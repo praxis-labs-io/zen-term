@@ -138,11 +138,11 @@ final class IconButton: NSView {
         let bg: NSColor
         let tint: NSColor
         if isActive {
-            bg = chrome.fill(chrome.accent, alpha: 0.15); tint = chrome.accent.nsColor
+            bg = chrome.fill(.active); tint = chrome.accent.nsColor
         } else if isHovered {
-            bg = chrome.fill(alpha: 0.10); tint = chrome.ink(.normal)
+            bg = chrome.fill(.hover); tint = chrome.ink(.normal)
         } else {
-            bg = restsFilled ? chrome.fill(alpha: 0.06) : .clear
+            bg = restsFilled ? chrome.fill(.rest) : .clear
             tint = chrome.ink(.subtle)
         }
         if let layer { Motion.ease(layer, keyPath: "backgroundColor", to: bg.cgColor) }

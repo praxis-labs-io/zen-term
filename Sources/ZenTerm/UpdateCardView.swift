@@ -262,7 +262,8 @@ final class UpdateCardView: ShadowCardView {
         // effectiveAppearance (not Theme.current) and washes out to invisible on a light theme.
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         let accent = Theme.current.chrome.accent.nsColor
-        badgeFill.layer?.backgroundColor = accent.withAlphaComponent(0.15).cgColor
+        badgeFill.layer?.backgroundColor =
+            Theme.current.chrome.tint(Theme.current.chrome.accent, alpha: ChromeTheme.badgeTint).cgColor
         iconView.contentTintColor = accent
         progressBar.reapplyTheme()
     }

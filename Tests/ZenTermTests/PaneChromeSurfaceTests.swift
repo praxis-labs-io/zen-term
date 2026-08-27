@@ -54,7 +54,7 @@ final class PaneChromeSurfaceTests: WindowTestCase {
         return try XCTUnwrap(NSColor(cgColor: painted)?.usingColorSpace(.sRGB))
     }
 
-    private var tintAlpha: CGFloat { 0.14 }  // FindBarView.fillAlpha, the faintest accent fill
+    private var tintAlpha: CGFloat { FindBarView.tintAlphaForTesting }
 
     // MARK: the strip carries the pane's fill
 

@@ -58,13 +58,75 @@ struct ChromeTheme: Equatable {
         foreground.nsColor.withAlphaComponent(min(1, level.alpha * Self.inkBoost))
     }
 
-    /// A **fill**: a hover wash, a hairline, a divider, a border, an active tint. Named apart from
-    /// `ink(_:)` so the fill path cannot colour text by accident.
+    /// The three weights an interactive fill is drawn at, in declaration order.
+    ///
+    /// **The ordering is guaranteed here**, not re-tuned per control: all three go through the same
+    /// `fillScale`, so no theme can pull one above another. Seven hand-tuned hover values is what
+    /// the alternative produced. See `docs/architecture.md`.
+    enum FillLevel: CaseIterable {
+        /// A filled surface at rest: a keycap, a progress track, an unfocused field.
+        case rest
+        /// The pointer is over it.
+        case hover
+        /// Selected, on, focused, or recording. Accent-toned, and always paired with accent ink or
+        /// an accent ring: the fill alone is too faint to carry the state.
+        case active
+
+        var alpha: CGFloat {
+            switch self {
+            case .rest: return 0.06
+            case .hover: return 0.10
+            case .active: return 0.15
+            }
+        }
+    }
+
+    /// A control's fill at one of the three interactive weights. The tier a control asks for, never
+    /// a number, which is what stops its states inverting on a narrow-separation theme.
+    func fill(_ level: FillLevel) -> NSColor {
+        fill(level == .active ? accent : nil, alpha: level.alpha)
+    }
+
+    /// A hairline: a card edge, a divider, an idle pane border.
+    static let hairline: CGFloat = 0.08
+    /// A control's border at rest, before it takes focus.
+    static let border: CGFloat = 0.10
+    /// The ring around a colour swatch. Heavier than `border` because it has to contain an
+    /// *arbitrary* colour rather than sit on the theme background: a dark theme's black slot
+    /// vanishes against the list card without it.
+    static let swatchRing: CGFloat = 0.15
+
+    /// A **structural fill**: a hairline, a divider, a border. Takes a raw alpha because nothing
+    /// about a divider can invert, but pass one of the three constants above rather than a literal
+    /// so the same number cannot mean three things. Named apart from `ink(_:)` so the fill path
+    /// cannot colour text.
     ///
     /// **Pass a role colour as `tint` rather than applying alpha to it yourself**, or that fill
     /// escapes `fillScale` and stops being comparable to the others in the same control.
     func fill(_ tint: TerminalColor? = nil, alpha: CGFloat) -> NSColor {
         (tint ?? foreground).nsColor.withAlphaComponent(min(1, alpha * Self.inkBoost * fillScale))
+    }
+
+    /// The accent square behind an icon glyph on a floating card: a toast, the update card, the
+    /// keybind hint bubble. One value, or three cards carry the same badge at three weights.
+    static let badgeTint: CGFloat = 0.15
+    /// A selected row, and the focus fill inputs share with it. Heavier than a badge because it
+    /// spans a whole row rather than backing a single glyph.
+    static let selectionTint: CGFloat = 0.18
+
+    /// The selected row in a palette, and the focus fill every input and nav row shares with it.
+    /// The most load-bearing fill in the chrome, so it lives here rather than on whichever view
+    /// happened to need it first.
+    var selectionFill: NSColor { tint(accent, alpha: Self.selectionTint) }
+
+    /// A **standalone** role-toned surface with no sibling fill to stay ordered against: an icon
+    /// badge, a selection row, the find bar's own wash, a scrollback selection.
+    ///
+    /// Deliberately outside `fillScale`. These sit behind text, where the constraint is not to fight
+    /// it, and scaling one to 1.77 puts an accent at 0.37 under a caption. Anything that *does* have
+    /// a sibling fill takes `fill(_:)` instead, or the pair re-inverts.
+    func tint(_ role: TerminalColor, alpha: CGFloat) -> NSColor {
+        role.nsColor.withAlphaComponent(min(1, alpha * Self.inkBoost))
     }
 
     /// `tint` composited over `base`, source-over. A chrome surface inside a pane paints its tint on

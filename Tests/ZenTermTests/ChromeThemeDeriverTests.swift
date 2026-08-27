@@ -181,7 +181,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
                 try String(contentsOf: url, encoding: .utf8), fontName: "Menlo", fontSize: 12,
                 fallback: Theme.rosePineZen)
             let chrome = ChromeThemeDeriver.derive(from: terminal)
-            let alpha = chrome.fill(alpha: 0.10).alphaComponent
+            let alpha = chrome.fill(alpha: ChromeTheme.border).alphaComponent
             let background = perceived(terminal.background)
             let painted = perceived(terminal.foreground) * alpha + background * (1 - alpha)
             deltas.append((entry.token, abs(painted - background)))
@@ -190,7 +190,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
         // the catalog grows: well-separated themes are deliberately never scaled down, so adding a
         // high-contrast theme pushes the spread up and fails a test that has nothing to do with the
         // addition. Each theme reaching the floor is stable however many arrive.
-        let target = 0.10 * ChromeTheme.inkBoost * 0.714  // reference separation
+        let target = ChromeTheme.border * ChromeTheme.inkBoost * 0.714  // reference separation
         for (token, delta) in deltas {
             XCTAssertGreaterThan(
                 delta, target * 0.92,
@@ -221,12 +221,60 @@ final class ChromeThemeDeriverTests: XCTestCase {
         let chrome = ChromeThemeDeriver.derive(from: narrow)
         XCTAssertGreaterThan(ChromeThemeDeriver.fillScale(for: narrow), 1, "precondition: it scales")
 
-        let hover = chrome.fill(alpha: 0.10).alphaComponent
-        let active = chrome.fill(chrome.accent, alpha: 0.14).alphaComponent
-        let unscaledActive = chrome.accent.nsColor.withAlphaComponent(0.14).alphaComponent
+        let hover = chrome.fill(.hover).alphaComponent
+        let active = chrome.fill(.active).alphaComponent
+        let unscaled = chrome.tint(chrome.accent, alpha: ChromeTheme.FillLevel.active.alpha).alphaComponent
 
         XCTAssertGreaterThan(active, hover, "the active state must out-weigh hover")
-        XCTAssertGreaterThan(unscaledActive, 0)
-        XCTAssertLessThan(unscaledActive, hover, "and unscaled it would not, which is the bug")
+        XCTAssertGreaterThan(unscaled, 0)
+        XCTAssertLessThan(unscaled, hover, "and off the scaled path it would not, which is the bug")
+    }
+
+    // MARK: - the fill ladder
+
+    /// **The ladder's whole promise.** Seven hand-tuned hover values is what a per-control number
+    /// produced, and one of them inverted: an unscaled accent active fill read fainter than the
+    /// pointer merely being over the control. Walking every bundled theme is what makes the promise
+    /// checkable, because the scale is what breaks it and the scale is per theme.
+    func test_everyBundledTheme_keepsTheFillLadderOrdered() throws {
+        for entry in ThemeCatalog.bundled {
+            let url = try XCTUnwrap(ThemeCatalog.bundledURL(for: entry.token))
+            let terminal = GhosttyThemeParser.parse(
+                try String(contentsOf: url, encoding: .utf8), fontName: "Menlo", fontSize: 12,
+                fallback: Theme.rosePineZen)
+            let chrome = ChromeThemeDeriver.derive(from: terminal)
+            let painted = ChromeTheme.FillLevel.allCases.map { chrome.fill($0).alphaComponent }
+            XCTAssertEqual(
+                painted, painted.sorted(), "\(entry.token) paints the fill tiers out of order: \(painted)")
+            XCTAssertEqual(Set(painted).count, painted.count, "\(entry.token) collapses two fill tiers")
+        }
+    }
+
+    /// The one place a scaled fill faces an unscaled one: `selectionFill` is a focus fill sitting
+    /// over `fill(.rest)` in every input and nav row. `tint(_:)` is deliberately off `fillScale`, so
+    /// this pair is the only one the ladder cannot guarantee — it gets a test instead of an
+    /// assumption. At the 1.8 cap the margin is still ~1.7x.
+    func test_theSelectionFill_staysAboveTheRestFill_atEveryScale() {
+        var flat = Theme.rosePineZen
+        flat.foreground = flat.background  // forces the scale to its cap, the worst case for rest
+        for theme in [Theme.rosePineZen, flat] {
+            let chrome = ChromeThemeDeriver.derive(from: theme)
+            XCTAssertGreaterThan(
+                chrome.selectionFill.alphaComponent, chrome.fill(.rest).alphaComponent,
+                "a focused input reads quieter than an unfocused one at scale "
+                    + "\(ChromeThemeDeriver.fillScale(for: theme))")
+        }
+    }
+
+    /// `tint(_:)` exists to stay off `fillScale`. If it ever picks the scale up, every selection row
+    /// and icon badge lifts with it, which is the change this split was made to avoid.
+    func test_aTint_isNotScaled() {
+        var narrow = Theme.rosePineZen
+        narrow.foreground = TerminalColor(red: 0x70, green: 0x70, blue: 0x70)
+        let chrome = ChromeThemeDeriver.derive(from: narrow)
+        XCTAssertGreaterThan(ChromeThemeDeriver.fillScale(for: narrow), 1, "precondition: it scales")
+        XCTAssertEqual(
+            chrome.tint(chrome.accent, alpha: 0.18).alphaComponent, 0.18 * ChromeTheme.inkBoost,
+            accuracy: 0.001, "a tint has picked up fillScale")
     }
 }

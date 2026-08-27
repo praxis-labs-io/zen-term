@@ -26,9 +26,9 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     /// ⌘Return anywhere in the field — submit the whole form.
     var onSubmit: (() -> Void)?
 
-    private static var restFill: NSColor { Theme.current.chrome.fill(alpha: 0.06) }
+    private static var restFill: NSColor { Theme.current.chrome.fill(.rest) }
     /// The same muted accent fill the ⌘P/⌘⇧P palettes use for the selected row.
-    private static var focusFill: NSColor { PaletteOverlay.selectionBackground }
+    private static var focusFill: NSColor { Theme.current.chrome.selectionFill }
 
     var text: String { field.stringValue }
     func setText(_ value: String) { field.stringValue = value }
@@ -45,7 +45,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         layer?.cornerRadius = 6
         layer?.backgroundColor = Self.restFill.cgColor
         layer?.borderWidth = 1
-        layer?.borderColor = Theme.current.chrome.fill(alpha: 0.10).cgColor
+        layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
         translatesAutoresizingMaskIntoConstraints = false
 
         field.isBordered = false
@@ -107,7 +107,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     private func setFocused(_ focused: Bool) {
         let chrome = Theme.current.chrome
         layer?.backgroundColor = (focused ? Self.focusFill : Self.restFill).cgColor
-        layer?.borderColor = (focused ? chrome.accent.nsColor : chrome.fill(alpha: 0.10)).cgColor
+        layer?.borderColor = (focused ? chrome.accent.nsColor : chrome.fill(alpha: ChromeTheme.border)).cgColor
         layer?.borderWidth = focused ? 1.5 : 1
     }
 

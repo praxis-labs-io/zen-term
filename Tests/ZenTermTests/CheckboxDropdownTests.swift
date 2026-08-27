@@ -164,7 +164,7 @@ final class CheckboxDropdownTests: WindowTestCase {
     func test_openList_rendersTheInitialHighlight() {
         let dropdown = makeDropdown()
         dropdown.openListForTesting()
-        let highlightFill = Theme.current.chrome.fill(alpha: 0.10).cgColor
+        let highlightFill = Theme.current.chrome.fill(.hover).cgColor
         XCTAssertEqual(dropdown.rowViewsForTesting.first?.layer?.backgroundColor, highlightFill)
     }
 

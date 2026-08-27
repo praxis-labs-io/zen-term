@@ -98,7 +98,8 @@ final class ToastView: ShadowCardView {
         let badge = NSView()
         badge.wantsLayer = true
         badge.layer?.cornerRadius = 7
-        badge.layer?.backgroundColor = accent.withAlphaComponent(0.15).cgColor
+        badge.layer?.backgroundColor =
+            Theme.current.chrome.tint(Theme.current.chrome.accent, alpha: ChromeTheme.badgeTint).cgColor
         badge.translatesAutoresizingMaskIntoConstraints = false
         let iconView = NSImageView()
         iconView.image = NSImage(

@@ -38,7 +38,7 @@ class SelectableRowView: NSView, PaletteRowView {
     }
 
     private func updateBackground() {
-        layer?.backgroundColor = (isSelected ? PaletteOverlay.selectionBackground : .clear).cgColor
+        layer?.backgroundColor = (isSelected ? Theme.current.chrome.selectionFill : .clear).cgColor
     }
 }
 
@@ -86,11 +86,6 @@ class PaletteOverlay: NSView, ModalOverlay {
     private var laidOutRows: [LaidOutRow] = []
     private var selected = 0
 
-    /// The selection highlight shared by every palette row (accent @ 18%).
-    static var selectionBackground: NSColor {
-        Theme.current.chrome.accent.nsColor.withAlphaComponent(0.18)
-    }
-
     init(
         background: NSColor, placeholder: String, emptyText: String, footerHints: [PaletteHint],
         rowHeight: CGFloat, maxListHeight: CGFloat = 320, emptyListHeight: CGFloat = 56,
@@ -134,7 +129,7 @@ class PaletteOverlay: NSView, ModalOverlay {
 
         for hairline in [divider, footerDivider] {
             hairline.wantsLayer = true
-            hairline.layer?.backgroundColor = Theme.current.chrome.fill(alpha: 0.08).cgColor
+            hairline.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor
             hairline.translatesAutoresizingMaskIntoConstraints = false
             hairline.heightAnchor.constraint(equalToConstant: 1).isActive = true
         }
@@ -286,7 +281,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         searchField.applyThemedCaret()  // the field holds focus across the swap, so re-tint in place
         applyPlaceholder()
         for hairline in [divider, footerDivider] {
-            hairline.layer?.backgroundColor = chrome.fill(alpha: 0.08).cgColor
+            hairline.layer?.backgroundColor = chrome.fill(alpha: ChromeTheme.hairline).cgColor
         }
         emptyLabel.textColor = chrome.ink(.muted)
         footerHintLabels.forEach { $0.textColor = chrome.ink(.muted) }

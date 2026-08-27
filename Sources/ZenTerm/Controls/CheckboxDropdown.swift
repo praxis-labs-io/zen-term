@@ -69,7 +69,7 @@ final class CheckboxDropdown: NSView {
         layer?.cornerRadius = 6
         PopoverButtonStyle.applyRestFill(to: self)
         layer?.borderWidth = 1
-        layer?.borderColor = Theme.current.chrome.fill(alpha: 0.10).cgColor
+        layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
 
         titleLabel.font = .systemFont(ofSize: 13)
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
@@ -278,7 +278,7 @@ final class CheckboxDropdown: NSView {
             title.textColor = item.isChecked ? chrome.foreground.nsColor : chrome.ink(.muted)
             check.isHidden = !item.isChecked
             check.contentTintColor = chrome.accent.nsColor
-            layer?.backgroundColor = (isHighlighted ? chrome.fill(alpha: 0.10) : NSColor.clear).cgColor
+            layer?.backgroundColor = (isHighlighted ? chrome.fill(.hover) : NSColor.clear).cgColor
         }
 
         override func mouseDown(with event: NSEvent) { onClick() }
