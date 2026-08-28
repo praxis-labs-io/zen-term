@@ -64,7 +64,10 @@ final class AccentColorConfigTests: XCTestCase {
         AppConfig.reload()
 
         XCTAssertEqual(Theme.current.chrome.accent, Theme.current.terminal.ansi[2])
-        XCTAssertNotEqual(Theme.current.chrome.accent, Theme.current.terminal.ansi[5])
+        XCTAssertNotEqual(
+            Theme.current.chrome.accent,
+            Theme.current.terminal.ansi[AccentSlot.themeDefault.ansiIndex],
+            "the key has not moved the accent off its default slot")
         // The roles that carry meaning stay where they were.
         XCTAssertEqual(Theme.current.chrome.info, Theme.current.terminal.ansi[4])
         XCTAssertEqual(Theme.current.chrome.destructive, Theme.current.terminal.ansi[1])

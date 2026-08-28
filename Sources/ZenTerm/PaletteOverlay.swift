@@ -15,7 +15,7 @@ struct PaletteHint {
     let label: String
 }
 
-/// A selectable palette row with the shared selection chrome: rounded corners, an iris
+/// A selectable palette row with the shared selection chrome: rounded corners, an accent
 /// highlight when selected, and a single click that runs the row (Raycast / Spotlight, not a
 /// select-then-double-click). Subclasses add their own content in `init` after calling `super.init`.
 class SelectableRowView: NSView, PaletteRowView {

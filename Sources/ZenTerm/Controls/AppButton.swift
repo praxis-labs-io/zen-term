@@ -6,12 +6,10 @@ import AppKit
 ///
 /// Variants:
 /// - `primary` — accent text; dims when disabled (a form's Add).
-/// - `secondary` — muted ghost, transparent at rest (Cancel / a toast's cancel).
-/// - `muted` — muted text on a subtle fill (a form's Add-variable).
-/// - `destructive` — destructive-tinted, subtle fill (a toast's confirm).
-///
-/// Focus is an accent ring plus accent text on every variant but `destructive`, whose tone is the
-/// message.
+/// - `secondary` — muted ghost, transparent at rest (Cancel / a toast's cancel); accent text on focus.
+/// - `muted` — muted text on a subtle fill (a form's Add-variable); accent text on focus.
+/// - `destructive` — destructive-tinted, subtle fill (a toast's confirm). Not focus-tinted: its
+///   tone is the message.
 /// - `segment` — an accent toggle that fills when `isOn` (a form's focus selector).
 /// - `link` — plain muted text, no fill or pill; brightens on hover, accent + underline on focus (a
 ///   quiet footer affordance like Settings' Report an Issue).

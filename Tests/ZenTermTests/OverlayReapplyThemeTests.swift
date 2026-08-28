@@ -42,7 +42,8 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         background = #010101
         foreground = #fefefe
         palette = 1=#ff0000
-        palette = 4=#00ffff
+        # The accent slot, named from the constant rather than pinned, like its siblings.
+        palette = \(AccentSlot.themeDefault.ansiIndex)=#00ffff
         palette = 5=#00ff00
         """.write(to: dir.appendingPathComponent("theme"), atomically: true, encoding: .utf8)
         return ConfigLoader.loadAppTheme(configRoot: dir, general: .builtIn)

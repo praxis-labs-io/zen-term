@@ -10,7 +10,7 @@ struct PanelMeta {
     let action: KeyInterceptor.ReservedChord
 }
 
-/// Hosts one terminal surface (a pane leaf or a drawer) in the shared rounded chrome: the iris
+/// Hosts one terminal surface (a pane leaf or a drawer) in the shared rounded chrome: the accent
 /// focus halo and an inner clip that keeps content inside the radius. A drawer passes `meta` for
 /// an always-on header and `zoomMeta` for the variant it wears while zoomed; a pane passes only
 /// `zoomMeta`, and either may be nil. Clicking anywhere in the panel requests focus.

@@ -20,10 +20,6 @@ enum ToastVariant: Equatable {
         }
     }
 
-    /// The accent — tints the icon and the badge fill. Defined in terms of `role(in:)` so the two
-    /// cannot drift: painting the badge from `chrome.accent` instead flattened every variant.
-    var accent: NSColor { role(in: Theme.current.chrome).nsColor }
-
     /// The default badge glyph (an SF Symbol); a `ToastContent.icon` override wins when set.
     var defaultIcon: String {
         switch self {

@@ -91,7 +91,6 @@ final class ToastView: ShadowCardView {
         self.titleLabel = NSTextField(labelWithString: content.title)
         self.messageLabel = NSTextField(wrappingLabelWithString: content.message)
         super.init(frame: .zero)
-        let accent = content.variant.accent
 
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true

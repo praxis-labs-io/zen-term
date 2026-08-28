@@ -16,7 +16,7 @@ struct TabBarItem {
 
 /// The bottom-left numbered tab bar. Stateless beyond its last rendered snapshot;
 /// selection/close flow out through callbacks. Clicking a tab selects it; middle-clicking a tab
-/// closes it. The active tab is marked with an iris underline. When the tabs overflow the bar they
+/// closes it. The active tab is marked with an accent underline. When the tabs overflow the bar they
 /// scroll horizontally with no scroller, the active tab is kept in view, and each edge fades
 /// when tabs sit off that side. New-tab lives in the footer dock, not here.
 ///
@@ -62,7 +62,7 @@ final class TabBarView: NSView {
     /// documented exception), so no chrome color is involved. Each edge's ramp is toggled
     /// fully-opaque when nothing overflows past it.
     private let edgeFade = CAGradientLayer()
-    /// A single iris underline that slides along the bar to the active tab (a tracer),
+    /// A single accent underline that slides along the bar to the active tab (a tracer),
     /// rather than a per-chip underline snapping on/off.
     /// Owned (not an NSView backing layer) so its anchor point is ours: a left-edge anchor
     /// lets us keyframe the left edge and width directly, for a stretch that only reaches
