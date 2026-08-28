@@ -42,6 +42,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         background = #010101
         foreground = #fefefe
         palette = 1=#ff0000
+        palette = 4=#00ffff
         palette = 5=#00ff00
         """.write(to: dir.appendingPathComponent("theme"), atomically: true, encoding: .utf8)
         return ConfigLoader.loadAppTheme(configRoot: dir, general: .builtIn)
@@ -303,12 +304,19 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         }
         let colorBefore = titleLabel.textColor
         let borderBefore = toast.layer?.borderColor
+        let badgeBefore = toast.badgeFillForTesting
+        let glyphBefore = toast.badgeIconTintForTesting
         XCTAssertNotNil(colorBefore)
+        XCTAssertNotNil(badgeBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
         toast.reapplyTheme()
 
         XCTAssertNotEqual(colorBefore, titleLabel.textColor)
         XCTAssertNotEqual(borderBefore, toast.layer?.borderColor)
+        // Both halves of the badge bake the live accent at init. The fill was the one that stayed
+        // stale on a theme swap while the card around it recolored.
+        XCTAssertNotEqual(badgeBefore, toast.badgeFillForTesting, "the badge fill stayed stale")
+        XCTAssertNotEqual(glyphBefore, toast.badgeIconTintForTesting, "the badge glyph stayed stale")
     }
 }

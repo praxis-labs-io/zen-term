@@ -1642,10 +1642,16 @@ carries the active state, so every `.active` site pairs it with accent ink or an
 
 **Structural fills keep a raw alpha** on `chrome.fill(alpha:)`, because nothing about a divider
 can invert. Three named constants, because the same 0.08 previously meant a divider in one file
-and a keycap background in another: `hairline` 0.08 (a card edge, a divider, an idle pane
-border), `border` 0.10 (a control at rest), and `swatchRing` 0.15. The ring is heavier on
-purpose: it has to contain an *arbitrary* colour rather than sit on the theme background, or a
-dark theme's black slot vanishes against the list card.
+and a keycap background in another. They are a **weight scale, not a taxonomy of objects**:
+`hairline` 0.08 is the quiet tier, `border` 0.10 the standard one, `swatchRing` 0.15 the loud
+one.
+
+Two of those weights have a reason a use-site name would hide. `swatchRing` is heavier because
+it has to contain an *arbitrary* colour rather than sit on the theme background, or a dark
+theme's black slot vanishes against the list card. And a mark's **length** decides which tier it
+wants, not what kind of object it is: the dock's 1x12 group ticks take `border`, not `hairline`,
+because a 12pt rule and a 400pt one do not read alike at equal alpha. Naming these after their
+first consumer is what sent those ticks to the quiet tier and made them disappear.
 
 **A standalone role-toned surface takes `chrome.tint(_:alpha:)`** and is deliberately *outside*
 `fillScale`: `selectionFill` (a selected row, and the focus fill inputs share with it),

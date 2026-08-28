@@ -51,6 +51,10 @@ final class ToastView: ShadowCardView {
     private let messageLabel: NSTextField
     /// Retained so `reapplyTheme()` can recolor it, like every other baked-color control here.
     private var closeButton: IconButton?
+    /// Same reason: both the badge's accent fill and its glyph's tint are baked from the live
+    /// accent at init, so a toast up across a theme change kept the old one on a recolored card.
+    private let badgeFill = NSView()
+    private let badgeIcon = NSImageView()
 
     /// Fixed card width — toasts read as a consistent column rather than sizing to their text.
     private static let width: CGFloat = 300
@@ -95,20 +99,16 @@ final class ToastView: ShadowCardView {
         FloatShadow.applyShadow(to: self)
 
         // Tinted icon badge (accent glyph on an accent-at-15% rounded square).
-        let badge = NSView()
-        badge.wantsLayer = true
-        badge.layer?.cornerRadius = 7
-        badge.layer?.backgroundColor =
-            Theme.current.chrome.tint(Theme.current.chrome.accent, alpha: ChromeTheme.badgeTint).cgColor
-        badge.translatesAutoresizingMaskIntoConstraints = false
-        let iconView = NSImageView()
-        iconView.image = NSImage(
+        badgeFill.wantsLayer = true
+        badgeFill.layer?.cornerRadius = 7
+        badgeFill.translatesAutoresizingMaskIntoConstraints = false
+        badgeIcon.image = NSImage(
             systemSymbolName: content.icon ?? content.variant.defaultIcon,
             accessibilityDescription: content.title)
-        iconView.symbolConfiguration = .init(pointSize: 13, weight: .semibold)
-        iconView.contentTintColor = accent
-        iconView.translatesAutoresizingMaskIntoConstraints = false
-        badge.addSubview(iconView)
+        badgeIcon.symbolConfiguration = .init(pointSize: 13, weight: .semibold)
+        badgeIcon.translatesAutoresizingMaskIntoConstraints = false
+        badgeFill.addSubview(badgeIcon)
+        applyBadgeTheme()
 
         // A card with buttons gets a close affordance; a passive one dismisses on body-click or
         // its timer and needs none. Without it an actionable card could only be answered, and a
@@ -177,7 +177,7 @@ final class ToastView: ShadowCardView {
             row.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
         }
 
-        let root = NSStackView(views: [badge, col])
+        let root = NSStackView(views: [badgeFill, col])
         root.orientation = .horizontal
         root.alignment = .top
         root.distribution = .fill  // stretch `col` to fill the fixed card width (badge stays 28)
@@ -187,10 +187,10 @@ final class ToastView: ShadowCardView {
 
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: Self.width),
-            badge.widthAnchor.constraint(equalToConstant: 28),
-            badge.heightAnchor.constraint(equalToConstant: 28),
-            iconView.centerXAnchor.constraint(equalTo: badge.centerXAnchor),
-            iconView.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
+            badgeFill.widthAnchor.constraint(equalToConstant: 28),
+            badgeFill.heightAnchor.constraint(equalToConstant: 28),
+            badgeIcon.centerXAnchor.constraint(equalTo: badgeFill.centerXAnchor),
+            badgeIcon.centerYAnchor.constraint(equalTo: badgeFill.centerYAnchor),
             root.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
             root.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
             root.topAnchor.constraint(equalTo: topAnchor, constant: 12),
@@ -309,7 +309,20 @@ final class ToastView: ShadowCardView {
         messageLabel.textColor = Self.messageColor
         shortcutSlots.forEach { $0.reapplyTheme() }  // else the keycap ink goes stale on a theme swap
         closeButton?.reapplyTheme()
+        applyBadgeTheme()
     }
+
+    /// The badge's fill and glyph, from one place so init and `reapplyTheme()` cannot drift.
+    private func applyBadgeTheme() {
+        let chrome = Theme.current.chrome
+        badgeFill.layer?.backgroundColor = chrome.tint(chrome.accent, alpha: ChromeTheme.badgeTint).cgColor
+        badgeIcon.contentTintColor = chrome.accent.nsColor
+    }
+
+    /// Test hooks: the badge paints from the live theme, so a stale one is only visible by reading
+    /// what was actually painted rather than what init was handed.
+    var badgeFillForTesting: CGColor? { badgeFill.layer?.backgroundColor }
+    var badgeIconTintForTesting: NSColor? { badgeIcon.contentTintColor }
 
     /// Re-resolve every action keycap against the live keymap and tab order. The host calls this
     /// whenever tabs mutate: a toast is built once per notification, so one for tab 3 would keep

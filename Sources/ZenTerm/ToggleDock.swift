@@ -278,7 +278,7 @@ final class ToggleDock: NSView {
     /// that read. The dividers bake their color in once at build time, so it's reset explicitly.
     func reapplyTheme() {
         for button in allButtons { button.reapplyTheme() }
-        let dividerColor = Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor
+        let dividerColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
         for divider in dividers { divider.layer?.backgroundColor = dividerColor }
     }
 
@@ -286,7 +286,7 @@ final class ToggleDock: NSView {
     private static func divider() -> NSView {
         let v = NSView()
         v.wantsLayer = true
-        v.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor
+        v.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
         v.translatesAutoresizingMaskIntoConstraints = false
         v.widthAnchor.constraint(equalToConstant: 1).isActive = true
         v.heightAnchor.constraint(equalToConstant: 12).isActive = true

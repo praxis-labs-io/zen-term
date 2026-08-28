@@ -87,9 +87,12 @@ struct ChromeTheme: Equatable {
         fill(level == .active ? accent : nil, alpha: level.alpha)
     }
 
-    /// A hairline: a card edge, a divider, an idle pane border.
+    /// The quiet tier, for a mark with length to carry it: a card edge, a full-width divider, an
+    /// idle pane border.
     static let hairline: CGFloat = 0.08
-    /// A control's border at rest, before it takes focus.
+    /// The standard tier: a control's border at rest, and any short mark that reads faint at
+    /// `hairline`. The dock's 1x12 group ticks are the latter — a 12pt rule and a 400pt one do not
+    /// read alike at equal alpha, because the eye integrates over the mark's area.
     static let border: CGFloat = 0.10
     /// The ring around a colour swatch. Heavier than `border` because it has to contain an
     /// *arbitrary* colour rather than sit on the theme background: a dark theme's black slot
