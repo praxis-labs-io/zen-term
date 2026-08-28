@@ -196,6 +196,12 @@ config works anywhere.
 including Rosé Pine, Catppuccin, Tokyo Night, Nord, Gruvbox, and Dracula. A theme
 colors the whole app, not only the terminal text.
 
+**Neovim follows your theme:** install
+[zen-theme.nvim](https://github.com/praxis-labs-io/zen-theme.nvim) and switching
+theme in Settings switches your editor's colorscheme to match, live. Your own
+theme files join in with one `nvim-colorscheme` line, described in the theme file
+itself.
+
 **Shortcuts:** press ⌘, and choose **Shortcuts**. Pick a shortcut and press the
 new one. If it collides with an existing shortcut, the app tells you which action
 already owns it. Delete takes a shortcut away, and the capture popover has a reset
