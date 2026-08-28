@@ -52,9 +52,9 @@ enum AccentSlot: String, CaseIterable {
         }
     }
 
-    /// The default the chrome uses with no `accent-color` set — the slot `ChromeThemeDeriver` has
-    /// always derived `accent` from.
-    static let themeDefault: AccentSlot = .magenta
+    /// The default the chrome uses with no `accent-color` set. Blue is the conventional accent and
+    /// the slot most themes treat as their primary; `accent-color` repoints it per user.
+    static let themeDefault: AccentSlot = .blue
 
     /// Title case, derived from the token so the two can't drift: `bright-cyan` → `Bright cyan`.
     var displayName: String {

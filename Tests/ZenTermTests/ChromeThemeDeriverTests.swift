@@ -12,7 +12,8 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(chrome.info, TerminalColor(hex: "#9ccfd8"))  // foam / palette[4]
         XCTAssertEqual(chrome.warning, TerminalColor(hex: "#f6c177"))  // gold / palette[3]
         XCTAssertEqual(chrome.destructive, TerminalColor(hex: "#eb6f92"))  // love / palette[1]
-        XCTAssertEqual(chrome.accent, TerminalColor(hex: "#c4a7e7"))  // iris / palette[5]
+        // Shares palette[4] with `info` by default; `accent-color` repoints it per user.
+        XCTAssertEqual(chrome.accent, TerminalColor(hex: "#9ccfd8"))  // foam / palette[4]
         XCTAssertEqual(chrome.attention, TerminalColor(hex: "#ea9a97"))  // rose / palette[6]
         XCTAssertEqual(chrome.positive, TerminalColor(hex: "#3e8fb0"))  // pine / palette[2] (ANSI green)
         // muted = foreground (#e0def4 = 224,222,244) blended over background (#191724 =
@@ -30,15 +31,17 @@ final class ChromeThemeDeriverTests: XCTestCase {
             ChromeThemeDeriver.derive(from: Theme.rosePineZen),
             ChromeThemeDeriver.derive(from: Theme.rosePineZen))
         var recolored = Theme.rosePineZen
-        recolored.ansi[5] = TerminalColor(red: 255, green: 255, blue: 255)  // shifts the accent slot alone
+        // The default accent's slot, read from the constant: pinning an index here made this assert
+        // nothing the moment the default moved off it.
+        recolored.ansi[AccentSlot.themeDefault.ansiIndex] = TerminalColor(red: 255, green: 255, blue: 255)
         XCTAssertNotEqual(
             ChromeThemeDeriver.derive(from: Theme.rosePineZen),
             ChromeThemeDeriver.derive(from: recolored))
     }
 
-    /// `accent-color` repoints the accent role and nothing else. The "nothing else" half
-    /// is the one that can rot silently: accent is aliased to a slot other roles also read, so a
-    /// deriver change could drag `info` or `attention` along with it and still look plausible.
+    /// `accent-color` repoints the accent role and nothing else. The "nothing else" half is the one
+    /// that can rot silently, and it is no longer hypothetical: the default accent shares palette[4]
+    /// with `info`, so a deriver change could drag `info` along and still look plausible.
     func test_accentOverride_movesOnlyTheAccentRole() {
         let base = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
         let overridden = ChromeThemeDeriver.derive(from: Theme.rosePineZen, accent: .brightGreen)
@@ -55,12 +58,14 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(overridden.foreground, base.foreground)
     }
 
-    /// An unset key has to derive exactly what it always did, or the setting silently recolors the
-    /// chrome for every user who never opened it.
-    func test_noAccentOverride_derivesTheHistoricalSlotFive() {
+    /// An unset key resolves to `themeDefault`, and the slot it names is pinned here. Both halves
+    /// matter: the first catches the nil path breaking, the second stops the default being repointed
+    /// by accident, which would silently recolor the chrome for every user who never opened it.
+    func test_noAccentOverride_resolvesToTheDefaultSlot() {
+        XCTAssertEqual(AccentSlot.themeDefault, .blue)
         XCTAssertEqual(
             ChromeThemeDeriver.derive(from: Theme.rosePineZen, accent: nil).accent,
-            ChromeThemeDeriver.derive(from: Theme.rosePineZen, accent: .magenta).accent)
+            ChromeThemeDeriver.derive(from: Theme.rosePineZen, accent: AccentSlot.themeDefault).accent)
     }
 
     /// Every slot has to name the ANSI entry the palette actually put there — an off-by-one here
