@@ -9,6 +9,9 @@ import AppKit
 /// - `secondary` — muted ghost, transparent at rest (Cancel / a toast's cancel).
 /// - `muted` — muted text on a subtle fill (a form's Add-variable).
 /// - `destructive` — destructive-tinted, subtle fill (a toast's confirm).
+///
+/// Focus is an accent ring plus accent text on every variant but `destructive`, whose tone is the
+/// message.
 /// - `segment` — an accent toggle that fills when `isOn` (a form's focus selector).
 /// - `link` — plain muted text, no fill or pill; brightens on hover, accent + underline on focus (a
 ///   quiet footer affordance like Settings' Report an Issue).
@@ -162,12 +165,14 @@ final class AppButton: NSButton {
             textColor = isEnabled ? chrome.accent.nsColor : chrome.ink(.faint)
             background = chrome.fill(isHovered && isEnabled ? .hover : .rest)
         case .secondary:
-            textColor = chrome.muted.nsColor
+            textColor = focusTinted(chrome.muted.nsColor, chrome)
             background = isHovered ? chrome.fill(.hover) : .clear
         case .muted:
-            textColor = chrome.muted.nsColor
+            textColor = focusTinted(chrome.muted.nsColor, chrome)
             background = chrome.fill(isHovered ? .hover : .rest)
         case .destructive:
+            // Deliberately not focus-tinted: losing the warning tone at the moment you are about to
+            // press it costs more than the inconsistency with the other pills.
             textColor = chrome.destructive.nsColor
             background = chrome.fill(isHovered ? .hover : .rest)
         case .segment:
@@ -198,6 +203,12 @@ final class AppButton: NSButton {
             if isLink, isFocusedStop { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
             attributedTitle = NSAttributedString(string: labelText, attributes: attributes)
         }
+    }
+
+    /// Focus tints a pill's text accent alongside its ring, so a keyboard user gets the same signal
+    /// on a quiet button as on a link. `.destructive` opts out; its tone is the message.
+    private func focusTinted(_ resting: NSColor, _ chrome: ChromeTheme) -> NSColor {
+        isFocusedStop ? chrome.accent.nsColor : resting
     }
 
     @objc private func fire() { onTap() }
