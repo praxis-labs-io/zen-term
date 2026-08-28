@@ -34,11 +34,11 @@
 #
 # The names are the usual ANSI hues, so what you get is whatever your theme put in
 # that slot: on Rosé Pine Zen, magenta is iris. Settings → Appearance → Accent
-# color shows each one's swatch and hex. Unset → magenta (palette 5).
+# color shows each one's swatch and hex. Unset → blue (palette 4).
 #
 #   black    red    green    yellow    blue    magenta    cyan    white
 #   and a bright- variant of each (bright-red, bright-cyan, …)
-# accent-color = magenta
+# accent-color = blue
 
 # ─── Terminal appearance ─────────────────────────────────────────────────────
 

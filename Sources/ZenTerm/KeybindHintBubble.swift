@@ -46,7 +46,8 @@ final class KeybindHintBubble: ShadowCardView {
         let badge = NSView()
         badge.wantsLayer = true
         badge.layer?.cornerRadius = 7
-        badge.layer?.backgroundColor = accent.withAlphaComponent(0.15).cgColor
+        badge.layer?.backgroundColor =
+            Theme.current.chrome.tint(Theme.current.chrome.accent, alpha: ChromeTheme.badgeTint).cgColor
         badge.translatesAutoresizingMaskIntoConstraints = false
         let icon = NSImageView()
         icon.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Record a shortcut")
@@ -68,7 +69,7 @@ final class KeybindHintBubble: ShadowCardView {
         let previewBox = NSView()
         previewBox.wantsLayer = true
         previewBox.layer?.cornerRadius = 6
-        previewBox.layer?.backgroundColor = Theme.current.chrome.fill(alpha: 0.06).cgColor
+        previewBox.layer?.backgroundColor = Theme.current.chrome.fill(.rest).cgColor
         // The accent ring says the input is listening, the same signal a focused chip carries.
         previewBox.layer?.borderWidth = 1.5
         previewBox.layer?.borderColor = Theme.current.chrome.accent.nsColor.cgColor
@@ -243,7 +244,7 @@ final class KeybindHintBubble: ShadowCardView {
         let box = NSView()
         box.wantsLayer = true
         box.layer?.cornerRadius = 4
-        box.layer?.backgroundColor = Theme.current.chrome.fill(alpha: 0.10).cgColor
+        box.layer?.backgroundColor = Theme.current.chrome.fill(.rest).cgColor
         box.translatesAutoresizingMaskIntoConstraints = false
         box.addSubview(label)
         NSLayoutConstraint.activate([

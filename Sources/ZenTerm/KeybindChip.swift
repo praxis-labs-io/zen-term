@@ -133,12 +133,12 @@ final class KeybindChip: NSView {
         let chrome = Theme.current.chrome
         let fill: NSColor
         if isCapturing {
-            fill = chrome.fill(chrome.accent, alpha: 0.14)
+            fill = chrome.fill(.active)
         } else if isFocused || isHovered {
             // Hover and focus share a fill; the accent ring below is what still tells them apart.
-            fill = chrome.fill(alpha: 0.10)
+            fill = chrome.fill(.hover)
         } else {
-            fill = chrome.fill(alpha: 0.06)
+            fill = chrome.fill(.rest)
         }
         layer?.backgroundColor = fill.cgColor
         let outlined = isFocused || isCapturing

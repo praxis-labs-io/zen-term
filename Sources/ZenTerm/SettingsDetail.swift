@@ -49,7 +49,7 @@ enum SettingsDetail {
     static func reorderHint() -> NSTextField {
         let hint = NSTextField(labelWithString: "⌥↑ ⌥↓ to reorder")
         hint.font = .systemFont(ofSize: 10, weight: .medium)
-        hint.textColor = Theme.current.chrome.ink(.muted)
+        hint.textColor = Theme.current.chrome.ink(.faint)
         hint.setContentHuggingPriority(.required, for: .horizontal)
         return hint
     }

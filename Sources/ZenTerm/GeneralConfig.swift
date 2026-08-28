@@ -34,7 +34,7 @@ struct GeneralConfig: Equatable {
     var themeName: String?
 
     /// Which ANSI slot of the active theme the chrome's `accent` role points at. Nil →
-    /// `AccentSlot.themeDefault`, the slot the chrome has always used. Stored as a slot, not a
+    /// `AccentSlot.themeDefault`. Stored as a slot, not a
     /// color, so it re-resolves against whatever theme is loaded.
     var accentColor: AccentSlot?
 

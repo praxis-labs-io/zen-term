@@ -107,6 +107,9 @@ final class TabBarViewTests: WindowTestCase {
         background = #010101
         foreground = #fefefe
         palette = 5=#00ff00
+        # The accent slot, named from the constant rather than pinned: this fixture used to
+        # move palette 5 because that was the accent, and went blind when the default moved.
+        palette = \(AccentSlot.themeDefault.ansiIndex)=#00ffff
         """.write(to: dir.appendingPathComponent("theme"), atomically: true, encoding: .utf8)
         return ConfigLoader.loadAppTheme(configRoot: dir, general: .builtIn)
     }

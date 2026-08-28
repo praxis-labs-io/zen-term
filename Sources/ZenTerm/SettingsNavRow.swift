@@ -2,7 +2,7 @@ import AppKit
 
 /// One left-nav entry in the Settings card: a selectable, keyboard-focusable label. Focus reads
 /// as an accent background fill — the same highlight the command palette and repo picker rows use
-/// (`PaletteOverlay.selectionBackground`), not a border — over a subtler selected-section fill.
+/// (`chrome.selectionFill`), not a border — over a subtler selected-section fill.
 /// Keyboard follows the shared 2D model (Up/Down move, Right/Tab enter the detail pane; Esc closes
 /// the card, owned by the card root — see `ModalEscape`).
 final class SettingsNavRow: NSView {
@@ -54,9 +54,9 @@ final class SettingsNavRow: NSView {
     private func refreshFill() {
         if isFocusedStop {
             // Share the palette/repo-picker row highlight so every focus background matches.
-            layer?.backgroundColor = PaletteOverlay.selectionBackground.cgColor
+            layer?.backgroundColor = Theme.current.chrome.selectionFill.cgColor
         } else if isSelected {
-            layer?.backgroundColor = Theme.current.chrome.fill(alpha: 0.06).cgColor
+            layer?.backgroundColor = Theme.current.chrome.fill(.rest).cgColor
         } else {
             layer?.backgroundColor = NSColor.clear.cgColor
         }

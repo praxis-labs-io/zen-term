@@ -55,7 +55,7 @@ final class SettingsWorkspacesSection: SettingsSection {
     func reapplyTheme() {
         caption?.textColor = Theme.current.chrome.ink(.muted)
         emptyHint?.textColor = Theme.current.chrome.ink(.muted)
-        reorderHint?.textColor = Theme.current.chrome.ink(.muted)
+        reorderHint?.textColor = Theme.current.chrome.ink(.faint)
         rows.forEach { $0.reapplyTheme() }
         addButton.reapplyTheme()
     }
@@ -260,7 +260,7 @@ final class WorkspaceRow: NSView {
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         gitBadge.image = IconCatalog.gitBadge()
         gitBadge.setAccessibilityLabel("Git repository")
-        gitBadge.contentTintColor = Theme.current.chrome.ink(.muted)
+        gitBadge.contentTintColor = Theme.current.chrome.ink(.faint)
         gitBadge.setContentHuggingPriority(.required, for: .horizontal)
         applyGitStatus()
         let controls = NSStackView(views: [labels, spacer, gitBadge])
@@ -283,7 +283,7 @@ final class WorkspaceRow: NSView {
     func reapplyTheme() {
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
-        gitBadge.contentTintColor = Theme.current.chrome.ink(.muted)
+        gitBadge.contentTintColor = Theme.current.chrome.ink(.faint)
         restyle()
     }
 
@@ -332,7 +332,7 @@ final class WorkspaceRow: NSView {
 
     private func restyle() {
         let chrome = Theme.current.chrome
-        layer?.backgroundColor = isFocused ? chrome.fill(alpha: 0.10).cgColor : nil
+        layer?.backgroundColor = isFocused ? chrome.fill(.active).cgColor : nil
         layer?.borderWidth = isFocused ? 1.5 : 0
         layer?.borderColor = isFocused ? chrome.accent.nsColor.cgColor : nil
     }

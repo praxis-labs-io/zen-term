@@ -10,7 +10,7 @@ struct PanelMeta {
     let action: KeyInterceptor.ReservedChord
 }
 
-/// Hosts one terminal surface (a pane leaf or a drawer) in the shared rounded chrome: the iris
+/// Hosts one terminal surface (a pane leaf or a drawer) in the shared rounded chrome: the accent
 /// focus halo and an inner clip that keeps content inside the radius. A drawer passes `meta` for
 /// an always-on header and `zoomMeta` for the variant it wears while zoomed; a pane passes only
 /// `zoomMeta`, and either may be nil. Clicking anywhere in the panel requests focus.
@@ -247,7 +247,7 @@ final class PanelHostView: NSView, TerminalModeHost {
         chrome.setHeader(modeMeta ?? (isZoomed ? zoomMeta : nil) ?? baseMeta)
     }
 
-    private static var idleBorder: NSColor { Theme.current.chrome.fill(alpha: 0.08) }
+    private static var idleBorder: NSColor { Theme.current.chrome.fill(alpha: ChromeTheme.hairline) }
 
     /// Re-apply the live pane border / focus-halo colors after a config change, no relaunch. The
     /// glow's color is set once at init (only its opacity is toggled elsewhere), so it's reset

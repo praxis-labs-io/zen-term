@@ -62,7 +62,7 @@ palette = 14=#ea9a97
 palette = 15=#e0def4
 
 # Chrome roles derived from the palette (for reference, not separate keys):
-#   accent       ← palette 5  (#c4a7e7, iris)
+#   accent       ← palette 4  (#9ccfd8, foam)
 #   info         ← palette 4  (#9ccfd8, foam)
 #   warning      ← palette 3  (#f6c177, gold)
 #   destructive  ← palette 1  (#eb6f92, love)

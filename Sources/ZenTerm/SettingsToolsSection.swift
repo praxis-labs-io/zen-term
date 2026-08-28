@@ -54,7 +54,7 @@ final class SettingsToolsSection: SettingsSection {
     func reapplyTheme() {
         caption?.textColor = Theme.current.chrome.ink(.muted)
         emptyHint?.textColor = Theme.current.chrome.ink(.muted)
-        reorderHint?.textColor = Theme.current.chrome.ink(.muted)
+        reorderHint?.textColor = Theme.current.chrome.ink(.faint)
         droppedFloatNotice?.textColor = Theme.current.chrome.warning.nsColor
         rows.forEach { $0.reapplyTheme() }
         addButton.reapplyTheme()
@@ -368,7 +368,7 @@ final class ToolFloatRow: NSView {
 
     private func restyle() {
         let chrome = Theme.current.chrome
-        layer?.backgroundColor = isFocused ? chrome.fill(alpha: 0.10).cgColor : nil
+        layer?.backgroundColor = isFocused ? chrome.fill(.active).cgColor : nil
         layer?.borderWidth = isFocused ? 1.5 : 0
         layer?.borderColor = isFocused ? chrome.accent.nsColor.cgColor : nil
     }

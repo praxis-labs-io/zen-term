@@ -6,8 +6,8 @@ import TerminalKit
 /// `ToastVariant` and the tab bar), so any ghostty theme recolors the chrome consistently.
 enum ChromeThemeDeriver {
     /// `accent` is the one role the user can repoint (`accent-color`) — it is the chrome's
-    /// primary and reaches every focus and active surface. Nil keeps `AccentSlot.themeDefault`, so
-    /// an unset key derives exactly what it always has. The other roles stay fixed: they are read as
+    /// primary and reaches every focus and active surface. Nil keeps `AccentSlot.themeDefault`.
+    /// The other roles stay fixed: they are read as
     /// meanings (a warning is not a taste), and `info`/`warning`/`destructive` in particular have to
     /// stay distinguishable from each other whatever the primary becomes.
     static func derive(from terminal: TerminalTheme, accent: AccentSlot? = nil) -> ChromeTheme {

@@ -1605,7 +1605,7 @@ comments, blank lines, and unknown keys verbatim.
 
 **Theming is derived, never hardcoded.** `ChromeThemeDeriver` maps ANSI slots onto
 nine chrome roles: background and foreground come from
-the theme's own, info is ansi[4], warning ansi[3], destructive ansi[1], accent ansi[5],
+the theme's own, info is ansi[4], warning ansi[3], destructive ansi[1], accent ansi[4],
 attention ansi[6], positive ansi[2], and muted a blend of fg and bg.
 
 Roles are named for meaning, not hue, which is why they are separate fields rather than
@@ -1615,20 +1615,49 @@ CLAUDE.md for the rule that the chrome never hardcodes a color.
 
 **A role answers which color. Two other things answer how strongly.**
 
-**Text and icons take one of three ink levels**, `muted` 0.5, `subtle` 0.7, `normal` 1.0.
-Every site asks for a level and never for a number, which is what stops a new site inventing
-a weight between two of them: twenty-one hand-tuned alphas is what that produced, and the
-things you click ended up at the weight of the hints beside them. There is no fourth level,
-and a site that wants one is the signal that the surface has too many tiers.
+**Text and icons take one of four ink levels**, `faint` 0.35, `muted` 0.5, `subtle` 0.7,
+`normal` 1.0. Every site asks for a level and never for a number, which is what stops a new
+site inventing a weight between two of them: twenty-one hand-tuned alphas is what that
+produced, and the things you click ended up at the weight of the hints beside them.
 
-`inkBoost` (1.15) lifts all three, because dark ink on a light theme reads fainter at equal
+`faint` is for a thing quieter than what it sits beside: a disabled label, a hint opposite a
+caption. It is the bottom of the ramp and the ramp is closed. A fifth level has nowhere to go
+anyway, since `normal` pins the top at 1.0 and `subtle` is already 0.7, so a site that wants
+one is the signal that the surface has too many tiers.
+
+`inkBoost` (1.15) lifts all four, because dark ink on a light theme reads fainter at equal
 opacity. **Check `1 / boost` before raising it.** A level above that threshold clamps to full
 opacity, which is how the previous 1.3 made `0.95` and `1` paint the same color while looking
 like two values.
 
-**Fills are separate and an order of magnitude fainter** (0.04 to 0.16): hover washes,
-hairlines, dividers, borders, active tints. They keep a raw alpha, on `chrome.fill(alpha:)`,
-because their differences are structural rather than emphasis.
+**Fills are separate and an order of magnitude fainter**: hover washes, hairlines, dividers,
+borders, active tints. There are three ways in, and which one a site takes is the whole
+distinction.
+
+**A control's interactive fills take a tier**, `chrome.fill(.rest / .hover / .active)` at 0.06,
+0.10 and 0.15. `.active` is accent-toned; the other two come off the foreground. All three run
+through the same `fillScale`, which is what guarantees the ordering: seven hand-tuned hover
+values is what a per-control number produced, and one of them inverted. The fill alone never
+carries the active state, so every `.active` site pairs it with accent ink or an accent ring.
+
+**Structural fills keep a raw alpha** on `chrome.fill(alpha:)`, because nothing about a divider
+can invert. Three named constants, because the same 0.08 previously meant a divider in one file
+and a keycap background in another. They are a **weight scale, not a taxonomy of objects**:
+`hairline` 0.08 is the quiet tier, `border` 0.10 the standard one, `swatchRing` 0.15 the loud
+one.
+
+Two of those weights have a reason a use-site name would hide. `swatchRing` is heavier because
+it has to contain an *arbitrary* colour rather than sit on the theme background, or a dark
+theme's black slot vanishes against the list card. And a mark's **length** decides which tier it
+wants, not what kind of object it is: the dock's 1x12 group ticks take `border`, not `hairline`,
+because a 12pt rule and a 400pt one do not read alike at equal alpha. Naming these after their
+first consumer is what sent those ticks to the quiet tier and made them disappear.
+
+**A standalone role-toned surface takes `chrome.tint(_:alpha:)`** and is deliberately *outside*
+`fillScale`: `selectionFill` (a selected row, and the focus fill inputs share with it),
+`badgeTint` (the accent square behind a card's icon glyph), the find bar's wash, the scrollback
+selection and flash. These sit behind text, where the constraint is not to fight it, and
+scaling one to 1.77 puts an accent at 0.37 under a caption.
 
 **`fillScale` normalizes them per theme.** A fill is our invention, not the theme author's: a
 0.10 wash of their foreground over their background lands wherever those two happen to sit,
@@ -1643,14 +1672,19 @@ fix what does not. That floor is the whole residual spread, not the 1.8 cap, whi
 theme reaches. One test walks all sixty-five themes, which is what makes any of this
 checkable without inspecting them by hand.
 
-**A role color used as a fill goes through `chrome.fill(chrome.accent, alpha:)`**, not
-`accent.withAlphaComponent`. `fillScale` has to reach every fill inside one control or their
-weights stop being comparable: a foreground hover scaled to 0.20 on a narrow-separation theme
-out-weighed a fixed accent active fill at 0.14, so "recording your chord" read fainter than
-the pointer merely being over it.
+**Never `accent.withAlphaComponent`.** `fillScale` has to reach every fill inside one control or
+their weights stop being comparable: a foreground hover scaled to 0.20 on a narrow-separation
+theme out-weighed a fixed accent active fill at 0.14, so "recording your chord" read fainter
+than the pointer merely being over it. That is why `.active` is a tier and not a `tint`.
+
+**One pair genuinely does mix the two**, and it is the only one: `selectionFill` is an unscaled
+focus fill sitting over a scaled `fill(.rest)` in every input and nav row. The margin holds at
+the 1.8 cap (0.207 against 0.124), but it holds by arithmetic rather than by construction, so
+it gets its own test. Any *second* such pair is the signal to move one side onto the other's
+path instead of adding a second test.
 
 **Text is deliberately not normalized.** At `normal` the ink is the theme author's own
-foreground, chosen to be legible on their own background. Normalizing it collapses all three
+foreground, chosen to be legible on their own background. Normalizing it collapses all four
 levels into one color on a narrow-separation theme and buys no contrast, because `normal` pins
 the top at 1.0 and the theme's own foreground-to-background distance is the real ceiling.
 

@@ -20,9 +20,9 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
     let placeholder: String
     private let scroll = NSScrollView()
 
-    private static var restFill: NSColor { Theme.current.chrome.fill(alpha: 0.06) }
+    private static var restFill: NSColor { Theme.current.chrome.fill(.rest) }
     /// The same muted accent fill the ⌘P/⌘⇧P palettes use for the selected row.
-    private static var focusFill: NSColor { PaletteOverlay.selectionBackground }
+    private static var focusFill: NSColor { Theme.current.chrome.selectionFill }
 
     var text: String { textView.string }
     func setText(_ value: String) {
@@ -37,7 +37,7 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         layer?.cornerRadius = 6
         layer?.backgroundColor = Self.restFill.cgColor
         layer?.borderWidth = 1
-        layer?.borderColor = Theme.current.chrome.fill(alpha: 0.10).cgColor
+        layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
         translatesAutoresizingMaskIntoConstraints = false
 
         // An NSTextView in a scroll view is sized by AppKit's autoresizing, not autolayout — the
@@ -136,7 +136,7 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
     private func setFocused(_ focused: Bool) {
         let chrome = Theme.current.chrome
         layer?.backgroundColor = (focused ? Self.focusFill : Self.restFill).cgColor
-        layer?.borderColor = (focused ? chrome.accent.nsColor : chrome.fill(alpha: 0.10)).cgColor
+        layer?.borderColor = (focused ? chrome.accent.nsColor : chrome.fill(alpha: ChromeTheme.border)).cgColor
         layer?.borderWidth = focused ? 1.5 : 1
     }
 

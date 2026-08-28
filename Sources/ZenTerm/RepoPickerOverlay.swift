@@ -114,8 +114,9 @@ final class RepoPickerOverlay: PaletteOverlay {
         }
     }
 
-    /// The persistent "＋ New Workspace…" action row, tinted with the accent so it reads as an
-    /// affordance distinct from the workspace list below it.
+    /// The persistent "＋ New Workspace…" action row. The `＋` is what distinguishes it; the accent
+    /// belongs to the selection highlight, so a permanent row wearing it competes with the thing you
+    /// actually have selected, and collides outright once the row itself is selected.
     private final class AddRowView: SelectableRowView {
         override init() {
             super.init()
@@ -124,13 +125,13 @@ final class RepoPickerOverlay: PaletteOverlay {
             let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
             icon.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "add workspace")?
                 .withSymbolConfiguration(config)
-            icon.contentTintColor = Theme.current.chrome.accent.nsColor
+            icon.contentTintColor = Theme.current.chrome.ink(.muted)
             icon.translatesAutoresizingMaskIntoConstraints = false
             addSubview(icon)
 
             let label = NSTextField(labelWithString: "New Workspace…")
             label.font = .systemFont(ofSize: 13, weight: .medium)
-            label.textColor = Theme.current.chrome.accent.nsColor
+            label.textColor = Theme.current.chrome.ink(.muted)
             label.translatesAutoresizingMaskIntoConstraints = false
             addSubview(label)
 
@@ -165,7 +166,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
             gitBadge.image = IconCatalog.gitBadge()
             gitBadge.setAccessibilityLabel("git repository")
-            gitBadge.contentTintColor = Theme.current.chrome.ink(.muted)
+            gitBadge.contentTintColor = Theme.current.chrome.ink(.faint)
             gitBadge.translatesAutoresizingMaskIntoConstraints = false
             addSubview(gitBadge)
 

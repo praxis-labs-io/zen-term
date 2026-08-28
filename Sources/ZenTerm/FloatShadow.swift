@@ -5,7 +5,7 @@ import AppKit
 /// ring instead — see `CardChrome.apply(halo:)`.
 enum FloatShadow {
     /// Subtle neutral hairline on the card edge (no color), for crispness over the shadow.
-    static var edge: NSColor { Theme.current.chrome.fill(alpha: 0.08) }
+    static var edge: NSColor { Theme.current.chrome.fill(alpha: ChromeTheme.hairline) }
 
     /// Cast a dark drop shadow from the card itself, with `masksToBounds = false` (masking
     /// would clip the shadow). The card's content is inset from the corners, so the rounded

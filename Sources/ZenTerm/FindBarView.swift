@@ -123,7 +123,8 @@ final class FindBarView: NSView {
     }
 
     private func applyFill() {
-        let tint = Theme.current.chrome.accent.nsColor.withAlphaComponent(Self.fillAlpha)
+        let chrome = Theme.current.chrome
+        let tint = chrome.tint(chrome.accent, alpha: Self.fillAlpha)
         layer?.backgroundColor = ChromeTheme.surface(tint: tint, over: paneFill).cgColor
     }
 
@@ -155,10 +156,16 @@ final class FindBarView: NSView {
 
     static let height: CGFloat = 26
     private static let cornerRadius: CGFloat = 6
-    /// The faintest accent fill the chrome uses, shared with `KeybindChip`'s resting state. Accent
-    /// rather than ink so the bar reads as chrome tinted over the pane rather than as a grey panel
-    /// laid on it.
+    /// The bar's own wash. A standalone surface with no sibling fill, so it goes through
+    /// `chrome.tint(_:)` and stays off `fillScale`. Accent rather than ink so the bar reads as
+    /// chrome tinted over the pane rather than as a grey panel laid on it.
     private static let fillAlpha: CGFloat = 0.14
+
+    /// Test hook: the tint's painted alpha, read off the same call the bar paints with. Pinning a
+    /// copy of `fillAlpha` in the test is what let it drift when the tint path picked up `inkBoost`.
+    static var tintAlphaForTesting: CGFloat {
+        Theme.current.chrome.tint(Theme.current.chrome.accent, alpha: fillAlpha).alphaComponent
+    }
 }
 
 extension FindBarView: NSTextFieldDelegate {

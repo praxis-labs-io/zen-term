@@ -12,7 +12,8 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(chrome.info, TerminalColor(hex: "#9ccfd8"))  // foam / palette[4]
         XCTAssertEqual(chrome.warning, TerminalColor(hex: "#f6c177"))  // gold / palette[3]
         XCTAssertEqual(chrome.destructive, TerminalColor(hex: "#eb6f92"))  // love / palette[1]
-        XCTAssertEqual(chrome.accent, TerminalColor(hex: "#c4a7e7"))  // iris / palette[5]
+        // Shares palette[4] with `info` by default; `accent-color` repoints it per user.
+        XCTAssertEqual(chrome.accent, TerminalColor(hex: "#9ccfd8"))  // foam / palette[4]
         XCTAssertEqual(chrome.attention, TerminalColor(hex: "#ea9a97"))  // rose / palette[6]
         XCTAssertEqual(chrome.positive, TerminalColor(hex: "#3e8fb0"))  // pine / palette[2] (ANSI green)
         // muted = foreground (#e0def4 = 224,222,244) blended over background (#191724 =
@@ -30,15 +31,17 @@ final class ChromeThemeDeriverTests: XCTestCase {
             ChromeThemeDeriver.derive(from: Theme.rosePineZen),
             ChromeThemeDeriver.derive(from: Theme.rosePineZen))
         var recolored = Theme.rosePineZen
-        recolored.ansi[5] = TerminalColor(red: 255, green: 255, blue: 255)  // shifts the accent slot alone
+        // The default accent's slot, read from the constant: pinning an index here made this assert
+        // nothing the moment the default moved off it.
+        recolored.ansi[AccentSlot.themeDefault.ansiIndex] = TerminalColor(red: 255, green: 255, blue: 255)
         XCTAssertNotEqual(
             ChromeThemeDeriver.derive(from: Theme.rosePineZen),
             ChromeThemeDeriver.derive(from: recolored))
     }
 
-    /// `accent-color` repoints the accent role and nothing else. The "nothing else" half
-    /// is the one that can rot silently: accent is aliased to a slot other roles also read, so a
-    /// deriver change could drag `info` or `attention` along with it and still look plausible.
+    /// `accent-color` repoints the accent role and nothing else. The "nothing else" half is the one
+    /// that can rot silently, and it is no longer hypothetical: the default accent shares palette[4]
+    /// with `info`, so a deriver change could drag `info` along and still look plausible.
     func test_accentOverride_movesOnlyTheAccentRole() {
         let base = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
         let overridden = ChromeThemeDeriver.derive(from: Theme.rosePineZen, accent: .brightGreen)
@@ -55,12 +58,14 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(overridden.foreground, base.foreground)
     }
 
-    /// An unset key has to derive exactly what it always did, or the setting silently recolors the
-    /// chrome for every user who never opened it.
-    func test_noAccentOverride_derivesTheHistoricalSlotFive() {
+    /// An unset key resolves to `themeDefault`, and the slot it names is pinned here. Both halves
+    /// matter: the first catches the nil path breaking, the second stops the default being repointed
+    /// by accident, which would silently recolor the chrome for every user who never opened it.
+    func test_noAccentOverride_resolvesToTheDefaultSlot() {
+        XCTAssertEqual(AccentSlot.themeDefault, .blue)
         XCTAssertEqual(
             ChromeThemeDeriver.derive(from: Theme.rosePineZen, accent: nil).accent,
-            ChromeThemeDeriver.derive(from: Theme.rosePineZen, accent: .magenta).accent)
+            ChromeThemeDeriver.derive(from: Theme.rosePineZen, accent: AccentSlot.themeDefault).accent)
     }
 
     /// Every slot has to name the ANSI entry the palette actually put there — an off-by-one here
@@ -85,7 +90,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
 
     func test_inkIsThemeForegroundAtTheBoostedLevelAlpha() {
         let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
-        for level in [ChromeTheme.InkLevel.muted, .subtle, .normal] {
+        for level in ChromeTheme.InkLevel.allCases {
             assertEqualRGBA(
                 chrome.ink(level),
                 Theme.rosePineZen.foreground.nsColor
@@ -95,21 +100,38 @@ final class ChromeThemeDeriverTests: XCTestCase {
 
     /// The multiplier must not clamp a level that is not meant to be full opacity. At 1.3 four of the
     /// old hand-tuned alphas collapsed into 1 and the ceiling was invisible to anyone tuning a value;
-    /// this fails the moment a raised boost pulls `subtle` up into `normal`.
+    /// this fails the moment a raised boost pulls a level up into `normal`.
     func test_theBoost_clampsOnlyTheNormalLevel() {
         let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
-        XCTAssertLessThan(chrome.ink(.muted).alphaComponent, 1)
-        XCTAssertLessThan(chrome.ink(.subtle).alphaComponent, 1, "subtle has been boosted into normal")
+        for level in ChromeTheme.InkLevel.allCases where level != .normal {
+            XCTAssertLessThan(
+                chrome.ink(level).alphaComponent, 1, "\(level) has been boosted into normal")
+        }
         XCTAssertEqual(chrome.ink(.normal).alphaComponent, 1, accuracy: 0.0001)
     }
 
-    /// The scale has to stay ordered and distinct: three levels that collapse are one level, and a
-    /// swap inverts every hierarchy built on them.
-    func test_theThreeLevels_areOrderedAndDistinct() {
-        let alphas = [ChromeTheme.InkLevel.muted, .subtle, .normal].map(\.alpha)
-        XCTAssertEqual(alphas, alphas.sorted())
-        XCTAssertEqual(Set(alphas).count, 3)
+    /// The scale has to stay ordered and distinct: two levels that collapse are one level, and a
+    /// swap inverts every hierarchy built on them. Reads `allCases` so adding a level cannot skip
+    /// this, which is the whole reason the enum is `CaseIterable`.
+    func test_theInkLevels_areOrderedAndDistinct() {
+        let alphas = ChromeTheme.InkLevel.allCases.map(\.alpha)
+        XCTAssertEqual(alphas, alphas.sorted(), "declaration order is the weight order")
+        XCTAssertEqual(Set(alphas).count, alphas.count, "two levels share an alpha")
         XCTAssertEqual(ChromeTheme.InkLevel.normal.alpha, 1, "normal is full strength or it is not normal")
+        XCTAssertEqual(ChromeTheme.InkLevel.allCases.last, .normal, "normal is the top of the ramp")
+    }
+
+    /// `faint` is the bottom of the ramp, and it has to stay clear of the `1 / inkBoost` ceiling —
+    /// a level declared above 0.87 paints as `normal` while reading in source like a quiet one.
+    func test_faint_isTheQuietestLevelAndClearsTheClamp() {
+        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
+        XCTAssertEqual(ChromeTheme.InkLevel.allCases.first, .faint)
+        XCTAssertLessThan(
+            chrome.ink(.faint).alphaComponent, chrome.ink(.muted).alphaComponent,
+            "faint has collapsed into muted")
+        XCTAssertLessThan(
+            ChromeTheme.InkLevel.faint.alpha, 1 / ChromeTheme.inkBoost,
+            "faint is above the clamp and paints opaque")
     }
 
     func test_aThemeSilentOnSelectedTextGetsItsOwnForeground() {
@@ -164,7 +186,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
                 try String(contentsOf: url, encoding: .utf8), fontName: "Menlo", fontSize: 12,
                 fallback: Theme.rosePineZen)
             let chrome = ChromeThemeDeriver.derive(from: terminal)
-            let alpha = chrome.fill(alpha: 0.10).alphaComponent
+            let alpha = chrome.fill(alpha: ChromeTheme.border).alphaComponent
             let background = perceived(terminal.background)
             let painted = perceived(terminal.foreground) * alpha + background * (1 - alpha)
             deltas.append((entry.token, abs(painted - background)))
@@ -173,7 +195,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
         // the catalog grows: well-separated themes are deliberately never scaled down, so adding a
         // high-contrast theme pushes the spread up and fails a test that has nothing to do with the
         // addition. Each theme reaching the floor is stable however many arrive.
-        let target = 0.10 * ChromeTheme.inkBoost * 0.714  // reference separation
+        let target = ChromeTheme.border * ChromeTheme.inkBoost * 0.714  // reference separation
         for (token, delta) in deltas {
             XCTAssertGreaterThan(
                 delta, target * 0.92,
@@ -204,12 +226,60 @@ final class ChromeThemeDeriverTests: XCTestCase {
         let chrome = ChromeThemeDeriver.derive(from: narrow)
         XCTAssertGreaterThan(ChromeThemeDeriver.fillScale(for: narrow), 1, "precondition: it scales")
 
-        let hover = chrome.fill(alpha: 0.10).alphaComponent
-        let active = chrome.fill(chrome.accent, alpha: 0.14).alphaComponent
-        let unscaledActive = chrome.accent.nsColor.withAlphaComponent(0.14).alphaComponent
+        let hover = chrome.fill(.hover).alphaComponent
+        let active = chrome.fill(.active).alphaComponent
+        let unscaled = chrome.tint(chrome.accent, alpha: ChromeTheme.FillLevel.active.alpha).alphaComponent
 
         XCTAssertGreaterThan(active, hover, "the active state must out-weigh hover")
-        XCTAssertGreaterThan(unscaledActive, 0)
-        XCTAssertLessThan(unscaledActive, hover, "and unscaled it would not, which is the bug")
+        XCTAssertGreaterThan(unscaled, 0)
+        XCTAssertLessThan(unscaled, hover, "and off the scaled path it would not, which is the bug")
+    }
+
+    // MARK: - the fill ladder
+
+    /// **The ladder's whole promise.** Seven hand-tuned hover values is what a per-control number
+    /// produced, and one of them inverted: an unscaled accent active fill read fainter than the
+    /// pointer merely being over the control. Walking every bundled theme is what makes the promise
+    /// checkable, because the scale is what breaks it and the scale is per theme.
+    func test_everyBundledTheme_keepsTheFillLadderOrdered() throws {
+        for entry in ThemeCatalog.bundled {
+            let url = try XCTUnwrap(ThemeCatalog.bundledURL(for: entry.token))
+            let terminal = GhosttyThemeParser.parse(
+                try String(contentsOf: url, encoding: .utf8), fontName: "Menlo", fontSize: 12,
+                fallback: Theme.rosePineZen)
+            let chrome = ChromeThemeDeriver.derive(from: terminal)
+            let painted = ChromeTheme.FillLevel.allCases.map { chrome.fill($0).alphaComponent }
+            XCTAssertEqual(
+                painted, painted.sorted(), "\(entry.token) paints the fill tiers out of order: \(painted)")
+            XCTAssertEqual(Set(painted).count, painted.count, "\(entry.token) collapses two fill tiers")
+        }
+    }
+
+    /// The one place a scaled fill faces an unscaled one: `selectionFill` is a focus fill sitting
+    /// over `fill(.rest)` in every input and nav row. `tint(_:)` is deliberately off `fillScale`, so
+    /// this pair is the only one the ladder cannot guarantee — it gets a test instead of an
+    /// assumption. At the 1.8 cap the margin is still ~1.7x.
+    func test_theSelectionFill_staysAboveTheRestFill_atEveryScale() {
+        var flat = Theme.rosePineZen
+        flat.foreground = flat.background  // forces the scale to its cap, the worst case for rest
+        for theme in [Theme.rosePineZen, flat] {
+            let chrome = ChromeThemeDeriver.derive(from: theme)
+            XCTAssertGreaterThan(
+                chrome.selectionFill.alphaComponent, chrome.fill(.rest).alphaComponent,
+                "a focused input reads quieter than an unfocused one at scale "
+                    + "\(ChromeThemeDeriver.fillScale(for: theme))")
+        }
+    }
+
+    /// `tint(_:)` exists to stay off `fillScale`. If it ever picks the scale up, every selection row
+    /// and icon badge lifts with it, which is the change this split was made to avoid.
+    func test_aTint_isNotScaled() {
+        var narrow = Theme.rosePineZen
+        narrow.foreground = TerminalColor(red: 0x70, green: 0x70, blue: 0x70)
+        let chrome = ChromeThemeDeriver.derive(from: narrow)
+        XCTAssertGreaterThan(ChromeThemeDeriver.fillScale(for: narrow), 1, "precondition: it scales")
+        XCTAssertEqual(
+            chrome.tint(chrome.accent, alpha: 0.18).alphaComponent, 0.18 * ChromeTheme.inkBoost,
+            accuracy: 0.001, "a tint has picked up fillScale")
     }
 }

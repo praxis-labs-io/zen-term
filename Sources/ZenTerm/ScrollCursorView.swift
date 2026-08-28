@@ -55,10 +55,10 @@ final class ScrollCursorView: NSView {
         guard let metrics = metrics?(), metrics.rows > 0, metrics.columns > 0, let state else {
             return
         }
-        let accent = Theme.current.chrome.accent.nsColor
+        let chrome = Theme.current.chrome
 
         if let selection = state.selection {
-            accent.withAlphaComponent(Self.selectionAlpha).setFill()
+            chrome.tint(chrome.accent, alpha: Self.selectionAlpha).setFill()
             fill(Self.rects(for: selection, metrics: metrics))
         } else {
             drawBand(metrics: metrics, row: state.cursorRow)
@@ -67,7 +67,8 @@ final class ScrollCursorView: NSView {
         drawCursorCell(metrics: metrics, row: state.cursorRow, cells: state.cursorCells)
 
         if let flash = state.flash, state.flashLevel > 0 {
-            accent.withAlphaComponent(Self.flashPeakAlpha * min(1, state.flashLevel)).setFill()
+            chrome.tint(chrome.accent, alpha: Self.flashPeakAlpha * min(1, state.flashLevel))
+                .setFill()
             fill(Self.rects(for: flash, metrics: metrics))
         }
     }
@@ -137,7 +138,6 @@ final class ScrollCursorView: NSView {
     /// Each row grows past its own edge into whichever neighbour continues the span, and is clipped
     /// back to itself: the overhang carries the corner radius out of sight and the interior seams
     /// square off. Rounding every row instead pinches each seam and the span reads as scalloped.
-    /// Same trick as `DiffLineRowView.pillRect`.
     private func fill(_ rects: [CGRect]) {
         for (index, rect) in rects.enumerated() {
             let clipped = bounds.intersection(rect)
@@ -190,7 +190,6 @@ final class ScrollCursorView: NSView {
         return low...high
     }
 
-    // `selectionAlpha` and `flashPeakAlpha` match `DiffLineRowView`: same objects, same values.
     // The band deliberately does not: accent means "this is what a `y` takes", so the band is `ink`.
     //
     // The cursor cell carries no alpha: an overlay cannot invert a cell, so it is outlined at full

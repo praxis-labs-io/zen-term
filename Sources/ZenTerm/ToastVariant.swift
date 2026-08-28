@@ -1,4 +1,4 @@
-import AppKit
+import TerminalKit
 
 /// A toast's tone. Drives only the icon badge + accent color; the card's background,
 /// hairline border, and drop shadow stay the shared overlay-card chrome (`FloatShadow`),
@@ -8,14 +8,14 @@ import AppKit
 enum ToastVariant: Equatable {
     case info, positive, warning, destructive
 
-    /// The accent — tints the icon and (at 15% alpha) the badge fill. Sourced from the
-    /// chrome theme so accents follow the active theme (foam/gold/love under Rosé Pine).
-    var accent: NSColor {
+    /// The chrome role this tone reads from. The badge needs the role itself, not a resolved
+    /// colour, so it can go through `chrome.tint(_:alpha:)` rather than applying alpha by hand.
+    func role(in chrome: ChromeTheme) -> TerminalColor {
         switch self {
-        case .info: return Theme.current.chrome.info.nsColor
-        case .positive: return Theme.current.chrome.positive.nsColor
-        case .warning: return Theme.current.chrome.warning.nsColor
-        case .destructive: return Theme.current.chrome.destructive.nsColor
+        case .info: return chrome.info
+        case .positive: return chrome.positive
+        case .warning: return chrome.warning
+        case .destructive: return chrome.destructive
         }
     }
 

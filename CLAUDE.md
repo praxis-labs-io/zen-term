@@ -141,15 +141,22 @@ bring-your-own theme and washes out on light themes. Everything resolves from
 - **Terminal surfaces:** build `TerminalSurfaceConfig(theme: Theme.current.terminal)`.
 - **Chrome UI:** use `Theme.current.chrome` roles (`background`, `foreground`,
   `info`, `warning`, `destructive`, `accent`, `attention`, `muted`).
-- **Text and icons take `chrome.ink(.muted / .subtle / .normal)`, never an alpha.**
-  Three weights, no fourth: `muted` recedes (captions, hints, counts), `subtle` is a
-  control at rest (a toolbar icon, an inactive tab), `normal` is active or hovered.
-  A site that wants a weight between two of these is the signal that the surface has
-  too many tiers, not that the scale is short.
-- **Fills take `chrome.fill(alpha:)`**, an order of magnitude fainter: hover washes,
-  hairlines, dividers, borders. Pass a role colour as `chrome.fill(chrome.accent,
-  alpha:)` rather than applying alpha yourself, or that fill escapes the per-theme
-  `fillScale` and stops being comparable to the others in the same control.
+- **Text and icons take `chrome.ink(.faint / .muted / .subtle / .normal)`, never an
+  alpha.** Four weights, no fifth: `faint` is quieter than what it sits beside (a
+  disabled label, a hint opposite a caption), `muted` recedes (captions, hints,
+  counts), `subtle` is a control at rest (a toolbar icon, an inactive tab), `normal`
+  is active or hovered. A site that wants a weight between two of these is the signal
+  that the surface has too many tiers, not that the scale is short.
+- **Fills are an order of magnitude fainter than ink, and there are three ways in.**
+  A control's interactive fills take a tier, `chrome.fill(.rest / .hover / .active)`,
+  never a number, or its states invert on a narrow-separation theme. Structural fills
+  (a divider, a border, a swatch ring) take `chrome.fill(alpha:)` with one of the
+  named constants `ChromeTheme.hairline / .border / .swatchRing`. A standalone
+  role-toned surface behind text (a selected row, a card's icon badge) takes
+  `chrome.tint(_:alpha:)`, which is deliberately outside `fillScale`.
+- **Never `accent.withAlphaComponent`.** That escapes the per-theme `fillScale` and
+  stops the fill being comparable to the others in the same control. Reach for
+  `chrome.selectionFill` before defining a new focus or selection fill.
 
 **Banned in the chrome:** `NSColor(white:…)`, `.white` / `.black`, raw hex, literal
 palette values, and AppKit system/semantic colors (`.secondaryLabelColor`,

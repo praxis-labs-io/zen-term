@@ -144,7 +144,10 @@ final class SettingsAccentPickerTests: WindowTestCase {
 
         XCTAssertEqual(items.count, AccentSlot.allCases.count + 1)
         XCTAssertTrue(items.allSatisfy { $0.swatch != nil })
-        XCTAssertEqual(items[0].note, Theme.current.terminal.ansi[5].hex)  // the default's own color
+        XCTAssertEqual(
+            items[0].note,
+            Theme.current.terminal.ansi[AccentSlot.themeDefault.ansiIndex].hex,
+            "the default row's swatch has drifted off themeDefault")
         XCTAssertEqual(
             items[1 + AccentSlot.brightCyan.ansiIndex].note, Theme.current.terminal.ansi[14].hex)
         XCTAssertEqual(items.first { $0.title == "Bright cyan" }?.group, "Bright")

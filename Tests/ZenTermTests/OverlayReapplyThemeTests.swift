@@ -43,6 +43,9 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         foreground = #fefefe
         palette = 1=#ff0000
         palette = 5=#00ff00
+        # The accent slot, named from the constant rather than pinned. Last, so it still wins if
+        # `themeDefault` ever returns to slot 5.
+        palette = \(AccentSlot.themeDefault.ansiIndex)=#00ffff
         """.write(to: dir.appendingPathComponent("theme"), atomically: true, encoding: .utf8)
         return ConfigLoader.loadAppTheme(configRoot: dir, general: .builtIn)
     }
@@ -303,12 +306,69 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         }
         let colorBefore = titleLabel.textColor
         let borderBefore = toast.layer?.borderColor
+        let badgeBefore = toast.badgeFillForTesting
+        let glyphBefore = toast.badgeIconTintForTesting
         XCTAssertNotNil(colorBefore)
+        XCTAssertNotNil(badgeBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
         toast.reapplyTheme()
 
         XCTAssertNotEqual(colorBefore, titleLabel.textColor)
         XCTAssertNotEqual(borderBefore, toast.layer?.borderColor)
+        // Both halves of the badge bake their colour at init. The fill was the one that stayed
+        // stale on a theme swap while the card around it recolored.
+        XCTAssertNotEqual(badgeBefore, toast.badgeFillForTesting, "the badge fill stayed stale")
+        XCTAssertNotEqual(glyphBefore, toast.badgeIconTintForTesting, "the badge glyph stayed stale")
+        // "It changed" is too weak on its own: painting the badge from `chrome.accent` also changes
+        // across a swap, and that flattens every variant to one colour. Pin the tone instead.
+        XCTAssertEqual(
+            toast.badgeIconTintForTesting, Theme.current.chrome.destructive.nsColor,
+            "a destructive toast's badge must carry the destructive role, not the chrome accent")
+    }
+
+    /// Every baked-colour control on the card, not just the ones someone remembered. The badge was
+    /// fixed first and the action buttons were missed, so a toast up across a theme change re-tinted
+    /// its icon while `Switch` kept the previous accent.
+    func test_reapplyTheme_recolorsToastActionButtons() throws {
+        let toast = ToastView(
+            content: ToastContent(variant: .info, title: "shell", message: "Waiting."),
+            actions: [
+                ToastAction(title: "Dismiss", kind: .cancel) {},
+                ToastAction(title: "Switch", kind: .primary) {},
+            ])
+        toast.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(toast)
+        toast.frame = NSRect(x: 0, y: 0, width: 300, height: 110)
+
+        let before = toast.actionTitleColorsForTesting
+        XCTAssertEqual(before.count, 2, "expected both action buttons")
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        toast.reapplyTheme()
+
+        XCTAssertNotEqual(before, toast.actionTitleColorsForTesting, "the action buttons stayed stale")
+        XCTAssertTrue(
+            toast.actionTitleColorsForTesting.contains(Theme.current.chrome.accent.nsColor),
+            "the primary action must carry the new accent")
+    }
+
+    /// The badge is the only thing that tells two toasts apart at a glance, so two variants must
+    /// never paint it the same. This is what a "did it change" assertion cannot see.
+    func test_toastBadge_carriesTheVariantTone_notTheChromeAccent() throws {
+        let window = makeWindow()
+        func badge(_ variant: ToastVariant) -> NSColor? {
+            let toast = ToastView(content: ToastContent(variant: variant, title: "T", message: "M"))
+            toast.translatesAutoresizingMaskIntoConstraints = true
+            window.contentView?.addSubview(toast)
+            toast.frame = NSRect(x: 0, y: 0, width: 300, height: 80)
+            return toast.badgeIconTintForTesting
+        }
+        let tones = [ToastVariant.info, .positive, .warning, .destructive].map(badge)
+        XCTAssertEqual(
+            tones.count, Set(tones.map { $0?.description ?? "nil" }).count,
+            "two variants share a badge tone")
+        XCTAssertEqual(badge(.warning), Theme.current.chrome.warning.nsColor)
     }
 }

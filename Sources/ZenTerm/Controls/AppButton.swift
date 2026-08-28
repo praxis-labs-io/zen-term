@@ -6,9 +6,10 @@ import AppKit
 ///
 /// Variants:
 /// - `primary` — accent text; dims when disabled (a form's Add).
-/// - `secondary` — muted ghost, transparent at rest (Cancel / a toast's cancel).
-/// - `muted` — muted text on a subtle fill (a form's Add-variable).
-/// - `destructive` — destructive-tinted, subtle fill (a toast's confirm).
+/// - `secondary` — muted ghost, transparent at rest (Cancel / a toast's cancel); accent text on focus.
+/// - `muted` — muted text on a subtle fill (a form's Add-variable); accent text on focus.
+/// - `destructive` — destructive-tinted, subtle fill (a toast's confirm). Not focus-tinted: its
+///   tone is the message.
 /// - `segment` — an accent toggle that fills when `isOn` (a form's focus selector).
 /// - `link` — plain muted text, no fill or pill; brightens on hover, accent + underline on focus (a
 ///   quiet footer affordance like Settings' Report an Issue).
@@ -157,23 +158,24 @@ final class AppButton: NSButton {
         var background: NSColor
         switch variant {
         case .primary:
-            textColor = isEnabled ? chrome.accent.nsColor : chrome.ink(.muted)
-            background = isHovered && isEnabled ? chrome.fill(alpha: 0.16) : chrome.fill(alpha: 0.09)
+            // The accent text is what makes this the primary action; the fill is the same tier as
+            // every other button's, not a louder one.
+            textColor = isEnabled ? chrome.accent.nsColor : chrome.ink(.faint)
+            background = chrome.fill(isHovered && isEnabled ? .hover : .rest)
         case .secondary:
-            textColor = chrome.muted.nsColor
-            background = isHovered ? chrome.fill(alpha: 0.09) : .clear
+            textColor = focusTinted(chrome.muted.nsColor, chrome)
+            background = isHovered ? chrome.fill(.hover) : .clear
         case .muted:
-            textColor = chrome.muted.nsColor
-            background = isHovered ? chrome.fill(alpha: 0.14) : chrome.fill(alpha: 0.09)
+            textColor = focusTinted(chrome.muted.nsColor, chrome)
+            background = chrome.fill(isHovered ? .hover : .rest)
         case .destructive:
+            // Deliberately not focus-tinted: losing the warning tone at the moment you are about to
+            // press it costs more than the inconsistency with the other pills.
             textColor = chrome.destructive.nsColor
-            background = isHovered ? chrome.fill(alpha: 0.12) : chrome.fill(alpha: 0.07)
+            background = chrome.fill(isHovered ? .hover : .rest)
         case .segment:
             textColor = isOn ? chrome.accent.nsColor : chrome.muted.nsColor
-            background =
-                isOn
-                ? chrome.fill(chrome.accent, alpha: 0.18)  // match the command palette selection tint
-                : (isHovered ? chrome.fill(alpha: 0.09) : chrome.fill(alpha: 0.05))
+            background = isOn ? chrome.fill(.active) : chrome.fill(isHovered ? .hover : .rest)
         case .link:
             textColor =
                 isFocusedStop
@@ -199,6 +201,12 @@ final class AppButton: NSButton {
             if isLink, isFocusedStop { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
             attributedTitle = NSAttributedString(string: labelText, attributes: attributes)
         }
+    }
+
+    /// Focus tints a pill's text accent alongside its ring, so a keyboard user gets the same signal
+    /// on a quiet button as on a link. `.destructive` opts out; its tone is the message.
+    private func focusTinted(_ resting: NSColor, _ chrome: ChromeTheme) -> NSColor {
+        isFocusedStop ? chrome.accent.nsColor : resting
     }
 
     @objc private func fire() { onTap() }
