@@ -148,7 +148,7 @@ bring-your-own theme and washes out on light themes. Everything resolves from
   is active or hovered. A site that wants a weight between two of these is the signal
   that the surface has too many tiers, not that the scale is short.
 - **Fills are an order of magnitude fainter than ink, and there are three ways in.**
-  A control's interactive fills take a tier, `chrome.fill(.rest / .hover / .active)` —
+  A control's interactive fills take a tier, `chrome.fill(.rest / .hover / .active)`,
   never a number, or its states invert on a narrow-separation theme. Structural fills
   (a divider, a border, a swatch ring) take `chrome.fill(alpha:)` with one of the
   named constants `ChromeTheme.hairline / .border / .swatchRing`. A standalone

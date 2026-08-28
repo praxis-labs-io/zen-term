@@ -6,7 +6,7 @@ import XCTest
 /// Focus on a pill is an accent ring *and* accent text, so a keyboard user gets the same signal on
 /// a quiet button as on a link. `.destructive` is the one opt-out. These drive a real
 /// window-mounted button: a state-only check passes while `becomeFirstResponder` never fires.
-final class AppButtonTests: XCTestCase {
+final class AppButtonTests: WindowTestCase {
     private func mount(_ variant: AppButton.Variant) -> (AppButton, NSWindow) {
         let button = AppButton(title: "Add workspace", variant: variant) {}
         button.isKeyboardFocusable = true

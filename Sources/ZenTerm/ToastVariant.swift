@@ -1,4 +1,3 @@
-import AppKit
 import TerminalKit
 
 /// A toast's tone. Drives only the icon badge + accent color; the card's background,
