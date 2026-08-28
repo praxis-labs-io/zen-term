@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "linear-zenterm": {
+    "linear-zen-term": {
       "type": "http",
       "url": "https://mcp.linear.app/mcp"
     }
