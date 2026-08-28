@@ -51,6 +51,9 @@ final class ToastView: ShadowCardView {
     private let messageLabel: NSTextField
     /// Retained so `reapplyTheme()` can recolor it, like every other baked-color control here.
     private var closeButton: IconButton?
+    /// Dismiss / Switch / a confirm. Retained for the same reason: an `AppButton` bakes its variant
+    /// colors at build time, so an unretained one keeps the old accent across a live theme change.
+    private var actionButtons: [AppButton] = []
     /// Same reason: both the badge's accent fill and its glyph's tint are baked from the live
     /// accent at init, so a toast up across a theme change kept the old one on a recolored card.
     private let badgeFill = NSView()
@@ -168,7 +171,8 @@ final class ToastView: ShadowCardView {
             // Small buttons hugging the leading edge (a trailing spacer absorbs the slack).
             let spacer = NSView()
             spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-            let row = NSStackView(views: actions.map(Self.button(for:)) + [spacer])
+            actionButtons = actions.map(Self.button(for:))
+            let row = NSStackView(views: actionButtons + [spacer])
             row.orientation = .horizontal
             row.alignment = .centerY
             row.spacing = 6
@@ -309,6 +313,7 @@ final class ToastView: ShadowCardView {
         messageLabel.textColor = Self.messageColor
         shortcutSlots.forEach { $0.reapplyTheme() }  // else the keycap ink goes stale on a theme swap
         closeButton?.reapplyTheme()
+        actionButtons.forEach { $0.reapplyTheme() }
         applyBadgeTheme()
     }
 
@@ -318,6 +323,15 @@ final class ToastView: ShadowCardView {
         let role = variant.role(in: chrome)  // the variant's tone, never the chrome accent
         badgeFill.layer?.backgroundColor = chrome.tint(role, alpha: ChromeTheme.badgeTint).cgColor
         badgeIcon.contentTintColor = role.nsColor
+    }
+
+    /// Test hook: an action button's painted title colour, which is where a stale accent shows.
+    var actionTitleColorsForTesting: [NSColor] {
+        actionButtons.compactMap {
+            $0.attributedTitle.length > 0
+                ? $0.attributedTitle.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+                : nil
+        }
     }
 
     /// Test hooks: the badge paints from the live theme, so a stale one is only visible by reading

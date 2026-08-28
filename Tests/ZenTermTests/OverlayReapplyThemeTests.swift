@@ -325,6 +325,33 @@ final class OverlayReapplyThemeTests: WindowTestCase {
             "a destructive toast's badge must carry the destructive role, not the chrome accent")
     }
 
+    /// Every baked-colour control on the card, not just the ones someone remembered. The badge was
+    /// fixed first and the action buttons were missed, so a toast up across a theme change re-tinted
+    /// its icon while `Switch` kept the previous accent.
+    func test_reapplyTheme_recolorsToastActionButtons() throws {
+        let toast = ToastView(
+            content: ToastContent(variant: .info, title: "shell", message: "Waiting."),
+            actions: [
+                ToastAction(title: "Dismiss", kind: .cancel) {},
+                ToastAction(title: "Switch", kind: .primary) {},
+            ])
+        toast.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(toast)
+        toast.frame = NSRect(x: 0, y: 0, width: 300, height: 110)
+
+        let before = toast.actionTitleColorsForTesting
+        XCTAssertEqual(before.count, 2, "expected both action buttons")
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        toast.reapplyTheme()
+
+        XCTAssertNotEqual(before, toast.actionTitleColorsForTesting, "the action buttons stayed stale")
+        XCTAssertTrue(
+            toast.actionTitleColorsForTesting.contains(Theme.current.chrome.accent.nsColor),
+            "the primary action must carry the new accent")
+    }
+
     /// The badge is the only thing that tells two toasts apart at a glance, so two variants must
     /// never paint it the same. This is what a "did it change" assertion cannot see.
     func test_toastBadge_carriesTheVariantTone_notTheChromeAccent() throws {
