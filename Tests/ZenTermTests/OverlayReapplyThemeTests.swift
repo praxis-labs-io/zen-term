@@ -314,9 +314,32 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
         XCTAssertNotEqual(colorBefore, titleLabel.textColor)
         XCTAssertNotEqual(borderBefore, toast.layer?.borderColor)
-        // Both halves of the badge bake the live accent at init. The fill was the one that stayed
+        // Both halves of the badge bake their colour at init. The fill was the one that stayed
         // stale on a theme swap while the card around it recolored.
         XCTAssertNotEqual(badgeBefore, toast.badgeFillForTesting, "the badge fill stayed stale")
         XCTAssertNotEqual(glyphBefore, toast.badgeIconTintForTesting, "the badge glyph stayed stale")
+        // "It changed" is too weak on its own: painting the badge from `chrome.accent` also changes
+        // across a swap, and that flattens every variant to one colour. Pin the tone instead.
+        XCTAssertEqual(
+            toast.badgeIconTintForTesting, Theme.current.chrome.destructive.nsColor,
+            "a destructive toast's badge must carry the destructive role, not the chrome accent")
+    }
+
+    /// The badge is the only thing that tells two toasts apart at a glance, so two variants must
+    /// never paint it the same. This is what a "did it change" assertion cannot see.
+    func test_toastBadge_carriesTheVariantTone_notTheChromeAccent() throws {
+        let window = makeWindow()
+        func badge(_ variant: ToastVariant) -> NSColor? {
+            let toast = ToastView(content: ToastContent(variant: variant, title: "T", message: "M"))
+            toast.translatesAutoresizingMaskIntoConstraints = true
+            window.contentView?.addSubview(toast)
+            toast.frame = NSRect(x: 0, y: 0, width: 300, height: 80)
+            return toast.badgeIconTintForTesting
+        }
+        let tones = [ToastVariant.info, .positive, .warning, .destructive].map(badge)
+        XCTAssertEqual(
+            tones.count, Set(tones.map { $0?.description ?? "nil" }).count,
+            "two variants share a badge tone")
+        XCTAssertEqual(badge(.warning), Theme.current.chrome.warning.nsColor)
     }
 }

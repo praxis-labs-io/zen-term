@@ -315,8 +315,9 @@ final class ToastView: ShadowCardView {
     /// The badge's fill and glyph, from one place so init and `reapplyTheme()` cannot drift.
     private func applyBadgeTheme() {
         let chrome = Theme.current.chrome
-        badgeFill.layer?.backgroundColor = chrome.tint(chrome.accent, alpha: ChromeTheme.badgeTint).cgColor
-        badgeIcon.contentTintColor = chrome.accent.nsColor
+        let role = variant.role(in: chrome)  // the variant's tone, never the chrome accent
+        badgeFill.layer?.backgroundColor = chrome.tint(role, alpha: ChromeTheme.badgeTint).cgColor
+        badgeIcon.contentTintColor = role.nsColor
     }
 
     /// Test hooks: the badge paints from the live theme, so a stale one is only visible by reading
