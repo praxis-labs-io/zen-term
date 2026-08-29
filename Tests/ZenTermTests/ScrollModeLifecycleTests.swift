@@ -1268,6 +1268,25 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertFalse(host.isInstalled, "the handler is app-global and would deafen the next window")
     }
 
+    func test_aTabSwitchGivesTheOldTabItsLiveCursorBack() throws {
+        // The mode's unfocused render is pushed at the controller that is active when the mode
+        // ends. Torn down after the switch, it restores the wrong tab and the one you left keeps
+        // drawing a hollow block for as long as it stays open.
+        let controller = makeWindow()
+        let first = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        controller.handle(.toggleScrollMode)
+        XCTAssertEqual(first.focusRenders.last, false)
+
+        controller.handle(.newTab)
+        controller.window.contentView?.layoutSubtreeIfNeeded()
+        controller.selectTabForTesting(index: 0)
+        controller.window.contentView?.layoutSubtreeIfNeeded()
+
+        XCTAssertFalse(controller.scrollMode.isActive)
+        XCTAssertEqual(
+            first.focusRenders.last, true, "no mode is up, so the pane's own cursor is live again")
+    }
+
     // MARK: the indicator's live text
 
     func test_theHeaderTracksTheReportedScrollPosition() throws {

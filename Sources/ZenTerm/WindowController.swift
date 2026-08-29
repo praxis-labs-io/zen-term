@@ -693,12 +693,17 @@ final class WindowController: NSObject {
                 if self.search.handle(event) { return true }
                 return self.scrollMode.handle(event)
             } : nil
-        // The shell is not taking keys while a mode is up, and its blinking cursor competes with
-        // the mode's own for the reader's eye. The unfocused render (hollow, still) says exactly
-        // that. It changes how the surface DRAWS, never who holds focus, so a mode that ends
-        // because focus moved re-asserts the render on whichever panel holds it now.
+        // A mode holds the keyboard, so the shell's cursor stands down (hollow, still) for as
+        // long as it is up. Released against the tab it was pushed at, never whichever is active.
+        if let previous = modeRenderTarget, previous !== activeController {
+            previous.setFocusedSurfaceRendersFocused(true)
+        }
+        modeRenderTarget = active ? activeController : nil
         activeController?.setFocusedSurfaceRendersFocused(!active)
     }
+
+    /// The tab whose focused surface currently wears a mode's unfocused render.
+    private weak var modeRenderTarget: TabController?
 
     /// Build the first tab, start its shell, and arm the title poll. Does **not** present the
     /// window: ordering it in and taking key belongs to whoever asked for the window, because a
