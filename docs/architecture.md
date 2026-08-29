@@ -1426,6 +1426,13 @@ underneath it. And it ends the find bar: the zoom pulls first responder off the 
 the bar hearing, nothing clears `isEditing` on a lost responder, and a bar left editing makes
 the mode handler decline every key, so the whole keyboard goes to the shell behind it.
 
+**The stand-down is lifted off the controller it was pushed at**, which `updateModeHandler`
+tracks rather than reading `activeController` twice. A tab change between the push and the
+release ends the mode against the tab you landed on, so the one you left kept drawing a
+hollow cursor with nothing short of another mode on that tab to clear it. `⌘T` is the path
+that proves it has to be tracked: it changes the active tab through `addTab`, never
+`select(_:)`, so ending modes at the switch would not have covered it.
+
 ## Config
 
 Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`, matching ghostty's
