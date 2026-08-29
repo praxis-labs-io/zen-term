@@ -697,8 +697,18 @@ final class WindowController: NSObject {
         // the mode's own for the reader's eye. The unfocused render (hollow, still) says exactly
         // that. It changes how the surface DRAWS, never who holds focus, so a mode that ends
         // because focus moved re-asserts the render on whichever panel holds it now.
+        // Lifted off the controller it was pushed at, not whichever one is active now: a tab
+        // change between the two ends the mode against the new tab and strands the one you left
+        // rendering unfocused, with nothing short of another mode on that tab to clear it.
+        if let previous = modeRenderTarget, previous !== activeController {
+            previous.setFocusedSurfaceRendersFocused(true)
+        }
+        modeRenderTarget = active ? activeController : nil
         activeController?.setFocusedSurfaceRendersFocused(!active)
     }
+
+    /// The tab whose focused surface currently wears a mode's unfocused render.
+    private weak var modeRenderTarget: TabController?
 
     /// Build the first tab, start its shell, and arm the title poll. Does **not** present the
     /// window: ordering it in and taking key belongs to whoever asked for the window, because a
