@@ -25,29 +25,16 @@ one-time hand-off rather than anything `bin/release` carries.
 hand. It needs no DMG: the enclosure inside already points at the asset here, the
 bytes are identical, and `SUPublicEDKey` never changed, so the signature verifies.
 
-**Pin the enclosure to the tag before uploading it.** `bin/release` writes the live
-appcast with a `releases/latest/download/` URL, which is right for a feed that is
-regenerated every release. The hand-off copy is written once and never again, so
-`latest` stops meaning 1.0.0 the moment 1.0.1 ships and the download 404s.
+`bin/release` already pins the enclosure to `releases/download/vX.Y.Z/`, so the file
+uploads as written. That matters most here: the hand-off copy is written once and
+never regenerated, and a `latest` URL would stop meaning 1.0.0 the moment 1.0.1
+shipped.
 
-Work on a copy, not `dist/appcast.xml` itself: a `bin/release` rerun regenerates that
-file from a heredoc and your edit is gone without a word.
-
-**The copy has to keep the name `appcast.xml`,** so put it in a subdirectory rather
-than renaming it. `gh release create` names each asset by its basename, and the feed
-every pre-1.0.0 build polls is literally `latest/download/appcast.xml`. Upload it as
-`appcast-handoff.xml` and that URL 404s, which is the one thing this hand-off exists
-to prevent.
-
-```
-mkdir -p dist/handoff && cp dist/appcast.xml dist/handoff/appcast.xml
-```
-
-Then edit the copy's enclosure to the tagged form:
-
-```
-https://github.com/praxis-labs-io/zen-term/releases/download/v1.0.0/ZenTerm-1.0.0-arm64.dmg
-```
+**It has to keep the name `appcast.xml`,** so upload `dist/appcast.xml` itself rather
+than a renamed copy. `gh release create` names each asset by its basename, and the
+feed every pre-1.0.0 build polls is literally `latest/download/appcast.xml`. Upload it
+as `appcast-handoff.xml` and that URL 404s, which is the one thing this hand-off
+exists to prevent.
 
 **Publish it as a draft first.** Creating this release moves `latest` on the old repo
 off v0.10.0 the instant it is public, so the asset becomes the feed for every pre-1.0.0
@@ -60,7 +47,7 @@ manual download. Draft, check, then publish:
 gh release create v1.0.0 --repo zen-term/zen-term-releases --draft \
     --title "ZenTerm 1.0.0" \
     --notes "ZenTerm moved to https://github.com/praxis-labs-io/zen-term. Releases are published there." \
-    dist/handoff/appcast.xml
+    dist/appcast.xml
 ```
 
 Confirm the asset kept its name and the enclosure resolves:
@@ -68,7 +55,7 @@ Confirm the asset kept its name and the enclosure resolves:
 ```
 gh release view v1.0.0 --repo zen-term/zen-term-releases --json assets \
     --jq '.assets[].name'          # must print exactly: appcast.xml
-curl -sI "$(grep -o 'https://[^"]*\.dmg' dist/handoff/appcast.xml)" | head -1
+curl -sI "$(grep -o 'https://[^"]*\.dmg' dist/appcast.xml)" | head -1
 ```
 
 The `curl` must return `200` or a `302`, not `404`. Then release it:

@@ -275,7 +275,8 @@ xcrun stapler validate "$DMG"
 # sparkle:version is read back out of the built app's plist rather than recomputing the commit
 # count: two places deriving one number is how they drift. The card bullets (CARD_NOTES, gathered
 # above) go into the description CDATA; the full curated prose stays in the GitHub release body, which
-# releaseNotesLink points at as the card's "What's new".
+# releaseNotesLink points at as the card's "What's new". The enclosure is pinned to $TAG, not
+# `latest`: the signature is for one exact file, and `latest` moves under a client mid-update.
 echo "▸ Appcast"
 BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")"
 ED_ATTRS="$("$SIGN_UPDATE" "$DMG")"  # sparkle:edSignature="…" length="…"
@@ -297,7 +298,7 @@ cat > "$APPCAST" <<XML
       <description><![CDATA[
 $CARD_NOTES
 ]]></description>
-      <enclosure url="https://github.com/$RELEASES_REPO/releases/latest/download/$DMG_NAME" $ED_ATTRS type="application/octet-stream" />
+      <enclosure url="https://github.com/$RELEASES_REPO/releases/download/$TAG/$DMG_NAME" $ED_ATTRS type="application/octet-stream" />
     </item>
   </channel>
 </rss>
