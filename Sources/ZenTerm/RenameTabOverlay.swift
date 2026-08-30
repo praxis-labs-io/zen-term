@@ -16,13 +16,13 @@ final class RenameTabOverlay: NSView, ModalOverlay {
     private var dismiss = DismissGate()
 
     private let header = NSTextField(labelWithString: "")
-    private let hint = NSTextField(labelWithString: "")
     private let nameField: FieldBox
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private let renameButton = AppButton(title: "Rename", variant: .primary, keyEquivalent: "\r")
 
     /// `current` is what the field starts with; `liveTitle` is the folder-derived name it falls
-    /// back to, shown as the placeholder so the reset is visible rather than described.
+    /// back to. It IS the placeholder: empty the field and you read the name you get back, which
+    /// is shorter and more concrete than a line of prose explaining the same rule.
     init(
         current: String, liveTitle: String, background: NSColor,
         onSubmit: @escaping (String) -> Void, onCancel: @escaping () -> Void
@@ -108,7 +108,6 @@ final class RenameTabOverlay: NSView, ModalOverlay {
         let chrome = Theme.current.chrome
         CardChrome.reapplyTheme(to: card)
         header.textColor = chrome.foreground.nsColor
-        hint.textColor = chrome.ink(.muted)
         let controls: [ThemeReapplying] = [nameField, cancelButton, renameButton]
         controls.forEach { $0.reapplyTheme() }
     }
@@ -119,10 +118,6 @@ final class RenameTabOverlay: NSView, ModalOverlay {
         header.font = .systemFont(ofSize: 15, weight: .semibold)
         header.textColor = Theme.current.chrome.foreground.nsColor
         header.stringValue = "Rename Tab"
-
-        hint.font = .systemFont(ofSize: 11)
-        hint.textColor = Theme.current.chrome.ink(.muted)
-        hint.stringValue = "Leave it empty to go back to the folder name."
 
         nameField.onEnter = { [weak self] in self?.submit() }
         nameField.onSubmit = { [weak self] in self?.submit() }
@@ -146,7 +141,7 @@ final class RenameTabOverlay: NSView, ModalOverlay {
         footer.spacing = 8
         footer.translatesAutoresizingMaskIntoConstraints = false
 
-        let content = NSStackView(views: [header, nameField, hint, footer])
+        let content = NSStackView(views: [header, nameField, footer])
         content.orientation = .vertical
         content.alignment = .leading
         content.spacing = 12
