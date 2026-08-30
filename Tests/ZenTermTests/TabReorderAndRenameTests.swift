@@ -194,4 +194,43 @@ final class TabReorderAndRenameTests: WindowTestCase {
             context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
             isARepeat: false, keyCode: 53)!
     }
+
+    // MARK: the card is a card
+
+    /// Every chord that presents a modal card closes a shown tool float first. Rename shipped in
+    /// the pass-through group instead, which stacked the card on top of the float: two modal
+    /// surfaces up at once, with the keyboard aimed at one of them.
+    func test_openingTheCardOverAShownFloat_closesTheFloat() throws {
+        let controller = makeWindow(tabs: 2)
+        controller.floatsForTesting.toggle(
+            ToolFloat(
+                id: "probe", order: 0, title: "Probe", icon: ToolFloatParser.defaultIcon,
+                command: "true", dir: nil, widthFraction: 0.6, heightFraction: 0.6,
+                requiresGitRepo: false, persist: .ephemeral,
+                toggle: Chord(command: true, shift: true, key: "y")))
+        XCTAssertTrue(controller.floatsForTesting.isOpen, "the float is up")
+
+        controller.handle(.renameTab)
+
+        XCTAssertFalse(controller.floatsForTesting.isOpen, "the float closes before the card opens")
+        XCTAssertNoThrow(try renameCard(controller), "and the card is up")
+    }
+
+    /// A pending destructive confirm outranks the card. The keyboard route is already gated on
+    /// `isConfirmOpen`, but double-clicking the ACTIVE chip is not: `select` returns early on the
+    /// tab already being active, before its own `cancelConfirm()`, so the card would land on top
+    /// of a confirm that then cannot be answered.
+    func test_doubleClickingTheActiveChip_answersAPendingConfirmFirst() throws {
+        let controller = makeWindow(tabs: 2)
+        var confirmed = 0
+        controller.presentConfirm(
+            variant: .warning, title: "Close 2 panes", message: "This closes both.",
+            confirmLabel: "Close", onConfirm: { confirmed += 1 })
+        XCTAssertTrue(controller.isConfirmOpen)
+
+        controller.renameTabForTesting(index: 1)  // index 1 is the active tab
+
+        XCTAssertFalse(controller.isConfirmOpen, "the confirm is cleared, not buried")
+        XCTAssertEqual(confirmed, 0, "and cleared means cancelled, never silently confirmed")
+    }
 }

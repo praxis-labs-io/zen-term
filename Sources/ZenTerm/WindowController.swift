@@ -1071,6 +1071,9 @@ final class WindowController: NSObject {
     /// Open the rename card for `id`. Takes the single modal slot, so whatever else is up closes.
     private func openRenameTab(_ id: TabID) {
         guard let controller = controllers[id] else { return }
+        // Double-clicking the ACTIVE chip never reaches `select`'s own call: it returns early on
+        // the id already being active, so a pending Close confirm would sit under the card.
+        cancelConfirm()
         if modal?.kind == .renameTab { closeModal(); return }
         if modal != nil { closeModal() }
         let overlay = RenameTabOverlay(
@@ -1855,10 +1858,11 @@ final class WindowController: NSObject {
                 .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom:
                 toastFloatBlocked()
                 return
-            case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue, .newTool:
+            case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue, .newTool,
+                .renameTab:
                 floats.close()  // close it, then fall through to open the other
             case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab,
-                .moveTabLeft, .moveTabRight, .renameTab, .fillScreen,
+                .moveTabLeft, .moveTabRight, .fillScreen,
                 .increaseFontSize, .decreaseFontSize, .resetFontSize, .selectAll,
                 // Reading the card's own buffer. `modeTarget` resolves the shown float ahead of the
                 // panel behind it, so all of these act on the terminal you are looking at.
@@ -2398,9 +2402,6 @@ final class WindowController: NSObject {
     /// rename is asserted on what reaches the bar rather than on the model alone.
     var tabOrderForTesting: [TabID] { tabs.order }
     var tabTitlesForTesting: [String] { tabs.order.map { titles[$0] ?? "shell" } }
-
-    /// Test hook: the tab bar itself, for driving the in-place rename editor.
-    var tabBarForTesting: TabBarView { tabBar }
 
     /// Test hook: the active tab's id, so a test can name the tab a tab-scoped thing belongs to
     /// and prove it is not simply whichever one is up.

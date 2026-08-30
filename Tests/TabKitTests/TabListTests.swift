@@ -105,8 +105,9 @@ final class TabListTests: XCTestCase {
         XCTAssertEqual(list.order, [TabID(1), TabID(2), TabID(3)])
     }
 
-    /// The moved tab keeps the selection, so ⌘⌃[ held down walks one tab across the bar rather
-    /// than dragging a different tab on each press.
+    /// The moved tab keeps the selection, so a second press moves the same tab again rather than
+    /// grabbing whichever tab landed in that slot. The chord is discrete, like the rest of the tab
+    /// family: a held key would fling the tab to the wall.
     func test_move_keepsTheMovedTabActive() {
         var list = TabList(first: TabID(1))
         list.add(TabID(2))

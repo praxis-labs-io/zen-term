@@ -8,7 +8,6 @@ import AppKit
 /// sliding underline, and a field that grows as you type has to reflow the strip, move the
 /// underline and recompute the edge fades on every keystroke.
 final class RenameTabOverlay: NSView, ModalOverlay {
-    private let liveTitle: String
     private let onSubmit: (String) -> Void
     private let onCancel: () -> Void
 
@@ -27,7 +26,6 @@ final class RenameTabOverlay: NSView, ModalOverlay {
         current: String, liveTitle: String, background: NSColor,
         onSubmit: @escaping (String) -> Void, onCancel: @escaping () -> Void
     ) {
-        self.liveTitle = liveTitle
         self.onSubmit = onSubmit
         self.onCancel = onCancel
         nameField = FieldBox(placeholder: liveTitle)

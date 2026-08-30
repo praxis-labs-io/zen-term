@@ -327,4 +327,62 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertEqual(selected, [TabID(2)])
         XCTAssertTrue(renamed.isEmpty)
     }
+
+    // MARK: revealing a moved tab
+
+    /// ⌘⌃] keeps the same tab active while walking it along the bar, so the reveal cannot key off
+    /// the selection: the tab slides under the edge fade and off-screen with its underline
+    /// following it out of view.
+    func test_movingTheActiveTabScrollsItBackIntoView() throws {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
+        mount(tabBar)
+        let names = (1...14).map { "tab-number-\($0)" }
+        func snapshot(active: Int) -> [TabBarItem] {
+            names.enumerated().map { i, name in
+                item(i + 1, name, index: i + 1, active: i + 1 == active)
+            }
+        }
+        tabBar.render(snapshot(active: 1))
+        tabBar.layoutSubtreeIfNeeded()
+
+        // The same tab stays active and walks to the far end of an overflowing strip.
+        var moved = names
+        let carried = moved.removeFirst()
+        moved.append(carried)
+        let items = moved.enumerated().map { i, name in
+            item(names.firstIndex(of: name)! + 1, name, index: i + 1, active: name == carried)
+        }
+        tabBar.render(items)
+        tabBar.layoutSubtreeIfNeeded()
+
+        let chip = try XCTUnwrap(tabBar.chipsForTesting.last)
+        XCTAssertTrue(
+            tabBar.visibleStripRectForTesting.intersects(chip.frame),
+            "the moved tab has to be scrolled back into view, not left off the end of the strip")
+    }
+
+    /// The reveal must not fire on a title poll, which would yank the strip back under a user who
+    /// is scrolling it. A title changing never changes a tab's slot.
+    func test_aTitleChangeDoesNotYankTheStripBack() throws {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
+        mount(tabBar)
+        let names = (1...14).map { "tab-number-\($0)" }
+        func snapshot(firstTitle: String) -> [TabBarItem] {
+            names.enumerated().map { i, name in
+                item(i + 1, i == 0 ? firstTitle : name, index: i + 1, active: i == 0)
+            }
+        }
+        tabBar.render(snapshot(firstTitle: names[0]))
+        tabBar.layoutSubtreeIfNeeded()
+        tabBar.scrollToForTesting(x: 300)
+        let scrolled = tabBar.visibleStripRectForTesting.origin.x
+        XCTAssertGreaterThan(scrolled, 0, "the strip is scrolled away from tab 1")
+
+        tabBar.render(snapshot(firstTitle: "a-new-title-from-the-poll"))
+        tabBar.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(
+            tabBar.visibleStripRectForTesting.origin.x, scrolled, accuracy: 0.5,
+            "a title poll must leave the scroll position alone")
+    }
 }

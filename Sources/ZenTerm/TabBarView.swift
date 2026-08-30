@@ -41,8 +41,7 @@ final class TabBarView: NSView {
     /// The last ~28pt at each edge over which overflowing tabs dissolve into the backdrop.
     private static let fadeWidth: CGFloat = 28
 
-    /// The chip label's font, shared with the rename editor: the two draw the same text in the
-    /// same place, so they cannot be allowed to disagree about the face.
+    /// The chip label's font.
     static let chipFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
     /// The kern the title carries in the label. The editor matches it or the text reflows on open.
     fileprivate static let titleKern: CGFloat = 0.4
@@ -79,6 +78,9 @@ final class TabBarView: NSView {
     /// toward the target rather than growing symmetrically about the center.
     private let tracer = CALayer()
     private var activeTabID: TabID?
+    /// The active tab's 1-based slot at the last render. A move keeps the same tab active while
+    /// changing this, which is the only signal separating it from a title poll.
+    private var activeTabIndex: Int?
     /// The last snapshot handed to `render(_:)`, retained so `reapplyTheme()` can re-render it
     /// after a theme swap without the caller re-supplying the tab list.
     private var lastItems: [TabBarItem] = []
@@ -177,17 +179,22 @@ final class TabBarView: NSView {
         let newActive = items.first(where: \.isActive)?.id
         if let activeChip {
             let selectionChanged = activeTabID != newActive
+            let newIndex = items.first(where: \.isActive)?.index
+            // ⌘⌃[ moves the active tab without changing which tab is active, and it can walk clean
+            // off the strip. Its slot changing is what separates that from a title poll, which
+            // must not yank the strip back while the user is scrolling it.
+            let slotChanged = activeTabIndex != nil && activeTabIndex != newIndex
             moveTracer(to: tracerFrame(for: activeChip), animated: activeTabID != nil && selectionChanged)
             tracer.isHidden = false
-            // Reveal the active tab only when the selection actually moves — not on a title-poll
-            // re-render, which would otherwise yank the strip back while the user scrolls it. Pad by
-            // `fadeWidth` on each side so the revealed tab clears the edge fade instead of sitting
-            // under it.
-            if selectionChanged {
+            // Pad by `fadeWidth` on each side so the revealed tab clears the edge fade instead of
+            // sitting under it.
+            if selectionChanged || slotChanged {
                 activeChip.scrollToVisible(activeChip.bounds.insetBy(dx: -Self.fadeWidth, dy: 0))
             }
+            activeTabIndex = newIndex
         } else {
             tracer.isHidden = true
+            activeTabIndex = nil
         }
         activeTabID = newActive
         updateFade()
@@ -232,6 +239,10 @@ final class TabBarView: NSView {
     var chipTooltipsForTesting: [(label: String, shortcut: String?)] {
         chips.map { ($0.tooltipLabelForTesting, $0.tooltipShortcutForTesting) }
     }
+
+    /// Test hook: the part of the strip on screen right now, so a test can assert what a reveal
+    /// or a scroll actually left visible.
+    var visibleStripRectForTesting: CGRect { scrollView.contentView.documentVisibleRect }
 
     /// Test hook: scroll the strip to a horizontal offset, as a trackpad drag would.
     func scrollToForTesting(x: CGFloat) {
