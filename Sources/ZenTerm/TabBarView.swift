@@ -42,6 +42,14 @@ final class TabBarView: NSView, NSTextFieldDelegate {
     /// The last ~28pt at each edge over which overflowing tabs dissolve into the backdrop.
     private static let fadeWidth: CGFloat = 28
 
+    /// The chip label's font, shared with the rename editor: the two draw the same text in the
+    /// same place, so they cannot be allowed to disagree about the face.
+    static let chipFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
+    /// The kern the title carries in the label. The editor matches it or the text reflows on open.
+    fileprivate static let titleKern: CGFloat = 0.4
+    /// The label's inset inside its chip.
+    fileprivate static let labelInset: CGFloat = 9
+
     fileprivate static var activeInk: NSColor { Theme.current.chrome.ink(.normal) }
     fileprivate static var idleInk: NSColor {
         Theme.current.chrome.ink(.subtle)
@@ -223,24 +231,28 @@ final class TabBarView: NSView, NSTextFieldDelegate {
         else { return }
 
         let field = NSTextField(string: title)
+        field.cell = FlushFieldCell(textCell: title)
+        field.isEditable = true  // a cell swapped in by hand starts read-only
+        field.isSelectable = true
         field.delegate = self
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
         field.usesSingleLineMode = true
         field.lineBreakMode = .byTruncatingTail
-        field.wantsLayer = true
-        field.layer?.cornerRadius = 6
         styleRenameEditor(field)
-        field.frame = chip.frame
+        field.frame = Self.editorFrame(over: chip)
         docView.addSubview(field, positioned: .above, relativeTo: chip)
 
         renameEditor = field
         renamingID = id
-        chip.isHidden = true
+        chip.setEditing(true)
         window?.makeFirstResponder(field)
         field.applyThemedCaret()  // the editor exists only once the field has focus
-        field.currentEditor()?.selectAll(nil)
+        if let editor = field.currentEditor() as? NSTextView {
+            editor.typingAttributes[.kern] = Self.titleKern
+            editor.selectAll(nil)
+        }
         field.scrollToVisible(field.bounds.insetBy(dx: -Self.fadeWidth, dy: 0))
     }
 
@@ -254,7 +266,7 @@ final class TabBarView: NSView, NSTextFieldDelegate {
         let value = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         renameEditor = nil
         renamingID = nil
-        chips.first(where: { $0.id == id })?.isHidden = false
+        chips.first(where: { $0.id == id })?.setEditing(false)
         if field.currentEditor() != nil { window?.makeFirstResponder(nil) }
         field.removeFromSuperview()
         if commit { onRename(id, value) }
@@ -262,9 +274,17 @@ final class TabBarView: NSView, NSTextFieldDelegate {
 
     /// The editor reads as the chip becoming editable: same font, the active fill behind it.
     private func styleRenameEditor(_ field: NSTextField) {
-        field.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
+        field.font = Self.chipFont
         field.textColor = Theme.current.chrome.ink(.normal)
-        field.layer?.backgroundColor = Theme.current.chrome.fill(.active).cgColor
+        (field.currentEditor() as? NSTextView)?.typingAttributes[.kern] = Self.titleKern
+    }
+
+    /// The title's own rectangle inside `chip`: everything right of the number the chip keeps
+    /// drawing. Framing here is what stops the text moving when the editor opens.
+    private static func editorFrame(over chip: Chip) -> CGRect {
+        CGRect(
+            x: chip.frame.minX + chip.titleOriginX, y: chip.frame.minY,
+            width: max(chip.frame.width - chip.titleOriginX - labelInset, 1), height: chip.frame.height)
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
@@ -353,7 +373,7 @@ final class TabBarView: NSView, NSTextFieldDelegate {
         let contentWidth = chips.isEmpty ? 0 : x - Self.chipSpacing
         docView.frame = CGRect(x: 0, y: 0, width: contentWidth, height: h)
         if let renameEditor, let chip = chips.first(where: { $0.id == renamingID }) {
-            renameEditor.frame = chip.frame
+            renameEditor.frame = Self.editorFrame(over: chip)
         }
     }
 
@@ -467,7 +487,7 @@ final class TabBarView: NSView, NSTextFieldDelegate {
     }
 
     private static func tabLabel(_ item: TabBarItem) -> NSAttributedString {
-        let font = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
+        let font = chipFont
         let ink = item.isActive ? activeInk : idleInk
         let numberColor: NSColor
         switch item.attentionState {
@@ -487,8 +507,34 @@ final class TabBarView: NSView, NSTextFieldDelegate {
         s.append(
             NSAttributedString(
                 string: item.title,
-                attributes: [.font: font, .foregroundColor: ink, .kern: 0.4]))
+                attributes: [.font: font, .foregroundColor: ink, .kern: titleKern]))
         return s
+    }
+
+    /// A field cell with no horizontal inset and its line centered by hand. AppKit's default cell
+    /// insets text a couple of points, which is the other half of the jump when the editor opens.
+    private final class FlushFieldCell: NSTextFieldCell {
+        override func drawingRect(forBounds rect: NSRect) -> NSRect {
+            let height = cellSize(forBounds: rect).height
+            return NSRect(x: rect.minX, y: rect.midY - height / 2, width: rect.width, height: height)
+        }
+
+        override func edit(
+            withFrame rect: NSRect, in view: NSView, editor: NSText, delegate: Any?, event: NSEvent?
+        ) {
+            super.edit(
+                withFrame: drawingRect(forBounds: rect), in: view, editor: editor, delegate: delegate,
+                event: event)
+        }
+
+        override func select(
+            withFrame rect: NSRect, in view: NSView, editor: NSText, delegate: Any?, start: Int,
+            length: Int
+        ) {
+            super.select(
+                withFrame: drawingRect(forBounds: rect), in: view, editor: editor, delegate: delegate,
+                start: start, length: length)
+        }
     }
 
     /// A rounded box holding a centered label. The box background appears on hover
@@ -518,7 +564,23 @@ final class TabBarView: NSView, NSTextFieldDelegate {
         /// The width this chip wants: its label plus the 9pt inset on each side. Read from the
         /// label's intrinsic size (not `fittingSize`) so it's independent of the frame the parent
         /// assigns during manual layout.
-        var fittingWidth: CGFloat { label.intrinsicContentSize.width + 18 }
+        var fittingWidth: CGFloat { label.intrinsicContentSize.width + 2 * TabBarView.labelInset }
+
+        /// Where the title starts inside this chip: the label inset plus the number prefix drawn
+        /// ahead of it. The editor frames from here, so opening it moves no text.
+        var titleOriginX: CGFloat {
+            let prefix = NSAttributedString(
+                string: "\(tabIndex) ", attributes: [.font: TabBarView.chipFont])
+            return TabBarView.labelInset + prefix.size().width
+        }
+
+        /// While its title is being edited the chip wears the active fill and stops answering
+        /// hover, so the number beside the editor sits on one continuous background.
+        private var isEditing = false
+        func setEditing(_ on: Bool) {
+            isEditing = on
+            updateBackground()
+        }
 
         var attributedLabelForTesting: NSAttributedString { label.attributedStringValue }
 
@@ -545,7 +607,7 @@ final class TabBarView: NSView, NSTextFieldDelegate {
             addSubview(label)
 
             NSLayoutConstraint.activate([
-                label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
+                label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: TabBarView.labelInset),
                 label.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
         }
@@ -607,9 +669,10 @@ final class TabBarView: NSView, NSTextFieldDelegate {
 
         private func updateBackground() {
             guard let layer else { return }
-            Motion.ease(
-                layer, keyPath: "backgroundColor",
-                to: (isHovered ? Theme.current.chrome.fill(.hover) : .clear).cgColor)
+            let fill: NSColor =
+                isEditing
+                ? Theme.current.chrome.fill(.active) : (isHovered ? Theme.current.chrome.fill(.hover) : .clear)
+            Motion.ease(layer, keyPath: "backgroundColor", to: fill.cgColor)
         }
     }
 }

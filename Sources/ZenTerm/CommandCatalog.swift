@@ -112,7 +112,7 @@ enum CommandCatalog {
         chords += [.openSettings, .reloadConfig, .checkForUpdates, .reportIssue]
         chords += [
             .toggleBottomDrawer, .toggleRightDrawer,
-            .newTab, .prevTab, .nextTab,
+            .newTab, .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab,
         ]
         if tabCount > 0 {
             chords += (1...min(tabCount, 9)).map { .selectTab($0) }

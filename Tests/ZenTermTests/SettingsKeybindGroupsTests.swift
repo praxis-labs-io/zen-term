@@ -19,7 +19,9 @@ final class SettingsKeybindGroupsTests: XCTestCase {
     /// The editable set, spelled out. There is no `CaseIterable` to walk — `selectTab` and
     /// `toggleToolFloat` carry associated values — so the enumeration lives here, and a new case
     /// that answers `true` and is added to neither list fails below rather than shipping invisible.
-    private static let everyAction: [KeyInterceptor.ReservedChord] =
+    /// Shared with `CommandCatalogTests`, which measures the palette's list against the same
+    /// inventory. The enum is not `CaseIterable`, so this list is the only roster there is.
+    static let everyAction: [KeyInterceptor.ReservedChord] =
         [
             .splitHorizontal, .splitVertical, .closePane, .toggleZoom,
             .toggleScrollMode, .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown,

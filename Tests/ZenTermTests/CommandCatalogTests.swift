@@ -33,7 +33,8 @@ final class CommandCatalogTests: XCTestCase {
                 "Check for Updates",
                 "Report an Issue…",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
-                "New Tab", "Previous Tab", "Next Tab",
+                "New Tab", "Previous Tab", "Next Tab", "Move Tab Left", "Move Tab Right",
+                "Rename Tab…",
                 "Split Horizontally", "Split Vertically",
                 "Focus Pane Left", "Focus Pane Down", "Focus Pane Up", "Focus Pane Right",
                 "Focus Previous Pane", "Focus Next Pane",
@@ -142,18 +143,43 @@ final class CommandCatalogTests: XCTestCase {
     }
 
     func test_everyEntry_hasTitle_andShortcut() {
-        // Every palette command shows its glyph, except the three shipped deliberately unbound:
-        // Check for Updates and Report an Issue are the menu bar's errands, and
-        // New Tool is a once-in-a-while errand that would spend a chord for nothing.
+        // Every palette command shows its glyph, except the four shipped deliberately unbound:
+        // Check for Updates and Report an Issue are the menu bar's errands, New Tool is a
+        // once-in-a-while errand, and Rename Tab is reached by double-clicking the tab.
         let unbound: Set<String> = [
             KeyInterceptor.ReservedChord.checkForUpdates.actionToken,
             KeyInterceptor.ReservedChord.reportIssue.actionToken,
             KeyInterceptor.ReservedChord.newTool.actionToken,
+            KeyInterceptor.ReservedChord.renameTab.actionToken,
         ]
         for command in CommandCatalog.commands(tabCount: 9) {
             XCTAssertFalse(command.title.isEmpty)
             guard !unbound.contains(command.chord.actionToken) else { continue }
             XCTAssertFalse(command.shortcut.isEmpty, "\(command.title) should show a shortcut")
         }
+    }
+
+    /// `spec(for:)` is exhaustive, so a new chord cannot compile without a palette title. Nothing
+    /// forced it into `commands(tabCount:)`, which is the list the palette actually renders: three
+    /// tab actions shipped with titles and no way to reach them. Anything editable in Settings is
+    /// reachable from the palette too, minus the four excluded on purpose above.
+    func test_everyEditableAction_isReachableFromThePalette() {
+        let excluded: Set<String> = [
+            "new_window",  // the menu bar owns it
+            "toggle_command_palette",  // it is the palette
+            "search_next", "search_previous",  // `n` / `N` step a live search
+        ]
+        let listed = Set(CommandCatalog.commands(tabCount: 9).map(\.chord.actionToken))
+
+        let missing =
+            SettingsKeybindGroupsTests.everyAction
+            .filter(\.isEditableInSettings)
+            .map(\.actionToken)
+            .filter { !excluded.contains($0) && !listed.contains($0) }
+            .sorted()
+
+        XCTAssertEqual(
+            missing, [],
+            "these have a palette title but no palette entry, so nothing on screen can run them")
     }
 }

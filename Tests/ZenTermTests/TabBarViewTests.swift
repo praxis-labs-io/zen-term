@@ -320,6 +320,25 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertTrue(tabBar.isRenaming, "the window reads this to swallow chords while typing")
     }
 
+    /// The editor covers the title only. Framed at the chip's own origin instead, the text jumps
+    /// left by the number prefix and the 9pt inset the moment you double-click.
+    func test_theEditorOpensWhereTheTitleAlreadyIs() throws {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _, _ in })
+        _ = mountKeyed(tabBar)
+        tabBar.render([item(1, "zen-term", index: 1, active: true), item(2, "api", index: 2)])
+        let chip = tabBar.chipsForTesting[1]
+
+        try doubleClick(chip)
+
+        let field = try XCTUnwrap(tabBar.renameEditorForTesting)
+        let prefix = NSAttributedString(
+            string: "2 ", attributes: [.font: TabBarView.chipFont])
+        XCTAssertEqual(
+            field.frame.minX, chip.frame.minX + 9 + prefix.size().width, accuracy: 0.5,
+            "the editor starts at the title, past the 9pt inset and the number")
+        XCTAssertFalse(chip.isHidden, "the chip stays up, still drawing its number beside the editor")
+    }
+
     /// A single click must still just select, or renaming would fire on every tab switch.
     func test_singleClickingAChip_selectsWithoutOpeningTheEditor() throws {
         var selected: [TabID] = []
@@ -404,7 +423,9 @@ final class TabBarViewTests: WindowTestCase {
         tabBar.layoutSubtreeIfNeeded()
 
         XCTAssertNotNil(tabBar.renameEditorForTesting, "the rename survives an unrelated re-render")
-        XCTAssertEqual(field.frame, tabBar.chipsForTesting[1].frame, "and tracks its chip's new frame")
+        XCTAssertEqual(
+            field.frame.minX, tabBar.chipsForTesting[1].frame.minX + 26.5, accuracy: 4,
+            "and tracks its chip's new position, still offset past the number")
     }
 
     func test_closingTheTabBeingRenamed_dropsTheEditor() throws {
