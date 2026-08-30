@@ -91,14 +91,22 @@ final class TabReorderAndRenameTests: WindowTestCase {
 
     // MARK: rename
 
+    private func descendants(of view: NSView) -> [NSView] {
+        view.subviews.flatMap { [$0] + descendants(of: $0) }
+    }
+
+    private func renameCard(_ controller: WindowController) throws -> RenameTabOverlay {
+        let content = try XCTUnwrap(controller.window.contentView)
+        return try XCTUnwrap(
+            descendants(of: content).compactMap { $0 as? RenameTabOverlay }.first,
+            "the rename card should be up")
+    }
+
     private func rename(_ controller: WindowController, to name: String) throws {
         controller.handle(.renameTab)
-        let field = try XCTUnwrap(
-            controller.tabBarForTesting.renameEditorForTesting, "⌘P → Rename Tab opens the editor")
-        field.stringValue = name
-        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
-        _ = controller.tabBarForTesting.control(
-            field, textView: editor, doCommandBy: #selector(NSResponder.insertNewline(_:)))
+        let card = try renameCard(controller)
+        card.nameFieldForTesting.setText(name)
+        card.renameButtonForTesting.onTap()
     }
 
     func test_renameTab_commitsThroughToTheBar() throws {
@@ -109,6 +117,21 @@ final class TabReorderAndRenameTests: WindowTestCase {
         XCTAssertEqual(controller.tabTitlesForTesting.last, "api server")
     }
 
+    /// The card opens holding the name the tab already has, so a small edit does not mean retyping
+    /// it, and its placeholder is the folder name the reset falls back to.
+    func test_theCardOpensSeededWithTheCurrentName() throws {
+        let controller = makeWindow(tabs: 2)
+        let live = try XCTUnwrap(controller.tabTitlesForTesting.last)
+        try rename(controller, to: "api server")  // pin a name, so current and live now differ
+
+        controller.handle(.renameTab)
+
+        let card = try renameCard(controller)
+        XCTAssertEqual(card.nameFieldForTesting.text, "api server", "the name it carries, not the folder")
+        XCTAssertEqual(card.nameFieldForTesting.placeholder, live, "the folder name, as the reset hint")
+        XCTAssertNotEqual(live, "api server", "otherwise this test proves nothing")
+    }
+
     /// The reset path. An empty commit clears the pin, so the tab goes back to reporting its own
     /// live cwd title rather than being stuck on an empty label.
     func test_renamingToNothing_restoresTheLiveTitle() throws {
@@ -117,25 +140,58 @@ final class TabReorderAndRenameTests: WindowTestCase {
         try rename(controller, to: "api server")
         XCTAssertEqual(controller.tabTitlesForTesting.last, "api server")
 
-        try rename(controller, to: "")
+        try rename(controller, to: "   ")
 
         XCTAssertEqual(controller.tabTitlesForTesting.last, live)
         XCTAssertFalse(live.isEmpty, "the live title is a real title, so the assertion means something")
     }
 
-    /// `KeyInterceptor` runs its monitor ahead of the responder chain, so without an explicit gate
-    /// ⌘W closes a pane while you are typing a name into the bar.
-    func test_whileRenaming_chordsAreSwallowed() throws {
+    /// A double-click on a chip is the mouse route to the same card, and it renames the tab that
+    /// was clicked rather than whichever one happens to be active.
+    func test_theBarsDoubleClickOpensTheCardForThatTab() throws {
+        let controller = makeWindow(tabs: 2)
+        controller.handle(.selectTab(1))
+
+        controller.renameTabForTesting(index: 1)
+        let card = try renameCard(controller)
+        card.nameFieldForTesting.setText("second")
+        card.renameButtonForTesting.onTap()
+
+        XCTAssertEqual(controller.tabTitlesForTesting.last, "second", "the clicked tab, not the active one")
+    }
+
+    /// The card takes the single modal slot, which is what gates the keyboard: `KeyInterceptor`
+    /// runs ahead of the responder chain, so ⌘W would otherwise close a pane while you type.
+    func test_whileTheCardIsUp_chordsAreSwallowed() throws {
         let controller = makeWindow(tabs: 2)
         let order = controller.tabOrderForTesting
         controller.handle(.renameTab)
-        XCTAssertTrue(controller.tabBarForTesting.isRenaming)
 
         controller.handle(.closePane)
         controller.handle(.newTab)
         controller.handle(.moveTabLeft)
 
         XCTAssertEqual(controller.tabOrderForTesting, order, "no tab opened, closed or moved")
-        XCTAssertTrue(controller.tabBarForTesting.isRenaming, "and the editor is still up")
+        XCTAssertNoThrow(try renameCard(controller), "and the card is still up")
+    }
+
+    /// Esc closes it and renames nothing.
+    func test_cancelling_leavesTheTitleAlone() throws {
+        let controller = makeWindow(tabs: 2)
+        let live = try XCTUnwrap(controller.tabTitlesForTesting.last)
+        controller.handle(.renameTab)
+        let card = try renameCard(controller)
+
+        card.nameFieldForTesting.setText("discarded")
+        XCTAssertTrue(card.performKeyEquivalent(with: Self.escapeEvent()))
+
+        XCTAssertEqual(controller.tabTitlesForTesting.last, live)
+    }
+
+    private static func escapeEvent() -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+            isARepeat: false, keyCode: 53)!
     }
 }

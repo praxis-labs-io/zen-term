@@ -237,6 +237,7 @@ final class WindowController: NSObject {
     /// switch tabs) but presented over the active tab's tile region. Modal while open.
     private enum ModalKind {
         case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm, reportIssue
+        case renameTab
 
         /// The chord that closes this same modal when pressed again (its own toggle), or nil for a
         /// card with no dedicated chord (the workspace / tool-float / report forms, reached from a
@@ -247,7 +248,7 @@ final class WindowController: NSObject {
             case .repoPicker: return .toggleRepoPicker
             case .commandPalette: return .toggleCommandPalette
             case .settings: return .openSettings
-            case .workspaceForm, .toolFloatForm, .reportIssue: return nil
+            case .workspaceForm, .toolFloatForm, .reportIssue, .renameTab: return nil
             }
         }
     }
@@ -365,12 +366,12 @@ final class WindowController: NSObject {
         // after super.init (so both can stay `let`).
         var onSelect: (TabID) -> Void = { _ in }
         var onClose: (TabID) -> Void = { _ in }
-        var onRename: (TabID, String) -> Void = { _, _ in }
+        var onRename: (TabID) -> Void = { _ in }
         var onNewTab: () -> Void = {}
         tabBar = TabBarView(
             onSelect: { onSelect($0) },
             onClose: { onClose($0) },
-            onRename: { onRename($0, $1) })
+            onRename: { onRename($0) })
         var onSplitH: () -> Void = {}
         var onSplitV: () -> Void = {}
         var onPalette: () -> Void = {}
@@ -392,7 +393,7 @@ final class WindowController: NSObject {
 
         onSelect = { [weak self] in self?.select($0) }
         onClose = { [weak self] in self?.closeTab($0) }
-        onRename = { [weak self] in self?.renameTab($0, to: $1) }
+        onRename = { [weak self] in self?.openRenameTab($0) }
         // New-tab is a top-level action (like new window) — it acts even while a modal card or
         // float is up, matching the pre-move tab-bar "+", rather than being swallowed by the card
         // gate in handle(_:).
@@ -1065,6 +1066,22 @@ final class WindowController: NSObject {
         guard tabs.move(tabs.activeID, by: delta) else { return }
         Log.info("tab moved", category: .tabs)
         renderTabBar()
+    }
+
+    /// Open the rename card for `id`. Takes the single modal slot, so whatever else is up closes.
+    private func openRenameTab(_ id: TabID) {
+        guard let controller = controllers[id] else { return }
+        if modal?.kind == .renameTab { closeModal(); return }
+        if modal != nil { closeModal() }
+        let overlay = RenameTabOverlay(
+            current: controller.title, liveTitle: controller.liveTitle,
+            background: Theme.current.chrome.background.nsColor,
+            onSubmit: { [weak self] name in
+                self?.renameTab(id, to: name)
+                self?.closeModal()
+            },
+            onCancel: { [weak self] in self?.closeModal() })
+        presentModal(overlay, kind: .renameTab)
     }
 
     /// Commit a rename. An empty name clears the pin, so the tab goes back to its live cwd title.
@@ -1800,10 +1817,6 @@ final class WindowController: NSObject {
         // swallowed. Its Return/Esc/button answers go through the toast's own key
         // equivalents, never here.
         if isConfirmOpen { return }
-        // A tab rename is modal over the bar: the interceptor runs ahead of the responder chain,
-        // so without this ⌘W would close a pane while you are typing a name. Enter and Esc are
-        // not reserved chords and reach the field editor untouched.
-        if tabBar.isRenaming { return }
         // A modal card (repo picker / command palette / Add-Workspace form) is modal over the
         // window: its own toggle closes it, another surface's toggle (another card, a tool
         // float) closes it and opens that instead — a live switch between all the modal
@@ -1891,7 +1904,7 @@ final class WindowController: NSObject {
         case .nextTab: cycleTab(1)
         case .moveTabLeft: moveActiveTab(-1)
         case .moveTabRight: moveActiveTab(1)
-        case .renameTab: tabBar.beginRename(tabs.activeID)
+        case .renameTab: openRenameTab(tabs.activeID)
         case .closePane:
             Log.info("close pane", category: .panes)
             requestClosePane()
@@ -2369,6 +2382,13 @@ final class WindowController: NSObject {
     func selectTabForTesting(index: Int) {
         guard tabs.order.indices.contains(index) else { return }
         select(tabs.order[index])
+    }
+
+    /// Test hook: the tab-bar chip's double-click path (`onRename` → the card), which bypasses
+    /// `handle(_:)` — so a test can prove the mouse route opens the card for the tab it clicked.
+    func renameTabForTesting(index: Int) {
+        guard tabs.order.indices.contains(index) else { return }
+        openRenameTab(tabs.order[index])
     }
 
     /// Test hook: the window's float engine, for asserting the relays wired onto it.

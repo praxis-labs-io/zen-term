@@ -454,10 +454,13 @@ goes through the nil-guarded `activeController`. `move` shifts a tab along the
 order, clamped at both ends, and recomputes `activeIndex` from the id that was
 active, so moving one tab never steals the selection from another.
 
-A tab's label is `pinnedTitle ?? paneCanvas.title`: the live cwd-derived title
-unless something pinned a name over it. A workspace launch pins its own title, and
-so does renaming a tab (double-click its chip, or the palette's Rename Tab).
-Committing an empty name clears the pin and the live title comes back. Nothing about
+A tab's label is `pinnedTitle ?? liveTitle`: the cwd-derived title unless something
+pinned a name over it. A workspace launch pins its own title, and so does renaming a
+tab, which opens `RenameTabOverlay` in the single modal slot (double-click a chip, or
+the palette's Rename Tab). Committing an empty name clears the pin and the live title
+comes back. The card is why the bar itself holds no editing state: the strip scrolls
+under a sliding underline, and a field that grew as you typed would have to reflow the
+chips, move the underline and recompute the edge fades on every keystroke. Nothing about
 a tab's position is stored: the bar's numbers, the chip tooltips and a waiting
 toast's ⌘N keycap are all derived from `tabs.order` at render time, which is why a
 move needs no more than a re-render.
