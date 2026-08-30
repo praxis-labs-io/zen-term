@@ -24,9 +24,12 @@ struct TabBarItem {
 /// `NSStackView`'s intrinsic width isn't authoritative, so the document view stayed capped and
 /// later chips were clipped. Manual layout (recomputed in `layout()`, so it tracks window
 /// resizes) keeps the content width exact.
-final class TabBarView: NSView {
+final class TabBarView: NSView, NSTextFieldDelegate {
     private let onSelect: (TabID) -> Void
     private let onClose: (TabID) -> Void
+    /// Reports a committed rename. An empty string is the reset: the caller clears the tab's
+    /// pinned title so it goes back to its live cwd title.
+    private let onRename: (TabID, String) -> Void
 
     static let height: CGFloat = 30
 
@@ -75,13 +78,21 @@ final class TabBarView: NSView {
     /// How long the tracer takes to reach the newly-selected tab — matched to the canvas
     /// page-slide (0.28s) so the two land together.
     private static let tracerDuration: CFTimeInterval = 0.28
+    /// The in-place rename editor and the tab it belongs to, non-nil only while one is open.
+    private var renameEditor: NSTextField?
+    private var renamingID: TabID?
+    /// Guards the teardown against `controlTextDidEndEditing` re-entering it as the editor is
+    /// pulled out of the view tree.
+    private var isEndingRename = false
 
     init(
         onSelect: @escaping (TabID) -> Void,
-        onClose: @escaping (TabID) -> Void
+        onClose: @escaping (TabID) -> Void,
+        onRename: @escaping (TabID, String) -> Void
     ) {
         self.onSelect = onSelect
         self.onClose = onClose
+        self.onRename = onRename
         super.init(frame: .zero)
         wantsLayer = true
 
@@ -147,7 +158,8 @@ final class TabBarView: NSView {
                     let fresh = Chip(
                         id: id, attributed: Self.tabLabel(item), index: item.index,
                         onClick: { [weak self] in self?.onSelect(id) },
-                        onMiddleClick: { [weak self] in self?.onClose(id) })
+                        onMiddleClick: { [weak self] in self?.onClose(id) },
+                        onDoubleClick: { [weak self] in self?.beginRename(id) })
                     docView.addSubview(fresh)
                     return fresh
                 }()
@@ -157,6 +169,9 @@ final class TabBarView: NSView {
         }
         reusable.values.forEach { $0.removeFromSuperview() }  // tabs that closed
         chips = next
+        // A rename dies with its tab; otherwise `layoutChips` re-frames the editor onto the
+        // chip's new position, so a re-render mid-edit never strands it over the wrong tab.
+        if let renamingID, !items.contains(where: { $0.id == renamingID }) { endRename(commit: false) }
         layoutChips()
 
         // Slide the tracer to the active tab. Animate only when the active tab actually
@@ -192,11 +207,85 @@ final class TabBarView: NSView {
     func reapplyTheme() {
         tracer.backgroundColor = Theme.current.chrome.accent.nsColor.cgColor
         chips.forEach { $0.reapplyTheme() }
+        if let renameEditor { styleRenameEditor(renameEditor) }
         render(lastItems)
+    }
+
+    /// Whether a tab is being renamed right now. The window reads this to swallow chords: the key
+    /// interceptor runs ahead of the responder chain, so ⌘W would otherwise act while you type.
+    var isRenaming: Bool { renamingID != nil }
+
+    /// Open the in-place editor over `id`'s chip, seeded with its current title and all selected.
+    /// A no-op if that tab has no chip or another rename is already open.
+    func beginRename(_ id: TabID) {
+        guard renamingID == nil, let chip = chips.first(where: { $0.id == id }),
+            let title = lastItems.first(where: { $0.id == id })?.title
+        else { return }
+
+        let field = NSTextField(string: title)
+        field.delegate = self
+        field.isBordered = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.usesSingleLineMode = true
+        field.lineBreakMode = .byTruncatingTail
+        field.wantsLayer = true
+        field.layer?.cornerRadius = 6
+        styleRenameEditor(field)
+        field.frame = chip.frame
+        docView.addSubview(field, positioned: .above, relativeTo: chip)
+
+        renameEditor = field
+        renamingID = id
+        chip.isHidden = true
+        window?.makeFirstResponder(field)
+        field.applyThemedCaret()  // the editor exists only once the field has focus
+        field.currentEditor()?.selectAll(nil)
+        field.scrollToVisible(field.bounds.insetBy(dx: -Self.fadeWidth, dy: 0))
+    }
+
+    /// Tear the editor down, reporting the trimmed value when `commit`. Re-entrant-safe: pulling
+    /// the field out of the tree fires `controlTextDidEndEditing`, which lands back here.
+    private func endRename(commit: Bool) {
+        guard !isEndingRename, let field = renameEditor, let id = renamingID else { return }
+        isEndingRename = true
+        defer { isEndingRename = false }
+
+        let value = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        renameEditor = nil
+        renamingID = nil
+        chips.first(where: { $0.id == id })?.isHidden = false
+        if field.currentEditor() != nil { window?.makeFirstResponder(nil) }
+        field.removeFromSuperview()
+        if commit { onRename(id, value) }
+    }
+
+    /// The editor reads as the chip becoming editable: same font, the active fill behind it.
+    private func styleRenameEditor(_ field: NSTextField) {
+        field.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
+        field.textColor = Theme.current.chrome.ink(.normal)
+        field.layer?.backgroundColor = Theme.current.chrome.fill(.active).cgColor
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        switch selector {
+        case #selector(NSResponder.insertNewline(_:)): endRename(commit: true)
+        case #selector(NSResponder.cancelOperation(_:)): endRename(commit: false)
+        default: return false
+        }
+        return true
+    }
+
+    /// Clicking away commits, matching every other in-place rename on the platform.
+    func controlTextDidEndEditing(_ obj: Notification) {
+        endRename(commit: true)
     }
 
     /// Test hook: the chip views currently in the bar.
     var chipsForTesting: [NSView] { chips }
+
+    /// Test hook: the open rename editor, so a test drives the real field rather than the state.
+    var renameEditorForTesting: NSTextField? { renameEditor }
 
     /// Test hook: each chip's rendered label. Chips persist across renders now, so a
     /// re-render has to be asserted on what the chip draws rather than on a new instance appearing.
@@ -263,6 +352,9 @@ final class TabBarView: NSView {
         }
         let contentWidth = chips.isEmpty ? 0 : x - Self.chipSpacing
         docView.frame = CGRect(x: 0, y: 0, width: contentWidth, height: h)
+        if let renameEditor, let chip = chips.first(where: { $0.id == renamingID }) {
+            renameEditor.frame = chip.frame
+        }
     }
 
     /// When the bar grows enough that all tabs fit, snap any leftover scroll offset back to the
@@ -411,6 +503,7 @@ final class TabBarView: NSView {
         private var tabIndex: Int
         private let onClick: () -> Void
         private let onMiddleClick: (() -> Void)?
+        private let onDoubleClick: (() -> Void)?
         private var isHovered = false
         private let label: NSTextField
         /// The hover-tooltip wiring — a branded `ChromeTooltip` (the same one the footer dock buttons
@@ -435,12 +528,14 @@ final class TabBarView: NSView {
 
         init(
             id: TabID, attributed: NSAttributedString, index: Int,
-            onClick: @escaping () -> Void, onMiddleClick: (() -> Void)?
+            onClick: @escaping () -> Void, onMiddleClick: (() -> Void)?,
+            onDoubleClick: (() -> Void)?
         ) {
             self.id = id
             self.tabIndex = index
             self.onClick = onClick
             self.onMiddleClick = onMiddleClick
+            self.onDoubleClick = onDoubleClick
             label = NSTextField(labelWithAttributedString: attributed)
             super.init(frame: .zero)
             wantsLayer = true
@@ -496,7 +591,8 @@ final class TabBarView: NSView {
         }
         override func mouseDown(with event: NSEvent) {
             tooltip.hide(from: self)  // a click dismisses the tooltip
-            onClick()
+            // The pair arrives as two events: the first selects the tab, the second renames it.
+            if event.clickCount == 2 { onDoubleClick?() } else { onClick() }
         }
         override func otherMouseDown(with event: NSEvent) {
             if event.buttonNumber == 2 { onMiddleClick?() }  // middle-click closes

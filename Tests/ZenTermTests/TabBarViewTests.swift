@@ -30,7 +30,7 @@ final class TabBarViewTests: WindowTestCase {
     /// 1.5s title poll read as a blinking tooltip. The chip surviving is what fixes that, and
     /// the label still has to follow the new title.
     func test_render_keepsEachTabsChipAcrossARerender() throws {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _, _ in })
         mount(tabBar)
         tabBar.render([item(1, "one", index: 1, active: true), item(2, "two", index: 2)])
         let before = tabBar.chipsForTesting
@@ -46,7 +46,7 @@ final class TabBarViewTests: WindowTestCase {
     }
 
     func test_render_dropsTheChipOfAClosedTab() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _, _ in })
         mount(tabBar)
         tabBar.render([item(1, "one", index: 1, active: true), item(2, "two", index: 2)])
         let closing = tabBar.chipsForTesting[1]
@@ -60,7 +60,7 @@ final class TabBarViewTests: WindowTestCase {
     /// Renumbering after a close has to reach the tooltip's keycap, which resolves at hover time from
     /// the chip's own index rather than one captured when it was built.
     func test_render_renumbersAKeptChipsShortcut() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _, _ in })
         mount(tabBar)
         tabBar.render([item(1, "one", index: 1, active: true), item(2, "two", index: 2)])
         XCTAssertEqual(tabBar.chipTooltipsForTesting[1].shortcut, CommandCatalog.spec(for: .selectTab(2)).shortcut)
@@ -77,7 +77,7 @@ final class TabBarViewTests: WindowTestCase {
     func test_reapplyTheme_recolorsTheKeptChipsLabel() throws {
         let original = Theme.current
         defer { Theme.setCurrentForTesting(original) }
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _, _ in })
         mount(tabBar)
         tabBar.render([item(1, "one", index: 1, active: true)])
         let chip = try XCTUnwrap(tabBar.chipsForTesting.first)
@@ -123,7 +123,7 @@ final class TabBarViewTests: WindowTestCase {
     }
 
     func test_reapplyTheme_resetsTracerColor() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _, _ in })
         let items = [TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle)]
         tabBar.render(items)
 
@@ -137,7 +137,7 @@ final class TabBarViewTests: WindowTestCase {
     func test_reapplyTheme_beforeAnyRender_doesNotCrash() {
         // No render() call before reapplyTheme() — must not crash on an empty snapshot; with no
         // tabs rendered the bar holds no chips (new-tab lives in the footer dock now).
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _, _ in })
         tabBar.reapplyTheme()
         XCTAssertTrue(tabBar.chipsForTesting.isEmpty)
     }
@@ -159,7 +159,7 @@ final class TabBarViewTests: WindowTestCase {
     func test_chipTooltip_readsFocusTabWithCommandShortcut() {
         // The tooltip reads "Focus tab" (not the tab's name); tabs 1–9 resolve a ⌘N keycap from
         // the live keymap, 10+ have no binding so no keycap.
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _, _ in })
         tabBar.render([
             TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle),
             TabBarItem(id: TabID(10), index: 10, title: "ten", isActive: false, attentionState: .idle),
@@ -174,7 +174,7 @@ final class TabBarViewTests: WindowTestCase {
     }
 
     func test_overflow_fadesWhenTabsExceedWidth() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _, _ in })
         tabBar.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 160, height: 60),
@@ -191,7 +191,7 @@ final class TabBarViewTests: WindowTestCase {
     }
 
     func test_overflow_noFadeWhenTabsFit() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _, _ in })
         tabBar.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 800, height: 60),
@@ -205,7 +205,7 @@ final class TabBarViewTests: WindowTestCase {
     }
 
     func test_overflow_leadingFadesOnceScrolledRight() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _, _ in })
         tabBar.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 160, height: 60),
@@ -231,7 +231,7 @@ final class TabBarViewTests: WindowTestCase {
     /// constants, so a test cannot restate the values and pass against its own copy of them.
     @MainActor
     func test_theNumberAndTitle_shareOneColorPerState() throws {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _, _ in })
         mount(tabBar)
         tabBar.render([item(1, "active", index: 1, active: true), item(2, "idle", index: 2)])
         let labels = tabBar.chipLabelsForTesting
@@ -261,7 +261,7 @@ final class TabBarViewTests: WindowTestCase {
     /// a weight, so it survives the two halves sharing one ink.
     @MainActor
     func test_aWaitingTab_stillMarksItsNumberWithTheAttentionColor() throws {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _, _ in })
         mount(tabBar)
         tabBar.render([
             TabBarItem(id: TabID(1), index: 1, title: "waiting", isActive: false, attentionState: .waiting)
@@ -274,5 +274,150 @@ final class TabBarViewTests: WindowTestCase {
 
         XCTAssertEqual(numberColor, Theme.current.chrome.attention.nsColor)
         XCTAssertEqual(titleColor, TabBarView.idleInkForTesting)
+    }
+
+    // MARK: rename
+
+    /// A keyed window, unlike `mount`'s borderless one: a field only installs its field editor
+    /// once it can actually take focus, and `currentEditor()` is nil without that.
+    private func mountKeyed(_ tabBar: TabBarView) -> NSWindow {
+        tabBar.translatesAutoresizingMaskIntoConstraints = true
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 60),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView?.addSubview(tabBar)
+        tabBar.frame = NSRect(x: 0, y: 0, width: 400, height: 30)
+        window.makeKeyAndOrderFront(nil)
+        tabBar.layoutSubtreeIfNeeded()
+        return window
+    }
+
+    /// The real second click of a pair. `clickCount` is what the chip branches on, so a
+    /// synthesized event with the wrong count would exercise the select path and still pass.
+    private func doubleClick(_ view: NSView) throws {
+        let event = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: view.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
+                clickCount: 2, pressure: 1))
+        view.mouseDown(with: event)
+    }
+
+    private func commit(_ tabBar: TabBarView, _ field: NSTextField) throws {
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        _ = tabBar.control(field, textView: editor, doCommandBy: #selector(NSResponder.insertNewline(_:)))
+    }
+
+    func test_doubleClickingAChip_opensTheEditorSeededWithTheTitle() throws {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _, _ in })
+        _ = mountKeyed(tabBar)
+        tabBar.render([item(1, "zen-term", index: 1, active: true), item(2, "api", index: 2)])
+
+        try doubleClick(tabBar.chipsForTesting[1])
+
+        let field = try XCTUnwrap(tabBar.renameEditorForTesting, "a double-click opens the editor")
+        XCTAssertEqual(field.stringValue, "api", "seeded with that tab's current title")
+        XCTAssertTrue(tabBar.isRenaming, "the window reads this to swallow chords while typing")
+    }
+
+    /// A single click must still just select, or renaming would fire on every tab switch.
+    func test_singleClickingAChip_selectsWithoutOpeningTheEditor() throws {
+        var selected: [TabID] = []
+        let tabBar = TabBarView(onSelect: { selected.append($0) }, onClose: { _ in }, onRename: { _, _ in })
+        _ = mountKeyed(tabBar)
+        tabBar.render([item(1, "zen-term", index: 1, active: true), item(2, "api", index: 2)])
+
+        tabBar.chipsForTesting[1].mouseDown(
+            with: try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+                    windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
+
+        XCTAssertEqual(selected, [TabID(2)])
+        XCTAssertNil(tabBar.renameEditorForTesting)
+    }
+
+    func test_enter_commitsTheTypedName() throws {
+        var renames: [(TabID, String)] = []
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { renames.append(($0, $1)) })
+        _ = mountKeyed(tabBar)
+        tabBar.render([item(1, "zen-term", index: 1, active: true), item(2, "api", index: 2)])
+        try doubleClick(tabBar.chipsForTesting[1])
+        let field = try XCTUnwrap(tabBar.renameEditorForTesting)
+
+        field.stringValue = "  api server  "
+        try commit(tabBar, field)
+
+        XCTAssertEqual(renames.count, 1)
+        XCTAssertEqual(renames.first?.0, TabID(2))
+        XCTAssertEqual(renames.first?.1, "api server", "trimmed")
+        XCTAssertNil(tabBar.renameEditorForTesting, "the editor closes on commit")
+        XCTAssertFalse(tabBar.isRenaming)
+    }
+
+    /// The empty commit is the documented reset: the caller clears the pinned title, so the tab
+    /// goes back to its live cwd title. It has to report, not be swallowed as "nothing typed".
+    func test_committingAnEmptyName_reportsTheReset() throws {
+        var renames: [(TabID, String)] = []
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { renames.append(($0, $1)) })
+        _ = mountKeyed(tabBar)
+        tabBar.render([item(1, "zen-term", index: 1, active: true)])
+        try doubleClick(tabBar.chipsForTesting[0])
+        let field = try XCTUnwrap(tabBar.renameEditorForTesting)
+
+        field.stringValue = "   "
+        try commit(tabBar, field)
+
+        XCTAssertEqual(renames.count, 1)
+        XCTAssertEqual(renames.first?.1, "", "an empty commit reports the reset")
+    }
+
+    func test_escape_cancelsWithoutRenaming() throws {
+        var renames: [(TabID, String)] = []
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { renames.append(($0, $1)) })
+        _ = mountKeyed(tabBar)
+        tabBar.render([item(1, "zen-term", index: 1, active: true)])
+        try doubleClick(tabBar.chipsForTesting[0])
+        let field = try XCTUnwrap(tabBar.renameEditorForTesting)
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+
+        field.stringValue = "discarded"
+        _ = tabBar.control(field, textView: editor, doCommandBy: #selector(NSResponder.cancelOperation(_:)))
+
+        XCTAssertTrue(renames.isEmpty, "Esc reports nothing")
+        XCTAssertNil(tabBar.renameEditorForTesting)
+        XCTAssertEqual(
+            tabBar.chipLabelsForTesting.first?.string, "1 zen-term", "the chip is back with its old title")
+    }
+
+    /// The 1.5s title poll re-renders whenever any tab's title moves. Mid-rename that must not
+    /// strand the editor at the old frame or over a different tab.
+    func test_aRerenderMidRename_keepsTheEditorOverItsOwnChip() throws {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _, _ in })
+        _ = mountKeyed(tabBar)
+        tabBar.render([item(1, "zen-term", index: 1, active: true), item(2, "api", index: 2)])
+        try doubleClick(tabBar.chipsForTesting[1])
+        let field = try XCTUnwrap(tabBar.renameEditorForTesting)
+
+        // Tab 1's title grows, which re-frames tab 2's chip further right.
+        tabBar.render([item(1, "a-much-longer-title", index: 1, active: true), item(2, "api", index: 2)])
+        tabBar.layoutSubtreeIfNeeded()
+
+        XCTAssertNotNil(tabBar.renameEditorForTesting, "the rename survives an unrelated re-render")
+        XCTAssertEqual(field.frame, tabBar.chipsForTesting[1].frame, "and tracks its chip's new frame")
+    }
+
+    func test_closingTheTabBeingRenamed_dropsTheEditor() throws {
+        var renames: [(TabID, String)] = []
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { renames.append(($0, $1)) })
+        _ = mountKeyed(tabBar)
+        tabBar.render([item(1, "zen-term", index: 1, active: true), item(2, "api", index: 2)])
+        try doubleClick(tabBar.chipsForTesting[1])
+
+        tabBar.render([item(1, "zen-term", index: 1, active: true)])  // tab 2 closed
+
+        XCTAssertNil(tabBar.renameEditorForTesting)
+        XCTAssertFalse(tabBar.isRenaming)
+        XCTAssertTrue(renames.isEmpty, "a tab that closed mid-rename is not renamed")
     }
 }

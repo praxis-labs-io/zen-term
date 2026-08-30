@@ -28,6 +28,8 @@ final class KeyInterceptor {
         case newTab, newWindow
         case selectTab(Int)  // 1...9
         case prevTab, nextTab
+        case moveTabLeft, moveTabRight  // shift the active tab one slot along the bar
+        case renameTab  // rename the active tab in place (unbound by default)
         case resizeLeft, resizeRight, resizeUp, resizeDown
         case toggleBottomDrawer
         case toggleRightDrawer

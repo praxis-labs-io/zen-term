@@ -90,4 +90,73 @@ final class TabListTests: XCTestCase {
         XCTAssertEqual(list.order, [TabID(1)])
         XCTAssertEqual(list.activeID, TabID(1))
     }
+
+    // MARK: move
+
+    func test_move_shiftsOneSlotInEachDirection() {
+        var list = TabList(first: TabID(1))
+        list.add(TabID(2))
+        list.add(TabID(3))
+
+        XCTAssertTrue(list.move(TabID(3), by: -1))
+        XCTAssertEqual(list.order, [TabID(1), TabID(3), TabID(2)])
+
+        XCTAssertTrue(list.move(TabID(3), by: 1))
+        XCTAssertEqual(list.order, [TabID(1), TabID(2), TabID(3)])
+    }
+
+    /// The moved tab keeps the selection, so ⌘⌃[ held down walks one tab across the bar rather
+    /// than dragging a different tab on each press.
+    func test_move_keepsTheMovedTabActive() {
+        var list = TabList(first: TabID(1))
+        list.add(TabID(2))
+        list.add(TabID(3))  // 3 is active
+
+        list.move(TabID(3), by: -1)
+
+        XCTAssertEqual(list.activeID, TabID(3))
+        XCTAssertEqual(list.activeIndex, 1)
+    }
+
+    /// Moving some *other* tab must not steal the selection, which is what a naive
+    /// `activeIndex = target` would do.
+    func test_move_leavesTheActiveTabActiveWhenAnotherMoves() {
+        var list = TabList(first: TabID(1))
+        list.add(TabID(2))
+        list.add(TabID(3))  // 3 is active
+
+        list.move(TabID(1), by: 1)
+
+        XCTAssertEqual(list.order, [TabID(2), TabID(1), TabID(3)])
+        XCTAssertEqual(list.activeID, TabID(3), "the tab that moved was not the active one")
+    }
+
+    func test_move_isANoOpAtEitherWall() {
+        var list = TabList(first: TabID(1))
+        list.add(TabID(2))
+
+        XCTAssertFalse(list.move(TabID(1), by: -1), "already leftmost")
+        XCTAssertFalse(list.move(TabID(2), by: 1), "already rightmost")
+        XCTAssertEqual(list.order, [TabID(1), TabID(2)])
+    }
+
+    func test_move_isANoOpForASingleTabOrAnAbsentID() {
+        var list = TabList(first: TabID(1))
+        XCTAssertFalse(list.move(TabID(1), by: 1))
+
+        list.add(TabID(2))
+        XCTAssertFalse(list.move(TabID(99), by: 1))
+        XCTAssertEqual(list.order, [TabID(1), TabID(2)])
+    }
+
+    /// A delta past the end clamps to the wall rather than trapping on an out-of-range insert.
+    func test_move_clampsAnOversizedDelta() {
+        var list = TabList(first: TabID(1))
+        list.add(TabID(2))
+        list.add(TabID(3))
+
+        XCTAssertTrue(list.move(TabID(1), by: 99))
+
+        XCTAssertEqual(list.order, [TabID(2), TabID(3), TabID(1)])
+    }
 }
