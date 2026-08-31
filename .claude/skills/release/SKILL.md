@@ -37,12 +37,6 @@ public tag and cannot be walked back, so it is never chosen silently.
 rather than a discovery. A surprise in phase 7 arrives after the tag, the DMG and the
 appcast are public and permanent.
 
-For **v1.0.0 specifically**: ZEN-423 repoints the website's `sync-docs`, and it cannot
-be verified until a v1.0.0 release exists to sync from, so the cut goes first on
-purpose. Expect phase 7 to publish nothing and do not treat that as a failure. The site
-holds at v0.10.0 until ZEN-423 lands, then a re-run picks v1.0.0 up. Nothing about the
-app, the feed, or the download is affected. Say this out loud at phase 1 rather than
-discovering it at phase 7.
 
 ## 2. Check the docs that ship with it
 
@@ -138,16 +132,20 @@ instead of trusting the exit code:
 - `gh release view vX.Y.Z --repo praxis-labs-io/zen-term --json assets` shows
   **both** the DMG and `appcast.xml`. A release missing the appcast leaves every
   installed copy unable to see the update.
-- **v1.0.0 only:** the hand-off in `docs/releasing.md` under "Retiring
-  zen-term-releases". Nothing in `bin/release` does it, and an install from
-  v0.10.0 or earlier has no other path to the update.
 - The appcast's `sparkle:version` matches the shipped build.
+- **The enclosure URL resolves and its `length` matches the DMG.** It is pinned to
+  `releases/download/vX.Y.Z/` and carries an EdDSA signature for that one file
+  (ZEN-253), so a wrong URL fails the signature check after a full download, with
+  nothing on screen to say why.
 - Mount the DMG and check the volume root: only the app, the Applications
   symlink, `.background`, and `.DS_Store`. See `bin/make-dmg`'s header for why
   this is worth a look every time (ZEN-203).
 
-Shipped tickets are already **Done** from their merges, so there is no Linear
-status work here.
+Shipped tickets are usually already **Done** from their merges. The exception is a
+ticket that went in as a direct commit to main: the GitHub integration moves nothing
+without a PR, so it is still sitting in Todo with its work shipped. ZEN-253 reached
+v1.2.0 that way. Check the range's tickets rather than assuming, and move that one by
+hand.
 
 ## 7. Sync the website
 
@@ -165,21 +163,14 @@ pulled), open a PR, and merge. Render deploys from `main`.
 *published* state: raw.githubusercontent for the docs, and the GitHub Releases API for
 the notes.
 
-**Check where `sync-docs.mjs` actually points before running it.** Until ZEN-423 lands
-it reads `zen-term/zen-term-releases`, a repo this project no longer publishes to, and
-it fails by syncing nothing rather than by erroring.
+An unsynced site is a real failure. ZEN-423 repointed the script at
+`praxis-labs-io/zen-term` and pinned every fetch to the release tag; `docs/releasing.md`,
+under "The website reads the repo", holds the three details that cost a wrong document
+if they move.
 
-**At the v1.0.0 cut that is expected.** The fix needs a published v1.0.0 to verify
-against, so the release goes first. Record that the site is unsynced, leave ZEN-423
-open, and re-run this phase once it merges. Do not hand-edit the site to paper over it.
-
-From v1.0.1 on, an unsynced site is a real failure. Repointing is not a URL swap:
-`docs/releasing.md`, under "The website reads the repo", lists the three paths that do
-not exist here and the one whose obvious fix publishes the wrong license document.
-
-Separately, ordering still matters: run it before `bin/release` has published and it
-syncs the previous version, succeeds, and commits nothing new. This step always follows
-phase 6, never precedes it.
+Ordering matters: run it before `bin/release` has published and it syncs the previous
+version, succeeds, and commits nothing new. This step always follows phase 6, never
+precedes it.
 
 Verify the new `content/release-notes/vX.Y.Z.md` actually appeared before opening
 the PR. An empty diff here means the release had not published yet.
