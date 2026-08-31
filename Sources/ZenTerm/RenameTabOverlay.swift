@@ -2,11 +2,8 @@ import AppKit
 
 /// The rename-a-tab card, opened by double-clicking a tab or from the palette's Rename Tab.
 /// One field seeded with the tab's current name; Return or Rename commits, Esc or Cancel closes,
-/// and an empty value clears the pin so the tab goes back to its folder name.
-///
-/// A card rather than an editor in the bar itself: the tab strip scrolls horizontally under a
-/// sliding underline, and a field that grows as you type has to reflow the strip, move the
-/// underline and recompute the edge fades on every keystroke.
+/// and an empty value clears the pin so the tab goes back to its folder name. Why a card rather
+/// than an editor in the bar is in `docs/architecture.md`.
 final class RenameTabOverlay: NSView, ModalOverlay {
     private let onSubmit: (String) -> Void
     private let onCancel: () -> Void

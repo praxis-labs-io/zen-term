@@ -65,7 +65,11 @@ public struct TabList {
     @discardableResult
     public mutating func move(_ id: TabID, by delta: Int) -> Bool {
         guard let idx = order.firstIndex(of: id) else { return false }
-        let target = min(max(idx + delta, 0), order.count - 1)
+        // Overflow lands at the wall the delta was heading for, rather than trapping: clamping
+        // is what this promises, and `idx + delta` overflows before any clamp could run.
+        let (sum, overflowed) = idx.addingReportingOverflow(delta)
+        let requested = overflowed ? (delta > 0 ? Int.max : Int.min) : sum
+        let target = min(max(requested, 0), order.count - 1)
         guard target != idx else { return false }
         let stillActive = order[activeIndex]
         order.remove(at: idx)

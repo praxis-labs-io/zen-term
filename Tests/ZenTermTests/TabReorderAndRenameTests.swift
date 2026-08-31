@@ -183,16 +183,17 @@ final class TabReorderAndRenameTests: WindowTestCase {
         let card = try renameCard(controller)
 
         card.nameFieldForTesting.setText("discarded")
-        XCTAssertTrue(card.performKeyEquivalent(with: Self.escapeEvent()))
+        XCTAssertTrue(card.performKeyEquivalent(with: try Self.escapeEvent()))
 
         XCTAssertEqual(controller.tabTitlesForTesting.last, live)
     }
 
-    private static func escapeEvent() -> NSEvent {
-        NSEvent.keyEvent(
-            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
-            context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
-            isARepeat: false, keyCode: 53)!
+    private static func escapeEvent() throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+                isARepeat: false, keyCode: 53))
     }
 
     // MARK: the card is a card

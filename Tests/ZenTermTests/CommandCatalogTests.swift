@@ -160,9 +160,10 @@ final class CommandCatalogTests: XCTestCase {
     }
 
     /// `spec(for:)` is exhaustive, so a new chord cannot compile without a palette title. Nothing
-    /// forced it into `commands(tabCount:)`, which is the list the palette actually renders: three
-    /// tab actions shipped with titles and no way to reach them. Anything editable in Settings is
-    /// reachable from the palette too, minus the four excluded on purpose above.
+    /// forced it into `commands(tabCount:)`, the list the palette renders: three tab actions
+    /// shipped with titles and no way to reach them. This catches an action listed in Settings but
+    /// not the palette. It cannot catch one missing from both, because `everyAction` is hand-kept
+    /// too (ZEN-439).
     func test_everyEditableAction_isReachableFromThePalette() {
         let excluded: Set<String> = [
             "new_window",  // the menu bar owns it

@@ -160,4 +160,20 @@ final class TabListTests: XCTestCase {
 
         XCTAssertEqual(list.order, [TabID(2), TabID(3), TabID(1)])
     }
+
+    /// The clamp has to survive a delta that overflows the addition, or the "clamps at both ends"
+    /// promise trades a wrong answer for a trap. It takes a non-zero index to reach: `0 + .max`
+    /// is fine, and no valid index can push `idx + .min` below `Int.min`.
+    func test_move_clampsRatherThanTrappingOnAnOverflowingDelta() {
+        var list = TabList(first: TabID(1))
+        list.add(TabID(2))
+        list.add(TabID(3))
+        list.add(TabID(4))
+        list.select(TabID(2))  // index 1, so `1 + .max` overflows, and it is not already at a wall
+
+        XCTAssertTrue(list.move(TabID(2), by: .max))
+
+        XCTAssertEqual(list.order, [TabID(1), TabID(3), TabID(4), TabID(2)], "clamped to the wall")
+        XCTAssertEqual(list.activeID, TabID(2), "and it is still the tab that moved")
+    }
 }
