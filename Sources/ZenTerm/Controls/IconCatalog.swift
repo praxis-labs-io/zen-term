@@ -1,56 +1,148 @@
 import AppKit
 
-/// The curated set of tool-float icons: dev-tooling metaphors (shells, builds, VCS, metrics, infra,
-/// files) plus brand marks, laid out as an 8-wide grid by `IconPickerField`. `image` resolves a
-/// symbol the same way the dock does: an SF Symbol, else a bundled brand mark ("git", "docker",
-/// "claude", …).
+/// The curated set of tool-float icons, in two sections: filled dev-tooling symbols, then brand
+/// marks. `image` resolves either the same way the dock does — an SF Symbol, else a bundled brand
+/// mark ("git", "docker", "claude", …).
+///
+/// The symbols are filled because every brand mark is a single solid path, and a hairline outline
+/// beside one reads as a different weight of thing. Where SF Symbols has no fill for a metaphor,
+/// the metaphor changed rather than the glyph gaining a `.circle.fill` enclosure, which reads as a
+/// badge and clashes harder than the outline did.
 ///
 /// A brand earns a cell by having a terminal UI behind it, first- or third-party: `docker` stands
 /// for lazydocker, `kubernetes` for k9s, `postgres` for pgcli, `slack` for wee-slack. A brand whose
 /// only interface is a window (Zed, Obsidian) or a plain CLI (Homebrew, Tailscale) doesn't, because
 /// you can't float it.
 enum IconCatalog {
-    static let defaultSymbol = "square.on.square"
+    static let defaultSymbol = "square.stack.fill"
 
-    /// 48 symbols → a tidy 8×6 grid, so the last row is never ragged (`columns = 8` in
-    /// `IconPickerField`, and `IconCatalogTests` pins the multiple). A float's custom (non-catalog)
-    /// symbol is shown alongside these by the picker so editing never loses it.
-    ///
-    /// Grouped by metaphor, a row at a time: shell/code/build/run, config/metrics/infra,
-    /// data/docs/files, review/VCS, editors/agents, then services. Brand marks last.
-    static let all: [String] = [
-        "square.on.square", "terminal", "chevron.left.forwardslash.chevron.right", "curlybraces",
-        "wrench.and.screwdriver", "ladybug", "play.rectangle", "bolt",
-        "gearshape", "chart.line.uptrend.xyaxis", "gauge", "cpu",
-        "server.rack", "network", "externaldrive", "cylinder.split.1x2",
-        "tablecells", "doc.text", "filemenu.and.selection", "list.bullet.rectangle",
-        "magnifyingglass", "folder", "checklist", "envelope",
-        "bubble.left.and.bubble.right", "arrow.triangle.branch", "arrow.triangle.pull",
-        "plus.forwardslash.minus",
-        "lock", "git", "github", "linear",
-        "neovim", "vim", "emacs", "helix",
-        "claude", "openai", "gemini", "copilot",
-        "opencode", "ollama", "docker", "kubernetes",
-        "postgres", "sqlite", "slack", "spotify",
+    /// A titled run of cells, laid out 8-wide under its own heading by `IconPickerField`.
+    struct Section {
+        let title: String
+        let symbols: [String]
+    }
+
+    /// 48 symbols → six full rows of the 8-wide grid (`IconCatalogTests` pins the multiple).
+    /// Grouped by metaphor, a row at a time: shell/code/build/test, pipeline/config/perf,
+    /// monitoring/infra/storage, data/docs/logs, find/files/comms, security/AI/media/panes.
+    static let symbols: [String] = [
+        "square.stack.fill", "terminal.fill", "curlybraces.square.fill", "applescript.fill",
+        "play.rectangle.fill", "ladybug.fill", "hammer.fill", "flask.fill",
+        "flowchart.fill", "bolt.fill", "flame.fill", "gearshape.fill",
+        "switch.2", "gauge.with.needle.fill", "stopwatch.fill", "chart.bar.fill",
+        "waveform.path.ecg.rectangle.fill", "cpu.fill", "memorychip.fill", "cube.fill",
+        "shippingbox.fill", "antenna.radiowaves.left.and.right", "cloud.fill", "externaldrive.fill",
+        "cylinder.split.1x2.fill", "tablecells.fill", "archivebox.fill", "doc.text.fill",
+        "square.text.square.fill", "list.bullet.rectangle.fill", "list.bullet.clipboard.fill",
+        "flag.fill",
+        "magnifyingglass.circle.fill", "folder.fill", "folder.fill.badge.gearshape", "envelope.fill",
+        "bubble.left.and.bubble.right.fill", "paperplane.fill", "lock.fill", "key.fill",
+        "shield.fill", "brain.fill", "sparkles", "atom",
+        "puzzlepiece.fill", "waveform", "rectangle.3.group.fill", "square.grid.2x2.fill",
     ]
 
+    /// 19 marks: VCS, editors, agents, then services. Short by five of a full row, which is why
+    /// they're last — a ragged row reads as the end of the grid, not a hole in it.
+    static let brands: [String] = [
+        "git", "github", "linear", "neovim",
+        "vim", "emacs", "helix", "claude",
+        "openai", "gemini", "copilot", "opencode",
+        "ollama", "docker", "kubernetes", "postgres",
+        "sqlite", "slack", "spotify",
+    ]
+
+    static let all: [String] = symbols + brands
+
+    /// The picker's sections. A float pinned to a symbol off the roster keeps its own leading
+    /// section, so editing that float never silently drops its glyph.
+    static func sections(including selected: String) -> [Section] {
+        var sections: [Section] = []
+        if !all.contains(selected) {
+            sections.append(Section(title: "Current", symbols: [selected]))
+        }
+        sections.append(Section(title: "Symbols", symbols: symbols))
+        sections.append(Section(title: "Brand marks", symbols: brands))
+        return sections
+    }
+
     /// A humanized, sentence-case label for a symbol — the picker shows this instead of the raw
-    /// `dotted.symbol.name`. A handful read better as an override; the rest just swap dots for spaces
-    /// and capitalize the first word.
+    /// `dotted.symbol.name`. Roster cells are named for what they're *for* ("Run", not "Play
+    /// rectangle"), so they all sit in the override table; the fallback below is what a user's own
+    /// custom symbol gets.
     static func displayName(_ symbol: String) -> String {
         if let name = displayOverrides[symbol] { return name }
-        let spaced = symbol.replacingOccurrences(of: ".", with: " ")
+        let stem = trimmingFillSuffix(symbol)
+        let spaced = stem.replacingOccurrences(of: ".", with: " ")
         return spaced.prefix(1).uppercased() + spaced.dropFirst()
+    }
+
+    /// A trailing fill marker is a rendering variant, not part of the name: "heart.fill" is a heart.
+    /// Only the suffix goes — "folder.fill.badge.gearshape" keeps its middle.
+    private static func trimmingFillSuffix(_ symbol: String) -> String {
+        for suffix in [".fill", ".filled"] where symbol.hasSuffix(suffix) {
+            return String(symbol.dropLast(suffix.count))
+        }
+        return symbol
     }
 
     /// Entries for symbols off the roster are load-bearing: a float pinned to a dropped icon keeps
     /// its label instead of falling back to the raw symbol name.
     private static let displayOverrides: [String: String] = [
+        // Roster: named for the job, not the glyph.
+        "square.stack.fill": "Float",
+        "curlybraces.square.fill": "Code",
+        "applescript.fill": "Script",
+        "play.rectangle.fill": "Run",
+        "ladybug.fill": "Debug",
+        "hammer.fill": "Build",
+        "flask.fill": "Tests",
+        "flowchart.fill": "Pipeline",
+        "bolt.fill": "Fast",
+        "flame.fill": "Hot",
+        "gearshape.fill": "Settings",
+        "switch.2": "Toggles",
+        "gauge.with.needle.fill": "Gauge",
+        "stopwatch.fill": "Benchmark",
+        "chart.bar.fill": "Chart",
+        "waveform.path.ecg.rectangle.fill": "Monitor",
+        "cpu.fill": "CPU",
+        "memorychip.fill": "Memory",
+        "cube.fill": "Container",
+        "shippingbox.fill": "Package",
+        "antenna.radiowaves.left.and.right": "Signal",
+        "externaldrive.fill": "Storage",
+        "cylinder.split.1x2.fill": "Database",
+        "tablecells.fill": "Table",
+        "archivebox.fill": "Archive",
+        "doc.text.fill": "Document",
+        "square.text.square.fill": "Notes",
+        "list.bullet.rectangle.fill": "Logs",
+        "list.bullet.clipboard.fill": "Checklist",
+        "magnifyingglass.circle.fill": "Search",
+        "folder.fill": "Files",
+        "folder.fill.badge.gearshape": "Config dir",
+        "envelope.fill": "Email",  // humanizes to "Envelope" on its own; the metaphor is mail
+        "bubble.left.and.bubble.right.fill": "Chat",
+        "paperplane.fill": "HTTP client",
+        "lock.fill": "Secrets",
+        "key.fill": "Keys",
+        "shield.fill": "Security",
+        "brain.fill": "Model",
+        "sparkles": "AI",
+        "puzzlepiece.fill": "Plugins",
+        "rectangle.3.group.fill": "Panes",
+        "square.grid.2x2.fill": "Dashboard",
+        "github": "GitHub",
+        "neovim": "Neovim",
+        "openai": "OpenAI",
+        "opencode": "OpenCode",
+        "sqlite": "SQLite",
+        // Dropped: kept so a float still configured with one keeps its label.
         "square.on.square": "Float",
-        "apple.terminal.on.rectangle": "Terminal window",  // dropped
+        "apple.terminal.on.rectangle": "Terminal window",
         "chevron.left.forwardslash.chevron.right": "Code",
         "wrench.and.screwdriver": "Tools",
-        "slider.horizontal.3": "Controls",  // dropped
+        "slider.horizontal.3": "Controls",
         "chart.line.uptrend.xyaxis": "Line chart",
         "cylinder.split.1x2": "Database",
         "list.bullet.rectangle": "Logs",
@@ -60,17 +152,10 @@ enum IconCatalog {
         "arrow.triangle.branch": "Git branch",
         "arrow.triangle.pull": "Pull request",
         "plus.forwardslash.minus": "Diff",
-        "note.text": "Notes",  // dropped
+        "note.text": "Notes",
         "bubble.left.and.bubble.right": "Chat",
-        "envelope": "Email",  // humanizes to "Envelope" on its own; the metaphor is mail
-        "git": "Git",
-        "github": "GitHub",
-        "linear": "Linear",
-        "neovim": "Neovim",
-        "openai": "OpenAI",
-        "opencode": "OpenCode",
-        "sqlite": "SQLite",
-        "htop": "htop",  // dropped; lowercase is the tool's own name
+        "envelope": "Email",
+        "htop": "htop",  // lowercase is the tool's own name
         "slack": "Slack",
         "spotify": "Spotify",
     ]

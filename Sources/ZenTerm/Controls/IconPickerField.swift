@@ -18,7 +18,10 @@ final class IconPickerField: NSView {
     private var isFocusedStop = false { didSet { restyle() } }
 
     private var popover: NSView?
-    private let symbols: [String]
+    private let sections: [IconCatalog.Section]
+    /// The sections flattened in render order, so `cells[i]` is always `orderedSymbols[i]` —
+    /// headings are rows in the stack but never cells, so arrow nav steps straight over them.
+    private let orderedSymbols: [String]
     private var cells: [IconButton] = []
     private var highlighted = 0
 
@@ -28,19 +31,27 @@ final class IconPickerField: NSView {
     static var columnsForTesting: Int { columns }
     private static let cellSize: CGFloat = 34
     private static let cellSpacing: CGFloat = 4
+    private static let headerHeight: CGFloat = 16
+    private static let sectionGap: CGFloat = 12
     private static let maxGridHeight: CGFloat = 320
     private static var restFill: NSColor { Theme.current.chrome.fill(.rest) }
     private static var focusFill: NSColor { Theme.current.chrome.selectionFill }
 
     /// Test hooks: open the grid and drive it without a live event loop.
     func openForTesting() { openPopover() }
+    /// The symbol the highlight currently sits on — the assertion arrow-key tests actually need.
+    var highlightedSymbolForTesting: String? {
+        orderedSymbols.indices.contains(highlighted) ? orderedSymbols[highlighted] : nil
+    }
+    var cellCountForTesting: Int { cells.count }
     func moveHighlightForTesting(_ delta: Int) { moveHighlight(delta) }
     func commitHighlightForTesting() { commitHighlight() }
 
     init(selected: String) {
         let initial = selected.isEmpty ? IconCatalog.defaultSymbol : selected
-        // Keep a custom (non-catalog) icon selectable so editing a float never drops it.
-        symbols = IconCatalog.all.contains(initial) ? IconCatalog.all : [initial] + IconCatalog.all
+        // A custom (non-catalog) icon gets its own leading section, so editing a float never drops it.
+        sections = IconCatalog.sections(including: initial)
+        orderedSymbols = sections.flatMap(\.symbols)
         self.selected = initial
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -173,7 +184,7 @@ final class IconPickerField: NSView {
 
     private func openPopover() {
         guard popover == nil, let contentView = window?.contentView else { return }
-        highlighted = max(0, symbols.firstIndex(of: selected) ?? 0)
+        highlighted = max(0, orderedSymbols.firstIndex(of: selected) ?? 0)
         let card = buildPopover()
         contentView.addSubview(card)
         popover = card
@@ -192,23 +203,32 @@ final class IconPickerField: NSView {
         grid.spacing = Self.cellSpacing
         grid.translatesAutoresizingMaskIntoConstraints = false
 
-        var row: NSStackView?
-        for (index, symbol) in symbols.enumerated() {
-            if index % Self.columns == 0 {
-                let newRow = NSStackView()
-                newRow.orientation = .horizontal
-                newRow.spacing = Self.cellSpacing
-                grid.addArrangedSubview(newRow)
-                row = newRow
+        var previousRow: NSView?
+        for (sectionIndex, section) in sections.enumerated() {
+            let header = Self.sectionHeader(section.title)
+            grid.addArrangedSubview(header)
+            if sectionIndex > 0, let previousRow {
+                grid.setCustomSpacing(Self.sectionGap, after: previousRow)
             }
-            let cell = IconButton(
-                symbol: symbol, size: NSSize(width: Self.cellSize, height: Self.cellSize),
-                pointSize: 15, accessibilityLabel: IconCatalog.displayName(symbol)
-            ) { [weak self] in self?.commit(symbol) }
-            // IconButton now owns hover labeling via its branded tooltip (the accessibility label
-            // above is the glyph name), so no native cell.toolTip is needed.
-            row?.addArrangedSubview(cell)
-            cells.append(cell)
+            var row: NSStackView?
+            for (index, symbol) in section.symbols.enumerated() {
+                if index % Self.columns == 0 {
+                    let newRow = NSStackView()
+                    newRow.orientation = .horizontal
+                    newRow.spacing = Self.cellSpacing
+                    grid.addArrangedSubview(newRow)
+                    row = newRow
+                }
+                let cell = IconButton(
+                    symbol: symbol, size: NSSize(width: Self.cellSize, height: Self.cellSize),
+                    pointSize: 15, accessibilityLabel: IconCatalog.displayName(symbol)
+                ) { [weak self] in self?.commit(symbol) }
+                // IconButton now owns hover labeling via its branded tooltip (the accessibility
+                // label above is the glyph name), so no native cell.toolTip is needed.
+                row?.addArrangedSubview(cell)
+                cells.append(cell)
+            }
+            previousRow = row
         }
 
         let doc = FlippedView()
@@ -234,9 +254,14 @@ final class IconPickerField: NSView {
         card.addSubview(scroll)
 
         let inset: CGFloat = 8
-        let rows = (symbols.count + Self.columns - 1) / Self.columns
         let gridWidth = CGFloat(Self.columns) * Self.cellSize + CGFloat(Self.columns - 1) * Self.cellSpacing
-        let gridHeight = CGFloat(rows) * Self.cellSize + CGFloat(max(rows - 1, 0)) * Self.cellSpacing
+        let gridHeight = sections.enumerated().reduce(CGFloat.zero) { total, entry in
+            let rows = (entry.element.symbols.count + Self.columns - 1) / Self.columns
+            let block =
+                Self.headerHeight + Self.cellSpacing
+                + CGFloat(rows) * Self.cellSize + CGFloat(rows) * Self.cellSpacing
+            return total + block + (entry.offset > 0 ? Self.sectionGap : 0)
+        }
         NSLayoutConstraint.activate([
             scroll.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: inset),
             scroll.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -inset),
@@ -252,6 +277,17 @@ final class IconPickerField: NSView {
         let cardHeight = min(gridHeight + inset * 2, Self.maxGridHeight)
         card.frame = NSRect(x: 0, y: 0, width: gridWidth + inset * 2, height: cardHeight)
         return card
+    }
+
+    /// A section heading: a quiet uppercase label above its block. Not a cell — it never enters
+    /// `cells`, so arrow navigation never lands on it.
+    private static func sectionHeader(_ title: String) -> NSTextField {
+        let label = NSTextField(labelWithString: title.uppercased())
+        label.font = .systemFont(ofSize: 9, weight: .semibold)
+        label.textColor = Theme.current.chrome.ink(.faint)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.heightAnchor.constraint(equalToConstant: headerHeight).isActive = true
+        return label
     }
 
     private func moveHighlight(_ delta: Int) {
@@ -275,7 +311,7 @@ final class IconPickerField: NSView {
 
     private func commitHighlight() {
         guard cells.indices.contains(highlighted) else { return }
-        commit(symbols[highlighted])
+        commit(orderedSymbols[highlighted])
     }
 
     private func commit(_ symbol: String) {
