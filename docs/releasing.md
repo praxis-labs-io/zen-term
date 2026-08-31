@@ -18,92 +18,54 @@ because a private repo's Releases are not downloadable. v1.0.0 moved them here.
 `SUFeedURL` is frozen into each build's Info.plist, so a copy installed before 1.0.0
 polls the old appcast forever and no change to `bin/package-app` reaches it. At the
 1.0.0 cut that was **7 downloads of the 0.10.0 DMG** and around 18 appcast polls a
-day: three to five machines, all of them people we can message. So this is a
-one-time hand-off rather than anything `bin/release` carries.
+day: three to five machines, all of them people we can message. So it was a one-time
+hand-off rather than anything `bin/release` carries.
 
-**When 1.0.0 publishes**, upload that release's `dist/appcast.xml` to the old repo by
-hand. It needs no DMG: the enclosure inside already points at the asset here, the
-bytes are identical, and `SUPublicEDKey` never changed, so the signature verifies.
+**That hand-off is done.** v1.0.0's `dist/appcast.xml` was uploaded to the old repo on
+2026-08-23, under its own name and with no DMG: the enclosure inside points at the
+asset here and `SUPublicEDKey` never changed, so the signature verifies. Every
+pre-1.0.0 install that checks for updates now lands on this repo's feed.
 
-`bin/release` already pins the enclosure to `releases/download/vX.Y.Z/`, so the file
-uploads as written. That matters most here: the hand-off copy is written once and
-never regenerated, and a `latest` URL would stop meaning 1.0.0 the moment 1.0.1
-shipped.
-
-**It has to keep the name `appcast.xml`,** so upload `dist/appcast.xml` itself rather
-than a renamed copy. `gh release create` names each asset by its basename, and the
-feed every pre-1.0.0 build polls is literally `latest/download/appcast.xml`. Upload it
-as `appcast-handoff.xml` and that URL 404s, which is the one thing this hand-off
-exists to prevent.
-
-**Publish it as a draft first.** Creating this release moves `latest` on the old repo
-off v0.10.0 the instant it is public, so the asset becomes the feed for every pre-1.0.0
-install immediately. That is the intent, and it is also why a mistake here takes down
-the only feed those machines have rather than merely failing to add a new one. There is
-no error anywhere when it goes wrong, and no way for those installs to recover except a
-manual download. Draft, check, then publish:
+**What is left is the wind-down.** Compare the hand-off item's fetch count against
+v0.10.0's DMG downloads, message whoever has not moved, then delete the repo and the
+`zen-term` org:
 
 ```
-gh release create v1.0.0 --repo zen-term/zen-term-releases --draft \
-    --title "ZenTerm 1.0.0" \
-    --notes "ZenTerm moved to https://github.com/praxis-labs-io/zen-term. Releases are published there." \
-    dist/appcast.xml
+gh release view v1.0.0 --repo zen-term/zen-term-releases \
+    --json assets --jq '.assets[] | "\(.name) \(.downloadCount)"'
+gh release view v0.10.0 --repo zen-term/zen-term-releases \
+    --json assets --jq '.assets[] | "\(.name) \(.downloadCount)"'
 ```
 
-Confirm the asset kept its name and the enclosure resolves:
+Do not publish anything else to the old repo. Creating a release there moves its
+`latest` and repoints every machine still on the old feed, and there is no error and
+no recovery short of a manual download when that goes wrong.
 
-```
-gh release view v1.0.0 --repo zen-term/zen-term-releases --json assets \
-    --jq '.assets[].name'          # must print exactly: appcast.xml
-curl -sI "$(grep -o 'https://[^"]*\.dmg' dist/appcast.xml)" | head -1
-```
+## The website reads the repo
 
-The `curl` must return `200` or a `302`, not `404`. Then release it:
+`zen-term-website`'s `scripts/sync-docs.mjs` pulls the config references and the
+shipped third-party notices from `praxis-labs-io/zen-term`, and the release notes from
+this repo's Releases API. ZEN-423 repointed it off `zen-term-releases`; run
+`pnpm sync-docs` on a branch there after a release, then commit and merge.
 
-```
-gh release edit v1.0.0 --repo zen-term/zen-term-releases --draft=false
-```
+**It reads published state, so ordering is the whole trap.** Run it before
+`bin/release` has published and it syncs the previous version, succeeds, and commits
+nothing new. There is no error. Confirm the new `content/release-notes/vX.Y.Z.md`
+exists before opening the PR, and confirm the version is live on the page after the
+merge, because merging is not deploying.
 
-Finally, fetch the feed the old builds actually poll and confirm it returns the 1.0.0
-item before you walk away:
+Three details in that script are load-bearing and cost a wrong document if changed:
 
-```
-curl -sL https://github.com/zen-term/zen-term-releases/releases/latest/download/appcast.xml | head -20
-```
-
-Every install picks 1.0.0 up on its next check and lands on the new feed. Give it a
-week, compare the 1.0.0 download count against the 0.10.0 one, message whoever has
-not moved, then delete the repo and the `zen-term` org.
-
-## The website reads the repo, and it is not a URL swap
-
-`zen-term-website`'s `scripts/sync-docs.mjs` still pulls the docs and the releases API
-from `zen-term/zen-term-releases`. It fails by syncing nothing rather than by erroring,
-so nothing in the release flow notices. Tracked as ZEN-423.
-
-**v1.0.0 ships before that fix, deliberately.** The repoint has to be verified against
-a published v1.0.0, so the release comes first and the site holds at v0.10.0 until
-ZEN-423 lands. That costs a lagging marketing site for as long as the ticket is open,
-and it costs nothing else: the app, the appcast, and the download are untouched by it.
-Re-run `pnpm sync-docs` once it merges.
-
-**From v1.0.1 on this is a prerequisite, not a known gap.**
-
-Three of its source paths do not exist here, and one of them fails dangerously:
-
-- **`docs/THIRD-PARTY-NOTICES.md` never existed in this repo.** The deleted
-  `bin/release` block synthesized it in the releases repo by copying
-  `Sources/ZenTerm/Resources/THIRD-PARTY-NOTICES.md`. What this repo has is
-  `docs/third-party-notices.md`, a maintainer re-probe doc twenty times smaller and
-  about something else. raw.githubusercontent is case-sensitive, so the repoint 404s,
-  **and lowercasing the path to make it pass publishes the wrong document as the app's
-  license disclosure.** Point it at `Sources/ZenTerm/Resources/THIRD-PARTY-NOTICES.md`.
-  Check this on a case-sensitive filesystem or with `git ls-files`: APFS is
-  case-insensitive, so `ls` finds a file that is not there.
-- **`themes/rose-pine-moon` was renamed** to `rose-pine-zen` in ZEN-416.
-- The notices used to be republished per tag, which is what kept the license text
-  matched to the binary that shipped. Reading `main` loses that, so fetch these at the
-  release tag rather than at `main`.
+- **Every fetch is pinned to the release tag**, not `main`. The notices have to match
+  the binary that shipped, and a reference read off `main` documents config nobody is
+  running yet.
+- **The notices come from `Sources/ZenTerm/Resources/THIRD-PARTY-NOTICES.md`.** The
+  lowercase `docs/third-party-notices.md` beside it is a maintainer re-probe procedure
+  about something else. raw.githubusercontent is case-sensitive, so pointing at the
+  lowercase path publishes the wrong document as the app's license disclosure. APFS is
+  case-insensitive, so check this with `git ls-files` rather than `ls`.
+- **The theme file is `themes/rose-pine-zen`**, renamed from `rose-pine-moon` in
+  ZEN-416.
 
 ## Versioning
 

@@ -67,6 +67,7 @@ keys? Four lines in the config move it to `⌃HJKL` or anywhere else.
 | Scratch, a blank shell over the tab | `⌘;`                     |
 | New window                       | `⌘N`                        |
 | Previous and next tab            | `⌘[` `⌘]`                   |
+| Move the tab along the bar       | `⌘⌃[` `⌘⌃]`                 |
 | Previous and next pane           | `⌘⇧[` `⌘⇧]`                 |
 | Tab 1 through 9                  | `⌘1` … `⌘9`                 |
 | Clear the screen                 | `⌘K`                        |
@@ -79,8 +80,9 @@ keys? Four lines in the config move it to `⌃HJKL` or anywhere else.
 with its shortcut beside it, so it doubles as the reference for this page.
 
 Coming from Ghostty, this is your keymap. Every shortcut above is the one Ghostty
-binds, with one exception: `⌘[` and `⌘]` are tabs here rather than panes, the way
-Safari and the rest of the Mac use them.
+binds, with two exceptions: `⌘[` and `⌘]` are tabs here rather than panes, the way
+Safari and the rest of the Mac use them, and `⌘⌃[` and `⌘⌃]` are ours, since Ghostty
+leaves moving a tab unbound.
 
 </details>
 

@@ -19,8 +19,12 @@ keycap, and the manual-check toasts are here, by eye.
 - **Feed:** `SUFeedURL` is `.../praxis-labs-io/zen-term/releases/latest/download/appcast.xml`.
   `bin/release` uploads a single-item `appcast.xml` beside each DMG, so `latest/`
   always resolves to the newest release. Sparkle only ever offers the newest item.
-  A copy installed through v0.10.0 polls the old `zen-term-releases` feed instead;
-  `docs/releasing.md` covers the one-time hand-off that brings those across.
+  The **enclosure inside** points at `releases/download/vX.Y.Z/` rather than `latest`.
+  It carries an EdDSA signature for one exact file, so a pointer that moves between
+  the feed fetch and the download hands over bytes the signature rejects, with no
+  error a user would see.
+  A copy installed through v0.10.0 polled the old `zen-term-releases` feed; the
+  hand-off in `docs/releasing.md` moved those onto this one at v1.0.0.
 - **Inert in dev.** A `swift run` build has no `SUFeedURL`, so `UpdateController`
   never starts. Only a packaged app checks for updates (hourly, `SUScheduledCheckInterval`).
 - **The card never takes focus.** It is non-modal, like a sticky toast: its buttons
