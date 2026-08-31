@@ -26,20 +26,30 @@ hand-off rather than anything `bin/release` carries.
 asset here and `SUPublicEDKey` never changed, so the signature verifies. Every
 pre-1.0.0 install that checks for updates now lands on this repo's feed.
 
-**What is left is the wind-down.** Compare the hand-off item's fetch count against
-v0.10.0's DMG downloads, message whoever has not moved, then delete the repo and the
-`zen-term` org:
+**The repo is archived, and that is where it should stay.** Archiving makes it
+read-only, not invisible: its Releases still serve, so the frozen pre-1.0.0 feed URL
+still returns 200 and still hands back the v1.0.0 hand-off item. Verified against the
+live URL at the v1.2.0 cut. Anyone still on an old build crosses over on their next
+check with nothing to do by hand.
+
+**Deleting it is the step that strands people, and it cannot be undone.** Delete the
+repo and that frozen URL 404s forever. An install that has not checked since, a laptop
+that was shut for a month, has no path back except downloading the DMG by hand, and the
+failure is silent: no card, no toast, nothing that says why updates stopped. Archived
+costs nothing. There is no deadline here, and no reason to force one.
+
+If it is ever deleted, the signal to watch is the hand-off item's fetch count going
+flat, which means nothing is polling any more:
 
 ```
 gh release view v1.0.0 --repo zen-term/zen-term-releases \
-    --json assets --jq '.assets[] | "\(.name) \(.downloadCount)"'
-gh release view v0.10.0 --repo zen-term/zen-term-releases \
     --json assets --jq '.assets[] | "\(.name) \(.downloadCount)"'
 ```
 
 Do not publish anything else to the old repo. Creating a release there moves its
 `latest` and repoints every machine still on the old feed, and there is no error and
-no recovery short of a manual download when that goes wrong.
+no recovery short of a manual download when that goes wrong. Archiving already blocks
+this, which is another reason to leave it archived.
 
 ## The website reads the repo
 
