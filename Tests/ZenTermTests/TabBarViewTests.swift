@@ -30,7 +30,7 @@ final class TabBarViewTests: WindowTestCase {
     /// 1.5s title poll read as a blinking tooltip. The chip surviving is what fixes that, and
     /// the label still has to follow the new title.
     func test_render_keepsEachTabsChipAcrossARerender() throws {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         mount(tabBar)
         tabBar.render([item(1, "one", index: 1, active: true), item(2, "two", index: 2)])
         let before = tabBar.chipsForTesting
@@ -46,7 +46,7 @@ final class TabBarViewTests: WindowTestCase {
     }
 
     func test_render_dropsTheChipOfAClosedTab() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         mount(tabBar)
         tabBar.render([item(1, "one", index: 1, active: true), item(2, "two", index: 2)])
         let closing = tabBar.chipsForTesting[1]
@@ -60,7 +60,7 @@ final class TabBarViewTests: WindowTestCase {
     /// Renumbering after a close has to reach the tooltip's keycap, which resolves at hover time from
     /// the chip's own index rather than one captured when it was built.
     func test_render_renumbersAKeptChipsShortcut() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         mount(tabBar)
         tabBar.render([item(1, "one", index: 1, active: true), item(2, "two", index: 2)])
         XCTAssertEqual(tabBar.chipTooltipsForTesting[1].shortcut, CommandCatalog.spec(for: .selectTab(2)).shortcut)
@@ -77,7 +77,7 @@ final class TabBarViewTests: WindowTestCase {
     func test_reapplyTheme_recolorsTheKeptChipsLabel() throws {
         let original = Theme.current
         defer { Theme.setCurrentForTesting(original) }
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         mount(tabBar)
         tabBar.render([item(1, "one", index: 1, active: true)])
         let chip = try XCTUnwrap(tabBar.chipsForTesting.first)
@@ -123,7 +123,7 @@ final class TabBarViewTests: WindowTestCase {
     }
 
     func test_reapplyTheme_resetsTracerColor() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         let items = [TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle)]
         tabBar.render(items)
 
@@ -137,7 +137,7 @@ final class TabBarViewTests: WindowTestCase {
     func test_reapplyTheme_beforeAnyRender_doesNotCrash() {
         // No render() call before reapplyTheme() — must not crash on an empty snapshot; with no
         // tabs rendered the bar holds no chips (new-tab lives in the footer dock now).
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         tabBar.reapplyTheme()
         XCTAssertTrue(tabBar.chipsForTesting.isEmpty)
     }
@@ -159,7 +159,7 @@ final class TabBarViewTests: WindowTestCase {
     func test_chipTooltip_readsFocusTabWithCommandShortcut() {
         // The tooltip reads "Focus tab" (not the tab's name); tabs 1–9 resolve a ⌘N keycap from
         // the live keymap, 10+ have no binding so no keycap.
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         tabBar.render([
             TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle),
             TabBarItem(id: TabID(10), index: 10, title: "ten", isActive: false, attentionState: .idle),
@@ -174,7 +174,7 @@ final class TabBarViewTests: WindowTestCase {
     }
 
     func test_overflow_fadesWhenTabsExceedWidth() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         tabBar.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 160, height: 60),
@@ -191,7 +191,7 @@ final class TabBarViewTests: WindowTestCase {
     }
 
     func test_overflow_noFadeWhenTabsFit() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         tabBar.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 800, height: 60),
@@ -205,7 +205,7 @@ final class TabBarViewTests: WindowTestCase {
     }
 
     func test_overflow_leadingFadesOnceScrolledRight() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         tabBar.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 160, height: 60),
@@ -231,7 +231,7 @@ final class TabBarViewTests: WindowTestCase {
     /// constants, so a test cannot restate the values and pass against its own copy of them.
     @MainActor
     func test_theNumberAndTitle_shareOneColorPerState() throws {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         mount(tabBar)
         tabBar.render([item(1, "active", index: 1, active: true), item(2, "idle", index: 2)])
         let labels = tabBar.chipLabelsForTesting
@@ -261,7 +261,7 @@ final class TabBarViewTests: WindowTestCase {
     /// a weight, so it survives the two halves sharing one ink.
     @MainActor
     func test_aWaitingTab_stillMarksItsNumberWithTheAttentionColor() throws {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in })
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         mount(tabBar)
         tabBar.render([
             TabBarItem(id: TabID(1), index: 1, title: "waiting", isActive: false, attentionState: .waiting)
@@ -274,5 +274,115 @@ final class TabBarViewTests: WindowTestCase {
 
         XCTAssertEqual(numberColor, Theme.current.chrome.attention.nsColor)
         XCTAssertEqual(titleColor, TabBarView.idleInkForTesting)
+    }
+
+    // MARK: rename
+
+    /// A keyed window: the chip's click path only matters with a window that can take focus.
+    private func mountKeyed(_ tabBar: TabBarView) -> NSWindow {
+        tabBar.translatesAutoresizingMaskIntoConstraints = true
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 60),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView?.addSubview(tabBar)
+        tabBar.frame = NSRect(x: 0, y: 0, width: 400, height: 30)
+        window.makeKeyAndOrderFront(nil)
+        tabBar.layoutSubtreeIfNeeded()
+        return window
+    }
+
+    private func click(_ view: NSView, count: Int) throws {
+        let event = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: view.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
+                clickCount: count, pressure: 1))
+        view.mouseDown(with: event)
+    }
+
+    /// The bar asks; the window opens the card. Renaming is not the bar's job, so all it owes is
+    /// the right tab id off a double-click.
+    func test_doubleClickingAChip_asksToRenameThatTab() throws {
+        var renamed: [TabID] = []
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { renamed.append($0) })
+        _ = mountKeyed(tabBar)
+        tabBar.render([item(1, "zen-term", index: 1, active: true), item(2, "api", index: 2)])
+
+        try click(tabBar.chipsForTesting[1], count: 2)
+
+        XCTAssertEqual(renamed, [TabID(2)], "the chip that was double-clicked, not the active tab")
+    }
+
+    /// A single click must still just select, or a rename card would open on every tab switch.
+    func test_singleClickingAChip_selectsAndAsksForNoRename() throws {
+        var selected: [TabID] = []
+        var renamed: [TabID] = []
+        let tabBar = TabBarView(
+            onSelect: { selected.append($0) }, onClose: { _ in }, onRename: { renamed.append($0) })
+        _ = mountKeyed(tabBar)
+        tabBar.render([item(1, "zen-term", index: 1, active: true), item(2, "api", index: 2)])
+
+        try click(tabBar.chipsForTesting[1], count: 1)
+
+        XCTAssertEqual(selected, [TabID(2)])
+        XCTAssertTrue(renamed.isEmpty)
+    }
+
+    // MARK: revealing a moved tab
+
+    /// ⌘⌃] keeps the same tab active while walking it along the bar, so the reveal cannot key off
+    /// the selection: the tab slides under the edge fade and off-screen with its underline
+    /// following it out of view.
+    func test_movingTheActiveTabScrollsItBackIntoView() throws {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
+        mount(tabBar)
+        let names = (1...14).map { "tab-number-\($0)" }
+        func snapshot(active: Int) -> [TabBarItem] {
+            names.enumerated().map { i, name in
+                item(i + 1, name, index: i + 1, active: i + 1 == active)
+            }
+        }
+        tabBar.render(snapshot(active: 1))
+        tabBar.layoutSubtreeIfNeeded()
+
+        // The same tab stays active and walks to the far end of an overflowing strip.
+        var moved = names
+        let carried = moved.removeFirst()
+        moved.append(carried)
+        let items = moved.enumerated().map { i, name in
+            item(names.firstIndex(of: name)! + 1, name, index: i + 1, active: name == carried)
+        }
+        tabBar.render(items)
+        tabBar.layoutSubtreeIfNeeded()
+
+        let chip = try XCTUnwrap(tabBar.chipsForTesting.last)
+        XCTAssertTrue(
+            tabBar.visibleStripRectForTesting.intersects(chip.frame),
+            "the moved tab has to be scrolled back into view, not left off the end of the strip")
+    }
+
+    /// The reveal must not fire on a title poll, which would yank the strip back under a user who
+    /// is scrolling it. A title changing never changes a tab's slot.
+    func test_aTitleChangeDoesNotYankTheStripBack() throws {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
+        mount(tabBar)
+        let names = (1...14).map { "tab-number-\($0)" }
+        func snapshot(firstTitle: String) -> [TabBarItem] {
+            names.enumerated().map { i, name in
+                item(i + 1, i == 0 ? firstTitle : name, index: i + 1, active: i == 0)
+            }
+        }
+        tabBar.render(snapshot(firstTitle: names[0]))
+        tabBar.layoutSubtreeIfNeeded()
+        tabBar.scrollToForTesting(x: 300)
+        let scrolled = tabBar.visibleStripRectForTesting.origin.x
+        XCTAssertGreaterThan(scrolled, 0, "the strip is scrolled away from tab 1")
+
+        tabBar.render(snapshot(firstTitle: "a-new-title-from-the-poll"))
+        tabBar.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(
+            tabBar.visibleStripRectForTesting.origin.x, scrolled, accuracy: 0.5,
+            "a title poll must leave the scroll position alone")
     }
 }

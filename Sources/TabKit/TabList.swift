@@ -58,4 +58,23 @@ public struct TabList {
         }
         return true
     }
+
+    /// Move `id` `delta` slots along the order, clamped at both ends. Returns `false` when
+    /// nothing moved (`id` absent, or already at the wall), so the caller can skip a re-render.
+    /// Whichever tab was active stays active.
+    @discardableResult
+    public mutating func move(_ id: TabID, by delta: Int) -> Bool {
+        guard let idx = order.firstIndex(of: id) else { return false }
+        // Overflow lands at the wall the delta was heading for, rather than trapping: clamping
+        // is what this promises, and `idx + delta` overflows before any clamp could run.
+        let (sum, overflowed) = idx.addingReportingOverflow(delta)
+        let requested = overflowed ? (delta > 0 ? Int.max : Int.min) : sum
+        let target = min(max(requested, 0), order.count - 1)
+        guard target != idx else { return false }
+        let stillActive = order[activeIndex]
+        order.remove(at: idx)
+        order.insert(id, at: target)
+        activeIndex = order.firstIndex(of: stillActive) ?? target
+        return true
+    }
 }

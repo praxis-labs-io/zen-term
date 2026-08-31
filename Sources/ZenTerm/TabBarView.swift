@@ -27,6 +27,8 @@ struct TabBarItem {
 final class TabBarView: NSView {
     private let onSelect: (TabID) -> Void
     private let onClose: (TabID) -> Void
+    /// Asks the window to open the rename card for a tab. The bar neither edits nor commits.
+    private let onRename: (TabID) -> Void
 
     static let height: CGFloat = 30
 
@@ -38,6 +40,13 @@ final class TabBarView: NSView {
     private static let bandNudge: CGFloat = 6
     /// The last ~28pt at each edge over which overflowing tabs dissolve into the backdrop.
     private static let fadeWidth: CGFloat = 28
+
+    /// The chip label's font.
+    static let chipFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
+    /// The kern the title carries in the label. The editor matches it or the text reflows on open.
+    fileprivate static let titleKern: CGFloat = 0.4
+    /// The label's inset inside its chip.
+    fileprivate static let labelInset: CGFloat = 9
 
     fileprivate static var activeInk: NSColor { Theme.current.chrome.ink(.normal) }
     fileprivate static var idleInk: NSColor {
@@ -69,6 +78,9 @@ final class TabBarView: NSView {
     /// toward the target rather than growing symmetrically about the center.
     private let tracer = CALayer()
     private var activeTabID: TabID?
+    /// The active tab's 1-based slot at the last render. A move keeps the same tab active while
+    /// changing this, which is the only signal separating it from a title poll.
+    private var activeTabIndex: Int?
     /// The last snapshot handed to `render(_:)`, retained so `reapplyTheme()` can re-render it
     /// after a theme swap without the caller re-supplying the tab list.
     private var lastItems: [TabBarItem] = []
@@ -78,10 +90,12 @@ final class TabBarView: NSView {
 
     init(
         onSelect: @escaping (TabID) -> Void,
-        onClose: @escaping (TabID) -> Void
+        onClose: @escaping (TabID) -> Void,
+        onRename: @escaping (TabID) -> Void
     ) {
         self.onSelect = onSelect
         self.onClose = onClose
+        self.onRename = onRename
         super.init(frame: .zero)
         wantsLayer = true
 
@@ -147,7 +161,8 @@ final class TabBarView: NSView {
                     let fresh = Chip(
                         id: id, attributed: Self.tabLabel(item), index: item.index,
                         onClick: { [weak self] in self?.onSelect(id) },
-                        onMiddleClick: { [weak self] in self?.onClose(id) })
+                        onMiddleClick: { [weak self] in self?.onClose(id) },
+                        onDoubleClick: { [weak self] in self?.onRename(id) })
                     docView.addSubview(fresh)
                     return fresh
                 }()
@@ -164,17 +179,22 @@ final class TabBarView: NSView {
         let newActive = items.first(where: \.isActive)?.id
         if let activeChip {
             let selectionChanged = activeTabID != newActive
+            let newIndex = items.first(where: \.isActive)?.index
+            // ⌘⌃[ moves the active tab without changing which tab is active, and it can walk clean
+            // off the strip. Its slot changing is what separates that from a title poll, which
+            // must not yank the strip back while the user is scrolling it.
+            let slotChanged = activeTabIndex != nil && activeTabIndex != newIndex
             moveTracer(to: tracerFrame(for: activeChip), animated: activeTabID != nil && selectionChanged)
             tracer.isHidden = false
-            // Reveal the active tab only when the selection actually moves — not on a title-poll
-            // re-render, which would otherwise yank the strip back while the user scrolls it. Pad by
-            // `fadeWidth` on each side so the revealed tab clears the edge fade instead of sitting
-            // under it.
-            if selectionChanged {
+            // Pad by `fadeWidth` on each side so the revealed tab clears the edge fade instead of
+            // sitting under it.
+            if selectionChanged || slotChanged {
                 activeChip.scrollToVisible(activeChip.bounds.insetBy(dx: -Self.fadeWidth, dy: 0))
             }
+            activeTabIndex = newIndex
         } else {
             tracer.isHidden = true
+            activeTabIndex = nil
         }
         activeTabID = newActive
         updateFade()
@@ -219,6 +239,10 @@ final class TabBarView: NSView {
     var chipTooltipsForTesting: [(label: String, shortcut: String?)] {
         chips.map { ($0.tooltipLabelForTesting, $0.tooltipShortcutForTesting) }
     }
+
+    /// Test hook: the part of the strip on screen right now, so a test can assert what a reveal
+    /// or a scroll actually left visible.
+    var visibleStripRectForTesting: CGRect { scrollView.contentView.documentVisibleRect }
 
     /// Test hook: scroll the strip to a horizontal offset, as a trackpad drag would.
     func scrollToForTesting(x: CGFloat) {
@@ -375,7 +399,7 @@ final class TabBarView: NSView {
     }
 
     private static func tabLabel(_ item: TabBarItem) -> NSAttributedString {
-        let font = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
+        let font = chipFont
         let ink = item.isActive ? activeInk : idleInk
         let numberColor: NSColor
         switch item.attentionState {
@@ -395,7 +419,7 @@ final class TabBarView: NSView {
         s.append(
             NSAttributedString(
                 string: item.title,
-                attributes: [.font: font, .foregroundColor: ink, .kern: 0.4]))
+                attributes: [.font: font, .foregroundColor: ink, .kern: titleKern]))
         return s
     }
 
@@ -411,6 +435,7 @@ final class TabBarView: NSView {
         private var tabIndex: Int
         private let onClick: () -> Void
         private let onMiddleClick: (() -> Void)?
+        private let onDoubleClick: (() -> Void)?
         private var isHovered = false
         private let label: NSTextField
         /// The hover-tooltip wiring — a branded `ChromeTooltip` (the same one the footer dock buttons
@@ -425,7 +450,7 @@ final class TabBarView: NSView {
         /// The width this chip wants: its label plus the 9pt inset on each side. Read from the
         /// label's intrinsic size (not `fittingSize`) so it's independent of the frame the parent
         /// assigns during manual layout.
-        var fittingWidth: CGFloat { label.intrinsicContentSize.width + 18 }
+        var fittingWidth: CGFloat { label.intrinsicContentSize.width + 2 * TabBarView.labelInset }
 
         var attributedLabelForTesting: NSAttributedString { label.attributedStringValue }
 
@@ -435,12 +460,14 @@ final class TabBarView: NSView {
 
         init(
             id: TabID, attributed: NSAttributedString, index: Int,
-            onClick: @escaping () -> Void, onMiddleClick: (() -> Void)?
+            onClick: @escaping () -> Void, onMiddleClick: (() -> Void)?,
+            onDoubleClick: (() -> Void)?
         ) {
             self.id = id
             self.tabIndex = index
             self.onClick = onClick
             self.onMiddleClick = onMiddleClick
+            self.onDoubleClick = onDoubleClick
             label = NSTextField(labelWithAttributedString: attributed)
             super.init(frame: .zero)
             wantsLayer = true
@@ -450,7 +477,7 @@ final class TabBarView: NSView {
             addSubview(label)
 
             NSLayoutConstraint.activate([
-                label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
+                label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: TabBarView.labelInset),
                 label.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
         }
@@ -496,7 +523,8 @@ final class TabBarView: NSView {
         }
         override func mouseDown(with event: NSEvent) {
             tooltip.hide(from: self)  // a click dismisses the tooltip
-            onClick()
+            // The pair arrives as two events: the first selects the tab, the second renames it.
+            if event.clickCount == 2 { onDoubleClick?() } else { onClick() }
         }
         override func otherMouseDown(with event: NSEvent) {
             if event.buttonNumber == 2 { onMiddleClick?() }  // middle-click closes

@@ -36,7 +36,11 @@ final class SettingsKeybindsSection: SettingsSection {
         ),
         ("Navigation", [.navLeft, .navDown, .navUp, .navRight, .prevPane, .nextPane]),
         ("Resize", [.resizeLeft, .resizeDown, .resizeUp, .resizeRight]),
-        ("Tabs", [.newTab, .newWindow, .prevTab, .nextTab] + (1...9).map { .selectTab($0) }),
+        (
+            "Tabs",
+            [.newTab, .newWindow, .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab]
+                + (1...9).map { .selectTab($0) }
+        ),
         ("Window", [.fillScreen, .dismissToast, .dismissAllToasts]),
         ("Drawers", [.toggleBottomDrawer, .toggleRightDrawer]),
         (

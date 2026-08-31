@@ -20,6 +20,9 @@ extension KeyInterceptor.ReservedChord {
         case .selectTab(let n): return "select_tab_\(n)"
         case .prevTab: return "prev_tab"
         case .nextTab: return "next_tab"
+        case .moveTabLeft: return "move_tab_left"
+        case .moveTabRight: return "move_tab_right"
+        case .renameTab: return "rename_tab"
         case .resizeLeft: return "resize_left"
         case .resizeRight: return "resize_right"
         case .resizeUp: return "resize_up"
@@ -87,7 +90,8 @@ extension KeyInterceptor.ReservedChord {
         case .scrollPageUp, .scrollPageDown: return true
         case .jumpToPreviousPrompt, .jumpToNextPrompt: return true
         case .splitVertical, .splitHorizontal, .closePane, .newTab, .newWindow, .selectTab,
-            .prevTab, .nextTab, .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
+            .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab,
+            .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
             .prevPane, .nextPane,
             .toggleToolFloat, .toggleRepoPicker, .toggleCommandPalette, .openSettings,
             .reloadConfig, .checkForUpdates, .reportIssue, .newTool, .resetFontSize,
@@ -134,6 +138,7 @@ extension KeyInterceptor.ReservedChord {
             .navLeft, .navRight, .navUp, .navDown, .prevPane, .nextPane,
             .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
             .newTab, .newWindow, .prevTab, .nextTab, .selectTab,
+            .moveTabLeft, .moveTabRight, .renameTab,
             .fillScreen, .toggleBottomDrawer, .toggleRightDrawer,
             .toggleRepoPicker, .toggleCommandPalette, .newTool, .openSettings,
             .dismissToast, .dismissAllToasts:
@@ -158,6 +163,9 @@ extension KeyInterceptor.ReservedChord {
         case "new_window": self = .newWindow
         case "prev_tab": self = .prevTab
         case "next_tab": self = .nextTab
+        case "move_tab_left": self = .moveTabLeft
+        case "move_tab_right": self = .moveTabRight
+        case "rename_tab": self = .renameTab
         case "resize_left": self = .resizeLeft
         case "resize_right": self = .resizeRight
         case "resize_up": self = .resizeUp
@@ -271,6 +279,10 @@ enum KeymapDefaults {
         // resolves.
         map[Chord(command: true, key: "[")] = .prevTab
         map[Chord(command: true, key: "]")] = .nextTab
+        // Moving a tab takes the control tier of the same bracket family: the brackets are
+        // already what orders tabs and panes, so ⌘⌃ reads as moving what ⌘ steps through.
+        map[Chord(command: true, control: true, key: "[")] = .moveTabLeft
+        map[Chord(command: true, control: true, key: "]")] = .moveTabRight
         map[Chord(command: true, key: "t")] = .newTab
         map[Chord(command: true, key: "n")] = .newWindow
         for n in 1...9 { map[Chord(command: true, key: "\(n)")] = .selectTab(n) }

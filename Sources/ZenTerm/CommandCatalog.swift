@@ -48,6 +48,9 @@ enum CommandCatalog {
         case .prevTab: return tab("Previous Tab", glyph, chord)
         case .nextTab: return tab("Next Tab", glyph, chord)
         case .selectTab(let n): return tab("Select Tab \(n)", glyph, chord)
+        case .moveTabLeft: return tab("Move Tab Left", glyph, chord)
+        case .moveTabRight: return tab("Move Tab Right", glyph, chord)
+        case .renameTab: return tab("Rename Tab…", glyph, chord)
         case .toggleBottomDrawer: return drawer("Toggle Bottom Drawer", glyph, chord)
         case .toggleRightDrawer: return drawer("Toggle Right Drawer", glyph, chord)
         case .toggleToolFloat(let id): return tool(ToolFloatCatalog.byID(id)?.title ?? id, glyph, chord)
@@ -109,7 +112,7 @@ enum CommandCatalog {
         chords += [.openSettings, .reloadConfig, .checkForUpdates, .reportIssue]
         chords += [
             .toggleBottomDrawer, .toggleRightDrawer,
-            .newTab, .prevTab, .nextTab,
+            .newTab, .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab,
         ]
         if tabCount > 0 {
             chords += (1...min(tabCount, 9)).map { .selectTab($0) }

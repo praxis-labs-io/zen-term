@@ -143,7 +143,10 @@ final class TabController: NSObject {
     /// live cwd-derived title so the tab keeps the workspace's name no matter where the
     /// focused pane's shell `cd`s. Nil for tabs opened any other way.
     var pinnedTitle: String?
-    var title: String { pinnedTitle ?? paneCanvas.title }
+    var title: String { pinnedTitle ?? liveTitle }
+    /// The cwd-derived title with no pin over it — what the tab falls back to when a rename is
+    /// cleared, and what the rename card shows as its placeholder.
+    var liveTitle: String { paneCanvas.title }
     /// The focused *panel's* cwd: a focused drawer's, else the focused pane's. Reading the canvas
     /// unconditionally meant a drawer you had `cd`'d elsewhere still reported the pane's directory,
     /// so the diff, a new tab and a `persist:dir` float all anchored to the wrong one.

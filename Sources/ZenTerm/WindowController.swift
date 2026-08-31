@@ -237,6 +237,7 @@ final class WindowController: NSObject {
     /// switch tabs) but presented over the active tab's tile region. Modal while open.
     private enum ModalKind {
         case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm, reportIssue
+        case renameTab
 
         /// The chord that closes this same modal when pressed again (its own toggle), or nil for a
         /// card with no dedicated chord (the workspace / tool-float / report forms, reached from a
@@ -247,7 +248,7 @@ final class WindowController: NSObject {
             case .repoPicker: return .toggleRepoPicker
             case .commandPalette: return .toggleCommandPalette
             case .settings: return .openSettings
-            case .workspaceForm, .toolFloatForm, .reportIssue: return nil
+            case .workspaceForm, .toolFloatForm, .reportIssue, .renameTab: return nil
             }
         }
     }
@@ -365,10 +366,12 @@ final class WindowController: NSObject {
         // after super.init (so both can stay `let`).
         var onSelect: (TabID) -> Void = { _ in }
         var onClose: (TabID) -> Void = { _ in }
+        var onRename: (TabID) -> Void = { _ in }
         var onNewTab: () -> Void = {}
         tabBar = TabBarView(
             onSelect: { onSelect($0) },
-            onClose: { onClose($0) })
+            onClose: { onClose($0) },
+            onRename: { onRename($0) })
         var onSplitH: () -> Void = {}
         var onSplitV: () -> Void = {}
         var onPalette: () -> Void = {}
@@ -390,6 +393,7 @@ final class WindowController: NSObject {
 
         onSelect = { [weak self] in self?.select($0) }
         onClose = { [weak self] in self?.closeTab($0) }
+        onRename = { [weak self] in self?.openRenameTab($0) }
         // New-tab is a top-level action (like new window) — it acts even while a modal card or
         // float is up, matching the pre-move tab-bar "+", rather than being swallowed by the card
         // gate in handle(_:).
@@ -1054,6 +1058,42 @@ final class WindowController: NSObject {
         guard tabs.order.count > 1, let i = tabs.order.firstIndex(of: tabs.activeID) else { return }
         let n = tabs.order.count
         select(tabs.order[(i + delta + n) % n], slideFrom: delta > 0 ? .fromRight : .fromLeft)
+    }
+
+    /// Shift the active tab one slot along the bar. The numbers, tooltips and toast keycaps are
+    /// all derived from `tabs.order` at render time, so re-rendering is the whole update.
+    private func moveActiveTab(_ delta: Int) {
+        guard tabs.move(tabs.activeID, by: delta) else { return }
+        Log.info("tab moved", category: .tabs)
+        renderTabBar()
+    }
+
+    /// Open the rename card for `id`. Takes the single modal slot, so whatever else is up closes.
+    private func openRenameTab(_ id: TabID) {
+        guard let controller = controllers[id] else { return }
+        // Double-clicking the ACTIVE chip never reaches `select`'s own call: it returns early on
+        // the id already being active, so a pending Close confirm would sit under the card.
+        cancelConfirm()
+        if modal?.kind == .renameTab { closeModal(); return }
+        if modal != nil { closeModal() }
+        let overlay = RenameTabOverlay(
+            current: controller.title, liveTitle: controller.liveTitle,
+            background: Theme.current.chrome.background.nsColor,
+            onSubmit: { [weak self] name in
+                self?.renameTab(id, to: name)
+                self?.closeModal()
+            },
+            onCancel: { [weak self] in self?.closeModal() })
+        presentModal(overlay, kind: .renameTab)
+    }
+
+    /// Commit a rename. An empty name clears the pin, so the tab goes back to its live cwd title.
+    /// Rendered here rather than left to the 1.5s title poll, which would look like a stall.
+    private func renameTab(_ id: TabID, to name: String) {
+        guard let controller = controllers[id] else { return }
+        controller.pinnedTitle = name.isEmpty ? nil : name
+        titles[id] = controller.title
+        renderTabBar()
     }
 
     /// Close a specific tab: terminate its shells, detach its canvas, and cascade to
@@ -1818,9 +1858,11 @@ final class WindowController: NSObject {
                 .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom:
                 toastFloatBlocked()
                 return
-            case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue, .newTool:
+            case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue, .newTool,
+                .renameTab:
                 floats.close()  // close it, then fall through to open the other
-            case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab, .fillScreen,
+            case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab,
+                .moveTabLeft, .moveTabRight, .fillScreen,
                 .increaseFontSize, .decreaseFontSize, .resetFontSize, .selectAll,
                 // Reading the card's own buffer. `modeTarget` resolves the shown float ahead of the
                 // panel behind it, so all of these act on the terminal you are looking at.
@@ -1864,6 +1906,9 @@ final class WindowController: NSObject {
             if idx >= 0 && idx < tabs.order.count { select(tabs.order[idx]) }
         case .prevTab: cycleTab(-1)
         case .nextTab: cycleTab(1)
+        case .moveTabLeft: moveActiveTab(-1)
+        case .moveTabRight: moveActiveTab(1)
+        case .renameTab: openRenameTab(tabs.activeID)
         case .closePane:
             Log.info("close pane", category: .panes)
             requestClosePane()
@@ -2343,8 +2388,20 @@ final class WindowController: NSObject {
         select(tabs.order[index])
     }
 
+    /// Test hook: the tab-bar chip's double-click path (`onRename` → the card), which bypasses
+    /// `handle(_:)` — so a test can prove the mouse route opens the card for the tab it clicked.
+    func renameTabForTesting(index: Int) {
+        guard tabs.order.indices.contains(index) else { return }
+        openRenameTab(tabs.order[index])
+    }
+
     /// Test hook: the window's float engine, for asserting the relays wired onto it.
     var floatsForTesting: ToolFloatController { floats }
+
+    /// Test hooks: the live tab order and the titles the bar is rendering, so a reorder or a
+    /// rename is asserted on what reaches the bar rather than on the model alone.
+    var tabOrderForTesting: [TabID] { tabs.order }
+    var tabTitlesForTesting: [String] { tabs.order.map { titles[$0] ?? "shell" } }
 
     /// Test hook: the active tab's id, so a test can name the tab a tab-scoped thing belongs to
     /// and prove it is not simply whichever one is up.
