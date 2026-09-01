@@ -9,6 +9,10 @@ import AppKit
 /// the metaphor changed rather than the glyph gaining a `.circle.fill` enclosure, which reads as a
 /// badge and clashes harder than the outline did.
 ///
+/// This roster is what a *user* pins to their own floats. The app's own behaviors stay on outline
+/// variants — the dock's split buttons, the scratch float — so a built-in reads as chrome rather
+/// than as another tool the user added.
+///
 /// A brand earns a cell by having a terminal UI behind it, first- or third-party: `docker` stands
 /// for lazydocker, `kubernetes` for k9s, `postgres` for pgcli, `slack` for wee-slack. A brand whose
 /// only interface is a window (Zed, Obsidian) or a plain CLI (Homebrew, Tailscale) doesn't, because
