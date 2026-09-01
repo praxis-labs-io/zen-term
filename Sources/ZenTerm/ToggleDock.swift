@@ -39,12 +39,7 @@ final class ToggleDock: NSView {
     /// Retained so `setToolFloats` can wire freshly-built float buttons to the same action.
     private let onToolFloat: (ToolFloat) -> Void
 
-    /// The app's own buttons are outline glyphs, and an outline reads larger than a fill at the
-    /// same box: the stroke marks the boundary while the interior stays empty. They also skew wide
-    /// (the split rectangles are 13.75pt across against a 12.14pt logo), and width is what carries
-    /// in a row. So chrome sits a point under the icons a user pins.
     private static let iconPointSize: CGFloat = 11
-    private static let floatIconPointSize: CGFloat = 11
 
     init(
         onNewTab: @escaping () -> Void,
@@ -180,7 +175,7 @@ final class ToggleDock: NSView {
             // Like the fixed buttons, resolve the glyph from the live keymap so the tooltip tracks
             // user rebinds of the float's `toggle_float:<id>` chord.
             let btn = IconButton(
-                symbol: spec.icon, pointSize: Self.floatIconPointSize, accessibilityLabel: spec.title,
+                symbol: spec.icon, pointSize: Self.iconPointSize, accessibilityLabel: spec.title,
                 shortcut: { CommandCatalog.spec(for: .toggleToolFloat(spec.id)).shortcut }
             ) { [weak self] in self?.onToolFloat(spec) }
             btn.isHidden = !spec.showsInToolbar

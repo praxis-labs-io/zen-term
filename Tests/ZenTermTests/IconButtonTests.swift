@@ -62,7 +62,7 @@ final class IconButtonTests: XCTestCase {
 /// years while drawing logos 10% taller than the symbols beside them. So measure the ink.
 final class IconGlyphSizeTests: XCTestCase {
     /// Ink bounding-box height of an image, supersampled so a 13pt glyph measures to a fraction.
-    private func inkHeight(_ image: NSImage) -> CGFloat? {
+    private func inkWidth(_ image: NSImage) -> CGFloat? {
         let scale: CGFloat = 8
         let side = 48
         let px = Int(CGFloat(side) * scale)
@@ -86,42 +86,44 @@ final class IconGlyphSizeTests: XCTestCase {
 
         guard let data = ctx.data else { return nil }
         let buf = data.bindMemory(to: UInt8.self, capacity: px * px * 4)
-        var minY = px
-        var maxY = -1
+        var minX = px
+        var maxX = -1
         for y in 0..<px {
             for x in 0..<px where buf[(y * px + x) * 4 + 3] > 8 {
-                if y < minY { minY = y }
-                if y > maxY { maxY = y }
+                if x < minX { minX = x }
+                if x > maxX { maxX = x }
             }
         }
-        guard maxY >= 0 else { return nil }
-        return CGFloat(maxY - minY + 1) / scale
+        guard maxX >= 0 else { return nil }
+        return CGFloat(maxX - minX + 1) / scale
     }
 
-    private func meanInkHeight(_ symbols: [String], pointSize: CGFloat) -> CGFloat {
+    private func meanInkWidth(_ symbols: [String], pointSize: CGFloat) -> CGFloat {
         let heights = symbols.compactMap { symbol -> CGFloat? in
             let brandBox = IconCatalog.brandBoxMatching(pointSize: pointSize)
             return IconCatalog.image(symbol, pointSize: pointSize, brandSize: brandBox)
-                .flatMap(inkHeight)
+                .flatMap(inkWidth)
         }
         XCTAssertEqual(heights.count, symbols.count, "every glyph must render to measure")
         return heights.reduce(0, +) / CGFloat(heights.count)
     }
 
-    /// At the dock's own point size, a logo and a symbol must draw within a point of each other.
-    func test_brandMarks_drawTheSameInkHeightAsSymbols() {
-        let pointSize: CGFloat = 13
-        let symbols = meanInkHeight(
+    /// Matched on width, not height: a mark is square and a symbol is wide and short, so they can
+    /// agree on one axis only, and width is what carries in a horizontal row. Matching height is
+    /// the bug this replaced — it left the symbols 10% wider and reading large.
+    func test_brandMarks_drawTheSameInkWidthAsSymbols() {
+        let pointSize: CGFloat = 11
+        let symbols = meanInkWidth(
             [
                 "terminal.fill", "folder.fill", "doc.text.fill", "gearshape.fill",
                 "curlybraces.square.fill", "waveform.path.ecg.rectangle.fill",
             ], pointSize: pointSize)
-        let brands = meanInkHeight(
+        let brands = meanInkWidth(
             ["git", "github", "neovim", "docker", "claude", "slack"], pointSize: pointSize)
 
         XCTAssertEqual(
             brands, symbols, accuracy: 1.0,
-            "brand ink \(brands) vs symbol ink \(symbols) — the marks read as a different size")
+            "brand width \(brands) vs symbol width \(symbols) — the marks read as a different size")
     }
 
     /// Where the glyph's image box actually sits inside a laid-out button, in exact layout
