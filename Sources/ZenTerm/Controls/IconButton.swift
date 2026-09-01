@@ -51,10 +51,11 @@ final class IconButton: NSView {
         wantsLayer = true
         layer?.cornerRadius = 6
         // An SF Symbol, else a bundled brand mark — resolved through the catalog, which owns that
-        // fallback. A brand mark is nudged a couple of points larger so a logo reads at the same
-        // optical weight as the symbols beside it. (The button carries the accessibility label
-        // itself, below, so the image needs no description of its own.)
-        icon.image = IconCatalog.image(symbol, pointSize: pointSize, weight: weight, brandSize: pointSize + 2)
+        // fallback. The mark is sized to match the symbols beside it, not to its nominal box.
+        // (The button carries the accessibility label itself, below, so the image needs none.)
+        icon.image = IconCatalog.image(
+            symbol, pointSize: pointSize, weight: weight,
+            brandSize: IconCatalog.brandBoxMatching(pointSize: pointSize))
         icon.imageScaling = .scaleNone
         icon.translatesAutoresizingMaskIntoConstraints = false
         addSubview(icon)

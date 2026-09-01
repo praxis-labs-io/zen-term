@@ -56,3 +56,77 @@ final class IconButtonTests: XCTestCase {
             Theme.current.chrome.ink(.normal).alphaComponent)
     }
 }
+
+/// The brand marks and the SF Symbols have to draw at the same size in a row together. That is a
+/// budget the eye can't police to a point: the `pointSize + 2` this replaced looked plausible for
+/// years while drawing logos 10% taller than the symbols beside them. So measure the ink.
+final class IconGlyphSizeTests: XCTestCase {
+    /// Ink bounding-box height of an image, supersampled so a 13pt glyph measures to a fraction.
+    private func inkHeight(_ image: NSImage) -> CGFloat? {
+        let scale: CGFloat = 8
+        let side = 48
+        let px = Int(CGFloat(side) * scale)
+        guard
+            let ctx = CGContext(
+                data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: px * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        let gc = NSGraphicsContext(cgContext: ctx, flipped: false)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = gc
+        let size = image.size
+        image.draw(
+            in: NSRect(
+                x: (CGFloat(side) - size.width) / 2 * scale,
+                y: (CGFloat(side) - size.height) / 2 * scale,
+                width: size.width * scale, height: size.height * scale),
+            from: .zero, operation: .sourceOver, fraction: 1)
+        NSGraphicsContext.restoreGraphicsState()
+
+        guard let data = ctx.data else { return nil }
+        let buf = data.bindMemory(to: UInt8.self, capacity: px * px * 4)
+        var minY = px
+        var maxY = -1
+        for y in 0..<px {
+            for x in 0..<px where buf[(y * px + x) * 4 + 3] > 8 {
+                if y < minY { minY = y }
+                if y > maxY { maxY = y }
+            }
+        }
+        guard maxY >= 0 else { return nil }
+        return CGFloat(maxY - minY + 1) / scale
+    }
+
+    private func meanInkHeight(_ symbols: [String], pointSize: CGFloat) -> CGFloat {
+        let heights = symbols.compactMap { symbol -> CGFloat? in
+            let brandBox = IconCatalog.brandBoxMatching(pointSize: pointSize)
+            return IconCatalog.image(symbol, pointSize: pointSize, brandSize: brandBox)
+                .flatMap(inkHeight)
+        }
+        XCTAssertEqual(heights.count, symbols.count, "every glyph must render to measure")
+        return heights.reduce(0, +) / CGFloat(heights.count)
+    }
+
+    /// At the dock's own point size, a logo and a symbol must draw within a point of each other.
+    func test_brandMarks_drawTheSameInkHeightAsSymbols() {
+        let pointSize: CGFloat = 13
+        let symbols = meanInkHeight(
+            [
+                "terminal.fill", "folder.fill", "doc.text.fill", "gearshape.fill",
+                "curlybraces.square.fill", "waveform.path.ecg.rectangle.fill",
+            ], pointSize: pointSize)
+        let brands = meanInkHeight(
+            ["git", "github", "neovim", "docker", "claude", "slack"], pointSize: pointSize)
+
+        XCTAssertEqual(
+            brands, symbols, accuracy: 1.0,
+            "brand ink \(brands) vs symbol ink \(symbols) — the marks read as a different size")
+    }
+
+    /// The ratio is the fix; pinning it stops a future edit reverting to a bare `pointSize + n`.
+    func test_brandBox_scalesWithPointSize() {
+        XCTAssertEqual(IconCatalog.brandBoxMatching(pointSize: 10), 10 * IconCatalog.brandBoxRatio)
+        XCTAssertGreaterThan(IconCatalog.brandBoxMatching(pointSize: 13), 13, "a mark needs a bigger box")
+    }
+}

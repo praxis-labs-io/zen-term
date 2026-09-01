@@ -180,6 +180,16 @@ enum IconCatalog {
         return brand
     }
 
+    /// The box a brand mark needs to draw the same ink height as an SF Symbol at `pointSize`.
+    ///
+    /// An SF Symbol's ink runs a little taller than its point size (≈1.03×) while a mark's runs a
+    /// little shorter than its box (≈0.96×), so a logo handed the same number draws bigger. The
+    /// ratio is measured, and `IconButtonTests` re-measures it rather than trusting this comment.
+    static func brandBoxMatching(pointSize: CGFloat) -> CGFloat { pointSize * brandBoxRatio }
+
+    /// Measured across the roster's marks and symbols: 1.03 / 0.96.
+    static let brandBoxRatio: CGFloat = 1.07
+
     /// The proper Git logo (the bundled `git` brand mark), sized as a small inline badge. Shared by
     /// the ⌘P picker and the Settings → Workspaces list to mark a workspace whose folder is a repo,
     /// so the two never drift. A template image, so the caller tints it like any SF Symbol.

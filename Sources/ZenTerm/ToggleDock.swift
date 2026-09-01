@@ -39,7 +39,7 @@ final class ToggleDock: NSView {
     /// Retained so `setToolFloats` can wire freshly-built float buttons to the same action.
     private let onToolFloat: (ToolFloat) -> Void
 
-    private static let iconPointSize: CGFloat = 11
+    private static let iconPointSize: CGFloat = 13
 
     init(
         onNewTab: @escaping () -> Void,
