@@ -33,7 +33,8 @@ final class IconPickerField: NSView {
     private static let cellSpacing: CGFloat = 4
     private static let headerHeight: CGFloat = 16
     private static let sectionGap: CGFloat = 12
-    private static let maxGridHeight: CGFloat = 320
+    /// Margin kept between the card and the window edge when the grid is taller than the window.
+    private static let windowMargin: CGFloat = 8
     private static var restFill: NSColor { Theme.current.chrome.fill(.rest) }
     private static var focusFill: NSColor { Theme.current.chrome.selectionFill }
 
@@ -274,8 +275,10 @@ final class IconPickerField: NSView {
             grid.leadingAnchor.constraint(equalTo: doc.leadingAnchor),
             grid.bottomAnchor.constraint(equalTo: doc.bottomAnchor),
         ])
-        let cardHeight = min(gridHeight + inset * 2, Self.maxGridHeight)
-        card.frame = NSRect(x: 0, y: 0, width: gridWidth + inset * 2, height: cardHeight)
+        // Sized to its content. `positionPopover` is where the window is known, so that is where
+        // a grid taller than the window gets clamped and left to scroll.
+        card.frame = NSRect(
+            x: 0, y: 0, width: gridWidth + inset * 2, height: gridHeight + inset * 2)
         return card
     }
 
@@ -325,7 +328,9 @@ final class IconPickerField: NSView {
     private func positionPopover() {
         guard let card = popover, let contentView = window?.contentView else { return }
         card.layoutSubtreeIfNeeded()
-        let size = card.frame.size
+        let available = contentView.bounds.height - Self.windowMargin * 2
+        let size = NSSize(
+            width: card.frame.width, height: min(card.frame.height, max(120, available)))
         let origin = convert(bounds, to: contentView)
         let x = max(8, min(origin.minX, contentView.bounds.width - size.width - 8))
         // contentView isn't flipped: below the button = a smaller y. Prefer below; flip above if it

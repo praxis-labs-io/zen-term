@@ -38,7 +38,7 @@ final class IconPickerFieldTests: WindowTestCase {
     /// in the stack. If headings ever became cells, the highlight would land on one and Return
     /// would commit a title as a symbol.
     func test_arrowNav_neverLandsOnASectionHeading() {
-        let field = openedField(selected: IconCatalog.defaultSymbol)
+        let (field, _) = openedField(selected: IconCatalog.defaultSymbol)
         XCTAssertEqual(
             field.cellCountForTesting, IconCatalog.all.count,
             "one cell per roster symbol — a heading must not have become one")
@@ -64,7 +64,7 @@ final class IconPickerFieldTests: WindowTestCase {
         let rows = (IconCatalog.symbols.count + columns - 1) / columns
         let index = (rows - 1) * columns + column
         XCTAssertLessThan(index, IconCatalog.symbols.count, "the last row must reach this column")
-        let field = openedField(selected: IconCatalog.symbols[index])
+        let (field, _) = openedField(selected: IconCatalog.symbols[index])
 
         field.moveHighlightForTesting(columns)
 
@@ -75,20 +75,49 @@ final class IconPickerFieldTests: WindowTestCase {
 
     /// A float pinned off the roster opens with its own symbol highlighted, not the default.
     func test_customSymbol_opensHighlighted() {
-        let field = openedField(selected: "heart.fill")
+        let (field, _) = openedField(selected: "heart.fill")
         XCTAssertEqual(field.highlightedSymbolForTesting, "heart.fill")
     }
 
-    private func openedField(selected: String) -> IconPickerField {
+    /// In a window with room, the whole roster is on screen at once — 67 cells and two headings
+    /// is a tall card, and truncating it hid the brand marks below a scroll.
+    func test_inATallWindow_theGridIsNotTruncated() throws {
+        let (field, window) = openedField(selected: IconCatalog.defaultSymbol, windowHeight: 900)
+        let card = try XCTUnwrap(
+            window.contentView?.subviews.first { $0 is ShadowCardView }, "no grid card")
+        _ = field
+
+        XCTAssertGreaterThan(card.frame.height, 400, "the grid is being cut short in a tall window")
+        XCTAssertLessThan(
+            card.frame.maxY, window.contentView!.bounds.height,
+            "the card runs past the top of the window")
+    }
+
+    /// The clamp still has to hold, or a short window gets a card drawn off its own edge.
+    func test_inAShortWindow_theCardStaysInside() throws {
+        let (field, window) = openedField(selected: IconCatalog.defaultSymbol, windowHeight: 300)
+        let card = try XCTUnwrap(
+            window.contentView?.subviews.first { $0 is ShadowCardView }, "no grid card")
+        _ = field
+
+        XCTAssertLessThanOrEqual(card.frame.height, window.contentView!.bounds.height)
+        XCTAssertGreaterThanOrEqual(card.frame.minY, 0)
+        XCTAssertLessThanOrEqual(card.frame.maxY, window.contentView!.bounds.height)
+    }
+
+    @discardableResult
+    private func openedField(
+        selected: String, windowHeight: CGFloat = 400
+    ) -> (IconPickerField, NSWindow) {
         let field = IconPickerField(selected: selected)
         field.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 400),
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: windowHeight),
             styleMask: [.borderless], backing: .buffered, defer: false)
         window.contentView?.addSubview(field)
-        field.frame = NSRect(x: 20, y: 300, width: 220, height: 30)
+        field.frame = NSRect(x: 20, y: windowHeight - 100, width: 220, height: 30)
         window.makeFirstResponder(field)
         field.openForTesting()
-        return field
+        return (field, window)
     }
 }
