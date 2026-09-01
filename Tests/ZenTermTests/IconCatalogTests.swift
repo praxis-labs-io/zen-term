@@ -152,6 +152,28 @@ final class IconCatalogTests: XCTestCase {
         XCTAssertNotNil(IconCatalog.image(ToolFloat.scratch.icon), "the scratch float must render")
     }
 
+    /// Every mark is authored at 24x24, so a caller that doesn't size one gets a logo most of a
+    /// Settings row tall beside a 14pt symbol. Two call sites did exactly that. Sizing is the
+    /// catalog's job now, and this holds it there.
+    func test_brandMarks_areSizedOffThePointSize_notTheirAuthoredBox() throws {
+        for symbol in IconCatalog.brands {
+            let image = try XCTUnwrap(IconCatalog.image(symbol, pointSize: 11), symbol)
+            XCTAssertEqual(
+                image.size.height, 11 + IconCatalog.brandNudge, accuracy: 0.01,
+                "\(symbol) drew at \(image.size.height)pt — its authored box, not the caller's size")
+        }
+    }
+
+    /// The default argument is the one a caller falls into without thinking, so it has to be sane
+    /// on its own rather than only when the caller remembers to pass a size.
+    func test_brandMark_atTheDefaultPointSize_matchesASymbolThere() throws {
+        let mark = try XCTUnwrap(IconCatalog.image("github"))
+        let symbol = try XCTUnwrap(IconCatalog.image("folder"))
+        XCTAssertLessThan(
+            abs(mark.size.height - symbol.size.height), 4,
+            "a mark at \(mark.size.height)pt beside a symbol at \(symbol.size.height)pt")
+    }
+
     /// Editing a float pinned off the roster must not silently drop its glyph — it gets its own
     /// leading section instead.
     func test_sections_leadWithACustomSymbol() {

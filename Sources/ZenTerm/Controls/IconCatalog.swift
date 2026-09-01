@@ -166,15 +166,15 @@ enum IconCatalog {
     ]
 
     /// Resolve a symbol to an image: an SF Symbol, else a brand mark bundled in `Resources/`. The
-    /// one place this fallback lives. `IconButton` renders the same catalog and used to carry its
-    /// own copy. SF Symbol first, so a brand-mark name must never collide with a real symbol
-    /// (`IconCatalogTests` holds the line).
+    /// one place this fallback lives. SF Symbol first, so a brand-mark name must never collide with
+    /// a real symbol (`IconCatalogTests` holds the line).
     ///
-    /// A brand mark is a plain SVG with no symbol metadata, so a `SymbolConfiguration` does nothing
-    /// to it: `brandSize` sizes it explicitly, and leaving it nil keeps the SVG's natural size.
+    /// A mark is a plain SVG with no symbol metadata, so a `SymbolConfiguration` does nothing to it
+    /// and it would otherwise draw at its authored 24pt — most of a Settings row. It is sized off
+    /// `pointSize` here instead, so every caller gets a mark scaled to the symbols beside it
+    /// whether or not it thought to ask.
     static func image(
-        _ symbol: String, pointSize: CGFloat = 14, weight: NSFont.Weight = .medium,
-        brandSize: CGFloat? = nil
+        _ symbol: String, pointSize: CGFloat = 14, weight: NSFont.Weight = .medium
     ) -> NSImage? {
         let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: weight)
         if let pair = composedGlyphs[symbol] { return compose(pair, config: config) }
@@ -182,9 +182,14 @@ enum IconCatalog {
             return image.withSymbolConfiguration(config)
         }
         guard let brand = BrandMark.image(symbol) else { return nil }
-        if let brandSize { brand.size = NSSize(width: brandSize, height: brandSize) }
+        let box = pointSize + brandNudge
+        brand.size = NSSize(width: box, height: box)
         return brand
     }
+
+    /// A mark carries no internal padding where a symbol does, so it needs a slightly larger box to
+    /// read at the same size as the glyphs around it.
+    static let brandNudge: CGFloat = 1
 
     /// Glyphs SF Symbols has no variant for. `square.on.square` fills its front face solid or not
     /// at all, and hierarchical rendering dims the *back* face rather than lightening the front, so
