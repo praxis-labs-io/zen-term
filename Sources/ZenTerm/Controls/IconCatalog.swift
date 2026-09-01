@@ -4,17 +4,21 @@ import AppKit
 /// marks. `image` resolves either the same way the dock does — an SF Symbol, else a bundled brand
 /// mark ("git", "docker", "claude", …).
 ///
-/// The symbols are outlines, matching the app's own chrome. Filled variants were tried and read
-/// as heavier than the brand marks beside them: a mark is line art with negative space, so a solid
-/// glyph carries about twice the ink at the same box. Matching the box never fixed that, because
-/// the mismatch was coverage, not size.
+/// The symbols are filled because every brand mark is a single solid path, and a hairline outline
+/// beside one reads as a different weight of thing. Where SF Symbols has no fill for a metaphor,
+/// the metaphor changed rather than the glyph gaining a `.circle.fill` enclosure, which reads as a
+/// badge and clashes harder than the outline did.
+///
+/// This roster is what a *user* pins to their own floats. The app's own behaviors stay on outline
+/// variants — the dock's split buttons, the scratch float — so a built-in reads as chrome rather
+/// than as another tool the user added.
 ///
 /// A brand earns a cell by having a terminal UI behind it, first- or third-party: `docker` stands
 /// for lazydocker, `kubernetes` for k9s, `postgres` for pgcli, `slack` for wee-slack. A brand whose
 /// only interface is a window (Zed, Obsidian) or a plain CLI (Homebrew, Tailscale) doesn't, because
 /// you can't float it.
 enum IconCatalog {
-    static let defaultSymbol = "square.on.square"
+    static let defaultSymbol = "square.stack.fill"
 
     /// A titled run of cells, laid out 8-wide under its own heading by `IconPickerField`.
     struct Section {
@@ -26,18 +30,19 @@ enum IconCatalog {
     /// Grouped by metaphor, a row at a time: shell/code/build/test, pipeline/config/perf,
     /// monitoring/infra/storage, data/docs/logs, find/files/comms, security/AI/media/panes.
     static let symbols: [String] = [
-        "square.on.square", "terminal", "curlybraces.square", "applescript",
-        "play.rectangle", "ladybug", "hammer", "flask",
-        "flowchart", "bolt", "flame", "gearshape",
-        "switch.2", "gauge.with.needle", "stopwatch", "chart.bar",
-        "waveform.path.ecg.rectangle", "cpu", "memorychip", "cube",
-        "shippingbox", "antenna.radiowaves.left.and.right", "cloud", "externaldrive",
-        "cylinder.split.1x2", "tablecells", "archivebox", "doc.text",
-        "square.text.square", "list.bullet.rectangle", "list.bullet.clipboard", "flag",
-        "magnifyingglass", "folder", "folder.badge.gearshape", "envelope",
-        "bubble.left.and.bubble.right", "paperplane", "lock", "key",
-        "shield", "brain", "sparkles", "atom",
-        "puzzlepiece", "waveform", "rectangle.3.group", "square.grid.2x2",
+        "square.stack.fill", "terminal.fill", "curlybraces.square.fill", "applescript.fill",
+        "play.rectangle.fill", "ladybug.fill", "hammer.fill", "flask.fill",
+        "flowchart.fill", "bolt.fill", "flame.fill", "gearshape.fill",
+        "switch.2", "gauge.with.needle.fill", "stopwatch.fill", "chart.bar.fill",
+        "waveform.path.ecg.rectangle.fill", "cpu.fill", "memorychip.fill", "cube.fill",
+        "shippingbox.fill", "antenna.radiowaves.left.and.right", "cloud.fill", "externaldrive.fill",
+        "cylinder.split.1x2.fill", "tablecells.fill", "archivebox.fill", "doc.text.fill",
+        "square.text.square.fill", "list.bullet.rectangle.fill", "list.bullet.clipboard.fill",
+        "flag.fill",
+        "magnifyingglass.circle.fill", "folder.fill", "folder.fill.badge.gearshape", "envelope.fill",
+        "bubble.left.and.bubble.right.fill", "paperplane.fill", "lock.fill", "key.fill",
+        "shield.fill", "brain.fill", "sparkles", "atom",
+        "puzzlepiece.fill", "waveform", "rectangle.3.group.fill", "square.grid.2x2.fill",
     ]
 
     /// 19 marks: VCS, editors, agents, then services. Short by five of a full row, which is why
@@ -88,65 +93,72 @@ enum IconCatalog {
     /// its label instead of falling back to the raw symbol name.
     private static let displayOverrides: [String: String] = [
         // Roster: named for the job, not the glyph.
-        "square.on.square": "Float",
-        "curlybraces.square": "Code",
-        "applescript": "Script",
-        "play.rectangle": "Run",
-        "ladybug": "Debug",
-        "hammer": "Build",
-        "flask": "Tests",
-        "flowchart": "Pipeline",
-        "bolt": "Fast",
-        "flame": "Hot",
-        "gearshape": "Settings",
+        "square.stack.fill": "Float",
+        "curlybraces.square.fill": "Code",
+        "applescript.fill": "Script",
+        "play.rectangle.fill": "Run",
+        "ladybug.fill": "Debug",
+        "hammer.fill": "Build",
+        "flask.fill": "Tests",
+        "flowchart.fill": "Pipeline",
+        "bolt.fill": "Fast",
+        "flame.fill": "Hot",
+        "gearshape.fill": "Settings",
         "switch.2": "Toggles",
-        "gauge.with.needle": "Gauge",
-        "stopwatch": "Benchmark",
-        "chart.bar": "Chart",
-        "waveform.path.ecg.rectangle": "Monitor",
-        "cpu": "CPU",
-        "memorychip": "Memory",
-        "cube": "Container",
-        "shippingbox": "Package",
+        "gauge.with.needle.fill": "Gauge",
+        "stopwatch.fill": "Benchmark",
+        "chart.bar.fill": "Chart",
+        "waveform.path.ecg.rectangle.fill": "Monitor",
+        "cpu.fill": "CPU",
+        "memorychip.fill": "Memory",
+        "cube.fill": "Container",
+        "shippingbox.fill": "Package",
         "antenna.radiowaves.left.and.right": "Signal",
-        "externaldrive": "Storage",
-        "cylinder.split.1x2": "Database",
-        "tablecells": "Table",
-        "archivebox": "Archive",
-        "doc.text": "Document",
-        "square.text.square": "Notes",
-        "list.bullet.rectangle": "Logs",
-        "list.bullet.clipboard": "Checklist",
-        "magnifyingglass": "Search",
-        "folder": "Files",
-        "folder.badge.gearshape": "Config dir",
-        "envelope": "Email",  // humanizes to "Envelope" on its own; the metaphor is mail
-        "bubble.left.and.bubble.right": "Chat",
-        "paperplane": "HTTP client",
-        "lock": "Secrets",
-        "key": "Keys",
-        "shield": "Security",
-        "brain": "Model",
+        "externaldrive.fill": "Storage",
+        "cylinder.split.1x2.fill": "Database",
+        "tablecells.fill": "Table",
+        "archivebox.fill": "Archive",
+        "doc.text.fill": "Document",
+        "square.text.square.fill": "Notes",
+        "list.bullet.rectangle.fill": "Logs",
+        "list.bullet.clipboard.fill": "Checklist",
+        "magnifyingglass.circle.fill": "Search",
+        "folder.fill": "Files",
+        "folder.fill.badge.gearshape": "Config dir",
+        "envelope.fill": "Email",  // humanizes to "Envelope" on its own; the metaphor is mail
+        "bubble.left.and.bubble.right.fill": "Chat",
+        "paperplane.fill": "HTTP client",
+        "lock.fill": "Secrets",
+        "key.fill": "Keys",
+        "shield.fill": "Security",
+        "brain.fill": "Model",
         "sparkles": "AI",
-        "puzzlepiece": "Plugins",
-        "rectangle.3.group": "Panes",
-        "square.grid.2x2": "Dashboard",
+        "puzzlepiece.fill": "Plugins",
+        "rectangle.3.group.fill": "Panes",
+        "square.grid.2x2.fill": "Dashboard",
         "github": "GitHub",
         "neovim": "Neovim",
         "openai": "OpenAI",
         "opencode": "OpenCode",
         "sqlite": "SQLite",
         // Dropped: kept so a float still configured with one keeps its label.
+        "square.on.square": "Float",
         "apple.terminal.on.rectangle": "Terminal window",
         "chevron.left.forwardslash.chevron.right": "Code",
         "wrench.and.screwdriver": "Tools",
         "slider.horizontal.3": "Controls",
         "chart.line.uptrend.xyaxis": "Line chart",
+        "cylinder.split.1x2": "Database",
+        "list.bullet.rectangle": "Logs",
         "filemenu.and.selection": "Outline",
+        "doc.text": "Document",
+        "play.rectangle": "Run",
         "arrow.triangle.branch": "Git branch",
         "arrow.triangle.pull": "Pull request",
         "plus.forwardslash.minus": "Diff",
         "note.text": "Notes",
+        "bubble.left.and.bubble.right": "Chat",
+        "envelope": "Email",
         "htop": "htop",  // lowercase is the tool's own name
         "slack": "Slack",
         "spotify": "Spotify",

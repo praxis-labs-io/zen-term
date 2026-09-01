@@ -44,14 +44,18 @@ final class IconCatalogTests: XCTestCase {
         }
     }
 
-    /// The roster is outline on purpose: a brand mark is line art with negative space, so a filled
-    /// glyph carries roughly twice the ink at the same box and reads heavier than the marks beside
-    /// it. Filled variants were tried and reverted, so this guards the way back.
-    func test_symbols_areNotFilledVariants() {
+    /// The roster is filled on purpose: every brand mark is a solid path, and an outline beside one
+    /// reads as a different weight of thing. Enclosure variants (`.circle.fill`) are a separate
+    /// family and are held to a hand-checked list rather than allowed in freely.
+    func test_symbols_areFilledOrDeliberatelySolid() {
+        let solidByNature: Set<String> = [
+            "switch.2", "sparkles", "atom", "waveform", "antenna.radiowaves.left.and.right",
+        ]
         for symbol in IconCatalog.symbols {
-            XCTAssertFalse(
-                symbol.contains(".fill") || symbol.contains(".filled"),
-                "\(symbol) is a filled variant, which outweighs the brand marks beside it")
+            let filled = symbol.contains(".fill") || symbol.contains(".filled")
+            XCTAssertTrue(
+                filled || solidByNature.contains(symbol),
+                "\(symbol) is a hairline outline, which clashes with the brand marks")
         }
     }
 
@@ -71,9 +75,9 @@ final class IconCatalogTests: XCTestCase {
     /// The picker labels cells with these, so a raw `dotted.symbol.name` would leak to the UI.
     func test_displayName_humanizesOrOverrides() {
         XCTAssertEqual(IconCatalog.displayName("spotify"), "Spotify")
-        XCTAssertEqual(IconCatalog.displayName("play.rectangle"), "Run")
-        XCTAssertEqual(IconCatalog.displayName("paperplane"), "HTTP client")
-        XCTAssertEqual(IconCatalog.displayName("cpu"), "CPU")
+        XCTAssertEqual(IconCatalog.displayName("play.rectangle.fill"), "Run")
+        XCTAssertEqual(IconCatalog.displayName("paperplane.fill"), "HTTP client")
+        XCTAssertEqual(IconCatalog.displayName("cpu.fill"), "CPU")
         XCTAssertEqual(IconCatalog.displayName("openai"), "OpenAI", "humanizes to \"Openai\" on its own")
         XCTAssertEqual(IconCatalog.displayName("sqlite"), "SQLite")
         XCTAssertEqual(IconCatalog.displayName("htop"), "htop", "the tool spells its own name lowercase")
@@ -95,10 +99,13 @@ final class IconCatalogTests: XCTestCase {
     /// `htop` is why a dropped brand mark stays bundled: nothing else would resolve it.
     func test_droppedIcons_stillResolve_soExistingFloatsKeepTheirGlyph() {
         let dropped = [
-            "chevron.left.forwardslash.chevron.right", "curlybraces", "wrench.and.screwdriver",
-            "gauge", "chart.line.uptrend.xyaxis", "server.rack", "network",
-            "filemenu.and.selection", "checklist", "arrow.triangle.branch", "arrow.triangle.pull",
-            "plus.forwardslash.minus", "apple.terminal.on.rectangle", "note.text",
+            "square.on.square", "terminal", "chevron.left.forwardslash.chevron.right", "curlybraces",
+            "wrench.and.screwdriver", "ladybug", "play.rectangle", "bolt", "gearshape", "gauge",
+            "chart.line.uptrend.xyaxis", "cpu", "server.rack", "network", "externaldrive",
+            "cylinder.split.1x2", "tablecells", "doc.text", "filemenu.and.selection",
+            "list.bullet.rectangle", "magnifyingglass", "folder", "checklist", "envelope",
+            "bubble.left.and.bubble.right", "arrow.triangle.branch", "arrow.triangle.pull",
+            "plus.forwardslash.minus", "lock", "apple.terminal.on.rectangle", "note.text",
             "slider.horizontal.3", "htop",
         ]
         for symbol in dropped {
@@ -126,7 +133,7 @@ final class IconCatalogTests: XCTestCase {
     }
 
     func test_sections_omitTheCustomBlockForARosterSymbol() {
-        let sections = IconCatalog.sections(including: "terminal")
+        let sections = IconCatalog.sections(including: "terminal.fill")
         XCTAssertEqual(sections.map(\.title), ["Symbols", "Brand marks"])
     }
 
