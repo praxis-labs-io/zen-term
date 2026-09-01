@@ -35,6 +35,11 @@ final class IconPickerField: NSView {
     private static let sectionGap: CGFloat = 12
     /// Margin kept between the card and the window edge when the grid is taller than the window.
     private static let windowMargin: CGFloat = 8
+    /// A lane for the overlay scroller, added only when the grid is clamped and will scroll.
+    /// Overlay scrollers draw *over* content, so without it the bar sits on the last column.
+    private static let scrollerGutter: CGFloat = 16
+    /// The card at its natural size, before `positionPopover` clamps it to the window.
+    private var cardNaturalSize: NSSize = .zero
     private static var restFill: NSColor { Theme.current.chrome.fill(.rest) }
     private static var focusFill: NSColor { Theme.current.chrome.selectionFill }
 
@@ -256,13 +261,6 @@ final class IconPickerField: NSView {
 
         let inset: CGFloat = 8
         let gridWidth = CGFloat(Self.columns) * Self.cellSize + CGFloat(Self.columns - 1) * Self.cellSpacing
-        let gridHeight = sections.enumerated().reduce(CGFloat.zero) { total, entry in
-            let rows = (entry.element.symbols.count + Self.columns - 1) / Self.columns
-            let block =
-                Self.headerHeight + Self.cellSpacing
-                + CGFloat(rows) * Self.cellSize + CGFloat(rows) * Self.cellSpacing
-            return total + block + (entry.offset > 0 ? Self.sectionGap : 0)
-        }
         NSLayoutConstraint.activate([
             scroll.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: inset),
             scroll.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -inset),
@@ -275,10 +273,15 @@ final class IconPickerField: NSView {
             grid.leadingAnchor.constraint(equalTo: doc.leadingAnchor),
             grid.bottomAnchor.constraint(equalTo: doc.bottomAnchor),
         ])
-        // Sized to its content. `positionPopover` is where the window is known, so that is where
-        // a grid taller than the window gets clamped and left to scroll.
-        card.frame = NSRect(
-            x: 0, y: 0, width: gridWidth + inset * 2, height: gridHeight + inset * 2)
+        // Measured off the laid-out stack, not a formula: headings, per-section gaps and the
+        // spacing between rows are the stack's arithmetic, and duplicating it here counted one
+        // spacing per section too many, leaving dead space under the last row.
+        grid.layoutSubtreeIfNeeded()
+        cardNaturalSize = NSSize(
+            width: gridWidth + inset * 2, height: grid.fittingSize.height + inset * 2)
+        // `positionPopover` is where the window is known, so that is where a grid taller than the
+        // window gets clamped and left to scroll.
+        card.frame = NSRect(origin: .zero, size: cardNaturalSize)
         return card
     }
 
@@ -328,9 +331,12 @@ final class IconPickerField: NSView {
     private func positionPopover() {
         guard let card = popover, let contentView = window?.contentView else { return }
         card.layoutSubtreeIfNeeded()
-        let available = contentView.bounds.height - Self.windowMargin * 2
+        let available = max(120, contentView.bounds.height - Self.windowMargin * 2)
+        let height = min(cardNaturalSize.height, available)
+        // Widen only when it will actually scroll, so a card that fits keeps even margins.
+        let scrolls = height < cardNaturalSize.height
         let size = NSSize(
-            width: card.frame.width, height: min(card.frame.height, max(120, available)))
+            width: cardNaturalSize.width + (scrolls ? Self.scrollerGutter : 0), height: height)
         let origin = convert(bounds, to: contentView)
         let x = max(8, min(origin.minX, contentView.bounds.width - size.width - 8))
         // contentView isn't flipped: below the button = a smaller y. Prefer below; flip above if it

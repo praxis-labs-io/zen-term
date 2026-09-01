@@ -93,6 +93,35 @@ final class IconPickerFieldTests: WindowTestCase {
             "the card runs past the top of the window")
     }
 
+    /// The card is measured off the laid-out stack, so no dead band under the last row. A
+    /// hand-written formula counted one row-spacing per section too many and left 8pt of it.
+    func test_inATallWindow_theCardHugsItsContent() throws {
+        let (field, window) = openedField(selected: IconCatalog.defaultSymbol, windowHeight: 900)
+        let card = try XCTUnwrap(
+            window.contentView?.subviews.first { $0 is ShadowCardView }, "no grid card")
+        let stack = try XCTUnwrap(
+            card.firstDescendant { $0 is NSStackView && $0.subviews.count > 2 }, "no grid stack")
+        _ = field
+
+        XCTAssertEqual(
+            card.frame.height, stack.fittingSize.height + 16, accuracy: 0.5,
+            "card \(card.frame.height) against content \(stack.fittingSize.height) + 16pt of inset")
+    }
+
+    /// Overlay scrollers draw over content, so a clamped grid needs a lane for the bar or it sits
+    /// on the last column of glyphs. A card that fits keeps its even margins.
+    func test_theScrollerGetsItsOwnLane_onlyWhenTheGridScrolls() throws {
+        let (_, tall) = openedField(selected: IconCatalog.defaultSymbol, windowHeight: 900)
+        let roomy = try XCTUnwrap(tall.contentView?.subviews.first { $0 is ShadowCardView })
+        let (_, short) = openedField(selected: IconCatalog.defaultSymbol, windowHeight: 300)
+        let clamped = try XCTUnwrap(short.contentView?.subviews.first { $0 is ShadowCardView })
+
+        XCTAssertGreaterThan(
+            clamped.frame.width, roomy.frame.width,
+            "a scrolling grid must widen, or the bar overlays the glyphs")
+        XCTAssertGreaterThanOrEqual(clamped.frame.width - roomy.frame.width, 12)
+    }
+
     /// The clamp still has to hold, or a short window gets a card drawn off its own edge.
     func test_inAShortWindow_theCardStaysInside() throws {
         let (field, window) = openedField(selected: IconCatalog.defaultSymbol, windowHeight: 300)
@@ -119,5 +148,19 @@ final class IconPickerFieldTests: WindowTestCase {
         window.makeFirstResponder(field)
         field.openForTesting()
         return (field, window)
+    }
+}
+
+extension NSView {
+    /// First descendant matching `match`, breadth-first — the grid stack is buried under the
+    /// card's scroll view and clip view.
+    fileprivate func firstDescendant(_ match: (NSView) -> Bool) -> NSView? {
+        var queue = subviews
+        while !queue.isEmpty {
+            let view = queue.removeFirst()
+            if match(view) { return view }
+            queue.append(contentsOf: view.subviews)
+        }
+        return nil
     }
 }
