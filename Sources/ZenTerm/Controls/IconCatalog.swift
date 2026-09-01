@@ -189,7 +189,7 @@ enum IconCatalog {
 
     /// A mark carries no internal padding where a symbol does, so it needs a slightly larger box to
     /// read at the same size as the glyphs around it.
-    static let brandNudge: CGFloat = 1
+    static let brandNudge: CGFloat = 1.5
 
     /// Glyphs SF Symbols has no variant for. `square.on.square` fills its front face solid or not
     /// at all, and hierarchical rendering dims the *back* face rather than lightening the front, so
