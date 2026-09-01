@@ -10,7 +10,7 @@ import Foundation
 enum ToolFloatParser {
     /// The defaults an omitted optional field falls back to — shared with `ConfigWriter`, which omits
     /// a field from its serialized line when the value equals the default, so the two halves can't drift.
-    static let defaultIcon = "square.stack.fill"
+    static let defaultIcon = "square.on.square"
     static let defaultFraction: CGFloat = 0.85
     static let defaultPersist: ToolFloat.Persistence = .ephemeral
 
