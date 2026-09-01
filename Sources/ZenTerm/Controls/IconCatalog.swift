@@ -1,6 +1,6 @@
 import AppKit
 
-/// The curated set of tool-float icons, in two sections: filled dev-tooling symbols, then brand
+/// The curated set of tool-float icons, in two sections: outline dev-tooling symbols, then brand
 /// marks. `image` resolves either the same way the dock does — an SF Symbol, else a bundled brand
 /// mark ("git", "docker", "claude", …).
 ///
@@ -136,8 +136,8 @@ enum IconCatalog {
         "openai": "OpenAI",
         "opencode": "OpenCode",
         "sqlite": "SQLite",
+        "square.fill.on.square": "Float",  // ToolFloat.scratch
         // Dropped: kept so a float still configured with one keeps its label.
-        "square.fill.on.square": "Float",
         "apple.terminal.on.rectangle": "Terminal window",
         "chevron.left.forwardslash.chevron.right": "Code",
         "wrench.and.screwdriver": "Tools",

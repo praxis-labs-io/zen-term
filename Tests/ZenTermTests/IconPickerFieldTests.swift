@@ -66,11 +66,38 @@ final class IconPickerFieldTests: WindowTestCase {
         XCTAssertLessThan(index, IconCatalog.symbols.count, "the last row must reach this column")
         let (field, _) = openedField(selected: IconCatalog.symbols[index])
 
-        field.moveHighlightForTesting(columns)
+        field.moveVerticallyForTesting(1)
 
         XCTAssertEqual(
             field.highlightedSymbolForTesting, IconCatalog.brands[column],
             "Down from column \(column) of the last symbol row should hold that column in the brands")
+    }
+
+    /// The "Current" section is a row of one, so a flat `+columns` stride past it skewed every
+    /// column below for the whole grid. Vertical nav walks rendered rows instead.
+    func test_withACustomSection_downLandsDirectlyBelow() {
+        let (field, _) = openedField(selected: "heart.fill")
+        XCTAssertEqual(field.highlightedSymbolForTesting, "heart.fill", "opens on the custom cell")
+
+        field.moveVerticallyForTesting(1)
+
+        XCTAssertEqual(
+            field.highlightedSymbolForTesting, IconCatalog.symbols[0],
+            "Down from the one-cell Current row must land on the first symbol, not skew across it")
+    }
+
+    /// And back up again, from a column the short row above cannot hold.
+    func test_withACustomSection_upFromAWideRowLandsOnTheShortRowsOnlyCell() {
+        let (field, _) = openedField(selected: "heart.fill")
+        field.moveVerticallyForTesting(1)
+        field.moveHighlightForTesting(5)  // along the first symbols row
+        XCTAssertEqual(field.highlightedSymbolForTesting, IconCatalog.symbols[5])
+
+        field.moveVerticallyForTesting(-1)
+
+        XCTAssertEqual(
+            field.highlightedSymbolForTesting, "heart.fill",
+            "Up onto a one-cell row must land on that cell, not fall off it")
     }
 
     /// A float pinned off the roster opens with its own symbol highlighted, not the default.

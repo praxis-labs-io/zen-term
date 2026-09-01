@@ -1,9 +1,5 @@
 import AppKit
 
-/// The shared rounded icon button across the chrome: an SF Symbol that's muted at rest,
-/// brightens with a faint background on hover, and — when `isActive` — tints iris with a
-/// faint iris background. Used by the footer dock toggles, the tab-bar "+", and the panel
-/// corner controls (zoom / drawer-hide). Replaces the old per-site glyph buttons.
 /// An image view that lays out by its own bounds. `NSImageView` derives alignment insets from an
 /// SF Symbol's baseline metadata — off-centre, and different per glyph — so an unmodified one hangs
 /// symbols unevenly beside a brand mark, whose SVG carries no such metadata. Setting the image's
@@ -12,6 +8,10 @@ private final class GlyphView: NSImageView {
     override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets() }
 }
 
+/// The shared rounded icon button across the chrome: an SF Symbol that's muted at rest,
+/// brightens with a faint background on hover, and — when `isActive` — tints iris with a
+/// faint iris background. Used by the footer dock toggles, the tab-bar "+", and the panel
+/// corner controls (zoom / drawer-hide). Replaces the old per-site glyph buttons.
 final class IconButton: NSView {
     /// Reassignable so a host can wire it after init (e.g. the panel zoom button, which
     /// targets a callback set later). Most callers pass it once via the initializer.

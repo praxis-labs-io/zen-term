@@ -22,6 +22,10 @@ final class IconPickerField: NSView {
     /// The sections flattened in render order, so `cells[i]` is always `orderedSymbols[i]` —
     /// headings are rows in the stack but never cells, so arrow nav steps straight over them.
     private let orderedSymbols: [String]
+    /// Flat-index ranges, one per rendered row. Vertical nav walks these instead of striding by
+    /// `columns`: a leading "Current" section is a row of one, and a flat stride past it skews
+    /// every column below.
+    private let rows: [Range<Int>]
     private var cells: [IconButton] = []
     private var highlighted = 0
 
@@ -51,6 +55,7 @@ final class IconPickerField: NSView {
     }
     var cellCountForTesting: Int { cells.count }
     func moveHighlightForTesting(_ delta: Int) { moveHighlight(delta) }
+    func moveVerticallyForTesting(_ rows: Int) { moveVertically(rows) }
     func commitHighlightForTesting() { commitHighlight() }
 
     init(selected: String) {
@@ -58,6 +63,16 @@ final class IconPickerField: NSView {
         // A custom (non-catalog) icon gets its own leading section, so editing a float never drops it.
         sections = IconCatalog.sections(including: initial)
         orderedSymbols = sections.flatMap(\.symbols)
+        var bounds: [Range<Int>] = []
+        var start = 0
+        for section in sections {
+            for chunk in stride(from: 0, to: section.symbols.count, by: Self.columns) {
+                let length = min(Self.columns, section.symbols.count - chunk)
+                bounds.append(start..<(start + length))
+                start += length
+            }
+        }
+        rows = bounds
         self.selected = initial
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -143,8 +158,8 @@ final class IconPickerField: NSView {
             switch KeyboardFocus.key(for: event) {
             case .left: moveHighlight(-1)
             case .right: moveHighlight(1)
-            case .up: moveHighlight(-Self.columns)
-            case .down: moveHighlight(Self.columns)
+            case .up: moveVertically(-1)
+            case .down: moveVertically(1)
             case .activate: commitHighlight()
             // Load-bearing for layered dismissal: a bare Esc reaches this keyDown before any
             // card-root performKeyEquivalent, so closing the grid here leaves the form open. Don't
@@ -296,6 +311,18 @@ final class IconPickerField: NSView {
         return label
     }
 
+    /// Up/Down by a rendered row, holding the column where the target row is wide enough and
+    /// landing on its last cell where it is not.
+    private func moveVertically(_ delta: Int) {
+        guard !cells.isEmpty, let row = rows.firstIndex(where: { $0.contains(highlighted) })
+        else { return }
+        let column = highlighted - rows[row].lowerBound
+        let target = rows[min(max(row + delta, 0), rows.count - 1)]
+        highlighted = target.lowerBound + min(column, target.count - 1)
+        refreshHighlight()
+        cells[highlighted].scrollToVisible(cells[highlighted].bounds)
+    }
+
     private func moveHighlight(_ delta: Int) {
         guard !cells.isEmpty else { return }
         highlighted = min(max(highlighted + delta, 0), cells.count - 1)
@@ -331,7 +358,7 @@ final class IconPickerField: NSView {
     private func positionPopover() {
         guard let card = popover, let contentView = window?.contentView else { return }
         card.layoutSubtreeIfNeeded()
-        let available = max(120, contentView.bounds.height - Self.windowMargin * 2)
+        let available = contentView.bounds.height - Self.windowMargin * 2
         let height = min(cardNaturalSize.height, available)
         // Widen only when it will actually scroll, so a card that fits keeps even margins.
         let scrolls = height < cardNaturalSize.height
