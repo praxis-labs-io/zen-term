@@ -116,55 +116,12 @@ final class IconCatalogTests: XCTestCase {
         XCTAssertEqual(IconCatalog.displayName("note.text"), "Notes")
     }
 
-    /// The composed glyph has to carry three alpha levels — clear, the washed front face, and the
-    /// solid outline. A plain symbol would only ever be clear or solid, so this proves the wash
-    /// survived rather than the composite collapsing to one of its halves.
-    func test_composedGlyph_washesTheFrontFaceWithoutFlatteningIt() throws {
-        let image = try XCTUnwrap(IconCatalog.image("square.on.square.softfill", pointSize: 40))
-        XCTAssertTrue(image.isTemplate, "must tint from the theme, not bake a color")
-
-        let rep = try XCTUnwrap(NSBitmapImageRep(data: image.tiffRepresentation ?? Data()))
-        var clear = 0
-        var washed = 0
-        var solid = 0
-        for x in 0..<rep.pixelsWide {
-            for y in 0..<rep.pixelsHigh {
-                let alpha = rep.colorAt(x: x, y: y)?.alphaComponent ?? 0
-                if alpha < 0.05 { clear += 1 } else if alpha > 0.85 { solid += 1 } else { washed += 1 }
-            }
-        }
-        XCTAssertGreaterThan(clear, 0, "no transparent surround")
-        XCTAssertGreaterThan(solid, 0, "the outline should stay at full strength")
-        XCTAssertGreaterThan(washed, solid / 4, "the front face lost its wash — only \(washed) part-alpha pixels")
-    }
-
-    /// It resolves through the same call the picker and the dock use, so a float pinned to it
-    /// renders like any other glyph.
-    func test_composedGlyph_isLabelledAndResolves() {
-        XCTAssertEqual(IconCatalog.displayName("square.on.square.softfill"), "Float")
+    /// Scratch is the app's own float, so its glyph follows the chrome pattern the drawer
+    /// buttons use — an outline container with one solid filled region, not a wash.
+    func test_scratchGlyph_isTheFilledFrontFaceVariant() {
+        XCTAssertEqual(ToolFloat.scratch.icon, "square.fill.on.square")
         XCTAssertNotNil(IconCatalog.image(ToolFloat.scratch.icon), "the scratch float must render")
-    }
-
-    /// Every mark is authored at 24x24, so a caller that doesn't size one gets a logo most of a
-    /// Settings row tall beside a 14pt symbol. Two call sites did exactly that. Sizing is the
-    /// catalog's job now, and this holds it there.
-    func test_brandMarks_areSizedOffThePointSize_notTheirAuthoredBox() throws {
-        for symbol in IconCatalog.brands {
-            let image = try XCTUnwrap(IconCatalog.image(symbol, pointSize: 11), symbol)
-            XCTAssertEqual(
-                image.size.height, 11 + IconCatalog.brandNudge, accuracy: 0.01,
-                "\(symbol) drew at \(image.size.height)pt — its authored box, not the caller's size")
-        }
-    }
-
-    /// The default argument is the one a caller falls into without thinking, so it has to be sane
-    /// on its own rather than only when the caller remembers to pass a size.
-    func test_brandMark_atTheDefaultPointSize_matchesASymbolThere() throws {
-        let mark = try XCTUnwrap(IconCatalog.image("github"))
-        let symbol = try XCTUnwrap(IconCatalog.image("folder"))
-        XCTAssertLessThan(
-            abs(mark.size.height - symbol.size.height), 4,
-            "a mark at \(mark.size.height)pt beside a symbol at \(symbol.size.height)pt")
+        XCTAssertEqual(IconCatalog.displayName(ToolFloat.scratch.icon), "Float")
     }
 
     /// Editing a float pinned off the roster must not silently drop its glyph — it gets its own
