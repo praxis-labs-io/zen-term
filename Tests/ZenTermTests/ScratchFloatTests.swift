@@ -47,10 +47,11 @@ final class ScratchFloatTests: XCTestCase {
         XCTAssertEqual(float?.scope, .window)
     }
 
-    /// The one thing a mistyped SF Symbol fails at, and nothing else would catch it.
+    /// The one thing a mistyped glyph fails at, and nothing else would catch it. Resolved the way
+    /// the dock resolves it, so a composed or brand-mark icon counts as rendering too — asserting
+    /// `systemSymbolName` directly only ever accepted a plain SF Symbol.
     func test_scratchIcon_resolves() {
-        XCTAssertNotNil(
-            NSImage(systemSymbolName: ToolFloat.scratch.icon, accessibilityDescription: nil))
+        XCTAssertNotNil(IconCatalog.image(ToolFloat.scratch.icon))
     }
 
     // MARK: the config file

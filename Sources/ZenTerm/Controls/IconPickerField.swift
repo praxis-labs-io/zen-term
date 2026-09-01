@@ -1,10 +1,9 @@
 import AppKit
 
-/// A tool-float icon picker: closed, a `FieldBox`-styled button showing the current glyph + name;
-/// Return / Space / click opens a floating card holding an 8-wide grid of curated dev-tooling icons.
-/// Arrow keys move the highlight, Return picks it, Esc closes the grid; clicking a cell picks it.
-/// A form focus stop — Up/Down bubble to the form while closed. Mirrors `Dropdown`'s window-child
-/// floating pattern.
+/// A tool-float icon picker: closed, a `FieldBox`-styled button; Return / Space / click opens a
+/// card holding the catalog 8 to a row. Arrows move the highlight, Return picks, Esc closes.
+/// A form focus stop, so Up/Down bubble to the form while closed. Mirrors `Dropdown`'s
+/// window-child floating pattern.
 final class IconPickerField: NSView {
     private(set) var selected: String
     var onChange: ((String) -> Void)?
@@ -18,7 +17,15 @@ final class IconPickerField: NSView {
     private var isFocusedStop = false { didSet { restyle() } }
 
     private var popover: NSView?
-    private let symbols: [String]
+    private var resizeObserver: NSObjectProtocol?
+    private let sections: [IconCatalog.Section]
+    /// The sections flattened in render order, so `cells[i]` is always `orderedSymbols[i]` —
+    /// headings are rows in the stack but never cells, so arrow nav steps straight over them.
+    private let orderedSymbols: [String]
+    /// Flat-index ranges, one per rendered row. Vertical nav walks these instead of striding by
+    /// `columns`: a leading "Current" section is a row of one, and a flat stride past it skews
+    /// every column below.
+    private let rows: [Range<Int>]
     private var cells: [IconButton] = []
     private var highlighted = 0
 
@@ -28,19 +35,44 @@ final class IconPickerField: NSView {
     static var columnsForTesting: Int { columns }
     private static let cellSize: CGFloat = 34
     private static let cellSpacing: CGFloat = 4
-    private static let maxGridHeight: CGFloat = 320
+    private static let headerHeight: CGFloat = 16
+    private static let sectionGap: CGFloat = 12
+    /// Margin kept between the card and the window edge when the grid is taller than the window.
+    private static let windowMargin: CGFloat = 8
+    /// A lane for the overlay scroller, added only when the grid is clamped and will scroll.
+    /// Overlay scrollers draw *over* content, so without it the bar sits on the last column.
+    private static let scrollerGutter: CGFloat = 16
+    /// The card at its natural size, before `positionPopover` clamps it to the window.
+    private var cardNaturalSize: NSSize = .zero
     private static var restFill: NSColor { Theme.current.chrome.fill(.rest) }
     private static var focusFill: NSColor { Theme.current.chrome.selectionFill }
 
     /// Test hooks: open the grid and drive it without a live event loop.
     func openForTesting() { openPopover() }
+    /// The symbol the highlight currently sits on — the assertion arrow-key tests actually need.
+    var highlightedSymbolForTesting: String? {
+        orderedSymbols.indices.contains(highlighted) ? orderedSymbols[highlighted] : nil
+    }
+    var cellCountForTesting: Int { cells.count }
     func moveHighlightForTesting(_ delta: Int) { moveHighlight(delta) }
+    func moveVerticallyForTesting(_ rows: Int) { moveVertically(rows) }
     func commitHighlightForTesting() { commitHighlight() }
 
     init(selected: String) {
         let initial = selected.isEmpty ? IconCatalog.defaultSymbol : selected
-        // Keep a custom (non-catalog) icon selectable so editing a float never drops it.
-        symbols = IconCatalog.all.contains(initial) ? IconCatalog.all : [initial] + IconCatalog.all
+        // A custom (non-catalog) icon gets its own leading section, so editing a float never drops it.
+        sections = IconCatalog.sections(including: initial)
+        orderedSymbols = sections.flatMap(\.symbols)
+        var bounds: [Range<Int>] = []
+        var start = 0
+        for section in sections {
+            for chunk in stride(from: 0, to: section.symbols.count, by: Self.columns) {
+                let length = min(Self.columns, section.symbols.count - chunk)
+                bounds.append(start..<(start + length))
+                start += length
+            }
+        }
+        rows = bounds
         self.selected = initial
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -80,6 +112,12 @@ final class IconPickerField: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// Backstop: `closePopover` clears the observer on every ordinary path, but a field torn down
+    /// with its grid still up would otherwise leave one registered against a dead object.
+    deinit {
+        if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
+    }
+
     func reapplyTheme() {
         restyle()
         renderClosed()
@@ -111,11 +149,10 @@ final class IconPickerField: NSView {
     }
     override func drawFocusRingMask() {}
 
-    /// The grid popover is parented to the window's content view (to escape this field's bounds),
-    /// not to this field's subtree — so removing the field, or an ancestor like the workspace /
-    /// tool-float form, doesn't take it along. Closing it when the field leaves the window binds the
-    /// popover's lifetime to the control, so a tab-switch `closeModal()` can't strand a dead grid on
-    /// the content view over every tab (same class as `Dropdown`).
+    /// The card is parented to the content view to escape this field's bounds, so removing the
+    /// field or its form doesn't take it along. Closing when the field leaves the window binds the
+    /// card's lifetime to the control, or a tab-switch `closeModal()` strands a dead grid over
+    /// every tab (same class as `Dropdown`).
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window == nil { closePopover() }
@@ -126,12 +163,11 @@ final class IconPickerField: NSView {
             switch KeyboardFocus.key(for: event) {
             case .left: moveHighlight(-1)
             case .right: moveHighlight(1)
-            case .up: moveHighlight(-Self.columns)
-            case .down: moveHighlight(Self.columns)
+            case .up: moveVertically(-1)
+            case .down: moveVertically(1)
             case .activate: commitHighlight()
-            // Load-bearing for layered dismissal: a bare Esc reaches this keyDown before any
-            // card-root performKeyEquivalent, so closing the grid here leaves the form open. Don't
-            // hoist Esc to the card root — that's the dead-end.
+            // Load-bearing: a bare Esc reaches this keyDown before any card-root
+            // performKeyEquivalent, so closing here leaves the form open. Don't hoist it.
             case .escape: closePopover()
             default: break  // consume every other key while the grid is open
             }
@@ -168,16 +204,31 @@ final class IconPickerField: NSView {
         popover?.removeFromSuperview()
         popover = nil
         cells = []
+        if let resizeObserver {
+            NotificationCenter.default.removeObserver(resizeObserver)
+            self.resizeObserver = nil
+        }
         restyle()
+    }
+
+    /// Same call as `ListPopover`: the card is frame-driven and placed once, so a resize strands it.
+    /// `queue: nil` runs the block synchronously, so the stranded card cannot outlive the turn.
+    private func observeResize(of window: NSWindow?) {
+        resizeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResizeNotification, object: window, queue: nil
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.closePopover() }
+        }
     }
 
     private func openPopover() {
         guard popover == nil, let contentView = window?.contentView else { return }
-        highlighted = max(0, symbols.firstIndex(of: selected) ?? 0)
+        highlighted = max(0, orderedSymbols.firstIndex(of: selected) ?? 0)
         let card = buildPopover()
         contentView.addSubview(card)
         popover = card
         positionPopover()
+        observeResize(of: window)
         refreshHighlight()
         restyle()
     }
@@ -192,23 +243,32 @@ final class IconPickerField: NSView {
         grid.spacing = Self.cellSpacing
         grid.translatesAutoresizingMaskIntoConstraints = false
 
-        var row: NSStackView?
-        for (index, symbol) in symbols.enumerated() {
-            if index % Self.columns == 0 {
-                let newRow = NSStackView()
-                newRow.orientation = .horizontal
-                newRow.spacing = Self.cellSpacing
-                grid.addArrangedSubview(newRow)
-                row = newRow
+        var previousRow: NSView?
+        for (sectionIndex, section) in sections.enumerated() {
+            let header = Self.sectionHeader(section.title)
+            grid.addArrangedSubview(header)
+            if sectionIndex > 0, let previousRow {
+                grid.setCustomSpacing(Self.sectionGap, after: previousRow)
             }
-            let cell = IconButton(
-                symbol: symbol, size: NSSize(width: Self.cellSize, height: Self.cellSize),
-                pointSize: 15, accessibilityLabel: IconCatalog.displayName(symbol)
-            ) { [weak self] in self?.commit(symbol) }
-            // IconButton now owns hover labeling via its branded tooltip (the accessibility label
-            // above is the glyph name), so no native cell.toolTip is needed.
-            row?.addArrangedSubview(cell)
-            cells.append(cell)
+            var row: NSStackView?
+            for (index, symbol) in section.symbols.enumerated() {
+                if index % Self.columns == 0 {
+                    let newRow = NSStackView()
+                    newRow.orientation = .horizontal
+                    newRow.spacing = Self.cellSpacing
+                    grid.addArrangedSubview(newRow)
+                    row = newRow
+                }
+                let cell = IconButton(
+                    symbol: symbol, size: NSSize(width: Self.cellSize, height: Self.cellSize),
+                    pointSize: 15, accessibilityLabel: IconCatalog.displayName(symbol)
+                ) { [weak self] in self?.commit(symbol) }
+                // IconButton now owns hover labeling via its branded tooltip (the accessibility
+                // label above is the glyph name), so no native cell.toolTip is needed.
+                row?.addArrangedSubview(cell)
+                cells.append(cell)
+            }
+            previousRow = row
         }
 
         let doc = FlippedView()
@@ -234,9 +294,7 @@ final class IconPickerField: NSView {
         card.addSubview(scroll)
 
         let inset: CGFloat = 8
-        let rows = (symbols.count + Self.columns - 1) / Self.columns
         let gridWidth = CGFloat(Self.columns) * Self.cellSize + CGFloat(Self.columns - 1) * Self.cellSpacing
-        let gridHeight = CGFloat(rows) * Self.cellSize + CGFloat(max(rows - 1, 0)) * Self.cellSpacing
         NSLayoutConstraint.activate([
             scroll.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: inset),
             scroll.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -inset),
@@ -249,9 +307,38 @@ final class IconPickerField: NSView {
             grid.leadingAnchor.constraint(equalTo: doc.leadingAnchor),
             grid.bottomAnchor.constraint(equalTo: doc.bottomAnchor),
         ])
-        let cardHeight = min(gridHeight + inset * 2, Self.maxGridHeight)
-        card.frame = NSRect(x: 0, y: 0, width: gridWidth + inset * 2, height: cardHeight)
+        // Measured off the laid-out stack, not a formula: duplicating the stack's arithmetic here
+        // counted one row-spacing per section too many and left dead space under the last row.
+        grid.layoutSubtreeIfNeeded()
+        cardNaturalSize = NSSize(
+            width: gridWidth + inset * 2, height: grid.fittingSize.height + inset * 2)
+        // `positionPopover` is where the window is known, so that is where a grid taller than the
+        // window gets clamped and left to scroll.
+        card.frame = NSRect(origin: .zero, size: cardNaturalSize)
         return card
+    }
+
+    /// A section heading: a quiet uppercase label above its block. Not a cell — it never enters
+    /// `cells`, so arrow navigation never lands on it.
+    private static func sectionHeader(_ title: String) -> NSTextField {
+        let label = NSTextField(labelWithString: title.uppercased())
+        label.font = .systemFont(ofSize: 9, weight: .semibold)
+        label.textColor = Theme.current.chrome.ink(.faint)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.heightAnchor.constraint(equalToConstant: headerHeight).isActive = true
+        return label
+    }
+
+    /// Up/Down by a rendered row, holding the column where the target row is wide enough and
+    /// landing on its last cell where it is not.
+    private func moveVertically(_ delta: Int) {
+        guard !cells.isEmpty, let row = rows.firstIndex(where: { $0.contains(highlighted) })
+        else { return }
+        let column = highlighted - rows[row].lowerBound
+        let target = rows[min(max(row + delta, 0), rows.count - 1)]
+        highlighted = target.lowerBound + min(column, target.count - 1)
+        refreshHighlight()
+        cells[highlighted].scrollToVisible(cells[highlighted].bounds)
     }
 
     private func moveHighlight(_ delta: Int) {
@@ -275,7 +362,7 @@ final class IconPickerField: NSView {
 
     private func commitHighlight() {
         guard cells.indices.contains(highlighted) else { return }
-        commit(symbols[highlighted])
+        commit(orderedSymbols[highlighted])
     }
 
     private func commit(_ symbol: String) {
@@ -289,7 +376,12 @@ final class IconPickerField: NSView {
     private func positionPopover() {
         guard let card = popover, let contentView = window?.contentView else { return }
         card.layoutSubtreeIfNeeded()
-        let size = card.frame.size
+        let available = contentView.bounds.height - Self.windowMargin * 2
+        let height = min(cardNaturalSize.height, available)
+        // Widen only when it will actually scroll, so a card that fits keeps even margins.
+        let scrolls = height < cardNaturalSize.height
+        let size = NSSize(
+            width: cardNaturalSize.width + (scrolls ? Self.scrollerGutter : 0), height: height)
         let origin = convert(bounds, to: contentView)
         let x = max(8, min(origin.minX, contentView.bounds.width - size.width - 8))
         // contentView isn't flipped: below the button = a smaller y. Prefer below; flip above if it

@@ -8,7 +8,7 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertEqual(float?.id, "x")
         XCTAssertEqual(float?.command, "foo")
         XCTAssertEqual(float?.title, "x")
-        XCTAssertEqual(float?.icon, "square.on.square")
+        XCTAssertEqual(float?.icon, ToolFloatParser.defaultIcon)
         XCTAssertEqual(float?.widthFraction, 0.85)
         XCTAssertEqual(float?.heightFraction, 0.85)
         XCTAssertEqual(float?.requiresGitRepo, false)

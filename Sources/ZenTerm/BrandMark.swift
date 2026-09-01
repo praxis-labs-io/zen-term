@@ -10,12 +10,10 @@ enum BrandMark {
     /// every caller is a view builder.
     private static var loaded: [String: NSImage?] = [:]
 
-    /// The mark named `name`, or nil when nothing is bundled under it. Each caller gets its own
-    /// copy: `IconCatalog.gitBadge` and `IconCatalog.image`'s `brandSize` both set `size` on what
-    /// they get back, which on a shared instance would resize every other caller's mark. A copy
-    /// shares the underlying representations, so it stays far cheaper than re-reading the file —
-    /// the palette rebuilds its rows on every keystroke, which made this disk I/O on the main
-    /// thread, once per row.
+    /// The mark named `name`, or nil when nothing is bundled. Each caller gets its own copy:
+    /// `gitBadge` and `IconCatalog.image` both set `size`, which on a shared instance would resize
+    /// every other caller's. A copy shares representations, so it stays cheaper than re-reading —
+    /// the palette rebuilds its rows per keystroke, which made this main-thread I/O once per row.
     static func image(_ name: String) -> NSImage? {
         if let cached = loaded[name] { return cached?.copy() as? NSImage }
         let image = load(name)

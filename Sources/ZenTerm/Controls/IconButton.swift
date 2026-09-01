@@ -1,5 +1,13 @@
 import AppKit
 
+/// An image view that lays out by its own bounds. `NSImageView` derives alignment insets from an
+/// SF Symbol's baseline metadata — off-centre, and different per glyph — so an unmodified one hangs
+/// symbols unevenly beside a brand mark, whose SVG carries no such metadata. Setting the image's
+/// `alignmentRect` does not reach this; the insets have to be overridden on the view.
+private final class GlyphView: NSImageView {
+    override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets() }
+}
+
 /// The shared rounded icon button across the chrome: an SF Symbol that's muted at rest,
 /// brightens with a faint background on hover, and — when `isActive` — tints iris with a
 /// faint iris background. Used by the footer dock toggles, the tab-bar "+", and the panel
@@ -8,7 +16,7 @@ final class IconButton: NSView {
     /// Reassignable so a host can wire it after init (e.g. the panel zoom button, which
     /// targets a callback set later). Most callers pass it once via the initializer.
     var onClick: () -> Void
-    private let icon = NSImageView()
+    private let icon = GlyphView()
     private var trackingArea: NSTrackingArea?
     private var isHovered = false { didSet { update() } }
 
@@ -50,11 +58,9 @@ final class IconButton: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 6
-        // An SF Symbol, else a bundled brand mark — resolved through the catalog, which owns that
-        // fallback. A brand mark is nudged a couple of points larger so a logo reads at the same
-        // optical weight as the symbols beside it. (The button carries the accessibility label
-        // itself, below, so the image needs no description of its own.)
-        icon.image = IconCatalog.image(symbol, pointSize: pointSize, weight: weight, brandSize: pointSize + 2)
+        // The catalog owns the symbol-else-mark fallback and sizes a mark off `pointSize`. The
+        // button carries the accessibility label itself, so the image needs none.
+        icon.image = IconCatalog.image(symbol, pointSize: pointSize, weight: weight)
         icon.imageScaling = .scaleNone
         icon.translatesAutoresizingMaskIntoConstraints = false
         addSubview(icon)
@@ -73,8 +79,12 @@ final class IconButton: NSView {
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: size.width),
             heightAnchor.constraint(equalToConstant: size.height),
+            // A fixed box, not each image's intrinsic size: symbol images vary (13, 15, 17pt at
+            // one point size), and hugging them lands origins on half-points that round apart.
             icon.centerXAnchor.constraint(equalTo: centerXAnchor),
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: size.width),
+            icon.heightAnchor.constraint(equalToConstant: size.height),
             activityDot.widthAnchor.constraint(equalToConstant: Self.dotDiameter),
             activityDot.heightAnchor.constraint(equalToConstant: Self.dotDiameter),
             // Inset from the corner so the dot clears the button's 6pt corner radius (and any
