@@ -123,6 +123,35 @@ final class IconCatalogTests: XCTestCase {
         XCTAssertEqual(IconCatalog.displayName("note.text"), "Notes")
     }
 
+    /// The composed glyph has to carry three alpha levels — clear, the washed front face, and the
+    /// solid outline. A plain symbol would only ever be clear or solid, so this proves the wash
+    /// survived rather than the composite collapsing to one of its halves.
+    func test_composedGlyph_washesTheFrontFaceWithoutFlatteningIt() throws {
+        let image = try XCTUnwrap(IconCatalog.image("square.on.square.softfill", pointSize: 40))
+        XCTAssertTrue(image.isTemplate, "must tint from the theme, not bake a color")
+
+        let rep = try XCTUnwrap(NSBitmapImageRep(data: image.tiffRepresentation ?? Data()))
+        var clear = 0
+        var washed = 0
+        var solid = 0
+        for x in 0..<rep.pixelsWide {
+            for y in 0..<rep.pixelsHigh {
+                let alpha = rep.colorAt(x: x, y: y)?.alphaComponent ?? 0
+                if alpha < 0.05 { clear += 1 } else if alpha > 0.85 { solid += 1 } else { washed += 1 }
+            }
+        }
+        XCTAssertGreaterThan(clear, 0, "no transparent surround")
+        XCTAssertGreaterThan(solid, 0, "the outline should stay at full strength")
+        XCTAssertGreaterThan(washed, solid / 4, "the front face lost its wash — only \(washed) part-alpha pixels")
+    }
+
+    /// It resolves through the same call the picker and the dock use, so a float pinned to it
+    /// renders like any other glyph.
+    func test_composedGlyph_isLabelledAndResolves() {
+        XCTAssertEqual(IconCatalog.displayName("square.on.square.softfill"), "Float")
+        XCTAssertNotNil(IconCatalog.image(ToolFloat.scratch.icon), "the scratch float must render")
+    }
+
     /// Editing a float pinned off the roster must not silently drop its glyph — it gets its own
     /// leading section instead.
     func test_sections_leadWithACustomSymbol() {

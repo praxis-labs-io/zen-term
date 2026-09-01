@@ -44,7 +44,7 @@ final class ToggleDock: NSView {
     /// (the split rectangles are 13.75pt across against a 12.14pt logo), and width is what carries
     /// in a row. So chrome sits a point under the icons a user pins.
     private static let iconPointSize: CGFloat = 11
-    private static let floatIconPointSize: CGFloat = 12
+    private static let floatIconPointSize: CGFloat = 11
 
     init(
         onNewTab: @escaping () -> Void,

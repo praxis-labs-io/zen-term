@@ -142,6 +142,7 @@ enum IconCatalog {
         "opencode": "OpenCode",
         "sqlite": "SQLite",
         // Dropped: kept so a float still configured with one keeps its label.
+        "square.on.square.softfill": "Float",
         "square.on.square": "Float",
         "apple.terminal.on.rectangle": "Terminal window",
         "chevron.left.forwardslash.chevron.right": "Code",
@@ -176,12 +177,43 @@ enum IconCatalog {
         brandSize: CGFloat? = nil
     ) -> NSImage? {
         let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: weight)
+        if let pair = composedGlyphs[symbol] { return compose(pair, config: config) }
         if let image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) {
             return image.withSymbolConfiguration(config)
         }
         guard let brand = BrandMark.image(symbol) else { return nil }
         if let brandSize { brand.size = NSSize(width: brandSize, height: brandSize) }
         return brand
+    }
+
+    /// Glyphs SF Symbols has no variant for. `square.on.square` fills its front face solid or not
+    /// at all, and hierarchical rendering dims the *back* face rather than lightening the front, so
+    /// a lightly-filled front has to be composed: the outline over its filled twin, washed back.
+    private static let composedGlyphs: [String: (outline: String, filled: String)] = [
+        "square.on.square.softfill": ("square.on.square", "square.fill.on.square")
+    ]
+
+    /// How much of the filled twin shows through. A template image keeps its alpha channel, so the
+    /// wash still tints from `Theme.current` like any other glyph rather than baking a color.
+    private static let composedFillAlpha: CGFloat = 0.25
+
+    private static func compose(
+        _ pair: (outline: String, filled: String), config: NSImage.SymbolConfiguration
+    ) -> NSImage? {
+        guard
+            let outline = NSImage(systemSymbolName: pair.outline, accessibilityDescription: nil)?
+                .withSymbolConfiguration(config),
+            let filled = NSImage(systemSymbolName: pair.filled, accessibilityDescription: nil)?
+                .withSymbolConfiguration(config)
+        else { return nil }
+        let bounds = NSRect(origin: .zero, size: outline.size)
+        let composed = NSImage(size: outline.size)
+        composed.lockFocus()
+        filled.draw(in: bounds, from: .zero, operation: .sourceOver, fraction: composedFillAlpha)
+        outline.draw(in: bounds, from: .zero, operation: .sourceOver, fraction: 1)
+        composed.unlockFocus()
+        composed.isTemplate = true
+        return composed
     }
 
     /// The box a brand mark needs to draw the same ink height as an SF Symbol at `pointSize`.

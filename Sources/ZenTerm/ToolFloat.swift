@@ -86,7 +86,7 @@ extension ToolFloat {
         id: "scratch",
         order: 0,  // inert: the built-ins lead the catalog and are never sorted with the user's
         title: "Scratch",
-        icon: "square.on.square",
+        icon: "square.on.square.softfill",
         command: "",  // no program, just a shell — see `ToolFloatController.spawn`
         dir: nil,
         widthFraction: 0.7,
