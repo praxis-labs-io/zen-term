@@ -252,7 +252,7 @@
 #                        (e.g. `q`); the next open is cold, not resumed
 #   toolbar  (optional)  false = no toolbar button; the shortcut     (default true)
 #                        and palette entry stay live
-#   icon     (optional)  SF Symbol name, or a bundled brand mark   (default square.stack.fill)
+#   icon     (optional)  SF Symbol name, or a bundled brand mark    (default square.on.square)
 #                        (github, git, docker, claude, htop and more:
 #                        the full set is the icon picker in
 #                        Settings → Tools)
@@ -269,11 +269,11 @@
 # float = order:3 title:"Open Lazygit" command:"lazygit" key:cmd+shift+l git:true persist:dir icon:git height:0.78
 #
 # Example: a system monitor kept alive for the window, reachable from every tab:
-# float = order:4 title:BTop command:"btop" key:cmd+shift+b persist:window icon:gauge.with.needle.fill
+# float = order:4 title:BTop command:"btop" key:cmd+shift+b persist:window icon:gauge.with.needle
 #
 # Example: zen-review, the standalone review tool, on ⌘G. It keeps a session per repo,
 # so `persist:dir` picks the reading back up where you left it.
-# float = order:5 title:Review command:"zen-review" key:cmd+g git:true persist:dir icon:list.bullet.clipboard.fill
+# float = order:5 title:Review command:"zen-review" key:cmd+g git:true persist:dir icon:list.bullet.clipboard
 
 # ─── Keybinds ────────────────────────────────────────────────────────────────
 #
