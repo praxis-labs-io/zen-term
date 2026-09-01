@@ -1,18 +1,9 @@
 import AppKit
 
-/// The curated set of tool-float icons, in two sections: outline dev-tooling symbols, then brand
-/// marks. `image` resolves either the same way the dock does — an SF Symbol, else a bundled brand
-/// mark ("git", "docker", "claude", …).
-///
-/// The symbols are outlines because a symbol and a mark are interchangeable choices for the same
-/// slot — a user pins `docker` or `cube` to one float — so they sit in adjacent cells and have to
-/// match. The marks are line art we can't restyle, so the symbols meet them: measured at the dock's
-/// size, an outline roster inks 58.9 against the marks' 57.4, where a filled one inks 110.4.
-///
-/// A brand earns a cell by having a terminal UI behind it, first- or third-party: `docker` stands
-/// for lazydocker, `kubernetes` for k9s, `postgres` for pgcli, `slack` for wee-slack. A brand whose
-/// only interface is a window (Zed, Obsidian) or a plain CLI (Homebrew, Tailscale) doesn't, because
-/// you can't float it.
+/// Tool-float icons in two sections: outline symbols, then brand marks. Both are line art, and
+/// they share picker cells, so a filled symbol would outweigh the marks it sits beside.
+/// A brand earns a cell only with a terminal UI behind it (`docker` for lazydocker, `postgres`
+/// for pgcli); one that only opens a window or a plain CLI can't be floated.
 enum IconCatalog {
     static let defaultSymbol = "square.on.square"
 
@@ -64,10 +55,8 @@ enum IconCatalog {
         return sections
     }
 
-    /// A humanized, sentence-case label for a symbol — the picker shows this instead of the raw
-    /// `dotted.symbol.name`. Roster cells are named for what they're *for* ("Run", not "Play
-    /// rectangle"), so they all sit in the override table; the fallback below is what a user's own
-    /// custom symbol gets.
+    /// The picker's label for a symbol. Roster cells are named for the job ("Run", not "Play
+    /// rectangle"), so most are overridden below; the fallback is for a user's own symbol.
     static func displayName(_ symbol: String) -> String {
         if let name = displayOverrides[symbol] { return name }
         let stem = trimmingFillSuffix(symbol)
@@ -129,6 +118,7 @@ enum IconCatalog {
         "brain": "Model",
         "sparkles": "AI",
         "puzzlepiece": "Plugins",
+        "waveform": "Music",
         "rectangle.3.group": "Panes",
         "square.grid.2x2": "Dashboard",
         "github": "GitHub",
@@ -153,14 +143,10 @@ enum IconCatalog {
         "spotify": "Spotify",
     ]
 
-    /// Resolve a symbol to an image: an SF Symbol, else a brand mark bundled in `Resources/`. The
-    /// one place this fallback lives. SF Symbol first, so a brand-mark name must never collide with
-    /// a real symbol (`IconCatalogTests` holds the line).
-    ///
-    /// A mark is a plain SVG with no symbol metadata, so a `SymbolConfiguration` does nothing to it
-    /// and it would otherwise draw at its authored 24pt — most of a Settings row. It is sized off
-    /// `pointSize` here instead, so every caller gets a mark scaled to the symbols beside it
-    /// whether or not it thought to ask.
+    /// An SF Symbol, else a bundled brand mark. SF Symbol first, so a mark name must never
+    /// collide with a real symbol (`IconCatalogTests` holds the line). A mark carries no symbol
+    /// metadata and would draw at its authored 24pt, so it is sized off `pointSize` here rather
+    /// than left to the caller to remember.
     static func image(
         _ symbol: String, pointSize: CGFloat = 14, weight: NSFont.Weight = .medium
     ) -> NSImage? {

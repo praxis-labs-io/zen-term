@@ -57,14 +57,12 @@ final class IconButtonTests: XCTestCase {
     }
 }
 
-/// The brand marks and the SF Symbols have to draw at the same size in a row together. That is a
-/// budget the eye can't police to a point: the `pointSize + 2` this replaced looked plausible for
-/// years while drawing logos 10% taller than the symbols beside them. So measure the ink.
+/// Glyph geometry the eye can't police to a point: a quarter point of vertical skew is invisible
+/// one glyph at a time and obvious in a row of eight. Measured, not looked at.
 final class IconGlyphSizeTests: XCTestCase {
-    /// Ink bounding-box height of an image, supersampled so a 13pt glyph measures to a fraction.
-    /// Where the glyph's image box actually sits inside a laid-out button, in exact layout
-    /// coordinates. Pixels can't resolve this: a quarter point is half a pixel at 2x, and the ink
-    /// bounding box won't budge for it.
+    /// Where the glyph's image box sits inside a laid-out button, in exact layout coordinates.
+    /// Pixels can't resolve this: a quarter point is half a device pixel at 2x, so a rasterised
+    /// check passes with the bug in place.
     private func glyphCentreOffset(_ symbol: String) throws -> CGFloat {
         let button = IconButton(symbol: symbol, pointSize: 12, accessibilityLabel: symbol) {}
         button.translatesAutoresizingMaskIntoConstraints = true

@@ -9,6 +9,7 @@ import XCTest
 final class IconCatalogTests: XCTestCase {
     /// `IconPickerField` lays each section out 8 to a row. Only the symbols block has to divide
     /// evenly — it is followed by another section, so a short row there would be a hole mid-grid.
+    /// The navigation this enables is covered in `IconPickerFieldTests`, not here.
     func test_symbols_fillTheEightWideGridExactly() {
         XCTAssertEqual(
             IconCatalog.symbols.count % IconPickerField.columnsForTesting, 0,
@@ -20,12 +21,6 @@ final class IconCatalogTests: XCTestCase {
     func test_brands_areTheFinalSection() {
         let titles = IconCatalog.sections(including: IconCatalog.defaultSymbol).map(\.title)
         XCTAssertEqual(titles.last, "Brand marks")
-    }
-
-    /// 48 being a multiple of the grid width is what keeps a Down press crossing the section
-    /// boundary in the same column instead of skewing.
-    func test_symbolsCount_keepsVerticalNavAlignedAcrossTheBoundary() {
-        XCTAssertEqual(IconCatalog.symbols.count % IconPickerField.columnsForTesting, 0)
     }
 
     func test_all_hasNoDuplicates() {

@@ -1,10 +1,9 @@
 import AppKit
 
-/// A tool-float icon picker: closed, a `FieldBox`-styled button showing the current glyph + name;
-/// Return / Space / click opens a floating card holding an 8-wide grid of curated dev-tooling icons.
-/// Arrow keys move the highlight, Return picks it, Esc closes the grid; clicking a cell picks it.
-/// A form focus stop — Up/Down bubble to the form while closed. Mirrors `Dropdown`'s window-child
-/// floating pattern.
+/// A tool-float icon picker: closed, a `FieldBox`-styled button; Return / Space / click opens a
+/// card holding the catalog 8 to a row. Arrows move the highlight, Return picks, Esc closes.
+/// A form focus stop, so Up/Down bubble to the form while closed. Mirrors `Dropdown`'s
+/// window-child floating pattern.
 final class IconPickerField: NSView {
     private(set) var selected: String
     var onChange: ((String) -> Void)?
@@ -18,6 +17,7 @@ final class IconPickerField: NSView {
     private var isFocusedStop = false { didSet { restyle() } }
 
     private var popover: NSView?
+    private var resizeObserver: NSObjectProtocol?
     private let sections: [IconCatalog.Section]
     /// The sections flattened in render order, so `cells[i]` is always `orderedSymbols[i]` —
     /// headings are rows in the stack but never cells, so arrow nav steps straight over them.
@@ -112,6 +112,12 @@ final class IconPickerField: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// Backstop: `closePopover` clears the observer on every ordinary path, but a field torn down
+    /// with its grid still up would otherwise leave one registered against a dead object.
+    deinit {
+        if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
+    }
+
     func reapplyTheme() {
         restyle()
         renderClosed()
@@ -143,11 +149,10 @@ final class IconPickerField: NSView {
     }
     override func drawFocusRingMask() {}
 
-    /// The grid popover is parented to the window's content view (to escape this field's bounds),
-    /// not to this field's subtree — so removing the field, or an ancestor like the workspace /
-    /// tool-float form, doesn't take it along. Closing it when the field leaves the window binds the
-    /// popover's lifetime to the control, so a tab-switch `closeModal()` can't strand a dead grid on
-    /// the content view over every tab (same class as `Dropdown`).
+    /// The card is parented to the content view to escape this field's bounds, so removing the
+    /// field or its form doesn't take it along. Closing when the field leaves the window binds the
+    /// card's lifetime to the control, or a tab-switch `closeModal()` strands a dead grid over
+    /// every tab (same class as `Dropdown`).
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window == nil { closePopover() }
@@ -161,9 +166,8 @@ final class IconPickerField: NSView {
             case .up: moveVertically(-1)
             case .down: moveVertically(1)
             case .activate: commitHighlight()
-            // Load-bearing for layered dismissal: a bare Esc reaches this keyDown before any
-            // card-root performKeyEquivalent, so closing the grid here leaves the form open. Don't
-            // hoist Esc to the card root — that's the dead-end.
+            // Load-bearing: a bare Esc reaches this keyDown before any card-root
+            // performKeyEquivalent, so closing here leaves the form open. Don't hoist it.
             case .escape: closePopover()
             default: break  // consume every other key while the grid is open
             }
@@ -200,7 +204,21 @@ final class IconPickerField: NSView {
         popover?.removeFromSuperview()
         popover = nil
         cells = []
+        if let resizeObserver {
+            NotificationCenter.default.removeObserver(resizeObserver)
+            self.resizeObserver = nil
+        }
         restyle()
+    }
+
+    /// Same call as `ListPopover`: the card is frame-driven and placed once, so a resize strands it.
+    /// `queue: nil` runs the block synchronously, so the stranded card cannot outlive the turn.
+    private func observeResize(of window: NSWindow?) {
+        resizeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResizeNotification, object: window, queue: nil
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.closePopover() }
+        }
     }
 
     private func openPopover() {
@@ -210,6 +228,7 @@ final class IconPickerField: NSView {
         contentView.addSubview(card)
         popover = card
         positionPopover()
+        observeResize(of: window)
         refreshHighlight()
         restyle()
     }
@@ -288,9 +307,8 @@ final class IconPickerField: NSView {
             grid.leadingAnchor.constraint(equalTo: doc.leadingAnchor),
             grid.bottomAnchor.constraint(equalTo: doc.bottomAnchor),
         ])
-        // Measured off the laid-out stack, not a formula: headings, per-section gaps and the
-        // spacing between rows are the stack's arithmetic, and duplicating it here counted one
-        // spacing per section too many, leaving dead space under the last row.
+        // Measured off the laid-out stack, not a formula: duplicating the stack's arithmetic here
+        // counted one row-spacing per section too many and left dead space under the last row.
         grid.layoutSubtreeIfNeeded()
         cardNaturalSize = NSSize(
             width: gridWidth + inset * 2, height: grid.fittingSize.height + inset * 2)

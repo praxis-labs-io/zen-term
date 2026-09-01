@@ -4,11 +4,9 @@ import XCTest
 @testable import ZenTerm
 
 final class IconPickerFieldTests: WindowTestCase {
-    /// Same class as `Dropdown`: the open grid card lives on `window.contentView`, not
-    /// inside the field's own subtree, so tearing the field's host out of the window — what a
-    /// tab-switch `closeModal()` does to the workspace / tool-float form hosting this field — must
-    /// still take the card with it. Without a leave-the-window hook the grid orphans on the content
-    /// view, stuck over every tab with no way to clear but restart.
+    /// Same class as `Dropdown`: the card lives on `window.contentView`, not the field's subtree,
+    /// so tearing the field's host out of the window — a tab-switch `closeModal()` on the form
+    /// hosting it — must still take the card. Without the hook it orphans over every tab.
     func test_removingHostFromWindow_closesOpenGrid() {
         let field = IconPickerField(selected: "hammer")
         field.translatesAutoresizingMaskIntoConstraints = true
@@ -104,6 +102,21 @@ final class IconPickerFieldTests: WindowTestCase {
     func test_customSymbol_opensHighlighted() {
         let (field, _) = openedField(selected: "heart.fill")
         XCTAssertEqual(field.highlightedSymbolForTesting, "heart.fill")
+    }
+
+    /// The card is placed once, at open, and is now tall enough to reach the window edge, so a
+    /// resize strands it at the old size and position. It closes instead, the way `ListPopover`
+    /// does for every other popover in the chrome.
+    func test_resizingTheWindow_closesTheGrid() {
+        let (field, window) = openedField(selected: IconCatalog.defaultSymbol, windowHeight: 900)
+        XCTAssertTrue(field.isPopoverOpen, "precondition: the grid is up before the resize")
+
+        window.setFrame(NSRect(x: 0, y: 0, width: 520, height: 400), display: false)
+
+        XCTAssertFalse(field.isPopoverOpen, "the grid must close rather than strand itself")
+        XCTAssertFalse(
+            window.contentView!.subviews.contains { $0 is ShadowCardView },
+            "no card left drawn on the content view after the resize")
     }
 
     /// In a window with room, the whole roster is on screen at once — 67 cells and two headings

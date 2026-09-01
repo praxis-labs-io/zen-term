@@ -58,9 +58,8 @@ final class IconButton: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 6
-        // An SF Symbol, else a bundled brand mark — resolved through the catalog, which owns that
-        // fallback and sizes a mark off `pointSize`. (The button carries the accessibility label
-        // itself, below, so the image needs no description of its own.)
+        // The catalog owns the symbol-else-mark fallback and sizes a mark off `pointSize`. The
+        // button carries the accessibility label itself, so the image needs none.
         icon.image = IconCatalog.image(symbol, pointSize: pointSize, weight: weight)
         icon.imageScaling = .scaleNone
         icon.translatesAutoresizingMaskIntoConstraints = false
@@ -80,9 +79,8 @@ final class IconButton: NSView {
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: size.width),
             heightAnchor.constraint(equalToConstant: size.height),
-            // A fixed box, not each image's intrinsic size. Symbol images come in assorted heights
-            // (13, 15, 17pt at one point size) and a brand mark in another, so hugging them lands
-            // origins on different half-points that round apart. One box centres them all alike.
+            // A fixed box, not each image's intrinsic size: symbol images vary (13, 15, 17pt at
+            // one point size), and hugging them lands origins on half-points that round apart.
             icon.centerXAnchor.constraint(equalTo: centerXAnchor),
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
             icon.widthAnchor.constraint(equalToConstant: size.width),
