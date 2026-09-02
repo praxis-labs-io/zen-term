@@ -30,6 +30,15 @@ enum NavCommand: Equatable {
         }
     }
 
+    /// One-line rendering for the `.nav` log, so a bug report carries the session's flag
+    /// history: which token was flagged nvim, when, and every hand-off in between.
+    var logLine: String {
+        switch self {
+        case .focus(let token, let dir): return "focus pane=\(token) dir=\(dir)"
+        case .setVim(let token, let on): return "setvim pane=\(token) vim=\(on)"
+        }
+    }
+
     private static func direction(from raw: String) -> Direction? {
         switch raw {
         case "left": return .left

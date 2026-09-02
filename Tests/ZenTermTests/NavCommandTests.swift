@@ -56,4 +56,16 @@ final class NavCommandTests: XCTestCase {
         XCTAssertNil(NavCommand.decode(""))
         XCTAssertNil(NavCommand.decode("   "))
     }
+
+    // The log line is the whole point of recording these: a bug report has to name the token
+    // and the flag state, or a stale nvim flag is unattributable after the fact.
+    func test_logLine_namesTokenAndVimState() {
+        XCTAssertEqual(NavCommand.setVim(token: 14, on: true).logLine, "setvim pane=14 vim=true")
+        XCTAssertEqual(NavCommand.setVim(token: 14, on: false).logLine, "setvim pane=14 vim=false")
+    }
+
+    func test_logLine_namesTokenAndDirection() {
+        XCTAssertEqual(NavCommand.focus(token: 7, dir: .left).logLine, "focus pane=7 dir=left")
+        XCTAssertEqual(NavCommand.focus(token: 7, dir: .down).logLine, "focus pane=7 dir=down")
+    }
 }
