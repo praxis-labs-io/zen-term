@@ -1763,6 +1763,138 @@ call-site changes is that nothing caches the color: `ConfigChange.between` sets
 `.theme` from a whole-value `AppTheme` diff, and the existing `reapplyTheme()` fan-out
 repaints even the sites that bake their color at init, like the tab bar's tracer.
 
+## Workspace clones
+
+A workspace can have parallel copies of itself, made from the ⌘P picker, opened as
+their own tabs, and removed the same way. zen-term creates the clone and tracks that
+it exists. It does nothing else about git: there is no promote, no merge, no conflict
+radar, no awareness between one clone and another. You branch, commit, push and open
+the pull request yourself, exactly as in any checkout.
+
+**The mechanism is `clonefile(2)`, not `git worktree`.** The advantage is what rides
+along for free at near-zero disk cost: the files git ignores. A `node_modules` makes
+the clone usable at all, and a carried `.turbo` cache turned a measured 33s first
+build into 1.5s. A fresh worktree or `git clone` has neither and needs a full setup
+pass first. `clonefile`, never `cp -Rc`: it clones the hierarchy in one call and
+returns a real `errno`, where `cp -c` degrades to a full byte copy in silence.
+
+Two constraints follow from the mechanism and both refuse rather than degrade. The
+clone and its source must be **on one APFS volume**, because extents are volume-local
+and a cross-volume clone is a full copy of every byte. The source must be a **whole
+repository**, because a worktree's `.git` is a file pointing back into its parent's
+admin directory and cloning it would hand two trees one set of bookkeeping.
+
+### Where they live
+
+`~/.zenterm/clones/<folder>-<digest>/<folder>-c<n>`
+
+A third state location, deliberately, beside `~/.config/zen-term` (config) and
+`~/Library/Application Support/ZenTerm` (the nav socket, the published theme). A clone
+is a working tree you `cd` into and run builds in, so neither of those is right. It
+gets a plain, typeable home instead.
+
+**The directory is keyed on the workspace's path, never its title.** `slug` folds case
+and punctuation, so "Zen Term", "zen term" and "zen/term" all land on `zen-term`, while
+`WorkspacesWriter` only refuses an exact duplicate: keyed on the title, two such
+workspaces shared a directory, listed each other's clones, and deleted each other's on
+⌥⌫. A title is also editable, and renaming one orphaned every clone it had. `<digest>`
+is eight hex characters of SHA-256 over the standardized path; `<folder>` is there to
+keep the path readable. Numbering starts at `c2`, because the workspace itself is the
+first copy.
+
+The title is a label and nothing else. `Clone.title` reads the workspace's *current*
+title, so renaming relabels the rows rather than losing them.
+
+### What a clone starts with
+
+`checkout -B <branch> origin/main --force`, then `clean -fd`, then the strip below.
+The force checkout discards the parent's copied uncommitted edits; `clean -fd` drops
+what was never told to git. It is deliberately not `-fdx`, so everything gitignored
+still rides along, which is the point of cloning.
+
+**Artifact directories that break when moved are removed, matched on a marker file
+rather than a name.** A virtualenv called `venv311` is as broken by relocation as one
+called `venv`, and a name list only knows the names it was written with.
+
+| marker | what it identifies | how it fails relocated |
+|---|---|---|
+| `pyvenv.cfg` | a Python virtualenv | dangling `bin/python3`, `pip3` dies with "bad interpreter" |
+| `build.db` | a SwiftPM/llbuild build directory | "PCH was compiled with module cache path X, but the path is currently Y" |
+
+Both are hard errors, not cache misses. The list is deliberately short: `node_modules`,
+`.turbo` and `.next` all survive relocation, and stripping them by intuition would
+spend the whole feature. Only measured breakage earns a built-in rule.
+
+Detection is gated on `git check-ignore`, because `build.db` is an ordinary enough
+filename that a tracked `data/` directory can hold one, and deleting tracked files
+would strip content the checkout had just restored. It scans the top level only, which
+is where every such directory was found across the repos to hand; anything nested is
+`clone_exclude`'s job, and a whole-tree walk would descend through a multi-gigabyte
+`node_modules` to find nothing.
+
+`clone_exclude` in the `workspaces` config names anything else a clone should start
+without, per workspace, on top of that detection. Entries that leave the workspace are
+refused twice: by `WorkspacesParser` on load, by `AddWorkspaceOverlay` as you type, and
+`CloneStore` checks containment again at the point the delete happens.
+
+### Knowing what a clone would lose
+
+`CloneStore.state` answers what removing the clone would destroy, and two things about
+it are load-bearing.
+
+**It measures against a baseline recorded at creation, not the repository's contents.**
+A clone copies the whole `.git`, so it inherits the parent's local branches and stashes.
+Counting those marked every brand-new clone as dirty, and a confirm that always warns is
+one people stop reading. Creation parks the starting tips under `refs/zenterm-base/*`
+and the stash depth in `zenterm.stashbase`; `state` counts
+`--branches --not --remotes --glob=refs/zenterm-base`. Inherited work is excluded and
+kept; work done *in* the clone counts, including commits added onto an inherited branch.
+The namespace is cleared before it is rewritten, and that is not tidiness: git refuses
+refs at both `refs/zenterm-base/feature` and `refs/zenterm-base/feature/x`, so a stale
+inherited ref whose name became a path prefix failed the whole clone.
+
+It counts **every local branch, not HEAD's**, and the stash. Work parked on a branch you
+are not standing on is exactly the work a person forgets they left behind.
+
+**`state` returns nil for "could not read", which is never "clean".** Folding a git
+failure into zeroes put "has nothing uncommitted" in front of someone about to delete a
+repository we had failed to inspect. The confirm says what it does not know and keeps
+the destructive framing.
+
+### The keyboard, and what closes with a clone
+
+`⌥⏎` clones the selected workspace row; `⌥⌫` removes the selected clone row. Both are
+reserved chords, so `KeyInterceptor` sees them ahead of the responder chain, which is
+the only way a chord fires while the picker's search field holds focus.
+
+**`PickerChordGuard` hands both back to the terminal unless the picker is open.**
+`resolve` consumes every chord in the keymap and the picker check in
+`WindowController.handle` runs after that, too late for the program in the pane. Without
+the guard both are dead keys everywhere: `⌥⌫` is delete-previous-word in every readline
+shell, `⌥⏎` inserts a newline without submitting in Claude Code. It sits beside
+`NavGuard` and `TextEditingChords` on the seam that already exists for this.
+
+Removing a clone asks once, with the whole consequence in one sentence: the work that
+goes and the tabs that close. Two dialogs for one decision is worse than one.
+
+Tabs are matched on `TabController.openedCWD`, where the tab was opened, **not** its
+live cwd. A shell that has `cd`'d out of the clone still belongs to it, and matching the
+live cwd would leave that tab running inside the directory being deleted. The lookup
+fans out across every window through `AppDelegate`, which owns the only list of them: a
+clone can be open in a window the picker did not start from.
+
+### GitCommand
+
+The app's only subprocess runner, and there was none before this. Blocking on purpose:
+the caller owns the queue hop, the way `GitRepoStatus` wraps `GitRepo`. **Never on the
+main thread.**
+
+Both pipes drain concurrently, and both before `waitUntilExit`. Reading one to EOF and
+only then the other deadlocks just as surely as waiting first: a child that fills the
+64K stderr buffer blocks on write while the reader blocks on stdout, and neither moves.
+`git add` under `core.autocrlf` warns once per file and passes 64K within a few hundred
+of them, so this is reachable, not theoretical.
+
 ## Invariants that will bite you
 
 - **Closures capture by id, never by object.** A closure stored on a controller
@@ -1853,6 +1985,9 @@ Do not describe these as features, and do not assume them when reading:
 - **No smooth scroll.** The viewport moves in whole cells and nothing below the
   seam can change that. See "What the backend will and won't do".
 - **No tab drag-to-reorder**, no config file watcher.
+- **No git management around clones.** A clone is created and tracked as a
+  directory; nothing promotes, merges, rebases, or compares one against another,
+  and no clone knows another exists. See "Workspace clones".
 - **Two seam events are emitted with zero consumers**: `surfaceDidRingBell` and
   `progressDidChange`. The backend translates both, but nothing in the chrome
   implements them. Pane exit runs entirely through `surfaceDidExit`.
