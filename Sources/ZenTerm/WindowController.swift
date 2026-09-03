@@ -1257,9 +1257,9 @@ final class WindowController: NSObject {
         }
     }
 
-    private func confirmRemoveClone(_ clone: Clone, state: CloneState, openTabs: Int) {
+    private func confirmRemoveClone(_ clone: Clone, state: CloneState?, openTabs: Int) {
         presentConfirm(
-            variant: state.isClean ? .warning : .destructive,
+            variant: state?.isClean == true ? .warning : .destructive,
             title: "Remove Clone",
             message: Self.removeCloneMessage(clone, state: state, openTabs: openTabs),
             confirmLabel: "Remove"
@@ -1292,10 +1292,18 @@ final class WindowController: NSObject {
 
     /// One confirm carrying both consequences: the work that goes, and the tabs that close.
     /// Splitting them would mean two dialogs for a single decision.
-    static func removeCloneMessage(_ clone: Clone, state: CloneState, openTabs: Int) -> String {
+    ///
+    /// A nil state is "we could not read the repository", never "it is empty": saying nothing is
+    /// uncommitted about a repo we failed to inspect is the one sentence here that could cost
+    /// someone a day.
+    static func removeCloneMessage(_ clone: Clone, state: CloneState?, openTabs: Int) -> String {
         var closing = ""
         if openTabs == 1 { closing = "closes its tab and " }
         if openTabs > 1 { closing = "closes its \(openTabs) tabs and " }
+        guard let state else {
+            return "\(clone.title) could not be read, so what it holds is unknown. "
+                + "Removing it \(closing)deletes the directory and everything in it."
+        }
         guard !state.isClean else {
             return "\(clone.title) has nothing uncommitted. Removing it \(closing)deletes the directory."
         }

@@ -130,9 +130,10 @@ final class WindowControllerCloneChordTests: WindowTestCase {
             doCommandBy: #selector(NSResponder.insertNewline(_:)))
 
         waitUntil(!c.isModalOverlayOpen, "the picker to close once the clone is opened")
-        waitUntil(
-            c.focusedCWD == CloneStore.root.appendingPathComponent("zen-term/zen-term-c2"),
-            "the clone's tab to open")
+        let expected = CloneStore.root
+            .appendingPathComponent(CloneStore.directoryName(for: workspace()))
+            .appendingPathComponent("\(CloneStore.slug(for: workspace()))-c2")
+        waitUntil(c.focusedCWD == expected, "the clone's tab to open")
     }
 
     func test_cloneWorkspaceChord_withNoModalOpen_doesNotClone() {

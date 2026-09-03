@@ -81,9 +81,13 @@ final class CloneStoreTests: XCTestCase {
 
         XCTAssertEqual(clone.name, "c2")
         XCTAssertEqual(clone.branch, "main")
-        XCTAssertEqual(clone.title, "Zen Term c2")
+        XCTAssertEqual(clone.title, "Zen Term c2", "the label follows the workspace's title")
+        // The path follows the workspace's *folder*, under a directory keyed on its full path.
+        let group = CloneStore.directoryName(for: workspace())
         XCTAssertEqual(
-            clone.path, CloneStore.root.appendingPathComponent("zen-term/zen-term-c2", isDirectory: true))
+            clone.path,
+            CloneStore.root.appendingPathComponent("\(group)/work-c2", isDirectory: true))
+        XCTAssertTrue(group.hasPrefix("work-"), "readable folder name, then the path digest")
         XCTAssertEqual(try run(["rev-parse", "--abbrev-ref", "HEAD"], in: clone.path), "main")
         XCTAssertEqual(
             try run(["rev-parse", "HEAD"], in: clone.path),
@@ -259,6 +263,98 @@ final class CloneStoreTests: XCTestCase {
 
     // MARK: state
 
+    /// A clone is a copy of the whole `.git`, so it inherits the parent's local branches and
+    /// stashes. Counting those would mark every brand-new clone as dirty, and a confirm that always
+    /// warns is one people stop reading — which is how the real warning gets clicked through.
+    func test_state_ignoresBranchesAndStashesInheritedFromTheParent() throws {
+        try run(["checkout", "-b", "feature/parent-work"], in: repo)
+        try write("parent\n", to: repo.appendingPathComponent("parent.txt"))
+        try run(["add", "."], in: repo)
+        try run(["commit", "-m", "the parent's own unpushed work"], in: repo)
+        try run(["checkout", "main"], in: repo)
+        try write("scratch\n", to: repo.appendingPathComponent("tracked.txt"))
+        try run(["stash"], in: repo)
+
+        let clone = try CloneStore.create(from: workspace())
+
+        XCTAssertEqual(CloneStore.state(clone), CloneState(uncommitted: 0, unpushed: 0, stashed: 0))
+        XCTAssertEqual(CloneStore.state(clone)?.isClean, true, "a clone nobody has touched is clean")
+        // The branch is inherited, not discarded: a lane can pick it up.
+        XCTAssertTrue(
+            try run(["branch", "--list", "feature/parent-work"], in: clone.path).contains("feature/parent-work"),
+            "the inherited branch is still there to work on")
+    }
+
+    /// Inherited work is not counted, but *extending* it in the clone is this clone's work.
+    func test_state_countsCommitsAddedOntoAnInheritedBranch() throws {
+        try run(["checkout", "-b", "feature/parent-work"], in: repo)
+        try write("parent\n", to: repo.appendingPathComponent("parent.txt"))
+        try run(["add", "."], in: repo)
+        try run(["commit", "-m", "the parent's own unpushed work"], in: repo)
+        try run(["checkout", "main"], in: repo)
+
+        let clone = try CloneStore.create(from: workspace())
+        try run(["config", "user.email", "test@example.com"], in: clone.path)
+        try run(["config", "user.name", "Test"], in: clone.path)
+        try run(["checkout", "feature/parent-work"], in: clone.path)
+        try write("more\n", to: clone.path.appendingPathComponent("more.txt"))
+        try run(["add", "."], in: clone.path)
+        try run(["commit", "-m", "extending it here"], in: clone.path)
+
+        XCTAssertEqual(CloneStore.state(clone)?.unpushed, 1, "the new commit counts, the inherited one does not")
+    }
+
+    /// The baseline namespace is cleared before it is rewritten, and that is not tidiness: git
+    /// refuses to hold refs at both `refs/zenterm-base/feature` and `refs/zenterm-base/feature/x`.
+    /// A stale inherited ref whose name has since become a path prefix makes `update-ref` fail,
+    /// which fails the whole clone and rolls it back.
+    func test_create_survivesAnInheritedBaselineWhoseNameBecameAPathPrefix() throws {
+        try run(["branch", "feature"], in: repo)
+
+        let first = try CloneStore.create(from: workspace())
+        // In the clone, the plain branch goes and a nested one takes its name as a prefix.
+        try run(["branch", "-D", "feature"], in: first.path)
+        try run(["branch", "feature/x"], in: first.path)
+
+        let second = try CloneStore.create(
+            from: Workspace(
+                title: "Zen Term", path: first.path, main: nil, right: nil, bottom: nil, focus: .main,
+                env: [:]))
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: second.path.path))
+        XCTAssertEqual(CloneStore.state(second)?.isClean, true)
+    }
+
+    /// A clone of a clone must measure against its own start, not the one it inherited.
+    func test_state_ofACloneOfAClone_measuresAgainstItsOwnBaseline() throws {
+        let first = try CloneStore.create(from: workspace())
+        try run(["config", "user.email", "test@example.com"], in: first.path)
+        try run(["config", "user.name", "Test"], in: first.path)
+        try run(["checkout", "-b", "feature/in-the-first-clone"], in: first.path)
+        try write("work\n", to: first.path.appendingPathComponent("work.txt"))
+        try run(["add", "."], in: first.path)
+        try run(["commit", "-m", "work in the first clone"], in: first.path)
+        try run(["checkout", "main"], in: first.path)
+        XCTAssertEqual(CloneStore.state(first)?.unpushed, 1)
+
+        let second = try CloneStore.create(
+            from: Workspace(
+                title: "Zen Term", path: first.path, main: nil, right: nil, bottom: nil, focus: .main,
+                env: [:]))
+
+        XCTAssertEqual(
+            CloneStore.state(second)?.unpushed, 0,
+            "the second clone starts fresh; the first clone's work is inherited, not its own")
+    }
+
+    /// Nil is "we could not read it", and the caller must not be able to mistake that for clean.
+    func test_state_isNilWhenTheCloneCannotBeRead() throws {
+        let clone = try CloneStore.create(from: workspace())
+        try FileManager.default.removeItem(at: clone.path.appendingPathComponent(".git"))
+
+        XCTAssertNil(CloneStore.state(clone), "a repo we cannot inspect never reports as clean")
+    }
+
     /// The failure this guards is the worst one this feature can have: the confirm saying the clone
     /// has nothing uncommitted, immediately before deleting a day of work. Counting only HEAD's
     /// unpushed commits does exactly that whenever the work is parked on a branch you are not on.
@@ -274,8 +370,9 @@ final class CloneStoreTests: XCTestCase {
         try run(["checkout", "main"], in: clone.path)
 
         // From main, `git status` is clean and HEAD has nothing unpushed. The work is still there.
-        XCTAssertEqual(CloneStore.state(clone).unpushed, 1)
-        XCTAssertFalse(CloneStore.state(clone).isClean, "so the clone must not read as safe to delete")
+        XCTAssertEqual(CloneStore.state(clone)?.unpushed, 1)
+        XCTAssertEqual(
+            CloneStore.state(clone)?.isClean, false, "so the clone must not read as safe to delete")
     }
 
     /// A stash lives in `refs/stash`, which is outside `--branches` as well as HEAD.
@@ -287,9 +384,9 @@ final class CloneStoreTests: XCTestCase {
         try write("scratch\n", to: clone.path.appendingPathComponent("tracked.txt"))
         try run(["stash"], in: clone.path)
 
-        XCTAssertEqual(CloneStore.state(clone).uncommitted, 0, "stashing cleans the working tree")
-        XCTAssertEqual(CloneStore.state(clone).stashed, 1)
-        XCTAssertFalse(CloneStore.state(clone).isClean)
+        XCTAssertEqual(CloneStore.state(clone)?.uncommitted, 0, "stashing cleans the working tree")
+        XCTAssertEqual(CloneStore.state(clone)?.stashed, 1)
+        XCTAssertEqual(CloneStore.state(clone)?.isClean, false)
     }
 
     func test_state_countsUncommittedAndUnpushed() throws {
@@ -305,7 +402,7 @@ final class CloneStoreTests: XCTestCase {
         try run(["add", "."], in: clone.path)
         try run(["commit", "-m", "work"], in: clone.path)
         XCTAssertEqual(CloneStore.state(clone), CloneState(uncommitted: 0, unpushed: 1, stashed: 0))
-        XCTAssertFalse(CloneStore.state(clone).isClean)
+        XCTAssertEqual(CloneStore.state(clone)?.isClean, false)
     }
 
     // MARK: remove
@@ -320,9 +417,60 @@ final class CloneStoreTests: XCTestCase {
     // MARK: slug
 
     func test_slug_makesOnePathSegmentFromFreeText() {
-        XCTAssertEqual(CloneStore.slug(for: "Zen Term"), "zen-term")
-        XCTAssertEqual(CloneStore.slug(for: "web/api"), "web-api")
-        XCTAssertEqual(CloneStore.slug(for: "  ../.. "), "workspace")
-        XCTAssertEqual(CloneStore.slug(for: "my_repo-1"), "my_repo-1")
+        XCTAssertEqual(CloneStore.slug(forText: "Zen Term"), "zen-term")
+        XCTAssertEqual(CloneStore.slug(forText: "web/api"), "web-api")
+        XCTAssertEqual(CloneStore.slug(forText: "  ../.. "), "workspace")
+        XCTAssertEqual(CloneStore.slug(forText: "my_repo-1"), "my_repo-1")
+    }
+
+    // MARK: which directory a workspace's clones live in
+
+    private func workspace(title: String, at path: URL) -> Workspace {
+        Workspace(
+            title: title, path: path, main: nil, right: nil, bottom: nil, focus: .main, env: [:])
+    }
+
+    /// `slug` folds case and punctuation, and `WorkspacesWriter` only refuses an exact duplicate
+    /// title. Keyed on the title, "Zen Term" and "zen term" would share a clones directory: each
+    /// would list the other's clones, and ⌥⌫ on either would delete both.
+    func test_directoryName_differsForWorkspacesWhoseTitlesSlugTheSame() {
+        let first = workspace(title: "Zen Term", at: URL(fileURLWithPath: "/Users/x/Dev/zen-term"))
+        let second = workspace(title: "zen term", at: URL(fileURLWithPath: "/Users/x/work/zen-term"))
+
+        XCTAssertNotEqual(CloneStore.directoryName(for: first), CloneStore.directoryName(for: second))
+    }
+
+    /// The readable half comes from the folder, so both still say what they are.
+    func test_directoryName_keepsTheFolderNameReadable() {
+        let ws = workspace(title: "Anything At All", at: URL(fileURLWithPath: "/Users/x/Dev/zen-term"))
+
+        XCTAssertTrue(CloneStore.directoryName(for: ws).hasPrefix("zen-term-"))
+        XCTAssertEqual(CloneStore.slug(for: ws), "zen-term")
+    }
+
+    /// The title is a label. Renaming a workspace used to orphan every clone it had, because the
+    /// directory was named after the old title and nothing went looking under it again.
+    func test_renamingAWorkspace_keepsItsClones() throws {
+        let clone = try CloneStore.create(from: workspace(title: "Zen Term"))
+
+        let renamed = Workspace(
+            title: "ZenTerm (main)", path: repo, main: nil, right: nil, bottom: nil, focus: .main,
+            env: [:])
+        let listed = CloneStore.list(for: [renamed])
+
+        XCTAssertEqual(listed.map(\.path), [clone.path], "the same clone on disk")
+        XCTAssertEqual(listed.first?.title, "ZenTerm (main) c2", "relabelled to the new title")
+    }
+
+    /// Two workspaces at different paths never see each other's clones, however alike they read.
+    func test_list_doesNotLeakClonesBetweenLookalikeWorkspaces() throws {
+        let other = root.appendingPathComponent("other-checkout", isDirectory: true)
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        let lookalike = workspace(title: "zen term", at: other)
+
+        _ = try CloneStore.create(from: workspace(title: "Zen Term"))
+
+        XCTAssertTrue(CloneStore.list(for: [lookalike]).isEmpty)
+        XCTAssertEqual(CloneStore.list(for: [workspace(title: "Zen Term")]).count, 1)
     }
 }

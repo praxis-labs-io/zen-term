@@ -92,4 +92,22 @@ final class RemoveCloneMessageTests: XCTestCase {
         let text = message(uncommitted: 0, unpushed: 1, openTabs: 0)
         XCTAssertFalse(text.contains("nothing uncommitted"), text)
     }
+
+    /// The sentence that must never read as reassurance: we could not inspect the repository.
+    func test_unknownState_saysSo_andNeverClaimsItIsEmpty() {
+        let text = WindowController.removeCloneMessage(clone, state: nil, openTabs: 0)
+
+        XCTAssertEqual(
+            text,
+            "zen-term c2 could not be read, so what it holds is unknown. "
+                + "Removing it deletes the directory and everything in it.")
+        XCTAssertFalse(text.contains("nothing uncommitted"), text)
+    }
+
+    func test_unknownState_stillNamesTheTabsThatClose() {
+        XCTAssertEqual(
+            WindowController.removeCloneMessage(clone, state: nil, openTabs: 2),
+            "zen-term c2 could not be read, so what it holds is unknown. "
+                + "Removing it closes its 2 tabs and deletes the directory and everything in it.")
+    }
 }

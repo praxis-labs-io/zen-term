@@ -48,4 +48,38 @@ final class GitCommandTests: XCTestCase {
 
         XCTAssertGreaterThan(blob.count, 65_536)
     }
+
+    /// The deadlock this guards: draining stdout to EOF and only *then* stderr hangs forever when
+    /// the child fills the 64K stderr buffer first, because it blocks on write while this thread
+    /// blocks on read. `git add` with `core.autocrlf` warns once per file, which passes 64K at a
+    /// few hundred files while stdout stays open and empty.
+    ///
+    /// It hangs rather than fails when reinstated, so it is written with an explicit timeout: a
+    /// test that never returns reports nothing.
+    func test_run_doesNotDeadlockOnACommandThatFloodsStderr() throws {
+        let repo = dir!
+        try GitCommand.run(["init", "--initial-branch=main"], in: repo).get()
+        try GitCommand.run(["config", "user.email", "test@example.com"], in: repo).get()
+        try GitCommand.run(["config", "user.name", "Test"], in: repo).get()
+        try GitCommand.run(["config", "core.autocrlf", "true"], in: repo).get()
+        for index in 0..<1500 {
+            try "line one\nline two\nline three\n".write(
+                to: repo.appendingPathComponent("f\(index).txt"), atomically: true, encoding: .utf8)
+        }
+
+        let finished = expectation(description: "git add returns")
+        var result: Result<String, Error>?
+        DispatchQueue.global(qos: .userInitiated).async {
+            result = GitCommand.run(["add", "."], in: repo)
+            finished.fulfill()
+        }
+        wait(for: [finished], timeout: 60)
+
+        guard case .success = try XCTUnwrap(result) else {
+            return XCTFail("git add should succeed despite the warnings")
+        }
+        // And the warnings really did exceed one pipe buffer, or this proves nothing.
+        let status = try GitCommand.run(["status", "--porcelain"], in: repo).get()
+        XCTAssertEqual(status.split(separator: "\n").count, 1500, "every file was staged")
+    }
 }

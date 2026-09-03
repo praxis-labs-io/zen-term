@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// One parallel copy of a workspace: its own directory, its own branch, nothing shared with the
@@ -33,10 +34,11 @@ struct Clone: Equatable {
 /// What a clone would lose if it were removed now.
 struct CloneState: Equatable {
     let uncommitted: Int
-    /// Commits on *any* local branch that no remote has. Not just HEAD's: work parked on a side
-    /// branch you are not standing on is exactly the work a person forgets they left behind.
+    /// Commits on *any* local branch that no remote has and that the clone did not start with.
+    /// Every local branch, not just HEAD's: work parked on a side branch you are not standing on
+    /// is exactly the work a person forgets they left behind.
     let unpushed: Int
-    /// Stash entries, which live in `refs/stash` and so are outside `--branches` as well as HEAD.
+    /// Stash entries made since the clone was created.
     let stashed: Int
 
     var isClean: Bool { uncommitted == 0 && unpushed == 0 && stashed == 0 }
@@ -90,8 +92,8 @@ enum CloneStore {
     /// being listed.
     static func list(for workspaces: [Workspace]) -> [Clone] {
         workspaces.flatMap { workspace -> [Clone] in
-            let slug = slug(for: workspace.title)
-            let dir = root.appendingPathComponent(slug, isDirectory: true)
+            let slug = slug(for: workspace)
+            let dir = root.appendingPathComponent(directoryName(for: workspace), isDirectory: true)
             let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
             return
                 names
@@ -113,8 +115,8 @@ enum CloneStore {
         let source = workspace.path.standardizedFileURL
         try verifyWholeRepo(at: source)
 
-        let slug = slug(for: workspace.title)
-        let dir = root.appendingPathComponent(slug, isDirectory: true)
+        let slug = slug(for: workspace)
+        let dir = root.appendingPathComponent(directoryName(for: workspace), isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try verifySameVolume(source, dir)
 
@@ -140,6 +142,7 @@ enum CloneStore {
             // ignored file still ride along.
             try git(["clean", "-fd"], in: destination)
             try stripUnrelocatable(in: destination, declared: workspace.cloneExclude)
+            try recordBaseline(in: destination)
         } catch {
             try? FileManager.default.removeItem(at: destination)
             throw error
@@ -148,21 +151,60 @@ enum CloneStore {
         return Clone(workspaceTitle: workspace.title, name: name, path: destination, branch: branch)
     }
 
-    /// What removing the clone would destroy. Three git calls, so callers keep it off the path
-    /// that renders rows and ask only when the answer is about to be shown.
+    /// What removing the clone would destroy, or nil when that cannot be determined. Several git
+    /// calls, so callers keep it off the path that renders rows and ask only when the answer is
+    /// about to be shown.
     ///
-    /// Counts every local branch, not HEAD's: a clone whose side branch holds a day of work reads
-    /// as clean from HEAD, and the confirm would say so immediately before deleting it.
-    static func state(_ clone: Clone) -> CloneState {
-        let status = (try? git(["status", "--porcelain"], in: clone.path)) ?? ""
-        let counted = (try? git(["rev-list", "--count", "--branches", "--not", "--remotes"], in: clone.path))
-        let stash = (try? git(["stash", "list"], in: clone.path)) ?? ""
+    /// **Nil is not "clean".** Reporting zero when git failed would put "nothing uncommitted" in
+    /// front of a person about to delete a repository we could not read, which is the one sentence
+    /// this function exists to get right. The caller says so and keeps the destructive framing.
+    ///
+    /// Measured against the baseline recorded at creation, not against the repo's whole contents:
+    /// a clone inherits the parent's local branches and stashes through the copy, so counting
+    /// those would mark every brand-new clone as dirty and train the warning away.
+    static func state(_ clone: Clone) -> CloneState? {
+        guard let status = try? git(["status", "--porcelain"], in: clone.path),
+            let counted = try? git(
+                ["rev-list", "--count", "--branches", "--not", "--remotes", "--glob=\(baseNamespace)"],
+                in: clone.path),
+            let unpushed = Int(counted),
+            let stash = try? git(["stash", "list"], in: clone.path)
+        else { return nil }
+        let stashBaseline =
+            (try? git(["config", "--local", "--get", stashBaselineKey], in: clone.path))
+            .flatMap(Int.init) ?? 0
         return CloneState(
-            uncommitted: lineCount(status), unpushed: Int(counted ?? "") ?? 0, stashed: lineCount(stash))
+            uncommitted: lineCount(status), unpushed: unpushed,
+            stashed: max(0, lineCount(stash) - stashBaseline))
     }
 
     private static func lineCount(_ output: String) -> Int {
         output.isEmpty ? 0 : output.split(separator: "\n").count
+    }
+
+    /// Where the creation-time branch tips are parked, and where the creation-time stash depth is.
+    private static let baseNamespace = "refs/zenterm-base"
+    private static let stashBaselineKey = "zenterm.stashbase"
+
+    /// Snapshot what the clone started with, so `state` can later tell inherited work from work
+    /// done here. The copy carries the parent's local branches and stashes, and those are the
+    /// parent's, not this clone's, however much they look alike.
+    ///
+    /// Cleared before it is written: cloning a clone would otherwise inherit the older namespace
+    /// and keep measuring against the wrong starting point.
+    private static func recordBaseline(in clone: URL) throws {
+        let existing = try git(["for-each-ref", "--format=%(refname)", baseNamespace], in: clone)
+        for ref in existing.split(separator: "\n") {
+            try git(["update-ref", "-d", String(ref)], in: clone)
+        }
+        let heads = try git(["for-each-ref", "--format=%(objectname) %(refname:short)", "refs/heads"], in: clone)
+        for line in heads.split(separator: "\n") {
+            let parts = line.split(separator: " ", maxSplits: 1)
+            guard parts.count == 2 else { continue }
+            try git(["update-ref", "\(baseNamespace)/\(parts[1])", String(parts[0])], in: clone)
+        }
+        let stashDepth = lineCount((try? git(["stash", "list"], in: clone)) ?? "")
+        try git(["config", "--local", stashBaselineKey, String(stashDepth)], in: clone)
     }
 
     /// Delete the clone. Copy-on-write means this frees only the blocks that diverged.
@@ -240,9 +282,35 @@ enum CloneStore {
 
     // MARK: helpers
 
-    /// A path segment from a workspace title, which is free text and may hold anything.
-    static func slug(for title: String) -> String {
-        let kept = title.map { character -> Character in
+    /// The readable half of a clone's name, taken from the workspace folder rather than its title:
+    /// a clone of `~/Dev/zen-term` is `zen-term-c2` however the picker labels it, and renaming the
+    /// workspace does not rename what is already on disk.
+    static func slug(for workspace: Workspace) -> String {
+        slug(forText: workspace.path.standardizedFileURL.lastPathComponent)
+    }
+
+    /// The directory holding one workspace's clones. Keyed on the **path**, not the title, and
+    /// carrying a digest of it.
+    ///
+    /// Titles do not identify a workspace. `slug` folds case and punctuation, so "Zen Term",
+    /// "zen term" and "zen/term" all land on `zen-term` while `WorkspacesWriter` only refuses an
+    /// exact duplicate: two such workspaces would share a directory, show each other's clones, and
+    /// delete each other's on ⌥⌫. A title is also editable, and renaming one would orphan every
+    /// clone it already had.
+    static func directoryName(for workspace: Workspace) -> String {
+        "\(slug(for: workspace))-\(digest(of: workspace.path))"
+    }
+
+    /// Eight hex characters of SHA-256 over the standardized path. Long enough that two workspaces
+    /// on one machine will not collide, short enough to type.
+    private static func digest(of path: URL) -> String {
+        let data = Data(path.standardizedFileURL.path.utf8)
+        return SHA256.hash(data: data).prefix(4).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// One path segment from free text, which may hold anything.
+    static func slug(forText text: String) -> String {
+        let kept = text.map { character -> Character in
             character.isLetter || character.isNumber || character == "-" || character == "_"
                 ? character : "-"
         }
