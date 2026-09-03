@@ -204,6 +204,7 @@ final class NavSocketServer {
         guard let line = String(data: lineData, encoding: .utf8),
             let command = NavCommand.decode(line)
         else { return }
+        Log.info("NavSocket: \(command.logLine)", category: .nav)
         DispatchQueue.main.async { [weak self] in self?.apply(command) }
     }
 

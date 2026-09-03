@@ -1,3 +1,4 @@
+import AppLog
 import XCTest
 
 @testable import ZenTerm
@@ -164,6 +165,43 @@ final class NavSocketServerTests: XCTestCase {
     }
 
     /// Open and connect an `AF_UNIX` stream client to `path`, returning the socket fd.
+    /// The log line is the point of ZEN-441, and nothing at runtime depends on it — drop the
+    /// `Log.info` from `dispatch` and every other test still passes. This is what fails.
+    func test_dispatch_logsEachAcceptedCommand() throws {
+        let path = "/tmp/zt-nav-log-\(getpid()).sock"
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("zt-nav-log-\(getpid())", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let sink = LogFileSink(directory: directory, fileName: "test.log", maxBytes: 1 << 20, maxFiles: 2)
+        let previousSink = Log.fileSink
+        Log.fileSink = sink
+        defer {
+            Log.fileSink = previousSink
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        let dispatched = expectation(description: "both commands dispatched")
+        var count = 0
+        let server = NavSocketServer(path: path) { _ in
+            count += 1
+            if count == 2 { dispatched.fulfill() }
+        }
+        server.start()
+        defer { server.stop() }
+
+        try sendLine(#"{"cmd":"setvim","pane":4242,"vim":true}"#, to: path)
+        try sendLine(#"{"cmd":"focus","dir":"left","pane":4242}"#, to: path)
+        try sendLine("garbage not json", to: path)
+        wait(for: [dispatched], timeout: 3)
+        sink.flush()
+
+        let written = try sink.fileURLs.map { try String(contentsOf: $0, encoding: .utf8) }.joined()
+        // `contains`, not equality: `Log.fileSink` is process-wide, so another test may interleave.
+        XCTAssertTrue(written.contains("NavSocket: setvim pane=4242 vim=true"), written)
+        XCTAssertTrue(written.contains("NavSocket: focus pane=4242 dir=left"), written)
+        XCTAssertFalse(written.contains("garbage"), "an undecodable line must never be logged")
+    }
+
     private func connectClient(to path: String) throws -> Int32 {
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         XCTAssertGreaterThanOrEqual(fd, 0)
