@@ -201,15 +201,17 @@ final class NavSocketServer {
     }
 
     private func readConnection(_ fd: Int32) {
-        // The token this connection holds the nvim flag for, cleared on EOF however the
-        // client died. Local to the connection, so no shared state and no locking.
-        var heldToken: Int?
+        // The tokens this connection holds the nvim flag for, cleared on EOF however the
+        // client died. Local to the connection, so no shared state and no locking. A set,
+        // not one token: a second hold must not silently abandon the first, which would
+        // leave exactly the stale flag this whole mechanism exists to clear.
+        var heldTokens: Set<Int> = []
         defer {
             close(fd)
-            if let heldToken {
-                Log.info("NavSocket: connection closed, clearing pane=\(heldToken)", category: .nav)
+            for token in heldTokens.sorted() {
+                Log.info("NavSocket: connection closed, clearing pane=\(token)", category: .nav)
                 DispatchQueue.main.async { [weak self] in
-                    self?.apply(.setVim(token: heldToken, presence: .off))
+                    self?.apply(.setVim(token: token, presence: .off))
                 }
             }
         }
@@ -230,12 +232,16 @@ final class NavSocketServer {
                     // The client is staying: the silence bound would otherwise close this
                     // connection out from under a live nvim after `recvTimeout` idle seconds.
                     Self.setRecvTimeout(0, on: fd)
-                    heldToken = token
-                case .off where token == heldToken:
-                    heldToken = nil  // a clean VimLeave already cleared it; don't clear twice
+                    heldTokens.insert(token)
                 case .off, .latched:
-                    break
+                    // `.off` is a clean VimLeave, `.latched` a downgrade to a flag that
+                    // outlives the connection. Either way this connection stops owning the
+                    // token, so it must not clear it again at EOF.
+                    heldTokens.remove(token)
                 }
+                // Holding nothing again means the silence bound applies again, or a client
+                // that holds, releases, then goes quiet parks a thread for the process life.
+                if heldTokens.isEmpty { Self.setRecvTimeout(recvTimeout, on: fd) }
             }
             // A single unterminated line grown past the cap is junk (never a nav command):
             // drop it rather than buffer unboundedly or later decode a truncated tail.

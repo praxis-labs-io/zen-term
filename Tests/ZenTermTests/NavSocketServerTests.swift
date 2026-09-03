@@ -185,9 +185,11 @@ final class NavSocketServerTests: XCTestCase {
         let path = "/tmp/zt-nav-latch-\(getpid()).sock"
         var commands: [NavCommand] = []
         let flagged = expectation(description: "setvim latched")
+        let barrier = expectation(description: "focus dispatched after the close")
         let server = NavSocketServer(path: path) { command in
             commands.append(command)
             if command == .setVim(token: 9, presence: .latched) { flagged.fulfill() }
+            if command == .focus(token: 9, dir: .left) { barrier.fulfill() }
         }
         server.start()
         defer { server.stop() }
@@ -195,12 +197,12 @@ final class NavSocketServerTests: XCTestCase {
         try sendLine(#"{"cmd":"setvim","pane":9,"vim":true}"#, to: path)
         wait(for: [flagged], timeout: 3)
 
-        // Give a clear every chance to arrive before asserting none did.
+        // The barrier has to be a command the server dispatches, not a main-queue hop: the
+        // test's own hop can be enqueued ahead of the server's, so a spurious clear would
+        // still be in flight when the assertion runs.
         try sendLine(#"{"cmd":"focus","dir":"left","pane":9}"#, to: path)
-        let settled = expectation(description: "focus round-tripped")
-        DispatchQueue.main.async { settled.fulfill() }
-        wait(for: [settled], timeout: 3)
-        XCTAssertFalse(commands.contains(.setVim(token: 9, presence: .off)))
+        wait(for: [barrier], timeout: 3)
+        XCTAssertFalse(commands.contains(.setVim(token: 9, presence: .off)), "\(commands)")
     }
 
     func test_heldConnection_survivesIdlePastTheSilenceBound() throws {
@@ -256,6 +258,82 @@ final class NavSocketServerTests: XCTestCase {
         }
         wait(for: [settled], timeout: 3)
         XCTAssertEqual(clears, 1)
+    }
+
+    func test_multipleHolds_clearEveryTokenOnClose() throws {
+        // A second hold must not abandon the first. It used to overwrite it, which left the
+        // earlier pane flagged forever: exactly the stale latch this mechanism removes.
+        let path = "/tmp/zt-nav-multihold-\(getpid()).sock"
+        let bothHeld = expectation(description: "both holds claimed")
+        bothHeld.expectedFulfillmentCount = 2
+        let firstCleared = expectation(description: "pane 7 cleared")
+        let secondCleared = expectation(description: "pane 9 cleared")
+        let server = NavSocketServer(path: path) { command in
+            if case .setVim(_, .held) = command { bothHeld.fulfill() }
+            if command == .setVim(token: 7, presence: .off) { firstCleared.fulfill() }
+            if command == .setVim(token: 9, presence: .off) { secondCleared.fulfill() }
+        }
+        server.start()
+        defer { server.stop() }
+
+        let fd = try connectClient(to: path)
+        writeLine(#"{"cmd":"setvim","pane":7,"vim":true,"hold":true}"#, to: fd)
+        writeLine(#"{"cmd":"setvim","pane":9,"vim":true,"hold":true}"#, to: fd)
+        wait(for: [bothHeld], timeout: 3)
+
+        close(fd)
+        wait(for: [firstCleared, secondCleared], timeout: 3)
+    }
+
+    func test_downgradeToLatched_survivesClose() throws {
+        // A latch is documented to persist until an explicit `vim:false`. A connection that
+        // held the token and then downgraded must not clear it on the way out.
+        let path = "/tmp/zt-nav-downgrade-\(getpid()).sock"
+        var commands: [NavCommand] = []
+        let latched = expectation(description: "downgraded to latched")
+        let barrier = expectation(description: "focus dispatched after the close")
+        let server = NavSocketServer(path: path) { command in
+            commands.append(command)
+            if command == .setVim(token: 9, presence: .latched) { latched.fulfill() }
+            if command == .focus(token: 9, dir: .left) { barrier.fulfill() }
+        }
+        server.start()
+        defer { server.stop() }
+
+        let fd = try connectClient(to: path)
+        writeLine(#"{"cmd":"setvim","pane":9,"vim":true,"hold":true}"#, to: fd)
+        writeLine(#"{"cmd":"setvim","pane":9,"vim":true}"#, to: fd)
+        wait(for: [latched], timeout: 3)
+        close(fd)
+
+        try sendLine(#"{"cmd":"focus","dir":"left","pane":9}"#, to: path)
+        wait(for: [barrier], timeout: 3)
+        XCTAssertFalse(commands.contains(.setVim(token: 9, presence: .off)), "\(commands)")
+    }
+
+    func test_releasedHold_regainsTheSilenceBound() throws {
+        // Holding clears the silence bound. Releasing has to restore it, or a client that
+        // holds, sends `vim:false`, then goes quiet parks a reader for the process lifetime.
+        let path = "/tmp/zt-nav-rebound-\(getpid()).sock"
+        let released = expectation(description: "hold released")
+        let server = NavSocketServer(path: path, recvTimeout: 1) { command in
+            if command == .setVim(token: 9, presence: .off) { released.fulfill() }
+        }
+        server.start()
+        defer { server.stop() }
+
+        let fd = try connectClient(to: path)
+        defer { close(fd) }
+        writeLine(#"{"cmd":"setvim","pane":9,"vim":true,"hold":true}"#, to: fd)
+        writeLine(#"{"cmd":"setvim","pane":9,"vim":false}"#, to: fd)
+        wait(for: [released], timeout: 3)
+
+        // With the bound restored the server drops this idle connection, so the client sees
+        // EOF. Without it the read blocks forever and this times out.
+        var timeout = timeval(tv_sec: 4, tv_usec: 0)
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+        var byte: UInt8 = 0
+        XCTAssertEqual(read(fd, &byte, 1), 0, "the silence bound was not restored (errno \(errno))")
     }
 
     /// Connect a throwaway `AF_UNIX` client, write one newline-terminated line, close.
