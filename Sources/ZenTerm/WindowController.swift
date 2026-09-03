@@ -307,6 +307,10 @@ final class WindowController: NSObject {
     /// and Copy/Paste routing respect the modal too, not just `handle(_:)`.
     var isModalOverlayOpen: Bool { modal != nil }
 
+    /// Whether the ⌘P picker specifically is up. Read by `AppDelegate`'s pass-through guard, which
+    /// has to hand ⌥⏎ and ⌥⌫ to the terminal everywhere else.
+    var isRepoPickerOpen: Bool { modal?.kind == .repoPicker }
+
     /// A blocking close confirm (⌘W on a busy or last pane), when up. Window-level like
     /// the palettes: modal over the active tab until answered.
     private var confirmToast: ToastView?

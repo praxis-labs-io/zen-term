@@ -110,6 +110,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return true
             }
             let controller = self?.keyController()
+            if PickerChordGuard.shouldPassThrough(
+                action: action, repoPickerIsOpen: controller?.isRepoPickerOpen == true)
+            {
+                return true
+            }
             return NavGuard.shouldPassThrough(
                 chord: chord, action: action,
                 focusedPaneIsVim: controller?.focusedPaneIsVim == true,
