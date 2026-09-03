@@ -238,6 +238,33 @@ final class CloneStoreTests: XCTestCase {
         XCTAssertTrue(CloneStore.list(for: [workspace()]).isEmpty)
     }
 
+    /// Two clones started at once, which is one double-tap of ⌥⏎. Both scan the directory, both
+    /// see no `c2`, and the loser's `clonefile` fails with EEXIST — reported as "File exists",
+    /// which tells the person nothing about what they did.
+    func test_create_concurrentClonesGetDistinctNumbers() throws {
+        let ws = workspace()
+        let done = expectation(description: "both clones finish")
+        done.expectedFulfillmentCount = 2
+        var results: [Result<Clone, Error>] = []
+        let lock = NSLock()
+
+        for _ in 0..<2 {
+            DispatchQueue.global(qos: .userInitiated).async {
+                let result = Result { try CloneStore.create(from: ws) }
+                lock.lock()
+                results.append(result)
+                lock.unlock()
+                done.fulfill()
+            }
+        }
+        wait(for: [done], timeout: 60)
+
+        let clones = results.compactMap { try? $0.get() }
+        XCTAssertEqual(clones.count, 2, "neither attempt loses a race to the other")
+        XCTAssertEqual(Set(clones.map(\.name)).count, 2, "and they get different numbers")
+        XCTAssertEqual(Set(CloneStore.list(for: [ws]).map(\.path)).count, 2)
+    }
+
     // MARK: list
 
     func test_list_findsClonesInOrder_andIgnoresStrangers() throws {

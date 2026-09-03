@@ -120,14 +120,21 @@ enum CloneStore {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try verifySameVolume(source, dir)
 
-        let number = nextNumber(in: dir, slug: slug)
-        let name = "c\(number)"
-        let destination = dir.appendingPathComponent("\(slug)-\(name)", isDirectory: true)
-
-        // clonefile, not `cp -Rc`: it clones the whole hierarchy in one call and reports a real
-        // errno, where `cp -c` degrades to a full byte copy without saying so.
-        guard clonefile(source.path, destination.path, 0) == 0 else {
-            throw CloneError.cloneFailed(errno)
+        // `clonefile` is the claim on the number, not `nextNumber`: two clones started at once
+        // (one double-tap of ⌥⏎) both read the directory before either has written to it, both
+        // pick the same number, and the loser fails with EEXIST reported as "File exists". Taking
+        // EEXIST as "someone got there first" and asking for the next number is the answer at the
+        // layer the race is on, and it holds across two windows or two processes as well.
+        var name = ""
+        var destination = dir
+        while true {
+            let number = nextNumber(in: dir, slug: slug)
+            name = "c\(number)"
+            destination = dir.appendingPathComponent("\(slug)-\(name)", isDirectory: true)
+            // clonefile, not `cp -Rc`: it clones the whole hierarchy in one call and reports a real
+            // errno, where `cp -c` degrades to a full byte copy without saying so.
+            if clonefile(source.path, destination.path, 0) == 0 { break }
+            guard errno == EEXIST else { throw CloneError.cloneFailed(errno) }
         }
 
         let branch: String

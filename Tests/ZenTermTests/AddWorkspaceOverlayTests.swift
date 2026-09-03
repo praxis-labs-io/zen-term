@@ -367,4 +367,63 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertTrue(text.contains("git"), AddWorkspaceOverlay.excludeCaptionText)
         XCTAssertFalse(AddWorkspaceOverlay.excludeCaptionText.contains("—"), "no em-dashes")
     }
+
+    // MARK: clone_exclude validation
+
+    /// `WorkspacesParser` drops an entry that leaves the workspace, with only a log line. Without
+    /// the form saying so, a path typed here is written to the file and then vanishes the next time
+    /// it is parsed, with nothing on screen ever explaining why.
+    func test_excludePathsThatLeaveTheWorkspace_areRejectedByTheForm() {
+        for bad in ["../secrets", "/etc/passwd", "~/Documents", "build/../../escape", "a\"b"] {
+            XCTAssertTrue(AddWorkspaceOverlay.excludeIsInvalid(bad), bad)
+        }
+        for good in [".next", "dist", "tmp/scratch", "my_dir-1", "  spaced dir  "] {
+            XCTAssertFalse(AddWorkspaceOverlay.excludeIsInvalid(good), good)
+        }
+    }
+
+    /// A blank row is someone who pressed ＋ and stopped, not an error to shout about.
+    func test_aBlankExcludeRow_isNotFlaggedAsInvalid() {
+        XCTAssertFalse(AddWorkspaceOverlay.excludeIsInvalid(""))
+        XCTAssertFalse(AddWorkspaceOverlay.excludeIsInvalid("   "))
+    }
+
+    /// The rules the form enforces and the rules the parser enforces have to be the same rules, or
+    /// the form promises something the file will not keep.
+    func test_theFormsRules_matchWhatTheParserAccepts() throws {
+        let dir = try makeRealDir()
+        for candidate in ["../secrets", "/etc", "~/x", "build/../../escape", ".next", "tmp/scratch"] {
+            let parsed = WorkspacesParser.parse(
+                """
+                [W]
+                path = \(dir.path)
+                clone_exclude = \(candidate)
+                """
+            ).first
+            let parserKept = parsed?.cloneExclude.contains(candidate) == true
+            XCTAssertEqual(
+                parserKept, !AddWorkspaceOverlay.excludeIsInvalid(candidate),
+                "form and parser disagree about \(candidate)")
+        }
+    }
+
+    func test_anInvalidExcludePath_showsTheErrorAndBlocksSubmit() throws {
+        let dir = try makeRealDir()
+        let (overlay, sink) = mount()
+        field(in: overlay, placeholder: "Workspace name").setText("Alpha")
+        field(in: overlay, placeholder: "Type a path, or Choose").setText(dir.path)
+        button(in: overlay, title: "＋ Add path")?.onTap()
+        excludeRows(in: overlay)[0].pathBox.setText("../secrets")
+
+        button(in: overlay, title: "Add Workspace")?.onTap()
+
+        XCTAssertTrue(sink.submitted.isEmpty, "an entry the file would drop must not be saved")
+        let shown = descendants(of: overlay)
+            .compactMap { $0 as? NSTextField }
+            .filter { !$0.isHidden && !$0.stringValue.isEmpty }
+            .map(\.stringValue)
+        XCTAssertTrue(
+            shown.contains { $0.contains("stay inside the workspace") },
+            "the form says why: \(shown)")
+    }
 }

@@ -70,6 +70,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private let addVarButton = AppButton(title: "＋ Add variable", variant: .muted)
     private let addExcludeButton = AppButton(title: "＋ Add path", variant: .muted)
     private let excludeCaption = NSTextField(labelWithString: "")
+    private let excludeError = NSTextField(labelWithString: "")
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private let addButton = AppButton(
         title: "Add Workspace", variant: .primary, keyEquivalent: "\r", keyEquivalentModifierMask: .command)
@@ -182,6 +183,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         envRows.forEach { $0.reapplyTheme() }
         excludeRows.forEach { $0.reapplyTheme() }
         excludeCaption.textColor = chrome.ink(.muted)
+        excludeError.textColor = chrome.destructive.nsColor
         for group in [titleGroup, folderGroup, mainGroup, rightGroup, bottomGroup] {
             group?.reapplyTheme()
         }
@@ -243,8 +245,12 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         excludeCaption.font = .systemFont(ofSize: 11)
         excludeCaption.textColor = Theme.current.chrome.ink(.muted)
         excludeCaption.stringValue = Self.excludeCaptionText
+        excludeError.font = .systemFont(ofSize: 11, weight: .medium)
+        excludeError.textColor = Theme.current.chrome.destructive.nsColor
+        excludeError.isHidden = true
         let excludeControls = Self.vStack(
-            [excludeStack, Self.leadingWrap(addExcludeButton), excludeCaption], spacing: 8)
+            [excludeStack, Self.leadingWrap(addExcludeButton), excludeError, excludeCaption],
+            spacing: 8)
         let excludeGroup = Self.vStack(
             [caption("LEAVE OUT OF CLONES", required: false), excludeControls], spacing: 6)
 
@@ -407,6 +413,16 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
 
     /// The caption under the ＋ Add path button. Says what the field does and, because the word
     /// alone invites the wrong reading, that it is scoped to clones and is not a gitignore.
+    /// Mirrors `WorkspacesParser`'s `clone_exclude` guard. A blank row is not invalid, it is
+    /// simply not an entry, and `buildWorkspace` drops it.
+    static func excludeIsInvalid(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return false }
+        return trimmed.hasPrefix("/") || trimmed.hasPrefix("~")
+            || trimmed.split(separator: "/").contains("..")
+            || trimmed.contains("\"")
+    }
+
     static let excludeCaptionText =
         "Paths a clone starts without. Applies only when this workspace is cloned, not to git."
 
@@ -658,6 +674,16 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         if let badEnvRow, firstInvalid == nil {
             firstInvalid = keyIsBad(badEnvRow) ? badEnvRow.keyBox.field : badEnvRow.valueBox.field
         }
+
+        // The same rules `WorkspacesParser` enforces on load, said here instead of on a log line
+        // nobody reads: an entry that leaves the workspace is dropped when the file is next parsed,
+        // so without this the path a person typed silently disappears. A `"` cannot round-trip
+        // either, for the reason an env value cannot.
+        let badExcludeRow = excludeRows.first { Self.excludeIsInvalid($0.path) }
+        excludeError.stringValue =
+            badExcludeRow == nil ? "" : "Paths stay inside the workspace: no leading / or ~, no .., no \"."
+        excludeError.isHidden = (badExcludeRow == nil)
+        if let badExcludeRow, firstInvalid == nil { firstInvalid = badExcludeRow.pathBox.field }
 
         return firstInvalid
     }

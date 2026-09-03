@@ -196,7 +196,10 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// separate ⏎/⇧⏎, the same as any other row.
     func completePendingClone(_ id: UUID, with clone: Clone) {
         pending.removeAll { $0.id == id }
-        clones.append(clone)
+        // A clone that finished while the picker was closed and reopened is already in the list
+        // this instance scanned from disk. Appending it again would render two rows sharing one
+        // identity, which `reselect(byIdentity:)` then cannot tell apart.
+        if !clones.contains(clone) { clones.append(clone) }
         rebuildRows()
     }
 

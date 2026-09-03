@@ -262,4 +262,20 @@ final class RepoPickerCloneRowTests: WindowTestCase {
 
         XCTAssertEqual(rowTitles(in: overlay), ["New Workspace…", "alpha", "Cloning…"])
     }
+
+    /// A clone that lands while the picker is closed and reopened is already in the list this
+    /// instance scanned from disk. Appending it again gives two rows one identity, and
+    /// `reselect(byIdentity:)` cannot then tell them apart.
+    func test_completePendingClone_doesNotDuplicateACloneAlreadyListed() {
+        let existing = clone("alpha", "c2")
+        let overlay = makePicker(entries: [workspace("alpha")], clones: [existing])
+        mount(overlay)
+        let id = overlay.beginPendingClone(for: workspace("alpha"))
+
+        overlay.completePendingClone(id, with: existing)
+
+        XCTAssertEqual(rowTitles(in: overlay), ["New Workspace…", "alpha", "alpha c2"])
+        let identities = (0..<overlay.numberOfRows()).compactMap { overlay.rowIdentity(at: $0) }
+        XCTAssertEqual(identities.count, Set(identities).count, "row identities stay unique")
+    }
 }
