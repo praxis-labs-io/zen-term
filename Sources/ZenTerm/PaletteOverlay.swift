@@ -84,7 +84,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         let height: NSLayoutConstraint
     }
     private var laidOutRows: [LaidOutRow] = []
-    private var selected = 0
+    private(set) var selected = 0
 
     init(
         background: NSColor, placeholder: String, emptyText: String, footerHints: [PaletteHint],
@@ -415,6 +415,28 @@ class PaletteOverlay: NSView, ModalOverlay {
     /// The laid-out row views, in list order — for a subclass that updates its rows in place (the
     /// repo picker's git badges, which land after a background probe) instead of re-rendering.
     var rowViews: [PaletteRowView] { laidOutRows.map(\.view) }
+
+    /// The live search text, so a subclass rebuilding its row model after an out-of-band change
+    /// (the repo picker inserting a clone-in-progress row) can re-run its own `applyFilter` under
+    /// the query the user actually typed, rather than resetting the list to unfiltered.
+    var currentQuery: String { searchField.stringValue }
+
+    /// Re-render after a subclass changes the data `numberOfRows`/`makeRow`/etc. derive from,
+    /// outside of a live filter edit (which already re-renders via `controlTextDidChange`).
+    func refreshRows() { reloadRows() }
+
+    /// Move selection back onto whichever row now carries `identity`, after a `refreshRows()` that
+    /// reset it to the default (every reload's normal behavior — correct for a live filter edit,
+    /// wrong for a subclass's own out-of-band change, where the user's place jumping to the top is
+    /// the bug). A no-op if `identity` is nil or nothing rendered carries it.
+    func reselect(byIdentity identity: AnyHashable?) {
+        guard let identity, let index = laidOutRows.firstIndex(where: { $0.id == identity }) else {
+            return
+        }
+        selected = index
+        updateHighlight()
+        scrollSelectedToVisible()
+    }
 
     /// The row highlighted after a (re)load — the first selectable row by default. A subclass
     /// overrides to prefer a different default (e.g. the repo picker highlights the first

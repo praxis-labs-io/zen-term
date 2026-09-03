@@ -370,12 +370,13 @@ final class PaletteInteractionTests: WindowTestCase {
 
     private func makeRepoPicker(
         entries: [Workspace],
+        clones: [Clone] = [],
         onChoose: @escaping (Workspace, Bool) -> Void = { _, _ in },
         onAddWorkspace: @escaping () -> Void = {},
         onDismiss: @escaping () -> Void = {}
     ) -> RepoPickerOverlay {
         RepoPickerOverlay(
-            entries: entries, background: Theme.current.chrome.background.nsColor,
+            entries: entries, clones: clones, background: Theme.current.chrome.background.nsColor,
             onChoose: onChoose, onAddWorkspace: onAddWorkspace, onDismiss: onDismiss)
     }
 

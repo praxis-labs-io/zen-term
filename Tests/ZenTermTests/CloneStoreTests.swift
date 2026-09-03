@@ -33,7 +33,7 @@ final class CloneStoreTests: XCTestCase {
         try run(["config", "user.email", "test@example.com"], in: work)
         try run(["config", "user.name", "Test"], in: work)
         try write("one\n", to: work.appendingPathComponent("tracked.txt"))
-        try write(".build/\n", to: work.appendingPathComponent(".gitignore"))
+        try write(".build/\n.env\n", to: work.appendingPathComponent(".gitignore"))
         try run(["add", "."], in: work)
         try run(["commit", "-m", "first"], in: work)
         try run(["remote", "add", "origin", origin.path], in: work)
@@ -61,30 +61,53 @@ final class CloneStoreTests: XCTestCase {
     func test_create_landsOnBranchOffOriginMain() throws {
         let clone = try CloneStore.create(from: workspace())
 
-        XCTAssertEqual(clone.name, "2")
-        XCTAssertEqual(clone.branch, "zen-term-2")
-        XCTAssertEqual(clone.title, "Zen Term 2")
-        XCTAssertEqual(clone.path, CloneStore.root.appendingPathComponent("zen-term/2", isDirectory: true))
-        XCTAssertEqual(try run(["rev-parse", "--abbrev-ref", "HEAD"], in: clone.path), "zen-term-2")
+        XCTAssertEqual(clone.name, "c2")
+        XCTAssertEqual(clone.branch, "main")
+        XCTAssertEqual(clone.title, "Zen Term c2")
+        XCTAssertEqual(
+            clone.path, CloneStore.root.appendingPathComponent("zen-term/zen-term-c2", isDirectory: true))
+        XCTAssertEqual(try run(["rev-parse", "--abbrev-ref", "HEAD"], in: clone.path), "main")
         XCTAssertEqual(
             try run(["rev-parse", "HEAD"], in: clone.path),
             try run(["rev-parse", "origin/main"], in: repo))
     }
 
-    func test_create_dropsParentEdits_keepsUntrackedAndIgnored() throws {
+    func test_create_dropsParentEdits_keepsIgnoredFiles() throws {
         try write("edited\n", to: repo.appendingPathComponent("tracked.txt"))
         try write("secret\n", to: repo.appendingPathComponent(".env"))
+
+        let clone = try CloneStore.create(from: workspace())
+
+        XCTAssertEqual(read(clone.path.appendingPathComponent("tracked.txt")), "one\n")
+        XCTAssertEqual(
+            read(clone.path.appendingPathComponent(".env")), "secret\n",
+            "a gitignored file a local setup needs (.env, node_modules, …) rides along")
+        // The parent keeps its own edit: the force checkout happens inside the copy.
+        XCTAssertEqual(read(repo.appendingPathComponent("tracked.txt")), "edited\n")
+    }
+
+    func test_create_dropsPlainUntrackedFiles() throws {
+        try write("scratch\n", to: repo.appendingPathComponent("scratch.txt"))
+
+        let clone = try CloneStore.create(from: workspace())
+
+        XCTAssertNil(
+            read(clone.path.appendingPathComponent("scratch.txt")),
+            "unlike a gitignored file, something never told to git at all doesn't ride along")
+    }
+
+    /// A relocated `.build/` doesn't degrade to a cold rebuild, it fails outright: Clang's module
+    /// cache and PCH validation hard-error on a path that no longer matches where they were built.
+    func test_create_stripsTheParentsBuildCache() throws {
         let cache = repo.appendingPathComponent(".build", isDirectory: true)
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
         try write("warm\n", to: cache.appendingPathComponent("artifact"))
 
         let clone = try CloneStore.create(from: workspace())
 
-        XCTAssertEqual(read(clone.path.appendingPathComponent("tracked.txt")), "one\n")
-        XCTAssertEqual(read(clone.path.appendingPathComponent(".env")), "secret\n")
-        XCTAssertEqual(read(clone.path.appendingPathComponent(".build/artifact")), "warm\n")
-        // The parent keeps its own edit: the force checkout happens inside the copy.
-        XCTAssertEqual(read(repo.appendingPathComponent("tracked.txt")), "edited\n")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: clone.path.appendingPathComponent(".build").path))
+        // The parent's own cache is untouched — only the copy inside the clone is stripped.
+        XCTAssertEqual(read(cache.appendingPathComponent("artifact")), "warm\n")
     }
 
     func test_create_numbersFromTwoAndSkipsTaken() throws {
@@ -93,7 +116,7 @@ final class CloneStoreTests: XCTestCase {
         try CloneStore.remove(first)
         let third = try CloneStore.create(from: workspace())
 
-        XCTAssertEqual([first.name, second.name, third.name], ["2", "3", "2"])
+        XCTAssertEqual([first.name, second.name, third.name], ["c2", "c3", "c2"])
     }
 
     func test_create_rejectsANonRepo() throws {
@@ -134,7 +157,8 @@ final class CloneStoreTests: XCTestCase {
 
     func test_list_forgetsACloneDeletedByHand() throws {
         let clone = try CloneStore.create(from: workspace())
-        try FileManager.default.removeItem(at: clone.path)
+        // A person deletes the whole "c2" folder, not just the checkout nested inside it.
+        try FileManager.default.removeItem(at: clone.path.deletingLastPathComponent())
 
         XCTAssertTrue(CloneStore.list(for: [workspace()]).isEmpty)
     }

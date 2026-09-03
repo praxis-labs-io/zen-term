@@ -1167,15 +1167,55 @@ final class WindowController: NSObject {
         pendingModal = .repoPicker
         ConfigLoader.loadWorkspaces { [weak self] workspaces in
             guard let self, self.pendingModal == .repoPicker else { return }
-            self.pendingModal = nil
-            let picker = RepoPickerOverlay(
-                entries: workspaces,
-                background: Theme.current.chrome.background.nsColor,
-                onChoose: { [weak self] ws, replace in self?.openWorkspace(ws, replaceCurrentTab: replace) },
-                onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
-                onDismiss: { [weak self] in self?.closeModal() }
-            )
-            self.presentModal(picker, kind: .repoPicker)
+            // The clone scan is another directory read, so it joins the same off-main wait rather
+            // than landing rows into a card that is already up.
+            DispatchQueue.global(qos: .userInitiated).async {
+                let clones = CloneStore.list(for: workspaces)
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, self.pendingModal == .repoPicker else { return }
+                    self.pendingModal = nil
+                    let picker = RepoPickerOverlay(
+                        entries: workspaces, clones: clones,
+                        background: Theme.current.chrome.background.nsColor,
+                        onChoose: { [weak self] ws, replace in
+                            self?.openWorkspace(ws, replaceCurrentTab: replace)
+                        },
+                        onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
+                        onDismiss: { [weak self] in self?.closeModal() }
+                    )
+                    self.presentModal(picker, kind: .repoPicker)
+                }
+            }
+        }
+    }
+
+    /// ⌥⏎ over the picker's current selection. A clone or the ＋ row has no workspace to clone,
+    /// so it's a no-op there. The picker stays open: a placeholder row appears under the workspace
+    /// immediately, and becomes a normal clone row — opened with the same ⏎/⇧⏎ as any other —
+    /// once `CloneStore.create` returns.
+    private func cloneSelectedWorkspaceInPicker() {
+        guard let picker = modal?.overlay as? RepoPickerOverlay, let ws = picker.selectedWorkspace else {
+            return
+        }
+        let pendingID = picker.beginPendingClone(for: ws)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result { try CloneStore.create(from: ws) }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                // The picker may have closed (or reopened as a fresh instance) while this ran; the
+                // clone itself still lands on disk either way, only the row update is skippable.
+                let picker = self.modal?.overlay as? RepoPickerOverlay
+                switch result {
+                case .success(let clone):
+                    picker?.completePendingClone(pendingID, with: clone)
+                case .failure(let error):
+                    picker?.failPendingClone(pendingID)
+                    self.showToast(
+                        ToastContent(
+                            variant: .warning, title: "Couldn't Clone \(ws.title)",
+                            message: error.localizedDescription))
+                }
+            }
         }
     }
 
@@ -1830,6 +1870,12 @@ final class WindowController: NSObject {
                 closeModal()
                 return
             }
+            // ⌥⏎ only ever means something over a selected workspace row, so it acts in place
+            // rather than joining the close-and-reopen switch below.
+            if modal.kind == .repoPicker, chord == .cloneWorkspace {
+                cloneSelectedWorkspaceInPicker()
+                return
+            }
             switch chord {
             case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue,
                 .newTool:
@@ -1965,6 +2011,9 @@ final class WindowController: NSObject {
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
+        // Handled above while the picker is open, the only place it means anything; reaching here
+        // means no modal was up, so there is no selection to clone.
+        case .cloneWorkspace: break
         case .toggleCommandPalette: toggleCommandPalette()
         case .openSettings: openSettings()
         case .reportIssue: openReportIssue()

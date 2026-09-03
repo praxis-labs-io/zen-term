@@ -5,13 +5,29 @@ import Foundation
 struct Clone: Equatable {
     /// The parent workspace's title, as the picker shows it.
     let workspaceTitle: String
-    /// The clone's number under that workspace: "2", "3".
+    /// The clone's identifier under that workspace: "c2", "c3". The parent workspace is the
+    /// implicit first copy, so numbering starts at 2 rather than claiming "c1" for something the
+    /// picker already shows unadorned.
     let name: String
+    /// The checkout, at `<clones>/<slug>/<slug>-<name>` — `zen-term-c2` beside `zen-term`'s own
+    /// checkout, not a bare "c2": legible in a directory listing or a shell's tab completion with
+    /// nothing else open, on its own.
     let path: URL
+    /// The branch checked out at creation, e.g. `main` — whatever the parent's own default
+    /// branch is called, not a clone-specific name. A clone is a standalone repo, so there is
+    /// nothing for it to collide with.
     let branch: String
 
     /// What the tab is called, and the title of the derived workspace that opens it.
     var title: String { "\(workspaceTitle) \(name)" }
+
+    /// The parent's recipe pointed at the clone, so a clone opens through the ordinary workspace
+    /// path with nothing new behind it.
+    func workspace(from parent: Workspace) -> Workspace {
+        Workspace(
+            title: title, path: path, main: parent.main, right: parent.right, bottom: parent.bottom,
+            focus: parent.focus, env: parent.env)
+    }
 }
 
 /// What a clone would lose if it were removed now.
@@ -75,18 +91,20 @@ enum CloneStore {
             let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
             return
                 names
-                .compactMap { Int($0) }
+                .compactMap { cloneNumber(from: $0, slug: slug) }
                 .sorted()
                 .map { number in
-                    Clone(
-                        workspaceTitle: workspace.title, name: String(number),
-                        path: dir.appendingPathComponent(String(number), isDirectory: true),
-                        branch: "\(slug)-\(number)")
+                    let name = "c\(number)"
+                    return Clone(
+                        workspaceTitle: workspace.title, name: name,
+                        path: dir.appendingPathComponent("\(slug)-\(name)", isDirectory: true),
+                        branch: "main")
                 }
         }
     }
 
-    /// Copy-on-write clone the workspace, then put the copy on a fresh branch off `origin/main`.
+    /// Copy-on-write clone the workspace, then check the copy out on the parent's own default
+    /// branch — `main`, or whatever `origin/HEAD` actually points to.
     static func create(from workspace: Workspace) throws -> Clone {
         let source = workspace.path.standardizedFileURL
         try verifyWholeRepo(at: source)
@@ -96,9 +114,9 @@ enum CloneStore {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try verifySameVolume(source, dir)
 
-        let number = nextNumber(in: dir)
-        let destination = dir.appendingPathComponent(String(number), isDirectory: true)
-        let branch = "\(slug)-\(number)"
+        let number = nextNumber(in: dir, slug: slug)
+        let name = "c\(number)"
+        let destination = dir.appendingPathComponent("\(slug)-\(name)", isDirectory: true)
 
         // clonefile, not `cp -Rc`: it clones the whole hierarchy in one call and reports a real
         // errno, where `cp -c` degrades to a full byte copy without saying so.
@@ -106,16 +124,33 @@ enum CloneStore {
             throw CloneError.cloneFailed(errno)
         }
 
+        let branch: String
         do {
             let base = try resolveBase(in: destination)
+            branch = String(base.dropFirst("origin/".count))
             try git(["checkout", "-B", branch, base, "--force"], in: destination)
+            // `checkout --force` resets tracked files but never touches untracked ones. Drop the
+            // ones outside `.gitignore` — whatever the parent's working branch had in progress and
+            // never told git about — so a clone starts clean of that; `-fd` alone leaves anything
+            // gitignored alone, so `.env`, `node_modules`, and every other locally-necessary
+            // ignored file still ride along.
+            try git(["clean", "-fd"], in: destination)
+            // The build cache is the one gitignored exception: it bakes in absolute paths — Clang's
+            // module cache, PCH validation, llbuild's manifest — tied to the ORIGINAL location.
+            // Reused from the clone's own path it doesn't degrade to a slow rebuild, it fails
+            // outright: "PCH was compiled with module cache path X, but the path is currently Y" is
+            // a hard error, not a cache miss. Strip it so the clone's first build is cold but
+            // correct.
+            let buildCache = destination.appendingPathComponent(".build", isDirectory: true)
+            if FileManager.default.fileExists(atPath: buildCache.path) {
+                try FileManager.default.removeItem(at: buildCache)
+            }
         } catch {
             try? FileManager.default.removeItem(at: destination)
             throw error
         }
 
-        return Clone(
-            workspaceTitle: workspace.title, name: String(number), path: destination, branch: branch)
+        return Clone(workspaceTitle: workspace.title, name: name, path: destination, branch: branch)
     }
 
     /// Uncommitted files and commits that are on no remote. Two git calls, so callers keep it off
@@ -145,12 +180,21 @@ enum CloneStore {
     }
 
     /// Numbering starts at 2: the workspace itself is the first copy.
-    private static func nextNumber(in dir: URL) -> Int {
+    private static func nextNumber(in dir: URL, slug: String) -> Int {
         let taken = Set(
-            ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []).compactMap(Int.init))
+            ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [])
+                .compactMap { cloneNumber(from: $0, slug: slug) })
         var number = 2
         while taken.contains(number) { number += 1 }
         return number
+    }
+
+    /// The number in a clone directory's `<slug>-c<n>` name, or nil for anything else that name
+    /// filters out a stray sibling directory.
+    private static func cloneNumber(from dirName: String, slug: String) -> Int? {
+        let prefix = "\(slug)-c"
+        guard dirName.hasPrefix(prefix) else { return nil }
+        return Int(dirName.dropFirst(prefix.count))
     }
 
     private static func verifyWholeRepo(at source: URL) throws {

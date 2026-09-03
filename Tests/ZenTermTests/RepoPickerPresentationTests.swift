@@ -28,12 +28,14 @@ final class RepoPickerPresentationTests: WindowTestCase {
             .appendingPathComponent("zenterm-picker-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
+        CloneStore.rootOverrideForTesting = tempRoot.appendingPathComponent("clones", isDirectory: true)
     }
 
     override func tearDownWithError() throws {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
         ConfigLoader.defaultRootOverrideForTesting = nil
+        CloneStore.rootOverrideForTesting = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
         try? FileManager.default.removeItem(at: tempRoot)

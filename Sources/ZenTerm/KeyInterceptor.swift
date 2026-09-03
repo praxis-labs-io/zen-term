@@ -37,6 +37,7 @@ final class KeyInterceptor {
         case fillScreen  // toggle the window to fill the desktop's visible frame (not native fullscreen)
         case toggleToolFloat(String)  // associated value = ToolFloat.id
         case toggleRepoPicker
+        case cloneWorkspace  // ⌥⏎ in the workspace picker: clone the selected row
         case toggleCommandPalette
         case openSettings
         case reloadConfig
