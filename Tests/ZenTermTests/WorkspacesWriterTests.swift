@@ -37,6 +37,22 @@ final class WorkspacesWriterTests: XCTestCase {
                 main: "nvim", right: "claude", bottom: "shell", focus: .right, env: [:]))
     }
 
+    func test_cloneExclude_roundTrips_inAuthoredOrder() {
+        assertRoundTrips(
+            Workspace(
+                title: "ZenTerm", path: expandTilde("~/Dev/zen-term"),
+                main: nil, right: nil, bottom: nil, focus: .main, env: [:],
+                cloneExclude: [".next", "tmp/scratch"]))
+    }
+
+    func test_cloneExcludeWithSpace_isQuoted_andRoundTrips() {
+        assertRoundTrips(
+            Workspace(
+                title: "ZenTerm", path: expandTilde("~/Dev/zen-term"),
+                main: nil, right: nil, bottom: nil, focus: .main, env: [:],
+                cloneExclude: ["build output"]))
+    }
+
     func test_env_roundTrips_regardlessOfKeyOrder() {
         assertRoundTrips(
             Workspace(

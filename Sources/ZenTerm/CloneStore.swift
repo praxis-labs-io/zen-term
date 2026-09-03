@@ -26,7 +26,7 @@ struct Clone: Equatable {
     func workspace(from parent: Workspace) -> Workspace {
         Workspace(
             title: title, path: path, main: parent.main, right: parent.right, bottom: parent.bottom,
-            focus: parent.focus, env: parent.env)
+            focus: parent.focus, env: parent.env, cloneExclude: parent.cloneExclude)
     }
 }
 
@@ -135,16 +135,7 @@ enum CloneStore {
             // gitignored alone, so `.env`, `node_modules`, and every other locally-necessary
             // ignored file still ride along.
             try git(["clean", "-fd"], in: destination)
-            // The build cache is the one gitignored exception: it bakes in absolute paths — Clang's
-            // module cache, PCH validation, llbuild's manifest — tied to the ORIGINAL location.
-            // Reused from the clone's own path it doesn't degrade to a slow rebuild, it fails
-            // outright: "PCH was compiled with module cache path X, but the path is currently Y" is
-            // a hard error, not a cache miss. Strip it so the clone's first build is cold but
-            // correct.
-            let buildCache = destination.appendingPathComponent(".build", isDirectory: true)
-            if FileManager.default.fileExists(atPath: buildCache.path) {
-                try FileManager.default.removeItem(at: buildCache)
-            }
+            try stripUnrelocatable(in: destination, declared: workspace.cloneExclude)
         } catch {
             try? FileManager.default.removeItem(at: destination)
             throw error
@@ -165,6 +156,74 @@ enum CloneStore {
     /// Delete the clone. Copy-on-write means this frees only the blocks that diverged.
     static func remove(_ clone: Clone) throws {
         try FileManager.default.removeItem(at: clone.path)
+    }
+
+    // MARK: what a clone must not carry
+
+    /// Marker files that identify an artifact directory which breaks when the checkout moves,
+    /// because it writes an absolute interpreter or compiler path into what it builds.
+    ///
+    /// Matched on the marker rather than the directory's name: a virtualenv called `venv311` is
+    /// as broken by relocation as one called `venv`, and a name list only ever knows the names it
+    /// was written with. Measured on the repos to hand, the failures are a dangling
+    /// `bin/python3` and "PCH was compiled with module cache path X, but the path is currently Y"
+    /// — hard errors, not cache misses.
+    ///
+    /// Deliberately short. `node_modules`, `.turbo` and `.next` all survive relocation (`.turbo`
+    /// turns a 33s first build into 1.5s), so carrying them is the point of cloning at all.
+    private static let breakingMarkers = [
+        "pyvenv.cfg",  // a Python virtualenv: absolute shebangs, absolute `home` in the config
+        "build.db",  // SwiftPM/llbuild: absolute paths through the module cache and PCH validation
+    ]
+
+    /// Remove what the clone cannot use at its new path: the directories the user named in
+    /// `clone_exclude`, then any top-level artifact directory carrying a marker.
+    ///
+    /// Top level only, which is where every such directory was found across the repos to hand.
+    /// Anything nested is `clone_exclude`'s job, and a whole-tree walk would have to descend
+    /// through a multi-gigabyte `node_modules` to find nothing.
+    private static func stripUnrelocatable(in clone: URL, declared: [String]) throws {
+        for name in declared {
+            guard let target = containedPath(name, under: clone),
+                FileManager.default.fileExists(atPath: target.path)
+            else { continue }
+            try FileManager.default.removeItem(at: target)
+        }
+        for directory in topLevelDirectories(of: clone) where carriesBreakingMarker(directory) {
+            // Only what git ignores. `build.db` is a common enough filename that a tracked
+            // `data/` directory could carry one, and deleting tracked files would leave the clone
+            // missing content the checkout just restored.
+            guard isIgnored(directory, in: clone) else { continue }
+            try FileManager.default.removeItem(at: directory)
+        }
+    }
+
+    /// `name` resolved under `clone`, or nil if it lands anywhere else. The parser already refuses
+    /// an escaping `clone_exclude`; this is the check at the point the delete actually happens.
+    private static func containedPath(_ name: String, under clone: URL) -> URL? {
+        let root = clone.standardizedFileURL
+        let target = root.appendingPathComponent(name).standardizedFileURL
+        guard target != root, target.path.hasPrefix(root.path + "/") else { return nil }
+        return target
+    }
+
+    private static func topLevelDirectories(of clone: URL) -> [URL] {
+        let contents =
+            (try? FileManager.default.contentsOfDirectory(
+                at: clone, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
+        return contents.filter {
+            (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
+        }
+    }
+
+    private static func carriesBreakingMarker(_ directory: URL) -> Bool {
+        breakingMarkers.contains {
+            FileManager.default.fileExists(atPath: directory.appendingPathComponent($0).path)
+        }
+    }
+
+    private static func isIgnored(_ directory: URL, in clone: URL) -> Bool {
+        (try? git(["check-ignore", "--quiet", "--", directory.lastPathComponent], in: clone)) != nil
     }
 
     // MARK: helpers

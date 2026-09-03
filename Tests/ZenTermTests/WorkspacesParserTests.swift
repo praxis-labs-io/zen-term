@@ -30,6 +30,39 @@ final class WorkspacesParserTests: XCTestCase {
         XCTAssertEqual(ws.env, ["NODE_ENV": "development", "PORT": "3000"])
     }
 
+    func test_cloneExclude_isRepeatable_andKeepsAuthoredOrder() {
+        let ws = WorkspacesParser.parse(
+            """
+            [ZenTerm]
+            path = ~/Dev/zen-term
+            clone_exclude = .next
+            clone_exclude = tmp/scratch
+            """
+        ).first
+        XCTAssertEqual(ws?.cloneExclude, [".next", "tmp/scratch"])
+    }
+
+    func test_cloneExclude_defaultsEmpty() {
+        XCTAssertEqual(WorkspacesParser.parse("[Scratch]\npath = ~/\n").first?.cloneExclude, [])
+    }
+
+    /// A clone is deleted wholesale later, so an entry that escapes the workspace would point that
+    /// delete at something else. Bad entries drop; the good one in the same section survives.
+    func test_cloneExclude_dropsEntriesThatLeaveTheWorkspace() {
+        let ws = WorkspacesParser.parse(
+            """
+            [ZenTerm]
+            path = ~/Dev/zen-term
+            clone_exclude = ../sibling
+            clone_exclude = /etc
+            clone_exclude = ~/Documents
+            clone_exclude = build/../../escape
+            clone_exclude = .next
+            """
+        ).first
+        XCTAssertEqual(ws?.cloneExclude, [".next"])
+    }
+
     func test_minimalSection_pathOnly_defaultsMinimal() {
         let ws = WorkspacesParser.parse("[Scratch]\npath = ~/\n").first
         XCTAssertEqual(ws?.title, "Scratch")

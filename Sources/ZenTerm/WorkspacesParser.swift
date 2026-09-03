@@ -58,6 +58,7 @@ enum WorkspacesParser {
         var bottom: String?
         var focusRaw: String?
         var env: [(key: String, value: String)] = []
+        var cloneExclude: [String] = []
 
         mutating func set(key: String, value: String) {
             if key != "env", value.isEmpty { return }  // `right =` (empty) → absent, not a "" command
@@ -67,6 +68,18 @@ enum WorkspacesParser {
             case "right": right = value
             case "bottom": bottom = value
             case "focus": focusRaw = value
+            case "clone_exclude":
+                // A clone is deleted wholesale later, so an entry that escapes the workspace
+                // would aim a delete at somewhere else entirely. Refuse rather than clamp.
+                guard !value.hasPrefix("/"), !value.hasPrefix("~"),
+                    !value.split(separator: "/").contains("..")
+                else {
+                    Log.warning(
+                        "Workspaces: `\(title)` clone_exclude `\(value)` leaves the workspace — skipped",
+                        category: .workspace)
+                    return
+                }
+                cloneExclude.append(value)
             case "env":
                 guard let equals = value.firstIndex(of: "=") else {
                     Log.warning(
@@ -107,7 +120,8 @@ enum WorkspacesParser {
             return Workspace(
                 title: title,
                 path: URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true),
-                main: main, right: right, bottom: bottom, focus: focus, env: envMap)
+                main: main, right: right, bottom: bottom, focus: focus, env: envMap,
+                cloneExclude: cloneExclude)
         }
     }
 

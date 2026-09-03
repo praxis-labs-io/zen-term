@@ -35,6 +35,8 @@ enum WorkspacesWriter {
         if let right = ws.right { add("right", quoted(right)) }
         if let bottom = ws.bottom { add("bottom", quoted(bottom)) }
         if ws.focus != .main { add("focus", ws.focus.rawValue) }  // .main is the parser default
+        // Authored order, not sorted: this is a list the user wrote, not a keyed map.
+        for excluded in ws.cloneExclude { add("clone_exclude", quoted(excluded)) }
         for key in ws.env.keys.sorted() {
             // The parser splits an env line on the first `=` for the KEY, then unquotes the VALUE
             // — so quote only the value part, never the `KEY=` prefix.

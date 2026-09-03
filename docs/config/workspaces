@@ -35,8 +35,19 @@
 #   bottom   (optional)  bottom-drawer command; absent → closed; `shell` → a plain shell
 #   focus    (optional)  main | right | bottom                       (default main)
 #   env      (optional)  KEY=VALUE, repeatable; injected into every surface
+#   clone_exclude (optional)  a top-level path to leave out when this workspace is cloned,
+#                             repeatable. Applies to clones only: it changes nothing about
+#                             the workspace itself, and it is not a gitignore.
 #
 # A value with spaces may be quoted: bottom = "npm run dev".
+#
+# About clone_exclude: ⌥⏎ on a workspace row in ⌘P makes a clone of it, and the copy carries
+# the files git ignores, so a clone can build without reinstalling anything. Most build output
+# survives the move (node_modules, .turbo and .next all do). What does not is anything holding
+# an absolute path to where it was built: zen-term finds Python virtualenvs and SwiftPM build
+# directories on its own and leaves them out. Name anything else here that a clone should
+# start without, either because it breaks when moved or because it is large and regenerated
+# anyway. Paths are relative to the workspace and may not leave it.
 #
 # Example: an editor + AI + dev-server workspace (uncomment and edit, or write your own):
 #
@@ -48,3 +59,4 @@
 # focus  = main
 # env    = NODE_ENV=development
 # env    = PORT=3000
+# clone_exclude = .next

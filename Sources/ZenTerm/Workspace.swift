@@ -20,4 +20,21 @@ struct Workspace: Equatable {
     let focus: Region
     /// Environment injected into every pane and drawer of this workspace.
     let env: [String: String]
+    /// Top-level paths left out when this workspace is cloned, on top of the artifact
+    /// directories `CloneStore` recognizes on its own. Relative to `path`; nothing else uses it.
+    let cloneExclude: [String]
+
+    init(
+        title: String, path: URL, main: String?, right: String?, bottom: String?,
+        focus: Region, env: [String: String], cloneExclude: [String] = []
+    ) {
+        self.title = title
+        self.path = path
+        self.main = main
+        self.right = right
+        self.bottom = bottom
+        self.focus = focus
+        self.env = env
+        self.cloneExclude = cloneExclude
+    }
 }

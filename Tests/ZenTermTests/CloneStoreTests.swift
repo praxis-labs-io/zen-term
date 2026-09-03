@@ -33,7 +33,9 @@ final class CloneStoreTests: XCTestCase {
         try run(["config", "user.email", "test@example.com"], in: work)
         try run(["config", "user.name", "Test"], in: work)
         try write("one\n", to: work.appendingPathComponent("tracked.txt"))
-        try write(".build/\n.env\n", to: work.appendingPathComponent(".gitignore"))
+        try write(
+            ".build/\n.env\nvenv311/\n.turbo/\nbig-cache/\n",
+            to: work.appendingPathComponent(".gitignore"))
         try run(["add", "."], in: work)
         try run(["commit", "-m", "first"], in: work)
         try run(["remote", "add", "origin", origin.path], in: work)
@@ -41,9 +43,25 @@ final class CloneStoreTests: XCTestCase {
         return work
     }
 
-    private func workspace(title: String = "Zen Term") -> Workspace {
-        Workspace(title: title, path: repo, main: nil, right: nil, bottom: nil, focus: .main, env: [:])
+    private func workspace(title: String = "Zen Term", cloneExclude: [String] = []) -> Workspace {
+        Workspace(
+            title: title, path: repo, main: nil, right: nil, bottom: nil, focus: .main, env: [:],
+            cloneExclude: cloneExclude)
     }
+
+    /// A directory in the parent carrying `marker`, the way a virtualenv carries `pyvenv.cfg`.
+    @discardableResult
+    private func makeDirectory(_ name: String, marker: String? = nil, payload: String = "payload\n")
+        throws -> URL
+    {
+        let dir = repo.appendingPathComponent(name, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        if let marker { try write("", to: dir.appendingPathComponent(marker)) }
+        try write(payload, to: dir.appendingPathComponent("content"))
+        return dir
+    }
+
+    private func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath: url.path) }
 
     @discardableResult
     private func run(_ args: [String], in dir: URL) throws -> String {
@@ -98,16 +116,92 @@ final class CloneStoreTests: XCTestCase {
 
     /// A relocated `.build/` doesn't degrade to a cold rebuild, it fails outright: Clang's module
     /// cache and PCH validation hard-error on a path that no longer matches where they were built.
-    func test_create_stripsTheParentsBuildCache() throws {
-        let cache = repo.appendingPathComponent(".build", isDirectory: true)
-        try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
-        try write("warm\n", to: cache.appendingPathComponent("artifact"))
+    func test_create_stripsASwiftBuildDirectory() throws {
+        let cache = try makeDirectory(".build", marker: "build.db", payload: "warm\n")
 
         let clone = try CloneStore.create(from: workspace())
 
-        XCTAssertFalse(FileManager.default.fileExists(atPath: clone.path.appendingPathComponent(".build").path))
+        XCTAssertFalse(exists(clone.path.appendingPathComponent(".build")))
         // The parent's own cache is untouched — only the copy inside the clone is stripped.
-        XCTAssertEqual(read(cache.appendingPathComponent("artifact")), "warm\n")
+        XCTAssertEqual(read(cache.appendingPathComponent("content")), "warm\n")
+    }
+
+    /// Recognized by `pyvenv.cfg`, not by the name `venv`: a relocated virtualenv has a dangling
+    /// `bin/python3` and a `pip3` that dies with "bad interpreter", whatever its directory is called.
+    func test_create_stripsAVirtualenvUnderAnyName() throws {
+        try makeDirectory("venv311", marker: "pyvenv.cfg")
+
+        let clone = try CloneStore.create(from: workspace())
+
+        XCTAssertFalse(exists(clone.path.appendingPathComponent("venv311")))
+    }
+
+    /// The counterweight to the two above, and the reason the marker list stays short: these
+    /// survive relocation, and carrying them is what makes a clone worth making. A `.turbo` cache
+    /// turns a 33s first build into 1.5s, so stripping it would spend the whole feature.
+    func test_create_keepsIgnoredCachesThatSurviveRelocation() throws {
+        try makeDirectory(".turbo")
+        try makeDirectory("big-cache")
+
+        let clone = try CloneStore.create(from: workspace())
+
+        XCTAssertTrue(exists(clone.path.appendingPathComponent(".turbo/content")))
+        XCTAssertTrue(exists(clone.path.appendingPathComponent("big-cache/content")))
+    }
+
+    /// `build.db` is an ordinary enough filename that a tracked directory can hold one. Stripping
+    /// it would delete content the force checkout had just restored, so detection is gated on git
+    /// actually ignoring the directory.
+    func test_create_keepsATrackedDirectoryCarryingAMarkerFile() throws {
+        try makeDirectory("data", marker: "build.db")
+        try run(["add", "."], in: repo)
+        try run(["commit", "-m", "tracked data"], in: repo)
+        try run(["push"], in: repo)
+
+        let clone = try CloneStore.create(from: workspace())
+
+        XCTAssertTrue(exists(clone.path.appendingPathComponent("data/build.db")))
+        XCTAssertTrue(exists(clone.path.appendingPathComponent("data/content")))
+    }
+
+    // MARK: clone_exclude
+
+    func test_create_dropsWhatCloneExcludeNames() throws {
+        try makeDirectory("big-cache")
+        try makeDirectory(".turbo")
+
+        let clone = try CloneStore.create(from: workspace(cloneExclude: ["big-cache"]))
+
+        XCTAssertFalse(exists(clone.path.appendingPathComponent("big-cache")))
+        XCTAssertTrue(exists(clone.path.appendingPathComponent(".turbo")), "only what was named")
+        XCTAssertTrue(exists(repo.appendingPathComponent("big-cache")), "the parent keeps its own")
+    }
+
+    /// The clone is deleted wholesale later, so an entry pointing outside it would aim that delete
+    /// somewhere else. The parser refuses these; this is the guard where the delete happens.
+    ///
+    /// The targets have to sit where the escape actually resolves — beside the clone, not beside
+    /// the repo — or the entries land on nothing and the test passes with the guard removed. `..`
+    /// is the sharp one: unguarded it deletes the directory holding every clone of this workspace.
+    func test_create_ignoresACloneExcludeThatLeavesTheWorkspace() throws {
+        let neighbour = try CloneStore.create(from: workspace())
+        let bystander = neighbour.path.deletingLastPathComponent()
+            .appendingPathComponent("bystander", isDirectory: true)
+        try FileManager.default.createDirectory(at: bystander, withIntermediateDirectories: true)
+        try write("safe\n", to: bystander.appendingPathComponent("content"))
+
+        let clone = try CloneStore.create(
+            from: workspace(cloneExclude: ["../bystander", "..", "../\(neighbour.path.lastPathComponent)"]))
+
+        XCTAssertEqual(read(bystander.appendingPathComponent("content")), "safe\n")
+        XCTAssertTrue(exists(neighbour.path.appendingPathComponent("tracked.txt")), "a sibling clone survives")
+        XCTAssertTrue(exists(clone.path.appendingPathComponent("tracked.txt")), "and so does this one")
+    }
+
+    func test_create_toleratesACloneExcludeNamingSomethingAbsent() throws {
+        let clone = try CloneStore.create(from: workspace(cloneExclude: ["never-existed"]))
+
+        XCTAssertTrue(exists(clone.path))
     }
 
     func test_create_numbersFromTwoAndSkipsTaken() throws {
