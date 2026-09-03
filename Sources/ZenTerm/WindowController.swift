@@ -1308,7 +1308,17 @@ final class WindowController: NSObject {
             let verb = state.unpushed == 1 ? "is" : "are"
             lost.append("\(state.unpushed) \(commits) that \(verb) on no remote")
         }
-        return "\(clone.title) has \(lost.joined(separator: " and ")). Removing it \(closing)deletes them."
+        if state.stashed > 0 {
+            lost.append("\(state.stashed) stash\(state.stashed == 1 ? "" : "es")")
+        }
+        return "\(clone.title) has \(Self.joined(lost)). Removing it \(closing)deletes them."
+    }
+
+    /// "a", "a and b", "a, b and c" — three clauses is the most this sentence can carry, and a
+    /// bare `joined(separator: " and ")` reads as a run-on at that length.
+    private static func joined(_ parts: [String]) -> String {
+        guard parts.count > 2 else { return parts.joined(separator: " and ") }
+        return parts.dropLast().joined(separator: ", ") + " and " + (parts.last ?? "")
     }
 
     /// Toggle the command palette (⌘⇧P). Builds the catalog fresh (its tab-select entries track

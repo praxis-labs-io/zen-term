@@ -33,9 +33,13 @@ struct Clone: Equatable {
 /// What a clone would lose if it were removed now.
 struct CloneState: Equatable {
     let uncommitted: Int
+    /// Commits on *any* local branch that no remote has. Not just HEAD's: work parked on a side
+    /// branch you are not standing on is exactly the work a person forgets they left behind.
     let unpushed: Int
+    /// Stash entries, which live in `refs/stash` and so are outside `--branches` as well as HEAD.
+    let stashed: Int
 
-    var isClean: Bool { uncommitted == 0 && unpushed == 0 }
+    var isClean: Bool { uncommitted == 0 && unpushed == 0 && stashed == 0 }
 }
 
 /// Creates, finds and removes workspace clones under `~/.zenterm/clones/`.
@@ -144,13 +148,21 @@ enum CloneStore {
         return Clone(workspaceTitle: workspace.title, name: name, path: destination, branch: branch)
     }
 
-    /// Uncommitted files and commits that are on no remote. Two git calls, so callers keep it off
-    /// the path that renders rows and ask only when the answer is about to be shown.
+    /// What removing the clone would destroy. Three git calls, so callers keep it off the path
+    /// that renders rows and ask only when the answer is about to be shown.
+    ///
+    /// Counts every local branch, not HEAD's: a clone whose side branch holds a day of work reads
+    /// as clean from HEAD, and the confirm would say so immediately before deleting it.
     static func state(_ clone: Clone) -> CloneState {
         let status = (try? git(["status", "--porcelain"], in: clone.path)) ?? ""
-        let uncommitted = status.isEmpty ? 0 : status.split(separator: "\n").count
-        let counted = (try? git(["rev-list", "--count", "HEAD", "--not", "--remotes"], in: clone.path)) ?? ""
-        return CloneState(uncommitted: uncommitted, unpushed: Int(counted) ?? 0)
+        let counted = (try? git(["rev-list", "--count", "--branches", "--not", "--remotes"], in: clone.path))
+        let stash = (try? git(["stash", "list"], in: clone.path)) ?? ""
+        return CloneState(
+            uncommitted: lineCount(status), unpushed: Int(counted ?? "") ?? 0, stashed: lineCount(stash))
+    }
+
+    private static func lineCount(_ output: String) -> Int {
+        output.isEmpty ? 0 : output.split(separator: "\n").count
     }
 
     /// Delete the clone. Copy-on-write means this frees only the blocks that diverged.

@@ -259,19 +259,52 @@ final class CloneStoreTests: XCTestCase {
 
     // MARK: state
 
+    /// The failure this guards is the worst one this feature can have: the confirm saying the clone
+    /// has nothing uncommitted, immediately before deleting a day of work. Counting only HEAD's
+    /// unpushed commits does exactly that whenever the work is parked on a branch you are not on.
+    func test_state_countsCommitsOnABranchYouAreNotStandingOn() throws {
+        let clone = try CloneStore.create(from: workspace())
+        try run(["config", "user.email", "test@example.com"], in: clone.path)
+        try run(["config", "user.name", "Test"], in: clone.path)
+
+        try run(["checkout", "-b", "feature/side"], in: clone.path)
+        try write("work\n", to: clone.path.appendingPathComponent("side.txt"))
+        try run(["add", "."], in: clone.path)
+        try run(["commit", "-m", "a day of work"], in: clone.path)
+        try run(["checkout", "main"], in: clone.path)
+
+        // From main, `git status` is clean and HEAD has nothing unpushed. The work is still there.
+        XCTAssertEqual(CloneStore.state(clone).unpushed, 1)
+        XCTAssertFalse(CloneStore.state(clone).isClean, "so the clone must not read as safe to delete")
+    }
+
+    /// A stash lives in `refs/stash`, which is outside `--branches` as well as HEAD.
+    func test_state_countsStashedWork() throws {
+        let clone = try CloneStore.create(from: workspace())
+        try run(["config", "user.email", "test@example.com"], in: clone.path)
+        try run(["config", "user.name", "Test"], in: clone.path)
+
+        try write("scratch\n", to: clone.path.appendingPathComponent("tracked.txt"))
+        try run(["stash"], in: clone.path)
+
+        XCTAssertEqual(CloneStore.state(clone).uncommitted, 0, "stashing cleans the working tree")
+        XCTAssertEqual(CloneStore.state(clone).stashed, 1)
+        XCTAssertFalse(CloneStore.state(clone).isClean)
+    }
+
     func test_state_countsUncommittedAndUnpushed() throws {
         let clone = try CloneStore.create(from: workspace())
-        XCTAssertEqual(CloneStore.state(clone), CloneState(uncommitted: 0, unpushed: 0))
+        XCTAssertEqual(CloneStore.state(clone), CloneState(uncommitted: 0, unpushed: 0, stashed: 0))
 
         try write("changed\n", to: clone.path.appendingPathComponent("tracked.txt"))
         try write("new\n", to: clone.path.appendingPathComponent("added.txt"))
-        XCTAssertEqual(CloneStore.state(clone), CloneState(uncommitted: 2, unpushed: 0))
+        XCTAssertEqual(CloneStore.state(clone), CloneState(uncommitted: 2, unpushed: 0, stashed: 0))
 
         try run(["config", "user.email", "test@example.com"], in: clone.path)
         try run(["config", "user.name", "Test"], in: clone.path)
         try run(["add", "."], in: clone.path)
         try run(["commit", "-m", "work"], in: clone.path)
-        XCTAssertEqual(CloneStore.state(clone), CloneState(uncommitted: 0, unpushed: 1))
+        XCTAssertEqual(CloneStore.state(clone), CloneState(uncommitted: 0, unpushed: 1, stashed: 0))
         XCTAssertFalse(CloneStore.state(clone).isClean)
     }
 

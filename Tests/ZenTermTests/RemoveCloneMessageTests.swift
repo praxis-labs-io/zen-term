@@ -12,9 +12,12 @@ final class RemoveCloneMessageTests: XCTestCase {
         workspaceTitle: "zen-term", name: "c2",
         path: URL(fileURLWithPath: "/tmp/clones/zen-term/zen-term-c2"), branch: "main")
 
-    private func message(uncommitted: Int, unpushed: Int, openTabs: Int) -> String {
+    private func message(
+        uncommitted: Int, unpushed: Int, openTabs: Int, stashed: Int = 0
+    ) -> String {
         WindowController.removeCloneMessage(
-            clone, state: CloneState(uncommitted: uncommitted, unpushed: unpushed), openTabs: openTabs)
+            clone, state: CloneState(uncommitted: uncommitted, unpushed: unpushed, stashed: stashed),
+            openTabs: openTabs)
     }
 
     func test_clean_andNotOpen_namesTheDirectory() {
@@ -67,5 +70,26 @@ final class RemoveCloneMessageTests: XCTestCase {
                 XCTAssertTrue(text.hasSuffix("."), text)
             }
         }
+    }
+
+    func test_stashedWorkAlone_isNamed() {
+        XCTAssertEqual(
+            message(uncommitted: 0, unpushed: 0, openTabs: 0, stashed: 1),
+            "zen-term c2 has 1 stash. Removing it deletes them.")
+    }
+
+    /// Three clauses is the most this sentence carries, and a bare " and " between all three reads
+    /// as a run-on.
+    func test_allThreeKindsOfLoss_readAsAList() {
+        XCTAssertEqual(
+            message(uncommitted: 2, unpushed: 1, openTabs: 0, stashed: 3),
+            "zen-term c2 has 2 uncommitted files, 1 commit that is on no remote and 3 stashes. "
+                + "Removing it deletes them.")
+    }
+
+    /// A clone whose only work is on a side branch must never read as clean.
+    func test_aCloneWithOnlySideBranchWork_isNotDescribedAsEmpty() {
+        let text = message(uncommitted: 0, unpushed: 1, openTabs: 0)
+        XCTAssertFalse(text.contains("nothing uncommitted"), text)
     }
 }
