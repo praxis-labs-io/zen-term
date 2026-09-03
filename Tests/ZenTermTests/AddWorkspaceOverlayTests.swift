@@ -284,4 +284,87 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
 
         XCTAssertEqual(sink.cancelled, 1)
     }
+
+    // MARK: clone_exclude rows
+
+    private func excludeRows(in overlay: NSView) -> [CloneExcludeRow] {
+        descendants(of: overlay).compactMap { $0 as? CloneExcludeRow }
+    }
+
+    func test_addForm_hasNoExcludeRowsUntilYouAddOne() {
+        let (overlay, _) = mount()
+
+        XCTAssertTrue(excludeRows(in: overlay).isEmpty)
+        XCTAssertNotNil(button(in: overlay, title: "＋ Add path"), "and a way to add one")
+    }
+
+    func test_addPathButton_addsARow_andTheRowSubmits() throws {
+        let dir = try makeRealDir()
+        let (overlay, sink) = mount()
+        field(in: overlay, placeholder: "Workspace name").setText("Alpha")
+        field(in: overlay, placeholder: "Type a path, or Choose").setText(dir.path)
+
+        button(in: overlay, title: "＋ Add path")?.onTap()
+        XCTAssertEqual(excludeRows(in: overlay).count, 1)
+        excludeRows(in: overlay)[0].pathBox.setText(".next")
+
+        button(in: overlay, title: "Add Workspace")?.onTap()
+
+        XCTAssertEqual(sink.submitted.first?.cloneExclude, [".next"])
+    }
+
+    /// The config keeps a list, so the form has to show it in the order it was written rather than
+    /// sorted the way the env map is.
+    func test_editForm_prefillsExcludePathsInAuthoredOrder() throws {
+        let dir = try makeRealDir()
+        let ws = Workspace(
+            title: "Alpha", path: dir, main: nil, right: nil, bottom: nil, focus: .main, env: [:],
+            cloneExclude: ["zzz-last", "aaa-first"])
+        let (overlay, sink) = mount(editing: ws)
+
+        XCTAssertEqual(excludeRows(in: overlay).map(\.path), ["zzz-last", "aaa-first"])
+
+        button(in: overlay, title: "Save")?.onTap()
+        XCTAssertEqual(sink.submitted.first?.cloneExclude, ["zzz-last", "aaa-first"], "and round-trips")
+    }
+
+    func test_removeButton_dropsThatRowOnly() throws {
+        let dir = try makeRealDir()
+        let ws = Workspace(
+            title: "Alpha", path: dir, main: nil, right: nil, bottom: nil, focus: .main, env: [:],
+            cloneExclude: ["keep-me", "drop-me", "keep-me-too"])
+        let (overlay, sink) = mount(editing: ws)
+
+        let doomed = try XCTUnwrap(excludeRows(in: overlay).first { $0.path == "drop-me" })
+        doomed.removeButton.onTap()
+
+        XCTAssertEqual(excludeRows(in: overlay).map(\.path), ["keep-me", "keep-me-too"])
+        button(in: overlay, title: "Save")?.onTap()
+        XCTAssertEqual(sink.submitted.first?.cloneExclude, ["keep-me", "keep-me-too"])
+    }
+
+    /// Pressing ＋ and changing your mind leaves an empty box, which is not an entry.
+    func test_blankRows_areNotSubmitted() throws {
+        let dir = try makeRealDir()
+        let (overlay, sink) = mount()
+        field(in: overlay, placeholder: "Workspace name").setText("Alpha")
+        field(in: overlay, placeholder: "Type a path, or Choose").setText(dir.path)
+
+        button(in: overlay, title: "＋ Add path")?.onTap()
+        button(in: overlay, title: "＋ Add path")?.onTap()
+        excludeRows(in: overlay)[0].pathBox.setText("   ")
+        excludeRows(in: overlay)[1].pathBox.setText("  dist  ")
+
+        button(in: overlay, title: "Add Workspace")?.onTap()
+
+        XCTAssertEqual(sink.submitted.first?.cloneExclude, ["dist"], "blank dropped, the other trimmed")
+    }
+
+    /// The word "exclude" invites reading this as a gitignore, so the caption has to say otherwise.
+    func test_theCaption_scopesItToClonesAndDisownsGitignore() {
+        let text = AddWorkspaceOverlay.excludeCaptionText.lowercased()
+        XCTAssertTrue(text.contains("clone"), AddWorkspaceOverlay.excludeCaptionText)
+        XCTAssertTrue(text.contains("git"), AddWorkspaceOverlay.excludeCaptionText)
+        XCTAssertFalse(AddWorkspaceOverlay.excludeCaptionText.contains("—"), "no em-dashes")
+    }
 }

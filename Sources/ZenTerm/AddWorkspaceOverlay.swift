@@ -64,8 +64,12 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private var captions: [FieldCaption] = []
     private var envRows: [EnvRow] = []
     private let envStack = NSStackView()
+    private var excludeRows: [CloneExcludeRow] = []
+    private let excludeStack = NSStackView()
     private let envError = NSTextField(labelWithString: "")
     private let addVarButton = AppButton(title: "＋ Add variable", variant: .muted)
+    private let addExcludeButton = AppButton(title: "＋ Add path", variant: .muted)
+    private let excludeCaption = NSTextField(labelWithString: "")
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private let addButton = AppButton(
         title: "Add Workspace", variant: .primary, keyEquivalent: "\r", keyEquivalentModifierMask: .command)
@@ -172,10 +176,12 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
 
         let controls: [ThemeReapplying] = [
             titleField, folderPicker, mainField, rightField, bottomField,
-            layoutSegment, focusSegment, addVarButton, cancelButton, addButton, deleteButton,
+            layoutSegment, focusSegment, addVarButton, addExcludeButton, cancelButton, addButton, deleteButton,
         ]
         controls.forEach { $0.reapplyTheme() }
         envRows.forEach { $0.reapplyTheme() }
+        excludeRows.forEach { $0.reapplyTheme() }
+        excludeCaption.textColor = chrome.ink(.muted)
         for group in [titleGroup, folderGroup, mainGroup, rightGroup, bottomGroup] {
             group?.reapplyTheme()
         }
@@ -230,10 +236,22 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         let envControls = Self.vStack([envStack, Self.leadingWrap(addVarButton), envError], spacing: 8)
         let envGroup = Self.vStack([caption("ENVIRONMENT", required: false), envControls], spacing: 6)
 
+        excludeStack.orientation = .vertical
+        excludeStack.alignment = .leading
+        excludeStack.spacing = 6
+        addExcludeButton.onTap = { [weak self] in self?.addExcludeRow() }
+        excludeCaption.font = .systemFont(ofSize: 11)
+        excludeCaption.textColor = Theme.current.chrome.ink(.muted)
+        excludeCaption.stringValue = Self.excludeCaptionText
+        let excludeControls = Self.vStack(
+            [excludeStack, Self.leadingWrap(addExcludeButton), excludeCaption], spacing: 8)
+        let excludeGroup = Self.vStack(
+            [caption("LEAVE OUT OF CLONES", required: false), excludeControls], spacing: 6)
+
         cancelButton.onTap = { [weak self] in self?.onCancel() }
         addButton.setTitle(editingWorkspace == nil ? "Add Workspace" : "Save")
         addButton.onTap = { [weak self] in self?.submit() }
-        for button in [addVarButton, cancelButton, addButton] {
+        for button in [addVarButton, addExcludeButton, cancelButton, addButton] {
             button.isKeyboardFocusable = true
             button.onArrowUp = { [weak self] in self?.moveVertical(-1) }
             button.onArrowDown = { [weak self] in self?.moveVertical(1) }
@@ -275,7 +293,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         let footer = Self.hStack(footerViews, spacing: 8)
 
         let content = NSStackView(views: [
-            header, titleGroup, folderGroup, layoutGroup, customDetail, envGroup, footer,
+            header, titleGroup, folderGroup, layoutGroup, customDetail, envGroup, excludeGroup, footer,
         ])
         content.orientation = .vertical
         content.alignment = .leading
@@ -318,9 +336,11 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             stops += [mainField.field, rightField.field, bottomField.field, focusSegment]
         }
         for row in envRows { stops.append(row.keyBox.field) }
+        stops.append(addVarButton)
+        for row in excludeRows { stops.append(row.pathBox.field) }
         // The footer is one vertical stop anchored on Add (its default focus); Cancel is reached
         // from it with Left/Right, not Up/Down.
-        stops += [addVarButton, addButton]
+        stops += [addExcludeButton, addButton]
         return stops
     }
 
@@ -348,6 +368,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         for row in envRows where isFocused(row.valueBox.field) || isFocused(row.removeButton) {
             return row.keyBox.field
         }
+        for row in excludeRows where isFocused(row.removeButton) { return row.pathBox.field }
         // The folder Choose button shares the folder field's vertical stop; it's reached with Right.
         if isFocused(folderPicker.chooseButton) { return folderPicker.field.field }
         // Cancel and Delete share the footer's vertical stop (Add); they're reached with Left/Right.
@@ -381,6 +402,39 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private func layoutChanged(_ index: Int) {
         layoutCaption.stringValue = layoutCaptions[min(index, layoutCaptions.count - 1)]
         customDetail.isHidden = (layoutChoice != .custom)
+        refreshValidity()
+    }
+
+    /// The caption under the ＋ Add path button. Says what the field does and, because the word
+    /// alone invites the wrong reading, that it is scoped to clones and is not a gitignore.
+    static let excludeCaptionText =
+        "Paths a clone starts without. Applies only when this workspace is cloned, not to git."
+
+    @discardableResult
+    private func addExcludeRow() -> CloneExcludeRow {
+        let row = CloneExcludeRow { [weak self] row in self?.removeExcludeRow(row) }
+        wireField(row.pathBox)
+        row.removeButton.isKeyboardFocusable = true
+        row.removeButton.onArrowUp = { [weak self] in self?.moveVertical(-1) }
+        row.removeButton.onArrowDown = { [weak self] in self?.moveVertical(1) }
+        // Left/Right step across the row: path · ✕, the same shape an env row uses for KEY · value · ✕.
+        row.pathBox.onArrowRight = { [weak self, weak row] in self?.focus(row?.removeButton) }
+        row.pathBox.onEnter = { [weak self, weak row] in self?.focus(row?.removeButton) }
+        row.removeButton.onArrowLeft = { [weak self, weak row] in self?.focus(row?.pathBox.field) }
+        row.pathBox.onTab = { [weak self] in self?.moveTab(1) }
+        excludeRows.append(row)
+        excludeStack.addArrangedSubview(row)
+        row.widthAnchor.constraint(equalTo: excludeStack.widthAnchor).isActive = true
+        window?.makeFirstResponder(row.pathBox.field)
+        refreshValidity()
+        return row
+    }
+
+    private func removeExcludeRow(_ row: CloneExcludeRow) {
+        excludeRows.removeAll { $0 === row }
+        excludeStack.removeArrangedSubview(row)
+        row.removeFromSuperview()
+        window?.makeFirstResponder(addExcludeButton)
         refreshValidity()
     }
 
@@ -435,6 +489,8 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             row.keyBox.setText(key)
             row.valueBox.setText(ws.env[key] ?? "")
         }
+        // Authored order, not sorted: the config keeps a list, so the form has to show it as one.
+        for excluded in ws.cloneExclude { addExcludeRow().pathBox.setText(excluded) }
     }
 
     /// The preset a workspace maps back to: Minimal / Editor+AI+Shell only when the recipe matches
@@ -520,9 +576,15 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             guard !key.isEmpty else { continue }  // a blank key isn't a variable
             env[key] = row.value.trimmingCharacters(in: .whitespaces)
         }
+        // A blank row is someone who pressed ＋ and changed their mind, not an entry.
+        let cloneExclude =
+            excludeRows
+            .map { $0.path.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
         return Workspace(
             title: title, path: folder,
-            main: recipe.main, right: recipe.right, bottom: recipe.bottom, focus: recipe.focus, env: env)
+            main: recipe.main, right: recipe.right, bottom: recipe.bottom, focus: recipe.focus, env: env,
+            cloneExclude: cloneExclude)
     }
 
     private func recipeForChoice() -> (main: String?, right: String?, bottom: String?, focus: Workspace.Region) {
@@ -698,5 +760,45 @@ final class EnvRow: NSView {
         valueBox.reapplyTheme()
         removeButton.reapplyTheme()
         equals.textColor = Theme.current.chrome.ink(.muted)
+    }
+}
+
+// MARK: - Clone-exclude row
+
+/// One `clone_exclude` entry: a path box and a remove button. `EnvRow` without the key half,
+/// which is the whole difference — this is a list, not a map.
+final class CloneExcludeRow: NSView {
+    let pathBox = FieldBox(placeholder: ".next")
+    /// A focus stop in the form's keyboard flow (arrow to it, Return removes the row).
+    let removeButton = AppButton(title: "✕", variant: .secondary)
+
+    var path: String { pathBox.text }
+
+    init(onRemove: @escaping (CloneExcludeRow) -> Void) {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        pathBox.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        removeButton.setContentHuggingPriority(.required, for: .horizontal)
+        removeButton.onTap = { [weak self] in if let self { onRemove(self) } }
+
+        let stack = NSStackView(views: [pathBox, removeButton])
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 6
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            stack.topAnchor.constraint(equalTo: topAnchor),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func reapplyTheme() {
+        pathBox.reapplyTheme()
+        removeButton.reapplyTheme()
     }
 }
