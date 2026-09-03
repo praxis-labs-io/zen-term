@@ -109,9 +109,11 @@ For the crossing to hold, the plugin:
 4. On `VimEnter`/`VimResume` sends `setvim` with `vim: true, hold: true`; on
    `VimLeave`/`VimSuspend` sends `vim: false`. The EOF clear is the backstop for
    when those never run, not the primary path.
-5. If a send fails (ZenTerm restarted, socket replaced), reconnects once and
-   re-sends the `setvim` hold before retrying. The old connection's EOF already
-   dropped the flag.
+5. Drops the channel when it reaches EOF and reopens it on the next command,
+   re-sending the `setvim` hold first because the old connection's EOF already
+   cleared the flag. A write alone cannot detect this: Neovim's `chansend` to a
+   dead peer still reports the bytes written. This recovers a socket rebound at
+   the same path, not a relaunched ZenTerm, whose `$ZEN_SOCK` path is new.
 
 ## Manual verification
 
