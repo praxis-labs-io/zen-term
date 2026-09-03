@@ -59,6 +59,7 @@ enum CommandCatalog {
         // with no such row would be a command that mostly does nothing. `CommandCatalogTests`
         // holds it out alongside `.findNext`/`.findPrevious` for the same reason.
         case .cloneWorkspace: return tool("Clone Workspace", glyph, chord)
+        case .removeClone: return tool("Remove Clone", glyph, chord)
         case .openSettings: return config("Settings…", glyph, chord)
         case .reloadConfig: return config("Reload Config", glyph, chord)
         case .checkForUpdates: return config("Check for Updates", glyph, chord)

@@ -281,6 +281,28 @@ final class WindowController: NSObject {
     /// no-op — so `handle` forwards them here instead. Injected by `AppDelegate`.
     var onAppGlobalCommand: ((KeyInterceptor.ReservedChord) -> Void)?
 
+    /// Ask every window how many tabs sit on a path, and close them. Removing a clone is
+    /// window-local (it starts from one window's picker) but its consequences are not: a clone can
+    /// be open in any window, and the confirm has to name that before it deletes the directory.
+    /// Injected by `AppDelegate`, which owns the only list of windows.
+    var onCountTabsAtPath: ((URL) -> Int)?
+    var onCloseTabsAtPath: ((URL) -> Void)?
+
+    /// Tabs in *this* window opened at `path`. The fan-out above sums these across windows.
+    func tabCount(atPath path: URL) -> Int {
+        let target = path.standardizedFileURL
+        return tabs.order.filter { controllers[$0]?.openedCWD?.standardizedFileURL == target }.count
+    }
+
+    /// Close every tab in this window opened at `path`. Closing the last one closes the window,
+    /// which `closeTab` already handles.
+    func closeTabs(atPath path: URL) {
+        let target = path.standardizedFileURL
+        for id in tabs.order where controllers[id]?.openedCWD?.standardizedFileURL == target {
+            closeTab(id)
+        }
+    }
+
     /// Whether a modal card is up right now. Read by `AppDelegate` so window-level chords (⌘N)
     /// and Copy/Paste routing respect the modal too, not just `handle(_:)`.
     var isModalOverlayOpen: Bool { modal != nil }
@@ -1219,6 +1241,76 @@ final class WindowController: NSObject {
         }
     }
 
+    /// ⌥⌫ on a clone row: read what removing it would cost, then confirm once with the whole
+    /// consequence. `CloneStore.state` shells out to git twice, so it runs off-main and the
+    /// confirm is presented on the way back.
+    private func removeSelectedCloneInPicker() {
+        guard let picker = modal?.overlay as? RepoPickerOverlay, let selection = picker.selectedClone
+        else { return }
+        let clone = selection.clone
+        let openTabs = onCountTabsAtPath?(clone.path) ?? tabCount(atPath: clone.path)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let state = CloneStore.state(clone)
+            DispatchQueue.main.async { [weak self] in
+                self?.confirmRemoveClone(clone, state: state, openTabs: openTabs)
+            }
+        }
+    }
+
+    private func confirmRemoveClone(_ clone: Clone, state: CloneState, openTabs: Int) {
+        presentConfirm(
+            variant: state.isClean ? .warning : .destructive,
+            title: "Remove Clone",
+            message: Self.removeCloneMessage(clone, state: state, openTabs: openTabs),
+            confirmLabel: "Remove"
+        ) { [weak self] in
+            guard let self else { return }
+            // Close the tabs first: they are shells running in the directory about to go away.
+            if openTabs > 0 {
+                if let fanOut = self.onCloseTabsAtPath {
+                    fanOut(clone.path)
+                } else {
+                    self.closeTabs(atPath: clone.path)
+                }
+            }
+            DispatchQueue.global(qos: .userInitiated).async {
+                let result = Result { try CloneStore.remove(clone) }
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    if case .failure(let error) = result {
+                        self.showToast(
+                            ToastContent(
+                                variant: .warning, title: "Couldn't Remove \(clone.title)",
+                                message: error.localizedDescription))
+                    }
+                    // No row to catch up: `presentConfirm` closed the picker to show the confirm,
+                    // and the next open rescans the clones directory from disk.
+                }
+            }
+        }
+    }
+
+    /// One confirm carrying both consequences: the work that goes, and the tabs that close.
+    /// Splitting them would mean two dialogs for a single decision.
+    static func removeCloneMessage(_ clone: Clone, state: CloneState, openTabs: Int) -> String {
+        var closing = ""
+        if openTabs == 1 { closing = "closes its tab and " }
+        if openTabs > 1 { closing = "closes its \(openTabs) tabs and " }
+        guard !state.isClean else {
+            return "\(clone.title) has nothing uncommitted. Removing it \(closing)deletes the directory."
+        }
+        var lost: [String] = []
+        if state.uncommitted > 0 {
+            lost.append("\(state.uncommitted) uncommitted file\(state.uncommitted == 1 ? "" : "s")")
+        }
+        if state.unpushed > 0 {
+            let commits = "commit\(state.unpushed == 1 ? "" : "s")"
+            let verb = state.unpushed == 1 ? "is" : "are"
+            lost.append("\(state.unpushed) \(commits) that \(verb) on no remote")
+        }
+        return "\(clone.title) has \(lost.joined(separator: " and ")). Removing it \(closing)deletes them."
+    }
+
     /// Toggle the command palette (⌘⇧P). Builds the catalog fresh (its tab-select entries track
     /// the live tab count). Pressing ⌘⇧P while it's up closes it.
     private func toggleCommandPalette() {
@@ -1876,6 +1968,11 @@ final class WindowController: NSObject {
                 cloneSelectedWorkspaceInPicker()
                 return
             }
+            // ⌥⌫ is the mirror of ⌥⏎: inert unless a clone row is selected.
+            if modal.kind == .repoPicker, chord == .removeClone {
+                removeSelectedCloneInPicker()
+                return
+            }
             switch chord {
             case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue,
                 .newTool:
@@ -2013,7 +2110,7 @@ final class WindowController: NSObject {
         case .toggleRepoPicker: toggleRepoPicker()
         // Handled above while the picker is open, the only place it means anything; reaching here
         // means no modal was up, so there is no selection to clone.
-        case .cloneWorkspace: break
+        case .cloneWorkspace, .removeClone: break
         case .toggleCommandPalette: toggleCommandPalette()
         case .openSettings: openSettings()
         case .reportIssue: openReportIssue()
@@ -2393,6 +2490,10 @@ final class WindowController: NSObject {
     /// the app's. Deliberately not the focused scroll target, which is nil whenever something other
     /// than a pane holds focus.
     var anyTerminalSurface: TerminalSurface? { activeController?.allSurfaces.first }
+
+    #if DEBUG
+        var allTerminalSurfacesForTesting: [TerminalSurface] { allTerminalSurfaces }
+    #endif
 
     /// Test hook: drive the real surface-failure toast so a test can click its actual buttons.
     func presentSurfaceFailureToastForTesting(retry: @escaping () -> Void, close: @escaping () -> Void) {

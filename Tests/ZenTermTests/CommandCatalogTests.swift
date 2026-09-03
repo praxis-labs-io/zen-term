@@ -170,6 +170,7 @@ final class CommandCatalogTests: XCTestCase {
             "toggle_command_palette",  // it is the palette
             "search_next", "search_previous",  // `n` / `N` step a live search
             "clone_workspace",  // only meaningful over a selected row in the picker itself
+            "remove_clone",  // same: only over a selected clone row
         ]
         let listed = Set(CommandCatalog.commands(tabCount: 9).map(\.chord.actionToken))
 

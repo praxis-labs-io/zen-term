@@ -50,6 +50,7 @@ final class RepoPickerOverlay: PaletteOverlay {
                 PaletteHint(keys: "⏎", label: "open"),
                 PaletteHint(keys: "⇧⏎", label: "replace"),
                 PaletteHint(keys: "⌥⏎", label: "clone"),
+                PaletteHint(keys: "⌥⌫", label: "remove"),
                 PaletteHint(keys: "⎋", label: "close"),
             ],
             rowHeight: 32,
@@ -170,6 +171,15 @@ final class RepoPickerOverlay: PaletteOverlay {
             return nil
         }
         return workspace
+    }
+
+    /// The clone under the selection, and the workspace it belongs to — what ⌥⌫ resolves against.
+    /// Nil on every other row, so the chord is inert unless a clone is actually selected.
+    var selectedClone: (clone: Clone, parent: Workspace)? {
+        guard rows.indices.contains(selected), case .clone(let clone, let parent) = rows[selected] else {
+            return nil
+        }
+        return (clone, parent)
     }
 
     /// Insert a placeholder row under `workspace` immediately, before the clone itself exists.

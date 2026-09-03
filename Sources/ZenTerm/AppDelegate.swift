@@ -268,6 +268,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The command palette dispatches through `handle(_:)`, where app-global chords are a no-op.
         // Hand them back to `route(_:)` so a palette pick reloads config / checks for updates too.
         wc.onAppGlobalCommand = { [weak self] chord in self?.route(chord) }
+        // Removing a clone starts in one window's picker but has to account for every window: a
+        // clone open elsewhere would otherwise be left running in a directory that is gone.
+        wc.onCountTabsAtPath = { [weak self] path in
+            self?.windows.reduce(0) { $0 + $1.tabCount(atPath: path) } ?? 0
+        }
+        wc.onCloseTabsAtPath = { [weak self] path in
+            // Copy first: closing a window's last tab removes it from `windows` mid-iteration.
+            for window in self?.windows ?? [] { window.closeTabs(atPath: path) }
+        }
         if centered { wc.window.center() }
         wc.onClosed = { [weak self, weak wc] in
             guard let self, let wc else { return }

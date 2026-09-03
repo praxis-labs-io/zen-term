@@ -34,6 +34,7 @@ extension KeyInterceptor.ReservedChord {
         case .toggleToolFloat(let id): return "toggle_float:\(id)"
         case .toggleRepoPicker: return "toggle_workspace_picker"
         case .cloneWorkspace: return "clone_workspace"
+        case .removeClone: return "remove_clone"
         case .toggleCommandPalette: return "toggle_command_palette"
         case .openSettings: return "open_settings"
         case .reloadConfig: return "reload_config"
@@ -94,7 +95,8 @@ extension KeyInterceptor.ReservedChord {
             .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab,
             .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
             .prevPane, .nextPane,
-            .toggleToolFloat, .toggleRepoPicker, .cloneWorkspace, .toggleCommandPalette, .openSettings,
+            .toggleToolFloat, .toggleRepoPicker, .cloneWorkspace, .removeClone, .toggleCommandPalette,
+            .openSettings,
             .reloadConfig, .checkForUpdates, .reportIssue, .newTool, .resetFontSize,
             .toggleScrollMode, .toggleSearch, .scrollToTop, .scrollToBottom,
             .findNext, .findPrevious, .searchSelection,
@@ -141,7 +143,7 @@ extension KeyInterceptor.ReservedChord {
             .newTab, .newWindow, .prevTab, .nextTab, .selectTab,
             .moveTabLeft, .moveTabRight, .renameTab,
             .fillScreen, .toggleBottomDrawer, .toggleRightDrawer,
-            .toggleRepoPicker, .cloneWorkspace, .toggleCommandPalette, .newTool, .openSettings,
+            .toggleRepoPicker, .cloneWorkspace, .removeClone, .toggleCommandPalette, .newTool, .openSettings,
             .dismissToast, .dismissAllToasts:
             return true
         }
@@ -184,6 +186,7 @@ extension KeyInterceptor.ReservedChord {
         // `toggle_repo_picker` still resolves so an existing binding keeps working.
         case "toggle_repo_picker": self = .toggleRepoPicker
         case "clone_workspace": self = .cloneWorkspace
+        case "remove_clone": self = .removeClone
         case "toggle_command_palette": self = .toggleCommandPalette
         case "open_settings": self = .openSettings
         case "reload_config": self = .reloadConfig
@@ -309,6 +312,8 @@ enum KeymapDefaults {
         map[Chord(command: true, key: "p")] = .toggleRepoPicker
         // Only ever fires while the picker is open with a workspace row selected.
         map[Chord(option: true, key: "⏎")] = .cloneWorkspace
+        // Same: only over a selected clone row.
+        map[Chord(option: true, key: "⌫")] = .removeClone
         map[Chord(command: true, key: "\\")] = .toggleRightDrawer
         map[Chord(command: true, key: "b")] = .toggleBottomDrawer
         // The one built-in float, beside the two drawers it behaves like. Read off the spec so the

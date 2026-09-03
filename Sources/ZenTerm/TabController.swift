@@ -144,6 +144,9 @@ final class TabController: NSObject {
     /// focused pane's shell `cd`s. Nil for tabs opened any other way.
     var pinnedTitle: String?
     var title: String { pinnedTitle ?? liveTitle }
+    /// Where this tab was opened, which is not `focusedCWD`: a shell that has `cd`'d elsewhere
+    /// still belongs to the workspace it was opened for. Removing a clone matches on this.
+    let openedCWD: URL?
     /// The cwd-derived title with no pin over it — what the tab falls back to when a rename is
     /// cleared, and what the rename card shows as its placeholder.
     var liveTitle: String { paneCanvas.title }
@@ -247,6 +250,7 @@ final class TabController: NSObject {
         makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make
     ) {
         workspaceEnv = env
+        openedCWD = initialCWD
         self.isToolFloatOpen = isToolFloatOpen
         self.makeSurface = makeSurface
         paneCanvas = PaneCanvasController(

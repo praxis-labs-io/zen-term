@@ -38,6 +38,7 @@ final class KeyInterceptor {
         case toggleToolFloat(String)  // associated value = ToolFloat.id
         case toggleRepoPicker
         case cloneWorkspace  // ⌥⏎ in the workspace picker: clone the selected row
+        case removeClone  // ⌥⌫ in the workspace picker: remove the selected clone
         case toggleCommandPalette
         case openSettings
         case reloadConfig

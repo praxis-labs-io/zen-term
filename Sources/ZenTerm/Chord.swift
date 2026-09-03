@@ -180,6 +180,7 @@ struct Chord: Hashable {
     private static let specialKeyGlyphs: [UInt16: String] = [
         123: "←", 124: "→", 125: "↓", 126: "↑", 36: "⏎",
         115: "↖", 119: "↘", 116: "⇞", 121: "⇟", 48: "⇥",
+        51: "⌫",
     ]
 
     /// How a config file spells each of those. The glyph is the canonical form everywhere inside
@@ -190,6 +191,7 @@ struct Chord: Hashable {
         "left": "←", "right": "→", "down": "↓", "up": "↑",
         "arrow_left": "←", "arrow_right": "→", "arrow_down": "↓", "arrow_up": "↑",
         "enter": "⏎", "return": "⏎",
+        "backspace": "⌫", "delete": "⌫",
         "home": "↖", "end": "↘", "page_up": "⇞", "page_down": "⇟",
         "tab": "⇥",
     ]
