@@ -123,7 +123,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let socket = NavSocketServer { command in
             switch command {
             case .focus(let token, let dir): NavRegistry.shared.route(focus: token, dir)
-            case .setVim(let token, let on): NavRegistry.shared.setVim(token: token, on)
+            case .setVim(let token, let presence):
+                NavRegistry.shared.setVim(token: token, presence != .off)
             }
         }
         socket.start()

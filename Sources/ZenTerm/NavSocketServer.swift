@@ -3,9 +3,12 @@ import Foundation
 
 /// A tiny `AF_UNIX` stream listener that carries the nvim navigator protocol. Neovim
 /// connects natively via `sockconnect('pipe', $ZEN_SOCK)` and writes one newline-delimited
-/// JSON line (`NavCommand`) per hop — no process spawn per keystroke. Each connection is
-/// short-lived: read the line(s), decode, hand the command to `apply` on the main actor,
-/// close.
+/// JSON line (`NavCommand`) per hop — no process spawn per keystroke. Read the line(s),
+/// decode, hand the command to `apply` on the main actor.
+///
+/// A connection that sends `setvim` with `hold` owns that pane's nvim flag for as long as
+/// it stays open, and the flag clears when it closes. That is the whole point: the kernel
+/// closes the fd however nvim dies, where an autocmd-driven clear never runs.
 ///
 /// Kept deliberately small: a listen socket + a `DispatchSource` that accepts, plus a
 /// bounded read per connection. The wire format and all routing live elsewhere
@@ -85,11 +88,23 @@ final class NavSocketServer {
     /// The bound socket path. Defaults to this instance's per-pid `$ZEN_SOCK` location;
     /// overridden in tests so they never touch the real socket.
     private let path: String
+    /// How long a connection may stay silent before it is dropped. Bounds a wedged client
+    /// that never sends anything; cleared outright once a connection declares a hold.
+    /// Injected only so tests need not idle for real seconds.
+    private let recvTimeout: time_t
     private let queue = DispatchQueue(label: "com.zenterm.nav-socket")
+    /// Reads block, and a held connection blocks for the life of an nvim. Its own queue
+    /// keeps those parked threads off the shared global pool the rest of the app uses.
+    private let connections = DispatchQueue(
+        label: "com.zenterm.nav-connections", qos: .utility, attributes: .concurrent)
     private var acceptSource: DispatchSourceRead?
 
-    init(path: String = NavSocketServer.socketPath, apply: @escaping (NavCommand) -> Void) {
+    init(
+        path: String = NavSocketServer.socketPath, recvTimeout: time_t = 2,
+        apply: @escaping (NavCommand) -> Void
+    ) {
         self.path = path
+        self.recvTimeout = recvTimeout
         self.apply = apply
     }
 
@@ -166,12 +181,11 @@ final class NavSocketServer {
     private func acceptOne(listenFD: Int32) {
         let conn = accept(listenFD, nil, nil)
         guard conn >= 0 else { return }
-        // A wedged client must not stall the accept queue: bound the read, then read off the
-        // shared concurrent queue so one slow connection can't head-of-line the rest. Close
-        // the connection even if `self` is gone by the time the read block runs.
-        var timeout = timeval(tv_sec: 2, tv_usec: 0)
-        setsockopt(conn, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
-        DispatchQueue.global(qos: .utility).async { [weak self] in
+        // A wedged client must not stall the accept queue: bound the read, then read off a
+        // concurrent queue so one slow connection can't head-of-line the rest. Close the
+        // connection even if `self` is gone by the time the read block runs.
+        Self.setRecvTimeout(recvTimeout, on: conn)
+        connections.async { [weak self] in
             guard let self else {
                 close(conn)
                 return
@@ -180,8 +194,25 @@ final class NavSocketServer {
         }
     }
 
+    /// `seconds == 0` means block forever, which is what a held connection wants.
+    private static func setRecvTimeout(_ seconds: time_t, on fd: Int32) {
+        var timeout = timeval(tv_sec: seconds, tv_usec: 0)
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+    }
+
     private func readConnection(_ fd: Int32) {
-        defer { close(fd) }
+        // The token this connection holds the nvim flag for, cleared on EOF however the
+        // client died. Local to the connection, so no shared state and no locking.
+        var heldToken: Int?
+        defer {
+            close(fd)
+            if let heldToken {
+                Log.info("NavSocket: connection closed, clearing pane=\(heldToken)", category: .nav)
+                DispatchQueue.main.async { [weak self] in
+                    self?.apply(.setVim(token: heldToken, presence: .off))
+                }
+            }
+        }
         var pending = Data()
         var chunk = [UInt8](repeating: 0, count: 4096)
         while true {
@@ -191,8 +222,20 @@ final class NavSocketServer {
             // Dispatch each complete line as it arrives, so a client that holds the channel
             // open (rather than closing after one line) sees no EOF/timeout latency.
             while let newline = pending.firstIndex(of: 0x0A) {
-                dispatch(pending[pending.startIndex..<newline])
+                let command = dispatch(pending[pending.startIndex..<newline])
                 pending.removeSubrange(pending.startIndex...newline)
+                guard case .setVim(let token, let presence) = command else { continue }
+                switch presence {
+                case .held:
+                    // The client is staying: the silence bound would otherwise close this
+                    // connection out from under a live nvim after `recvTimeout` idle seconds.
+                    Self.setRecvTimeout(0, on: fd)
+                    heldToken = token
+                case .off where token == heldToken:
+                    heldToken = nil  // a clean VimLeave already cleared it; don't clear twice
+                case .off, .latched:
+                    break
+                }
             }
             // A single unterminated line grown past the cap is junk (never a nav command):
             // drop it rather than buffer unboundedly or later decode a truncated tail.
@@ -200,12 +243,16 @@ final class NavSocketServer {
         }
     }
 
-    private func dispatch(_ lineData: Data) {
+    /// Hand one decoded line to `apply` on main, returning it so the caller can track what
+    /// this connection has claimed. Nil for anything undecodable.
+    @discardableResult
+    private func dispatch(_ lineData: Data) -> NavCommand? {
         guard let line = String(data: lineData, encoding: .utf8),
             let command = NavCommand.decode(line)
-        else { return }
+        else { return nil }
         Log.info("NavSocket: \(command.logLine)", category: .nav)
         DispatchQueue.main.async { [weak self] in self?.apply(command) }
+        return command
     }
 
     deinit { stop() }

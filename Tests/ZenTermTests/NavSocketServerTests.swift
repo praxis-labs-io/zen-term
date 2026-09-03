@@ -27,7 +27,7 @@ final class NavSocketServerTests: XCTestCase {
         wait(for: [focusReceived, vimReceived], timeout: 3)
         XCTAssertEqual(commands.count, 2)  // the garbage line added nothing
         XCTAssertTrue(commands.contains(.focus(token: 5, dir: .left)))
-        XCTAssertTrue(commands.contains(.setVim(token: 5, on: true)))
+        XCTAssertTrue(commands.contains(.setVim(token: 5, presence: .latched)))
     }
 
     func test_persistentConnection_dispatchesEachLineBeforeClose() throws {
@@ -157,6 +157,107 @@ final class NavSocketServerTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: unrelated))
     }
 
+    func test_heldConnection_clearsVimWhenTheClientDies() throws {
+        // The fix. A held connection owns the flag, and the kernel closes its fd however nvim
+        // dies — so EOF, not an autocmd, is what clears the pane.
+        let path = "/tmp/zt-nav-held-\(getpid()).sock"
+        var commands: [NavCommand] = []
+        let flagged = expectation(description: "setvim held")
+        let cleared = expectation(description: "cleared on close")
+        let server = NavSocketServer(path: path) { command in
+            commands.append(command)
+            if command == .setVim(token: 9, presence: .held) { flagged.fulfill() }
+            if command == .setVim(token: 9, presence: .off) { cleared.fulfill() }
+        }
+        server.start()
+        defer { server.stop() }
+
+        let fd = try connectClient(to: path)
+        writeLine(#"{"cmd":"setvim","pane":9,"vim":true,"hold":true}"#, to: fd)
+        wait(for: [flagged], timeout: 3)
+        close(fd)  // stands in for the nvim process dying
+        wait(for: [cleared], timeout: 3)
+    }
+
+    func test_latchedConnection_survivesClose() throws {
+        // Back-compat, and the reason `hold` is on the wire at all: a pre-`hold` plugin closes
+        // after every line, so inferring presence from the close would clear its flag instantly.
+        let path = "/tmp/zt-nav-latch-\(getpid()).sock"
+        var commands: [NavCommand] = []
+        let flagged = expectation(description: "setvim latched")
+        let server = NavSocketServer(path: path) { command in
+            commands.append(command)
+            if command == .setVim(token: 9, presence: .latched) { flagged.fulfill() }
+        }
+        server.start()
+        defer { server.stop() }
+
+        try sendLine(#"{"cmd":"setvim","pane":9,"vim":true}"#, to: path)
+        wait(for: [flagged], timeout: 3)
+
+        // Give a clear every chance to arrive before asserting none did.
+        try sendLine(#"{"cmd":"focus","dir":"left","pane":9}"#, to: path)
+        let settled = expectation(description: "focus round-tripped")
+        DispatchQueue.main.async { settled.fulfill() }
+        wait(for: [settled], timeout: 3)
+        XCTAssertFalse(commands.contains(.setVim(token: 9, presence: .off)))
+    }
+
+    func test_heldConnection_survivesIdlePastTheSilenceBound() throws {
+        // `SO_RCVTIMEO` bounds a wedged client, and a held connection is idle by nature: without
+        // clearing the bound on hold, the server closes the channel out from under a live nvim.
+        let path = "/tmp/zt-nav-idle-\(getpid()).sock"
+        let flagged = expectation(description: "setvim held")
+        let moved = expectation(description: "focus after idle")
+        let server = NavSocketServer(path: path, recvTimeout: 1) { command in
+            if command == .setVim(token: 9, presence: .held) { flagged.fulfill() }
+            if command == .focus(token: 9, dir: .left) { moved.fulfill() }
+        }
+        server.start()
+        defer { server.stop() }
+
+        let fd = try connectClient(to: path)
+        defer { close(fd) }
+        writeLine(#"{"cmd":"setvim","pane":9,"vim":true,"hold":true}"#, to: fd)
+        wait(for: [flagged], timeout: 3)
+
+        let idled = expectation(description: "idled past the bound")
+        DispatchQueue.global().asyncAfter(deadline: .now() + 1.6) { idled.fulfill() }
+        wait(for: [idled], timeout: 5)
+
+        writeLine(#"{"cmd":"focus","dir":"left","pane":9}"#, to: fd)
+        wait(for: [moved], timeout: 3)
+    }
+
+    func test_cleanLeaveThenClose_clearsExactlyOnce() throws {
+        // A clean `:qa` sends `vim:false` and then the channel closes. Both are clears, and two
+        // of them would log a phantom crash for every ordinary quit.
+        let path = "/tmp/zt-nav-once-\(getpid()).sock"
+        var clears = 0
+        let cleared = expectation(description: "explicit clear")
+        let server = NavSocketServer(path: path) { command in
+            if command == .setVim(token: 9, presence: .off) {
+                clears += 1
+                if clears == 1 { cleared.fulfill() }
+            }
+        }
+        server.start()
+        defer { server.stop() }
+
+        let fd = try connectClient(to: path)
+        writeLine(#"{"cmd":"setvim","pane":9,"vim":true,"hold":true}"#, to: fd)
+        writeLine(#"{"cmd":"setvim","pane":9,"vim":false}"#, to: fd)
+        wait(for: [cleared], timeout: 3)
+        close(fd)
+
+        let settled = expectation(description: "close settled")
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) {
+            DispatchQueue.main.async { settled.fulfill() }
+        }
+        wait(for: [settled], timeout: 3)
+        XCTAssertEqual(clears, 1)
+    }
+
     /// Connect a throwaway `AF_UNIX` client, write one newline-terminated line, close.
     private func sendLine(_ line: String, to path: String) throws {
         let fd = try connectClient(to: path)
@@ -197,7 +298,7 @@ final class NavSocketServerTests: XCTestCase {
 
         let written = try sink.fileURLs.map { try String(contentsOf: $0, encoding: .utf8) }.joined()
         // `contains`, not equality: `Log.fileSink` is process-wide, so another test may interleave.
-        XCTAssertTrue(written.contains("NavSocket: setvim pane=4242 vim=true"), written)
+        XCTAssertTrue(written.contains("NavSocket: setvim pane=4242 vim=latched"), written)
         XCTAssertTrue(written.contains("NavSocket: focus pane=4242 dir=left"), written)
         XCTAssertFalse(written.contains("garbage"), "an undecodable line must never be logged")
     }
@@ -223,6 +324,10 @@ final class NavSocketServerTests: XCTestCase {
             }
         }
         XCTAssertEqual(connected, 0, "connect failed, errno=\(errno)")
+        // Without this, writing to a server that has closed the connection kills the whole
+        // test process with SIGPIPE instead of failing the one assertion that cares.
+        var on: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
         return fd
     }
 

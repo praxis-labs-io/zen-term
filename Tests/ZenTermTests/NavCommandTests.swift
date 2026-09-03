@@ -15,15 +15,34 @@ final class NavCommandTests: XCTestCase {
             NavCommand.decode(#"{"cmd":"focus","dir":"down","pane":7}"#), .focus(token: 7, dir: .down))
     }
 
-    func test_setvim_decodesBothStates() {
+    func test_setvim_withoutHold_isTheLegacyLatch() {
+        // The back-compat guarantee: a plugin that predates `hold` still latches, so an old
+        // client is never silently downgraded to a presence that clears on close.
         XCTAssertEqual(
-            NavCommand.decode(#"{"cmd":"setvim","pane":3,"vim":true}"#), .setVim(token: 3, on: true))
+            NavCommand.decode(#"{"cmd":"setvim","pane":3,"vim":true}"#), .setVim(token: 3, presence: .latched))
         XCTAssertEqual(
-            NavCommand.decode(#"{"cmd":"setvim","pane":3,"vim":false}"#), .setVim(token: 3, on: false))
+            NavCommand.decode(#"{"cmd":"setvim","pane":3,"vim":false}"#), .setVim(token: 3, presence: .off))
+    }
+
+    func test_setvim_withHold_isHeld() {
+        XCTAssertEqual(
+            NavCommand.decode(#"{"cmd":"setvim","pane":3,"vim":true,"hold":true}"#),
+            .setVim(token: 3, presence: .held))
+        XCTAssertEqual(
+            NavCommand.decode(#"{"cmd":"setvim","pane":3,"vim":true,"hold":false}"#),
+            .setVim(token: 3, presence: .latched))
+    }
+
+    func test_setvim_holdWithoutVim_isOff() {
+        // Holding a cleared flag is asking for nothing; `off` has to win or a client could
+        // park a hold that clears a flag it never set.
+        XCTAssertEqual(
+            NavCommand.decode(#"{"cmd":"setvim","pane":3,"vim":false,"hold":true}"#),
+            .setVim(token: 3, presence: .off))
     }
 
     func test_setvim_missingVimDefaultsToOff() {
-        XCTAssertEqual(NavCommand.decode(#"{"cmd":"setvim","pane":3}"#), .setVim(token: 3, on: false))
+        XCTAssertEqual(NavCommand.decode(#"{"cmd":"setvim","pane":3}"#), .setVim(token: 3, presence: .off))
     }
 
     func test_ignoresTrailingWhitespaceAndNewline() {
@@ -58,10 +77,12 @@ final class NavCommandTests: XCTestCase {
     }
 
     // The log line is the whole point of recording these: a bug report has to name the token
-    // and the flag state, or a stale nvim flag is unattributable after the fact.
+    // and which presence was claimed, or a stale nvim flag is unattributable after the fact.
     func test_logLine_namesTokenAndVimState() {
-        XCTAssertEqual(NavCommand.setVim(token: 14, on: true).logLine, "setvim pane=14 vim=true")
-        XCTAssertEqual(NavCommand.setVim(token: 14, on: false).logLine, "setvim pane=14 vim=false")
+        XCTAssertEqual(NavCommand.setVim(token: 14, presence: .held).logLine, "setvim pane=14 vim=held")
+        XCTAssertEqual(
+            NavCommand.setVim(token: 14, presence: .latched).logLine, "setvim pane=14 vim=latched")
+        XCTAssertEqual(NavCommand.setVim(token: 14, presence: .off).logLine, "setvim pane=14 vim=off")
     }
 
     func test_logLine_namesTokenAndDirection() {
