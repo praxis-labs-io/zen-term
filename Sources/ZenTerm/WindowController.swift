@@ -285,6 +285,11 @@ final class WindowController: NSObject {
     /// window-local (it starts from one window's picker) but its consequences are not: a clone can
     /// be open in any window, and the confirm has to name that before it deletes the directory.
     /// Injected by `AppDelegate`, which owns the only list of windows.
+    /// Clones whose delete is still running, shared across windows: the hazard is the directory
+    /// going away, which does not care which window is looking. `AppDelegate` injects the one
+    /// instance; the default keeps a window built on its own (a test, say) behaving correctly.
+    var cloneRemovals = CloneRemovalTracker()
+
     var onCountTabsAtPath: ((URL) -> Int)?
     var onCloseTabsAtPath: ((URL) -> Void)?
 
@@ -1201,7 +1206,7 @@ final class WindowController: NSObject {
                     guard let self, self.pendingModal == .repoPicker else { return }
                     self.pendingModal = nil
                     let picker = RepoPickerOverlay(
-                        entries: workspaces, clones: clones,
+                        entries: workspaces, clones: clones, removing: self.cloneRemovals.inFlight,
                         background: Theme.current.chrome.background.nsColor,
                         onChoose: { [weak self] ws, replace in
                             self?.openWorkspace(ws, replaceCurrentTab: replace)
@@ -1277,10 +1282,22 @@ final class WindowController: NSObject {
                     self.closeTabs(atPath: clone.path)
                 }
             }
+            // Deleting is slow and stays slow: a clone of a JS monorepo is a quarter of a million
+            // files and takes tens of seconds. Until it finishes the directory is still there, so
+            // the picker still lists the clone and opening that row lands in a directory being
+            // deleted. Say so for as long as it is true, rather than leaving that a guessing game.
+            self.cloneRemovals.begin(clone.path)
+            let notice = self.toasts.showSticky(
+                ToastContent(
+                    variant: .info, title: "Removing \(clone.title)",
+                    message: "It stays in the picker until its files are gone."),
+                actions: [])
             DispatchQueue.global(qos: .userInitiated).async {
                 let result = Result { try CloneStore.remove(clone) }
                 DispatchQueue.main.async { [weak self] in
                     guard let self else { return }
+                    self.cloneRemovals.finish(clone.path)
+                    self.toasts.dismiss(notice)
                     if case .failure(let error) = result {
                         self.showToast(
                             ToastContent(

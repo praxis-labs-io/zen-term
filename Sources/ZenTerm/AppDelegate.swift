@@ -264,6 +264,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         BackendShadow.report(assembled: GeneralConfig.current.keymap, probe: surface.disposition)
     }
 
+    /// One tracker for every window: a clone being deleted must read as such in all of them.
+    private let cloneRemovals = CloneRemovalTracker()
+
     private func newWindow(initialCWD: URL?, centered: Bool) {
         let offset = CGFloat(windows.count) * 28
         let rect = NSRect(x: 0, y: 0, width: 900, height: 560).offsetBy(dx: offset, dy: -offset)
@@ -273,6 +276,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The command palette dispatches through `handle(_:)`, where app-global chords are a no-op.
         // Hand them back to `route(_:)` so a palette pick reloads config / checks for updates too.
         wc.onAppGlobalCommand = { [weak self] chord in self?.route(chord) }
+        wc.cloneRemovals = cloneRemovals
         // Removing a clone starts in one window's picker but has to account for every window: a
         // clone open elsewhere would otherwise be left running in a directory that is gone.
         wc.onCountTabsAtPath = { [weak self] path in

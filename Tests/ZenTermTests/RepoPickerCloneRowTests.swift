@@ -40,11 +40,12 @@ final class RepoPickerCloneRowTests: WindowTestCase {
     }
 
     private func makePicker(
-        entries: [Workspace], clones: [Clone],
+        entries: [Workspace], clones: [Clone], removing: Set<URL> = [],
         onChoose: @escaping (Workspace, Bool) -> Void = { _, _ in }
     ) -> RepoPickerOverlay {
         RepoPickerOverlay(
-            entries: entries, clones: clones, background: Theme.current.chrome.background.nsColor,
+            entries: entries, clones: clones, removing: removing,
+            background: Theme.current.chrome.background.nsColor,
             onChoose: onChoose, onAddWorkspace: {}, onDismiss: {})
     }
 
@@ -277,5 +278,63 @@ final class RepoPickerCloneRowTests: WindowTestCase {
         XCTAssertEqual(rowTitles(in: overlay), ["New Workspace…", "alpha", "alpha c2"])
         let identities = (0..<overlay.numberOfRows()).compactMap { overlay.rowIdentity(at: $0) }
         XCTAssertEqual(identities.count, Set(identities).count, "row identities stay unique")
+    }
+
+    // MARK: rows for a clone that is being removed
+
+    /// A large clone takes tens of seconds to delete and stays on disk for all of it, so it is
+    /// still listed. Showing it as an ordinary row made the wait a guessing game, and opening it
+    /// dropped a tab into a directory being deleted underneath it.
+    func test_aCloneBeingRemoved_saysSoInsteadOfLookingOrdinary() {
+        let doomed = clone("alpha", "c2")
+        let overlay = makePicker(
+            entries: [workspace("alpha")], clones: [doomed, clone("alpha", "c3")],
+            removing: [doomed.path])
+        mount(overlay)
+
+        XCTAssertEqual(
+            rowTitles(in: overlay), ["New Workspace…", "alpha", "Removing alpha c2…", "alpha c3"])
+        XCTAssertTrue(overlay.rowViews[2] is RepoPickerOverlay.RemovingCloneRowView)
+        XCTAssertTrue(overlay.rowViews[3] is RepoPickerOverlay.CloneRowView, "its sibling is untouched")
+    }
+
+    func test_aCloneBeingRemoved_isNotSelectable() {
+        let doomed = clone("alpha", "c2")
+        let overlay = makePicker(
+            entries: [workspace("alpha")], clones: [doomed], removing: [doomed.path])
+        mount(overlay)
+
+        send(Self.moveDown, to: overlay)  // would land on the removing row if it were selectable
+
+        XCTAssertNil(overlay.selectedClone, "nothing to remove twice")
+        XCTAssertEqual(overlay.selectedWorkspace?.title, "alpha", "selection holds on the parent")
+    }
+
+    /// Return on it must not open a tab in a directory that is going away.
+    func test_returnOnACloneBeingRemoved_opensNothing() {
+        var chosen: (Workspace, Bool)?
+        let doomed = clone("alpha", "c2")
+        let overlay = makePicker(
+            entries: [workspace("alpha")], clones: [doomed], removing: [doomed.path],
+            onChoose: { chosen = ($0, $1) })
+        mount(overlay)
+
+        send(Self.moveDown, to: overlay)
+        send(#selector(NSResponder.insertNewline(_:)), to: overlay)
+
+        // Selection never reached the removing row, so Return acted on the parent it stayed on.
+        XCTAssertEqual(chosen?.0.title, "alpha")
+        XCTAssertNotEqual(chosen?.0.path, doomed.path, "never the clone being deleted")
+    }
+
+    func test_removingRowsHaveTheirOwnIdentity() {
+        let doomed = clone("alpha", "c2")
+        let overlay = makePicker(
+            entries: [workspace("alpha")], clones: [doomed, clone("alpha", "c3")],
+            removing: [doomed.path])
+        mount(overlay)
+
+        let identities = (0..<overlay.numberOfRows()).compactMap { overlay.rowIdentity(at: $0) }
+        XCTAssertEqual(identities.count, Set(identities).count)
     }
 }

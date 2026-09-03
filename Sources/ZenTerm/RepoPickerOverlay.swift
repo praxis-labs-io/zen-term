@@ -13,6 +13,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         case workspace(Workspace)
         case clone(Clone, parent: Workspace)
         case pendingClone(id: UUID, parent: Workspace)
+        case removingClone(Clone, parent: Workspace)
     }
 
     /// A clone `CloneStore.create` is still working on: a placeholder row under `parent` until
@@ -29,17 +30,21 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     private let entries: [Workspace]
     private var clones: [Clone]
+    /// Clone paths whose delete is still running. Their rows show the inverse of a pending clone:
+    /// a spinner that says so, and no selection, because the directory is going away underneath it.
+    private let removing: Set<URL>
     private var pending: [PendingClone] = []
     private var rows: [Row]
 
     init(
-        entries: [Workspace], clones: [Clone], background: NSColor,
+        entries: [Workspace], clones: [Clone], removing: Set<URL> = [], background: NSColor,
         onChoose: @escaping (Workspace, Bool) -> Void, onAddWorkspace: @escaping () -> Void,
         onDismiss: @escaping () -> Void
     ) {
+        self.removing = removing
         self.entries = entries
         self.clones = clones
-        self.rows = Self.rows(for: entries, clones: clones, pending: [])
+        self.rows = Self.rows(for: entries, clones: clones, pending: [], removing: removing)
         self.onChoose = onChoose
         self.onAddWorkspace = onAddWorkspace
         super.init(
@@ -71,17 +76,23 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     /// The ＋ row first, then each workspace trailed by the clones made from it and, last, any
     /// still being made.
-    private static func rows(for workspaces: [Workspace], clones: [Clone], pending: [PendingClone])
-        -> [Row]
-    {
-        [.add]
-            + workspaces.flatMap { workspace in
-                [Row.workspace(workspace)]
-                    + clones.filter { $0.workspaceTitle == workspace.title }
-                    .map { Row.clone($0, parent: workspace) }
-                    + pending.filter { $0.parent.title == workspace.title }
-                    .map { Row.pendingClone(id: $0.id, parent: workspace) }
+    private static func rows(
+        for workspaces: [Workspace], clones: [Clone], pending: [PendingClone], removing: Set<URL>
+    ) -> [Row] {
+        var out: [Row] = [.add]
+        for workspace in workspaces {
+            out.append(.workspace(workspace))
+            for clone in clones where clone.workspaceTitle == workspace.title {
+                out.append(
+                    removing.contains(clone.path)
+                        ? .removingClone(clone, parent: workspace)
+                        : .clone(clone, parent: workspace))
             }
+            for entry in pending where entry.parent.title == workspace.title {
+                out.append(.pendingClone(id: entry.id, parent: workspace))
+            }
+        }
+        return out
     }
 
     override func numberOfRows() -> Int { rows.count }
@@ -102,6 +113,8 @@ final class RepoPickerOverlay: PaletteOverlay {
             return CloneRowView(clone: clone)
         case .pendingClone:
             return PendingCloneRowView()
+        case .removingClone(let clone, _):
+            return RemovingCloneRowView(clone: clone)
         }
     }
 
@@ -114,6 +127,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .workspace(let workspace): return ["workspace", workspace.title]
         case .clone(let clone, _): return ["clone", clone.workspaceTitle, clone.name]
         case .pendingClone(let id, _): return ["pendingClone", id.uuidString]
+        case .removingClone(let clone, _): return ["removingClone", clone.workspaceTitle, clone.name]
         }
     }
 
@@ -121,6 +135,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// treatment a section header gets.
     override func isSelectable(at index: Int) -> Bool {
         if case .pendingClone = rows[index] { return false }
+        if case .removingClone = rows[index] { return false }
         return true
     }
 
@@ -148,7 +163,7 @@ final class RepoPickerOverlay: PaletteOverlay {
                 }
         }
         // the ＋ row stays pinned at the top through any filter
-        rows = Self.rows(for: matches, clones: clones, pending: pending)
+        rows = Self.rows(for: matches, clones: clones, pending: pending, removing: removing)
     }
 
     override func activate(index: Int, modifiers: NSEvent.ModifierFlags) {
@@ -158,8 +173,8 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .workspace(let workspace): onChoose(workspace, modifiers.contains(.shift))
         case .clone(let clone, let parent):
             onChoose(clone.workspace(from: parent), modifiers.contains(.shift))
-        case .pendingClone:
-            break  // not selectable; nothing to activate yet
+        case .pendingClone, .removingClone:
+            break  // neither is selectable; nothing to activate
         }
     }
 
@@ -316,6 +331,38 @@ final class RepoPickerOverlay: PaletteOverlay {
             addSubview(spinner)
 
             let name = NSTextField(labelWithString: "Cloning…")
+            name.font = .systemFont(ofSize: 13)
+            name.textColor = Theme.current.chrome.ink(.muted)
+            name.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(name)
+
+            NSLayoutConstraint.activate([
+                spinner.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
+                spinner.centerYAnchor.constraint(equalTo: centerYAnchor),
+                name.leadingAnchor.constraint(equalTo: spinner.trailingAnchor, constant: 8),
+                name.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+    }
+
+    /// The inverse of a pending clone: the clone still exists on disk, so it is still listed, but
+    /// its delete is running and it is going away. Not selectable, because opening it would land a
+    /// tab in a directory being removed underneath it.
+    final class RemovingCloneRowView: SelectableRowView {
+        init(clone: Clone) {
+            super.init()
+
+            let spinner = NSProgressIndicator()
+            spinner.style = .spinning
+            spinner.controlSize = .small
+            spinner.isIndeterminate = true
+            spinner.startAnimation(nil)
+            spinner.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(spinner)
+
+            let name = NSTextField(labelWithString: "Removing \(clone.title)…")
             name.font = .systemFont(ofSize: 13)
             name.textColor = Theme.current.chrome.ink(.muted)
             name.translatesAutoresizingMaskIntoConstraints = false

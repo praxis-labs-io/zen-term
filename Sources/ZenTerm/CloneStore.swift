@@ -214,8 +214,18 @@ enum CloneStore {
         try git(["config", "--local", stashBaselineKey, String(stashDepth)], in: clone)
     }
 
+    #if DEBUG
+        /// Test-only, and the only way to observe the window's in-flight state: deleting a real
+        /// clone takes tens of seconds, deleting a fixture takes none, so a test cannot otherwise
+        /// catch the picker mid-removal.
+        static var willRemoveForTesting: ((Clone) -> Void)?
+    #endif
+
     /// Delete the clone. Copy-on-write means this frees only the blocks that diverged.
     static func remove(_ clone: Clone) throws {
+        #if DEBUG
+            willRemoveForTesting?(clone)
+        #endif
         try FileManager.default.removeItem(at: clone.path)
     }
 
