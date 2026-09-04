@@ -165,29 +165,31 @@ final class RepoPickerOverlay: PaletteOverlay {
         private let branchLabel = NSTextField(labelWithString: "")
         private let churnLabel = NSTextField(labelWithString: "")
 
+        /// Extra width between one glyph-and-count group and the next, on top of the space itself.
+        static let groupGap: CGFloat = 4
+
         /// The counts, in the order and vocabulary a starship prompt writes them, each token in the
         /// chrome role that stands for its color there. Nerd-font glyphs are out: the chrome draws
         /// in the system font, where a private-use codepoint renders as a box.
         static func churnText(_ churn: GitChurn) -> NSAttributedString {
             let chrome = Theme.current.chrome
+            let font = NSFont.systemFont(ofSize: 11)
             let out = NSMutableAttributedString()
             func token(_ text: String, _ role: TerminalColor) {
-                if out.length > 0 { out.append(NSAttributedString(string: " ")) }
+                // A glyph binds to its own count and separates from the next pair, so the eye reads
+                // groups rather than one run of symbols. Kerning the gap, rather than padding with
+                // more spaces, keeps it under a point of control instead of the font's space width.
+                if out.length > 0 {
+                    out.append(
+                        NSAttributedString(string: " ", attributes: [.font: font, .kern: groupGap]))
+                }
                 out.append(
                     NSAttributedString(
-                        string: text,
-                        attributes: [
-                            .foregroundColor: role.nsColor, .font: NSFont.systemFont(ofSize: 11),
-                        ]))
+                        string: text, attributes: [.foregroundColor: role.nsColor, .font: font]))
             }
 
-            if churn.ahead > 0 && churn.behind > 0 {
-                token("⇕ ⇡\(churn.ahead) ⇣\(churn.behind)", chrome.accent)
-            } else if churn.ahead > 0 {
-                token("⇡\(churn.ahead)", chrome.info)
-            } else if churn.behind > 0 {
-                token("⇣\(churn.behind)", chrome.destructive)
-            }
+            if churn.ahead > 0 { token("⇡\(churn.ahead)", chrome.info) }
+            if churn.behind > 0 { token("⇣\(churn.behind)", chrome.destructive) }
             if churn.staged > 0 { token("+\(churn.staged)", chrome.positive) }
             if churn.modified > 0 { token("~\(churn.modified)", chrome.warning) }
             if churn.untracked > 0 { token("?\(churn.untracked)", chrome.attention) }
