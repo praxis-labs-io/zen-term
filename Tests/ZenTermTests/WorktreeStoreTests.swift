@@ -20,6 +20,7 @@ final class WorktreeStoreTests: XCTestCase {
 
     override func tearDownWithError() throws {
         WorktreeStore.rootOverrideForTesting = nil
+        WorktreeStore.betweenCheckAndAddForTesting = nil
         try? FileManager.default.removeItem(at: root)
         try super.tearDownWithError()
     }
@@ -197,6 +198,97 @@ final class WorktreeStoreTests: XCTestCase {
         }
     }
 
+    // MARK: create, the destructive failure paths
+
+    /// `worktree add -b <name>` reaches git's own `git branch` call with no `--` guard, so a name
+    /// beginning with a dash is read as an option there. `-m` renames the checked-out branch.
+    func test_create_refusesABranchNameThatGitWouldReadAsAnOption() throws {
+        let headBefore = try GitFixture.run(["symbolic-ref", "HEAD"], in: repo)
+
+        XCTAssertThrowsError(try WorktreeStore.create(branch: "-m", in: repo)) { error in
+            XCTAssertEqual(error as? WorktreeStore.WorktreeError, .invalidBranchName("-m"))
+        }
+        XCTAssertEqual(try GitFixture.run(["symbolic-ref", "HEAD"], in: repo), headBefore)
+        XCTAssertEqual(try GitFixture.branches(in: repo), ["main"])
+    }
+
+    func test_create_refusesANameGitWouldNotTake() throws {
+        for name in ["bad..name", "has space", "ends.lock", ""] {
+            XCTAssertThrowsError(try WorktreeStore.create(branch: name, in: repo), name) { error in
+                XCTAssertEqual(error as? WorktreeStore.WorktreeError, .invalidBranchName(name), name)
+            }
+        }
+        XCTAssertEqual(try GitFixture.branches(in: repo), ["main"])
+    }
+
+    /// A `post-checkout` hook that fails (direnv, LFS, repo tooling) makes `worktree add` register
+    /// the worktree and *then* exit non-zero. Deleting the directory first leaves git refusing to
+    /// drop the branch, with a stale admin entry that breaks the next create of the same name.
+    func test_create_rollbackClearsTheRegistrationSoNoOrphanSurvives() throws {
+        try failingPostCheckoutHook()
+
+        XCTAssertThrowsError(try WorktreeStore.create(branch: "hooked", in: repo))
+
+        XCTAssertEqual(try GitFixture.branches(in: repo), ["main"], "no orphaned branch")
+        XCTAssertFalse(
+            GitFixture.exists(repo.appendingPathComponent(".git/worktrees/hooked")),
+            "no stale admin entry")
+        XCTAssertEqual(try WorktreeStore.list(in: repo), [])
+    }
+
+    /// Isolates the OID guard. The raced branch sits on an older commit that IS merged, so
+    /// `branch -d` would delete it without complaint and only the OID comparison can save it.
+    func test_create_doesNotDeleteAMergedBranchItDidNotCreate() throws {
+        let older = try GitFixture.run(["rev-parse", "HEAD"], in: repo)
+        try GitFixture.write("two\n", to: repo.appendingPathComponent("tracked.txt"))
+        try GitFixture.run(["commit", "-qam", "second"], in: repo)
+        try GitFixture.run(["push", "-q", "origin", "main"], in: repo)
+        WorktreeStore.betweenCheckAndAddForTesting = { repo in
+            try? GitFixture.run(["branch", "raced", older], in: repo)
+        }
+
+        XCTAssertThrowsError(try WorktreeStore.create(branch: "raced", in: repo)) { error in
+            guard
+                case .rollbackIncomplete(_, let leftBehind) =
+                    try? XCTUnwrap(error as? WorktreeStore.WorktreeError)
+            else { return XCTFail("expected rollbackIncomplete, got \(error)") }
+            XCTAssertEqual(leftBehind, ["the branch raced"])
+        }
+        XCTAssertEqual(try GitFixture.run(["rev-parse", "raced"], in: repo), older, "untouched")
+    }
+
+    /// Belt and braces over the same window: an unmerged raced branch is refused by `branch -d`
+    /// as well as by the OID guard, so it survives even if one of the two regresses.
+    func test_create_doesNotDeleteAnUnmergedBranchItDidNotCreate() throws {
+        var theirCommit = ""
+        WorktreeStore.betweenCheckAndAddForTesting = { repo in
+            try? GitFixture.run(["branch", "raced"], in: repo)
+            let commit = try? GitFixture.run(
+                ["commit-tree", "-m", "their work", "-p", "HEAD", "HEAD^{tree}"], in: repo)
+            try? GitFixture.run(["update-ref", "refs/heads/raced", commit ?? ""], in: repo)
+            theirCommit = (try? GitFixture.run(["rev-parse", "raced"], in: repo)) ?? ""
+        }
+
+        XCTAssertThrowsError(try WorktreeStore.create(branch: "raced", in: repo))
+        XCTAssertEqual(try GitFixture.run(["rev-parse", "raced"], in: repo), theirCommit)
+    }
+
+    /// The residual the OID guard cannot close, pinned rather than papered over: a raced branch cut
+    /// from the same base is indistinguishable from ours, so the rollback takes it. It carries no
+    /// commits of its own, so the loss is the ref and nothing else.
+    func test_create_takesBackABranchStandingExactlyWhereItPutIt() throws {
+        WorktreeStore.betweenCheckAndAddForTesting = { repo in
+            try? GitFixture.run(["branch", "raced", "origin/main"], in: repo)
+        }
+
+        XCTAssertThrowsError(try WorktreeStore.create(branch: "raced", in: repo)) { error in
+            if case .rollbackIncomplete = error as? WorktreeStore.WorktreeError {
+                XCTFail("the rollback should complete cleanly here")
+            }
+        }
+        XCTAssertEqual(try GitFixture.branches(in: repo), ["main"])
+    }
+
     // MARK: remove
 
     /// Carried files (ZEN-453) are always untracked, and git refuses a worktree holding those
@@ -250,6 +342,15 @@ final class WorktreeStoreTests: XCTestCase {
         try FileManager.default.removeItem(at: worktree.path)
 
         XCTAssertNil(WorktreeStore.state(worktree))
+    }
+
+    // MARK: fixtures
+
+    /// A hook that fails after the checkout, the way direnv or an LFS hook can.
+    private func failingPostCheckoutHook() throws {
+        let hook = repo.appendingPathComponent(".git/hooks/post-checkout")
+        try GitFixture.write("#!/bin/sh\nexit 1\n", to: hook)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hook.path)
     }
 
     // MARK: naming

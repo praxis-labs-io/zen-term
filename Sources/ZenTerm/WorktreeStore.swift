@@ -31,9 +31,12 @@ enum WorktreeStore {
     enum WorktreeError: Error, LocalizedError, Equatable {
         case notARepo(URL)
         case unbornHead(URL)
+        case invalidBranchName(String)
         case branchExists(String)
         case destinationExists(URL)
         case gitFailed(GitCommand.Failure)
+        /// The create failed *and* undoing it did not finish. `leftBehind` names what survives.
+        case rollbackIncomplete(cause: String, leftBehind: [String])
 
         var errorDescription: String? {
             switch self {
@@ -41,19 +44,33 @@ enum WorktreeStore {
                 return "\(url.lastPathComponent) is not a git repository."
             case .unbornHead(let url):
                 return "\(url.lastPathComponent) has no commits yet, so there is nothing to branch from."
+            case .invalidBranchName(let branch):
+                return "\(branch) is not a branch name git will take."
             case .branchExists(let branch):
                 return "A branch named \(branch) already exists."
             case .destinationExists(let url):
                 return "\(url.lastPathComponent) is already a folder in the worktrees directory."
             case .gitFailed(let failure):
                 return failure.errorDescription
+            case .rollbackIncomplete(let cause, let leftBehind):
+                return "\(cause) Cleaning up left \(sentenceList(leftBehind)) behind."
             }
+        }
+
+        private func sentenceList(_ items: [String]) -> String {
+            guard let last = items.last else { return "nothing" }
+            guard items.count > 1 else { return last }
+            return items.dropLast().joined(separator: ", ") + " and " + last
         }
     }
 
     #if DEBUG
         /// Test-only redirect, mirroring `ConfigLoader.defaultRootOverrideForTesting`.
         static var rootOverrideForTesting: URL?
+
+        /// Test-only seam for the window between the branch precheck and `worktree add`, the only
+        /// place a branch we did not create can appear. Mirrors `CloneStore.willRemoveForTesting`.
+        static var betweenCheckAndAddForTesting: ((URL) -> Void)?
     #endif
 
     /// Worktrees get a plain, typeable home of their own rather than a corner of app state: a
@@ -98,10 +115,11 @@ enum WorktreeStore {
     /// A worktree on a new `branch`, cut from the repo's default branch.
     static func create(branch: String, in repo: URL) throws -> Worktree {
         guard GitRepo.isGitRepo(repo) else { throw WorktreeError.notARepo(repo) }
+        guard isUsableBranchName(branch, in: repo) else { throw WorktreeError.invalidBranchName(branch) }
         guard !branchExists(branch, in: repo) else { throw WorktreeError.branchExists(branch) }
 
         let base = try resolveBase(in: repo)
-        let head = try git(["rev-parse", base], in: repo)
+        let base0ID = try git(["rev-parse", base], in: repo)
         let parent = root.appendingPathComponent(directoryName(for: repo), isDirectory: true)
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
         let destination = parent.appendingPathComponent(slug(forText: branch), isDirectory: true)
@@ -109,18 +127,51 @@ enum WorktreeStore {
             throw WorktreeError.destinationExists(destination)
         }
 
+        #if DEBUG
+            betweenCheckAndAddForTesting?(repo)
+        #endif
+
         do {
             try git(["worktree", "add", "-b", branch, destination.path, base], in: repo)
         } catch {
-            // `worktree add` creates the branch before it checks the destination, so a failure
-            // here leaves a branch behind with no tree on it unless we take it back.
-            try? FileManager.default.removeItem(at: destination)
-            if branchExists(branch, in: repo) { _ = try? git(["branch", "-D", branch], in: repo) }
+            let leftBehind = rollback(branch: branch, at: destination, createdAt: base0ID, in: repo)
+            guard leftBehind.isEmpty else {
+                throw WorktreeError.rollbackIncomplete(
+                    cause: error.localizedDescription, leftBehind: leftBehind)
+            }
             throw error
         }
 
+        // Read the worktree's own HEAD rather than trusting the OID resolved before the add: a
+        // concurrent fetch can move `base` in between, and a reported sha has to be the real one.
+        let head = (try? git(["rev-parse", "HEAD"], in: destination)) ?? base0ID
         return Worktree(
             path: destination.standardizedFileURL, branch: branch, head: head, isLocked: false)
+    }
+
+    /// Undo what a failed `create` made, and report what it could not take back.
+    ///
+    /// Order matters: git refuses to delete a branch still registered to a worktree, even one whose
+    /// directory is gone, so the registration goes first and a bare `removeItem` never leads.
+    private static func rollback(
+        branch: String, at destination: URL, createdAt base0ID: String, in repo: URL
+    ) -> [String] {
+        _ = try? git(["worktree", "remove", "--force", destination.path], in: repo)
+        try? FileManager.default.removeItem(at: destination)
+        _ = try? git(["worktree", "prune"], in: repo)
+
+        var leftBehind: [String] = []
+        if FileManager.default.fileExists(atPath: destination.path) {
+            leftBehind.append("the folder \(destination.lastPathComponent)")
+        }
+        guard branchExists(branch, in: repo) else { return leftBehind }
+
+        // Delete only a branch still standing where we put it. One that moved belongs to whoever
+        // created it after our precheck, and this errs toward leaving it and saying so.
+        let atBase = (try? git(["rev-parse", "--verify", "refs/heads/\(branch)"], in: repo)) == base0ID
+        if atBase, (try? git(["branch", "-d", "--", branch], in: repo)) != nil { return leftBehind }
+        leftBehind.append("the branch \(branch)")
+        return leftBehind
     }
 
     /// Delete the worktree, leaving the branch it held alone. `--force` is unconditional because
@@ -211,6 +262,16 @@ enum WorktreeStore {
             throw WorktreeError.unbornHead(repo)
         }
         return "HEAD"
+    }
+
+    /// A name git will take that cannot also be read as a command-line option.
+    ///
+    /// The dash check is the load-bearing half. `refs/heads/-m` is a perfectly *valid* ref name, so
+    /// `check-ref-format` passes it, and `worktree add -b -m` then reaches git's own unguarded
+    /// `git branch` call and renames whatever branch the repo is standing on.
+    private static func isUsableBranchName(_ branch: String, in repo: URL) -> Bool {
+        guard !branch.isEmpty, !branch.hasPrefix("-") else { return false }
+        return (try? git(["check-ref-format", "refs/heads/\(branch)"], in: repo)) != nil
     }
 
     private static func branchExists(_ branch: String, in repo: URL) -> Bool {

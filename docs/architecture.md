@@ -1796,11 +1796,36 @@ collide as `destinationExists`, which is the honest answer.
 `origin/main`) and falls back to the local `HEAD`, so a repo with no remote works.
 A repo with no commits at all throws `unbornHead`.
 
-**`git worktree add` creates the branch before it checks the destination.** A
-failing add therefore leaves a branch behind with no tree on it, so `create`
-deletes the destination and the branch on any failure. The destination is checked
-for existence *before* the add for the same reason in reverse: without that check,
-the rollback would delete a directory we never made.
+**A branch name is validated before any git command runs, and a leading dash is
+rejected by hand.** `refs/heads/-m` is a perfectly valid ref name, so
+`check-ref-format` passes it, but `git worktree add -b -m` hands `-m` to git's own
+`git branch` call, which has no `--` guard: the repo's checked-out branch gets
+renamed and `HEAD` follows it. Probed on 2.50.1, reflog and all. That is the only
+defect here that damages the user's primary checkout, and validation is the whole
+defence, because the vulnerable call is inside git rather than in our argv.
+
+**Rollback order is load-bearing.** `git worktree add` can fail *after* registering
+the worktree, which a `post-checkout` hook that exits non-zero reproduces exactly
+(direnv and LFS both install one). Deleting the directory first then leaves git
+refusing the branch with "cannot delete branch … used by worktree", plus a stale
+`.git/worktrees/<slug>` entry that breaks the next create of the same name. So the
+rollback runs `worktree remove --force`, then the directory, then `prune`, and only
+then the branch.
+
+**The rollback deletes a branch only if it still points at the base OID recorded
+before the add.** Keying off the name alone is a time-of-check-to-time-of-use hole:
+a branch that appears between our precheck and our failure belongs to whoever made
+it, and `branch -D` on that destroys their work. It errs toward leaving a branch and
+saying so. `branch -d` rather than `-D` is a second line under that; no test can
+isolate it, because any branch passing the OID check is merged by construction, so
+do not "simplify" it back to `-D`.
+
+The residual it cannot close: a branch someone else cuts from the same base in that
+window is indistinguishable from ours and is taken. It carries no commits, so the
+loss is the ref and nothing else.
+
+Whatever the rollback cannot undo is named in `rollbackIncomplete` rather than
+swallowed, so a create that half-failed says which branch or folder survived it.
 
 ### What removal costs
 
