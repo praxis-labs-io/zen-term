@@ -43,14 +43,14 @@ final class RepoPickerOverlay: PaletteOverlay {
             onDismiss: onDismiss)
 
         // One background pass per open: the rows are up with whatever git status was already known,
-        // and the badges fill in when the probes land. Per open rather than once per process, so a
-        // folder that just became a repo gets its badge without a relaunch.
+        // and the branches fill in when the probes land. Per open rather than once per process, so
+        // a branch switched in a shell shows up without a relaunch.
         GitRepoStatus.refresh(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Re-read every workspace row's badge from `GitRepoStatus`.
+    /// Re-read every workspace row's branch from `GitRepoStatus`.
     private func applyGitStatus() {
         for row in rowViews { (row as? RowView)?.applyGitStatus() }
     }
@@ -79,7 +79,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     /// A row is the same row across a re-filter when it's the ＋ row or names the same workspace.
     /// Workspace titles are the `[Title]` section headers, unique by construction, and a row renders
-    /// nothing but the title and a git badge (which updates in place rather than by rebuilding).
+    /// nothing but the title and its branch (which updates in place rather than by rebuilding).
     override func rowIdentity(at index: Int) -> AnyHashable? {
         switch rows[index] {
         case .add: return ["add"]
@@ -146,13 +146,13 @@ final class RepoPickerOverlay: PaletteOverlay {
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
     }
 
-    /// One workspace row: title (left) and a muted git icon (right) when its dir is a repo. The
-    /// badge is always built and starts hidden — whether the folder is a repo is filesystem I/O,
-    /// which can't run on the main thread, so the row shows the last-known answer now and
-    /// `applyGitStatus()` turns the badge on when a fresh probe lands.
+    /// One workspace row: title (left) and the branch its dir is on (right) when it is a repo. The
+    /// branch label is always built and starts empty — reading `HEAD` is filesystem I/O, which
+    /// can't run on the main thread, so the row shows the last-known answer now and
+    /// `applyGitStatus()` fills the branch in when a fresh probe lands.
     final class RowView: SelectableRowView {
         let workspace: Workspace
-        private let gitBadge = NSImageView()
+        private let branchLabel = NSTextField(labelWithString: "")
 
         init(workspace: Workspace) {
             self.workspace = workspace
@@ -164,27 +164,34 @@ final class RepoPickerOverlay: PaletteOverlay {
             name.translatesAutoresizingMaskIntoConstraints = false
             addSubview(name)
 
-            gitBadge.image = IconCatalog.gitBadge()
-            gitBadge.setAccessibilityLabel("git repository")
-            gitBadge.contentTintColor = Theme.current.chrome.ink(.faint)
-            gitBadge.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(gitBadge)
+            branchLabel.font = .systemFont(ofSize: 11)
+            branchLabel.textColor = Theme.current.chrome.ink(.muted)
+            // The title is what identifies the row, so a long branch truncates rather than
+            // squeezing the name it sits opposite.
+            branchLabel.lineBreakMode = .byTruncatingTail
+            branchLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            branchLabel.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(branchLabel)
 
             NSLayoutConstraint.activate([
                 name.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
                 name.centerYAnchor.constraint(equalTo: centerYAnchor),
-                gitBadge.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-                gitBadge.centerYAnchor.constraint(equalTo: centerYAnchor),
+                branchLabel.leadingAnchor.constraint(
+                    greaterThanOrEqualTo: name.trailingAnchor, constant: 12),
+                branchLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+                branchLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
             applyGitStatus()
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-        /// Show the badge when this workspace's folder is a known repo. Run at build time and again
-        /// whenever a `GitRepoStatus.refresh` lands.
+        /// Show the branch when this workspace's folder is a known repo. Run at build time and
+        /// again whenever a `GitRepoStatus.refresh` lands.
         func applyGitStatus() {
-            gitBadge.isHidden = GitRepoStatus.known(workspace.path) != true
+            let branch = GitRepoStatus.branch(workspace.path)
+            branchLabel.stringValue = branch ?? ""
+            branchLabel.setAccessibilityLabel(branch.map { "on branch \($0)" })
         }
     }
 }

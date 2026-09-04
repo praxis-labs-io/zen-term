@@ -2,11 +2,11 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The off-main git-status cache behind the ⌘⇧P picker's and Settings → Workspaces' badges.
-/// Pure logic over a real temp tree — no AppKit — so it pins the two things the badge
+/// The off-main git cache behind the ⌘P picker's branch labels and Settings → Workspaces' badges.
+/// Pure logic over a real temp tree — no AppKit — so it pins the two things those
 /// rows depend on: an unprobed directory answers "unknown" rather than "not a repo", and a refresh
-/// re-answers, which is what lets a freshly `git init`ed folder pick up its badge without a
-/// relaunch.
+/// re-answers, which is what lets a freshly `git init`ed folder, or a branch just switched in a
+/// shell, show up without a relaunch.
 final class GitRepoStatusTests: XCTestCase {
     private var root: URL!
 
@@ -28,6 +28,14 @@ final class GitRepoStatusTests: XCTestCase {
         let dir = root.appendingPathComponent(name, isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         if git { try Data().write(to: dir.appendingPathComponent(".git")) }
+        return dir
+    }
+
+    private func makeRepo(_ name: String, on branch: String) throws -> URL {
+        let dir = root.appendingPathComponent(name, isDirectory: true)
+        let gitDir = dir.appendingPathComponent(".git", isDirectory: true)
+        try FileManager.default.createDirectory(at: gitDir, withIntermediateDirectories: true)
+        try Data("ref: refs/heads/\(branch)\n".utf8).write(to: gitDir.appendingPathComponent("HEAD"))
         return dir
     }
 
@@ -56,6 +64,37 @@ final class GitRepoStatusTests: XCTestCase {
 
         XCTAssertEqual(GitRepoStatus.known(repo), true)
         XCTAssertEqual(GitRepoStatus.known(plain), false)
+    }
+
+    /// One probe answers both questions, so a row never renders a branch for a folder the same pass
+    /// called a non-repo.
+    func test_refresh_answersTheBranchAlongsideTheRepoAnswer() throws {
+        let repo = try makeRepo("repo", on: "feature/zen-450")
+        let plain = try makeDir("plain", git: false)
+
+        refresh([repo, plain])
+
+        XCTAssertEqual(GitRepoStatus.branch(repo), "feature/zen-450")
+        XCTAssertNil(GitRepoStatus.branch(plain))
+    }
+
+    /// The picker probes per open, which is what makes a branch switched in a shell show up on the
+    /// next ⌘P rather than at the next relaunch.
+    func test_refresh_picksUpASwitchedBranch() throws {
+        let repo = try makeRepo("repo", on: "main")
+        refresh([repo])
+        XCTAssertEqual(GitRepoStatus.branch(repo), "main")
+
+        try Data("ref: refs/heads/side\n".utf8)
+            .write(to: repo.appendingPathComponent(".git/HEAD"))
+        refresh([repo])
+
+        XCTAssertEqual(GitRepoStatus.branch(repo), "side")
+    }
+
+    func test_branch_isNilUntilSomethingProbes() throws {
+        let repo = try makeRepo("repo", on: "main")
+        XCTAssertNil(GitRepoStatus.branch(repo))
     }
 
     /// Every open refreshes, so a folder that becomes a repo between two opens answers correctly on

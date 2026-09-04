@@ -1,22 +1,35 @@
 import Foundation
 
-/// The last-known "is this directory a git repo" answer per directory, probed off the main thread.
+/// The last-known git answers per directory — is it a repo, and what branch is it on — probed off
+/// the main thread.
 ///
-/// `GitRepo.isGitRepo` is a `fileExists` stat, and the chrome must never block the main queue on
-/// filesystem I/O — a workspace on a network share or FUSE mount makes that stat
+/// Both answers are filesystem reads, and the chrome must never block the main queue on
+/// filesystem I/O — a workspace on a network share or FUSE mount makes that read
 /// unbounded, and the ⌘P picker used to run one per row per keystroke. So a row renders
-/// from `known` (instant, nil until something has probed the path) and its host calls `refresh` to
-/// fill the badges in when the answers land.
+/// from `known` / `branch` (instant, nil until something has probed the path) and its host calls
+/// `refresh` to fill them in when the answers land.
 ///
 /// Refreshing per open, rather than answering once for the life of the process, is what makes a
-/// freshly `git init`ed folder show its badge without a relaunch.
+/// freshly `git init`ed folder answer without a relaunch, and a branch switched in a shell show up
+/// the next time the picker opens.
 ///
 /// Main-thread only: `known` reads the cache, and `refresh` hops back to main before writing it.
 enum GitRepoStatus {
-    private static var cache: [URL: Bool] = [:]
+    /// One directory's answers. `branch` is nil for a directory that isn't a repo, and for a repo
+    /// whose `HEAD` can't be read.
+    private struct Status {
+        let isRepo: Bool
+        let branch: String?
+    }
 
-    /// The last-known answer for `dir`, or nil when nothing has probed it yet.
-    static func known(_ dir: URL) -> Bool? { cache[dir.standardizedFileURL] }
+    private static var cache: [URL: Status] = [:]
+
+    /// Whether `dir` is a repo, or nil when nothing has probed it yet.
+    static func known(_ dir: URL) -> Bool? { cache[dir.standardizedFileURL]?.isRepo }
+
+    /// The branch `dir` is on, or nil when nothing has probed it, it isn't a repo, or its `HEAD`
+    /// didn't read.
+    static func branch(_ dir: URL) -> String? { cache[dir.standardizedFileURL]?.branch }
 
     /// Probe every directory in `dirs` off-main, recording each answer and running `completion` on
     /// the main thread as it lands.
@@ -33,8 +46,9 @@ enum GitRepoStatus {
         for dir in dirs.map(\.standardizedFileURL) {
             DispatchQueue.global(qos: .userInitiated).async {
                 let isRepo = GitRepo.isGitRepo(dir)
+                let branch = isRepo ? GitRepo.currentBranch(dir) : nil
                 DispatchQueue.main.async {
-                    cache[dir] = isRepo
+                    cache[dir] = Status(isRepo: isRepo, branch: branch)
                     completion()
                 }
             }
