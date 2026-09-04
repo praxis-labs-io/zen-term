@@ -97,6 +97,41 @@ final class GitRepoStatusTests: XCTestCase {
         XCTAssertNil(GitRepoStatus.branch(repo))
     }
 
+    /// `refreshChurn` answers for every directory it was given, including the ones with no answer.
+    /// A caller counting completions (which is the only way to wait on a re-probe) hangs rather
+    /// than fails if a failure path returns without calling back.
+    func test_refreshChurn_answersEvenForDirectoriesWithNoChurn() throws {
+        let repo = try makeRepo("repo", on: "main")
+        let plain = try makeDir("plain", git: false)
+        var landed = 0
+
+        GitRepoStatus.refreshChurn([repo, plain]) { landed += 1 }
+
+        waitUntil(landed == 2, "an answer for the plain directory too, not just the repo")
+        XCTAssertNil(GitRepoStatus.churn(plain), "a non-repo has no counts")
+    }
+
+    /// A probe that cannot answer clears the counts rather than leaving the previous run's on the
+    /// row. `git status` exits nonzero on an `index.lock` held by a concurrent git, and a stale
+    /// `~3` asserts work that may already be committed.
+    func test_refreshChurn_clearsCountsWhenAProbeStopsAnswering() throws {
+        let repo = root.appendingPathComponent("real-repo", isDirectory: true)
+        try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+        _ = GitCommand.run(["init", "-q"], in: repo)
+        try Data("loose\n".utf8).write(to: repo.appendingPathComponent("untracked.txt"))
+
+        var landed = 0
+        GitRepoStatus.refreshChurn([repo]) { landed += 1 }
+        waitUntil(landed == 1, "the first probe to land")
+        XCTAssertEqual(GitRepoStatus.churn(repo)?.untracked, 1)
+
+        try FileManager.default.removeItem(at: repo.appendingPathComponent(".git"))
+        GitRepoStatus.refreshChurn([repo]) { landed += 1 }
+        waitUntil(landed == 2, "the second probe to land")
+
+        XCTAssertNil(GitRepoStatus.churn(repo), "the stale count must not survive")
+    }
+
     /// Every open refreshes, so a folder that becomes a repo between two opens answers correctly on
     /// the second — the reason the cache isn't a once-per-process answer.
     func test_refresh_picksUpAFolderThatBecameARepo() throws {

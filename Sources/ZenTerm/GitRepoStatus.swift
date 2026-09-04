@@ -63,8 +63,20 @@ enum GitRepoStatus {
         }
     }
 
+    /// Churn probes run here rather than on the global queue: each is a blocking `git`, one per
+    /// workspace, and an unbounded fan-out of them is what starves the very queue
+    /// `GitRepoStatus.repoRoot` and the tool floats' `git:` gating share. Four at a time keeps a
+    /// stalled mount from taking the app's worker threads with it.
+    private static let churnQueue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 4
+        queue.qualityOfService = .userInitiated
+        return queue
+    }()
+
     /// Probe every directory in `dirs` for churn off-main, running `completion` on the main thread
-    /// as each answer lands.
+    /// as each answer lands — including the answers that are "none", so a caller counting
+    /// completions is never left waiting on one that will not come.
     ///
     /// Separate from `refresh` because it costs a different order of magnitude: `refresh` reads two
     /// files, this runs `git` once per directory. Keeping them apart is what lets a row show its
@@ -74,20 +86,32 @@ enum GitRepoStatus {
     /// No fetch: `git status` reports ahead/behind against the remote-tracking ref already on disk.
     /// A ⌘P that hit the network would stall on a VPN or an auth prompt for a repo the user only
     /// wanted to open.
+    ///
+    /// Each call cancels the one before it. A picker closed and reopened must not leave the first
+    /// open's probes running behind the second's.
     static func refreshChurn(_ dirs: [URL], completion: @escaping () -> Void) {
+        churnQueue.cancelAllOperations()
         for dir in dirs.map(\.standardizedFileURL) {
-            DispatchQueue.global(qos: .userInitiated).async {
-                guard GitRepo.isGitRepo(dir),
-                    case .success(let output) = GitCommand.run(
-                        ["status", "--porcelain=v2", "--branch"], in: dir)
-                else { return }
-                let churn = GitChurn.parse(output)
+            churnQueue.addOperation {
+                let churn = churnNow(for: dir)
                 DispatchQueue.main.async {
+                    // A probe that failed clears the counts rather than leaving the last run's.
+                    // `git status` exits nonzero on an `index.lock` held by a concurrent git, and a
+                    // row must not go on asserting work that may no longer be there.
                     cache[dir, default: Status()].churn = churn
                     completion()
                 }
             }
         }
+    }
+
+    /// One directory's counts, or nil when it isn't a repo or `git` can't answer for it.
+    private static func churnNow(for dir: URL) -> GitChurn? {
+        guard GitRepo.isGitRepo(dir),
+            case .success(let output) = GitCommand.run(
+                ["status", "--porcelain=v2", "--branch"], in: dir)
+        else { return nil }
+        return GitChurn.parse(output)
     }
 
     /// The enclosing repo root for `cwd`, resolved off-main and delivered on the main thread.

@@ -1818,6 +1818,17 @@ repaints even the sites that bake their color at init, like the tab bar's tracer
   fetch is ever run: ahead/behind is read against the remote-tracking ref already
   on disk, because a ⌘P that hit the network would stall on a VPN or an auth
   prompt for a repo the user only wanted to open.
+- **`GitCommand` gates on `xcode-select -p`, and churn probes are bounded to
+  four.** `/usr/bin/git` is an `xcrun` shim that exists whether or not the
+  Command Line Tools do, and running it without them opens the system "install
+  developer tools" modal, so a per-row probe would stack one prompt per
+  workspace. `xcode-select -p` answers the same question and opens nothing.
+  The probes themselves run on `churnQueue`, not the global queue: unbounded
+  blocking `git` calls are what would starve the `.userInitiated` work that
+  `repoRoot` and the tool floats' `git:` gating share, and each `refreshChurn`
+  cancels the one before it so a reopened picker does not run behind the last
+  one. A probe that cannot answer clears the counts rather than leaving the
+  previous run's on the row.
 - **A tool float's open is cancellable while its repo-root probe is out.** The
   walk is off-main, so a `git:`-gated or `.directory` float opens a queue hop
   after the press, and for that window `pendingOpen` is the float's only trace:

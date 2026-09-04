@@ -232,11 +232,17 @@ final class RepoPickerOverlay: PaletteOverlay {
             churnLabel.alignment = .right
             churnLabel.lineBreakMode = .byClipping
             churnLabel.setContentHuggingPriority(.required, for: .horizontal)
-            churnLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+            // Above the title's 750 so the counts are the last thing to give, but breakable, so a
+            // row too narrow for everything still lays out.
+            churnLabel.setContentCompressionResistancePriority(.defaultHigh + 1, for: .horizontal)
             churnLabel.translatesAutoresizingMaskIntoConstraints = false
             addSubview(churnLabel)
 
+            // The floor is a preference, not a law: a narrow tile can leave less room than the
+            // floor plus the counts plus a gap, and three required constraints in that row would
+            // go unsatisfiable rather than degrade.
             branchFloor = branchLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 0)
+            branchFloor.priority = .defaultHigh
 
             NSLayoutConstraint.activate([
                 name.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),

@@ -62,11 +62,42 @@ final class GitChurnTests: XCTestCase {
     /// A deletion is reported as an ordinary `1` entry with `D` in one half. Counting it as
     /// "staged" or "modified" as well would double it, and a row would claim more work than exists.
     func test_parse_aDeletionCountsOnlyOnce() {
-        let churn = GitChurn.parse("1 D. N... 100644 100644 000000 aaa bbb gone.swift")
+        let staged = GitChurn.parse("1 D. N... 100644 100644 000000 aaa bbb gone.swift")
+        XCTAssertEqual(staged.deleted, 1)
+        XCTAssertEqual(staged.staged, 0)
+        XCTAssertEqual(staged.modified, 0)
 
-        XCTAssertEqual(churn.deleted, 1)
-        XCTAssertEqual(churn.staged, 0)
-        XCTAssertEqual(churn.modified, 0)
+        let worktree = GitChurn.parse("1 .D N... 100644 100644 000000 aaa bbb gone.swift")
+        XCTAssertEqual(worktree.deleted, 1)
+        XCTAssertEqual(worktree.staged, 0)
+        XCTAssertEqual(worktree.modified, 0)
+    }
+
+    /// `X` and `Y` are independent answers, so a `D` in one must not speak for the other. `MD` is a
+    /// staged edit the worktree then deleted: reporting only the delete hides staged work that a
+    /// commit would still capture.
+    func test_parse_aDeleteInOneHalfKeepsTheOtherHalfsChange() {
+        let editedThenDeleted = GitChurn.parse(
+            "1 MD N... 100644 100644 000000 aaa bbb both.swift")
+        XCTAssertEqual(editedThenDeleted.staged, 1, "the staged edit is still there to commit")
+        XCTAssertEqual(editedThenDeleted.deleted, 1)
+        XCTAssertEqual(editedThenDeleted.modified, 0, "a delete is not also a modification")
+
+        let addedThenDeleted = GitChurn.parse(
+            "1 AD N... 000000 100644 000000 aaa bbb added.swift")
+        XCTAssertEqual(addedThenDeleted.staged, 1)
+        XCTAssertEqual(addedThenDeleted.deleted, 1)
+    }
+
+    /// A rename whose file was edited afterwards is both. Reading only the staged half would drop
+    /// the edit, which is the same loss `MD` shows on the other side.
+    func test_parse_aRenameKeepsAWorktreeEdit() {
+        let churn = GitChurn.parse(
+            "2 RM N... 100644 100644 100644 aaa bbb R100 new.swift\tolds.swift")
+
+        XCTAssertEqual(churn.renamed, 1)
+        XCTAssertEqual(churn.modified, 1)
+        XCTAssertEqual(churn.staged, 0, "the rename is the staged change, counted as a rename")
     }
 
     func test_parse_cleanTreeIsEmpty() {
