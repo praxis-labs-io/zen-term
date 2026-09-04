@@ -161,9 +161,17 @@ final class RepoPickerOverlay: PaletteOverlay {
         /// proportional and so land somewhere different on every row.
         static let branchMaxWidth: CGFloat = 220
 
+        /// How little branch a row will fall to before the title starts giving way instead. Without
+        /// it the branch has the lowest compression resistance in the row and absorbs the whole
+        /// squeeze, collapsing to an ellipsis beside a title that never gave an inch.
+        static let branchMinWidth: CGFloat = 120
+
         let workspace: Workspace
         private let branchLabel = NSTextField(labelWithString: "")
         private let churnLabel = NSTextField(labelWithString: "")
+        /// Held at `min(the branch's own width, branchMinWidth)`: a floor that a short branch like
+        /// `main` never reaches, so it still hugs rather than reserving a column.
+        private var branchFloor: NSLayoutConstraint!
 
         /// Extra width between one glyph-and-count group and the next, on top of the space itself.
         static let groupGap: CGFloat = 4
@@ -206,6 +214,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             let name = NSTextField(labelWithString: workspace.title)
             name.font = .systemFont(ofSize: 13)
             name.textColor = Theme.current.chrome.foreground.nsColor
+            name.lineBreakMode = .byTruncatingTail
             name.translatesAutoresizingMaskIntoConstraints = false
             addSubview(name)
 
@@ -227,11 +236,14 @@ final class RepoPickerOverlay: PaletteOverlay {
             churnLabel.translatesAutoresizingMaskIntoConstraints = false
             addSubview(churnLabel)
 
+            branchFloor = branchLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 0)
+
             NSLayoutConstraint.activate([
                 name.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
                 name.centerYAnchor.constraint(equalTo: centerYAnchor),
                 branchLabel.widthAnchor.constraint(
                     lessThanOrEqualToConstant: Self.branchMaxWidth),
+                branchFloor,
                 branchLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
                 branchLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
                 churnLabel.trailingAnchor.constraint(
@@ -251,6 +263,8 @@ final class RepoPickerOverlay: PaletteOverlay {
             let branch = GitRepoStatus.branch(workspace.path)
             branchLabel.stringValue = branch ?? ""
             branchLabel.setAccessibilityLabel(branch.map { "on branch \($0)" })
+            branchFloor.constant = min(
+                branchLabel.intrinsicContentSize.width, Self.branchMinWidth)
 
             let churn = GitRepoStatus.churn(workspace.path) ?? GitChurn()
             churnLabel.attributedStringValue = Self.churnText(churn)
