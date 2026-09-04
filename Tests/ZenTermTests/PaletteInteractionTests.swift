@@ -536,6 +536,29 @@ final class PaletteInteractionTests: WindowTestCase {
         waitUntil(branch?.stringValue == "feature/zen-450", "the branch to land when the probe does")
     }
 
+    /// A branch caps at a fixed character count, not at whatever the title leaves it. The eye can't
+    /// check a budget, and the cap is what keeps a long branch from crowding the name it identifies
+    /// the row by.
+    func test_repoPicker_longBranchElidesItsMiddleAtTheCap() {
+        typealias Row = RepoPickerOverlay.RowView
+        let long = "feature/zen-450-show-current-branch-in-workspace-picker"
+
+        let shown = Row.displayBranch(long)
+
+        XCTAssertEqual(shown.count, Row.branchMaxCharacters)
+        XCTAssertTrue(shown.hasPrefix("feature/zen-45"), "the head names the kind of work")
+        XCTAssertTrue(shown.hasSuffix("space-picker"), "and the tail what it does")
+        XCTAssertTrue(shown.contains("…"), "with the middle elided, not an end lopped off")
+    }
+
+    /// A branch inside the cap is shown whole — no ellipsis on a name that fits.
+    func test_repoPicker_shortBranchIsShownWhole() {
+        XCTAssertEqual(RepoPickerOverlay.RowView.displayBranch("main"), "main")
+        XCTAssertEqual(
+            RepoPickerOverlay.RowView.displayBranch(String(repeating: "a", count: 28)),
+            String(repeating: "a", count: 28))
+    }
+
     func test_repoPicker_filterNarrowsWorkspacesKeepingAddRowPinned() throws {
         var chosen: (Workspace, Bool)?
         let overlay = makeRepoPicker(

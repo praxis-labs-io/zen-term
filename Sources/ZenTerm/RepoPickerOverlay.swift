@@ -151,6 +151,19 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// can't run on the main thread, so the row shows the last-known answer now and
     /// `applyGitStatus()` fills the branch in when a fresh probe lands.
     final class RowView: SelectableRowView {
+        /// How much branch a row will show. The title is what identifies the row, so the branch
+        /// gets a fixed share of the width rather than as much as the name leaves it.
+        static let branchMaxCharacters = 28
+
+        /// Elide the middle of an over-long branch. A branch name is `kind/ticket-what-it-does`,
+        /// so the head and the tail are the two halves that tell two of them apart, and dropping
+        /// either end leaves every `feature/…` row looking alike.
+        static func displayBranch(_ branch: String) -> String {
+            guard branch.count > branchMaxCharacters else { return branch }
+            let keep = branchMaxCharacters - 1
+            return branch.prefix(keep - keep / 2) + "…" + branch.suffix(keep / 2)
+        }
+
         let workspace: Workspace
         private let branchLabel = NSTextField(labelWithString: "")
 
@@ -166,9 +179,9 @@ final class RepoPickerOverlay: PaletteOverlay {
 
             branchLabel.font = .systemFont(ofSize: 11)
             branchLabel.textColor = Theme.current.chrome.ink(.muted)
-            // The title is what identifies the row, so a long branch truncates rather than
-            // squeezing the name it sits opposite.
-            branchLabel.lineBreakMode = .byTruncatingTail
+            // A narrow window elides where the character cap does, so the branch reads the same
+            // way however it got shortened.
+            branchLabel.lineBreakMode = .byTruncatingMiddle
             branchLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             branchLabel.translatesAutoresizingMaskIntoConstraints = false
             addSubview(branchLabel)
@@ -190,7 +203,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         /// again whenever a `GitRepoStatus.refresh` lands.
         func applyGitStatus() {
             let branch = GitRepoStatus.branch(workspace.path)
-            branchLabel.stringValue = branch ?? ""
+            branchLabel.stringValue = branch.map(Self.displayBranch) ?? ""
             branchLabel.setAccessibilityLabel(branch.map { "on branch \($0)" })
         }
     }
