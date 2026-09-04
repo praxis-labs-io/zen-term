@@ -16,10 +16,11 @@ import Foundation
 /// Main-thread only: `known` reads the cache, and `refresh` hops back to main before writing it.
 enum GitRepoStatus {
     /// One directory's answers. `branch` is nil for a directory that isn't a repo, and for a repo
-    /// whose `HEAD` can't be read.
+    /// whose `HEAD` can't be read. `churn` arrives separately and later — see `refreshChurn`.
     private struct Status {
-        let isRepo: Bool
-        let branch: String?
+        var isRepo = false
+        var branch: String?
+        var churn: GitChurn?
     }
 
     private static var cache: [URL: Status] = [:]
@@ -30,6 +31,9 @@ enum GitRepoStatus {
     /// The branch `dir` is on, or nil when nothing has probed it, it isn't a repo, or its `HEAD`
     /// didn't read.
     static func branch(_ dir: URL) -> String? { cache[dir.standardizedFileURL]?.branch }
+
+    /// What `dir` has in flight, or nil until `refreshChurn` has answered for it.
+    static func churn(_ dir: URL) -> GitChurn? { cache[dir.standardizedFileURL]?.churn }
 
     /// Probe every directory in `dirs` off-main, recording each answer and running `completion` on
     /// the main thread as it lands.
@@ -48,7 +52,38 @@ enum GitRepoStatus {
                 let isRepo = GitRepo.isGitRepo(dir)
                 let branch = isRepo ? GitRepo.currentBranch(dir) : nil
                 DispatchQueue.main.async {
-                    cache[dir] = Status(isRepo: isRepo, branch: branch)
+                    cache[dir, default: Status()].isRepo = isRepo
+                    cache[dir, default: Status()].branch = branch
+                    // A folder that stopped being a repo must not keep the counts it had when it
+                    // was one.
+                    if !isRepo { cache[dir, default: Status()].churn = nil }
+                    completion()
+                }
+            }
+        }
+    }
+
+    /// Probe every directory in `dirs` for churn off-main, running `completion` on the main thread
+    /// as each answer lands.
+    ///
+    /// Separate from `refresh` because it costs a different order of magnitude: `refresh` reads two
+    /// files, this runs `git` once per directory. Keeping them apart is what lets a row show its
+    /// branch immediately and fill the counts in behind it, rather than holding both behind a
+    /// `git status` on a large repo.
+    ///
+    /// No fetch: `git status` reports ahead/behind against the remote-tracking ref already on disk.
+    /// A ⌘P that hit the network would stall on a VPN or an auth prompt for a repo the user only
+    /// wanted to open.
+    static func refreshChurn(_ dirs: [URL], completion: @escaping () -> Void) {
+        for dir in dirs.map(\.standardizedFileURL) {
+            DispatchQueue.global(qos: .userInitiated).async {
+                guard GitRepo.isGitRepo(dir),
+                    case .success(let output) = GitCommand.run(
+                        ["status", "--porcelain=v2", "--branch"], in: dir)
+                else { return }
+                let churn = GitChurn.parse(output)
+                DispatchQueue.main.async {
+                    cache[dir, default: Status()].churn = churn
                     completion()
                 }
             }

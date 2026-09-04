@@ -1,4 +1,5 @@
 import AppKit
+import TerminalKit
 
 /// The `⌘P` workspace picker: a modal palette over the tab's tile region listing the
 /// workspaces configured in `~/.config/zen-term/workspaces`, led by a persistent
@@ -46,6 +47,9 @@ final class RepoPickerOverlay: PaletteOverlay {
         // and the branches fill in when the probes land. Per open rather than once per process, so
         // a branch switched in a shell shows up without a relaunch.
         GitRepoStatus.refresh(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }
+        // The counts run `git` rather than reading a file, so they land after the branch does
+        // rather than holding it up.
+        GitRepoStatus.refreshChurn(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -158,6 +162,39 @@ final class RepoPickerOverlay: PaletteOverlay {
 
         let workspace: Workspace
         private let branchLabel = NSTextField(labelWithString: "")
+        private let churnLabel = NSTextField(labelWithString: "")
+
+        /// The counts, in the order and vocabulary a starship prompt writes them, each token in the
+        /// chrome role that stands for its color there. Nerd-font glyphs are out: the chrome draws
+        /// in the system font, where a private-use codepoint renders as a box.
+        static func churnText(_ churn: GitChurn) -> NSAttributedString {
+            let chrome = Theme.current.chrome
+            let out = NSMutableAttributedString()
+            func token(_ text: String, _ role: TerminalColor) {
+                if out.length > 0 { out.append(NSAttributedString(string: " ")) }
+                out.append(
+                    NSAttributedString(
+                        string: text,
+                        attributes: [
+                            .foregroundColor: role.nsColor, .font: NSFont.systemFont(ofSize: 11),
+                        ]))
+            }
+
+            if churn.ahead > 0 && churn.behind > 0 {
+                token("⇕ ⇡\(churn.ahead) ⇣\(churn.behind)", chrome.accent)
+            } else if churn.ahead > 0 {
+                token("⇡\(churn.ahead)", chrome.info)
+            } else if churn.behind > 0 {
+                token("⇣\(churn.behind)", chrome.destructive)
+            }
+            if churn.staged > 0 { token("+\(churn.staged)", chrome.positive) }
+            if churn.modified > 0 { token("~\(churn.modified)", chrome.warning) }
+            if churn.untracked > 0 { token("?\(churn.untracked)", chrome.attention) }
+            if churn.renamed > 0 { token("»\(churn.renamed)", chrome.info) }
+            if churn.deleted > 0 { token("-\(churn.deleted)", chrome.destructive) }
+            if churn.conflicted > 0 { token("≠\(churn.conflicted)", chrome.accent) }
+            return out
+        }
 
         init(workspace: Workspace) {
             self.workspace = workspace
@@ -177,6 +214,13 @@ final class RepoPickerOverlay: PaletteOverlay {
             branchLabel.translatesAutoresizingMaskIntoConstraints = false
             addSubview(branchLabel)
 
+            churnLabel.alignment = .right
+            churnLabel.lineBreakMode = .byClipping
+            churnLabel.setContentHuggingPriority(.required, for: .horizontal)
+            churnLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+            churnLabel.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(churnLabel)
+
             // The column width gives way before the row does: a card narrowed to 0.92×tile has to
             // come out of the branch, not out of an unsatisfiable constraint.
             let column = branchLabel.widthAnchor.constraint(
@@ -189,10 +233,13 @@ final class RepoPickerOverlay: PaletteOverlay {
                 column,
                 branchLabel.widthAnchor.constraint(
                     lessThanOrEqualToConstant: Self.branchColumnWidth),
-                branchLabel.leadingAnchor.constraint(
-                    greaterThanOrEqualTo: name.trailingAnchor, constant: 12),
                 branchLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
                 branchLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+                churnLabel.trailingAnchor.constraint(
+                    equalTo: branchLabel.leadingAnchor, constant: -10),
+                churnLabel.leadingAnchor.constraint(
+                    greaterThanOrEqualTo: name.trailingAnchor, constant: 12),
+                churnLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
             applyGitStatus()
         }
@@ -205,6 +252,9 @@ final class RepoPickerOverlay: PaletteOverlay {
             let branch = GitRepoStatus.branch(workspace.path)
             branchLabel.stringValue = branch ?? ""
             branchLabel.setAccessibilityLabel(branch.map { "on branch \($0)" })
+
+            let churn = GitRepoStatus.churn(workspace.path) ?? GitChurn()
+            churnLabel.attributedStringValue = Self.churnText(churn)
         }
     }
 }
