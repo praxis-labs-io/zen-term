@@ -1801,13 +1801,23 @@ repaints even the sites that bake their color at init, like the tab bar's tracer
   is the answer for an empty *file* and flashing it mid-read reads as "your
   workspaces are gone".
 - **Interactive git probes go through `GitRepoStatus`, never `GitRepo` directly.**
-  Both are filesystem I/O, which the main queue never blocks on: the ⌘⇧P picker and
-  Settings → Workspaces render their badges from `GitRepoStatus.known` (nil until
-  something has probed) and turn them on when a `refresh` lands, and a tool float
-  resolves its repo root through an injected async probe, and only when its `git:`
-  guard or `.directory` anchor actually needs one. Refreshing per open, rather than
-  answering once per process, is what shows a freshly `git init`ed folder's badge
-  without a relaunch.
+  All of it is I/O the main queue never blocks on: the ⌘P picker renders each
+  workspace's branch and Settings → Workspaces its badge from `GitRepoStatus`
+  (nil until something has probed), filling them in when a `refresh` lands, and a
+  tool float resolves its repo root through an injected async probe, and only when
+  its `git:` guard or `.directory` anchor actually needs one. Refreshing per open,
+  rather than answering once per process, is what shows a freshly `git init`ed
+  folder, or a branch just switched in a shell, without a relaunch.
+- **The branch is a file read; the churn is a subprocess, and they are separate
+  probes.** `GitRepo.currentBranch` reads `.git/HEAD` (following a `gitdir:`
+  pointer, so a worktree answers for itself), which is the same cost class as the
+  `fileExists` behind `isGitRepo`. The picker's counts need `git status
+  --porcelain=v2 --branch` through `GitCommand`, the app's only subprocess, so
+  they ride a second call, `GitRepoStatus.refreshChurn`. Folding them into one
+  probe would hold every branch label behind a `git status` on a large repo. No
+  fetch is ever run: ahead/behind is read against the remote-tracking ref already
+  on disk, because a ⌘P that hit the network would stall on a VPN or an auth
+  prompt for a repo the user only wanted to open.
 - **A tool float's open is cancellable while its repo-root probe is out.** The
   walk is off-main, so a `git:`-gated or `.directory` float opens a queue hop
   after the press, and for that window `pendingOpen` is the float's only trace:
