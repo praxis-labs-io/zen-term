@@ -151,18 +151,10 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// can't run on the main thread, so the row shows the last-known answer now and
     /// `applyGitStatus()` fills the branch in when a fresh probe lands.
     final class RowView: SelectableRowView {
-        /// How much branch a row will show. The title is what identifies the row, so the branch
-        /// gets a fixed share of the width rather than as much as the name leaves it.
-        static let branchMaxCharacters = 28
-
-        /// Elide the middle of an over-long branch. A branch name is `kind/ticket-what-it-does`,
-        /// so the head and the tail are the two halves that tell two of them apart, and dropping
-        /// either end leaves every `feature/…` row looking alike.
-        static func displayBranch(_ branch: String) -> String {
-            guard branch.count > branchMaxCharacters else { return branch }
-            let keep = branchMaxCharacters - 1
-            return branch.prefix(keep - keep / 2) + "…" + branch.suffix(keep / 2)
-        }
+        /// The branch column. A fixed width rather than a character count: characters are
+        /// proportional, so a cap counted in them lands somewhere different on every row. 220pt
+        /// fits an ordinary `feature/zen-450-…` branch whole and still leaves the title 300.
+        static let branchColumnWidth: CGFloat = 220
 
         let workspace: Workspace
         private let branchLabel = NSTextField(labelWithString: "")
@@ -179,16 +171,24 @@ final class RepoPickerOverlay: PaletteOverlay {
 
             branchLabel.font = .systemFont(ofSize: 11)
             branchLabel.textColor = Theme.current.chrome.ink(.muted)
-            // A narrow window elides where the character cap does, so the branch reads the same
-            // way however it got shortened.
-            branchLabel.lineBreakMode = .byTruncatingMiddle
+            branchLabel.alignment = .right
+            branchLabel.lineBreakMode = .byTruncatingTail
             branchLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             branchLabel.translatesAutoresizingMaskIntoConstraints = false
             addSubview(branchLabel)
 
+            // The column width gives way before the row does: a card narrowed to 0.92×tile has to
+            // come out of the branch, not out of an unsatisfiable constraint.
+            let column = branchLabel.widthAnchor.constraint(
+                equalToConstant: Self.branchColumnWidth)
+            column.priority = .defaultHigh
+
             NSLayoutConstraint.activate([
                 name.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
                 name.centerYAnchor.constraint(equalTo: centerYAnchor),
+                column,
+                branchLabel.widthAnchor.constraint(
+                    lessThanOrEqualToConstant: Self.branchColumnWidth),
                 branchLabel.leadingAnchor.constraint(
                     greaterThanOrEqualTo: name.trailingAnchor, constant: 12),
                 branchLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
@@ -203,7 +203,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         /// again whenever a `GitRepoStatus.refresh` lands.
         func applyGitStatus() {
             let branch = GitRepoStatus.branch(workspace.path)
-            branchLabel.stringValue = branch.map(Self.displayBranch) ?? ""
+            branchLabel.stringValue = branch ?? ""
             branchLabel.setAccessibilityLabel(branch.map { "on branch \($0)" })
         }
     }
