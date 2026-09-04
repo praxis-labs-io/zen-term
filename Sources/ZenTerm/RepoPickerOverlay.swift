@@ -155,10 +155,11 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// can't run on the main thread, so the row shows the last-known answer now and
     /// `applyGitStatus()` fills the branch in when a fresh probe lands.
     final class RowView: SelectableRowView {
-        /// The branch column. A fixed width rather than a character count: characters are
-        /// proportional, so a cap counted in them lands somewhere different on every row. 220pt
-        /// fits an ordinary `feature/zen-450-…` branch whole and still leaves the title 300.
-        static let branchColumnWidth: CGFloat = 220
+        /// How much width a branch may take before it truncates. A cap, not a reserved column:
+        /// the counts sit against the branch, so reserving the full width would strand a `~1`
+        /// 220pt from a row reading `main`. Measured in points rather than characters, which are
+        /// proportional and so land somewhere different on every row.
+        static let branchMaxWidth: CGFloat = 220
 
         let workspace: Workspace
         private let branchLabel = NSTextField(labelWithString: "")
@@ -210,6 +211,9 @@ final class RepoPickerOverlay: PaletteOverlay {
             branchLabel.textColor = Theme.current.chrome.ink(.muted)
             branchLabel.alignment = .right
             branchLabel.lineBreakMode = .byTruncatingTail
+            // Hug the text: the branch takes the width it needs up to the cap, so the counts sit
+            // against it rather than against a reserved column edge.
+            branchLabel.setContentHuggingPriority(.required, for: .horizontal)
             branchLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             branchLabel.translatesAutoresizingMaskIntoConstraints = false
             addSubview(branchLabel)
@@ -221,18 +225,11 @@ final class RepoPickerOverlay: PaletteOverlay {
             churnLabel.translatesAutoresizingMaskIntoConstraints = false
             addSubview(churnLabel)
 
-            // The column width gives way before the row does: a card narrowed to 0.92×tile has to
-            // come out of the branch, not out of an unsatisfiable constraint.
-            let column = branchLabel.widthAnchor.constraint(
-                equalToConstant: Self.branchColumnWidth)
-            column.priority = .defaultHigh
-
             NSLayoutConstraint.activate([
                 name.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
                 name.centerYAnchor.constraint(equalTo: centerYAnchor),
-                column,
                 branchLabel.widthAnchor.constraint(
-                    lessThanOrEqualToConstant: Self.branchColumnWidth),
+                    lessThanOrEqualToConstant: Self.branchMaxWidth),
                 branchLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
                 branchLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
                 churnLabel.trailingAnchor.constraint(
