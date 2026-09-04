@@ -185,10 +185,10 @@ checkout, or the build fails with "local binary target 'GhosttyKit' … does not
 contain a binary artifact", then "'module' is inaccessible" (the missing Resources
 dir suppresses TerminalKit's `Bundle.module` accessor).
 
-**Those symlinks show up as untracked, unlike in the main checkout.** Both
-`.gitignore` patterns end in a trailing slash, which matches a directory, and a
-symlink is not a directory to git. So `git add -A` in a worktree commits them. Use
-`git add -u` and check `git diff --cached --name-only` before committing.
+**Both patterns are slashless for that reason.** A trailing slash matches a
+directory only, and a symlink is not a directory to git, so the slashed form left
+both symlinks showing as untracked in every worktree. That is how a symlink
+carrying a machine-absolute path got committed once.
 
 **Never call `Bundle.module` in shippable code.** For a statically-linked
 executable target it resolves via the SwiftPM-generated "executable" accessor,
@@ -1762,6 +1762,66 @@ that carry meaning stay put: a warning is not a taste. What makes this work with
 call-site changes is that nothing caches the color: `ConfigChange.between` sets
 `.theme` from a whole-value `AppTheme` diff, and the existing `reapplyTheme()` fan-out
 repaints even the sites that bake their color at init, like the tab bar's tracer.
+
+## Worktrees
+
+`WorktreeStore` lists, creates and removes the git worktrees of a repo. It is the
+headless half of the ⌘P picker's worktree rows: no AppKit, every call blocking, so
+callers run them off-main and hop back.
+
+**Git is the whole registry.** There is no index of our own to fall out of step
+with the repo. `list` runs `git worktree prune` and then
+`git worktree list --porcelain`, which means a worktree made by hand in an
+arbitrary directory shows up alongside ours, and one deleted in Finder is
+forgotten instead of lingering as a row that opens nothing.
+
+Two things about that listing are not what they look like. It is sorted by path,
+**not** main-checkout-first, so the main checkout is found with
+`git rev-parse --path-format=absolute --git-common-dir` and its parent, which
+answers the same from inside any worktree. And a record still marked `prunable`
+after the prune is a *locked* worktree whose directory is gone, so it is dropped:
+there is nothing to open.
+
+### Where they live
+
+`~/.zenterm/worktrees/<repo-slug>-<digest>/<branch-slug>`. The digest is eight hex
+characters of SHA-256 over the standardized repo path, so two repos whose folders
+are both called `app` cannot share a directory. Branch names become one path
+segment, so `feature/zen-452` is `feature-zen-452`; two branches that slug the same
+collide as `destinationExists`, which is the honest answer.
+
+### Creating one, and what a failure leaves behind
+
+`create` branches off the remote's default (`refs/remotes/origin/HEAD`, then
+`origin/main`) and falls back to the local `HEAD`, so a repo with no remote works.
+A repo with no commits at all throws `unbornHead`.
+
+**`git worktree add` creates the branch before it checks the destination.** A
+failing add therefore leaves a branch behind with no tree on it, so `create`
+deletes the destination and the branch on any failure. The destination is checked
+for existence *before* the add for the same reason in reverse: without that check,
+the rollback would delete a directory we never made.
+
+### What removal costs
+
+`remove` is `git worktree remove --force`, and the force is unconditional: carried
+files are always untracked and git refuses without it. The branch is untouched.
+`state` counts uncommitted files and `rev-list --count HEAD --not --remotes`, and
+returns **nil, not zero**, when git cannot be read: telling someone about to delete
+an unreadable tree that it holds nothing is the one thing it exists to get right.
+There is no stash count beside those, because `refs/stash` is shared across every
+worktree of a repo.
+
+### GitCommand
+
+`GitCommand.run` is the app's only `Process()` call site. It is blocking on
+purpose, the way `GitRepoStatus` wraps `GitRepo`: the caller owns the queue hop.
+
+Both pipes drain **concurrently, and both before `waitUntilExit`**. Reading stdout
+to EOF and only then stderr deadlocks just as surely as waiting first: a child that
+fills the 64K stderr buffer blocks on write while the reader blocks on stdout, and
+neither moves. `git add` under `core.autocrlf` warns once per file and passes 64K
+at a few hundred files, which is how this was found.
 
 ## Invariants that will bite you
 
