@@ -223,18 +223,10 @@ final class ToggleDock: NSView {
         !hiddenButtons.contains(button) || surfacedButtons.contains(button)
     }
 
-    /// Mirror the active tab's overlay state (drawers, zoom) and the window's shown tool float
-    /// (`floatID` — floats are window-level, so they don't ride a tab's `OverlayState`); split
-    /// buttons are momentary and have no active state. A modal tool
-    /// float covers the whole tab, so while one is open the zoom and drawer
-    /// pips dim — their state is hidden behind it and returns when it closes. Otherwise the
-    /// drawer tints reflect what's visible: a zoomed pane hides both drawers (neither lit), a
-    /// zoomed drawer hides its sibling (only its own lit).
-    ///
-    /// `isLiveInBackground` dots a float whose tool is still running while its card is dismissed —
-    /// the only trace a hidden persistent float has. `isFloatBusy` answers the stricter question
-    /// for Scratch. Both are queries rather than sets, so each rule keeps one definition on the
-    /// controller that owns the registry. `tab` scopes the surfaced-button hold below.
+    /// Mirror the active tab's overlay onto the buttons: `isActive` is what is on screen right now,
+    /// so a card or a zoomed sibling dims what it covers. `floatID` is the window's shown float,
+    /// which is why it does not ride a tab's `OverlayState`, and `tab` scopes the hold in
+    /// `surface(_:busy:onScreen:)`. Split buttons are momentary and have no active state.
     func render(
         overlay: OverlayState, floatID: String?, paletteOpen: Bool, tab: TabID? = nil,
         isLiveInBackground: (String) -> Bool = { _ in false },
