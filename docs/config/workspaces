@@ -7,7 +7,8 @@
 # Format: INI-style. A `[Title]` line opens a section; `key = value` lines below it
 # configure that workspace until the next header. Lines starting with `#` and blank
 # lines are ignored; unknown keys are ignored. A section with no `path` is skipped, a
-# malformed `env` line is dropped, and nothing here can crash the app (bad lines are
+# malformed `env` line is dropped, a `carry` entry that leaves the workspace is dropped,
+# and nothing here can crash the app (bad lines are
 # logged and skipped). Manage workspaces from inside the app too, in Settings → Workspaces
 # (add / edit / delete / reorder), or the ＋ row in the ⌘P picker to add-and-open one.
 # Hand-edits to this file are picked up the next time you open the ⌘P picker (or on
@@ -35,8 +36,26 @@
 #   bottom   (optional)  bottom-drawer command; absent → closed; `shell` → a plain shell
 #   focus    (optional)  main | right | bottom                       (default main)
 #   env      (optional)  KEY=VALUE, repeatable; injected into every surface
+#   carry    (optional)  a top-level path to copy into a new worktree, repeatable
 #
 # A value with spaces may be quoted: bottom = "npm run dev".
+#
+# About carry: a git worktree gets everything git tracks and nothing it ignores, so a
+# fresh one has no .env, no node_modules and no virtualenv, and cannot run the project
+# until you install it again. Name here what a worktree of this workspace needs to run.
+# On APFS the copy shares its disk blocks with the original, so carrying a node_modules
+# costs close to no space and close to no time. On another volume it is a real copy,
+# which still works and takes longer. Paths are relative to the workspace and may not
+# leave it.
+#
+# What carry will not do: an entry git tracks is refused, because a tracked file copied
+# into a worktree makes git report a change that never goes away. An entry the worktree
+# already has is left alone. An entry this workspace does not have is skipped, so one
+# section can cover a repo before and after its first install.
+#
+# A carried install is the one from this checkout. Open a worktree on a branch that
+# changed a lockfile and the install is still the old one until you run your package
+# manager in it.
 #
 # Example: an editor + AI + dev-server workspace (uncomment and edit, or write your own):
 #
@@ -48,3 +67,5 @@
 # focus  = main
 # env    = NODE_ENV=development
 # env    = PORT=3000
+# carry  = .env
+# carry  = node_modules

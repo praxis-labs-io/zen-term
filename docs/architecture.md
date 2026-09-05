@@ -1845,6 +1845,48 @@ commits, so the loss is the ref and nothing else.
 Whatever the rollback cannot undo is named in `rollbackIncomplete` rather than
 swallowed, so a create that half-failed says which branch or folder survived it.
 
+### Carrying what git leaves out
+
+A worktree gets everything git tracks and nothing it ignores, so a fresh one has no
+`.env`, no `node_modules` and no virtualenv, and cannot run the project. The repeated
+`carry` key on a workspace names what to copy, and `WorktreeCarry.copy` brings it
+across and reports every entry that did not make it. Nothing throws: a config naming
+something this repo lacks is a normal state, and it must never stop a worktree being
+made.
+
+**An allowlist, because the denylist is what killed the clone approach.** That design
+copied everything and subtracted what breaks on relocation, which asks us to know
+every ecosystem's landmines. Two were found by measuring, a Python venv's absolute
+shebangs and llbuild's absolute paths in `.build`. The next one was a guess.
+
+**`copyfile(3)`, not `clonefile(2)`**, whose own man page says cloning directories
+with it is discouraged, and carry entries are mostly directories. `COPYFILE_CLONE` is
+a best-try flag that falls back to a byte copy on its own, so the cross-volume refusal
+the clone approach needed is gone: a worktree on an external drive works and takes
+longer rather than being refused. Probed on macOS 25.5: a 200MB clone costs no free
+space, a copy onto a separate APFS volume returns 0 rather than `EXDEV`, and the flag
+implies `COPYFILE_NOFOLLOW_SRC` so a symlink clones as a symlink, which is what keeps
+a pnpm `node_modules` cheap.
+
+**Three refusals, and one of them is not what the return code says.** An entry git
+tracks is refused, because a tracked file in a worktree reports a modification that
+never goes away; a repo git could not be asked about is declined rather than guessed
+at, the same way `state` returns nil instead of zero. An entry resolving outside the
+workspace is refused here as well as at parse time, because this is where the write
+happens. And an entry the worktree already holds is refused on our own `fileExists`
+check, because `COPYFILE_CLONE` implies `COPYFILE_EXCL` only for a *file*: onto an
+existing directory it returns 0 having copied nothing, so trusting it would report an
+entry as carried when none of it arrived.
+
+A copy that dies partway is taken back. `COPYFILE_RECURSIVE` can fail mid-hierarchy on
+a full disk, and half a `node_modules` reads to a package manager as an install it
+need not redo.
+
+The gap carry does not close is drift: a carried install is the one from the checkout
+it came from, so a worktree on a branch that moved a lockfile holds the old install
+until the package manager runs in it. Detecting that means a per-ecosystem map of
+install directory to lockfile, which is the knowledge this project decided not to hold.
+
 ### What removal costs
 
 `remove` is `git worktree remove --force`, and the force is unconditional: carried
