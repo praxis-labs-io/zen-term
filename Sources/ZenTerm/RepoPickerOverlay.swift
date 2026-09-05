@@ -1,4 +1,5 @@
 import AppKit
+import TerminalKit
 
 /// The `⌘P` workspace picker: a modal palette over the tab's tile region listing the
 /// workspaces configured in `~/.config/zen-term/workspaces`, led by a persistent
@@ -43,14 +44,17 @@ final class RepoPickerOverlay: PaletteOverlay {
             onDismiss: onDismiss)
 
         // One background pass per open: the rows are up with whatever git status was already known,
-        // and the badges fill in when the probes land. Per open rather than once per process, so a
-        // folder that just became a repo gets its badge without a relaunch.
+        // and the branches fill in when the probes land. Per open rather than once per process, so
+        // a branch switched in a shell shows up without a relaunch.
         GitRepoStatus.refresh(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }
+        // The counts run `git` rather than reading a file, so they land after the branch does
+        // rather than holding it up.
+        GitRepoStatus.refreshChurn(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Re-read every workspace row's badge from `GitRepoStatus`.
+    /// Re-read every workspace row's branch from `GitRepoStatus`.
     private func applyGitStatus() {
         for row in rowViews { (row as? RowView)?.applyGitStatus() }
     }
@@ -79,7 +83,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     /// A row is the same row across a re-filter when it's the ＋ row or names the same workspace.
     /// Workspace titles are the `[Title]` section headers, unique by construction, and a row renders
-    /// nothing but the title and a git badge (which updates in place rather than by rebuilding).
+    /// nothing but the title and its branch (which updates in place rather than by rebuilding).
     override func rowIdentity(at index: Int) -> AnyHashable? {
         switch rows[index] {
         case .add: return ["add"]
@@ -146,13 +150,62 @@ final class RepoPickerOverlay: PaletteOverlay {
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
     }
 
-    /// One workspace row: title (left) and a muted git icon (right) when its dir is a repo. The
-    /// badge is always built and starts hidden — whether the folder is a repo is filesystem I/O,
-    /// which can't run on the main thread, so the row shows the last-known answer now and
-    /// `applyGitStatus()` turns the badge on when a fresh probe lands.
+    /// One workspace row: title (left) and the branch its dir is on (right) when it is a repo. The
+    /// branch label is always built and starts empty — reading `HEAD` is filesystem I/O, which
+    /// can't run on the main thread, so the row shows the last-known answer now and
+    /// `applyGitStatus()` fills the branch in when a fresh probe lands.
     final class RowView: SelectableRowView {
+        /// How much width a branch may take before it truncates. A cap, not a reserved column:
+        /// the counts sit against the branch, so reserving the full width would strand a `~1`
+        /// 220pt from a row reading `main`. Measured in points rather than characters, which are
+        /// proportional and so land somewhere different on every row.
+        static let branchMaxWidth: CGFloat = 220
+
+        /// How little branch a row will fall to before the title starts giving way instead. Without
+        /// it the branch has the lowest compression resistance in the row and absorbs the whole
+        /// squeeze, collapsing to an ellipsis beside a title that never gave an inch.
+        static let branchMinWidth: CGFloat = 120
+
         let workspace: Workspace
-        private let gitBadge = NSImageView()
+        private let branchLabel = NSTextField(labelWithString: "")
+        private let churnLabel = NSTextField(labelWithString: "")
+        /// Held at `min(the branch's own width, branchMinWidth)`: a floor that a short branch like
+        /// `main` never reaches, so it still hugs rather than reserving a column.
+        private var branchFloor: NSLayoutConstraint!
+
+        /// Extra width between one glyph-and-count group and the next, on top of the space itself.
+        static let groupGap: CGFloat = 4
+
+        /// The counts, in the order and vocabulary a starship prompt writes them, each token in the
+        /// chrome role that stands for its color there. Nerd-font glyphs are out: the chrome draws
+        /// in the system font, where a private-use codepoint renders as a box.
+        static func churnText(_ churn: GitChurn) -> NSAttributedString {
+            let chrome = Theme.current.chrome
+            let font = NSFont.systemFont(ofSize: 11)
+            let out = NSMutableAttributedString()
+            func token(_ text: String, _ role: TerminalColor) {
+                // A glyph binds to its own count and separates from the next pair, so the eye reads
+                // groups rather than one run of symbols. Kerning the gap, rather than padding with
+                // more spaces, keeps it under a point of control instead of the font's space width.
+                if out.length > 0 {
+                    out.append(
+                        NSAttributedString(string: " ", attributes: [.font: font, .kern: groupGap]))
+                }
+                out.append(
+                    NSAttributedString(
+                        string: text, attributes: [.foregroundColor: role.nsColor, .font: font]))
+            }
+
+            if churn.ahead > 0 { token("⇡\(churn.ahead)", chrome.info) }
+            if churn.behind > 0 { token("⇣\(churn.behind)", chrome.destructive) }
+            if churn.staged > 0 { token("+\(churn.staged)", chrome.positive) }
+            if churn.modified > 0 { token("~\(churn.modified)", chrome.warning) }
+            if churn.untracked > 0 { token("?\(churn.untracked)", chrome.attention) }
+            if churn.renamed > 0 { token("»\(churn.renamed)", chrome.info) }
+            if churn.deleted > 0 { token("-\(churn.deleted)", chrome.destructive) }
+            if churn.conflicted > 0 { token("≠\(churn.conflicted)", chrome.accent) }
+            return out
+        }
 
         init(workspace: Workspace) {
             self.workspace = workspace
@@ -161,30 +214,66 @@ final class RepoPickerOverlay: PaletteOverlay {
             let name = NSTextField(labelWithString: workspace.title)
             name.font = .systemFont(ofSize: 13)
             name.textColor = Theme.current.chrome.foreground.nsColor
+            name.lineBreakMode = .byTruncatingTail
             name.translatesAutoresizingMaskIntoConstraints = false
             addSubview(name)
 
-            gitBadge.image = IconCatalog.gitBadge()
-            gitBadge.setAccessibilityLabel("git repository")
-            gitBadge.contentTintColor = Theme.current.chrome.ink(.faint)
-            gitBadge.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(gitBadge)
+            branchLabel.font = .systemFont(ofSize: 11)
+            branchLabel.textColor = Theme.current.chrome.ink(.muted)
+            branchLabel.alignment = .right
+            branchLabel.lineBreakMode = .byTruncatingTail
+            // Hug the text: the branch takes the width it needs up to the cap, so the counts sit
+            // against it rather than against a reserved column edge.
+            branchLabel.setContentHuggingPriority(.required, for: .horizontal)
+            branchLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            branchLabel.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(branchLabel)
+
+            churnLabel.alignment = .right
+            churnLabel.lineBreakMode = .byClipping
+            churnLabel.setContentHuggingPriority(.required, for: .horizontal)
+            // Above the title's 750 so the counts are the last thing to give, but breakable, so a
+            // row too narrow for everything still lays out.
+            churnLabel.setContentCompressionResistancePriority(.defaultHigh + 1, for: .horizontal)
+            churnLabel.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(churnLabel)
+
+            // The floor is a preference, not a law: a narrow tile can leave less room than the
+            // floor plus the counts plus a gap, and three required constraints in that row would
+            // go unsatisfiable rather than degrade.
+            branchFloor = branchLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 0)
+            branchFloor.priority = .defaultHigh
 
             NSLayoutConstraint.activate([
                 name.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
                 name.centerYAnchor.constraint(equalTo: centerYAnchor),
-                gitBadge.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-                gitBadge.centerYAnchor.constraint(equalTo: centerYAnchor),
+                branchLabel.widthAnchor.constraint(
+                    lessThanOrEqualToConstant: Self.branchMaxWidth),
+                branchFloor,
+                branchLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+                branchLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+                churnLabel.trailingAnchor.constraint(
+                    equalTo: branchLabel.leadingAnchor, constant: -10),
+                churnLabel.leadingAnchor.constraint(
+                    greaterThanOrEqualTo: name.trailingAnchor, constant: 12),
+                churnLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
             applyGitStatus()
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-        /// Show the badge when this workspace's folder is a known repo. Run at build time and again
-        /// whenever a `GitRepoStatus.refresh` lands.
+        /// Show the branch when this workspace's folder is a known repo. Run at build time and
+        /// again whenever a `GitRepoStatus.refresh` lands.
         func applyGitStatus() {
-            gitBadge.isHidden = GitRepoStatus.known(workspace.path) != true
+            let branch = GitRepoStatus.branch(workspace.path)
+            branchLabel.stringValue = branch ?? ""
+            branchLabel.setAccessibilityLabel(branch.map { "on branch \($0)" })
+            branchFloor.constant = min(
+                branchLabel.intrinsicContentSize.width, Self.branchMinWidth)
+
+            let churn = GitRepoStatus.churn(workspace.path) ?? GitChurn()
+            churnLabel.attributedStringValue = Self.churnText(churn)
         }
     }
 }

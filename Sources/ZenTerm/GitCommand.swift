@@ -10,8 +10,32 @@ enum GitCommand {
         var errorDescription: String? { stderr.isEmpty ? "git exited with \(status)." : stderr }
     }
 
+    /// Whether a real `git` exists to run. Resolved once, off any hot path.
+    ///
+    /// `/usr/bin/git` is always present as an `xcrun` shim, so its existence proves nothing: on a
+    /// Mac without the Command Line Tools, running it opens the system "install developer tools"
+    /// modal. A picker probing one repo per row would stack a prompt per workspace, from work the
+    /// user never asked for. `xcode-select -p` answers the same question and opens nothing.
+    static let isAvailable: Bool = {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcode-select")
+        process.arguments = ["-p"]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+        } catch {
+            return false
+        }
+        process.waitUntilExit()
+        return process.terminationStatus == 0
+    }()
+
     /// Trimmed stdout on success. `dir` must exist; git resolves the repo from it.
     static func run(_ args: [String], in dir: URL) -> Result<String, Error> {
+        guard isAvailable else {
+            return .failure(Failure(status: -1, stderr: "git is not available."))
+        }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["git"] + args

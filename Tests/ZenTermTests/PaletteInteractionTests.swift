@@ -516,23 +516,24 @@ final class PaletteInteractionTests: WindowTestCase {
             "a theme swap must rebuild every row, not reuse one carrying the old palette")
     }
 
-    /// The badge asks a filesystem question that can't be answered on the main thread, so the row
-    /// renders first and the badge lands when the probe does.
-    func test_repoPicker_gitBadgeAppearsWhenTheBackgroundProbeLands() throws {
+    /// The branch asks a filesystem question that can't be answered on the main thread, so the row
+    /// renders first and the branch lands when the probe does.
+    func test_repoPicker_branchAppearsWhenTheBackgroundProbeLands() throws {
         let repo = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-picker-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
-        try Data().write(to: repo.appendingPathComponent(".git"))  // a worktree-style `.git` file
+        let gitDir = repo.appendingPathComponent(".git", isDirectory: true)
+        try FileManager.default.createDirectory(at: gitDir, withIntermediateDirectories: true)
+        try Data("ref: refs/heads/feature/zen-450\n".utf8)
+            .write(to: gitDir.appendingPathComponent("HEAD"))
         defer { try? FileManager.default.removeItem(at: repo) }
 
         let overlay = makeRepoPicker(entries: [workspace("repo", path: repo)])
         mount(overlay)
-        let badge = descendants(of: rows(in: overlay)[1]).compactMap { $0 as? NSImageView }.first
-        XCTAssertEqual(badge?.isHidden, true, "nothing has probed the folder yet")
+        let labels = descendants(of: rows(in: overlay)[1]).compactMap { $0 as? NSTextField }
+        let branch = labels.first { $0.stringValue != "repo" }
+        XCTAssertEqual(branch?.stringValue, "", "nothing has probed the folder yet")
 
-        waitUntil(badge?.isHidden == false, "the git badge to turn on when the probe lands")
-
-        XCTAssertNotNil(badge?.image, "and renders the bundled git logo")
+        waitUntil(branch?.stringValue == "feature/zen-450", "the branch to land when the probe does")
     }
 
     func test_repoPicker_filterNarrowsWorkspacesKeepingAddRowPinned() throws {
