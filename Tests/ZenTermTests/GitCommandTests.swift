@@ -49,15 +49,12 @@ final class GitCommandTests: XCTestCase {
         XCTAssertGreaterThan(blob.count, 65_536)
     }
 
-    /// The deadlock this guards: draining stdout to EOF and only *then* stderr hangs forever when
-    /// the child fills the 64K stderr buffer first, because it blocks on write while this thread
-    /// blocks on read. `git add` with `core.autocrlf` warns once per file, which passes 64K at a
-    /// few hundred files while stdout stays open and empty.
-    ///
-    /// It hangs rather than fails when reinstated, so it is written with an explicit timeout: a
-    /// test that never returns reports nothing.
+    /// Draining stdout to EOF and only *then* stderr hangs forever: `git add` with `core.autocrlf`
+    /// warns once per file, passing the 64K stderr buffer while stdout stays open and empty.
+    /// It hangs rather than fails when reinstated, so the timeout is explicit: a test that never
+    /// returns reports nothing.
     func test_run_doesNotDeadlockOnACommandThatFloodsStderr() throws {
-        let repo = dir!
+        let repo = try XCTUnwrap(dir)
         try GitCommand.run(["init", "--initial-branch=main"], in: repo).get()
         try GitCommand.run(["config", "user.email", "test@example.com"], in: repo).get()
         try GitCommand.run(["config", "user.name", "Test"], in: repo).get()
