@@ -647,6 +647,29 @@ final class ToolFloatControllerTests: WindowTestCase {
         XCTAssertFalse(floats.isLiveInBackground("btop"))
     }
 
+    /// Busy is not liveness, and the gap between them is why the dock surfaces a hidden Scratch
+    /// button on this rather than on registry membership: a persistent float stays live at an idle
+    /// prompt for the rest of its scope's life, so membership would put the button back for good.
+    func test_isBusy_tracksTheSurface_notMereLiveness() throws {
+        let dir = try makeDir("plain", git: false)
+        let (floats, spawned, _) = makeFloats(cwd: dir)
+        let float = spec("btop", persist: .window)
+
+        XCTAssertFalse(floats.isBusy("btop"), "never launched → no surface to ask")
+
+        floats.toggle(float)
+        let surface = try XCTUnwrap(floatSurfaces(spawned(), command: "btop").first)
+        XCTAssertFalse(floats.isBusy("btop"), "shown, but sitting at a prompt")
+
+        surface.isBusy = true
+        floats.close()  // dismissed, process still working
+        XCTAssertTrue(floats.isBusy("btop"), "dismissed and working is the whole point")
+
+        surface.isBusy = false
+        XCTAssertFalse(floats.isBusy("btop"), "the work ended")
+        XCTAssertTrue(floats.isLiveInBackground("btop"), "while liveness still says yes")
+    }
+
     /// An `.ephemeral` float never enters the registry — its process dies with the card, so there
     /// is no background state to dot.
     func test_isLiveInBackground_ephemeralFloat_neverDots() throws {

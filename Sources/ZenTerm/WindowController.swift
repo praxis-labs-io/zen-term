@@ -497,6 +497,9 @@ final class WindowController: NSObject {
                 }
                 if change.contains(.toolbarButtons) {
                     self.dock.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
+                    // A newly hidden drawer may have work running behind it, and the dock only
+                    // grants that button its handle from a render.
+                    self.renderDock()
                 }
                 // An open palette re-resolves its whole catalog here, so this tracks more than a
                 // recolor: `.keymap` because a row's shortcut column resolves from the live keymap,
@@ -739,17 +742,25 @@ final class WindowController: NSObject {
         }
         if changed { renderTabBar() }
 
-        // The active tab's drawer busy-state has no push event, so poll it here (building the
-        // overlay once) and re-render the dock only when a drawer's activity dot flips.
-        let overlay = activeController?.overlayState
-        let busy = (overlay?.bottomBusy ?? false, overlay?.rightBusy ?? false)
-        if busy != lastDrawerBusy { renderDock() }
+        // Busy state has no push event, so poll it here (building the overlay once) and re-render
+        // the dock only when one of the three actually flips.
+        if busyDots() != lastBusyDots { renderDock() }
     }
 
-    /// The active tab's (bottom, right) drawer busy-state as of the last `renderDock()` — so the
-    /// poll re-renders only when the activity dot actually flips. Updated on every dock render
-    /// (including tab switches), so a switch to a differently-busy tab can't leave it stale.
-    private var lastDrawerBusy = (false, false)
+    /// The active tab's (bottom drawer, right drawer, Scratch) busy state, which drives their
+    /// activity dots and surfaces any of the three that `hide-toolbar-buttons` hides.
+    private func busyDots() -> (Bool, Bool, Bool) {
+        let overlay = activeController?.overlayState
+        return (
+            overlay?.bottomBusy ?? false, overlay?.rightBusy ?? false,
+            floats.isBusy(ToolFloat.scratch.id)
+        )
+    }
+
+    /// `busyDots()` as of the last `renderDock()` — so the poll re-renders only when a dot actually
+    /// flips. Updated on every dock render (including tab switches), so a switch to a
+    /// differently-busy tab can't leave it stale.
+    private var lastBusyDots = (false, false, false)
 
     deinit { titlePoll?.invalidate() }  // backstop; tearDown() normally handles it
 
@@ -2458,10 +2469,11 @@ final class WindowController: NSObject {
         // The shown float is window-level, so it comes from `floats`, not the active tab's state.
         dock.render(
             overlay: overlay, floatID: floats.activeID, paletteOpen: modal?.kind == .commandPalette,
-            isLiveInBackground: floats.isLiveInBackground)
+            tab: tabs.order.isEmpty ? nil : tabs.activeID,
+            isLiveInBackground: floats.isLiveInBackground, isFloatBusy: floats.isBusy)
         // Keep the poll's change-guard in sync with what's actually shown, so a tab switch to a
         // differently-busy tab re-evaluates instead of comparing against a stale value.
-        lastDrawerBusy = (overlay.bottomBusy, overlay.rightBusy)
+        lastBusyDots = busyDots()
     }
 
     /// Wire the first controller once the dict is populated. Called from

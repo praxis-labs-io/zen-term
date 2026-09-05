@@ -100,7 +100,9 @@
 
 # Hide any of the footer toolbar's built-in buttons (bottom-right of the tab bar).
 # Comma-separated, any order. Hiding is visual only: every hidden button's
-# shortcut and palette entry stay live. Buttons, in toolbar order:
+# shortcut and palette entry stay live. A hidden bottom-drawer, right-drawer or
+# scratch button comes back while its shell is busy out of sight, so work you
+# cannot see keeps a handle in the footer. Buttons, in toolbar order:
 #   new-tab, split-h, split-v, bottom-drawer, right-drawer, scratch, focus-mode,
 #   command-palette
 # In-app Settings edit: applies live.

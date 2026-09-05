@@ -178,6 +178,16 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         return liveFloats[registryKey(id, in: currentTabID())] != nil
     }
 
+    /// Whether this float's process has work running right now, the drawer's `isBusy` signal rather
+    /// than liveness. The dock surfaces a hidden Scratch button on it: Scratch is a login shell that
+    /// stays live for its tab's life, so liveness would put the button back for good after one open.
+    /// Registered floats only, shown or not: an `.ephemeral` one is never in here and reads false
+    /// even while its card is up. Unlike liveness above, being shown is not itself an answer.
+    func isBusy(_ id: String) -> Bool {
+        if let live = liveFloats[id] { return live.surface.isBusy }
+        return liveFloats[registryKey(id, in: currentTabID())]?.surface.isBusy == true
+    }
+
     /// Every live float surface, for the config-change re-theming fan-out.
     var allSurfaces: [TerminalSurface] {
         var result = liveFloats.values.map(\.surface)

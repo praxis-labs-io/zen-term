@@ -1,12 +1,10 @@
 import AppKit
+import TabKit
 
-/// The footer toolbar (bottom-right of the tab-bar row): a row of `IconButton`s — new tab │
-/// split-h, split-v, bottom drawer, right drawer, focus mode │ palette │ one per
-/// `ToolFloatCatalog` entry — grouped by thin dividers. Active toggles tint accent. Buttons fire
-/// injected closures (routed through the window's chord handler, so they respect the modals).
-/// Any built-in button can be hidden by `hide-toolbar-buttons`, and a float's `toolbar:false`
-/// hides its button while the tool isn't running (a running tool always keeps its button, dot and
-/// all); a divider only renders between two groups that both show something.
+/// The footer toolbar (bottom-right of the tab-bar row): `IconButton`s in `ToolbarButton.groups`
+/// order plus one per `ToolFloatCatalog` entry, separated by dividers that render only between two
+/// groups both showing something. Active toggles tint accent; buttons fire injected closures,
+/// routed through the window's chord handler so they respect the modals.
 final class ToggleDock: NSView {
     private let paletteBtn: IconButton
     private let bottomBtn: IconButton
@@ -22,6 +20,14 @@ final class ToggleDock: NSView {
     /// silently miss another.
     private var fixedButtons: [ToolbarButton: IconButton] = [:]
     private var hiddenButtons: Set<ToolbarButton>
+    /// Hidden buttons `render` puts back for now, because the surface behind them has a live
+    /// process: the drawers and Scratch, which are otherwise invisible while they work. Held across
+    /// renders rather than rebuilt, since `surface(_:busy:onScreen:)` only re-decides one that is
+    /// off screen.
+    private var surfacedButtons: Set<ToolbarButton> = []
+    /// The tab `surfacedButtons` was decided in, so a tab switch drops the hold rather than
+    /// freezing one tab's answer against another's open drawer.
+    private var surfacedTab: TabID?
     private var toolFloatBtns: [String: IconButton] = [:]
     /// Floats declaring `toolbar:false`. Their buttons are built and hidden rather than skipped:
     /// `render` surfaces one while its tool is running (shown, or live in background), because the
@@ -200,32 +206,39 @@ final class ToggleDock: NSView {
     /// group collapses to a single divider between its neighbors).
     private func refreshVisibility() {
         for (button, view) in fixedButtons {
-            view.isHidden = hiddenButtons.contains(button)
+            view.isHidden = !isVisible(button)
         }
         let groupVisible =
             ToolbarButton.groups.map { group in
-                group.contains { !hiddenButtons.contains($0) }
+                group.contains { isVisible($0) }
             } + [toolFloatBtns.values.contains { !$0.isHidden }]
         for (index, divider) in dividers.enumerated() {
             divider.isHidden = !(groupVisible[...index].contains(true) && groupVisible[index + 1])
         }
     }
 
-    /// Mirror the active tab's overlay state (drawers, zoom) and the window's shown tool float
-    /// (`floatID` — floats are window-level, so they don't ride a tab's `OverlayState`); split
-    /// buttons are momentary and have no active state. A modal tool
-    /// float covers the whole tab, so while one is open the zoom and drawer
-    /// pips dim — their state is hidden behind it and returns when it closes. Otherwise the
-    /// drawer tints reflect what's visible: a zoomed pane hides both drawers (neither lit), a
-    /// zoomed drawer hides its sibling (only its own lit).
-    ///
-    /// `isLiveInBackground` dots a float whose tool is still running while its card is dismissed —
-    /// the only trace a hidden persistent float has. Passed as a query rather than a set so the
-    /// "live but not shown" rule keeps one definition, on the controller that owns the registry.
+    /// One definition of "on screen" for a built-in, so the `isHidden` write and the divider
+    /// grouping can never disagree about a button `render` has surfaced.
+    private func isVisible(_ button: ToolbarButton) -> Bool {
+        !hiddenButtons.contains(button) || surfacedButtons.contains(button)
+    }
+
+    /// Mirror the active tab's overlay onto the buttons: `isActive` is what is on screen right now,
+    /// so a card or a zoomed sibling dims what it covers. `floatID` is the window's shown float,
+    /// which is why it does not ride a tab's `OverlayState`, and `tab` scopes the hold in
+    /// `surface(_:busy:onScreen:)`. Split buttons are momentary and have no active state.
     func render(
-        overlay: OverlayState, floatID: String?, paletteOpen: Bool,
-        isLiveInBackground: (String) -> Bool = { _ in false }
+        overlay: OverlayState, floatID: String?, paletteOpen: Bool, tab: TabID? = nil,
+        isLiveInBackground: (String) -> Bool = { _ in false },
+        isFloatBusy: (String) -> Bool = { _ in false }
     ) {
+        // The hold belongs to the tab it was decided in, so a switch re-derives from the new tab's
+        // state instead of carrying a button the tab it arrives in has no live work behind.
+        if tab != surfacedTab {
+            surfacedTab = tab
+            surfacedButtons = []
+        }
+
         paletteBtn.isActive = paletteOpen
         for (id, btn) in toolFloatBtns {
             let isLive = isLiveInBackground(id)
@@ -236,7 +249,6 @@ final class ToggleDock: NSView {
             // again when the tool dies, so a live process always keeps a visible handle.
             btn.isHidden = toolbarHiddenFloatIDs.contains(id) && floatID != id && !isLive
         }
-        refreshVisibility()  // a surfaced or re-hidden float button moves the tools divider
 
         // Above the `floatCoversTab` branch below, deliberately: that branch dims the buttons whose
         // state is hidden behind a card, and this button IS the card when Scratch is the one open.
@@ -271,6 +283,33 @@ final class ToggleDock: NSView {
         // drawer is currently shown or hidden.
         bottomBtn.showsActivity = overlay.bottomBusy
         rightBtn.showsActivity = overlay.rightBusy
+
+        // A hidden drawer or Scratch comes back while its shell works out of sight, and the
+        // `isActive` settled above says whether it is out of sight.
+        surface(.bottomDrawer, busy: overlay.bottomBusy, onScreen: bottomBtn.isActive)
+        surface(.rightDrawer, busy: overlay.rightBusy, onScreen: rightBtn.isActive)
+        surface(
+            .scratch, busy: isFloatBusy(ToolFloat.scratch.id), onScreen: scratchBtn.isActive)
+        refreshVisibility()  // a surfaced or re-hidden button moves a divider
+    }
+
+    /// Grant or withdraw a hidden button's live-work handle, but only while the surface it belongs
+    /// to is off screen: it is a handle on work you cannot see, so a visible one holds its last
+    /// answer. That is what keeps the button from vanishing under the pointer that just pressed it,
+    /// and from flashing on open, where a spawning shell reads busy until its first prompt mark.
+    private func surface(_ button: ToolbarButton, busy: Bool, onScreen: Bool) {
+        // A hold means nothing for a button already on the toolbar, and holding one anyway leaves
+        // state that a later `hide-toolbar-buttons` edit reads as a reason to keep it there.
+        guard hiddenButtons.contains(button) else {
+            surfacedButtons.remove(button)
+            return
+        }
+        guard !onScreen else { return }
+        if busy {
+            surfacedButtons.insert(button)
+        } else {
+            surfacedButtons.remove(button)
+        }
     }
 
     /// Re-apply the live chrome colors to every button + divider after a config change — no
