@@ -52,9 +52,8 @@ enum GitCommand {
             return .failure(error)
         }
 
-        // Both pipes drain at once, and both before waiting. Reading one to EOF and only then the
-        // other deadlocks just as surely as waiting first: a child that fills the 64K stderr buffer
-        // blocks on write while this thread blocks reading stdout, and neither ever moves.
+        // Both pipes drain at once, and both before waiting: a child that fills the 64K stderr
+        // buffer blocks on write while this thread blocks reading stdout, and neither ever moves.
         var errData = Data()
         let errDrain = DispatchQueue(label: "GitCommand.stderr")
         let drained = DispatchGroup()

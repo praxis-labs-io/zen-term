@@ -185,10 +185,10 @@ checkout, or the build fails with "local binary target 'GhosttyKit' … does not
 contain a binary artifact", then "'module' is inaccessible" (the missing Resources
 dir suppresses TerminalKit's `Bundle.module` accessor).
 
-**Those symlinks show up as untracked, unlike in the main checkout.** Both
-`.gitignore` patterns end in a trailing slash, which matches a directory, and a
-symlink is not a directory to git. So `git add -A` in a worktree commits them. Use
-`git add -u` and check `git diff --cached --name-only` before committing.
+**Both patterns are slashless for that reason.** A trailing slash matches a
+directory only, and a symlink is not a directory to git, so the slashed form left
+both symlinks showing as untracked in every worktree. That is how a symlink
+carrying a machine-absolute path got committed once.
 
 **Never call `Bundle.module` in shippable code.** For a statically-linked
 executable target it resolves via the SwiftPM-generated "executable" accessor,
@@ -1762,6 +1762,115 @@ that carry meaning stay put: a warning is not a taste. What makes this work with
 call-site changes is that nothing caches the color: `ConfigChange.between` sets
 `.theme` from a whole-value `AppTheme` diff, and the existing `reapplyTheme()` fan-out
 repaints even the sites that bake their color at init, like the tab bar's tracer.
+
+## Worktrees
+
+`WorktreeStore` lists, creates and removes the git worktrees of a repo. It is
+headless: no AppKit, every call blocking, so callers run them off-main and hop
+back. Nothing calls it yet. The ⌘P picker's worktree rows land on top of it.
+
+**Git is the whole registry.** There is no index of our own to fall out of step
+with the repo, so a worktree made by hand in an arbitrary directory shows up
+alongside ours and one deleted in Finder stops being listed.
+
+Three things about `git worktree list --porcelain` are not what they look like.
+The main checkout is **record one**, which git documents, so it is read straight
+off the listing. Deriving it from `--git-common-dir` and its parent is wrong inside
+a submodule, where the common dir is `<super>/.git/modules/<name>` and the listing
+reports that same internals path as the checkout, so the filter matches nothing and
+the picker gains a row pointing into `.git`. A record marked `prunable` has no
+directory to open and is dropped whether or not a prune has run. And the listing is
+read with `-z`, because git escapes a lock reason but never the path: a worktree
+directory holding a newline splits a line-based parse across records.
+
+**The prune is conditional.** It is what stops a deleted worktree wedging
+`git checkout`, `git branch -d` and a re-add at the same path, and it is skipped
+when a prunable record sits on a volume that is not mounted. A worktree on an
+ejected drive is indistinguishable from a deleted one, and pruning its record is
+final: `git worktree repair` cannot rebuild an admin file that no longer exists.
+Pruning was never what hid the row from the list.
+
+### Where they live
+
+`~/.zenterm/worktrees/<repo-slug>-<digest>/<branch-slug>`, keyed on the **main
+checkout** so that creating from inside a worktree does not give one repo a second
+home. The digest is eight hex characters of SHA-256 over the standardized repo
+path, so two repos whose folders are both called `app` cannot share a directory.
+Branch names become one path segment, so `feature/zen-452` is `feature-zen-452`.
+That is lossy: `feature/x` and `feature-x` arrive at the same folder, so
+`destinationExists` names the branch already holding it rather than a folder name
+the user never typed.
+
+### Creating one, and what a failure leaves behind
+
+`create` branches off the remote's default (`refs/remotes/origin/HEAD`, then
+`origin/main`) and falls back to the local `HEAD`, so a repo with no remote works.
+A repo with no commits at all throws `unbornHead`. `symbolic-ref` still succeeds
+when `origin/HEAD` names a branch the remote has since dropped, so the target is
+resolved before it is trusted and an unusable one falls through the ladder.
+
+**A branch name is validated before any *mutating* git command runs, and a leading
+dash is rejected by hand.** `refs/heads/-m` is a perfectly valid ref name, so
+`check-ref-format` passes it, but `git worktree add -b -m` hands `-m` to git's own
+`git branch` call, which has no `--` guard: the repo's checked-out branch gets
+renamed and `HEAD` follows it. Probed on 2.50.1, reflog and all. That is the only
+defect here that damages the user's primary checkout, and validation is the whole
+defence, because the vulnerable call is inside git rather than in our argv.
+
+**Rollback order is load-bearing.** `git worktree add` can fail *after* registering
+the worktree, which a `post-checkout` hook that exits non-zero reproduces exactly
+(direnv and LFS both install one). Deleting the directory first then leaves git
+refusing the branch with "cannot delete branch … used by worktree", plus a stale
+`.git/worktrees/<slug>` entry that breaks the next create of the same name. So the
+rollback runs `worktree remove --force`, then the directory, then `prune`, and only
+then the branch.
+
+**The rollback deletes a branch only if it still points at the base OID recorded
+before the add.** Keying off the name alone is a time-of-check-to-time-of-use hole:
+a branch that appears between our precheck and our failure belongs to whoever made
+it, and deleting it destroys their work. It errs toward leaving a branch and saying
+so. That OID check is the only guard, so do not weaken it.
+
+The delete is `branch -D`. `-d` is not a second line under the OID check but a
+different question: it refuses a branch merged into neither its upstream nor the
+*current* HEAD. `worktree add -b` off a remote-tracking base usually sets that
+upstream and hides the difference, but under `branch.autoSetupMerge=false` a
+checkout sitting behind `origin/main` keeps the branch, and the orphan then wedges
+the next create of the same name.
+
+The residual the OID check cannot close: a branch someone else cuts from the same
+base in that window is indistinguishable from ours and is taken. It carries no
+commits, so the loss is the ref and nothing else.
+
+Whatever the rollback cannot undo is named in `rollbackIncomplete` rather than
+swallowed, so a create that half-failed says which branch or folder survived it.
+
+### What removal costs
+
+`remove` is `git worktree remove --force`, and the force is unconditional: carried
+files are always untracked and git refuses without it. The branch is untouched. A
+**locked** worktree is refused instead, because git wants the force twice there and
+a lock is the user's own "not this one", usually a drive that comes and goes.
+
+`state` counts uncommitted files and `rev-list --count HEAD --not --remotes`, and
+returns **nil, not zero**, when git cannot be read: telling someone about to delete
+an unreadable tree that it holds nothing is the one thing it exists to get right.
+Unpushed is zero in a repo with **no remote at all**, because `--not --remotes`
+excludes nothing without remote-tracking refs and would otherwise report the whole
+history as at risk, when `remove` leaves the branch in place anyway. There is no
+stash count beside those, because `refs/stash` is shared across every worktree of a
+repo.
+
+### GitCommand
+
+`GitCommand.run` is the app's only `Process()` call site. It is blocking on
+purpose, the way `GitRepoStatus` wraps `GitRepo`: the caller owns the queue hop.
+
+Both pipes drain **concurrently, and both before `waitUntilExit`**. Reading stdout
+to EOF and only then stderr deadlocks just as surely as waiting first: a child that
+fills the 64K stderr buffer blocks on write while the reader blocks on stdout, and
+neither moves. `git add` under `core.autocrlf` warns once per file and passes 64K
+at a few hundred files, which is how this was found.
 
 ## Invariants that will bite you
 
