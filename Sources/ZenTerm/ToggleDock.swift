@@ -1,12 +1,9 @@
 import AppKit
 
-/// The footer toolbar (bottom-right of the tab-bar row): a row of `IconButton`s — new tab │
-/// split-h, split-v, bottom drawer, right drawer, focus mode │ palette │ one per
-/// `ToolFloatCatalog` entry — grouped by thin dividers. Active toggles tint accent. Buttons fire
-/// injected closures (routed through the window's chord handler, so they respect the modals).
-/// Any built-in button can be hidden by `hide-toolbar-buttons`, and a float's `toolbar:false`
-/// hides its button while the tool isn't running (a running tool always keeps its button, dot and
-/// all); a divider only renders between two groups that both show something.
+/// The footer toolbar (bottom-right of the tab-bar row): `IconButton`s in `ToolbarButton.groups`
+/// order plus one per `ToolFloatCatalog` entry, separated by dividers that render only between two
+/// groups both showing something. Active toggles tint accent; buttons fire injected closures,
+/// routed through the window's chord handler so they respect the modals.
 final class ToggleDock: NSView {
     private let paletteBtn: IconButton
     private let bottomBtn: IconButton
@@ -22,6 +19,9 @@ final class ToggleDock: NSView {
     /// silently miss another.
     private var fixedButtons: [ToolbarButton: IconButton] = [:]
     private var hiddenButtons: Set<ToolbarButton>
+    /// Hidden buttons `render` puts back for now, because the surface behind them has a live
+    /// process: the drawers and Scratch, which are otherwise invisible while they work.
+    private var surfacedButtons: Set<ToolbarButton> = []
     private var toolFloatBtns: [String: IconButton] = [:]
     /// Floats declaring `toolbar:false`. Their buttons are built and hidden rather than skipped:
     /// `render` surfaces one while its tool is running (shown, or live in background), because the
@@ -200,15 +200,21 @@ final class ToggleDock: NSView {
     /// group collapses to a single divider between its neighbors).
     private func refreshVisibility() {
         for (button, view) in fixedButtons {
-            view.isHidden = hiddenButtons.contains(button)
+            view.isHidden = !isVisible(button)
         }
         let groupVisible =
             ToolbarButton.groups.map { group in
-                group.contains { !hiddenButtons.contains($0) }
+                group.contains { isVisible($0) }
             } + [toolFloatBtns.values.contains { !$0.isHidden }]
         for (index, divider) in dividers.enumerated() {
             divider.isHidden = !(groupVisible[...index].contains(true) && groupVisible[index + 1])
         }
+    }
+
+    /// One definition of "on screen" for a built-in, so the `isHidden` write and the divider
+    /// grouping can never disagree about a button `render` has surfaced.
+    private func isVisible(_ button: ToolbarButton) -> Bool {
+        !hiddenButtons.contains(button) || surfacedButtons.contains(button)
     }
 
     /// Mirror the active tab's overlay state (drawers, zoom) and the window's shown tool float
@@ -220,12 +226,21 @@ final class ToggleDock: NSView {
     /// zoomed drawer hides its sibling (only its own lit).
     ///
     /// `isLiveInBackground` dots a float whose tool is still running while its card is dismissed —
-    /// the only trace a hidden persistent float has. Passed as a query rather than a set so the
-    /// "live but not shown" rule keeps one definition, on the controller that owns the registry.
+    /// the only trace a hidden persistent float has. `isFloatBusy` answers the stricter question
+    /// for Scratch. Both are queries rather than sets, so each rule keeps one definition on the
+    /// controller that owns the registry.
     func render(
         overlay: OverlayState, floatID: String?, paletteOpen: Bool,
-        isLiveInBackground: (String) -> Bool = { _ in false }
+        isLiveInBackground: (String) -> Bool = { _ in false },
+        isFloatBusy: (String) -> Bool = { _ in false }
     ) {
+        // A hidden drawer or Scratch comes back while its shell is working, since nothing else on
+        // screen says so. Busy alone: existence means "ever opened", and an open one is already up.
+        surfacedButtons = []
+        if overlay.bottomBusy { surfacedButtons.insert(.bottomDrawer) }
+        if overlay.rightBusy { surfacedButtons.insert(.rightDrawer) }
+        if isFloatBusy(ToolFloat.scratch.id) { surfacedButtons.insert(.scratch) }
+
         paletteBtn.isActive = paletteOpen
         for (id, btn) in toolFloatBtns {
             let isLive = isLiveInBackground(id)
@@ -236,7 +251,7 @@ final class ToggleDock: NSView {
             // again when the tool dies, so a live process always keeps a visible handle.
             btn.isHidden = toolbarHiddenFloatIDs.contains(id) && floatID != id && !isLive
         }
-        refreshVisibility()  // a surfaced or re-hidden float button moves the tools divider
+        refreshVisibility()  // a surfaced or re-hidden button moves a divider
 
         // Above the `floatCoversTab` branch below, deliberately: that branch dims the buttons whose
         // state is hidden behind a card, and this button IS the card when Scratch is the one open.
