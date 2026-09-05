@@ -410,13 +410,24 @@ final class ToggleDockTests: XCTestCase {
     }
 
     /// Hiding a drawer that is mid-job (a live Settings edit) leaves it on screen, rather than
-    /// dropping the handle on work already running.
+    /// dropping the handle on work already running. The window pairs the two calls.
     func test_hidingABusyDrawer_leavesItOnScreen() {
         let dock = makeDock([])
+        dock.setHiddenButtons([.bottomDrawer])
         render(dock, OverlayState(bottomBusy: true))
 
-        dock.setHiddenButtons([.bottomDrawer])
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
+    }
+
+    /// A hold on a button nothing was hiding is state with no meaning, and hiding that button later
+    /// read it as a reason to keep it on screen with no work behind it.
+    func test_hidingAnIdleDrawer_isNotBlockedByAnEarlierBusySpell() {
+        let dock = makeDock([])
+        render(dock, OverlayState(bottomBusy: true))  // busy and closed, but nothing is hidden yet
+        render(dock, OverlayState(isBottomOpen: true))  // reopened, and the job ended on screen
+
+        dock.setHiddenButtons([.bottomDrawer])
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.bottomHidden)
     }
 
     /// Scratch keys off busy, not the liveness every other float uses: its shell stays live for the

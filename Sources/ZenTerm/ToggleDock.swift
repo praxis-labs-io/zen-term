@@ -306,6 +306,12 @@ final class ToggleDock: NSView {
     /// answer. That is what keeps the button from vanishing under the pointer that just pressed it,
     /// and from flashing on open, where a spawning shell reads busy until its first prompt mark.
     private func surface(_ button: ToolbarButton, busy: Bool, onScreen: Bool) {
+        // A hold means nothing for a button already on the toolbar, and holding one anyway leaves
+        // state that a later `hide-toolbar-buttons` edit reads as a reason to keep it there.
+        guard hiddenButtons.contains(button) else {
+            surfacedButtons.remove(button)
+            return
+        }
         guard !onScreen else { return }
         if busy {
             surfacedButtons.insert(button)

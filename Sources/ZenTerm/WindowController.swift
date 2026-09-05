@@ -497,6 +497,9 @@ final class WindowController: NSObject {
                 }
                 if change.contains(.toolbarButtons) {
                     self.dock.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
+                    // A newly hidden drawer may have work running behind it, and the dock only
+                    // grants that button its handle from a render.
+                    self.renderDock()
                 }
                 // An open palette re-resolves its whole catalog here, so this tracks more than a
                 // recolor: `.keymap` because a row's shortcut column resolves from the live keymap,
