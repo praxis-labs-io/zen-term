@@ -288,6 +288,25 @@ final class ScratchFloatInteractionTests: WindowTestCase {
             "a tab with no scratch running must not dot one")
     }
 
+    /// What surfaces a hidden Scratch button, and it is tab-scoped the way the dot is. Read through
+    /// the wrong registry key it answers false forever, and the button just never appears.
+    func test_scratchBusy_isAnsweredOnlyInTheTabItIsRunningIn() {
+        let c = makeWindow()
+        let surface = openScratch(c)
+        toggleScratch(c)
+        XCTAssertFalse(
+            c.floatsForTesting.isBusy(ToolFloat.scratch.id), "dismissed at a prompt is not busy")
+
+        surface.isBusy = true
+        XCTAssertTrue(c.floatsForTesting.isBusy(ToolFloat.scratch.id))
+
+        c.handle(.newTab)
+
+        XCTAssertFalse(
+            c.floatsForTesting.isBusy(ToolFloat.scratch.id),
+            "a tab with no scratch running must not get its button back")
+    }
+
     /// A hidden scratch asking for input is usually not in the tab that happens to be up, and the
     /// banner's click has to land where the prompt is. The engine reports the owning tab because it
     /// is the only thing that knows it — the window would otherwise guess the active one, which is
