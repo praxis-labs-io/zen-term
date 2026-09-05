@@ -302,11 +302,11 @@ final class ToggleDockTests: XCTestCase {
     private static let scratchHidden = fixedDefault.filter { $0 != "Scratch" }
 
     private func render(
-        _ dock: ToggleDock, _ overlay: OverlayState = OverlayState(), scratchBusy: Bool = false,
-        scratchLive: Bool = false
+        _ dock: ToggleDock, _ overlay: OverlayState = OverlayState(), floatID: String? = nil,
+        scratchBusy: Bool = false, scratchLive: Bool = false
     ) {
         dock.render(
-            overlay: overlay, floatID: nil, paletteOpen: false,
+            overlay: overlay, floatID: floatID, paletteOpen: false,
             isLiveInBackground: { scratchLive && $0 == ToolFloat.scratch.id },
             isFloatBusy: { scratchBusy && $0 == ToolFloat.scratch.id })
     }
@@ -334,6 +334,26 @@ final class ToggleDockTests: XCTestCase {
 
         render(dock, OverlayState(isBottomOpen: true))
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.bottomHidden)
+    }
+
+    /// The spawn flash: a shell reads busy until its first prompt mark, and a drawer only ever
+    /// spawns one while it is on screen. Busy alone would pop the button in and out on every open.
+    func test_hiddenDrawer_staysHiddenWhileBusyAndOnScreen() {
+        let dock = makeDock([])
+        dock.setHiddenButtons([.bottomDrawer])
+
+        render(dock, OverlayState(isBottomOpen: true, bottomBusy: true))
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.bottomHidden)
+    }
+
+    /// Focus mode on a pane takes an open drawer off screen, so a busy one is out of sight again
+    /// and earns its handle back.
+    func test_hiddenDrawer_surfacesWhileBusyAndZoomedAway() {
+        let dock = makeDock([])
+        dock.setHiddenButtons([.bottomDrawer])
+
+        render(dock, OverlayState(isBottomOpen: true, zoomed: .pane, bottomBusy: true))
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
     }
 
     /// A tab that never opened a drawer reaches the dock as this same idle state, so one input
@@ -377,6 +397,16 @@ final class ToggleDockTests: XCTestCase {
         render(dock, scratchBusy: true, scratchLive: true)
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
         XCTAssertTrue(dock.scratchActivityForTesting)
+    }
+
+    /// The reported flash: opening Scratch spawns a shell that reads busy until its first prompt
+    /// mark, and the card is up the whole time, so the button must not appear and then drop.
+    func test_hiddenScratch_staysHiddenWhileItsOwnCardIsUp() {
+        let dock = makeDock([])
+        dock.setHiddenButtons([.scratch])
+
+        render(dock, floatID: ToolFloat.scratch.id, scratchBusy: true)
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.scratchHidden)
     }
 
     /// A surfaced button counts for the divider grouping too, or the middle group comes back with

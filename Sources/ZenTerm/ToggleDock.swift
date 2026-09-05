@@ -234,13 +234,6 @@ final class ToggleDock: NSView {
         isLiveInBackground: (String) -> Bool = { _ in false },
         isFloatBusy: (String) -> Bool = { _ in false }
     ) {
-        // A hidden drawer or Scratch comes back while its shell is working, since nothing else on
-        // screen says so. Busy alone: existence means "ever opened", and an open one is already up.
-        surfacedButtons = []
-        if overlay.bottomBusy { surfacedButtons.insert(.bottomDrawer) }
-        if overlay.rightBusy { surfacedButtons.insert(.rightDrawer) }
-        if isFloatBusy(ToolFloat.scratch.id) { surfacedButtons.insert(.scratch) }
-
         paletteBtn.isActive = paletteOpen
         for (id, btn) in toolFloatBtns {
             let isLive = isLiveInBackground(id)
@@ -251,7 +244,6 @@ final class ToggleDock: NSView {
             // again when the tool dies, so a live process always keeps a visible handle.
             btn.isHidden = toolbarHiddenFloatIDs.contains(id) && floatID != id && !isLive
         }
-        refreshVisibility()  // a surfaced or re-hidden button moves a divider
 
         // Above the `floatCoversTab` branch below, deliberately: that branch dims the buttons whose
         // state is hidden behind a card, and this button IS the card when Scratch is the one open.
@@ -286,6 +278,15 @@ final class ToggleDock: NSView {
         // drawer is currently shown or hidden.
         bottomBtn.showsActivity = overlay.bottomBusy
         rightBtn.showsActivity = overlay.rightBusy
+
+        // A hidden drawer or Scratch comes back while its shell works out of sight. Gated on the
+        // `isActive` settled above: a spawning shell reads busy until its first prompt mark, and
+        // busy alone would flash the button open on every open.
+        surfacedButtons = []
+        if overlay.bottomBusy, !bottomBtn.isActive { surfacedButtons.insert(.bottomDrawer) }
+        if overlay.rightBusy, !rightBtn.isActive { surfacedButtons.insert(.rightDrawer) }
+        if isFloatBusy(ToolFloat.scratch.id), !scratchBtn.isActive { surfacedButtons.insert(.scratch) }
+        refreshVisibility()  // a surfaced or re-hidden button moves a divider
     }
 
     /// Re-apply the live chrome colors to every button + divider after a config change — no
