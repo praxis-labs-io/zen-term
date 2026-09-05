@@ -346,6 +346,24 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.bottomHidden)
     }
 
+    /// Pressing a surfaced button opens the drawer, and the button must not vanish under the
+    /// pointer that just pressed it. It holds until the drawer is closed and the work is done.
+    func test_surfacedDrawer_holdsWhileYouOpenAndUseIt() {
+        let dock = makeDock([])
+        dock.setHiddenButtons([.bottomDrawer])
+        render(dock, OverlayState(bottomBusy: true))
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
+
+        render(dock, OverlayState(isBottomOpen: true, bottomBusy: true))
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault, "vanished as it was pressed")
+
+        render(dock, OverlayState(isBottomOpen: true))
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault, "vanished while on screen")
+
+        render(dock)
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.bottomHidden)
+    }
+
     /// Focus mode on a pane takes an open drawer off screen, so a busy one is out of sight again
     /// and earns its handle back.
     func test_hiddenDrawer_surfacesWhileBusyAndZoomedAway() {

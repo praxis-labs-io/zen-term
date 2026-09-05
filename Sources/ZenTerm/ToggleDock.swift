@@ -20,7 +20,9 @@ final class ToggleDock: NSView {
     private var fixedButtons: [ToolbarButton: IconButton] = [:]
     private var hiddenButtons: Set<ToolbarButton>
     /// Hidden buttons `render` puts back for now, because the surface behind them has a live
-    /// process: the drawers and Scratch, which are otherwise invisible while they work.
+    /// process: the drawers and Scratch, which are otherwise invisible while they work. Held across
+    /// renders rather than rebuilt, since `surface(_:busy:onScreen:)` only re-decides one that is
+    /// off screen.
     private var surfacedButtons: Set<ToolbarButton> = []
     private var toolFloatBtns: [String: IconButton] = [:]
     /// Floats declaring `toolbar:false`. Their buttons are built and hidden rather than skipped:
@@ -279,14 +281,26 @@ final class ToggleDock: NSView {
         bottomBtn.showsActivity = overlay.bottomBusy
         rightBtn.showsActivity = overlay.rightBusy
 
-        // A hidden drawer or Scratch comes back while its shell works out of sight. Gated on the
-        // `isActive` settled above: a spawning shell reads busy until its first prompt mark, and
-        // busy alone would flash the button open on every open.
-        surfacedButtons = []
-        if overlay.bottomBusy, !bottomBtn.isActive { surfacedButtons.insert(.bottomDrawer) }
-        if overlay.rightBusy, !rightBtn.isActive { surfacedButtons.insert(.rightDrawer) }
-        if isFloatBusy(ToolFloat.scratch.id), !scratchBtn.isActive { surfacedButtons.insert(.scratch) }
+        // A hidden drawer or Scratch comes back while its shell works out of sight, and the
+        // `isActive` settled above says whether it is out of sight.
+        surface(.bottomDrawer, busy: overlay.bottomBusy, onScreen: bottomBtn.isActive)
+        surface(.rightDrawer, busy: overlay.rightBusy, onScreen: rightBtn.isActive)
+        surface(
+            .scratch, busy: isFloatBusy(ToolFloat.scratch.id), onScreen: scratchBtn.isActive)
         refreshVisibility()  // a surfaced or re-hidden button moves a divider
+    }
+
+    /// Grant or withdraw a hidden button's live-work handle, but only while the surface it belongs
+    /// to is off screen: it is a handle on work you cannot see, so a visible one holds its last
+    /// answer. That is what keeps the button from vanishing under the pointer that just pressed it,
+    /// and from flashing on open, where a spawning shell reads busy until its first prompt mark.
+    private func surface(_ button: ToolbarButton, busy: Bool, onScreen: Bool) {
+        guard !onScreen else { return }
+        if busy {
+            surfacedButtons.insert(button)
+        } else {
+            surfacedButtons.remove(button)
+        }
     }
 
     /// Re-apply the live chrome colors to every button + divider after a config change — no
