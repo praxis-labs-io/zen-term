@@ -374,6 +374,31 @@ final class WorktreeStoreTests: XCTestCase {
         XCTAssertNil(WorktreeStore.state(worktree))
     }
 
+    /// Git escapes a lock reason but never the path, so a worktree whose directory holds a newline
+    /// splits a line-based parse across records. Nothing we make can, one added by hand can.
+    func test_list_readsAWorktreeWhosePathHoldsANewline() throws {
+        let odd = root.appendingPathComponent("by\nhand", isDirectory: true)
+        try GitFixture.run(["worktree", "add", "-b", "odd", odd.path], in: repo)
+
+        let listed = try WorktreeStore.list(in: repo)
+
+        XCTAssertEqual(listed.map(\.path), [odd.standardizedFileURL])
+        XCTAssertEqual(listed.first?.branch, "odd")
+    }
+
+    /// `symbolic-ref` still succeeds when `origin/HEAD` names a branch the remote no longer has, so
+    /// an unverified base reaches `rev-parse` and kills the create instead of falling through.
+    func test_create_fallsBackWhenOriginHeadNamesAMissingBranch() throws {
+        try GitFixture.run(
+            ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk"], in: repo)
+
+        let worktree = try WorktreeStore.create(branch: "recovered", in: repo)
+
+        XCTAssertEqual(
+            try GitFixture.run(["rev-parse", "HEAD"], in: worktree.path),
+            try GitFixture.run(["rev-parse", "origin/main"], in: repo))
+    }
+
     // MARK: the volume a prunable worktree lives on
 
     /// A worktree on an unmounted volume is indistinguishable from a deleted one, and pruning its
@@ -399,16 +424,15 @@ final class WorktreeStoreTests: XCTestCase {
         XCTAssertTrue(WorktreeStore.isSafeToPrune(prunableListing(for: "/Volumes/\(mounted)/wt")))
     }
 
+    /// The `-z` shape `worktree list` emits: fields NUL-separated, records by an empty field.
     private func prunableListing(for path: String) -> String {
-        """
-        worktree \(repo.path)
-        HEAD 0000000000000000000000000000000000000000
-        branch refs/heads/main
-
-        worktree \(path)
-        HEAD 0000000000000000000000000000000000000000
-        prunable gitdir file points to non-existent location
-        """
+        let zeros = String(repeating: "0", count: 40)
+        let main = ["worktree \(repo.path)", "HEAD \(zeros)", "branch refs/heads/main"]
+        let stale = [
+            "worktree \(path)", "HEAD \(zeros)",
+            "prunable gitdir file points to non-existent location",
+        ]
+        return [main, stale].map { $0.joined(separator: "\0") }.joined(separator: "\0\0")
     }
 
     // MARK: a repo that is not the main checkout

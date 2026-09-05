@@ -24,10 +24,8 @@ struct WorktreeState: Equatable {
 
 /// Lists, creates and removes the worktrees of a repo, under `~/.zenterm/worktrees/`.
 ///
-/// Git is the whole registry. There is no index of our own to fall out of step, so a worktree made
-/// by hand elsewhere is listed alongside ours and one deleted in Finder simply stops being listed.
-///
-/// Every call blocks on `git` or the filesystem, so callers run them off-main and hop back.
+/// Git is the whole registry, so a worktree made by hand elsewhere is listed alongside ours and one
+/// deleted in Finder stops being listed. Every call blocks, so callers run them off-main.
 enum WorktreeStore {
     enum WorktreeError: Error, LocalizedError, Equatable {
         case notARepo(URL)
@@ -100,7 +98,7 @@ enum WorktreeStore {
     /// it prunable on its own. The prune is hygiene for git's own commands, and it is conditional.
     static func list(in repo: URL) throws -> [Worktree] {
         guard GitRepo.isGitRepo(repo) else { throw WorktreeError.notARepo(repo) }
-        let listing = try git(["worktree", "list", "--porcelain"], in: repo)
+        let listing = try porcelain(in: repo)
         if isSafeToPrune(listing) { _ = try? git(["worktree", "prune"], in: repo) }
         let main = mainPath(in: listing)
         return parse(listing).filter { $0.path != main }
@@ -188,8 +186,7 @@ enum WorktreeStore {
         guard branchExists(branch, in: repo) else { return leftBehind }
 
         // Delete only a branch still standing where we put it: one that moved belongs to whoever
-        // created it after our precheck. `-D` because that OID check is the merge check, and
-        // `-d`'s is against the *current* HEAD, which `base` is routinely ahead of.
+        // created it after our precheck, and that OID check, not `-d`'s, is the guard that says so.
         let atBase = (try? git(["rev-parse", "--verify", "refs/heads/\(branch)"], in: repo)) == base0ID
         if atBase, (try? git(["branch", "-D", "--", branch], in: repo)) != nil { return leftBehind }
         leftBehind.append("the branch \(branch)")
@@ -258,8 +255,7 @@ enum WorktreeStore {
     /// path keeps a submodule right: there `--git-common-dir` names `.git/modules/<name>`, whose
     /// parent is an internals directory rather than any checkout.
     private static func mainCheckout(of repo: URL) -> URL {
-        let listing = try? git(["worktree", "list", "--porcelain"], in: repo)
-        return listing.flatMap(mainPath(in:)) ?? repo.standardizedFileURL
+        return (try? porcelain(in: repo)).flatMap(mainPath(in:)) ?? repo.standardizedFileURL
     }
 
     private static func mainPath(in listing: String) -> URL? {
@@ -269,13 +265,19 @@ enum WorktreeStore {
     /// Which branch already holds `destination`, when a worktree holds it at all rather than some
     /// stray folder. Read without pruning: this runs on the way out of a failed create.
     private static func branchHolding(_ destination: URL, in repo: URL) -> String? {
-        guard let listing = try? git(["worktree", "list", "--porcelain"], in: repo) else { return nil }
+        guard let listing = try? porcelain(in: repo) else { return nil }
         return parse(listing).first { $0.path == destination.standardizedFileURL }?.branch
     }
 
-    /// Records separated by a blank line, each a `key value` per line.
+    /// `-z` so a worktree path holding a newline stays one field. Git escapes a lock reason but
+    /// never the path, so a line-split parse loses the record instead.
+    private static func porcelain(in repo: URL) throws -> String {
+        try git(["worktree", "list", "--porcelain", "-z"], in: repo)
+    }
+
+    /// Records separated by an empty field, each a `key value`.
     private static func records(in listing: String) -> [[Substring]] {
-        listing.components(separatedBy: "\n\n").map { $0.split(separator: "\n") }
+        listing.components(separatedBy: "\0\0").map { $0.split(separator: "\0") }
     }
 
     private static func worktreePath(in record: [Substring]) -> URL? {
@@ -316,8 +318,11 @@ enum WorktreeStore {
     /// What a new worktree branches from: the remote's default branch where there is one, and the
     /// current checkout otherwise, so a repo with no remote still works.
     private static func resolveBase(in repo: URL) throws -> String {
+        // `symbolic-ref` still succeeds when the branch it names is gone from the remote, so the
+        // target has to resolve before it is trusted or `create` dies on `rev-parse` instead.
         if let head = try? git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], in: repo),
-            !head.isEmpty
+            !head.isEmpty,
+            (try? git(["rev-parse", "--verify", "--quiet", "\(head)^{commit}"], in: repo)) != nil
         {
             return head
         }
@@ -332,9 +337,8 @@ enum WorktreeStore {
 
     /// A name git will take that cannot also be read as a command-line option.
     ///
-    /// The dash check is the load-bearing half. `refs/heads/-m` is a perfectly *valid* ref name, so
-    /// `check-ref-format` passes it, and `worktree add -b -m` then reaches git's own unguarded
-    /// `git branch` call and renames whatever branch the repo is standing on.
+    /// The dash check is load-bearing: `refs/heads/-m` is a *valid* ref name, so `check-ref-format`
+    /// passes it and `worktree add -b -m` renames whatever branch the repo is standing on.
     private static func isUsableBranchName(_ branch: String, in repo: URL) -> Bool {
         guard !branch.isEmpty, !branch.hasPrefix("-") else { return false }
         return (try? git(["check-ref-format", "refs/heads/\(branch)"], in: repo)) != nil
