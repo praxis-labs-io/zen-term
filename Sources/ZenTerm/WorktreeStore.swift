@@ -14,8 +14,9 @@ struct Worktree: Equatable {
 /// What a worktree would lose if it were removed now.
 struct WorktreeState: Equatable {
     let uncommitted: Int
-    /// Commits on this worktree's HEAD that no remote has. There is no stash count beside it:
-    /// `refs/stash` is shared across every worktree of a repo, so a per-worktree number is a lie.
+    /// Commits on this worktree's HEAD that no remote has, and zero in a repo with no remote at
+    /// all: `remove` leaves the branch alone, so with nowhere to push there is nothing to lose.
+    /// There is no stash count beside it: `refs/stash` is shared across every worktree of a repo.
     let unpushed: Int
 
     var isClean: Bool { uncommitted == 0 && unpushed == 0 }
@@ -33,7 +34,10 @@ enum WorktreeStore {
         case unbornHead(URL)
         case invalidBranchName(String)
         case branchExists(String)
-        case destinationExists(URL)
+        /// `branch` names the worktree already holding the folder, when one does. Two branch names
+        /// can slug onto one folder, so the folder's own name is not what the user typed.
+        case destinationExists(URL, branch: String?)
+        case isLocked(URL)
         case gitFailed(GitCommand.Failure)
         /// The create failed *and* undoing it did not finish. `leftBehind` names what survives.
         case rollbackIncomplete(cause: String, leftBehind: [String])
@@ -48,8 +52,13 @@ enum WorktreeStore {
                 return "\(branch) is not a branch name git will take."
             case .branchExists(let branch):
                 return "A branch named \(branch) already exists."
-            case .destinationExists(let url):
-                return "\(url.lastPathComponent) is already a folder in the worktrees directory."
+            case .destinationExists(let url, let branch):
+                guard let branch else {
+                    return "\(url.lastPathComponent) is already a folder in the worktrees directory."
+                }
+                return "A worktree for \(branch) already uses that folder name."
+            case .isLocked(let url):
+                return "\(url.lastPathComponent) is locked. Unlock it before removing it."
             case .gitFailed(let failure):
                 return failure.errorDescription
             case .rollbackIncomplete(let cause, let leftBehind):
@@ -87,13 +96,13 @@ enum WorktreeStore {
 
     /// Every linked worktree of `repo`, wherever on disk it lives, main checkout excluded.
     ///
-    /// Prunes first, so a worktree whose directory was deleted in Finder is forgotten here rather
-    /// than lingering as a row that opens nothing.
+    /// A worktree whose directory is gone is dropped from the answer either way, because git marks
+    /// it prunable on its own. The prune is hygiene for git's own commands, and it is conditional.
     static func list(in repo: URL) throws -> [Worktree] {
         guard GitRepo.isGitRepo(repo) else { throw WorktreeError.notARepo(repo) }
-        try git(["worktree", "prune"], in: repo)
         let listing = try git(["worktree", "list", "--porcelain"], in: repo)
-        let main = try mainCheckout(of: repo)
+        if isSafeToPrune(listing) { _ = try? git(["worktree", "prune"], in: repo) }
+        let main = mainPath(in: listing)
         return parse(listing).filter { $0.path != main }
     }
 
@@ -103,6 +112,14 @@ enum WorktreeStore {
     /// front of a person about to delete a tree we could not read.
     static func state(_ worktree: Worktree) -> WorktreeState? {
         guard let status = try? git(["status", "--porcelain"], in: worktree.path),
+            let remotes = try? git(["remote"], in: worktree.path)
+        else { return nil }
+        // `--not --remotes` excludes nothing when there are no remote-tracking refs, so the count
+        // would be the repo's whole history rather than the work a push would carry off.
+        guard !remotes.isEmpty else {
+            return WorktreeState(uncommitted: lineCount(status), unpushed: 0)
+        }
+        guard
             let counted = try? git(
                 ["rev-list", "--count", "HEAD", "--not", "--remotes"], in: worktree.path),
             let unpushed = Int(counted)
@@ -120,11 +137,15 @@ enum WorktreeStore {
 
         let base = try resolveBase(in: repo)
         let base0ID = try git(["rev-parse", base], in: repo)
-        let parent = root.appendingPathComponent(directoryName(for: repo), isDirectory: true)
+        // Keyed on the main checkout, never on `repo`: creating from inside a worktree would
+        // otherwise give the same repo a second home under the root.
+        let parent = root.appendingPathComponent(
+            directoryName(for: mainCheckout(of: repo)), isDirectory: true)
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
         let destination = parent.appendingPathComponent(slug(forText: branch), isDirectory: true)
         guard !FileManager.default.fileExists(atPath: destination.path) else {
-            throw WorktreeError.destinationExists(destination)
+            throw WorktreeError.destinationExists(
+                destination, branch: branchHolding(destination, in: repo))
         }
 
         #if DEBUG
@@ -166,18 +187,20 @@ enum WorktreeStore {
         }
         guard branchExists(branch, in: repo) else { return leftBehind }
 
-        // Delete only a branch still standing where we put it. One that moved belongs to whoever
-        // created it after our precheck, and this errs toward leaving it and saying so.
+        // Delete only a branch still standing where we put it: one that moved belongs to whoever
+        // created it after our precheck. `-D` because that OID check is the merge check, and
+        // `-d`'s is against the *current* HEAD, which `base` is routinely ahead of.
         let atBase = (try? git(["rev-parse", "--verify", "refs/heads/\(branch)"], in: repo)) == base0ID
-        if atBase, (try? git(["branch", "-d", "--", branch], in: repo)) != nil { return leftBehind }
+        if atBase, (try? git(["branch", "-D", "--", branch], in: repo)) != nil { return leftBehind }
         leftBehind.append("the branch \(branch)")
         return leftBehind
     }
 
     /// Delete the worktree, leaving the branch it held alone. `--force` is unconditional because
     /// carried files are always untracked and git refuses without it, so the confirm in front of
-    /// this call is what makes it safe.
+    /// this call is what makes it safe. A lock is the user's own "not this one" and is obeyed.
     static func remove(_ worktree: Worktree, in repo: URL) throws {
+        guard !worktree.isLocked else { throw WorktreeError.isLocked(worktree.path) }
         try git(["worktree", "remove", "--force", worktree.path.path], in: repo)
     }
 
@@ -190,7 +213,7 @@ enum WorktreeStore {
     }
 
     /// One path segment from free text, which may hold anything: a branch called `feature/x` names
-    /// a directory called `feature-x`.
+    /// a directory called `feature-x`. Lossy, so two branch names can arrive at one folder.
     static func slug(forText text: String) -> String {
         let kept = text.map { character -> Character in
             character.isLetter || character.isNumber || character == "-" || character == "_"
@@ -209,21 +232,64 @@ enum WorktreeStore {
 
     // MARK: helpers
 
-    /// The repo's main checkout. `--git-common-dir` is the one answer that holds from inside any
-    /// worktree, and `worktree list` sorts by path rather than putting the main one first.
-    private static func mainCheckout(of repo: URL) throws -> URL {
-        let common = try git(["rev-parse", "--path-format=absolute", "--git-common-dir"], in: repo)
-        return URL(fileURLWithPath: common).deletingLastPathComponent().standardizedFileURL
+    /// Whether pruning now would only forget directories that are genuinely gone.
+    ///
+    /// A worktree on an unmounted volume is indistinguishable from a deleted one, and pruning it is
+    /// final: `worktree repair` cannot rebuild an admin file that no longer exists.
+    static func isSafeToPrune(_ listing: String) -> Bool {
+        prunablePaths(in: listing).allSatisfy(isOnAPresentVolume)
+    }
+
+    /// Volumes other than the boot one live under `/Volumes`, and the mount point goes with the
+    /// drive, so an absent one reads as "cannot see it" rather than "deleted".
+    private static func isOnAPresentVolume(_ path: URL) -> Bool {
+        let parts = path.standardizedFileURL.pathComponents
+        guard parts.count > 2, parts[1] == "Volumes" else { return true }
+        return FileManager.default.fileExists(atPath: "/Volumes/\(parts[2])")
+    }
+
+    private static func prunablePaths(in listing: String) -> [URL] {
+        records(in: listing)
+            .filter { $0.contains { $0.hasPrefix("prunable") } }
+            .compactMap(worktreePath(in:))
+    }
+
+    /// The repo's main checkout. `worktree list` documents it as record one, and taking git's own
+    /// path keeps a submodule right: there `--git-common-dir` names `.git/modules/<name>`, whose
+    /// parent is an internals directory rather than any checkout.
+    private static func mainCheckout(of repo: URL) -> URL {
+        let listing = try? git(["worktree", "list", "--porcelain"], in: repo)
+        return listing.flatMap(mainPath(in:)) ?? repo.standardizedFileURL
+    }
+
+    private static func mainPath(in listing: String) -> URL? {
+        records(in: listing).first.flatMap(worktreePath(in:))
+    }
+
+    /// Which branch already holds `destination`, when a worktree holds it at all rather than some
+    /// stray folder. Read without pruning: this runs on the way out of a failed create.
+    private static func branchHolding(_ destination: URL, in repo: URL) -> String? {
+        guard let listing = try? git(["worktree", "list", "--porcelain"], in: repo) else { return nil }
+        return parse(listing).first { $0.path == destination.standardizedFileURL }?.branch
     }
 
     /// Records separated by a blank line, each a `key value` per line.
+    private static func records(in listing: String) -> [[Substring]] {
+        listing.components(separatedBy: "\n\n").map { $0.split(separator: "\n") }
+    }
+
+    private static func worktreePath(in record: [Substring]) -> URL? {
+        record.first { $0.hasPrefix("worktree ") }
+            .map { URL(fileURLWithPath: String($0.dropFirst("worktree ".count))).standardizedFileURL }
+    }
+
     private static func parse(_ listing: String) -> [Worktree] {
-        listing.components(separatedBy: "\n\n").compactMap { record in
+        records(in: listing).compactMap { record in
             var path: URL?
             var head: String?
             var branch: String?
             var locked = false
-            for line in record.split(separator: "\n") {
+            for line in record {
                 let parts = line.split(separator: " ", maxSplits: 1)
                 guard let key = parts.first else { continue }
                 let value = parts.count > 1 ? String(parts[1]) : ""
@@ -232,8 +298,8 @@ enum WorktreeStore {
                 case "HEAD": head = value
                 case "branch": branch = shortBranch(value)
                 case "locked": locked = true
-                // We pruned already, so anything still prunable is a locked worktree whose
-                // directory is gone. There is nothing to open, and `bare` is not a checkout.
+                // A prunable record's directory is gone, so there is nothing to open whether or not
+                // the prune that follows takes it. `bare` is not a checkout either.
                 case "prunable", "bare": return nil
                 default: continue
                 }

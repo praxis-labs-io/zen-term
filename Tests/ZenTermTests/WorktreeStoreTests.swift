@@ -32,7 +32,8 @@ final class WorktreeStoreTests: XCTestCase {
     }
 
     /// The picker's workspace row *is* the main checkout, so returning it would double every repo.
-    /// `worktree list` sorts by path, so a name that sorts first is what catches taking record one.
+    /// `worktree list` documents record one as the main worktree, and a linked one sorting ahead
+    /// of it is what catches an implementation that trusts the order instead.
     func test_list_excludesTheMainCheckout() throws {
         _ = try WorktreeStore.create(branch: "aaa-sorts-first", in: repo)
 
@@ -157,7 +158,8 @@ final class WorktreeStoreTests: XCTestCase {
         try GitFixture.write("", to: occupied.appendingPathComponent("squatter"))
 
         XCTAssertThrowsError(try WorktreeStore.create(branch: "blocked", in: repo)) { error in
-            XCTAssertEqual(error as? WorktreeStore.WorktreeError, .destinationExists(occupied))
+            XCTAssertEqual(
+                error as? WorktreeStore.WorktreeError, .destinationExists(occupied, branch: nil))
         }
         XCTAssertEqual(try GitFixture.branches(in: repo), ["main"])
         XCTAssertTrue(GitFixture.exists(occupied.appendingPathComponent("squatter")))
@@ -257,8 +259,8 @@ final class WorktreeStoreTests: XCTestCase {
         XCTAssertEqual(try GitFixture.run(["rev-parse", "raced"], in: repo), older, "untouched")
     }
 
-    /// Belt and braces over the same window: an unmerged raced branch is refused by `branch -d`
-    /// as well as by the OID guard, so it survives even if one of the two regresses.
+    /// The same window with an unmerged branch. The rollback deletes with `-D`, so nothing but
+    /// the OID guard stands between someone else's commits and a delete.
     func test_create_doesNotDeleteAnUnmergedBranchItDidNotCreate() throws {
         var theirCommit = ""
         WorktreeStore.betweenCheckAndAddForTesting = { repo in
@@ -304,6 +306,20 @@ final class WorktreeStoreTests: XCTestCase {
         XCTAssertEqual(try WorktreeStore.list(in: repo), [])
     }
 
+    /// A lock is the user's own "not this one", usually because the worktree lives on a drive that
+    /// comes and goes. `--force` alone cannot remove it anyway: git wants the force twice.
+    func test_remove_refusesALockedWorktree() throws {
+        let created = try WorktreeStore.create(branch: "pinned", in: repo)
+        try GitFixture.run(["worktree", "lock", created.path.path], in: repo)
+        let worktree = try XCTUnwrap(try WorktreeStore.list(in: repo).first)
+
+        XCTAssertTrue(worktree.isLocked)
+        XCTAssertThrowsError(try WorktreeStore.remove(worktree, in: repo)) { error in
+            XCTAssertEqual(error as? WorktreeStore.WorktreeError, .isLocked(worktree.path))
+        }
+        XCTAssertTrue(GitFixture.exists(created.path))
+    }
+
     func test_remove_leavesTheBranchAlone() throws {
         let worktree = try WorktreeStore.create(branch: "survivor", in: repo)
 
@@ -335,6 +351,20 @@ final class WorktreeStoreTests: XCTestCase {
         XCTAssertFalse(state.isClean)
     }
 
+    /// `--not --remotes` excludes nothing when there are no remote-tracking refs, so the count is
+    /// the repo's whole history. A local-only worktree would never read as clean.
+    func test_state_countsNothingUnpushedInARepoWithNoRemote() throws {
+        let solo = try GitFixture.makeRepo(at: root.appendingPathComponent("solo"))
+        try GitFixture.write("two\n", to: solo.appendingPathComponent("tracked.txt"))
+        try GitFixture.run(["commit", "-qam", "second"], in: solo)
+        let worktree = try WorktreeStore.create(branch: "local-only", in: solo)
+
+        let state = try XCTUnwrap(WorktreeStore.state(worktree))
+
+        XCTAssertEqual(state.unpushed, 0)
+        XCTAssertTrue(state.isClean)
+    }
+
     /// Nil is not "clean". Reporting zero here would tell someone about to delete an unreadable
     /// tree that it holds nothing.
     func test_state_isNilWhenTheWorktreeCannotBeRead() throws {
@@ -342,6 +372,114 @@ final class WorktreeStoreTests: XCTestCase {
         try FileManager.default.removeItem(at: worktree.path)
 
         XCTAssertNil(WorktreeStore.state(worktree))
+    }
+
+    // MARK: the volume a prunable worktree lives on
+
+    /// A worktree on an unmounted volume is indistinguishable from a deleted one, and pruning its
+    /// record is final: `worktree repair` cannot rebuild an admin file that is gone.
+    func test_isSafeToPrune_refusesAPrunableWorktreeOnAnAbsentVolume() {
+        let absent = "/Volumes/\(UUID().uuidString)/code/wt"
+
+        XCTAssertFalse(WorktreeStore.isSafeToPrune(prunableListing(for: absent)))
+    }
+
+    func test_isSafeToPrune_allowsAPrunableWorktreeOnThisVolume() {
+        let here = root.appendingPathComponent("deleted", isDirectory: true).path
+
+        XCTAssertTrue(WorktreeStore.isSafeToPrune(prunableListing(for: here)))
+    }
+
+    /// The mount point itself is what disappears with the drive, so a volume that IS mounted keeps
+    /// its worktrees prunable however deep under `/Volumes` they sit.
+    func test_isSafeToPrune_allowsAPrunableWorktreeOnAMountedVolume() throws {
+        let mounted = try XCTUnwrap(
+            try FileManager.default.contentsOfDirectory(atPath: "/Volumes").first)
+
+        XCTAssertTrue(WorktreeStore.isSafeToPrune(prunableListing(for: "/Volumes/\(mounted)/wt")))
+    }
+
+    private func prunableListing(for path: String) -> String {
+        """
+        worktree \(repo.path)
+        HEAD 0000000000000000000000000000000000000000
+        branch refs/heads/main
+
+        worktree \(path)
+        HEAD 0000000000000000000000000000000000000000
+        prunable gitdir file points to non-existent location
+        """
+    }
+
+    // MARK: a repo that is not the main checkout
+
+    /// Inside a submodule `--git-common-dir` is `<super>/.git/modules/<name>`, and `worktree list`
+    /// reports that same internals path as the checkout. Deriving the main checkout from the common
+    /// dir matches neither, so the submodule's own record survives as a row pointing into `.git`.
+    func test_list_isEmptyInsideASubmodule() throws {
+        let sub = try makeSubmodule()
+
+        XCTAssertTrue(GitRepo.isGitRepo(sub), "a submodule is reachable through the picker")
+        XCTAssertEqual(try WorktreeStore.list(in: sub), [])
+    }
+
+    /// Creating from inside a worktree has to land in the repo's one home. Keying the parent on the
+    /// path it was handed gives the same repo a second directory under the root.
+    func test_create_fromInsideAWorktreeUsesTheRepoOneHome() throws {
+        let first = try WorktreeStore.create(branch: "one", in: repo)
+
+        let second = try WorktreeStore.create(branch: "two", in: first.path)
+
+        XCTAssertEqual(
+            second.path.deletingLastPathComponent().lastPathComponent,
+            WorktreeStore.directoryName(for: repo))
+        XCTAssertEqual(try WorktreeStore.list(in: repo).compactMap(\.branch).sorted(), ["one", "two"])
+    }
+
+    private func makeSubmodule() throws -> URL {
+        let lib = try GitFixture.makeRepo(at: root.appendingPathComponent("lib", isDirectory: true))
+        try GitFixture.run(
+            ["-c", "protocol.file.allow=always", "submodule", "add", "--quiet", lib.path, "sub"],
+            in: repo)
+        try GitFixture.run(["commit", "-qm", "add submodule"], in: repo)
+        return repo.appendingPathComponent("sub", isDirectory: true)
+    }
+
+    // MARK: a base ahead of the checkout
+
+    /// `-d` refuses a branch merged into neither its upstream nor the *current* HEAD. `worktree
+    /// add -b` off a remote-tracking base normally sets that upstream and hides it, but not under
+    /// `branch.autoSetupMerge=false`: there a checkout behind `origin/main` keeps the branch, and
+    /// the orphan then wedges the next create of the same name. The OID guard is the real check.
+    func test_create_rollsBackABranchCutFromABaseAheadOfTheCheckout() throws {
+        try GitFixture.run(["config", "branch.autoSetupMerge", "false"], in: repo)
+        try GitFixture.write("two\n", to: repo.appendingPathComponent("tracked.txt"))
+        try GitFixture.run(["commit", "-qam", "second"], in: repo)
+        try GitFixture.run(["push", "-q", "origin", "main"], in: repo)
+        try GitFixture.run(["reset", "--hard", "--quiet", "HEAD~1"], in: repo)
+        try failingPostCheckoutHook()
+
+        XCTAssertThrowsError(try WorktreeStore.create(branch: "behind", in: repo))
+
+        XCTAssertEqual(try GitFixture.branches(in: repo), ["main"], "no orphaned branch")
+    }
+
+    // MARK: two branch names, one folder
+
+    /// `feature/x` and `feature-x` slug onto one folder. Naming the folder would put a name the
+    /// user never typed in front of them, with nothing connecting it to the branch they asked for.
+    func test_create_namesTheBranchAlreadyHoldingTheFolder() throws {
+        _ = try WorktreeStore.create(branch: "feature/x", in: repo)
+
+        XCTAssertThrowsError(try WorktreeStore.create(branch: "feature-x", in: repo)) { error in
+            guard case .destinationExists(_, let branch) = error as? WorktreeStore.WorktreeError
+            else { return XCTFail("expected destinationExists, got \(error)") }
+            XCTAssertEqual(branch, "feature/x")
+            XCTAssertEqual(
+                (error as? LocalizedError)?.errorDescription,
+                "A worktree for feature/x already uses that folder name.")
+        }
+        XCTAssertEqual(try GitFixture.branches(in: repo), ["feature/x", "main"])
     }
 
     // MARK: fixtures
