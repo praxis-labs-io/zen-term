@@ -22,7 +22,8 @@ enum WorkspacesWriter {
     /// Render a workspace as one `[Title]` section: aligned `key = value` lines in the same field
     /// order as `docs/config/workspaces`, absent fields omitted (the parser treats an empty value
     /// as absent), values quoted when they contain whitespace or a `#` (so the parser doesn't
-    /// truncate a comment or lose spacing), and env keys sorted for deterministic output.
+    /// truncate a comment or lose spacing), and env keys sorted for deterministic output. `carry`
+    /// is the exception: it is an authored list, so its order is the content, not a detail.
     static func serialize(_ ws: Workspace) -> String {
         var lines = ["[\(ws.title)]"]
         func add(_ key: String, _ rendered: String) {
@@ -35,6 +36,7 @@ enum WorkspacesWriter {
         if let right = ws.right { add("right", quoted(right)) }
         if let bottom = ws.bottom { add("bottom", quoted(bottom)) }
         if ws.focus != .main { add("focus", ws.focus.rawValue) }  // .main is the parser default
+        for entry in ws.carry { add("carry", quoted(entry)) }
         for key in ws.env.keys.sorted() {
             // The parser splits an env line on the first `=` for the KEY, then unquotes the VALUE
             // — so quote only the value part, never the `KEY=` prefix.

@@ -3,7 +3,8 @@ import Foundation
 
 /// Parses `~/.config/zen-term/workspaces` into `[Workspace]`. INI-style: each `[Title]`
 /// section is one workspace, with `key = value` lines (`path`, `main`, `right`, `bottom`,
-/// `focus`, and repeatable `env`). Best-effort, symmetric with the other config parsers:
+/// `focus`, and repeatable `env` and `carry`). Best-effort, symmetric with the other config
+/// parsers:
 /// unknown keys are ignored, a section missing the required `path` is logged and dropped, a
 /// malformed `env` entry is skipped, a value may be wrapped in quotes, and nothing throws.
 enum WorkspacesParser {
@@ -58,6 +59,7 @@ enum WorkspacesParser {
         var bottom: String?
         var focusRaw: String?
         var env: [(key: String, value: String)] = []
+        var carry: [String] = []
 
         mutating func set(key: String, value: String) {
             if key != "env", value.isEmpty { return }  // `right =` (empty) → absent, not a "" command
@@ -85,6 +87,18 @@ enum WorkspacesParser {
                 // rest of the parser (whitespace-trimmed, quotes optional) instead of keeping them literal.
                 let raw = String(value[value.index(after: equals)...]).trimmingCharacters(in: .whitespaces)
                 env.append((name, ConfigText.unquote(raw)))
+            case "carry":
+                // A carried entry is copied into a worktree by path, so one that escapes the
+                // workspace would reach into somewhere else entirely. Refuse rather than clamp.
+                guard !value.hasPrefix("/"), !value.hasPrefix("~"),
+                    !value.split(separator: "/").contains("..")
+                else {
+                    Log.warning(
+                        "Workspaces: `\(title)` carry `\(value)` leaves the workspace — skipped",
+                        category: .workspace)
+                    return
+                }
+                carry.append(value)
             default:
                 break  // unknown key — ignored
             }
@@ -107,7 +121,7 @@ enum WorkspacesParser {
             return Workspace(
                 title: title,
                 path: URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true),
-                main: main, right: right, bottom: bottom, focus: focus, env: envMap)
+                main: main, right: right, bottom: bottom, focus: focus, env: envMap, carry: carry)
         }
     }
 
