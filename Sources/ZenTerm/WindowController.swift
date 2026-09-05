@@ -2466,6 +2466,7 @@ final class WindowController: NSObject {
         // The shown float is window-level, so it comes from `floats`, not the active tab's state.
         dock.render(
             overlay: overlay, floatID: floats.activeID, paletteOpen: modal?.kind == .commandPalette,
+            tab: tabs.order.isEmpty ? nil : tabs.activeID,
             isLiveInBackground: floats.isLiveInBackground, isFloatBusy: floats.isBusy)
         // Keep the poll's change-guard in sync with what's actually shown, so a tab switch to a
         // differently-busy tab re-evaluates instead of comparing against a stale value.

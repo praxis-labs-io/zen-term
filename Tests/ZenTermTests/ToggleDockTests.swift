@@ -1,4 +1,5 @@
 import AppKit
+import TabKit
 import XCTest
 
 @testable import ZenTerm
@@ -303,10 +304,10 @@ final class ToggleDockTests: XCTestCase {
 
     private func render(
         _ dock: ToggleDock, _ overlay: OverlayState = OverlayState(), floatID: String? = nil,
-        scratchBusy: Bool = false, scratchLive: Bool = false
+        tab: TabID? = nil, scratchBusy: Bool = false, scratchLive: Bool = false
     ) {
         dock.render(
-            overlay: overlay, floatID: floatID, paletteOpen: false,
+            overlay: overlay, floatID: floatID, paletteOpen: false, tab: tab,
             isLiveInBackground: { scratchLive && $0 == ToolFloat.scratch.id },
             isFloatBusy: { scratchBusy && $0 == ToolFloat.scratch.id })
     }
@@ -362,6 +363,21 @@ final class ToggleDockTests: XCTestCase {
 
         render(dock)
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.bottomHidden)
+    }
+
+    /// The hold is one tab's answer. Without scoping it, arriving in a tab whose drawer is open
+    /// froze the previous tab's answer, and its button sat lit in a tab with no work behind it.
+    func test_surfacedDrawer_doesNotFollowATabSwitch() {
+        let dock = makeDock([])
+        dock.setHiddenButtons([.bottomDrawer])
+        render(dock, OverlayState(bottomBusy: true), tab: TabID(1))
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
+
+        render(dock, OverlayState(isBottomOpen: true), tab: TabID(2))
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.bottomHidden)
+
+        render(dock, OverlayState(bottomBusy: true), tab: TabID(1))
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault, "still working back here")
     }
 
     /// Focus mode on a pane takes an open drawer off screen, so a busy one is out of sight again

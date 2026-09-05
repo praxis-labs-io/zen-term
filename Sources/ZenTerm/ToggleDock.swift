@@ -1,4 +1,5 @@
 import AppKit
+import TabKit
 
 /// The footer toolbar (bottom-right of the tab-bar row): `IconButton`s in `ToolbarButton.groups`
 /// order plus one per `ToolFloatCatalog` entry, separated by dividers that render only between two
@@ -24,6 +25,9 @@ final class ToggleDock: NSView {
     /// renders rather than rebuilt, since `surface(_:busy:onScreen:)` only re-decides one that is
     /// off screen.
     private var surfacedButtons: Set<ToolbarButton> = []
+    /// The tab `surfacedButtons` was decided in, so a tab switch drops the hold rather than
+    /// freezing one tab's answer against another's open drawer.
+    private var surfacedTab: TabID?
     private var toolFloatBtns: [String: IconButton] = [:]
     /// Floats declaring `toolbar:false`. Their buttons are built and hidden rather than skipped:
     /// `render` surfaces one while its tool is running (shown, or live in background), because the
@@ -230,12 +234,19 @@ final class ToggleDock: NSView {
     /// `isLiveInBackground` dots a float whose tool is still running while its card is dismissed —
     /// the only trace a hidden persistent float has. `isFloatBusy` answers the stricter question
     /// for Scratch. Both are queries rather than sets, so each rule keeps one definition on the
-    /// controller that owns the registry.
+    /// controller that owns the registry. `tab` scopes the surfaced-button hold below.
     func render(
-        overlay: OverlayState, floatID: String?, paletteOpen: Bool,
+        overlay: OverlayState, floatID: String?, paletteOpen: Bool, tab: TabID? = nil,
         isLiveInBackground: (String) -> Bool = { _ in false },
         isFloatBusy: (String) -> Bool = { _ in false }
     ) {
+        // The hold belongs to the tab it was decided in, so a switch re-derives from the new tab's
+        // state instead of carrying a button the tab it arrives in has no live work behind.
+        if tab != surfacedTab {
+            surfacedTab = tab
+            surfacedButtons = []
+        }
+
         paletteBtn.isActive = paletteOpen
         for (id, btn) in toolFloatBtns {
             let isLive = isLiveInBackground(id)
