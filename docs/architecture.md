@@ -1767,7 +1767,8 @@ repaints even the sites that bake their color at init, like the tab bar's tracer
 
 `WorktreeStore` lists, creates and removes the git worktrees of a repo. It is
 headless: no AppKit, every call blocking, so callers run them off-main and hop
-back. Nothing calls it yet. The ⌘P picker's worktree rows land on top of it.
+back. The ⌘P picker reads it for the worktree rows under each workspace; nothing
+creates or removes one from the UI yet.
 
 **Git is the whole registry.** There is no index of our own to fall out of step
 with the repo, so a worktree made by hand in an arbitrary directory shows up
@@ -1778,7 +1779,9 @@ The main checkout is **record one**, which git documents, so it is read straight
 off the listing. Deriving it from `--git-common-dir` and its parent is wrong inside
 a submodule, where the common dir is `<super>/.git/modules/<name>` and the listing
 reports that same internals path as the checkout, so the filter matches nothing and
-the picker gains a row pointing into `.git`. A record marked `prunable` has no
+the picker gains a row pointing into `.git`. That is an argument about the *parent*
+of the common dir, not the common dir itself. The picker groups on the common dir,
+which "Grouping the rows" below covers. A record marked `prunable` has no
 directory to open and is dropped whether or not a prune has run. And the listing is
 read with `-z`, because git escapes a lock reason but never the path: a worktree
 directory holding a newline splits a line-based parse across records.
@@ -1789,6 +1792,30 @@ when a prunable record sits on a volume that is not mounted. A worktree on an
 ejected drive is indistinguishable from a deleted one, and pruning its record is
 final: `git worktree repair` cannot rebuild an admin file that no longer exists.
 Pruning was never what hid the row from the list.
+
+### Grouping the rows
+
+The picker groups on `git rev-parse --git-common-dir`, canonicalized, because
+`GitRepo.repoRoot` cannot answer this. It walks up to the first `.git` entry, and a
+worktree's `.git` is a *file*, so a workspace opened inside a worktree resolves to
+that worktree's own root and would form a group of its own. The common dir is
+shared by every checkout of a repo, so it groups them together and survives the
+bare and `.bare` layouts a path comparison gets wrong.
+
+Nothing takes its parent, which is what separates this from `mainCheckout`: the
+folder name needs a readable path and the group needs only a token two checkouts
+agree on. Git answers `.git` from a main checkout and an absolute path from a
+linked one, so both are resolved before they are compared.
+
+Two workspaces can be checkouts of one repo, and `worktree list` answers the same
+set for both. The first in config order claims the common dir and takes the child
+rows; the second keeps its own row without repeating them. A worktree the user has
+already configured as a workspace of its own is skipped rather than rendered twice.
+
+The listing is two `git` calls per workspace, so it runs on its own bounded queue
+in `GitRepoStatus` and the rows arrive after the card, the way the branch and the
+counts already do. A reload resets the selection to the default, so the picker puts
+it back by identity: rows appearing under the cursor must not move it.
 
 ### Where they live
 
