@@ -84,7 +84,10 @@ class PaletteOverlay: NSView, ModalOverlay {
         let height: NSLayoutConstraint
     }
     private var laidOutRows: [LaidOutRow] = []
-    private var selected = 0
+    /// The highlighted row, for a subclass that rebuilds its rows and wants the selection back.
+    private(set) var selected = 0
+    /// Set for the span of one reload, so only rows arriving from a background pass ease in.
+    private var animatesNextReload = false
 
     init(
         background: NSColor, placeholder: String, emptyText: String, footerHints: [PaletteHint],
@@ -372,6 +375,7 @@ class PaletteOverlay: NSView, ModalOverlay {
 
         let count = numberOfRows()
         var next: [LaidOutRow] = []
+        var arrived: [PaletteRowView] = []
         var total: CGFloat = 0
         for index in 0..<count {
             let height = rowHeight(at: index)
@@ -385,6 +389,7 @@ class PaletteOverlay: NSView, ModalOverlay {
                 row = reused
             } else {
                 let view = makeRow(at: index)
+                if animatesNextReload { arrived.append(view) }
                 rowsStack.insertArrangedSubview(view, at: index)  // width pins to the stack, so insert first
                 let heightConstraint = view.heightAnchor.constraint(equalToConstant: height)
                 NSLayoutConstraint.activate([
@@ -406,15 +411,60 @@ class PaletteOverlay: NSView, ModalOverlay {
         emptyLabel.isHidden = count != 0
         // Empty → keep a small fixed height so the "no results" label isn't clipped by a
         // zero-height scroll view.
-        listHeight.constant = count == 0 ? emptyListHeight : min(total + 2 * listVerticalInset, maxListHeight)
+        setListHeight(count == 0 ? emptyListHeight : min(total + 2 * listVerticalInset, maxListHeight))
         selected = defaultSelectionIndex()
         updateHighlight()
         scrollSelectedToVisible()
+        for row in arrived {
+            row.wantsLayer = true
+            row.layer?.opacity = 0  // `Motion.fade` reads the model value as its start
+            Motion.fade(row, to: 1)
+        }
+    }
+
+    /// The list grows to meet rows that arrive after the card is up, instead of snapping. Only an
+    /// animated reload eases: a filter keystroke replaces the whole list and has to stay instant.
+    private func setListHeight(_ height: CGFloat) {
+        guard animatesNextReload, !Motion.isReduceMotionEnabled() else {
+            listHeight.constant = height
+            return
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Motion.fadeDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            listHeight.animator().constant = height
+        }
     }
 
     /// The laid-out row views, in list order — for a subclass that updates its rows in place (the
     /// repo picker's git badges, which land after a background probe) instead of re-rendering.
     var rowViews: [PaletteRowView] { laidOutRows.map(\.view) }
+
+    /// The query the list is filtered by right now — for a subclass rebuilding its model outside a
+    /// keystroke, where the filter in force is not the empty one.
+    var currentQuery: String { searchField.stringValue }
+
+    /// Re-render the rows from the subclass's current model. Pair it with `reselect(byIdentity:)`:
+    /// a reload resets the selection to the default, which yanks the highlight off the row the
+    /// person is standing on when new rows arrive mid-session.
+    /// `animated` is for rows landing under the cursor from a background pass. A filter keystroke
+    /// passes false: easing a list the person is typing into reads as lag, not polish.
+    func refreshRows(animated: Bool = false) {
+        animatesNextReload = animated
+        reloadRows()
+        animatesNextReload = false
+    }
+
+    /// Put the selection back on the row with `identity`. A no-op when that row is gone or is not
+    /// selectable, leaving whatever default the reload chose.
+    func reselect(byIdentity identity: AnyHashable?) {
+        guard let identity, let index = laidOutRows.firstIndex(where: { $0.id == identity }),
+            isSelectable(at: index)
+        else { return }
+        selected = index
+        updateHighlight()
+        scrollSelectedToVisible()
+    }
 
     /// The row highlighted after a (re)load — the first selectable row by default. A subclass
     /// overrides to prefer a different default (e.g. the repo picker highlights the first

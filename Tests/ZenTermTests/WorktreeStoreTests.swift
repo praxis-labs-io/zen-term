@@ -75,6 +75,18 @@ final class WorktreeStoreTests: XCTestCase {
         XCTAssertFalse(afterPrune.contains("prunable"), "the record was pruned, not just filtered")
     }
 
+    /// The picker lists on every open, and a prune is final: a worktree moved on disk and waiting
+    /// for `git worktree repair` would lose that chance to a keystroke.
+    func test_list_withoutPruning_leavesTheRecordAlone() throws {
+        let worktree = try WorktreeStore.create(branch: "moved", in: repo)
+        try FileManager.default.removeItem(at: worktree.path)
+
+        XCTAssertEqual(try WorktreeStore.list(in: repo, pruning: false), [])
+
+        let after = try GitFixture.run(["worktree", "list", "--porcelain"], in: repo)
+        XCTAssertTrue(after.contains("prunable"), "the record survives a read")
+    }
+
     func test_list_throwsForADirectoryThatIsNotARepo() throws {
         let plain = root.appendingPathComponent("plain", isDirectory: true)
         try FileManager.default.createDirectory(at: plain, withIntermediateDirectories: true)
@@ -399,29 +411,76 @@ final class WorktreeStoreTests: XCTestCase {
             try GitFixture.run(["rev-parse", "origin/main"], in: repo))
     }
 
+    // MARK: the common dir
+
+    /// The grouping key for the picker's rows, and the whole reason it is not a path comparison.
+    /// Git answers `.git` from the main checkout and an absolute path from a linked worktree, so
+    /// the two agree only once both are resolved.
+    func test_commonDir_isTheSameForACheckoutAndItsWorktree() throws {
+        let worktree = try WorktreeStore.create(branch: "feature", in: repo)
+
+        XCTAssertEqual(WorktreeStore.commonDir(of: repo), WorktreeStore.commonDir(of: worktree.path))
+        XCTAssertEqual(
+            WorktreeStore.commonDir(of: repo),
+            repo.appendingPathComponent(".git").resolvingSymlinksInPath().standardizedFileURL)
+    }
+
+    /// A worktree made by hand outside our root still groups under its repo, which is the case a
+    /// path comparison gets wrong.
+    func test_commonDir_matchesAHandMadeWorktreeAnywhere() throws {
+        let elsewhere = root.appendingPathComponent("by-hand", isDirectory: true)
+        try GitFixture.run(["worktree", "add", "-b", "by-hand", elsewhere.path], in: repo)
+
+        XCTAssertEqual(WorktreeStore.commonDir(of: elsewhere), WorktreeStore.commonDir(of: repo))
+    }
+
+    /// A submodule is its own repo, so it groups on its own rather than under its superproject.
+    func test_commonDir_separatesASubmoduleFromItsSuperproject() throws {
+        let sub = try makeSubmodule()
+
+        let answer = WorktreeStore.commonDir(of: sub)
+        XCTAssertNotNil(answer)
+        XCTAssertNotEqual(answer, WorktreeStore.commonDir(of: repo))
+    }
+
+    func test_commonDir_isNilOutsideARepo() throws {
+        let plain = root.appendingPathComponent("not-a-repo", isDirectory: true)
+        try FileManager.default.createDirectory(at: plain, withIntermediateDirectories: true)
+
+        XCTAssertNil(WorktreeStore.commonDir(of: plain))
+    }
+
     // MARK: the volume a prunable worktree lives on
 
     /// A worktree on an unmounted volume is indistinguishable from a deleted one, and pruning its
     /// record is final: `worktree repair` cannot rebuild an admin file that is gone.
-    func test_isSafeToPrune_refusesAPrunableWorktreeOnAnAbsentVolume() {
+    func test_shouldPrune_refusesAPrunableWorktreeOnAnAbsentVolume() {
         let absent = "/Volumes/\(UUID().uuidString)/code/wt"
 
-        XCTAssertFalse(WorktreeStore.isSafeToPrune(prunableListing(for: absent)))
+        XCTAssertFalse(WorktreeStore.shouldPrune(prunableListing(for: absent)))
     }
 
-    func test_isSafeToPrune_allowsAPrunableWorktreeOnThisVolume() {
+    func test_shouldPrune_allowsAPrunableWorktreeOnThisVolume() {
         let here = root.appendingPathComponent("deleted", isDirectory: true).path
 
-        XCTAssertTrue(WorktreeStore.isSafeToPrune(prunableListing(for: here)))
+        XCTAssertTrue(WorktreeStore.shouldPrune(prunableListing(for: here)))
     }
 
     /// The mount point itself is what disappears with the drive, so a volume that IS mounted keeps
     /// its worktrees prunable however deep under `/Volumes` they sit.
-    func test_isSafeToPrune_allowsAPrunableWorktreeOnAMountedVolume() throws {
+    func test_shouldPrune_allowsAPrunableWorktreeOnAMountedVolume() throws {
         let mounted = try XCTUnwrap(
             try FileManager.default.contentsOfDirectory(atPath: "/Volumes").first)
 
-        XCTAssertTrue(WorktreeStore.isSafeToPrune(prunableListing(for: "/Volumes/\(mounted)/wt")))
+        XCTAssertTrue(WorktreeStore.shouldPrune(prunableListing(for: "/Volumes/\(mounted)/wt")))
+    }
+
+    /// The common case by a wide margin, and the one that was spawning a `git worktree prune` per
+    /// workspace on every picker open: `allSatisfy` is true of an empty list.
+    func test_shouldPrune_isFalseWhenNothingIsPrunable() throws {
+        let listing = try GitFixture.run(["worktree", "list", "--porcelain", "-z"], in: repo)
+
+        XCTAssertFalse(WorktreeStore.shouldPrune(listing))
     }
 
     /// The `-z` shape `worktree list` emits: fields NUL-separated, records by an empty field.

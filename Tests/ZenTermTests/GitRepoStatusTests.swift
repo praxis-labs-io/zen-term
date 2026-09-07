@@ -24,6 +24,47 @@ final class GitRepoStatusTests: XCTestCase {
         try super.tearDownWithError()
     }
 
+    /// The whole production path the picker's worktree rows hang off. The row tests drive
+    /// `setWorktrees` directly, so without this the background seam could stop populating the UI
+    /// and every one of them would still pass.
+    func test_refreshWorktrees_deliversTheCommonDirAndLinkedWorktreesOnMain() throws {
+        let repo = try GitFixture.makeRepo(at: root.appendingPathComponent("work", isDirectory: true))
+        try GitFixture.run(
+            ["worktree", "add", "-b", "probe", root.appendingPathComponent("wt").path], in: repo)
+
+        var answered: (dir: URL, listing: WorktreeListing)?
+        var onMain = false
+        let landed = expectation(description: "the listing lands")
+        GitRepoStatus.refreshWorktrees([repo]) { dir, listing in
+            onMain = Thread.isMainThread
+            answered = (dir, listing)
+            landed.fulfill()
+        }
+        wait(for: [landed], timeout: 20)
+
+        XCTAssertTrue(onMain, "the cache and the rows are main-thread only")
+        XCTAssertEqual(answered?.dir, repo.standardizedFileURL)
+        XCTAssertEqual(answered?.listing.worktrees.compactMap(\.branch), ["probe"])
+        XCTAssertEqual(answered?.listing.commonDir, WorktreeStore.commonDir(of: repo))
+    }
+
+    /// A directory that is not a repo still answers, so a caller counting completions is never
+    /// left waiting on one that will not come.
+    func test_refreshWorktrees_answersForADirectoryThatIsNotARepo() throws {
+        let plain = try makeDir("plain", git: false)
+
+        var listing: WorktreeListing?
+        let landed = expectation(description: "the listing lands")
+        GitRepoStatus.refreshWorktrees([plain]) { _, answer in
+            listing = answer
+            landed.fulfill()
+        }
+        wait(for: [landed], timeout: 20)
+
+        XCTAssertEqual(listing?.worktrees, [])
+        XCTAssertNil(listing?.commonDir)
+    }
+
     private func makeDir(_ name: String, git: Bool) throws -> URL {
         let dir = root.appendingPathComponent(name, isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

@@ -11,6 +11,14 @@ struct Worktree: Equatable {
     let isLocked: Bool
 }
 
+/// One repo's worktrees, with the git directory every checkout of it shares. The picker groups
+/// on `commonDir`, so a workspace opened inside a worktree lands under its parent rather than in a
+/// group of its own.
+struct WorktreeListing: Equatable {
+    let commonDir: URL?
+    let worktrees: [Worktree]
+}
+
 /// What a worktree would lose if it were removed now.
 struct WorktreeState: Equatable {
     let uncommitted: Int
@@ -96,10 +104,14 @@ enum WorktreeStore {
     ///
     /// A worktree whose directory is gone is dropped from the answer either way, because git marks
     /// it prunable on its own. The prune is hygiene for git's own commands, and it is conditional.
-    static func list(in repo: URL) throws -> [Worktree] {
+    ///
+    /// `pruning: false` makes this a pure read. The picker lists on every open, and a prune is
+    /// final: a worktree moved on disk, waiting for `git worktree repair`, loses that chance the
+    /// next time someone presses ⌘P. Opening a picker must not write to a repo.
+    static func list(in repo: URL, pruning: Bool = true) throws -> [Worktree] {
         guard GitRepo.isGitRepo(repo) else { throw WorktreeError.notARepo(repo) }
         let listing = try porcelain(in: repo)
-        if isSafeToPrune(listing) { _ = try? git(["worktree", "prune"], in: repo) }
+        if pruning, shouldPrune(listing) { _ = try? git(["worktree", "prune"], in: repo) }
         let main = mainPath(in: listing)
         return parse(listing).filter { $0.path != main }
     }
@@ -123,6 +135,18 @@ enum WorktreeStore {
             let unpushed = Int(counted)
         else { return nil }
         return WorktreeState(uncommitted: lineCount(status), unpushed: unpushed)
+    }
+
+    /// The git directory every checkout of this repo shares, canonicalized: the identity two
+    /// worktrees of one repo agree on where their paths do not. Nil outside a repo. Unlike
+    /// `mainCheckout` nothing takes its parent, so the submodule layout that makes it a bad source
+    /// for a folder name is harmless here.
+    static func commonDir(of repo: URL) -> URL? {
+        guard let answer = try? git(["rev-parse", "--git-common-dir"], in: repo), !answer.isEmpty
+        else { return nil }
+        // Git answers relative to the directory it ran in, which is `repo`, and only sometimes.
+        let url = answer.hasPrefix("/") ? URL(fileURLWithPath: answer) : repo.appendingPathComponent(answer)
+        return url.resolvingSymlinksInPath().standardizedFileURL
     }
 
     // MARK: writing
@@ -229,12 +253,16 @@ enum WorktreeStore {
 
     // MARK: helpers
 
-    /// Whether pruning now would only forget directories that are genuinely gone.
+    /// Whether there is anything to prune, and whether pruning it would only forget directories
+    /// that are genuinely gone.
     ///
     /// A worktree on an unmounted volume is indistinguishable from a deleted one, and pruning it is
     /// final: `worktree repair` cannot rebuild an admin file that no longer exists.
-    static func isSafeToPrune(_ listing: String) -> Bool {
-        prunablePaths(in: listing).allSatisfy(isOnAPresentVolume)
+    static func shouldPrune(_ listing: String) -> Bool {
+        let prunable = prunablePaths(in: listing)
+        // `allSatisfy` is true of nothing, so without this the picker spawned a no-op `prune` per
+        // workspace per open, which is the common case rather than the rare one.
+        return !prunable.isEmpty && prunable.allSatisfy(isOnAPresentVolume)
     }
 
     /// Volumes other than the boot one live under `/Volumes`, and the mount point goes with the

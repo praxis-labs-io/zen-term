@@ -21,6 +21,10 @@ final class TabBarViewTests: WindowTestCase {
         tabBar.frame = NSRect(x: 0, y: 0, width: 400, height: 30)
     }
 
+    private func descendants(of view: NSView) -> [NSView] {
+        view.subviews.flatMap { [$0] + descendants(of: $0) }
+    }
+
     private func item(_ id: Int, _ title: String, index: Int, active: Bool = false) -> TabBarItem {
         TabBarItem(id: TabID(id), index: index, title: title, isActive: active, attentionState: .idle)
     }
@@ -43,6 +47,38 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertTrue(before[1] === after[1], "and so is tab 2's")
         XCTAssertEqual(
             tabBar.chipLabelsForTesting.first?.string, "1 renamed", "the kept chip shows the new title")
+    }
+
+    /// A chip was as wide as whatever it held, so one long title pushed every other tab off the
+    /// strip. A worktree tab carries a project, a mark and a branch, which made that routine.
+    func test_render_capsAChipsWidthAndTruncatesTheTitle() throws {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
+        mount(tabBar)
+        let long = "ZenTerm \u{2387} feature/zen-455-worktree-rows-in-the-picker-and-then-some"
+
+        tabBar.render([item(1, "one", index: 1, active: true), item(2, long, index: 2)])
+
+        tabBar.layoutSubtreeIfNeeded()
+        let widths = tabBar.chipsForTesting.map(\.frame.width)
+        XCTAssertLessThanOrEqual(
+            try XCTUnwrap(widths.last), TabBarView.maxChipWidth, "the chip stops at the cap")
+        XCTAssertGreaterThan(
+            try XCTUnwrap(widths.last), try XCTUnwrap(widths.first),
+            "a long title still takes more room than a short one, up to the cap")
+
+        // Width alone passed while the label wrapped to a second line and bled out of the chip:
+        // an attributed value carries its own line behaviour, so the label's own setting is not
+        // enough on its own.
+        let chip = try XCTUnwrap(tabBar.chipsForTesting.last)
+        let label = try XCTUnwrap(
+            descendants(of: chip).compactMap { $0 as? NSTextField }.first)
+        XCTAssertEqual(label.maximumNumberOfLines, 1)
+        let style =
+            label.attributedStringValue.attribute(
+                .paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        XCTAssertEqual(style?.lineBreakMode, .byTruncatingTail, "truncate, never wrap")
+        XCTAssertLessThanOrEqual(
+            label.frame.height, chip.frame.height, "one line, inside the chip")
     }
 
     func test_render_dropsTheChipOfAClosedTab() {
