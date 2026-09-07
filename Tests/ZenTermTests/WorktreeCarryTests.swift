@@ -130,6 +130,23 @@ final class WorktreeCarryTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: bystander, encoding: .utf8), "untouched\n")
     }
 
+    /// `COPYFILE_CLONE` implies `COPYFILE_NOFOLLOW_SRC`, so this arrives as a link holding its
+    /// original relative target. A worktree sits under a different parent, so it would dangle.
+    func test_copy_refusesASymlinkPointingOutsideTheWorkspace() throws {
+        let outside = root.appendingPathComponent("shared", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        try GitFixture.write("secret\n", to: outside.appendingPathComponent(".env"))
+        try FileManager.default.createSymbolicLink(
+            atPath: repo.appendingPathComponent(".env").path, withDestinationPath: "../shared/.env")
+
+        let report = WorktreeCarry.copy([".env"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, [])
+        XCTAssertEqual(
+            report.skipped, [CarryReport.Skipped(name: ".env", reason: .leavesTheWorkspace)])
+        XCTAssertFalse(GitFixture.exists(worktree.appendingPathComponent(".env")))
+    }
+
     /// Probed: `copyfile` with `COPYFILE_CLONE` returns 0 for a directory that already exists,
     /// having copied none of it. Trusting that would report an entry as carried when it was not.
     func test_copy_refusesAnEntryTheWorktreeAlreadyHas() throws {

@@ -88,17 +88,28 @@ enum WorkspacesParser {
                 let raw = String(value[value.index(after: equals)...]).trimmingCharacters(in: .whitespaces)
                 env.append((name, ConfigText.unquote(raw)))
             case "carry":
+                // A trailing slash is how a .gitignore names a directory, so accept it and let the
+                // entry mean the same thing either way.
+                let entry = value.hasSuffix("/") ? String(value.dropLast()) : value
                 // A carried entry is copied into a worktree by path, so one that escapes the
                 // workspace would reach into somewhere else entirely. Refuse rather than clamp.
-                guard !value.hasPrefix("/"), !value.hasPrefix("~"),
-                    !value.split(separator: "/").contains("..")
+                guard !entry.hasPrefix("/"), !entry.hasPrefix("~"),
+                    !entry.split(separator: "/").contains("..")
                 else {
                     Log.warning(
                         "Workspaces: `\(title)` carry `\(value)` leaves the workspace — skipped",
                         category: .workspace)
                     return
                 }
-                carry.append(value)
+                // Carry copies top-level entries only, and nothing creates a destination's parent,
+                // so a nested one would fail at copy time with an errno that reads as a missing source.
+                guard !entry.contains("/") else {
+                    Log.warning(
+                        "Workspaces: `\(title)` carry `\(value)` is not a top-level entry — skipped",
+                        category: .workspace)
+                    return
+                }
+                carry.append(entry)
             default:
                 break  // unknown key — ignored
             }

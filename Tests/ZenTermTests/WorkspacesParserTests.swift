@@ -125,6 +125,25 @@ final class WorkspacesParserTests: XCTestCase {
         XCTAssertEqual(ws?.carry, [".env"])
     }
 
+    /// Nothing creates a destination's parent, so a nested entry would die at copy time with an
+    /// errno that reads as a missing source. It is refused where the reason is still legible.
+    func test_carry_dropsANestedEntry() {
+        let ws = WorkspacesParser.parse(
+            """
+            [ZenTerm]
+            path  = ~/Dev/zen-term
+            carry = config/local.json
+            carry = .env
+            """
+        ).first
+        XCTAssertEqual(ws?.carry, [".env"])
+    }
+
+    func test_carry_acceptsATrailingSlash() {
+        let ws = WorkspacesParser.parse("[X]\npath = ~/x\ncarry = node_modules/\n").first
+        XCTAssertEqual(ws?.carry, ["node_modules"])
+    }
+
     func test_emptyCarryValue_treatedAsAbsent() {
         XCTAssertEqual(WorkspacesParser.parse("[Scratch]\npath = ~/\ncarry =\n").first?.carry, [])
     }

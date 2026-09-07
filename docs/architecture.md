@@ -1866,9 +1866,17 @@ the clone approach needed is gone: a worktree on an external drive works and tak
 longer rather than being refused. Probed on macOS 25.5: a 200MB clone costs no free
 space, a copy onto a separate APFS volume returns 0 rather than `EXDEV`, and the flag
 implies `COPYFILE_NOFOLLOW_SRC` so a symlink clones as a symlink, which is what keeps
-a pnpm `node_modules` cheap.
+a pnpm `node_modules` cheap. That last part cuts both ways: links *inside* a carried
+directory stay correct because they point within it, but a carried entry that is itself
+a link out of the workspace would arrive holding a target that no longer resolves, so
+that one is refused.
 
-**Three refusals, and one of them is not what the return code says.** An entry git
+**Top-level entries only.** Nothing creates a destination's parent, so a nested entry
+would die in `copyfile` with an `ENOENT` that reads as a missing source. The parser
+refuses it instead, where the reason is still legible. A trailing slash is accepted and
+dropped, because that is how a `.gitignore` names a directory.
+
+**Four refusals, and one of them is not what the return code says.** An entry git
 tracks is refused, because a tracked file in a worktree reports a modification that
 never goes away; a repo git could not be asked about is declined rather than guessed
 at, the same way `state` returns nil instead of zero. An entry resolving outside the

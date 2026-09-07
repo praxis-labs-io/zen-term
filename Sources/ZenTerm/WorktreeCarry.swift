@@ -59,6 +59,18 @@ enum WorktreeCarry {
                 skip(name, .notThere)
                 continue
             }
+            // `COPYFILE_CLONE` implies `COPYFILE_NOFOLLOW_SRC`, so a symlink arrives as a symlink
+            // with its original target. A worktree sits under a different parent, so one pointing
+            // outside the workspace lands dangling while the report calls it carried.
+            if let target = try? FileManager.default.destinationOfSymbolicLink(atPath: from.path) {
+                let resolved = URL(
+                    fileURLWithPath: target, relativeTo: from.deletingLastPathComponent()
+                ).standardizedFileURL
+                guard resolved.path.hasPrefix(source.standardizedFileURL.path + "/") else {
+                    skip(name, .leavesTheWorkspace)
+                    continue
+                }
+            }
             switch isTracked(name, in: source) {
             case .some(true): skip(name, .tracked); continue
             case .none: skip(name, .unreadable); continue
@@ -74,7 +86,11 @@ enum WorktreeCarry {
 
             let flags = copyfile_flags_t(COPYFILE_CLONE | COPYFILE_RECURSIVE)
             guard copyfile(from.path, to.path, nil, flags) == 0 else {
-                let reason = String(cString: strerror(errno))
+                // `strerror` hands back a shared static buffer, so two creates failing at once can
+                // report each other's message.
+                var message = [CChar](repeating: 0, count: 256)
+                strerror_r(errno, &message, message.count)
+                let reason = String(cString: message)
                 // A recursive copy can die partway through and leave half a `node_modules`, which
                 // a package manager can read as an install it need not redo.
                 try? FileManager.default.removeItem(at: to)
