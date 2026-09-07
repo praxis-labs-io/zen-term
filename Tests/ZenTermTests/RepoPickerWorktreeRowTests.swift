@@ -53,18 +53,21 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             "the branch comes from the listing, not from a probe that has not run")
     }
 
-    /// A detached worktree has no branch, and the row must not go blank where every other row
-    /// carries a label.
-    func test_detachedWorktree_fallsBackToTheProbe() {
+    /// A detached worktree has no branch, and nothing ever probes a worktree path, so without its
+    /// own answer the row renders blank where every other row carries a label.
+    func test_detachedWorktree_showsItsShortHead() throws {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
         mount(overlay)
 
         let detached = Worktree(
-            path: repo.appendingPathComponent("wt"), branch: nil, head: "abc1234", isLocked: false)
+            path: repo.appendingPathComponent("wt"), branch: nil,
+            head: "abc1234def5678901234567890abcdef12345678", isLocked: false)
         overlay.setWorktrees(WorktreeListing(commonDir: repo, worktrees: [detached]), for: repo)
 
-        XCTAssertEqual(shape(of: overlay), ["add", "workspace:alpha", "worktree:wt"])
+        let row = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
+        let labels = descendants(of: row).compactMap { $0 as? NSTextField }
+        XCTAssertEqual(labels.first { $0.stringValue != "wt" }?.stringValue, "abc1234")
     }
 
     // MARK: identity and reuse

@@ -250,6 +250,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         /// The folder whose git status this row shows: the worktree's own, not its parent's.
         private let statusPath: URL
         /// Git names a worktree's branch when it lists it, so that row never waits on a probe.
+        /// A detached worktree has no branch and takes its short head, the way `GitRepo` does.
         private let fixedBranch: String?
         private let branchLabel = NSTextField(labelWithString: "")
         private let churnLabel = NSTextField(labelWithString: "")
@@ -312,7 +313,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             self.workspace = workspace
             self.worktree = worktree
             self.statusPath = statusPath
-            self.fixedBranch = worktree?.branch
+            self.fixedBranch = worktree.map { $0.branch ?? String($0.head.prefix(7)) }
             super.init()
 
             let name = NSTextField(labelWithString: title)
@@ -370,6 +371,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         /// Show the branch when this workspace's folder is a known repo. Run at build time and
         /// again whenever a `GitRepoStatus.refresh` lands.
         func applyGitStatus() {
+            // Only a workspace row waits on the probe: nothing ever probes a worktree path.
             let branch = fixedBranch ?? GitRepoStatus.branch(statusPath)
             branchLabel.stringValue = branch ?? ""
             branchLabel.setAccessibilityLabel(branch.map { "on branch \($0)" })
