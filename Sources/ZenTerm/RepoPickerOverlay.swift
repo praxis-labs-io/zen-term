@@ -254,9 +254,6 @@ final class RepoPickerOverlay: PaletteOverlay {
         let worktree: Worktree?
         /// The folder whose git status this row shows: the worktree's own, not its parent's.
         private let statusPath: URL
-        /// Git names a worktree's branch when it lists it, so that row never waits on a probe.
-        /// A detached worktree has no branch and takes its short head, the way `GitRepo` does.
-        private let fixedBranch: String?
         private let branchLabel = NSTextField(labelWithString: "")
         private let churnLabel = NSTextField(labelWithString: "")
         /// Held at `min(the branch's own width, branchMinWidth)`: a floor that a short branch like
@@ -303,11 +300,13 @@ final class RepoPickerOverlay: PaletteOverlay {
                 statusPath: workspace.path, indent: 0)
         }
 
-        /// A worktree of `parent`'s repo: its folder on the left, its branch on the right, indented
-        /// under the workspace row it belongs to.
+        /// A worktree of `parent`'s repo, indented under the workspace row it belongs to. The
+        /// branch is the name: the folder we put it in is the branch's own slug, so showing both
+        /// said the same thing twice. A detached worktree has only its short head to go on.
         convenience init(worktree: Worktree, parent: Workspace) {
             self.init(
-                workspace: parent, worktree: worktree, title: worktree.path.lastPathComponent,
+                workspace: parent, worktree: worktree,
+                title: worktree.branch ?? String(worktree.head.prefix(7)),
                 statusPath: worktree.path, indent: Self.childIndent)
         }
 
@@ -318,12 +317,14 @@ final class RepoPickerOverlay: PaletteOverlay {
             self.workspace = workspace
             self.worktree = worktree
             self.statusPath = statusPath
-            self.fixedBranch = worktree.map { $0.branch ?? String($0.head.prefix(7)) }
             super.init()
 
             let name = NSTextField(labelWithString: title)
             name.font = .systemFont(ofSize: 13)
-            name.textColor = Theme.current.chrome.foreground.nsColor
+            // A child recedes against the workspace it hangs under, which is the openable thing.
+            name.textColor =
+                worktree == nil
+                ? Theme.current.chrome.foreground.nsColor : Theme.current.chrome.ink(.muted)
             name.lineBreakMode = .byTruncatingTail
             name.translatesAutoresizingMaskIntoConstraints = false
             addSubview(name)
@@ -376,8 +377,9 @@ final class RepoPickerOverlay: PaletteOverlay {
         /// Show the branch when this workspace's folder is a known repo. Run at build time and
         /// again whenever a `GitRepoStatus.refresh` lands.
         func applyGitStatus() {
-            // Only a workspace row waits on the probe: nothing ever probes a worktree path.
-            let branch = fixedBranch ?? GitRepoStatus.branch(statusPath)
+            // A child row's name already is its branch, so repeating it on the right said the same
+            // thing twice. Only a workspace row waits on the probe; nothing probes a worktree path.
+            let branch = worktree == nil ? GitRepoStatus.branch(statusPath) : nil
             branchLabel.stringValue = branch ?? ""
             branchLabel.setAccessibilityLabel(branch.map { "on branch \($0)" })
             branchFloor.constant = min(

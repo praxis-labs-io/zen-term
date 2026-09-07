@@ -37,9 +37,9 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             ["add", "workspace:alpha", "worktree:one", "worktree:two", "workspace:beta"])
     }
 
-    /// Git names a worktree's branch when it lists it, so the row has it without waiting on the
-    /// probe a workspace row waits on.
-    func test_worktreeRow_showsItsOwnBranchWithoutAProbe() throws {
+    /// The branch names the row. The folder we put a worktree in is that same branch's slug, so
+    /// showing the folder on the left and the branch on the right said the same thing twice.
+    func test_worktreeRow_isNamedByItsBranch() throws {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
         mount(overlay)
@@ -47,17 +47,31 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         overlay.setWorktrees(listing(repo, "feature/zen-455"), for: repo)
 
         let row = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
-        let title = row.worktree?.path.lastPathComponent
-        let labels = descendants(of: row).compactMap { $0 as? NSTextField }
-        XCTAssertEqual(title, "wt-feature-zen-455", "the folder is the branch's slug")
         XCTAssertEqual(
-            labels.first { $0.stringValue != title }?.stringValue, "feature/zen-455",
-            "the branch comes from the listing, not from a probe that has not run")
+            row.worktree?.path.lastPathComponent, "wt-feature-zen-455",
+            "the folder is the slug, and is not what the row says")
+        let shown = descendants(of: row).compactMap { ($0 as? NSTextField)?.stringValue }
+            .filter { !$0.isEmpty }
+        XCTAssertEqual(shown, ["feature/zen-455"], "the branch, once, and nothing beside it")
+    }
+
+    /// A child recedes against the workspace it hangs under, which is the openable thing.
+    func test_worktreeRow_isMutedAgainstItsWorkspace() throws {
+        let repo = path("alpha")
+        let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
+        mount(overlay)
+
+        overlay.setWorktrees(listing(repo, "one"), for: repo)
+
+        let parent = try XCTUnwrap(rowViews(in: overlay)[1] as? RepoPickerOverlay.RowView)
+        let child = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
+        XCTAssertEqual(label(in: parent, saying: "alpha")?.textColor, Theme.current.chrome.foreground.nsColor)
+        XCTAssertEqual(label(in: child, saying: "one")?.textColor, Theme.current.chrome.ink(.muted))
     }
 
     /// A detached worktree has no branch, and nothing ever probes a worktree path, so without its
-    /// own answer the row renders blank where every other row carries a label.
-    func test_detachedWorktree_showsItsShortHead() throws {
+    /// own answer the row renders blank where every other row carries a name.
+    func test_detachedWorktree_isNamedByItsShortHead() throws {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
         mount(overlay)
@@ -68,8 +82,13 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         overlay.setWorktrees(WorktreeListing(commonDir: repo, worktrees: [detached]), for: repo)
 
         let row = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
-        let labels = descendants(of: row).compactMap { $0 as? NSTextField }
-        XCTAssertEqual(labels.first { $0.stringValue != "wt" }?.stringValue, "abc1234")
+        let shown = descendants(of: row).compactMap { ($0 as? NSTextField)?.stringValue }
+            .filter { !$0.isEmpty }
+        XCTAssertEqual(shown, ["abc1234"])
+    }
+
+    private func label(in row: NSView, saying text: String) -> NSTextField? {
+        descendants(of: row).compactMap { $0 as? NSTextField }.first { $0.stringValue == text }
     }
 
     // MARK: identity and reuse
@@ -239,7 +258,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         overlay.rowViews.map { view in
             guard let row = view as? RepoPickerOverlay.RowView else { return "add" }
             guard let worktree = row.worktree else { return "workspace:\(row.workspace.title)" }
-            return "worktree:\(worktree.branch ?? worktree.path.lastPathComponent)"
+            return "worktree:\(worktree.branch ?? String(worktree.head.prefix(7)))"
         }
     }
 
