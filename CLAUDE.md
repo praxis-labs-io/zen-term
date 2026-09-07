@@ -178,6 +178,15 @@ key `ZEN`). Status ladder: Backlog, Todo, In Progress, In Review, Done.
   `state: "In Review"` and `project: "Polish & Bugs"` directly. Hardcoded ids are
   banned: the 2026-07-19 workspace move invalidated every one, and names survive the
   next move too.
+- **A project name that "matches more than one project" needs its id for that one
+  call.** The four durable project names exist on every team in the workspace (ZEN,
+  ZNN, ZNR, ZNO, ZNL), and `save_issue` does not scope the project lookup by the
+  `team` you passed alongside it. Resolve it with `list_projects`, then confirm which
+  row is ours by listing its issues and checking the identifier prefix is `ZEN-`;
+  the order `list_projects` returns is not the answer. Pass that id for the call and
+  do not write it down anywhere: it is exactly the kind of id the rule above bans,
+  and the next workspace move invalidates it. Statuses and the uniquely-named epic
+  projects still resolve by name.
 - **Branch names come from the ticket's `gitBranchName` field, verbatim.** Do not
   abbreviate the slug, and do not add or drop a prefix. Reference the issue id in
   commits and PRs so Linear auto-links.
