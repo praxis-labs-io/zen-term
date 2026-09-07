@@ -98,6 +98,14 @@ Mechanical and checkable. A reviewer should be able to fail copy on these.
    dot `·` between a title and a qualifier): use a colon, e.g. a zoomed panel
    header reads "Terminal pane: Focus Mode".
 
+   **One exception, and it has to earn its place: `⎇` between a workspace and a
+   worktree's branch**, so a tab reads "ZenTerm ⎇ runbook-two". A colon there
+   claims the branch is a qualifier of the project when it is a parallel checkout
+   of it, and the glyph says which of two same-named tabs you are looking at from
+   across the screen. U+2387 is the only branch-shaped character the system font
+   carries itself, so it is the one that cannot fall back to a box. Nothing else
+   gets a spacer glyph on this argument.
+
    **Scope: prose a user reads.** Code comments and `NSLog` strings are out of it
    ("I do not care about comments"), so don't sweep `Sources/` for the character.
    `docs/config/*` stays **in** scope, because users open those files. Everything
@@ -322,7 +330,8 @@ needs a real deprecation, not a find-and-replace.
 
 Before any copy ships:
 
-- [ ] Any em-dash or dot spacer (`·`)? Replace it with a colon.
+- [ ] Any em-dash or dot spacer (`·`)? Replace it with a colon. The one exception
+      is `⎇` between a workspace and a worktree branch.
 - [ ] Any hype word or adverb? Cut it.
 - [ ] Read the last clause of each paragraph in a row. Do they sound like a set?
       Cut the cadence and state the fact.

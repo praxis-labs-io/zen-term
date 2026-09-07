@@ -12,6 +12,8 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
     override func setUp() {
         super.setUp()
+        // Pinned so a fading row resolves instantly and the machine's setting cannot decide a run.
+        Motion.isReduceMotionEnabled = { true }
         GitRepoStatus.resetForTesting()
     }
 
@@ -139,7 +141,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         overlay.activate(index: 2, modifiers: [])
 
-        XCTAssertEqual(chosen?.0.title, "alpha: feature")
+        XCTAssertEqual(chosen?.0.title, "alpha \u{2387} feature")
         XCTAssertEqual(chosen?.0.path.lastPathComponent, "wt-feature")
         XCTAssertEqual(chosen?.0.main, "nvim")
         XCTAssertEqual(chosen?.0.right, "claude")

@@ -79,7 +79,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         listings[workspacePath.standardizedFileURL] = listing
         let held = rows.indices.contains(selected) ? rowIdentity(at: selected) : nil
         applyFilter(query: currentQuery)
-        refreshRows()
+        refreshRows(animated: true)
         reselect(byIdentity: held)
     }
 
@@ -183,12 +183,17 @@ final class RepoPickerOverlay: PaletteOverlay {
         }
     }
 
+    /// Separates a worktree tab's project from its branch. U+2387 is the one branch-shaped glyph
+    /// the system font carries itself: `⑂` falls back to Apple Symbols and `⮔` to LastResort, which
+    /// draws a box. The brand voice's colon rule carves this out by name.
+    static let worktreeMark = "\u{2387}"
+
     /// The parent's recipe, opened in the worktree's folder: same panes, same drawers, same env,
     /// pinned to a tab that names both. A worktree is the project, on another branch.
     static func workspace(for worktree: Worktree, parent: Workspace) -> Workspace {
         let name = worktree.branch ?? worktree.path.lastPathComponent
         return Workspace(
-            title: "\(parent.title): \(name)", path: worktree.path, main: parent.main,
+            title: "\(parent.title) \(worktreeMark) \(name)", path: worktree.path, main: parent.main,
             right: parent.right, bottom: parent.bottom, focus: parent.focus, env: parent.env,
             carry: parent.carry)
     }
