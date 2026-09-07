@@ -399,6 +399,45 @@ final class WorktreeStoreTests: XCTestCase {
             try GitFixture.run(["rev-parse", "origin/main"], in: repo))
     }
 
+    // MARK: the common dir
+
+    /// The grouping key for the picker's rows, and the whole reason it is not a path comparison.
+    /// Git answers `.git` from the main checkout and an absolute path from a linked worktree, so
+    /// the two agree only once both are resolved.
+    func test_commonDir_isTheSameForACheckoutAndItsWorktree() throws {
+        let worktree = try WorktreeStore.create(branch: "feature", in: repo)
+
+        XCTAssertEqual(WorktreeStore.commonDir(of: repo), WorktreeStore.commonDir(of: worktree.path))
+        XCTAssertEqual(
+            WorktreeStore.commonDir(of: repo),
+            repo.appendingPathComponent(".git").resolvingSymlinksInPath().standardizedFileURL)
+    }
+
+    /// A worktree made by hand outside our root still groups under its repo, which is the case a
+    /// path comparison gets wrong.
+    func test_commonDir_matchesAHandMadeWorktreeAnywhere() throws {
+        let elsewhere = root.appendingPathComponent("by-hand", isDirectory: true)
+        try GitFixture.run(["worktree", "add", "-b", "by-hand", elsewhere.path], in: repo)
+
+        XCTAssertEqual(WorktreeStore.commonDir(of: elsewhere), WorktreeStore.commonDir(of: repo))
+    }
+
+    /// A submodule is its own repo, so it groups on its own rather than under its superproject.
+    func test_commonDir_separatesASubmoduleFromItsSuperproject() throws {
+        let sub = try makeSubmodule()
+
+        let answer = WorktreeStore.commonDir(of: sub)
+        XCTAssertNotNil(answer)
+        XCTAssertNotEqual(answer, WorktreeStore.commonDir(of: repo))
+    }
+
+    func test_commonDir_isNilOutsideARepo() throws {
+        let plain = root.appendingPathComponent("not-a-repo", isDirectory: true)
+        try FileManager.default.createDirectory(at: plain, withIntermediateDirectories: true)
+
+        XCTAssertNil(WorktreeStore.commonDir(of: plain))
+    }
+
     // MARK: the volume a prunable worktree lives on
 
     /// A worktree on an unmounted volume is indistinguishable from a deleted one, and pruning its

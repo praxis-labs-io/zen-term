@@ -125,6 +125,18 @@ enum WorktreeStore {
         return WorktreeState(uncommitted: lineCount(status), unpushed: unpushed)
     }
 
+    /// The git directory every checkout of this repo shares, canonicalized: the identity two
+    /// worktrees of one repo agree on where their paths do not. Nil outside a repo. Unlike
+    /// `mainCheckout` nothing takes its parent, so the submodule layout that makes it a bad source
+    /// for a folder name is harmless here.
+    static func commonDir(of repo: URL) -> URL? {
+        guard let answer = try? git(["rev-parse", "--git-common-dir"], in: repo), !answer.isEmpty
+        else { return nil }
+        // Git answers relative to the directory it ran in, which is `repo`, and only sometimes.
+        let url = answer.hasPrefix("/") ? URL(fileURLWithPath: answer) : repo.appendingPathComponent(answer)
+        return url.resolvingSymlinksInPath().standardizedFileURL
+    }
+
     // MARK: writing
 
     /// A worktree on a new `branch`, cut from the repo's default branch.
