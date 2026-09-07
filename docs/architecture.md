@@ -1786,9 +1786,12 @@ directory to open and is dropped whether or not a prune has run. And the listing
 read with `-z`, because git escapes a lock reason but never the path: a worktree
 directory holding a newline splits a line-based parse across records.
 
-**The prune is conditional.** It is what stops a deleted worktree wedging
-`git checkout`, `git branch -d` and a re-add at the same path, and it is skipped
-when a prunable record sits on a volume that is not mounted. A worktree on an
+**The prune is conditional twice over.** It is what stops a deleted worktree wedging
+`git checkout`, `git branch -d` and a re-add at the same path. It is skipped when
+nothing is prunable, which is the common case and not the rare one: `allSatisfy` is
+true of an empty list, so a guard that only asked about volumes spawned a no-op
+`git worktree prune` per workspace on every picker open. And it is skipped when a
+prunable record sits on a volume that is not mounted. A worktree on an
 ejected drive is indistinguishable from a deleted one, and pruning its record is
 final: `git worktree repair` cannot rebuild an admin file that no longer exists.
 Pruning was never what hid the row from the list.
@@ -2006,7 +2009,10 @@ at a few hundred files, which is how this was found.
   probe would hold every branch label behind a `git status` on a large repo. No
   fetch is ever run: ahead/behind is read against the remote-tracking ref already
   on disk, because a ⌘P that hit the network would stall on a VPN or an auth
-  prompt for a repo the user only wanted to open.
+  prompt for a repo the user only wanted to open. The probe runs
+  `--no-optional-locks`, so it never takes the index lock: four run at once
+  against repos the user also has a shell in, and a collision drops the row's
+  counts.
 - **`GitCommand` gates on `xcode-select -p`, and churn probes are bounded to
   four.** `/usr/bin/git` is an `xcrun` shim that exists whether or not the
   Command Line Tools do, and running it without them opens the system "install

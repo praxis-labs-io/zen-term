@@ -138,9 +138,11 @@ enum GitRepoStatus {
 
     /// One directory's counts, or nil when it isn't a repo or `git` can't answer for it.
     private static func churnNow(for dir: URL) -> GitChurn? {
+        // `--no-optional-locks` so a probe never takes the index lock: four of these run at once
+        // against repos the user also has a shell in, and a collision drops the row's counts.
         guard GitRepo.isGitRepo(dir),
             case .success(let output) = GitCommand.run(
-                ["status", "--porcelain=v2", "--branch"], in: dir)
+                ["--no-optional-locks", "status", "--porcelain=v2", "--branch"], in: dir)
         else { return nil }
         return GitChurn.parse(output)
     }

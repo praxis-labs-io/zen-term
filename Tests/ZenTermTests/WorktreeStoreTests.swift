@@ -442,25 +442,33 @@ final class WorktreeStoreTests: XCTestCase {
 
     /// A worktree on an unmounted volume is indistinguishable from a deleted one, and pruning its
     /// record is final: `worktree repair` cannot rebuild an admin file that is gone.
-    func test_isSafeToPrune_refusesAPrunableWorktreeOnAnAbsentVolume() {
+    func test_shouldPrune_refusesAPrunableWorktreeOnAnAbsentVolume() {
         let absent = "/Volumes/\(UUID().uuidString)/code/wt"
 
-        XCTAssertFalse(WorktreeStore.isSafeToPrune(prunableListing(for: absent)))
+        XCTAssertFalse(WorktreeStore.shouldPrune(prunableListing(for: absent)))
     }
 
-    func test_isSafeToPrune_allowsAPrunableWorktreeOnThisVolume() {
+    func test_shouldPrune_allowsAPrunableWorktreeOnThisVolume() {
         let here = root.appendingPathComponent("deleted", isDirectory: true).path
 
-        XCTAssertTrue(WorktreeStore.isSafeToPrune(prunableListing(for: here)))
+        XCTAssertTrue(WorktreeStore.shouldPrune(prunableListing(for: here)))
     }
 
     /// The mount point itself is what disappears with the drive, so a volume that IS mounted keeps
     /// its worktrees prunable however deep under `/Volumes` they sit.
-    func test_isSafeToPrune_allowsAPrunableWorktreeOnAMountedVolume() throws {
+    func test_shouldPrune_allowsAPrunableWorktreeOnAMountedVolume() throws {
         let mounted = try XCTUnwrap(
             try FileManager.default.contentsOfDirectory(atPath: "/Volumes").first)
 
-        XCTAssertTrue(WorktreeStore.isSafeToPrune(prunableListing(for: "/Volumes/\(mounted)/wt")))
+        XCTAssertTrue(WorktreeStore.shouldPrune(prunableListing(for: "/Volumes/\(mounted)/wt")))
+    }
+
+    /// The common case by a wide margin, and the one that was spawning a `git worktree prune` per
+    /// workspace on every picker open: `allSatisfy` is true of an empty list.
+    func test_shouldPrune_isFalseWhenNothingIsPrunable() throws {
+        let listing = try GitFixture.run(["worktree", "list", "--porcelain", "-z"], in: repo)
+
+        XCTAssertFalse(WorktreeStore.shouldPrune(listing))
     }
 
     /// The `-z` shape `worktree list` emits: fields NUL-separated, records by an empty field.

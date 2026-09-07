@@ -107,7 +107,7 @@ enum WorktreeStore {
     static func list(in repo: URL) throws -> [Worktree] {
         guard GitRepo.isGitRepo(repo) else { throw WorktreeError.notARepo(repo) }
         let listing = try porcelain(in: repo)
-        if isSafeToPrune(listing) { _ = try? git(["worktree", "prune"], in: repo) }
+        if shouldPrune(listing) { _ = try? git(["worktree", "prune"], in: repo) }
         let main = mainPath(in: listing)
         return parse(listing).filter { $0.path != main }
     }
@@ -249,12 +249,16 @@ enum WorktreeStore {
 
     // MARK: helpers
 
-    /// Whether pruning now would only forget directories that are genuinely gone.
+    /// Whether there is anything to prune, and whether pruning it would only forget directories
+    /// that are genuinely gone.
     ///
     /// A worktree on an unmounted volume is indistinguishable from a deleted one, and pruning it is
     /// final: `worktree repair` cannot rebuild an admin file that no longer exists.
-    static func isSafeToPrune(_ listing: String) -> Bool {
-        prunablePaths(in: listing).allSatisfy(isOnAPresentVolume)
+    static func shouldPrune(_ listing: String) -> Bool {
+        let prunable = prunablePaths(in: listing)
+        // `allSatisfy` is true of nothing, so without this the picker spawned a no-op `prune` per
+        // workspace per open, which is the common case rather than the rare one.
+        return !prunable.isEmpty && prunable.allSatisfy(isOnAPresentVolume)
     }
 
     /// Volumes other than the boot one live under `/Volumes`, and the mount point goes with the
