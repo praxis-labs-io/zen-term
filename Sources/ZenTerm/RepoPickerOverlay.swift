@@ -183,17 +183,12 @@ final class RepoPickerOverlay: PaletteOverlay {
         }
     }
 
-    /// Separates a worktree tab's project from its branch. U+2387 is the one branch-shaped glyph
-    /// the system font carries itself: `⑂` falls back to Apple Symbols and `⮔` to LastResort, which
-    /// draws a box. The brand voice's colon rule carves this out by name.
-    static let worktreeMark = "\u{2387}"
-
     /// The parent's recipe, opened in the worktree's folder: same panes, same drawers, same env,
     /// pinned to a tab that names both. A worktree is the project, on another branch.
     static func workspace(for worktree: Worktree, parent: Workspace) -> Workspace {
         let name = worktree.branch ?? worktree.path.lastPathComponent
         return Workspace(
-            title: "\(parent.title) \(worktreeMark) \(name)", path: worktree.path, main: parent.main,
+            title: "\(parent.title): \(name)", path: worktree.path, main: parent.main,
             right: parent.right, bottom: parent.bottom, focus: parent.focus, env: parent.env,
             carry: parent.carry)
     }
@@ -294,24 +289,28 @@ final class RepoPickerOverlay: PaletteOverlay {
             return out
         }
 
+        /// What the left slot says on a worktree row. It is a type slot, not a name slot: a
+        /// worktree has no name, and its two candidates are the branch (which the right column
+        /// owns) and a folder that is either that branch's slug or a UUID.
+        static let typeRail = "Worktree"
+
         convenience init(workspace: Workspace) {
             self.init(
-                workspace: workspace, worktree: nil, title: workspace.title,
+                workspace: workspace, worktree: nil, label: workspace.title,
                 statusPath: workspace.path, indent: 0)
         }
 
-        /// A worktree of `parent`'s repo, indented under the workspace row it belongs to. The
-        /// branch is the name: the folder we put it in is the branch's own slug, so showing both
-        /// said the same thing twice. A detached worktree has only its short head to go on.
+        /// A worktree of `parent`'s repo, indented under the workspace row it belongs to. Its
+        /// branch goes where every other row's branch goes, so one column means one thing at
+        /// every depth, and the left says what kind of row this is instead.
         convenience init(worktree: Worktree, parent: Workspace) {
             self.init(
-                workspace: parent, worktree: worktree,
-                title: worktree.branch ?? String(worktree.head.prefix(7)),
+                workspace: parent, worktree: worktree, label: Self.typeRail,
                 statusPath: worktree.path, indent: Self.childIndent)
         }
 
         private init(
-            workspace: Workspace, worktree: Worktree?, title: String, statusPath: URL,
+            workspace: Workspace, worktree: Worktree?, label: String, statusPath: URL,
             indent: CGFloat
         ) {
             self.workspace = workspace
@@ -319,12 +318,13 @@ final class RepoPickerOverlay: PaletteOverlay {
             self.statusPath = statusPath
             super.init()
 
-            let name = NSTextField(labelWithString: title)
-            name.font = .systemFont(ofSize: 13)
-            // A child recedes against the workspace it hangs under, which is the openable thing.
+            // The rail is a type, not a name, so it is quieter and smaller than one. That is also
+            // what makes a child recede without spending an ink step on it.
+            let name = NSTextField(labelWithString: label)
+            name.font = .systemFont(ofSize: worktree == nil ? 13 : 11)
             name.textColor =
                 worktree == nil
-                ? Theme.current.chrome.foreground.nsColor : Theme.current.chrome.ink(.muted)
+                ? Theme.current.chrome.foreground.nsColor : Theme.current.chrome.ink(.faint)
             name.lineBreakMode = .byTruncatingTail
             name.translatesAutoresizingMaskIntoConstraints = false
             addSubview(name)
@@ -333,9 +333,6 @@ final class RepoPickerOverlay: PaletteOverlay {
             branchLabel.textColor = Theme.current.chrome.ink(.muted)
             branchLabel.alignment = .right
             branchLabel.lineBreakMode = .byTruncatingTail
-            // An attributed value carries its own paragraph style, so the field's own line settings
-            // stop applying and a long note wraps out of a fixed-height row.
-            branchLabel.maximumNumberOfLines = 1
             // Hug the text: the branch takes the width it needs up to the cap, so the counts sit
             // against it rather than against a reserved column edge.
             branchLabel.setContentHuggingPriority(.required, for: .horizontal)
@@ -380,71 +377,19 @@ final class RepoPickerOverlay: PaletteOverlay {
         /// Show the branch when this workspace's folder is a known repo. Run at build time and
         /// again whenever a `GitRepoStatus.refresh` lands.
         func applyGitStatus() {
-            // A child row's name already is its branch, so the right column carries the mark and
-            // whatever is unusual instead. Only a workspace row waits on the probe; nothing
-            // probes a worktree path.
-            if let worktree {
-                branchLabel.attributedStringValue = Self.worktreeNote(for: worktree)
-                branchLabel.setAccessibilityLabel(Self.worktreeAccessibilityLabel(for: worktree))
-            } else {
-                let branch = GitRepoStatus.branch(statusPath)
-                branchLabel.stringValue = branch ?? ""
-                branchLabel.setAccessibilityLabel(branch.map { "on branch \($0)" })
-            }
+            // One rule at every depth: churn, then the head. A worktree's branch comes from the
+            // listing that named it; only a workspace waits on a probe.
+            let head =
+                worktree.map { $0.branch ?? String($0.head.prefix(7)) }
+                ?? GitRepoStatus.branch(statusPath)
+            branchLabel.stringValue = head ?? ""
+            branchLabel.setAccessibilityLabel(
+                head.map { worktree == nil ? "on branch \($0)" : "worktree on branch \($0)" })
             branchFloor.constant = min(
                 branchLabel.intrinsicContentSize.width, Self.branchMinWidth)
 
             let churn = GitRepoStatus.churn(statusPath) ?? GitChurn()
             churnLabel.attributedStringValue = Self.churnText(churn)
-        }
-
-        /// The mark every worktree row wears, preceded by whatever is unusual about this one: that
-        /// it has no branch, or that it lives outside the folder we keep worktrees in. The churn
-        /// counts sit to the left of all of it.
-        static func worktreeNote(for worktree: Worktree) -> NSAttributedString {
-            let chrome = Theme.current.chrome
-            let out = NSMutableAttributedString()
-            // Head, not tail: the note is usually a path, where the last components are what tells
-            // one worktree from another. Without a style the label wraps instead of truncating.
-            let paragraph = NSMutableParagraphStyle()
-            paragraph.lineBreakMode = .byTruncatingHead
-            paragraph.alignment = .right
-            let aside = notes(for: worktree).joined(separator: " ")
-            if !aside.isEmpty {
-                out.append(
-                    NSAttributedString(
-                        string: aside + " ",
-                        attributes: [
-                            .font: NSFont.systemFont(ofSize: 11), .foregroundColor: chrome.ink(.muted),
-                            .paragraphStyle: paragraph,
-                        ]))
-            }
-            // Fainter than the note beside it: the mark is the same on every row, so it is the
-            // part with the least to say.
-            out.append(
-                NSAttributedString(
-                    string: RepoPickerOverlay.worktreeMark,
-                    attributes: [
-                        .font: NSFont.systemFont(ofSize: 12), .foregroundColor: chrome.ink(.faint),
-                        .paragraphStyle: paragraph,
-                    ]))
-            return out
-        }
-
-        static func worktreeAccessibilityLabel(for worktree: Worktree) -> String {
-            (["worktree"] + notes(for: worktree)).joined(separator: ", ")
-        }
-
-        /// Nothing for the ordinary case: a worktree on a branch, in the folder we keep them in.
-        private static func notes(for worktree: Worktree) -> [String] {
-            var notes: [String] = []
-            if worktree.branch == nil { notes.append("detached") }
-            let path = worktree.path.standardizedFileURL
-            let ours = WorktreeStore.root.standardizedFileURL.path + "/"
-            if !path.path.hasPrefix(ours) {
-                notes.append(PathDisplay.abbreviatingHome(path.deletingLastPathComponent().path))
-            }
-            return notes
         }
     }
 }

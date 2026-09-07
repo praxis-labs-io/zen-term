@@ -47,9 +47,10 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             ["add", "workspace:alpha", "worktree:one", "worktree:two", "workspace:beta"])
     }
 
-    /// The branch names the row. The folder we put a worktree in is that same branch's slug, so
-    /// showing the folder on the left and the branch on the right said the same thing twice.
-    func test_worktreeRow_isNamedByItsBranch() throws {
+    /// The left slot is a type, not a name. A worktree has no name: the branch belongs to the
+    /// right column by the picker's own grammar, and the folder is either that branch's slug or a
+    /// UUID, so the slot says what kind of row this is instead.
+    func test_worktreeRow_readsAsAWorktreeOnTheLeftAndItsBranchOnTheRight() throws {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
         mount(overlay)
@@ -57,55 +58,33 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         overlay.setWorktrees(listing(repo, "feature/zen-455"), for: repo)
 
         let row = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
-        XCTAssertEqual(
-            row.worktree?.path.lastPathComponent, "feature-zen-455",
-            "the folder is the slug, and is not what the row says")
-        XCTAssertNotNil(label(in: row, saying: "feature/zen-455"), "the branch names the row")
-        XCTAssertEqual(
-            rightColumn(of: row), RepoPickerOverlay.worktreeMark,
-            "an ordinary worktree has nothing unusual to say, so only the mark")
+        XCTAssertNotNil(label(in: row, saying: RepoPickerOverlay.RowView.typeRail))
+        XCTAssertEqual(rightColumn(of: row), "feature/zen-455")
     }
 
-    /// A row is a fixed 32pt, so a long note has to truncate. An attributed value carries its own
-    /// paragraph style, and without one the label wraps to a second line and clips the row above.
-    func test_aLongLocationNote_truncatesRatherThanWraps() throws {
+    /// The proof the column means one thing at every depth: a workspace and its worktree put
+    /// their branch in the same label, so the two right-align at one x.
+    func test_branchSitsInTheSameColumnOnAWorkspaceAndAWorktree() throws {
         let repo = path("alpha")
+        GitRepoStatus.resetForTesting()
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
         mount(overlay)
+        overlay.setWorktrees(listing(repo, "one"), for: repo)
 
-        let deep = URL(fileURLWithPath: "/private/var/folders/4h/drucial-Dev-zen-linear/f4ad3f25-54a2-4d7b-9c11")
-        overlay.setWorktrees(
-            WorktreeListing(commonDir: repo, worktrees: [foreignWorktree(deep, "agent")]), for: repo)
-
-        let row = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
-        let label = try XCTUnwrap(
-            descendants(of: row).compactMap { $0 as? NSTextField }
-                .first { $0.attributedStringValue.string.hasSuffix(RepoPickerOverlay.worktreeMark) })
-        XCTAssertEqual(label.maximumNumberOfLines, 1, "one line, whatever the value carries")
-        let style =
-            label.attributedStringValue.attribute(
-                .paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        let parent = try XCTUnwrap(rowViews(in: overlay)[1] as? RepoPickerOverlay.RowView)
+        let child = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
+        overlay.layoutSubtreeIfNeeded()
+        let parentBranch = try XCTUnwrap(branchLabel(in: parent))
+        let childBranch = try XCTUnwrap(branchLabel(in: child))
         XCTAssertEqual(
-            style?.lineBreakMode, .byTruncatingHead,
-            "a path's last components are what tell two worktrees apart")
+            parentBranch.convert(parentBranch.bounds, to: overlay).maxX,
+            childBranch.convert(childBranch.bounds, to: overlay).maxX,
+            accuracy: 0.5, "both branches end at the same trailing edge")
     }
 
-    /// The mark says "worktree" on every child; the note beside it only appears when there is
-    /// something about this one the name does not already carry.
-    func test_worktreeOutsideOurRoot_saysWhereItLives() throws {
-        let repo = path("alpha")
-        let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
-        mount(overlay)
-
-        let elsewhere = foreignWorktree(URL(fileURLWithPath: "/private/tmp"), "runbook-elsewhere")
-        overlay.setWorktrees(WorktreeListing(commonDir: repo, worktrees: [elsewhere]), for: repo)
-
-        let row = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
-        XCTAssertEqual(rightColumn(of: row), "/private/tmp \(RepoPickerOverlay.worktreeMark)")
-    }
-
-    /// A child recedes against the workspace it hangs under, which is the openable thing.
-    func test_worktreeRow_isMutedAgainstItsWorkspace() throws {
+    /// A type recedes further than a name does, which is what lets the child recede without
+    /// spending an ink step that `.muted` already means elsewhere.
+    func test_theTypeRail_isFainterAndSmallerThanAWorkspaceName() throws {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
         mount(overlay)
@@ -114,13 +93,17 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         let parent = try XCTUnwrap(rowViews(in: overlay)[1] as? RepoPickerOverlay.RowView)
         let child = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
-        XCTAssertEqual(label(in: parent, saying: "alpha")?.textColor, Theme.current.chrome.foreground.nsColor)
-        XCTAssertEqual(label(in: child, saying: "one")?.textColor, Theme.current.chrome.ink(.muted))
+        let name = try XCTUnwrap(label(in: parent, saying: "alpha"))
+        let rail = try XCTUnwrap(label(in: child, saying: RepoPickerOverlay.RowView.typeRail))
+        XCTAssertEqual(name.textColor, Theme.current.chrome.foreground.nsColor)
+        XCTAssertEqual(rail.textColor, Theme.current.chrome.ink(.faint))
+        XCTAssertEqual(name.font?.pointSize, 13)
+        XCTAssertEqual(rail.font?.pointSize, 11)
     }
 
-    /// A detached worktree has no branch, and nothing ever probes a worktree path, so without its
-    /// own answer the row renders blank where every other row carries a name.
-    func test_detachedWorktree_isNamedByItsShortHead() throws {
+    /// A detached worktree has no branch, and nothing probes a worktree path, so without the head
+    /// git already handed us the column would be blank where every other row carries a value.
+    func test_detachedWorktree_showsItsShortHeadInTheBranchColumn() throws {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
         mount(overlay)
@@ -131,12 +114,19 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         overlay.setWorktrees(WorktreeListing(commonDir: repo, worktrees: [detached]), for: repo)
 
         let row = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
-        XCTAssertNotNil(label(in: row, saying: "abc1234"), "the short head names the row")
-        XCTAssertEqual(rightColumn(of: row), "detached \(RepoPickerOverlay.worktreeMark)")
+        XCTAssertEqual(rightColumn(of: row), "abc1234", "the same slot a branch would use")
     }
 
     private func label(in row: NSView, saying text: String) -> NSTextField? {
         descendants(of: row).compactMap { $0 as? NSTextField }.first { $0.stringValue == text }
+    }
+
+    /// The branch label, found by geometry rather than content: it is the right-aligned field
+    /// furthest right, and its trailing edge is pinned whether or not a probe has filled it in.
+    private func branchLabel(in row: NSView) -> NSTextField? {
+        descendants(of: row).compactMap { $0 as? NSTextField }
+            .filter { $0.alignment == .right }
+            .max { $0.frame.maxX < $1.frame.maxX }
     }
 
     // MARK: identity and reuse
@@ -208,7 +198,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         overlay.activate(index: 2, modifiers: [])
 
-        XCTAssertEqual(chosen?.0.title, "alpha \u{2387} feature")
+        XCTAssertEqual(chosen?.0.title, "alpha: feature")
         XCTAssertEqual(chosen?.0.path.lastPathComponent, "feature")
         XCTAssertEqual(chosen?.0.main, "nvim")
         XCTAssertEqual(chosen?.0.right, "claude")
@@ -330,14 +320,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             branch: branch, head: "0000000", isLocked: false)
     }
 
-    /// A worktree made by hand somewhere that is not ours.
-    private func foreignWorktree(_ dir: URL, _ branch: String?) -> Worktree {
-        Worktree(
-            path: dir.appendingPathComponent(branch ?? "detached", isDirectory: true).standardizedFileURL,
-            branch: branch, head: "abc1234def5678901234567890abcdef12345678", isLocked: false)
-    }
-
-    /// The right-hand column's text, mark included.
+    /// The right-hand column's value: the branch, or the short head on a detached worktree.
     private func rightColumn(of row: NSView) -> String? {
         descendants(of: row).compactMap { $0 as? NSTextField }
             .map(\.stringValue).filter { !$0.isEmpty }.dropFirst().first
