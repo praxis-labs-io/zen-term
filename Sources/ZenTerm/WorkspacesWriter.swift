@@ -19,11 +19,10 @@ enum WorkspacesWriter {
     /// match the hand-written house style in `docs/config/workspaces` (longest key is `bottom`).
     private static let keyColumnWidth = 6
 
-    /// Render a workspace as one `[Title]` section: aligned `key = value` lines in the same field
-    /// order as `docs/config/workspaces`, absent fields omitted (the parser treats an empty value
-    /// as absent), values quoted when they contain whitespace or a `#` (so the parser doesn't
-    /// truncate a comment or lose spacing), and env keys sorted for deterministic output. `carry`
-    /// is the exception: it is an authored list, so its order is the content, not a detail.
+    /// One `[Title]` section: aligned `key = value` lines in field order, absent fields omitted, a
+    /// value quoted when it holds whitespace or a `#` so the parser cannot truncate or lose it.
+    /// Env keys sort for deterministic output; `carry` does not, because it is an authored list
+    /// whose order is the content.
     static func serialize(_ ws: Workspace) -> String {
         var lines = ["[\(ws.title)]"]
         func add(_ key: String, _ rendered: String) {

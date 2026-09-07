@@ -30,14 +30,10 @@ struct CarryReport: Equatable {
     var isEmpty: Bool { carried.isEmpty && skipped.isEmpty }
 }
 
-/// Copies the gitignored entries a project needs to run into a fresh worktree, which git leaves
-/// empty of them.
-///
-/// An allowlist, never a denylist: naming what a project needs is short and knowable, where
+/// Copies into a fresh worktree the gitignored entries a project needs to run. An allowlist, since
 /// subtracting what breaks on relocation asks us to know every ecosystem's landmines.
 ///
-/// Blocking, and it can move gigabytes. The caller owns the queue hop, the way `GitCommand` and
-/// `WorktreeStore` do. Never call this on the main thread.
+/// Blocking, and it can move gigabytes: the caller owns the queue hop. Never call this on main.
 enum WorktreeCarry {
     /// Bring `entries` across in authored order, and report what did not make it.
     static func copy(_ entries: [String], from source: URL, into worktree: URL) -> CarryReport {
@@ -78,8 +74,8 @@ enum WorktreeCarry {
             }
             // `COPYFILE_CLONE` implies `COPYFILE_EXCL`, but that only refuses a *file*: copying a
             // directory onto one that exists returns 0 and copies nothing. Probed on macOS 25.5.
-            // Without this the report would call an entry carried when none of it arrived.
-            guard !FileManager.default.fileExists(atPath: to.path) else {
+            // No-follow, or a dangling link here reads as absent and the cleanup deletes it.
+            guard !entryExists(at: to) else {
                 skip(name, .alreadyInTheWorktree)
                 continue
             }
@@ -102,16 +98,23 @@ enum WorktreeCarry {
         return CarryReport(carried: carried, skipped: skipped)
     }
 
-    /// Whether git tracks anything at `name`, or nil when git could not be asked.
-    ///
-    /// **Nil is not "untracked".** Carrying a tracked path leaves git reporting a modification that
-    /// never goes away, so a repo we could not read is one we decline rather than guess about.
-    /// `--` guards a name that would otherwise read as an option.
+    /// Whether git tracks anything at `name`, or nil when git could not be asked. **Nil is not
+    /// "untracked":** carrying a tracked path leaves git reporting a modification that never goes
+    /// away, so a repo we could not read is one we decline rather than guess about.
     private static func isTracked(_ name: String, in repo: URL) -> Bool? {
-        switch GitCommand.run(["ls-files", "-z", "--", name], in: repo) {
+        // `--` ends option parsing but not pathspec globbing, so without `--literal-pathspecs` a
+        // name holding `*` or `?` matches unrelated tracked files.
+        let args = ["--literal-pathspecs", "ls-files", "-z", "--", name]
+        switch GitCommand.run(args, in: repo) {
         case .success(let output): return !output.isEmpty
         case .failure: return nil
         }
+    }
+
+    /// Whether anything sits at `url`, a dangling symlink included. `fileExists` follows links.
+    private static func entryExists(at url: URL) -> Bool {
+        var info = stat()
+        return lstat(url.path, &info) == 0
     }
 
     /// `name` resolved under `root`, or nil when it lands anywhere else. The parser already refuses

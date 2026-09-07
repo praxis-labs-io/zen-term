@@ -1,12 +1,10 @@
 import AppLog
 import Foundation
 
-/// Parses `~/.config/zen-term/workspaces` into `[Workspace]`. INI-style: each `[Title]`
-/// section is one workspace, with `key = value` lines (`path`, `main`, `right`, `bottom`,
-/// `focus`, and repeatable `env` and `carry`). Best-effort, symmetric with the other config
-/// parsers:
-/// unknown keys are ignored, a section missing the required `path` is logged and dropped, a
-/// malformed `env` entry is skipped, a value may be wrapped in quotes, and nothing throws.
+/// Parses `~/.config/zen-term/workspaces` into `[Workspace]`. INI-style: each `[Title]` section is
+/// one workspace, with `key = value` lines (`path`, `main`, `right`, `bottom`, `focus`, and
+/// repeatable `env` and `carry`). Best-effort like the other config parsers: an unknown key is
+/// ignored, a bad entry is logged and skipped, a section with no `path` is dropped, nothing throws.
 enum WorkspacesParser {
     static func parse(_ text: String) -> [Workspace] {
         var workspaces: [Workspace] = []

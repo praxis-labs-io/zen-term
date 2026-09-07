@@ -1854,6 +1854,9 @@ across and reports every entry that did not make it. Nothing throws: a config na
 something this repo lacks is a normal state, and it must never stop a worktree being
 made.
 
+Nothing calls it yet. The key parses and round-trips through the config today, and the
+create path that runs the copy is the next piece of this epic.
+
 **An allowlist, because the denylist is what killed the clone approach.** That design
 copied everything and subtracted what breaks on relocation, which asks us to know
 every ecosystem's landmines. Two were found by measuring, a Python venv's absolute

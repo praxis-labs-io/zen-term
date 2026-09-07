@@ -130,6 +130,37 @@ final class WorktreeCarryTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: bystander, encoding: .utf8), "untouched\n")
     }
 
+    /// Probed: `fileExists` follows links, so a dangling one reads as absent. `copyfile` then fails
+    /// `EEXIST` and the cleanup would delete an entry the worktree already had.
+    func test_copy_leavesADanglingSymlinkTheWorktreeAlreadyHas() throws {
+        let source = repo.appendingPathComponent("node_modules", isDirectory: true)
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        try GitFixture.write("new\n", to: source.appendingPathComponent("fresh.txt"))
+        let existing = worktree.appendingPathComponent("node_modules")
+        try FileManager.default.createSymbolicLink(
+            atPath: existing.path, withDestinationPath: "../gone")
+
+        let report = WorktreeCarry.copy(["node_modules"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, [])
+        XCTAssertEqual(
+            report.skipped,
+            [CarryReport.Skipped(name: "node_modules", reason: .alreadyInTheWorktree)])
+        XCTAssertEqual(
+            try FileManager.default.destinationOfSymbolicLink(atPath: existing.path), "../gone")
+    }
+
+    /// `--` ends option parsing but not pathspec globbing, so without `--literal-pathspecs` this
+    /// matches the fixture's tracked `tracked.txt` and is refused as tracked.
+    func test_copy_doesNotTreatAGlobAsAMatchOnTrackedFiles() throws {
+        try GitFixture.write("ignored\n", to: repo.appendingPathComponent("*.txt"))
+
+        let report = WorktreeCarry.copy(["*.txt"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, ["*.txt"])
+        XCTAssertEqual(report.skipped, [])
+    }
+
     /// `COPYFILE_CLONE` implies `COPYFILE_NOFOLLOW_SRC`, so this arrives as a link holding its
     /// original relative target. A worktree sits under a different parent, so it would dangle.
     func test_copy_refusesASymlinkPointingOutsideTheWorkspace() throws {
