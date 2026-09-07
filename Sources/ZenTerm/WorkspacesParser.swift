@@ -1,11 +1,10 @@
 import AppLog
 import Foundation
 
-/// Parses `~/.config/zen-term/workspaces` into `[Workspace]`. INI-style: each `[Title]`
-/// section is one workspace, with `key = value` lines (`path`, `main`, `right`, `bottom`,
-/// `focus`, and repeatable `env`). Best-effort, symmetric with the other config parsers:
-/// unknown keys are ignored, a section missing the required `path` is logged and dropped, a
-/// malformed `env` entry is skipped, a value may be wrapped in quotes, and nothing throws.
+/// Parses `~/.config/zen-term/workspaces` into `[Workspace]`. INI-style: each `[Title]` section is
+/// one workspace, with `key = value` lines (`path`, `main`, `right`, `bottom`, `focus`, and
+/// repeatable `env` and `carry`). Best-effort like the other config parsers: an unknown key is
+/// ignored, a bad entry is logged and skipped, a section with no `path` is dropped, nothing throws.
 enum WorkspacesParser {
     static func parse(_ text: String) -> [Workspace] {
         var workspaces: [Workspace] = []
@@ -58,6 +57,7 @@ enum WorkspacesParser {
         var bottom: String?
         var focusRaw: String?
         var env: [(key: String, value: String)] = []
+        var carry: [String] = []
 
         mutating func set(key: String, value: String) {
             if key != "env", value.isEmpty { return }  // `right =` (empty) → absent, not a "" command
@@ -85,6 +85,29 @@ enum WorkspacesParser {
                 // rest of the parser (whitespace-trimmed, quotes optional) instead of keeping them literal.
                 let raw = String(value[value.index(after: equals)...]).trimmingCharacters(in: .whitespaces)
                 env.append((name, ConfigText.unquote(raw)))
+            case "carry":
+                // A trailing slash is how a .gitignore names a directory, so accept it and let the
+                // entry mean the same thing either way.
+                let entry = value.hasSuffix("/") ? String(value.dropLast()) : value
+                // A carried entry is copied into a worktree by path, so one that escapes the
+                // workspace would reach into somewhere else entirely. Refuse rather than clamp.
+                guard !entry.hasPrefix("/"), !entry.hasPrefix("~"),
+                    !entry.split(separator: "/").contains("..")
+                else {
+                    Log.warning(
+                        "Workspaces: `\(title)` carry `\(value)` leaves the workspace — skipped",
+                        category: .workspace)
+                    return
+                }
+                // Carry copies top-level entries only, and nothing creates a destination's parent,
+                // so a nested one would fail at copy time with an errno that reads as a missing source.
+                guard !entry.contains("/") else {
+                    Log.warning(
+                        "Workspaces: `\(title)` carry `\(value)` is not a top-level entry — skipped",
+                        category: .workspace)
+                    return
+                }
+                carry.append(entry)
             default:
                 break  // unknown key — ignored
             }
@@ -107,7 +130,7 @@ enum WorkspacesParser {
             return Workspace(
                 title: title,
                 path: URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true),
-                main: main, right: right, bottom: bottom, focus: focus, env: envMap)
+                main: main, right: right, bottom: bottom, focus: focus, env: envMap, carry: carry)
         }
     }
 

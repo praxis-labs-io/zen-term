@@ -20,4 +20,23 @@ struct Workspace: Equatable {
     let focus: Region
     /// Environment injected into every pane and drawer of this workspace.
     let env: [String: String]
+    /// Top-level gitignored entries copied into a new worktree of this workspace, in authored
+    /// order. Relative to `path`. Nothing else reads it.
+    let carry: [String]
+
+    /// Written out rather than left memberwise so `carry` can default: every existing call site
+    /// predates it and none of them has an opinion about it.
+    init(
+        title: String, path: URL, main: String?, right: String?, bottom: String?,
+        focus: Region, env: [String: String], carry: [String] = []
+    ) {
+        self.title = title
+        self.path = path
+        self.main = main
+        self.right = right
+        self.bottom = bottom
+        self.focus = focus
+        self.env = env
+        self.carry = carry
+    }
 }

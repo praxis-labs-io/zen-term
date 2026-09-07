@@ -90,6 +90,64 @@ final class WorkspacesParserTests: XCTestCase {
         XCTAssertEqual(ws?.env["QUOTED"], "hello world")  // surrounding quotes stripped
     }
 
+    // MARK: carry
+
+    func test_carry_isRepeatable_andKeepsAuthoredOrder() {
+        let ws = WorkspacesParser.parse(
+            """
+            [ZenTerm]
+            path  = ~/Dev/zen-term
+            carry = node_modules
+            carry = .env
+            """
+        ).first
+        XCTAssertEqual(ws?.carry, ["node_modules", ".env"])
+    }
+
+    func test_carry_defaultsEmpty() {
+        XCTAssertEqual(WorkspacesParser.parse("[Scratch]\npath = ~/\n").first?.carry, [])
+    }
+
+    /// A carried entry is copied by path, so one that escapes the workspace would reach into
+    /// somewhere else. Bad entries drop; the good one in the same section survives.
+    func test_carry_dropsEntriesThatLeaveTheWorkspace() {
+        let ws = WorkspacesParser.parse(
+            """
+            [ZenTerm]
+            path  = ~/Dev/zen-term
+            carry = ../sibling
+            carry = /etc
+            carry = ~/Documents
+            carry = build/../../escape
+            carry = .env
+            """
+        ).first
+        XCTAssertEqual(ws?.carry, [".env"])
+    }
+
+    /// Nothing creates a destination's parent, so a nested entry would die at copy time with an
+    /// errno that reads as a missing source. It is refused where the reason is still legible.
+    func test_carry_dropsANestedEntry() {
+        let ws = WorkspacesParser.parse(
+            """
+            [ZenTerm]
+            path  = ~/Dev/zen-term
+            carry = config/local.json
+            carry = .env
+            """
+        ).first
+        XCTAssertEqual(ws?.carry, [".env"])
+    }
+
+    func test_carry_acceptsATrailingSlash() {
+        let ws = WorkspacesParser.parse("[X]\npath = ~/x\ncarry = node_modules/\n").first
+        XCTAssertEqual(ws?.carry, ["node_modules"])
+    }
+
+    func test_emptyCarryValue_treatedAsAbsent() {
+        XCTAssertEqual(WorkspacesParser.parse("[Scratch]\npath = ~/\ncarry =\n").first?.carry, [])
+    }
+
     func test_emptyValue_treatedAsAbsent() {
         // `right =` with no value must not become a "" command that launches an empty program.
         let ws = WorkspacesParser.parse("[X]\npath = ~/x\nmain =\nright =\nfocus =\n").first

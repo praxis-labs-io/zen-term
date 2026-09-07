@@ -53,6 +53,24 @@ final class WorkspacesWriterTests: XCTestCase {
         assertRoundTrips(ws)
     }
 
+    /// The inverse of the env case: env is a map and sorts, carry is a list the user authored, so
+    /// the order it comes back in has to be the order it went out in.
+    func test_carry_roundTrips_inAuthoredOrder() {
+        assertRoundTrips(
+            Workspace(
+                title: "ZenTerm", path: expandTilde("~/Dev/zen-term"),
+                main: nil, right: nil, bottom: nil, focus: .main, env: [:],
+                carry: ["node_modules", ".env"]))
+    }
+
+    func test_carryWithSpace_isQuoted_andRoundTrips() {
+        let ws = Workspace(
+            title: "Spaced", path: expandTilde("~/Dev/spaced"),
+            main: nil, right: nil, bottom: nil, focus: .main, env: [:], carry: ["build output"])
+        XCTAssertTrue(WorkspacesWriter.serialize(ws).contains("carry  = \"build output\""))
+        assertRoundTrips(ws)
+    }
+
     func test_envValueWithSpace_isQuoted_andRoundTrips() {
         let ws = Workspace(
             title: "Spaced", path: expandTilde("~/Dev/spaced"),

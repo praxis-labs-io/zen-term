@@ -20,6 +20,25 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         super.tearDown()
     }
 
+    // MARK: carry survives an edit
+
+    /// The form has no `carry` rows, so a `Workspace` it rebuilds without one writes an empty list
+    /// back over the file. `WorkspacesWriter.update` regenerates the whole section body, so saving
+    /// an unrelated field would delete hand-authored `carry` lines with nothing said.
+    func test_editingAWorkspace_keepsCarryTheFormCannotShow() throws {
+        let ws = Workspace(
+            title: "ZenTerm", path: try makeRealDir(),
+            main: nil, right: nil, bottom: nil, focus: .main, env: [:],
+            carry: ["node_modules", ".env"])
+        let (overlay, sink) = mount(editing: ws)
+        field(in: overlay, placeholder: "Workspace name").setText("Renamed")
+
+        try XCTUnwrap(button(in: overlay, title: "Save")).onTap()
+
+        XCTAssertEqual(sink.submitted.first?.title, "Renamed")
+        XCTAssertEqual(sink.submitted.first?.carry, ["node_modules", ".env"])
+    }
+
     // MARK: harness
 
     private func mount(

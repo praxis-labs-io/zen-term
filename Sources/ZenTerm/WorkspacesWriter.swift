@@ -19,10 +19,10 @@ enum WorkspacesWriter {
     /// match the hand-written house style in `docs/config/workspaces` (longest key is `bottom`).
     private static let keyColumnWidth = 6
 
-    /// Render a workspace as one `[Title]` section: aligned `key = value` lines in the same field
-    /// order as `docs/config/workspaces`, absent fields omitted (the parser treats an empty value
-    /// as absent), values quoted when they contain whitespace or a `#` (so the parser doesn't
-    /// truncate a comment or lose spacing), and env keys sorted for deterministic output.
+    /// One `[Title]` section: aligned `key = value` lines in field order, absent fields omitted, a
+    /// value quoted when it holds whitespace or a `#` so the parser cannot truncate or lose it.
+    /// Env keys sort for deterministic output; `carry` does not, because it is an authored list
+    /// whose order is the content.
     static func serialize(_ ws: Workspace) -> String {
         var lines = ["[\(ws.title)]"]
         func add(_ key: String, _ rendered: String) {
@@ -35,6 +35,7 @@ enum WorkspacesWriter {
         if let right = ws.right { add("right", quoted(right)) }
         if let bottom = ws.bottom { add("bottom", quoted(bottom)) }
         if ws.focus != .main { add("focus", ws.focus.rawValue) }  // .main is the parser default
+        for entry in ws.carry { add("carry", quoted(entry)) }
         for key in ws.env.keys.sorted() {
             // The parser splits an env line on the first `=` for the KEY, then unquotes the VALUE
             // — so quote only the value part, never the `KEY=` prefix.

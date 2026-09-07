@@ -520,9 +520,12 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             guard !key.isEmpty else { continue }  // a blank key isn't a variable
             env[key] = row.value.trimmingCharacters(in: .whitespaces)
         }
+        // Carried through rather than rebuilt: the form has no rows for `carry` yet, and a `Workspace`
+        // built without it writes an empty list over what the user hand-authored in the file.
         return Workspace(
             title: title, path: folder,
-            main: recipe.main, right: recipe.right, bottom: recipe.bottom, focus: recipe.focus, env: env)
+            main: recipe.main, right: recipe.right, bottom: recipe.bottom, focus: recipe.focus,
+            env: env, carry: editingWorkspace?.carry ?? [])
     }
 
     private func recipeForChoice() -> (main: String?, right: String?, bottom: String?, focus: Workspace.Region) {
