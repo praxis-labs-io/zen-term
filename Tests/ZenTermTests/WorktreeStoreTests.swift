@@ -122,6 +122,42 @@ final class WorktreeStoreTests: XCTestCase {
             "trunk\n")
     }
 
+    /// `.currentCheckout` is the whole reason the parameter exists: standing on `side`, the
+    /// default-branch ladder would answer `origin/main` and cut from the wrong commit.
+    func test_create_fromTheCurrentCheckout_cutsFromWhereTheRepoIsStanding() throws {
+        try GitFixture.run(["checkout", "-q", "-b", "side"], in: repo)
+        try GitFixture.write("side\n", to: repo.appendingPathComponent("tracked.txt"))
+        try GitFixture.run(["commit", "-qam", "on side"], in: repo)
+
+        let worktree = try WorktreeStore.create(branch: "stacked", base: .currentCheckout, in: repo)
+
+        XCTAssertEqual(worktree.head, try GitFixture.run(["rev-parse", "side"], in: repo))
+        XCTAssertNotEqual(worktree.head, try GitFixture.run(["rev-parse", "origin/main"], in: repo))
+    }
+
+    /// The card names the ref each choice cuts from, so the two have to agree with `create`.
+    func test_createOptions_nameTheRefsAndTheBranchesAlreadyTaken() throws {
+        try GitFixture.run(["checkout", "-q", "-b", "side"], in: repo)
+
+        let options = WorktreeStore.createOptions(in: repo)
+
+        XCTAssertEqual(options.currentBranch, "side")
+        XCTAssertEqual(options.defaultBase, "origin/main")
+        XCTAssertTrue(options.branches.contains("side"))
+        XCTAssertTrue(options.branches.contains("main"))
+    }
+
+    /// With no remote there is no default branch to name, so `.defaultBranch` and `.currentCheckout`
+    /// mean the same thing and the caption has to say so rather than invent an `origin/`.
+    func test_createOptions_inARepoWithNoRemote_nameTheLocalBranchForBothChoices() throws {
+        let solo = try GitFixture.makeRepo(at: root.appendingPathComponent("solo", isDirectory: true))
+
+        let options = WorktreeStore.createOptions(in: solo)
+
+        XCTAssertEqual(options.defaultBase, options.currentBranch)
+        XCTAssertNotNil(options.defaultBase)
+    }
+
     /// A repo that was `git init`ed locally and pushed has no `refs/remotes/origin/HEAD` at all.
     func test_create_fallsBackToOriginMainWhenOriginHeadIsUnset() throws {
         XCTAssertThrowsError(

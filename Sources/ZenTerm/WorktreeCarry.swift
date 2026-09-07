@@ -30,13 +30,32 @@ struct CarryReport: Equatable {
     var isEmpty: Bool { carried.isEmpty && skipped.isEmpty }
 }
 
+extension CarryReport.Skipped.Reason {
+    /// What to tell someone whose entry did not come across, as the tail of a sentence starting
+    /// with the entry's name.
+    var explanation: String {
+        switch self {
+        case .leavesTheWorkspace: return "points outside the workspace"
+        case .notThere: return "isn't there"
+        case .tracked: return "is tracked by git"
+        case .unreadable: return "couldn't be checked with git"
+        case .alreadyInTheWorktree: return "was already in the worktree"
+        case .copyFailed(let reason): return "didn't copy: \(reason)"
+        }
+    }
+}
+
 /// Copies into a fresh worktree the gitignored entries a project needs to run. An allowlist, since
 /// subtracting what breaks on relocation asks us to know every ecosystem's landmines.
 ///
 /// Blocking, and it can move gigabytes: the caller owns the queue hop. Never call this on main.
 enum WorktreeCarry {
-    /// Bring `entries` across in authored order, and report what did not make it.
-    static func copy(_ entries: [String], from source: URL, into worktree: URL) -> CarryReport {
+    /// Bring `entries` across in authored order, and report what did not make it. `onEntry` fires
+    /// off-main as each one starts, for a caller naming what it is on.
+    static func copy(
+        _ entries: [String], from source: URL, into worktree: URL,
+        onEntry: ((String) -> Void)? = nil
+    ) -> CarryReport {
         var carried: [String] = []
         var skipped: [CarryReport.Skipped] = []
 
@@ -45,6 +64,7 @@ enum WorktreeCarry {
         }
 
         for name in entries {
+            onEntry?(name)
             guard let from = containedPath(name, under: source),
                 let to = containedPath(name, under: worktree)
             else {
