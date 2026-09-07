@@ -165,6 +165,16 @@ the *final* frame on every resize and on first layout. A width-threshold auto-fo
 the app (green in tests) until it moved off a `layout()` width read onto the pane's frame
 notification.
 
+**An attributed value carries its own line behaviour, so the field's `lineBreakMode` stops
+applying.** Set `attributedStringValue` (or build with `NSTextField(labelWithAttributedString:)`)
+and the paragraph style inside the string decides wrapping. The default wraps, so a label the
+designer set to `.byTruncatingTail` silently starts wrapping the moment its value becomes
+attributed, and inside a fixed-height row it bleeds over its neighbours. Put an
+`NSMutableParagraphStyle` on every run, and set `maximumNumberOfLines = 1` on the field as the
+backstop. This shipped twice in one branch, in a 32pt picker row and a 22pt tab chip. A test that
+measures only width passes through it, so assert the paragraph style, the line cap, and that the
+label's height still fits its container.
+
 **Anything driven from `setFrameSize` sees every frame the layout passes through, not the one it
 lands on.** Auto Layout walks a view through intermediate frames while it solves, and a few of them
 are nonsense: a pane briefly a handful of pixels wide, a zero-height strip mid-animation. Work
