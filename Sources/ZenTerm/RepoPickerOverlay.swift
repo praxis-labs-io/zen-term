@@ -7,10 +7,12 @@ import TerminalKit
 /// a new tab, Shift+Enter replaces the current tab, Esc / backdrop click dismiss. Built on
 /// `PaletteOverlay`, which owns the card/list/keyboard scaffolding; this supplies the rows + filter.
 final class RepoPickerOverlay: PaletteOverlay {
-    /// A leading action row, then one row per configured workspace.
+    /// A leading action row, then one row per configured workspace, each followed by the worktrees
+    /// of its repo.
     private enum Row {
         case add
         case workspace(Workspace)
+        case worktree(Worktree, parent: Workspace)
     }
 
     /// (selected workspace, replaceCurrentTab). `replaceCurrentTab` is Shift+Enter.
@@ -19,6 +21,11 @@ final class RepoPickerOverlay: PaletteOverlay {
     private let onAddWorkspace: () -> Void
 
     private let entries: [Workspace]
+    /// Keyed by the workspace's standardized path, filled in when the background listing lands.
+    private var listings: [URL: WorktreeListing] = [:]
+    /// Every configured workspace's path, so a worktree that already has a workspace row of its
+    /// own is not repeated as a child of one.
+    private let configuredPaths: Set<URL>
     private var rows: [Row]
 
     init(
@@ -27,7 +34,8 @@ final class RepoPickerOverlay: PaletteOverlay {
         onDismiss: @escaping () -> Void
     ) {
         self.entries = entries
-        self.rows = Self.rows(for: entries)
+        self.configuredPaths = Set(entries.map { $0.path.standardizedFileURL })
+        self.rows = Self.rows(for: entries, listings: [:], configured: [])
         self.onChoose = onChoose
         self.onAddWorkspace = onAddWorkspace
         super.init(
@@ -50,6 +58,11 @@ final class RepoPickerOverlay: PaletteOverlay {
         // The counts run `git` rather than reading a file, so they land after the branch does
         // rather than holding it up.
         GitRepoStatus.refreshChurn(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }
+        // Two `git` calls per workspace, so the worktree rows land last and insert themselves under
+        // the workspace they belong to rather than holding the card back.
+        GitRepoStatus.refreshWorktrees(entries.map(\.path)) { [weak self] path, listing in
+            self?.setWorktrees(listing, for: path)
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -59,9 +72,37 @@ final class RepoPickerOverlay: PaletteOverlay {
         for row in rowViews { (row as? RowView)?.applyGitStatus() }
     }
 
-    /// The ＋ row first, then a workspace row per entry.
-    private static func rows(for workspaces: [Workspace]) -> [Row] {
-        [.add] + workspaces.map(Row.workspace)
+    /// Hand the picker one workspace's listing as the background pass answers for it, and
+    /// re-render around it. The selection is put back by identity: rows arriving under the cursor
+    /// must not move it, and a reload otherwise resets to the default.
+    func setWorktrees(_ listing: WorktreeListing, for workspacePath: URL) {
+        listings[workspacePath.standardizedFileURL] = listing
+        let held = rows.indices.contains(selected) ? rowIdentity(at: selected) : nil
+        applyFilter(query: currentQuery)
+        refreshRows()
+        reselect(byIdentity: held)
+    }
+
+    /// The ＋ row first, then a workspace row per entry with its repo's worktrees under it.
+    ///
+    /// Two workspaces can be checkouts of one repo, and `worktree list` answers the same set for
+    /// both, so the shared common dir is claimed by whichever comes first and the second workspace
+    /// keeps its own row without repeating the children.
+    private static func rows(
+        for workspaces: [Workspace], listings: [URL: WorktreeListing], configured: Set<URL>
+    ) -> [Row] {
+        var rows: [Row] = [.add]
+        var claimed: Set<URL> = []
+        for workspace in workspaces {
+            rows.append(.workspace(workspace))
+            let path = workspace.path.standardizedFileURL
+            guard let listing = listings[path] else { continue }
+            guard claimed.insert(listing.commonDir ?? path).inserted else { continue }
+            for worktree in listing.worktrees where !configured.contains(worktree.path.standardizedFileURL) {
+                rows.append(.worktree(worktree, parent: workspace))
+            }
+        }
+        return rows
     }
 
     override func numberOfRows() -> Int { rows.count }
@@ -78,6 +119,8 @@ final class RepoPickerOverlay: PaletteOverlay {
             return AddRowView()
         case .workspace(let workspace):
             return RowView(workspace: workspace)
+        case .worktree(let worktree, let parent):
+            return RowView(worktree: worktree, parent: parent)
         }
     }
 
@@ -88,26 +131,46 @@ final class RepoPickerOverlay: PaletteOverlay {
         switch rows[index] {
         case .add: return ["add"]
         case .workspace(let workspace): return ["workspace", workspace.title]
+        // The path, not the branch: a worktree's branch changes under it, and a reused row keeps
+        // whatever it baked in at construction.
+        case .worktree(let worktree, _): return ["worktree", worktree.path.path]
         }
     }
 
+    /// A workspace survives the filter when its own title matches or one of its worktrees does, so
+    /// a query naming a branch never renders that worktree's row orphaned. A title match keeps the
+    /// whole group; a worktree-only match narrows the group to the worktrees that matched.
     override func applyFilter(query: String) {
         let q = query.lowercased()
-        let matches: [Workspace]
-        if q.isEmpty {
-            matches = entries
-        } else {
-            matches =
-                entries
-                .filter { $0.title.lowercased().contains(q) }
-                .sorted { a, b in
-                    let ap = a.title.lowercased().hasPrefix(q)
-                    let bp = b.title.lowercased().hasPrefix(q)
-                    if ap != bp { return ap }  // prefix matches rank first
-                    return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
-                }
+        guard !q.isEmpty else {
+            // The ＋ row stays pinned at the top through any filter.
+            rows = Self.rows(for: entries, listings: listings, configured: configuredPaths)
+            return
         }
-        rows = Self.rows(for: matches)  // the ＋ row stays pinned at the top through any filter
+
+        var matches: [Workspace] = []
+        var narrowed: [URL: WorktreeListing] = [:]
+        for workspace in entries {
+            let path = workspace.path.standardizedFileURL
+            let all = listings[path]?.worktrees ?? []
+            let titleMatches = workspace.title.lowercased().contains(q)
+            let hits = titleMatches ? all : all.filter { Self.matches($0, q) }
+            guard titleMatches || !hits.isEmpty else { continue }
+            matches.append(workspace)
+            narrowed[path] = WorktreeListing(commonDir: listings[path]?.commonDir, worktrees: hits)
+        }
+        matches.sort { a, b in
+            let ap = a.title.lowercased().hasPrefix(q)
+            let bp = b.title.lowercased().hasPrefix(q)
+            if ap != bp { return ap }  // prefix matches rank first
+            return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
+        }
+        rows = Self.rows(for: matches, listings: narrowed, configured: configuredPaths)
+    }
+
+    private static func matches(_ worktree: Worktree, _ query: String) -> Bool {
+        if let branch = worktree.branch, branch.lowercased().contains(query) { return true }
+        return worktree.path.lastPathComponent.lowercased().contains(query)
     }
 
     override func activate(index: Int, modifiers: NSEvent.ModifierFlags) {
@@ -115,7 +178,19 @@ final class RepoPickerOverlay: PaletteOverlay {
         switch rows[index] {
         case .add: onAddWorkspace()
         case .workspace(let workspace): onChoose(workspace, modifiers.contains(.shift))
+        case .worktree(let worktree, let parent):
+            onChoose(Self.workspace(for: worktree, parent: parent), modifiers.contains(.shift))
         }
+    }
+
+    /// The parent's recipe, opened in the worktree's folder: same panes, same drawers, same env,
+    /// pinned to a tab that names both. A worktree is the project, on another branch.
+    static func workspace(for worktree: Worktree, parent: Workspace) -> Workspace {
+        let name = worktree.branch ?? worktree.path.lastPathComponent
+        return Workspace(
+            title: "\(parent.title): \(name)", path: worktree.path, main: parent.main,
+            right: parent.right, bottom: parent.bottom, focus: parent.focus, env: parent.env,
+            carry: parent.carry)
     }
 
     /// The persistent "＋ New Workspace…" action row. The `＋` is what distinguishes it; the accent
@@ -166,7 +241,16 @@ final class RepoPickerOverlay: PaletteOverlay {
         /// squeeze, collapsing to an ellipsis beside a title that never gave an inch.
         static let branchMinWidth: CGFloat = 120
 
+        /// How far a worktree row sits inside its workspace, on top of the row's own inset.
+        static let childIndent: CGFloat = 16
+
         let workspace: Workspace
+        /// The worktree this row stands for, or nil on a workspace row.
+        let worktree: Worktree?
+        /// The folder whose git status this row shows: the worktree's own, not its parent's.
+        private let statusPath: URL
+        /// Git names a worktree's branch when it lists it, so that row never waits on a probe.
+        private let fixedBranch: String?
         private let branchLabel = NSTextField(labelWithString: "")
         private let churnLabel = NSTextField(labelWithString: "")
         /// Held at `min(the branch's own width, branchMinWidth)`: a floor that a short branch like
@@ -207,11 +291,31 @@ final class RepoPickerOverlay: PaletteOverlay {
             return out
         }
 
-        init(workspace: Workspace) {
+        convenience init(workspace: Workspace) {
+            self.init(
+                workspace: workspace, worktree: nil, title: workspace.title,
+                statusPath: workspace.path, indent: 0)
+        }
+
+        /// A worktree of `parent`'s repo: its folder on the left, its branch on the right, indented
+        /// under the workspace row it belongs to.
+        convenience init(worktree: Worktree, parent: Workspace) {
+            self.init(
+                workspace: parent, worktree: worktree, title: worktree.path.lastPathComponent,
+                statusPath: worktree.path, indent: Self.childIndent)
+        }
+
+        private init(
+            workspace: Workspace, worktree: Worktree?, title: String, statusPath: URL,
+            indent: CGFloat
+        ) {
             self.workspace = workspace
+            self.worktree = worktree
+            self.statusPath = statusPath
+            self.fixedBranch = worktree?.branch
             super.init()
 
-            let name = NSTextField(labelWithString: workspace.title)
+            let name = NSTextField(labelWithString: title)
             name.font = .systemFont(ofSize: 13)
             name.textColor = Theme.current.chrome.foreground.nsColor
             name.lineBreakMode = .byTruncatingTail
@@ -245,7 +349,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             branchFloor.priority = .defaultHigh
 
             NSLayoutConstraint.activate([
-                name.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+                name.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10 + indent),
                 name.centerYAnchor.constraint(equalTo: centerYAnchor),
                 branchLabel.widthAnchor.constraint(
                     lessThanOrEqualToConstant: Self.branchMaxWidth),
@@ -266,13 +370,13 @@ final class RepoPickerOverlay: PaletteOverlay {
         /// Show the branch when this workspace's folder is a known repo. Run at build time and
         /// again whenever a `GitRepoStatus.refresh` lands.
         func applyGitStatus() {
-            let branch = GitRepoStatus.branch(workspace.path)
+            let branch = fixedBranch ?? GitRepoStatus.branch(statusPath)
             branchLabel.stringValue = branch ?? ""
             branchLabel.setAccessibilityLabel(branch.map { "on branch \($0)" })
             branchFloor.constant = min(
                 branchLabel.intrinsicContentSize.width, Self.branchMinWidth)
 
-            let churn = GitRepoStatus.churn(workspace.path) ?? GitChurn()
+            let churn = GitRepoStatus.churn(statusPath) ?? GitChurn()
             churnLabel.attributedStringValue = Self.churnText(churn)
         }
     }

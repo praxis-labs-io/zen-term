@@ -105,6 +105,37 @@ enum GitRepoStatus {
         }
     }
 
+    /// Its own queue rather than `churnQueue`: each call there cancels the one before it, and the
+    /// two passes run together on every picker open.
+    private static let worktreeQueue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 4
+        queue.qualityOfService = .userInitiated
+        return queue
+    }()
+
+    /// List every directory's worktrees off-main, delivering each answer on the main thread as it
+    /// lands. Uncached: the picker holds the listings for the life of one open, and a worktree made
+    /// or removed in a shell has to show up the next time it opens.
+    ///
+    /// `WorktreeStore` blocks by contract, and each call is two `git` invocations, so this is the
+    /// same bounded fan-out as `refreshChurn` for the same reason: a stalled mount must not take
+    /// the app's worker threads with it.
+    static func refreshWorktrees(
+        _ dirs: [URL], completion: @escaping (URL, WorktreeListing) -> Void
+    ) {
+        worktreeQueue.cancelAllOperations()
+        for dir in dirs.map(\.standardizedFileURL) {
+            worktreeQueue.addOperation {
+                let commonDir = WorktreeStore.commonDir(of: dir)
+                let worktrees = (try? WorktreeStore.list(in: dir)) ?? []
+                DispatchQueue.main.async {
+                    completion(dir, WorktreeListing(commonDir: commonDir, worktrees: worktrees))
+                }
+            }
+        }
+    }
+
     /// One directory's counts, or nil when it isn't a repo or `git` can't answer for it.
     private static func churnNow(for dir: URL) -> GitChurn? {
         guard GitRepo.isGitRepo(dir),

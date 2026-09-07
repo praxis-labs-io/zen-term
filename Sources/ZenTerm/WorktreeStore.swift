@@ -11,6 +11,14 @@ struct Worktree: Equatable {
     let isLocked: Bool
 }
 
+/// One repo's worktrees, with the git directory every checkout of it shares. The picker groups
+/// on `commonDir`, so a workspace opened inside a worktree lands under its parent rather than in a
+/// group of its own.
+struct WorktreeListing: Equatable {
+    let commonDir: URL?
+    let worktrees: [Worktree]
+}
+
 /// What a worktree would lose if it were removed now.
 struct WorktreeState: Equatable {
     let uncommitted: Int

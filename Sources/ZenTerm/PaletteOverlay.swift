@@ -84,7 +84,8 @@ class PaletteOverlay: NSView, ModalOverlay {
         let height: NSLayoutConstraint
     }
     private var laidOutRows: [LaidOutRow] = []
-    private var selected = 0
+    /// The highlighted row, for a subclass that rebuilds its rows and wants the selection back.
+    private(set) var selected = 0
 
     init(
         background: NSColor, placeholder: String, emptyText: String, footerHints: [PaletteHint],
@@ -415,6 +416,26 @@ class PaletteOverlay: NSView, ModalOverlay {
     /// The laid-out row views, in list order — for a subclass that updates its rows in place (the
     /// repo picker's git badges, which land after a background probe) instead of re-rendering.
     var rowViews: [PaletteRowView] { laidOutRows.map(\.view) }
+
+    /// The query the list is filtered by right now — for a subclass rebuilding its model outside a
+    /// keystroke, where the filter in force is not the empty one.
+    var currentQuery: String { searchField.stringValue }
+
+    /// Re-render the rows from the subclass's current model. Pair it with `reselect(byIdentity:)`:
+    /// a reload resets the selection to the default, which yanks the highlight off the row the
+    /// person is standing on when new rows arrive mid-session.
+    func refreshRows() { reloadRows() }
+
+    /// Put the selection back on the row with `identity`. A no-op when that row is gone or is not
+    /// selectable, leaving whatever default the reload chose.
+    func reselect(byIdentity identity: AnyHashable?) {
+        guard let identity, let index = laidOutRows.firstIndex(where: { $0.id == identity }),
+            isSelectable(at: index)
+        else { return }
+        selected = index
+        updateHighlight()
+        scrollSelectedToVisible()
+    }
 
     /// The row highlighted after a (re)load — the first selectable row by default. A subclass
     /// overrides to prefer a different default (e.g. the repo picker highlights the first
