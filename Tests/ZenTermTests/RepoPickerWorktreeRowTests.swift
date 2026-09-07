@@ -290,6 +290,106 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(shape(of: overlay), ["add", "workspace:alpha", "workspace:one"])
     }
 
+    /// The counts arrive as an attributed value, which carries its own line behaviour, so the
+    /// field's `lineBreakMode` does not reach them and a narrow row wrapped them out of its 32pt.
+    func test_churnLabel_isCappedToOneLine() throws {
+        let repo = path("alpha")
+        let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
+        mount(overlay)
+
+        let row = try XCTUnwrap(rowViews(in: overlay)[1] as? RepoPickerOverlay.RowView)
+        let clipping = descendants(of: row).compactMap { $0 as? NSTextField }
+            .filter { $0.lineBreakMode == .byClipping }
+        XCTAssertEqual(clipping.count, 1, "the churn label")
+        XCTAssertEqual(clipping.first?.maximumNumberOfLines, 1)
+    }
+
+    // MARK: ownership
+
+    /// A workspace inside a repo but not at its root resolves a common dir and lists nothing,
+    /// because `isGitRepo` wants a `.git` entry. Claiming the group there hid the real checkout's
+    /// worktrees entirely.
+    func test_aWorkspaceThatListsNothing_doesNotClaimTheGroup() {
+        let docs = path("repo-docs")
+        let repo = path("repo")
+        let shared = repo.appendingPathComponent(".git")
+        let overlay = makeRepoPicker(
+            entries: [workspace("Docs", path: docs), workspace("Repo", path: repo)])
+        mount(overlay)
+
+        overlay.setWorktrees(WorktreeListing(commonDir: shared, worktrees: []), for: docs)
+        overlay.setWorktrees(
+            WorktreeListing(commonDir: shared, worktrees: [worktree(repo, "one")]), for: repo)
+
+        XCTAssertEqual(
+            shape(of: overlay), ["add", "workspace:Docs", "workspace:Repo", "worktree:one"])
+    }
+
+    /// Ownership is decided from config order, never from the filtered list. `applyFilter` ranks
+    /// prefix matches first and then alphabetically, so a query can inverse the configured order.
+    /// Deciding ownership there moved the worktree to the other parent, and activating it opened
+    /// that workspace's recipe at this worktree's path.
+    func test_ownership_doesNotMoveWhenAFilterReordersTheList() throws {
+        let owner = path("owner")
+        let other = path("other")
+        let shared = owner.appendingPathComponent(".git")
+        var chosen: (Workspace, Bool)?
+        // Config order puts "b-x" first; the query "x" prefixes neither, so "a-x" sorts ahead.
+        let ownerWorkspace = Workspace(
+            title: "b-x", path: owner, main: "nvim", right: nil, bottom: nil, focus: .main, env: [:])
+        let overlay = makeRepoPicker(
+            entries: [ownerWorkspace, workspace("a-x", path: other)],
+            onChoose: { chosen = ($0, $1) })
+        mount(overlay)
+        let trees = [worktree(owner, "shared-branch")]
+        overlay.setWorktrees(WorktreeListing(commonDir: shared, worktrees: trees), for: owner)
+        overlay.setWorktrees(WorktreeListing(commonDir: shared, worktrees: trees), for: other)
+        XCTAssertEqual(
+            shape(of: overlay), ["add", "workspace:b-x", "worktree:shared-branch", "workspace:a-x"])
+
+        type("x", into: overlay)
+
+        XCTAssertEqual(
+            shape(of: overlay), ["add", "workspace:a-x", "workspace:b-x", "worktree:shared-branch"],
+            "the filter reorders the workspaces, and the worktree stays with b-x")
+        let index = try XCTUnwrap(shape(of: overlay).firstIndex(of: "worktree:shared-branch"))
+        overlay.activate(index: index, modifiers: [])
+        XCTAssertEqual(chosen?.0.main, "nvim", "b-x's recipe, not a-x's")
+    }
+
+    /// A row you cannot find by the text it shows is a row you cannot find. A detached worktree
+    /// renders its short head, so the head has to be searchable.
+    func test_filter_findsADetachedWorktreeByItsShortHead() {
+        let repo = path("alpha")
+        let overlay = makeRepoPicker(
+            entries: [workspace("alpha", path: repo), workspace("beta")])
+        mount(overlay)
+        let detached = Worktree(
+            path: worktreeRoot.appendingPathComponent("alpha/loose", isDirectory: true), branch: nil,
+            head: "abc1234def5678901234567890abcdef12345678", isLocked: false)
+        overlay.setWorktrees(WorktreeListing(commonDir: repo, worktrees: [detached]), for: repo)
+
+        type("abc1234", into: overlay)
+
+        XCTAssertEqual(shape(of: overlay), ["add", "workspace:alpha", "worktree:abc1234"])
+    }
+
+    /// Announcing a commit as a branch tells a screen reader the repository is in a state it is not
+    /// in.
+    func test_accessibility_doesNotCallADetachedHeadABranch() {
+        XCTAssertEqual(
+            RepoPickerOverlay.RowView.headDescription("main", nil), "on branch main")
+        let onBranch = Worktree(
+            path: worktreeRoot, branch: "feature", head: "abc1234", isLocked: false)
+        XCTAssertEqual(
+            RepoPickerOverlay.RowView.headDescription("feature", onBranch),
+            "worktree on branch feature")
+        let detached = Worktree(path: worktreeRoot, branch: nil, head: "abc1234", isLocked: false)
+        XCTAssertEqual(
+            RepoPickerOverlay.RowView.headDescription("abc1234", detached),
+            "worktree with a detached head at abc1234")
+    }
+
     // MARK: selection
 
     /// The listing lands while the card is already up. Rows inserted under the cursor must not

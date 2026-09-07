@@ -128,7 +128,8 @@ enum GitRepoStatus {
         for dir in dirs.map(\.standardizedFileURL) {
             worktreeQueue.addOperation {
                 let commonDir = WorktreeStore.commonDir(of: dir)
-                let worktrees = (try? WorktreeStore.list(in: dir)) ?? []
+                // A read, not a write: the picker lists on every open, and pruning there is final.
+                let worktrees = (try? WorktreeStore.list(in: dir, pruning: false)) ?? []
                 DispatchQueue.main.async {
                     completion(dir, WorktreeListing(commonDir: commonDir, worktrees: worktrees))
                 }

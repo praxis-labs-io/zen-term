@@ -75,6 +75,18 @@ final class WorktreeStoreTests: XCTestCase {
         XCTAssertFalse(afterPrune.contains("prunable"), "the record was pruned, not just filtered")
     }
 
+    /// The picker lists on every open, and a prune is final: a worktree moved on disk and waiting
+    /// for `git worktree repair` would lose that chance to a keystroke.
+    func test_list_withoutPruning_leavesTheRecordAlone() throws {
+        let worktree = try WorktreeStore.create(branch: "moved", in: repo)
+        try FileManager.default.removeItem(at: worktree.path)
+
+        XCTAssertEqual(try WorktreeStore.list(in: repo, pruning: false), [])
+
+        let after = try GitFixture.run(["worktree", "list", "--porcelain"], in: repo)
+        XCTAssertTrue(after.contains("prunable"), "the record survives a read")
+    }
+
     func test_list_throwsForADirectoryThatIsNotARepo() throws {
         let plain = root.appendingPathComponent("plain", isDirectory: true)
         try FileManager.default.createDirectory(at: plain, withIntermediateDirectories: true)

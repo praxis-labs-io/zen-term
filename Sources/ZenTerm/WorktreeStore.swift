@@ -104,10 +104,14 @@ enum WorktreeStore {
     ///
     /// A worktree whose directory is gone is dropped from the answer either way, because git marks
     /// it prunable on its own. The prune is hygiene for git's own commands, and it is conditional.
-    static func list(in repo: URL) throws -> [Worktree] {
+    ///
+    /// `pruning: false` makes this a pure read. The picker lists on every open, and a prune is
+    /// final: a worktree moved on disk, waiting for `git worktree repair`, loses that chance the
+    /// next time someone presses ⌘P. Opening a picker must not write to a repo.
+    static func list(in repo: URL, pruning: Bool = true) throws -> [Worktree] {
         guard GitRepo.isGitRepo(repo) else { throw WorktreeError.notARepo(repo) }
         let listing = try porcelain(in: repo)
-        if shouldPrune(listing) { _ = try? git(["worktree", "prune"], in: repo) }
+        if pruning, shouldPrune(listing) { _ = try? git(["worktree", "prune"], in: repo) }
         let main = mainPath(in: listing)
         return parse(listing).filter { $0.path != main }
     }

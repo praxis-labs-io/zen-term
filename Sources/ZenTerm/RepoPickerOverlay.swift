@@ -23,6 +23,9 @@ final class RepoPickerOverlay: PaletteOverlay {
     private let entries: [Workspace]
     /// Keyed by the workspace's standardized path, filled in when the background listing lands.
     private var listings: [URL: WorktreeListing] = [:]
+    /// Common dir to the workspace that shows its worktrees, in config order. Recomputed when a
+    /// listing lands, never when the query changes.
+    private var worktreeOwners: [URL: URL] = [:]
     /// Every configured workspace's path, so a worktree that already has a workspace row of its
     /// own is not repeated as a child of one.
     private let configuredPaths: Set<URL>
@@ -35,7 +38,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     ) {
         self.entries = entries
         self.configuredPaths = Set(entries.map { $0.path.standardizedFileURL })
-        self.rows = Self.rows(for: entries, listings: [:], configured: [])
+        self.rows = Self.rows(for: entries, listings: [:], configured: [], owners: [:])
         self.onChoose = onChoose
         self.onAddWorkspace = onAddWorkspace
         super.init(
@@ -77,27 +80,46 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// must not move it, and a reload otherwise resets to the default.
     func setWorktrees(_ listing: WorktreeListing, for workspacePath: URL) {
         listings[workspacePath.standardizedFileURL] = listing
+        worktreeOwners = Self.owners(among: entries, listings: listings)
         let held = rows.indices.contains(selected) ? rowIdentity(at: selected) : nil
         applyFilter(query: currentQuery)
         refreshRows(animated: true)
         reselect(byIdentity: held)
     }
 
-    /// The ＋ row first, then a workspace row per entry with its repo's worktrees under it.
+    /// Which workspace shows the worktrees of each repo, decided once from config order.
     ///
     /// Two workspaces can be checkouts of one repo, and `worktree list` answers the same set for
-    /// both, so the shared common dir is claimed by whichever comes first and the second workspace
-    /// keeps its own row without repeating the children.
+    /// both. Deciding this from the filtered, re-sorted list would let a query move a worktree to
+    /// a different parent and so open it with a different recipe. An empty listing never claims:
+    /// a workspace inside a repo but not at its root resolves a common dir and lists nothing, and
+    /// claiming there would hide the real checkout's worktrees.
+    private static func owners(
+        among workspaces: [Workspace], listings: [URL: WorktreeListing]
+    ) -> [URL: URL] {
+        var owners: [URL: URL] = [:]
+        for workspace in workspaces {
+            let path = workspace.path.standardizedFileURL
+            guard let listing = listings[path], !listing.worktrees.isEmpty else { continue }
+            let key = listing.commonDir ?? path
+            if owners[key] == nil { owners[key] = path }
+        }
+        return owners
+    }
+
+    /// The ＋ row first, then a workspace row per entry, with a repo's worktrees under whichever
+    /// workspace `owners` picked for it.
     private static func rows(
-        for workspaces: [Workspace], listings: [URL: WorktreeListing], configured: Set<URL>
+        for workspaces: [Workspace], listings: [URL: WorktreeListing], configured: Set<URL>,
+        owners: [URL: URL]
     ) -> [Row] {
         var rows: [Row] = [.add]
-        var claimed: Set<URL> = []
         for workspace in workspaces {
             rows.append(.workspace(workspace))
             let path = workspace.path.standardizedFileURL
-            guard let listing = listings[path] else { continue }
-            guard claimed.insert(listing.commonDir ?? path).inserted else { continue }
+            guard let listing = listings[path], owners[listing.commonDir ?? path] == path else {
+                continue
+            }
             for worktree in listing.worktrees where !configured.contains(worktree.path.standardizedFileURL) {
                 rows.append(.worktree(worktree, parent: workspace))
             }
@@ -144,7 +166,8 @@ final class RepoPickerOverlay: PaletteOverlay {
         let q = query.lowercased()
         guard !q.isEmpty else {
             // The ＋ row stays pinned at the top through any filter.
-            rows = Self.rows(for: entries, listings: listings, configured: configuredPaths)
+            rows = Self.rows(
+                for: entries, listings: listings, configured: configuredPaths, owners: worktreeOwners)
             return
         }
 
@@ -165,11 +188,17 @@ final class RepoPickerOverlay: PaletteOverlay {
             if ap != bp { return ap }  // prefix matches rank first
             return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
         }
-        rows = Self.rows(for: matches, listings: narrowed, configured: configuredPaths)
+        // Owners come from `entries`, never from `matches`: the filter re-sorts, and ownership
+        // must not move with it.
+        rows = Self.rows(
+            for: matches, listings: narrowed, configured: configuredPaths, owners: worktreeOwners)
     }
 
+    /// The head is searched as well as the branch: a detached worktree renders its short head, and
+    /// a row you cannot find by the text it shows is a row you cannot find.
     private static func matches(_ worktree: Worktree, _ query: String) -> Bool {
         if let branch = worktree.branch, branch.lowercased().contains(query) { return true }
+        if worktree.branch == nil, worktree.head.lowercased().hasPrefix(query) { return true }
         return worktree.path.lastPathComponent.lowercased().contains(query)
     }
 
@@ -344,6 +373,9 @@ final class RepoPickerOverlay: PaletteOverlay {
 
             churnLabel.alignment = .right
             churnLabel.lineBreakMode = .byClipping
+            // The counts arrive as an attributed value, which carries its own line behaviour, so
+            // the field's own setting does not reach them. See docs/swift-conventions.md.
+            churnLabel.maximumNumberOfLines = 1
             churnLabel.setContentHuggingPriority(.required, for: .horizontal)
             // Above the title's 750 so the counts are the last thing to give, but breakable, so a
             // row too narrow for everything still lays out.
@@ -378,15 +410,23 @@ final class RepoPickerOverlay: PaletteOverlay {
 
         /// Show the branch when this workspace's folder is a known repo. Run at build time and
         /// again whenever a `GitRepoStatus.refresh` lands.
+        /// A detached worktree's head is a commit, and announcing it as a branch tells a screen
+        /// reader the repository is in a state it is not in.
+        static func headDescription(_ head: String, _ worktree: Worktree?) -> String {
+            guard let worktree else { return "on branch \(head)" }
+            return worktree.branch == nil
+                ? "worktree with a detached head at \(head)" : "worktree on branch \(head)"
+        }
+
         func applyGitStatus() {
             // One rule at every depth: churn, then the head. A worktree's branch comes from the
-            // listing that named it; only a workspace waits on a probe.
+            // listing that named it; only a workspace waits on a probe. Nothing probes a worktree
+            // path for churn yet, so that half of a child row is a reserved slot, not a value.
             let head =
                 worktree.map { $0.branch ?? String($0.head.prefix(7)) }
                 ?? GitRepoStatus.branch(statusPath)
             branchLabel.stringValue = head ?? ""
-            branchLabel.setAccessibilityLabel(
-                head.map { worktree == nil ? "on branch \($0)" : "worktree on branch \($0)" })
+            branchLabel.setAccessibilityLabel(head.map { Self.headDescription($0, worktree) })
             branchFloor.constant = min(
                 branchLabel.intrinsicContentSize.width, Self.branchMinWidth)
 
