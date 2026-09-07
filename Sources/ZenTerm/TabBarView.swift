@@ -47,6 +47,9 @@ final class TabBarView: NSView {
     fileprivate static let titleKern: CGFloat = 0.4
     /// The label's inset inside its chip.
     fileprivate static let labelInset: CGFloat = 9
+    /// How wide one chip may get before its label truncates. Without a cap a chip is as wide as
+    /// its title, and a worktree tab carries a project, a mark and a branch.
+    static let maxChipWidth: CGFloat = 220
 
     fileprivate static var activeInk: NSColor { Theme.current.chrome.ink(.normal) }
     fileprivate static var idleInk: NSColor {
@@ -447,10 +450,15 @@ final class TabBarView: NSView {
             return CommandCatalog.spec(for: .selectTab(self.tabIndex)).shortcut
         }
 
-        /// The width this chip wants: its label plus the 9pt inset on each side. Read from the
-        /// label's intrinsic size (not `fittingSize`) so it's independent of the frame the parent
-        /// assigns during manual layout.
-        var fittingWidth: CGFloat { label.intrinsicContentSize.width + 2 * TabBarView.labelInset }
+        /// The width this chip wants: its label plus the 9pt inset on each side, capped. Read from
+        /// the label's intrinsic size (not `fittingSize`) so it's independent of the frame the
+        /// parent assigns during manual layout. Past the cap the label truncates instead, so one
+        /// long title cannot push every other tab off the strip.
+        var fittingWidth: CGFloat {
+            min(
+                label.intrinsicContentSize.width + 2 * TabBarView.labelInset,
+                TabBarView.maxChipWidth)
+        }
 
         var attributedLabelForTesting: NSAttributedString { label.attributedStringValue }
 
@@ -469,6 +477,10 @@ final class TabBarView: NSView {
             self.onMiddleClick = onMiddleClick
             self.onDoubleClick = onDoubleClick
             label = NSTextField(labelWithAttributedString: attributed)
+            label.lineBreakMode = .byTruncatingTail
+            // Below the inset constraints, so a title past the cap gives way and truncates
+            // instead of overflowing the chip it is pinned inside.
+            label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             super.init(frame: .zero)
             wantsLayer = true
             layer?.cornerRadius = 6
@@ -478,6 +490,7 @@ final class TabBarView: NSView {
 
             NSLayoutConstraint.activate([
                 label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: TabBarView.labelInset),
+                label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -TabBarView.labelInset),
                 label.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
         }

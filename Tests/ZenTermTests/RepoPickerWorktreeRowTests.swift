@@ -10,15 +10,25 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
     /// Retained so a mounted overlay's window outlives the mount call.
     private var window: NSWindow?
 
+    /// Where "ours" is for this case, so an ordinary worktree is not reported as living somewhere
+    /// odd. Real paths, never created on disk: nothing here touches the filesystem.
+    private var worktreeRoot: URL!
+
     override func setUp() {
         super.setUp()
         // Pinned so a fading row resolves instantly and the machine's setting cannot decide a run.
         Motion.isReduceMotionEnabled = { true }
+        worktreeRoot =
+            FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-wt-root-\(UUID().uuidString)", isDirectory: true)
+            .standardizedFileURL
+        WorktreeStore.rootOverrideForTesting = worktreeRoot
         GitRepoStatus.resetForTesting()
     }
 
     override func tearDown() {
         window = nil
+        WorktreeStore.rootOverrideForTesting = nil
         GitRepoStatus.resetForTesting()
         super.tearDown()
     }
@@ -48,11 +58,50 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         let row = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
         XCTAssertEqual(
-            row.worktree?.path.lastPathComponent, "wt-feature-zen-455",
+            row.worktree?.path.lastPathComponent, "feature-zen-455",
             "the folder is the slug, and is not what the row says")
-        let shown = descendants(of: row).compactMap { ($0 as? NSTextField)?.stringValue }
-            .filter { !$0.isEmpty }
-        XCTAssertEqual(shown, ["feature/zen-455"], "the branch, once, and nothing beside it")
+        XCTAssertNotNil(label(in: row, saying: "feature/zen-455"), "the branch names the row")
+        XCTAssertEqual(
+            rightColumn(of: row), RepoPickerOverlay.worktreeMark,
+            "an ordinary worktree has nothing unusual to say, so only the mark")
+    }
+
+    /// A row is a fixed 32pt, so a long note has to truncate. An attributed value carries its own
+    /// paragraph style, and without one the label wraps to a second line and clips the row above.
+    func test_aLongLocationNote_truncatesRatherThanWraps() throws {
+        let repo = path("alpha")
+        let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
+        mount(overlay)
+
+        let deep = URL(fileURLWithPath: "/private/var/folders/4h/drucial-Dev-zen-linear/f4ad3f25-54a2-4d7b-9c11")
+        overlay.setWorktrees(
+            WorktreeListing(commonDir: repo, worktrees: [foreignWorktree(deep, "agent")]), for: repo)
+
+        let row = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
+        let label = try XCTUnwrap(
+            descendants(of: row).compactMap { $0 as? NSTextField }
+                .first { $0.attributedStringValue.string.hasSuffix(RepoPickerOverlay.worktreeMark) })
+        XCTAssertEqual(label.maximumNumberOfLines, 1, "one line, whatever the value carries")
+        let style =
+            label.attributedStringValue.attribute(
+                .paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        XCTAssertEqual(
+            style?.lineBreakMode, .byTruncatingHead,
+            "a path's last components are what tell two worktrees apart")
+    }
+
+    /// The mark says "worktree" on every child; the note beside it only appears when there is
+    /// something about this one the name does not already carry.
+    func test_worktreeOutsideOurRoot_saysWhereItLives() throws {
+        let repo = path("alpha")
+        let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
+        mount(overlay)
+
+        let elsewhere = foreignWorktree(URL(fileURLWithPath: "/private/tmp"), "runbook-elsewhere")
+        overlay.setWorktrees(WorktreeListing(commonDir: repo, worktrees: [elsewhere]), for: repo)
+
+        let row = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
+        XCTAssertEqual(rightColumn(of: row), "/private/tmp \(RepoPickerOverlay.worktreeMark)")
     }
 
     /// A child recedes against the workspace it hangs under, which is the openable thing.
@@ -77,14 +126,13 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         mount(overlay)
 
         let detached = Worktree(
-            path: repo.appendingPathComponent("wt"), branch: nil,
+            path: worktreeRoot.appendingPathComponent("alpha/loose", isDirectory: true), branch: nil,
             head: "abc1234def5678901234567890abcdef12345678", isLocked: false)
         overlay.setWorktrees(WorktreeListing(commonDir: repo, worktrees: [detached]), for: repo)
 
         let row = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
-        let shown = descendants(of: row).compactMap { ($0 as? NSTextField)?.stringValue }
-            .filter { !$0.isEmpty }
-        XCTAssertEqual(shown, ["abc1234"])
+        XCTAssertNotNil(label(in: row, saying: "abc1234"), "the short head names the row")
+        XCTAssertEqual(rightColumn(of: row), "detached \(RepoPickerOverlay.worktreeMark)")
     }
 
     private func label(in row: NSView, saying text: String) -> NSTextField? {
@@ -161,7 +209,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         overlay.activate(index: 2, modifiers: [])
 
         XCTAssertEqual(chosen?.0.title, "alpha \u{2387} feature")
-        XCTAssertEqual(chosen?.0.path.lastPathComponent, "wt-feature")
+        XCTAssertEqual(chosen?.0.path.lastPathComponent, "feature")
         XCTAssertEqual(chosen?.0.main, "nvim")
         XCTAssertEqual(chosen?.0.right, "claude")
         XCTAssertEqual(chosen?.0.bottom, "shell")
@@ -270,14 +318,29 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             .standardizedFileURL
     }
 
-    /// A worktree of `repo`, laid out the way `WorktreeStore.create` lays one out: the branch's
-    /// slug as the folder name, so a row's title and its branch are not the same string.
+    /// A worktree of `repo` where the app puts one, laid out the way `WorktreeStore.create` lays
+    /// it out: the branch's slug as the folder name, so a row's name and its folder differ.
     private func worktree(_ repo: URL, _ branch: String) -> Worktree {
         Worktree(
-            path: repo.deletingLastPathComponent()
-                .appendingPathComponent("wt-\(WorktreeStore.slug(forText: branch))", isDirectory: true)
+            path:
+                worktreeRoot
+                .appendingPathComponent(repo.lastPathComponent, isDirectory: true)
+                .appendingPathComponent(WorktreeStore.slug(forText: branch), isDirectory: true)
                 .standardizedFileURL,
             branch: branch, head: "0000000", isLocked: false)
+    }
+
+    /// A worktree made by hand somewhere that is not ours.
+    private func foreignWorktree(_ dir: URL, _ branch: String?) -> Worktree {
+        Worktree(
+            path: dir.appendingPathComponent(branch ?? "detached", isDirectory: true).standardizedFileURL,
+            branch: branch, head: "abc1234def5678901234567890abcdef12345678", isLocked: false)
+    }
+
+    /// The right-hand column's text, mark included.
+    private func rightColumn(of row: NSView) -> String? {
+        descendants(of: row).compactMap { $0 as? NSTextField }
+            .map(\.stringValue).filter { !$0.isEmpty }.dropFirst().first
     }
 
     private func listing(_ repo: URL, _ branches: String...) -> WorktreeListing {

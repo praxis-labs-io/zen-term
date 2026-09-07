@@ -45,6 +45,24 @@ final class TabBarViewTests: WindowTestCase {
             tabBar.chipLabelsForTesting.first?.string, "1 renamed", "the kept chip shows the new title")
     }
 
+    /// A chip was as wide as whatever it held, so one long title pushed every other tab off the
+    /// strip. A worktree tab carries a project, a mark and a branch, which made that routine.
+    func test_render_capsAChipsWidthAndTruncatesTheTitle() throws {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
+        mount(tabBar)
+        let long = "ZenTerm \u{2387} feature/zen-455-worktree-rows-in-the-picker-and-then-some"
+
+        tabBar.render([item(1, "one", index: 1, active: true), item(2, long, index: 2)])
+
+        tabBar.layoutSubtreeIfNeeded()
+        let widths = tabBar.chipsForTesting.map(\.frame.width)
+        XCTAssertLessThanOrEqual(
+            try XCTUnwrap(widths.last), TabBarView.maxChipWidth, "the chip stops at the cap")
+        XCTAssertGreaterThan(
+            try XCTUnwrap(widths.last), try XCTUnwrap(widths.first),
+            "a long title still takes more room than a short one, up to the cap")
+    }
+
     func test_render_dropsTheChipOfAClosedTab() {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         mount(tabBar)
