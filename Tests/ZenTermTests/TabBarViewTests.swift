@@ -21,6 +21,10 @@ final class TabBarViewTests: WindowTestCase {
         tabBar.frame = NSRect(x: 0, y: 0, width: 400, height: 30)
     }
 
+    private func descendants(of view: NSView) -> [NSView] {
+        view.subviews.flatMap { [$0] + descendants(of: $0) }
+    }
+
     private func item(_ id: Int, _ title: String, index: Int, active: Bool = false) -> TabBarItem {
         TabBarItem(id: TabID(id), index: index, title: title, isActive: active, attentionState: .idle)
     }
@@ -61,6 +65,20 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertGreaterThan(
             try XCTUnwrap(widths.last), try XCTUnwrap(widths.first),
             "a long title still takes more room than a short one, up to the cap")
+
+        // Width alone passed while the label wrapped to a second line and bled out of the chip:
+        // an attributed value carries its own line behaviour, so the label's own setting is not
+        // enough on its own.
+        let chip = try XCTUnwrap(tabBar.chipsForTesting.last)
+        let label = try XCTUnwrap(
+            descendants(of: chip).compactMap { $0 as? NSTextField }.first)
+        XCTAssertEqual(label.maximumNumberOfLines, 1)
+        let style =
+            label.attributedStringValue.attribute(
+                .paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        XCTAssertEqual(style?.lineBreakMode, .byTruncatingTail, "truncate, never wrap")
+        XCTAssertLessThanOrEqual(
+            label.frame.height, chip.frame.height, "one line, inside the chip")
     }
 
     func test_render_dropsTheChipOfAClosedTab() {

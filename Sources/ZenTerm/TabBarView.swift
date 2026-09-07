@@ -416,13 +416,22 @@ final class TabBarView: NSView {
         // A bare number — the ⌘N binding for tabs 1–9 lives in the hover tooltip now, not inline.
         // The prefix shares `numberColor`, so it recolors with the tab attention state.
         let prefix = "\(item.index) "
+        // An attributed value carries its own line behaviour, so the label's `lineBreakMode` does
+        // not reach it: without this a title past the cap wraps out of a 22pt chip.
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingTail
         let s = NSMutableAttributedString(
             string: prefix,
-            attributes: [.font: font, .foregroundColor: numberColor])
+            attributes: [
+                .font: font, .foregroundColor: numberColor, .paragraphStyle: paragraph,
+            ])
         s.append(
             NSAttributedString(
                 string: item.title,
-                attributes: [.font: font, .foregroundColor: ink, .kern: titleKern]))
+                attributes: [
+                    .font: font, .foregroundColor: ink, .kern: titleKern,
+                    .paragraphStyle: paragraph,
+                ]))
         return s
     }
 
@@ -478,6 +487,7 @@ final class TabBarView: NSView {
             self.onDoubleClick = onDoubleClick
             label = NSTextField(labelWithAttributedString: attributed)
             label.lineBreakMode = .byTruncatingTail
+            label.maximumNumberOfLines = 1
             // Below the inset constraints, so a title past the cap gives way and truncates
             // instead of overflowing the chip it is pinned inside.
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)

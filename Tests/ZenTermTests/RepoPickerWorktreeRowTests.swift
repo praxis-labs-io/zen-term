@@ -117,6 +117,24 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(rightColumn(of: row), "abc1234", "the same slot a branch would use")
     }
 
+    /// A detached worktree's folder is named after whatever directory it was made in, which reads
+    /// like a branch and is not one. The tab says what the row says.
+    func test_detachedWorktree_opensATabNamedByItsHeadNotItsFolder() {
+        let repo = path("alpha")
+        var chosen: (Workspace, Bool)?
+        let overlay = makeRepoPicker(
+            entries: [workspace("alpha", path: repo)], onChoose: { chosen = ($0, $1) })
+        mount(overlay)
+        let detached = Worktree(
+            path: worktreeRoot.appendingPathComponent("alpha/runbook-detached", isDirectory: true),
+            branch: nil, head: "abc1234def5678901234567890abcdef12345678", isLocked: false)
+        overlay.setWorktrees(WorktreeListing(commonDir: repo, worktrees: [detached]), for: repo)
+
+        overlay.activate(index: 2, modifiers: [])
+
+        XCTAssertEqual(chosen?.0.title, "alpha: abc1234")
+    }
+
     private func label(in row: NSView, saying text: String) -> NSTextField? {
         descendants(of: row).compactMap { $0 as? NSTextField }.first { $0.stringValue == text }
     }

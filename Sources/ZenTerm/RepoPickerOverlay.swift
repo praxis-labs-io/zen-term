@@ -186,7 +186,9 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// The parent's recipe, opened in the worktree's folder: same panes, same drawers, same env,
     /// pinned to a tab that names both. A worktree is the project, on another branch.
     static func workspace(for worktree: Worktree, parent: Workspace) -> Workspace {
-        let name = worktree.branch ?? worktree.path.lastPathComponent
+        // The same fallback the row uses. A detached worktree's folder name is whatever directory
+        // it was made in, which reads like a branch and is not one.
+        let name = worktree.branch ?? String(worktree.head.prefix(7))
         return Workspace(
             title: "\(parent.title): \(name)", path: worktree.path, main: parent.main,
             right: parent.right, bottom: parent.bottom, focus: parent.focus, env: parent.env,
