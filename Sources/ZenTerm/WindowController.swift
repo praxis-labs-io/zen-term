@@ -237,7 +237,7 @@ final class WindowController: NSObject {
     /// switch tabs) but presented over the active tab's tile region. Modal while open.
     private enum ModalKind {
         case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm, reportIssue
-        case renameTab
+        case renameTab, worktreeForm
 
         /// The chord that closes this same modal when pressed again (its own toggle), or nil for a
         /// card with no dedicated chord (the workspace / tool-float / report forms, reached from a
@@ -248,7 +248,8 @@ final class WindowController: NSObject {
             case .repoPicker: return .toggleRepoPicker
             case .commandPalette: return .toggleCommandPalette
             case .settings: return .openSettings
-            case .workspaceForm, .toolFloatForm, .reportIssue, .renameTab: return nil
+            case .workspaceForm, .toolFloatForm, .reportIssue, .renameTab, .worktreeForm:
+                return nil
             }
         }
     }
@@ -316,6 +317,10 @@ final class WindowController: NSObject {
     /// the window swallows nav rather than acting on it, and a consumed `Ctrl`-nav chord would be
     /// taken from the tool for nothing.
     var isToolFloatOpen: Bool { floats.isOpen }
+
+    /// Whether the workspace picker is up. Read by the key pass-through guard: the create chord
+    /// belongs to the terminal everywhere else.
+    var isRepoPickerOpen: Bool { modal?.kind == .repoPicker }
 
     /// The shown float's tool name for copy: its title with a leading "Open " stripped, so a
     /// notice reads "Lazygit", not "Open Lazygit". Nil when nothing is shown, letting each call
@@ -1226,6 +1231,80 @@ final class WindowController: NSObject {
         }
     }
 
+    /// Open the create-a-worktree card from the picker's ⌥⏎, seeded with the repo's branch names
+    /// for the inline collision check. The picker is still up when the chord fires, and the single
+    /// modal slot means the card replaces it, so close it first.
+    private func createWorktreeFromPicker() {
+        guard let picker = modal?.overlay as? RepoPickerOverlay, let target = picker.createTarget
+        else { return }
+        closeModal()
+        pendingModal = .worktreeForm
+        GitRepoStatus.createOptions(in: target.repo) { [weak self] options in
+            guard let self, self.pendingModal == .worktreeForm else { return }
+            self.pendingModal = nil
+            let form = NewWorktreeOverlay(
+                workspace: target.workspace, options: options,
+                background: Theme.current.chrome.background.nsColor,
+                onSubmit: { [weak self] branch, base in
+                    self?.createWorktree(branch: branch, base: base, from: target)
+                },
+                onCancel: { [weak self] in self?.closeModal() }
+            )
+            self.presentModal(form, kind: .worktreeForm)
+        }
+    }
+
+    /// Cut the worktree and carry into it off-main, then open it. The card is looked up again after
+    /// the hop rather than captured: the worktree lands on disk either way, and only the report back
+    /// to the card is skippable.
+    private func createWorktree(
+        branch: String, base: WorktreeStore.Base, from target: RepoPickerOverlay.CreateTarget
+    ) {
+        let workspace = target.workspace
+        (modal?.overlay as? NewWorktreeOverlay)?.beginWork("Creating \(branch)")
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result: Result<(Worktree, CarryReport), Error>
+            do {
+                let worktree = try WorktreeStore.create(branch: branch, base: base, in: target.repo)
+                let report = WorktreeCarry.copy(
+                    workspace.carry, from: workspace.path, into: worktree.path,
+                    onEntry: { name in
+                        DispatchQueue.main.async { [weak self] in
+                            (self?.modal?.overlay as? NewWorktreeOverlay)?
+                                .setPhase("Carrying \(name)")
+                        }
+                    })
+                result = .success((worktree, report))
+            } catch {
+                result = .failure(error)
+            }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                switch result {
+                case .success(let (worktree, report)):
+                    self.closeModal()
+                    self.openWorkspace(
+                        RepoPickerOverlay.workspace(for: worktree, parent: workspace),
+                        replaceCurrentTab: false)
+                    self.reportCarry(report)
+                case .failure(let error):
+                    (self.modal?.overlay as? NewWorktreeOverlay)?
+                        .failWork(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    /// Say what carry left behind. An entry that simply is not there stays silent: one section
+    /// covers a repo before and after its first install, which is what the reference config says.
+    private func reportCarry(_ report: CarryReport) {
+        let lost = report.skipped.filter { $0.reason != .notThere }
+        guard !lost.isEmpty else { return }
+        let list = lost.map { "\($0.name) \($0.reason.explanation)" }.joined(separator: ", ")
+        toasts.show(
+            ToastContent(variant: .warning, title: "Couldn't Carry Everything", message: "\(list)."))
+    }
+
     /// Open the "Report an Issue" composer (Help menu + Settings). Non-private: `AppDelegate` routes
     /// the Help-menu item here, and the Settings nav button calls it too. It's terminal, so opening
     /// the GitHub issue or cancelling just closes back to the terminal (Settings doesn't reopen).
@@ -1841,6 +1920,12 @@ final class WindowController: NSObject {
                 closeModal()
                 return
             }
+            // Acts on the picker's selection rather than joining the close-and-reopen switch
+            // below: the card it opens replaces the picker, and it means nothing anywhere else.
+            if modal.kind == .repoPicker, chord == .createWorktree {
+                createWorktreeFromPicker()
+                return
+            }
             switch chord {
             case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue,
                 .newTool:
@@ -1976,6 +2061,9 @@ final class WindowController: NSObject {
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
+        // Only means something over the picker, which the gate above already answered for.
+        // `PickerChordGuard` is what stops it being a dead key in the terminal.
+        case .createWorktree: break
         case .toggleCommandPalette: toggleCommandPalette()
         case .openSettings: openSettings()
         case .reportIssue: openReportIssue()

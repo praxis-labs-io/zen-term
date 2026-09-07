@@ -48,6 +48,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             footerHints: [
                 PaletteHint(keys: "⏎", label: "open"),
                 PaletteHint(keys: "⇧⏎", label: "replace"),
+                PaletteHint(keys: "⌥⏎", label: "new worktree"),
                 PaletteHint(keys: "↑↓", label: "move"),
                 PaletteHint(keys: "⎋", label: "close"),
             ],
@@ -200,6 +201,26 @@ final class RepoPickerOverlay: PaletteOverlay {
         if let branch = worktree.branch, branch.lowercased().contains(query) { return true }
         if worktree.branch == nil, worktree.head.lowercased().hasPrefix(query) { return true }
         return worktree.path.lastPathComponent.lowercased().contains(query)
+    }
+
+    /// What ⌥⏎ creates from, or nil on the ＋ row. Two answers, because a worktree row means
+    /// different things by them: `workspace` is the parent, whose recipe and `carry` the new
+    /// worktree inherits and whose checkout actually holds the install a sibling has none of;
+    /// `repo` is the row's own checkout, so "this checkout" cuts from the branch you can see.
+    struct CreateTarget: Equatable {
+        let workspace: Workspace
+        let repo: URL
+    }
+
+    var createTarget: CreateTarget? {
+        guard rows.indices.contains(selected) else { return nil }
+        switch rows[selected] {
+        case .add: return nil
+        case .workspace(let workspace):
+            return CreateTarget(workspace: workspace, repo: workspace.path)
+        case .worktree(let worktree, let parent):
+            return CreateTarget(workspace: parent, repo: worktree.path)
+        }
     }
 
     override func activate(index: Int, modifiers: NSEvent.ModifierFlags) {
