@@ -1882,9 +1882,14 @@ swallowed, so a create that half-failed says which branch or folder survived it.
 ⌥⏎ over a picker row opens a card. Not a chord acting in place, the way the shelved
 clones branch did it: a worktree needs a branch name and there is nowhere on a row to
 type one. `WindowController` holds a **single modal slot**, so presenting the card
-tears the picker down exactly as the ＋ row's form does, and cancel closes to the
-terminal rather than reopening. That is also why the clone branch's pending-row trio
-does not port: there is no picker left to put a placeholder row into.
+tears the picker down exactly as the ＋ row's form does. That is also why the clone
+branch's pending-row trio does not port: there is no picker left to put a placeholder
+row into.
+
+Cancel reopens the picker, which the ＋ row's form deliberately does not do. The ＋ row
+is chosen as a way out of the list; ⌥⏎ is a detour from a row, so backing out of it
+returns to where it started. The picker is rebuilt from the file either way, so the
+selection and the query do not survive the trip.
 
 **The card owns the wait.** Submit locks it, and the footer's spacer, which is dead
 space already, names the step running: the branch, then each carry entry as it starts.

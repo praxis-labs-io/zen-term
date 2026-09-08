@@ -1248,7 +1248,7 @@ final class WindowController: NSObject {
                 onSubmit: { [weak self] branch, base in
                     self?.createWorktree(branch: branch, base: base, from: target)
                 },
-                onCancel: { [weak self] in self?.closeModal() }
+                onCancel: { [weak self] in self?.reopenRepoPicker() }
             )
             self.presentModal(form, kind: .worktreeForm)
         }
@@ -1781,6 +1781,14 @@ final class WindowController: NSObject {
 
     /// Close the workspace form and reopen the Settings card on its Workspaces section — the "back"
     /// for the sub-form, so save / cancel / delete land where the user launched it.
+    /// Where the create card hands back. Unlike the ＋ row's form, which is reached by choosing to
+    /// leave the picker, ⌥⏎ is a detour from a row, so backing out returns to the list. The picker
+    /// is rebuilt from the file, so the selection and the query do not survive it.
+    private func reopenRepoPicker() {
+        closeModal()
+        toggleRepoPicker()
+    }
+
     private func reopenSettingsOnWorkspaces() {
         closeModal()
         openSettings(landing: .workspaces)

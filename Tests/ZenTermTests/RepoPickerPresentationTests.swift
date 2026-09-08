@@ -83,6 +83,89 @@ final class RepoPickerPresentationTests: WindowTestCase {
         path = ~/Dev/beta
         """
 
+    private func createCards(in c: WindowController) -> [NewWorktreeOverlay] {
+        descendants(of: c.window.contentView!).compactMap { $0 as? NewWorktreeOverlay }
+    }
+
+    /// Move the selection the way the card does: the search field holds the keyboard, so arrows
+    /// arrive through its `doCommandBy`, never as a responder method on the overlay.
+    private func moveUp(in picker: RepoPickerOverlay) {
+        let field = descendants(of: picker).compactMap { $0 as? NSTextField }
+            .first { ($0.delegate as? PaletteOverlay) === picker }!
+        _ = picker.control(field, textView: NSTextView(), doCommandBy: #selector(NSResponder.moveUp(_:)))
+    }
+
+    /// Esc the way `NSWindow.sendEvent` delivers it, a `performKeyEquivalent` traversal from the
+    /// content view, which is where a card root claims it.
+    private func pressEscape(in c: WindowController) -> Bool {
+        let esc = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+            isARepeat: false, keyCode: 53)!
+        return c.window.contentView!.performKeyEquivalent(with: esc)
+    }
+
+    // MARK: ⌥⏎ routing
+
+    /// The chord is answered inside `handle`'s modal gate, whose switch ends in `default: return`.
+    /// A case that stops being matched there is swallowed with every card-level test still green.
+    func test_createWorktree_overThePicker_swapsItForTheCreateCard() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+
+        c.handle(.createWorktree)
+
+        waitUntil(!createCards(in: c).isEmpty, "the create card to be presented")
+        XCTAssertTrue(pickers(in: c).isEmpty, "one modal slot, so the card replaces the picker")
+    }
+
+    /// Outside the picker the chord means nothing. `PickerChordGuard` is what keeps it from being a
+    /// dead key there, and this is the other half: nothing may present.
+    func test_createWorktree_withNoPickerUp_presentsNothing() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+
+        c.handle(.createWorktree)
+        waitForPendingLoads()
+
+        XCTAssertTrue(createCards(in: c).isEmpty)
+        XCTAssertTrue(pickers(in: c).isEmpty)
+    }
+
+    /// The ＋ row has no workspace to cut from, so the chord has nothing to act on there.
+    func test_createWorktree_overTheAddRow_presentsNothing() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        let picker = try XCTUnwrap(pickers(in: c).first)
+        moveUp(in: picker)
+
+        c.handle(.createWorktree)
+        waitForPendingLoads()
+
+        XCTAssertTrue(createCards(in: c).isEmpty)
+        XCTAssertFalse(pickers(in: c).isEmpty, "the picker is left where it was")
+    }
+
+    /// Backing out of the card returns to the list. ⌥⏎ is a detour from a row rather than a way out
+    /// of the picker, which is what separates it from the ＋ row's form.
+    func test_cancellingTheCreateCard_reopensThePicker() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        c.handle(.createWorktree)
+        waitUntil(!createCards(in: c).isEmpty, "the create card to be presented")
+
+        XCTAssertTrue(pressEscape(in: c), "the card claims Esc in performKeyEquivalent")
+
+        waitUntil(!pickers(in: c).isEmpty, "the picker to come back")
+        XCTAssertTrue(createCards(in: c).isEmpty)
+    }
+
     /// The card must arrive already holding its rows. Presenting first and filling after is what
     /// made the open flash: the list height is what sizes the card, so entries landing a frame later
     /// resize it mid-spring.
