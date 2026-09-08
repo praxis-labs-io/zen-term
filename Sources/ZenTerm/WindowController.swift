@@ -318,8 +318,7 @@ final class WindowController: NSObject {
     /// taken from the tool for nothing.
     var isToolFloatOpen: Bool { floats.isOpen }
 
-    /// Whether the workspace picker is up. Read by the key pass-through guard: the create chord
-    /// belongs to the terminal everywhere else.
+    /// Read by the key pass-through guard: the create chord is the terminal's everywhere else.
     var isRepoPickerOpen: Bool { modal?.kind == .repoPicker }
 
     /// The shown float's tool name for copy: its title with a leading "Open " stripped, so a
@@ -1231,9 +1230,8 @@ final class WindowController: NSObject {
         }
     }
 
-    /// Open the create-a-worktree card from the picker's ⌥⏎, seeded with the repo's branch names
-    /// for the inline collision check. The picker is still up when the chord fires, and the single
-    /// modal slot means the card replaces it, so close it first.
+    /// Seeded before presenting, so the collision check is right from the first keystroke. The
+    /// single modal slot means the card replaces the picker, so close it first.
     private func createWorktreeFromPicker() {
         guard let picker = modal?.overlay as? RepoPickerOverlay, let target = picker.createTarget
         else { return }
@@ -1248,20 +1246,21 @@ final class WindowController: NSObject {
                 onSubmit: { [weak self] branch, base in
                     self?.createWorktree(branch: branch, base: base, from: target)
                 },
-                onCancel: { [weak self] in self?.reopenRepoPicker() }
+                onCancel: { [weak self] in self?.reopenRepoPicker() },
+                onDismiss: { [weak self] in self?.closeModal() }
             )
             self.presentModal(form, kind: .worktreeForm)
         }
     }
 
-    /// Cut the worktree and carry into it off-main, then open it. The card is looked up again after
-    /// the hop rather than captured: the worktree lands on disk either way, and only the report back
-    /// to the card is skippable.
+    /// The card is looked up again after the hop rather than captured: the worktree lands either
+    /// way, and only the report back to it is skippable.
     private func createWorktree(
         branch: String, base: WorktreeStore.Base, from target: RepoPickerOverlay.CreateTarget
     ) {
         let workspace = target.workspace
-        (modal?.overlay as? NewWorktreeOverlay)?.beginWork("Creating \(branch)")
+        let card = modal?.overlay as? NewWorktreeOverlay
+        card?.beginWork("Creating \(branch)")
         DispatchQueue.global(qos: .userInitiated).async {
             let result: Result<(Worktree, CarryReport), Error>
             do {
@@ -1269,34 +1268,52 @@ final class WindowController: NSObject {
                 let report = WorktreeCarry.copy(
                     workspace.carry, from: workspace.path, into: worktree.path,
                     onEntry: { name in
-                        DispatchQueue.main.async { [weak self] in
-                            (self?.modal?.overlay as? NewWorktreeOverlay)?
-                                .setPhase("Carrying \(name)")
+                        DispatchQueue.main.async { [weak self, weak card] in
+                            guard let card, self?.isPresenting(card) == true else { return }
+                            card.setPhase("Carrying \(name)")
                         }
                     })
                 result = .success((worktree, report))
             } catch {
                 result = .failure(error)
             }
-            DispatchQueue.main.async { [weak self] in
+            DispatchQueue.main.async { [weak self, weak card] in
                 guard let self else { return }
+                let stillUp = card.map(self.isPresenting) ?? false
                 switch result {
                 case .success(let (worktree, report)):
-                    self.closeModal()
+                    if stillUp { self.closeModal() }
                     self.openWorkspace(
                         RepoPickerOverlay.workspace(for: worktree, parent: workspace),
                         replaceCurrentTab: false)
                     self.reportCarry(report)
                 case .failure(let error):
-                    (self.modal?.overlay as? NewWorktreeOverlay)?
-                        .failWork(error.localizedDescription)
+                    if stillUp {
+                        card?.failWork(error.localizedDescription)
+                    } else {
+                        // The card is gone, and a create that half-failed can leave a branch or a
+                        // folder behind. Saying nothing is the one outcome that must not happen.
+                        self.toasts.show(
+                            ToastContent(
+                                variant: .warning, title: "Couldn't Create the Worktree",
+                                message: error.localizedDescription))
+                    }
                 }
             }
         }
     }
 
-    /// Say what carry left behind. An entry that simply is not there stays silent: one section
-    /// covers a repo before and after its first install, which is what the reference config says.
+    /// Whether `card` is still the modal that is up. A create outlives its card: any surface chord
+    /// or a tab-bar click closes one, and the answer must not land on whatever replaced it.
+    private func isPresenting(_ card: NewWorktreeOverlay) -> Bool {
+        (modal?.overlay as? NewWorktreeOverlay) === card
+    }
+
+    #if DEBUG
+        func isPresentingForTesting(_ card: NewWorktreeOverlay) -> Bool { isPresenting(card) }
+    #endif
+
+    /// `.notThere` stays silent: one section covers a repo before and after its first install.
     private func reportCarry(_ report: CarryReport) {
         let lost = report.skipped.filter { $0.reason != .notThere }
         guard !lost.isEmpty else { return }
@@ -1779,16 +1796,15 @@ final class WindowController: NSObject {
         }
     }
 
-    /// Close the workspace form and reopen the Settings card on its Workspaces section — the "back"
-    /// for the sub-form, so save / cancel / delete land where the user launched it.
-    /// Where the create card hands back. Unlike the ＋ row's form, which is reached by choosing to
-    /// leave the picker, ⌥⏎ is a detour from a row, so backing out returns to the list. The picker
-    /// is rebuilt from the file, so the selection and the query do not survive it.
+    /// ⌥⏎ is a detour from a row rather than a way out of the list, so backing out returns to it.
+    /// Rebuilt from the file, so the selection and the query do not survive the trip.
     private func reopenRepoPicker() {
         closeModal()
         toggleRepoPicker()
     }
 
+    /// Close the workspace form and reopen the Settings card on its Workspaces section — the "back"
+    /// for the sub-form, so save / cancel / delete land where the user launched it.
     private func reopenSettingsOnWorkspaces() {
         closeModal()
         openSettings(landing: .workspaces)
@@ -1928,8 +1944,7 @@ final class WindowController: NSObject {
                 closeModal()
                 return
             }
-            // Acts on the picker's selection rather than joining the close-and-reopen switch
-            // below: the card it opens replaces the picker, and it means nothing anywhere else.
+            // Answered ahead of the switch below, whose `default` would swallow it.
             if modal.kind == .repoPicker, chord == .createWorktree {
                 createWorktreeFromPicker()
                 return
@@ -2069,8 +2084,7 @@ final class WindowController: NSObject {
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
-        // Only means something over the picker, which the gate above already answered for.
-        // `PickerChordGuard` is what stops it being a dead key in the terminal.
+        // Answered by the modal gate above. `PickerChordGuard` keeps it from being a dead key.
         case .createWorktree: break
         case .toggleCommandPalette: toggleCommandPalette()
         case .openSettings: openSettings()

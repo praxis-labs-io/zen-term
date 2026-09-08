@@ -28,8 +28,7 @@ final class WorktreeCarryTests: XCTestCase {
 
     // MARK: what comes across
 
-    /// The create card names the entry it is on, so `onEntry` has to fire for every entry in
-    /// authored order, including the ones that go on to be skipped.
+    /// Every entry in authored order, including the ones that go on to be skipped.
     func test_copy_namesEveryEntryAsItStarts() throws {
         try GitFixture.write("SECRET=1\n", to: repo.appendingPathComponent(".env"))
 

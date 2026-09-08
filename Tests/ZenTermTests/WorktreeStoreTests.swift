@@ -122,8 +122,7 @@ final class WorktreeStoreTests: XCTestCase {
             "trunk\n")
     }
 
-    /// `.currentCheckout` is the whole reason the parameter exists: standing on `side`, the
-    /// default-branch ladder would answer `origin/main` and cut from the wrong commit.
+    /// Standing on `side`, the default-branch ladder would cut from `origin/main` instead.
     func test_create_fromTheCurrentCheckout_cutsFromWhereTheRepoIsStanding() throws {
         try GitFixture.run(["checkout", "-q", "-b", "side"], in: repo)
         try GitFixture.write("side\n", to: repo.appendingPathComponent("tracked.txt"))
@@ -135,7 +134,7 @@ final class WorktreeStoreTests: XCTestCase {
         XCTAssertNotEqual(worktree.head, try GitFixture.run(["rev-parse", "origin/main"], in: repo))
     }
 
-    /// The card names the ref each choice cuts from, so the two have to agree with `create`.
+    /// The card names these refs, so they have to agree with what `create` will do.
     func test_createOptions_nameTheRefsAndTheBranchesAlreadyTaken() throws {
         try GitFixture.run(["checkout", "-q", "-b", "side"], in: repo)
 
@@ -147,8 +146,7 @@ final class WorktreeStoreTests: XCTestCase {
         XCTAssertTrue(options.branches.contains("main"))
     }
 
-    /// With no remote there is no default branch to name, so `.defaultBranch` and `.currentCheckout`
-    /// mean the same thing and the caption has to say so rather than invent an `origin/`.
+    /// With no remote the two choices mean the same thing, and neither may invent an `origin/`.
     func test_createOptions_inARepoWithNoRemote_nameTheLocalBranchForBothChoices() throws {
         let solo = try GitFixture.makeRepo(at: root.appendingPathComponent("solo", isDirectory: true))
 

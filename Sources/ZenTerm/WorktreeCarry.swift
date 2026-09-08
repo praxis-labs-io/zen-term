@@ -31,8 +31,7 @@ struct CarryReport: Equatable {
 }
 
 extension CarryReport.Skipped.Reason {
-    /// What to tell someone whose entry did not come across, as the tail of a sentence starting
-    /// with the entry's name.
+    /// The tail of a sentence starting with the entry's name.
     var explanation: String {
         switch self {
         case .leavesTheWorkspace: return "points outside the workspace"
@@ -50,8 +49,7 @@ extension CarryReport.Skipped.Reason {
 ///
 /// Blocking, and it can move gigabytes: the caller owns the queue hop. Never call this on main.
 enum WorktreeCarry {
-    /// Bring `entries` across in authored order, and report what did not make it. `onEntry` fires
-    /// off-main as each one starts, for a caller naming what it is on.
+    /// In authored order. `onEntry` fires off-main as each one starts.
     static func copy(
         _ entries: [String], from source: URL, into worktree: URL,
         onEntry: ((String) -> Void)? = nil

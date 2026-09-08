@@ -3,13 +3,13 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction tests for the create-a-worktree card, driven through the real controls in a window.
-/// A state-only test would pass while a control was dead, which is the failure the project's
-/// interaction-test rule exists to catch.
+/// The create-a-worktree card, driven through its real controls in a window. A state-only test
+/// would pass while a control was dead.
 final class NewWorktreeOverlayTests: WindowTestCase {
     private final class Sink {
         var submitted: [(branch: String, base: WorktreeStore.Base)] = []
         var cancelled = 0
+        var dismissed = 0
     }
 
     private var window: NSWindow?
@@ -45,8 +45,7 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         XCTAssertEqual(inlineMessage(in: overlay), "That branch already exists.")
     }
 
-    /// `refs/heads/-m` passes `check-ref-format`, and `worktree add -b -m` then hands `-m` to git's
-    /// own `git branch`, which has no `--` guard: the repo's checked-out branch gets renamed.
+    /// `check-ref-format` passes `-m`, and `worktree add -b -m` then renames the repo's own branch.
     func test_aLeadingDash_neverReachesGit() throws {
         let (overlay, sink) = mount()
 
@@ -138,8 +137,7 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         XCTAssertTrue(visibleText(in: overlay).contains("Starts from feature/zen-455."))
     }
 
-    /// A detached checkout has no branch name and a repo with no remote has no default, so the
-    /// caption says which choice it is rather than naming a ref that does not exist.
+    /// A detached checkout and a repo with no remote leave nothing to name.
     func test_withNothingToName_theCaptionStillSaysWhichChoiceItIs() throws {
         let (overlay, _) = mount(defaultBase: nil, currentBranch: nil)
 
@@ -169,6 +167,64 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         overlay.failWork("That branch already exists.")
 
         XCTAssertFalse(visibleText(in: overlay).contains("Creating spike"))
+    }
+
+    /// Clicking out is a way out, not a way back. Esc and Cancel return to the list; this does not.
+    func test_theBackdrop_dismissesRatherThanReturningToThePicker() throws {
+        let (overlay, sink) = mount()
+
+        try XCTUnwrap(backdrop(in: overlay)).mouseDown(with: NSEvent())
+
+        XCTAssertEqual(sink.dismissed, 1)
+        XCTAssertEqual(sink.cancelled, 0)
+    }
+
+    func test_theCancelButton_returnsToThePickerRatherThanDismissing() throws {
+        let (overlay, sink) = mount()
+
+        try XCTUnwrap(button(in: overlay, title: "Cancel")).onTap()
+
+        XCTAssertEqual(sink.cancelled, 1)
+        XCTAssertEqual(sink.dismissed, 0)
+    }
+
+    func test_whileWorking_theBackdropIsDeadToo() throws {
+        let (overlay, sink) = mount()
+        overlay.beginWork("Creating spike")
+
+        try XCTUnwrap(backdrop(in: overlay)).mouseDown(with: NSEvent())
+
+        XCTAssertEqual(sink.dismissed, 0)
+    }
+
+    /// The base the caption describes has to stay the base that was submitted.
+    func test_whileWorking_theBaseSegmentIsLocked() throws {
+        let (overlay, _) = mount()
+        let base = try XCTUnwrap(segment(in: overlay))
+
+        overlay.beginWork("Creating spike")
+
+        // The flag is not the lock: `NSButton` is what refuses the click, so assert on the segments.
+        XCTAssertEqual(segmentButtons(in: base).filter(\.isEnabled), [])
+        XCTAssertFalse(base.acceptsFirstResponder)
+        XCTAssertTrue(visibleText(in: overlay).contains("Starts from origin/main."))
+
+        overlay.failWork("nope")
+
+        XCTAssertEqual(segmentButtons(in: base).filter { !$0.isEnabled }, [], "and it comes back")
+        XCTAssertTrue(base.acceptsFirstResponder)
+    }
+
+    /// The message named a branch the user has since retyped.
+    func test_typingAfterAFailure_clearsTheError() throws {
+        let (overlay, _) = mount()
+        overlay.beginWork("Creating spike")
+        overlay.failWork("That branch already exists.")
+
+        branchField(in: overlay).setText("spike-2")
+        branchField(in: overlay).onChange?()
+
+        XCTAssertFalse(visibleText(in: overlay).contains("That branch already exists."))
     }
 
     // MARK: carry
@@ -202,8 +258,7 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         XCTAssertTrue(KeyboardFocus.isFocused(base, in: window))
     }
 
-    /// Cancel shares Create's vertical stop, so Up from Cancel has to leave the footer rather than
-    /// dying on a stop the list does not hold.
+    /// Cancel is not in `verticalStops`, so Up from it has to resolve through Create.
     func test_upFromCancel_reachesTheBaseSegment() throws {
         let (overlay, _) = mount()
         let base = try XCTUnwrap(segment(in: overlay))
@@ -231,7 +286,8 @@ final class NewWorktreeOverlayTests: WindowTestCase {
                 branches: branches, defaultBase: defaultBase, currentBranch: currentBranch),
             background: Theme.current.chrome.background.nsColor,
             onSubmit: { sink.submitted.append((branch: $0, base: $1)) },
-            onCancel: { sink.cancelled += 1 })
+            onCancel: { sink.cancelled += 1 },
+            onDismiss: { sink.dismissed += 1 })
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 640),
             styleMask: [.borderless], backing: .buffered, defer: false)
@@ -254,12 +310,19 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == title }
     }
 
+    private func segmentButtons(in segment: SegmentedControl) -> [AppButton] {
+        descendants(of: segment).compactMap { $0 as? AppButton }
+    }
+
+    private func backdrop(in overlay: NSView) -> BackdropView? {
+        descendants(of: overlay).compactMap { $0 as? BackdropView }.first
+    }
+
     private func segment(in overlay: NSView) -> SegmentedControl? {
         descendants(of: overlay).compactMap { $0 as? SegmentedControl }.first
     }
 
-    /// Every label on the card that is actually on screen. Editable fields are the typed value, not
-    /// copy, and are left out.
+    /// Every label on screen. An editable field holds the typed value, not copy.
     private func visibleText(in overlay: NSView) -> [String] {
         descendants(of: overlay)
             .compactMap { $0 as? NSTextField }
@@ -267,8 +330,8 @@ final class NewWorktreeOverlayTests: WindowTestCase {
             .map(\.stringValue)
     }
 
-    /// The branch field's inline validation message, read out of its `LabeledField`. The caption is
-    /// a `FieldCaption` and the control's own text field is editable, so neither is mistaken for it.
+    /// The inline validation message. The caption is a `FieldCaption` and the field is editable,
+    /// so neither is mistaken for it.
     private func inlineMessage(in overlay: NSView) -> String? {
         guard let group = descendants(of: overlay).compactMap({ $0 as? LabeledField }).first
         else { return nil }
@@ -278,8 +341,8 @@ final class NewWorktreeOverlayTests: WindowTestCase {
             .stringValue
     }
 
-    /// An arrow keyDown as AppKit delivers one: `.function` and `.numericPad` ride along, and a
-    /// synthesized event without them is a keystroke macOS never sends.
+    /// AppKit hangs `.function` and `.numericPad` on every arrow; without them this is a
+    /// keystroke macOS never sends.
     private func arrow(down: Bool) throws -> NSEvent {
         let character = String(UnicodeScalar(down ? NSDownArrowFunctionKey : NSUpArrowFunctionKey)!)
         return try XCTUnwrap(
@@ -290,8 +353,7 @@ final class NewWorktreeOverlayTests: WindowTestCase {
                 keyCode: down ? 125 : 126))
     }
 
-    /// Esc the way `NSWindow.sendEvent` delivers it: a `performKeyEquivalent` traversal from the
-    /// content view, which is where the card root claims it.
+    /// `NSWindow.sendEvent`'s path: a traversal from the content view, where the card claims it.
     @discardableResult
     private func pressEscape() -> Bool {
         let esc = NSEvent.keyEvent(

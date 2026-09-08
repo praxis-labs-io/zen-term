@@ -1,14 +1,13 @@
 import AppKit
 
-/// The create-a-worktree card, opened with ⌥⏎ over a ⌘P picker row. It collects a branch name and
-/// a base, hands them to `onSubmit`, and holds the card through the create so a long `carry` copy
-/// has somewhere to show. A `ModalOverlay` built on the same card, backdrop and spring as
-/// `AddWorkspaceOverlay`, whose keyboard model it mirrors: Up/Down between stops, ⌘Return submits.
+/// The create-a-worktree card, opened with ⌥⏎ over a ⌘P picker row. Mirrors
+/// `AddWorkspaceOverlay`'s card, keyboard model and validation shape.
 final class NewWorktreeOverlay: NSView, ModalOverlay {
     private let workspace: Workspace
     private let options: WorktreeStore.CreateOptions
     private let onSubmit: (String, WorktreeStore.Base) -> Void
     private let onCancel: () -> Void
+    private let onDismiss: () -> Void
 
     private let card = CardView()
     private var dismiss = DismissGate()
@@ -33,24 +32,27 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         title: "Create Worktree", variant: .primary, keyEquivalent: "\r",
         keyEquivalentModifierMask: .command)
 
-    /// True from submit until create answers. Locks the branch field, both buttons, Esc and the
-    /// backdrop: `WorktreeStore.create` cannot be called back, so tearing the card down early would
-    /// leave a worktree landing with nothing to report to.
+    /// `WorktreeStore.create` cannot be called back, so Esc and the backdrop are locked too: a
+    /// card torn down early leaves a worktree landing with nothing to report to.
     private var isWorking = false
 
     init(
         workspace: Workspace, options: WorktreeStore.CreateOptions, background: NSColor,
-        onSubmit: @escaping (String, WorktreeStore.Base) -> Void, onCancel: @escaping () -> Void
+        onSubmit: @escaping (String, WorktreeStore.Base) -> Void, onCancel: @escaping () -> Void,
+        onDismiss: @escaping () -> Void
     ) {
         self.workspace = workspace
         self.options = options
         self.onSubmit = onSubmit
         self.onCancel = onCancel
+        self.onDismiss = onDismiss
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
 
-        let backdrop = BackdropView(onClick: { [weak self] in self?.cancel() })
+        // Clicking out is a way out, not a way back: Esc and Cancel return to the list, this does
+        // not. The picker's own backdrop dismisses to the terminal too.
+        let backdrop = BackdropView(onClick: { [weak self] in self?.dismissToTerminal() })
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
@@ -104,9 +106,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         dismiss.isDismissing ? nil : super.hitTest(point)
     }
 
-    /// The card owns Esc, the same way `AddWorkspaceOverlay` does: a focused button lets it bubble
-    /// here and a focused field routes it through the field editor, which never bubbles as a
-    /// card-root `keyDown`. A create in flight counts as dismissing, so Esc does nothing.
+    /// The card root is the single Esc owner, for the reasons `AddWorkspaceOverlay` documents.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if ModalEscape.handle(
             event, in: window, dismissing: dismiss.isDismissing || isWorking,
@@ -135,8 +135,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
 
     // MARK: the create's own state
 
-    /// Lock the card for the create and say what it is on. The host calls this on submit and
-    /// resolves it by closing the card on success or calling `failWork` on failure.
+    /// The host resolves this by closing the card, or by calling `failWork`.
     func beginWork(_ phase: String) {
         isWorking = true
         errorLabel.isHidden = true
@@ -144,22 +143,21 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         spinner.isSpinning = true
         setPhase(phase)
         branchField.field.isEditable = false
+        baseSegment.isEnabled = false
         cancelButton.isEnabled = false
         createButton.isEnabled = false
     }
 
-    /// Name the step running now. The create is two steps and the carry names its entries, so this
-    /// reports what is happening rather than standing in for it.
     func setPhase(_ phase: String) {
         phaseLabel.stringValue = phase
     }
 
-    /// Hand the card back with the reason the create failed.
     func failWork(_ message: String) {
         isWorking = false
         phaseGroup.isHidden = true
         spinner.isSpinning = false
         branchField.field.isEditable = true
+        baseSegment.isEnabled = true
         cancelButton.isEnabled = true
         createButton.isEnabled = true
         errorLabel.stringValue = message
@@ -225,8 +223,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         createButton.onBacktab = { [weak self] in self?.moveTab(-1) }
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        // The phase line takes the footer's dead space, so a create that runs for seconds says so
-        // without the card changing height under the person waiting on it.
+        // In the footer's dead space, so a long create says so without the card changing height.
         let footer = Self.hStack([phaseGroup, spacer, cancelButton, createButton], spacing: 8)
 
         let content = NSStackView(views: [
@@ -270,7 +267,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         window?.makeFirstResponder(stops[next])
     }
 
-    /// Cancel shares the footer's vertical stop with Create; it is reached with Left/Right.
+    /// Cancel shares Create's stop; it is reached with Left/Right.
     private func currentVerticalAnchor(in stops: [NSView]) -> NSView? {
         if let direct = stops.first(where: isFocused) { return direct }
         return isFocused(cancelButton) ? createButton : nil
@@ -308,8 +305,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
             : Self.startsFrom(options.defaultBase, "the default branch")
     }
 
-    /// Name the ref if git answered, and say which one it is otherwise. Naming it is the whole
-    /// point: a caption that only says "the default branch" makes the reader go and look.
     private static func startsFrom(_ ref: String?, _ fallback: String) -> String {
         "Starts from \(ref ?? fallback)."
     }
@@ -317,6 +312,11 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
     private func cancel() {
         guard !isWorking else { return }
         onCancel()
+    }
+
+    private func dismissToTerminal() {
+        guard !isWorking else { return }
+        onDismiss()
     }
 
     private func submit() {
@@ -336,15 +336,13 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         baseSegment.selectedIndex == 1 ? .currentCheckout : .defaultBranch
     }
 
-    /// Update the branch field's inline message and return it when it offends, nil when
-    /// submittable. `includeRequired` gates the empty check: false for the live pass, so an
-    /// untouched field is not flagged, true on a submit attempt.
+    /// `includeRequired` is false for the live pass, so an untouched field is not flagged.
     @discardableResult
     private func validate(includeRequired: Bool) -> NSView? {
         let branch = branchName
         var message: String?
-        // The dash is git's own defect, not a style rule: `worktree add -b -m` hands `-m` to git's
-        // `git branch`, which has no `--` guard, and the repo's checked-out branch gets renamed.
+        // `worktree add -b -m` hands `-m` to git's own `git branch`, which has no `--` guard, and
+        // the repo's checked-out branch gets renamed.
         if branch.hasPrefix("-") {
             message = "Can't start with a dash."
         } else if branch.contains(where: \.isWhitespace) {
@@ -358,12 +356,15 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         return message == nil ? nil : branchField.field
     }
 
-    private func refreshValidity() { validate(includeRequired: false) }
+    private func refreshValidity() {
+        // The message named a branch that is no longer in the field.
+        errorLabel.isHidden = true
+        validate(includeRequired: false)
+    }
 
     // MARK: layout helpers
 
-    /// A caption built straight into a stack, retained so `reapplyTheme()` can reach it. The ones
-    /// wrapped by a `LabeledField` need no retaining: it holds its own.
+    /// Retained so `reapplyTheme()` can reach it. A `LabeledField` holds its own.
     private func caption(_ text: String) -> FieldCaption {
         let field = FieldCaption(text, required: false)
         captions.append(field)

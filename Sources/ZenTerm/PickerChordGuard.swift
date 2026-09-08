@@ -1,5 +1,3 @@
-/// Whether the create chord should reach the terminal instead of being consumed.
-///
 /// `KeyInterceptor.resolve` consumes any chord in the keymap before the picker check runs, so
 /// without this ⌥⏎ is dead everywhere, including where a TUI needs it to insert a newline.
 enum PickerChordGuard {

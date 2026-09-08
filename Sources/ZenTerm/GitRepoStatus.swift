@@ -148,9 +148,8 @@ enum GitRepoStatus {
         return GitChurn.parse(output)
     }
 
-    /// What the create card opens with, read off-main and delivered on the main thread. Uncached
-    /// on purpose: it seeds a collision check and two captions that have to be right for the repo
-    /// as it stands the moment the card opens.
+    /// Uncached: it seeds a collision check and two captions that have to be right for the repo as
+    /// it stands the moment the card opens.
     static func createOptions(in dir: URL, completion: @escaping (WorktreeStore.CreateOptions) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             let options = WorktreeStore.createOptions(in: dir)

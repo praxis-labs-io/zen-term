@@ -173,10 +173,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
     // MARK: NewWorktreeOverlay
 
-    /// The card holds an uncommitted branch name, so it is recolored in place rather than rebuilt.
-    /// Its captions are built straight into stacks instead of wrapped by a `LabeledField`, which is
-    /// the shape that goes stale: a `FieldCaption` left out of the retained list has nothing else
-    /// reaching it.
+    /// A `FieldCaption` built straight into a stack has nothing but the retained list reaching it.
     func test_reapplyTheme_recolorsNewWorktreeOverlayAndPreservesTypedBranch() throws {
         let overlay = makeWorktreeCard()
         let window = makeWindow()
@@ -205,8 +202,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
         let headerColorBefore = header.textColor
         XCTAssertNotNil(headerColorBefore)
-        // A `FieldCaption` bakes its color into an attributed string, so `textColor` reads as
-        // AppKit's default whatever the theme is. The rendered value is the only honest property.
+        // `FieldCaption` bakes its color into an attributed string, so `textColor` never moves.
         let captionBefore = caption.attributedStringValue
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
@@ -246,7 +242,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
             options: WorktreeStore.CreateOptions(
                 branches: [], defaultBase: "origin/main", currentBranch: "main"),
             background: Theme.current.chrome.background.nsColor,
-            onSubmit: { _, _ in }, onCancel: {})
+            onSubmit: { _, _ in }, onCancel: {}, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         return overlay
     }

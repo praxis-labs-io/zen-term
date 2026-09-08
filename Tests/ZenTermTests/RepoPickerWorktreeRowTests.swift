@@ -33,6 +33,24 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         super.tearDown()
     }
 
+    // MARK: the create hint follows the keymap
+
+    func test_theCreateHint_readsTheChordFromTheLiveKeymap() {
+        setKeymap([Chord(command: true, shift: true, key: "n"): .createWorktree])
+
+        let hint = RepoPickerOverlay.footerHints().first { $0.label == "new worktree" }
+        XCTAssertEqual(hint?.keys, "⌘⇧N")
+    }
+
+    /// Unbound in Settings, the hint would otherwise go on advertising a key that does nothing.
+    func test_withTheActionUnbound_theHintIsGone() {
+        setKeymap([:])
+
+        let hints = RepoPickerOverlay.footerHints()
+        XCTAssertNil(hints.first { $0.label == "new worktree" })
+        XCTAssertEqual(hints.map(\.label), ["open", "replace", "move", "close"])
+    }
+
     // MARK: what ⌥⏎ creates from
 
     func test_theCreateTarget_isNilOnTheAddRow() {
@@ -57,9 +75,8 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(target.repo, repo)
     }
 
-    /// The two halves disagree on a worktree row, and both readings matter: the branch is cut from
-    /// the worktree you are standing on, so a branch can be stacked on the one you can see, while
-    /// carry still copies from the parent, which is the checkout holding the install.
+    /// The branch is cut from the row you can see; carry still comes from the parent, which is the
+    /// checkout holding the install.
     func test_onAWorktreeRow_theBranchIsCutFromTheWorktreeAndCarryComesFromTheParent() throws {
         let repo = path("alpha")
         let parent = workspace("alpha", path: repo)
@@ -495,6 +512,14 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         -> Workspace
     {
         Workspace(title: title, path: path, main: nil, right: nil, bottom: nil, focus: .main, env: [:])
+    }
+
+    private func setKeymap(_ map: [Chord: KeyInterceptor.ReservedChord]) {
+        let original = GeneralConfig.current
+        var overridden = original
+        overridden.keymap = map
+        GeneralConfig.setCurrentForTesting(overridden)
+        addTeardownBlock { GeneralConfig.setCurrentForTesting(original) }
     }
 
     private func makeRepoPicker(

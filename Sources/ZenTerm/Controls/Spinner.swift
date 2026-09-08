@@ -1,10 +1,7 @@
 import AppKit
 
-/// A small rotating arc for a step whose length nothing knows. `NSProgressIndicator` tints from
-/// `effectiveAppearance`, which the chrome bans, so this is an accent arc on a neutral ring,
-/// mirroring what `UpdateProgressBar` does for the same reason.
-///
-/// Under Reduce Motion it holds still as a ring: a stopped spinner reads as a hung app.
+/// A rotating arc for a step whose length nothing knows. `NSProgressIndicator` tints from
+/// `effectiveAppearance`, which the chrome bans, so this draws its own, like `UpdateProgressBar`.
 final class Spinner: NSView {
     private let track = CAShapeLayer()
     private let arc = CAShapeLayer()
@@ -12,8 +9,7 @@ final class Spinner: NSView {
     private static let lineWidth: CGFloat = 2
     private static let rotationKey = "zenterm.spin"
 
-    /// Whether the arc is turning. Setting it re-adds or removes the rotation, so a card that
-    /// finishes and comes back does not stack two animations.
+    /// Idempotent, so a card that finishes and comes back does not stack two animations.
     var isSpinning = false {
         didSet {
             guard isSpinning != oldValue else { return }
@@ -40,8 +36,7 @@ final class Spinner: NSView {
         NSSize(width: Self.diameter, height: Self.diameter)
     }
 
-    /// The arc rotates about the view's center, so both shapes are sized and centered here rather
-    /// than pinned by constraints: a layer has no autolayout of its own.
+    /// A layer has no autolayout, so both shapes are sized here rather than pinned.
     override func layout() {
         super.layout()
         let inset = Self.lineWidth / 2
@@ -51,7 +46,6 @@ final class Spinner: NSView {
         track.frame = bounds
         arc.path = ring
         arc.frame = bounds
-        // Three quarters of the ring, so the gap is what reads as turning.
         arc.strokeEnd = 0.75
         applySpin()
     }
@@ -63,7 +57,10 @@ final class Spinner: NSView {
     }
 
     private func applySpin() {
+        // A layout pass reaches this while the arc is turning, and re-adding snaps it back to 0°.
+        if isSpinning, arc.animation(forKey: Self.rotationKey) != nil { return }
         arc.removeAnimation(forKey: Self.rotationKey)
+        // A stopped spinner reads as a hung app, so Reduce Motion leaves a static ring.
         guard isSpinning, !Motion.isReduceMotionEnabled() else { return }
         let spin = CABasicAnimation(keyPath: "transform.rotation.z")
         spin.fromValue = 0

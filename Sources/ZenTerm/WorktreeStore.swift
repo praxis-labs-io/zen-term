@@ -35,8 +35,7 @@ struct WorktreeState: Equatable {
 /// Git is the whole registry, so a worktree made by hand elsewhere is listed alongside ours and one
 /// deleted in Finder stops being listed. Every call blocks, so callers run them off-main.
 enum WorktreeStore {
-    /// Where a new worktree's branch starts: the remote's default branch, or wherever the repo is
-    /// standing right now.
+    /// Where a new worktree's branch starts.
     enum Base: Equatable {
         case defaultBranch
         case currentCheckout
@@ -156,23 +155,20 @@ enum WorktreeStore {
         return url.resolvingSymlinksInPath().standardizedFileURL
     }
 
-    /// What the create card needs before it opens: the names a new branch cannot take, and the ref
-    /// each base choice will actually cut from, so the card can name them instead of hedging.
+    /// What the create card opens with, so it can name each base rather than describe it.
     struct CreateOptions: Equatable {
         let branches: Set<String>
         let defaultBase: String?
         let currentBranch: String?
     }
 
-    /// Read them in one pass. Every field is nil or empty when git cannot answer, which leaves the
-    /// refusing to `create` rather than turning a guess into a message.
+    /// Empty when git cannot answer, which leaves the refusing to `create` rather than to a guess.
     static func createOptions(in repo: URL) -> CreateOptions {
         CreateOptions(
             branches: branchNames(in: repo), defaultBase: defaultBaseName(in: repo),
             currentBranch: GitRepo.currentBranch(repo))
     }
 
-    /// Every local branch name, for a caller checking a new one against them.
     static func branchNames(in repo: URL) -> Set<String> {
         guard
             let output = try? git(
@@ -181,8 +177,7 @@ enum WorktreeStore {
         return Set(output.split(separator: "\n").map(String.init))
     }
 
-    /// The ref `.defaultBranch` resolves to, named the way a person would read it. `HEAD` is the
-    /// remoteless fallback, so it answers with the branch that HEAD is on rather than the word.
+    /// `HEAD` is the remoteless fallback, so that answers with the branch it is on, not the word.
     private static func defaultBaseName(in repo: URL) -> String? {
         guard let base = try? resolveBase(.defaultBranch, in: repo) else { return nil }
         return base == "HEAD" ? GitRepo.currentBranch(repo) : base
@@ -382,8 +377,7 @@ enum WorktreeStore {
         ref.hasPrefix("refs/heads/") ? String(ref.dropFirst("refs/heads/".count)) : ref
     }
 
-    /// The ref a new worktree branches from. `.defaultBranch` falls back to the current checkout,
-    /// so a repo with no remote still works.
+    /// `.defaultBranch` falls back to the current checkout, so a repo with no remote still works.
     private static func resolveBase(_ base: Base, in repo: URL) throws -> String {
         guard base == .defaultBranch else { return try verifiedHead(in: repo) }
         // `symbolic-ref` still succeeds when the branch it names is gone from the remote, so the
