@@ -349,11 +349,26 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
             message = "Can't contain spaces."
         } else if options.branches.contains(branch) {
             message = "That branch already exists."
+        } else if let nested = options.branches.filter({ $0.hasPrefix(branch + "/") }).min() {
+            message = "\(nested) already uses this name as a folder."
+        } else if let parent = Self.branchAncestor(of: branch, in: options.branches) {
+            message = "\(parent) is already a branch, so this can't be a folder."
         } else if includeRequired, branch.isEmpty {
             message = "Enter a branch name."
         }
         branchGroup?.setMessage(message)
         return message == nil ? nil : branchField.field
+    }
+
+    /// Git keeps a ref in a file, so `a` and `a/b` cannot both be branches. `min()` above picks the
+    /// offender rather than any of them, so the message does not change between two identical runs.
+    private static func branchAncestor(of branch: String, in branches: Set<String>) -> String? {
+        var prefix = ""
+        for part in branch.split(separator: "/").dropLast() {
+            prefix += prefix.isEmpty ? String(part) : "/\(part)"
+            if branches.contains(prefix) { return prefix }
+        }
+        return nil
     }
 
     private func refreshValidity() {

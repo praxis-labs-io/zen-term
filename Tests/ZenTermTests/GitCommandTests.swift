@@ -3,6 +3,36 @@ import XCTest
 @testable import ZenTerm
 
 final class GitCommandTests: XCTestCase {
+    /// What a failed `worktree add` actually writes: one progress line, then the failure. Handing
+    /// the whole stream to a person put three lines of git on a form card.
+    func test_errorDescription_keepsTheFailureAndDropsThePreamble() {
+        let failure = GitCommand.Failure(
+            status: 128,
+            stderr: """
+                Preparing worktree (new branch 'test')
+                fatal: cannot lock ref 'refs/heads/test': 'refs/heads/test/branch-test' exists; \
+                cannot create 'refs/heads/test'
+                """)
+
+        XCTAssertEqual(
+            failure.errorDescription,
+            "Cannot lock ref 'refs/heads/test': 'refs/heads/test/branch-test' exists; "
+                + "cannot create 'refs/heads/test'.")
+    }
+
+    /// Nothing git says is guaranteed to carry a prefix, and dropping the only line would leave
+    /// the user with a status code.
+    func test_errorDescription_fallsBackToTheLastLine() {
+        let failure = GitCommand.Failure(status: 1, stderr: "something went sideways\n")
+
+        XCTAssertEqual(failure.errorDescription, "something went sideways")
+    }
+
+    func test_errorDescription_namesTheStatusWhenGitSaidNothing() {
+        XCTAssertEqual(
+            GitCommand.Failure(status: 128, stderr: "").errorDescription, "git exited with 128.")
+    }
+
     private var dir: URL!
 
     override func setUpWithError() throws {
@@ -30,7 +60,12 @@ final class GitCommandTests: XCTestCase {
         }
         XCTAssertNotEqual(failure.status, 0)
         XCTAssertFalse(failure.stderr.isEmpty)
-        XCTAssertEqual(failure.errorDescription, failure.stderr)
+        // Against real git, not a fixture string: the shape of what it writes is the thing being
+        // relied on, and a hand-written stderr would keep passing after git changed it.
+        XCTAssertTrue(failure.stderr.hasPrefix("fatal: "), "raw stderr is kept whole")
+        XCTAssertEqual(
+            failure.errorDescription,
+            "Not a git repository (or any of the parent directories): .git.")
     }
 
     func test_run_readsOutputLargerThanAPipeBuffer() throws {

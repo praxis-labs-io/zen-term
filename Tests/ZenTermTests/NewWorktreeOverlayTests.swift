@@ -66,6 +66,52 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         XCTAssertEqual(inlineMessage(in: overlay), "Can't contain spaces.")
     }
 
+    /// Git keeps a ref in a file, so a branch cannot be both a name and a folder of names. Both
+    /// directions are knowable from the same set the exact-match check already reads.
+    func test_aNameAlreadyUsedAsAFolder_isRefused() throws {
+        let (overlay, sink) = mount(branches: ["test/branch-test", "test/test-1"])
+
+        branchField(in: overlay).setText("test")
+        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
+
+        XCTAssertTrue(sink.submitted.isEmpty)
+        XCTAssertEqual(
+            inlineMessage(in: overlay), "test/branch-test already uses this name as a folder.",
+            "names the offender, and the same one every run")
+    }
+
+    func test_aNameUnderAnExistingBranch_isRefused() throws {
+        let (overlay, sink) = mount(branches: ["test"])
+
+        branchField(in: overlay).setText("test/spike")
+        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
+
+        XCTAssertTrue(sink.submitted.isEmpty)
+        XCTAssertEqual(
+            inlineMessage(in: overlay), "test is already a branch, so this can't be a folder.")
+    }
+
+    /// The conflict can sit any number of segments up, not just at the first one.
+    func test_aDeepNameUnderAnExistingBranch_namesTheBranchInTheWay() throws {
+        let (overlay, _) = mount(branches: ["feature/zen"])
+
+        branchField(in: overlay).setText("feature/zen/473")
+        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
+
+        XCTAssertEqual(
+            inlineMessage(in: overlay), "feature/zen is already a branch, so this can't be a folder.")
+    }
+
+    /// A shared prefix that is not a whole path segment is not a conflict.
+    func test_aNameSharingAPrefixButNotASegment_isFine() throws {
+        let (overlay, sink) = mount(branches: ["test/branch-test"])
+
+        branchField(in: overlay).setText("testing")
+        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
+
+        XCTAssertEqual(sink.submitted.first?.branch, "testing")
+    }
+
     // MARK: submit
 
     func test_submit_handsBackTheTrimmedBranchAndTheDefaultBase() throws {
