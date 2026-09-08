@@ -337,6 +337,8 @@
 #   select_all  (no default; Edit > Select All holds ⌘A)
 #   write_screen_file  write_screen_file_copy  write_screen_file_open
 #   toggle_workspace_picker  toggle_command_palette
+#   create_worktree     (only over the workspace picker; anywhere else the key goes to
+#                        the terminal, so ⌥⏎ still inserts a newline in a TUI)
 #   open_settings  reload_config
 #   increase_font_size  decrease_font_size  reset_font_size
 #   check_for_updates   (no default binding; bind a chord to reach it by keyboard)
@@ -393,6 +395,7 @@
 # keybind = dismiss_all_toasts=cmd+shift+opt+n
 # keybind = toggle_command_palette=cmd+shift+p
 # keybind = toggle_workspace_picker=cmd+p
+# keybind = create_worktree=opt+enter            # over a picker row: cut a worktree of it
 # keybind = open_settings=cmd+,
 # keybind = reload_config=cmd+shift+,
 # keybind = increase_font_size=cmd+=             # ⌘+ (cmd+shift+=) does this too

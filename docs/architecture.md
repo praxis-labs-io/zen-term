@@ -1767,8 +1767,8 @@ repaints even the sites that bake their color at init, like the tab bar's tracer
 
 `WorktreeStore` lists, creates and removes the git worktrees of a repo. It is
 headless: no AppKit, every call blocking, so callers run them off-main and hop
-back. The ⌘P picker reads it for the worktree rows under each workspace; nothing
-creates or removes one from the UI yet.
+back. The ⌘P picker reads it for the worktree rows under each workspace and makes
+one with ⌥⏎; nothing removes one from the UI yet.
 
 **Git is the whole registry.** There is no index of our own to fall out of step
 with the repo, so a worktree made by hand in an arbitrary directory shows up
@@ -1833,8 +1833,10 @@ the user never typed.
 
 ### Creating one, and what a failure leaves behind
 
-`create` branches off the remote's default (`refs/remotes/origin/HEAD`, then
-`origin/main`) and falls back to the local `HEAD`, so a repo with no remote works.
+`create` takes a `Base`. `.defaultBranch` branches off the remote's default
+(`refs/remotes/origin/HEAD`, then `origin/main`) and falls back to the local `HEAD`,
+so a repo with no remote works; `.currentCheckout` is that fallback asked for
+directly, which is how a branch is stacked on the one the repo is standing on.
 A repo with no commits at all throws `unbornHead`. `symbolic-ref` still succeeds
 when `origin/HEAD` names a branch the remote has since dropped, so the target is
 resolved before it is trusted and an unusable one falls through the ladder.
@@ -1875,6 +1877,43 @@ commits, so the loss is the ref and nothing else.
 Whatever the rollback cannot undo is named in `rollbackIncomplete` rather than
 swallowed, so a create that half-failed says which branch or folder survived it.
 
+### Making one from the picker
+
+⌥⏎ over a picker row opens a card. Not a chord acting in place, the way the shelved
+clones branch did it: a worktree needs a branch name and there is nowhere on a row to
+type one. `WindowController` holds a **single modal slot**, so presenting the card
+tears the picker down exactly as the ＋ row's form does. That is also why the clone
+branch's pending-row trio does not port: there is no picker left to put a placeholder
+row into.
+
+Cancel reopens the picker, which the ＋ row's form deliberately does not do. The ＋ row
+is chosen as a way out of the list; ⌥⏎ is a detour from a row, so backing out of it
+returns to where it started. The picker is rebuilt from the file either way, so the
+selection and the query do not survive the trip.
+
+**The card owns the wait.** Submit locks it, and the footer's spacer, which is dead
+space already, names the step running: the branch, then each carry entry as it starts.
+Nothing joins the layout, so the card does not change height under someone waiting on
+it. The text is what the loop already holds rather than a stand-in for it, which is the
+whole reason `WorktreeCarry.copy` reports the entry it is on. A determinate bar is not
+available here and never will be: the carry's length is unknown until it is over.
+
+**The base captions name the ref**, "Starts from origin/main", and the name comes from
+the same `resolveBase` the create will run. A caption that only said "the default
+branch" would make the reader go and look, and one that guessed would be wrong in a
+repo with no remote.
+
+**A worktree row means two different things by its selection.** The branch is cut from
+the worktree, so the base choice reads against the branch on screen. Carry copies from
+the **parent**, because that is the checkout holding the install a sibling worktree has
+none of. `RepoPickerOverlay.CreateTarget` carries both rather than collapsing them.
+
+**The chord goes through `PickerChordGuard`.** `KeyInterceptor.resolve` consumes a chord
+on keymap membership alone, with no regard for what is on screen, so binding ⌥⏎ would
+kill it app-wide, and ⌥⏎ is how Claude Code and other TUIs insert a newline without
+submitting. `WindowController`'s modal gate ends in `default: return`, so the chord is
+answered ahead of that switch: the picker is the only state it is ever pressed in.
+
 ### Carrying what git leaves out
 
 A worktree gets everything git tracks and nothing it ignores, so a fresh one has no
@@ -1884,8 +1923,10 @@ across and reports every entry that did not make it. Nothing throws: a config na
 something this repo lacks is a normal state, and it must never stop a worktree being
 made.
 
-Nothing calls it yet. The key parses and round-trips through the config today, and the
-create path that runs the copy is the next piece of this epic.
+The create card runs it, and reports every entry that stayed behind except one that is
+simply not there: a section covers a repo before and after its first install, so that
+one is a normal state rather than something to interrupt with. Setting `carry` is still
+a hand edit of the workspaces file; the card only reads it.
 
 **An allowlist, because the denylist is what killed the clone approach.** That design
 copied everything and subtracted what breaks on relocation, which asks us to know

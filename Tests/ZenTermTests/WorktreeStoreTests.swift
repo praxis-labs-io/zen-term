@@ -122,6 +122,40 @@ final class WorktreeStoreTests: XCTestCase {
             "trunk\n")
     }
 
+    /// Standing on `side`, the default-branch ladder would cut from `origin/main` instead.
+    func test_create_fromTheCurrentCheckout_cutsFromWhereTheRepoIsStanding() throws {
+        try GitFixture.run(["checkout", "-q", "-b", "side"], in: repo)
+        try GitFixture.write("side\n", to: repo.appendingPathComponent("tracked.txt"))
+        try GitFixture.run(["commit", "-qam", "on side"], in: repo)
+
+        let worktree = try WorktreeStore.create(branch: "stacked", base: .currentCheckout, in: repo)
+
+        XCTAssertEqual(worktree.head, try GitFixture.run(["rev-parse", "side"], in: repo))
+        XCTAssertNotEqual(worktree.head, try GitFixture.run(["rev-parse", "origin/main"], in: repo))
+    }
+
+    /// The card names these refs, so they have to agree with what `create` will do.
+    func test_createOptions_nameTheRefsAndTheBranchesAlreadyTaken() throws {
+        try GitFixture.run(["checkout", "-q", "-b", "side"], in: repo)
+
+        let options = WorktreeStore.createOptions(in: repo)
+
+        XCTAssertEqual(options.currentBranch, "side")
+        XCTAssertEqual(options.defaultBase, "origin/main")
+        XCTAssertTrue(options.branches.contains("side"))
+        XCTAssertTrue(options.branches.contains("main"))
+    }
+
+    /// With no remote the two choices mean the same thing, and neither may invent an `origin/`.
+    func test_createOptions_inARepoWithNoRemote_nameTheLocalBranchForBothChoices() throws {
+        let solo = try GitFixture.makeRepo(at: root.appendingPathComponent("solo", isDirectory: true))
+
+        let options = WorktreeStore.createOptions(in: solo)
+
+        XCTAssertEqual(options.defaultBase, options.currentBranch)
+        XCTAssertNotNil(options.defaultBase)
+    }
+
     /// A repo that was `git init`ed locally and pushed has no `refs/remotes/origin/HEAD` at all.
     func test_create_fallsBackToOriginMainWhenOriginHeadIsUnset() throws {
         XCTAssertThrowsError(

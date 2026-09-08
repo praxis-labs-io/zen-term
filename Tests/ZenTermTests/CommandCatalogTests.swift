@@ -169,6 +169,7 @@ final class CommandCatalogTests: XCTestCase {
             "new_window",  // the menu bar owns it
             "toggle_command_palette",  // it is the palette
             "search_next", "search_previous",  // `n` / `N` step a live search
+            "create_worktree",  // needs a selected picker row, so a palette entry would be dead
         ]
         let listed = Set(CommandCatalog.commands(tabCount: 9).map(\.chord.actionToken))
 

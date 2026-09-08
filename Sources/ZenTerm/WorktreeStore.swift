@@ -35,6 +35,12 @@ struct WorktreeState: Equatable {
 /// Git is the whole registry, so a worktree made by hand elsewhere is listed alongside ours and one
 /// deleted in Finder stops being listed. Every call blocks, so callers run them off-main.
 enum WorktreeStore {
+    /// Where a new worktree's branch starts.
+    enum Base: Equatable {
+        case defaultBranch
+        case currentCheckout
+    }
+
     enum WorktreeError: Error, LocalizedError, Equatable {
         case notARepo(URL)
         case unbornHead(URL)
@@ -149,16 +155,44 @@ enum WorktreeStore {
         return url.resolvingSymlinksInPath().standardizedFileURL
     }
 
+    /// What the create card opens with, so it can name each base rather than describe it.
+    struct CreateOptions: Equatable {
+        let branches: Set<String>
+        let defaultBase: String?
+        let currentBranch: String?
+    }
+
+    /// Empty when git cannot answer, which leaves the refusing to `create` rather than to a guess.
+    static func createOptions(in repo: URL) -> CreateOptions {
+        CreateOptions(
+            branches: branchNames(in: repo), defaultBase: defaultBaseName(in: repo),
+            currentBranch: GitRepo.currentBranch(repo))
+    }
+
+    static func branchNames(in repo: URL) -> Set<String> {
+        guard
+            let output = try? git(
+                ["for-each-ref", "--format=%(refname:short)", "refs/heads"], in: repo)
+        else { return [] }
+        return Set(output.split(separator: "\n").map(String.init))
+    }
+
+    /// `HEAD` is the remoteless fallback, so that answers with the branch it is on, not the word.
+    private static func defaultBaseName(in repo: URL) -> String? {
+        guard let base = try? resolveBase(.defaultBranch, in: repo) else { return nil }
+        return base == "HEAD" ? GitRepo.currentBranch(repo) : base
+    }
+
     // MARK: writing
 
-    /// A worktree on a new `branch`, cut from the repo's default branch.
-    static func create(branch: String, in repo: URL) throws -> Worktree {
+    /// A worktree on a new `branch`, cut from `base`.
+    static func create(branch: String, base: Base = .defaultBranch, in repo: URL) throws -> Worktree {
         guard GitRepo.isGitRepo(repo) else { throw WorktreeError.notARepo(repo) }
         guard isUsableBranchName(branch, in: repo) else { throw WorktreeError.invalidBranchName(branch) }
         guard !branchExists(branch, in: repo) else { throw WorktreeError.branchExists(branch) }
 
-        let base = try resolveBase(in: repo)
-        let base0ID = try git(["rev-parse", base], in: repo)
+        let baseRef = try resolveBase(base, in: repo)
+        let base0ID = try git(["rev-parse", baseRef], in: repo)
         // Keyed on the main checkout, never on `repo`: creating from inside a worktree would
         // otherwise give the same repo a second home under the root.
         let parent = root.appendingPathComponent(
@@ -175,7 +209,7 @@ enum WorktreeStore {
         #endif
 
         do {
-            try git(["worktree", "add", "-b", branch, destination.path, base], in: repo)
+            try git(["worktree", "add", "-b", branch, destination.path, baseRef], in: repo)
         } catch {
             let leftBehind = rollback(branch: branch, at: destination, createdAt: base0ID, in: repo)
             guard leftBehind.isEmpty else {
@@ -343,9 +377,9 @@ enum WorktreeStore {
         ref.hasPrefix("refs/heads/") ? String(ref.dropFirst("refs/heads/".count)) : ref
     }
 
-    /// What a new worktree branches from: the remote's default branch where there is one, and the
-    /// current checkout otherwise, so a repo with no remote still works.
-    private static func resolveBase(in repo: URL) throws -> String {
+    /// `.defaultBranch` falls back to the current checkout, so a repo with no remote still works.
+    private static func resolveBase(_ base: Base, in repo: URL) throws -> String {
+        guard base == .defaultBranch else { return try verifiedHead(in: repo) }
         // `symbolic-ref` still succeeds when the branch it names is gone from the remote, so the
         // target has to resolve before it is trusted or `create` dies on `rev-parse` instead.
         if let head = try? git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], in: repo),
@@ -357,6 +391,10 @@ enum WorktreeStore {
         if (try? git(["rev-parse", "--verify", "--quiet", "origin/main"], in: repo)) != nil {
             return "origin/main"
         }
+        return try verifiedHead(in: repo)
+    }
+
+    private static func verifiedHead(in repo: URL) throws -> String {
         guard (try? git(["rev-parse", "--verify", "--quiet", "HEAD"], in: repo)) != nil else {
             throw WorktreeError.unbornHead(repo)
         }

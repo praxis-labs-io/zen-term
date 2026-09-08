@@ -193,6 +193,38 @@ final class KeyInterceptorRouteTests: XCTestCase {
                 charactersIgnoringModifiers: character, isARepeat: isARepeat, keyCode: keyCode))
     }
 
+    /// The shipped ⌥⏎ has to decode and route as the real keystroke. The guard's truth table and
+    /// `handle(.createWorktree)` both skip `Chord`, so the default could be dead with them green.
+    func test_theShippedCreateWorktreeChord_routesAndDefersByPickerState() throws {
+        let keys = KeyInterceptor()
+        keys.setKeymap(KeymapDefaults.map)
+        var pickerIsOpen = true
+        keys.passThroughGuard = { _, action in
+            PickerChordGuard.shouldPassThrough(action: action, repoPickerIsOpen: pickerIsOpen)
+        }
+        var fired: [KeyInterceptor.ReservedChord] = []
+        keys.onReservedChord = { fired.append($0) }
+        let event = try optionReturn()
+
+        XCTAssertNil(keys.route(event), "consumed while the picker is up")
+        XCTAssertEqual(fired, [.createWorktree])
+
+        pickerIsOpen = false
+        XCTAssertNotNil(
+            keys.route(event), "handed back to the terminal, where ⌥⏎ is a newline in a TUI")
+        XCTAssertEqual(fired, [.createWorktree], "no second dispatch")
+    }
+
+    /// Return carries no `.function`, unlike an arrow: a synthesized event that adds it is a
+    /// keystroke macOS never sends and would match a chord the real key cannot.
+    private func optionReturn() throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.option], timestamp: 0,
+                windowNumber: 0, context: nil, characters: "\r",
+                charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36))
+    }
+
     /// An arrow keyDown as AppKit delivers it: `.numericPad` on top of everything `functionKeyDown`
     /// already carries.
     private func arrowKeyDown(

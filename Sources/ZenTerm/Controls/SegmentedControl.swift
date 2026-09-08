@@ -20,6 +20,16 @@ final class SegmentedControl: NSView {
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
 
+    /// Off refuses the mouse and the keyboard both, and drops first responder so focus cannot sit
+    /// on a control that will not answer.
+    var isEnabled = true {
+        didSet {
+            guard isEnabled != oldValue else { return }
+            segments.forEach { $0.isEnabled = isEnabled }
+            if !isEnabled, isControlFocused { window?.makeFirstResponder(nil) }
+        }
+    }
+
     private var segments: [AppButton] = []
     /// The segment row, kept so `intrinsicContentSize` can report the content width — without an
     /// intrinsic size, content hugging has nothing to bite on and the control stretches to fill its
@@ -106,7 +116,7 @@ final class SegmentedControl: NSView {
 
     // MARK: keyboard
 
-    override var acceptsFirstResponder: Bool { true }
+    override var acceptsFirstResponder: Bool { isEnabled }
 
     override func becomeFirstResponder() -> Bool {
         isControlFocused = true
@@ -123,6 +133,7 @@ final class SegmentedControl: NSView {
     override func drawFocusRingMask() {}  // the selected segment's accent outline marks focus
 
     override func keyDown(with event: NSEvent) {
+        guard isEnabled else { return super.keyDown(with: event) }
         switch KeyboardFocus.key(for: event) {
         case .left where selectedIndex == 0 && onArrowLeft != nil: onArrowLeft?()  // boundary → exit
         case .left: select(selectedIndex - 1)

@@ -148,6 +148,15 @@ enum GitRepoStatus {
         return GitChurn.parse(output)
     }
 
+    /// Uncached: it seeds a collision check and two captions that have to be right for the repo as
+    /// it stands the moment the card opens.
+    static func createOptions(in dir: URL, completion: @escaping (WorktreeStore.CreateOptions) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let options = WorktreeStore.createOptions(in: dir)
+            DispatchQueue.main.async { completion(options) }
+        }
+    }
+
     /// The enclosing repo root for `cwd`, resolved off-main and delivered on the main thread.
     /// Uncached on purpose: this answers for a pane's live cwd, which moves with every `cd`, and the
     /// walk is what has to leave the main queue — `GitRepo.repoRoot` probes every ancestor, so it's

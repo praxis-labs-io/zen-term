@@ -45,12 +45,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             background: background,
             placeholder: "Search workspaces…",
             emptyText: "",  // never shown — the ＋ row is always present, so the list is never empty
-            footerHints: [
-                PaletteHint(keys: "⏎", label: "open"),
-                PaletteHint(keys: "⇧⏎", label: "replace"),
-                PaletteHint(keys: "↑↓", label: "move"),
-                PaletteHint(keys: "⎋", label: "close"),
-            ],
+            footerHints: Self.footerHints(),
             rowHeight: 32,
             onDismiss: onDismiss)
 
@@ -200,6 +195,40 @@ final class RepoPickerOverlay: PaletteOverlay {
         if let branch = worktree.branch, branch.lowercased().contains(query) { return true }
         if worktree.branch == nil, worktree.head.lowercased().hasPrefix(query) { return true }
         return worktree.path.lastPathComponent.lowercased().contains(query)
+    }
+
+    /// The create hint reads the live keymap and drops out when the action is unbound, unlike the
+    /// four beside it, which are fixed keys the picker owns.
+    static func footerHints() -> [PaletteHint] {
+        var hints = [
+            PaletteHint(keys: "⏎", label: "open"),
+            PaletteHint(keys: "⇧⏎", label: "replace"),
+        ]
+        if let chord = Chord.displayed(.createWorktree, in: GeneralConfig.current.keymap) {
+            hints.append(PaletteHint(keys: chord.displayGlyph, label: "new worktree"))
+        }
+        return hints + [
+            PaletteHint(keys: "↑↓", label: "move"),
+            PaletteHint(keys: "⎋", label: "close"),
+        ]
+    }
+
+    /// Two answers, because a worktree row disagrees on them: `repo` is the row's own checkout, so
+    /// the base is the branch you can see, while `workspace` is the parent, which holds the install.
+    struct CreateTarget: Equatable {
+        let workspace: Workspace
+        let repo: URL
+    }
+
+    var createTarget: CreateTarget? {
+        guard rows.indices.contains(selected) else { return nil }
+        switch rows[selected] {
+        case .add: return nil
+        case .workspace(let workspace):
+            return CreateTarget(workspace: workspace, repo: workspace.path)
+        case .worktree(let worktree, let parent):
+            return CreateTarget(workspace: parent, repo: worktree.path)
+        }
     }
 
     override func activate(index: Int, modifiers: NSEvent.ModifierFlags) {

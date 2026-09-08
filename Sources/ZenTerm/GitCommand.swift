@@ -7,7 +7,24 @@ enum GitCommand {
         let status: Int32
         let stderr: String
 
-        var errorDescription: String? { stderr.isEmpty ? "git exited with \(status)." : stderr }
+        var errorDescription: String? {
+            let reason = Self.reason(in: stderr)
+            return reason.isEmpty ? "git exited with \(status)." : reason
+        }
+
+        /// Git writes progress to stderr beside the failure, so handing the whole stream to a
+        /// person reads as a crash dump. The `fatal:` / `error:` line is the part they need.
+        private static func reason(in stderr: String) -> String {
+            let lines = stderr.split(separator: "\n")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            guard
+                let named = lines.last(where: { $0.hasPrefix("fatal: ") || $0.hasPrefix("error: ") }),
+                let body = named.range(of: ": ").map({ String(named[$0.upperBound...]) })
+            else { return lines.last ?? "" }
+            return body.prefix(1).uppercased() + body.dropFirst()
+                + (body.hasSuffix(".") ? "" : ".")
+        }
     }
 
     /// Whether a real `git` exists to run. Resolved once, off any hot path.

@@ -83,6 +83,103 @@ final class RepoPickerPresentationTests: WindowTestCase {
         path = ~/Dev/beta
         """
 
+    private func createCards(in c: WindowController) -> [NewWorktreeOverlay] {
+        descendants(of: c.window.contentView!).compactMap { $0 as? NewWorktreeOverlay }
+    }
+
+    /// The search field holds the keyboard, so arrows arrive through its `doCommandBy`.
+    private func moveUp(in picker: RepoPickerOverlay) {
+        let field = descendants(of: picker).compactMap { $0 as? NSTextField }
+            .first { ($0.delegate as? PaletteOverlay) === picker }!
+        _ = picker.control(field, textView: NSTextView(), doCommandBy: #selector(NSResponder.moveUp(_:)))
+    }
+
+    /// `NSWindow.sendEvent`'s path: a traversal from the content view, where a card claims it.
+    private func pressEscape(in c: WindowController) -> Bool {
+        let esc = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+            isARepeat: false, keyCode: 53)!
+        return c.window.contentView!.performKeyEquivalent(with: esc)
+    }
+
+    // MARK: ⌥⏎ routing
+
+    /// The modal gate's switch ends in `default: return`, so an unmatched case is swallowed.
+    func test_createWorktree_overThePicker_swapsItForTheCreateCard() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+
+        c.handle(.createWorktree)
+
+        waitUntil(!createCards(in: c).isEmpty, "the create card to be presented")
+        XCTAssertTrue(pickers(in: c).isEmpty, "one modal slot, so the card replaces the picker")
+    }
+
+    /// The other half of `PickerChordGuard`: outside the picker, nothing may present.
+    func test_createWorktree_withNoPickerUp_presentsNothing() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+
+        c.handle(.createWorktree)
+        waitForPendingLoads()
+
+        XCTAssertTrue(createCards(in: c).isEmpty)
+        XCTAssertTrue(pickers(in: c).isEmpty)
+    }
+
+    /// The ＋ row has no workspace to cut from.
+    func test_createWorktree_overTheAddRow_presentsNothing() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        let picker = try XCTUnwrap(pickers(in: c).first)
+        moveUp(in: picker)
+
+        c.handle(.createWorktree)
+        waitForPendingLoads()
+
+        XCTAssertTrue(createCards(in: c).isEmpty)
+        XCTAssertFalse(pickers(in: c).isEmpty, "the picker is left where it was")
+    }
+
+    /// ⌥⏎ is a detour from a row, unlike the ＋ row's form, which is a way out of the list.
+    func test_cancellingTheCreateCard_reopensThePicker() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        c.handle(.createWorktree)
+        waitUntil(!createCards(in: c).isEmpty, "the create card to be presented")
+
+        XCTAssertTrue(pressEscape(in: c), "the card claims Esc in performKeyEquivalent")
+
+        waitUntil(!pickers(in: c).isEmpty, "the picker to come back")
+        XCTAssertTrue(createCards(in: c).isEmpty)
+    }
+
+    /// A create outlives its card: any surface chord closes one, and a tab-bar click does too. The
+    /// answer must not land on whatever replaced it, and a failure must not vanish with it.
+    func test_aCardClosedMidCreate_isNotTheOneTheAnswerLandsOn() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        c.handle(.createWorktree)
+        waitUntil(!createCards(in: c).isEmpty, "the create card to be presented")
+        let card = try XCTUnwrap(createCards(in: c).first)
+        card.beginWork("Creating spike")
+
+        c.handle(.toggleCommandPalette)
+
+        waitForPendingLoads()
+        XCTAssertTrue(createCards(in: c).isEmpty, "the gate closed it out from under the create")
+        XCTAssertFalse(c.isPresentingForTesting(card), "so the answer has to go somewhere else")
+    }
+
     /// The card must arrive already holding its rows. Presenting first and filling after is what
     /// made the open flash: the list height is what sizes the card, so entries landing a frame later
     /// resize it mid-spring.

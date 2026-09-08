@@ -171,6 +171,82 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertNotEqual(colorBefore, card.layer?.borderColor)
     }
 
+    // MARK: NewWorktreeOverlay
+
+    /// A `FieldCaption` built straight into a stack has nothing but the retained list reaching it.
+    func test_reapplyTheme_recolorsNewWorktreeOverlayAndPreservesTypedBranch() throws {
+        let overlay = makeWorktreeCard()
+        let window = makeWindow()
+        window.contentView?.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 460, height: 480)
+
+        guard
+            let header = descendants(of: overlay).compactMap({ $0 as? NSTextField })
+                .first(where: { $0.stringValue == "New Worktree" })
+        else {
+            return XCTFail("expected the header label")
+        }
+        guard
+            let branchField = descendants(of: overlay).compactMap({ $0 as? FieldBox })
+                .first(where: { $0.placeholder == "feature/name" })
+        else {
+            return XCTFail("expected the branch field")
+        }
+        guard
+            let caption = descendants(of: overlay).compactMap({ $0 as? FieldCaption })
+                .first(where: { $0.stringValue.hasPrefix("CARRY") })
+        else {
+            return XCTFail("expected the CARRY caption")
+        }
+        branchField.setText("feature/zen-473")
+
+        let headerColorBefore = header.textColor
+        XCTAssertNotNil(headerColorBefore)
+        // `FieldCaption` bakes its color into an attributed string, so `textColor` never moves.
+        let captionBefore = caption.attributedStringValue
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        overlay.reapplyTheme()
+
+        XCTAssertNotEqual(headerColorBefore, header.textColor)
+        XCTAssertNotEqual(captionBefore, caption.attributedStringValue)
+        XCTAssertEqual(branchField.text, "feature/zen-473", "the typed branch survives the recolor")
+    }
+
+    /// The spinner draws in `CAShapeLayer`s, which no view-level recolor reaches on its own.
+    func test_reapplyTheme_recolorsTheSpinnerArc() throws {
+        let overlay = makeWorktreeCard()
+        let window = makeWindow()
+        window.contentView?.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 460, height: 480)
+
+        guard let spinner = descendants(of: overlay).compactMap({ $0 as? Spinner }).first else {
+            return XCTFail("expected the spinner")
+        }
+        let colorsBefore = (spinner.layer?.sublayers ?? []).compactMap { ($0 as? CAShapeLayer)?.strokeColor }
+        XCTAssertEqual(colorsBefore.count, 2, "a track and an arc")
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        overlay.reapplyTheme()
+
+        let colorsAfter = (spinner.layer?.sublayers ?? []).compactMap { ($0 as? CAShapeLayer)?.strokeColor }
+        XCTAssertNotEqual(colorsBefore, colorsAfter)
+    }
+
+    private func makeWorktreeCard() -> NewWorktreeOverlay {
+        let workspace = Workspace(
+            title: "ZenTerm", path: FileManager.default.temporaryDirectory,
+            main: nil, right: nil, bottom: nil, focus: .main, env: [:], carry: ["node_modules"])
+        let overlay = NewWorktreeOverlay(
+            workspace: workspace,
+            options: WorktreeStore.CreateOptions(
+                branches: [], defaultBase: "origin/main", currentBranch: "main"),
+            background: Theme.current.chrome.background.nsColor,
+            onSubmit: { _, _ in }, onCancel: {}, onDismiss: {})
+        overlay.translatesAutoresizingMaskIntoConstraints = true
+        return overlay
+    }
+
     func test_reapplyTheme_recolorsEnvRowAndPreservesTypedKey() throws {
         let overlay = AddWorkspaceOverlay(
             existingTitles: [], background: Theme.current.chrome.background.nsColor,
