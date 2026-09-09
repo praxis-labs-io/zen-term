@@ -323,6 +323,34 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertTrue(text.contains("keybind = new_tab=none"), text)
     }
 
+    /// A modified backspace is a chord, not the clear command. `remove_worktree` ships on ⌥⌫, so
+    /// re-recording it over its own row used to read as Delete and unbind it instead.
+    func test_optionDelete_recordsAChordRatherThanClearingTheAction() {
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+        row(for: .removeWorktree).chip.onActivate?()
+
+        capturer.feed(deleteKey(option: true))
+
+        XCTAssertEqual(liveKeymap[Chord(option: true, key: "⌫")], .removeWorktree)
+        XCTAssertEqual(GeneralConfig.current.unboundActions, [], "⌥⌫ is a chord, never the clear")
+        XCTAssertFalse(capturer.isArmed, "recording it ends the capture")
+    }
+
+    /// `Chord` has no glyph for forward delete, so recording one writes an unprintable character
+    /// into the config and draws as tofu in the chip. It stays the clear command at every modifier.
+    func test_optionForwardDelete_clearsRatherThanRecording() throws {
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+        row(for: .newTab).chip.onActivate?()
+
+        capturer.feed(keyDown("\u{f728}", code: 117, flags: [.option]))
+
+        XCTAssertEqual(GeneralConfig.current.unboundActions, [.newTab], "⌦ clears, never records")
+        let text = try configText()
+        XCTAssertFalse(text.contains("\u{f728}"), "no unprintable key reaches the file: \(text)")
+    }
+
     /// Reset moved off Delete and onto a button, so the button is the only way back to a default and
     /// has to work. Dead, an action removed by mistake could never be restored from the card.
     func test_theResetButton_putsTheDefaultBack() throws {

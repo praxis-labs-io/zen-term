@@ -170,6 +170,7 @@ final class CommandCatalogTests: XCTestCase {
             "toggle_command_palette",  // it is the palette
             "search_next", "search_previous",  // `n` / `N` step a live search
             "create_worktree",  // needs a selected picker row, so a palette entry would be dead
+            "remove_worktree",  // same
         ]
         let listed = Set(CommandCatalog.commands(tabCount: 9).map(\.chord.actionToken))
 

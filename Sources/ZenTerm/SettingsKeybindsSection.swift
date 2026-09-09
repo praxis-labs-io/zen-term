@@ -47,7 +47,7 @@ final class SettingsKeybindsSection: SettingsSection {
             "Surfaces & Tools",
             [
                 .toggleToolFloat(ToolFloat.scratch.id), .toggleRepoPicker, .createWorktree,
-                .toggleCommandPalette, .newTool, .openSettings,
+                .removeWorktree, .toggleCommandPalette, .newTool, .openSettings,
             ]
         ),
     ]
@@ -245,13 +245,15 @@ final class SettingsKeybindsSection: SettingsSection {
             hintBubble?.setPreview(Self.modifierGlyph(event.modifierFlags))
             return
         }
-        // keyDown. Esc / backspace / forward-delete are commands (the popover promises them), not
-        // recordable chords.
-        // Route the physical-key decode through the shared decoder so the macOS keyCodes stay in
-        // exactly one place (KeyboardFocus.key). Esc / Delete are commands, not recordable chords.
+        // A modified backspace is a chord, since ⌥⌫ is a shipped default. A modified forward
+        // delete is not: `Chord` has no glyph for it and would record an unprintable key.
+        let isRecordable = event.keyCode == 51 && !KeyboardFocus.isUnmodified(event)
         switch KeyboardFocus.key(for: event) {
         case .escape: endCapture(row); refreshRows(); return  // Esc → cancel
-        case .delete: endCapture(row); remove(row); return  // Backspace → no shortcut at all
+        case .delete where !isRecordable:
+            endCapture(row)
+            remove(row)  // Delete → no shortcut at all
+            return
         default: break
         }
         guard let chord = Chord(event: event) else { return }  // unmappable key — keep waiting

@@ -10,6 +10,8 @@ import TerminalKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windows: [WindowController] = []
+    /// One tracker for every window: a worktree being deleted must read as such in all of them.
+    private let worktreeRemovals = WorktreeRemovalTracker()
     private let keys = KeyInterceptor()
     /// The nvim navigator command socket (`$ZEN_SOCK`). Started at launch, torn down on
     /// quit. Nil if it couldn't bind — the ⌘-nav path never depends on it.
@@ -56,6 +58,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // load logs anything. Left nil under `swift test` (the app never launches there), so a test
         // run never writes to the user's ~/Library/Logs/ZenTerm/zen-term.log.
         Log.fileSink = .standard()
+
+        // Copy first: a removal closes tabs, and closing a window's last tab removes it from
+        // `windows` mid-iteration.
+        worktreeRemovals.onChanged = { [weak self] change in
+            for window in self?.windows ?? [] { window.worktreeRemovalsChanged(change) }
+        }
 
         // Terminals repeat a held key rather than popping macOS's press-and-hold accent
         // palette — the palette otherwise leaks the auto-repeats and the selection number
@@ -274,6 +282,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The command palette dispatches through `handle(_:)`, where app-global chords are a no-op.
         // Hand them back to `route(_:)` so a palette pick reloads config / checks for updates too.
         wc.onAppGlobalCommand = { [weak self] chord in self?.route(chord) }
+        wc.worktreeRemovals = worktreeRemovals
+        // Removing a worktree starts in one window's picker but has to account for every window:
+        // a tab open elsewhere would otherwise be left running in a folder that is gone.
+        wc.onCountTabsAtPath = { [weak self] path in
+            self?.windows.reduce(0) { $0 + $1.tabCount(atPath: path) } ?? 0
+        }
         if centered { wc.window.center() }
         wc.onClosed = { [weak self, weak wc] in
             guard let self, let wc else { return }
@@ -380,7 +394,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // exiting now would cut it off before a single signal went out — the original bug, on
         // the most ordinary way to close the app. Wait for it, then go.
         guard let key = keyController() else {
-            drainSessionSweeps { NSApp.reply(toApplicationShouldTerminate: true) }
+            // Quitting mid-delete leaves a half-removed folder with git's entry still in place,
+            // and a window closed by that very removal takes this path.
+            worktreeRemovals.whenIdle {
+                self.drainSessionSweeps { NSApp.reply(toApplicationShouldTerminate: true) }
+            }
             return .terminateLater
         }
         if quitConfirmPending { return .terminateCancel }  // a quit dialog is already up
@@ -394,7 +412,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     return
                 }
                 self.quitConfirmPending = false
-                self.tearDownAllWindows { NSApp.reply(toApplicationShouldTerminate: true) }
+                self.tearDownAllWindows {
+                    self.worktreeRemovals.whenIdle { NSApp.reply(toApplicationShouldTerminate: true) }
+                }
             },
             onCancel: { [weak self] in
                 self?.quitConfirmPending = false

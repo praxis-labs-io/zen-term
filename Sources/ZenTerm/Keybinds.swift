@@ -34,6 +34,7 @@ extension KeyInterceptor.ReservedChord {
         case .toggleToolFloat(let id): return "toggle_float:\(id)"
         case .toggleRepoPicker: return "toggle_workspace_picker"
         case .createWorktree: return "create_worktree"
+        case .removeWorktree: return "remove_worktree"
         case .toggleCommandPalette: return "toggle_command_palette"
         case .openSettings: return "open_settings"
         case .reloadConfig: return "reload_config"
@@ -94,7 +95,8 @@ extension KeyInterceptor.ReservedChord {
             .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab,
             .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
             .prevPane, .nextPane,
-            .toggleToolFloat, .toggleRepoPicker, .createWorktree, .toggleCommandPalette,
+            .toggleToolFloat, .toggleRepoPicker, .createWorktree, .removeWorktree,
+            .toggleCommandPalette,
             .openSettings,
             .reloadConfig, .checkForUpdates, .reportIssue, .newTool, .resetFontSize,
             .toggleScrollMode, .toggleSearch, .scrollToTop, .scrollToBottom,
@@ -142,7 +144,8 @@ extension KeyInterceptor.ReservedChord {
             .newTab, .newWindow, .prevTab, .nextTab, .selectTab,
             .moveTabLeft, .moveTabRight, .renameTab,
             .fillScreen, .toggleBottomDrawer, .toggleRightDrawer,
-            .toggleRepoPicker, .createWorktree, .toggleCommandPalette, .newTool, .openSettings,
+            .toggleRepoPicker, .createWorktree, .removeWorktree, .toggleCommandPalette, .newTool,
+            .openSettings,
             .dismissToast, .dismissAllToasts:
             return true
         }
@@ -185,6 +188,7 @@ extension KeyInterceptor.ReservedChord {
         // `toggle_repo_picker` still resolves so an existing binding keeps working.
         case "toggle_repo_picker": self = .toggleRepoPicker
         case "create_worktree": self = .createWorktree
+        case "remove_worktree": self = .removeWorktree
         case "toggle_command_palette": self = .toggleCommandPalette
         case "open_settings": self = .openSettings
         case "reload_config": self = .reloadConfig
@@ -308,9 +312,10 @@ enum KeymapDefaults {
         // runs, so a chord bound there is dead and every test of it passes.
         map[Chord(command: true, shift: true, key: "p")] = .toggleCommandPalette
         map[Chord(command: true, key: "p")] = .toggleRepoPicker
-        // ⌥⏎ inserts a newline without submitting in Claude Code and other TUIs, so
-        // `PickerChordGuard` hands it back whenever the picker is closed.
+        // ⌥⏎ is a TUI newline and ⌥⌫ is readline's delete-previous-word, so `PickerChordGuard`
+        // hands both back whenever the picker is closed.
         map[Chord(option: true, key: "⏎")] = .createWorktree
+        map[Chord(option: true, key: "⌫")] = .removeWorktree
         map[Chord(command: true, key: "\\")] = .toggleRightDrawer
         map[Chord(command: true, key: "b")] = .toggleBottomDrawer
         // The one built-in float, beside the two drawers it behaves like. Read off the spec so the

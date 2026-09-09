@@ -38,6 +38,7 @@ final class KeyInterceptor {
         case toggleToolFloat(String)  // associated value = ToolFloat.id
         case toggleRepoPicker
         case createWorktree  // only over the workspace picker; see PickerChordGuard
+        case removeWorktree  // only over the workspace picker; see PickerChordGuard
         case toggleCommandPalette
         case openSettings
         case reloadConfig

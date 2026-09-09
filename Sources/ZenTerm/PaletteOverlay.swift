@@ -233,7 +233,11 @@ class PaletteOverlay: NSView, ModalOverlay {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// Make the search field first responder — called by the host after presenting.
-    func focusInitialResponder() {
+    func focusInitialResponder() { focusQuery() }
+
+    /// Focus the query field, past any override of `focusInitialResponder`. A subclass showing a
+    /// card over the list sends focus there instead, and needs this to hand it back.
+    func focusQuery() {
         window?.makeFirstResponder(searchField)
         searchField.applyThemedCaret()  // the editor exists only once the field has focus
     }
@@ -261,13 +265,18 @@ class PaletteOverlay: NSView, ModalOverlay {
     /// every card agrees on one Esc owner, rather than each host deciding by accident; it also
     /// covers the search field, whose `cancelOperation` used to handle this separately.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if ModalEscape.handle(
-            event, in: window, dismissing: dismiss.isDismissing, close: { self.onDismiss() }
-        ) {
+        if !isShowingOverlaidCard,
+            ModalEscape.handle(
+                event, in: window, dismissing: dismiss.isDismissing, close: { self.onDismiss() })
+        {
             return true
         }
         return super.performKeyEquivalent(with: event)
     }
+
+    /// Whether a subclass has put a card over the list. That card owns Esc for as long as it is up,
+    /// so answering it must not take the whole palette down with it.
+    var isShowingOverlaidCard: Bool { false }
 
     /// Re-apply the card's theme-dependent colors after a live theme change: the retained shell
     /// (card fill/border, search glyph, search field text, divider, empty label, footer hints),

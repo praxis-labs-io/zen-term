@@ -884,8 +884,10 @@ launch is a fresh process, which is what makes an unanswered conflict come back.
 card arms no key equivalents, so Esc keeps reaching the pane and the × is
 the only keyboard-free way out.
 
-**Delete removes; reset is an icon beside the input.** On a `KeybindChip`, Backspace
-leaves the action with no shortcut and writes `= none`. It used to restore the
+**Delete removes; reset is an icon beside the input.** On a `KeybindChip`, a bare
+Backspace leaves the action with no shortcut and writes `= none`. Bare is the whole of
+it: `remove_worktree` ships on ⌥⌫, and a modified backspace read as the clear command
+unbinds the action being recorded onto. It used to restore the
 default, which read as doing nothing on exactly the rows most likely to be pressed:
 an action whose default is a chord something else already holds gets it back and
 loses it again on the reload. Reset moved into the capture popover, next to the input
@@ -1768,7 +1770,8 @@ repaints even the sites that bake their color at init, like the tab bar's tracer
 `WorktreeStore` lists, creates and removes the git worktrees of a repo. It is
 headless: no AppKit, every call blocking, so callers run them off-main and hop
 back. The ⌘P picker reads it for the worktree rows under each workspace and makes
-one with ⌥⏎; nothing removes one from the UI yet.
+one with ⌥⏎ and removes one with ⌥⌫. Settings does not list them: that pane is the
+workspaces you configured, and a worktree was never in that file.
 
 **Git is the whole registry.** There is no index of our own to fall out of step
 with the repo, so a worktree made by hand in an arbitrary directory shows up
@@ -2003,6 +2006,98 @@ excludes nothing without remote-tracking refs and would otherwise report the who
 history as at risk, when `remove` leaves the branch in place anyway. There is no
 stash count beside those, because `refs/stash` is shared across every worktree of a
 repo.
+
+### Removing one, with ⌥⌫
+
+**Removal is a picker chord, not a Settings flow.** Settings → Workspaces lists the
+workspaces you *configured*; a worktree is discovered by `git worktree list` and was never
+in that file, so it has no row there. ⌘P is the one place worktrees are listed, and ⌥⌫ over
+a worktree row removes it, beside the ⌥⏎ that made it. Over a workspace row or the ＋ row
+it does nothing: `selectedWorktree` is nil and there is nothing to remove.
+
+**The chord goes through `PickerChordGuard`, for the same reason ⌥⏎ does.** ⌥⌫ is
+delete-previous-word in every readline shell, and `KeyInterceptor.resolve` consumes a chord
+on keymap membership alone, so without the guard it is a dead key everywhere. `⌫` is a
+special key with no character behind it, so `Chord` carries its keyCode, its config word
+(`backspace`, ghostty's name; macOS calls this key "delete" and ghostty gives that to
+forward delete) and the glyph it writes back.
+
+**The confirm is a card over the picker, not the toast confirm ⌘W and ⌘Q use.** Closing a
+pane is a smaller thing than deleting a folder, so the two do not share a shape.
+`ConfirmCard` is full-bleed, centered, and hosted by `RepoPickerOverlay` rather than by
+`WindowController`'s single modal slot, which is what keeps the list underneath from being
+torn down. The row being asked about stays on screen, and becomes the progress state the
+moment the answer is yes. `PaletteOverlay` claims Esc for its own dismissal, so it asks
+`isShowingOverlaidCard` first and stands down while a card is up; the card owns Esc, its
+backdrop swallows clicks on the rows, and the affirmative holds focus so Return answers.
+
+**There is no cancelling a removal once it starts, so nothing offers to.** `git worktree
+remove --force` unlinks as it walks, with no transaction behind it: killing it at 350ms
+into a 40,002-file worktree left 7,774 files gone, the directory still there, and git still
+listing the worktree. A Cancel button would leave you worse off than either finishing or
+never starting.
+
+**The confirm carries the whole weight, because git never gets to refuse.** `--force` is
+unconditional, so nothing downstream will stop a mistake. One sentence names all of it:
+what is uncommitted and unpushed, the tabs that close, the carried entries that go with
+the folder, and the branch that stays. Splitting that into two dialogs for one decision
+is worse than one long sentence. A nil `WorktreeState` reads as "could not be read",
+never as "clean", and keeps the destructive framing.
+
+**The read runs off-main and the confirm is presented on the way back**, so it checks the
+picker is still the one that was up, by identity. Otherwise it lands over whatever the user
+opened instead, asking about something they are no longer looking at. Cancel takes the card
+down and leaves the list where it was, which is the difference between this and the create
+card: that one replaces the picker and reopens it on cancel, because a form is a different
+task, while a confirm is about a row you are still looking at.
+
+**The tabs close when the folder is gone, not when its removal is asked for.** Closing them
+at the confirm takes the window down with them the moment one of them is its last, and the
+picker showing the progress goes with the window: the delete then runs with nothing on
+screen saying so. So the confirm starts the delete and closes nothing, and
+`WorktreeRemovalTracker.Change.removed` is what closes the tabs. `failed` closes none of
+them, because the folder is still there and the shell in it is still working.
+
+**The close is unconditional at that point**, never gated on the count read before the
+confirm: a tab opened in another window while the confirm sat there would otherwise be left
+running in a folder that is gone. That gating was a real bug on the shelved clones branch.
+Tabs are matched on `TabController.openedCWD`, where the tab was opened, **not** its live
+cwd: a shell that has `cd`'d out still belongs to the worktree, and matching the live cwd
+leaves exactly the tab that most needs closing. `AppDelegate` fans the change out to every
+window, and each window closes its own.
+
+**That close leaves an open card up**, which is the one place `closeTab` does not dismiss
+the modal. Taking a card down belongs to the tab bar, whose ✕ is reachable while one is up;
+a removal closing tabs from under the picker the user is watching it in is not that. The
+close hands the keyboard to the tab it promotes, so `closeTabs(atPath:)` gives it back to
+the card afterwards.
+
+**`WorktreeRemovalTracker` is app-wide**, because the hazard is the folder going away and
+that does not care which window is looking. The delete is slow and stays slow: removing a
+worktree carrying a 204,839-file `node_modules` measured **13.4 seconds** on an M-series
+machine, and git lists the folder for all of it. So a worktree being removed renders as a
+`Removing…` row that refuses to open, and `AppDelegate` fans the change out to every window
+so a picker already open is rebuilt rather than only the next one to be opened. The row is
+the whole progress state: a toast beside it would say the same thing twice, and only a
+failure gets one.
+
+**The tracker runs the delete, rather than the window that asked for it.** Removing a
+worktree closes the tabs open in it, and closing a window's last tab closes the window, so
+the window is often gone before git is. Only the toasts are the window's and only they are
+dropped; the claim, the fan-out, and the delete itself outlive it. For the same reason quit
+waits on `whenIdle` alongside the shell sweeps: exiting mid-delete leaves a half-removed
+folder with git's entry for it still in place. The wait is bounded, because a `git` that
+has stopped answering must not hold the process open.
+
+**The finish re-lists rather than only re-rendering.** `refreshRemovalState` rebuilds from
+the listings already in hand, and those still name a folder git has stopped reporting, so a
+re-render alone would put the ordinary row back for something gone.
+
+Nothing here deletes a directory itself, so there is no `gitdir:` guard: every removal is
+`git worktree remove --force` and git decides what a working tree is. A remove that fails
+because the folder was deleted in Finder reports git's own error. The one place the app
+deletes a worktree directory itself is `create`'s rollback, and its claim already proves
+ownership rather than inferring it.
 
 ### GitCommand
 

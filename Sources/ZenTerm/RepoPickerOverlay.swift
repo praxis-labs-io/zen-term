@@ -23,6 +23,12 @@ final class RepoPickerOverlay: PaletteOverlay {
     private let entries: [Workspace]
     /// Keyed by the workspace's standardized path, filled in when the background listing lands.
     private var listings: [URL: WorktreeListing] = [:]
+
+    /// This picker's probes in flight, cancelled when it goes away so a closed picker stops
+    /// costing the queue. Held per picker rather than cancelled queue-wide: another window's
+    /// picker is probing the same queue and its answers are not this one's to drop.
+    private var churnRefresh: GitRepoStatus.RefreshToken?
+    private var worktreeRefresh: GitRepoStatus.RefreshToken?
     /// Common dir to the workspace that shows its worktrees, in config order. Recomputed when a
     /// listing lands, never when the query changes.
     private var worktreeOwners: [URL: URL] = [:]
@@ -30,13 +36,18 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// own is not repeated as a child of one.
     private let configuredPaths: Set<URL>
     private var rows: [Row]
+    /// Worktrees whose delete is running. A row for one of these is going away, so it renders as
+    /// removing and refuses to open: a tab landed in it would start in a folder mid-delete.
+    private let removals: WorktreeRemovalTracker
 
     init(
         entries: [Workspace], background: NSColor,
+        removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
         onChoose: @escaping (Workspace, Bool) -> Void, onAddWorkspace: @escaping () -> Void,
         onDismiss: @escaping () -> Void
     ) {
         self.entries = entries
+        self.removals = removals
         self.configuredPaths = Set(entries.map { $0.path.standardizedFileURL })
         self.rows = Self.rows(for: entries, listings: [:], configured: [], owners: [:])
         self.onChoose = onChoose
@@ -55,15 +66,31 @@ final class RepoPickerOverlay: PaletteOverlay {
         GitRepoStatus.refresh(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }
         // The counts run `git` rather than reading a file, so they land after the branch does
         // rather than holding it up.
-        GitRepoStatus.refreshChurn(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }
+        churnRefresh = GitRepoStatus.refreshChurn(entries.map(\.path)) { [weak self] in
+            self?.applyGitStatus()
+        }
         // Two `git` calls per workspace, so the worktree rows land last and insert themselves under
         // the workspace they belong to rather than holding the card back.
-        GitRepoStatus.refreshWorktrees(entries.map(\.path)) { [weak self] path, listing in
+        relistWorktrees()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Ask git for every entry's worktrees again: once on open, and again when a removal ends,
+    /// because the listings in hand still name the folder that has gone. The whole set rather
+    /// than the one workspace that changed, since this call supersedes the one before it.
+    func relistWorktrees() {
+        worktreeRefresh?.cancel()
+        worktreeRefresh = GitRepoStatus.refreshWorktrees(entries.map(\.path)) {
+            [weak self] path, listing in
             self?.setWorktrees(listing, for: path)
         }
     }
 
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+    deinit {
+        churnRefresh?.cancel()
+        worktreeRefresh?.cancel()
+    }
 
     /// Re-read every workspace row's branch from `GitRepoStatus`.
     private func applyGitStatus() {
@@ -137,8 +164,86 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .workspace(let workspace):
             return RowView(workspace: workspace)
         case .worktree(let worktree, let parent):
+            guard !removals.isRemoving(worktree.path) else { return RemovingRowView(worktree: worktree) }
             return RowView(worktree: worktree, parent: parent)
         }
+    }
+
+    override func isSelectable(at index: Int) -> Bool {
+        guard case .worktree(let worktree, _) = rows[index] else { return true }
+        return !removals.isRemoving(worktree.path)
+    }
+
+    /// A confirm shown over the list, which stays put underneath it. Removing a worktree is
+    /// answered here rather than by replacing the picker: the row it is about has to remain
+    /// visible, and it becomes the progress state the moment the answer is yes.
+    private var confirmCard: ConfirmCard?
+
+    override var isShowingOverlaidCard: Bool { confirmCard != nil }
+
+    func presentConfirm(_ card: ConfirmCard) {
+        confirmCard?.removeFromSuperview()
+        card.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(card)
+        NSLayoutConstraint.activate([
+            card.leadingAnchor.constraint(equalTo: leadingAnchor),
+            card.trailingAnchor.constraint(equalTo: trailingAnchor),
+            card.topAnchor.constraint(equalTo: topAnchor),
+            card.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+        confirmCard = card
+        card.focusInitialResponder()
+        card.animateIn()
+    }
+
+    /// While a card is up the keyboard is its own, so focus goes there rather than to the query.
+    override func focusInitialResponder() {
+        if let confirmCard { confirmCard.focusInitialResponder() } else { focusQuery() }
+    }
+
+    /// Take the confirm down and give the list its keyboard back. The slot is cleared in the exit
+    /// animation's completion, not before it: the card is on screen for that whole spring, and
+    /// releasing it early hands Esc back to the picker, which closes the picker instead.
+    func dismissConfirm() {
+        guard let card = confirmCard else { return }
+        card.animateOut { [weak self, weak card] in
+            card?.removeFromSuperview()
+            guard let self, self.confirmCard === card else { return }
+            self.confirmCard = nil
+        }
+        focusQuery()
+    }
+
+    override func reapplyTheme() {
+        super.reapplyTheme()
+        confirmCard?.reapplyTheme()
+    }
+
+    #if DEBUG
+        var presentedConfirmForTesting: ConfirmCard? { confirmCard }
+    #endif
+
+    /// Take a removed worktree out of the listings in hand, and re-render around it. The claim is
+    /// cleared before this arrives, so a re-render alone puts an ordinary, openable row back for a
+    /// folder git has just deleted, and the relist that would correct it is a git call away.
+    func dropWorktree(at path: URL) {
+        let target = path.standardizedFileURL
+        for (workspace, listing) in listings {
+            listings[workspace] = WorktreeListing(
+                commonDir: listing.commonDir,
+                worktrees: listing.worktrees.filter { $0.path.standardizedFileURL != target })
+        }
+        worktreeOwners = Self.owners(among: entries, listings: listings)
+        refreshRemovalState()
+    }
+
+    /// Re-render around a removal that started or finished. Rebuilt rather than restyled: the row
+    /// changes type, and the identity carries the removal so a stale view is never reused.
+    func refreshRemovalState() {
+        let held = rows.indices.contains(selected) ? rowIdentity(at: selected) : nil
+        applyFilter(query: currentQuery)
+        refreshRows(animated: true)
+        reselect(byIdentity: held)
     }
 
     /// A row is the same row across a re-filter when it's the ＋ row or names the same workspace.
@@ -148,9 +253,10 @@ final class RepoPickerOverlay: PaletteOverlay {
         switch rows[index] {
         case .add: return ["add"]
         case .workspace(let workspace): return ["workspace", workspace.title]
-        // The path, not the branch: a worktree's branch changes under it, and a reused row keeps
-        // whatever it baked in at construction.
-        case .worktree(let worktree, _): return ["worktree", worktree.path.path]
+        // The path and the removal state, not the branch: both change under a row that bakes its
+        // content in at construction, and a reused view would keep the old one.
+        case .worktree(let worktree, _):
+            return ["worktree", worktree.path.path, removals.isRemoving(worktree.path) ? "removing" : ""]
         }
     }
 
@@ -207,6 +313,9 @@ final class RepoPickerOverlay: PaletteOverlay {
         if let chord = Chord.displayed(.createWorktree, in: GeneralConfig.current.keymap) {
             hints.append(PaletteHint(keys: chord.displayGlyph, label: "new worktree"))
         }
+        if let chord = Chord.displayed(.removeWorktree, in: GeneralConfig.current.keymap) {
+            hints.append(PaletteHint(keys: chord.displayGlyph, label: "remove worktree"))
+        }
         return hints + [
             PaletteHint(keys: "↑↓", label: "move"),
             PaletteHint(keys: "⎋", label: "close"),
@@ -229,6 +338,15 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .worktree(let worktree, let parent):
             return CreateTarget(workspace: parent, repo: worktree.path)
         }
+    }
+
+    /// The selected worktree and the workspace it hangs under, or nil on any other row. The parent
+    /// comes along because removing runs `git` in its checkout and its `carry` names what goes with
+    /// the folder. A worktree already being removed is unselectable, so it can never be this.
+    var selectedWorktree: (worktree: Worktree, parent: Workspace)? {
+        guard rows.indices.contains(selected), case .worktree(let worktree, let parent) = rows[selected]
+        else { return nil }
+        return (worktree, parent)
     }
 
     override func activate(index: Int, modifiers: NSEvent.ModifierFlags) {
@@ -278,6 +396,38 @@ final class RepoPickerOverlay: PaletteOverlay {
                 icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 11),
                 icon.centerYAnchor.constraint(equalTo: centerYAnchor),
                 label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
+                label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+    }
+
+    /// A worktree still listed because its folder is still on disk, with its delete running. Not
+    /// selectable: opening it would land a tab in a folder being removed underneath it.
+    final class RemovingRowView: SelectableRowView {
+        /// The worktree this row stands for, by the name the ordinary row would have shown.
+        let name: String
+
+        init(worktree: Worktree) {
+            name = worktree.branch ?? String(worktree.head.prefix(7))
+            super.init()
+
+            let spinner = Spinner()
+            spinner.isSpinning = true
+            addSubview(spinner)
+
+            let label = NSTextField(labelWithString: "Removing \(name)…")
+            label.font = .systemFont(ofSize: 11)
+            label.textColor = Theme.current.chrome.ink(.faint)
+            label.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(label)
+
+            NSLayoutConstraint.activate([
+                spinner.leadingAnchor.constraint(
+                    equalTo: leadingAnchor, constant: 11 + RowView.childIndent),
+                spinner.centerYAnchor.constraint(equalTo: centerYAnchor),
+                label.leadingAnchor.constraint(equalTo: spinner.trailingAnchor, constant: 8),
                 label.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
         }

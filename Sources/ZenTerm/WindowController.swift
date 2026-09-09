@@ -282,6 +282,55 @@ final class WindowController: NSObject {
     /// no-op — so `handle` forwards them here instead. Injected by `AppDelegate`.
     var onAppGlobalCommand: ((KeyInterceptor.ReservedChord) -> Void)?
 
+    /// Ask every window how many tabs sit inside a path. A worktree can be open in any window, and
+    /// the confirm has to name that. Injected by `AppDelegate`, which owns the list of windows.
+    var onCountTabsAtPath: ((URL) -> Int)?
+
+    /// Worktrees whose delete is still running, shared across windows: the hazard is the folder
+    /// going away, which does not care which window is looking. `AppDelegate` injects the one
+    /// instance; the default keeps a window built on its own (a test, say) behaving correctly.
+    var worktreeRemovals = WorktreeRemovalTracker()
+
+    /// Tabs in *this* window opened inside `path`. The fan-out above sums these across windows.
+    func tabCount(atPath path: URL) -> Int {
+        tabs.order.filter { Self.isInside(controllers[$0]?.openedCWD, path) }.count
+    }
+
+    /// Whether `cwd` is `root` or sits under it. A ⌘T from a worktree tab inherits the shell's cwd,
+    /// which is a subdirectory, and that tab is in the folder being deleted just the same.
+    private static func isInside(_ cwd: URL?, _ root: URL) -> Bool {
+        guard let cwd = cwd?.standardizedFileURL.path else { return false }
+        let target = root.standardizedFileURL.path
+        return cwd == target || cwd.hasPrefix(target.hasSuffix("/") ? target : target + "/")
+    }
+
+    /// Close every tab in this window opened inside `path`; the last one closes the window. An
+    /// open card stays up and keeps the keyboard, because the picker is where the user is
+    /// watching this removal and the close would hand focus to the tab it promotes.
+    func closeTabs(atPath path: URL) {
+        let card = modal?.overlay
+        for id in tabs.order where Self.isInside(controllers[id]?.openedCWD, path) {
+            closeTab(id, dismissingModal: false)
+        }
+        if let card, modal?.overlay === card { card.focusInitialResponder() }
+    }
+
+    /// A removal started, finished or failed somewhere in the app. The tabs go only once the folder
+    /// actually has: closing them at the ask takes this window down with them when one of them is
+    /// its last, and the picker showing the progress goes too. An open picker re-renders either
+    /// way, since a row built before the removal began still reads as one to open.
+    func worktreeRemovalsChanged(_ change: WorktreeRemovalTracker.Change) {
+        if case .removed(let path) = change { closeTabs(atPath: path) }
+        guard let picker = modal?.overlay as? RepoPickerOverlay else { return }
+        // Re-listing, not just re-rendering: the listings in hand still name a folder git has
+        // stopped reporting, and `dropWorktree` covers the gap until the answer lands.
+        switch change {
+        case .began: picker.refreshRemovalState()
+        case .removed(let path): picker.dropWorktree(at: path); picker.relistWorktrees()
+        case .failed: picker.refreshRemovalState(); picker.relistWorktrees()
+        }
+    }
+
     /// Whether a modal card is up right now. Read by `AppDelegate` so window-level chords (⌘N)
     /// and Copy/Paste routing respect the modal too, not just `handle(_:)`.
     var isModalOverlayOpen: Bool { modal != nil }
@@ -1111,11 +1160,12 @@ final class WindowController: NSObject {
         renderTabBar()
     }
 
-    /// Close a specific tab: terminate its shells, detach its canvas, and cascade to
-    /// closing the window when it was the last tab.
-    private func closeTab(_ id: TabID) {
+    /// Close a specific tab: terminate its shells, detach its canvas, and cascade to closing the
+    /// window when it was the last tab. `dismissingModal` is false for a close nobody asked the
+    /// tab bar for, since taking a card down is the tab bar's and not a worktree removal's.
+    private func closeTab(_ id: TabID, dismissingModal: Bool = true) {
         Log.info("tab closed", category: .tabs)
-        closeModal()  // the "×" button is reachable while a palette is up
+        if dismissingModal { closeModal() }  // the "×" button is reachable while a palette is up
         closeFloatForTabChange()
         cancelConfirm()  // a middle-click close voids a pending confirm on another tab
         let survived = tabs.close(id)
@@ -1186,6 +1236,7 @@ final class WindowController: NSObject {
             let picker = RepoPickerOverlay(
                 entries: workspaces,
                 background: Theme.current.chrome.background.nsColor,
+                removals: self.worktreeRemovals,
                 onChoose: { [weak self] ws, replace in self?.openWorkspace(ws, replaceCurrentTab: replace) },
                 onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
                 onDismiss: { [weak self] in self?.closeModal() }
@@ -1320,6 +1371,112 @@ final class WindowController: NSObject {
         let list = lost.map { "\($0.name) \($0.reason.explanation)" }.joined(separator: ", ")
         toasts.show(
             ToastContent(variant: .warning, title: "Couldn't Carry Everything", message: "\(list)."))
+    }
+
+    /// Remove the worktree the picker has selected: read what it would cost, then confirm once with
+    /// the whole consequence. `WorktreeStore.state` shells out to git twice, so it runs off-main and
+    /// the confirm is presented on the way back.
+    private func removeSelectedWorktreeInPicker() {
+        guard let picker = modal?.overlay as? RepoPickerOverlay,
+            let selection = picker.selectedWorktree
+        else { return }  // a workspace row or the ＋ row has nothing to remove
+        let (worktree, parent) = selection
+        let openTabs = onCountTabsAtPath?(worktree.path) ?? tabCount(atPath: worktree.path)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let state = WorktreeStore.state(worktree)
+            let carried = parent.carry.filter {
+                FileManager.default.fileExists(
+                    atPath: worktree.path.appendingPathComponent($0).path)
+            }
+            DispatchQueue.main.async { [weak self] in
+                // The picker may be long gone, or another window may have started this removal.
+                // Either way the question is stale, and nothing is destroyed by dropping it.
+                guard let self, self.modal?.overlay === picker,
+                    !self.worktreeRemovals.isRemoving(worktree.path)
+                else { return }
+                self.confirmRemoveWorktree(
+                    picker, worktree, from: parent, state: state, carried: carried,
+                    openTabs: openTabs)
+            }
+        }
+    }
+
+    /// Over the picker rather than in place of it: the row being asked about stays on screen, and
+    /// becomes the `Removing…` row the moment the answer is yes. A card, not the toast confirm ⌘W
+    /// and ⌘Q use, because this one deletes a folder and cannot be taken back.
+    private func confirmRemoveWorktree(
+        _ picker: RepoPickerOverlay, _ worktree: Worktree, from parent: Workspace,
+        state: WorktreeState?, carried: [String], openTabs: Int
+    ) {
+        let name = Self.worktreeName(worktree)
+        let card = ConfirmCard(
+            title: "Remove Worktree",
+            message: Self.removeWorktreeMessage(
+                worktree, state: state, carried: carried, openTabs: openTabs),
+            confirmLabel: "Remove",
+            background: Theme.current.chrome.background.nsColor,
+            onCancel: { [weak picker] in picker?.dismissConfirm() },
+            onConfirm: { [weak self, weak picker] in
+                picker?.dismissConfirm()
+                self?.beginWorktreeRemoval(worktree, from: parent, named: name)
+            })
+        picker.presentConfirm(card)
+    }
+
+    /// Hand the delete to the tracker. Nothing is closed or presented here: the claim fans out and
+    /// turns the row the picker is still showing into its `Removing…` state, and the tabs go when
+    /// the folder does. Only the failure toast is this window's, and only it is dropped with it.
+    private func beginWorktreeRemoval(_ worktree: Worktree, from parent: Workspace, named name: String) {
+        worktreeRemovals.remove(worktree, in: parent.path) { [weak self] error in
+            guard let self, let error else { return }
+            self.toasts.show(
+                ToastContent(
+                    variant: .warning, title: "Couldn't Remove \(name)",
+                    message: error.localizedDescription))
+        }
+    }
+
+    /// A detached worktree's folder name is whatever directory it was made in, which reads like a
+    /// branch and is not one, so the short head stands in.
+    static func worktreeName(_ worktree: Worktree) -> String {
+        worktree.branch ?? String(worktree.head.prefix(7))
+    }
+
+    /// One confirm carrying every consequence: the work that goes, the tabs that close, the
+    /// carried files that go with the folder, and the branch that does not. A nil state reads as
+    /// "could not be read", never "empty": that is the one sentence here that could cost a day.
+    static func removeWorktreeMessage(
+        _ worktree: Worktree, state: WorktreeState?, carried: [String], openTabs: Int
+    ) -> String {
+        let name = worktreeName(worktree)
+        var does: [String] = []
+        if openTabs == 1 { does.append("closes its tab") }
+        if openTabs > 1 { does.append("closes its \(openTabs) tabs") }
+        does.append(
+            carried.isEmpty
+                ? "deletes the folder" : "deletes the folder with the \(joined(carried)) it carries")
+        does.append("keeps the branch")
+        let consequence = "Removing it \(joined(does))."
+
+        guard let state else {
+            return "\(name) could not be read, so what it holds is unknown. \(consequence)"
+        }
+        guard !state.isClean else { return "\(name) has nothing uncommitted. \(consequence)" }
+        var lost: [String] = []
+        if state.uncommitted > 0 {
+            lost.append("\(state.uncommitted) uncommitted file\(state.uncommitted == 1 ? "" : "s")")
+        }
+        if state.unpushed > 0 {
+            let verb = state.unpushed == 1 ? "is" : "are"
+            lost.append("\(state.unpushed) commit\(state.unpushed == 1 ? "" : "s") that \(verb) on no remote")
+        }
+        return "\(name) has \(joined(lost)). \(consequence)"
+    }
+
+    private static func joined(_ items: [String]) -> String {
+        guard items.count > 1 else { return items.first ?? "" }
+        guard items.count > 2 else { return items.joined(separator: " and ") }
+        return items.dropLast().joined(separator: ", ") + ", and " + (items.last ?? "")
     }
 
     /// Open the "Report an Issue" composer (Help menu + Settings). Non-private: `AppDelegate` routes
@@ -1940,6 +2097,9 @@ final class WindowController: NSObject {
         // cards; every other chord is swallowed. Its arrow/Enter/Esc keys aren't chords — they
         // go to the card's field editor, never here.
         if let modal {
+            // A card over the card owns the keyboard: a destructive question is answered, never
+            // navigated away from by the chord that opened the surface under it.
+            if (modal.overlay as? PaletteOverlay)?.isShowingOverlaidCard == true { return }
             if let selfToggle = modal.kind.selfToggle, chord == selfToggle {
                 closeModal()
                 return
@@ -1947,6 +2107,10 @@ final class WindowController: NSObject {
             // Answered ahead of the switch below, whose `default` would swallow it.
             if modal.kind == .repoPicker, chord == .createWorktree {
                 createWorktreeFromPicker()
+                return
+            }
+            if modal.kind == .repoPicker, chord == .removeWorktree {
+                removeSelectedWorktreeInPicker()
                 return
             }
             switch chord {
@@ -2084,8 +2248,8 @@ final class WindowController: NSObject {
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
-        // Answered by the modal gate above. `PickerChordGuard` keeps it from being a dead key.
-        case .createWorktree: break
+        // Answered by the modal gate above. `PickerChordGuard` keeps them from being dead keys.
+        case .createWorktree, .removeWorktree: break
         case .toggleCommandPalette: toggleCommandPalette()
         case .openSettings: openSettings()
         case .reportIssue: openReportIssue()

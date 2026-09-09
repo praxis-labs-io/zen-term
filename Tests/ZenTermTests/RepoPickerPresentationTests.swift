@@ -103,6 +103,198 @@ final class RepoPickerPresentationTests: WindowTestCase {
         return c.window.contentView!.performKeyEquivalent(with: esc)
     }
 
+    /// Hand the picker a listing the way the background pass does, so a worktree row exists
+    /// without a real repo on disk. The path never has to resolve: `WorktreeStore.state` failing is
+    /// the "could not be read" branch of the confirm, which still confirms.
+    private func giveWorktrees(_ picker: RepoPickerOverlay, under path: URL, _ branches: String...) {
+        let worktrees = branches.map {
+            Worktree(
+                path: path.appendingPathComponent($0, isDirectory: true), branch: $0,
+                head: "0000000", isLocked: false)
+        }
+        picker.setWorktrees(
+            WorktreeListing(commonDir: path.appendingPathComponent(".git"), worktrees: worktrees),
+            for: path)
+    }
+
+    /// The search field holds the keyboard, so arrows arrive through its `doCommandBy`.
+    private func moveDown(in picker: RepoPickerOverlay) {
+        let field = descendants(of: picker).compactMap { $0 as? NSTextField }
+            .first { ($0.delegate as? PaletteOverlay) === picker }!
+        _ = picker.control(
+            field, textView: NSTextView(), doCommandBy: #selector(NSResponder.moveDown(_:)))
+    }
+
+    private func pressEscapeThroughTheResponder(in c: WindowController) {
+        let esc = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+            isARepeat: false, keyCode: 53)!
+        guard let content = c.window.contentView else { return }
+        if content.performKeyEquivalent(with: esc) { return }
+        (c.window.firstResponder as? NSView)?.keyDown(with: esc)
+    }
+
+    // MARK: ⌥⌫ routing
+
+    /// The modal gate's switch ends in `default: return`, so an unmatched case is swallowed.
+    func test_removeWorktree_overAWorktreeRow_confirms() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        let picker = try XCTUnwrap(pickers(in: c).first)
+        let alpha = URL(
+            fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
+        giveWorktrees(picker, under: alpha, "feature/one")
+        moveDown(in: picker)
+
+        c.handle(.removeWorktree)
+
+        waitUntil(picker.presentedConfirmForTesting != nil, "the remove confirm to be presented")
+        // The row being asked about has to stay on screen, and it becomes the progress state the
+        // moment the answer is yes. A confirm that replaced the picker took both away.
+        XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "the picker is not replaced")
+        XCTAssertFalse(c.isConfirmOpen, "a card, never the toast confirm")
+    }
+
+    /// A workspace is a checkout the user configured, not a worktree of ours.
+    func test_removeWorktree_overAWorkspaceRow_confirmsNothing() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+
+        c.handle(.removeWorktree)
+        waitForPendingLoads()
+
+        XCTAssertNil(pickers(in: c).first?.presentedConfirmForTesting)
+        XCTAssertFalse(pickers(in: c).isEmpty, "the picker is left where it was")
+    }
+
+    /// The other half of `PickerChordGuard`: outside the picker, nothing may present.
+    func test_removeWorktree_withNoPickerUp_presentsNothing() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+
+        c.handle(.removeWorktree)
+        waitForPendingLoads()
+
+        XCTAssertFalse(c.isConfirmOpen)
+        XCTAssertTrue(pickers(in: c).isEmpty)
+    }
+
+    /// Esc answers the confirm, not the picker: the list underneath is still where the user was.
+    func test_cancellingTheRemoveConfirm_leavesThePickerUp() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        let picker = try XCTUnwrap(pickers(in: c).first)
+        let alpha = URL(
+            fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
+        giveWorktrees(picker, under: alpha, "feature/one")
+        moveDown(in: picker)
+        c.handle(.removeWorktree)
+        waitUntil(picker.presentedConfirmForTesting != nil, "the remove confirm to be presented")
+
+        pressEscapeThroughTheResponder(in: c)
+
+        XCTAssertNil(picker.presentedConfirmForTesting)
+        XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "the picker never left")
+    }
+
+    /// A destructive question is answered, never navigated away from. Both picker chords stay live
+    /// while the confirm is up otherwise: ⌥⏎ swapped the picker for the create form and dropped the
+    /// question with it, and ⌥⌫ stacked a second card over the first.
+    func test_chordsAreSwallowedWhileTheConfirmIsUp() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        let picker = try XCTUnwrap(pickers(in: c).first)
+        waitForPendingLoads()
+        let alpha = URL(
+            fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
+        giveWorktrees(picker, under: alpha, "feature/one")
+        moveDown(in: picker)
+        c.handle(.removeWorktree)
+        waitUntil(picker.presentedConfirmForTesting != nil, "the remove confirm to be presented")
+        let card = try XCTUnwrap(picker.presentedConfirmForTesting)
+
+        c.handle(.createWorktree)
+        c.handle(.removeWorktree)
+        c.handle(.toggleRepoPicker)
+        waitForPendingLoads()
+
+        XCTAssertTrue(picker.presentedConfirmForTesting === card, "the same question, still up")
+        XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "and the same picker under it")
+    }
+
+    /// The whole point of the card over the toast: answering yes turns the row that was asked
+    /// about into the progress state, in the list the user was already looking at.
+    func test_confirmingTheRemove_leavesThePickerUpWithTheRowRemoving() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        // `AppDelegate` owns this wiring in the app; a bare window has to stand in for it.
+        c.worktreeRemovals.onChanged = { [weak c] change in c?.worktreeRemovalsChanged(change) }
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        let picker = try XCTUnwrap(pickers(in: c).first)
+        // The picker lists worktrees in the background on open, and those answers are empty here.
+        // Seeding before they land would have the row wiped out from under the test.
+        waitForPendingLoads()
+        let alpha = URL(
+            fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
+        giveWorktrees(picker, under: alpha, "feature/one")
+        moveDown(in: picker)
+        c.handle(.removeWorktree)
+        waitUntil(picker.presentedConfirmForTesting != nil, "the remove confirm to be presented")
+        let card = try XCTUnwrap(picker.presentedConfirmForTesting)
+
+        try XCTUnwrap(button(in: card, title: "Remove")).onTap()
+
+        XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "the picker is never rebuilt")
+        XCTAssertNil(picker.presentedConfirmForTesting, "the confirm is answered and gone")
+        XCTAssertEqual(
+            c.tabOrderForTesting.count, 1, "the tabs go when the folder does, not when it is asked")
+        XCTAssertTrue(
+            picker.rowViews.contains { $0 is RepoPickerOverlay.RemovingRowView },
+            "the row says what is happening to it")
+    }
+
+    /// The removal closes the tab it was opened in, and the picker is where the user is watching
+    /// that happen. Only the tab bar takes a card down.
+    func test_theTabClosingOnARemoval_leavesThePickerUp() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        let removed = URL(
+            fileURLWithPath: NSString("~/Dev/alpha/feature/one").expandingTildeInPath,
+            isDirectory: true)
+        // Opening a workspace is how a worktree gets its tab, and it closes the picker on the way.
+        c.openWorkspaceForTesting(
+            Workspace(
+                title: "feature/one", path: removed, main: nil, right: nil, bottom: nil,
+                focus: .main, env: [:]),
+            replaceCurrentTab: false)
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        let picker = try XCTUnwrap(pickers(in: c).first)
+        XCTAssertEqual(c.tabCount(atPath: removed), 1)
+
+        c.worktreeRemovalsChanged(.removed(removed))
+
+        XCTAssertEqual(c.tabCount(atPath: removed), 0, "the tab goes with the folder")
+        XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "the picker does not")
+    }
+
+    private func button(in card: NSView, title: String) -> AppButton? {
+        func descendants(of view: NSView) -> [NSView] {
+            view.subviews.flatMap { [$0] + descendants(of: $0) }
+        }
+        return descendants(of: card).compactMap { $0 as? AppButton }.first { $0.title == title }
+    }
+
     // MARK: ⌥⏎ routing
 
     /// The modal gate's switch ends in `default: return`, so an unmatched case is swallowed.
