@@ -177,6 +177,46 @@ final class RepoPickerOverlay: PaletteOverlay {
         return !removals.isRemoving(worktree.path)
     }
 
+    /// A confirm shown over the list, which stays put underneath it. Removing a worktree is
+    /// answered here rather than by replacing the picker: the row it is about has to remain
+    /// visible, and it becomes the progress state the moment the answer is yes.
+    private var confirmCard: ConfirmCard?
+
+    override var isShowingOverlaidCard: Bool { confirmCard != nil }
+
+    func presentConfirm(_ card: ConfirmCard) {
+        confirmCard?.removeFromSuperview()
+        card.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(card)
+        NSLayoutConstraint.activate([
+            card.leadingAnchor.constraint(equalTo: leadingAnchor),
+            card.trailingAnchor.constraint(equalTo: trailingAnchor),
+            card.topAnchor.constraint(equalTo: topAnchor),
+            card.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+        confirmCard = card
+        card.focusInitialResponder()
+        card.animateIn()
+    }
+
+    /// Take the confirm down and give the list its keyboard back. No-op when none is up, so an
+    /// answer that arrives twice (Return on a button already springing out) is harmless.
+    func dismissConfirm() {
+        guard let card = confirmCard else { return }
+        confirmCard = nil
+        card.animateOut { card.removeFromSuperview() }
+        focusInitialResponder()
+    }
+
+    override func reapplyTheme() {
+        super.reapplyTheme()
+        confirmCard?.reapplyTheme()
+    }
+
+    #if DEBUG
+        var presentedConfirmForTesting: ConfirmCard? { confirmCard }
+    #endif
+
     /// Re-render around a removal that started or finished. Rebuilt rather than restyled: the row
     /// changes type, and the identity carries the removal so a stale view is never reused.
     func refreshRemovalState() {

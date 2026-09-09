@@ -261,13 +261,18 @@ class PaletteOverlay: NSView, ModalOverlay {
     /// every card agrees on one Esc owner, rather than each host deciding by accident; it also
     /// covers the search field, whose `cancelOperation` used to handle this separately.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if ModalEscape.handle(
-            event, in: window, dismissing: dismiss.isDismissing, close: { self.onDismiss() }
-        ) {
+        if !isShowingOverlaidCard,
+            ModalEscape.handle(
+                event, in: window, dismissing: dismiss.isDismissing, close: { self.onDismiss() })
+        {
             return true
         }
         return super.performKeyEquivalent(with: event)
     }
+
+    /// Whether a subclass has put a card over the list. That card owns Esc for as long as it is up,
+    /// so answering it must not take the whole palette down with it.
+    var isShowingOverlaidCard: Bool { false }
 
     /// Re-apply the card's theme-dependent colors after a live theme change: the retained shell
     /// (card fill/border, search glyph, search field text, divider, empty label, footer hints),

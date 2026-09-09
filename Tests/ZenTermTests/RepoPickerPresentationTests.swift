@@ -151,8 +151,11 @@ final class RepoPickerPresentationTests: WindowTestCase {
 
         c.handle(.removeWorktree)
 
-        waitUntil(c.isConfirmOpen, "the remove confirm to be presented")
-        XCTAssertTrue(pickers(in: c).isEmpty, "one modal slot, so the confirm replaces the picker")
+        waitUntil(picker.presentedConfirmForTesting != nil, "the remove confirm to be presented")
+        // The row being asked about has to stay on screen, and it becomes the progress state the
+        // moment the answer is yes. A confirm that replaced the picker took both away.
+        XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "the picker is not replaced")
+        XCTAssertFalse(c.isConfirmOpen, "a card, never the toast confirm")
     }
 
     /// A workspace is a checkout the user configured, not a worktree of ours.
@@ -165,7 +168,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
         c.handle(.removeWorktree)
         waitForPendingLoads()
 
-        XCTAssertFalse(c.isConfirmOpen)
+        XCTAssertNil(pickers(in: c).first?.presentedConfirmForTesting)
         XCTAssertFalse(pickers(in: c).isEmpty, "the picker is left where it was")
     }
 
@@ -181,8 +184,8 @@ final class RepoPickerPresentationTests: WindowTestCase {
         XCTAssertTrue(pickers(in: c).isEmpty)
     }
 
-    /// ⌥⌫ is a detour from a row, so backing out returns to where it started.
-    func test_cancellingTheRemoveConfirm_reopensThePicker() throws {
+    /// Esc answers the confirm, not the picker: the list underneath is still where the user was.
+    func test_cancellingTheRemoveConfirm_leavesThePickerUp() throws {
         try seedWorkspaces(twoWorkspaces)
         let c = makeWindow()
         c.handle(.toggleRepoPicker)
@@ -193,12 +196,51 @@ final class RepoPickerPresentationTests: WindowTestCase {
         giveWorktrees(picker, under: alpha, "feature/one")
         moveDown(in: picker)
         c.handle(.removeWorktree)
-        waitUntil(c.isConfirmOpen, "the remove confirm to be presented")
+        waitUntil(picker.presentedConfirmForTesting != nil, "the remove confirm to be presented")
 
         pressEscapeThroughTheResponder(in: c)
 
-        XCTAssertFalse(c.isConfirmOpen)
-        waitUntil(!pickers(in: c).isEmpty, "the picker to come back")
+        XCTAssertNil(picker.presentedConfirmForTesting)
+        XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "the picker never left")
+    }
+
+    /// The whole point of the card over the toast: answering yes turns the row that was asked
+    /// about into the progress state, in the list the user was already looking at.
+    func test_confirmingTheRemove_leavesThePickerUpWithTheRowRemoving() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        // `AppDelegate` owns this wiring in the app; a bare window has to stand in for it.
+        c.worktreeRemovals.onChanged = { [weak c] relisting in
+            c?.worktreeRemovalsChanged(relisting: relisting)
+        }
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        let picker = try XCTUnwrap(pickers(in: c).first)
+        // The picker lists worktrees in the background on open, and those answers are empty here.
+        // Seeding before they land would have the row wiped out from under the test.
+        waitForPendingLoads()
+        let alpha = URL(
+            fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
+        giveWorktrees(picker, under: alpha, "feature/one")
+        moveDown(in: picker)
+        c.handle(.removeWorktree)
+        waitUntil(picker.presentedConfirmForTesting != nil, "the remove confirm to be presented")
+        let card = try XCTUnwrap(picker.presentedConfirmForTesting)
+
+        try XCTUnwrap(button(in: card, title: "Remove")).onTap()
+
+        XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "the picker is never rebuilt")
+        XCTAssertNil(picker.presentedConfirmForTesting, "the confirm is answered and gone")
+        XCTAssertTrue(
+            picker.rowViews.contains { $0 is RepoPickerOverlay.RemovingRowView },
+            "the row says what is happening to it")
+    }
+
+    private func button(in card: NSView, title: String) -> AppButton? {
+        func descendants(of view: NSView) -> [NSView] {
+            view.subviews.flatMap { [$0] + descendants(of: $0) }
+        }
+        return descendants(of: card).compactMap { $0 as? AppButton }.first { $0.title == title }
     }
 
     // MARK: ⌥⏎ routing

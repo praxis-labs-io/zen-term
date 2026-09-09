@@ -1379,22 +1379,29 @@ final class WindowController: NSObject {
                 // looking at, and nothing has been destroyed by dropping it.
                 guard let self, self.modal?.overlay === picker else { return }
                 self.confirmRemoveWorktree(
-                    worktree, from: parent, state: state, carried: carried, openTabs: openTabs)
+                    picker, worktree, from: parent, state: state, carried: carried,
+                    openTabs: openTabs)
             }
         }
     }
 
+    /// Over the picker rather than in place of it: the row being asked about stays on screen, and
+    /// becomes the `Removing…` row the moment the answer is yes. A card, not the toast confirm ⌘W
+    /// and ⌘Q use, because this one deletes a folder and cannot be taken back.
     private func confirmRemoveWorktree(
-        _ worktree: Worktree, from parent: Workspace, state: WorktreeState?, carried: [String],
-        openTabs: Int
+        _ picker: RepoPickerOverlay, _ worktree: Worktree, from parent: Workspace,
+        state: WorktreeState?, carried: [String], openTabs: Int
     ) {
         let name = Self.worktreeName(worktree)
-        presentConfirm(
-            variant: .warning, title: "Remove Worktree",
+        let card = ConfirmCard(
+            title: "Remove Worktree",
             message: Self.removeWorktreeMessage(
                 worktree, state: state, carried: carried, openTabs: openTabs),
             confirmLabel: "Remove",
-            onConfirm: { [weak self] in
+            background: Theme.current.chrome.background.nsColor,
+            onCancel: { [weak picker] in picker?.dismissConfirm() },
+            onConfirm: { [weak self, weak picker] in
+                picker?.dismissConfirm()
                 guard let self else { return }
                 // Unconditional, never gated on the count read before the confirm: a tab opened in
                 // another window while the confirm sat there would be left in a folder that is gone.
@@ -1404,36 +1411,24 @@ final class WindowController: NSObject {
                     self.closeTabs(atPath: worktree.path)
                 }
                 self.beginWorktreeRemoval(worktree, from: parent, named: name)
-            },
-            // ⌥⌫ is a detour from a row rather than a way out of the list, so backing out of it
-            // returns to where it started, the same as cancelling the create card.
-            onCancel: { [weak self] in self?.reopenRepoPicker() })
+            })
+        picker.presentConfirm(card)
     }
 
-    /// Hand the delete to the tracker, and put the picker back with the row reading as removing for
-    /// as long as that is true. The tracker claims the path before this returns, which is what the
-    /// reopen needs: a row reads the tracker as it is built, so a picker rebuilt first would offer
-    /// an ordinary row for a folder that is going away.
+    /// Hand the delete to the tracker. Nothing is presented here: the tracker claims the path and
+    /// fans that out, which turns the row the picker is still showing into its `Removing…` state.
     ///
-    /// Only the toasts are this window's, and only they are dropped when it closes. The delete runs
-    /// on the tracker precisely because this window may not survive the tabs it just closed.
+    /// Only the failure toast is this window's, and only it is dropped when the window closes. The
+    /// delete runs on the tracker precisely because this window may not survive the tabs it just
+    /// closed.
     private func beginWorktreeRemoval(_ worktree: Worktree, from parent: Workspace, named name: String) {
-        let notice = toasts.showSticky(
-            ToastContent(
-                variant: .info, title: "Removing \(name)",
-                message: "It stays listed until its files are gone."),
-            actions: [])
         worktreeRemovals.remove(worktree, in: parent.path) { [weak self] error in
-            guard let self else { return }
-            self.toasts.dismiss(notice)
-            if let error {
-                self.toasts.show(
-                    ToastContent(
-                        variant: .warning, title: "Couldn't Remove \(name)",
-                        message: error.localizedDescription))
-            }
+            guard let self, let error else { return }
+            self.toasts.show(
+                ToastContent(
+                    variant: .warning, title: "Couldn't Remove \(name)",
+                    message: error.localizedDescription))
         }
-        reopenRepoPicker()
     }
 
     /// A detached worktree's folder name is whatever directory it was made in, which reads like a

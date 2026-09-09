@@ -2022,6 +2022,21 @@ special key with no character behind it, so `Chord` carries its keyCode, its con
 (`backspace`, ghostty's name; macOS calls this key "delete" and ghostty gives that to
 forward delete) and the glyph it writes back.
 
+**The confirm is a card over the picker, not the toast confirm ⌘W and ⌘Q use.** Closing a
+pane is a smaller thing than deleting a folder, so the two do not share a shape.
+`ConfirmCard` is full-bleed, centered, and hosted by `RepoPickerOverlay` rather than by
+`WindowController`'s single modal slot, which is what keeps the list underneath from being
+torn down. The row being asked about stays on screen, and becomes the progress state the
+moment the answer is yes. `PaletteOverlay` claims Esc for its own dismissal, so it asks
+`isShowingOverlaidCard` first and stands down while a card is up; the card owns Esc, its
+backdrop swallows clicks on the rows, and the affirmative holds focus so Return answers.
+
+**There is no cancelling a removal once it starts, so nothing offers to.** `git worktree
+remove --force` unlinks as it walks, with no transaction behind it: killing it at 350ms
+into a 40,002-file worktree left 7,774 files gone, the directory still there, and git still
+listing the worktree. A Cancel button would leave you worse off than either finishing or
+never starting.
+
 **The confirm carries the whole weight, because git never gets to refuse.** `--force` is
 unconditional, so nothing downstream will stop a mistake. One sentence names all of it:
 what is uncommitted and unpushed, the tabs that close, the carried entries that go with
@@ -2031,9 +2046,10 @@ never as "clean", and keeps the destructive framing.
 
 **The read runs off-main and the confirm is presented on the way back**, so it checks the
 picker is still the one that was up, by identity. Otherwise it lands over whatever the user
-opened instead, asking about something they are no longer looking at. Cancel reopens the
-picker: ⌥⌫ is a detour from a row, so backing out returns where it started, the same rule
-the create card follows.
+opened instead, asking about something they are no longer looking at. Cancel takes the card
+down and leaves the list where it was, which is the difference between this and the create
+card: that one replaces the picker and reopens it on cancel, because a form is a different
+task, while a confirm is about a row you are still looking at.
 
 **The tab fan-out is unconditional.** It runs whether or not the count read before the
 confirm found anything: a tab opened in another window while the confirm sat there would
@@ -2047,9 +2063,10 @@ out through `AppDelegate`, which owns the only list of windows.
 that does not care which window is looking. The delete is slow and stays slow: removing a
 worktree carrying a 204,839-file `node_modules` measured **13.4 seconds** on an M-series
 machine, and git lists the folder for all of it. So a worktree being removed renders as a
-`Removing…` row that refuses to open, a sticky toast says the same, and `AppDelegate` fans
-the change out to every window so a picker already open is rebuilt rather than only the
-next one to be opened.
+`Removing…` row that refuses to open, and `AppDelegate` fans the change out to every window
+so a picker already open is rebuilt rather than only the next one to be opened. The row is
+the whole progress state: a toast beside it would say the same thing twice, and only a
+failure gets one.
 
 **The tracker runs the delete, rather than the window that asked for it.** Removing a
 worktree closes the tabs open in it, and closing a window's last tab closes the window, so
@@ -2059,9 +2076,7 @@ waits on `whenIdle` alongside the shell sweeps: exiting mid-delete leaves a half
 folder with git's entry for it still in place. The wait is bounded, because a `git` that
 has stopped answering must not hold the process open.
 
-**The claim goes in before the picker is reopened**, because a row reads the tracker as it
-is built: reopening first would offer an ordinary row for a folder already going away. And
-the finish **re-lists** rather than only re-rendering. `refreshRemovalState` rebuilds from
+**The finish re-lists rather than only re-rendering.** `refreshRemovalState` rebuilds from
 the listings already in hand, and those still name a folder git has stopped reporting, so a
 re-render alone would put the ordinary row back for something gone.
 
