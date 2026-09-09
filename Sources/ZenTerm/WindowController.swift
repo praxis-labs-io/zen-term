@@ -282,12 +282,9 @@ final class WindowController: NSObject {
     /// no-op — so `handle` forwards them here instead. Injected by `AppDelegate`.
     var onAppGlobalCommand: ((KeyInterceptor.ReservedChord) -> Void)?
 
-    /// Ask every window how many tabs sit on a path, and close them. Removing a worktree starts in
-    /// one window's picker but its consequences are not window-local: a worktree can be open in any
-    /// window, and the confirm has to name that before it deletes the folder.
-    /// Injected by `AppDelegate`, which owns the only list of windows.
+    /// Ask every window how many tabs sit inside a path. A worktree can be open in any window, and
+    /// the confirm has to name that. Injected by `AppDelegate`, which owns the list of windows.
     var onCountTabsAtPath: ((URL) -> Int)?
-    var onCloseTabsAtPath: ((URL) -> Void)?
 
     /// Worktrees whose delete is still running, shared across windows: the hazard is the folder
     /// going away, which does not care which window is looking. `AppDelegate` injects the one

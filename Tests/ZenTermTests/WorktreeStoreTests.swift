@@ -424,6 +424,22 @@ final class WorktreeStoreTests: XCTestCase {
         XCTAssertFalse(state.isClean)
     }
 
+    /// `git status --porcelain` collapses an untracked directory into one entry by default, and
+    /// the confirm this feeds is what stands between the user and `--force`. Reporting "1
+    /// uncommitted file" for a folder of three is the one number here that must not be wrong.
+    func test_state_countsEveryFileInAnUntrackedDirectory() throws {
+        let worktree = try WorktreeStore.create(branch: "untracked-dir", in: repo)
+        let nested = worktree.path.appendingPathComponent("scratch", isDirectory: true)
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        for name in ["a.txt", "b.txt", "c.txt"] {
+            try GitFixture.write("x\n", to: nested.appendingPathComponent(name))
+        }
+
+        let state = try XCTUnwrap(WorktreeStore.state(worktree))
+
+        XCTAssertEqual(state.uncommitted, 3)
+    }
+
     /// `--not --remotes` excludes nothing when there are no remote-tracking refs, so the count is
     /// the repo's whole history. A local-only worktree would never read as clean.
     func test_state_countsNothingUnpushedInARepoWithNoRemote() throws {

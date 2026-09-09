@@ -127,7 +127,9 @@ enum WorktreeStore {
     /// **Nil is not "clean".** Reporting zero when git failed would put "nothing uncommitted" in
     /// front of a person about to delete a tree we could not read.
     static func state(_ worktree: Worktree) -> WorktreeState? {
-        guard let status = try? git(["status", "--porcelain"], in: worktree.path),
+        // `--untracked-files=all`, because the default collapses an untracked directory into one
+        // entry and the confirm would offer "1 uncommitted file" for a folder of hundreds.
+        guard let status = try? git(["status", "--porcelain", "--untracked-files=all"], in: worktree.path),
             let remotes = try? git(["remote"], in: worktree.path)
         else { return nil }
         // `--not --remotes` excludes nothing when there are no remote-tracking refs, so the count

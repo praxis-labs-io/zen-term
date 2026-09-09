@@ -291,10 +291,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wc.onCountTabsAtPath = { [weak self] path in
             self?.windows.reduce(0) { $0 + $1.tabCount(atPath: path) } ?? 0
         }
-        wc.onCloseTabsAtPath = { [weak self] path in
-            // Copy first: closing a window's last tab removes it from `windows` mid-iteration.
-            for window in self?.windows ?? [] { window.closeTabs(atPath: path) }
-        }
         if centered { wc.window.center() }
         wc.onClosed = { [weak self, weak wc] in
             guard let self, let wc else { return }
