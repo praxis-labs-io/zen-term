@@ -245,14 +245,15 @@ final class SettingsKeybindsSection: SettingsSection {
             hintBubble?.setPreview(Self.modifierGlyph(event.modifierFlags))
             return
         }
-        // Decoded through the shared decoder so the macOS keyCodes stay in exactly one place.
+        // Backspace with a modifier is a chord: ⌥⌫ is a shipped default, and reading it as the
+        // clear command would unbind the very action it was being recorded onto. Forward delete
+        // never is, because `Chord` has no glyph for it and would record an unprintable key.
+        let isRecordable = event.keyCode == 51 && !KeyboardFocus.isUnmodified(event)
         switch KeyboardFocus.key(for: event) {
         case .escape: endCapture(row); refreshRows(); return  // Esc → cancel
-        // Bare ⌫ only: ⌥⌫ is a shipped default, and reading a modified backspace as the clear
-        // command would unbind the very action the user was recording it onto.
-        case .delete where KeyboardFocus.isUnmodified(event):
+        case .delete where !isRecordable:
             endCapture(row)
-            remove(row)  // Backspace → no shortcut at all
+            remove(row)  // Delete → no shortcut at all
             return
         default: break
         }
