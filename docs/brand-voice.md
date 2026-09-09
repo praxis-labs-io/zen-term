@@ -279,9 +279,14 @@ person downloading, not for the person who wrote the patch.
 
 One word per concept. The audit found four concepts with two or three words each.
 
-Find is the one row where the two vocabularies deliberately differ, and the seam
-below is why: every label a user reads says Find, every token they type says
+Find and copy are the two rows where the vocabularies deliberately differ, and the
+seam below is why. Every label a user reads says Find, every token they type says
 `search`. `toggle_search`, `search_selection`, `search_next`, `search_previous`.
+
+Copy is the same shape and for the same reason. `carry = ` is a shipped config key,
+so renaming it breaks every file that has one, but "carry" asks the reader to work
+out a metaphor. The UI names the action and the destination instead: COPY INTO NEW
+WORKTREES, "Choose what to copy", "Copying node_modules".
 
 | Concept                               | Use                                                  | Not                                                        |
 | ------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------- |
@@ -295,6 +300,7 @@ below is why: every label a user reads says Find, every token they type says
 | Version control                       | **Git repository**, or **Git repo**                  | repo, git repository (lowercase)                           |
 | The footer button row                 | **toolbar**                                          | dock (that's macOS's; the type name `ToggleDock` is code)  |
 | Looking through the scrollback        | **Find** in UI, `search` in config                   | search in UI, scrollback search, find in config            |
+| Files a worktree needs that git ignores | **copy** in UI, `carry` in config                  | carry in UI (a metaphor, not a description)                |
 
 Apostrophes: straight (`'`), matching the bulk of the codebase. Two form overlays
 use curly (`’`) and should be reconciled.

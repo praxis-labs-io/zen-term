@@ -81,9 +81,9 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertNotNil(carry.focusStop)
     }
 
-    func test_theCarryCaption_saysWhereTheEntriesGo() {
+    func test_theCopyCaption_saysWhatTheEntriesAre() {
         XCTAssertTrue(
-            AddWorkspaceOverlay.carryCaptionText.lowercased().contains("worktree"),
+            AddWorkspaceOverlay.carryCaptionText.lowercased().contains("git ignores"),
             AddWorkspaceOverlay.carryCaptionText)
         XCTAssertFalse(AddWorkspaceOverlay.carryCaptionText.contains("—"), "no em-dashes")
     }

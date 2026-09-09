@@ -73,12 +73,12 @@ final class CarryPickerTests: WindowTestCase {
         XCTAssertNotNil(picker.focusStop)
     }
 
-    func test_nothingIsCarriedUntilItIsPicked() {
+    func test_nothingIsChosenUntilItIsPicked() {
         let picker = picker(ignoring: ["node_modules", ".env"])
         load(picker)
 
         XCTAssertEqual(picker.carried, [])
-        XCTAssertEqual(picker.dropdownForTesting?.buttonTitleForTesting, "Nothing carried")
+        XCTAssertEqual(picker.dropdownForTesting?.buttonTitleForTesting, "Nothing chosen")
     }
 
     func test_pickingAnEntry_carriesItAndCountsIt() throws {
@@ -89,7 +89,7 @@ final class CarryPickerTests: WindowTestCase {
         toggle(list, row: 1)
 
         XCTAssertEqual(picker.carried, [".env"])
-        XCTAssertEqual(list.buttonTitleForTesting, "1 carried")
+        XCTAssertEqual(list.buttonTitleForTesting, "1 file")
         XCTAssertEqual(list.itemsForTesting.map(\.isChecked), [false, true])
     }
 
@@ -102,7 +102,7 @@ final class CarryPickerTests: WindowTestCase {
         toggle(list, row: 1)
 
         XCTAssertEqual(picker.carried, [])
-        XCTAssertEqual(list.buttonTitleForTesting, "Nothing carried")
+        XCTAssertEqual(list.buttonTitleForTesting, "Nothing chosen")
     }
 
     /// The list stays open across a pick, because carrying is several picks per visit.

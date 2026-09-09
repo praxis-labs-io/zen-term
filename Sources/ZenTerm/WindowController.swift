@@ -1327,7 +1327,7 @@ final class WindowController: NSObject {
                     onEntry: { name in
                         DispatchQueue.main.async { [weak self, weak card] in
                             guard let card, self?.isPresenting(card) == true else { return }
-                            card.setPhase("Carrying \(name)")
+                            card.setPhase("Copying \(name)")
                         }
                     })
                 result = .success((worktree, report))
@@ -1376,7 +1376,7 @@ final class WindowController: NSObject {
         guard !lost.isEmpty else { return }
         let list = lost.map { "\($0.name) \($0.reason.explanation)" }.joined(separator: ", ")
         toasts.show(
-            ToastContent(variant: .warning, title: "Couldn't Carry Everything", message: "\(list)."))
+            ToastContent(variant: .warning, title: "Couldn't Copy Everything", message: "\(list)."))
     }
 
     /// Remove the worktree the picker has selected: read what it would cost, then confirm once with
@@ -1460,7 +1460,7 @@ final class WindowController: NSObject {
         if openTabs > 1 { does.append("closes its \(openTabs) tabs") }
         does.append(
             carried.isEmpty
-                ? "deletes the folder" : "deletes the folder with the \(joined(carried)) it carries")
+                ? "deletes the folder" : "deletes the folder with the \(joined(carried)) it copied")
         does.append("keeps the branch")
         let consequence = "Removing it \(joined(does))."
 

@@ -246,7 +246,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         carryCaption.textColor = Theme.current.chrome.ink(.muted)
         carryCaption.stringValue = Self.carryCaptionText
         let carryGroup = Self.vStack(
-            [caption("CARRY", required: false), carryPicker, carryCaption], spacing: 6)
+            [caption("COPY INTO NEW WORKTREES", required: false), carryPicker, carryCaption], spacing: 6)
 
         cancelButton.onTap = { [weak self] in self?.onCancel() }
         addButton.setTitle(editingWorkspace == nil ? "Add Workspace" : "Save")
@@ -521,7 +521,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         }
     }
 
-    static let carryCaptionText = "Copied into a new worktree of this workspace."
+    static let carryCaptionText = "Files git ignores that a worktree needs to run."
 
     private static func focusIndex(for region: Workspace.Region) -> Int {
         switch region {

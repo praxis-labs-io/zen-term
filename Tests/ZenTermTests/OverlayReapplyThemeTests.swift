@@ -194,9 +194,9 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         }
         guard
             let caption = descendants(of: overlay).compactMap({ $0 as? FieldCaption })
-                .first(where: { $0.stringValue.hasPrefix("CARRY") })
+                .first(where: { $0.stringValue.hasPrefix("COPY INTO") })
         else {
-            return XCTFail("expected the CARRY caption")
+            return XCTFail("expected the copy-into caption")
         }
         branchField.setText("feature/zen-473")
 
@@ -266,7 +266,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
         XCTAssertNotEqual(before, list.layer?.borderColor)
         XCTAssertEqual(carry.carried, ["node_modules"], "a recolor never loses what was picked")
-        XCTAssertEqual(list.buttonTitleForTesting, "1 carried")
+        XCTAssertEqual(list.buttonTitleForTesting, "1 file")
     }
 
     func test_reapplyTheme_recolorsEnvRowAndPreservesTypedKey() throws {

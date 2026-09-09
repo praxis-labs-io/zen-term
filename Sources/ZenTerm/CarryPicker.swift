@@ -190,6 +190,6 @@ final class CarryPicker: NSView, ThemeReapplying {
     }
 
     private func summary() -> String {
-        carried.isEmpty ? "Nothing carried" : "\(carried.count) carried"
+        carried.isEmpty ? "Nothing chosen" : "\(carried.count) file\(carried.count == 1 ? "" : "s")"
     }
 }

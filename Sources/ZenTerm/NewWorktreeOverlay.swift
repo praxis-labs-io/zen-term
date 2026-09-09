@@ -24,7 +24,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
     ) { _ in }
     private let baseCaption = NSTextField(labelWithString: "")
     private let carryLabel = NSTextField(labelWithString: "")
-    private let carryLink = AppButton(title: "Set what to carry", variant: .muted)
+    private let carryLink = AppButton(title: "Choose what to copy", variant: .muted)
     private let errorLabel = NSTextField(labelWithString: "")
     private let spinner = Spinner()
     private let phaseLabel = NSTextField(labelWithString: "")
@@ -197,7 +197,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         // Nothing to say when nothing is set: the button already says it.
         carryLabel.stringValue = workspace.carry.joined(separator: ", ")
         carryLabel.isHidden = workspace.carry.isEmpty
-        carryLink.setTitle(workspace.carry.isEmpty ? "Set what to carry" : "Change what to carry")
+        carryLink.setTitle(workspace.carry.isEmpty ? "Choose what to copy" : "Change what to copy")
         carryLink.isHidden = onEditWorkspace == nil
         carryLink.isKeyboardFocusable = onEditWorkspace != nil
         carryLink.onTap = { [weak self] in self?.editWorkspace() }
@@ -206,7 +206,8 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         carryLink.onTab = { [weak self] in self?.moveTab(1) }
         carryLink.onBacktab = { [weak self] in self?.moveTab(-1) }
         let carryGroup = Self.vStack(
-            [caption("CARRY"), carryLabel, Self.leadingWrap(carryLink)], spacing: 6)
+            [caption("COPY INTO THIS WORKTREE"), carryLabel, Self.leadingWrap(carryLink)],
+            spacing: 6)
 
         errorLabel.font = .systemFont(ofSize: 11, weight: .medium)
         errorLabel.textColor = Theme.current.chrome.destructive.nsColor

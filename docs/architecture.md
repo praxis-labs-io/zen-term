@@ -1949,7 +1949,8 @@ The create card runs it, and reports every entry that stayed behind except one t
 simply not there: a section covers a repo before and after its first install, so that
 one is a normal state rather than something to interrupt with.
 
-**Carry is picked, never typed.** The workspace form's CARRY control lists what
+**Carry is picked, never typed.** The workspace form's COPY INTO NEW WORKTREES
+control lists what
 `git status --porcelain --ignored` reports for the folder, which is the same question
 carry answers, and the user ticks what comes across. An ignored directory arrives
 collapsed to one entry, which is the granularity the copy works at. The catalog is the
@@ -1972,6 +1973,11 @@ workspace, not to one create, so ticking a box there would either rewrite the co
 a side effect of making a worktree or drift from what the file says. The card shows what
 comes across and a button into the workspace form, which hands back to the picker rather
 than to Settings: `⌥⏎` is where it started, and the typed branch is gone either way.
+
+**The word the user reads is "copy", not "carry".** `carry = ` is a shipped config
+key, so renaming it breaks every file that has one, but the metaphor asks the reader
+to work it out. `docs/brand-voice.md` carries the row, beside Find / `search`, which
+is the same seam.
 
 **An allowlist, because the denylist is what killed the clone approach.** That design
 copied everything and subtracted what breaks on relocation, which asks us to know
