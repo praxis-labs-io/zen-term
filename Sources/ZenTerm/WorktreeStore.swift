@@ -227,11 +227,13 @@ enum WorktreeStore {
     }
 
     /// Take the branch name, or throw. `git branch` writes the ref under git's own lock and refuses
-    /// a name already taken, so winning here is what makes the rollback's delete safe. It is also
-    /// what sets the upstream off a remote-tracking base, which `git push` with no `-u` relies on.
+    /// a name already taken, so winning here is what makes the rollback's delete safe.
+    ///
+    /// `--no-track` because tracking the base sets an upstream named something else, and
+    /// `push.default=simple` refuses that: the first `git push` from a new worktree failed.
     private static func claimBranch(_ branch: String, at baseRef: String, in repo: URL) throws {
         do {
-            try git(["branch", "--", branch, baseRef], in: repo)
+            try git(["branch", "--no-track", "--", branch, baseRef], in: repo)
         } catch {
             throw branchExists(branch, in: repo) ? WorktreeError.branchExists(branch) : error
         }
@@ -279,7 +281,7 @@ enum WorktreeStore {
         guard branchExists(branch, in: repo) else { return leftBehind }
 
         // `-D`, because the claim already proved the branch is ours: `-d` asks a different question
-        // and refuses one cut from a base ahead of the checkout with no upstream set.
+        // and refuses an untracked one cut from a base ahead of the checkout.
         if (try? git(["branch", "-D", "--", branch], in: repo)) != nil { return leftBehind }
         leftBehind.append("the branch \(branch)")
         return leftBehind

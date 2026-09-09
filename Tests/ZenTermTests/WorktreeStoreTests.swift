@@ -185,14 +185,14 @@ final class WorktreeStoreTests: XCTestCase {
             WorktreeStore.directoryName(for: repo))
     }
 
-    /// Claiming the branch is what sets its upstream, so `git push` inside a new worktree needs no
-    /// `-u`. Nothing else pins that, and a rewrite of the claim can drop it silently.
-    func test_create_tracksTheRemoteBaseItWasCutFrom() throws {
-        _ = try WorktreeStore.create(branch: "tracked", in: repo)
+    /// A branch cut from `origin/main` used to be set up to track it, and `push.default=simple`
+    /// refuses an upstream whose name is not the branch's own, so the first `git push` from a new
+    /// worktree failed. Untracked, git names the push that works instead.
+    func test_create_leavesTheNewBranchUntracked() throws {
+        _ = try WorktreeStore.create(branch: "fresh", in: repo)
 
-        XCTAssertEqual(
-            try GitFixture.run(["config", "branch.tracked.merge"], in: repo), "refs/heads/main")
-        XCTAssertEqual(try GitFixture.run(["config", "branch.tracked.remote"], in: repo), "origin")
+        XCTAssertThrowsError(try GitFixture.run(["config", "branch.fresh.merge"], in: repo))
+        XCTAssertThrowsError(try GitFixture.run(["config", "branch.fresh.remote"], in: repo))
     }
 
     func test_create_refusesABranchThatAlreadyExists() throws {
@@ -574,12 +574,10 @@ final class WorktreeStoreTests: XCTestCase {
 
     // MARK: a base ahead of the checkout
 
-    /// `-d` refuses a branch merged into neither its upstream nor the *current* HEAD. The claim
-    /// normally sets that upstream off a remote-tracking base and hides it, but not under
-    /// `branch.autoSetupMerge=false`: there a checkout behind `origin/main` keeps the branch, and
-    /// the orphan then wedges the next create of the same name. That is why the rollback uses `-D`.
+    /// `-d` refuses a branch merged into neither its upstream nor the *current* HEAD, and a claimed
+    /// branch is untracked, so it has no upstream to be merged into. A checkout sitting behind
+    /// `origin/main` keeps the orphan, which wedges the next create of the same name. Hence `-D`.
     func test_create_rollsBackABranchCutFromABaseAheadOfTheCheckout() throws {
-        try GitFixture.run(["config", "branch.autoSetupMerge", "false"], in: repo)
         try GitFixture.write("two\n", to: repo.appendingPathComponent("tracked.txt"))
         try GitFixture.run(["commit", "-qam", "second"], in: repo)
         try GitFixture.run(["push", "-q", "origin", "main"], in: repo)

@@ -1854,11 +1854,10 @@ failure.
 the command after it, so the rollback would have to guess which of the two it owns.
 Each claim is instead an operation that fails when someone already holds the thing:
 
-- `git branch -- <name> <base>` writes the ref under git's own lock and refuses a name
-  already taken. It is also what sets the new branch's upstream off a remote-tracking
-  base, which is why `git push` in a fresh worktree needs no `-u`. `update-ref` with a
-  zero old value is the same compare-and-swap, but it is plumbing and sets nothing,
-  and reimplementing git's `branch.autoSetupMerge` policy by hand would drift from it.
+- `git branch --no-track -- <name> <base>` writes the ref under git's own lock and
+  refuses a name already taken. `update-ref` with a zero old value is the same
+  compare-and-swap one layer down, but branch creation is what `git branch` is for, and
+  the tracking decision below is a flag on it rather than a policy to reimplement.
 - `createDirectory(withIntermediateDirectories: false)` refuses a path that exists.
   `worktree add` accepts the empty directory that leaves, so the add runs without `-b`
   and checks out the branch already claimed.
@@ -1868,6 +1867,13 @@ touches the filesystem. Ownership is a fact after that, and the rollback deletes
 what this create made. There is no OID comparison to weaken, and no window where a
 losing process takes a branch someone else cut from the same base or deletes the
 winner's fresh worktree directory.
+
+**`--no-track`, deliberately.** `worktree add -b` tracked the base, which set
+`origin/main` as the upstream of a branch called something else. `push.default=simple`
+refuses an upstream whose name is not the branch's own, so the first `git push` from a
+new worktree failed with a lecture about a branch the user had not asked to push to.
+Untracked, git names the push that works, and `push.autoSetupRemote` runs it without
+asking. The cost is that `git status` no longer counts the branch ahead of its base.
 
 **Rollback order is load-bearing.** `git worktree add` can fail *after* registering
 the worktree, which a `post-checkout` hook that exits non-zero reproduces exactly
@@ -1879,9 +1885,9 @@ then the branch.
 
 The delete is `branch -D`. `-d` is not a second line of defence under the claim but a
 different question: it refuses a branch merged into neither its upstream nor the
-*current* HEAD. The claim usually sets that upstream and hides the difference, but
-under `branch.autoSetupMerge=false` a checkout sitting behind `origin/main` keeps the
-branch, and the orphan then wedges the next create of the same name.
+*current* HEAD. A claimed branch has no upstream at all, so a checkout sitting behind
+`origin/main` keeps the branch, and the orphan then wedges the next create of the same
+name.
 
 Whatever the rollback cannot undo is named in `rollbackIncomplete` rather than
 swallowed, so a create that half-failed says which branch or folder survived it.
