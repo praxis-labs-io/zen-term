@@ -89,9 +89,9 @@ enum WorktreeStore {
         /// Test-only redirect, mirroring `ConfigLoader.defaultRootOverrideForTesting`.
         static var rootOverrideForTesting: URL?
 
-        /// Test-only seam for the window between the branch precheck and `worktree add`, the only
-        /// place a branch we did not create can appear. Mirrors `CloneStore.willRemoveForTesting`.
-        static var betweenCheckAndAddForTesting: ((URL) -> Void)?
+        /// Test-only seam for the window before `create` claims anything, where another process can
+        /// take the branch name or the folder first. Mirrors `CloneStore.willRemoveForTesting`.
+        static var beforeClaimingForTesting: ((URL) -> Void)?
     #endif
 
     /// Worktrees get a plain, typeable home of their own rather than a corner of app state: a
@@ -186,10 +186,12 @@ enum WorktreeStore {
     // MARK: writing
 
     /// A worktree on a new `branch`, cut from `base`.
+    ///
+    /// The branch and the folder are each claimed with an operation that refuses what someone else
+    /// already holds, so a create that fails takes back only what it made itself.
     static func create(branch: String, base: Base = .defaultBranch, in repo: URL) throws -> Worktree {
         guard GitRepo.isGitRepo(repo) else { throw WorktreeError.notARepo(repo) }
         guard isUsableBranchName(branch, in: repo) else { throw WorktreeError.invalidBranchName(branch) }
-        guard !branchExists(branch, in: repo) else { throw WorktreeError.branchExists(branch) }
 
         let baseRef = try resolveBase(base, in: repo)
         let base0ID = try git(["rev-parse", baseRef], in: repo)
@@ -197,26 +199,24 @@ enum WorktreeStore {
         // otherwise give the same repo a second home under the root.
         let parent = root.appendingPathComponent(
             directoryName(for: mainCheckout(of: repo)), isDirectory: true)
-        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
         let destination = parent.appendingPathComponent(slug(forText: branch), isDirectory: true)
-        guard !FileManager.default.fileExists(atPath: destination.path) else {
-            throw WorktreeError.destinationExists(
-                destination, branch: branchHolding(destination, in: repo))
-        }
 
         #if DEBUG
-            betweenCheckAndAddForTesting?(repo)
+            beforeClaimingForTesting?(repo)
         #endif
 
+        try claimBranch(branch, at: baseRef, in: repo)
         do {
-            try git(["worktree", "add", "-b", branch, destination.path, baseRef], in: repo)
+            try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+            try claimDestination(destination, in: repo)
         } catch {
-            let leftBehind = rollback(branch: branch, at: destination, createdAt: base0ID, in: repo)
-            guard leftBehind.isEmpty else {
-                throw WorktreeError.rollbackIncomplete(
-                    cause: error.localizedDescription, leftBehind: leftBehind)
-            }
-            throw error
+            throw takingBack(branch, at: nil, in: repo, after: error)
+        }
+
+        do {
+            try git(["worktree", "add", destination.path, branch], in: repo)
+        } catch {
+            throw takingBack(branch, at: destination, in: repo, after: error)
         }
 
         // Read the worktree's own HEAD rather than trusting the OID resolved before the add: a
@@ -226,27 +226,61 @@ enum WorktreeStore {
             path: destination.standardizedFileURL, branch: branch, head: head, isLocked: false)
     }
 
-    /// Undo what a failed `create` made, and report what it could not take back.
+    /// Take the branch name, or throw. `git branch` writes the ref under git's own lock and refuses
+    /// a name already taken, so winning here is what makes the rollback's delete safe. It is also
+    /// what sets the upstream off a remote-tracking base, which `git push` with no `-u` relies on.
+    private static func claimBranch(_ branch: String, at baseRef: String, in repo: URL) throws {
+        do {
+            try git(["branch", "--", branch, baseRef], in: repo)
+        } catch {
+            throw branchExists(branch, in: repo) ? WorktreeError.branchExists(branch) : error
+        }
+    }
+
+    /// Take the folder, or throw. Creating it without intermediates fails on a path that already
+    /// exists, and `worktree add` accepts the empty directory that leaves behind.
+    private static func claimDestination(_ destination: URL, in repo: URL) throws {
+        do {
+            try FileManager.default.createDirectory(
+                at: destination, withIntermediateDirectories: false)
+        } catch let error as CocoaError where error.code == .fileWriteFileExists {
+            throw WorktreeError.destinationExists(
+                destination, branch: branchHolding(destination, in: repo))
+        }
+    }
+
+    /// What a failed `create` throws, once it has taken back what it claimed.
+    private static func takingBack(
+        _ branch: String, at destination: URL?, in repo: URL, after cause: Error
+    ) -> Error {
+        let leftBehind = rollback(branch: branch, at: destination, in: repo)
+        guard leftBehind.isEmpty else {
+            return WorktreeError.rollbackIncomplete(
+                cause: cause.localizedDescription, leftBehind: leftBehind)
+        }
+        return cause
+    }
+
+    /// Undo what a failed `create` claimed, and report what it could not take back. `destination`
+    /// is nil when the create never got as far as claiming the folder.
     ///
     /// Order matters: git refuses to delete a branch still registered to a worktree, even one whose
     /// directory is gone, so the registration goes first and a bare `removeItem` never leads.
-    private static func rollback(
-        branch: String, at destination: URL, createdAt base0ID: String, in repo: URL
-    ) -> [String] {
-        _ = try? git(["worktree", "remove", "--force", destination.path], in: repo)
-        try? FileManager.default.removeItem(at: destination)
-        _ = try? git(["worktree", "prune"], in: repo)
-
+    private static func rollback(branch: String, at destination: URL?, in repo: URL) -> [String] {
         var leftBehind: [String] = []
-        if FileManager.default.fileExists(atPath: destination.path) {
-            leftBehind.append("the folder \(destination.lastPathComponent)")
+        if let destination {
+            _ = try? git(["worktree", "remove", "--force", destination.path], in: repo)
+            try? FileManager.default.removeItem(at: destination)
+            _ = try? git(["worktree", "prune"], in: repo)
+            if FileManager.default.fileExists(atPath: destination.path) {
+                leftBehind.append("the folder \(destination.lastPathComponent)")
+            }
         }
         guard branchExists(branch, in: repo) else { return leftBehind }
 
-        // Delete only a branch still standing where we put it: one that moved belongs to whoever
-        // created it after our precheck, and that OID check, not `-d`'s, is the guard that says so.
-        let atBase = (try? git(["rev-parse", "--verify", "refs/heads/\(branch)"], in: repo)) == base0ID
-        if atBase, (try? git(["branch", "-D", "--", branch], in: repo)) != nil { return leftBehind }
+        // `-D`, because the claim already proved the branch is ours: `-d` asks a different question
+        // and refuses one cut from a base ahead of the checkout with no upstream set.
+        if (try? git(["branch", "-D", "--", branch], in: repo)) != nil { return leftBehind }
         leftBehind.append("the branch \(branch)")
         return leftBehind
     }
