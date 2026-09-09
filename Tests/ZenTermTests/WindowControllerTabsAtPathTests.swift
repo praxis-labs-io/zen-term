@@ -143,6 +143,34 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
         XCTAssertEqual(c.tabCount(atPath: wanted), 1)
     }
 
+    /// A ⌘T from a worktree tab inherits the shell's cwd, which is a subdirectory of it. That tab
+    /// is in the folder being deleted just the same, so the confirm has to count it and the
+    /// removal has to close it.
+    func test_aTabOpenedInsideTheWorktreeCountsAndCloses() throws {
+        let c = makeWindow()
+        let wanted = try folder("feature-x")
+        let inside = try folder("feature-x/src")
+        c.openWorkspaceForTesting(workspace("x", at: wanted), replaceCurrentTab: false)
+        c.openWorkspaceForTesting(workspace("x/src", at: inside), replaceCurrentTab: false)
+
+        XCTAssertEqual(c.tabCount(atPath: wanted), 2)
+
+        c.closeTabs(atPath: wanted)
+        XCTAssertEqual(c.tabCount(atPath: wanted), 0)
+    }
+
+    /// A sibling whose name merely starts the same is a different folder.
+    func test_aSiblingSharingAPathPrefixIsNotInside() throws {
+        let c = makeWindow()
+        let wanted = try folder("feature-x")
+        _ = try folder("feature-x-old")
+        c.openWorkspaceForTesting(
+            workspace("old", at: root.appendingPathComponent("feature-x-old", isDirectory: true)),
+            replaceCurrentTab: false)
+
+        XCTAssertEqual(c.tabCount(atPath: wanted), 0)
+    }
+
     func test_aPathNothingWasOpenedAtClosesNothing() throws {
         let c = makeWindow()
         let wanted = try folder("feature-x")

@@ -294,10 +294,17 @@ final class WindowController: NSObject {
     /// instance; the default keeps a window built on its own (a test, say) behaving correctly.
     var worktreeRemovals = WorktreeRemovalTracker()
 
-    /// Tabs in *this* window opened at `path`. The fan-out above sums these across windows.
+    /// Tabs in *this* window opened inside `path`. The fan-out above sums these across windows.
     func tabCount(atPath path: URL) -> Int {
-        let target = path.standardizedFileURL
-        return tabs.order.filter { controllers[$0]?.openedCWD?.standardizedFileURL == target }.count
+        tabs.order.filter { Self.isInside(controllers[$0]?.openedCWD, path) }.count
+    }
+
+    /// Whether `cwd` is `root` or sits under it. A ⌘T from a worktree tab inherits the shell's cwd,
+    /// which is a subdirectory, and that tab is in the folder being deleted just the same.
+    private static func isInside(_ cwd: URL?, _ root: URL) -> Bool {
+        guard let cwd = cwd?.standardizedFileURL.path else { return false }
+        let target = root.standardizedFileURL.path
+        return cwd == target || cwd.hasPrefix(target.hasSuffix("/") ? target : target + "/")
     }
 
     /// Close every tab in this window opened at `path`. Closing the last one closes the window,
@@ -307,9 +314,8 @@ final class WindowController: NSObject {
     /// that is the surface the user is watching it from. The close hands the keyboard to the tab it
     /// promotes, so the card takes it back.
     func closeTabs(atPath path: URL) {
-        let target = path.standardizedFileURL
         let card = modal?.overlay
-        for id in tabs.order where controllers[id]?.openedCWD?.standardizedFileURL == target {
+        for id in tabs.order where Self.isInside(controllers[id]?.openedCWD, path) {
             closeTab(id, dismissingModal: false)
         }
         if let card, modal?.overlay === card { card.focusInitialResponder() }
