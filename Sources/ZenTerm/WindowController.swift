@@ -282,9 +282,9 @@ final class WindowController: NSObject {
     /// no-op — so `handle` forwards them here instead. Injected by `AppDelegate`.
     var onAppGlobalCommand: ((KeyInterceptor.ReservedChord) -> Void)?
 
-    /// Ask every window how many tabs sit on a path, and close them. Removing a worktree is
-    /// window-local (it starts from one window's Settings) but its consequences are not: a worktree
-    /// can be open in any window, and the confirm has to name that before it deletes the folder.
+    /// Ask every window how many tabs sit on a path, and close them. Removing a worktree starts in
+    /// one window's picker but its consequences are not window-local: a worktree can be open in any
+    /// window, and the confirm has to name that before it deletes the folder.
     /// Injected by `AppDelegate`, which owns the only list of windows.
     var onCountTabsAtPath: ((URL) -> Int)?
     var onCloseTabsAtPath: ((URL) -> Void)?
@@ -293,11 +293,6 @@ final class WindowController: NSObject {
     /// going away, which does not care which window is looking. `AppDelegate` injects the one
     /// instance; the default keeps a window built on its own (a test, say) behaving correctly.
     var worktreeRemovals = WorktreeRemovalTracker()
-
-    /// Tell every window a removal started or finished. Injected by `AppDelegate` for the same
-    /// reason the two above are: a picker open in another window is showing a row that just changed
-    /// meaning.
-    var onWorktreeRemovalsChanged: ((_ relisting: Bool) -> Void)?
 
     /// Tabs in *this* window opened at `path`. The fan-out above sums these across windows.
     func tabCount(atPath path: URL) -> Int {
@@ -1363,7 +1358,7 @@ final class WindowController: NSObject {
             ToastContent(variant: .warning, title: "Couldn't Carry Everything", message: "\(list)."))
     }
 
-    /// Remove a worktree from Settings → Workspaces: read what it would cost, then confirm once with
+    /// Remove the worktree the picker has selected: read what it would cost, then confirm once with
     /// the whole consequence. `WorktreeStore.state` shells out to git twice, so it runs off-main and
     /// the confirm is presented on the way back.
     private func removeSelectedWorktreeInPicker() {
@@ -1415,35 +1410,30 @@ final class WindowController: NSObject {
             onCancel: { [weak self] in self?.reopenRepoPicker() })
     }
 
-    /// Delete the folder, and put the picker back with the row reading as removing for as long as
-    /// that is true. The claim goes in before the reopen: a row reads the tracker as it is built, so
-    /// a picker rebuilt first would offer an ordinary row for a folder that is going away.
+    /// Hand the delete to the tracker, and put the picker back with the row reading as removing for
+    /// as long as that is true. The tracker claims the path before this returns, which is what the
+    /// reopen needs: a row reads the tracker as it is built, so a picker rebuilt first would offer
+    /// an ordinary row for a folder that is going away.
+    ///
+    /// Only the toasts are this window's, and only they are dropped when it closes. The delete runs
+    /// on the tracker precisely because this window may not survive the tabs it just closed.
     private func beginWorktreeRemoval(_ worktree: Worktree, from parent: Workspace, named name: String) {
-        worktreeRemovals.begin(worktree.path)
-        onWorktreeRemovalsChanged?(false)
-        reopenRepoPicker()
         let notice = toasts.showSticky(
             ToastContent(
                 variant: .info, title: "Removing \(name)",
                 message: "It stays listed until its files are gone."),
             actions: [])
-        DispatchQueue.global(qos: .userInitiated).async {
-            let result = Result { try WorktreeStore.remove(worktree, in: parent.path) }
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.worktreeRemovals.finish(worktree.path)
-                // Re-listing, not just re-rendering: the listings in hand still name a folder git
-                // has stopped reporting, so a re-render alone puts the ordinary row back.
-                self.onWorktreeRemovalsChanged?(true)
-                self.toasts.dismiss(notice)
-                if case .failure(let error) = result {
-                    self.toasts.show(
-                        ToastContent(
-                            variant: .warning, title: "Couldn't Remove \(name)",
-                            message: error.localizedDescription))
-                }
+        worktreeRemovals.remove(worktree, in: parent.path) { [weak self] error in
+            guard let self else { return }
+            self.toasts.dismiss(notice)
+            if let error {
+                self.toasts.show(
+                    ToastContent(
+                        variant: .warning, title: "Couldn't Remove \(name)",
+                        message: error.localizedDescription))
             }
         }
+        reopenRepoPicker()
     }
 
     /// A detached worktree's folder name is whatever directory it was made in, which reads like a

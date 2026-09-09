@@ -2049,6 +2049,14 @@ machine, and git lists the folder for all of it. So a worktree being removed ren
 the change out to every window so a picker already open is rebuilt rather than only the
 next one to be opened.
 
+**The tracker runs the delete, rather than the window that asked for it.** Removing a
+worktree closes the tabs open in it, and closing a window's last tab closes the window, so
+the window is often gone before git is. Only the toasts are the window's and only they are
+dropped; the claim, the fan-out, and the delete itself outlive it. For the same reason quit
+waits on `whenIdle` alongside the shell sweeps: exiting mid-delete leaves a half-removed
+folder with git's entry for it still in place. The wait is bounded, because a `git` that
+has stopped answering must not hold the process open.
+
 **The claim goes in before the picker is reopened**, because a row reads the tracker as it
 is built: reopening first would offer an ordinary row for a folder already going away. And
 the finish **re-lists** rather than only re-rendering. `refreshRemovalState` rebuilds from
