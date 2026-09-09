@@ -23,6 +23,12 @@ final class RepoPickerOverlay: PaletteOverlay {
     private let entries: [Workspace]
     /// Keyed by the workspace's standardized path, filled in when the background listing lands.
     private var listings: [URL: WorktreeListing] = [:]
+
+    /// This picker's probes in flight, cancelled when it goes away so a closed picker stops
+    /// costing the queue. Held per picker rather than cancelled queue-wide: another window's
+    /// picker is probing the same queue and its answers are not this one's to drop.
+    private var churnRefresh: GitRepoStatus.RefreshToken?
+    private var worktreeRefresh: GitRepoStatus.RefreshToken?
     /// Common dir to the workspace that shows its worktrees, in config order. Recomputed when a
     /// listing lands, never when the query changes.
     private var worktreeOwners: [URL: URL] = [:]
@@ -60,7 +66,9 @@ final class RepoPickerOverlay: PaletteOverlay {
         GitRepoStatus.refresh(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }
         // The counts run `git` rather than reading a file, so they land after the branch does
         // rather than holding it up.
-        GitRepoStatus.refreshChurn(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }
+        churnRefresh = GitRepoStatus.refreshChurn(entries.map(\.path)) { [weak self] in
+            self?.applyGitStatus()
+        }
         // Two `git` calls per workspace, so the worktree rows land last and insert themselves under
         // the workspace they belong to rather than holding the card back.
         relistWorktrees()
@@ -72,12 +80,19 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// finishes: `refreshRemovalState` re-renders from the listings already in hand, and those
     /// still name the folder that has just gone.
     ///
-    /// The whole set rather than the one workspace that changed, because `refreshWorktrees`
-    /// cancels the operations in flight and a narrower call would strand the others mid-probe.
+    /// The whole set rather than the one workspace that changed: this call supersedes the one
+    /// before it, and a narrower call would strand this picker's other workspaces mid-probe.
     func relistWorktrees() {
-        GitRepoStatus.refreshWorktrees(entries.map(\.path)) { [weak self] path, listing in
+        worktreeRefresh?.cancel()
+        worktreeRefresh = GitRepoStatus.refreshWorktrees(entries.map(\.path)) {
+            [weak self] path, listing in
             self?.setWorktrees(listing, for: path)
         }
+    }
+
+    deinit {
+        churnRefresh?.cancel()
+        worktreeRefresh?.cancel()
     }
 
     /// Re-read every workspace row's branch from `GitRepoStatus`.

@@ -65,6 +65,27 @@ final class GitRepoStatusTests: XCTestCase {
         XCTAssertNil(listing?.commonDir)
     }
 
+    /// Two windows each hold an open picker, so two callers probe the same bounded queue. The
+    /// second starting must not take the first's answers with it: a picker missing a delivery goes
+    /// on showing a worktree row for a folder that has been removed.
+    func test_refreshWorktrees_aSecondCallerDoesNotCancelTheFirstsProbes() throws {
+        let dirs = try (1...6).map { try makeDir("first-\($0)", git: false) }
+        let other = try makeDir("second", git: false)
+
+        var answered: Set<URL> = []
+        let allLanded = expectation(description: "every directory answers")
+        allLanded.expectedFulfillmentCount = dirs.count
+        GitRepoStatus.refreshWorktrees(dirs) { dir, _ in
+            answered.insert(dir)
+            allLanded.fulfill()
+        }
+        // Synchronous, so it lands while the queue (four at a time) still has the tail pending.
+        GitRepoStatus.refreshWorktrees([other]) { _, _ in }
+
+        wait(for: [allLanded], timeout: 20)
+        XCTAssertEqual(answered, Set(dirs.map(\.standardizedFileURL)))
+    }
+
     private func makeDir(_ name: String, git: Bool) throws -> URL {
         let dir = root.appendingPathComponent(name, isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
