@@ -236,6 +236,31 @@ final class RepoPickerPresentationTests: WindowTestCase {
             "the row says what is happening to it")
     }
 
+    /// The removal closes the tab it was opened in, and the picker is where the user is watching
+    /// that happen. Only the tab bar takes a card down.
+    func test_theTabClosingOnARemoval_leavesThePickerUp() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        let removed = URL(
+            fileURLWithPath: NSString("~/Dev/alpha/feature/one").expandingTildeInPath,
+            isDirectory: true)
+        // Opening a workspace is how a worktree gets its tab, and it closes the picker on the way.
+        c.openWorkspaceForTesting(
+            Workspace(
+                title: "feature/one", path: removed, main: nil, right: nil, bottom: nil,
+                focus: .main, env: [:]),
+            replaceCurrentTab: false)
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        let picker = try XCTUnwrap(pickers(in: c).first)
+        XCTAssertEqual(c.tabCount(atPath: removed), 1)
+
+        c.worktreeRemovalsChanged(.removed(removed))
+
+        XCTAssertEqual(c.tabCount(atPath: removed), 0, "the tab goes with the folder")
+        XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "the picker does not")
+    }
+
     private func button(in card: NSView, title: String) -> AppButton? {
         func descendants(of view: NSView) -> [NSView] {
             view.subviews.flatMap { [$0] + descendants(of: $0) }

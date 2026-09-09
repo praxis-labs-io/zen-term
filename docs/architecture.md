@@ -2066,6 +2066,12 @@ cwd: a shell that has `cd`'d out still belongs to the worktree, and matching the
 leaves exactly the tab that most needs closing. `AppDelegate` fans the change out to every
 window, and each window closes its own.
 
+**That close leaves an open card up**, which is the one place `closeTab` does not dismiss
+the modal. Taking a card down belongs to the tab bar, whose ✕ is reachable while one is up;
+a removal closing tabs from under the picker the user is watching it in is not that. The
+close hands the keyboard to the tab it promotes, so `closeTabs(atPath:)` gives it back to
+the card afterwards.
+
 **`WorktreeRemovalTracker` is app-wide**, because the hazard is the folder going away and
 that does not care which window is looking. The delete is slow and stays slow: removing a
 worktree carrying a 204,839-file `node_modules` measured **13.4 seconds** on an M-series

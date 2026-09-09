@@ -302,11 +302,17 @@ final class WindowController: NSObject {
 
     /// Close every tab in this window opened at `path`. Closing the last one closes the window,
     /// which `closeTab` already handles.
+    ///
+    /// An open card stays open: this runs when a worktree's files are gone, and the picker showing
+    /// that is the surface the user is watching it from. The close hands the keyboard to the tab it
+    /// promotes, so the card takes it back.
     func closeTabs(atPath path: URL) {
         let target = path.standardizedFileURL
+        let card = modal?.overlay
         for id in tabs.order where controllers[id]?.openedCWD?.standardizedFileURL == target {
-            closeTab(id)
+            closeTab(id, dismissingModal: false)
         }
+        if let card, modal?.overlay === card { card.focusInitialResponder() }
     }
 
     /// A removal started, finished or failed somewhere in the app. The tabs go only once the folder
@@ -1153,9 +1159,12 @@ final class WindowController: NSObject {
 
     /// Close a specific tab: terminate its shells, detach its canvas, and cascade to
     /// closing the window when it was the last tab.
-    private func closeTab(_ id: TabID) {
+    /// `dismissingModal` is false for a close nobody asked the tab bar for: a worktree removal
+    /// closes tabs from under the picker the user is watching it in, and taking that picker down
+    /// belongs to the tab bar, not to the removal.
+    private func closeTab(_ id: TabID, dismissingModal: Bool = true) {
         Log.info("tab closed", category: .tabs)
-        closeModal()  // the "×" button is reachable while a palette is up
+        if dismissingModal { closeModal() }  // the "×" button is reachable while a palette is up
         closeFloatForTabChange()
         cancelConfirm()  // a middle-click close voids a pending confirm on another tab
         let survived = tabs.close(id)
