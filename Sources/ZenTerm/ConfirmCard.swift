@@ -1,11 +1,8 @@
 import AppKit
 
-/// A confirmation shown over a card that stays put, for a consequence that outlives the window:
-/// removing a worktree deletes a folder and cannot be taken back. Closing a pane or a window is a
-/// smaller thing and keeps the toast confirm.
-///
-/// Full-bleed, so its backdrop swallows clicks on the list underneath. `ConfirmCard` owns Esc and
-/// its buttons own Return; the host stops claiming both while one is up.
+/// A confirmation over a card that stays put, for a consequence that cannot be taken back:
+/// closing a pane keeps the toast confirm, deleting a folder does not. Full-bleed, so its
+/// backdrop swallows clicks on the list underneath, and it owns Esc and Return while it is up.
 final class ConfirmCard: NSView {
     private let onCancel: () -> Void
     private let onConfirm: () -> Void

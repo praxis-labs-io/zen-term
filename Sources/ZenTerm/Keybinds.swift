@@ -312,9 +312,8 @@ enum KeymapDefaults {
         // runs, so a chord bound there is dead and every test of it passes.
         map[Chord(command: true, shift: true, key: "p")] = .toggleCommandPalette
         map[Chord(command: true, key: "p")] = .toggleRepoPicker
-        // ⌥⏎ inserts a newline without submitting in Claude Code and other TUIs, and ⌥⌫ is
-        // delete-previous-word in every readline shell, so `PickerChordGuard` hands both back
-        // whenever the picker is closed.
+        // ⌥⏎ is a TUI newline and ⌥⌫ is readline's delete-previous-word, so `PickerChordGuard`
+        // hands both back whenever the picker is closed.
         map[Chord(option: true, key: "⏎")] = .createWorktree
         map[Chord(option: true, key: "⌫")] = .removeWorktree
         map[Chord(command: true, key: "\\")] = .toggleRightDrawer

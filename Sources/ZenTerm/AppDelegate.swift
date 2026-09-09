@@ -59,9 +59,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // run never writes to the user's ~/Library/Logs/ZenTerm/zen-term.log.
         Log.fileSink = .standard()
 
-        // A removal changes what every window's open picker is showing, and the tabs open in the
-        // folder outlive the delete: they close when it is gone, not when it is asked for, so the
-        // picker and the tab stay put with the row saying what is happening.
         // Copy first: a removal closes tabs, and closing a window's last tab removes it from
         // `windows` mid-iteration.
         worktreeRemovals.onChanged = { [weak self] change in
@@ -397,9 +394,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // exiting now would cut it off before a single signal went out — the original bug, on
         // the most ordinary way to close the app. Wait for it, then go.
         guard let key = keyController() else {
-            // The removal outlives the window that asked for it, and this is the path a window
-            // closed by that very removal takes. Quitting mid-delete leaves a half-removed folder
-            // and git's entry for it still in place.
+            // Quitting mid-delete leaves a half-removed folder with git's entry still in place,
+            // and a window closed by that very removal takes this path.
             worktreeRemovals.whenIdle {
                 self.drainSessionSweeps { NSApp.reply(toApplicationShouldTerminate: true) }
             }

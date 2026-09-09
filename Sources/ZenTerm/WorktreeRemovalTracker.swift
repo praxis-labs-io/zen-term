@@ -1,14 +1,9 @@
 import Foundation
 
-/// The worktrees whose delete is still running, shared by every window, and the place those
-/// deletes run from.
-///
-/// A worktree carrying an install is a quarter of a million files, and it stays on disk and in
-/// `git worktree list` for the whole delete. The picker shows those rows as removing and refuses to
-/// open them, and that guard has to be app-wide: the directory is going away whichever window you
-/// are looking from, so a second window listing it as an ordinary row would drop a tab into it.
-///
-/// Main-thread only, which is where every caller already is.
+/// The worktrees whose delete is still running, and the place those deletes run from. One stays
+/// on disk and in `git worktree list` for the whole delete, so the picker refuses to open its row.
+/// App-wide, because another window listing it as ordinary would drop a tab into a folder that is
+/// going away. Main-thread only.
 final class WorktreeRemovalTracker {
     /// The longest a quit waits on a delete. Seconds is the measured cost of the worst case, so a
     /// wait past this is a `git` that has stopped answering and must not hold the process open.
@@ -33,12 +28,9 @@ final class WorktreeRemovalTracker {
     }
     private var waiters: [Waiter] = []
 
-    /// Delete the worktree, holding the claim until the files are gone.
-    ///
-    /// Owned here rather than by the window that asked, because that window may not outlive the
-    /// call: the tabs open in the worktree close when it is gone, and closing a window's last tab
-    /// closes the window. `completion` carries the failure and is the caller's to weaken; the
-    /// claim and the fan-out are not, and always run.
+    /// Delete the worktree, holding the claim until the files are gone. Owned here rather than by
+    /// the window that asked, which may not outlive the call: the tabs close when the folder goes,
+    /// and a window's last tab closing closes the window. `completion` is the caller's to weaken.
     func remove(_ worktree: Worktree, in parent: URL, completion: @escaping (Error?) -> Void) {
         // Two windows can each raise a confirm for one worktree. A second delete would fail and
         // toast, and the first `finish` would clear the sole claim while it was still running.

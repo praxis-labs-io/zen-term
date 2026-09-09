@@ -76,12 +76,9 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Ask git for every entry's worktrees again. Run once on open, and again when a removal
-    /// finishes: `refreshRemovalState` re-renders from the listings already in hand, and those
-    /// still name the folder that has just gone.
-    ///
-    /// The whole set rather than the one workspace that changed: this call supersedes the one
-    /// before it, and a narrower call would strand this picker's other workspaces mid-probe.
+    /// Ask git for every entry's worktrees again: once on open, and again when a removal ends,
+    /// because the listings in hand still name the folder that has gone. The whole set rather
+    /// than the one workspace that changed, since this call supersedes the one before it.
     func relistWorktrees() {
         worktreeRefresh?.cancel()
         worktreeRefresh = GitRepoStatus.refreshWorktrees(entries.map(\.path)) {
@@ -256,9 +253,8 @@ final class RepoPickerOverlay: PaletteOverlay {
         switch rows[index] {
         case .add: return ["add"]
         case .workspace(let workspace): return ["workspace", workspace.title]
-        // The path, not the branch: a worktree's branch changes under it, and a reused row keeps
-        // whatever it baked in at construction. The removal state rides along for the same reason:
-        // a row that has started removing is a different view, so it must not reuse the old one.
+        // The path and the removal state, not the branch: both change under a row that bakes its
+        // content in at construction, and a reused view would keep the old one.
         case .worktree(let worktree, _):
             return ["worktree", worktree.path.path, removals.isRemoving(worktree.path) ? "removing" : ""]
         }

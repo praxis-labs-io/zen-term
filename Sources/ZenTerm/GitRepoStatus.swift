@@ -89,22 +89,10 @@ enum GitRepoStatus {
         return queue
     }()
 
-    /// Probe every directory in `dirs` for churn off-main, running `completion` on the main thread
-    /// as each answer lands — including the answers that are "none", so a caller counting
-    /// completions is never left waiting on one that will not come.
-    ///
-    /// Separate from `refresh` because it costs a different order of magnitude: `refresh` reads two
-    /// files, this runs `git` once per directory. Keeping them apart is what lets a row show its
-    /// branch immediately and fill the counts in behind it, rather than holding both behind a
-    /// `git status` on a large repo.
-    ///
-    /// No fetch: `git status` reports ahead/behind against the remote-tracking ref already on disk.
-    /// A ⌘P that hit the network would stall on a VPN or an auth prompt for a repo the user only
-    /// wanted to open.
-    ///
-    /// The returned token cancels this call's probes. A picker closed and reopened must not leave
-    /// the first open's running behind the second's, and cancelling by token rather than by queue
-    /// is what keeps that from reaching a picker in another window.
+    /// Probe every directory for churn off-main, answering on the main thread as each lands,
+    /// including the "none" answers so a caller counting completions never waits on one that will
+    /// not come. Separate from `refresh` because it costs an order of magnitude more. The returned
+    /// token cancels this call's probes, by token not by queue: another window's picker shares it.
     @discardableResult
     static func refreshChurn(_ dirs: [URL], completion: @escaping () -> Void) -> RefreshToken {
         let token = RefreshToken()

@@ -304,12 +304,9 @@ final class WindowController: NSObject {
         return cwd == target || cwd.hasPrefix(target.hasSuffix("/") ? target : target + "/")
     }
 
-    /// Close every tab in this window opened at `path`. Closing the last one closes the window,
-    /// which `closeTab` already handles.
-    ///
-    /// An open card stays open: this runs when a worktree's files are gone, and the picker showing
-    /// that is the surface the user is watching it from. The close hands the keyboard to the tab it
-    /// promotes, so the card takes it back.
+    /// Close every tab in this window opened inside `path`; the last one closes the window. An
+    /// open card stays up and keeps the keyboard, because the picker is where the user is
+    /// watching this removal and the close would hand focus to the tab it promotes.
     func closeTabs(atPath path: URL) {
         let card = modal?.overlay
         for id in tabs.order where Self.isInside(controllers[id]?.openedCWD, path) {
@@ -1163,11 +1160,9 @@ final class WindowController: NSObject {
         renderTabBar()
     }
 
-    /// Close a specific tab: terminate its shells, detach its canvas, and cascade to
-    /// closing the window when it was the last tab.
-    /// `dismissingModal` is false for a close nobody asked the tab bar for: a worktree removal
-    /// closes tabs from under the picker the user is watching it in, and taking that picker down
-    /// belongs to the tab bar, not to the removal.
+    /// Close a specific tab: terminate its shells, detach its canvas, and cascade to closing the
+    /// window when it was the last tab. `dismissingModal` is false for a close nobody asked the
+    /// tab bar for, since taking a card down is the tab bar's and not a worktree removal's.
     private func closeTab(_ id: TabID, dismissingModal: Bool = true) {
         Log.info("tab closed", category: .tabs)
         if dismissingModal { closeModal() }  // the "×" button is reachable while a palette is up
@@ -1394,9 +1389,8 @@ final class WindowController: NSObject {
                     atPath: worktree.path.appendingPathComponent($0).path)
             }
             DispatchQueue.main.async { [weak self] in
-                // The picker the chord was pressed over may be long gone by now. A confirm landing
-                // over whatever the user opened instead asks about something they are no longer
-                // looking at, and nothing has been destroyed by dropping it.
+                // The picker may be long gone, or another window may have started this removal.
+                // Either way the question is stale, and nothing is destroyed by dropping it.
                 guard let self, self.modal?.overlay === picker,
                     !self.worktreeRemovals.isRemoving(worktree.path)
                 else { return }
@@ -1429,12 +1423,9 @@ final class WindowController: NSObject {
         picker.presentConfirm(card)
     }
 
-    /// Hand the delete to the tracker. Nothing is closed and nothing is presented here: the tracker
-    /// claims the path and fans that out, which turns the row the picker is still showing into its
-    /// `Removing…` state. The tabs go when the folder does, which `AppDelegate` drives off the same
-    /// fan-out, so the picker and the tab that would take it down stay up for the whole delete.
-    ///
-    /// Only the failure toast is this window's, and only it is dropped if the window closes.
+    /// Hand the delete to the tracker. Nothing is closed or presented here: the claim fans out and
+    /// turns the row the picker is still showing into its `Removing…` state, and the tabs go when
+    /// the folder does. Only the failure toast is this window's, and only it is dropped with it.
     private func beginWorktreeRemoval(_ worktree: Worktree, from parent: Workspace, named name: String) {
         worktreeRemovals.remove(worktree, in: parent.path) { [weak self] error in
             guard let self, let error else { return }
@@ -1451,12 +1442,9 @@ final class WindowController: NSObject {
         worktree.branch ?? String(worktree.head.prefix(7))
     }
 
-    /// One confirm carrying every consequence: the work that goes, the tabs that close, the carried
-    /// files that go with the folder, and the branch that does not.
-    ///
-    /// A nil state is "we could not read this worktree", never "it is empty": saying nothing is
-    /// uncommitted about a tree we failed to inspect is the one sentence here that could cost
-    /// someone a day.
+    /// One confirm carrying every consequence: the work that goes, the tabs that close, the
+    /// carried files that go with the folder, and the branch that does not. A nil state reads as
+    /// "could not be read", never "empty": that is the one sentence here that could cost a day.
     static func removeWorktreeMessage(
         _ worktree: Worktree, state: WorktreeState?, carried: [String], openTabs: Int
     ) -> String {

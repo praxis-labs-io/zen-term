@@ -245,9 +245,8 @@ final class SettingsKeybindsSection: SettingsSection {
             hintBubble?.setPreview(Self.modifierGlyph(event.modifierFlags))
             return
         }
-        // Backspace with a modifier is a chord: ⌥⌫ is a shipped default, and reading it as the
-        // clear command would unbind the very action it was being recorded onto. Forward delete
-        // never is, because `Chord` has no glyph for it and would record an unprintable key.
+        // A modified backspace is a chord, since ⌥⌫ is a shipped default. A modified forward
+        // delete is not: `Chord` has no glyph for it and would record an unprintable key.
         let isRecordable = event.keyCode == 51 && !KeyboardFocus.isUnmodified(event)
         switch KeyboardFocus.key(for: event) {
         case .escape: endCapture(row); refreshRows(); return  // Esc → cancel
