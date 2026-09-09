@@ -179,7 +179,7 @@ struct Chord: Hashable {
     /// as nothing at all on a keycap and reads as a stray blank in a config file.
     private static let specialKeyGlyphs: [UInt16: String] = [
         123: "←", 124: "→", 125: "↓", 126: "↑", 36: "⏎",
-        115: "↖", 119: "↘", 116: "⇞", 121: "⇟", 48: "⇥",
+        115: "↖", 119: "↘", 116: "⇞", 121: "⇟", 48: "⇥", 51: "⌫",
     ]
 
     /// How a config file spells each of those. The glyph is the canonical form everywhere inside
@@ -192,6 +192,9 @@ struct Chord: Hashable {
         "enter": "⏎", "return": "⏎",
         "home": "↖", "end": "↘", "page_up": "⇞", "page_down": "⇟",
         "tab": "⇥",
+        // ghostty's name, and the unambiguous one: macOS calls this key "delete", which ghostty
+        // gives to forward delete instead.
+        "backspace": "⌫",
     ]
 
     /// The word `configToken` writes back for a glyph. One per key, so a chord round-trips to the
@@ -199,6 +202,7 @@ struct Chord: Hashable {
     private static let wordForSpecialKey: [String: String] = [
         "←": "left", "→": "right", "↓": "down", "↑": "up", "⏎": "enter",
         "↖": "home", "↘": "end", "⇞": "page_up", "⇟": "page_down", "⇥": "tab",
+        "⌫": "backspace",
     ]
 
     /// The keyCode behind a special glyph, for a caller that needs the physical key back: a

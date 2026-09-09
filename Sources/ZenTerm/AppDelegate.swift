@@ -286,8 +286,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Copy first: closing a window's last tab removes it from `windows` mid-iteration.
             for window in self?.windows ?? [] { window.closeTabs(atPath: path) }
         }
-        wc.onWorktreeRemovalsChanged = { [weak self] in
-            for window in self?.windows ?? [] { window.worktreeRemovalsChanged() }
+        wc.onWorktreeRemovalsChanged = { [weak self] relisting in
+            for window in self?.windows ?? [] {
+                window.worktreeRemovalsChanged(relisting: relisting)
+            }
         }
         if centered { wc.window.center() }
         wc.onClosed = { [weak self, weak wc] in

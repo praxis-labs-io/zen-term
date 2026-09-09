@@ -47,7 +47,7 @@ final class SettingsKeybindsSection: SettingsSection {
             "Surfaces & Tools",
             [
                 .toggleToolFloat(ToolFloat.scratch.id), .toggleRepoPicker, .createWorktree,
-                .toggleCommandPalette, .newTool, .openSettings,
+                .removeWorktree, .toggleCommandPalette, .newTool, .openSettings,
             ]
         ),
     ]

@@ -63,12 +63,22 @@ final class RepoPickerOverlay: PaletteOverlay {
         GitRepoStatus.refreshChurn(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }
         // Two `git` calls per workspace, so the worktree rows land last and insert themselves under
         // the workspace they belong to rather than holding the card back.
+        relistWorktrees()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Ask git for every entry's worktrees again. Run once on open, and again when a removal
+    /// finishes: `refreshRemovalState` re-renders from the listings already in hand, and those
+    /// still name the folder that has just gone.
+    ///
+    /// The whole set rather than the one workspace that changed, because `refreshWorktrees`
+    /// cancels the operations in flight and a narrower call would strand the others mid-probe.
+    func relistWorktrees() {
         GitRepoStatus.refreshWorktrees(entries.map(\.path)) { [weak self] path, listing in
             self?.setWorktrees(listing, for: path)
         }
     }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// Re-read every workspace row's branch from `GitRepoStatus`.
     private func applyGitStatus() {
@@ -80,11 +90,31 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// must not move it, and a reload otherwise resets to the default.
     func setWorktrees(_ listing: WorktreeListing, for workspacePath: URL) {
         listings[workspacePath.standardizedFileURL] = listing
-        worktreeOwners = WorktreeGrouping.owners(among: entries, listings: listings)
+        worktreeOwners = Self.owners(among: entries, listings: listings)
         let held = rows.indices.contains(selected) ? rowIdentity(at: selected) : nil
         applyFilter(query: currentQuery)
         refreshRows(animated: true)
         reselect(byIdentity: held)
+    }
+
+    /// Which workspace shows the worktrees of each repo, decided once from config order.
+    ///
+    /// Two workspaces can be checkouts of one repo, and `worktree list` answers the same set for
+    /// both. Deciding this from the filtered, re-sorted list would let a query move a worktree to
+    /// a different parent and so open it with a different recipe. An empty listing never claims:
+    /// a workspace inside a repo but not at its root resolves a common dir and lists nothing, and
+    /// claiming there would hide the real checkout's worktrees.
+    private static func owners(
+        among workspaces: [Workspace], listings: [URL: WorktreeListing]
+    ) -> [URL: URL] {
+        var owners: [URL: URL] = [:]
+        for workspace in workspaces {
+            let path = workspace.path.standardizedFileURL
+            guard let listing = listings[path], !listing.worktrees.isEmpty else { continue }
+            let key = listing.commonDir ?? path
+            if owners[key] == nil { owners[key] = path }
+        }
+        return owners
     }
 
     /// The ＋ row first, then a workspace row per entry, with a repo's worktrees under whichever
@@ -96,9 +126,13 @@ final class RepoPickerOverlay: PaletteOverlay {
         var rows: [Row] = [.add]
         for workspace in workspaces {
             rows.append(.workspace(workspace))
-            let children = WorktreeGrouping.worktrees(
-                of: workspace, listings: listings, owners: owners, configured: configured)
-            rows.append(contentsOf: children.map { .worktree($0, parent: workspace) })
+            let path = workspace.path.standardizedFileURL
+            guard let listing = listings[path], owners[listing.commonDir ?? path] == path else {
+                continue
+            }
+            for worktree in listing.worktrees where !configured.contains(worktree.path.standardizedFileURL) {
+                rows.append(.worktree(worktree, parent: workspace))
+            }
         }
         return rows
     }
@@ -205,6 +239,9 @@ final class RepoPickerOverlay: PaletteOverlay {
         if let chord = Chord.displayed(.createWorktree, in: GeneralConfig.current.keymap) {
             hints.append(PaletteHint(keys: chord.displayGlyph, label: "new worktree"))
         }
+        if let chord = Chord.displayed(.removeWorktree, in: GeneralConfig.current.keymap) {
+            hints.append(PaletteHint(keys: chord.displayGlyph, label: "remove worktree"))
+        }
         return hints + [
             PaletteHint(keys: "↑↓", label: "move"),
             PaletteHint(keys: "⎋", label: "close"),
@@ -227,6 +264,15 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .worktree(let worktree, let parent):
             return CreateTarget(workspace: parent, repo: worktree.path)
         }
+    }
+
+    /// The selected worktree and the workspace it hangs under, or nil on any other row. The parent
+    /// comes along because removing runs `git` in its checkout and its `carry` names what goes with
+    /// the folder. A worktree already being removed is unselectable, so it can never be this.
+    var selectedWorktree: (worktree: Worktree, parent: Workspace)? {
+        guard rows.indices.contains(selected), case .worktree(let worktree, let parent) = rows[selected]
+        else { return nil }
+        return (worktree, parent)
     }
 
     override func activate(index: Int, modifiers: NSEvent.ModifierFlags) {

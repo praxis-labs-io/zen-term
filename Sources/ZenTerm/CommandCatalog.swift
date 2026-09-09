@@ -90,8 +90,9 @@ enum CommandCatalog {
         // `navigate` with no search running and do nothing every time. Keyboard-only by necessity
         // rather than by choice. `CommandCatalogTests` holds them out.
         case .findNext: return pane("Find Next", glyph, chord)
-        // Needs a selected picker row, so a palette entry would run and do nothing.
+        // Both need a selected picker row, so a palette entry would run and do nothing.
         case .createWorktree: return tool("New Worktree…", glyph, chord)
+        case .removeWorktree: return tool("Remove Worktree…", glyph, chord)
         case .findPrevious: return pane("Find Previous", glyph, chord)
         }
     }

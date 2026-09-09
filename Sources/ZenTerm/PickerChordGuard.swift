@@ -5,7 +5,7 @@ enum PickerChordGuard {
         -> Bool
     {
         switch action {
-        case .createWorktree: return !repoPickerIsOpen
+        case .createWorktree, .removeWorktree: return !repoPickerIsOpen
         default: return false
         }
     }

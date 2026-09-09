@@ -297,7 +297,7 @@ final class WindowController: NSObject {
     /// Tell every window a removal started or finished. Injected by `AppDelegate` for the same
     /// reason the two above are: a picker open in another window is showing a row that just changed
     /// meaning.
-    var onWorktreeRemovalsChanged: (() -> Void)?
+    var onWorktreeRemovalsChanged: ((_ relisting: Bool) -> Void)?
 
     /// Tabs in *this* window opened at `path`. The fan-out above sums these across windows.
     func tabCount(atPath path: URL) -> Int {
@@ -316,8 +316,10 @@ final class WindowController: NSObject {
 
     /// A removal started or finished somewhere in the app, so an open picker has to re-render: a
     /// row built before the removal began still reads as an ordinary worktree to open.
-    func worktreeRemovalsChanged() {
-        (modal?.overlay as? RepoPickerOverlay)?.refreshRemovalState()
+    func worktreeRemovalsChanged(relisting: Bool) {
+        guard let picker = modal?.overlay as? RepoPickerOverlay else { return }
+        picker.refreshRemovalState()
+        if relisting { picker.relistWorktrees() }
     }
 
     /// Whether a modal card is up right now. Read by `AppDelegate` so window-level chords (⌘N)
@@ -1364,8 +1366,11 @@ final class WindowController: NSObject {
     /// Remove a worktree from Settings → Workspaces: read what it would cost, then confirm once with
     /// the whole consequence. `WorktreeStore.state` shells out to git twice, so it runs off-main and
     /// the confirm is presented on the way back.
-    private func removeWorktree(_ worktree: Worktree, from parent: Workspace) {
-        let card = modal?.overlay
+    private func removeSelectedWorktreeInPicker() {
+        guard let picker = modal?.overlay as? RepoPickerOverlay,
+            let selection = picker.selectedWorktree
+        else { return }  // a workspace row or the ＋ row has nothing to remove
+        let (worktree, parent) = selection
         let openTabs = onCountTabsAtPath?(worktree.path) ?? tabCount(atPath: worktree.path)
         DispatchQueue.global(qos: .userInitiated).async {
             let state = WorktreeStore.state(worktree)
@@ -1374,10 +1379,10 @@ final class WindowController: NSObject {
                     atPath: worktree.path.appendingPathComponent($0).path)
             }
             DispatchQueue.main.async { [weak self] in
-                // The Settings card the user pressed Remove on may be long gone by now. A confirm
-                // landing over whatever they opened instead asks about something they are no longer
+                // The picker the chord was pressed over may be long gone by now. A confirm landing
+                // over whatever the user opened instead asks about something they are no longer
                 // looking at, and nothing has been destroyed by dropping it.
-                guard let self, self.modal?.overlay === card else { return }
+                guard let self, self.modal?.overlay === picker else { return }
                 self.confirmRemoveWorktree(
                     worktree, from: parent, state: state, carried: carried, openTabs: openTabs)
             }
@@ -1405,15 +1410,18 @@ final class WindowController: NSObject {
                 }
                 self.beginWorktreeRemoval(worktree, from: parent, named: name)
             },
-            onCancel: { [weak self] in self?.reopenSettingsOnWorkspaces() })
+            // ⌥⌫ is a detour from a row rather than a way out of the list, so backing out of it
+            // returns to where it started, the same as cancelling the create card.
+            onCancel: { [weak self] in self?.reopenRepoPicker() })
     }
 
-    /// Delete the folder, then hand back to the Settings → Workspaces the confirm closed. The list
-    /// is rebuilt on the way back rather than on the way in: a worktree still being deleted is still
-    /// on disk, so reopening first would put a row up for a folder that is going away.
+    /// Delete the folder, and put the picker back with the row reading as removing for as long as
+    /// that is true. The claim goes in before the reopen: a row reads the tracker as it is built, so
+    /// a picker rebuilt first would offer an ordinary row for a folder that is going away.
     private func beginWorktreeRemoval(_ worktree: Worktree, from parent: Workspace, named name: String) {
         worktreeRemovals.begin(worktree.path)
-        onWorktreeRemovalsChanged?()
+        onWorktreeRemovalsChanged?(false)
+        reopenRepoPicker()
         let notice = toasts.showSticky(
             ToastContent(
                 variant: .info, title: "Removing \(name)",
@@ -1424,7 +1432,9 @@ final class WindowController: NSObject {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 self.worktreeRemovals.finish(worktree.path)
-                self.onWorktreeRemovalsChanged?()
+                // Re-listing, not just re-rendering: the listings in hand still name a folder git
+                // has stopped reporting, so a re-render alone puts the ordinary row back.
+                self.onWorktreeRemovalsChanged?(true)
                 self.toasts.dismiss(notice)
                 if case .failure(let error) = result {
                     self.toasts.show(
@@ -1432,9 +1442,6 @@ final class WindowController: NSObject {
                             variant: .warning, title: "Couldn't Remove \(name)",
                             message: error.localizedDescription))
                 }
-                // Only when nothing took the slot in the meantime: a delete can outlast the confirm,
-                // and reopening Settings over a picker the user just opened is a card they lose.
-                if self.modal == nil { self.reopenSettingsOnWorkspaces() }
             }
         }
     }
@@ -1576,10 +1583,6 @@ final class WindowController: NSObject {
         toolsSection.onReorder = { [weak self] floats in self?.reorderToolFloats(floats) }
         let workspacesSection = SettingsWorkspacesSection()
         workspacesSection.onEditWorkspace = { [weak self] ws in self?.openWorkspaceForm(editing: ws) }
-        workspacesSection.worktreeRemovals = worktreeRemovals
-        workspacesSection.onRemoveWorktree = { [weak self] worktree, parent in
-            self?.removeWorktree(worktree, from: parent)
-        }
         workspacesSection.onReorder = { [weak self] moved, neighbour in
             self?.reorderWorkspaces(moved, with: neighbour) ?? false
         }
@@ -2116,6 +2119,10 @@ final class WindowController: NSObject {
                 createWorktreeFromPicker()
                 return
             }
+            if modal.kind == .repoPicker, chord == .removeWorktree {
+                removeSelectedWorktreeInPicker()
+                return
+            }
             switch chord {
             case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue,
                 .newTool:
@@ -2251,8 +2258,8 @@ final class WindowController: NSObject {
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
-        // Answered by the modal gate above. `PickerChordGuard` keeps it from being a dead key.
-        case .createWorktree: break
+        // Answered by the modal gate above. `PickerChordGuard` keeps them from being dead keys.
+        case .createWorktree, .removeWorktree: break
         case .toggleCommandPalette: toggleCommandPalette()
         case .openSettings: openSettings()
         case .reportIssue: openReportIssue()

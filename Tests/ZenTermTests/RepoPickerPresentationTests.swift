@@ -103,6 +103,104 @@ final class RepoPickerPresentationTests: WindowTestCase {
         return c.window.contentView!.performKeyEquivalent(with: esc)
     }
 
+    /// Hand the picker a listing the way the background pass does, so a worktree row exists
+    /// without a real repo on disk. The path never has to resolve: `WorktreeStore.state` failing is
+    /// the "could not be read" branch of the confirm, which still confirms.
+    private func giveWorktrees(_ picker: RepoPickerOverlay, under path: URL, _ branches: String...) {
+        let worktrees = branches.map {
+            Worktree(
+                path: path.appendingPathComponent($0, isDirectory: true), branch: $0,
+                head: "0000000", isLocked: false)
+        }
+        picker.setWorktrees(
+            WorktreeListing(commonDir: path.appendingPathComponent(".git"), worktrees: worktrees),
+            for: path)
+    }
+
+    /// The search field holds the keyboard, so arrows arrive through its `doCommandBy`.
+    private func moveDown(in picker: RepoPickerOverlay) {
+        let field = descendants(of: picker).compactMap { $0 as? NSTextField }
+            .first { ($0.delegate as? PaletteOverlay) === picker }!
+        _ = picker.control(
+            field, textView: NSTextView(), doCommandBy: #selector(NSResponder.moveDown(_:)))
+    }
+
+    private func pressEscapeThroughTheResponder(in c: WindowController) {
+        let esc = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+            context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+            isARepeat: false, keyCode: 53)!
+        guard let content = c.window.contentView else { return }
+        if content.performKeyEquivalent(with: esc) { return }
+        (c.window.firstResponder as? NSView)?.keyDown(with: esc)
+    }
+
+    // MARK: ⌥⌫ routing
+
+    /// The modal gate's switch ends in `default: return`, so an unmatched case is swallowed.
+    func test_removeWorktree_overAWorktreeRow_confirms() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        let picker = try XCTUnwrap(pickers(in: c).first)
+        let alpha = URL(
+            fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
+        giveWorktrees(picker, under: alpha, "feature/one")
+        moveDown(in: picker)
+
+        c.handle(.removeWorktree)
+
+        waitUntil(c.isConfirmOpen, "the remove confirm to be presented")
+        XCTAssertTrue(pickers(in: c).isEmpty, "one modal slot, so the confirm replaces the picker")
+    }
+
+    /// A workspace is a checkout the user configured, not a worktree of ours.
+    func test_removeWorktree_overAWorkspaceRow_confirmsNothing() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+
+        c.handle(.removeWorktree)
+        waitForPendingLoads()
+
+        XCTAssertFalse(c.isConfirmOpen)
+        XCTAssertFalse(pickers(in: c).isEmpty, "the picker is left where it was")
+    }
+
+    /// The other half of `PickerChordGuard`: outside the picker, nothing may present.
+    func test_removeWorktree_withNoPickerUp_presentsNothing() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+
+        c.handle(.removeWorktree)
+        waitForPendingLoads()
+
+        XCTAssertFalse(c.isConfirmOpen)
+        XCTAssertTrue(pickers(in: c).isEmpty)
+    }
+
+    /// ⌥⌫ is a detour from a row, so backing out returns to where it started.
+    func test_cancellingTheRemoveConfirm_reopensThePicker() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        let picker = try XCTUnwrap(pickers(in: c).first)
+        let alpha = URL(
+            fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
+        giveWorktrees(picker, under: alpha, "feature/one")
+        moveDown(in: picker)
+        c.handle(.removeWorktree)
+        waitUntil(c.isConfirmOpen, "the remove confirm to be presented")
+
+        pressEscapeThroughTheResponder(in: c)
+
+        XCTAssertFalse(c.isConfirmOpen)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to come back")
+    }
+
     // MARK: ⌥⏎ routing
 
     /// The modal gate's switch ends in `default: return`, so an unmatched case is swallowed.

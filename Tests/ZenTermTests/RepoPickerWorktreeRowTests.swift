@@ -465,6 +465,58 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(shape(of: overlay)[overlay.selected], "workspace:beta")
     }
 
+    // MARK: what ⌥⌫ removes from
+
+    func test_theSelectedWorktree_isNilOnTheAddRow() {
+        let overlay = makeRepoPicker(entries: [workspace("alpha")])
+        mount(overlay)
+        send(#selector(NSResponder.moveUp(_:)), to: overlay)
+
+        XCTAssertEqual(shape(of: overlay)[overlay.selected], "add")
+        XCTAssertNil(overlay.selectedWorktree)
+    }
+
+    /// A workspace is a checkout the user configured, not a worktree of ours, so ⌥⌫ over one has
+    /// nothing to remove and does nothing.
+    func test_theSelectedWorktree_isNilOnAWorkspaceRow() {
+        let repo = path("alpha")
+        let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
+        mount(overlay)
+        overlay.setWorktrees(listing(repo, "one"), for: repo)
+
+        XCTAssertEqual(shape(of: overlay)[overlay.selected], "workspace:alpha")
+        XCTAssertNil(overlay.selectedWorktree)
+    }
+
+    /// The parent comes along because the remove runs `git` in its checkout and its `carry` names
+    /// what goes with the folder.
+    func test_onAWorktreeRow_itNamesTheWorktreeAndItsParent() throws {
+        let repo = path("alpha")
+        let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
+        mount(overlay)
+        overlay.setWorktrees(listing(repo, "one", "two"), for: repo)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
+
+        let selection = try XCTUnwrap(overlay.selectedWorktree)
+        XCTAssertEqual(selection.worktree.branch, "one")
+        XCTAssertEqual(selection.parent.title, "alpha")
+    }
+
+    // MARK: the remove hint follows the keymap
+
+    func test_theRemoveHint_readsTheChordFromTheLiveKeymap() {
+        setKeymap([Chord(option: true, key: "⌫"): .removeWorktree])
+
+        let hint = RepoPickerOverlay.footerHints().first { $0.label == "remove worktree" }
+        XCTAssertEqual(hint?.keys, "⌥⌫")
+    }
+
+    func test_withRemoveUnbound_theHintIsGone() {
+        setKeymap([:])
+
+        XCTAssertNil(RepoPickerOverlay.footerHints().first { $0.label == "remove worktree" })
+    }
+
     // MARK: a worktree on its way out
 
     /// The folder is still on disk, so `worktree list` still reports it. The row has to say what is
@@ -512,6 +564,19 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         XCTAssertEqual(
             shape(of: overlay), ["add", "workspace:alpha", "removing:one", "worktree:two"])
+    }
+
+    /// Re-listing is what actually drops the row: the listings in hand still name the folder git
+    /// has stopped reporting, so a re-render alone puts the ordinary row back for something gone.
+    func test_relisting_dropsAWorktreeGitNoLongerReports() {
+        let repo = path("alpha")
+        let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
+        mount(overlay)
+        overlay.setWorktrees(listing(repo, "one", "two"), for: repo)
+
+        overlay.setWorktrees(listing(repo, "two"), for: repo)
+
+        XCTAssertEqual(shape(of: overlay), ["add", "workspace:alpha", "worktree:two"])
     }
 
     /// The delete failed, or it finished before the folder left the listing. Either way the row goes
