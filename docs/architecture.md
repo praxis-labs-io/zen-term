@@ -1768,7 +1768,7 @@ repaints even the sites that bake their color at init, like the tab bar's tracer
 `WorktreeStore` lists, creates and removes the git worktrees of a repo. It is
 headless: no AppKit, every call blocking, so callers run them off-main and hop
 back. The ⌘P picker reads it for the worktree rows under each workspace and makes
-one with ⌥⏎; nothing removes one from the UI yet.
+one with ⌥⏎; Settings → Workspaces lists them again and is where one is removed.
 
 **Git is the whole registry.** There is no index of our own to fall out of step
 with the repo, so a worktree made by hand in an arbitrary directory shows up
@@ -1814,6 +1814,12 @@ Two workspaces can be checkouts of one repo, and `worktree list` answers the sam
 set for both. The first in config order claims the common dir and takes the child
 rows; the second keeps its own row without repeating them. A worktree the user has
 already configured as a workspace of its own is skipped rather than rendered twice.
+
+Both rules live in `WorktreeGrouping`, because the picker and Settings → Workspaces
+both list these rows and a worktree rendered twice in Settings is two Remove buttons
+on one folder. Ownership is decided from **config order**, never from the list on
+screen: the picker re-sorts under a query, and a worktree that moved to a different
+parent would open with a different recipe.
 
 The listing is two `git` calls per workspace, so it runs on its own bounded queue
 in `GitRepoStatus` and the rows arrive after the card, the way the branch and the
@@ -2003,6 +2009,48 @@ excludes nothing without remote-tracking refs and would otherwise report the who
 history as at risk, when `remove` leaves the branch in place anyway. There is no
 stash count beside those, because `refs/stash` is shared across every worktree of a
 repo.
+
+### Removing one, from Settings
+
+**Removal is a deliberate Settings flow, not a picker chord.** ZenTerm does not destroy
+workspaces the way a session manager does, so a worktree goes when the user goes looking
+for it, beside the workspace edits already in Settings → Workspaces. The row is one focus
+stop with a Remove button; ⌫ on it does the same, and a click only focuses. A whole row
+that deletes what it names is one slip from a folder that is gone. A **locked** worktree
+gets no button at all: the store obeys a lock, so the button could only ever fail.
+
+**The confirm carries the whole weight, because git never gets to refuse.** `--force` is
+unconditional, so nothing downstream will stop a mistake. One sentence names all of it:
+what is uncommitted and unpushed, the tabs that close, the carried entries that go with
+the folder, and the branch that stays. Splitting that into two dialogs for one decision
+is worse than one long sentence. A nil `WorktreeState` reads as "could not be read",
+never as "clean", and keeps the destructive framing.
+
+**The read runs off-main and the confirm is presented on the way back**, so it checks the
+Settings card is still the one that was up, by identity. Otherwise it lands over whatever
+the user opened instead, asking about something they are no longer looking at.
+
+**The tab fan-out is unconditional.** It runs whether or not the count read before the
+confirm found anything: a tab opened in another window while the confirm sat there would
+otherwise be left running in a folder that is gone. That gating was a real bug on the
+shelved clones branch. Tabs are matched on `TabController.openedCWD`, where the tab was
+opened, **not** its live cwd: a shell that has `cd`'d out still belongs to the worktree,
+and matching the live cwd leaves exactly the tab that most needs closing. The lookup fans
+out through `AppDelegate`, which owns the only list of windows.
+
+**`WorktreeRemovalTracker` is app-wide**, because the hazard is the folder going away and
+that does not care which window is looking. The delete is slow and stays slow: removing a
+worktree carrying a 204,839-file `node_modules` measured **13.4 seconds** on an M-series
+machine, and the folder is listed for all of it. So the picker renders those rows as
+removing and refuses to open them, a sticky toast says the same in the window that asked,
+and `AppDelegate` fans a change out to every window so a picker already open is rebuilt
+rather than only the next one to be opened. Settings reopens when the delete lands, not
+when the confirm is answered: a list rebuilt on the way in would put a row up for a folder
+that is going away.
+
+Nothing here deletes a directory itself, so there is no `gitdir:` guard: every removal is
+`git worktree remove --force` and git decides what a working tree is. A remove that fails
+because the folder was deleted in Finder reports git's own error.
 
 ### GitCommand
 
