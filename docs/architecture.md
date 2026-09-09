@@ -1967,10 +1967,12 @@ directory stay correct because they point within it, but a carried entry that is
 a link out of the workspace would arrive holding a target that no longer resolves, so
 that one is refused.
 
-**Top-level entries only.** Nothing creates a destination's parent, so a nested entry
-would die in `copyfile` with an `ENOENT` that reads as a missing source. The parser
-refuses it instead, where the reason is still legible. A trailing slash is accepted and
-dropped, because that is how a `.gitignore` names a directory.
+**A nested entry works, because the destination's parent is created first.** A Rails
+app keeps its dev key at `config/credentials/development.key`, so nesting is the common
+case rather than an exotic one. Without that `mkdir` the copy died in `copyfile` with an
+`ENOENT` that read as a missing source. A parent left empty by a failed copy stays: git
+does not track empty directories, so it shows up in no `git status`. A trailing slash is
+accepted and dropped, because that is how a `.gitignore` names a directory.
 
 **Four refusals, and one of them is not what the return code says.** An entry git
 tracks is refused, because a tracked file in a worktree reports a modification that

@@ -98,6 +98,16 @@ enum WorktreeCarry {
                 continue
             }
 
+            // A nested entry can land under a directory the worktree does not have, because git
+            // gave it only what it tracks. One left empty by a failed copy shows in no `git status`.
+            let parent = to.deletingLastPathComponent()
+            do {
+                try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+            } catch {
+                skip(name, .copyFailed(error.localizedDescription))
+                continue
+            }
+
             let flags = copyfile_flags_t(COPYFILE_CLONE | COPYFILE_RECURSIVE)
             guard copyfile(from.path, to.path, nil, flags) == 0 else {
                 // `strerror` hands back a shared static buffer, so two creates failing at once can

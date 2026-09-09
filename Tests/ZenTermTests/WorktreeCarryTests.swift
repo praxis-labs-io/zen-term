@@ -102,6 +102,82 @@ final class WorktreeCarryTests: XCTestCase {
             ])
     }
 
+    // MARK: nested entries
+
+    /// A Rails app keeps its dev key at `config/credentials/development.key`, under a directory
+    /// git already tracks, so the worktree has the parent and only the file has to come across.
+    func test_copy_bringsANestedEntryUnderAParentTheWorktreeHas() throws {
+        let credentials = repo.appendingPathComponent("config/credentials", isDirectory: true)
+        try FileManager.default.createDirectory(at: credentials, withIntermediateDirectories: true)
+        try GitFixture.write("", to: credentials.appendingPathComponent(".keep"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "config"], in: repo)
+        try GitFixture.write("key\n", to: credentials.appendingPathComponent("development.key"))
+        try GitFixture.run(["worktree", "add", "-b", "side", worktree.path], in: repo)
+
+        let report = WorktreeCarry.copy(
+            ["config/credentials/development.key"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, ["config/credentials/development.key"])
+        XCTAssertEqual(report.skipped, [])
+        XCTAssertEqual(
+            try String(
+                contentsOf: worktree.appendingPathComponent("config/credentials/development.key"),
+                encoding: .utf8),
+            "key\n")
+    }
+
+    /// The whole directory is gitignored, so the worktree has no parent to copy into. Nothing used
+    /// to make one, and `copyfile` died with an `ENOENT` that read as a missing source.
+    func test_copy_createsTheParentTheWorktreeDoesNotHave() throws {
+        let claude = repo.appendingPathComponent(".claude", isDirectory: true)
+        try FileManager.default.createDirectory(at: claude, withIntermediateDirectories: true)
+        try GitFixture.write("{}\n", to: claude.appendingPathComponent("settings.local.json"))
+        try GitFixture.run(["worktree", "add", "-b", "side", worktree.path], in: repo)
+        XCTAssertFalse(GitFixture.exists(worktree.appendingPathComponent(".claude")))
+
+        let report = WorktreeCarry.copy(
+            [".claude/settings.local.json"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, [".claude/settings.local.json"])
+        XCTAssertEqual(report.skipped, [])
+        XCTAssertEqual(
+            try String(
+                contentsOf: worktree.appendingPathComponent(".claude/settings.local.json"),
+                encoding: .utf8),
+            "{}\n")
+    }
+
+    func test_copy_refusesANestedPathGitTracks() throws {
+        let config = repo.appendingPathComponent("config", isDirectory: true)
+        try FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
+        try GitFixture.write("a: 1\n", to: config.appendingPathComponent("database.yml"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "config"], in: repo)
+        try GitFixture.run(["worktree", "add", "-b", "side", worktree.path], in: repo)
+
+        let report = WorktreeCarry.copy(["config/database.yml"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, [])
+        XCTAssertEqual(
+            report.skipped,
+            [CarryReport.Skipped(name: "config/database.yml", reason: .tracked)])
+    }
+
+    func test_copy_refusesANestedEntryThatClimbsOut() throws {
+        let bystander = root.appendingPathComponent("bystander.txt")
+        try GitFixture.write("untouched\n", to: bystander)
+
+        let report = WorktreeCarry.copy(
+            ["config/../../bystander.txt"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, [])
+        XCTAssertEqual(
+            report.skipped,
+            [CarryReport.Skipped(name: "config/../../bystander.txt", reason: .leavesTheWorkspace)])
+        XCTAssertEqual(try String(contentsOf: bystander, encoding: .utf8), "untouched\n")
+    }
+
     // MARK: what it refuses, and what it leaves alone
 
     func test_copy_reportsAnEntryThatIsNotThere() {
