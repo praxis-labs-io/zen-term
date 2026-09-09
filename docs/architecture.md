@@ -884,8 +884,10 @@ launch is a fresh process, which is what makes an unanswered conflict come back.
 card arms no key equivalents, so Esc keeps reaching the pane and the × is
 the only keyboard-free way out.
 
-**Delete removes; reset is an icon beside the input.** On a `KeybindChip`, Backspace
-leaves the action with no shortcut and writes `= none`. It used to restore the
+**Delete removes; reset is an icon beside the input.** On a `KeybindChip`, a bare
+Backspace leaves the action with no shortcut and writes `= none`. Bare is the whole of
+it: `remove_worktree` ships on ⌥⌫, and a modified backspace read as the clear command
+unbinds the action being recorded onto. It used to restore the
 default, which read as doing nothing on exactly the rows most likely to be pressed:
 an action whose default is a chord something else already holds gets it back and
 loses it again on the reload. Reset moved into the capture popover, next to the input

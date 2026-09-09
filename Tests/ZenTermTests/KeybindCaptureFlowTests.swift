@@ -323,6 +323,20 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         XCTAssertTrue(text.contains("keybind = new_tab=none"), text)
     }
 
+    /// A modified backspace is a chord, not the clear command. `remove_worktree` ships on ⌥⌫, so
+    /// re-recording it over its own row used to read as Delete and unbind it instead.
+    func test_optionDelete_recordsAChordRatherThanClearingTheAction() {
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+        row(for: .removeWorktree).chip.onActivate?()
+
+        capturer.feed(deleteKey(option: true))
+
+        XCTAssertEqual(liveKeymap[Chord(option: true, key: "⌫")], .removeWorktree)
+        XCTAssertEqual(GeneralConfig.current.unboundActions, [], "⌥⌫ is a chord, never the clear")
+        XCTAssertFalse(capturer.isArmed, "recording it ends the capture")
+    }
+
     /// Reset moved off Delete and onto a button, so the button is the only way back to a default and
     /// has to work. Dead, an action removed by mistake could never be restored from the card.
     func test_theResetButton_putsTheDefaultBack() throws {

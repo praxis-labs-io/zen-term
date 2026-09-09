@@ -245,13 +245,15 @@ final class SettingsKeybindsSection: SettingsSection {
             hintBubble?.setPreview(Self.modifierGlyph(event.modifierFlags))
             return
         }
-        // keyDown. Esc / backspace / forward-delete are commands (the popover promises them), not
-        // recordable chords.
-        // Route the physical-key decode through the shared decoder so the macOS keyCodes stay in
-        // exactly one place (KeyboardFocus.key). Esc / Delete are commands, not recordable chords.
+        // Decoded through the shared decoder so the macOS keyCodes stay in exactly one place.
         switch KeyboardFocus.key(for: event) {
         case .escape: endCapture(row); refreshRows(); return  // Esc → cancel
-        case .delete: endCapture(row); remove(row); return  // Backspace → no shortcut at all
+        // Bare ⌫ only: ⌥⌫ is a shipped default, and reading a modified backspace as the clear
+        // command would unbind the very action the user was recording it onto.
+        case .delete where KeyboardFocus.isUnmodified(event):
+            endCapture(row)
+            remove(row)  // Backspace → no shortcut at all
+            return
         default: break
         }
         guard let chord = Chord(event: event) else { return }  // unmappable key — keep waiting
