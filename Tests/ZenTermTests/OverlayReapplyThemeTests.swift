@@ -247,6 +247,28 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         return overlay
     }
 
+    func test_reapplyTheme_recolorsTheCarryListAndKeepsWhatIsPicked() throws {
+        let overlay = AddWorkspaceOverlay(
+            existingTitles: [], background: Theme.current.chrome.background.nsColor,
+            onSubmit: { _ in }, onCancel: {})
+        overlay.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 460, height: 640)
+
+        let carry = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? CarryPicker }.first)
+        carry.setCarried(["node_modules"])
+        let list = try XCTUnwrap(carry.dropdownForTesting)
+        let before = list.layer?.borderColor
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        overlay.reapplyTheme()
+
+        XCTAssertNotEqual(before, list.layer?.borderColor)
+        XCTAssertEqual(carry.carried, ["node_modules"], "a recolor never loses what was picked")
+        XCTAssertEqual(list.buttonTitleForTesting, "1 carried")
+    }
+
     func test_reapplyTheme_recolorsEnvRowAndPreservesTypedKey() throws {
         let overlay = AddWorkspaceOverlay(
             existingTitles: [], background: Theme.current.chrome.background.nsColor,

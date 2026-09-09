@@ -189,7 +189,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         carryLabel.lineBreakMode = .byTruncatingTail
         carryLabel.stringValue =
             workspace.carry.isEmpty
-            ? "Nothing set. Add carry lines to this workspace to bring over what git ignores."
+            ? "Nothing set. Pick what to carry when you edit this workspace."
             : workspace.carry.joined(separator: ", ")
         let carryGroup = Self.vStack([caption("CARRY"), carryLabel], spacing: 6)
 

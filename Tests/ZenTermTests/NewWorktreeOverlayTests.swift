@@ -286,7 +286,7 @@ final class NewWorktreeOverlayTests: WindowTestCase {
 
         XCTAssertTrue(
             visibleText(in: overlay).contains(
-                "Nothing set. Add carry lines to this workspace to bring over what git ignores."))
+                "Nothing set. Pick what to carry when you edit this workspace."))
     }
 
     // MARK: keyboard

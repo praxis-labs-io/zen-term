@@ -126,6 +126,19 @@ enum WorktreeCarry {
         return CarryReport(carried: carried, skipped: skipped)
     }
 
+    /// What git ignores in `workspace`, as paths relative to it, or nil when git could not be
+    /// asked. An ignored directory arrives collapsed to one entry, which is what carry copies at.
+    static func ignoredEntries(in workspace: URL) -> [String]? {
+        // `-z` so a path holding a space or a quote arrives literal; `--porcelain` alone quotes it.
+        let args = ["status", "--porcelain", "--ignored", "-z"]
+        guard case .success(let output) = GitCommand.run(args, in: workspace) else { return nil }
+        return output.split(separator: "\0").compactMap { line in
+            guard line.hasPrefix("!! ") else { return nil }
+            let entry = line.dropFirst(3)
+            return String(entry.hasSuffix("/") ? entry.dropLast() : entry)
+        }
+    }
+
     /// Whether git tracks anything at `name`, or nil when git could not be asked. **Nil is not
     /// "untracked":** carrying a tracked path leaves git reporting a modification that never goes
     /// away, so a repo we could not read is one we decline rather than guess about.

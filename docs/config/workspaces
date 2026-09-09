@@ -58,6 +58,10 @@
 # changed a lockfile and the install is still the old one until you run your package
 # manager in it.
 #
+# Setting carry: the workspace form (Settings → Workspaces, or the ＋ row in the ⌘P
+# picker) lists what git ignores in the folder and you tick what to carry. Editing this
+# file by hand does the same thing.
+#
 # Making a worktree: ⌥⏎ over a row in the ⌘P picker. Name the branch, pick where it
 # starts, and the carry entries below come across with it.
 #

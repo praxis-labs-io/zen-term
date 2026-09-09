@@ -20,12 +20,11 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         super.tearDown()
     }
 
-    // MARK: carry survives an edit
+    // MARK: carry
 
-    /// The form has no `carry` rows, so a `Workspace` it rebuilds without one writes an empty list
-    /// back over the file. `WorkspacesWriter.update` regenerates the whole section body, so saving
-    /// an unrelated field would delete hand-authored `carry` lines with nothing said.
-    func test_editingAWorkspace_keepsCarryTheFormCannotShow() throws {
+    /// `WorkspacesWriter.update` regenerates the whole section body, so a form that rebuilt the
+    /// workspace without `carry` would delete those lines on any unrelated edit, with nothing said.
+    func test_editingAWorkspace_roundTripsCarryThroughThePicker() throws {
         let ws = Workspace(
             title: "ZenTerm", path: try makeRealDir(),
             main: nil, right: nil, bottom: nil, focus: .main, env: [:],
@@ -37,6 +36,78 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
 
         XCTAssertEqual(sink.submitted.first?.title, "Renamed")
         XCTAssertEqual(sink.submitted.first?.carry, ["node_modules", ".env"])
+    }
+
+    /// The catalog is read out of the folder, so choosing one has to reach the control. Nothing is
+    /// typed into CARRY, which is why the folder is the only thing that can fill it.
+    func test_choosingAFolder_loadsWhatGitIgnoresThere() throws {
+        let dir = try makeRealDir()
+        let (overlay, _) = mount()
+        let carry = try XCTUnwrap(carryPicker(in: overlay))
+        carry.settle = 0
+        carry.probe = { _ in ["node_modules", ".env"] }
+        let landed = expectation(description: "catalog")
+        carry.onChanged = { if !carry.catalog.isEmpty { landed.fulfill() } }
+
+        picker(in: overlay).setText(dir.path)
+        picker(in: overlay).field.onChange?()
+        wait(for: [landed], timeout: 2)
+
+        XCTAssertEqual(carry.catalog, ["node_modules", ".env"])
+    }
+
+    func test_whatIsPickedInCarry_isWhatIsSubmitted() throws {
+        let dir = try makeRealDir()
+        let ws = Workspace(
+            title: "ZenTerm", path: dir, main: nil, right: nil, bottom: nil, focus: .main,
+            env: [:], carry: [".env"])
+        let (overlay, sink) = mount(editing: ws)
+        let carry = try XCTUnwrap(carryPicker(in: overlay))
+
+        carry.setCarried([".env", "node_modules"])
+        try XCTUnwrap(button(in: overlay, title: "Save")).onTap()
+
+        XCTAssertEqual(sink.submitted.first?.carry, [".env", "node_modules"])
+    }
+
+    /// A list with nothing to show is not a focus stop, so an arrow into it would strand the ring.
+    func test_carryIsAVerticalStopOnlyOnceItHasAList() throws {
+        let (overlay, _) = mount()
+        let carry = try XCTUnwrap(carryPicker(in: overlay))
+        XCTAssertNil(carry.focusStop)
+
+        carry.setCarried(["node_modules"])
+
+        XCTAssertNotNil(carry.focusStop)
+    }
+
+    func test_theCarryCaption_saysWhereTheEntriesGo() {
+        XCTAssertTrue(
+            AddWorkspaceOverlay.carryCaptionText.lowercased().contains("worktree"),
+            AddWorkspaceOverlay.carryCaptionText)
+        XCTAssertFalse(AddWorkspaceOverlay.carryCaptionText.contains("—"), "no em-dashes")
+    }
+
+    /// The form's own stop list, not the control's: a stop the form never splices in is a stop the
+    /// arrows cannot reach, and `verticalStops()` is private.
+    func test_downFromTheEnvButton_reachesTheCarryList() throws {
+        let dir = try makeRealDir()
+        let ws = Workspace(
+            title: "ZenTerm", path: dir, main: nil, right: nil, bottom: nil, focus: .main,
+            env: [:], carry: ["node_modules"])
+        let (overlay, _) = mount(editing: ws)
+        let carry = try XCTUnwrap(carryPicker(in: overlay))
+        let list = try XCTUnwrap(carry.focusStop)
+        let addVar = try XCTUnwrap(button(in: overlay, title: "＋ Add variable"))
+        window?.makeFirstResponder(addVar)
+
+        addVar.onArrowDown?()
+
+        XCTAssertTrue(KeyboardFocus.isFocused(list, in: window), "Down off ＋ Add variable lands on CARRY")
+    }
+
+    private func carryPicker(in overlay: NSView) -> CarryPicker? {
+        descendants(of: overlay).compactMap { $0 as? CarryPicker }.first
     }
 
     // MARK: harness

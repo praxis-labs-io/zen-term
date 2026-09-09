@@ -102,6 +102,47 @@ final class WorktreeCarryTests: XCTestCase {
             ])
     }
 
+    // MARK: what can be carried
+
+    /// The form offers what git ignores, so the candidates come from git rather than a directory
+    /// walk. An ignored directory collapses to one entry, which is the granularity carry copies at.
+    func test_ignoredEntries_listsIgnoredFilesAndCollapsesIgnoredDirectories() throws {
+        try GitFixture.write("SECRET=1\n", to: repo.appendingPathComponent(".env"))
+        let build = repo.appendingPathComponent(".build/x", isDirectory: true)
+        try FileManager.default.createDirectory(at: build, withIntermediateDirectories: true)
+        try GitFixture.write("o\n", to: build.appendingPathComponent("y.o"))
+
+        XCTAssertEqual(WorktreeCarry.ignoredEntries(in: repo), [".build", ".env"])
+    }
+
+    func test_ignoredEntries_listsANestedIgnoredPathOnItsOwn() throws {
+        let credentials = repo.appendingPathComponent("config/credentials", isDirectory: true)
+        try FileManager.default.createDirectory(at: credentials, withIntermediateDirectories: true)
+        try GitFixture.write("", to: credentials.appendingPathComponent(".keep"))
+        try GitFixture.write(
+            ".build/\n.env\nconfig/credentials/*.key\n",
+            to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "config"], in: repo)
+        try GitFixture.write("key\n", to: credentials.appendingPathComponent("development.key"))
+
+        XCTAssertEqual(
+            WorktreeCarry.ignoredEntries(in: repo), ["config/credentials/development.key"])
+    }
+
+    /// A tracked file is refused at copy time, so offering it would be offering a mistake.
+    func test_ignoredEntries_leavesOutWhatGitTracks() throws {
+        try GitFixture.write("SECRET=1\n", to: repo.appendingPathComponent(".env"))
+
+        XCTAssertEqual(WorktreeCarry.ignoredEntries(in: repo), [".env"])
+    }
+
+    /// Nil is not "nothing ignored": the form says it could not ask rather than showing an empty
+    /// list that reads as a repo with nothing to carry.
+    func test_ignoredEntries_isNilWhenTheFolderIsNotARepo() {
+        XCTAssertNil(WorktreeCarry.ignoredEntries(in: root))
+    }
+
     // MARK: nested entries
 
     /// A Rails app keeps its dev key at `config/credentials/development.key`, under a directory

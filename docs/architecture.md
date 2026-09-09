@@ -1947,8 +1947,18 @@ made.
 
 The create card runs it, and reports every entry that stayed behind except one that is
 simply not there: a section covers a repo before and after its first install, so that
-one is a normal state rather than something to interrupt with. Setting `carry` is still
-a hand edit of the workspaces file; the card only reads it.
+one is a normal state rather than something to interrupt with.
+
+**Carry is picked, never typed.** The workspace form's CARRY control lists what
+`git status --porcelain --ignored` reports for the folder, which is the same question
+carry answers, and the user ticks what comes across. An ignored directory arrives
+collapsed to one entry, which is the granularity the copy works at. The catalog is the
+union of that list and whatever the workspace already carries, so a `carry` line naming
+something not on disk stays put instead of being dropped by the next save. `nil` from
+the probe is not "nothing ignored": the control says the folder is not a repo rather
+than showing an empty list. `CheckboxDropdown` fixes its row count at init and the
+catalog's length is not known until git answers, so the control is rebuilt when one
+lands rather than re-seeded.
 
 **An allowlist, because the denylist is what killed the clone approach.** That design
 copied everything and subtracted what breaks on relocation, which asks us to know
