@@ -204,6 +204,33 @@ final class RepoPickerPresentationTests: WindowTestCase {
         XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "the picker never left")
     }
 
+    /// A destructive question is answered, never navigated away from. Both picker chords stay live
+    /// while the confirm is up otherwise: ⌥⏎ swapped the picker for the create form and dropped the
+    /// question with it, and ⌥⌫ stacked a second card over the first.
+    func test_chordsAreSwallowedWhileTheConfirmIsUp() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        let picker = try XCTUnwrap(pickers(in: c).first)
+        waitForPendingLoads()
+        let alpha = URL(
+            fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
+        giveWorktrees(picker, under: alpha, "feature/one")
+        moveDown(in: picker)
+        c.handle(.removeWorktree)
+        waitUntil(picker.presentedConfirmForTesting != nil, "the remove confirm to be presented")
+        let card = try XCTUnwrap(picker.presentedConfirmForTesting)
+
+        c.handle(.createWorktree)
+        c.handle(.removeWorktree)
+        c.handle(.toggleRepoPicker)
+        waitForPendingLoads()
+
+        XCTAssertTrue(picker.presentedConfirmForTesting === card, "the same question, still up")
+        XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "and the same picker under it")
+    }
+
     /// The whole point of the card over the toast: answering yes turns the row that was asked
     /// about into the progress state, in the list the user was already looking at.
     func test_confirmingTheRemove_leavesThePickerUpWithTheRowRemoving() throws {

@@ -199,13 +199,22 @@ final class RepoPickerOverlay: PaletteOverlay {
         card.animateIn()
     }
 
-    /// Take the confirm down and give the list its keyboard back. No-op when none is up, so an
-    /// answer that arrives twice (Return on a button already springing out) is harmless.
+    /// While a card is up the keyboard is its own, so focus goes there rather than to the query.
+    override func focusInitialResponder() {
+        if let confirmCard { confirmCard.focusInitialResponder() } else { focusQuery() }
+    }
+
+    /// Take the confirm down and give the list its keyboard back. The slot is cleared in the exit
+    /// animation's completion, not before it: the card is on screen for that whole spring, and
+    /// releasing it early hands Esc back to the picker, which closes the picker instead.
     func dismissConfirm() {
         guard let card = confirmCard else { return }
-        confirmCard = nil
-        card.animateOut { card.removeFromSuperview() }
-        focusInitialResponder()
+        card.animateOut { [weak self, weak card] in
+            card?.removeFromSuperview()
+            guard let self, self.confirmCard === card else { return }
+            self.confirmCard = nil
+        }
+        focusQuery()
     }
 
     override func reapplyTheme() {

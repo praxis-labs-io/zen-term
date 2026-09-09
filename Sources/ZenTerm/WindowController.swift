@@ -2101,6 +2101,9 @@ final class WindowController: NSObject {
         // cards; every other chord is swallowed. Its arrow/Enter/Esc keys aren't chords — they
         // go to the card's field editor, never here.
         if let modal {
+            // A card over the card owns the keyboard: a destructive question is answered, never
+            // navigated away from by the chord that opened the surface under it.
+            if (modal.overlay as? PaletteOverlay)?.isShowingOverlaidCard == true { return }
             if let selfToggle = modal.kind.selfToggle, chord == selfToggle {
                 closeModal()
                 return
