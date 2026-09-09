@@ -328,6 +328,23 @@ final class WorktreeStoreTests: XCTestCase {
         XCTAssertEqual(try WorktreeStore.list(in: repo), [])
     }
 
+    /// The claim proves the branch is ours, not that it still stands where we put it. A
+    /// `post-checkout` hook runs with the new worktree checked out, so it can commit and then fail.
+    /// Those commits are left behind and named rather than force-deleted.
+    func test_create_leavesABranchTheAddMovedBehind() throws {
+        try hook("post-checkout", "#!/bin/sh\ngit commit -q --allow-empty -m theirs\nexit 1\n")
+
+        XCTAssertThrowsError(try WorktreeStore.create(branch: "moved", in: repo)) { error in
+            guard
+                case .rollbackIncomplete(_, let leftBehind) =
+                    try? XCTUnwrap(error as? WorktreeStore.WorktreeError)
+            else { return XCTFail("expected rollbackIncomplete, got \(error)") }
+            XCTAssertEqual(leftBehind, ["the branch moved"])
+        }
+        XCTAssertEqual(
+            try GitFixture.run(["log", "-1", "--format=%s", "moved"], in: repo), "theirs")
+    }
+
     /// The second race: the folder. A losing process used to delete the winner's fresh worktree,
     /// because the rollback's `removeItem` ran on a directory it had only checked, never made.
     func test_create_leavesAFolderItDidNotMakeAlone() throws {
@@ -611,9 +628,13 @@ final class WorktreeStoreTests: XCTestCase {
 
     /// A hook that fails after the checkout, the way direnv or an LFS hook can.
     private func failingPostCheckoutHook() throws {
-        let hook = repo.appendingPathComponent(".git/hooks/post-checkout")
-        try GitFixture.write("#!/bin/sh\nexit 1\n", to: hook)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hook.path)
+        try hook("post-checkout", "#!/bin/sh\nexit 1\n")
+    }
+
+    private func hook(_ name: String, _ script: String) throws {
+        let path = repo.appendingPathComponent(".git/hooks/\(name)")
+        try GitFixture.write(script, to: path)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: path.path)
     }
 
     // MARK: naming

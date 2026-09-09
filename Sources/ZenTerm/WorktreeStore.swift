@@ -210,13 +210,13 @@ enum WorktreeStore {
             try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
             try claimDestination(destination, in: repo)
         } catch {
-            throw takingBack(branch, at: nil, in: repo, after: error)
+            throw takingBack(branch, claimedAt: base0ID, at: nil, in: repo, after: error)
         }
 
         do {
             try git(["worktree", "add", destination.path, branch], in: repo)
         } catch {
-            throw takingBack(branch, at: destination, in: repo, after: error)
+            throw takingBack(branch, claimedAt: base0ID, at: destination, in: repo, after: error)
         }
 
         // Read the worktree's own HEAD rather than trusting the OID resolved before the add: a
@@ -253,9 +253,9 @@ enum WorktreeStore {
 
     /// What a failed `create` throws, once it has taken back what it claimed.
     private static func takingBack(
-        _ branch: String, at destination: URL?, in repo: URL, after cause: Error
+        _ branch: String, claimedAt: String, at destination: URL?, in repo: URL, after cause: Error
     ) -> Error {
-        let leftBehind = rollback(branch: branch, at: destination, in: repo)
+        let leftBehind = rollback(branch: branch, claimedAt: claimedAt, at: destination, in: repo)
         guard leftBehind.isEmpty else {
             return WorktreeError.rollbackIncomplete(
                 cause: cause.localizedDescription, leftBehind: leftBehind)
@@ -268,7 +268,9 @@ enum WorktreeStore {
     ///
     /// Order matters: git refuses to delete a branch still registered to a worktree, even one whose
     /// directory is gone, so the registration goes first and a bare `removeItem` never leads.
-    private static func rollback(branch: String, at destination: URL?, in repo: URL) -> [String] {
+    private static func rollback(
+        branch: String, claimedAt: String, at destination: URL?, in repo: URL
+    ) -> [String] {
         var leftBehind: [String] = []
         if let destination {
             _ = try? git(["worktree", "remove", "--force", destination.path], in: repo)
@@ -280,9 +282,14 @@ enum WorktreeStore {
         }
         guard branchExists(branch, in: repo) else { return leftBehind }
 
-        // `-D`, because the claim already proved the branch is ours: `-d` asks a different question
-        // and refuses an untracked one cut from a base ahead of the checkout.
-        if (try? git(["branch", "-D", "--", branch], in: repo)) != nil { return leftBehind }
+        // The claim proved the branch is ours, not that nothing was written to it while the add
+        // ran: a `post-checkout` hook has the new worktree checked out and can commit.
+        let unmoved =
+            (try? git(["rev-parse", "--verify", "refs/heads/\(branch)"], in: repo))
+            == claimedAt
+        // `-D`, because `-d` asks a different question and refuses an untracked branch cut from a
+        // base ahead of the checkout.
+        if unmoved, (try? git(["branch", "-D", "--", branch], in: repo)) != nil { return leftBehind }
         leftBehind.append("the branch \(branch)")
         return leftBehind
     }

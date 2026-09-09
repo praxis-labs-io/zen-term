@@ -1864,9 +1864,13 @@ Each claim is instead an operation that fails when someone already holds the thi
 
 The branch is claimed first, so the common refusal (a name already taken) never
 touches the filesystem. Ownership is a fact after that, and the rollback deletes only
-what this create made. There is no OID comparison to weaken, and no window where a
-losing process takes a branch someone else cut from the same base or deletes the
-winner's fresh worktree directory.
+what this create made: there is no window where a losing process takes a branch
+someone else cut from the same base, or deletes the winner's fresh worktree directory.
+
+What the claim does not prove is that the branch still stands where it was put. A
+`post-checkout` hook runs with the new worktree checked out and can commit before it
+fails, so the rollback still compares the ref against the OID it claimed and leaves a
+branch that moved, rather than force-deleting commits it did not make.
 
 **`--no-track`, deliberately.** `worktree add -b` tracked the base, which set
 `origin/main` as the upstream of a branch called something else. `push.default=simple`
