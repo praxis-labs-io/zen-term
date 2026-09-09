@@ -10,6 +10,8 @@ import TerminalKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windows: [WindowController] = []
+    /// One tracker for every window: a worktree being deleted must read as such in all of them.
+    private let worktreeRemovals = WorktreeRemovalTracker()
     private let keys = KeyInterceptor()
     /// The nvim navigator command socket (`$ZEN_SOCK`). Started at launch, torn down on
     /// quit. Nil if it couldn't bind — the ⌘-nav path never depends on it.
@@ -274,6 +276,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The command palette dispatches through `handle(_:)`, where app-global chords are a no-op.
         // Hand them back to `route(_:)` so a palette pick reloads config / checks for updates too.
         wc.onAppGlobalCommand = { [weak self] chord in self?.route(chord) }
+        wc.worktreeRemovals = worktreeRemovals
+        // Removing a worktree starts in one window's Settings but has to account for every window:
+        // one open elsewhere would otherwise be left running in a folder that is gone.
+        wc.onCountTabsAtPath = { [weak self] path in
+            self?.windows.reduce(0) { $0 + $1.tabCount(atPath: path) } ?? 0
+        }
+        wc.onCloseTabsAtPath = { [weak self] path in
+            // Copy first: closing a window's last tab removes it from `windows` mid-iteration.
+            for window in self?.windows ?? [] { window.closeTabs(atPath: path) }
+        }
+        wc.onWorktreeRemovalsChanged = { [weak self] in
+            for window in self?.windows ?? [] { window.worktreeRemovalsChanged() }
+        }
         if centered { wc.window.center() }
         wc.onClosed = { [weak self, weak wc] in
             guard let self, let wc else { return }

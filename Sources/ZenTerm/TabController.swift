@@ -155,6 +155,10 @@ final class TabController: NSObject {
     /// nil reads downstream as "no repository" rather than "unknown".
     var focusedCWD: URL? { focusedDrawerSurface?.currentDirectory ?? paneCanvas.focusedCWD }
 
+    /// Where this tab was opened, which is not `focusedCWD`: a shell that has `cd`'d elsewhere
+    /// still belongs to the folder it was opened for. Removing a worktree matches on this.
+    let openedCWD: URL?
+
     /// True when the tab has a single pane, so ⌘W on it would close the whole tab.
     var isSinglePane: Bool { paneCanvas.paneCount == 1 }
 
@@ -247,6 +251,7 @@ final class TabController: NSObject {
         makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make
     ) {
         workspaceEnv = env
+        openedCWD = initialCWD
         self.isToolFloatOpen = isToolFloatOpen
         self.makeSurface = makeSurface
         paneCanvas = PaneCanvasController(

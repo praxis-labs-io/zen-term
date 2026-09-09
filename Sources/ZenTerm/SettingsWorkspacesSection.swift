@@ -1,10 +1,11 @@
 import AppKit
 
-/// The Workspaces settings section: the configured workspaces, with add / edit / reorder. Each
-/// workspace is a focusable `WorkspaceRow` — Return / click opens the edit form (delete lives there),
-/// Up/Down move between rows, ⌥Up/⌥Down move the workspace itself (the order the ⌘P picker and this
-/// list both read), Left exits to the nav, Esc closes the card. A trailing "Add workspace" button
-/// opens a blank form. Add / edit route out through `onEditWorkspace`; the host presents
+/// The Workspaces settings section: the configured workspaces, with add / edit / reorder, and each
+/// repo's worktrees listed under it. Each workspace is a focusable `WorkspaceRow` — Return / click
+/// opens the edit form (delete lives there), Up/Down move between rows, ⌥Up/⌥Down move the
+/// workspace itself (the order the ⌘P picker and this list both read), Left exits to the nav, Esc
+/// closes the card. A `WorktreeRow` under it removes that worktree. A trailing "Add workspace"
+/// button opens a blank form. Add / edit route out through `onEditWorkspace`; the host presents
 /// `AddWorkspaceOverlay`, which writes on submit / delete and hands back here, so the ⌘P picker
 /// reflects the change with no restart. Mirrors `SettingsToolsSection`.
 final class SettingsWorkspacesSection: SettingsSection {
@@ -12,6 +13,10 @@ final class SettingsWorkspacesSection: SettingsSection {
     var onExitToNav: (() -> Void)?
     /// Set by the host: open the add / edit form. `nil` adds a new workspace; a value edits that one.
     var onEditWorkspace: ((Workspace?) -> Void)?
+    /// Set by the host: remove this worktree of that workspace's repo, behind a confirm.
+    var onRemoveWorktree: ((Worktree, Workspace) -> Void)?
+    /// Set by the host. A worktree whose delete is already running offers no second Remove.
+    var worktreeRemovals = WorktreeRemovalTracker()
     /// Set by the host: exchange these two workspaces' positions in the `workspaces` file. Returns
     /// whether the write landed — on false the list is left exactly as it was, so it can never show
     /// an order the file doesn't have.
@@ -21,7 +26,12 @@ final class SettingsWorkspacesSection: SettingsSection {
     /// without assuming the rows are adjacent in the file.
     var onReorder: ((_ moved: Workspace, _ with: Workspace) -> Bool)?
 
+    /// Workspace rows only, so ⌥↑/⌥↓ reorder the file and never move a worktree row.
     private var rows: [WorkspaceRow] = []
+    /// Every focus stop in render order: a workspace, its worktrees, the next workspace, the button.
+    private var stops: [NSView] = []
+    /// Keyed by the workspace's standardized path, filled in when the background listing lands.
+    private var listings: [URL: WorktreeListing] = [:]
     private let addButton = AppButton(title: "＋ Add workspace", variant: .muted)
     /// Rebuilt fresh by `populateRows` on each `makeDetailView` (the card rebuilds a section's detail
     /// on every switch), so their width constraints never accumulate on a retained view. Weak refs
@@ -50,14 +60,13 @@ final class SettingsWorkspacesSection: SettingsSection {
         return SettingsDetail.scroll(for: stack)
     }
 
-    func detailStops() -> [NSView] { rows + [addButton] }
+    func detailStops() -> [NSView] { stops }
 
     func reapplyTheme() {
         caption?.textColor = Theme.current.chrome.ink(.muted)
         emptyHint?.textColor = Theme.current.chrome.ink(.muted)
         reorderHint?.textColor = Theme.current.chrome.ink(.faint)
-        rows.forEach { $0.reapplyTheme() }
-        addButton.reapplyTheme()
+        stops.forEach { ($0 as? ThemeReapplying)?.reapplyTheme() }
     }
 
     // MARK: rows
@@ -76,9 +85,17 @@ final class SettingsWorkspacesSection: SettingsSection {
         // rebuild the current rows a second time under the user.
         mountGeneration += 1
         let generation = mountGeneration
+        listings = [:]
         ConfigLoader.loadWorkspaces { [weak self] workspaces in
             guard let self, generation == self.mountGeneration else { return }
             self.populate(with: workspaces)
+            // Two `git` calls per workspace, so the worktree rows land after the workspaces they
+            // belong to, the way the ⌘P picker's do.
+            GitRepoStatus.refreshWorktrees(workspaces.map(\.path)) { [weak self] path, listing in
+                guard let self, generation == self.mountGeneration else { return }
+                self.listings[path.standardizedFileURL] = listing
+                self.populate(with: workspaces)
+            }
         }
     }
 
@@ -92,14 +109,13 @@ final class SettingsWorkspacesSection: SettingsSection {
         // in here when the load lands (the add button is a stop from the first frame), so remember
         // whether focus was ours and put it back on the equivalent stop afterwards.
         let focusedStop = stack.window?.firstResponder as? NSView
-        let hadFocus = focusedStop.map { stop in detailStops().contains { $0 === stop } } ?? false
-        // The add button is the only stop that survives the rebuild, so it's the only one that can
-        // be restored by identity. Restoring it matters: it's the stop the user lands on when they
-        // enter the detail before the rows arrive, and moving them to a row would put Return on a
-        // workspace they never selected.
-        let wasAddButton = focusedStop === addButton
+        let hadFocus = focusedStop.map { stop in stops.contains { $0 === stop } } ?? false
+        // Restored by identity rather than position: a worktree listing landing under the user
+        // inserts rows above them, and restoring by index would move them to a different workspace.
+        let heldStop = focusedStop.flatMap(Self.stopID)
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         rows = []
+        stops = []
 
         let caption = SettingsDetail.groupCaption("Workspaces")
         self.caption = caption
@@ -122,6 +138,8 @@ final class SettingsWorkspacesSection: SettingsSection {
             stack.addArrangedSubview(hint)
             hint.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         } else if let workspaces {
+            let configured = Set(workspaces.map { $0.path.standardizedFileURL })
+            let owners = WorktreeGrouping.owners(among: workspaces, listings: listings)
             for workspace in workspaces {
                 let row = WorkspaceRow(workspace: workspace)
                 row.onActivate = { [weak self, weak row] in row.map { self?.onEditWorkspace?($0.workspace) } }
@@ -133,8 +151,26 @@ final class SettingsWorkspacesSection: SettingsSection {
                 row.onBacktab = { [weak self, weak row] in self?.moveTab(from: row, delta: -1) }
                 row.onExitToNav = { [weak self] in self?.onExitToNav?() }
                 rows.append(row)
+                stops.append(row)
                 stack.addArrangedSubview(row)
                 row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+                let children = WorktreeGrouping.worktrees(
+                    of: workspace, listings: listings, owners: owners, configured: configured)
+                for worktree in children {
+                    let child = WorktreeRow(
+                        worktree: worktree, parent: workspace,
+                        isRemoving: worktreeRemovals.isRemoving(worktree.path))
+                    child.onRemove = { [weak self] in self?.onRemoveWorktree?(worktree, workspace) }
+                    child.onArrowUp = { [weak self, weak child] in self?.moveFocus(from: child, delta: -1) }
+                    child.onArrowDown = { [weak self, weak child] in self?.moveFocus(from: child, delta: 1) }
+                    child.onTab = { [weak self, weak child] in self?.moveTab(from: child, delta: 1) }
+                    child.onBacktab = { [weak self, weak child] in self?.moveTab(from: child, delta: -1) }
+                    child.onExitToNav = { [weak self] in self?.onExitToNav?() }
+                    stops.append(child)
+                    stack.addArrangedSubview(child)
+                    child.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+                }
             }
             // The rows are up with whatever git status was already known; fill in the rest when the
             // background probe lands, the same way the ⌘P picker does.
@@ -144,6 +180,7 @@ final class SettingsWorkspacesSection: SettingsSection {
         }
         stack.setCustomSpacing(10, after: header)
 
+        stops.append(addButton)
         let addRow = SettingsDetail.trailingRow(addButton)
         stack.addArrangedSubview(addRow)
         addRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -153,12 +190,23 @@ final class SettingsWorkspacesSection: SettingsSection {
         // ⌥↓⌥↓ walks one down without re-finding it.
         if let title, let moved = rows.first(where: { $0.workspace.title == title }) {
             stack.window?.makeFirstResponder(moved)
-            KeyboardFocus.reveal(moved, among: rows + [addButton])
+            KeyboardFocus.reveal(moved, among: stops)
             return
         }
-        // Focus was in this section before the rebuild, so put it back: on the add button if that's
-        // where it was, else the first stop, so arrows and Return keep working without a click.
-        if hadFocus { stack.window?.makeFirstResponder(wasAddButton ? addButton : detailStops().first) }
+        // Focus was in this section before the rebuild, so put it back on the same stop, falling to
+        // the first when that stop is gone, so arrows and Return keep working without a click.
+        guard hadFocus else { return }
+        let same = heldStop.flatMap { held in stops.first { Self.stopID($0) == held } }
+        stack.window?.makeFirstResponder(same ?? stops.first)
+    }
+
+    /// What a focus stop is, across a rebuild. The add button is the stop a user lands on before
+    /// any row has arrived, so it needs an identity of its own rather than falling to the first row.
+    private static func stopID(_ view: NSView) -> AnyHashable? {
+        if let row = view as? WorkspaceRow { return ["workspace", row.workspace.title] }
+        if let row = view as? WorktreeRow { return ["worktree", row.worktree.path.path] }
+        if view is AppButton { return ["add"] }
+        return nil
     }
 
     /// Move a workspace one slot: exchange it with its neighbour in the file, then re-render in the
@@ -191,9 +239,7 @@ final class SettingsWorkspacesSection: SettingsSection {
     private var mountGeneration = 0
 
     private func moveFocus(from view: NSView?, delta: Int) {
-        guard let view else { return }
-        let stops = rows + [addButton]
-        guard let anchor = stops.firstIndex(where: { $0 === view }) else { return }
+        guard let view, let anchor = stops.firstIndex(where: { $0 === view }) else { return }
         SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta) { $0 }
     }
 
@@ -201,9 +247,7 @@ final class SettingsWorkspacesSection: SettingsSection {
     /// to the first, and Shift-Tab retreats one stop, exiting to the nav only from the first —
     /// mirroring how Left exits.
     private func moveTab(from view: NSView?, delta: Int) {
-        guard let view else { return }
-        let stops = rows + [addButton]
-        guard let anchor = stops.firstIndex(where: { $0 === view }) else { return }
+        guard let view, let anchor = stops.firstIndex(where: { $0 === view }) else { return }
         if delta < 0, anchor == 0 {
             onExitToNav?()
             return
@@ -216,7 +260,7 @@ final class SettingsWorkspacesSection: SettingsSection {
 /// stop — Return / click opens the edit form (where delete lives), Up/Down (and Tab/Shift-Tab) move
 /// rows, ⌥Up/⌥Down reorder the workspace itself, Left exits to nav. Mirrors `ToolFloatRow`
 /// (workspaces have no shortcut, so no keycap).
-final class WorkspaceRow: NSView {
+final class WorkspaceRow: NSView, ThemeReapplying {
     let workspace: Workspace
     var onActivate: (() -> Void)?
     var onArrowUp: (() -> Void)?
@@ -327,6 +371,134 @@ final class WorkspaceRow: NSView {
         window?.makeFirstResponder(self)
         onActivate?()
     }
+
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
+
+    private func restyle() {
+        let chrome = Theme.current.chrome
+        layer?.backgroundColor = isFocused ? chrome.fill(.active).cgColor : nil
+        layer?.borderWidth = isFocused ? 1.5 : 0
+        layer?.borderColor = isFocused ? chrome.accent.nsColor.cgColor : nil
+    }
+}
+
+/// One worktree row, indented under the workspace whose repo it belongs to: its branch and its
+/// folder, with a Remove button. The row is one focus stop and ⌫ on it removes, so a click can only
+/// focus: a whole row that deletes on click is one slip from a folder that is gone. Return does
+/// nothing, because Return opens things everywhere else in Settings.
+final class WorktreeRow: NSView, ThemeReapplying {
+    /// How far the row sits inside its workspace, mirroring the ⌘P picker's child indent.
+    static let childIndent: CGFloat = 16
+
+    let worktree: Worktree
+    let parent: Workspace
+    var onRemove: (() -> Void)?
+    var onArrowUp: (() -> Void)?
+    var onArrowDown: (() -> Void)?
+    var onTab: (() -> Void)?
+    var onBacktab: (() -> Void)?
+    var onExitToNav: (() -> Void)?
+
+    private let titleLabel: NSTextField
+    private let subtitleLabel: NSTextField
+    /// Absent on a locked worktree and disabled while a delete is running: `WorktreeStore.remove`
+    /// obeys a lock, so offering a button that always fails is worse than offering none.
+    private let removeButton: AppButton?
+    /// Says why there is no button, so a locked worktree does not read as an oversight.
+    private let lockedLabel: NSTextField?
+    private var isFocused = false { didSet { restyle() } }
+
+    init(worktree: Worktree, parent: Workspace, isRemoving: Bool) {
+        self.worktree = worktree
+        self.parent = parent
+        // A detached worktree's folder name is whatever directory it was made in, which reads like
+        // a branch and is not one, so the short head stands in.
+        titleLabel = NSTextField(labelWithString: worktree.branch ?? String(worktree.head.prefix(7)))
+        subtitleLabel = NSTextField(
+            labelWithString: PathDisplay.abbreviatingHome(worktree.path.path))
+        removeButton = worktree.isLocked ? nil : AppButton(title: "Remove", variant: .destructive)
+        lockedLabel = worktree.isLocked ? NSTextField(labelWithString: "Locked") : nil
+
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        layer?.cornerRadius = 8
+
+        titleLabel.font = .systemFont(ofSize: 12)
+        subtitleLabel.font = .systemFont(ofSize: 11)
+        subtitleLabel.lineBreakMode = .byTruncatingMiddle
+        lockedLabel?.font = .systemFont(ofSize: 11)
+        let labels = NSStackView(views: [titleLabel, subtitleLabel])
+        labels.orientation = .vertical
+        labels.alignment = .leading
+        labels.spacing = 1
+        labels.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        removeButton?.isEnabled = !isRemoving
+        removeButton?.setContentHuggingPriority(.required, for: .horizontal)
+        removeButton?.onTap = { [weak self] in self?.requestRemove() }
+        let trailing: NSView? = removeButton ?? lockedLabel
+        let controls = NSStackView(views: [labels, spacer] + (trailing.map { [$0] } ?? []))
+        controls.orientation = .horizontal
+        controls.alignment = .centerY
+        controls.spacing = 10
+        controls.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(controls)
+        NSLayoutConstraint.activate([
+            controls.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6 + Self.childIndent),
+            controls.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            controls.topAnchor.constraint(equalTo: topAnchor, constant: 5),
+            controls.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
+        ])
+        applyInk()
+        restyle()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func reapplyTheme() {
+        applyInk()
+        removeButton?.reapplyTheme()
+        restyle()
+    }
+
+    /// The row is a child, so it sits a weight quieter than the workspace above it.
+    private func applyInk() {
+        let chrome = Theme.current.chrome
+        titleLabel.textColor = chrome.ink(.subtle)
+        subtitleLabel.textColor = chrome.ink(.muted)
+        lockedLabel?.textColor = chrome.ink(.faint)
+    }
+
+    /// No-op while the delete is already running, so ⌫ cannot start a second one behind the button
+    /// that has already been disabled for it.
+    private func requestRemove() {
+        guard removeButton?.isEnabled == true else { return }
+        onRemove?()
+    }
+
+    // MARK: focus + keyboard
+
+    override var acceptsFirstResponder: Bool { true }
+    override func becomeFirstResponder() -> Bool { isFocused = true; return true }
+    override func resignFirstResponder() -> Bool { isFocused = false; return true }
+    override func drawFocusRingMask() {}
+
+    override func keyDown(with event: NSEvent) {
+        switch KeyboardFocus.key(for: event) {
+        case .up: onArrowUp?()
+        case .down: onArrowDown?()
+        case .left: onExitToNav?()
+        case .delete: requestRemove()
+        case .tab(let shift) where onTab != nil || onBacktab != nil:
+            shift ? onBacktab?() : onTab?()
+        default: super.keyDown(with: event)
+        }
+    }
+
+    override func mouseDown(with event: NSEvent) { window?.makeFirstResponder(self) }
 
     override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
 

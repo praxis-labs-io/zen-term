@@ -30,13 +30,18 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// own is not repeated as a child of one.
     private let configuredPaths: Set<URL>
     private var rows: [Row]
+    /// Worktrees whose delete is running. A row for one of these is going away, so it renders as
+    /// removing and refuses to open: a tab landed in it would start in a folder mid-delete.
+    private let removals: WorktreeRemovalTracker
 
     init(
         entries: [Workspace], background: NSColor,
+        removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
         onChoose: @escaping (Workspace, Bool) -> Void, onAddWorkspace: @escaping () -> Void,
         onDismiss: @escaping () -> Void
     ) {
         self.entries = entries
+        self.removals = removals
         self.configuredPaths = Set(entries.map { $0.path.standardizedFileURL })
         self.rows = Self.rows(for: entries, listings: [:], configured: [], owners: [:])
         self.onChoose = onChoose
@@ -75,31 +80,11 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// must not move it, and a reload otherwise resets to the default.
     func setWorktrees(_ listing: WorktreeListing, for workspacePath: URL) {
         listings[workspacePath.standardizedFileURL] = listing
-        worktreeOwners = Self.owners(among: entries, listings: listings)
+        worktreeOwners = WorktreeGrouping.owners(among: entries, listings: listings)
         let held = rows.indices.contains(selected) ? rowIdentity(at: selected) : nil
         applyFilter(query: currentQuery)
         refreshRows(animated: true)
         reselect(byIdentity: held)
-    }
-
-    /// Which workspace shows the worktrees of each repo, decided once from config order.
-    ///
-    /// Two workspaces can be checkouts of one repo, and `worktree list` answers the same set for
-    /// both. Deciding this from the filtered, re-sorted list would let a query move a worktree to
-    /// a different parent and so open it with a different recipe. An empty listing never claims:
-    /// a workspace inside a repo but not at its root resolves a common dir and lists nothing, and
-    /// claiming there would hide the real checkout's worktrees.
-    private static func owners(
-        among workspaces: [Workspace], listings: [URL: WorktreeListing]
-    ) -> [URL: URL] {
-        var owners: [URL: URL] = [:]
-        for workspace in workspaces {
-            let path = workspace.path.standardizedFileURL
-            guard let listing = listings[path], !listing.worktrees.isEmpty else { continue }
-            let key = listing.commonDir ?? path
-            if owners[key] == nil { owners[key] = path }
-        }
-        return owners
     }
 
     /// The ＋ row first, then a workspace row per entry, with a repo's worktrees under whichever
@@ -111,13 +96,9 @@ final class RepoPickerOverlay: PaletteOverlay {
         var rows: [Row] = [.add]
         for workspace in workspaces {
             rows.append(.workspace(workspace))
-            let path = workspace.path.standardizedFileURL
-            guard let listing = listings[path], owners[listing.commonDir ?? path] == path else {
-                continue
-            }
-            for worktree in listing.worktrees where !configured.contains(worktree.path.standardizedFileURL) {
-                rows.append(.worktree(worktree, parent: workspace))
-            }
+            let children = WorktreeGrouping.worktrees(
+                of: workspace, listings: listings, owners: owners, configured: configured)
+            rows.append(contentsOf: children.map { .worktree($0, parent: workspace) })
         }
         return rows
     }
@@ -137,8 +118,23 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .workspace(let workspace):
             return RowView(workspace: workspace)
         case .worktree(let worktree, let parent):
+            guard !removals.isRemoving(worktree.path) else { return RemovingRowView(worktree: worktree) }
             return RowView(worktree: worktree, parent: parent)
         }
+    }
+
+    override func isSelectable(at index: Int) -> Bool {
+        guard case .worktree(let worktree, _) = rows[index] else { return true }
+        return !removals.isRemoving(worktree.path)
+    }
+
+    /// Re-render around a removal that started or finished. Rebuilt rather than restyled: the row
+    /// changes type, and the identity carries the removal so a stale view is never reused.
+    func refreshRemovalState() {
+        let held = rows.indices.contains(selected) ? rowIdentity(at: selected) : nil
+        applyFilter(query: currentQuery)
+        refreshRows(animated: true)
+        reselect(byIdentity: held)
     }
 
     /// A row is the same row across a re-filter when it's the ＋ row or names the same workspace.
@@ -149,8 +145,10 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .add: return ["add"]
         case .workspace(let workspace): return ["workspace", workspace.title]
         // The path, not the branch: a worktree's branch changes under it, and a reused row keeps
-        // whatever it baked in at construction.
-        case .worktree(let worktree, _): return ["worktree", worktree.path.path]
+        // whatever it baked in at construction. The removal state rides along for the same reason:
+        // a row that has started removing is a different view, so it must not reuse the old one.
+        case .worktree(let worktree, _):
+            return ["worktree", worktree.path.path, removals.isRemoving(worktree.path) ? "removing" : ""]
         }
     }
 
@@ -278,6 +276,38 @@ final class RepoPickerOverlay: PaletteOverlay {
                 icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 11),
                 icon.centerYAnchor.constraint(equalTo: centerYAnchor),
                 label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
+                label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+    }
+
+    /// A worktree still listed because its folder is still on disk, with its delete running. Not
+    /// selectable: opening it would land a tab in a folder being removed underneath it.
+    final class RemovingRowView: SelectableRowView {
+        /// The worktree this row stands for, by the name the ordinary row would have shown.
+        let name: String
+
+        init(worktree: Worktree) {
+            name = worktree.branch ?? String(worktree.head.prefix(7))
+            super.init()
+
+            let spinner = Spinner()
+            spinner.isSpinning = true
+            addSubview(spinner)
+
+            let label = NSTextField(labelWithString: "Removing \(name)…")
+            label.font = .systemFont(ofSize: 11)
+            label.textColor = Theme.current.chrome.ink(.faint)
+            label.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(label)
+
+            NSLayoutConstraint.activate([
+                spinner.leadingAnchor.constraint(
+                    equalTo: leadingAnchor, constant: 11 + RowView.childIndent),
+                spinner.centerYAnchor.constraint(equalTo: centerYAnchor),
+                label.leadingAnchor.constraint(equalTo: spinner.trailingAnchor, constant: 8),
                 label.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
         }

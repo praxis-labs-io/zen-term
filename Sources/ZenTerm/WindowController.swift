@@ -282,6 +282,44 @@ final class WindowController: NSObject {
     /// no-op — so `handle` forwards them here instead. Injected by `AppDelegate`.
     var onAppGlobalCommand: ((KeyInterceptor.ReservedChord) -> Void)?
 
+    /// Ask every window how many tabs sit on a path, and close them. Removing a worktree is
+    /// window-local (it starts from one window's Settings) but its consequences are not: a worktree
+    /// can be open in any window, and the confirm has to name that before it deletes the folder.
+    /// Injected by `AppDelegate`, which owns the only list of windows.
+    var onCountTabsAtPath: ((URL) -> Int)?
+    var onCloseTabsAtPath: ((URL) -> Void)?
+
+    /// Worktrees whose delete is still running, shared across windows: the hazard is the folder
+    /// going away, which does not care which window is looking. `AppDelegate` injects the one
+    /// instance; the default keeps a window built on its own (a test, say) behaving correctly.
+    var worktreeRemovals = WorktreeRemovalTracker()
+
+    /// Tell every window a removal started or finished. Injected by `AppDelegate` for the same
+    /// reason the two above are: a picker open in another window is showing a row that just changed
+    /// meaning.
+    var onWorktreeRemovalsChanged: (() -> Void)?
+
+    /// Tabs in *this* window opened at `path`. The fan-out above sums these across windows.
+    func tabCount(atPath path: URL) -> Int {
+        let target = path.standardizedFileURL
+        return tabs.order.filter { controllers[$0]?.openedCWD?.standardizedFileURL == target }.count
+    }
+
+    /// Close every tab in this window opened at `path`. Closing the last one closes the window,
+    /// which `closeTab` already handles.
+    func closeTabs(atPath path: URL) {
+        let target = path.standardizedFileURL
+        for id in tabs.order where controllers[id]?.openedCWD?.standardizedFileURL == target {
+            closeTab(id)
+        }
+    }
+
+    /// A removal started or finished somewhere in the app, so an open picker has to re-render: a
+    /// row built before the removal began still reads as an ordinary worktree to open.
+    func worktreeRemovalsChanged() {
+        (modal?.overlay as? RepoPickerOverlay)?.refreshRemovalState()
+    }
+
     /// Whether a modal card is up right now. Read by `AppDelegate` so window-level chords (⌘N)
     /// and Copy/Paste routing respect the modal too, not just `handle(_:)`.
     var isModalOverlayOpen: Bool { modal != nil }
@@ -1186,6 +1224,7 @@ final class WindowController: NSObject {
             let picker = RepoPickerOverlay(
                 entries: workspaces,
                 background: Theme.current.chrome.background.nsColor,
+                removals: self.worktreeRemovals,
                 onChoose: { [weak self] ws, replace in self?.openWorkspace(ws, replaceCurrentTab: replace) },
                 onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
                 onDismiss: { [weak self] in self?.closeModal() }
@@ -1322,6 +1361,130 @@ final class WindowController: NSObject {
             ToastContent(variant: .warning, title: "Couldn't Carry Everything", message: "\(list)."))
     }
 
+    /// Remove a worktree from Settings → Workspaces: read what it would cost, then confirm once with
+    /// the whole consequence. `WorktreeStore.state` shells out to git twice, so it runs off-main and
+    /// the confirm is presented on the way back.
+    private func removeWorktree(_ worktree: Worktree, from parent: Workspace) {
+        let card = modal?.overlay
+        let openTabs = onCountTabsAtPath?(worktree.path) ?? tabCount(atPath: worktree.path)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let state = WorktreeStore.state(worktree)
+            let carried = parent.carry.filter {
+                FileManager.default.fileExists(
+                    atPath: worktree.path.appendingPathComponent($0).path)
+            }
+            DispatchQueue.main.async { [weak self] in
+                // The Settings card the user pressed Remove on may be long gone by now. A confirm
+                // landing over whatever they opened instead asks about something they are no longer
+                // looking at, and nothing has been destroyed by dropping it.
+                guard let self, self.modal?.overlay === card else { return }
+                self.confirmRemoveWorktree(
+                    worktree, from: parent, state: state, carried: carried, openTabs: openTabs)
+            }
+        }
+    }
+
+    private func confirmRemoveWorktree(
+        _ worktree: Worktree, from parent: Workspace, state: WorktreeState?, carried: [String],
+        openTabs: Int
+    ) {
+        let name = Self.worktreeName(worktree)
+        presentConfirm(
+            variant: .warning, title: "Remove Worktree",
+            message: Self.removeWorktreeMessage(
+                worktree, state: state, carried: carried, openTabs: openTabs),
+            confirmLabel: "Remove",
+            onConfirm: { [weak self] in
+                guard let self else { return }
+                // Unconditional, never gated on the count read before the confirm: a tab opened in
+                // another window while the confirm sat there would be left in a folder that is gone.
+                if let fanOut = self.onCloseTabsAtPath {
+                    fanOut(worktree.path)
+                } else {
+                    self.closeTabs(atPath: worktree.path)
+                }
+                self.beginWorktreeRemoval(worktree, from: parent, named: name)
+            },
+            onCancel: { [weak self] in self?.reopenSettingsOnWorkspaces() })
+    }
+
+    /// Delete the folder, then hand back to the Settings → Workspaces the confirm closed. The list
+    /// is rebuilt on the way back rather than on the way in: a worktree still being deleted is still
+    /// on disk, so reopening first would put a row up for a folder that is going away.
+    private func beginWorktreeRemoval(_ worktree: Worktree, from parent: Workspace, named name: String) {
+        worktreeRemovals.begin(worktree.path)
+        onWorktreeRemovalsChanged?()
+        let notice = toasts.showSticky(
+            ToastContent(
+                variant: .info, title: "Removing \(name)",
+                message: "It stays listed until its files are gone."),
+            actions: [])
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result { try WorktreeStore.remove(worktree, in: parent.path) }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.worktreeRemovals.finish(worktree.path)
+                self.onWorktreeRemovalsChanged?()
+                self.toasts.dismiss(notice)
+                if case .failure(let error) = result {
+                    self.toasts.show(
+                        ToastContent(
+                            variant: .warning, title: "Couldn't Remove \(name)",
+                            message: error.localizedDescription))
+                }
+                // Only when nothing took the slot in the meantime: a delete can outlast the confirm,
+                // and reopening Settings over a picker the user just opened is a card they lose.
+                if self.modal == nil { self.reopenSettingsOnWorkspaces() }
+            }
+        }
+    }
+
+    /// A detached worktree's folder name is whatever directory it was made in, which reads like a
+    /// branch and is not one, so the short head stands in.
+    static func worktreeName(_ worktree: Worktree) -> String {
+        worktree.branch ?? String(worktree.head.prefix(7))
+    }
+
+    /// One confirm carrying every consequence: the work that goes, the tabs that close, the carried
+    /// files that go with the folder, and the branch that does not.
+    ///
+    /// A nil state is "we could not read this worktree", never "it is empty": saying nothing is
+    /// uncommitted about a tree we failed to inspect is the one sentence here that could cost
+    /// someone a day.
+    static func removeWorktreeMessage(
+        _ worktree: Worktree, state: WorktreeState?, carried: [String], openTabs: Int
+    ) -> String {
+        let name = worktreeName(worktree)
+        var does: [String] = []
+        if openTabs == 1 { does.append("closes its tab") }
+        if openTabs > 1 { does.append("closes its \(openTabs) tabs") }
+        does.append(
+            carried.isEmpty
+                ? "deletes the folder" : "deletes the folder with the \(joined(carried)) it carries")
+        does.append("keeps the branch")
+        let consequence = "Removing it \(joined(does))."
+
+        guard let state else {
+            return "\(name) could not be read, so what it holds is unknown. \(consequence)"
+        }
+        guard !state.isClean else { return "\(name) has nothing uncommitted. \(consequence)" }
+        var lost: [String] = []
+        if state.uncommitted > 0 {
+            lost.append("\(state.uncommitted) uncommitted file\(state.uncommitted == 1 ? "" : "s")")
+        }
+        if state.unpushed > 0 {
+            let verb = state.unpushed == 1 ? "is" : "are"
+            lost.append("\(state.unpushed) commit\(state.unpushed == 1 ? "" : "s") that \(verb) on no remote")
+        }
+        return "\(name) has \(joined(lost)). \(consequence)"
+    }
+
+    private static func joined(_ items: [String]) -> String {
+        guard items.count > 1 else { return items.first ?? "" }
+        guard items.count > 2 else { return items.joined(separator: " and ") }
+        return items.dropLast().joined(separator: ", ") + ", and " + (items.last ?? "")
+    }
+
     /// Open the "Report an Issue" composer (Help menu + Settings). Non-private: `AppDelegate` routes
     /// the Help-menu item here, and the Settings nav button calls it too. It's terminal, so opening
     /// the GitHub issue or cancelling just closes back to the terminal (Settings doesn't reopen).
@@ -1413,6 +1576,10 @@ final class WindowController: NSObject {
         toolsSection.onReorder = { [weak self] floats in self?.reorderToolFloats(floats) }
         let workspacesSection = SettingsWorkspacesSection()
         workspacesSection.onEditWorkspace = { [weak self] ws in self?.openWorkspaceForm(editing: ws) }
+        workspacesSection.worktreeRemovals = worktreeRemovals
+        workspacesSection.onRemoveWorktree = { [weak self] worktree, parent in
+            self?.removeWorktree(worktree, from: parent)
+        }
         workspacesSection.onReorder = { [weak self] moved, neighbour in
             self?.reorderWorkspaces(moved, with: neighbour) ?? false
         }
