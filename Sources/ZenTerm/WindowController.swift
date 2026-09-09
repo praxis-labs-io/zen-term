@@ -309,12 +309,17 @@ final class WindowController: NSObject {
         }
     }
 
-    /// A removal started or finished somewhere in the app, so an open picker has to re-render: a
-    /// row built before the removal began still reads as an ordinary worktree to open.
-    func worktreeRemovalsChanged(relisting: Bool) {
+    /// A removal started, finished or failed somewhere in the app. The tabs go only once the folder
+    /// actually has: closing them at the ask takes this window down with them when one of them is
+    /// its last, and the picker showing the progress goes too. An open picker re-renders either
+    /// way, since a row built before the removal began still reads as one to open.
+    func worktreeRemovalsChanged(_ change: WorktreeRemovalTracker.Change) {
+        if case .removed(let path) = change { closeTabs(atPath: path) }
         guard let picker = modal?.overlay as? RepoPickerOverlay else { return }
         picker.refreshRemovalState()
-        if relisting { picker.relistWorktrees() }
+        // Re-listing, not just re-rendering: the listings in hand still name a folder git has
+        // stopped reporting, so a re-render alone puts the ordinary row back.
+        if case .began = change {} else { picker.relistWorktrees() }
     }
 
     /// Whether a modal card is up right now. Read by `AppDelegate` so window-level chords (⌘N)
@@ -1402,25 +1407,17 @@ final class WindowController: NSObject {
             onCancel: { [weak picker] in picker?.dismissConfirm() },
             onConfirm: { [weak self, weak picker] in
                 picker?.dismissConfirm()
-                guard let self else { return }
-                // Unconditional, never gated on the count read before the confirm: a tab opened in
-                // another window while the confirm sat there would be left in a folder that is gone.
-                if let fanOut = self.onCloseTabsAtPath {
-                    fanOut(worktree.path)
-                } else {
-                    self.closeTabs(atPath: worktree.path)
-                }
-                self.beginWorktreeRemoval(worktree, from: parent, named: name)
+                self?.beginWorktreeRemoval(worktree, from: parent, named: name)
             })
         picker.presentConfirm(card)
     }
 
-    /// Hand the delete to the tracker. Nothing is presented here: the tracker claims the path and
-    /// fans that out, which turns the row the picker is still showing into its `Removing…` state.
+    /// Hand the delete to the tracker. Nothing is closed and nothing is presented here: the tracker
+    /// claims the path and fans that out, which turns the row the picker is still showing into its
+    /// `Removing…` state. The tabs go when the folder does, which `AppDelegate` drives off the same
+    /// fan-out, so the picker and the tab that would take it down stay up for the whole delete.
     ///
-    /// Only the failure toast is this window's, and only it is dropped when the window closes. The
-    /// delete runs on the tracker precisely because this window may not survive the tabs it just
-    /// closed.
+    /// Only the failure toast is this window's, and only it is dropped if the window closes.
     private func beginWorktreeRemoval(_ worktree: Worktree, from parent: Workspace, named name: String) {
         worktreeRemovals.remove(worktree, in: parent.path) { [weak self] error in
             guard let self, let error else { return }

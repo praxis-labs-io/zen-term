@@ -16,9 +16,16 @@ final class WorktreeRemovalTracker {
 
     private(set) var inFlight: Set<URL> = []
 
-    /// Told a removal started (`false`) or finished (`true`, meaning the listings in hand are now
-    /// wrong and have to be fetched again). `AppDelegate` fans this out to every window.
-    var onChanged: ((_ relisting: Bool) -> Void)?
+    /// What happened to one worktree. `removed` is the only case where the folder is gone, so it
+    /// is the only one that closes the tabs that were open in it.
+    enum Change {
+        case began(URL)
+        case removed(URL)
+        case failed(URL)
+    }
+
+    /// Told each of the above. `AppDelegate` fans it out to every window.
+    var onChanged: ((Change) -> Void)?
 
     private final class Waiter {
         var completion: (() -> Void)?
@@ -29,18 +36,24 @@ final class WorktreeRemovalTracker {
     /// Delete the worktree, holding the claim until the files are gone.
     ///
     /// Owned here rather than by the window that asked, because that window may not outlive the
-    /// call: removing a worktree closes the tabs open in it, and closing a window's last tab closes
-    /// the window. `completion` carries the failure and is the caller's to weaken; the claim and
-    /// the fan-out are not, and always run.
+    /// call: the tabs open in the worktree close when it is gone, and closing a window's last tab
+    /// closes the window. `completion` carries the failure and is the caller's to weaken; the
+    /// claim and the fan-out are not, and always run.
     func remove(_ worktree: Worktree, in parent: URL, completion: @escaping (Error?) -> Void) {
         begin(worktree.path)
-        onChanged?(false)
+        onChanged?(.began(worktree.path))
         DispatchQueue.global(qos: .userInitiated).async {
             let result = Result { try WorktreeStore.remove(worktree, in: parent) }
             DispatchQueue.main.async {
                 self.finish(worktree.path)
-                self.onChanged?(true)
-                if case .failure(let error) = result { completion(error) } else { completion(nil) }
+                switch result {
+                case .success:
+                    self.onChanged?(.removed(worktree.path))
+                    completion(nil)
+                case .failure(let error):
+                    self.onChanged?(.failed(worktree.path))
+                    completion(error)
+                }
             }
         }
     }

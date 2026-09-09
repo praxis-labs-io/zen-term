@@ -210,9 +210,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
         try seedWorkspaces(twoWorkspaces)
         let c = makeWindow()
         // `AppDelegate` owns this wiring in the app; a bare window has to stand in for it.
-        c.worktreeRemovals.onChanged = { [weak c] relisting in
-            c?.worktreeRemovalsChanged(relisting: relisting)
-        }
+        c.worktreeRemovals.onChanged = { [weak c] change in c?.worktreeRemovalsChanged(change) }
         c.handle(.toggleRepoPicker)
         waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
         let picker = try XCTUnwrap(pickers(in: c).first)
@@ -231,6 +229,8 @@ final class RepoPickerPresentationTests: WindowTestCase {
 
         XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "the picker is never rebuilt")
         XCTAssertNil(picker.presentedConfirmForTesting, "the confirm is answered and gone")
+        XCTAssertEqual(
+            c.tabOrderForTesting.count, 1, "the tabs go when the folder does, not when it is asked")
         XCTAssertTrue(
             picker.rowViews.contains { $0 is RepoPickerOverlay.RemovingRowView },
             "the row says what is happening to it")

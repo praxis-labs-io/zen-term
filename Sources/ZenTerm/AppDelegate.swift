@@ -59,11 +59,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // run never writes to the user's ~/Library/Logs/ZenTerm/zen-term.log.
         Log.fileSink = .standard()
 
-        // A removal started in one window changes what every other window's open picker is showing.
-        worktreeRemovals.onChanged = { [weak self] relisting in
-            for window in self?.windows ?? [] {
-                window.worktreeRemovalsChanged(relisting: relisting)
-            }
+        // A removal changes what every window's open picker is showing, and the tabs open in the
+        // folder outlive the delete: they close when it is gone, not when it is asked for, so the
+        // picker and the tab stay put with the row saying what is happening.
+        // Copy first: a removal closes tabs, and closing a window's last tab removes it from
+        // `windows` mid-iteration.
+        worktreeRemovals.onChanged = { [weak self] change in
+            for window in self?.windows ?? [] { window.worktreeRemovalsChanged(change) }
         }
 
         // Terminals repeat a held key rather than popping macOS's press-and-hold accent

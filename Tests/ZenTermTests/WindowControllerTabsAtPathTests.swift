@@ -110,6 +110,39 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
         XCTAssertEqual(c.tabOrderForTesting.count, before - 2)
     }
 
+    /// The reported bug: confirming closed the tab, which closed the window, which took the picker
+    /// showing the progress with it. Nothing may go until the folder actually has.
+    func test_aRemovalThatHasOnlyStarted_leavesTheTabOpen() throws {
+        let c = makeWindow()
+        let wanted = try folder("feature-x")
+        c.openWorkspaceForTesting(workspace("x", at: wanted), replaceCurrentTab: false)
+
+        c.worktreeRemovalsChanged(.began(wanted))
+
+        XCTAssertEqual(c.tabCount(atPath: wanted), 1)
+    }
+
+    func test_aRemovalThatLanded_closesTheTab() throws {
+        let c = makeWindow()
+        let wanted = try folder("feature-x")
+        c.openWorkspaceForTesting(workspace("x", at: wanted), replaceCurrentTab: false)
+
+        c.worktreeRemovalsChanged(.removed(wanted))
+
+        XCTAssertEqual(c.tabCount(atPath: wanted), 0)
+    }
+
+    /// The folder is still there, so the shell in it is still working.
+    func test_aRemovalThatFailed_leavesTheTabOpen() throws {
+        let c = makeWindow()
+        let wanted = try folder("feature-x")
+        c.openWorkspaceForTesting(workspace("x", at: wanted), replaceCurrentTab: false)
+
+        c.worktreeRemovalsChanged(.failed(wanted))
+
+        XCTAssertEqual(c.tabCount(atPath: wanted), 1)
+    }
+
     func test_aPathNothingWasOpenedAtClosesNothing() throws {
         let c = makeWindow()
         let wanted = try folder("feature-x")

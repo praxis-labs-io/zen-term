@@ -2051,13 +2051,20 @@ down and leaves the list where it was, which is the difference between this and 
 card: that one replaces the picker and reopens it on cancel, because a form is a different
 task, while a confirm is about a row you are still looking at.
 
-**The tab fan-out is unconditional.** It runs whether or not the count read before the
-confirm found anything: a tab opened in another window while the confirm sat there would
-otherwise be left running in a folder that is gone. That gating was a real bug on the
-shelved clones branch. Tabs are matched on `TabController.openedCWD`, where the tab was
-opened, **not** its live cwd: a shell that has `cd`'d out still belongs to the worktree,
-and matching the live cwd leaves exactly the tab that most needs closing. The lookup fans
-out through `AppDelegate`, which owns the only list of windows.
+**The tabs close when the folder is gone, not when its removal is asked for.** Closing them
+at the confirm takes the window down with them the moment one of them is its last, and the
+picker showing the progress goes with the window: the delete then runs with nothing on
+screen saying so. So the confirm starts the delete and closes nothing, and
+`WorktreeRemovalTracker.Change.removed` is what closes the tabs. `failed` closes none of
+them, because the folder is still there and the shell in it is still working.
+
+**The close is unconditional at that point**, never gated on the count read before the
+confirm: a tab opened in another window while the confirm sat there would otherwise be left
+running in a folder that is gone. That gating was a real bug on the shelved clones branch.
+Tabs are matched on `TabController.openedCWD`, where the tab was opened, **not** its live
+cwd: a shell that has `cd`'d out still belongs to the worktree, and matching the live cwd
+leaves exactly the tab that most needs closing. `AppDelegate` fans the change out to every
+window, and each window closes its own.
 
 **`WorktreeRemovalTracker` is app-wide**, because the hazard is the folder going away and
 that does not care which window is looking. The delete is slow and stays slow: removing a

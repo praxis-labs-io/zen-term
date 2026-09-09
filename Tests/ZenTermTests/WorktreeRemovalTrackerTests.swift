@@ -44,8 +44,14 @@ final class WorktreeRemovalTrackerTests: XCTestCase {
         _ = try GitFixture.run(["worktree", "add", "-b", "probe", treePath.path], in: repo)
         let worktree = Worktree(path: treePath, branch: "probe", head: "abc1234", isLocked: false)
 
-        var relisting: [Bool] = []
-        tracker.onChanged = { relisting.append($0) }
+        var changes: [String] = []
+        tracker.onChanged = { change in
+            switch change {
+            case .began: changes.append("began")
+            case .removed: changes.append("removed")
+            case .failed: changes.append("failed")
+            }
+        }
         var failure: Error?
         let done = expectation(description: "the delete lands")
         tracker.remove(worktree, in: repo) { error in
@@ -57,7 +63,7 @@ final class WorktreeRemovalTrackerTests: XCTestCase {
 
         XCTAssertNil(failure)
         XCTAssertFalse(tracker.isRemoving(treePath))
-        XCTAssertEqual(relisting, [false, true], "a finish has to re-list, not just re-render")
+        XCTAssertEqual(changes, ["began", "removed"], "removed is what closes the tabs")
         XCTAssertFalse(FileManager.default.fileExists(atPath: treePath.path))
     }
 
