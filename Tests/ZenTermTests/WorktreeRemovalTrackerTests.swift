@@ -67,6 +67,22 @@ final class WorktreeRemovalTrackerTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: treePath.path))
     }
 
+    /// Two windows can each raise a confirm for one worktree. A second delete fails and toasts,
+    /// and the first finish would clear the sole claim while the second was still running: quit
+    /// would then read idle mid-delete, which is the one thing `whenIdle` exists to stop.
+    func test_removeIgnoresAPathAlreadyInFlight() {
+        let worktree = Worktree(path: path, branch: "probe", head: "abc1234", isLocked: false)
+        tracker.begin(path)
+        var changes = 0
+        tracker.onChanged = { _ in changes += 1 }
+
+        tracker.remove(worktree, in: path.deletingLastPathComponent()) { _ in
+            XCTFail("the second remove must not run")
+        }
+
+        XCTAssertEqual(changes, 0, "nothing to announce: the claim was already there")
+    }
+
     func test_whenIdleRunsAtOnceWithNothingInFlight() {
         var ran = false
         tracker.whenIdle { ran = true }

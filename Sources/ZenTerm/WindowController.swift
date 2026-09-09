@@ -1391,7 +1391,9 @@ final class WindowController: NSObject {
                 // The picker the chord was pressed over may be long gone by now. A confirm landing
                 // over whatever the user opened instead asks about something they are no longer
                 // looking at, and nothing has been destroyed by dropping it.
-                guard let self, self.modal?.overlay === picker else { return }
+                guard let self, self.modal?.overlay === picker,
+                    !self.worktreeRemovals.isRemoving(worktree.path)
+                else { return }
                 self.confirmRemoveWorktree(
                     picker, worktree, from: parent, state: state, carried: carried,
                     openTabs: openTabs)

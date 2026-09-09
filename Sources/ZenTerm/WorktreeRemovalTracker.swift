@@ -40,6 +40,9 @@ final class WorktreeRemovalTracker {
     /// closes the window. `completion` carries the failure and is the caller's to weaken; the
     /// claim and the fan-out are not, and always run.
     func remove(_ worktree: Worktree, in parent: URL, completion: @escaping (Error?) -> Void) {
+        // Two windows can each raise a confirm for one worktree. A second delete would fail and
+        // toast, and the first `finish` would clear the sole claim while it was still running.
+        guard !isRemoving(worktree.path) else { return }
         begin(worktree.path)
         onChanged?(.began(worktree.path))
         DispatchQueue.global(qos: .userInitiated).async {
