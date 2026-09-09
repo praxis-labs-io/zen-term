@@ -328,10 +328,13 @@ final class WindowController: NSObject {
     func worktreeRemovalsChanged(_ change: WorktreeRemovalTracker.Change) {
         if case .removed(let path) = change { closeTabs(atPath: path) }
         guard let picker = modal?.overlay as? RepoPickerOverlay else { return }
-        picker.refreshRemovalState()
         // Re-listing, not just re-rendering: the listings in hand still name a folder git has
-        // stopped reporting, so a re-render alone puts the ordinary row back.
-        if case .began = change {} else { picker.relistWorktrees() }
+        // stopped reporting, and `dropWorktree` covers the gap until the answer lands.
+        switch change {
+        case .began: picker.refreshRemovalState()
+        case .removed(let path): picker.dropWorktree(at: path); picker.relistWorktrees()
+        case .failed: picker.refreshRemovalState(); picker.relistWorktrees()
+        }
     }
 
     /// Whether a modal card is up right now. Read by `AppDelegate` so window-level chords (⌘N)

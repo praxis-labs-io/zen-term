@@ -226,6 +226,20 @@ final class RepoPickerOverlay: PaletteOverlay {
         var presentedConfirmForTesting: ConfirmCard? { confirmCard }
     #endif
 
+    /// Take a removed worktree out of the listings in hand, and re-render around it. The claim is
+    /// cleared before this arrives, so a re-render alone puts an ordinary, openable row back for a
+    /// folder git has just deleted, and the relist that would correct it is a git call away.
+    func dropWorktree(at path: URL) {
+        let target = path.standardizedFileURL
+        for (workspace, listing) in listings {
+            listings[workspace] = WorktreeListing(
+                commonDir: listing.commonDir,
+                worktrees: listing.worktrees.filter { $0.path.standardizedFileURL != target })
+        }
+        worktreeOwners = Self.owners(among: entries, listings: listings)
+        refreshRemovalState()
+    }
+
     /// Re-render around a removal that started or finished. Rebuilt rather than restyled: the row
     /// changes type, and the identity carries the removal so a stale view is never reused.
     func refreshRemovalState() {

@@ -579,9 +579,9 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(shape(of: overlay), ["add", "workspace:alpha", "worktree:two"])
     }
 
-    /// The delete failed, or it finished before the folder left the listing. Either way the row goes
-    /// back to being one you can open.
-    func test_aRemovalFinishing_putsTheOrdinaryRowBack() {
+    /// The delete failed, so the folder is still there and the row goes back to being one you can
+    /// open. The `removed` case is the opposite, below.
+    func test_aRemovalFailing_putsTheOrdinaryRowBack() {
         let repo = path("alpha")
         let removals = WorktreeRemovalTracker()
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)], removals: removals)
@@ -593,6 +593,22 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         overlay.refreshRemovalState()
 
         XCTAssertEqual(shape(of: overlay), ["add", "workspace:alpha", "worktree:one", "worktree:two"])
+    }
+
+    /// The claim is cleared before the picker hears about it, so re-rendering alone offers an
+    /// ordinary row for a folder git has just deleted. Opening it lands a tab in nothing.
+    func test_aRemovalThatLanded_takesTheRowOutBeforeTheRelist() {
+        let repo = path("alpha")
+        let removals = WorktreeRemovalTracker()
+        let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)], removals: removals)
+        mount(overlay)
+        removals.begin(worktree(repo, "one").path)
+        overlay.setWorktrees(listing(repo, "one", "two"), for: repo)
+
+        removals.finish(worktree(repo, "one").path)
+        overlay.dropWorktree(at: worktree(repo, "one").path)
+
+        XCTAssertEqual(shape(of: overlay), ["add", "workspace:alpha", "worktree:two"])
     }
 
     // MARK: helpers

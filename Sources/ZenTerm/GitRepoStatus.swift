@@ -29,9 +29,13 @@ enum GitRepoStatus {
     /// windows each hold an open picker, and a global cancel takes the other window's answers with
     /// it.
     final class RefreshToken {
+        /// Read on the main queue before delivering. `Operation.cancel()` cannot stop one that has
+        /// already started, so a superseded probe still finishes and would answer over the newer one.
+        fileprivate(set) var isCancelled = false
         fileprivate var operations: [Operation] = []
 
         func cancel() {
+            isCancelled = true
             for operation in operations { operation.cancel() }
         }
     }
@@ -108,9 +112,9 @@ enum GitRepoStatus {
             let probe = BlockOperation {
                 let churn = churnNow(for: dir)
                 DispatchQueue.main.async {
+                    guard !token.isCancelled else { return }
                     // A probe that failed clears the counts rather than leaving the last run's.
-                    // `git status` exits nonzero on an `index.lock` held by a concurrent git, and a
-                    // row must not go on asserting work that may no longer be there.
+                    // `git status` exits nonzero on an `index.lock` held by a concurrent git.
                     cache[dir, default: Status()].churn = churn
                     completion()
                 }
@@ -148,6 +152,7 @@ enum GitRepoStatus {
                 // A read, not a write: the picker lists on every open, and pruning there is final.
                 let worktrees = (try? WorktreeStore.list(in: dir, pruning: false)) ?? []
                 DispatchQueue.main.async {
+                    guard !token.isCancelled else { return }
                     completion(dir, WorktreeListing(commonDir: commonDir, worktrees: worktrees))
                 }
             }
