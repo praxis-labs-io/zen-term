@@ -8,6 +8,9 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
     private let onSubmit: (String, WorktreeStore.Base) -> Void
     private let onCancel: () -> Void
     private let onDismiss: () -> Void
+    /// Opens the workspace's edit form, where carry is set. Nil leaves the link off, for a host
+    /// with nowhere to send it.
+    private let onEditWorkspace: (() -> Void)?
 
     private let card = CardView()
     private var dismiss = DismissGate()
@@ -21,6 +24,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
     ) { _ in }
     private let baseCaption = NSTextField(labelWithString: "")
     private let carryLabel = NSTextField(labelWithString: "")
+    private let carryLink = AppButton(title: "Set what to carry", variant: .muted)
     private let errorLabel = NSTextField(labelWithString: "")
     private let spinner = Spinner()
     private let phaseLabel = NSTextField(labelWithString: "")
@@ -39,13 +43,14 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
     init(
         workspace: Workspace, options: WorktreeStore.CreateOptions, background: NSColor,
         onSubmit: @escaping (String, WorktreeStore.Base) -> Void, onCancel: @escaping () -> Void,
-        onDismiss: @escaping () -> Void
+        onDismiss: @escaping () -> Void, onEditWorkspace: (() -> Void)? = nil
     ) {
         self.workspace = workspace
         self.options = options
         self.onSubmit = onSubmit
         self.onCancel = onCancel
         self.onDismiss = onDismiss
+        self.onEditWorkspace = onEditWorkspace
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -127,7 +132,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         errorLabel.textColor = chrome.destructive.nsColor
         spinner.reapplyTheme()
 
-        let controls: [ThemeReapplying] = [branchField, baseSegment, cancelButton, createButton]
+        let controls: [ThemeReapplying] = [branchField, baseSegment, carryLink, cancelButton, createButton]
         controls.forEach { $0.reapplyTheme() }
         branchGroup?.reapplyTheme()
         captions.forEach { $0.reapplyTheme() }
@@ -144,6 +149,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         setPhase(phase)
         branchField.field.isEditable = false
         baseSegment.isEnabled = false
+        carryLink.isEnabled = false
         cancelButton.isEnabled = false
         createButton.isEnabled = false
     }
@@ -158,6 +164,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         spinner.isSpinning = false
         branchField.field.isEditable = true
         baseSegment.isEnabled = true
+        carryLink.isEnabled = true
         cancelButton.isEnabled = true
         createButton.isEnabled = true
         errorLabel.stringValue = message
@@ -187,11 +194,19 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         carryLabel.font = .systemFont(ofSize: 11)
         carryLabel.textColor = Theme.current.chrome.ink(.muted)
         carryLabel.lineBreakMode = .byTruncatingTail
-        carryLabel.stringValue =
-            workspace.carry.isEmpty
-            ? "Nothing set. Pick what to carry when you edit this workspace."
-            : workspace.carry.joined(separator: ", ")
-        let carryGroup = Self.vStack([caption("CARRY"), carryLabel], spacing: 6)
+        // Nothing to say when nothing is set: the button already says it.
+        carryLabel.stringValue = workspace.carry.joined(separator: ", ")
+        carryLabel.isHidden = workspace.carry.isEmpty
+        carryLink.setTitle(workspace.carry.isEmpty ? "Set what to carry" : "Change what to carry")
+        carryLink.isHidden = onEditWorkspace == nil
+        carryLink.isKeyboardFocusable = onEditWorkspace != nil
+        carryLink.onTap = { [weak self] in self?.editWorkspace() }
+        carryLink.onArrowUp = { [weak self] in self?.moveVertical(-1) }
+        carryLink.onArrowDown = { [weak self] in self?.moveVertical(1) }
+        carryLink.onTab = { [weak self] in self?.moveTab(1) }
+        carryLink.onBacktab = { [weak self] in self?.moveTab(-1) }
+        let carryGroup = Self.vStack(
+            [caption("CARRY"), carryLabel, Self.leadingWrap(carryLink)], spacing: 6)
 
         errorLabel.font = .systemFont(ofSize: 11, weight: .medium)
         errorLabel.textColor = Theme.current.chrome.destructive.nsColor
@@ -244,7 +259,10 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
     // MARK: keyboard
 
     private func verticalStops() -> [NSView] {
-        [branchField.field, baseSegment, createButton]
+        var stops: [NSView] = [branchField.field, baseSegment]
+        if carryLink.isKeyboardFocusable { stops.append(carryLink) }
+        stops.append(createButton)
+        return stops
     }
 
     private func moveVertical(_ delta: Int) {
@@ -384,6 +402,21 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         let field = FieldCaption(text, required: false)
         captions.append(field)
         return field
+    }
+
+    /// Carry is a property of the workspace, not of this create, so the link hands off to the form
+    /// that owns it rather than editing it here.
+    private func editWorkspace() {
+        guard !isWorking else { return }
+        onEditWorkspace?()
+    }
+
+    /// A single control wrapped so it hugs the leading edge rather than stretching to full width.
+    private static func leadingWrap(_ view: NSView) -> NSView {
+        let stack = NSStackView(views: [view])
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        return stack
     }
 
     private static func hStack(_ views: [NSView], spacing: CGFloat) -> NSStackView {

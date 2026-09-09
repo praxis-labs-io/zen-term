@@ -1298,7 +1298,13 @@ final class WindowController: NSObject {
                     self?.createWorktree(branch: branch, base: base, from: target)
                 },
                 onCancel: { [weak self] in self?.reopenRepoPicker() },
-                onDismiss: { [weak self] in self?.closeModal() }
+                onDismiss: { [weak self] in self?.closeModal() },
+                // Back to the picker rather than to Settings: ⌥⏎ is where this started, and the
+                // branch typed into the card is gone either way.
+                onEditWorkspace: { [weak self] in
+                    self?.openWorkspaceForm(
+                        editing: target.workspace, returningTo: { self?.reopenRepoPicker() })
+                }
             )
             self.presentModal(form, kind: .worktreeForm)
         }
@@ -1874,7 +1880,10 @@ final class WindowController: NSObject {
     /// edits). Closes the Settings card first — one modal slot — mirroring the tool-float hand-off;
     /// the form's own title-collision check excludes the workspace being edited. On save / cancel /
     /// delete it hands back to Settings → Workspaces.
-    private func openWorkspaceForm(editing workspace: Workspace?) {
+    private func openWorkspaceForm(
+        editing workspace: Workspace?, returningTo done: (() -> Void)? = nil
+    ) {
+        let done = done ?? { [weak self] in self?.reopenSettingsOnWorkspaces() }
         closeModal()
         // Same as the add form: the collision check needs the whole title set before the first
         // keystroke, so the card waits on the load rather than presenting half-seeded.
@@ -1889,8 +1898,10 @@ final class WindowController: NSObject {
                 editing: workspace,
                 existingTitles: existingTitles,
                 background: Theme.current.chrome.background.nsColor,
-                onSubmit: { [weak self] built in self?.submitWorkspace(built, replacing: originalTitle) },
-                onCancel: { [weak self] in self?.reopenSettingsOnWorkspaces() },
+                onSubmit: { [weak self] built in
+                    self?.submitWorkspace(built, replacing: originalTitle, then: done)
+                },
+                onCancel: done,
                 onDelete: workspace.map { existing in { [weak self] in self?.deleteWorkspace(existing) } }
             )
             self.presentModal(form, kind: .workspaceForm)
@@ -1901,7 +1912,9 @@ final class WindowController: NSObject {
     /// ⌘P picker reads the file fresh on each open, so no reload is needed for it to reflect this).
     /// `originalTitle` is the title before an edit — a rename replaces that section in place; a nil
     /// original is a fresh add. A write failure keeps the form up with a toast.
-    private func submitWorkspace(_ ws: Workspace, replacing originalTitle: String?) {
+    private func submitWorkspace(
+        _ ws: Workspace, replacing originalTitle: String?, then done: (() -> Void)? = nil
+    ) {
         do {
             if let originalTitle {
                 try WorkspacesWriter.update(ws, originalTitle: originalTitle)
@@ -1915,7 +1928,7 @@ final class WindowController: NSObject {
                     message: "Failed to write \(ws.title) to the workspaces file: \(error.localizedDescription)"))
             return
         }
-        reopenSettingsOnWorkspaces()
+        (done ?? reopenSettingsOnWorkspaces)()
     }
 
     /// Delete the workspace being edited, then hand back to Settings → Workspaces. A write failure

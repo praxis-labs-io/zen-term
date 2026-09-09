@@ -1960,6 +1960,19 @@ than showing an empty list. `CheckboxDropdown` fixes its row count at init and t
 catalog's length is not known until git answers, so the control is rebuilt when one
 lands rather than re-seeded.
 
+**The checkbox list filters as you type**, the same `FuzzyMatch` ranking `Dropdown` and
+the command palette use, because a carry list is as long as the repo's `.gitignore`.
+One deliberate divergence from `Dropdown`: Space toggles rather than typing, since a
+checkbox list commits with it and a fuzzy query over paths has no use for a space. The
+highlight returns to the top match on every query change, where `Dropdown` keeps it,
+because that highlight starts on row 0 rather than on a current selection.
+
+**The create card links out rather than editing carry itself.** Carry belongs to the
+workspace, not to one create, so ticking a box there would either rewrite the config as
+a side effect of making a worktree or drift from what the file says. The card shows what
+comes across and a button into the workspace form, which hands back to the picker rather
+than to Settings: `⌥⏎` is where it started, and the typed branch is gone either way.
+
 **An allowlist, because the denylist is what killed the clone approach.** That design
 copied everything and subtracted what breaks on relocation, which asks us to know
 every ecosystem's landmines. Two were found by measuring, a Python venv's absolute

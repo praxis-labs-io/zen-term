@@ -42,6 +42,94 @@ final class CheckboxDropdownTests: WindowTestCase {
                 isARepeat: false, keyCode: code)!)
     }
 
+    // MARK: type to filter
+
+    /// A carry list is as long as the repo's `.gitignore`, which is past what arrowing can reach.
+    func test_typing_narrowsTheListAndShowsTheQuery() {
+        let dropdown = makeDropdown([".env", "node_modules", "config/credentials/development.key"])
+        press(dropdown, " ", code: 49)
+
+        press(dropdown, "c", code: 8)
+        press(dropdown, "r", code: 15)
+
+        XCTAssertEqual(dropdown.queryForTesting, "cr")
+        XCTAssertEqual(dropdown.visibleIndicesForTesting, [2], "fuzzy, the way the palette matches")
+        XCTAssertEqual(dropdown.buttonTitleForTesting, "cr", "the button shows what is being typed")
+    }
+
+    /// The one deliberate divergence from `Dropdown`: this list commits with Space, so a query
+    /// never holds one. Typing past a filter must not silently stop toggling.
+    func test_space_stillTogglesRatherThanTypingIntoTheQuery() {
+        var toggled: [Int] = []
+        let dropdown = makeDropdown([".env", "node_modules"], onToggle: { toggled.append($0) })
+        press(dropdown, " ", code: 49)  // open
+        press(dropdown, "m", code: 46)  // filter to node_modules
+        press(dropdown, "o", code: 31)
+        press(dropdown, "d", code: 2)
+
+        press(dropdown, " ", code: 49)
+
+        XCTAssertEqual(dropdown.queryForTesting, "mod", "Space never enters the query")
+        XCTAssertEqual(toggled, [1], "it toggles the highlighted row, by catalog index")
+    }
+
+    func test_backspace_widensTheListAgain() {
+        let dropdown = makeDropdown([".env", "node_modules"])
+        press(dropdown, " ", code: 49)
+        press(dropdown, "n", code: 45)
+        XCTAssertEqual(dropdown.visibleIndicesForTesting, [1, 0])
+
+        press(dropdown, "", code: 51)  // backspace
+
+        XCTAssertEqual(dropdown.queryForTesting, "")
+        XCTAssertEqual(dropdown.visibleIndicesForTesting, [0, 1])
+    }
+
+    /// Esc clears a mistyped query before it closes anything, so recovering is not a reopen.
+    func test_escape_clearsTheQueryBeforeItClosesTheList() {
+        let dropdown = makeDropdown([".env", "node_modules"])
+        press(dropdown, " ", code: 49)
+        press(dropdown, "n", code: 45)
+
+        press(dropdown, "", code: 53)
+        XCTAssertTrue(dropdown.isPopoverOpen, "the first Esc clears")
+        XCTAssertEqual(dropdown.queryForTesting, "")
+
+        press(dropdown, "", code: 53)
+        XCTAssertFalse(dropdown.isPopoverOpen, "the second closes")
+    }
+
+    func test_arrowsWalkOnlyWhatTheQueryAdmits() {
+        var toggled: [Int] = []
+        let dropdown = makeDropdown([".env", "node_modules", "nested"], onToggle: { toggled.append($0) })
+        press(dropdown, " ", code: 49)
+        press(dropdown, "n", code: 45)
+        press(dropdown, "e", code: 14)
+        press(dropdown, "s", code: 1)
+        let admitted = dropdown.visibleIndicesForTesting
+        XCTAssertFalse(admitted.contains(0), ".env is filtered out: \(admitted)")
+
+        press(dropdown, "", code: 125)  // Down, within the filtered set
+        press(dropdown, "\r", code: 36)  // Return toggles
+
+        XCTAssertEqual(toggled, [admitted[1]], "a filtered-out row is never reachable")
+        XCTAssertGreaterThan(admitted.count, 1, "the query has to leave more than one row to walk")
+    }
+
+    func test_reopening_startsWithNoQuery() {
+        let dropdown = makeDropdown([".env", "node_modules"])
+        press(dropdown, " ", code: 49)
+        press(dropdown, "n", code: 45)
+        press(dropdown, "", code: 53)  // clear
+        press(dropdown, "", code: 53)  // close
+
+        press(dropdown, " ", code: 49)
+
+        XCTAssertEqual(dropdown.queryForTesting, "")
+        XCTAssertEqual(dropdown.visibleIndicesForTesting, [0, 1])
+        XCTAssertEqual(dropdown.buttonTitleForTesting, "All shown")
+    }
+
     func test_spaceOpensTheList_withVisibleCard() {
         let dropdown = makeDropdown()
         XCTAssertFalse(dropdown.isPopoverOpen)

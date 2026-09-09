@@ -10,6 +10,7 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         var submitted: [(branch: String, base: WorktreeStore.Base)] = []
         var cancelled = 0
         var dismissed = 0
+        var editedWorkspace = 0
     }
 
     private var window: NSWindow?
@@ -281,46 +282,95 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         XCTAssertTrue(visibleText(in: overlay).contains("node_modules, .env"))
     }
 
-    func test_withNoCarryConfigured_theLineSaysWhereToSetIt() throws {
+    /// The button carries the whole message when nothing is set, so there is no line to read.
+    func test_withNoCarryConfigured_thereIsOnlyTheButton() throws {
         let (overlay, _) = mount(carry: [])
 
-        XCTAssertTrue(
-            visibleText(in: overlay).contains(
-                "Nothing set. Pick what to carry when you edit this workspace."))
+        XCTAssertNotNil(button(in: overlay, title: "Set what to carry"))
+        XCTAssertFalse(visibleText(in: overlay).contains("Nothing set"))
+    }
+
+    /// Carry belongs to the workspace, not to this create, so the card sends you to the form that
+    /// owns it. Without the button the empty state names a place with no way to get there.
+    func test_theCarryButton_opensTheWorkspaceForm() throws {
+        let (overlay, sink) = mount(carry: [])
+        let carryButton = try XCTUnwrap(button(in: overlay, title: "Set what to carry"))
+
+        carryButton.onTap()
+
+        XCTAssertEqual(sink.editedWorkspace, 1)
+    }
+
+    func test_withCarryAlreadySet_theButtonOffersToChangeIt() throws {
+        let (overlay, _) = mount(carry: ["node_modules"])
+
+        XCTAssertNotNil(button(in: overlay, title: "Change what to carry"))
+        XCTAssertNil(button(in: overlay, title: "Set what to carry"))
+    }
+
+    /// A host with nowhere to send it leaves the button off rather than showing a dead one.
+    func test_withNoWayToEditTheWorkspace_thereIsNoButton() throws {
+        let (overlay, _) = mount(carry: [], canEditWorkspace: false)
+
+        XCTAssertTrue(try XCTUnwrap(button(in: overlay, title: "Set what to carry")).isHidden)
+    }
+
+    func test_theCarryButton_isAKeyboardStopBetweenBaseAndCreate() throws {
+        let (overlay, _) = mount(carry: [])
+        let base = try XCTUnwrap(segment(in: overlay))
+        let carryButton = try XCTUnwrap(button(in: overlay, title: "Set what to carry"))
+        window?.makeFirstResponder(base)
+
+        base.keyDown(with: try arrow(down: true))
+
+        XCTAssertTrue(KeyboardFocus.isFocused(carryButton, in: window))
+    }
+
+    /// A create in flight locks every control; a card torn down early leaves a worktree landing
+    /// with nothing to report to.
+    func test_aCreateInFlight_locksTheCarryButton() throws {
+        let (overlay, sink) = mount(carry: [])
+        let carryButton = try XCTUnwrap(button(in: overlay, title: "Set what to carry"))
+
+        overlay.beginWork("Creating spike")
+        carryButton.onTap()
+
+        XCTAssertFalse(carryButton.isEnabled)
+        XCTAssertEqual(sink.editedWorkspace, 0)
     }
 
     // MARK: keyboard
 
-    func test_downAndUp_walkTheBaseSegmentBetweenTheBranchFieldAndCreate() throws {
+    func test_downAndUp_walkTheBaseSegmentBetweenTheBranchFieldAndCarry() throws {
         let (overlay, _) = mount()
         let base = try XCTUnwrap(segment(in: overlay))
-        let create = try XCTUnwrap(button(in: overlay, title: "Create Worktree"))
+        let carryButton = try XCTUnwrap(button(in: overlay, title: "Set what to carry"))
         window?.makeFirstResponder(base)
 
         base.keyDown(with: try arrow(down: true))
-        XCTAssertTrue(KeyboardFocus.isFocused(create, in: window))
+        XCTAssertTrue(KeyboardFocus.isFocused(carryButton, in: window))
 
-        create.keyDown(with: try arrow(down: false))
+        carryButton.keyDown(with: try arrow(down: false))
         XCTAssertTrue(KeyboardFocus.isFocused(base, in: window))
     }
 
     /// Cancel is not in `verticalStops`, so Up from it has to resolve through Create.
-    func test_upFromCancel_reachesTheBaseSegment() throws {
+    func test_upFromCancel_reachesTheCarryButton() throws {
         let (overlay, _) = mount()
-        let base = try XCTUnwrap(segment(in: overlay))
+        let carryButton = try XCTUnwrap(button(in: overlay, title: "Set what to carry"))
         let cancel = try XCTUnwrap(button(in: overlay, title: "Cancel"))
         window?.makeFirstResponder(cancel)
 
         cancel.keyDown(with: try arrow(down: false))
 
-        XCTAssertTrue(KeyboardFocus.isFocused(base, in: window))
+        XCTAssertTrue(KeyboardFocus.isFocused(carryButton, in: window))
     }
 
     // MARK: harness
 
     private func mount(
         carry: [String] = [], branches: Set<String> = [], defaultBase: String? = "origin/main",
-        currentBranch: String? = "feature/zen-455"
+        currentBranch: String? = "feature/zen-455", canEditWorkspace: Bool = true
     ) -> (overlay: NewWorktreeOverlay, sink: Sink) {
         let sink = Sink()
         let workspace = Workspace(
@@ -333,7 +383,8 @@ final class NewWorktreeOverlayTests: WindowTestCase {
             background: Theme.current.chrome.background.nsColor,
             onSubmit: { sink.submitted.append((branch: $0, base: $1)) },
             onCancel: { sink.cancelled += 1 },
-            onDismiss: { sink.dismissed += 1 })
+            onDismiss: { sink.dismissed += 1 },
+            onEditWorkspace: canEditWorkspace ? { sink.editedWorkspace += 1 } : nil)
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 640),
             styleMask: [.borderless], backing: .buffered, defer: false)
