@@ -20,7 +20,7 @@ final class WorktreeStoreTests: XCTestCase {
 
     override func tearDownWithError() throws {
         WorktreeStore.rootOverrideForTesting = nil
-        WorktreeStore.betweenCheckAndAddForTesting = nil
+        WorktreeStore.beforeClaimingForTesting = nil
         try? FileManager.default.removeItem(at: root)
         try super.tearDownWithError()
     }
@@ -185,6 +185,16 @@ final class WorktreeStoreTests: XCTestCase {
             WorktreeStore.directoryName(for: repo))
     }
 
+    /// A branch cut from `origin/main` used to be set up to track it, and `push.default=simple`
+    /// refuses an upstream whose name is not the branch's own, so the first `git push` from a new
+    /// worktree failed. Untracked, git names the push that works instead.
+    func test_create_leavesTheNewBranchUntracked() throws {
+        _ = try WorktreeStore.create(branch: "fresh", in: repo)
+
+        XCTAssertThrowsError(try GitFixture.run(["config", "branch.fresh.merge"], in: repo))
+        XCTAssertThrowsError(try GitFixture.run(["config", "branch.fresh.remote"], in: repo))
+    }
+
     func test_create_refusesABranchThatAlreadyExists() throws {
         try GitFixture.run(["branch", "taken"], in: repo)
 
@@ -211,9 +221,9 @@ final class WorktreeStoreTests: XCTestCase {
         XCTAssertTrue(GitFixture.exists(occupied.appendingPathComponent("squatter")))
     }
 
-    /// The precheck above never reaches git. This one does: the parent directory is read-only, so
-    /// `worktree add` creates the branch and then fails to make the tree.
-    func test_create_rollsTheBranchBackWhenGitCannotMakeTheTree() throws {
+    /// The branch is claimed before the folder, so a folder that cannot be made has to give the
+    /// branch back. The parent directory is read-only, which is what stops the folder being made.
+    func test_create_rollsTheBranchBackWhenTheFolderCannotBeMade() throws {
         let parent = WorktreeStore.root.appendingPathComponent(
             WorktreeStore.directoryName(for: repo), isDirectory: true)
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
@@ -284,32 +294,11 @@ final class WorktreeStoreTests: XCTestCase {
         XCTAssertEqual(try WorktreeStore.list(in: repo), [])
     }
 
-    /// Isolates the OID guard. The raced branch sits on an older commit that IS merged, so
-    /// `branch -d` would delete it without complaint and only the OID comparison can save it.
-    func test_create_doesNotDeleteAMergedBranchItDidNotCreate() throws {
-        let older = try GitFixture.run(["rev-parse", "HEAD"], in: repo)
-        try GitFixture.write("two\n", to: repo.appendingPathComponent("tracked.txt"))
-        try GitFixture.run(["commit", "-qam", "second"], in: repo)
-        try GitFixture.run(["push", "-q", "origin", "main"], in: repo)
-        WorktreeStore.betweenCheckAndAddForTesting = { repo in
-            try? GitFixture.run(["branch", "raced", older], in: repo)
-        }
-
-        XCTAssertThrowsError(try WorktreeStore.create(branch: "raced", in: repo)) { error in
-            guard
-                case .rollbackIncomplete(_, let leftBehind) =
-                    try? XCTUnwrap(error as? WorktreeStore.WorktreeError)
-            else { return XCTFail("expected rollbackIncomplete, got \(error)") }
-            XCTAssertEqual(leftBehind, ["the branch raced"])
-        }
-        XCTAssertEqual(try GitFixture.run(["rev-parse", "raced"], in: repo), older, "untouched")
-    }
-
-    /// The same window with an unmerged branch. The rollback deletes with `-D`, so nothing but
-    /// the OID guard stands between someone else's commits and a delete.
-    func test_create_doesNotDeleteAnUnmergedBranchItDidNotCreate() throws {
+    /// The claim is what makes ownership a fact: a branch that appears in the window belongs to
+    /// whoever made it, and `create` never reaches the add, so their commits cannot be deleted.
+    func test_create_leavesABranchItDidNotCreateAlone() throws {
         var theirCommit = ""
-        WorktreeStore.betweenCheckAndAddForTesting = { repo in
+        WorktreeStore.beforeClaimingForTesting = { repo in
             try? GitFixture.run(["branch", "raced"], in: repo)
             let commit = try? GitFixture.run(
                 ["commit-tree", "-m", "their work", "-p", "HEAD", "HEAD^{tree}"], in: repo)
@@ -317,24 +306,62 @@ final class WorktreeStoreTests: XCTestCase {
             theirCommit = (try? GitFixture.run(["rev-parse", "raced"], in: repo)) ?? ""
         }
 
-        XCTAssertThrowsError(try WorktreeStore.create(branch: "raced", in: repo))
+        XCTAssertThrowsError(try WorktreeStore.create(branch: "raced", in: repo)) { error in
+            XCTAssertEqual(error as? WorktreeStore.WorktreeError, .branchExists("raced"))
+        }
         XCTAssertEqual(try GitFixture.run(["rev-parse", "raced"], in: repo), theirCommit)
     }
 
-    /// The residual the OID guard cannot close, pinned rather than papered over: a raced branch cut
-    /// from the same base is indistinguishable from ours, so the rollback takes it. It carries no
-    /// commits of its own, so the loss is the ref and nothing else.
-    func test_create_takesBackABranchStandingExactlyWhereItPutIt() throws {
-        WorktreeStore.betweenCheckAndAddForTesting = { repo in
+    /// The residual the old OID heuristic could not close, now closed: a branch raced onto the same
+    /// base was indistinguishable from ours and was taken. The claim refuses instead.
+    func test_create_leavesABranchRacedOntoTheSameBaseAlone() throws {
+        WorktreeStore.beforeClaimingForTesting = { repo in
             try? GitFixture.run(["branch", "raced", "origin/main"], in: repo)
         }
 
         XCTAssertThrowsError(try WorktreeStore.create(branch: "raced", in: repo)) { error in
-            if case .rollbackIncomplete = error as? WorktreeStore.WorktreeError {
-                XCTFail("the rollback should complete cleanly here")
-            }
+            XCTAssertEqual(error as? WorktreeStore.WorktreeError, .branchExists("raced"))
         }
-        XCTAssertEqual(try GitFixture.branches(in: repo), ["main"])
+        XCTAssertEqual(
+            try GitFixture.run(["rev-parse", "raced"], in: repo),
+            try GitFixture.run(["rev-parse", "origin/main"], in: repo))
+        XCTAssertEqual(try WorktreeStore.list(in: repo), [])
+    }
+
+    /// The claim proves the branch is ours, not that it still stands where we put it. A
+    /// `post-checkout` hook runs with the new worktree checked out, so it can commit and then fail.
+    /// Those commits are left behind and named rather than force-deleted.
+    func test_create_leavesABranchTheAddMovedBehind() throws {
+        try hook("post-checkout", "#!/bin/sh\ngit commit -q --allow-empty -m theirs\nexit 1\n")
+
+        XCTAssertThrowsError(try WorktreeStore.create(branch: "moved", in: repo)) { error in
+            guard
+                case .rollbackIncomplete(_, let leftBehind) =
+                    try? XCTUnwrap(error as? WorktreeStore.WorktreeError)
+            else { return XCTFail("expected rollbackIncomplete, got \(error)") }
+            XCTAssertEqual(leftBehind, ["the branch moved"])
+        }
+        XCTAssertEqual(
+            try GitFixture.run(["log", "-1", "--format=%s", "moved"], in: repo), "theirs")
+    }
+
+    /// The second race: the folder. A losing process used to delete the winner's fresh worktree,
+    /// because the rollback's `removeItem` ran on a directory it had only checked, never made.
+    func test_create_leavesAFolderItDidNotMakeAlone() throws {
+        let parent = WorktreeStore.root.appendingPathComponent(
+            WorktreeStore.directoryName(for: repo), isDirectory: true)
+        let theirs = parent.appendingPathComponent("raced", isDirectory: true)
+        WorktreeStore.beforeClaimingForTesting = { _ in
+            try? FileManager.default.createDirectory(at: theirs, withIntermediateDirectories: true)
+            try? GitFixture.write("theirs\n", to: theirs.appendingPathComponent("tracked.txt"))
+        }
+
+        XCTAssertThrowsError(try WorktreeStore.create(branch: "raced", in: repo)) { error in
+            XCTAssertEqual(
+                error as? WorktreeStore.WorktreeError, .destinationExists(theirs, branch: nil))
+        }
+        XCTAssertTrue(GitFixture.exists(theirs.appendingPathComponent("tracked.txt")))
+        XCTAssertEqual(try GitFixture.branches(in: repo), ["main"], "our claim was given back")
     }
 
     // MARK: remove
@@ -564,12 +591,10 @@ final class WorktreeStoreTests: XCTestCase {
 
     // MARK: a base ahead of the checkout
 
-    /// `-d` refuses a branch merged into neither its upstream nor the *current* HEAD. `worktree
-    /// add -b` off a remote-tracking base normally sets that upstream and hides it, but not under
-    /// `branch.autoSetupMerge=false`: there a checkout behind `origin/main` keeps the branch, and
-    /// the orphan then wedges the next create of the same name. The OID guard is the real check.
+    /// `-d` refuses a branch merged into neither its upstream nor the *current* HEAD, and a claimed
+    /// branch is untracked, so it has no upstream to be merged into. A checkout sitting behind
+    /// `origin/main` keeps the orphan, which wedges the next create of the same name. Hence `-D`.
     func test_create_rollsBackABranchCutFromABaseAheadOfTheCheckout() throws {
-        try GitFixture.run(["config", "branch.autoSetupMerge", "false"], in: repo)
         try GitFixture.write("two\n", to: repo.appendingPathComponent("tracked.txt"))
         try GitFixture.run(["commit", "-qam", "second"], in: repo)
         try GitFixture.run(["push", "-q", "origin", "main"], in: repo)
@@ -603,9 +628,13 @@ final class WorktreeStoreTests: XCTestCase {
 
     /// A hook that fails after the checkout, the way direnv or an LFS hook can.
     private func failingPostCheckoutHook() throws {
-        let hook = repo.appendingPathComponent(".git/hooks/post-checkout")
-        try GitFixture.write("#!/bin/sh\nexit 1\n", to: hook)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hook.path)
+        try hook("post-checkout", "#!/bin/sh\nexit 1\n")
+    }
+
+    private func hook(_ name: String, _ script: String) throws {
+        let path = repo.appendingPathComponent(".git/hooks/\(name)")
+        try GitFixture.write(script, to: path)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: path.path)
     }
 
     // MARK: naming

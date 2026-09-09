@@ -1843,11 +1843,41 @@ resolved before it is trusted and an unusable one falls through the ladder.
 
 **A branch name is validated before any *mutating* git command runs, and a leading
 dash is rejected by hand.** `refs/heads/-m` is a perfectly valid ref name, so
-`check-ref-format` passes it, but `git worktree add -b -m` hands `-m` to git's own
-`git branch` call, which has no `--` guard: the repo's checked-out branch gets
-renamed and `HEAD` follows it. Probed on 2.50.1, reflog and all. That is the only
-defect here that damages the user's primary checkout, and validation is the whole
-defence, because the vulnerable call is inside git rather than in our argv.
+`check-ref-format` passes it. The `git worktree add -b -m` this used to run handed
+`-m` to git's own `git branch` call, which has no `--` guard: the repo's checked-out
+branch got renamed and `HEAD` followed it. Probed on 2.50.1, reflog and all. The
+claim below passes `--` in our own argv, so that path is shut twice over, and the
+validation is what turns a bad name into `invalidBranchName` rather than a git
+failure.
+
+**The branch and the folder are claimed, not checked.** A precheck is not atomic with
+the command after it, so the rollback would have to guess which of the two it owns.
+Each claim is instead an operation that fails when someone already holds the thing:
+
+- `git branch --no-track -- <name> <base>` writes the ref under git's own lock and
+  refuses a name already taken. `update-ref` with a zero old value is the same
+  compare-and-swap one layer down, but branch creation is what `git branch` is for, and
+  the tracking decision below is a flag on it rather than a policy to reimplement.
+- `createDirectory(withIntermediateDirectories: false)` refuses a path that exists.
+  `worktree add` accepts the empty directory that leaves, so the add runs without `-b`
+  and checks out the branch already claimed.
+
+The branch is claimed first, so the common refusal (a name already taken) never
+touches the filesystem. Ownership is a fact after that, and the rollback deletes only
+what this create made: there is no window where a losing process takes a branch
+someone else cut from the same base, or deletes the winner's fresh worktree directory.
+
+What the claim does not prove is that the branch still stands where it was put. A
+`post-checkout` hook runs with the new worktree checked out and can commit before it
+fails, so the rollback still compares the ref against the OID it claimed and leaves a
+branch that moved, rather than force-deleting commits it did not make.
+
+**`--no-track`, deliberately.** `worktree add -b` tracked the base, which set
+`origin/main` as the upstream of a branch called something else. `push.default=simple`
+refuses an upstream whose name is not the branch's own, so the first `git push` from a
+new worktree failed with a lecture about a branch the user had not asked to push to.
+Untracked, git names the push that works, and `push.autoSetupRemote` runs it without
+asking. The cost is that `git status` no longer counts the branch ahead of its base.
 
 **Rollback order is load-bearing.** `git worktree add` can fail *after* registering
 the worktree, which a `post-checkout` hook that exits non-zero reproduces exactly
@@ -1857,22 +1887,11 @@ refusing the branch with "cannot delete branch … used by worktree", plus a sta
 rollback runs `worktree remove --force`, then the directory, then `prune`, and only
 then the branch.
 
-**The rollback deletes a branch only if it still points at the base OID recorded
-before the add.** Keying off the name alone is a time-of-check-to-time-of-use hole:
-a branch that appears between our precheck and our failure belongs to whoever made
-it, and deleting it destroys their work. It errs toward leaving a branch and saying
-so. That OID check is the only guard, so do not weaken it.
-
-The delete is `branch -D`. `-d` is not a second line under the OID check but a
+The delete is `branch -D`. `-d` is not a second line of defence under the claim but a
 different question: it refuses a branch merged into neither its upstream nor the
-*current* HEAD. `worktree add -b` off a remote-tracking base usually sets that
-upstream and hides the difference, but under `branch.autoSetupMerge=false` a
-checkout sitting behind `origin/main` keeps the branch, and the orphan then wedges
-the next create of the same name.
-
-The residual the OID check cannot close: a branch someone else cuts from the same
-base in that window is indistinguishable from ours and is taken. It carries no
-commits, so the loss is the ref and nothing else.
+*current* HEAD. A claimed branch has no upstream at all, so a checkout sitting behind
+`origin/main` keeps the branch, and the orphan then wedges the next create of the same
+name.
 
 Whatever the rollback cannot undo is named in `rollbackIncomplete` rather than
 swallowed, so a create that half-failed says which branch or folder survived it.
