@@ -17,9 +17,13 @@ final class CarryPickerTests: WindowTestCase {
     }
 
     private func picker(ignoring ignored: [String]?) -> CarryPicker {
+        picker(catalog: ignored.map { IgnoredCatalog(entries: $0, resting: $0, fileCounts: [:], directories: []) })
+    }
+
+    private func picker(catalog: IgnoredCatalog?) -> CarryPicker {
         let picker = CarryPicker()
         picker.settle = 0
-        picker.probe = { _, _ in ignored }
+        picker.probe = { _, _ in catalog }
         picker.translatesAutoresizingMaskIntoConstraints = true
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 460, height: 400),
@@ -164,7 +168,11 @@ final class CarryPickerTests: WindowTestCase {
         press(first, " ", code: 49)
         XCTAssertTrue(first.isPopoverOpen)
 
-        picker.probe = { _, _ in ["node_modules", ".env", "dist"] }
+        picker.probe = { _, _ in
+            IgnoredCatalog(
+                entries: ["node_modules", ".env", "dist"], resting: ["node_modules", ".env", "dist"], fileCounts: [:],
+                directories: [])
+        }
         let landed = expectation(description: "catalog")
         picker.onChanged = { landed.fulfill() }
         picker.workspaceFolder = folder.appendingPathComponent("elsewhere")
@@ -185,9 +193,11 @@ final class CarryPickerTests: WindowTestCase {
         picker.settle = 0
         picker.translatesAutoresizingMaskIntoConstraints = true
         picker.probe = { _, chosen in
-            chosen.contains("config/credentials/production.key")
+            let rows =
+                chosen.contains("config/credentials/production.key")
                 ? ["config/credentials/development.key", "config/credentials/production.key", "z/last"]
                 : ["config/credentials", "z/last"]
+            return IgnoredCatalog(entries: rows, resting: rows, fileCounts: [:], directories: [])
         }
         picker.setCarried(["config/credentials/production.key"])
         let landed = expectation(description: "catalog")
@@ -199,6 +209,91 @@ final class CarryPickerTests: WindowTestCase {
             picker.catalog,
             ["config/credentials/development.key", "config/credentials/production.key", "z/last"])
         XCTAssertFalse(picker.catalog.contains("config/credentials"), "the folded row is gone")
+    }
+
+    /// The fold is the resting view, not a wall. Without this there is no way to pick one file out
+    /// of a folded folder: the only thing that expands one is already having chosen something in it.
+    func test_aFileInsideAFoldedFolder_isReachableByTyping() throws {
+        let picker = picker(
+            catalog: IgnoredCatalog(
+                entries: ["log", "log/one.log", "log/two.log", ".env"],
+                resting: ["log", ".env"], fileCounts: ["log": 2], directories: []))
+        load(picker)
+        let list = try XCTUnwrap(picker.dropdownForTesting)
+        window?.makeFirstResponder(list)
+        press(list, " ", code: 49)
+
+        XCTAssertEqual(list.visibleIndicesForTesting, [0, 3], "at rest, the folder stands in")
+
+        press(list, "t", code: 17)
+        press(list, "w", code: 13)
+        press(list, "o", code: 31)
+
+        let shown = list.visibleIndicesForTesting.map { list.itemsForTesting[$0].title }
+        XCTAssertTrue(shown.contains("log/two.log"), "a query reaches inside the fold: \(shown)")
+    }
+
+    /// Picked out of a folded folder, it has to keep showing: falling back behind the fold on the
+    /// next open would read as the pick not having landed.
+    func test_aFilePickedOutOfAFold_staysVisibleAtRest() throws {
+        let picker = picker(
+            catalog: IgnoredCatalog(
+                entries: ["log", "log/one.log", "log/two.log", ".env"],
+                resting: ["log", ".env"], fileCounts: ["log": 2], directories: []))
+        picker.setCarried(["log/two.log"])
+        load(picker)
+        let list = try XCTUnwrap(picker.dropdownForTesting)
+        window?.makeFirstResponder(list)
+        press(list, " ", code: 49)
+
+        let shown = list.visibleIndicesForTesting.map { list.itemsForTesting[$0].title }
+        XCTAssertEqual(shown, ["log", "log/two.log", ".env"])
+    }
+
+    /// The row has to say it stands for more than itself, or the fold is invisible.
+    func test_aFoldedFolder_saysHowManyFilesItStandsFor() throws {
+        let picker = picker(
+            catalog: IgnoredCatalog(
+                entries: ["log", "log/one.log", "log/two.log"],
+                resting: ["log"], fileCounts: ["log": 2], directories: []))
+        load(picker)
+
+        let items = try XCTUnwrap(picker.dropdownForTesting).itemsForTesting
+        XCTAssertEqual(items.first { $0.title == "log" }?.note, "2 files")
+        XCTAssertNil(items.first { $0.title == "log/one.log" }?.note)
+    }
+
+    /// A path alone does not say whether ticking it brings one file or a tree.
+    func test_foldersAndFiles_carryDifferentIcons() throws {
+        let picker = picker(
+            catalog: IgnoredCatalog(
+                entries: ["node_modules", ".env"], resting: ["node_modules", ".env"],
+                fileCounts: [:], directories: ["node_modules"]))
+        load(picker)
+
+        let items = try XCTUnwrap(picker.dropdownForTesting).itemsForTesting
+        XCTAssertEqual(items.first { $0.title == "node_modules" }?.symbol, "folder")
+        XCTAssertEqual(items.first { $0.title == ".env" }?.symbol, "doc")
+    }
+
+    /// A bare line of text read as the control having failed to render. It is select-shaped in
+    /// every state, and spins only while git is being asked.
+    func test_whileLoading_theControlIsASelectWithASpinner() {
+        let picker = picker(ignoring: ["node_modules"])
+        picker.settle = 10  // never lands during this test
+
+        picker.workspaceFolder = folder
+
+        XCTAssertEqual(picker.statusForTesting, "Reading what git ignores…")
+        XCTAssertTrue(picker.isSpinningForTesting)
+    }
+
+    func test_aStateThatIsNotLoading_doesNotSpin() {
+        let picker = picker(ignoring: [])
+        load(picker)
+
+        XCTAssertEqual(picker.statusForTesting, "Git ignores nothing here yet.")
+        XCTAssertFalse(picker.isSpinningForTesting)
     }
 
     /// Nil is not "nothing ignored". An empty list there would read as a repo with nothing to carry.
@@ -225,7 +320,7 @@ final class CarryPickerTests: WindowTestCase {
         var asked: [String] = []
         picker.probe = { folder, _ in
             asked.append(folder.path)
-            return []
+            return IgnoredCatalog(entries: [], resting: [], fileCounts: [:], directories: [])
         }
         let landed = expectation(description: "catalog")
         picker.onChanged = { landed.fulfill() }

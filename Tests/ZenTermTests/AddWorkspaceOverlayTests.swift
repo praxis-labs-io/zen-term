@@ -45,7 +45,10 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         let (overlay, _) = mount()
         let carry = try XCTUnwrap(carryPicker(in: overlay))
         carry.settle = 0
-        carry.probe = { _, _ in ["node_modules", ".env"] }
+        carry.probe = { _, _ in
+            IgnoredCatalog(
+                entries: ["node_modules", ".env"], resting: ["node_modules", ".env"], fileCounts: [:], directories: [])
+        }
         let landed = expectation(description: "catalog")
         carry.onChanged = { if !carry.catalog.isEmpty { landed.fulfill() } }
 
@@ -114,7 +117,7 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         _ carry: CarryPicker, in overlay: AddWorkspaceOverlay, folder: URL, ignoring: [String]
     ) {
         carry.settle = 0
-        carry.probe = { _, _ in ignoring }
+        carry.probe = { _, _ in IgnoredCatalog(entries: ignoring, resting: ignoring, fileCounts: [:], directories: []) }
         let landed = expectation(description: "catalog")
         carry.onChanged = { if carry.focusStop != nil { landed.fulfill() } }
         picker(in: overlay).setText(folder.path)

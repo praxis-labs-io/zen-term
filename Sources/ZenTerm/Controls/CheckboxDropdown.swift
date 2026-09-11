@@ -3,6 +3,18 @@ import AppKit
 struct CheckboxDropdownItem: Equatable {
     let title: String
     let isChecked: Bool
+    /// A muted trailing word, for what the title alone does not say (how many files a folded
+    /// folder stands in for). Nil on an ordinary row.
+    let note: String?
+    /// An SF Symbol shown before the title, where the rows are of more than one kind.
+    let symbol: String?
+
+    init(title: String, isChecked: Bool, note: String? = nil, symbol: String? = nil) {
+        self.title = title
+        self.isChecked = isChecked
+        self.note = note
+        self.symbol = symbol
+    }
 }
 
 /// A themed dropdown whose open list is a row of real checkboxes — the chrome's multi-select
@@ -55,6 +67,10 @@ final class CheckboxDropdown: NSView {
     private var query = ""
     /// An index into `items`, not into `visible`.
     private var highlighted = 0
+    /// The rows shown while nothing is typed. A query searches every item, so a row left out of
+    /// this is reachable by name but not by scrolling: the copy list folds a noisy folder into one
+    /// row at rest and still lets you pick a single file out of it.
+    var restingIndices: [Int]?
     private var isFocusedStop = false
 
     private static let rowHeight: CGFloat = 28
@@ -252,7 +268,7 @@ final class CheckboxDropdown: NSView {
     /// finds `config/credentials/development.key`.
     private func refilter() {
         guard !query.isEmpty else {
-            visible = Array(items.indices)
+            visible = restingIndices.map { $0.filter(items.indices.contains) } ?? Array(items.indices)
             return
         }
         visible =
@@ -361,6 +377,8 @@ final class CheckboxDropdown: NSView {
         private let onClick: () -> Void
         private let check = NSImageView()
         private let title = NSTextField(labelWithString: "")
+        private let note = NSTextField(labelWithString: "")
+        private let icon = NSImageView()
 
         init(onClick: @escaping () -> Void) {
             self.onClick = onClick
@@ -375,15 +393,27 @@ final class CheckboxDropdown: NSView {
             title.font = .systemFont(ofSize: 13)
             title.lineBreakMode = .byTruncatingTail
             title.translatesAutoresizingMaskIntoConstraints = false
+            note.font = .systemFont(ofSize: 11)
+            note.translatesAutoresizingMaskIntoConstraints = false
+            note.setContentCompressionResistancePriority(.required, for: .horizontal)
+            icon.symbolConfiguration = .init(pointSize: 11, weight: .regular)
+            icon.translatesAutoresizingMaskIntoConstraints = false
             addSubview(check)
+            addSubview(icon)
             addSubview(title)
+            addSubview(note)
             NSLayoutConstraint.activate([
                 check.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
                 check.widthAnchor.constraint(equalToConstant: 14),
                 check.centerYAnchor.constraint(equalTo: centerYAnchor),
-                title.leadingAnchor.constraint(equalTo: check.trailingAnchor, constant: 6),
-                title.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -8),
+                icon.leadingAnchor.constraint(equalTo: check.trailingAnchor, constant: 6),
+                icon.widthAnchor.constraint(equalToConstant: 14),
+                icon.centerYAnchor.constraint(equalTo: centerYAnchor),
+                title.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
+                title.trailingAnchor.constraint(lessThanOrEqualTo: note.leadingAnchor, constant: -8),
                 title.centerYAnchor.constraint(equalTo: centerYAnchor),
+                note.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+                note.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
         }
 
@@ -392,6 +422,14 @@ final class CheckboxDropdown: NSView {
         func render(item: CheckboxDropdownItem, isHighlighted: Bool, chrome: ChromeTheme) {
             title.stringValue = item.title
             title.textColor = item.isChecked ? chrome.foreground.nsColor : chrome.ink(.muted)
+            note.stringValue = item.note ?? ""
+            note.textColor = chrome.ink(.faint)
+            note.isHidden = item.note == nil
+            icon.image = item.symbol.flatMap {
+                NSImage(systemSymbolName: $0, accessibilityDescription: nil)
+            }
+            icon.contentTintColor = item.isChecked ? chrome.accent.nsColor : chrome.ink(.subtle)
+            icon.isHidden = item.symbol == nil
             check.isHidden = !item.isChecked
             check.contentTintColor = chrome.accent.nsColor
             layer?.backgroundColor = (isHighlighted ? chrome.fill(.hover) : NSColor.clear).cgColor

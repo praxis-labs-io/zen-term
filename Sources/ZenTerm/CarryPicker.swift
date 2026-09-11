@@ -6,7 +6,7 @@ import AppKit
 final class CarryPicker: NSView, ThemeReapplying {
     /// What git ignores in a workspace, given what it already copies. Blocking, so it runs
     /// off-main. Tests replace it.
-    var probe: (URL, Set<String>) -> [String]? = WorktreeCarry.ignoredEntries
+    var probe: (URL, Set<String>) -> IgnoredCatalog? = WorktreeCarry.ignoredEntries
 
     /// The list or its selection changed: a catalog landed, or an entry was toggled.
     var onChanged: (() -> Void)?
@@ -30,17 +30,23 @@ final class CarryPicker: NSView, ThemeReapplying {
     /// What the list offers: what git ignores today, plus anything already carried that git no
     /// longer ignores, so a hand-authored entry survives a save instead of vanishing from the file.
     private(set) var catalog: [String] = []
+    /// The rows shown while nothing is typed. A folded folder stands in for its files here; the
+    /// files stay in `catalog`, reachable by typing their name.
+    private(set) var resting: [String] = []
+    private var fileCounts: [String: Int] = [:]
+    private var directories: Set<String> = []
 
     /// The stop the form arrows to, absent while the list has nothing to show.
     var focusStop: NSView? { dropdown }
 
     var isLoadingForTesting: Bool { isLoading }
 
-    var statusForTesting: String? { status.isHidden ? nil : status.stringValue }
+    var statusForTesting: String? { status.isHidden ? nil : status.title }
+    var isSpinningForTesting: Bool { status.isSpinning }
     var dropdownForTesting: CheckboxDropdown? { dropdown }
 
     private let slot = NSStackView()
-    private let status = NSTextField(labelWithString: "")
+    private let status = PlaceholderSelect()
     private var dropdown: CheckboxDropdown?
     /// Bumped per reload so a superseded probe's answer is dropped rather than landing over a
     /// newer one. `DispatchWorkItem.cancel` cannot stop one that has already started.
@@ -54,9 +60,6 @@ final class CarryPicker: NSView, ThemeReapplying {
     override init(frame: NSRect) {
         super.init(frame: frame)
         translatesAutoresizingMaskIntoConstraints = false
-
-        status.font = .systemFont(ofSize: 11)
-        status.textColor = Theme.current.chrome.ink(.muted)
 
         slot.orientation = .vertical
         slot.alignment = .leading
@@ -78,10 +81,11 @@ final class CarryPicker: NSView, ThemeReapplying {
     func setCarried(_ entries: [String]) {
         carried = entries
         catalog = entries
+        resting = entries
     }
 
     func reapplyTheme() {
-        status.textColor = Theme.current.chrome.ink(.muted)
+        status.reapplyTheme()
         dropdown?.reapplyTheme()
     }
 
@@ -118,13 +122,20 @@ final class CarryPicker: NSView, ThemeReapplying {
 
     /// Nil is not "nothing ignored": the folder is not a repo, or git could not be asked, and the
     /// message says so rather than showing an empty list that reads as a repo with nothing to carry.
-    private func apply(_ ignored: [String]?) {
+    private func apply(_ ignored: IgnoredCatalog?) {
         guard let ignored else {
             catalog = carried
+            resting = carried
+            fileCounts = [:]
+            directories = []
             render(unreadable: true)
             return
         }
-        catalog = ignored + carried.filter { !ignored.contains($0) }
+        let extras = carried.filter { !ignored.entries.contains($0) }
+        catalog = ignored.entries + extras
+        resting = ignored.resting + extras
+        fileCounts = ignored.fileCounts
+        directories = ignored.directories
         render(unreadable: false)
     }
 
@@ -162,9 +173,10 @@ final class CarryPicker: NSView, ThemeReapplying {
         switch content {
         case .message(let text):
             dropdown = nil
-            status.stringValue = text
+            status.set(title: text, isLoading: isLoading)
             status.isHidden = false
             slot.addArrangedSubview(status)
+            status.widthAnchor.constraint(equalTo: slot.widthAnchor).isActive = true
         case .list:
             status.isHidden = true
             buildDropdown()
@@ -177,6 +189,7 @@ final class CarryPicker: NSView, ThemeReapplying {
         let list = CheckboxDropdown(title: summary(), items: items()) { [weak self] index in
             self?.toggle(index)
         }
+        list.restingIndices = restingIndices()
         list.onArrowUp = { [weak self] in self?.onArrowUp?() }
         list.onArrowDown = { [weak self] in self?.onArrowDown?() }
         list.onTab = { [weak self] in self?.onTab?() }
@@ -195,11 +208,79 @@ final class CarryPicker: NSView, ThemeReapplying {
             carried = catalog.filter { carried.contains($0) || $0 == entry }
         }
         dropdown?.setItems(items(), title: summary())
+        dropdown?.restingIndices = restingIndices()
         onChanged?()
     }
 
     private func items() -> [CheckboxDropdownItem] {
-        catalog.map { CheckboxDropdownItem(title: $0, isChecked: carried.contains($0)) }
+        catalog.map { entry in
+            CheckboxDropdownItem(
+                title: entry, isChecked: carried.contains(entry),
+                note: fileCounts[entry].map { "\($0) files" },
+                symbol: directories.contains(entry) ? "folder" : "doc")
+        }
+    }
+
+    /// A checked row is shown at rest wherever it sits, so a file picked out of a folded folder
+    /// does not disappear behind that folder the moment the list reopens.
+    private func restingIndices() -> [Int] {
+        let shown = Set(resting).union(carried)
+        return catalog.indices.filter { shown.contains(catalog[$0]) }
+    }
+
+    /// The control's shape while there is no list: a select-sized box holding the reason, and a
+    /// spinner while git is being asked. A bare line of text read as the control having failed to
+    /// render rather than as a state it was in.
+    private final class PlaceholderSelect: NSView {
+        private let label = NSTextField(labelWithString: "")
+        private let spinner = Spinner()
+
+        var title: String { label.stringValue }
+        var isSpinning: Bool { spinner.isSpinning }
+
+        init() {
+            super.init(frame: .zero)
+            translatesAutoresizingMaskIntoConstraints = false
+            wantsLayer = true
+            layer?.cornerRadius = 6
+            PopoverButtonStyle.applyRestFill(to: self)
+            layer?.borderWidth = 1
+
+            label.font = .systemFont(ofSize: 13)
+            label.lineBreakMode = .byTruncatingTail
+            label.translatesAutoresizingMaskIntoConstraints = false
+            spinner.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(label)
+            addSubview(spinner)
+            NSLayoutConstraint.activate([
+                heightAnchor.constraint(equalToConstant: 30),
+                label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
+                label.centerYAnchor.constraint(equalTo: centerYAnchor),
+                spinner.leadingAnchor.constraint(greaterThanOrEqualTo: label.trailingAnchor, constant: 6),
+                spinner.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -9),
+                spinner.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+            applyColors()
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+        func set(title: String, isLoading: Bool) {
+            label.stringValue = title
+            spinner.isHidden = !isLoading
+            spinner.isSpinning = isLoading
+        }
+
+        func reapplyTheme() {
+            PopoverButtonStyle.applyRestFill(to: self)
+            applyColors()
+            spinner.reapplyTheme()
+        }
+
+        private func applyColors() {
+            label.textColor = Theme.current.chrome.ink(.muted)
+            layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
+        }
     }
 
     private func summary() -> String {

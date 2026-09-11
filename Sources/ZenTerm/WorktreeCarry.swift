@@ -44,6 +44,19 @@ extension CarryReport.Skipped.Reason {
     }
 }
 
+/// What a workspace could copy, and what to show at rest.
+struct IgnoredCatalog: Equatable {
+    /// Every row, unfolded: a folded folder followed by the files it stands in for. What a query
+    /// searches, so a single file inside a folded folder is still pickable by name.
+    let entries: [String]
+    /// The subset shown while nothing is typed.
+    let resting: [String]
+    /// How many files each folded folder stands in for.
+    let fileCounts: [String: Int]
+    /// Which entries are folders, so the list can tell the two kinds apart at a glance.
+    let directories: Set<String>
+}
+
 /// Copies into a fresh worktree the gitignored entries a project needs to run. An allowlist, since
 /// subtracting what breaks on relocation asks us to know every ecosystem's landmines.
 ///
@@ -144,7 +157,7 @@ enum WorktreeCarry {
     /// asked. An ignored directory arrives collapsed to one entry, which is what carry copies at.
     /// `chosen` is what the workspace already copies. A folder holding one of those stays
     /// expanded, so the pick sits among its siblings rather than behind a row that means more.
-    static func ignoredEntries(in workspace: URL, chosen: Set<String>) -> [String]? {
+    static func ignoredEntries(in workspace: URL, chosen: Set<String>) -> IgnoredCatalog? {
         guard let reported = ignoredPaths(in: workspace, under: nil) else { return nil }
         return fold(reported, chosen: chosen)
     }
@@ -157,7 +170,7 @@ enum WorktreeCarry {
     /// each, and folding it would hide the difference between a `node_modules` worth copying and a
     /// `.cache` that is not.
     private static func fold(_ reported: [(path: String, isDirectory: Bool)], chosen: Set<String>)
-        -> [String]
+        -> IgnoredCatalog
     {
         let chosenParents = Set(chosen.map { ($0 as NSString).deletingLastPathComponent })
         var files: [String: [String]] = [:]
@@ -173,17 +186,27 @@ enum WorktreeCarry {
             kids.count > 1 && !chosenParents.contains(parent)
                 && !directories.contains { ($0 as NSString).deletingLastPathComponent == parent }
         }
-        var result: [String] = []
+        // Every file stays a row, sitting under the folder it folded into: the fold is the
+        // resting view, and a query still has to be able to reach a single file inside one.
+        var entries: [String] = []
+        var resting: [String] = []
         var seen: Set<String> = []
         for entry in reported {
             let parent = (entry.path as NSString).deletingLastPathComponent
-            if !entry.isDirectory, folded[parent] != nil {
-                if seen.insert(parent).inserted { result.append(parent) }
-            } else {
-                result.append(entry.path)
+            guard !entry.isDirectory, let siblings = folded[parent] else {
+                entries.append(entry.path)
+                resting.append(entry.path)
+                continue
+            }
+            if seen.insert(parent).inserted {
+                entries.append(parent)
+                resting.append(parent)
+                entries.append(contentsOf: siblings)
             }
         }
-        return result
+        return IgnoredCatalog(
+            entries: entries, resting: resting, fileCounts: folded.mapValues(\.count),
+            directories: directories.union(folded.keys))
     }
 
     /// What git ignores, as paths relative to `workspace`, each flagged as a folder or a file.

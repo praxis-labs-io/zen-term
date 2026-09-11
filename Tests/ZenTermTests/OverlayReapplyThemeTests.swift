@@ -258,7 +258,9 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
         let carry = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? CarryPicker }.first)
         carry.settle = 0
-        carry.probe = { _, _ in ["node_modules"] }
+        carry.probe = { _, _ in
+            IgnoredCatalog(entries: ["node_modules"], resting: ["node_modules"], fileCounts: [:], directories: [])
+        }
         carry.setCarried(["node_modules"])
         let landed = expectation(description: "catalog")
         carry.onChanged = { if carry.dropdownForTesting != nil { landed.fulfill() } }

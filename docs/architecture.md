@@ -1967,9 +1967,10 @@ something not on disk stays put instead of being dropped by the next save. `nil`
 the probe is not "nothing ignored": the control says the folder is not a repo rather
 than showing an empty list. `CheckboxDropdown` fixes its row count at init and the
 catalog's length is not known until git answers, so the control is rebuilt when one
-lands rather than re-seeded. Rebuilding takes an open list with it, so the control shows
-`Reading what git ignores…` until the catalog lands rather than a seeded list it would
-tear down, and anything arriving while a list *is* open waits for it to close.
+lands rather than re-seeded. Rebuilding takes an open list with it, so the control shows a
+select-shaped box with a spinner and `Reading what git ignores…` until the catalog lands,
+rather than a seeded list it would tear down. Select-shaped in every state, because a bare
+line of text there read as the control having failed to render, and anything arriving while a list *is* open waits for it to close.
 
 **The checkbox list filters as you type**, the same `FuzzyMatch` ranking `Dropdown` and
 the command palette use, because a carry list is as long as the repo's `.gitignore`.
@@ -2015,6 +2016,15 @@ files fold. A folder whose ignored children are themselves folders is already on
 and folding it would hide the difference between a `node_modules` worth copying and a
 `.cache` that is not. A tracked *file* is still refused outright: copying one reports a
 modification that never goes away.
+
+**A fold is the resting view, not a wall.** Every folded file stays in the catalog, so
+typing its name reaches it and it can be picked on its own; the folded folder is only what
+shows while nothing is typed. Without that the fold is a trap, because the one thing that
+expands a folder is already having chosen something inside it. A file picked that way keeps
+showing at rest, since falling back behind the fold on the next open would read as the pick
+not having landed. The row carries its count (`170 files`) so the fold is visible, and
+folders and files carry different icons, because a path alone does not say whether ticking
+it brings one file or a tree.
 
 A fold tidies a choice nobody has made yet, so **a folder holding something the workspace
 already copies stays expanded** and that pick sits among its siblings. Folding it instead
