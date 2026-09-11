@@ -308,7 +308,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     static func footerHints() -> [PaletteHint] {
         var hints = [
             PaletteHint(keys: "⏎", label: "open"),
-            PaletteHint(keys: "⇧⏎", label: "replace"),
+            PaletteHint(keys: "⇧⏎", label: "replace tab"),
         ]
         if let chord = Chord.displayed(.createWorktree, in: GeneralConfig.current.keymap) {
             hints.append(PaletteHint(keys: chord.displayGlyph, label: "new worktree"))
@@ -319,6 +319,12 @@ final class RepoPickerOverlay: PaletteOverlay {
         // No ↑↓ or ⎋ here, unlike the command palette: this footer carries up to four hints and the
         // two worktree chords are the ones nothing else teaches. Arrowing a list and Esc are not.
         return hints
+    }
+
+    /// ⌥⌫ acts on a worktree row and nothing else, so the hint follows the selection rather than
+    /// teaching a key that does nothing over a workspace or the ＋ row.
+    override func selectionChanged() {
+        setFooterHint("remove worktree", isShown: selectedWorktree != nil)
     }
 
     /// Two answers, because a worktree row disagrees on them: `repo` is the row's own checkout, so

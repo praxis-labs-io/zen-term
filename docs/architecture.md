@@ -1925,6 +1925,13 @@ the same `resolveBase` the create will run. A caption that only said "the defaul
 branch" would make the reader go and look, and one that guessed would be wrong in a
 repo with no remote.
 
+**The picker's footer teaches the two chords and nothing else.** `⏎ open`,
+`⇧⏎ replace tab`, and the two worktree chords read from the live keymap, so a rebind or
+an unbind tracks. `↑↓` and `⎋` came out: four hints fit, and arrowing a list is not what
+this footer is for. `remove worktree` follows the selection through
+`PaletteOverlay.selectionChanged`, because ⌥⌫ acts on a worktree row and nothing else,
+and a hint left up over a workspace teaches a key that does nothing there.
+
 **A worktree row means two different things by its selection.** The branch is cut from
 the worktree, so the base choice reads against the branch on screen. Carry copies from
 the **parent**, because that is the checkout holding the install a sibling worktree has
