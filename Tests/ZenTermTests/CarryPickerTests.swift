@@ -19,7 +19,7 @@ final class CarryPickerTests: WindowTestCase {
     private func picker(ignoring ignored: [String]?) -> CarryPicker {
         let picker = CarryPicker()
         picker.settle = 0
-        picker.probe = { _ in ignored }
+        picker.probe = { _, _ in ignored }
         picker.translatesAutoresizingMaskIntoConstraints = true
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 460, height: 400),
@@ -164,7 +164,7 @@ final class CarryPickerTests: WindowTestCase {
         press(first, " ", code: 49)
         XCTAssertTrue(first.isPopoverOpen)
 
-        picker.probe = { _ in ["node_modules", ".env", "dist"] }
+        picker.probe = { _, _ in ["node_modules", ".env", "dist"] }
         let landed = expectation(description: "catalog")
         picker.onChanged = { landed.fulfill() }
         picker.workspaceFolder = folder.appendingPathComponent("elsewhere")
@@ -176,6 +176,29 @@ final class CarryPickerTests: WindowTestCase {
         press(first, "", code: 53)  // Esc closes it
 
         XCTAssertEqual(picker.dropdownForTesting?.itemsForTesting.count, 3, "then it rebuilds")
+    }
+
+    /// The catalog expands the folder holding it, so it sits among its siblings instead of being
+    /// appended after every other row with its folder nowhere near it.
+    func test_anAlreadyChosenChild_sitsInPlaceRatherThanAtTheEnd() {
+        let picker = CarryPicker()
+        picker.settle = 0
+        picker.translatesAutoresizingMaskIntoConstraints = true
+        picker.probe = { _, chosen in
+            chosen.contains("config/credentials/production.key")
+                ? ["config/credentials/development.key", "config/credentials/production.key", "z/last"]
+                : ["config/credentials", "z/last"]
+        }
+        picker.setCarried(["config/credentials/production.key"])
+        let landed = expectation(description: "catalog")
+        picker.onChanged = { landed.fulfill() }
+        picker.workspaceFolder = folder
+        wait(for: [landed], timeout: 2)
+
+        XCTAssertEqual(
+            picker.catalog,
+            ["config/credentials/development.key", "config/credentials/production.key", "z/last"])
+        XCTAssertFalse(picker.catalog.contains("config/credentials"), "the folded row is gone")
     }
 
     /// Nil is not "nothing ignored". An empty list there would read as a repo with nothing to carry.
@@ -200,8 +223,9 @@ final class CarryPickerTests: WindowTestCase {
         let picker = picker(ignoring: [])
         picker.settle = 0.05
         var asked: [String] = []
-        picker.probe = {
-            asked.append($0.path); return []
+        picker.probe = { folder, _ in
+            asked.append(folder.path)
+            return []
         }
         let landed = expectation(description: "catalog")
         picker.onChanged = { landed.fulfill() }

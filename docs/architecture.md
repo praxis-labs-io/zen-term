@@ -2016,6 +2016,12 @@ and folding it would hide the difference between a `node_modules` worth copying 
 `.cache` that is not. A tracked *file* is still refused outright: copying one reports a
 modification that never goes away.
 
+A fold tidies a choice nobody has made yet, so **a folder holding something the workspace
+already copies stays expanded** and that pick sits among its siblings. Folding it instead
+would leave two rows meaning overlapping things, with the chosen child stranded at the end
+of the list, and would blur a real difference: copying every key in `config/credentials`
+is not the same act as copying one.
+
 **A nested entry works, because the destination's parent is created first.** A Rails
 app keeps its dev key at `config/credentials/development.key`, so nesting is the common
 case rather than an exotic one. Without that `mkdir` the copy died in `copyfile` with an

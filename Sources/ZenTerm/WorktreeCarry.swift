@@ -142,9 +142,11 @@ enum WorktreeCarry {
 
     /// What git ignores in `workspace`, as paths relative to it, or nil when git could not be
     /// asked. An ignored directory arrives collapsed to one entry, which is what carry copies at.
-    static func ignoredEntries(in workspace: URL) -> [String]? {
+    /// `chosen` is what the workspace already copies. A folder holding one of those stays
+    /// expanded, so the pick sits among its siblings rather than behind a row that means more.
+    static func ignoredEntries(in workspace: URL, chosen: Set<String>) -> [String]? {
         guard let reported = ignoredPaths(in: workspace, under: nil) else { return nil }
-        return fold(reported)
+        return fold(reported, chosen: chosen)
     }
 
     /// One row per folder that sprays ignored *files*, in place of the files. Git collapses a
@@ -154,7 +156,10 @@ enum WorktreeCarry {
     /// Only files fold. A folder whose ignored children are themselves folders is already one row
     /// each, and folding it would hide the difference between a `node_modules` worth copying and a
     /// `.cache` that is not.
-    private static func fold(_ reported: [(path: String, isDirectory: Bool)]) -> [String] {
+    private static func fold(_ reported: [(path: String, isDirectory: Bool)], chosen: Set<String>)
+        -> [String]
+    {
+        let chosenParents = Set(chosen.map { ($0 as NSString).deletingLastPathComponent })
         var files: [String: [String]] = [:]
         for entry in reported where !entry.isDirectory {
             let parent = (entry.path as NSString).deletingLastPathComponent
@@ -165,7 +170,8 @@ enum WorktreeCarry {
         // A parent that also holds an ignored folder keeps its files: folding there would swallow
         // that folder's row into a name that no longer says which of the two it means.
         let folded = files.filter { parent, kids in
-            kids.count > 1 && !directories.contains { ($0 as NSString).deletingLastPathComponent == parent }
+            kids.count > 1 && !chosenParents.contains(parent)
+                && !directories.contains { ($0 as NSString).deletingLastPathComponent == parent }
         }
         var result: [String] = []
         var seen: Set<String> = []

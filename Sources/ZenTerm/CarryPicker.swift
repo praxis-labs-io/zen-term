@@ -4,8 +4,9 @@ import AppKit
 /// folder. Carry names what a worktree needs and git leaves out, so the candidates are already
 /// known and nothing here is typed.
 final class CarryPicker: NSView, ThemeReapplying {
-    /// What git ignores in a workspace. Blocking, so it runs off-main. Tests replace it.
-    var probe: (URL) -> [String]? = WorktreeCarry.ignoredEntries
+    /// What git ignores in a workspace, given what it already copies. Blocking, so it runs
+    /// off-main. Tests replace it.
+    var probe: (URL, Set<String>) -> [String]? = WorktreeCarry.ignoredEntries
 
     /// The list or its selection changed: a catalog landed, or an entry was toggled.
     var onChanged: (() -> Void)?
@@ -98,9 +99,10 @@ final class CarryPicker: NSView, ThemeReapplying {
         isLoading = true
         show(.message("Reading what git ignores…"))
         let probe = probe
+        let chosen = Set(carried)
         let work = DispatchWorkItem { [weak self] in
             DispatchQueue.global(qos: .userInitiated).async {
-                let ignored = probe(folder)
+                let ignored = probe(folder, chosen)
                 DispatchQueue.main.async {
                     guard let self, token == self.generation else { return }
                     self.apply(ignored)

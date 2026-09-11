@@ -112,7 +112,7 @@ final class WorktreeCarryTests: XCTestCase {
         try FileManager.default.createDirectory(at: build, withIntermediateDirectories: true)
         try GitFixture.write("o\n", to: build.appendingPathComponent("y.o"))
 
-        XCTAssertEqual(WorktreeCarry.ignoredEntries(in: repo), [".build", ".env"])
+        XCTAssertEqual(WorktreeCarry.ignoredEntries(in: repo, chosen: []), [".build", ".env"])
     }
 
     /// A Rails `log/` holds a tracked `.keep`, so git cannot collapse it and reports every rotated
@@ -128,7 +128,30 @@ final class WorktreeCarryTests: XCTestCase {
         try GitFixture.write("b\n", to: log.appendingPathComponent("two.log"))
         try GitFixture.write("S=1\n", to: repo.appendingPathComponent(".env"))
 
-        XCTAssertEqual(WorktreeCarry.ignoredEntries(in: repo), [".env", "log"])
+        XCTAssertEqual(WorktreeCarry.ignoredEntries(in: repo, chosen: []), [".env", "log"])
+    }
+
+    /// A fold tidies a choice nobody has made yet. Once one exists inside the folder, hiding its
+    /// context is wrong: copying every key is a different act from copying one.
+    func test_ignoredEntries_doesNotFoldAFolderHoldingSomethingAlreadyChosen() throws {
+        let credentials = repo.appendingPathComponent("config/credentials", isDirectory: true)
+        try FileManager.default.createDirectory(at: credentials, withIntermediateDirectories: true)
+        try GitFixture.write("x\n", to: credentials.appendingPathComponent(".keep"))
+        try GitFixture.write("config/credentials/*.key\n", to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "creds"], in: repo)
+        try GitFixture.write("p\n", to: credentials.appendingPathComponent("production.key"))
+        try GitFixture.write("d\n", to: credentials.appendingPathComponent("development.key"))
+
+        XCTAssertEqual(
+            WorktreeCarry.ignoredEntries(in: repo, chosen: []), ["config/credentials"],
+            "with nothing chosen there it folds")
+
+        XCTAssertEqual(
+            WorktreeCarry.ignoredEntries(
+                in: repo, chosen: ["config/credentials/production.key"]),
+            ["config/credentials/development.key", "config/credentials/production.key"],
+            "a chosen child expands it, so the pick sits among its siblings")
     }
 
     /// Folding a parent whose ignored children are directories would offer the package folder
@@ -145,7 +168,7 @@ final class WorktreeCarryTests: XCTestCase {
         try GitFixture.run(["commit", "-m", "pkg"], in: repo)
 
         XCTAssertEqual(
-            WorktreeCarry.ignoredEntries(in: repo), ["pkg/.turbo", "pkg/node_modules"])
+            WorktreeCarry.ignoredEntries(in: repo, chosen: []), ["pkg/.turbo", "pkg/node_modules"])
     }
 
     /// One ignored file under a folder is already one row. Folding it would rename that row to its
@@ -159,7 +182,7 @@ final class WorktreeCarryTests: XCTestCase {
         try GitFixture.run(["commit", "-m", "config"], in: repo)
         try GitFixture.write("k\n", to: config.appendingPathComponent("master.key"))
 
-        XCTAssertEqual(WorktreeCarry.ignoredEntries(in: repo), ["config/master.key"])
+        XCTAssertEqual(WorktreeCarry.ignoredEntries(in: repo, chosen: []), ["config/master.key"])
     }
 
     /// The whole point of folding: the row has to copy what it says it copies, and leave the
@@ -198,20 +221,20 @@ final class WorktreeCarryTests: XCTestCase {
         try GitFixture.write("key\n", to: credentials.appendingPathComponent("development.key"))
 
         XCTAssertEqual(
-            WorktreeCarry.ignoredEntries(in: repo), ["config/credentials/development.key"])
+            WorktreeCarry.ignoredEntries(in: repo, chosen: []), ["config/credentials/development.key"])
     }
 
     /// A tracked file is refused at copy time, so offering it would be offering a mistake.
     func test_ignoredEntries_leavesOutWhatGitTracks() throws {
         try GitFixture.write("SECRET=1\n", to: repo.appendingPathComponent(".env"))
 
-        XCTAssertEqual(WorktreeCarry.ignoredEntries(in: repo), [".env"])
+        XCTAssertEqual(WorktreeCarry.ignoredEntries(in: repo, chosen: []), [".env"])
     }
 
     /// Nil is not "nothing ignored": the form says it could not ask rather than showing an empty
     /// list that reads as a repo with nothing to carry.
     func test_ignoredEntries_isNilWhenTheFolderIsNotARepo() {
-        XCTAssertNil(WorktreeCarry.ignoredEntries(in: root))
+        XCTAssertNil(WorktreeCarry.ignoredEntries(in: root, chosen: []))
     }
 
     // MARK: nested entries
