@@ -155,7 +155,7 @@ final class CarryPickerTests: WindowTestCase {
 
         XCTAssertTrue(picker.isLoadingForTesting)
         XCTAssertEqual(picker.statusForTesting, "Reading what git ignores…")
-        XCTAssertNil(picker.focusStop, "nothing to open, so nothing closes under the user")
+        XCTAssertNil(picker.dropdownForTesting, "no list to close under the user")
     }
 
     /// A catalog landing on an open list has to wait: rebuilding swaps the control out, and the
@@ -328,6 +328,64 @@ final class CarryPickerTests: WindowTestCase {
     func test_theCaption_saysWhatTheControlIsFor() {
         XCTAssertTrue(CarryPicker.captionText.lowercased().contains("git ignores"))
         XCTAssertFalse(CarryPicker.captionText.contains("—"), "no em-dashes")
+    }
+
+    /// Skipping it while git is being asked means the ring gains a stop under the user the moment
+    /// the catalog lands, so an arrow press that worked a second ago now goes somewhere else.
+    func test_whileLoading_theControlIsStillAFocusStop() throws {
+        let picker = picker(ignoring: ["node_modules"])
+        picker.settle = 10  // never lands during this test
+
+        picker.workspaceFolder = folder
+
+        let stop = try XCTUnwrap(picker.focusStop, "loading is still a stop")
+        window?.makeFirstResponder(stop)
+        XCTAssertTrue(KeyboardFocus.isFocused(stop, in: window))
+    }
+
+    /// The placeholder leaves the view tree when the list arrives, and a ring landing nowhere eats
+    /// the next arrow press.
+    func test_theCatalogLanding_handsFocusToTheList() throws {
+        let picker = picker(ignoring: ["node_modules"])
+        picker.settle = 0.05
+        picker.workspaceFolder = folder
+        let placeholder = try XCTUnwrap(picker.focusStop)
+        window?.makeFirstResponder(placeholder)
+
+        let landed = expectation(description: "catalog")
+        picker.onChanged = { landed.fulfill() }
+        wait(for: [landed], timeout: 2)
+
+        let list = try XCTUnwrap(picker.dropdownForTesting)
+        XCTAssertTrue(KeyboardFocus.isFocused(list, in: window), "focus follows the control")
+    }
+
+    /// Arrowing off it has to leave, or the ring dead-ends on a control with nothing to open.
+    func test_arrowingOffTheLoadingControl_bubblesToTheForm() throws {
+        let picker = picker(ignoring: ["node_modules"])
+        picker.settle = 10
+        var moved = 0
+        picker.onArrowDown = { moved += 1 }
+        picker.workspaceFolder = folder
+        let stop = try XCTUnwrap(picker.focusStop)
+        window?.makeFirstResponder(stop)
+
+        stop.keyDown(
+            with: NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "",
+                isARepeat: false, keyCode: 125)!)
+
+        XCTAssertEqual(moved, 1)
+    }
+
+    /// A settled state with nothing to pick is still skipped: there is nothing to stand on.
+    func test_aSettledStateWithNothingToPick_isNotAStop() {
+        let picker = picker(ignoring: [])
+        load(picker)
+
+        XCTAssertEqual(picker.statusForTesting, "Git ignores nothing here yet.")
+        XCTAssertNil(picker.focusStop)
     }
 
     /// Nil is not "nothing ignored". An empty list there would read as a repo with nothing to carry.

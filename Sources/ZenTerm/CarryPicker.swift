@@ -36,8 +36,10 @@ final class CarryPicker: NSView, ThemeReapplying {
     private var fileCounts: [String: Int] = [:]
     private var directories: Set<String> = []
 
-    /// The stop the form arrows to, absent while the list has nothing to show.
-    var focusStop: NSView? { dropdown }
+    /// The stop the form arrows to. The placeholder is one while git is being asked, so the ring
+    /// does not gain a stop under the user the moment the catalog lands; the settled states with
+    /// nothing to pick are skipped.
+    var focusStop: NSView? { dropdown ?? (isLoading ? status : nil) }
 
     var isLoadingForTesting: Bool { isLoading }
 
@@ -67,6 +69,11 @@ final class CarryPicker: NSView, ThemeReapplying {
         slot.orientation = .vertical
         slot.alignment = .leading
         slot.translatesAutoresizingMaskIntoConstraints = false
+
+        status.onArrowUp = { [weak self] in self?.onArrowUp?() }
+        status.onArrowDown = { [weak self] in self?.onArrowDown?() }
+        status.onTab = { [weak self] in self?.onTab?() }
+        status.onBacktab = { [weak self] in self?.onBacktab?() }
 
         detail.font = .systemFont(ofSize: 11)
         detail.textColor = Theme.current.chrome.ink(.muted)
@@ -188,19 +195,26 @@ final class CarryPicker: NSView, ThemeReapplying {
             dropdown.onClosed = { [weak self] in self?.show(content) }
             return
         }
+        // Read before the teardown below: a view out of the tree has no window to be focused in.
+        let placeholderHadFocus = KeyboardFocus.isFocused(status, in: window)
         for view in slot.arrangedSubviews { slot.removeArrangedSubview(view) }
         status.removeFromSuperview()
         dropdown?.removeFromSuperview()
         switch content {
         case .message(let text):
             dropdown = nil
+            status.isFocusable = isLoading
             status.set(title: text, isLoading: isLoading)
             status.isHidden = false
             slot.addArrangedSubview(status)
             status.widthAnchor.constraint(equalTo: slot.widthAnchor).isActive = true
         case .list:
+            // Hand focus on rather than dropping it: the placeholder holding it is about to leave
+            // the view tree, and a form whose ring lands nowhere eats the next arrow press.
             status.isHidden = true
+            status.isFocusable = false
             buildDropdown()
+            if placeholderHadFocus, let dropdown { window?.makeFirstResponder(dropdown) }
         }
     }
 
@@ -260,6 +274,48 @@ final class CarryPicker: NSView, ThemeReapplying {
         var title: String { label.stringValue }
         var isSpinning: Bool { spinner.isSpinning }
 
+        /// A stop only while there is a reason to stand here. Set by the owner per state.
+        var isFocusable = false {
+            didSet {
+                guard !isFocusable, isFocused else { return }
+                window?.makeFirstResponder(nil)
+            }
+        }
+        var onArrowUp: (() -> Void)?
+        var onArrowDown: (() -> Void)?
+        var onTab: (() -> Void)?
+        var onBacktab: (() -> Void)?
+
+        private var isFocused = false
+
+        override var acceptsFirstResponder: Bool { isFocusable }
+
+        override func becomeFirstResponder() -> Bool {
+            isFocused = true
+            restyle()
+            return true
+        }
+
+        override func resignFirstResponder() -> Bool {
+            isFocused = false
+            restyle()
+            return super.resignFirstResponder()
+        }
+
+        override func drawFocusRingMask() {}
+
+        /// Consumes everything else, the way the open list does: there is nothing here to activate,
+        /// and letting a key fall through would run it against whatever is behind the card.
+        override func keyDown(with event: NSEvent) {
+            switch KeyboardFocus.key(for: event) {
+            case .up: onArrowUp?()
+            case .down: onArrowDown?()
+            case .tab(let shift): shift ? onBacktab?() : onTab?()
+            case .escape: super.keyDown(with: event)
+            default: break
+            }
+        }
+
         init() {
             super.init(frame: .zero)
             translatesAutoresizingMaskIntoConstraints = false
@@ -297,6 +353,11 @@ final class CarryPicker: NSView, ThemeReapplying {
             PopoverButtonStyle.applyRestFill(to: self)
             applyColors()
             spinner.reapplyTheme()
+        }
+
+        private func restyle() {
+            PopoverButtonStyle.apply(to: self, isFocused: isFocused, isOpen: false)
+            label.textColor = Theme.current.chrome.ink(.muted)
         }
 
         private func applyColors() {

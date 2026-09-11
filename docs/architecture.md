@@ -1970,7 +1970,9 @@ catalog's length is not known until git answers, so the control is rebuilt when 
 lands rather than re-seeded. Rebuilding takes an open list with it, so the control shows a
 select-shaped box with a spinner and `Reading what git ignores…` until the catalog lands,
 rather than a seeded list it would tear down. Select-shaped in every state, because a bare
-line of text there read as the control having failed to render, and anything arriving while a list *is* open waits for it to close.
+line of text there read as the control having failed to render. It is a focus stop while
+loading and hands focus to the list when one arrives, so the ring does not gain a stop under
+the user the moment the catalog lands; the settled states with nothing to pick are skipped, and anything arriving while a list *is* open waits for it to close.
 
 **The checkbox list filters as you type**, the same `FuzzyMatch` ranking `Dropdown` and
 the command palette use, because a carry list is as long as the repo's `.gitignore`.
