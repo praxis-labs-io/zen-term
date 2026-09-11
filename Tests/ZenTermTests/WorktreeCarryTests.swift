@@ -115,6 +115,77 @@ final class WorktreeCarryTests: XCTestCase {
         XCTAssertEqual(WorktreeCarry.ignoredEntries(in: repo), [".build", ".env"])
     }
 
+    /// A Rails `log/` holds a tracked `.keep`, so git cannot collapse it and reports every rotated
+    /// log on its own: 170 of craftwork's 249 rows came from one folder. One row instead.
+    func test_ignoredEntries_foldsAFolderThatSpraysIgnoredFiles() throws {
+        let log = repo.appendingPathComponent("log", isDirectory: true)
+        try FileManager.default.createDirectory(at: log, withIntermediateDirectories: true)
+        try GitFixture.write("", to: log.appendingPathComponent(".keep"))
+        try GitFixture.write("log/*.log\n.env\n", to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "log"], in: repo)
+        try GitFixture.write("a\n", to: log.appendingPathComponent("one.log"))
+        try GitFixture.write("b\n", to: log.appendingPathComponent("two.log"))
+        try GitFixture.write("S=1\n", to: repo.appendingPathComponent(".env"))
+
+        XCTAssertEqual(WorktreeCarry.ignoredEntries(in: repo), [".env", "log"])
+    }
+
+    /// Folding a parent whose ignored children are directories would offer the package folder
+    /// itself, hiding the difference between a node_modules worth carrying and a .cache that is not.
+    func test_ignoredEntries_doesNotFoldAFolderWhoseChildrenAreDirectories() throws {
+        for name in ["pkg/node_modules", "pkg/.turbo"] {
+            let dir = repo.appendingPathComponent(name, isDirectory: true)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try GitFixture.write("x\n", to: dir.appendingPathComponent("f.txt"))
+        }
+        try GitFixture.write("index.js\n", to: repo.appendingPathComponent("pkg/index.js"))
+        try GitFixture.write("node_modules/\n.turbo/\n", to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "pkg"], in: repo)
+
+        XCTAssertEqual(
+            WorktreeCarry.ignoredEntries(in: repo), ["pkg/.turbo", "pkg/node_modules"])
+    }
+
+    /// One ignored file under a folder is already one row. Folding it would rename that row to its
+    /// parent and quietly widen what it means.
+    func test_ignoredEntries_doesNotFoldASingleFile() throws {
+        let config = repo.appendingPathComponent("config", isDirectory: true)
+        try FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
+        try GitFixture.write("x\n", to: config.appendingPathComponent("app.yml"))
+        try GitFixture.write("config/*.key\n", to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "config"], in: repo)
+        try GitFixture.write("k\n", to: config.appendingPathComponent("master.key"))
+
+        XCTAssertEqual(WorktreeCarry.ignoredEntries(in: repo), ["config/master.key"])
+    }
+
+    /// The whole point of folding: the row has to copy what it says it copies, and leave the
+    /// tracked file that stopped git collapsing the folder in the first place.
+    func test_copy_ofAPartlyTrackedFolder_bringsTheIgnoredFilesAndLeavesTheTrackedOne() throws {
+        let log = repo.appendingPathComponent("log", isDirectory: true)
+        try FileManager.default.createDirectory(at: log, withIntermediateDirectories: true)
+        try GitFixture.write("keep\n", to: log.appendingPathComponent(".keep"))
+        try GitFixture.write("log/*.log\n", to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "log"], in: repo)
+        try GitFixture.write("a\n", to: log.appendingPathComponent("one.log"))
+        try GitFixture.run(["worktree", "add", "-b", "side", worktree.path], in: repo)
+
+        let report = WorktreeCarry.copy(["log"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, ["log"])
+        XCTAssertEqual(report.skipped, [])
+        XCTAssertEqual(
+            try String(contentsOf: worktree.appendingPathComponent("log/one.log"), encoding: .utf8),
+            "a\n")
+        XCTAssertEqual(
+            try GitFixture.run(["status", "--porcelain"], in: worktree), "",
+            "the tracked .keep is the worktree's own, so the tree stays clean")
+    }
+
     func test_ignoredEntries_listsANestedIgnoredPathOnItsOwn() throws {
         let credentials = repo.appendingPathComponent("config/credentials", isDirectory: true)
         try FileManager.default.createDirectory(at: credentials, withIntermediateDirectories: true)

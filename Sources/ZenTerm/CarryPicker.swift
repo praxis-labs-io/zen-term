@@ -33,6 +33,8 @@ final class CarryPicker: NSView, ThemeReapplying {
     /// The stop the form arrows to, absent while the list has nothing to show.
     var focusStop: NSView? { dropdown }
 
+    var isLoadingForTesting: Bool { isLoading }
+
     var statusForTesting: String? { status.isHidden ? nil : status.stringValue }
     var dropdownForTesting: CheckboxDropdown? { dropdown }
 
@@ -45,6 +47,7 @@ final class CarryPicker: NSView, ThemeReapplying {
     /// Coalesces the reload, so walking a path costs a single `git status` rather than one per
     /// character typed.
     private var pending: DispatchWorkItem?
+    private var isLoading = false
     var settle: TimeInterval = 0.35
 
     override init(frame: NSRect) {
@@ -69,11 +72,11 @@ final class CarryPicker: NSView, ThemeReapplying {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Seed from the workspace being edited, before the catalog arrives.
+    /// Seed from the workspace being edited. No list yet: the catalog is whatever git says plus
+    /// these, and building one from these alone would be torn down the moment the probe lands.
     func setCarried(_ entries: [String]) {
         carried = entries
         catalog = entries
-        renderContent(unreadable: false)
     }
 
     func reapplyTheme() {
@@ -92,7 +95,8 @@ final class CarryPicker: NSView, ThemeReapplying {
             render(unreadable: false)
             return
         }
-        if catalog.isEmpty { show(.message("Reading what git ignores…")) }
+        isLoading = true
+        show(.message("Reading what git ignores…"))
         let probe = probe
         let work = DispatchWorkItem { [weak self] in
             DispatchQueue.global(qos: .userInitiated).async {
@@ -123,6 +127,7 @@ final class CarryPicker: NSView, ThemeReapplying {
     }
 
     private func render(unreadable: Bool) {
+        isLoading = false
         renderContent(unreadable: unreadable)
         onChanged?()
     }
@@ -143,6 +148,12 @@ final class CarryPicker: NSView, ThemeReapplying {
     }
 
     private func show(_ content: Content) {
+        // Every branch below swaps the control out, which takes an open list with it. Anything
+        // arriving while one is up waits for it to close rather than shutting it under the user.
+        if let dropdown, dropdown.isPopoverOpen {
+            dropdown.onClosed = { [weak self] in self?.show(content) }
+            return
+        }
         for view in slot.arrangedSubviews { slot.removeArrangedSubview(view) }
         status.removeFromSuperview()
         dropdown?.removeFromSuperview()

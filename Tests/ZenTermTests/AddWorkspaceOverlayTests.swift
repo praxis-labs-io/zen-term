@@ -72,11 +72,12 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
 
     /// A list with nothing to show is not a focus stop, so an arrow into it would strand the ring.
     func test_carryIsAVerticalStopOnlyOnceItHasAList() throws {
+        let dir = try makeRealDir()
         let (overlay, _) = mount()
         let carry = try XCTUnwrap(carryPicker(in: overlay))
         XCTAssertNil(carry.focusStop)
 
-        carry.setCarried(["node_modules"])
+        loadCarry(carry, in: overlay, folder: dir, ignoring: ["node_modules"])
 
         XCTAssertNotNil(carry.focusStop)
     }
@@ -97,6 +98,7 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
             env: [:], carry: ["node_modules"])
         let (overlay, _) = mount(editing: ws)
         let carry = try XCTUnwrap(carryPicker(in: overlay))
+        loadCarry(carry, in: overlay, folder: dir, ignoring: ["node_modules"])
         let list = try XCTUnwrap(carry.focusStop)
         let addVar = try XCTUnwrap(button(in: overlay, title: "＋ Add variable"))
         window?.makeFirstResponder(addVar)
@@ -104,6 +106,21 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         addVar.onArrowDown?()
 
         XCTAssertTrue(KeyboardFocus.isFocused(list, in: window), "Down off ＋ Add variable lands on CARRY")
+    }
+
+    /// Point the folder field at `folder` and let the stubbed probe land, which is the only way a
+    /// list exists: a seeded one would be torn down when git answered.
+    private func loadCarry(
+        _ carry: CarryPicker, in overlay: AddWorkspaceOverlay, folder: URL, ignoring: [String]
+    ) {
+        carry.settle = 0
+        carry.probe = { _ in ignoring }
+        let landed = expectation(description: "catalog")
+        carry.onChanged = { if carry.focusStop != nil { landed.fulfill() } }
+        picker(in: overlay).setText(folder.path)
+        picker(in: overlay).field.onChange?()
+        wait(for: [landed], timeout: 2)
+        carry.onChanged = nil
     }
 
     private func carryPicker(in overlay: NSView) -> CarryPicker? {

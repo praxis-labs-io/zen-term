@@ -140,6 +140,44 @@ final class CarryPickerTests: WindowTestCase {
         XCTAssertEqual(picker.carried, ["a", "b", "c"], "a pick re-seats the set in catalog order")
     }
 
+    /// Opening the form on a workspace that already carries something used to build a list from the
+    /// seeded entries, then tear it down when git answered. Anyone reading it watched it vanish.
+    func test_whileTheProbeIsInFlight_thereIsNoListToTearDown() {
+        let picker = picker(ignoring: ["node_modules", ".env"])
+        picker.settle = 10  // never lands during this test
+
+        picker.setCarried([".env"])
+        picker.workspaceFolder = folder
+
+        XCTAssertTrue(picker.isLoadingForTesting)
+        XCTAssertEqual(picker.statusForTesting, "Reading what git ignores…")
+        XCTAssertNil(picker.focusStop, "nothing to open, so nothing closes under the user")
+    }
+
+    /// A catalog landing on an open list has to wait: rebuilding swaps the control out, and the
+    /// open card goes with it mid-pick.
+    func test_aCatalogLandingOnAnOpenList_waitsForItToClose() throws {
+        let picker = picker(ignoring: ["node_modules", ".env"])
+        load(picker)
+        let first = try XCTUnwrap(picker.dropdownForTesting)
+        window?.makeFirstResponder(first)
+        press(first, " ", code: 49)
+        XCTAssertTrue(first.isPopoverOpen)
+
+        picker.probe = { _ in ["node_modules", ".env", "dist"] }
+        let landed = expectation(description: "catalog")
+        picker.onChanged = { landed.fulfill() }
+        picker.workspaceFolder = folder.appendingPathComponent("elsewhere")
+        wait(for: [landed], timeout: 2)
+
+        XCTAssertTrue(first.isPopoverOpen, "the open list survives the catalog landing")
+        XCTAssertTrue(picker.dropdownForTesting === first, "and it is still the same control")
+
+        press(first, "", code: 53)  // Esc closes it
+
+        XCTAssertEqual(picker.dropdownForTesting?.itemsForTesting.count, 3, "then it rebuilds")
+    }
+
     /// Nil is not "nothing ignored". An empty list there would read as a repo with nothing to carry.
     func test_aFolderGitCannotAnswerFor_saysSo() {
         let picker = picker(ignoring: nil)

@@ -257,7 +257,14 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         overlay.frame = NSRect(x: 0, y: 0, width: 460, height: 640)
 
         let carry = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? CarryPicker }.first)
+        carry.settle = 0
+        carry.probe = { _ in ["node_modules"] }
         carry.setCarried(["node_modules"])
+        let landed = expectation(description: "catalog")
+        carry.onChanged = { if carry.dropdownForTesting != nil { landed.fulfill() } }
+        carry.workspaceFolder = FileManager.default.temporaryDirectory
+        wait(for: [landed], timeout: 2)
+        carry.onChanged = nil
         let list = try XCTUnwrap(carry.dropdownForTesting)
         let before = list.layer?.borderColor
 

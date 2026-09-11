@@ -86,7 +86,21 @@ enum WorktreeCarry {
                 }
             }
             switch isTracked(name, in: source) {
-            case .some(true): skip(name, .tracked); continue
+            case .some(true):
+                // A folder git tracks something inside is one the picker folds into a single row,
+                // so the row has to mean what it says: bring the ignored content, leave the rest.
+                // A tracked *file* is still refused, because copying one reports a modification
+                // that never goes away.
+                guard isDirectory(from) else {
+                    skip(name, .tracked)
+                    continue
+                }
+                if let reason = copyIgnoredContents(of: name, from: source, into: worktree) {
+                    skip(name, reason)
+                } else {
+                    carried.append(name)
+                }
+                continue
             case .none: skip(name, .unreadable); continue
             case .some(false): break
             }
@@ -129,13 +143,57 @@ enum WorktreeCarry {
     /// What git ignores in `workspace`, as paths relative to it, or nil when git could not be
     /// asked. An ignored directory arrives collapsed to one entry, which is what carry copies at.
     static func ignoredEntries(in workspace: URL) -> [String]? {
+        guard let reported = ignoredPaths(in: workspace, under: nil) else { return nil }
+        return fold(reported)
+    }
+
+    /// One row per folder that sprays ignored *files*, in place of the files. Git collapses a
+    /// folder only when it tracks nothing inside, so a Rails `log/` with a tracked `.keep` reports
+    /// every rotated log on its own: 170 rows out of craftwork's 249 came from that one folder.
+    ///
+    /// Only files fold. A folder whose ignored children are themselves folders is already one row
+    /// each, and folding it would hide the difference between a `node_modules` worth copying and a
+    /// `.cache` that is not.
+    private static func fold(_ reported: [(path: String, isDirectory: Bool)]) -> [String] {
+        var files: [String: [String]] = [:]
+        for entry in reported where !entry.isDirectory {
+            let parent = (entry.path as NSString).deletingLastPathComponent
+            guard !parent.isEmpty else { continue }
+            files[parent, default: []].append(entry.path)
+        }
+        let directories = Set(reported.filter(\.isDirectory).map(\.path))
+        // A parent that also holds an ignored folder keeps its files: folding there would swallow
+        // that folder's row into a name that no longer says which of the two it means.
+        let folded = files.filter { parent, kids in
+            kids.count > 1 && !directories.contains { ($0 as NSString).deletingLastPathComponent == parent }
+        }
+        var result: [String] = []
+        var seen: Set<String> = []
+        for entry in reported {
+            let parent = (entry.path as NSString).deletingLastPathComponent
+            if !entry.isDirectory, folded[parent] != nil {
+                if seen.insert(parent).inserted { result.append(parent) }
+            } else {
+                result.append(entry.path)
+            }
+        }
+        return result
+    }
+
+    /// What git ignores, as paths relative to `workspace`, each flagged as a folder or a file.
+    /// `under` narrows it to one path. Nil when git could not be asked.
+    private static func ignoredPaths(in workspace: URL, under path: String?)
+        -> [(path: String, isDirectory: Bool)]?
+    {
         // `-z` so a path holding a space or a quote arrives literal; `--porcelain` alone quotes it.
-        let args = ["status", "--porcelain", "--ignored", "-z"]
+        var args = ["status", "--porcelain", "--ignored", "-z"]
+        if let path { args += ["--", path] }
         guard case .success(let output) = GitCommand.run(args, in: workspace) else { return nil }
         return output.split(separator: "\0").compactMap { line in
             guard line.hasPrefix("!! ") else { return nil }
             let entry = line.dropFirst(3)
-            return String(entry.hasSuffix("/") ? entry.dropLast() : entry)
+            let isDirectory = entry.hasSuffix("/")
+            return (String(isDirectory ? entry.dropLast() : entry), isDirectory)
         }
     }
 
@@ -150,6 +208,43 @@ enum WorktreeCarry {
         case .success(let output): return !output.isEmpty
         case .failure: return nil
         }
+    }
+
+    /// Copy what git ignores under `name` one entry at a time, for a folder git tracks something
+    /// else inside. Whole-folder `copyfile` would bring the tracked content with it.
+    /// Nil on success, the refusal otherwise.
+    private static func copyIgnoredContents(of name: String, from source: URL, into worktree: URL)
+        -> CarryReport.Skipped.Reason?
+    {
+        guard let inside = ignoredPaths(in: source, under: name), !inside.isEmpty else {
+            return .notThere
+        }
+        for entry in inside {
+            guard let from = containedPath(entry.path, under: source),
+                let to = containedPath(entry.path, under: worktree)
+            else { return .leavesTheWorkspace }
+            guard !entryExists(at: to) else { continue }
+            do {
+                try FileManager.default.createDirectory(
+                    at: to.deletingLastPathComponent(), withIntermediateDirectories: true)
+            } catch {
+                return .copyFailed(error.localizedDescription)
+            }
+            let flags = copyfile_flags_t(COPYFILE_CLONE | COPYFILE_RECURSIVE)
+            guard copyfile(from.path, to.path, nil, flags) == 0 else {
+                var message = [CChar](repeating: 0, count: 256)
+                strerror_r(errno, &message, message.count)
+                try? FileManager.default.removeItem(at: to)
+                return .copyFailed(String(cString: message))
+            }
+        }
+        return nil
+    }
+
+    private static func isDirectory(_ url: URL) -> Bool {
+        var info = stat()
+        guard stat(url.path, &info) == 0 else { return false }
+        return info.st_mode & S_IFMT == S_IFDIR
     }
 
     /// Whether anything sits at `url`, a dangling symlink included. `fileExists` follows links.

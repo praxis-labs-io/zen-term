@@ -1967,7 +1967,9 @@ something not on disk stays put instead of being dropped by the next save. `nil`
 the probe is not "nothing ignored": the control says the folder is not a repo rather
 than showing an empty list. `CheckboxDropdown` fixes its row count at init and the
 catalog's length is not known until git answers, so the control is rebuilt when one
-lands rather than re-seeded.
+lands rather than re-seeded. Rebuilding takes an open list with it, so the control shows
+`Reading what git ignores…` until the catalog lands rather than a seeded list it would
+tear down, and anything arriving while a list *is* open waits for it to close.
 
 **The checkbox list filters as you type**, the same `FuzzyMatch` ranking `Dropdown` and
 the command palette use, because a carry list is as long as the repo's `.gitignore`.
@@ -2003,6 +2005,16 @@ a pnpm `node_modules` cheap. That last part cuts both ways: links *inside* a car
 directory stay correct because they point within it, but a carried entry that is itself
 a link out of the workspace would arrive holding a target that no longer resolves, so
 that one is refused.
+
+**A folder git tracks something inside copies its ignored content, not the folder.** Git
+collapses an ignored folder only when it tracks nothing there, so a Rails `log/` holding a
+tracked `.keep` reports every rotated log on its own: 170 of craftwork's 249 rows came from
+that one folder. The picker folds a folder that sprays ignored *files* into one row, and
+the copy then brings what git ignores under it and leaves the tracked file behind. Only
+files fold. A folder whose ignored children are themselves folders is already one row each,
+and folding it would hide the difference between a `node_modules` worth copying and a
+`.cache` that is not. A tracked *file* is still refused outright: copying one reports a
+modification that never goes away.
 
 **A nested entry works, because the destination's parent is created first.** A Rails
 app keeps its dev key at `config/credentials/development.key`, so nesting is the common

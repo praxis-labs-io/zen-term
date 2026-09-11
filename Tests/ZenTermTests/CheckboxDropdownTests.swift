@@ -130,6 +130,33 @@ final class CheckboxDropdownTests: WindowTestCase {
         XCTAssertEqual(dropdown.buttonTitleForTesting, "All shown")
     }
 
+    /// A query that admits nothing rendered a 12pt sliver with no text in it, because the card
+    /// sized itself to zero rows.
+    func test_aQueryThatMatchesNothing_saysSoRatherThanShowingASliver() {
+        let dropdown = makeDropdown([".env", "node_modules"])
+        press(dropdown, " ", code: 49)
+
+        press(dropdown, "z", code: 6)
+        press(dropdown, "q", code: 12)
+
+        XCTAssertEqual(dropdown.visibleIndicesForTesting, [])
+        XCTAssertGreaterThan(dropdown.listCardSizeForTesting.height, 20, "the card has to hold a line")
+    }
+
+    /// The highlight survives a query that admits nothing, so Space was committing a row the user
+    /// could not see. In the copy list that wrote a path into the workspace on save.
+    func test_spaceWithNothingMatching_togglesNothing() {
+        var toggled: [Int] = []
+        let dropdown = makeDropdown([".env", "node_modules"], onToggle: { toggled.append($0) })
+        press(dropdown, " ", code: 49)
+        press(dropdown, "z", code: 6)
+
+        press(dropdown, " ", code: 49)
+        press(dropdown, "\r", code: 36)
+
+        XCTAssertEqual(toggled, [], "a filtered-out row is not committable")
+    }
+
     func test_spaceOpensTheList_withVisibleCard() {
         let dropdown = makeDropdown()
         XCTAssertFalse(dropdown.isPopoverOpen)

@@ -49,8 +49,9 @@
 # leave it. A nested path works: config/credentials/development.key is copied there, and
 # any directory it needs on the way is created.
 #
-# What carry will not do: an entry git tracks is refused, because a tracked file copied
-# into a worktree makes git report a change that never goes away. An entry the worktree
+# What carry will not do: a tracked file is refused, because copying one into a worktree
+# makes git report a change that never goes away. A folder git tracks something inside is
+# not refused: its ignored content comes across and the tracked files stay behind. An entry the worktree
 # already has is left alone. An entry this workspace does not have is skipped, so one
 # section can cover a repo before and after its first install.
 #

@@ -27,6 +27,9 @@ final class CheckboxDropdown: NSView {
     var onArrowLeft: (() -> Void)?
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
+    /// Fired once when the open list closes, then cleared. An owner that needs to rebuild the
+    /// control waits on this rather than pulling the card out from under a multi-select in progress.
+    var onClosed: (() -> Void)?
 
     /// The closed-state title. The query displaces it in the same label while one is being typed.
     private var summary: String
@@ -208,11 +211,15 @@ final class CheckboxDropdown: NSView {
     }
 
     private func closeList() {
+        let wasOpen = popover.isOpen
         popover.close()
         rowViews = []
         query = ""
         renderTitle()
         restyle()
+        guard wasOpen, let closed = onClosed else { return }
+        onClosed = nil
+        closed()
     }
 
     /// Esc clears a mistyped query before it closes anything, so recovering does not mean
@@ -292,7 +299,12 @@ final class CheckboxDropdown: NSView {
         row.scrollToVisible(row.bounds)
     }
 
-    private func toggleHighlight() { toggle(highlighted) }
+    /// A row the query filtered out is not committable: the highlight survives a query that admits
+    /// nothing, and toggling it would change an entry the user cannot see.
+    private func toggleHighlight() {
+        guard visible.contains(highlighted) else { return }
+        toggle(highlighted)
+    }
 
     /// Report a toggle and keep the list open — several picks per visit is the point of a
     /// multi-select. The owner's write triggers a reload whose `setItems` re-renders the rows.
@@ -313,14 +325,33 @@ final class CheckboxDropdown: NSView {
         }
     }
 
-    /// One row per item the query admits; `ListPopover` sizes them and assembles the card.
+    /// One row per item the query admits; `ListPopover` sizes them and assembles the card. A query
+    /// that admits nothing gets a line saying so, or the card renders as an empty sliver.
     private func buildRows() -> [ListPopover.Row] {
         rowViews = []
+        guard !visible.isEmpty else {
+            return [ListPopover.Row(view: Self.emptyRowView(), height: Self.rowHeight)]
+        }
         return visible.map { index in
             let row = CheckboxRowView { [weak self] in self?.toggle(index) }
             rowViews.append(row)
             return ListPopover.Row(view: row, height: Self.rowHeight)
         }
+    }
+
+    private static func emptyRowView() -> NSView {
+        let label = NSTextField(labelWithString: "No matches")
+        label.font = .systemFont(ofSize: 10, weight: .semibold)
+        label.textColor = Theme.current.chrome.ink(.muted)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        let host = NSView()
+        host.translatesAutoresizingMaskIntoConstraints = false
+        host.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 8),
+            label.centerYAnchor.constraint(equalTo: host.centerYAnchor),
+        ])
+        return host
     }
 
     /// One checkbox row in the open list: a fixed-width check slot (titles align whether checked
