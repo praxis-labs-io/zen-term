@@ -48,7 +48,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         let hints = RepoPickerOverlay.footerHints()
         XCTAssertNil(hints.first { $0.label == "new worktree" })
-        XCTAssertEqual(hints.map(\.label), ["open", "replace", "move", "close"])
+        XCTAssertEqual(hints.map(\.label), ["open", "replace"])
     }
 
     // MARK: what ⌥⏎ creates from

@@ -316,10 +316,9 @@ final class RepoPickerOverlay: PaletteOverlay {
         if let chord = Chord.displayed(.removeWorktree, in: GeneralConfig.current.keymap) {
             hints.append(PaletteHint(keys: chord.displayGlyph, label: "remove worktree"))
         }
-        return hints + [
-            PaletteHint(keys: "↑↓", label: "move"),
-            PaletteHint(keys: "⎋", label: "close"),
-        ]
+        // No ↑↓ or ⎋ here, unlike the command palette: this footer carries up to four hints and the
+        // two worktree chords are the ones nothing else teaches. Arrowing a list and Esc are not.
+        return hints
     }
 
     /// Two answers, because a worktree row disagrees on them: `repo` is the row's own checkout, so
