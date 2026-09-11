@@ -1991,8 +1991,14 @@ the Settings card carries. Without the cap a form grows with its content: measur
 for a workspace with twelve env vars and twenty copy entries, and 630pt for the tool-float
 form, both on a tall display where nothing looks wrong until you reach for a button. The
 footer stays out of the scroll because a form long enough to clip is exactly the one whose
-buttons have to stay reachable, and each card's arrow and Tab go through
-`SettingsDetail.moveFocus`, which reveals the stop it focuses.
+buttons have to stay reachable, sits under a hairline so a clipped row does not read as the
+footer's own, and each card's arrow and Tab go through `SettingsDetail.moveFocus`, which
+reveals the stop it focuses.
+
+**The content-fit constraint is a `<=` plus a low-priority equality, never a `.defaultHigh`
+equality.** As a two-way equality it outranks a label's 750 compression resistance, so
+capping the card dragged the body down with it and laid every caption in the form out at
+zero height: still present, still reported visible, and invisible on screen.
 
 **The line under the select becomes the selection.** It carries the caption until
 something is chosen and the chosen paths after that, in full and one per line. The button

@@ -22,11 +22,16 @@ enum FormCard {
         }
 
         let scroll = SettingsDetail.scroll(for: body)
-        // `SettingsDetail.scroll` insets the body 18 top and bottom; matching that here lets a short
-        // form size to its content while the cap above still wins on a long one.
+        // `SettingsDetail.scroll` insets the body 18 top and bottom, so 36 is the body's own height
+        // plus its insets. The `<=` keeps a short form from leaving dead space; the equality is
+        // `.defaultLow` so a long one scrolls instead of dragging the body down with it. As a
+        // two-way equality at `.defaultHigh` it outranked the labels' 750 compression resistance
+        // and squashed every caption in the form to zero height once the card hit its cap.
+        scroll.heightAnchor.constraint(lessThanOrEqualTo: body.heightAnchor, constant: 36).isActive = true
         let fits = scroll.heightAnchor.constraint(equalTo: body.heightAnchor, constant: 36)
-        fits.priority = .defaultHigh
+        fits.priority = .defaultLow
         fits.isActive = true
+        body.setContentCompressionResistancePriority(.required, for: .vertical)
 
         // The scroll spans the card, so the footer carries the side insets itself rather than
         // taking them from the stack (which would inset the scroll with it).
@@ -36,16 +41,25 @@ enum FormCard {
         NSLayoutConstraint.activate([
             footer.leadingAnchor.constraint(equalTo: footerRow.leadingAnchor, constant: 20),
             footer.trailingAnchor.constraint(equalTo: footerRow.trailingAnchor, constant: -20),
-            footer.topAnchor.constraint(equalTo: footerRow.topAnchor),
+            footer.topAnchor.constraint(equalTo: footerRow.topAnchor, constant: 14),
             footer.bottomAnchor.constraint(equalTo: footerRow.bottomAnchor, constant: -16),
         ])
 
-        let content = NSStackView(views: [scroll, footerRow])
+        // The buttons sit against content that scrolls under them, so the band needs an edge the
+        // way the palette's hint row does. Without it a clipped row reads as the footer's own.
+        let divider = NSView()
+        divider.wantsLayer = true
+        divider.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor
+        divider.translatesAutoresizingMaskIntoConstraints = false
+        divider.heightAnchor.constraint(equalToConstant: 1).isActive = true
+
+        let content = NSStackView(views: [scroll, divider, footerRow])
         content.orientation = .vertical
         content.alignment = .leading
         content.spacing = 0
         content.translatesAutoresizingMaskIntoConstraints = false
         scroll.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
+        divider.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
         footerRow.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
         return content
     }
