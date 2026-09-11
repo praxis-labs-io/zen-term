@@ -539,6 +539,20 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertFalse(hintIsShown("remove worktree", in: overlay), "and hidden again on the way back")
     }
 
+    /// ⌥⏎ has nothing to create from on the ＋ row, which is the row that opens the form itself.
+    func test_theCreateHint_isHiddenOnTheAddRow() {
+        setKeymap([Chord(option: true, key: "⏎"): .createWorktree])
+        let overlay = makeRepoPicker(entries: [workspace("alpha")])
+        mount(overlay)
+
+        XCTAssertTrue(hintIsShown("new worktree", in: overlay), "shown over a workspace")
+
+        send(#selector(NSResponder.moveUp(_:)), to: overlay)
+
+        XCTAssertEqual(shape(of: overlay)[overlay.selected], "add")
+        XCTAssertFalse(hintIsShown("new worktree", in: overlay))
+    }
+
     /// ⏎ and ⇧⏎ act on every row, so they never move.
     func test_theOpenHints_stayUpOnEveryRow() {
         let repo = path("alpha")

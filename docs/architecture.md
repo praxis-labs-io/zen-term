@@ -1928,9 +1928,10 @@ repo with no remote.
 **The picker's footer teaches the two chords and nothing else.** `⏎ open`,
 `⇧⏎ replace tab`, and the two worktree chords read from the live keymap, so a rebind or
 an unbind tracks. `↑↓` and `⎋` came out: four hints fit, and arrowing a list is not what
-this footer is for. `remove worktree` follows the selection through
-`PaletteOverlay.selectionChanged`, because ⌥⌫ acts on a worktree row and nothing else,
-and a hint left up over a workspace teaches a key that does nothing there.
+this footer is for. Both worktree hints follow the selection through
+`PaletteOverlay.selectionChanged`: ⌥⌫ acts on a worktree row and nothing else, and ⌥⏎
+has nothing to create from on the ＋ row. A hint left up where its key does nothing
+teaches the reader something untrue.
 
 **A worktree row means two different things by its selection.** The branch is cut from
 the worktree, so the base choice reads against the branch on screen. Carry copies from

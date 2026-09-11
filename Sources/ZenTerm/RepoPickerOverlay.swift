@@ -321,9 +321,10 @@ final class RepoPickerOverlay: PaletteOverlay {
         return hints
     }
 
-    /// ⌥⌫ acts on a worktree row and nothing else, so the hint follows the selection rather than
-    /// teaching a key that does nothing over a workspace or the ＋ row.
+    /// Each worktree chord acts on some rows and not others, so its hint follows the selection
+    /// rather than teaching a key that does nothing where the reader is standing.
     override func selectionChanged() {
+        setFooterHint("new worktree", isShown: createTarget != nil)
         setFooterHint("remove worktree", isShown: selectedWorktree != nil)
     }
 
