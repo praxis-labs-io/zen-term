@@ -85,13 +85,6 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertNotNil(carry.focusStop)
     }
 
-    func test_theCopyCaption_saysWhatTheEntriesAre() {
-        XCTAssertTrue(
-            AddWorkspaceOverlay.carryCaptionText.lowercased().contains("git ignores"),
-            AddWorkspaceOverlay.carryCaptionText)
-        XCTAssertFalse(AddWorkspaceOverlay.carryCaptionText.contains("—"), "no em-dashes")
-    }
-
     /// The form's own stop list, not the control's: a stop the form never splices in is a stop the
     /// arrows cannot reach, and `verticalStops()` is private.
     func test_downFromTheEnvButton_reachesTheCarryList() throws {

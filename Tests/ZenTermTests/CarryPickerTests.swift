@@ -296,6 +296,40 @@ final class CarryPickerTests: WindowTestCase {
         XCTAssertFalse(picker.isSpinningForTesting)
     }
 
+    /// A count says how many, never which, so the only way to see the selection was to open the
+    /// list and scroll all of it. The line under the select carries the names instead, in full:
+    /// these are paths, and no button-width summary holds one.
+    func test_theLineUnderTheSelect_listsWhatIsChosen() throws {
+        let picker = picker(ignoring: ["apps/rails/node_modules", ".env"])
+        load(picker)
+
+        XCTAssertEqual(picker.detailForTesting, CarryPicker.captionText, "the caption until then")
+
+        picker.setCarried([".env", "apps/rails/node_modules"])
+
+        XCTAssertEqual(picker.detailForTesting, ".env\napps/rails/node_modules")
+        XCTAssertEqual(picker.summaryForTesting, "2 files", "the button stays a count")
+
+        picker.setCarried([])
+
+        XCTAssertEqual(picker.detailForTesting, CarryPicker.captionText, "and the caption returns")
+    }
+
+    /// Ticking a row has to move the line too, or it only tells the truth on a reopen.
+    func test_pickingARow_movesTheLineUnderTheSelect() throws {
+        let picker = picker(ignoring: ["node_modules", ".env"])
+        load(picker)
+
+        toggle(try XCTUnwrap(picker.dropdownForTesting), row: 1)
+
+        XCTAssertEqual(picker.detailForTesting, ".env")
+    }
+
+    func test_theCaption_saysWhatTheControlIsFor() {
+        XCTAssertTrue(CarryPicker.captionText.lowercased().contains("git ignores"))
+        XCTAssertFalse(CarryPicker.captionText.contains("—"), "no em-dashes")
+    }
+
     /// Nil is not "nothing ignored". An empty list there would read as a repo with nothing to carry.
     func test_aFolderGitCannotAnswerFor_saysSo() {
         let picker = picker(ignoring: nil)

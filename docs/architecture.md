@@ -1985,6 +1985,11 @@ a side effect of making a worktree or drift from what the file says. The card sh
 comes across and a button into the workspace form, which hands back to the picker rather
 than to Settings: `⌥⏎` is where it started, and the typed branch is gone either way.
 
+**The line under the select becomes the selection.** It carries the caption until
+something is chosen and the chosen paths after that, in full and one per line. The button
+stays a count, because these are paths and no button-width summary holds one: naming them
+there meant opening the list and scrolling all of it to see what was picked.
+
 **The word the user reads is "copy", not "carry".** `carry = ` is a shipped config
 key, so renaming it breaks every file that has one, but the metaphor asks the reader
 to work it out. `docs/brand-voice.md` carries the row, beside Find / `search`, which

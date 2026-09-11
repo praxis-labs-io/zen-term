@@ -43,9 +43,12 @@ final class CarryPicker: NSView, ThemeReapplying {
 
     var statusForTesting: String? { status.isHidden ? nil : status.title }
     var isSpinningForTesting: Bool { status.isSpinning }
+    var summaryForTesting: String { summary() }
+    var detailForTesting: String { detail.stringValue }
     var dropdownForTesting: CheckboxDropdown? { dropdown }
 
     private let slot = NSStackView()
+    private let detail = NSTextField(labelWithString: "")
     private let status = PlaceholderSelect()
     private var dropdown: CheckboxDropdown?
     /// Bumped per reload so a superseded probe's answer is dropped rather than landing over a
@@ -64,13 +67,28 @@ final class CarryPicker: NSView, ThemeReapplying {
         slot.orientation = .vertical
         slot.alignment = .leading
         slot.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(slot)
+
+        detail.font = .systemFont(ofSize: 11)
+        detail.textColor = Theme.current.chrome.ink(.muted)
+        detail.maximumNumberOfLines = 0
+        detail.lineBreakMode = .byWordWrapping
+        detail.translatesAutoresizingMaskIntoConstraints = false
+
+        let column = NSStackView(views: [slot, detail])
+        column.orientation = .vertical
+        column.alignment = .leading
+        column.spacing = 6
+        column.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(column)
         NSLayoutConstraint.activate([
-            slot.leadingAnchor.constraint(equalTo: leadingAnchor),
-            slot.trailingAnchor.constraint(equalTo: trailingAnchor),
-            slot.topAnchor.constraint(equalTo: topAnchor),
-            slot.bottomAnchor.constraint(equalTo: bottomAnchor),
+            column.leadingAnchor.constraint(equalTo: leadingAnchor),
+            column.trailingAnchor.constraint(equalTo: trailingAnchor),
+            column.topAnchor.constraint(equalTo: topAnchor),
+            column.bottomAnchor.constraint(equalTo: bottomAnchor),
+            slot.widthAnchor.constraint(equalTo: column.widthAnchor),
+            detail.widthAnchor.constraint(equalTo: column.widthAnchor),
         ])
+        renderDetail()
         show(.message("Choose a folder first."))
     }
 
@@ -80,12 +98,15 @@ final class CarryPicker: NSView, ThemeReapplying {
     /// these, and building one from these alone would be torn down the moment the probe lands.
     func setCarried(_ entries: [String]) {
         carried = entries
-        catalog = entries
-        resting = entries
+        catalog = catalog.isEmpty ? entries : catalog
+        resting = resting.isEmpty ? entries : resting
+        dropdown?.setItems(items(), title: summary())
+        renderDetail()
     }
 
     func reapplyTheme() {
         status.reapplyTheme()
+        detail.textColor = Theme.current.chrome.ink(.muted)
         dropdown?.reapplyTheme()
     }
 
@@ -209,6 +230,7 @@ final class CarryPicker: NSView, ThemeReapplying {
         }
         dropdown?.setItems(items(), title: summary())
         dropdown?.restingIndices = restingIndices()
+        renderDetail()
         onChanged?()
     }
 
@@ -285,5 +307,14 @@ final class CarryPicker: NSView, ThemeReapplying {
 
     private func summary() -> String {
         carried.isEmpty ? "Nothing chosen" : "\(carried.count) file\(carried.count == 1 ? "" : "s")"
+    }
+
+    /// The line under the select: what the control is for until something is chosen, then what is
+    /// chosen. A count alone meant opening the list and scrolling all of it to see the selection,
+    /// and these are full paths, which no button-width summary can hold.
+    static let captionText = "Files git ignores that a worktree needs to run."
+
+    private func renderDetail() {
+        detail.stringValue = carried.isEmpty ? Self.captionText : carried.joined(separator: "\n")
     }
 }

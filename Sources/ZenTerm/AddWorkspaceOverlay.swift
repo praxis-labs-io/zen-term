@@ -67,7 +67,6 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private let envError = NSTextField(labelWithString: "")
     private let addVarButton = AppButton(title: "＋ Add variable", variant: .muted)
     private let carryPicker = CarryPicker()
-    private let carryCaption = NSTextField(labelWithString: "")
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private let addButton = AppButton(
         title: "Add Workspace", variant: .primary, keyEquivalent: "\r", keyEquivalentModifierMask: .command)
@@ -178,7 +177,6 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         ]
         controls.forEach { $0.reapplyTheme() }
         carryPicker.reapplyTheme()
-        carryCaption.textColor = chrome.ink(.muted)
         envRows.forEach { $0.reapplyTheme() }
         for group in [titleGroup, folderGroup, mainGroup, rightGroup, bottomGroup] {
             group?.reapplyTheme()
@@ -242,11 +240,8 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         carryPicker.onArrowDown = { [weak self] in self?.moveVertical(1) }
         carryPicker.onTab = { [weak self] in self?.moveTab(1) }
         carryPicker.onBacktab = { [weak self] in self?.moveTab(-1) }
-        carryCaption.font = .systemFont(ofSize: 11)
-        carryCaption.textColor = Theme.current.chrome.ink(.muted)
-        carryCaption.stringValue = Self.carryCaptionText
         let carryGroup = Self.vStack(
-            [caption("COPY INTO NEW WORKTREES", required: false), carryPicker, carryCaption], spacing: 6)
+            [caption("COPY INTO NEW WORKTREES", required: false), carryPicker], spacing: 6)
 
         cancelButton.onTap = { [weak self] in self?.onCancel() }
         addButton.setTitle(editingWorkspace == nil ? "Add Workspace" : "Save")
@@ -520,8 +515,6 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         case .custom: return 2
         }
     }
-
-    static let carryCaptionText = "Files git ignores that a worktree needs to run."
 
     private static func focusIndex(for region: Workspace.Region) -> Int {
         switch region {
