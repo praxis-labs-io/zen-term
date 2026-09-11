@@ -104,6 +104,31 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertTrue(KeyboardFocus.isFocused(list, in: window), "Down off ＋ Add variable lands on CARRY")
     }
 
+    /// A dropped cap looks fine on a laptop and turns the card into a full-height wall on a tall
+    /// display, which is the shape a layout test can settle and the eye usually cannot. Every form
+    /// card shares the cap, so `FormCardHeightTests` covers the other two.
+    func test_theCard_staysUnderTheSettingsHeight_howeverMuchItHolds() throws {
+        let ws = Workspace(
+            title: "Big", path: try makeRealDir(), main: "nvim", right: "claude", bottom: "shell",
+            focus: .bottom, env: Dictionary(uniqueKeysWithValues: (0..<12).map { ("KEY\($0)", "v") }),
+            carry: (0..<20).map { "entry-\($0)" })
+        let overlay = AddWorkspaceOverlay(
+            editing: ws, existingTitles: [], background: Theme.current.chrome.background.nsColor,
+            onSubmit: { _ in }, onCancel: {})
+        overlay.translatesAutoresizingMaskIntoConstraints = true
+        let win = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 1600),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        win.contentView?.addSubview(overlay)
+        overlay.frame = win.contentView!.bounds
+        window = win
+        win.contentView?.layoutSubtreeIfNeeded()
+
+        let card = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? CardView }.first)
+        XCTAssertLessThanOrEqual(card.frame.height, FormCard.maxHeight)
+        XCTAssertGreaterThan(card.frame.height, 0)
+    }
+
     /// Point the folder field at `folder` and let the stubbed probe land, which is the only way a
     /// list exists: a seeded one would be torn down when git answered.
     private func loadCarry(

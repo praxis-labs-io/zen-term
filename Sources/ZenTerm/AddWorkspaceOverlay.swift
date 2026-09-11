@@ -112,6 +112,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             cardWidth,
             card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.92),
             card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.92),
+            card.heightAnchor.constraint(lessThanOrEqualToConstant: FormCard.maxHeight),
 
             content.leadingAnchor.constraint(equalTo: card.leadingAnchor),
             content.trailingAnchor.constraint(equalTo: card.trailingAnchor),
@@ -287,45 +288,9 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         }
         let footer = Self.hStack(footerViews, spacing: 8)
 
-        let body = NSStackView(views: [
-            header, titleGroup, folderGroup, layoutGroup, customDetail, envGroup, carryGroup,
-        ])
-        body.orientation = .vertical
-        body.alignment = .leading
-        body.spacing = 14
-        body.translatesAutoresizingMaskIntoConstraints = false
-        // Stretch every row to the content width (AppKit stacks have no `.fill` alignment).
-        for view in body.arrangedSubviews {
-            view.widthAnchor.constraint(equalTo: body.widthAnchor).isActive = true
-        }
-
-        // The footer stays out of the scroll: a form long enough to clip is exactly the one where
-        // Add and Cancel have to stay reachable.
-        let scroll = SettingsDetail.scroll(for: body)
-        let fits = scroll.heightAnchor.constraint(equalTo: body.heightAnchor, constant: 36)
-        fits.priority = .defaultHigh
-        fits.isActive = true
-
-        // The scroll spans the card, so the footer carries the side insets itself rather than
-        // taking them from the stack (which would inset the scroll with it).
-        let footerRow = NSView()
-        footerRow.translatesAutoresizingMaskIntoConstraints = false
-        footerRow.addSubview(footer)
-        NSLayoutConstraint.activate([
-            footer.leadingAnchor.constraint(equalTo: footerRow.leadingAnchor, constant: 20),
-            footer.trailingAnchor.constraint(equalTo: footerRow.trailingAnchor, constant: -20),
-            footer.topAnchor.constraint(equalTo: footerRow.topAnchor),
-            footer.bottomAnchor.constraint(equalTo: footerRow.bottomAnchor, constant: -16),
-        ])
-
-        let content = NSStackView(views: [scroll, footerRow])
-        content.orientation = .vertical
-        content.alignment = .leading
-        content.spacing = 0
-        content.translatesAutoresizingMaskIntoConstraints = false
-        scroll.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
-        footerRow.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
-        return content
+        return FormCard.content(
+            rows: [header, titleGroup, folderGroup, layoutGroup, customDetail, envGroup, carryGroup],
+            footer: footer, spacing: 14)
     }
 
     private func buildCustomDetail() {
@@ -377,20 +342,9 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private func move(_ delta: Int, wrap: Bool) {
         let stops = verticalStops()
         let anchor = currentVerticalAnchor(in: stops).flatMap { anchor in stops.firstIndex { $0 === anchor } }
-        SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta, wrap: wrap) { stop in
-            Self.revealTarget(for: stop)
+        SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta, wrap: wrap) {
+            FormCard.revealTarget(for: $0)
         }
-    }
-
-    /// The view scrolled into view for a stop: its labelled group where it has one, so the inline
-    /// validation message under a field arrives with it.
-    private static func revealTarget(for stop: NSView) -> NSView {
-        var view: NSView? = stop
-        while let current = view {
-            if current is LabeledField { return current }
-            view = current.superview
-        }
-        return stop
     }
 
     /// The vertical stop that represents the current focus — the focused stop itself, or, when the

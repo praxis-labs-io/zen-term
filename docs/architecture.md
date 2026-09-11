@@ -1985,6 +1985,15 @@ a side effect of making a worktree or drift from what the file says. The card sh
 comes across and a button into the workspace form, which hands back to the picker rather
 than to Settings: `⌥⏎` is where it started, and the typed branch is gone either way.
 
+**Every form card shares one assembly.** `FormCard.content` builds the body into a scroll
+with the footer pinned outside it, and each card caps at `FormCard.maxHeight`, the same 460
+the Settings card carries. Without the cap a form grows with its content: measured at 1381pt
+for a workspace with twelve env vars and twenty copy entries, and 630pt for the tool-float
+form, both on a tall display where nothing looks wrong until you reach for a button. The
+footer stays out of the scroll because a form long enough to clip is exactly the one whose
+buttons have to stay reachable, and each card's arrow and Tab go through
+`SettingsDetail.moveFocus`, which reveals the stop it focuses.
+
 **The line under the select becomes the selection.** It carries the caption until
 something is chosen and the chosen paths after that, in full and one per line. The button
 stays a count, because these are paths and no button-width summary holds one: naming them

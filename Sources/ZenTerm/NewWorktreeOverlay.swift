@@ -81,6 +81,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
             cardWidth,
             card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.92),
             card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.92),
+            card.heightAnchor.constraint(lessThanOrEqualToConstant: FormCard.maxHeight),
 
             content.leadingAnchor.constraint(equalTo: card.leadingAnchor),
             content.trailingAnchor.constraint(equalTo: card.trailingAnchor),
@@ -242,19 +243,9 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         // In the footer's dead space, so a long create says so without the card changing height.
         let footer = Self.hStack([phaseGroup, spacer, cancelButton, createButton], spacing: 8)
 
-        let content = NSStackView(views: [
-            header, branchGroup, baseGroup, carryGroup, errorLabel, footer,
-        ])
-        content.orientation = .vertical
-        content.alignment = .leading
-        content.spacing = 14
-        content.edgeInsets = NSEdgeInsets(top: 18, left: 20, bottom: 16, right: 20)
-        content.translatesAutoresizingMaskIntoConstraints = false
-        // Stretch every row to the inset content width (AppKit stacks have no `.fill` alignment).
-        for view in content.arrangedSubviews {
-            view.widthAnchor.constraint(equalTo: content.widthAnchor, constant: -40).isActive = true
-        }
-        return content
+        return FormCard.content(
+            rows: [header, branchGroup, baseGroup, carryGroup, errorLabel],
+            footer: footer, spacing: 14)
     }
 
     // MARK: keyboard
@@ -279,11 +270,9 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         let anchor = currentVerticalAnchor(in: stops).flatMap { anchor in
             stops.firstIndex { $0 === anchor }
         }
-        guard
-            let next = KeyboardFocus.step(
-                from: anchor, delta: delta, count: stops.count, wrap: wrap)
-        else { return }
-        window?.makeFirstResponder(stops[next])
+        SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta, wrap: wrap) {
+            FormCard.revealTarget(for: $0)
+        }
     }
 
     /// Cancel shares Create's stop; it is reached with Left/Right.
