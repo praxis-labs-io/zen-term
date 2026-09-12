@@ -241,6 +241,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         carryPicker.onArrowDown = { [weak self] in self?.moveVertical(1) }
         carryPicker.onTab = { [weak self] in self?.moveTab(1) }
         carryPicker.onBacktab = { [weak self] in self?.moveTab(-1) }
+        carryPicker.onFocusLost = { [weak self] in self?.focus(self?.addVarButton) }
         let carryGroup = Self.vStack(
             [caption("COPY INTO NEW WORKTREES", required: false), carryPicker], spacing: 6)
 

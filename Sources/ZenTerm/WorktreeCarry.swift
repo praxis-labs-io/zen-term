@@ -215,15 +215,30 @@ enum WorktreeCarry {
         -> [(path: String, isDirectory: Bool)]?
     {
         // `-z` so a path holding a space or a quote arrives literal; `--porcelain` alone quotes it.
+        // Porcelain paths are relative to the repo root, never to the directory git ran in, so a
+        // workspace pointing inside a repo has to subtract its own prefix from every one.
+        guard let prefix = repoPrefix(of: workspace) else { return nil }
         var args = ["status", "--porcelain", "--ignored", "-z"]
-        if let path { args += ["--", path] }
+        if let path { args += ["--", prefix + path] }
         guard case .success(let output) = GitCommand.run(args, in: workspace) else { return nil }
         return output.split(separator: "\0").compactMap { line in
             guard line.hasPrefix("!! ") else { return nil }
-            let entry = line.dropFirst(3)
-            let isDirectory = entry.hasSuffix("/")
-            return (String(isDirectory ? entry.dropLast() : entry), isDirectory)
+            var entry = line.dropFirst(3)
+            if entry.hasSuffix("/") { entry = entry.dropLast() }
+            // Outside the workspace, so not ours to offer. A pathspec keeps this empty in practice.
+            guard entry.hasPrefix(prefix) else { return nil }
+            let relative = String(entry.dropFirst(prefix.count))
+            guard !relative.isEmpty else { return nil }
+            return (relative, line.hasSuffix("/"))
         }
+    }
+
+    /// Where `workspace` sits inside its repo, with a trailing slash, or "" at the root. Nil when
+    /// git could not be asked, which is what makes a non-repo folder read as unreadable.
+    private static func repoPrefix(of workspace: URL) -> String? {
+        guard case .success(let output) = GitCommand.run(["rev-parse", "--show-prefix"], in: workspace)
+        else { return nil }
+        return output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Whether git tracks anything at `name`, or nil when git could not be asked. **Nil is not
@@ -245,9 +260,11 @@ enum WorktreeCarry {
     private static func copyIgnoredContents(of name: String, from source: URL, into worktree: URL)
         -> CarryReport.Skipped.Reason?
     {
-        guard let inside = ignoredPaths(in: source, under: name), !inside.isEmpty else {
-            return .notThere
-        }
+        // Nothing ignored under it is not the same as git refusing to say. The first is a folder
+        // with nothing to bring and stays quiet; the second is declined out loud, the way
+        // `isTracked` declines rather than guessing.
+        guard let inside = ignoredPaths(in: source, under: name) else { return .unreadable }
+        guard !inside.isEmpty else { return .notThere }
         for entry in inside {
             guard let from = containedPath(entry.path, under: source),
                 let to = containedPath(entry.path, under: worktree)

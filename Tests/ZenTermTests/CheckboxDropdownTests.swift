@@ -157,6 +157,39 @@ final class CheckboxDropdownTests: WindowTestCase {
         XCTAssertEqual(toggled, [], "a filtered-out row is not committable")
     }
 
+    /// `KeyboardFocus.key` decodes eight keycodes; Home, End, the page keys and every F-key fall
+    /// past it carrying a private-use scalar, which `Character` calls printable. Unfiltered they
+    /// entered the query, emptied the list and rendered the button as tofu.
+    func test_theNonPrintingKeys_doNotEnterTheQuery() {
+        let dropdown = makeDropdown([".env", "node_modules"])
+        press(dropdown, " ", code: 49)
+
+        for (glyph, code) in [("\u{F729}", UInt16(115)), ("\u{F72B}", 119), ("\u{F72C}", 116)] {
+            press(dropdown, glyph, code: code)
+        }
+
+        XCTAssertEqual(dropdown.queryForTesting, "")
+        XCTAssertEqual(dropdown.visibleIndicesForTesting, [0, 1])
+    }
+
+    /// A window resize closes the card without going through `closeList`, so everything hanging off
+    /// a close has to happen there too or the button keeps its accent query text.
+    func test_aResizeClosingTheList_clearsTheQueryAndFiresOnClosed() {
+        var closed = 0
+        let dropdown = makeDropdown([".env", "node_modules"])
+        dropdown.onClosed = { closed += 1 }
+        press(dropdown, " ", code: 49)
+        press(dropdown, "n", code: 45)
+        XCTAssertEqual(dropdown.queryForTesting, "n")
+
+        window?.setFrame(NSRect(x: 0, y: 0, width: 500, height: 500), display: false)
+
+        XCTAssertFalse(dropdown.isPopoverOpen)
+        XCTAssertEqual(dropdown.queryForTesting, "")
+        XCTAssertEqual(dropdown.buttonTitleForTesting, "All shown")
+        XCTAssertEqual(closed, 1, "a waiting owner has to hear about it")
+    }
+
     func test_spaceOpensTheList_withVisibleCard() {
         let dropdown = makeDropdown()
         XCTAssertFalse(dropdown.isPopoverOpen)

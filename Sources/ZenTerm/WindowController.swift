@@ -1303,7 +1303,8 @@ final class WindowController: NSObject {
                 // branch typed into the card is gone either way.
                 onEditWorkspace: { [weak self] in
                     self?.openWorkspaceForm(
-                        editing: target.workspace, returningTo: { self?.reopenRepoPicker() })
+                        editing: target.workspace,
+                        returningTo: { [weak self] in self?.reopenRepoPicker() })
                 }
             )
             self.presentModal(form, kind: .worktreeForm)
@@ -1902,7 +1903,9 @@ final class WindowController: NSObject {
                     self?.submitWorkspace(built, replacing: originalTitle, then: done)
                 },
                 onCancel: done,
-                onDelete: workspace.map { existing in { [weak self] in self?.deleteWorkspace(existing) } }
+                onDelete: workspace.map { existing in
+                    { [weak self] in self?.deleteWorkspace(existing, then: done) }
+                }
             )
             self.presentModal(form, kind: .workspaceForm)
         }
@@ -1933,7 +1936,7 @@ final class WindowController: NSObject {
 
     /// Delete the workspace being edited, then hand back to Settings → Workspaces. A write failure
     /// keeps the form up with a toast.
-    private func deleteWorkspace(_ ws: Workspace) {
+    private func deleteWorkspace(_ ws: Workspace, then done: (() -> Void)? = nil) {
         do {
             try WorkspacesWriter.remove(title: ws.title)
         } catch {
@@ -1943,7 +1946,7 @@ final class WindowController: NSObject {
                     message: "Failed to update the workspaces file: \(error.localizedDescription)"))
             return
         }
-        reopenSettingsOnWorkspaces()
+        (done ?? reopenSettingsOnWorkspaces)()
     }
 
     /// Exchange two workspaces' positions in the `workspaces` file, reporting whether the write

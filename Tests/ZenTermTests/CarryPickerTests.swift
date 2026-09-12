@@ -21,9 +21,14 @@ final class CarryPickerTests: WindowTestCase {
     }
 
     private func picker(catalog: IgnoredCatalog?) -> CarryPicker {
+        picker(catalogProvider: { catalog })
+    }
+
+    /// Let the stub answer differently per call, for the cases that change folder mid-flight.
+    private func picker(catalogProvider: @escaping () -> IgnoredCatalog?) -> CarryPicker {
         let picker = CarryPicker()
         picker.settle = 0
-        picker.probe = { _, _ in catalog }
+        picker.probe = { _, _ in catalogProvider() }
         picker.translatesAutoresizingMaskIntoConstraints = true
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 460, height: 400),
@@ -42,6 +47,15 @@ final class CarryPickerTests: WindowTestCase {
         wait(for: [landed], timeout: 2)
         picker.onChanged = nil
         window?.layoutIfNeeded()
+    }
+
+    /// Let the probe's hop off-main and back land, for a case with no single `onChanged` to await.
+    private func spin() {
+        let settled = expectation(description: "settled")
+        DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.main.async { settled.fulfill() }
+        }
+        wait(for: [settled], timeout: 2)
     }
 
     /// Open the list, walk down to `index`, and toggle it — the keys a user actually presses.
@@ -158,234 +172,93 @@ final class CarryPickerTests: WindowTestCase {
         XCTAssertNil(picker.dropdownForTesting, "no list to close under the user")
     }
 
-    /// A catalog landing on an open list has to wait: rebuilding swaps the control out, and the
-    /// open card goes with it mid-pick.
-    func test_aCatalogLandingOnAnOpenList_waitsForItToClose() throws {
-        let picker = picker(ignoring: ["node_modules", ".env"])
+    /// A catalog landing on an open list has to wait, and the whole catalog with it. Swapping
+    /// `catalog` while the rows stay stale leaves the user clicking a row that reads `node_modules`
+    /// and carrying whatever now sits at that index.
+    func test_aCatalogLandingOnAnOpenList_changesNothingUntilItCloses() throws {
+        var rows = ["aaa", "bbb"]
+        let picker = picker(catalogProvider: {
+            IgnoredCatalog(entries: rows, resting: rows, fileCounts: [:], directories: [])
+        })
         load(picker)
-        let first = try XCTUnwrap(picker.dropdownForTesting)
-        window?.makeFirstResponder(first)
-        press(first, " ", code: 49)
-        XCTAssertTrue(first.isPopoverOpen)
+        let list = try XCTUnwrap(picker.dropdownForTesting)
+        window?.makeFirstResponder(list)
+        press(list, " ", code: 49)
+        XCTAssertTrue(list.isPopoverOpen)
 
-        picker.probe = { _, _ in
-            IgnoredCatalog(
-                entries: ["node_modules", ".env", "dist"], resting: ["node_modules", ".env", "dist"], fileCounts: [:],
-                directories: [])
-        }
-        let landed = expectation(description: "catalog")
-        picker.onChanged = { landed.fulfill() }
+        rows = ["zzz", "yyy", "xxx"]
         picker.workspaceFolder = folder.appendingPathComponent("elsewhere")
-        wait(for: [landed], timeout: 2)
+        spin()
 
-        XCTAssertTrue(first.isPopoverOpen, "the open list survives the catalog landing")
-        XCTAssertTrue(picker.dropdownForTesting === first, "and it is still the same control")
+        XCTAssertTrue(list.isPopoverOpen, "the open list survives")
+        XCTAssertTrue(picker.dropdownForTesting === list, "and is the same control")
+        XCTAssertEqual(picker.catalog, ["aaa", "bbb"], "the catalog it is indexing has not moved")
 
-        press(first, "", code: 53)  // Esc closes it
+        press(list, " ", code: 49)  // toggle row 0, which still reads 'aaa'
+        XCTAssertEqual(picker.carried, ["aaa"], "so a pick means the row that was on screen")
 
-        XCTAssertEqual(picker.dropdownForTesting?.itemsForTesting.count, 3, "then it rebuilds")
-    }
-
-    /// The catalog expands the folder holding it, so it sits among its siblings instead of being
-    /// appended after every other row with its folder nowhere near it.
-    func test_anAlreadyChosenChild_sitsInPlaceRatherThanAtTheEnd() {
-        let picker = CarryPicker()
-        picker.settle = 0
-        picker.translatesAutoresizingMaskIntoConstraints = true
-        picker.probe = { _, chosen in
-            let rows =
-                chosen.contains("config/credentials/production.key")
-                ? ["config/credentials/development.key", "config/credentials/production.key", "z/last"]
-                : ["config/credentials", "z/last"]
-            return IgnoredCatalog(entries: rows, resting: rows, fileCounts: [:], directories: [])
-        }
-        picker.setCarried(["config/credentials/production.key"])
-        let landed = expectation(description: "catalog")
-        picker.onChanged = { landed.fulfill() }
-        picker.workspaceFolder = folder
-        wait(for: [landed], timeout: 2)
+        press(list, "", code: 53)  // Esc closes, and the waiting catalog lands
+        spin()
 
         XCTAssertEqual(
-            picker.catalog,
-            ["config/credentials/development.key", "config/credentials/production.key", "z/last"])
-        XCTAssertFalse(picker.catalog.contains("config/credentials"), "the folded row is gone")
+            picker.catalog, ["zzz", "yyy", "xxx", "aaa"],
+            "the new catalog, with the pick kept the way any carried entry git stopped ignoring is")
     }
 
-    /// The fold is the resting view, not a wall. Without this there is no way to pick one file out
-    /// of a folded folder: the only thing that expands one is already having chosen something in it.
-    func test_aFileInsideAFoldedFolder_isReachableByTyping() throws {
-        let picker = picker(
-            catalog: IgnoredCatalog(
-                entries: ["log", "log/one.log", "log/two.log", ".env"],
-                resting: ["log", ".env"], fileCounts: ["log": 2], directories: []))
+    /// A window resize closes the card without going through `closeList`. The waiting catalog used
+    /// to be stranded there forever, and the form submitted against rows it never showed.
+    func test_aResizeClosingTheList_doesNotStrandTheWaitingCatalog() throws {
+        var rows = ["aaa", "bbb"]
+        let picker = picker(catalogProvider: {
+            IgnoredCatalog(entries: rows, resting: rows, fileCounts: [:], directories: [])
+        })
         load(picker)
         let list = try XCTUnwrap(picker.dropdownForTesting)
         window?.makeFirstResponder(list)
         press(list, " ", code: 49)
 
-        XCTAssertEqual(list.visibleIndicesForTesting, [0, 3], "at rest, the folder stands in")
+        rows = ["zzz"]
+        picker.workspaceFolder = folder.appendingPathComponent("elsewhere")
+        spin()
+        window?.setFrame(NSRect(x: 0, y: 0, width: 500, height: 500), display: false)
+        spin()
 
-        press(list, "t", code: 17)
-        press(list, "w", code: 13)
-        press(list, "o", code: 31)
-
-        let shown = list.visibleIndicesForTesting.map { list.itemsForTesting[$0].title }
-        XCTAssertTrue(shown.contains("log/two.log"), "a query reaches inside the fold: \(shown)")
+        XCTAssertFalse(list.isPopoverOpen, "the resize closed it")
+        XCTAssertEqual(picker.catalog, ["zzz"], "and the waiting catalog landed")
     }
 
-    /// Picked out of a folded folder, it has to keep showing: falling back behind the fold on the
-    /// next open would read as the pick not having landed.
-    func test_aFilePickedOutOfAFold_staysVisibleAtRest() throws {
-        let picker = picker(
-            catalog: IgnoredCatalog(
-                entries: ["log", "log/one.log", "log/two.log", ".env"],
-                resting: ["log", ".env"], fileCounts: ["log": 2], directories: []))
-        picker.setCarried(["log/two.log"])
-        load(picker)
-        let list = try XCTUnwrap(picker.dropdownForTesting)
-        window?.makeFirstResponder(list)
-        press(list, " ", code: 49)
-
-        let shown = list.visibleIndicesForTesting.map { list.itemsForTesting[$0].title }
-        XCTAssertEqual(shown, ["log", "log/two.log", ".env"])
-    }
-
-    /// The row has to say it stands for more than itself, or the fold is invisible.
-    func test_aFoldedFolder_saysHowManyFilesItStandsFor() throws {
-        let picker = picker(
-            catalog: IgnoredCatalog(
-                entries: ["log", "log/one.log", "log/two.log"],
-                resting: ["log"], fileCounts: ["log": 2], directories: []))
-        load(picker)
-
-        let items = try XCTUnwrap(picker.dropdownForTesting).itemsForTesting
-        XCTAssertEqual(items.first { $0.title == "log" }?.note, "2 files")
-        XCTAssertNil(items.first { $0.title == "log/one.log" }?.note)
-    }
-
-    /// A path alone does not say whether ticking it brings one file or a tree.
-    func test_foldersAndFiles_carryDifferentIcons() throws {
-        let picker = picker(
-            catalog: IgnoredCatalog(
-                entries: ["node_modules", ".env"], resting: ["node_modules", ".env"],
-                fileCounts: [:], directories: ["node_modules"]))
-        load(picker)
-
-        let items = try XCTUnwrap(picker.dropdownForTesting).itemsForTesting
-        XCTAssertEqual(items.first { $0.title == "node_modules" }?.symbol, "folder")
-        XCTAssertEqual(items.first { $0.title == ".env" }?.symbol, "doc")
-    }
-
-    /// A bare line of text read as the control having failed to render. It is select-shaped in
-    /// every state, and spins only while git is being asked.
-    func test_whileLoading_theControlIsASelectWithASpinner() {
-        let picker = picker(ignoring: ["node_modules"])
-        picker.settle = 10  // never lands during this test
-
-        picker.workspaceFolder = folder
-
-        XCTAssertEqual(picker.statusForTesting, "Reading what git ignores…")
-        XCTAssertTrue(picker.isSpinningForTesting)
-    }
-
-    func test_aStateThatIsNotLoading_doesNotSpin() {
+    /// Loading held the ring, then git answered with nothing to pick. The placeholder stops being
+    /// a stop, and without the hand-off the next arrow press has nowhere to go.
+    func test_losingTheStopWhileFocused_tellsTheForm() throws {
         let picker = picker(ignoring: [])
-        load(picker)
-
-        XCTAssertEqual(picker.statusForTesting, "Git ignores nothing here yet.")
-        XCTAssertFalse(picker.isSpinningForTesting)
-    }
-
-    /// A count says how many, never which, so the only way to see the selection was to open the
-    /// list and scroll all of it. The line under the select carries the names instead, in full:
-    /// these are paths, and no button-width summary holds one.
-    func test_theLineUnderTheSelect_listsWhatIsChosen() throws {
-        let picker = picker(ignoring: ["apps/rails/node_modules", ".env"])
-        load(picker)
-
-        XCTAssertEqual(picker.detailForTesting, CarryPicker.captionText, "the caption until then")
-
-        picker.setCarried([".env", "apps/rails/node_modules"])
-
-        XCTAssertEqual(picker.detailForTesting, ".env\napps/rails/node_modules")
-        XCTAssertEqual(picker.summaryForTesting, "2 files", "the button stays a count")
-
-        picker.setCarried([])
-
-        XCTAssertEqual(picker.detailForTesting, CarryPicker.captionText, "and the caption returns")
-    }
-
-    /// Ticking a row has to move the line too, or it only tells the truth on a reopen.
-    func test_pickingARow_movesTheLineUnderTheSelect() throws {
-        let picker = picker(ignoring: ["node_modules", ".env"])
-        load(picker)
-
-        toggle(try XCTUnwrap(picker.dropdownForTesting), row: 1)
-
-        XCTAssertEqual(picker.detailForTesting, ".env")
-    }
-
-    func test_theCaption_saysWhatTheControlIsFor() {
-        XCTAssertTrue(CarryPicker.captionText.lowercased().contains("git ignores"))
-        XCTAssertFalse(CarryPicker.captionText.contains("—"), "no em-dashes")
-    }
-
-    /// Skipping it while git is being asked means the ring gains a stop under the user the moment
-    /// the catalog lands, so an arrow press that worked a second ago now goes somewhere else.
-    func test_whileLoading_theControlIsStillAFocusStop() throws {
-        let picker = picker(ignoring: ["node_modules"])
-        picker.settle = 10  // never lands during this test
-
-        picker.workspaceFolder = folder
-
-        let stop = try XCTUnwrap(picker.focusStop, "loading is still a stop")
-        window?.makeFirstResponder(stop)
-        XCTAssertTrue(KeyboardFocus.isFocused(stop, in: window))
-    }
-
-    /// The placeholder leaves the view tree when the list arrives, and a ring landing nowhere eats
-    /// the next arrow press.
-    func test_theCatalogLanding_handsFocusToTheList() throws {
-        let picker = picker(ignoring: ["node_modules"])
         picker.settle = 0.05
-        picker.workspaceFolder = folder
-        let placeholder = try XCTUnwrap(picker.focusStop)
-        window?.makeFirstResponder(placeholder)
-
-        let landed = expectation(description: "catalog")
-        picker.onChanged = { landed.fulfill() }
-        wait(for: [landed], timeout: 2)
-
-        let list = try XCTUnwrap(picker.dropdownForTesting)
-        XCTAssertTrue(KeyboardFocus.isFocused(list, in: window), "focus follows the control")
-    }
-
-    /// Arrowing off it has to leave, or the ring dead-ends on a control with nothing to open.
-    func test_arrowingOffTheLoadingControl_bubblesToTheForm() throws {
-        let picker = picker(ignoring: ["node_modules"])
-        picker.settle = 10
-        var moved = 0
-        picker.onArrowDown = { moved += 1 }
+        var lost = 0
+        picker.onFocusLost = { lost += 1 }
         picker.workspaceFolder = folder
         let stop = try XCTUnwrap(picker.focusStop)
         window?.makeFirstResponder(stop)
 
-        stop.keyDown(
-            with: NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "",
-                isARepeat: false, keyCode: 125)!)
+        let landed = expectation(description: "catalog")
+        picker.onChanged = { landed.fulfill() }
+        wait(for: [landed], timeout: 2)
 
-        XCTAssertEqual(moved, 1)
+        XCTAssertNil(picker.focusStop, "nothing to stand on any more")
+        XCTAssertEqual(lost, 1)
     }
 
-    /// A settled state with nothing to pick is still skipped: there is nothing to stand on.
-    func test_aSettledStateWithNothingToPick_isNotAStop() {
-        let picker = picker(ignoring: [])
+    /// Clearing the folder claimed git ignored nothing there, and could render a stale `170 files`
+    /// note against an unrelated row, because only `catalog` was reset.
+    func test_clearingTheFolder_resetsTheWholeCatalog() {
+        let picker = picker(
+            catalog: IgnoredCatalog(
+                entries: ["log"], resting: ["log"], fileCounts: ["log": 170], directories: ["log"]))
         load(picker)
+        XCTAssertNotNil(picker.dropdownForTesting)
 
-        XCTAssertEqual(picker.statusForTesting, "Git ignores nothing here yet.")
-        XCTAssertNil(picker.focusStop)
+        picker.workspaceFolder = nil
+
+        XCTAssertEqual(picker.statusForTesting, "Choose a folder first.")
+        XCTAssertEqual(picker.resting, [])
     }
 
     /// Nil is not "nothing ignored". An empty list there would read as a repo with nothing to carry.

@@ -132,6 +132,41 @@ final class WorktreeCarryTests: XCTestCase {
         XCTAssertEqual(WorktreeCarry.ignoredEntries(in: repo, chosen: [])?.resting, [".env", "log"])
     }
 
+    /// Porcelain paths are relative to the repo root, not to the directory git ran in, so a
+    /// workspace pointing at a package inside a monorepo got `pkg/web/node_modules` and resolved it
+    /// to `<workspace>/pkg/web/node_modules`. Every entry then read as absent, and absent is the one
+    /// refusal the toast stays silent about, so nothing copied and nothing said so.
+    func test_ignoredEntries_areRelativeToTheWorkspace_notTheRepoRoot() throws {
+        let web = repo.appendingPathComponent("pkg/web/node_modules", isDirectory: true)
+        try FileManager.default.createDirectory(at: web, withIntermediateDirectories: true)
+        try GitFixture.write("x\n", to: repo.appendingPathComponent("pkg/web/index.js"))
+        try GitFixture.write("node_modules/\n", to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "pkg"], in: repo)
+        try GitFixture.write("{}\n", to: web.appendingPathComponent("p.json"))
+
+        let workspace = repo.appendingPathComponent("pkg/web", isDirectory: true)
+        let catalog = try XCTUnwrap(WorktreeCarry.ignoredEntries(in: workspace, chosen: []))
+
+        XCTAssertEqual(catalog.resting, ["node_modules"])
+    }
+
+    /// Nothing ignored under a folder is a folder with nothing to bring, and stays quiet. Git
+    /// refusing to say is declined out loud, the way `isTracked` declines rather than guessing.
+    func test_copy_ofATrackedFolderWithNothingIgnoredInIt_saysNothingIsThere() throws {
+        let src = repo.appendingPathComponent("src", isDirectory: true)
+        try FileManager.default.createDirectory(at: src, withIntermediateDirectories: true)
+        try GitFixture.write("x\n", to: src.appendingPathComponent("main.swift"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "src"], in: repo)
+        try GitFixture.run(["worktree", "add", "-b", "side", worktree.path], in: repo)
+
+        let report = WorktreeCarry.copy(["src"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, [])
+        XCTAssertEqual(report.skipped, [CarryReport.Skipped(name: "src", reason: .notThere)])
+    }
+
     /// A fold is the resting view, not a wall: the files stay in the catalog so a query can reach
     /// one. Without that, picking a single file out of a folded folder is impossible from the form.
     func test_ignoredEntries_keepsTheFoldedFilesReachableBehindTheFolder() throws {

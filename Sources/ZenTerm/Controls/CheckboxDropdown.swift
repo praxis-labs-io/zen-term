@@ -53,9 +53,14 @@ final class CheckboxDropdown: NSView {
     private lazy var popover: ListPopover = {
         let popover = ListPopover(anchor: self)
         // A window resize closes the list on its own; drop the lit border and the stale rows with it.
+        // A window resize closes the card without going through `closeList`, so everything that
+        // hangs off a close has to be done here too: a stranded `onClosed` never fires again.
         popover.onSelfClose = { [weak self] in
             self?.rowViews = []
+            self?.query = ""
+            self?.renderTitle()
             self?.restyle()
+            self?.fireClosed()
         }
         return popover
     }()
@@ -233,7 +238,12 @@ final class CheckboxDropdown: NSView {
         query = ""
         renderTitle()
         restyle()
-        guard wasOpen, let closed = onClosed else { return }
+        guard wasOpen else { return }
+        fireClosed()
+    }
+
+    private func fireClosed() {
+        guard let closed = onClosed else { return }
         onClosed = nil
         closed()
     }
@@ -256,12 +266,23 @@ final class CheckboxDropdown: NSView {
     /// and a fuzzy query over paths has no use for one. That is the one deliberate divergence from
     /// `Dropdown`, which owns Space because it commits on Return instead.
     private func typed(_ event: NSEvent) {
+        // Home, End, the page keys and every F-key decode to no focus key and arrive here carrying
+        // a private-use scalar, which is printable as far as `Character` is concerned: unfiltered
+        // they entered the query, emptied the list and rendered the button as tofu.
         guard event.modifierFlags.isDisjoint(with: [.command, .control, .option]),
             let characters = event.charactersIgnoringModifiers, !characters.isEmpty,
-            characters.allSatisfy({ !$0.isWhitespace && !$0.isNewline })
+            characters.unicodeScalars.allSatisfy(Self.isTypable)
         else { return }
         query += characters
         rerenderList()
+    }
+
+    /// Whether a scalar belongs in a query: not whitespace, not a control code, and outside the
+    /// private-use block AppKit encodes the non-printing keys in.
+    private static func isTypable(_ scalar: Unicode.Scalar) -> Bool {
+        !CharacterSet.whitespacesAndNewlines.contains(scalar)
+            && !CharacterSet.controlCharacters.contains(scalar)
+            && !(0xF700...0xF8FF).contains(scalar.value)
     }
 
     /// Recompute `visible` from `query`, ranked by the scorer the command palette uses, so "cred"

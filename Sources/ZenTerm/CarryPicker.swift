@@ -15,6 +15,9 @@ final class CarryPicker: NSView, ThemeReapplying {
     var onArrowDown: (() -> Void)?
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
+    /// The control stopped being a focus stop while it held the ring. The form moves on rather
+    /// than leaving the next arrow press with nowhere to go.
+    var onFocusLost: (() -> Void)?
 
     /// The folder the catalog is read from. Setting it reloads.
     var workspaceFolder: URL? {
@@ -60,6 +63,7 @@ final class CarryPicker: NSView, ThemeReapplying {
     /// character typed.
     private var pending: DispatchWorkItem?
     private var isLoading = false
+    private var deferredWork: (() -> Void)?
     var settle: TimeInterval = 0.35
 
     override init(frame: NSRect) {
@@ -124,12 +128,19 @@ final class CarryPicker: NSView, ThemeReapplying {
         let token = generation
         pending?.cancel()
         guard let folder = workspaceFolder else {
+            // The whole catalog, not just `catalog`: a stale `resting` claims git ignores nothing
+            // here, and a stale count renders `170 files` against an unrelated row.
+            isLoading = false
             catalog = carried
-            render(unreadable: false)
+            resting = carried
+            fileCounts = [:]
+            directories = []
+            whenListIdle { self.show(.message("Choose a folder first.")) }
+            onChanged?()
             return
         }
         isLoading = true
-        show(.message("Reading what git ignores…"))
+        whenListIdle { self.show(.message("Reading what git ignores…")) }
         let probe = probe
         let chosen = Set(carried)
         let work = DispatchWorkItem { [weak self] in
@@ -150,7 +161,24 @@ final class CarryPicker: NSView, ThemeReapplying {
 
     /// Nil is not "nothing ignored": the folder is not a repo, or git could not be asked, and the
     /// message says so rather than showing an empty list that reads as a repo with nothing to carry.
+    /// Run `work` once no list is open. Everything that reshapes this control goes through here:
+    /// swapping `catalog` under an open list leaves the rows the user can see indexing entries they
+    /// cannot, so a click carries whatever now sits at that row's position.
+    private func whenListIdle(_ work: @escaping () -> Void) {
+        guard let dropdown, dropdown.isPopoverOpen else { return work() }
+        deferredWork = work
+        dropdown.onClosed = { [weak self] in
+            guard let self, let work = self.deferredWork else { return }
+            self.deferredWork = nil
+            work()
+        }
+    }
+
     private func apply(_ ignored: IgnoredCatalog?) {
+        whenListIdle { self.applyNow(ignored) }
+    }
+
+    private func applyNow(_ ignored: IgnoredCatalog?) {
         guard let ignored else {
             catalog = carried
             resting = carried
@@ -189,12 +217,6 @@ final class CarryPicker: NSView, ThemeReapplying {
     }
 
     private func show(_ content: Content) {
-        // Every branch below swaps the control out, which takes an open list with it. Anything
-        // arriving while one is up waits for it to close rather than shutting it under the user.
-        if let dropdown, dropdown.isPopoverOpen {
-            dropdown.onClosed = { [weak self] in self?.show(content) }
-            return
-        }
         // Read before the teardown below: a view out of the tree has no window to be focused in.
         let placeholderHadFocus = KeyboardFocus.isFocused(status, in: window)
         for view in slot.arrangedSubviews { slot.removeArrangedSubview(view) }
@@ -202,12 +224,21 @@ final class CarryPicker: NSView, ThemeReapplying {
         dropdown?.removeFromSuperview()
         switch content {
         case .message(let text):
+            let listHadFocus = dropdown.map { KeyboardFocus.isFocused($0, in: window) } ?? false
             dropdown = nil
             status.isFocusable = isLoading
             status.set(title: text, isLoading: isLoading)
             status.isHidden = false
             slot.addArrangedSubview(status)
             status.widthAnchor.constraint(equalTo: slot.widthAnchor).isActive = true
+            // Both directions, or the ring lands nowhere: loading to a settled message leaves the
+            // placeholder unfocusable, and a list replaced by one takes the focus out with it.
+            guard placeholderHadFocus || listHadFocus else { return }
+            if status.isFocusable {
+                window?.makeFirstResponder(status)
+            } else {
+                onFocusLost?()
+            }
         case .list:
             // Hand focus on rather than dropping it: the placeholder holding it is about to leave
             // the view tree, and a form whose ring lands nowhere eats the next arrow press.
