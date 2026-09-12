@@ -99,14 +99,6 @@ enum WorkspacesParser {
                         category: .workspace)
                     return
                 }
-                // Carry copies top-level entries only, and nothing creates a destination's parent,
-                // so a nested one would fail at copy time with an errno that reads as a missing source.
-                guard !entry.contains("/") else {
-                    Log.warning(
-                        "Workspaces: `\(title)` carry `\(value)` is not a top-level entry — skipped",
-                        category: .workspace)
-                    return
-                }
                 carry.append(entry)
             default:
                 break  // unknown key — ignored

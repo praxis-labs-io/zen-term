@@ -34,6 +34,8 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private let onDelete: (() -> Void)?
 
     private let card = CardView()
+    /// Retained so a live theme change reaches it: it bakes its color at build time.
+    private var footerDivider: ThemeReapplying?
     private var dismiss = DismissGate()
     /// Retained (not a throwaway init-local) so `reapplyTheme()` can recolor it in place.
     private let header = NSTextField(labelWithString: "")
@@ -66,6 +68,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private let envStack = NSStackView()
     private let envError = NSTextField(labelWithString: "")
     private let addVarButton = AppButton(title: "＋ Add variable", variant: .muted)
+    private let carryPicker = CarryPicker()
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private let addButton = AppButton(
         title: "Add Workspace", variant: .primary, keyEquivalent: "\r", keyEquivalentModifierMask: .command)
@@ -111,6 +114,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             cardWidth,
             card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.92),
             card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.92),
+            card.heightAnchor.constraint(lessThanOrEqualToConstant: FormCard.maxHeight),
 
             content.leadingAnchor.constraint(equalTo: card.leadingAnchor),
             content.trailingAnchor.constraint(equalTo: card.trailingAnchor),
@@ -175,6 +179,8 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             layoutSegment, focusSegment, addVarButton, cancelButton, addButton, deleteButton,
         ]
         controls.forEach { $0.reapplyTheme() }
+        carryPicker.reapplyTheme()
+        footerDivider?.reapplyTheme()
         envRows.forEach { $0.reapplyTheme() }
         for group in [titleGroup, folderGroup, mainGroup, rightGroup, bottomGroup] {
             group?.reapplyTheme()
@@ -202,8 +208,11 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         folderPicker.onPicked = { [weak self] url in
             guard let self else { return }
             if !self.titleEditedByUser { self.titleField.setText(url.lastPathComponent) }
-            self.refreshValidity()
+            self.folderChanged()
         }
+        // After `wireField`, which points this at `refreshValidity` alone. The carry catalog is
+        // read out of the folder, so it has to follow a typed path as well as a chosen one.
+        folderPicker.field.onChange = { [weak self] in self?.folderChanged() }
         folderPicker.wireNav(
             onVertical: { [weak self] in self?.moveVertical($0) },
             onTabForward: { [weak self] in self?.moveTab(1) })
@@ -229,6 +238,15 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         envError.isHidden = true
         let envControls = Self.vStack([envStack, Self.leadingWrap(addVarButton), envError], spacing: 8)
         let envGroup = Self.vStack([caption("ENVIRONMENT", required: false), envControls], spacing: 6)
+
+        carryPicker.onChanged = { [weak self] in self?.refreshValidity() }
+        carryPicker.onArrowUp = { [weak self] in self?.moveVertical(-1) }
+        carryPicker.onArrowDown = { [weak self] in self?.moveVertical(1) }
+        carryPicker.onTab = { [weak self] in self?.moveTab(1) }
+        carryPicker.onBacktab = { [weak self] in self?.moveTab(-1) }
+        carryPicker.onFocusLost = { [weak self] in self?.focus(self?.addVarButton) }
+        let carryGroup = Self.vStack(
+            [caption("COPY INTO NEW WORKTREES", required: false), carryPicker], spacing: 6)
 
         cancelButton.onTap = { [weak self] in self?.onCancel() }
         addButton.setTitle(editingWorkspace == nil ? "Add Workspace" : "Save")
@@ -274,19 +292,11 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         }
         let footer = Self.hStack(footerViews, spacing: 8)
 
-        let content = NSStackView(views: [
-            header, titleGroup, folderGroup, layoutGroup, customDetail, envGroup, footer,
-        ])
-        content.orientation = .vertical
-        content.alignment = .leading
-        content.spacing = 14
-        content.edgeInsets = NSEdgeInsets(top: 18, left: 20, bottom: 16, right: 20)
-        content.translatesAutoresizingMaskIntoConstraints = false
-        // Stretch every row to the inset content width (AppKit stacks have no `.fill` alignment).
-        for view in content.arrangedSubviews {
-            view.widthAnchor.constraint(equalTo: content.widthAnchor, constant: -40).isActive = true
-        }
-        return content
+        let built = FormCard.content(
+            rows: [header, titleGroup, folderGroup, layoutGroup, customDetail, envGroup, carryGroup],
+            footer: footer, spacing: 14)
+        footerDivider = built.divider
+        return built.view
     }
 
     private func buildCustomDetail() {
@@ -318,27 +328,29 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             stops += [mainField.field, rightField.field, bottomField.field, focusSegment]
         }
         for row in envRows { stops.append(row.keyBox.field) }
+        stops.append(addVarButton)
+        // CARRY sits under the ＋ button, and is absent while the list has nothing to show.
+        if let carryStop = carryPicker.focusStop { stops.append(carryStop) }
         // The footer is one vertical stop anchored on Add (its default focus); Cancel is reached
         // from it with Left/Right, not Up/Down.
-        stops += [addVarButton, addButton]
+        stops.append(addButton)
         return stops
     }
 
-    private func moveVertical(_ delta: Int) {
-        let stops = verticalStops()
-        let anchor = currentVerticalAnchor(in: stops).flatMap { anchor in stops.firstIndex { $0 === anchor } }
-        guard let next = KeyboardFocus.step(from: anchor, delta: delta, count: stops.count) else { return }
-        window?.makeFirstResponder(stops[next])
-    }
+    private func moveVertical(_ delta: Int) { move(delta, wrap: false) }
 
     /// Tab traversal: wraps at the ends where the arrows clamp, so a Tab loop never dies on the last
     /// stop. Matches the Settings card, so the same key behaves the same way in every card.
-    private func moveTab(_ delta: Int) {
+    private func moveTab(_ delta: Int) { move(delta, wrap: true) }
+
+    /// Through the Settings mover, which reveals the destination as well as focusing it. The body
+    /// scrolls, so a stop below the fold would otherwise take focus off screen.
+    private func move(_ delta: Int, wrap: Bool) {
         let stops = verticalStops()
         let anchor = currentVerticalAnchor(in: stops).flatMap { anchor in stops.firstIndex { $0 === anchor } }
-        guard let next = KeyboardFocus.step(from: anchor, delta: delta, count: stops.count, wrap: true)
-        else { return }
-        window?.makeFirstResponder(stops[next])
+        SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta, wrap: wrap) {
+            FormCard.revealTarget(for: $0)
+        }
     }
 
     /// The vertical stop that represents the current focus — the focused stop itself, or, when the
@@ -435,6 +447,8 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             row.keyBox.setText(key)
             row.valueBox.setText(ws.env[key] ?? "")
         }
+        carryPicker.setCarried(ws.carry)
+        carryPicker.workspaceFolder = ws.path
     }
 
     /// The preset a workspace maps back to: Minimal / Editor+AI+Shell only when the recipe matches
@@ -520,12 +534,10 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             guard !key.isEmpty else { continue }  // a blank key isn't a variable
             env[key] = row.value.trimmingCharacters(in: .whitespaces)
         }
-        // Carried through rather than rebuilt: the form has no rows for `carry` yet, and a `Workspace`
-        // built without it writes an empty list over what the user hand-authored in the file.
         return Workspace(
             title: title, path: folder,
             main: recipe.main, right: recipe.right, bottom: recipe.bottom, focus: recipe.focus,
-            env: env, carry: editingWorkspace?.carry ?? [])
+            env: env, carry: carryPicker.carried)
     }
 
     private func recipeForChoice() -> (main: String?, right: String?, bottom: String?, focus: Workspace.Region) {
@@ -604,6 +616,11 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     }
 
     private func refreshValidity() { validate(includeRequired: false) }
+
+    private func folderChanged() {
+        carryPicker.workspaceFolder = resolvedFolder().flatMap { PathDisplay.isDirectory($0) ? $0 : nil }
+        refreshValidity()
+    }
 
     // MARK: layout helpers
 

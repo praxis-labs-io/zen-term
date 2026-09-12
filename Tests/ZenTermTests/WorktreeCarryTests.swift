@@ -102,6 +102,328 @@ final class WorktreeCarryTests: XCTestCase {
             ])
     }
 
+    // MARK: what can be carried
+
+    /// The form offers what git ignores, so the candidates come from git rather than a directory
+    /// walk. An ignored directory collapses to one entry, which is the granularity carry copies at.
+    func test_ignoredEntries_listsIgnoredFilesAndCollapsesIgnoredDirectories() throws {
+        try GitFixture.write("SECRET=1\n", to: repo.appendingPathComponent(".env"))
+        let build = repo.appendingPathComponent(".build/x", isDirectory: true)
+        try FileManager.default.createDirectory(at: build, withIntermediateDirectories: true)
+        try GitFixture.write("o\n", to: build.appendingPathComponent("y.o"))
+
+        XCTAssertEqual(
+            WorktreeCarry.ignoredEntries(in: repo, chosen: [])?.resting, [".build", ".env"])
+    }
+
+    /// A Rails `log/` holds a tracked `.keep`, so git cannot collapse it and reports every rotated
+    /// log on its own: 170 of craftwork's 249 rows came from one folder. One row instead.
+    func test_ignoredEntries_foldsAFolderThatSpraysIgnoredFiles() throws {
+        let log = repo.appendingPathComponent("log", isDirectory: true)
+        try FileManager.default.createDirectory(at: log, withIntermediateDirectories: true)
+        try GitFixture.write("", to: log.appendingPathComponent(".keep"))
+        try GitFixture.write("log/*.log\n.env\n", to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "log"], in: repo)
+        try GitFixture.write("a\n", to: log.appendingPathComponent("one.log"))
+        try GitFixture.write("b\n", to: log.appendingPathComponent("two.log"))
+        try GitFixture.write("S=1\n", to: repo.appendingPathComponent(".env"))
+
+        XCTAssertEqual(WorktreeCarry.ignoredEntries(in: repo, chosen: [])?.resting, [".env", "log"])
+    }
+
+    /// Porcelain paths are relative to the repo root, not to the directory git ran in, so a
+    /// workspace pointing at a package inside a monorepo got `pkg/web/node_modules` and resolved it
+    /// to `<workspace>/pkg/web/node_modules`. Every entry then read as absent, and absent is the one
+    /// refusal the toast stays silent about, so nothing copied and nothing said so.
+    func test_ignoredEntries_areRelativeToTheWorkspace_notTheRepoRoot() throws {
+        let web = repo.appendingPathComponent("pkg/web/node_modules", isDirectory: true)
+        try FileManager.default.createDirectory(at: web, withIntermediateDirectories: true)
+        try GitFixture.write("x\n", to: repo.appendingPathComponent("pkg/web/index.js"))
+        try GitFixture.write("node_modules/\n", to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "pkg"], in: repo)
+        try GitFixture.write("{}\n", to: web.appendingPathComponent("p.json"))
+
+        let workspace = repo.appendingPathComponent("pkg/web", isDirectory: true)
+        let catalog = try XCTUnwrap(WorktreeCarry.ignoredEntries(in: workspace, chosen: []))
+
+        XCTAssertEqual(catalog.resting, ["node_modules"])
+    }
+
+    /// Nothing ignored under a folder is a folder with nothing to bring, and stays quiet. Git
+    /// refusing to say is declined out loud, the way `isTracked` declines rather than guessing.
+    func test_copy_ofATrackedFolderWithNothingIgnoredInIt_saysNothingIsThere() throws {
+        let src = repo.appendingPathComponent("src", isDirectory: true)
+        try FileManager.default.createDirectory(at: src, withIntermediateDirectories: true)
+        try GitFixture.write("x\n", to: src.appendingPathComponent("main.swift"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "src"], in: repo)
+        try GitFixture.run(["worktree", "add", "-b", "side", worktree.path], in: repo)
+
+        let report = WorktreeCarry.copy(["src"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, [])
+        XCTAssertEqual(report.skipped, [CarryReport.Skipped(name: "src", reason: .notThere)])
+    }
+
+    /// `containedPath` is lexical. A worktree that checks out a symlink where a carried entry
+    /// lands had `copyfile` follow it: probed, the file wrote outside the worktree and the folder
+    /// came back reported as carried.
+    func test_copy_refusesToWriteThroughASymlinkedParentInTheWorktree() throws {
+        let outside = root.appendingPathComponent("outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        let config = repo.appendingPathComponent("config", isDirectory: true)
+        try FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
+        try GitFixture.write("k\n", to: config.appendingPathComponent(".keep"))
+        try GitFixture.write("config/*.secret\n", to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "config"], in: repo)
+        try GitFixture.write("S\n", to: config.appendingPathComponent("a.secret"))
+        try GitFixture.run(["worktree", "add", "-b", "side", worktree.path], in: repo)
+        try FileManager.default.removeItem(at: worktree.appendingPathComponent("config"))
+        try FileManager.default.createSymbolicLink(
+            at: worktree.appendingPathComponent("config"), withDestinationURL: outside)
+
+        let report = WorktreeCarry.copy(["config"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, [])
+        XCTAssertEqual(
+            report.skipped, [CarryReport.Skipped(name: "config", reason: .leavesTheWorkspace)])
+        XCTAssertFalse(
+            GitFixture.exists(outside.appendingPathComponent("a.secret")),
+            "nothing may be written through the link")
+    }
+
+    /// The per-entry path skipped the symlink check the whole-entry path does, so a link out of
+    /// the workspace cloned as a dangling entry while the folder was reported as carried.
+    func test_copy_ofAPartlyTrackedFolder_refusesASymlinkPointingOut() throws {
+        let bystander = root.appendingPathComponent("bystander.txt")
+        try GitFixture.write("untouched\n", to: bystander)
+        let config = repo.appendingPathComponent("config", isDirectory: true)
+        try FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
+        try GitFixture.write("k\n", to: config.appendingPathComponent(".keep"))
+        try GitFixture.write("config/*.link\n", to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "config"], in: repo)
+        try FileManager.default.createSymbolicLink(
+            at: config.appendingPathComponent("out.link"), withDestinationURL: bystander)
+        try GitFixture.run(["worktree", "add", "-b", "side", worktree.path], in: repo)
+
+        let report = WorktreeCarry.copy(["config"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, [])
+        XCTAssertEqual(
+            report.skipped, [CarryReport.Skipped(name: "config", reason: .leavesTheWorkspace)])
+    }
+
+    /// A fold is the resting view, not a wall: the files stay in the catalog so a query can reach
+    /// one. Without that, picking a single file out of a folded folder is impossible from the form.
+    func test_ignoredEntries_keepsTheFoldedFilesReachableBehindTheFolder() throws {
+        let log = repo.appendingPathComponent("log", isDirectory: true)
+        try FileManager.default.createDirectory(at: log, withIntermediateDirectories: true)
+        try GitFixture.write("", to: log.appendingPathComponent(".keep"))
+        try GitFixture.write("log/*.log\n.env\n", to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "log"], in: repo)
+        try GitFixture.write("a\n", to: log.appendingPathComponent("one.log"))
+        try GitFixture.write("b\n", to: log.appendingPathComponent("two.log"))
+        try GitFixture.write("S=1\n", to: repo.appendingPathComponent(".env"))
+
+        let catalog = try XCTUnwrap(WorktreeCarry.ignoredEntries(in: repo, chosen: []))
+
+        XCTAssertEqual(catalog.resting, [".env", "log"], "at rest the folder stands in for its files")
+        XCTAssertEqual(
+            catalog.entries, [".env", "log", "log/one.log", "log/two.log"],
+            "every file is still a row, sitting under the folder it folded into")
+        XCTAssertEqual(catalog.fileCounts, ["log": 2], "so the row can say what it stands for")
+    }
+
+    /// A fold tidies a choice nobody has made yet. Once one exists inside the folder, hiding its
+    /// context is wrong: copying every key is a different act from copying one.
+    func test_ignoredEntries_doesNotFoldAFolderHoldingSomethingAlreadyChosen() throws {
+        let credentials = repo.appendingPathComponent("config/credentials", isDirectory: true)
+        try FileManager.default.createDirectory(at: credentials, withIntermediateDirectories: true)
+        try GitFixture.write("x\n", to: credentials.appendingPathComponent(".keep"))
+        try GitFixture.write("config/credentials/*.key\n", to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "creds"], in: repo)
+        try GitFixture.write("p\n", to: credentials.appendingPathComponent("production.key"))
+        try GitFixture.write("d\n", to: credentials.appendingPathComponent("development.key"))
+
+        XCTAssertEqual(
+            WorktreeCarry.ignoredEntries(in: repo, chosen: [])?.resting, ["config/credentials"],
+            "with nothing chosen there it folds")
+
+        XCTAssertEqual(
+            WorktreeCarry.ignoredEntries(
+                in: repo, chosen: ["config/credentials/production.key"])?.resting,
+            ["config/credentials/development.key", "config/credentials/production.key"],
+            "a chosen child expands it, so the pick sits among its siblings")
+    }
+
+    /// Folding a parent whose ignored children are directories would offer the package folder
+    /// itself, hiding the difference between a node_modules worth carrying and a .cache that is not.
+    func test_ignoredEntries_doesNotFoldAFolderWhoseChildrenAreDirectories() throws {
+        for name in ["pkg/node_modules", "pkg/.turbo"] {
+            let dir = repo.appendingPathComponent(name, isDirectory: true)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try GitFixture.write("x\n", to: dir.appendingPathComponent("f.txt"))
+        }
+        try GitFixture.write("index.js\n", to: repo.appendingPathComponent("pkg/index.js"))
+        try GitFixture.write("node_modules/\n.turbo/\n", to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "pkg"], in: repo)
+
+        XCTAssertEqual(
+            WorktreeCarry.ignoredEntries(in: repo, chosen: [])?.resting,
+            ["pkg/.turbo", "pkg/node_modules"])
+    }
+
+    /// One ignored file under a folder is already one row. Folding it would rename that row to its
+    /// parent and quietly widen what it means.
+    func test_ignoredEntries_doesNotFoldASingleFile() throws {
+        let config = repo.appendingPathComponent("config", isDirectory: true)
+        try FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
+        try GitFixture.write("x\n", to: config.appendingPathComponent("app.yml"))
+        try GitFixture.write("config/*.key\n", to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "config"], in: repo)
+        try GitFixture.write("k\n", to: config.appendingPathComponent("master.key"))
+
+        XCTAssertEqual(
+            WorktreeCarry.ignoredEntries(in: repo, chosen: [])?.resting, ["config/master.key"])
+    }
+
+    /// The whole point of folding: the row has to copy what it says it copies, and leave the
+    /// tracked file that stopped git collapsing the folder in the first place.
+    func test_copy_ofAPartlyTrackedFolder_bringsTheIgnoredFilesAndLeavesTheTrackedOne() throws {
+        let log = repo.appendingPathComponent("log", isDirectory: true)
+        try FileManager.default.createDirectory(at: log, withIntermediateDirectories: true)
+        try GitFixture.write("keep\n", to: log.appendingPathComponent(".keep"))
+        try GitFixture.write("log/*.log\n", to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "log"], in: repo)
+        try GitFixture.write("a\n", to: log.appendingPathComponent("one.log"))
+        try GitFixture.run(["worktree", "add", "-b", "side", worktree.path], in: repo)
+
+        let report = WorktreeCarry.copy(["log"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, ["log"])
+        XCTAssertEqual(report.skipped, [])
+        XCTAssertEqual(
+            try String(contentsOf: worktree.appendingPathComponent("log/one.log"), encoding: .utf8),
+            "a\n")
+        XCTAssertEqual(
+            try GitFixture.run(["status", "--porcelain"], in: worktree), "",
+            "the tracked .keep is the worktree's own, so the tree stays clean")
+    }
+
+    func test_ignoredEntries_listsANestedIgnoredPathOnItsOwn() throws {
+        let credentials = repo.appendingPathComponent("config/credentials", isDirectory: true)
+        try FileManager.default.createDirectory(at: credentials, withIntermediateDirectories: true)
+        try GitFixture.write("", to: credentials.appendingPathComponent(".keep"))
+        try GitFixture.write(
+            ".build/\n.env\nconfig/credentials/*.key\n",
+            to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "config"], in: repo)
+        try GitFixture.write("key\n", to: credentials.appendingPathComponent("development.key"))
+
+        XCTAssertEqual(
+            WorktreeCarry.ignoredEntries(in: repo, chosen: [])?.resting,
+            ["config/credentials/development.key"])
+    }
+
+    /// A tracked file is refused at copy time, so offering it would be offering a mistake.
+    func test_ignoredEntries_leavesOutWhatGitTracks() throws {
+        try GitFixture.write("SECRET=1\n", to: repo.appendingPathComponent(".env"))
+
+        XCTAssertEqual(WorktreeCarry.ignoredEntries(in: repo, chosen: [])?.resting, [".env"])
+    }
+
+    /// Nil is not "nothing ignored": the form says it could not ask rather than showing an empty
+    /// list that reads as a repo with nothing to carry.
+    func test_ignoredEntries_isNilWhenTheFolderIsNotARepo() {
+        XCTAssertNil(WorktreeCarry.ignoredEntries(in: root, chosen: []))
+    }
+
+    // MARK: nested entries
+
+    /// A Rails app keeps its dev key at `config/credentials/development.key`, under a directory
+    /// git already tracks, so the worktree has the parent and only the file has to come across.
+    func test_copy_bringsANestedEntryUnderAParentTheWorktreeHas() throws {
+        let credentials = repo.appendingPathComponent("config/credentials", isDirectory: true)
+        try FileManager.default.createDirectory(at: credentials, withIntermediateDirectories: true)
+        try GitFixture.write("", to: credentials.appendingPathComponent(".keep"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "config"], in: repo)
+        try GitFixture.write("key\n", to: credentials.appendingPathComponent("development.key"))
+        try GitFixture.run(["worktree", "add", "-b", "side", worktree.path], in: repo)
+
+        let report = WorktreeCarry.copy(
+            ["config/credentials/development.key"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, ["config/credentials/development.key"])
+        XCTAssertEqual(report.skipped, [])
+        XCTAssertEqual(
+            try String(
+                contentsOf: worktree.appendingPathComponent("config/credentials/development.key"),
+                encoding: .utf8),
+            "key\n")
+    }
+
+    /// The whole directory is gitignored, so the worktree has no parent to copy into. Nothing used
+    /// to make one, and `copyfile` died with an `ENOENT` that read as a missing source.
+    func test_copy_createsTheParentTheWorktreeDoesNotHave() throws {
+        let claude = repo.appendingPathComponent(".claude", isDirectory: true)
+        try FileManager.default.createDirectory(at: claude, withIntermediateDirectories: true)
+        try GitFixture.write("{}\n", to: claude.appendingPathComponent("settings.local.json"))
+        try GitFixture.run(["worktree", "add", "-b", "side", worktree.path], in: repo)
+        XCTAssertFalse(GitFixture.exists(worktree.appendingPathComponent(".claude")))
+
+        let report = WorktreeCarry.copy(
+            [".claude/settings.local.json"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, [".claude/settings.local.json"])
+        XCTAssertEqual(report.skipped, [])
+        XCTAssertEqual(
+            try String(
+                contentsOf: worktree.appendingPathComponent(".claude/settings.local.json"),
+                encoding: .utf8),
+            "{}\n")
+    }
+
+    func test_copy_refusesANestedPathGitTracks() throws {
+        let config = repo.appendingPathComponent("config", isDirectory: true)
+        try FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
+        try GitFixture.write("a: 1\n", to: config.appendingPathComponent("database.yml"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "config"], in: repo)
+        try GitFixture.run(["worktree", "add", "-b", "side", worktree.path], in: repo)
+
+        let report = WorktreeCarry.copy(["config/database.yml"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, [])
+        XCTAssertEqual(
+            report.skipped,
+            [CarryReport.Skipped(name: "config/database.yml", reason: .tracked)])
+    }
+
+    func test_copy_refusesANestedEntryThatClimbsOut() throws {
+        let bystander = root.appendingPathComponent("bystander.txt")
+        try GitFixture.write("untouched\n", to: bystander)
+
+        let report = WorktreeCarry.copy(
+            ["config/../../bystander.txt"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, [])
+        XCTAssertEqual(
+            report.skipped,
+            [CarryReport.Skipped(name: "config/../../bystander.txt", reason: .leavesTheWorkspace)])
+        XCTAssertEqual(try String(contentsOf: bystander, encoding: .utf8), "untouched\n")
+    }
+
     // MARK: what it refuses, and what it leaves alone
 
     func test_copy_reportsAnEntryThatIsNotThere() {

@@ -48,7 +48,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         let hints = RepoPickerOverlay.footerHints()
         XCTAssertNil(hints.first { $0.label == "new worktree" })
-        XCTAssertEqual(hints.map(\.label), ["open", "replace", "move", "close"])
+        XCTAssertEqual(hints.map(\.label), ["open", "replace tab"])
     }
 
     // MARK: what ⌥⏎ creates from
@@ -515,6 +515,69 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         setKeymap([:])
 
         XCTAssertNil(RepoPickerOverlay.footerHints().first { $0.label == "remove worktree" })
+    }
+
+    /// ⌥⌫ acts on a worktree row and nothing else, so a hint left up over a workspace teaches a
+    /// key that does nothing there.
+    func test_theRemoveHint_showsOnlyOverAWorktreeRow() throws {
+        setKeymap([Chord(option: true, key: "⌫"): .removeWorktree])
+        let repo = path("alpha")
+        let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
+        mount(overlay)
+        overlay.setWorktrees(listing(repo, "one"), for: repo)
+
+        XCTAssertEqual(shape(of: overlay)[overlay.selected], "workspace:alpha")
+        XCTAssertFalse(hintIsShown("remove worktree", in: overlay), "hidden over a workspace")
+
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
+
+        XCTAssertNotNil(overlay.selectedWorktree)
+        XCTAssertTrue(hintIsShown("remove worktree", in: overlay), "shown over a worktree")
+
+        send(#selector(NSResponder.moveUp(_:)), to: overlay)
+
+        XCTAssertFalse(hintIsShown("remove worktree", in: overlay), "and hidden again on the way back")
+    }
+
+    /// ⌥⏎ has nothing to create from on the ＋ row, which is the row that opens the form itself.
+    func test_theCreateHint_isHiddenOnTheAddRow() {
+        setKeymap([Chord(option: true, key: "⏎"): .createWorktree])
+        let overlay = makeRepoPicker(entries: [workspace("alpha")])
+        mount(overlay)
+
+        XCTAssertTrue(hintIsShown("new worktree", in: overlay), "shown over a workspace")
+
+        send(#selector(NSResponder.moveUp(_:)), to: overlay)
+
+        XCTAssertEqual(shape(of: overlay)[overlay.selected], "add")
+        XCTAssertFalse(hintIsShown("new worktree", in: overlay))
+    }
+
+    /// ⏎ and ⇧⏎ act on every row, so they never move.
+    func test_theOpenHints_stayUpOnEveryRow() {
+        let repo = path("alpha")
+        let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
+        mount(overlay)
+        overlay.setWorktrees(listing(repo, "one"), for: repo)
+
+        XCTAssertTrue(hintIsShown("open", in: overlay))
+        XCTAssertTrue(hintIsShown("replace tab", in: overlay))
+
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
+
+        XCTAssertTrue(hintIsShown("open", in: overlay))
+        XCTAssertTrue(hintIsShown("replace tab", in: overlay))
+    }
+
+    /// Through the real view rather than a flag: a hint hidden in the model while its row stays on
+    /// screen is the failure this is here to catch.
+    private func hintIsShown(_ label: String, in overlay: NSView) -> Bool {
+        func walk(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(walk) }
+        guard
+            let field = walk(overlay).compactMap({ $0 as? NSTextField })
+                .first(where: { $0.stringValue == label })
+        else { return false }
+        return !field.isHiddenOrHasHiddenAncestor
     }
 
     // MARK: a worktree on its way out

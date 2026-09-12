@@ -1298,7 +1298,14 @@ final class WindowController: NSObject {
                     self?.createWorktree(branch: branch, base: base, from: target)
                 },
                 onCancel: { [weak self] in self?.reopenRepoPicker() },
-                onDismiss: { [weak self] in self?.closeModal() }
+                onDismiss: { [weak self] in self?.closeModal() },
+                // Back to the picker rather than to Settings: ⌥⏎ is where this started, and the
+                // branch typed into the card is gone either way.
+                onEditWorkspace: { [weak self] in
+                    self?.openWorkspaceForm(
+                        editing: target.workspace,
+                        returningTo: { [weak self] in self?.reopenRepoPicker() })
+                }
             )
             self.presentModal(form, kind: .worktreeForm)
         }
@@ -1321,7 +1328,7 @@ final class WindowController: NSObject {
                     onEntry: { name in
                         DispatchQueue.main.async { [weak self, weak card] in
                             guard let card, self?.isPresenting(card) == true else { return }
-                            card.setPhase("Carrying \(name)")
+                            card.setPhase("Copying \(name)")
                         }
                     })
                 result = .success((worktree, report))
@@ -1370,7 +1377,7 @@ final class WindowController: NSObject {
         guard !lost.isEmpty else { return }
         let list = lost.map { "\($0.name) \($0.reason.explanation)" }.joined(separator: ", ")
         toasts.show(
-            ToastContent(variant: .warning, title: "Couldn't Carry Everything", message: "\(list)."))
+            ToastContent(variant: .warning, title: "Couldn't Copy Everything", message: "\(list)."))
     }
 
     /// Remove the worktree the picker has selected: read what it would cost, then confirm once with
@@ -1454,7 +1461,7 @@ final class WindowController: NSObject {
         if openTabs > 1 { does.append("closes its \(openTabs) tabs") }
         does.append(
             carried.isEmpty
-                ? "deletes the folder" : "deletes the folder with the \(joined(carried)) it carries")
+                ? "deletes the folder" : "deletes the folder with the \(joined(carried)) it copied")
         does.append("keeps the branch")
         let consequence = "Removing it \(joined(does))."
 
@@ -1874,7 +1881,10 @@ final class WindowController: NSObject {
     /// edits). Closes the Settings card first — one modal slot — mirroring the tool-float hand-off;
     /// the form's own title-collision check excludes the workspace being edited. On save / cancel /
     /// delete it hands back to Settings → Workspaces.
-    private func openWorkspaceForm(editing workspace: Workspace?) {
+    private func openWorkspaceForm(
+        editing workspace: Workspace?, returningTo done: (() -> Void)? = nil
+    ) {
+        let done = done ?? { [weak self] in self?.reopenSettingsOnWorkspaces() }
         closeModal()
         // Same as the add form: the collision check needs the whole title set before the first
         // keystroke, so the card waits on the load rather than presenting half-seeded.
@@ -1889,9 +1899,13 @@ final class WindowController: NSObject {
                 editing: workspace,
                 existingTitles: existingTitles,
                 background: Theme.current.chrome.background.nsColor,
-                onSubmit: { [weak self] built in self?.submitWorkspace(built, replacing: originalTitle) },
-                onCancel: { [weak self] in self?.reopenSettingsOnWorkspaces() },
-                onDelete: workspace.map { existing in { [weak self] in self?.deleteWorkspace(existing) } }
+                onSubmit: { [weak self] built in
+                    self?.submitWorkspace(built, replacing: originalTitle, then: done)
+                },
+                onCancel: done,
+                onDelete: workspace.map { existing in
+                    { [weak self] in self?.deleteWorkspace(existing, then: done) }
+                }
             )
             self.presentModal(form, kind: .workspaceForm)
         }
@@ -1901,7 +1915,9 @@ final class WindowController: NSObject {
     /// ⌘P picker reads the file fresh on each open, so no reload is needed for it to reflect this).
     /// `originalTitle` is the title before an edit — a rename replaces that section in place; a nil
     /// original is a fresh add. A write failure keeps the form up with a toast.
-    private func submitWorkspace(_ ws: Workspace, replacing originalTitle: String?) {
+    private func submitWorkspace(
+        _ ws: Workspace, replacing originalTitle: String?, then done: (() -> Void)? = nil
+    ) {
         do {
             if let originalTitle {
                 try WorkspacesWriter.update(ws, originalTitle: originalTitle)
@@ -1915,12 +1931,12 @@ final class WindowController: NSObject {
                     message: "Failed to write \(ws.title) to the workspaces file: \(error.localizedDescription)"))
             return
         }
-        reopenSettingsOnWorkspaces()
+        (done ?? reopenSettingsOnWorkspaces)()
     }
 
     /// Delete the workspace being edited, then hand back to Settings → Workspaces. A write failure
     /// keeps the form up with a toast.
-    private func deleteWorkspace(_ ws: Workspace) {
+    private func deleteWorkspace(_ ws: Workspace, then done: (() -> Void)? = nil) {
         do {
             try WorkspacesWriter.remove(title: ws.title)
         } catch {
@@ -1930,7 +1946,7 @@ final class WindowController: NSObject {
                     message: "Failed to update the workspaces file: \(error.localizedDescription)"))
             return
         }
-        reopenSettingsOnWorkspaces()
+        (done ?? reopenSettingsOnWorkspaces)()
     }
 
     /// Exchange two workspaces' positions in the `workspaces` file, reporting whether the write

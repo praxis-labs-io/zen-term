@@ -1925,6 +1925,14 @@ the same `resolveBase` the create will run. A caption that only said "the defaul
 branch" would make the reader go and look, and one that guessed would be wrong in a
 repo with no remote.
 
+**The picker's footer teaches the two chords and nothing else.** `⏎ open`,
+`⇧⏎ replace tab`, and the two worktree chords read from the live keymap, so a rebind or
+an unbind tracks. `↑↓` and `⎋` came out: four hints fit, and arrowing a list is not what
+this footer is for. Both worktree hints follow the selection through
+`PaletteOverlay.selectionChanged`: ⌥⌫ acts on a worktree row and nothing else, and ⌥⏎
+has nothing to create from on the ＋ row. A hint left up where its key does nothing
+teaches the reader something untrue.
+
 **A worktree row means two different things by its selection.** The branch is cut from
 the worktree, so the base choice reads against the branch on screen. Carry copies from
 the **parent**, because that is the checkout holding the install a sibling worktree has
@@ -1947,8 +1955,62 @@ made.
 
 The create card runs it, and reports every entry that stayed behind except one that is
 simply not there: a section covers a repo before and after its first install, so that
-one is a normal state rather than something to interrupt with. Setting `carry` is still
-a hand edit of the workspaces file; the card only reads it.
+one is a normal state rather than something to interrupt with.
+
+**Carry is picked, never typed.** The workspace form's COPY INTO NEW WORKTREES
+control lists what
+`git status --porcelain --ignored` reports for the folder, which is the same question
+carry answers, and the user ticks what comes across. An ignored directory arrives
+collapsed to one entry, which is the granularity the copy works at. The catalog is the
+union of that list and whatever the workspace already carries, so a `carry` line naming
+something not on disk stays put instead of being dropped by the next save. `nil` from
+the probe is not "nothing ignored": the control says the folder is not a repo rather
+than showing an empty list. `CheckboxDropdown` fixes its row count at init and the
+catalog's length is not known until git answers, so the control is rebuilt when one
+lands rather than re-seeded. Rebuilding takes an open list with it, so the control shows a
+select-shaped box with a spinner and `Reading what git ignores…` until the catalog lands,
+rather than a seeded list it would tear down. Select-shaped in every state, because a bare
+line of text there read as the control having failed to render. It is a focus stop while
+loading and hands focus to the list when one arrives, so the ring does not gain a stop under
+the user the moment the catalog lands; the settled states with nothing to pick are skipped, and anything arriving while a list *is* open waits for it to close.
+
+**The checkbox list filters as you type**, the same `FuzzyMatch` ranking `Dropdown` and
+the command palette use, because a carry list is as long as the repo's `.gitignore`.
+One deliberate divergence from `Dropdown`: Space toggles rather than typing, since a
+checkbox list commits with it and a fuzzy query over paths has no use for a space. The
+highlight returns to the top match on every query change, where `Dropdown` keeps it,
+because that highlight starts on row 0 rather than on a current selection.
+
+**The create card links out rather than editing carry itself.** Carry belongs to the
+workspace, not to one create, so ticking a box there would either rewrite the config as
+a side effect of making a worktree or drift from what the file says. The card shows what
+comes across and a button into the workspace form, which hands back to the picker rather
+than to Settings: `⌥⏎` is where it started, and the typed branch is gone either way.
+
+**Every form card shares one assembly.** `FormCard.content` builds the body into a scroll
+with the footer pinned outside it, and each card caps at `FormCard.maxHeight`, the same 460
+the Settings card carries. Without the cap a form grows with its content: measured at 1381pt
+for a workspace with twelve env vars and twenty copy entries, and 630pt for the tool-float
+form, both on a tall display where nothing looks wrong until you reach for a button. The
+footer stays out of the scroll because a form long enough to clip is exactly the one whose
+buttons have to stay reachable, sits under a hairline the card retains and recolors, so a clipped row does not
+read as the footer's own and the rule does not go stale on a theme change, and each card's arrow and Tab go through `SettingsDetail.moveFocus`, which
+reveals the stop it focuses.
+
+**The content-fit constraint is a `<=` plus a low-priority equality, never a `.defaultHigh`
+equality.** As a two-way equality it outranks a label's 750 compression resistance, so
+capping the card dragged the body down with it and laid every caption in the form out at
+zero height: still present, still reported visible, and invisible on screen.
+
+**The line under the select becomes the selection.** It carries the caption until
+something is chosen and the chosen paths after that, in full and one per line. The button
+stays a count, because these are paths and no button-width summary holds one: naming them
+there meant opening the list and scrolling all of it to see what was picked.
+
+**The word the user reads is "copy", not "carry".** `carry = ` is a shipped config
+key, so renaming it breaks every file that has one, but the metaphor asks the reader
+to work it out. `docs/brand-voice.md` carries the row, beside Find / `search`, which
+is the same seam.
 
 **An allowlist, because the denylist is what killed the clone approach.** That design
 copied everything and subtracted what breaks on relocation, which asks us to know
@@ -1967,10 +2029,41 @@ directory stay correct because they point within it, but a carried entry that is
 a link out of the workspace would arrive holding a target that no longer resolves, so
 that one is refused.
 
-**Top-level entries only.** Nothing creates a destination's parent, so a nested entry
-would die in `copyfile` with an `ENOENT` that reads as a missing source. The parser
-refuses it instead, where the reason is still legible. A trailing slash is accepted and
-dropped, because that is how a `.gitignore` names a directory.
+**A folder git tracks something inside copies its ignored content, not the folder.** Git
+collapses an ignored folder only when it tracks nothing there, so a Rails `log/` holding a
+tracked `.keep` reports every rotated log on its own: 170 of craftwork's 249 rows came from
+that one folder. The picker folds a folder that sprays ignored *files* into one row, and
+the copy then brings what git ignores under it and leaves the tracked file behind. Only
+files fold. A folder whose ignored children are themselves folders is already one row each,
+and folding it would hide the difference between a `node_modules` worth copying and a
+`.cache` that is not. A tracked *file* is still refused outright: copying one reports a
+modification that never goes away. Containment is checked against the **resolved** path on both
+sides, not the lexical one: probed, a worktree holding a symlink where a carried entry lands had
+`copyfile` follow it and write outside the tree while reporting the folder as carried. A partial
+copy inside such a folder is taken back whole, for the same reason the whole-entry path takes
+one back.
+
+**A fold is the resting view, not a wall.** Every folded file stays in the catalog, so
+typing its name reaches it and it can be picked on its own; the folded folder is only what
+shows while nothing is typed. Without that the fold is a trap, because the one thing that
+expands a folder is already having chosen something inside it. A file picked that way keeps
+showing at rest, since falling back behind the fold on the next open would read as the pick
+not having landed. The row carries its count (`170 files`) so the fold is visible, and
+folders and files carry different icons, because a path alone does not say whether ticking
+it brings one file or a tree.
+
+A fold tidies a choice nobody has made yet, so **a folder holding something the workspace
+already copies stays expanded** and that pick sits among its siblings. Folding it instead
+would leave two rows meaning overlapping things, with the chosen child stranded at the end
+of the list, and would blur a real difference: copying every key in `config/credentials`
+is not the same act as copying one.
+
+**A nested entry works, because the destination's parent is created first.** A Rails
+app keeps its dev key at `config/credentials/development.key`, so nesting is the common
+case rather than an exotic one. Without that `mkdir` the copy died in `copyfile` with an
+`ENOENT` that read as a missing source. A parent left empty by a failed copy stays: git
+does not track empty directories, so it shows up in no `git status`. A trailing slash is
+accepted and dropped, because that is how a `.gitignore` names a directory.
 
 **Four refusals, and one of them is not what the return code says.** An entry git
 tracks is refused, because a tracked file in a worktree reports a modification that

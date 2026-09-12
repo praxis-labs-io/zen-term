@@ -23,6 +23,8 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private let onDelete: (() -> Void)?
 
     private let card = CardView()
+    /// Retained so a live theme change reaches it: it bakes its color at build time.
+    private var footerDivider: ThemeReapplying?
     private var dismiss = DismissGate()
     /// Retained (not a throwaway init-local) so `reapplyTheme()` can recolor it in place.
     private let header = NSTextField(labelWithString: "")
@@ -110,6 +112,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             cardWidth,
             card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.92),
             card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.92),
+            card.heightAnchor.constraint(lessThanOrEqualToConstant: FormCard.maxHeight),
 
             content.leadingAnchor.constraint(equalTo: card.leadingAnchor),
             content.trailingAnchor.constraint(equalTo: card.trailingAnchor),
@@ -165,6 +168,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     func reapplyTheme() {
         CardChrome.reapplyTheme(to: card)
         header.textColor = Theme.current.chrome.foreground.nsColor
+        footerDivider?.reapplyTheme()
 
         let controls: [ThemeReapplying] = [
             titleField, commandField, dirPicker, widthField, heightField, gitSegment,
@@ -308,19 +312,13 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         }
         let footer = Self.hStack(footerViews, spacing: 8)
 
-        let content = NSStackView(views: [
-            header, titleGroup, iconGroup, chordGroup, commandGroup, dirGroup, sizeGroup,
-            gitGroup, persistGroup, toolbarGroup, footer,
-        ])
-        content.orientation = .vertical
-        content.alignment = .leading
-        content.spacing = 12
-        content.edgeInsets = NSEdgeInsets(top: 18, left: 20, bottom: 16, right: 20)
-        content.translatesAutoresizingMaskIntoConstraints = false
-        for view in content.arrangedSubviews {
-            view.widthAnchor.constraint(equalTo: content.widthAnchor, constant: -40).isActive = true
-        }
-        return content
+        let built = FormCard.content(
+            rows: [
+                header, titleGroup, iconGroup, chordGroup, commandGroup, dirGroup, sizeGroup,
+                gitGroup, persistGroup, toolbarGroup,
+            ], footer: footer, spacing: 12)
+        footerDivider = built.divider
+        return built.view
     }
 
     /// Seed the fields from the float being edited (all blank for a new float). The chord renders
@@ -503,21 +501,20 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         ]
     }
 
-    private func moveVertical(_ delta: Int) {
-        let stops = verticalStops()
-        let anchor = currentVerticalAnchor(in: stops).flatMap { anchor in stops.firstIndex { $0 === anchor } }
-        guard let next = KeyboardFocus.step(from: anchor, delta: delta, count: stops.count) else { return }
-        window?.makeFirstResponder(stops[next])
-    }
+    private func moveVertical(_ delta: Int) { move(delta, wrap: false) }
 
     /// Tab traversal: wraps at the ends where the arrows clamp, so a Tab loop never dies on the last
     /// stop. Matches the Settings card, so the same key behaves the same way in every card.
-    private func moveTab(_ delta: Int) {
+    private func moveTab(_ delta: Int) { move(delta, wrap: true) }
+
+    /// Through the Settings mover, which reveals the destination as well as focusing it: the body
+    /// scrolls, so a stop below the fold would otherwise take focus off screen.
+    private func move(_ delta: Int, wrap: Bool) {
         let stops = verticalStops()
         let anchor = currentVerticalAnchor(in: stops).flatMap { anchor in stops.firstIndex { $0 === anchor } }
-        guard let next = KeyboardFocus.step(from: anchor, delta: delta, count: stops.count, wrap: true)
-        else { return }
-        window?.makeFirstResponder(stops[next])
+        SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta, wrap: wrap) {
+            FormCard.revealTarget(for: $0)
+        }
     }
 
     /// The vertical stop representing the current focus — the focused stop itself, or the row anchor

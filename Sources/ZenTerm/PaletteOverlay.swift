@@ -68,6 +68,9 @@ class PaletteOverlay: NSView, ModalOverlay {
     /// The footer hints' labels + keycaps, retained so `reapplyTheme()` can recolor them — they're
     /// built once in `init` (never rebuilt by a row re-render) and bake their ink color in.
     private var footerHintLabels: [NSTextField] = []
+    /// One entry per hint, keyed on its label, so a subclass can hide the ones that only apply to
+    /// some rows. Hiding an arranged subview collapses it, so the row closes up rather than gapping.
+    private var footerHintItems: [String: NSView] = [:]
     private var footerKeycaps: [KeycapView] = []
     private let defaultRowHeight: CGFloat
     private let maxListHeight: CGFloat
@@ -165,9 +168,10 @@ class PaletteOverlay: NSView, ModalOverlay {
 
         // The hints get the same keycap treatment as the list rows: each key in a box
         // (SF Symbols where available), its action beside it. Centered in the footer row.
-        let (footer, footerLabels, footerKeycaps) = Self.makeFooter(footerHints)
+        let (footer, footerLabels, footerKeycaps, footerItems) = Self.makeFooter(footerHints)
         self.footerHintLabels = footerLabels
         self.footerKeycaps = footerKeycaps
+        self.footerHintItems = footerItems
         footer.translatesAutoresizingMaskIntoConstraints = false
         let footerRow = NSView()
         footerRow.translatesAutoresizingMaskIntoConstraints = false
@@ -502,6 +506,16 @@ class PaletteOverlay: NSView, ModalOverlay {
 
     private func updateHighlight() {
         for (i, row) in laidOutRows.enumerated() { row.view.isSelected = (i == selected) }
+        selectionChanged()
+    }
+
+    /// The selection landed somewhere new. A subclass overrides to track it; the base does nothing.
+    func selectionChanged() {}
+
+    /// Show or hide one footer hint by its label, for a chord that only acts on some rows. A hint
+    /// left up over a row the chord ignores teaches a key that does nothing there.
+    func setFooterHint(_ label: String, isShown: Bool) {
+        footerHintItems[label]?.isHidden = !isShown
     }
 
     /// Reveal the selected row through the shared keyboard reveal, so a palette scrolls exactly like a
@@ -520,10 +534,11 @@ class PaletteOverlay: NSView, ModalOverlay {
     /// `reapplyTheme()` — the footer is built once and never rebuilt by a row re-render, so
     /// nothing here may be a throwaway local.
     private static func makeFooter(_ hints: [PaletteHint]) -> (
-        view: NSStackView, labels: [NSTextField], keycaps: [KeycapView]
+        view: NSStackView, labels: [NSTextField], keycaps: [KeycapView], items: [String: NSView]
     ) {
         var labels: [NSTextField] = []
         var keycaps: [KeycapView] = []
+        var byLabel: [String: NSView] = [:]
         let items = hints.map { hint -> NSView in
             let keycap = KeycapView(shortcut: hint.keys)
             let label = NSTextField(labelWithString: hint.label)
@@ -535,13 +550,14 @@ class PaletteOverlay: NSView, ModalOverlay {
             item.orientation = .horizontal
             item.spacing = 5
             item.alignment = .centerY
+            byLabel[hint.label] = item
             return item
         }
         let stack = NSStackView(views: items)
         stack.orientation = .horizontal
         stack.spacing = 16
         stack.alignment = .centerY
-        return (stack, labels, keycaps)
+        return (stack, labels, keycaps, byLabel)
     }
 
 }

@@ -20,12 +20,11 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         super.tearDown()
     }
 
-    // MARK: carry survives an edit
+    // MARK: carry
 
-    /// The form has no `carry` rows, so a `Workspace` it rebuilds without one writes an empty list
-    /// back over the file. `WorkspacesWriter.update` regenerates the whole section body, so saving
-    /// an unrelated field would delete hand-authored `carry` lines with nothing said.
-    func test_editingAWorkspace_keepsCarryTheFormCannotShow() throws {
+    /// `WorkspacesWriter.update` regenerates the whole section body, so a form that rebuilt the
+    /// workspace without `carry` would delete those lines on any unrelated edit, with nothing said.
+    func test_editingAWorkspace_roundTripsCarryThroughThePicker() throws {
         let ws = Workspace(
             title: "ZenTerm", path: try makeRealDir(),
             main: nil, right: nil, bottom: nil, focus: .main, env: [:],
@@ -37,6 +36,124 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
 
         XCTAssertEqual(sink.submitted.first?.title, "Renamed")
         XCTAssertEqual(sink.submitted.first?.carry, ["node_modules", ".env"])
+    }
+
+    /// The catalog is read out of the folder, so choosing one has to reach the control. Nothing is
+    /// typed into CARRY, which is why the folder is the only thing that can fill it.
+    func test_choosingAFolder_loadsWhatGitIgnoresThere() throws {
+        let dir = try makeRealDir()
+        let (overlay, _) = mount()
+        let carry = try XCTUnwrap(carryPicker(in: overlay))
+        carry.settle = 0
+        carry.probe = { _, _ in
+            IgnoredCatalog(
+                entries: ["node_modules", ".env"], resting: ["node_modules", ".env"], fileCounts: [:], directories: [])
+        }
+        let landed = expectation(description: "catalog")
+        carry.onChanged = { if !carry.catalog.isEmpty { landed.fulfill() } }
+
+        picker(in: overlay).setText(dir.path)
+        picker(in: overlay).field.onChange?()
+        wait(for: [landed], timeout: 2)
+
+        XCTAssertEqual(carry.catalog, ["node_modules", ".env"])
+    }
+
+    func test_whatIsPickedInCarry_isWhatIsSubmitted() throws {
+        let dir = try makeRealDir()
+        let ws = Workspace(
+            title: "ZenTerm", path: dir, main: nil, right: nil, bottom: nil, focus: .main,
+            env: [:], carry: [".env"])
+        let (overlay, sink) = mount(editing: ws)
+        let carry = try XCTUnwrap(carryPicker(in: overlay))
+
+        carry.setCarried([".env", "node_modules"])
+        try XCTUnwrap(button(in: overlay, title: "Save")).onTap()
+
+        XCTAssertEqual(sink.submitted.first?.carry, [".env", "node_modules"])
+    }
+
+    /// A list with nothing to show is not a focus stop, so an arrow into it would strand the ring.
+    func test_carryIsAVerticalStopOnlyOnceItHasAList() throws {
+        let dir = try makeRealDir()
+        let (overlay, _) = mount()
+        let carry = try XCTUnwrap(carryPicker(in: overlay))
+        XCTAssertNil(carry.focusStop)
+
+        loadCarry(carry, in: overlay, folder: dir, ignoring: ["node_modules"])
+
+        XCTAssertNotNil(carry.focusStop)
+    }
+
+    /// The form's own stop list, not the control's: a stop the form never splices in is a stop the
+    /// arrows cannot reach, and `verticalStops()` is private.
+    func test_downFromTheEnvButton_reachesTheCarryList() throws {
+        let dir = try makeRealDir()
+        let ws = Workspace(
+            title: "ZenTerm", path: dir, main: nil, right: nil, bottom: nil, focus: .main,
+            env: [:], carry: ["node_modules"])
+        let (overlay, _) = mount(editing: ws)
+        let carry = try XCTUnwrap(carryPicker(in: overlay))
+        loadCarry(carry, in: overlay, folder: dir, ignoring: ["node_modules"])
+        let list = try XCTUnwrap(carry.focusStop)
+        let addVar = try XCTUnwrap(button(in: overlay, title: "＋ Add variable"))
+        window?.makeFirstResponder(addVar)
+
+        // The real event, not the callback: AppKit puts `.function` and `.numericPad` on every
+        // arrow, and calling `onArrowDown` directly stays green while the button stops routing it.
+        let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
+        addVar.keyDown(
+            with: try XCTUnwrap(
+                NSEvent.keyEvent(
+                    with: .keyDown, location: .zero, modifierFlags: [.function, .numericPad],
+                    timestamp: 0, windowNumber: 0, context: nil, characters: down,
+                    charactersIgnoringModifiers: down, isARepeat: false, keyCode: 125)))
+
+        XCTAssertTrue(KeyboardFocus.isFocused(list, in: window), "Down off ＋ Add variable lands on CARRY")
+    }
+
+    /// A dropped cap looks fine on a laptop and turns the card into a full-height wall on a tall
+    /// display, which is the shape a layout test can settle and the eye usually cannot. Every form
+    /// card shares the cap, so `FormCardHeightTests` covers the other two.
+    func test_theCard_staysUnderTheSettingsHeight_howeverMuchItHolds() throws {
+        let ws = Workspace(
+            title: "Big", path: try makeRealDir(), main: "nvim", right: "claude", bottom: "shell",
+            focus: .bottom, env: Dictionary(uniqueKeysWithValues: (0..<12).map { ("KEY\($0)", "v") }),
+            carry: (0..<20).map { "entry-\($0)" })
+        let overlay = AddWorkspaceOverlay(
+            editing: ws, existingTitles: [], background: Theme.current.chrome.background.nsColor,
+            onSubmit: { _ in }, onCancel: {})
+        overlay.translatesAutoresizingMaskIntoConstraints = true
+        let win = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 1600),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        win.contentView?.addSubview(overlay)
+        overlay.frame = win.contentView!.bounds
+        window = win
+        win.contentView?.layoutSubtreeIfNeeded()
+
+        let card = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? CardView }.first)
+        XCTAssertLessThanOrEqual(card.frame.height, FormCard.maxHeight)
+        XCTAssertGreaterThan(card.frame.height, 0)
+    }
+
+    /// Point the folder field at `folder` and let the stubbed probe land, which is the only way a
+    /// list exists: a seeded one would be torn down when git answered.
+    private func loadCarry(
+        _ carry: CarryPicker, in overlay: AddWorkspaceOverlay, folder: URL, ignoring: [String]
+    ) {
+        carry.settle = 0
+        carry.probe = { _, _ in IgnoredCatalog(entries: ignoring, resting: ignoring, fileCounts: [:], directories: []) }
+        let landed = expectation(description: "catalog")
+        carry.onChanged = { if carry.focusStop != nil { landed.fulfill() } }
+        picker(in: overlay).setText(folder.path)
+        picker(in: overlay).field.onChange?()
+        wait(for: [landed], timeout: 2)
+        carry.onChanged = nil
+    }
+
+    private func carryPicker(in overlay: NSView) -> CarryPicker? {
+        descendants(of: overlay).compactMap { $0 as? CarryPicker }.first
     }
 
     // MARK: harness

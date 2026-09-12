@@ -75,13 +75,13 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
         let clean = WorktreeState(uncommitted: 0, unpushed: 0)
         XCTAssertTrue(
             message(state: clean, carried: [".env"])
-                .contains("deletes the folder with the .env it carries"))
+                .contains("deletes the folder with the .env it copied"))
         XCTAssertTrue(
             message(state: clean, carried: [".env", "node_modules"])
-                .contains("deletes the folder with the .env and node_modules it carries"))
+                .contains("deletes the folder with the .env and node_modules it copied"))
         XCTAssertTrue(
             message(state: clean, carried: [".env", "node_modules", ".venv"])
-                .contains("deletes the folder with the .env, node_modules, and .venv it carries"))
+                .contains("deletes the folder with the .env, node_modules, and .venv it copied"))
     }
 
     func test_everyCase_saysTheBranchStays() {
@@ -108,6 +108,6 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
                 openTabs: 2),
             "feature/zen-456 has 3 uncommitted files and 2 commits that are on no remote. "
                 + "Removing it closes its 2 tabs, deletes the folder with the .env and node_modules "
-                + "it carries, and keeps the branch.")
+                + "it copied, and keeps the branch.")
     }
 }

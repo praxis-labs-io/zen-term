@@ -127,16 +127,18 @@ final class WorkspacesParserTests: XCTestCase {
 
     /// Nothing creates a destination's parent, so a nested entry would die at copy time with an
     /// errno that reads as a missing source. It is refused where the reason is still legible.
-    func test_carry_dropsANestedEntry() {
+    /// A Rails app keeps its dev key under `config/credentials/`, so a nested entry is the common
+    /// case rather than an exotic one.
+    func test_carry_keepsANestedEntry() {
         let ws = WorkspacesParser.parse(
             """
             [ZenTerm]
             path  = ~/Dev/zen-term
-            carry = config/local.json
+            carry = config/credentials/development.key
             carry = .env
             """
         ).first
-        XCTAssertEqual(ws?.carry, [".env"])
+        XCTAssertEqual(ws?.carry, ["config/credentials/development.key", ".env"])
     }
 
     func test_carry_acceptsATrailingSlash() {

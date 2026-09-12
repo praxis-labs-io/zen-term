@@ -36,7 +36,7 @@
 #   bottom   (optional)  bottom-drawer command; absent → closed; `shell` → a plain shell
 #   focus    (optional)  main | right | bottom                       (default main)
 #   env      (optional)  KEY=VALUE, repeatable; injected into every surface
-#   carry    (optional)  a top-level path to copy into a new worktree, repeatable
+#   carry    (optional)  a path to copy into a new worktree, repeatable
 #
 # A value with spaces may be quoted: bottom = "npm run dev".
 #
@@ -46,16 +46,22 @@
 # On APFS the copy shares its disk blocks with the original, so carrying a node_modules
 # costs close to no space and close to no time. On another volume it is a real copy,
 # which still works and takes longer. Paths are relative to the workspace and may not
-# leave it.
+# leave it. A nested path works: config/credentials/development.key is copied there, and
+# any directory it needs on the way is created.
 #
-# What carry will not do: an entry git tracks is refused, because a tracked file copied
-# into a worktree makes git report a change that never goes away. An entry the worktree
+# What carry will not do: a tracked file is refused, because copying one into a worktree
+# makes git report a change that never goes away. A folder git tracks something inside is
+# not refused: its ignored content comes across and the tracked files stay behind. An entry the worktree
 # already has is left alone. An entry this workspace does not have is skipped, so one
 # section can cover a repo before and after its first install.
 #
 # A carried install is the one from this checkout. Open a worktree on a branch that
 # changed a lockfile and the install is still the old one until you run your package
 # manager in it.
+#
+# Setting carry: the workspace form (Settings → Workspaces, or the ＋ row in the ⌘P
+# picker) calls this "Copy into new worktrees". It lists what git ignores in the folder
+# and you tick what to copy. Editing this file by hand does the same thing.
 #
 # Making a worktree: ⌥⏎ over a row in the ⌘P picker. Name the branch, pick where it
 # starts, and the carry entries below come across with it.
@@ -72,3 +78,4 @@
 # env    = PORT=3000
 # carry  = .env
 # carry  = node_modules
+# carry  = config/credentials/development.key

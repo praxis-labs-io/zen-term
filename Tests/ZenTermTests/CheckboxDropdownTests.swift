@@ -42,6 +42,154 @@ final class CheckboxDropdownTests: WindowTestCase {
                 isARepeat: false, keyCode: code)!)
     }
 
+    // MARK: type to filter
+
+    /// A carry list is as long as the repo's `.gitignore`, which is past what arrowing can reach.
+    func test_typing_narrowsTheListAndShowsTheQuery() {
+        let dropdown = makeDropdown([".env", "node_modules", "config/credentials/development.key"])
+        press(dropdown, " ", code: 49)
+
+        press(dropdown, "c", code: 8)
+        press(dropdown, "r", code: 15)
+
+        XCTAssertEqual(dropdown.queryForTesting, "cr")
+        XCTAssertEqual(dropdown.visibleIndicesForTesting, [2], "fuzzy, the way the palette matches")
+        XCTAssertEqual(dropdown.buttonTitleForTesting, "cr", "the button shows what is being typed")
+    }
+
+    /// The one deliberate divergence from `Dropdown`: this list commits with Space, so a query
+    /// never holds one. Typing past a filter must not silently stop toggling.
+    func test_space_stillTogglesRatherThanTypingIntoTheQuery() {
+        var toggled: [Int] = []
+        let dropdown = makeDropdown([".env", "node_modules"], onToggle: { toggled.append($0) })
+        press(dropdown, " ", code: 49)  // open
+        press(dropdown, "m", code: 46)  // filter to node_modules
+        press(dropdown, "o", code: 31)
+        press(dropdown, "d", code: 2)
+
+        press(dropdown, " ", code: 49)
+
+        XCTAssertEqual(dropdown.queryForTesting, "mod", "Space never enters the query")
+        XCTAssertEqual(toggled, [1], "it toggles the highlighted row, by catalog index")
+    }
+
+    func test_backspace_widensTheListAgain() {
+        let dropdown = makeDropdown([".env", "node_modules"])
+        press(dropdown, " ", code: 49)
+        press(dropdown, "n", code: 45)
+        XCTAssertEqual(dropdown.visibleIndicesForTesting, [1, 0])
+
+        press(dropdown, "", code: 51)  // backspace
+
+        XCTAssertEqual(dropdown.queryForTesting, "")
+        XCTAssertEqual(dropdown.visibleIndicesForTesting, [0, 1])
+    }
+
+    /// Esc clears a mistyped query before it closes anything, so recovering is not a reopen.
+    func test_escape_clearsTheQueryBeforeItClosesTheList() {
+        let dropdown = makeDropdown([".env", "node_modules"])
+        press(dropdown, " ", code: 49)
+        press(dropdown, "n", code: 45)
+
+        press(dropdown, "", code: 53)
+        XCTAssertTrue(dropdown.isPopoverOpen, "the first Esc clears")
+        XCTAssertEqual(dropdown.queryForTesting, "")
+
+        press(dropdown, "", code: 53)
+        XCTAssertFalse(dropdown.isPopoverOpen, "the second closes")
+    }
+
+    func test_arrowsWalkOnlyWhatTheQueryAdmits() {
+        var toggled: [Int] = []
+        let dropdown = makeDropdown([".env", "node_modules", "nested"], onToggle: { toggled.append($0) })
+        press(dropdown, " ", code: 49)
+        press(dropdown, "n", code: 45)
+        press(dropdown, "e", code: 14)
+        press(dropdown, "s", code: 1)
+        let admitted = dropdown.visibleIndicesForTesting
+        XCTAssertFalse(admitted.contains(0), ".env is filtered out: \(admitted)")
+
+        press(dropdown, "", code: 125)  // Down, within the filtered set
+        press(dropdown, "\r", code: 36)  // Return toggles
+
+        XCTAssertEqual(toggled, [admitted[1]], "a filtered-out row is never reachable")
+        XCTAssertGreaterThan(admitted.count, 1, "the query has to leave more than one row to walk")
+    }
+
+    func test_reopening_startsWithNoQuery() {
+        let dropdown = makeDropdown([".env", "node_modules"])
+        press(dropdown, " ", code: 49)
+        press(dropdown, "n", code: 45)
+        press(dropdown, "", code: 53)  // clear
+        press(dropdown, "", code: 53)  // close
+
+        press(dropdown, " ", code: 49)
+
+        XCTAssertEqual(dropdown.queryForTesting, "")
+        XCTAssertEqual(dropdown.visibleIndicesForTesting, [0, 1])
+        XCTAssertEqual(dropdown.buttonTitleForTesting, "All shown")
+    }
+
+    /// A query that admits nothing rendered a 12pt sliver with no text in it, because the card
+    /// sized itself to zero rows.
+    func test_aQueryThatMatchesNothing_saysSoRatherThanShowingASliver() {
+        let dropdown = makeDropdown([".env", "node_modules"])
+        press(dropdown, " ", code: 49)
+
+        press(dropdown, "z", code: 6)
+        press(dropdown, "q", code: 12)
+
+        XCTAssertEqual(dropdown.visibleIndicesForTesting, [])
+        XCTAssertGreaterThan(dropdown.listCardSizeForTesting.height, 20, "the card has to hold a line")
+    }
+
+    /// The highlight survives a query that admits nothing, so Space was committing a row the user
+    /// could not see. In the copy list that wrote a path into the workspace on save.
+    func test_spaceWithNothingMatching_togglesNothing() {
+        var toggled: [Int] = []
+        let dropdown = makeDropdown([".env", "node_modules"], onToggle: { toggled.append($0) })
+        press(dropdown, " ", code: 49)
+        press(dropdown, "z", code: 6)
+
+        press(dropdown, " ", code: 49)
+        press(dropdown, "\r", code: 36)
+
+        XCTAssertEqual(toggled, [], "a filtered-out row is not committable")
+    }
+
+    /// `KeyboardFocus.key` decodes eight keycodes; Home, End, the page keys and every F-key fall
+    /// past it carrying a private-use scalar, which `Character` calls printable. Unfiltered they
+    /// entered the query, emptied the list and rendered the button as tofu.
+    func test_theNonPrintingKeys_doNotEnterTheQuery() {
+        let dropdown = makeDropdown([".env", "node_modules"])
+        press(dropdown, " ", code: 49)
+
+        for (glyph, code) in [("\u{F729}", UInt16(115)), ("\u{F72B}", 119), ("\u{F72C}", 116)] {
+            press(dropdown, glyph, code: code)
+        }
+
+        XCTAssertEqual(dropdown.queryForTesting, "")
+        XCTAssertEqual(dropdown.visibleIndicesForTesting, [0, 1])
+    }
+
+    /// A window resize closes the card without going through `closeList`, so everything hanging off
+    /// a close has to happen there too or the button keeps its accent query text.
+    func test_aResizeClosingTheList_clearsTheQueryAndFiresOnClosed() {
+        var closed = 0
+        let dropdown = makeDropdown([".env", "node_modules"])
+        dropdown.onClosed = { closed += 1 }
+        press(dropdown, " ", code: 49)
+        press(dropdown, "n", code: 45)
+        XCTAssertEqual(dropdown.queryForTesting, "n")
+
+        window?.setFrame(NSRect(x: 0, y: 0, width: 500, height: 500), display: false)
+
+        XCTAssertFalse(dropdown.isPopoverOpen)
+        XCTAssertEqual(dropdown.queryForTesting, "")
+        XCTAssertEqual(dropdown.buttonTitleForTesting, "All shown")
+        XCTAssertEqual(closed, 1, "a waiting owner has to hear about it")
+    }
+
     func test_spaceOpensTheList_withVisibleCard() {
         let dropdown = makeDropdown()
         XCTAssertFalse(dropdown.isPopoverOpen)

@@ -194,9 +194,9 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         }
         guard
             let caption = descendants(of: overlay).compactMap({ $0 as? FieldCaption })
-                .first(where: { $0.stringValue.hasPrefix("CARRY") })
+                .first(where: { $0.stringValue.hasPrefix("COPY INTO") })
         else {
-            return XCTFail("expected the CARRY caption")
+            return XCTFail("expected the copy-into caption")
         }
         branchField.setText("feature/zen-473")
 
@@ -245,6 +245,61 @@ final class OverlayReapplyThemeTests: WindowTestCase {
             onSubmit: { _, _ in }, onCancel: {}, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         return overlay
+    }
+
+    /// The footer hairline bakes its color at build time like every other one in the app, so a
+    /// card that does not retain and recolor it keeps the old rule after a live theme change.
+    func test_reapplyTheme_recolorsTheFormCardsFooterHairline() throws {
+        let overlay = AddWorkspaceOverlay(
+            existingTitles: [], background: Theme.current.chrome.background.nsColor,
+            onSubmit: { _ in }, onCancel: {})
+        overlay.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 460, height: 640)
+        window.contentView?.layoutSubtreeIfNeeded()
+
+        let hairline = try XCTUnwrap(
+            descendants(of: overlay).first {
+                $0.frame.height == 1 && $0.layer?.backgroundColor != nil
+            })
+        let before = hairline.layer?.backgroundColor
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        overlay.reapplyTheme()
+
+        XCTAssertNotEqual(before, hairline.layer?.backgroundColor)
+    }
+
+    func test_reapplyTheme_recolorsTheCarryListAndKeepsWhatIsPicked() throws {
+        let overlay = AddWorkspaceOverlay(
+            existingTitles: [], background: Theme.current.chrome.background.nsColor,
+            onSubmit: { _ in }, onCancel: {})
+        overlay.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 460, height: 640)
+
+        let carry = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? CarryPicker }.first)
+        carry.settle = 0
+        carry.probe = { _, _ in
+            IgnoredCatalog(entries: ["node_modules"], resting: ["node_modules"], fileCounts: [:], directories: [])
+        }
+        carry.setCarried(["node_modules"])
+        let landed = expectation(description: "catalog")
+        carry.onChanged = { if carry.dropdownForTesting != nil { landed.fulfill() } }
+        carry.workspaceFolder = FileManager.default.temporaryDirectory
+        wait(for: [landed], timeout: 2)
+        carry.onChanged = nil
+        let list = try XCTUnwrap(carry.dropdownForTesting)
+        let before = list.layer?.borderColor
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        overlay.reapplyTheme()
+
+        XCTAssertNotEqual(before, list.layer?.borderColor)
+        XCTAssertEqual(carry.carried, ["node_modules"], "a recolor never loses what was picked")
+        XCTAssertEqual(list.buttonTitleForTesting, "1 file")
     }
 
     func test_reapplyTheme_recolorsEnvRowAndPreservesTypedKey() throws {
