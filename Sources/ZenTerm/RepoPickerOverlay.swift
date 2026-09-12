@@ -69,7 +69,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         GitRepoStatus.refresh(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }
         // The counts run `git` rather than reading a file, so they land after the branch does
         // rather than holding it up.
-        refreshChurn(entries.map(\.path))
+        refreshChurn(Array(configuredPaths))
         // Two `git` calls per workspace, so the worktree rows land last and insert themselves under
         // the workspace they belong to rather than holding the card back.
         relistWorktrees()
@@ -99,7 +99,6 @@ final class RepoPickerOverlay: PaletteOverlay {
             GitRepoStatus.refreshChurn(paths) { [weak self] in self?.applyGitStatus() })
     }
 
-    /// Re-read every workspace row's branch from `GitRepoStatus`.
     private func applyGitStatus() {
         for row in rowViews { (row as? RowView)?.applyGitStatus() }
     }

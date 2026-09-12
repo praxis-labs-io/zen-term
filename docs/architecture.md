@@ -2331,9 +2331,10 @@ at a few hundred files, which is how this was found.
   The probes themselves run on `churnQueue`, not the global queue: unbounded
   blocking `git` calls are what would starve the `.userInitiated` work that
   `repoRoot` and the tool floats' `git:` gating share. Each `refreshChurn` call
-  returns its own token, and the picker cancels its tokens when it closes, so a
-  reopened picker does not run behind the last one and another window's picker
-  keeps its answers. A probe that cannot answer clears the counts rather than leaving the
+  returns its own token, so another window's picker keeps its answers. A picker
+  cancels its tokens when it closes: probes still queued are dropped, and one
+  already running finishes without delivering, so four stalled probes can still
+  hold the queue a reopened picker waits on. A probe that cannot answer clears the counts rather than leaving the
   previous run's on the row.
 - **A tool float's open is cancellable while its repo-root probe is out.** The
   walk is off-main, so a `git:`-gated or `.directory` float opens a queue hop
