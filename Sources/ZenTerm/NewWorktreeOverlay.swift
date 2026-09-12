@@ -123,11 +123,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         // The confirm answers its own Esc, and the card must not close underneath it.
         if confirm.isShowing { return super.performKeyEquivalent(with: event) }
-        // Esc takes the suggestion list down first. The card is the next press.
-        if branchField.isListOpen, event.type == .keyDown, event.keyCode == 53 {
-            branchField.closeList()
-            return true
-        }
         if ModalEscape.handle(
             event, in: window, dismissing: dismiss.isDismissing || isWorking,
             close: { self.onCancel() })
@@ -416,6 +411,15 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
     }
 
     var branchName: String { branchField.text.trimmingCharacters(in: .whitespaces) }
+
+    #if DEBUG
+        /// Types a branch and runs the live pass, so a test can mount the card in its
+        /// existing-branch state.
+        func setBranchForTesting(_ branch: String) {
+            branchField.box.setText(branch)
+            refreshValidity()
+        }
+    #endif
 
     var isExistingBranch: Bool { options.branches.contains(branchName) }
 

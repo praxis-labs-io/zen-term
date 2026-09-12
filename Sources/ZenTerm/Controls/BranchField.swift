@@ -68,6 +68,12 @@ final class BranchField: NSView, ThemeReapplying {
             self?.onSubmit?()
         }
         box.onEndEditing = { [weak self] in self?.closeList() }
+        // The list owns Esc only while it is up. The card root gets every other one.
+        box.onEscape = { [weak self] in
+            guard let self, self.isListOpen else { return false }
+            self.closeList()
+            return true
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -105,7 +111,7 @@ final class BranchField: NSView, ThemeReapplying {
             // Ranked here rather than read: an untouched field has never filtered, and Down on an
             // empty one is how the whole branch list is reached.
             if delta > 0 {
-                matches = ranked(for: text)
+                matches = suggestions(for: text)
                 highlighted = 0
                 if !matches.isEmpty {
                     openList()
@@ -138,15 +144,21 @@ final class BranchField: NSView, ThemeReapplying {
     // MARK: the list
 
     private func refreshMatches() {
-        let query = text
-        matches = ranked(for: query)
-        // A query that admits nothing shows nothing. An empty popover renders as a bare sliver.
+        matches = suggestions(for: text)
         guard !matches.isEmpty else {
             closeList()
             return
         }
         highlighted = 0
         if popover.isOpen { rerenderList() } else { openList() }
+    }
+
+    /// What the list should show for `query`. Empty when there is nothing worth showing: nothing
+    /// matches, which would render as a bare sliver, or the query is already the only match, where
+    /// the choice is made and a one-row list restating it would trap Down inside itself.
+    private func suggestions(for query: String) -> [String] {
+        let ranked = ranked(for: query)
+        return ranked == [query] ? [] : ranked
     }
 
     /// An exact match leads, then `FuzzyMatch` order, then the alphabetical listing as the

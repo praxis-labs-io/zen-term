@@ -34,6 +34,13 @@ final class BranchFieldTests: XCTestCase {
             Notification(name: NSControl.textDidChangeNotification, object: field.box.field))
     }
 
+    @discardableResult
+    private func escape() -> Bool {
+        field.box.control(
+            field.box.field, textView: NSTextView(),
+            doCommandBy: #selector(NSResponder.cancelOperation(_:)))
+    }
+
     private func arrow(_ key: UInt16) {
         field.box.control(
             field.box.field, textView: NSTextView(),
@@ -49,8 +56,25 @@ final class BranchFieldTests: XCTestCase {
 
     /// The name the user typed in full is the one they meant, whatever the scorer says.
     func test_anExactMatch_leadsTheList() {
+        type("feature/zen-45")
+
+        XCTAssertEqual(field.matchesForTesting.first, "feature/zen-454")
+    }
+
+    /// The choice is made, so a one-row list restating it adds nothing and traps Down inside it.
+    func test_aQueryThatIsAlreadyTheOnlyMatch_closesTheList() {
+        type("feature/zen-454")
+
+        XCTAssertFalse(field.isListOpen)
+    }
+
+    /// Still a list while the typed name is one of several: `main` is exact, but not alone.
+    func test_anExactMatchWithOtherCandidates_keepsTheList() {
+        field.setBranches(["main", "main-ish"], holders: [:])
+
         type("main")
 
+        XCTAssertTrue(field.isListOpen)
         XCTAssertEqual(field.matchesForTesting.first, "main")
     }
 
@@ -117,6 +141,24 @@ final class BranchFieldTests: XCTestCase {
         field.box.onEnter?()
 
         XCTAssertEqual(advanced, 1)
+    }
+
+    /// Esc is answered in the field's own command routing, not at the card root:
+    /// `performKeyEquivalent` does not run for a bare Esc while a popover host holds focus, which
+    /// is the trap `ModalEscape` documents and two earlier attempts fell into.
+    func test_escapeTakesTheListDownAndKeepsTheCard() {
+        type("zen")
+
+        XCTAssertTrue(escape(), "the field consumed Esc")
+        XCTAssertFalse(field.isListOpen)
+        XCTAssertEqual(field.text, "zen")
+    }
+
+    /// With no list up, Esc belongs to the card root. Consuming it here would strand the card open.
+    func test_escapeWithNoListIsNotConsumed() {
+        type("qqqq")
+
+        XCTAssertFalse(escape())
     }
 
     func test_closingTheListLeavesTheTypedTextAlone() {

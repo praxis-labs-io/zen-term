@@ -80,6 +80,21 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         XCTAssertEqual(inlineMessage(in: overlay), "feature/zen-473 already has a worktree.")
     }
 
+    /// A hidden control is still a focus stop unless it is taken out of the list, and arrowing
+    /// into one looks exactly like the arrow doing nothing.
+    func test_withTheBaseHidden_downFromTheBranchFieldReachesTheCopyButton() throws {
+        let (overlay, _) = mount(branches: ["feature/zen-473"])
+        let copyButton = try XCTUnwrap(button(in: overlay, title: "Choose what to copy"))
+        type("feature/zen-473", into: overlay)
+        let box = branchField(in: overlay)
+        window?.makeFirstResponder(box.field)
+
+        _ = box.control(
+            box.field, textView: NSTextView(), doCommandBy: #selector(NSResponder.moveDown(_:)))
+
+        XCTAssertTrue(KeyboardFocus.isFocused(copyButton, in: window))
+    }
+
     /// `a` and `a/b` cannot both be refs, but that is a rule about cutting a new branch. Reporting
     /// it against a branch the user just picked from the list would be nonsense.
     func test_theRefFileConflictChecks_areSilentForABranchThatExists() throws {

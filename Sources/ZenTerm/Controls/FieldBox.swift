@@ -25,6 +25,11 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     var onEndEditing: (() -> Void)?
     /// ⌘Return anywhere in the field — submit the whole form.
     var onSubmit: (() -> Void)?
+    /// Esc in the field, for a control hanging a popover off it. Returns whether it consumed the
+    /// key; false lets Esc carry on to the card root, which is the single Esc owner otherwise.
+    /// Handled here rather than at that root because `performKeyEquivalent` does not run for a bare
+    /// Esc while a popover host holds focus. See `ModalEscape`.
+    var onEscape: (() -> Bool)?
 
     private static var restFill: NSColor { Theme.current.chrome.fill(.rest) }
     /// The same muted accent fill the ⌘P/⌘⇧P palettes use for the selected row.
@@ -129,6 +134,8 @@ final class FieldBox: NSView, NSTextFieldDelegate {
             } else {
                 (onEnter ?? onArrowDown)?()
             }
+        case #selector(NSResponder.cancelOperation(_:)):
+            guard let onEscape, onEscape() else { return false }
         case #selector(NSResponder.insertTab(_:)):
             guard let onTab else { return false }
             onTab()

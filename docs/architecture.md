@@ -1957,7 +1957,13 @@ refusal.** `BranchField` is a `FieldBox` with a `ListPopover` under it, ranked b
 `FuzzyMatch` with an exact match first. Not a `Dropdown`: that is a closed select that takes
 first responder for itself, and here the text field has to keep the keyboard while the list
 advises it. Down on an empty field opens the whole list, which is how "give this branch a
-worktree" is reached without typing. A branch something already holds keeps its row with a
+worktree" is reached without typing, and the list goes away once the query *is* the only
+match: the choice is made, and a one-row list restating it traps Down inside itself.
+
+**Esc is answered in the field's own `doCommandBy`, not at the card root.**
+`performKeyEquivalent` does not run for a bare Esc while a popover host holds focus, which
+`ModalEscape` documents and two earlier attempts fell into. `FieldBox.onEscape` returns
+whether it consumed the key, so Esc with no list up still reaches the single Esc owner. A branch something already holds keeps its row with a
 note saying so, because hiding it leaves the user typing the name by hand and meeting the
 refusal with no explanation.
 
