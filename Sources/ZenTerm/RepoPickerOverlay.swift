@@ -27,7 +27,10 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// This picker's probes in flight, cancelled when it goes away so a closed picker stops
     /// costing the queue. Held per picker rather than cancelled queue-wide: another window's
     /// picker is probing the same queue and its answers are not this one's to drop.
-    private var churnRefresh: GitRepoStatus.RefreshToken?
+    private var churnRefreshes: [GitRepoStatus.RefreshToken] = []
+    /// Paths already sent for counts this open. Two workspaces of one repo list the same worktrees,
+    /// and a relist after a removal lists them all again.
+    private var churnProbed: Set<URL>
     private var worktreeRefresh: GitRepoStatus.RefreshToken?
     /// Common dir to the workspace that shows its worktrees, in config order. Recomputed when a
     /// listing lands, never when the query changes.
@@ -49,6 +52,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         self.entries = entries
         self.removals = removals
         self.configuredPaths = Set(entries.map { $0.path.standardizedFileURL })
+        self.churnProbed = configuredPaths
         self.rows = Self.rows(for: entries, listings: [:], configured: [], owners: [:])
         self.onChoose = onChoose
         self.onAddWorkspace = onAddWorkspace
@@ -66,9 +70,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         GitRepoStatus.refresh(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }
         // The counts run `git` rather than reading a file, so they land after the branch does
         // rather than holding it up.
-        churnRefresh = GitRepoStatus.refreshChurn(entries.map(\.path)) { [weak self] in
-            self?.applyGitStatus()
-        }
+        refreshChurn(entries.map(\.path))
         // Two `git` calls per workspace, so the worktree rows land last and insert themselves under
         // the workspace they belong to rather than holding the card back.
         relistWorktrees()
@@ -88,8 +90,14 @@ final class RepoPickerOverlay: PaletteOverlay {
     }
 
     deinit {
-        churnRefresh?.cancel()
+        for token in churnRefreshes { token.cancel() }
         worktreeRefresh?.cancel()
+    }
+
+    private func refreshChurn(_ paths: [URL]) {
+        guard !paths.isEmpty else { return }
+        churnRefreshes.append(
+            GitRepoStatus.refreshChurn(paths) { [weak self] in self?.applyGitStatus() })
     }
 
     /// Re-read every workspace row's branch from `GitRepoStatus`.
@@ -102,6 +110,10 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// must not move it, and a reload otherwise resets to the default.
     func setWorktrees(_ listing: WorktreeListing, for workspacePath: URL) {
         listings[workspacePath.standardizedFileURL] = listing
+        let unprobed = listing.worktrees.map(\.path.standardizedFileURL).filter {
+            churnProbed.insert($0).inserted
+        }
+        refreshChurn(unprobed)
         worktreeOwners = Self.owners(among: entries, listings: listings)
         let held = rows.indices.contains(selected) ? rowIdentity(at: selected) : nil
         applyFilter(query: currentQuery)
@@ -582,9 +594,8 @@ final class RepoPickerOverlay: PaletteOverlay {
         }
 
         func applyGitStatus() {
-            // One rule at every depth: churn, then the head. A worktree's branch comes from the
-            // listing that named it; only a workspace waits on a probe. Nothing probes a worktree
-            // path for churn yet, so that half of a child row is a reserved slot, not a value.
+            // A worktree's branch comes from the listing that named it; only a workspace waits on
+            // a probe for its head.
             let head =
                 worktree.map { $0.branch ?? String($0.head.prefix(7)) }
                 ?? GitRepoStatus.branch(statusPath)

@@ -1820,7 +1820,9 @@ already configured as a workspace of its own is skipped rather than rendered twi
 
 The listing is two `git` calls per workspace, so it runs on its own bounded queue
 in `GitRepoStatus` and the rows arrive after the card, the way the branch and the
-counts already do. A reload resets the selection to the default, so the picker puts
+counts already do. Each listing that lands sends its worktrees for counts, once per
+path per open: two workspaces of one repo list the same set, and a relist after a
+removal lists every one again. A reload resets the selection to the default, so the picker puts
 it back by identity: rows appearing under the cursor must not move it.
 
 ### Where they live
@@ -2328,9 +2330,10 @@ at a few hundred files, which is how this was found.
   workspace. `xcode-select -p` answers the same question and opens nothing.
   The probes themselves run on `churnQueue`, not the global queue: unbounded
   blocking `git` calls are what would starve the `.userInitiated` work that
-  `repoRoot` and the tool floats' `git:` gating share, and each `refreshChurn`
-  cancels the one before it so a reopened picker does not run behind the last
-  one. A probe that cannot answer clears the counts rather than leaving the
+  `repoRoot` and the tool floats' `git:` gating share. Each `refreshChurn` call
+  returns its own token, and the picker cancels its tokens when it closes, so a
+  reopened picker does not run behind the last one and another window's picker
+  keeps its answers. A probe that cannot answer clears the counts rather than leaving the
   previous run's on the row.
 - **A tool float's open is cancellable while its repo-root probe is out.** The
   walk is off-main, so a `git:`-gated or `.directory` float opens a queue hop
