@@ -3,8 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// A worktree row's churn counts, against a real repo and a real linked worktree: the counts come
-/// from a `git status` the picker has to remember to run, so a row can sit blank while looking fine.
 final class RepoPickerWorktreeChurnTests: WindowTestCase {
     private var root: URL!
     private var window: NSWindow?

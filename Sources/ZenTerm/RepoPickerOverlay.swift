@@ -28,8 +28,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// costing the queue. Held per picker rather than cancelled queue-wide: another window's
     /// picker is probing the same queue and its answers are not this one's to drop.
     private var churnRefreshes: [GitRepoStatus.RefreshToken] = []
-    /// Paths already sent for counts this open. Two workspaces of one repo list the same worktrees,
-    /// and a relist after a removal lists them all again.
+    /// Two workspaces of one repo list the same worktrees, and a relist lists them all again.
     private var churnProbed: Set<URL>
     private var worktreeRefresh: GitRepoStatus.RefreshToken?
     /// Common dir to the workspace that shows its worktrees, in config order. Recomputed when a
@@ -594,8 +593,6 @@ final class RepoPickerOverlay: PaletteOverlay {
         }
 
         func applyGitStatus() {
-            // A worktree's branch comes from the listing that named it; only a workspace waits on
-            // a probe for its head.
             let head =
                 worktree.map { $0.branch ?? String($0.head.prefix(7)) }
                 ?? GitRepoStatus.branch(statusPath)
