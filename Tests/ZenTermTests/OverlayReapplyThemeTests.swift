@@ -233,6 +233,43 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertNotEqual(colorsBefore, colorsAfter)
     }
 
+    /// The suggestion rows bake their colors at render time, and the list is parented to the
+    /// window rather than to the card, so nothing reaches them but the field's own recolor.
+    func test_reapplyTheme_recolorsTheOpenBranchListAndKeepsTheQuery() throws {
+        let field = BranchField()
+        let window = makeWindow()
+        window.contentView?.addSubview(field)
+        field.frame = NSRect(x: 20, y: 200, width: 400, height: 30)
+        field.setBranches(["feature/zen-454"], holders: [:])
+        field.box.setText("zen")
+        field.box.controlTextDidChange(
+            Notification(name: NSControl.textDidChangeNotification, object: field.box.field))
+        XCTAssertTrue(field.isListOpen)
+
+        guard
+            let row = descendants(of: try XCTUnwrap(window.contentView))
+                .compactMap({ $0 as? NSTextField })
+                .first(where: { $0.stringValue == "feature/zen-454" })
+        else {
+            return XCTFail("expected the suggestion row")
+        }
+        let before = row.textColor
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        field.reapplyTheme()
+
+        guard
+            let after = descendants(of: try XCTUnwrap(window.contentView))
+                .compactMap({ $0 as? NSTextField })
+                .first(where: { $0.stringValue == "feature/zen-454" })
+        else {
+            return XCTFail("the list came down instead of recoloring")
+        }
+        XCTAssertNotEqual(before, after.textColor)
+        XCTAssertEqual(field.text, "zen", "the query survives the recolor")
+        field.closeList()
+    }
+
     private func makeWorktreeCard() -> NewWorktreeOverlay {
         let workspace = Workspace(
             title: "ZenTerm", path: FileManager.default.temporaryDirectory,
@@ -242,7 +279,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
             options: WorktreeStore.CreateOptions(
                 branches: [], defaultBase: "origin/main", currentBranch: "main", holders: [:]),
             background: Theme.current.chrome.background.nsColor,
-            onSubmit: { _, _ in }, onCancel: {}, onDismiss: {})
+            onSubmit: { _ in }, onCancel: {}, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         return overlay
     }

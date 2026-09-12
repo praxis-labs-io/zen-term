@@ -7,7 +7,7 @@ import XCTest
 /// would pass while a control was dead.
 final class NewWorktreeOverlayTests: WindowTestCase {
     private final class Sink {
-        var submitted: [(branch: String, base: WorktreeStore.Base)] = []
+        var submitted: [NewWorktreeOverlay.Request] = []
         var cancelled = 0
         var dismissed = 0
         var editedWorkspace = 0
@@ -36,14 +36,109 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         XCTAssertEqual(inlineMessage(in: overlay), "Enter a branch name.")
     }
 
-    func test_aBranchThatAlreadyExists_isRefusedBeforeSubmit() throws {
+    // MARK: an existing branch
+
+    func test_anExistingBranch_isTakenRatherThanRefused() throws {
         let (overlay, sink) = mount(branches: ["feature/zen-473"])
 
-        branchField(in: overlay).setText("feature/zen-473")
+        type("feature/zen-473", into: overlay)
+        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
+
+        XCTAssertEqual(sink.submitted.first, .existingBranch("feature/zen-473"))
+        XCTAssertNil(inlineMessage(in: overlay))
+    }
+
+    /// There is no base to choose for a branch that is already at a commit.
+    func test_anExistingBranch_hidesTheBaseGroupAndBringsItBack() throws {
+        let (overlay, _) = mount(branches: ["feature/zen-473"])
+
+        type("feature/zen-473", into: overlay)
+        XCTAssertTrue(try XCTUnwrap(segment(in: overlay)).isHiddenOrHasHiddenAncestor)
+
+        type("feature/zen-999", into: overlay)
+        XCTAssertFalse(try XCTUnwrap(segment(in: overlay)).isHiddenOrHasHiddenAncestor)
+    }
+
+    func test_anExistingBranch_saysSoBeforeCreateIsPressed() throws {
+        let (overlay, _) = mount(branches: ["feature/zen-473"])
+
+        type("feature/zen-473", into: overlay)
+
+        XCTAssertTrue(
+            visibleText(in: overlay).contains("Uses the existing branch feature/zen-473."))
+    }
+
+    func test_aBranchAWorktreeAlreadyHas_blocksSubmit() throws {
+        let (overlay, sink) = mount(
+            branches: ["feature/zen-473"],
+            holders: ["feature/zen-473": .worktree(URL(fileURLWithPath: "/tmp/wt"))])
+
+        type("feature/zen-473", into: overlay)
         try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
 
         XCTAssertTrue(sink.submitted.isEmpty)
-        XCTAssertEqual(inlineMessage(in: overlay), "That branch already exists.")
+        XCTAssertEqual(inlineMessage(in: overlay), "feature/zen-473 already has a worktree.")
+    }
+
+    /// `a` and `a/b` cannot both be refs, but that is a rule about cutting a new branch. Reporting
+    /// it against a branch the user just picked from the list would be nonsense.
+    func test_theRefFileConflictChecks_areSilentForABranchThatExists() throws {
+        let (overlay, sink) = mount(branches: ["feature", "feature/zen-473"])
+
+        type("feature", into: overlay)
+        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
+
+        XCTAssertEqual(sink.submitted.first, .existingBranch("feature"))
+        XCTAssertNil(inlineMessage(in: overlay))
+    }
+
+    // MARK: the main checkout's confirm
+
+    func test_aBranchTheMainCheckoutHolds_asksBeforeMovingIt() throws {
+        let (overlay, sink) = mount(
+            branches: ["feature/zen-473"],
+            holders: ["feature/zen-473": .mainCheckout(URL(fileURLWithPath: "/tmp/repo"))])
+
+        type("feature/zen-473", into: overlay)
+        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
+
+        XCTAssertTrue(sink.submitted.isEmpty, "nothing is created until the question is answered")
+        XCTAssertTrue(visibleText(in: overlay).contains("Move Your Main Checkout"))
+    }
+
+    func test_confirmingTheMove_submitsTheExistingBranch() throws {
+        let (overlay, sink) = mount(
+            branches: ["feature/zen-473"],
+            holders: ["feature/zen-473": .mainCheckout(URL(fileURLWithPath: "/tmp/repo"))])
+        type("feature/zen-473", into: overlay)
+        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
+
+        try XCTUnwrap(button(in: confirmCard(in: overlay), title: "Create Worktree")).onTap()
+
+        XCTAssertEqual(sink.submitted.first, .existingBranch("feature/zen-473"))
+    }
+
+    func test_cancellingTheMove_createsNothing() throws {
+        let (overlay, sink) = mount(
+            branches: ["feature/zen-473"],
+            holders: ["feature/zen-473": .mainCheckout(URL(fileURLWithPath: "/tmp/repo"))])
+        type("feature/zen-473", into: overlay)
+        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
+
+        try XCTUnwrap(button(in: confirmCard(in: overlay), title: "Cancel")).onTap()
+
+        XCTAssertTrue(sink.submitted.isEmpty)
+    }
+
+    /// The message has to name where the checkout lands, and must never say "origin/main": that
+    /// is a remote ref, and checking one out detaches HEAD.
+    func test_theMoveMessage_namesTheLocalBranchTheCheckoutLandsOn() {
+        XCTAssertEqual(
+            NewWorktreeOverlay.moveMainCheckoutMessage("feature/x", to: "origin/main"),
+            """
+            feature/x is checked out in your main checkout. Creating this worktree moves that \
+            checkout to main, so any shell open there will be on main.
+            """)
     }
 
     /// `check-ref-format` passes `-m`, and `worktree add -b -m` then renames the repo's own branch.
@@ -110,7 +205,7 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         branchField(in: overlay).setText("testing")
         try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
 
-        XCTAssertEqual(sink.submitted.first?.branch, "testing")
+        XCTAssertEqual(sink.submitted.first, .newBranch("testing", .defaultBranch))
     }
 
     // MARK: submit
@@ -121,8 +216,7 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         branchField(in: overlay).setText("  feature/zen-473  ")
         try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
 
-        XCTAssertEqual(sink.submitted.first?.branch, "feature/zen-473")
-        XCTAssertEqual(sink.submitted.first?.base, .defaultBranch)
+        XCTAssertEqual(sink.submitted.first, .newBranch("feature/zen-473", .defaultBranch))
     }
 
     func test_theSecondBaseSegment_cutsFromTheCurrentCheckout() throws {
@@ -132,7 +226,7 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         branchField(in: overlay).setText("spike")
         try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
 
-        XCTAssertEqual(sink.submitted.first?.base, .currentCheckout)
+        XCTAssertEqual(sink.submitted.first, .newBranch("spike", .currentCheckout))
     }
 
     // MARK: the create's own state
@@ -383,7 +477,7 @@ final class NewWorktreeOverlayTests: WindowTestCase {
                 branches: branches, defaultBase: defaultBase, currentBranch: currentBranch,
                 holders: holders),
             background: Theme.current.chrome.background.nsColor,
-            onSubmit: { sink.submitted.append((branch: $0, base: $1)) },
+            onSubmit: { sink.submitted.append($0) },
             onCancel: { sink.cancelled += 1 },
             onDismiss: { sink.dismissed += 1 },
             onEditWorkspace: canEditWorkspace ? { sink.editedWorkspace += 1 } : nil)
@@ -395,6 +489,20 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         win.contentView?.layoutSubtreeIfNeeded()
         window = win
         return (overlay, sink)
+    }
+
+    /// Types through the real field so the live validation pass runs, the way a keystroke does.
+    private func type(_ text: String, into overlay: NSView) {
+        let box = branchField(in: overlay)
+        box.setText(text)
+        box.controlTextDidChange(
+            Notification(name: NSControl.textDidChangeNotification, object: box.field))
+    }
+
+    /// Both cards carry a Create Worktree and a Cancel, so a confirm's buttons are looked up
+    /// inside it rather than by title across the whole overlay.
+    private func confirmCard(in overlay: NSView) -> NSView {
+        descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first!
     }
 
     private func descendants(of view: NSView) -> [NSView] {

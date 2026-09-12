@@ -1875,6 +1875,33 @@ What the claim does not prove is that the branch still stands where it was put. 
 fails, so the rollback still compares the ref against the OID it claimed and leaves a
 branch that moved, rather than force-deleting commits it did not make.
 
+### Taking a branch that already exists
+
+`create(existingBranch:in:)` is the same `worktree add <dest> <branch>` with the branch
+claim skipped, because the branch is already the user's. That one difference decides the
+whole shape:
+
+**The rollback must not touch the branch.** The new-branch rollback ends in `branch -D`,
+and running that here would delete work nobody asked about. `BranchClaim` is nil on this
+path, and the rollback stops after the folder.
+
+**Every failure is a refusal before anything is written**, so there is no stash, no move
+back, and no rollback matrix. `holders(in:)` reads one `worktree list --porcelain` and says
+where each branch is checked out. `list` cannot answer it: that one drops the main checkout,
+which is the case this exists for. A branch a linked worktree holds is refused. A branch the
+main checkout holds is refused when it has uncommitted work, and **a count git could not
+read counts as dirty**, because this is the only path that moves a checkout the user did not
+name.
+
+**A clean main checkout moves to the local default branch**, and the card asks first. The
+target is `fallbackBranch`, not `resolveBase`: that answers with `origin/main`, and checking
+out a remote ref detaches `HEAD`. A repo with no local default, or one whose default already
+has a worktree, or a main checkout already standing on the default, each refuse by name.
+
+**The move runs after the folder is claimed.** A taken folder then refuses without having
+moved anything, which is why `addWorktree` takes the step rather than the caller running it
+first.
+
 **`--no-track`, deliberately.** `worktree add -b` tracked the base, which set
 `origin/main` as the upstream of a branch called something else. `push.default=simple`
 refuses an upstream whose name is not the branch's own, so the first `git push` from a
@@ -1924,6 +1951,25 @@ available here and never will be: the carry's length is unknown until it is over
 the same `resolveBase` the create will run. A caption that only said "the default
 branch" would make the reader go and look, and one that guessed would be wrong in a
 repo with no remote.
+
+**The branch field suggests, and a name that exists is the affordance rather than a
+refusal.** `BranchField` is a `FieldBox` with a `ListPopover` under it, ranked by
+`FuzzyMatch` with an exact match first. Not a `Dropdown`: that is a closed select that takes
+first responder for itself, and here the text field has to keep the keyboard while the list
+advises it. Down on an empty field opens the whole list, which is how "give this branch a
+worktree" is reached without typing. A branch something already holds keeps its row with a
+note saying so, because hiding it leaves the user typing the name by hand and meeting the
+refusal with no explanation.
+
+An existing branch **hides the BASE group**, and takes it out of the focus stops with it: a
+branch that exists is already at a commit, and there is nothing to choose. The ref-file
+conflict checks (`a` and `a/b` cannot both be refs) apply only to cutting a new branch.
+
+**Moving the main checkout is asked, not done.** The card presents a `ConfirmCard` over
+itself naming where the checkout lands and that shells already open there will be on that
+branch. Nothing closes: unlike removal, this deletes no folder. `ConfirmSlot` holds the card
+for both the picker and this one, clearing the slot in the exit animation's completion so Esc
+is not handed back mid-spring.
 
 **The picker's footer teaches the two chords and nothing else.** `⏎ open`,
 `⇧⏎ replace tab`, and the two worktree chords read from the live keymap, so a rebind or
