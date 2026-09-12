@@ -177,50 +177,28 @@ final class RepoPickerOverlay: PaletteOverlay {
     /// A confirm shown over the list, which stays put underneath it. Removing a worktree is
     /// answered here rather than by replacing the picker: the row it is about has to remain
     /// visible, and it becomes the progress state the moment the answer is yes.
-    private var confirmCard: ConfirmCard?
+    private lazy var confirm = ConfirmSlot(over: self)
 
-    override var isShowingOverlaidCard: Bool { confirmCard != nil }
+    override var isShowingOverlaidCard: Bool { confirm.isShowing }
 
-    func presentConfirm(_ card: ConfirmCard) {
-        confirmCard?.removeFromSuperview()
-        card.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(card)
-        NSLayoutConstraint.activate([
-            card.leadingAnchor.constraint(equalTo: leadingAnchor),
-            card.trailingAnchor.constraint(equalTo: trailingAnchor),
-            card.topAnchor.constraint(equalTo: topAnchor),
-            card.bottomAnchor.constraint(equalTo: bottomAnchor),
-        ])
-        confirmCard = card
-        card.focusInitialResponder()
-        card.animateIn()
-    }
+    func presentConfirm(_ card: ConfirmCard) { confirm.present(card) }
 
     /// While a card is up the keyboard is its own, so focus goes there rather than to the query.
     override func focusInitialResponder() {
-        if let confirmCard { confirmCard.focusInitialResponder() } else { focusQuery() }
+        if let card = confirm.card { card.focusInitialResponder() } else { focusQuery() }
     }
 
-    /// Take the confirm down and give the list its keyboard back. The slot is cleared in the exit
-    /// animation's completion, not before it: the card is on screen for that whole spring, and
-    /// releasing it early hands Esc back to the picker, which closes the picker instead.
     func dismissConfirm() {
-        guard let card = confirmCard else { return }
-        card.animateOut { [weak self, weak card] in
-            card?.removeFromSuperview()
-            guard let self, self.confirmCard === card else { return }
-            self.confirmCard = nil
-        }
-        focusQuery()
+        confirm.dismiss { [weak self] in self?.focusQuery() }
     }
 
     override func reapplyTheme() {
         super.reapplyTheme()
-        confirmCard?.reapplyTheme()
+        confirm.card?.reapplyTheme()
     }
 
     #if DEBUG
-        var presentedConfirmForTesting: ConfirmCard? { confirmCard }
+        var presentedConfirmForTesting: ConfirmCard? { confirm.card }
     #endif
 
     /// Take a removed worktree out of the listings in hand, and re-render around it. The claim is

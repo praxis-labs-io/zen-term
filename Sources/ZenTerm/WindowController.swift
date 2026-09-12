@@ -1294,8 +1294,8 @@ final class WindowController: NSObject {
             let form = NewWorktreeOverlay(
                 workspace: target.workspace, options: options,
                 background: Theme.current.chrome.background.nsColor,
-                onSubmit: { [weak self] branch, base in
-                    self?.createWorktree(branch: branch, base: base, from: target)
+                onSubmit: { [weak self] request in
+                    self?.createWorktree(request, from: target)
                 },
                 onCancel: { [weak self] in self?.reopenRepoPicker() },
                 onDismiss: { [weak self] in self?.closeModal() },
@@ -1314,15 +1314,21 @@ final class WindowController: NSObject {
     /// The card is looked up again after the hop rather than captured: the worktree lands either
     /// way, and only the report back to it is skippable.
     private func createWorktree(
-        branch: String, base: WorktreeStore.Base, from target: RepoPickerOverlay.CreateTarget
+        _ request: NewWorktreeOverlay.Request, from target: RepoPickerOverlay.CreateTarget
     ) {
         let workspace = target.workspace
         let card = modal?.overlay as? NewWorktreeOverlay
-        card?.beginWork("Creating \(branch)")
+        card?.beginWork("Creating \(Self.branchName(of: request))")
         DispatchQueue.global(qos: .userInitiated).async {
             let result: Result<(Worktree, CarryReport), Error>
             do {
-                let worktree = try WorktreeStore.create(branch: branch, base: base, in: target.repo)
+                let worktree: Worktree
+                switch request {
+                case .newBranch(let branch, let base):
+                    worktree = try WorktreeStore.create(branch: branch, base: base, in: target.repo)
+                case .existingBranch(let branch):
+                    worktree = try WorktreeStore.create(existingBranch: branch, in: target.repo)
+                }
                 let report = WorktreeCarry.copy(
                     workspace.carry, from: workspace.path, into: worktree.path,
                     onEntry: { name in
@@ -1358,6 +1364,13 @@ final class WindowController: NSObject {
                     }
                 }
             }
+        }
+    }
+
+    static func branchName(of request: NewWorktreeOverlay.Request) -> String {
+        switch request {
+        case .newBranch(let branch, _): return branch
+        case .existingBranch(let branch): return branch
         }
     }
 
@@ -2115,7 +2128,7 @@ final class WindowController: NSObject {
         if let modal {
             // A card over the card owns the keyboard: a destructive question is answered, never
             // navigated away from by the chord that opened the surface under it.
-            if (modal.overlay as? PaletteOverlay)?.isShowingOverlaidCard == true { return }
+            if modal.overlay.isShowingOverlaidCard { return }
             if let selfToggle = modal.kind.selfToggle, chord == selfToggle {
                 closeModal()
                 return

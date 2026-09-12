@@ -301,6 +301,7 @@ WORKTREES, "Choose what to copy", "Copying node_modules".
 | The footer button row                 | **toolbar**                                          | dock (that's macOS's; the type name `ToggleDock` is code)  |
 | Looking through the scrollback        | **Find** in UI, `search` in config                   | search in UI, scrollback search, find in config            |
 | Files a worktree needs that git ignores | **copy** in UI, `carry` in config                  | carry in UI (a metaphor, not a description)                |
+| The checkout a repo's worktrees hang off | **main checkout**                                  | root, main worktree (worktree already means the new folder) |
 
 Apostrophes: straight (`'`), matching the bulk of the codebase. Two form overlays
 use curly (`’`) and should be reconciled.

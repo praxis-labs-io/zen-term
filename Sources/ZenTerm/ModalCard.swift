@@ -15,10 +15,14 @@ protocol ModalOverlay: NSView {
     /// Re-apply the overlay's theme-dependent colors after a live theme change. Default no-op;
     /// overlays with theme-dependent chrome override it.
     func reapplyTheme()
+    /// Whether a card is up over this overlay. A question is answered, never navigated away from
+    /// by the chord that opened the surface under it, so the host's chord gate reads this.
+    var isShowingOverlaidCard: Bool { get }
 }
 
 extension ModalOverlay {
     func reapplyTheme() {}
+    var isShowingOverlaidCard: Bool { false }
 }
 
 /// The card container: swallows clicks so a tap on the card's empty area doesn't fall through
