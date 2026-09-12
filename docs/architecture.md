@@ -1885,8 +1885,8 @@ whole shape:
 and running that here would delete work nobody asked about. `BranchClaim` is nil on this
 path, and the rollback stops after the folder.
 
-**Every failure is a refusal before anything is written**, so there is no stash, no move
-back, and no rollback matrix. `holders(in:)` reads one `worktree list --porcelain` and says
+**Every refusal lands before anything is written**, so there is no stash and no user work to
+restore. `holders(in:)` reads one `worktree list --porcelain` and says
 where each branch is checked out. `list` cannot answer it: that one drops the main checkout,
 which is the case this exists for. A branch a linked worktree holds is refused. A branch the
 main checkout holds is refused when it has uncommitted work, and **a count git could not
@@ -1898,9 +1898,13 @@ target is `fallbackBranch`, not `resolveBase`: that answers with `origin/main`, 
 out a remote ref detaches `HEAD`. A repo with no local default, or one whose default already
 has a worktree, or a main checkout already standing on the default, each refuse by name.
 
-**The move runs after the folder is claimed.** A taken folder then refuses without having
-moved anything, which is why `addWorktree` takes the step rather than the caller running it
-first.
+**The move runs after the folder is claimed, and comes back with it.** A taken folder refuses
+without having moved anything, which is why `addWorktree` takes the move rather than the
+caller running it first. And `worktree add` can still fail after the checkout has moved, which
+a `post-checkout` hook exiting non-zero reproduces, so the rollback puts the checkout back on
+the branch it started on. Leaving someone's checkout on a branch they did not ask for, with no
+worktree to show for it, costs more than the failure. A move-back that itself fails is named
+through `rollbackIncomplete` rather than swallowed.
 
 **`--no-track`, deliberately.** `worktree add -b` tracked the base, which set
 `origin/main` as the upstream of a branch called something else. `push.default=simple`
@@ -1968,7 +1972,11 @@ note saying so, because hiding it leaves the user typing the name by hand and me
 refusal with no explanation.
 
 An existing branch **hides the BASE group**, and takes it out of the focus stops with it: a
-branch that exists is already at a commit, and there is nothing to choose. The ref-file
+branch that exists is already at a commit, and there is nothing to choose. That changes the
+card's height, so the list is repositioned against the moved field rather than left against
+its old frame. The default branch under the main checkout is refused in the card instead of
+confirmed, because the store refuses it too and a confirm would ask about a move that cannot
+happen. The ref-file
 conflict checks (`a` and `a/b` cannot both be refs) apply only to cutting a new branch.
 
 **Moving the main checkout is asked, not done.** The card presents a `ConfirmCard` over

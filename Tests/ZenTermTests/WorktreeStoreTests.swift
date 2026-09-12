@@ -115,6 +115,21 @@ final class WorktreeStoreTests: XCTestCase {
             "the main checkout moved to the default branch, not a detached origin/main")
     }
 
+    /// The move is part of the create, so it comes back with the folder. A checkout left on a
+    /// branch nobody asked for, with no worktree to show for it, costs more than the failure.
+    func test_createExisting_putsTheMainCheckoutBackWhenTheAddFails() throws {
+        try GitFixture.run(["checkout", "-q", "-b", "busy"], in: repo)
+        try GitFixture.run(["commit", "-q", "--allow-empty", "-m", "on busy"], in: repo)
+        try failingPostCheckoutHook()
+
+        XCTAssertThrowsError(try WorktreeStore.create(existingBranch: "busy", in: repo))
+
+        XCTAssertEqual(
+            try GitFixture.run(["rev-parse", "--abbrev-ref", "HEAD"], in: repo), "busy",
+            "the main checkout is back on the branch it started on")
+        XCTAssertEqual(try WorktreeStore.list(in: repo), [])
+    }
+
     func test_createExisting_refusesWhenTheDefaultBranchIsItselfInAWorktree() throws {
         try GitFixture.run(["checkout", "-q", "-b", "busy"], in: repo)
         _ = try WorktreeStore.create(existingBranch: "main", in: repo)

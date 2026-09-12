@@ -97,6 +97,13 @@ final class BranchField: NSView, ThemeReapplying {
     /// Where `text` is checked out, when it names a branch something already holds.
     var holderOfTypedBranch: WorktreeStore.Holder? { holders[text] }
 
+    /// Put an open list back against the field. The popover is frame-placed once, so anything that
+    /// moves the field on screen has to say so.
+    func repositionList() {
+        guard popover.isOpen else { return }
+        popover.reposition()
+    }
+
     func closeList() {
         guard popover.isOpen else { return }
         popover.close()
@@ -192,6 +199,12 @@ final class BranchField: NSView, ThemeReapplying {
 
     private func renderRows() {
         let chrome = Theme.current.chrome
+        // The list caps at 260pt, so past nine branches the highlight walks off the bottom and
+        // Return commits one the user cannot see. `Dropdown` and `CheckboxDropdown` do the same.
+        if rowViews.indices.contains(highlighted) {
+            let row = rowViews[highlighted]
+            row.scrollToVisible(row.bounds)
+        }
         for (index, row) in rowViews.enumerated() {
             let branch = matches[index]
             row.render(

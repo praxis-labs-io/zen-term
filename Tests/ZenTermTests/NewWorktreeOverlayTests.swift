@@ -121,6 +121,50 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         XCTAssertTrue(visibleText(in: overlay).contains("Move Your Main Checkout"))
     }
 
+    /// The store throws for this, so confirming a move first asks about a step that cannot happen
+    /// and then fails anyway, with a message that reads "moves that checkout to main" for main.
+    func test_theDefaultBranchUnderTheMainCheckout_isRefusedRatherThanConfirmed() throws {
+        let (overlay, sink) = mount(
+            branches: ["main"], defaultBase: "origin/main",
+            holders: ["main": .mainCheckout(URL(fileURLWithPath: "/tmp/repo"))])
+
+        type("main", into: overlay)
+        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
+
+        XCTAssertTrue(sink.submitted.isEmpty)
+        XCTAssertEqual(
+            inlineMessage(in: overlay),
+            "main is the default branch, so your main checkout cannot move off it.")
+        XCTAssertFalse(
+            visibleText(in: overlay).contains("Move Your Main Checkout"), "no confirm was shown")
+    }
+
+    /// The list is parented to the window, so left up it draws over the confirm, and a row clicked
+    /// there edits the card mid-create.
+    func test_submitting_takesTheSuggestionListDown() throws {
+        let (overlay, _) = mount(branches: ["main", "main-ish"])
+        type("main", into: overlay)
+        XCTAssertTrue(branchListIsOpen(in: overlay))
+
+        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
+
+        XCTAssertFalse(branchListIsOpen(in: overlay))
+    }
+
+    /// A card over the card owns the keyboard, and the chord gate reads this off the protocol now
+    /// rather than off `PaletteOverlay`, which this card is not.
+    func test_withTheConfirmUp_theCardReportsAnOverlaidCard() throws {
+        let (overlay, _) = mount(
+            branches: ["feature/zen-473"],
+            holders: ["feature/zen-473": .mainCheckout(URL(fileURLWithPath: "/tmp/repo"))])
+        XCTAssertFalse(overlay.isShowingOverlaidCard)
+
+        type("feature/zen-473", into: overlay)
+        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
+
+        XCTAssertTrue(overlay.isShowingOverlaidCard)
+    }
+
     func test_confirmingTheMove_submitsTheExistingBranch() throws {
         let (overlay, sink) = mount(
             branches: ["feature/zen-473"],
@@ -531,6 +575,10 @@ final class NewWorktreeOverlayTests: WindowTestCase {
 
     /// Both cards carry a Create Worktree and a Cancel, so a confirm's buttons are looked up
     /// inside it rather than by title across the whole overlay.
+    private func branchListIsOpen(in overlay: NSView) -> Bool {
+        descendants(of: overlay).compactMap { $0 as? BranchField }.first?.isListOpen ?? false
+    }
+
     private func confirmCard(in overlay: NSView) -> NSView {
         descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first!
     }

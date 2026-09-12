@@ -275,7 +275,7 @@ enum WorktreeStore {
         // The card's branch list is a snapshot, and a shell can delete a branch while it is open.
         guard branchExists(branch, in: repo) else { throw WorktreeError.branchNotThere(branch) }
 
-        var move: (main: URL, to: String)?
+        var move: CheckoutMove?
         switch holder(of: branch, in: repo) {
         case .worktree:
             throw WorktreeError.branchInWorktree(branch)
@@ -293,7 +293,7 @@ enum WorktreeStore {
             if case .worktree = holder(of: fallback, in: repo) {
                 throw WorktreeError.defaultBranchInWorktree(branch, defaultBranch: fallback)
             }
-            move = (main, fallback)
+            move = CheckoutMove(checkout: main, from: branch, to: fallback)
         case nil:
             break
         }
@@ -304,11 +304,9 @@ enum WorktreeStore {
             beforeClaimingForTesting?(repo)
         #endif
 
-        return try addWorktree(branch, claim: nil, fallbackHead: head, in: repo) {
-            // After the folder is claimed, so a taken folder refuses without having moved anything.
-            guard let move else { return }
-            try git(["checkout", move.to], in: move.main)
-        }
+        // `move` runs after the folder is claimed, so a taken folder refuses without having moved
+        // anything.
+        return try addWorktree(branch, claim: nil, fallbackHead: head, in: repo, move: move)
     }
 
     /// What a failed create has to give back beyond the folder. Nil when the branch was not this
@@ -318,11 +316,11 @@ enum WorktreeStore {
         let oid: String
     }
 
-    /// Claim the folder, run `afterClaiming`, add the worktree, and report it. Shared by both
-    /// creates, which differ in what they claimed rather than in what they add.
+    /// Claim the folder, run `move`, add the worktree, and report it. Shared by both creates,
+    /// which differ in what they claimed rather than in what they add.
     private static func addWorktree(
         _ branch: String, claim: BranchClaim?, fallbackHead: String, in repo: URL,
-        afterClaiming: () throws -> Void = {}
+        move: CheckoutMove? = nil
     ) throws -> Worktree {
         // Keyed on the main checkout, never on `repo`: creating from inside a worktree would
         // otherwise give the same repo a second home under the root.
@@ -338,10 +336,14 @@ enum WorktreeStore {
         }
 
         do {
-            try afterClaiming()
+            try move.map { try git(["checkout", $0.to], in: $0.checkout) }
             try git(["worktree", "add", destination.path, branch], in: repo)
         } catch {
-            throw takingBack(claim, at: destination, in: repo, after: error)
+            // The move is undone with the folder. `worktree add` can fail after the checkout has
+            // already moved (a `post-checkout` hook that exits non-zero), and leaving someone's
+            // checkout on a branch they did not ask for, with no worktree to show for it, is the
+            // one outcome here that costs more than the failure itself.
+            throw takingBack(claim, at: destination, undoing: move, in: repo, after: error)
         }
 
         // Read the worktree's own HEAD rather than trusting the OID resolved before the add: a
@@ -387,11 +389,23 @@ enum WorktreeStore {
         }
     }
 
+    /// A main checkout stepping off the branch a worktree is taking, and the branch it was on, so
+    /// a failed create can put it back.
+    private struct CheckoutMove {
+        let checkout: URL
+        let from: String
+        let to: String
+    }
+
     /// What a failed `create` throws, once it has taken back what it claimed.
     private static func takingBack(
-        _ claim: BranchClaim?, at destination: URL?, in repo: URL, after cause: Error
+        _ claim: BranchClaim?, at destination: URL?, undoing move: CheckoutMove? = nil,
+        in repo: URL, after cause: Error
     ) -> Error {
-        let leftBehind = rollback(claim, at: destination, in: repo)
+        var leftBehind = rollback(claim, at: destination, in: repo)
+        if let move, (try? git(["checkout", move.from], in: move.checkout)) == nil {
+            leftBehind.append("your main checkout on \(move.to)")
+        }
         guard leftBehind.isEmpty else {
             return WorktreeError.rollbackIncomplete(
                 cause: cause.localizedDescription, leftBehind: leftBehind)

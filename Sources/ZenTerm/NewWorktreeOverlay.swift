@@ -103,7 +103,12 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
 
     // MARK: ModalOverlay
 
-    func focusInitialResponder() { window?.makeFirstResponder(branchField.field) }
+    var isShowingOverlaidCard: Bool { confirm.isShowing }
+
+    /// While a confirm is up the keyboard is its own, so focus goes there rather than to the field.
+    func focusInitialResponder() {
+        if let card = confirm.card { card.focusInitialResponder() } else { focus(branchField.field) }
+    }
 
     func animateIn() {
         superview?.layoutSubtreeIfNeeded()
@@ -138,7 +143,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         header.textColor = chrome.foreground.nsColor
         baseCaption.textColor = chrome.ink(.muted)
         branchCaption.textColor = chrome.ink(.muted)
-        branchField.reapplyTheme()
         confirm.card?.reapplyTheme()
         carryLabel.textColor = chrome.ink(.muted)
         phaseLabel.textColor = chrome.ink(.muted)
@@ -325,15 +329,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         branchField.setBranches(options.branches, holders: options.holders)
     }
 
-    private func wireField(_ box: FieldBox) {
-        box.onChange = { [weak self] in self?.refreshValidity() }
-        box.onArrowUp = { [weak self] in self?.moveVertical(-1) }
-        box.onArrowDown = { [weak self] in self?.moveVertical(1) }
-        box.onTab = { [weak self] in self?.moveTab(1) }
-        box.onBacktab = { [weak self] in self?.moveTab(-1) }
-        box.onSubmit = { [weak self] in self?.submit() }
-    }
-
     private func wireSegment(_ segment: SegmentedControl) {
         segment.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         segment.onArrowDown = { [weak self] in self?.moveVertical(1) }
@@ -366,6 +361,10 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
 
     private func submit() {
         guard !isWorking, !confirm.isShowing else { return }
+        // ⌘Return reaches the button through `performKeyEquivalent` and a click never moves first
+        // responder, so neither path takes the list down on its own. Left up it draws over the
+        // confirm, and a row clicked there would edit the card mid-create.
+        branchField.closeList()
         if let firstInvalid = validate(includeRequired: true) {
             window?.makeFirstResponder(firstInvalid)
             return
@@ -423,6 +422,13 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
 
     var isExistingBranch: Bool { options.branches.contains(branchName) }
 
+    /// Where a moved main checkout lands. `defaultBase` is a remote ref, and checking one out
+    /// detaches HEAD, so the local name is what every message and the store both mean.
+    private var localDefaultBranch: String? {
+        guard let base = options.defaultBase else { return nil }
+        return base.hasPrefix("origin/") ? String(base.dropFirst("origin/".count)) : base
+    }
+
     var request: Request {
         isExistingBranch ? .existingBranch(branchName) : .newBranch(branchName, base)
     }
@@ -447,7 +453,13 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         } else if branch.contains(where: \.isWhitespace) {
             message = "Can't contain spaces."
         } else if isExistingBranch {
-            if case .worktree = options.holders[branch] { message = "\(branch) already has a worktree." }
+            if case .worktree = options.holders[branch] {
+                message = "\(branch) already has a worktree."
+            } else if case .mainCheckout = options.holders[branch], branch == localDefaultBranch {
+                // The store throws `.mainCheckoutOnDefaultBranch` for this, so confirming a move
+                // first would ask about a step that cannot happen and then fail anyway.
+                message = "\(branch) is the default branch, so your main checkout cannot move off it."
+            }
         } else if let nested = options.branches.filter({ $0.hasPrefix(branch + "/") }).min() {
             message = "\(nested) already uses this name as a folder."
         } else if let parent = Self.branchAncestor(of: branch, in: options.branches) {
@@ -464,7 +476,15 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
     /// Create will do before it is pressed, the way the base caption names its ref.
     private func renderBranchMode() {
         let existing = isExistingBranch
-        baseGroup?.isHidden = !existing ? false : true
+        // Hiding BASE changes the card's height, which moves the field under a list placed against
+        // its old frame. Lay the card out and put the list back rather than taking it down: the
+        // query that hid BASE can still have other candidates behind it.
+        let moved = baseGroup?.isHidden != existing
+        baseGroup?.isHidden = existing
+        if moved {
+            card.layoutSubtreeIfNeeded()
+            branchField.repositionList()
+        }
         guard existing else {
             branchCaption.isHidden = true
             return

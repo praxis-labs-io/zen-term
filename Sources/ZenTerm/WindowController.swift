@@ -2128,7 +2128,7 @@ final class WindowController: NSObject {
         if let modal {
             // A card over the card owns the keyboard: a destructive question is answered, never
             // navigated away from by the chord that opened the surface under it.
-            if (modal.overlay as? PaletteOverlay)?.isShowingOverlaidCard == true { return }
+            if modal.overlay.isShowingOverlaidCard { return }
             if let selfToggle = modal.kind.selfToggle, chord == selfToggle {
                 closeModal()
                 return
