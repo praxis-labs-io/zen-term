@@ -145,6 +145,21 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         XCTAssertTrue(sink.submitted.isEmpty)
     }
 
+    /// The card root is the single Esc owner, so it has to stand down while a confirm is up or it
+    /// cancels the form underneath the question.
+    func test_escapeWithTheConfirmUp_leavesTheCardStanding() throws {
+        let (overlay, sink) = mount(
+            branches: ["feature/zen-473"],
+            holders: ["feature/zen-473": .mainCheckout(URL(fileURLWithPath: "/tmp/repo"))])
+        type("feature/zen-473", into: overlay)
+        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
+
+        pressEscape()
+
+        XCTAssertEqual(sink.cancelled, 0, "the confirm answered its own Esc")
+        XCTAssertTrue(sink.submitted.isEmpty)
+    }
+
     /// The message has to name where the checkout lands, and must never say "origin/main": that
     /// is a remote ref, and checking one out detaches HEAD.
     func test_theMoveMessage_namesTheLocalBranchTheCheckoutLandsOn() {
