@@ -38,7 +38,7 @@ final class FormCardHeightTests: WindowTestCase {
         let overlay = NewWorktreeOverlay(
             workspace: workspace,
             options: WorktreeStore.CreateOptions(
-                branches: [], defaultBase: "origin/main", currentBranch: "main"),
+                branches: [], defaultBase: "origin/main", currentBranch: "main", holders: [:]),
             background: Theme.current.chrome.background.nsColor,
             onSubmit: { _, _ in }, onCancel: {}, onDismiss: {})
         XCTAssertLessThanOrEqual(try cardHeight(of: overlay), FormCard.maxHeight)

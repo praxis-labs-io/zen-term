@@ -25,6 +25,154 @@ final class WorktreeStoreTests: XCTestCase {
         try super.tearDownWithError()
     }
 
+    // MARK: create from an existing branch
+
+    func test_createExisting_landsOnABranchCheckedOutNowhere() throws {
+        try GitFixture.run(["branch", "parked"], in: repo)
+
+        let worktree = try WorktreeStore.create(existingBranch: "parked", in: repo)
+
+        XCTAssertEqual(worktree.branch, "parked")
+        XCTAssertEqual(worktree.head, try GitFixture.run(["rev-parse", "parked"], in: repo))
+        XCTAssertEqual(try GitFixture.run(["rev-parse", "--abbrev-ref", "HEAD"], in: repo), "main")
+    }
+
+    /// The whole reason this path does not claim the branch: the rollback that serves the
+    /// new-branch create would delete work the user has been carrying for a week.
+    func test_createExisting_leavesTheBranchAloneWhenTheAddFails() throws {
+        try GitFixture.run(["branch", "parked"], in: repo)
+        let before = try GitFixture.run(["rev-parse", "parked"], in: repo)
+        try failingPostCheckoutHook()
+
+        XCTAssertThrowsError(try WorktreeStore.create(existingBranch: "parked", in: repo))
+
+        XCTAssertEqual(try GitFixture.run(["rev-parse", "parked"], in: repo), before)
+        XCTAssertTrue(try GitFixture.branches(in: repo).contains("parked"))
+        XCTAssertEqual(try WorktreeStore.list(in: repo), [], "no registration survives")
+    }
+
+    func test_createExisting_refusesABranchThatIsNoLongerThere() throws {
+        XCTAssertThrowsError(try WorktreeStore.create(existingBranch: "ghost", in: repo)) { error in
+            XCTAssertEqual(error as? WorktreeStore.WorktreeError, .branchNotThere("ghost"))
+        }
+    }
+
+    /// Giving the default branch a worktree would leave the main checkout with nowhere to stand.
+    func test_createExisting_refusesTheDefaultBranchWhenTheMainCheckoutIsOnIt() throws {
+        XCTAssertThrowsError(try WorktreeStore.create(existingBranch: "main", in: repo)) { error in
+            XCTAssertEqual(
+                error as? WorktreeStore.WorktreeError, .mainCheckoutOnDefaultBranch("main"))
+        }
+    }
+
+    func test_createExisting_refusesABranchAWorktreeAlreadyHas() throws {
+        try GitFixture.run(["branch", "parked"], in: repo)
+        _ = try WorktreeStore.create(existingBranch: "parked", in: repo)
+
+        XCTAssertThrowsError(try WorktreeStore.create(existingBranch: "parked", in: repo)) { error in
+            XCTAssertEqual(error as? WorktreeStore.WorktreeError, .branchInWorktree("parked"))
+        }
+    }
+
+    func test_createExisting_refusesWhenTheMainCheckoutIsOnItAndDirty() throws {
+        try GitFixture.run(["checkout", "-q", "-b", "busy"], in: repo)
+        try GitFixture.write("edited\n", to: repo.appendingPathComponent("tracked.txt"))
+        try GitFixture.write("new\n", to: repo.appendingPathComponent("scratch.txt"))
+
+        XCTAssertThrowsError(try WorktreeStore.create(existingBranch: "busy", in: repo)) { error in
+            XCTAssertEqual(
+                error as? WorktreeStore.WorktreeError, .branchInMainCheckout("busy", uncommitted: 2))
+        }
+        XCTAssertEqual(try GitFixture.run(["rev-parse", "--abbrev-ref", "HEAD"], in: repo), "busy")
+        XCTAssertEqual(try WorktreeStore.list(in: repo), [], "nothing written")
+    }
+
+    /// The count is what makes the refusal actionable, so it has to be the real one.
+    func test_createExisting_countsEveryFileInAnUntrackedDirectory() throws {
+        try GitFixture.run(["checkout", "-q", "-b", "busy"], in: repo)
+        let dir = repo.appendingPathComponent("logs", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        for name in ["a.log", "b.log", "c.log"] {
+            try GitFixture.write("x\n", to: dir.appendingPathComponent(name))
+        }
+
+        XCTAssertThrowsError(try WorktreeStore.create(existingBranch: "busy", in: repo)) { error in
+            XCTAssertEqual(
+                error as? WorktreeStore.WorktreeError, .branchInMainCheckout("busy", uncommitted: 3))
+        }
+    }
+
+    func test_createExisting_movesACleanMainCheckoutToTheDefaultBranch() throws {
+        try GitFixture.run(["checkout", "-q", "-b", "busy"], in: repo)
+        try GitFixture.write("committed\n", to: repo.appendingPathComponent("tracked.txt"))
+        try GitFixture.run(["commit", "-qam", "on busy"], in: repo)
+
+        let worktree = try WorktreeStore.create(existingBranch: "busy", in: repo)
+
+        XCTAssertEqual(worktree.branch, "busy")
+        XCTAssertEqual(
+            try GitFixture.run(["rev-parse", "--abbrev-ref", "HEAD"], in: repo), "main",
+            "the main checkout moved to the default branch, not a detached origin/main")
+    }
+
+    func test_createExisting_refusesWhenTheDefaultBranchIsItselfInAWorktree() throws {
+        try GitFixture.run(["checkout", "-q", "-b", "busy"], in: repo)
+        _ = try WorktreeStore.create(existingBranch: "main", in: repo)
+
+        XCTAssertThrowsError(try WorktreeStore.create(existingBranch: "busy", in: repo)) { error in
+            XCTAssertEqual(
+                error as? WorktreeStore.WorktreeError,
+                .defaultBranchInWorktree("busy", defaultBranch: "main"))
+        }
+        XCTAssertEqual(try GitFixture.run(["rev-parse", "--abbrev-ref", "HEAD"], in: repo), "busy")
+    }
+
+    /// `worktree add <dest> <branch>` has no `--`, so a leading dash is git's own option parser.
+    /// `refs/heads/-m` is a valid ref name, so `update-ref` makes one where `git branch` will not.
+    func test_createExisting_refusesABranchNameGitWouldReadAsAnOption() throws {
+        try GitFixture.run(["update-ref", "refs/heads/-m", "HEAD"], in: repo)
+
+        XCTAssertThrowsError(try WorktreeStore.create(existingBranch: "-m", in: repo)) { error in
+            XCTAssertEqual(error as? WorktreeStore.WorktreeError, .invalidBranchName("-m"))
+        }
+    }
+
+    /// A folder already taken must refuse before the main checkout is moved for nothing.
+    func test_createExisting_leavesTheMainCheckoutPutWhenTheFolderIsOccupied() throws {
+        try GitFixture.run(["checkout", "-q", "-b", "busy"], in: repo)
+        try GitFixture.run(["commit", "-q", "--allow-empty", "-m", "on busy"], in: repo)
+        let taken = WorktreeStore.rootOverrideForTesting!
+            .appendingPathComponent(WorktreeStore.directoryName(for: repo), isDirectory: true)
+            .appendingPathComponent(WorktreeStore.slug(forText: "busy"), isDirectory: true)
+        try FileManager.default.createDirectory(at: taken, withIntermediateDirectories: true)
+
+        XCTAssertThrowsError(try WorktreeStore.create(existingBranch: "busy", in: repo))
+
+        XCTAssertEqual(try GitFixture.run(["rev-parse", "--abbrev-ref", "HEAD"], in: repo), "busy")
+    }
+
+    // MARK: holders
+
+    func test_holders_tellTheMainCheckoutFromAWorktree() throws {
+        try GitFixture.run(["branch", "parked"], in: repo)
+        let worktree = try WorktreeStore.create(existingBranch: "parked", in: repo)
+
+        let holders = WorktreeStore.holders(in: repo)
+
+        XCTAssertEqual(holders["main"], .mainCheckout(repo.resolvingSymlinksInPath().standardizedFileURL))
+        XCTAssertEqual(holders["parked"], .worktree(worktree.path))
+        XCTAssertNil(holders["nothing"])
+    }
+
+    func test_createOptions_carryTheHolders() throws {
+        try GitFixture.run(["branch", "parked"], in: repo)
+
+        let options = WorktreeStore.createOptions(in: repo)
+
+        XCTAssertNotNil(options.holders["main"])
+        XCTAssertNil(options.holders["parked"], "a branch checked out nowhere has no holder")
+    }
+
     // MARK: list
 
     func test_list_isEmptyForARepoWithNoWorktrees() throws {

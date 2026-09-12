@@ -41,11 +41,27 @@ enum WorktreeStore {
         case currentCheckout
     }
 
+    /// Where a branch is checked out. Git allows one checkout per branch, so this is what turns
+    /// its refusal into a message naming the place rather than repeating git's.
+    enum Holder: Equatable {
+        case mainCheckout(URL)
+        case worktree(URL)
+    }
+
     enum WorktreeError: Error, LocalizedError, Equatable {
         case notARepo(URL)
         case unbornHead(URL)
         case invalidBranchName(String)
         case branchExists(String)
+        /// The card's branch list is a snapshot, so a branch can go between opening it and Create.
+        case branchNotThere(String)
+        case branchInWorktree(String)
+        case branchInMainCheckout(String, uncommitted: Int)
+        /// The main checkout holds the branch and has nowhere to move to.
+        case defaultBranchInWorktree(String, defaultBranch: String)
+        case noFallbackBranch(String)
+        /// The main checkout is already on the default branch, so it has nowhere else to stand.
+        case mainCheckoutOnDefaultBranch(String)
         /// `branch` names the worktree already holding the folder, when one does. Two branch names
         /// can slug onto one folder, so the folder's own name is not what the user typed.
         case destinationExists(URL, branch: String?)
@@ -64,6 +80,24 @@ enum WorktreeStore {
                 return "\(branch) is not a branch name git will take."
             case .branchExists(let branch):
                 return "A branch named \(branch) already exists."
+            case .branchNotThere(let branch):
+                return "\(branch) is no longer a branch in this repository."
+            case .branchInWorktree(let branch):
+                return "\(branch) already has a worktree."
+            case .branchInMainCheckout(let branch, let uncommitted):
+                guard uncommitted > 0 else {
+                    return "Your main checkout is on \(branch), and what it holds could not be read."
+                }
+                let files = "\(uncommitted) uncommitted file\(uncommitted == 1 ? "" : "s")"
+                return "Your main checkout is on \(branch) and has \(files). Commit or stash them first."
+            case .noFallbackBranch(let branch):
+                return
+                    "Your main checkout is on \(branch), and this repository has no default branch for it to move to."
+            case .mainCheckoutOnDefaultBranch(let branch):
+                return "Your main checkout is on \(branch), which is the default branch, so it cannot move off it."
+            case .defaultBranchInWorktree(let branch, let base):
+                return
+                    "Your main checkout is on \(branch), and \(base) already has a worktree, so there is nowhere to move it."
             case .destinationExists(let url, let branch):
                 guard let branch else {
                     return "\(url.lastPathComponent) is already a folder in the worktrees directory."
@@ -126,11 +160,14 @@ enum WorktreeStore {
     ///
     /// **Nil is not "clean".** Reporting zero when git failed would put "nothing uncommitted" in
     /// front of a person about to delete a tree we could not read.
-    static func state(_ worktree: Worktree) -> WorktreeState? {
+    static func state(_ worktree: Worktree) -> WorktreeState? { state(at: worktree.path) }
+
+    /// The same answer for any checkout, including the main one, which `list` leaves out.
+    static func state(at checkout: URL) -> WorktreeState? {
         // `--untracked-files=all`, because the default collapses an untracked directory into one
         // entry and the confirm would offer "1 uncommitted file" for a folder of hundreds.
-        guard let status = try? git(["status", "--porcelain", "--untracked-files=all"], in: worktree.path),
-            let remotes = try? git(["remote"], in: worktree.path)
+        guard let status = try? git(["status", "--porcelain", "--untracked-files=all"], in: checkout),
+            let remotes = try? git(["remote"], in: checkout)
         else { return nil }
         // `--not --remotes` excludes nothing when there are no remote-tracking refs, so the count
         // would be the repo's whole history rather than the work a push would carry off.
@@ -139,7 +176,7 @@ enum WorktreeStore {
         }
         guard
             let counted = try? git(
-                ["rev-list", "--count", "HEAD", "--not", "--remotes"], in: worktree.path),
+                ["rev-list", "--count", "HEAD", "--not", "--remotes"], in: checkout),
             let unpushed = Int(counted)
         else { return nil }
         return WorktreeState(uncommitted: lineCount(status), unpushed: unpushed)
@@ -157,19 +194,38 @@ enum WorktreeStore {
         return url.resolvingSymlinksInPath().standardizedFileURL
     }
 
-    /// What the create card opens with, so it can name each base rather than describe it.
+    /// What the create card opens with, so it can name each base rather than describe it, and say
+    /// which branches are already spoken for.
     struct CreateOptions: Equatable {
         let branches: Set<String>
         let defaultBase: String?
         let currentBranch: String?
+        let holders: [String: Holder]
     }
 
     /// Empty when git cannot answer, which leaves the refusing to `create` rather than to a guess.
     static func createOptions(in repo: URL) -> CreateOptions {
         CreateOptions(
             branches: branchNames(in: repo), defaultBase: defaultBaseName(in: repo),
-            currentBranch: GitRepo.currentBranch(repo))
+            currentBranch: GitRepo.currentBranch(repo), holders: holders(in: repo))
     }
+
+    /// Every checked-out branch of `repo`, and where. One `worktree list`, so the card can answer
+    /// for each branch it offers without a call per row.
+    ///
+    /// `list` cannot be the source: it drops the main checkout, which is the case this exists for.
+    static func holders(in repo: URL) -> [String: Holder] {
+        guard let listing = try? porcelain(in: repo) else { return [:] }
+        let main = mainPath(in: listing)
+        var holders: [String: Holder] = [:]
+        for worktree in parse(listing) {
+            guard let branch = worktree.branch else { continue }
+            holders[branch] = worktree.path == main ? .mainCheckout(worktree.path) : .worktree(worktree.path)
+        }
+        return holders
+    }
+
+    static func holder(of branch: String, in repo: URL) -> Holder? { holders(in: repo)[branch] }
 
     static func branchNames(in repo: URL) -> Set<String> {
         guard
@@ -197,35 +253,113 @@ enum WorktreeStore {
 
         let baseRef = try resolveBase(base, in: repo)
         let base0ID = try git(["rev-parse", baseRef], in: repo)
-        // Keyed on the main checkout, never on `repo`: creating from inside a worktree would
-        // otherwise give the same repo a second home under the root.
-        let parent = root.appendingPathComponent(
-            directoryName(for: mainCheckout(of: repo)), isDirectory: true)
-        let destination = parent.appendingPathComponent(slug(forText: branch), isDirectory: true)
 
         #if DEBUG
             beforeClaimingForTesting?(repo)
         #endif
 
         try claimBranch(branch, at: baseRef, in: repo)
+        return try addWorktree(
+            branch, claim: BranchClaim(name: branch, oid: base0ID), fallbackHead: base0ID, in: repo)
+    }
+
+    /// A worktree on a branch that already exists.
+    ///
+    /// The branch is not claimed, because it was the user's before this ran, so a failure takes
+    /// back only the folder. Every refusal lands before anything is written, which is why there is
+    /// no stash and nothing to restore: work is never moved, only refused.
+    static func create(existingBranch branch: String, in repo: URL) throws -> Worktree {
+        guard GitRepo.isGitRepo(repo) else { throw WorktreeError.notARepo(repo) }
+        // The same dash guard the new-branch path documents: our `worktree add` argv has no `--`.
+        guard isUsableBranchName(branch, in: repo) else { throw WorktreeError.invalidBranchName(branch) }
+        // The card's branch list is a snapshot, and a shell can delete a branch while it is open.
+        guard branchExists(branch, in: repo) else { throw WorktreeError.branchNotThere(branch) }
+
+        var move: (main: URL, to: String)?
+        switch holder(of: branch, in: repo) {
+        case .worktree:
+            throw WorktreeError.branchInWorktree(branch)
+        case .mainCheckout(let main):
+            // Unreadable counts as dirty, not clean. This is the one path that moves a checkout the
+            // user did not name, so a count we could not take must not read as "nothing to lose".
+            let uncommitted = state(at: main)?.uncommitted
+            guard uncommitted == 0 else {
+                throw WorktreeError.branchInMainCheckout(branch, uncommitted: uncommitted ?? 0)
+            }
+            guard let fallback = fallbackBranch(in: repo) else {
+                throw WorktreeError.noFallbackBranch(branch)
+            }
+            guard fallback != branch else { throw WorktreeError.mainCheckoutOnDefaultBranch(branch) }
+            if case .worktree = holder(of: fallback, in: repo) {
+                throw WorktreeError.defaultBranchInWorktree(branch, defaultBranch: fallback)
+            }
+            move = (main, fallback)
+        case nil:
+            break
+        }
+
+        let head = (try? git(["rev-parse", "refs/heads/\(branch)"], in: repo)) ?? ""
+
+        #if DEBUG
+            beforeClaimingForTesting?(repo)
+        #endif
+
+        return try addWorktree(branch, claim: nil, fallbackHead: head, in: repo) {
+            // After the folder is claimed, so a taken folder refuses without having moved anything.
+            guard let move else { return }
+            try git(["checkout", move.to], in: move.main)
+        }
+    }
+
+    /// What a failed create has to give back beyond the folder. Nil when the branch was not this
+    /// create's to take.
+    private struct BranchClaim {
+        let name: String
+        let oid: String
+    }
+
+    /// Claim the folder, run `afterClaiming`, add the worktree, and report it. Shared by both
+    /// creates, which differ in what they claimed rather than in what they add.
+    private static func addWorktree(
+        _ branch: String, claim: BranchClaim?, fallbackHead: String, in repo: URL,
+        afterClaiming: () throws -> Void = {}
+    ) throws -> Worktree {
+        // Keyed on the main checkout, never on `repo`: creating from inside a worktree would
+        // otherwise give the same repo a second home under the root.
+        let parent = root.appendingPathComponent(
+            directoryName(for: mainCheckout(of: repo)), isDirectory: true)
+        let destination = parent.appendingPathComponent(slug(forText: branch), isDirectory: true)
+
         do {
             try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
             try claimDestination(destination, in: repo)
         } catch {
-            throw takingBack(branch, claimedAt: base0ID, at: nil, in: repo, after: error)
+            throw takingBack(claim, at: nil, in: repo, after: error)
         }
 
         do {
+            try afterClaiming()
             try git(["worktree", "add", destination.path, branch], in: repo)
         } catch {
-            throw takingBack(branch, claimedAt: base0ID, at: destination, in: repo, after: error)
+            throw takingBack(claim, at: destination, in: repo, after: error)
         }
 
         // Read the worktree's own HEAD rather than trusting the OID resolved before the add: a
         // concurrent fetch can move `base` in between, and a reported sha has to be the real one.
-        let head = (try? git(["rev-parse", "HEAD"], in: destination)) ?? base0ID
+        let head = (try? git(["rev-parse", "HEAD"], in: destination)) ?? fallbackHead
         return Worktree(
             path: destination.standardizedFileURL, branch: branch, head: head, isLocked: false)
+    }
+
+    /// The local branch a main checkout moves to when its own branch leaves for a worktree. Nil
+    /// when the repo has none, which refuses rather than guessing.
+    ///
+    /// `resolveBase` answers with a remote ref, and checking one out detaches HEAD.
+    private static func fallbackBranch(in repo: URL) -> String? {
+        guard let base = try? resolveBase(.defaultBranch, in: repo) else { return nil }
+        let local = base.hasPrefix("origin/") ? String(base.dropFirst("origin/".count)) : base
+        guard local != "HEAD", branchExists(local, in: repo) else { return nil }
+        return local
     }
 
     /// Take the branch name, or throw. `git branch` writes the ref under git's own lock and refuses
@@ -255,9 +389,9 @@ enum WorktreeStore {
 
     /// What a failed `create` throws, once it has taken back what it claimed.
     private static func takingBack(
-        _ branch: String, claimedAt: String, at destination: URL?, in repo: URL, after cause: Error
+        _ claim: BranchClaim?, at destination: URL?, in repo: URL, after cause: Error
     ) -> Error {
-        let leftBehind = rollback(branch: branch, claimedAt: claimedAt, at: destination, in: repo)
+        let leftBehind = rollback(claim, at: destination, in: repo)
         guard leftBehind.isEmpty else {
             return WorktreeError.rollbackIncomplete(
                 cause: cause.localizedDescription, leftBehind: leftBehind)
@@ -268,11 +402,12 @@ enum WorktreeStore {
     /// Undo what a failed `create` claimed, and report what it could not take back. `destination`
     /// is nil when the create never got as far as claiming the folder.
     ///
+    /// A nil `claim` is the existing-branch path, where the branch was never this create's: the
+    /// folder goes and the branch stays, because deleting it would destroy work nobody asked about.
+    ///
     /// Order matters: git refuses to delete a branch still registered to a worktree, even one whose
     /// directory is gone, so the registration goes first and a bare `removeItem` never leads.
-    private static func rollback(
-        branch: String, claimedAt: String, at destination: URL?, in repo: URL
-    ) -> [String] {
+    private static func rollback(_ claim: BranchClaim?, at destination: URL?, in repo: URL) -> [String] {
         var leftBehind: [String] = []
         if let destination {
             _ = try? git(["worktree", "remove", "--force", destination.path], in: repo)
@@ -282,17 +417,17 @@ enum WorktreeStore {
                 leftBehind.append("the folder \(destination.lastPathComponent)")
             }
         }
-        guard branchExists(branch, in: repo) else { return leftBehind }
+        guard let claim, branchExists(claim.name, in: repo) else { return leftBehind }
 
         // The claim proved the branch is ours, not that nothing was written to it while the add
         // ran: a `post-checkout` hook has the new worktree checked out and can commit.
         let unmoved =
-            (try? git(["rev-parse", "--verify", "refs/heads/\(branch)"], in: repo))
-            == claimedAt
+            (try? git(["rev-parse", "--verify", "refs/heads/\(claim.name)"], in: repo))
+            == claim.oid
         // `-D`, because `-d` asks a different question and refuses an untracked branch cut from a
         // base ahead of the checkout.
-        if unmoved, (try? git(["branch", "-D", "--", branch], in: repo)) != nil { return leftBehind }
-        leftBehind.append("the branch \(branch)")
+        if unmoved, (try? git(["branch", "-D", "--", claim.name], in: repo)) != nil { return leftBehind }
+        leftBehind.append("the branch \(claim.name)")
         return leftBehind
     }
 

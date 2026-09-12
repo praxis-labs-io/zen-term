@@ -370,7 +370,8 @@ final class NewWorktreeOverlayTests: WindowTestCase {
 
     private func mount(
         carry: [String] = [], branches: Set<String> = [], defaultBase: String? = "origin/main",
-        currentBranch: String? = "feature/zen-455", canEditWorkspace: Bool = true
+        currentBranch: String? = "feature/zen-455", canEditWorkspace: Bool = true,
+        holders: [String: WorktreeStore.Holder] = [:]
     ) -> (overlay: NewWorktreeOverlay, sink: Sink) {
         let sink = Sink()
         let workspace = Workspace(
@@ -379,7 +380,8 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         let overlay = NewWorktreeOverlay(
             workspace: workspace,
             options: WorktreeStore.CreateOptions(
-                branches: branches, defaultBase: defaultBase, currentBranch: currentBranch),
+                branches: branches, defaultBase: defaultBase, currentBranch: currentBranch,
+                holders: holders),
             background: Theme.current.chrome.background.nsColor,
             onSubmit: { sink.submitted.append((branch: $0, base: $1)) },
             onCancel: { sink.cancelled += 1 },
