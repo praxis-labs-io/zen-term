@@ -34,6 +34,8 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private let onDelete: (() -> Void)?
 
     private let card = CardView()
+    /// Retained so a live theme change reaches it: it bakes its color at build time.
+    private var footerDivider: ThemeReapplying?
     private var dismiss = DismissGate()
     /// Retained (not a throwaway init-local) so `reapplyTheme()` can recolor it in place.
     private let header = NSTextField(labelWithString: "")
@@ -178,6 +180,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         ]
         controls.forEach { $0.reapplyTheme() }
         carryPicker.reapplyTheme()
+        footerDivider?.reapplyTheme()
         envRows.forEach { $0.reapplyTheme() }
         for group in [titleGroup, folderGroup, mainGroup, rightGroup, bottomGroup] {
             group?.reapplyTheme()
@@ -289,9 +292,11 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         }
         let footer = Self.hStack(footerViews, spacing: 8)
 
-        return FormCard.content(
+        let built = FormCard.content(
             rows: [header, titleGroup, folderGroup, layoutGroup, customDetail, envGroup, carryGroup],
             footer: footer, spacing: 14)
+        footerDivider = built.divider
+        return built.view
     }
 
     private func buildCustomDetail() {

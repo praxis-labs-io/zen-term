@@ -23,6 +23,8 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private let onDelete: (() -> Void)?
 
     private let card = CardView()
+    /// Retained so a live theme change reaches it: it bakes its color at build time.
+    private var footerDivider: ThemeReapplying?
     private var dismiss = DismissGate()
     /// Retained (not a throwaway init-local) so `reapplyTheme()` can recolor it in place.
     private let header = NSTextField(labelWithString: "")
@@ -166,6 +168,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     func reapplyTheme() {
         CardChrome.reapplyTheme(to: card)
         header.textColor = Theme.current.chrome.foreground.nsColor
+        footerDivider?.reapplyTheme()
 
         let controls: [ThemeReapplying] = [
             titleField, commandField, dirPicker, widthField, heightField, gitSegment,
@@ -309,11 +312,13 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         }
         let footer = Self.hStack(footerViews, spacing: 8)
 
-        return FormCard.content(
+        let built = FormCard.content(
             rows: [
                 header, titleGroup, iconGroup, chordGroup, commandGroup, dirGroup, sizeGroup,
                 gitGroup, persistGroup, toolbarGroup,
             ], footer: footer, spacing: 12)
+        footerDivider = built.divider
+        return built.view
     }
 
     /// Seed the fields from the float being edited (all blank for a new float). The chord renders

@@ -13,6 +13,8 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
     private let onEditWorkspace: (() -> Void)?
 
     private let card = CardView()
+    /// Retained so a live theme change reaches it: it bakes its color at build time.
+    private var footerDivider: ThemeReapplying?
     private var dismiss = DismissGate()
     private let header = NSTextField(labelWithString: "")
 
@@ -132,6 +134,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         phaseLabel.textColor = chrome.ink(.muted)
         errorLabel.textColor = chrome.destructive.nsColor
         spinner.reapplyTheme()
+        footerDivider?.reapplyTheme()
 
         let controls: [ThemeReapplying] = [branchField, baseSegment, carryLink, cancelButton, createButton]
         controls.forEach { $0.reapplyTheme() }
@@ -243,9 +246,11 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         // In the footer's dead space, so a long create says so without the card changing height.
         let footer = Self.hStack([phaseGroup, spacer, cancelButton, createButton], spacing: 8)
 
-        return FormCard.content(
+        let built = FormCard.content(
             rows: [header, branchGroup, baseGroup, carryGroup, errorLabel],
             footer: footer, spacing: 14)
+        footerDivider = built.divider
+        return built.view
     }
 
     // MARK: keyboard

@@ -7,10 +7,17 @@ enum FormCard {
     /// form grows with its content and becomes a full-height wall on a tall display.
     static let maxHeight: CGFloat = 460
 
+    /// What `content` hands back. The divider bakes its color at build time like every hairline
+    /// in the app, so the card has to retain it and recolor it on a live theme change.
+    struct Content {
+        let view: NSStackView
+        let divider: ThemeReapplying
+    }
+
     /// Wrap a form's rows in the shared card content: `rows` scroll, `footer` stays put, because a
     /// form long enough to clip is exactly the one where its buttons have to stay reachable. Pin
-    /// the result to the card's edges; `spacing` is the gap between rows.
-    static func content(rows: [NSView], footer: NSView, spacing: CGFloat) -> NSStackView {
+    /// `view` to the card's edges; `spacing` is the gap between rows.
+    static func content(rows: [NSView], footer: NSView, spacing: CGFloat) -> Content {
         let body = NSStackView(views: rows)
         body.orientation = .vertical
         body.alignment = .leading
@@ -47,11 +54,7 @@ enum FormCard {
 
         // The buttons sit against content that scrolls under them, so the band needs an edge the
         // way the palette's hint row does. Without it a clipped row reads as the footer's own.
-        let divider = NSView()
-        divider.wantsLayer = true
-        divider.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor
-        divider.translatesAutoresizingMaskIntoConstraints = false
-        divider.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        let divider = Hairline()
 
         let content = NSStackView(views: [scroll, divider, footerRow])
         content.orientation = .vertical
@@ -61,7 +64,24 @@ enum FormCard {
         scroll.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
         divider.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
         footerRow.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
-        return content
+        return Content(view: content, divider: divider)
+    }
+
+    /// The one-pixel rule above a form's footer.
+    private final class Hairline: NSView, ThemeReapplying {
+        init() {
+            super.init(frame: .zero)
+            wantsLayer = true
+            translatesAutoresizingMaskIntoConstraints = false
+            heightAnchor.constraint(equalToConstant: 1).isActive = true
+            reapplyTheme()
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+        func reapplyTheme() {
+            layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor
+        }
     }
 
     /// The view scrolled into view for a focus stop: its labelled group where it has one, so the

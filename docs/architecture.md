@@ -1993,8 +1993,8 @@ the Settings card carries. Without the cap a form grows with its content: measur
 for a workspace with twelve env vars and twenty copy entries, and 630pt for the tool-float
 form, both on a tall display where nothing looks wrong until you reach for a button. The
 footer stays out of the scroll because a form long enough to clip is exactly the one whose
-buttons have to stay reachable, sits under a hairline so a clipped row does not read as the
-footer's own, and each card's arrow and Tab go through `SettingsDetail.moveFocus`, which
+buttons have to stay reachable, sits under a hairline the card retains and recolors, so a clipped row does not
+read as the footer's own and the rule does not go stale on a theme change, and each card's arrow and Tab go through `SettingsDetail.moveFocus`, which
 reveals the stop it focuses.
 
 **The content-fit constraint is a `<=` plus a low-priority equality, never a `.defaultHigh`
@@ -2037,7 +2037,11 @@ the copy then brings what git ignores under it and leaves the tracked file behin
 files fold. A folder whose ignored children are themselves folders is already one row each,
 and folding it would hide the difference between a `node_modules` worth copying and a
 `.cache` that is not. A tracked *file* is still refused outright: copying one reports a
-modification that never goes away.
+modification that never goes away. Containment is checked against the **resolved** path on both
+sides, not the lexical one: probed, a worktree holding a symlink where a carried entry lands had
+`copyfile` follow it and write outside the tree while reporting the folder as carried. A partial
+copy inside such a folder is taken back whole, for the same reason the whole-entry path takes
+one back.
 
 **A fold is the resting view, not a wall.** Every folded file stays in the catalog, so
 typing its name reaches it and it can be picked on its own; the folded folder is only what

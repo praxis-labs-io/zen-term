@@ -86,17 +86,9 @@ enum WorktreeCarry {
                 skip(name, .notThere)
                 continue
             }
-            // `COPYFILE_CLONE` implies `COPYFILE_NOFOLLOW_SRC`, so a symlink arrives as a symlink
-            // with its original target. A worktree sits under a different parent, so one pointing
-            // outside the workspace lands dangling while the report calls it carried.
-            if let target = try? FileManager.default.destinationOfSymbolicLink(atPath: from.path) {
-                let resolved = URL(
-                    fileURLWithPath: target, relativeTo: from.deletingLastPathComponent()
-                ).standardizedFileURL
-                guard resolved.path.hasPrefix(source.standardizedFileURL.path + "/") else {
-                    skip(name, .leavesTheWorkspace)
-                    continue
-                }
+            guard symlinkStaysInside(from, source), resolvesInside(to, worktree) else {
+                skip(name, .leavesTheWorkspace)
+                continue
             }
             switch isTracked(name, in: source) {
             case .some(true):
@@ -218,7 +210,9 @@ enum WorktreeCarry {
         // Porcelain paths are relative to the repo root, never to the directory git ran in, so a
         // workspace pointing inside a repo has to subtract its own prefix from every one.
         guard let prefix = repoPrefix(of: workspace) else { return nil }
-        var args = ["status", "--porcelain", "--ignored", "-z"]
+        // `--literal-pathspecs` for the same reason `isTracked` passes it: a real folder named
+        // with `*`, `?` or `[` is a glob to git, and would match paths outside the one asked about.
+        var args = ["--literal-pathspecs", "status", "--porcelain", "--ignored", "-z"]
         if let path { args += ["--", prefix + path] }
         guard case .success(let output) = GitCommand.run(args, in: workspace) else { return nil }
         return output.split(separator: "\0").compactMap { line in
@@ -265,26 +259,64 @@ enum WorktreeCarry {
         // `isTracked` declines rather than guessing.
         guard let inside = ignoredPaths(in: source, under: name) else { return .unreadable }
         guard !inside.isEmpty else { return .notThere }
+        // Everything this call put in the worktree, so a failure partway takes all of it back
+        // rather than leaving an install the folder is then reported as not having brought.
+        var written: [URL] = []
+        func undo(_ reason: CarryReport.Skipped.Reason) -> CarryReport.Skipped.Reason {
+            for url in written.reversed() { try? FileManager.default.removeItem(at: url) }
+            return reason
+        }
+
         for entry in inside {
             guard let from = containedPath(entry.path, under: source),
                 let to = containedPath(entry.path, under: worktree)
-            else { return .leavesTheWorkspace }
+            else { return undo(.leavesTheWorkspace) }
+            guard symlinkStaysInside(from, source), resolvesInside(to, worktree) else {
+                return undo(.leavesTheWorkspace)
+            }
             guard !entryExists(at: to) else { continue }
             do {
                 try FileManager.default.createDirectory(
                     at: to.deletingLastPathComponent(), withIntermediateDirectories: true)
             } catch {
-                return .copyFailed(error.localizedDescription)
+                return undo(.copyFailed(error.localizedDescription))
             }
             let flags = copyfile_flags_t(COPYFILE_CLONE | COPYFILE_RECURSIVE)
             guard copyfile(from.path, to.path, nil, flags) == 0 else {
                 var message = [CChar](repeating: 0, count: 256)
                 strerror_r(errno, &message, message.count)
                 try? FileManager.default.removeItem(at: to)
-                return .copyFailed(String(cString: message))
+                return undo(.copyFailed(String(cString: message)))
             }
+            written.append(to)
         }
         return nil
+    }
+
+    /// Whether `url` still lands under `root` once the symlinks on the way are resolved.
+    /// `containedPath` is lexical, so a worktree that checks out a symlink at a carried path would
+    /// have `createDirectory` and `copyfile` follow it straight out of the tree. Probed: a copy
+    /// through such a parent wrote outside the worktree and reported the folder as carried.
+    private static func resolvesInside(_ url: URL, _ root: URL) -> Bool {
+        let base = root.resolvingSymlinksInPath().standardizedFileURL.path
+        var probe = url
+        while !entryExists(at: probe) {
+            let parent = probe.deletingLastPathComponent()
+            guard parent.path != probe.path else { return false }
+            probe = parent
+        }
+        let resolved = probe.resolvingSymlinksInPath().standardizedFileURL.path
+        return resolved == base || resolved.hasPrefix(base + "/")
+    }
+
+    /// Whether a symlink at `from` points somewhere inside `source`. `COPYFILE_CLONE` implies
+    /// `COPYFILE_NOFOLLOW_SRC`, so one pointing out arrives dangling under a different parent.
+    private static func symlinkStaysInside(_ from: URL, _ source: URL) -> Bool {
+        guard let target = try? FileManager.default.destinationOfSymbolicLink(atPath: from.path)
+        else { return true }
+        let resolved = URL(fileURLWithPath: target, relativeTo: from.deletingLastPathComponent())
+            .standardizedFileURL
+        return resolved.path.hasPrefix(source.standardizedFileURL.path + "/")
     }
 
     private static func isDirectory(_ url: URL) -> Bool {

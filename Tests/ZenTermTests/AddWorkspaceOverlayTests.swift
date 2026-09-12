@@ -99,7 +99,15 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         let addVar = try XCTUnwrap(button(in: overlay, title: "＋ Add variable"))
         window?.makeFirstResponder(addVar)
 
-        addVar.onArrowDown?()
+        // The real event, not the callback: AppKit puts `.function` and `.numericPad` on every
+        // arrow, and calling `onArrowDown` directly stays green while the button stops routing it.
+        let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
+        addVar.keyDown(
+            with: try XCTUnwrap(
+                NSEvent.keyEvent(
+                    with: .keyDown, location: .zero, modifierFlags: [.function, .numericPad],
+                    timestamp: 0, windowNumber: 0, context: nil, characters: down,
+                    charactersIgnoringModifiers: down, isARepeat: false, keyCode: 125)))
 
         XCTAssertTrue(KeyboardFocus.isFocused(list, in: window), "Down off ＋ Add variable lands on CARRY")
     }

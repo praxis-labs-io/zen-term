@@ -247,6 +247,30 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         return overlay
     }
 
+    /// The footer hairline bakes its color at build time like every other one in the app, so a
+    /// card that does not retain and recolor it keeps the old rule after a live theme change.
+    func test_reapplyTheme_recolorsTheFormCardsFooterHairline() throws {
+        let overlay = AddWorkspaceOverlay(
+            existingTitles: [], background: Theme.current.chrome.background.nsColor,
+            onSubmit: { _ in }, onCancel: {})
+        overlay.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 460, height: 640)
+        window.contentView?.layoutSubtreeIfNeeded()
+
+        let hairline = try XCTUnwrap(
+            descendants(of: overlay).first {
+                $0.frame.height == 1 && $0.layer?.backgroundColor != nil
+            })
+        let before = hairline.layer?.backgroundColor
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        overlay.reapplyTheme()
+
+        XCTAssertNotEqual(before, hairline.layer?.backgroundColor)
+    }
+
     func test_reapplyTheme_recolorsTheCarryListAndKeepsWhatIsPicked() throws {
         let overlay = AddWorkspaceOverlay(
             existingTitles: [], background: Theme.current.chrome.background.nsColor,

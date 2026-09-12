@@ -167,6 +167,56 @@ final class WorktreeCarryTests: XCTestCase {
         XCTAssertEqual(report.skipped, [CarryReport.Skipped(name: "src", reason: .notThere)])
     }
 
+    /// `containedPath` is lexical. A worktree that checks out a symlink where a carried entry
+    /// lands had `copyfile` follow it: probed, the file wrote outside the worktree and the folder
+    /// came back reported as carried.
+    func test_copy_refusesToWriteThroughASymlinkedParentInTheWorktree() throws {
+        let outside = root.appendingPathComponent("outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        let config = repo.appendingPathComponent("config", isDirectory: true)
+        try FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
+        try GitFixture.write("k\n", to: config.appendingPathComponent(".keep"))
+        try GitFixture.write("config/*.secret\n", to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "config"], in: repo)
+        try GitFixture.write("S\n", to: config.appendingPathComponent("a.secret"))
+        try GitFixture.run(["worktree", "add", "-b", "side", worktree.path], in: repo)
+        try FileManager.default.removeItem(at: worktree.appendingPathComponent("config"))
+        try FileManager.default.createSymbolicLink(
+            at: worktree.appendingPathComponent("config"), withDestinationURL: outside)
+
+        let report = WorktreeCarry.copy(["config"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, [])
+        XCTAssertEqual(
+            report.skipped, [CarryReport.Skipped(name: "config", reason: .leavesTheWorkspace)])
+        XCTAssertFalse(
+            GitFixture.exists(outside.appendingPathComponent("a.secret")),
+            "nothing may be written through the link")
+    }
+
+    /// The per-entry path skipped the symlink check the whole-entry path does, so a link out of
+    /// the workspace cloned as a dangling entry while the folder was reported as carried.
+    func test_copy_ofAPartlyTrackedFolder_refusesASymlinkPointingOut() throws {
+        let bystander = root.appendingPathComponent("bystander.txt")
+        try GitFixture.write("untouched\n", to: bystander)
+        let config = repo.appendingPathComponent("config", isDirectory: true)
+        try FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
+        try GitFixture.write("k\n", to: config.appendingPathComponent(".keep"))
+        try GitFixture.write("config/*.link\n", to: repo.appendingPathComponent(".gitignore"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "config"], in: repo)
+        try FileManager.default.createSymbolicLink(
+            at: config.appendingPathComponent("out.link"), withDestinationURL: bystander)
+        try GitFixture.run(["worktree", "add", "-b", "side", worktree.path], in: repo)
+
+        let report = WorktreeCarry.copy(["config"], from: repo, into: worktree)
+
+        XCTAssertEqual(report.carried, [])
+        XCTAssertEqual(
+            report.skipped, [CarryReport.Skipped(name: "config", reason: .leavesTheWorkspace)])
+    }
+
     /// A fold is the resting view, not a wall: the files stay in the catalog so a query can reach
     /// one. Without that, picking a single file out of a folded folder is impossible from the form.
     func test_ignoredEntries_keepsTheFoldedFilesReachableBehindTheFolder() throws {
