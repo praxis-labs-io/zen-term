@@ -4,11 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The command palette dispatches a picked command through `WindowController.handle(_:)`, but the
-/// app-global chords (reload config, check for updates) are owned by `AppDelegate.route`, not the
-/// window. `handle` forwards them via `onAppGlobalCommand`; without that seam a palette pick is a
-/// silent no-op — which is exactly how "Reload Config" from the palette shipped doing nothing.
-/// This pins the forwarding so it can't regress to a bare `break` again.
 @MainActor
 final class WindowControllerAppGlobalDispatchTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
@@ -17,7 +12,6 @@ final class WindowControllerAppGlobalDispatchTests: WindowTestCase {
     override func setUp() {
         super.setUp()
         originalOverride = TerminalSurfaceFactory.makeOverride
-        // A real ghostty surface needs a live libghostty app; inject a headless stub instead.
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
     }
 
@@ -49,8 +43,6 @@ final class WindowControllerAppGlobalDispatchTests: WindowTestCase {
     }
 
     func test_windowScopedChord_doesNotForward() {
-        // Only the app-global arm calls the seam; a window-scoped action is handled in place, so the
-        // forward must stay specific rather than firing for every chord.
         let controller = makeController()
         var forwarded: [KeyInterceptor.ReservedChord] = []
         controller.onAppGlobalCommand = { forwarded.append($0) }

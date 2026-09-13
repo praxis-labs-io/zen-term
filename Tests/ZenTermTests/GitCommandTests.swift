@@ -3,8 +3,6 @@ import XCTest
 @testable import ZenTerm
 
 final class GitCommandTests: XCTestCase {
-    /// What a failed `worktree add` actually writes: one progress line, then the failure. Handing
-    /// the whole stream to a person put three lines of git on a form card.
     func test_errorDescription_keepsTheFailureAndDropsThePreamble() {
         let failure = GitCommand.Failure(
             status: 128,
@@ -20,8 +18,6 @@ final class GitCommandTests: XCTestCase {
                 + "cannot create 'refs/heads/test'.")
     }
 
-    /// Nothing git says is guaranteed to carry a prefix, and dropping the only line would leave
-    /// the user with a status code.
     func test_errorDescription_fallsBackToTheLastLine() {
         let failure = GitCommand.Failure(status: 1, stderr: "something went sideways\n")
 
@@ -60,8 +56,6 @@ final class GitCommandTests: XCTestCase {
         }
         XCTAssertNotEqual(failure.status, 0)
         XCTAssertFalse(failure.stderr.isEmpty)
-        // Against real git, not a fixture string: the shape of what it writes is the thing being
-        // relied on, and a hand-written stderr would keep passing after git changed it.
         XCTAssertTrue(failure.stderr.hasPrefix("fatal: "), "raw stderr is kept whole")
         XCTAssertEqual(
             failure.errorDescription,
@@ -78,16 +72,11 @@ final class GitCommandTests: XCTestCase {
             _ = try GitCommand.run(args, in: dir).get()
         }
 
-        // A 64K pipe fills long before git finishes, so a runner that waits before reading deadlocks.
         let blob = try GitCommand.run(["show", "HEAD:big.txt"], in: dir).get()
 
         XCTAssertGreaterThan(blob.count, 65_536)
     }
 
-    /// Draining stdout to EOF and only *then* stderr hangs forever: `git add` with `core.autocrlf`
-    /// warns once per file, passing the 64K stderr buffer while stdout stays open and empty.
-    /// It hangs rather than fails when reinstated, so the timeout is explicit: a test that never
-    /// returns reports nothing.
     func test_run_doesNotDeadlockOnACommandThatFloodsStderr() throws {
         let repo = try XCTUnwrap(dir)
         try GitCommand.run(["init", "--initial-branch=main"], in: repo).get()
@@ -110,7 +99,6 @@ final class GitCommandTests: XCTestCase {
         guard case .success = try XCTUnwrap(result) else {
             return XCTFail("git add should succeed despite the warnings")
         }
-        // And the warnings really did exceed one pipe buffer, or this proves nothing.
         let status = try GitCommand.run(["status", "--porcelain"], in: repo).get()
         XCTAssertEqual(status.split(separator: "\n").count, 1500, "every file was staged")
     }

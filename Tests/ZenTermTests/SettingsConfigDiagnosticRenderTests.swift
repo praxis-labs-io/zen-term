@@ -3,15 +3,8 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Rendering tests for the non-keybind config diagnostics: a bad scalar shows inline on the
-/// Settings row that owns its key, a dropped `float =` line shows in the Tools-section notice, and
-/// the reload toast's "Open Settings" button lands on the right section. State-only assertions would
-/// pass while the row/notice is dead, so these mount the real sections in a window and read what's
-/// actually rendered (`renderedMessageForTesting`), driving the same view tree the user sees.
 final class SettingsConfigDiagnosticRenderTests: WindowTestCase {
     private var tempRoot: URL!
-    /// The section + host window are retained for the test's lifetime (the rows capture the section
-    /// weakly; a deallocated section would silently stop rendering).
     private var section: SettingsSection?
     private var hostWindow: NSWindow?
 
@@ -27,18 +20,16 @@ final class SettingsConfigDiagnosticRenderTests: WindowTestCase {
         section = nil
         hostWindow = nil
         ConfigLoader.defaultRootOverrideForTesting = nil
-        AppConfig.reload()  // restore the process's real config state
+        AppConfig.reload()
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }
 
-    /// Write the sandboxed config and reload so `GeneralConfig.current.configDiagnostics` reflects it.
     private func loadConfig(_ text: String) {
         try? text.write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         AppConfig.reload()
     }
 
-    /// Mount a section in a host window (both retained) and return every view in its live tree.
     private func mount(_ section: SettingsSection) -> [NSView] {
         self.section = section
         let detail = section.makeDetailView()
@@ -55,8 +46,6 @@ final class SettingsConfigDiagnosticRenderTests: WindowTestCase {
     private func rowMessages(_ views: [NSView]) -> [String] {
         views.compactMap { ($0 as? LayoutRow)?.renderedMessageForTesting }
     }
-
-    // MARK: per-row scalar diagnostics
 
     func test_clampedScalar_showsOnTheTerminalRow() {
         loadConfig("font-size = 200\n")
@@ -76,13 +65,10 @@ final class SettingsConfigDiagnosticRenderTests: WindowTestCase {
         XCTAssertEqual(messages, ["reduce-motion = maybe isn't valid (system, on, or off). Using the default."])
     }
 
-    /// The toolbar row is an `addCustomRow` + `registerScalarKey` pairing — without the registration
-    /// the unknown-slug diagnostic would never reach the row, so this guards that seam specifically.
     func test_unknownToolbarButtonSlug_showsOnTheAppearanceRow() {
         loadConfig("hide-toolbar-buttons = split-h,zoom\n")
         let expected = ToolbarButton.allCases.map(\.rawValue).joined(separator: ", ")
         let messages = rowMessages(mount(SettingsAppearanceSection()))
-        // Must NOT say "Using the default." — split-h on the same line is genuinely hidden.
         XCTAssertEqual(
             messages,
             ["hide-toolbar-buttons: zoom isn't valid (\(expected)). Ignoring it; the rest still applies."])
@@ -93,10 +79,8 @@ final class SettingsConfigDiagnosticRenderTests: WindowTestCase {
         XCTAssertTrue(rowMessages(mount(SettingsTerminalSection())).isEmpty)
     }
 
-    // MARK: dropped-float Tools notice
-
     func test_droppedFloat_showsTheToolsNotice() {
-        loadConfig("float = title:Notes key:cmd+shift+n\n")  // no command:
+        loadConfig("float = title:Notes key:cmd+shift+n\n")
         let notices = mount(SettingsToolsSection())
             .compactMap { ($0 as? NSTextField)?.stringValue }
             .filter { $0.contains("Ignoring this tool float") }
@@ -111,17 +95,14 @@ final class SettingsConfigDiagnosticRenderTests: WindowTestCase {
         XCTAssertTrue(notices.isEmpty)
     }
 
-    // MARK: surviving-float sub-field diagnostics render on the float's own row
-
     private func toolRowMessages(_ views: [NSView]) -> [String] {
         views.compactMap { ($0 as? ToolFloatRow)?.renderedMessageForTesting }
     }
 
     func test_survivingFloatWithBadField_showsOnItsToolsRow() {
-        loadConfig("float = title:Notes command:notes key:cmd+shift+n width:big\n")  // float survives
+        loadConfig("float = title:Notes command:notes key:cmd+shift+n width:big\n")
         let views = mount(SettingsToolsSection())
         XCTAssertEqual(toolRowMessages(views), ["Notes: width:big isn't valid. Using 0.85."])
-        // It renders on the row, NOT in the dropped-line notice — the float still works.
         let notices = views.compactMap { ($0 as? NSTextField)?.stringValue }
             .filter { $0.contains("Ignoring this tool float") }
         XCTAssertTrue(notices.isEmpty, "a surviving float belongs on its row, not the dropped-line notice")
@@ -131,8 +112,6 @@ final class SettingsConfigDiagnosticRenderTests: WindowTestCase {
         loadConfig("float = title:Notes command:notes key:cmd+shift+n\n")
         XCTAssertTrue(toolRowMessages(mount(SettingsToolsSection())).isEmpty)
     }
-
-    // MARK: toast landing (scope → section)
 
     func test_landing_mapsEachScopeToItsSection() {
         func landing(_ scope: ConfigDiagnostic.Scope) -> String? {
