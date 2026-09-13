@@ -99,6 +99,30 @@ final class ConfirmCardTests: WindowTestCase {
         XCTAssertTrue(icons.allSatisfy { $0.image != nil }, "every mark resolves to a symbol")
     }
 
+    func test_clickingChecklistText_leavesFocusOnRemove() throws {
+        let card = mountChecklist([
+            .init(mark: .lost, text: [.init(text: "Removing it loses 1 file", tone: .ink(.muted))], rows: [])
+        ])
+        card.focusInitialResponder()
+        let text = try XCTUnwrap(
+            descendants(of: card).compactMap { $0 as? NSTextField }.first {
+                $0.stringValue == "Removing it loses 1 file"
+            })
+
+        let win = try XCTUnwrap(window)
+        let point = text.convert(NSPoint(x: text.bounds.midX, y: text.bounds.midY), to: nil)
+        func click(_ type: NSEvent.EventType) throws -> NSEvent {
+            try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: type, location: point, modifierFlags: [], timestamp: 0, windowNumber: win.windowNumber,
+                    context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        }
+        NSApp.postEvent(try click(.leftMouseUp), atStart: false)
+        text.mouseDown(with: try click(.leftMouseDown))
+
+        XCTAssertTrue(KeyboardFocus.isFocused(try XCTUnwrap(button(in: card, title: "Remove")), in: window))
+    }
+
     func test_aPlainMessage_hasNoChecklist() {
         let (card, _) = mount()
 

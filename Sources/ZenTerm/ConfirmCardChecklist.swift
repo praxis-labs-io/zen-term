@@ -87,6 +87,7 @@ final class ConfirmCardChecklist: NSView, ThemeReapplying {
                 view.translatesAutoresizingMaskIntoConstraints = false
                 addSubview(view)
             }
+            label.isSelectable = false
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             NSLayoutConstraint.activate([
                 icon.leadingAnchor.constraint(equalTo: leadingAnchor),
