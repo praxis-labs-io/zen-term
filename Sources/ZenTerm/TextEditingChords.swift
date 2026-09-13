@@ -1,6 +1,5 @@
 import AppKit
 
-/// The keymap chords a focused text view owns ahead of ZenTerm.
 enum TextEditingChords {
     /// No ⌘A: AppKit serves Select All from the Edit menu, not from `NSTextView`.
     private static let owned: Set<Chord> = [

@@ -183,7 +183,6 @@ final class SettingsAppearanceSection: SettingsFormSection {
         accentDropdown?.setItems(accentItems(selected: selected), selectedIndex: selected)
     }
 
-    /// The accent row's data is theme-derived, so it re-renders here as well as recoloring.
     override func reapplyTheme() {
         super.reapplyTheme()
         refreshAccentRow()

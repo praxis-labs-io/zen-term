@@ -13,7 +13,6 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     // Captured at `showUpdateFound` because `showReady` carries no appcast item.
     private var pendingVersion: String?
 
-    // A manual check reports a no-update result; a scheduled one stays silent.
     private var userInitiated = false
 
     func show(

@@ -61,7 +61,6 @@ final class ScrollModeController {
         onActiveChanged?(true)
     }
 
-    /// Idempotent: every teardown trigger calls it without checking whether another got there first.
     func end() {
         guard isActive else { return }
         flashTimer?.invalidate()
@@ -146,7 +145,6 @@ final class ScrollModeController {
             ?? containedRow(of: line, near: origin)
     }
 
-    /// Nearest match wins: a prompt string repeats down the viewport.
     private func exactRow(of line: String, near origin: Int) -> Int? {
         let here = min(max(origin, 0), lastRow)
         if rowText(here) == line { return here }
@@ -492,7 +490,6 @@ final class ScrollModeController {
         refreshCursor(remembersLine: false)
     }
 
-    /// Chrome-owned, so libghostty's search-the-selection, which reads `Screen.selection`, cannot see it.
     var selectedText: String? {
         guard let surface, let range = selectionRange() else { return nil }
         let text = surface.text(in: range)

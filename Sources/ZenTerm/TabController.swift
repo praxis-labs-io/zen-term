@@ -82,7 +82,6 @@ final class TabController: NSObject {
 
     private var tileConstraints: [NSLayoutConstraint] = []
 
-    // Bumped per toggle so a superseded animation's completion cannot stomp newer layout.
     private var bottomDrawerAnimationID = 0
     private var rightDrawerAnimationID = 0
 

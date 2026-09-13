@@ -8,7 +8,6 @@ struct ThemeEntry: Equatable {
     let source: Source
 }
 
-/// A user file shadows a bundled entry of the same token.
 enum ThemeCatalog {
     /// Stays in step with `Theme.rosePineZen`.
     static let defaultThemeName = "rose-pine-zen"

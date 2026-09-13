@@ -1,4 +1,4 @@
-/// The raw value is the `hide-toolbar-buttons` slug. Hiding is visual only.
+/// The raw value is the `hide-toolbar-buttons` slug.
 enum ToolbarButton: String, CaseIterable {
     case newTab = "new-tab"
     case splitHorizontal = "split-h"

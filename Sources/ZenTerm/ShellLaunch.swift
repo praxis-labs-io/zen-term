@@ -1,7 +1,6 @@
 import Foundation
 import TerminalKit
 
-/// Launches use `SessionFontSize.points`, so a new pane matches a ⌘+ step already on screen.
 enum ShellLaunch {
     static var userShell: String {
         GeneralConfig.current.shell ?? ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"

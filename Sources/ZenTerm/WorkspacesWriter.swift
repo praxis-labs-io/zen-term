@@ -51,7 +51,7 @@ enum WorkspacesWriter {
         try ConfigFileIO.writePreservingSymlink(existing + separator + serialize(ws), to: url)
     }
 
-    /// Comments inside the edited section are not preserved. Appends when `originalTitle` is absent.
+    /// Comments inside the edited section are not preserved.
     static func update(_ ws: Workspace, originalTitle: String, configRoot: URL = ConfigLoader.defaultRoot) throws {
         let url = configRoot.appendingPathComponent("workspaces")
         let existing = try ConfigFileIO.readExistingOrEmpty(url)
@@ -84,7 +84,6 @@ enum WorkspacesWriter {
         try ConfigFileIO.writePreservingSymlink(lines.joined(separator: "\n"), to: url)
     }
 
-    /// Returns false when either title is missing, so a stale row is not reported as swapped.
     static func swap(
         _ title: String, with other: String, configRoot: URL = ConfigLoader.defaultRoot
     ) throws -> Bool {

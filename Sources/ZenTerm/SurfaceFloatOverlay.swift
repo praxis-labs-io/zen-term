@@ -10,7 +10,6 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost {
     private let ring = RingFillView()
     /// Drawn in theme-independent black, like `FloatShadow`.
     private let elevation = OutsideShadowView()
-    /// Frosts the panes behind a translucent card, as the window blur does for a pane.
     private let blur = NSVisualEffectView()
     private var dismiss = DismissGate()
 

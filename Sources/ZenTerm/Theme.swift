@@ -23,7 +23,6 @@ enum Theme {
     static private(set) var current: AppTheme = builtIn
 
     @MainActor
-    /// Reads the font from the general config, so `GeneralConfig.reloadCurrent()` must run first.
     static func reloadCurrent() { current = ConfigLoader.loadAppTheme() }
 
     #if DEBUG

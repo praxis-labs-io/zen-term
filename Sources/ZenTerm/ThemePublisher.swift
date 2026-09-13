@@ -24,7 +24,6 @@ enum ThemePublisher {
         let ansi: [String]
     }
 
-    // Serial, so writes land in the order the theme changed.
     private static let queue = DispatchQueue(label: "com.zenterm.theme-publisher")
 
     @MainActor

@@ -39,7 +39,6 @@ final class SettingsGeneralSection: SettingsFormSection {
         }
     }
 
-    /// Static so the row closures do not capture and retain the section.
     private static let dismissals: [GeneralConfig.ToastDismissal] = [.sticky, .auto]
     private static let dismissalTitles = ["Sticky", "Auto"]
     private static func dismissalIndex(_ dismissal: GeneralConfig.ToastDismissal) -> Int {

@@ -2,7 +2,6 @@ import AppLog
 import CoreGraphics
 import Foundation
 
-/// Grammar: whitespace-separated, quote-aware `field:value` tokens, each split on its first `:`.
 enum ToolFloatParser {
     /// Defaults are shared with `ConfigWriter`, which omits a field equal to its default.
     static let defaultIcon = "square.on.square"

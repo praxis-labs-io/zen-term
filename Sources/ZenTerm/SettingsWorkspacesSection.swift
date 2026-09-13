@@ -4,7 +4,6 @@ final class SettingsWorkspacesSection: SettingsSection {
     var navTitle: String { "Workspaces" }
     var onExitToNav: (() -> Void)?
     var onEditWorkspace: ((Workspace?) -> Void)?
-    /// Returns whether the write landed; on false the list is left as it was.
     var onReorder: ((_ moved: Workspace, _ with: Workspace) -> Bool)?
 
     private var rows: [WorkspaceRow] = []
@@ -131,7 +130,6 @@ final class SettingsWorkspacesSection: SettingsSection {
         }
     }
 
-    /// Bumped per mount, so a load from an earlier mount is dropped.
     private var mountGeneration = 0
 
     private func moveFocus(from view: NSView?, delta: Int) {

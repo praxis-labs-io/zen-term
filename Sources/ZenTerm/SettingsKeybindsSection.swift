@@ -4,7 +4,6 @@ final class SettingsKeybindsSection: SettingsSection {
     var navTitle: String { "Shortcuts" }
     var onExitToNav: (() -> Void)?
 
-    /// Hand-ordered; `SettingsKeybindGroupsTests` checks it against `isEditableInSettings`.
     static let groups: [(String, [KeyInterceptor.ReservedChord])] = [
         ("Panes", [.splitHorizontal, .splitVertical, .closePane, .toggleZoom]),
         (
