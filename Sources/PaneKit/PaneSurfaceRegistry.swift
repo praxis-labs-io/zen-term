@@ -1,9 +1,6 @@
 import TerminalKit
 
-/// Owns the live `TerminalSurface` per leaf. Applying a diff creates surfaces for
-/// new leaves (via the injected factory), terminates surfaces for removed leaves,
-/// and leaves retained surfaces untouched — so a retained leaf keeps its running
-/// shell, scrollback, and first-responder state across any tree restructure.
+/// Owns the live surface per leaf. Retained leaves keep their surface across any tree change.
 public final class PaneSurfaceRegistry {
     private var surfaces: [PaneID: TerminalSurface] = [:]
     private let makeSurface: () -> TerminalSurface
@@ -14,18 +11,14 @@ public final class PaneSurfaceRegistry {
 
     public func surface(for id: PaneID) -> TerminalSurface? { surfaces[id] }
     public var ids: Set<PaneID> { Set(surfaces.keys) }
-    /// Every live surface in the registry, for a full config-change re-theme pass.
     public var allSurfaces: [TerminalSurface] { Array(surfaces.values) }
 
-    /// Terminates every surface and empties the registry. Used when a whole tab is
-    /// torn down at once (its controller is discarded), so its shells don't leak.
     public func terminateAll() {
         for surface in surfaces.values { surface.terminate() }
         surfaces.removeAll()
     }
 
-    /// Applies the diff and returns the newly-created (id, surface) pairs so the
-    /// caller can set their delegate and `start(...)` them with the right config.
+    /// Terminates removed leaves' surfaces and returns new ones for the caller to configure and start.
     @discardableResult
     public func apply(_ diff: PaneDiff) -> [(id: PaneID, surface: TerminalSurface)] {
         for id in diff.removed {
