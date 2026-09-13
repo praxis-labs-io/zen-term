@@ -3,10 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Unit tests for `ShellLaunch` — the launch-config builder behind ⌘P workspaces and every
-/// pane/drawer. Covers the custom-shell / shell-args branch, the login+interactive
-/// `program` wrapper that keeps a pane alive after the program exits, env merge, and the
-/// home-is-the-default-cwd rule.
 final class ShellLaunchTests: XCTestCase {
     private var originalConfig: GeneralConfig!
 
@@ -28,8 +24,6 @@ final class ShellLaunchTests: XCTestCase {
         config.shellArgs = shellArgs
         GeneralConfig.setCurrentForTesting(config)
     }
-
-    // MARK: shell()
 
     func test_shell_defaultsToLoginShell_whenNoCustomShell() {
         withConfig(shell: nil)
@@ -64,16 +58,10 @@ final class ShellLaunchTests: XCTestCase {
         XCTAssertEqual(config.environment["ZEN_PANE"], "7")
     }
 
-    // MARK: program()
-
     func test_program_wrapsCommandInLoginShellThatReExecs() {
-        // Pin an explicit zsh: `userShell` falls back to the tester's ambient `$SHELL`, which
-        // would make the tail (and so this assertion) machine-dependent.
         withConfig(shell: "/bin/zsh")
         let config = ShellLaunch.program("nvim .", cwd: URL(fileURLWithPath: "/work"))
         XCTAssertEqual(config.command, "/bin/zsh")
-        // The `; exec …` tail keeps the pane alive with a fresh shell after the program quits,
-        // and re-arms libghostty's ZDOTDIR redirect so that shell keeps integration.
         XCTAssertEqual(
             config.args,
             [
@@ -86,8 +74,6 @@ final class ShellLaunchTests: XCTestCase {
         XCTAssertEqual(config.workingDirectory, URL(fileURLWithPath: "/work"))
     }
 
-    /// The re-arm is zsh-specific — libghostty's injection is per-shell and `ZDOTDIR` means
-    /// nothing to fish. A fish user keeps the plain tail rather than a broken redirect.
     func test_program_doesNotRearmIntegration_forANonZshShell() {
         withConfig(shell: "/usr/local/bin/fish")
         let config = ShellLaunch.program("nvim .", cwd: nil)

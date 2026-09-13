@@ -4,14 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The find bar holds an app-global key handler and a live search engine behind it.
-/// Every retraction has to take down both, and the phase-one gate has to give the keyboard away
-/// while the field owns it.
-///
-/// The failures are invisible from the code. A bar left up over a pane you walked away from keeps
-/// swallowing keys, a search left running keeps libghostty painting highlights over a bar that is
-/// gone, and a phase-one gate that does not stand down makes the field untypeable while looking
-/// exactly right.
 @MainActor
 final class SearchLifecycleTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
@@ -80,12 +72,9 @@ final class SearchLifecycleTests: WindowTestCase {
                 isARepeat: false, keyCode: keyCode))
     }
 
-    /// The surface the focused pane is driving, which is the one the bar targets.
     private func focusedSurface(_ controller: WindowController) throws -> RecordingSurface {
         try XCTUnwrap(controller.focusedScrollTargetForTesting?.surface as? RecordingSurface)
     }
-
-    // MARK: opening
 
     func test_theChordOpensTheBarAndInstallsTheKeyHandler() throws {
         let controller = makeWindow()
@@ -117,15 +106,12 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_theChordSeedsTheBarFromScrollModesOwnSelection() throws {
-        // Two selection models, one chord. A `v` selection is the chrome's overlay, which the
-        // backend cannot see, so it is read directly.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows[5] = "an error happened"
         controller.handle(.toggleScrollMode)
         controller.scrollMode.land(on: ScrollCell(row: 5, column: 3))
         _ = controller.scrollMode.handle(try keyDown("v"))
-        // Read before the chord: raising the bar reflows the pane, which releases the selection.
         let selected = try XCTUnwrap(controller.scrollMode.selectedText)
 
         controller.handle(.toggleSearch)
@@ -134,7 +120,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_theChordSeedsTheBarFromAMouseSelectionToo() throws {
-        // The other model: a drag is libghostty's own selection, read back through the seam.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.selectionText = "needle"
@@ -145,9 +130,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_aSelectionSpanningRowsSeedsItsFirstLine() throws {
-        // A needle is one line because everything downstream of it is: the scan, the cursor and the
-        // landing are all per-row. The engine would match across a break, but the count and
-        // highlights it produced would point at matches nothing could navigate to.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
@@ -156,7 +138,6 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.handle(.toggleSearch)
 
         XCTAssertEqual(surface.searches.last, "first line")
-        // The field shows exactly what is searched, which is how the reader sees this happened.
         XCTAssertEqual(try XCTUnwrap(panel.findBarForTesting).needle, "first line")
     }
 
@@ -182,16 +163,11 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.searches.last, "fresh", "a stale needle under the caret looks broken")
     }
 
-    // MARK: the phase-one gate
-
     func test_whileTheFieldIsFocusedTheModeHandlerStandsDown() throws {
-        // The interceptor is a local monitor running ahead of the field editor. A mode that keeps
-        // claiming keys here eats every character and leaves the bar untypeable, while looking
-        // exactly right on screen.
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
-        controller.handle(.toggleScrollMode)  // scroll mode up first: its handler is the one at risk
+        controller.handle(.toggleScrollMode)
         controller.handle(.toggleSearch)
 
         let handler = try XCTUnwrap(host.modeHandler)
@@ -213,11 +189,7 @@ final class SearchLifecycleTests: WindowTestCase {
             "and still declines ⌘N, or the menu item dies while the bar is up")
     }
 
-    // MARK: the engine
-
     func test_committingStepsOntoTheFirstMatch() throws {
-        // libghostty matches eagerly but selects nothing until it is asked, so without this step
-        // phase two would open on no match at all.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         controller.handle(.toggleSearch)
@@ -229,11 +201,9 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_aMatchOnlyInHistoryIsPreviewedWhileTyping() throws {
-        // Otherwise the bar counts matches over a screen showing none of them, and Return is
-        // pressed on faith.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
-        surface.rows = Array(repeating: "", count: 24)  // nothing on screen matches
+        surface.rows = Array(repeating: "", count: 24)
         controller.handle(.toggleSearch)
         controller.search.beginNeedleForTesting("error")
 
@@ -243,8 +213,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_aMatchAlreadyOnScreenIsNotChasedWhileTyping() throws {
-        // The part of vim's incsearch worth leaving out: stepping here pulls the screen off the
-        // answer already in front of the reader.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows[5] = "an error happened"
@@ -257,7 +225,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_theCountClimbingDoesNotStepOncePerReport() throws {
-        // SEARCH_TOTAL fires repeatedly as the engine works back through the buffer.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows = Array(repeating: "", count: 24)
@@ -272,7 +239,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_committingAfterAPreviewStaysOnTheMatchItShowed() throws {
-        // A second step here would walk straight past the match the reader is looking at.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows = Array(repeating: "", count: 24)
@@ -286,11 +252,7 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.searchSteps, [.next], "the preview's step is the only one")
     }
 
-    // MARK: leaving
-
     func test_leavingPutsTheViewportBackAtTheBottom() throws {
-        // A search that scrolled you into history and then closed should not leave you reading
-        // something you were only looking for.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows = Array(repeating: "", count: 24)
@@ -305,8 +267,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_aNeedleThatStopsMatchingGivesTheViewportBack() throws {
-        // One character past the last match, the viewport is parked on the previous needle's
-        // answer with nothing on screen matching what is now typed.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows = Array(repeating: "", count: 24)
@@ -321,8 +281,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_aSearchThatNeverMovedTheViewportDoesNotScrollOnTheWayOut() throws {
-        // The match was on screen the whole time. Scrolling here would move a pane the reader
-        // never asked to move.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows[5] = "an error happened"
@@ -336,7 +294,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_aReaderInTheirOwnScrollModeIsLeftWhereTheSearchTookThem() throws {
-        // They are still in scroll mode reading, and the match is what they asked to be shown.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows = Array(repeating: "", count: 24)
@@ -352,8 +309,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_escapeLeavesTheScrollModeThatCommittingStarted() throws {
-        // One keystroke to find something, one to be done with it. Being dropped into a mode you
-        // never asked for, needing a second Esc, is the surprise this asserts against.
         let controller = makeWindow()
         controller.handle(.toggleSearch)
         controller.search.commit()
@@ -375,14 +330,6 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertTrue(controller.scrollMode.isActive, "they put themselves there and keep it")
     }
 
-    // MARK: the bar and a live prompt never coexist
-
-    /// The bar being up means the keyboard belongs to the search: to the field while the needle is
-    /// being typed, to scroll mode once ⏎ hands it over. There is no third state, and every way out
-    /// of scroll mode has to hold that.
-    ///
-    /// Focus Mode steals first responder off the find field without the bar hearing it, and nothing
-    /// clears `isEditing` on a lost responder, so the bar would sit there swallowing every key.
     func test_focusModeTakesTheFindBarDownWithIt() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
@@ -401,10 +348,6 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertNil(panel.findBarForTesting)
     }
 
-    /// Left open, the hole is worse than a stray bar. `search.isActive` keeps the app-global
-    /// handler installed, `SearchController.handle` still claims `n` and `N`, and
-    /// `ScrollModeController.handle` declines everything once inactive. So the prompt goes live
-    /// while silently eating the two keys that step a search.
     func test_everyWayOutOfScrollModeTakesTheBarWithIt() throws {
         let exits: [(String, (WindowController, ModeHostSpy) throws -> Void)] = [
             ("q", { _, host in _ = try XCTUnwrap(host.modeHandler)(try self.keyDown("q")) }),
@@ -434,10 +377,6 @@ final class SearchLifecycleTests: WindowTestCase {
         }
     }
 
-    /// The reader put themselves in scroll mode, then opened a bar over it. Leaving still takes the
-    /// bar down, because the prompt goes live either way and the invariant does not care who
-    /// started the mode. This is where it parts company with Esc, which leaves a reader-owned mode
-    /// alone precisely because the prompt stays dead.
     func test_leavingAReaderOwnedScrollModeAlsoTakesTheBarDown() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
@@ -456,10 +395,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_theHeaderIsUpBeforeCommitSoCommittingReflowsNothing() throws {
-        // The bug this pins: committing used to raise the header, which displaces content and
-        // resizes the grid a second time, and libghostty's reflow snaps the viewport toward the
-        // bottom. The match the reader was looking at goes off the top and they have to press `n`
-        // to get it back. Raising the header with the bar means the commit moves no geometry.
         let controller = makeWindow()
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
 
@@ -491,11 +426,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_committingOverAnOpenScrollModeStillReassertsTheUnfocusedRender() throws {
-        // While a mode holds the keyboard the surface renders unfocused, hollow and still, because
-        // the shell is not taking keys. Committing takes first responder back, which drives the
-        // surface focused through the responder chain, so the render has to be pushed over it
-        // again. Starting scroll mode does that through its own callback, which is why this was
-        // invisible until a search opened over a scroll mode that was already up.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         controller.handle(.toggleScrollMode)
@@ -510,8 +440,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_escapeHandsTheKeyboardBackToThePane() throws {
-        // The bar took first responder on the way in. Left holding it, the pane draws a live
-        // cursor while every keystroke goes to a hidden field, and only a click fixes it.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         controller.handle(.toggleSearch)
@@ -523,9 +451,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_committingBeforeThePreviewsAnswerArrivesDoesNotStepTwice() throws {
-        // Found at the machine. The preview steps, libghostty paints the match, and the reader
-        // presses Return before the selection report gets back. Branching on our copy of the
-        // backend's state lands them one match past the one they were looking at.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows = Array(repeating: "", count: 24)
@@ -534,18 +459,12 @@ final class SearchLifecycleTests: WindowTestCase {
         controller.search.report(total: 3, from: surface)
         XCTAssertEqual(surface.searchSteps, [.next], "the preview asked for a match")
 
-        // No report(selected:) — the answer is still in flight, exactly as it is on a fast Return.
         controller.search.commit()
 
         XCTAssertEqual(surface.searchSteps, [.next], "committing must not ask for another")
     }
 
     func test_typingPastTheDebounceLeavesNothingPendingBehindIt() throws {
-        // Found at the machine, and only under a real keystroke sequence: `l` schedules a debounce,
-        // typing on to `line` cancels it and sends immediately. Leaving the cancelled item in place
-        // tells the commit a needle is still waiting, so it re-sends one the engine already has and
-        // clears the state that said not to step again. The reader lands one match past the one
-        // they were watching.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows = Array(repeating: "", count: 24)
@@ -564,12 +483,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_aDebounceThatFiresOnItsOwnLeavesNothingPendingBehindIt() throws {
-        // The other half of the same bug, and the half that survived the first fix. Type a short
-        // needle, wait for the count, press Return: the work item had fired and sent the needle,
-        // but nothing cleared the reference standing in for "a needle is pending", so committing
-        // re-sent one the engine already had and stepped past the match being watched.
-        //
-        // The only test here that waits on a real timer, because the natural firing is the subject.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows = Array(repeating: "", count: 24)
@@ -592,8 +505,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_committingSendsAShortNeedleBeforeSteppingIt() throws {
-        // A 1-2 character needle is still sitting in the debounce. Stepping before it is sent
-        // navigates a search that does not exist, and the backend answers false in silence.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         controller.handle(.toggleSearch)
@@ -607,7 +518,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_endingTheSearchTearsDownOnlyOnce() throws {
-        // libghostty answers end_search by calling END_SEARCH straight back, synchronously.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.echoesEndSearch = true
@@ -626,8 +536,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_theScrollChordDuringTypingCommitsRatherThanStartingADeadMode() throws {
-        // A reserved chord routes ahead of the mode handler, so this fires while the field owns
-        // the keyboard. Starting the mode there puts a header up over a mode that takes no keys.
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
@@ -642,8 +550,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_escapeGivesASelectionBackBeforeItClosesTheBar() throws {
-        // Scroll mode's own `.cancel` exists so a mis-anchored `v` can be undone without leaving.
-        // Claiming Esc here would take the selection, the mode and the bar in one keystroke.
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
@@ -660,7 +566,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_theViewportGoesBackWhereTheReaderHadItNotToTheBottom() throws {
-        // A reader who had scrolled into a build log before searching gets that place back.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         surface.rows = Array(repeating: "", count: 24)
@@ -678,8 +583,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_everyRetractionTakesTheBarDownAndStopsTheEngine() throws {
-        // Both halves matter. A bar that vanishes while the engine keeps painting highlights is
-        // the bug this asserts against.
         let retractions: [(String, (WindowController) -> Void)] = [
             (
                 "a close confirm",
@@ -721,8 +624,6 @@ final class SearchLifecycleTests: WindowTestCase {
     }
 
     func test_theBackendEndingTheSearchClosesTheBarWithoutCallingBack() throws {
-        // libghostty owns keybinds of its own that end a search. Calling `endSearch` back at one
-        // that has already gone is a loop waiting to happen.
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
@@ -746,8 +647,6 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertTrue(controller.search.isActive, "a background pane must not close the focused bar")
     }
 
-    // MARK: the count
-
     func test_theBarShowsATotalWhileTypingAndAnIndexAfterCommit() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
@@ -764,10 +663,6 @@ final class SearchLifecycleTests: WindowTestCase {
         XCTAssertEqual(bar.countTextForTesting, "15 / 17", "zero-based, and newest-first")
     }
 
-    /// The count reads in buffer order, oldest first, because that is the order the reader sees on
-    /// screen. libghostty walks matches newest to oldest, so reported straight through the first
-    /// match a search lands on reads `1 / 3` while sitting at the bottom of three, and stepping up
-    /// the screen counts up while the index counts down.
     func test_theCountReadsInBufferOrderNotTheBackendsWalkOrder() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)

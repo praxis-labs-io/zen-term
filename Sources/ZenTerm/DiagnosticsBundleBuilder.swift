@@ -1,32 +1,20 @@
 import Foundation
 
-/// Assembles the diagnostics `.zip` a user attaches to a bug report: the rotated log files plus a
-/// `metadata.txt` holding the `SystemReport` block. It carries only the logs it's handed and the
-/// report it's given, so the shell environment and the config file can never leak in.
-///
-/// Pure Foundation: the archive is produced with `NSFileCoordinator`'s `.forUploading` reading
-/// intent (the system's own directory-to-zip), so there's no third-party archiver.
 struct DiagnosticsBundleBuilder {
     let report: SystemReport
     let logFiles: [URL]
 
-    /// Copy `metadata.txt` and each existing log into `directory` (created if needed). Split out from
-    /// `build` so the bundle's contents are assertable without unzipping.
+    /// Skips a log that fails to copy: a rotation can remove one mid-export.
     func stage(into directory: URL) throws {
         let fileManager = FileManager.default
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         try Data(report.plainText.utf8)
             .write(to: directory.appendingPathComponent("metadata.txt"))
         for log in logFiles {
-            // A log can be absent, vanish between listing and copy (a rotation mid-export), or be
-            // unreadable; a diagnostics bundle is best-effort per file, so skip one that fails rather
-            // than abort the whole export.
             try? fileManager.copyItem(at: log, to: directory.appendingPathComponent(log.lastPathComponent))
         }
     }
 
-    /// Stage into a throwaway temp folder and zip it to `destination` (overwriting). The archive
-    /// expands to a single "ZenTerm Diagnostics/" folder.
     func build(to destination: URL) throws {
         let fileManager = FileManager.default
         let parent = fileManager.temporaryDirectory

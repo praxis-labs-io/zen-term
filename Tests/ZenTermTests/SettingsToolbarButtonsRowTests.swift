@@ -3,9 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// End-to-end tests for the Appearance "Toolbar buttons" multi-select: mount the real
-/// section over a sandboxed config root, drive the real checkbox list, and read the file it wrote —
-/// the full write path a user's click takes, not the closure in isolation.
 final class SettingsToolbarButtonsRowTests: WindowTestCase {
     private var tempRoot: URL!
     private var section: SettingsSection?
@@ -24,7 +21,7 @@ final class SettingsToolbarButtonsRowTests: WindowTestCase {
         section = nil
         hostWindow = nil
         ConfigLoader.defaultRootOverrideForTesting = nil
-        AppConfig.reload()  // restore the process's real config state
+        AppConfig.reload()
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }
@@ -33,7 +30,6 @@ final class SettingsToolbarButtonsRowTests: WindowTestCase {
         (try? String(contentsOf: tempRoot.appendingPathComponent("config"), encoding: .utf8)) ?? ""
     }
 
-    /// Mount the Appearance section in a host window and return its toolbar checkbox dropdown.
     private func mountToolbarList() throws -> CheckboxDropdown {
         let section = SettingsAppearanceSection()
         self.section = section
@@ -68,9 +64,9 @@ final class SettingsToolbarButtonsRowTests: WindowTestCase {
         XCTAssertTrue(list.itemsForTesting.allSatisfy(\.isChecked), "everything shows by default")
         XCTAssertEqual(list.buttonTitleForTesting, "All shown")
 
-        pressSpace(list)  // open the list
+        pressSpace(list)
         XCTAssertTrue(list.isPopoverOpen)
-        pressSpace(list)  // uncheck New tab (the first, highlighted row)
+        pressSpace(list)
 
         XCTAssertTrue(
             configText().contains("hide-toolbar-buttons = new-tab"),
@@ -82,7 +78,7 @@ final class SettingsToolbarButtonsRowTests: WindowTestCase {
         XCTAssertEqual(GeneralConfig.current.hiddenToolbarButtons, [.newTab])
         XCTAssertTrue(list.isPopoverOpen, "the write's reload must not close the open list")
 
-        pressSpace(list)  // re-check it — nothing hidden, so the key must go, not linger empty
+        pressSpace(list)
 
         XCTAssertFalse(configText().contains("hide-toolbar-buttons"))
         XCTAssertEqual(list.itemsForTesting.first?.isChecked, true)

@@ -2,13 +2,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Vim's `w`, `b` and `e` over a viewport.
-///
-/// A motion that lands one character out looks identical on screen to one that landed right; the
-/// reader finds out when the yank hands them half a path. The rules are vim's, so there is a
-/// correct answer to assert against.
 final class ScrollWordMotionTests: XCTestCase {
-    /// A fixture screen.
     private func screen(_ rows: [String]) -> ScrollWordMotion.Screen {
         ScrollWordMotion.Screen(lastRow: rows.count - 1) { row in
             rows.indices.contains(row) ? rows[row] : ""
@@ -19,10 +13,7 @@ final class ScrollWordMotionTests: XCTestCase {
         ScrollCell(row: row, column: column)
     }
 
-    // MARK: classes
-
     func test_aRunOfPunctuationIsItsOwnWord() {
-        // Treating punctuation as part of the word beside it is `W`'s behavior, not `w`'s.
         let sut = screen(["foo.bar"])
 
         XCTAssertEqual(ScrollWordMotion.nextWordStart(from: cell(0, 0), on: sut), cell(0, 3))
@@ -36,8 +27,6 @@ final class ScrollWordMotionTests: XCTestCase {
             ScrollWordMotion.nextWordStart(from: cell(0, 0), on: sut), cell(0, 6),
             "run_2 is one word, so w crosses the whole of it")
     }
-
-    // MARK: w
 
     func test_wLandsOnTheStartOfTheNextWord() {
         let sut = screen(["alpha beta gamma"])
@@ -72,8 +61,6 @@ final class ScrollWordMotionTests: XCTestCase {
             "the last cell reached, not a row past the grid")
     }
 
-    // MARK: b
-
     func test_bGoesToTheStartOfTheWordTheCursorIsIn() {
         let sut = screen(["alpha beta"])
 
@@ -97,8 +84,6 @@ final class ScrollWordMotionTests: XCTestCase {
 
         XCTAssertEqual(ScrollWordMotion.previousWordStart(from: cell(0, 0), on: sut), cell(0, 0))
     }
-
-    // MARK: e
 
     func test_eGoesToTheEndOfTheWordAhead() {
         let sut = screen(["alpha beta"])

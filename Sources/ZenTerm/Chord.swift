@@ -1,46 +1,22 @@
 import AppKit
 
-/// A parsed keyboard chord — a set of modifiers plus one key. The shared currency between
-/// the config file (`cmd+shift+g`), the display glyph (`⌘⇧G`), and live `NSEvent` matching
-/// in `KeyInterceptor`. Value-typed and `Hashable` so a `[Chord: ReservedChord]` keymap is
-/// a plain dictionary lookup.
 struct Chord: Hashable {
     var command: Bool
     var shift: Bool
     var option: Bool
     var control: Bool
-    /// Lowercased single key token: `"g"`, `"1"`, `"\\"`, `"-"`. Canonical *whenever Shift is set* —
-    /// there it's always the unshifted glyph, because `init` folds `"|"` onto `⇧"\\"`. Without
-    /// Shift the token is whatever was given: `cmd+|` stays `"|"`, since the fold table is US-only
-    /// and these glyphs are unshifted on other layouts. Don't assume a base glyph; see `init`.
     var key: String
 
-    /// Canonicalizes: **with Shift held**, a glyph that a US key produces only via Shift folds onto
-    /// its base key, so one physical key has exactly one spelling. `charactersIgnoringModifiers`
-    /// applies Shift, so a live ⌘⇧- press arrives as `_` while the config spells the same chord
-    /// `cmd+shift+-` — folding both onto ⇧`-` makes them the same dictionary key, which is what lets
-    /// the keymap hold one entry per binding instead of one per spelling.
-    ///
-    /// The Shift condition is load-bearing, not a formality: the table is US-only, and on other
-    /// layouts these glyphs are reachable *without* Shift (`_` is an unshifted key on AZERTY, `+` on
-    /// German QWERTZ). Folding on the glyph alone would give such a keypress a Shift its user never
-    /// held and land it on ⌘⇧- — the split_horizontal default — swallowing a keystroke the terminal
-    /// should have received. Gating on Shift means a non-US layout can at worst mis-*label* a chord,
-    /// never invent one.
+    /// Folds a shifted glyph onto its base key only with Shift held: non-US layouts type these glyphs unshifted.
     init(command: Bool = false, shift: Bool = false, option: Bool = false, control: Bool = false, key: String) {
         self.command = command
         self.option = option
         self.control = control
         self.shift = shift
-        // Lowercase here, not just in `parse` / `init(event:)`: a live event's key always arrives
-        // lowercased, so a `Chord(key: "G")` built directly would be a dictionary key no keypress
-        // could ever match — a bind that looks right in the map and never fires.
         let key = key.lowercased()
         self.key = (shift ? Chord.baseKeyForShiftedGlyph[key] : nil) ?? key
     }
 
-    /// The unshifted glyph for each key a US layout shifts into a different character. One-way by
-    /// design (shifted → base): the base key is the canonical spelling, so nothing maps back.
     private static let baseKeyForShiftedGlyph: [String: String] = [
         "~": "`", "!": "1", "@": "2", "#": "3", "$": "4", "%": "5",
         "^": "6", "&": "7", "*": "8", "(": "9", ")": "0", "_": "-",
@@ -48,18 +24,13 @@ struct Chord: Hashable {
         "<": ",", ">": ".", "?": "/",
     ]
 
-    /// Parse `cmd+shift+g` → a `Chord`, or `nil` if the spec is malformed (no key, two keys,
-    /// or an unknown modifier word). Accepts ghostty-style aliases so a pasted ghostty
-    /// keybind mostly works: `cmd`/`command`, `shift`, `opt`/`option`/`alt`, `ctrl`/`control`,
-    /// and `arrow_up` beside `up`.
+    /// Accepts ghostty's modifier and key spellings, so a pasted ghostty keybind resolves.
     static func parse(_ spec: String) -> Chord? {
         var command = false
         var shift = false
         var option = false
         var control = false
         var key: String?
-        // Keep empty subsequences so a stray `++` or trailing `+` (e.g. "cmd++g", "nope+")
-        // is rejected rather than silently collapsed.
         for rawToken in spec.split(separator: "+", omittingEmptySubsequences: false) {
             let token = rawToken.trimmingCharacters(in: .whitespaces).lowercased()
             guard !token.isEmpty else { return nil }
@@ -69,38 +40,21 @@ struct Chord: Hashable {
             case "opt", "option", "alt": option = true
             case "ctrl", "control": control = true
             default:
-                if key != nil { return nil }  // two non-modifier tokens → ambiguous
-                // `+` is the token separator, so the plus key travels as the word `plus`
-                // (ghostty's spelling too) — translate it back here. See `configToken`.
-                // A key that types no character travels as a word for the same reason it needs
-                // one at all: nobody can put ↖ in a text file from the keyboard.
+                if key != nil { return nil }
                 key = Chord.specialKeyWords[token] ?? ((token == "plus") ? "+" : token)
             }
         }
         guard let key else { return nil }
-        // A live event's key is a single `charactersIgnoringModifiers` character, so a
-        // multi-char token (e.g. "space") could never match — reject it as a dead bind. The
-        // special keys are already glyphs by here, one character each.
         guard key.count == 1 else { return nil }
-        // A modifier-less chord would swallow that plain keystroke from the terminal for
-        // every keypress — reserved chords must carry at least one modifier. This reads the
-        // *spelled* modifiers, deliberately ahead of the Shift `init` infers for a shifted glyph:
-        // a bare `_` must stay rejected rather than canonicalize into a ⇧- that eats every
-        // underscore typed into the terminal.
         guard command || shift || option || control else { return nil }
         return Chord(command: command, shift: shift, option: option, control: control, key: key)
     }
 
-    /// The display form the chrome renders (`⌘⇧G`) — modifiers in the repo's established
-    /// order (⌘ ⇧ ⌥ ⌃), then the key: letters uppercased, symbols/digits as-is. `KeycapView`
-    /// turns the modifier glyphs into SF Symbols.
     var displayGlyph: String {
         Chord.modifierGlyph(command: command, shift: shift, option: option, control: control)
             + (key.count == 1 ? key.uppercased() : key)
     }
 
-    /// The modifier glyphs in the repo's established order (⌘ ⇧ ⌥ ⌃) — the one place that order
-    /// lives, shared by `displayGlyph` and the keybind capture's live modifier preview.
     static func modifierGlyph(command: Bool, shift: Bool, option: Bool, control: Bool) -> String {
         var glyph = ""
         if command { glyph += "⌘" }
@@ -110,39 +64,28 @@ struct Chord: Hashable {
         return glyph
     }
 
-    /// The modifier glyphs for a live `NSEvent`'s flags — same ⌘⇧⌥⌃ order as `displayGlyph`.
     static func modifierGlyph(_ flags: NSEvent.ModifierFlags) -> String {
         modifierGlyph(
             command: flags.contains(.command), shift: flags.contains(.shift),
             option: flags.contains(.option), control: flags.contains(.control))
     }
 
-    /// The config-file word form the writer emits (`cmd+shift+g`) — modifiers in the
-    /// repo's order (cmd, shift, opt, ctrl) then the key. A *projection* of `parse`, not its
-    /// inverse: with Shift held, several spellings fold to one chord (`cmd+shift+_` and
-    /// `cmd+shift+-` both emit `cmd+shift+-`), so a re-parse of the output is stable from here on.
-    /// It follows `displayGlyph` except on the keys that type nothing, where the screen gets the
-    /// glyph and the file gets the word: nobody can type ↖ into a config.
+    /// Writes `+` as `plus` and special keys as words: `+` separates tokens, and nobody can type ↖ into a file.
     var configToken: String {
         var token = ""
         if command { token += "cmd+" }
         if shift { token += "shift+" }
         if option { token += "opt+" }
         if control { token += "ctrl+" }
-        // The plus key can't travel literally — `+` is the token separator, so `cmd++` would parse
-        // as a stray empty token. Emit the word `plus`; `parse` maps it back. Only reachable
-        // unshifted (⇧+ folds to ⇧=): a layout where `+` needs no Shift, or an explicit `cmd+plus`.
         if key == "+" { return token + "plus" }
         return token + (Chord.wordForSpecialKey[key] ?? key)
     }
 
-    /// Build the chord an `NSEvent` represents, for keymap lookup. Mirrors the modifier +
-    /// `charactersIgnoringModifiers` reading `KeyInterceptor` used before it went data-driven.
     init?(event: NSEvent) {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let key: String
         if let special = Chord.glyphForSpecialKey(event.keyCode) {
-            key = special  // arrow / return keys carry a non-printing character — use a glyph token
+            key = special
         } else {
             guard let characters = event.charactersIgnoringModifiers?.lowercased(), !characters.isEmpty else {
                 return nil
@@ -157,56 +100,38 @@ struct Chord: Hashable {
             key: key)
     }
 
-    /// The chord to show for an action, or nil when it's unbound. An action can hold several chords
-    /// (a user binding two), and dictionary order is arbitrary — picking the lowest `configToken`
-    /// keeps the palette, the dock tooltip, and the Settings chip naming the same one, instead of
-    /// disagreeing with each other and drifting between launches.
+    /// Picks the lowest `configToken`, so every surface names the same chord across launches.
     static func displayed(
         _ action: KeyInterceptor.ReservedChord, in keymap: [Chord: KeyInterceptor.ReservedChord]
     ) -> Chord? {
         keymap.filter { $0.value == action }.keys.min { $0.configToken < $1.configToken }
     }
 
-    /// Keys whose `charactersIgnoringModifiers` is a non-printing character render as tofu (□) — map
-    /// them to a display glyph, which `KeycapView` draws as an SF Symbol and `configToken`/`parse`
-    /// round-trip as a single character.
     private static func glyphForSpecialKey(_ keyCode: UInt16) -> String? {
         specialKeyGlyphs[keyCode]
     }
 
-    /// Tab is the one entry here that *does* type a character. It still belongs, because the
-    /// character is a horizontal tab: `charactersIgnoringModifiers` hands back "\t", which renders
-    /// as nothing at all on a keycap and reads as a stray blank in a config file.
+    /// Includes Tab: its character is `\t`, which renders blank on a keycap and in a config file.
     private static let specialKeyGlyphs: [UInt16: String] = [
         123: "←", 124: "→", 125: "↓", 126: "↑", 36: "⏎",
         115: "↖", 119: "↘", 116: "⇞", 121: "⇟", 48: "⇥", 51: "⌫",
     ]
 
-    /// How a config file spells each of those. The glyph is the canonical form everywhere inside
-    /// the app, and it is the one form nobody can type into a text editor, so the file gets a word.
-    /// ghostty's own spellings are accepted alongside the short ones for the reason `parse`'s
-    /// modifier aliases exist: a keybind line pasted from a ghostty config should resolve.
     private static let specialKeyWords: [String: String] = [
         "left": "←", "right": "→", "down": "↓", "up": "↑",
         "arrow_left": "←", "arrow_right": "→", "arrow_down": "↓", "arrow_up": "↑",
         "enter": "⏎", "return": "⏎",
         "home": "↖", "end": "↘", "page_up": "⇞", "page_down": "⇟",
         "tab": "⇥",
-        // ghostty's name, and the unambiguous one: macOS calls this key "delete", which ghostty
-        // gives to forward delete instead.
         "backspace": "⌫",
     ]
 
-    /// The word `configToken` writes back for a glyph. One per key, so a chord round-trips to the
-    /// same line it was read from rather than alternating between two accepted spellings.
     private static let wordForSpecialKey: [String: String] = [
         "←": "left", "→": "right", "↓": "down", "↑": "up", "⏎": "enter",
         "↖": "home", "↘": "end", "⇞": "page_up", "⇟": "page_down", "⇥": "tab",
         "⌫": "backspace",
     ]
 
-    /// The keyCode behind a special glyph, for a caller that needs the physical key back: a
-    /// backend keymap matches on the keyCode, and these keys have no character table to look up.
     static func keyCodeForSpecialGlyph(_ key: String) -> UInt16? {
         specialKeyGlyphs.first { $0.value == key }?.key
     }

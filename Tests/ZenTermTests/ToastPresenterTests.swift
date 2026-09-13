@@ -3,9 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Coverage for `ToastPresenter`'s lifecycle + the "sticky toast never steals input" guarantee.
-/// The key-equivalent assertions matter: a sticky/passive toast that armed Return/Esc
-/// would hijack those keys from the focused terminal.
 @MainActor
 final class ToastPresenterTests: WindowTestCase {
     private func makeHost() -> NSView {
@@ -43,12 +40,6 @@ final class ToastPresenterTests: WindowTestCase {
         return descendants(of: host).compactMap { $0 as? ToastView }
     }
 
-    // MARK: which cards claim keys
-    //
-    // The keys live on the card root now, not on `NSButton.keyEquivalent`, so these press real
-    // events at it. Reading the buttons no longer distinguishes the two: no toast button carries a
-    // key equivalent, so that assertion would hold for a confirm as well and prove nothing.
-
     private func keyEvent(_ keyCode: UInt16, _ characters: String) -> NSEvent {
         NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
@@ -75,8 +66,6 @@ final class ToastPresenterTests: WindowTestCase {
         XCTAssertTrue(toast.performKeyEquivalent(with: keyEvent(53, "\u{1b}")), "and Esc cancels")
     }
 
-    // MARK: lifecycle
-
     func test_show_mountsToastThenAutoDismisses() {
         let host = makeHost()
         let presenter = ToastPresenter(host: host, topInset: 12, trailingInset: 12, dismissAfter: 0.05)
@@ -92,7 +81,6 @@ final class ToastPresenterTests: WindowTestCase {
         let toast = presenter.confirm(content(), actions: actions())
         XCTAssertEqual(arrangedToasts(in: host).count, 1)
 
-        // A user click and the auto-dismiss timer can both fire — dismiss must not double-remove.
         presenter.dismiss(toast)
         presenter.dismiss(toast)
 

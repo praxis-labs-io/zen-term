@@ -1,14 +1,10 @@
 import AppKit
 
-/// A theme-driven download bar for `UpdateCardView`. `NSProgressIndicator` tints from
-/// `effectiveAppearance`, which the chrome bans, so this is a plain two-layer bar:
-/// a neutral ink track under an accent fill. `fraction` nil means the expected length isn't
-/// known yet, and an accent segment sweeps across to read as working.
+/// Not `NSProgressIndicator`, which tints from `effectiveAppearance` rather than the theme.
 final class UpdateProgressBar: NSView {
     private let fill = CALayer()
-    private static let sweepFraction: CGFloat = 0.3  // width of the indeterminate segment
+    private static let sweepFraction: CGFloat = 0.3
 
-    /// 0…1 fills the bar; nil runs the indeterminate sweep.
     var fraction: Double? {
         didSet {
             guard fraction != oldValue else { return }
@@ -28,9 +24,7 @@ final class UpdateProgressBar: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// A fixed 4pt bar. Vending the height intrinsically (rather than a self-owned height
-    /// constraint the card re-adds each rebuild) keeps the download hot path from leaking
-    /// constraints; width comes from a constraint to the card's column.
+    /// Intrinsic, because a height constraint would be re-added on every card rebuild.
     override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: 4) }
 
     override func layout() {
@@ -48,8 +42,6 @@ final class UpdateProgressBar: NSView {
         guard bounds.width > 0 else { return }
         if let fraction {
             fill.removeAnimation(forKey: "sweep")
-            // No implicit animation on the frame set — the bar advances as data arrives, and CA's
-            // default would lag each step behind the real progress.
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             fill.frame = CGRect(

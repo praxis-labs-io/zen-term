@@ -54,7 +54,6 @@ final class DiagnosticsBundleBuilderTests: XCTestCase {
     }
 
     func test_stage_carriesOnlyMetadataAndLogs() throws {
-        // The bundle must never carry the shell environment or the config file — only what it's handed.
         let active = try writeLog("zen-term.log", "x\n")
         let staging = dir.appendingPathComponent("staged", isDirectory: true)
 
@@ -79,7 +78,6 @@ final class DiagnosticsBundleBuilderTests: XCTestCase {
         XCTAssertTrue(listing.contains("zen-term.log"), "zip carries the log; listing was:\n\(listing)")
     }
 
-    /// `unzip -l` entry names, so the test asserts the real archive rather than trusting `build`.
     private func unzipListing(_ zip: URL) throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
