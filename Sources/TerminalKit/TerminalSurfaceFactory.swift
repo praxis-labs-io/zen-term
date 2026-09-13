@@ -1,4 +1,3 @@
-/// The one place the chrome gets a terminal.
 public enum TerminalSurfaceFactory {
     #if DEBUG
         /// When set, `make()` returns this instead of a libghostty surface. Debug builds only.

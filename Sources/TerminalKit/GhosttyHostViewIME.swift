@@ -1,7 +1,6 @@
 import AppKit
 import GhosttyKit
 
-// Accents, dead keys, the emoji picker, CJK and dictation, ported from ghostty's `SurfaceView`.
 extension GhosttyHostView: NSTextInputClient {
     func hasMarkedText() -> Bool { markedText.length > 0 }
 

@@ -1,6 +1,5 @@
 import CoreGraphics
 
-/// A terminal's font and color palette.
 public struct TerminalTheme: Sendable, Equatable {
     public var fontName: String
     public var fontSize: CGFloat

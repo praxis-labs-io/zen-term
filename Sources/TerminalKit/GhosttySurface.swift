@@ -2,7 +2,6 @@ import AppKit
 import AppLog
 import GhosttyKit
 
-/// The libghostty `TerminalSurface`, the sole backend.
 public final class GhosttySurface: NSObject, TerminalSurface {
     private let hostView = GhosttyHostView()
     var surfacePtr: ghostty_surface_t?
@@ -23,7 +22,6 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     // A scheme push triggers a config reload that can re-derive the scheme, so a repeat must be silent.
     private var lastReportedScheme: ghostty_color_scheme_e?
 
-    // Effective focus as libghostty heard it: `paneFocused && isAppActive`.
     private(set) var lastFocused = true
 
     private var paneFocused = true
@@ -263,7 +261,6 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         handleFocusChange(focused)
     }
 
-    // Both the chrome's `setFocused` and responder changes land here, since either may fire alone.
     private func handleFocusChange(_ focused: Bool) {
         paneFocused = focused
         syncFocus()

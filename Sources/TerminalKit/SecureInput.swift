@@ -1,7 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
 
-// Process-global secure keyboard entry, held only while a focused surface wants it and the app is active.
 final class SecureInput {
     static let shared = SecureInput()
 

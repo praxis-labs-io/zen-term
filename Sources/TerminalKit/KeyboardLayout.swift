@@ -1,6 +1,5 @@
 import Carbon
 
-// The current input-source id, snapped around `keyDown` to detect an input method claiming a key.
 enum KeyboardLayout {
     // TIS off the main thread kills the process with no crash report, and `swift test` cannot catch it.
     @MainActor

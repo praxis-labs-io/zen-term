@@ -32,7 +32,7 @@ public final class ShellSessionReaper {
         reap(sessions: [session])
     }
 
-    /// Sweeps every session in one graced pass. Per-session passes serialize and outlast quit's budget.
+    /// Sweeps every session in one graced pass.
     public func reap(sessions: Set<pid_t>) {
         let live = sessions.filter { $0 > 1 }
         guard !live.isEmpty else { return }

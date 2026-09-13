@@ -1,6 +1,5 @@
 import AppKit
 
-/// Spawn parameters for a terminal-backed leaf.
 public struct TerminalSurfaceConfig {
     public var command: String?
     public var args: [String]
@@ -157,7 +156,6 @@ public struct TerminalViewportCell: Equatable {
 
 public enum TerminalSearchStep: Equatable { case next, previous }
 
-/// What the backend does with the path after writing the screen to a file.
 public enum ScreenFileDisposition: Equatable {
     /// Types the path into the pane.
     case paste
@@ -166,7 +164,6 @@ public enum ScreenFileDisposition: Equatable {
     case open
 }
 
-/// One keystroke, in the terms a backend keymap needs.
 public struct TerminalKey: Equatable {
     /// The macOS virtual keycode: the physical key, not the glyph a layout puts there.
     public var keyCode: UInt16
@@ -200,7 +197,6 @@ public enum ChordDisposition: Equatable {
     case mayClaim
 }
 
-/// Events a surface sends up to the chrome.
 public protocol TerminalSurfaceDelegate: AnyObject {
     func surface(_ s: TerminalSurface, titleDidChange title: String)
     func surface(_ s: TerminalSurface, cwdDidChange url: URL)
@@ -255,7 +251,6 @@ public extension TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, wantsSearchWithNeedle needle: String) {}
 }
 
-/// A terminal the chrome can host as a pane leaf.
 public protocol TerminalSurface: AnyObject {
     var view: NSView { get }
     var delegate: TerminalSurfaceDelegate? { get set }
@@ -322,7 +317,7 @@ public protocol TerminalSurface: AnyObject {
     /// Does nothing when no search is running.
     func stepSearch(_ step: TerminalSearchStep)
 
-    /// Ends the search. Idempotent.
+    /// Idempotent.
     func endSearch()
 
     /// What the backend would do with `key` under the current config. Do not cache across reloads.

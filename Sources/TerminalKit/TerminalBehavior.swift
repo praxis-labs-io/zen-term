@@ -1,6 +1,6 @@
 import Foundation
 
-/// Non-appearance terminal settings from user config: cursor, Option, glyph thickening, scroll, shader.
+/// Non-appearance terminal settings from user config.
 public struct TerminalBehavior: Equatable, Sendable {
     public enum CursorStyle: Sendable, Equatable { case block, bar, underline }
 

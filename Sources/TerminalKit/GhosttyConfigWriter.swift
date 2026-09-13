@@ -1,7 +1,7 @@
 import AppLog
 import Foundation
 
-// Writes the chrome's theme as ghostty config text; libghostty only accepts config from files.
+// libghostty only accepts config from files.
 enum GhosttyConfigWriter {
     // `.whileFocused` freezes a blurred cursor tail mid-decay into a tracer; `.always` does not.
     enum ShaderAnimation: String {
@@ -103,7 +103,6 @@ enum GhosttyConfigWriter {
         }
     }
 
-    // `variant` keeps a per-surface config from overwriting the app-global one.
     static func writeConfig(
         for theme: TerminalTheme?, behavior: TerminalBehavior? = nil,
         shaderAnimation: ShaderAnimation = .whileFocused, variant: String? = nil,

@@ -111,7 +111,6 @@ final class GhosttyApp {
         tick()
     }
 
-    // Returns false when the push failed and the surface kept its previous config.
     @discardableResult
     func updateSurfaceConfig(
         _ surfacePtr: ghostty_surface_t, theme: TerminalTheme?, behavior: TerminalBehavior,

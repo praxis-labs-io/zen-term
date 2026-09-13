@@ -19,7 +19,6 @@ final class GhosttyHostView: NSView {
 
     var markedText = NSMutableAttributedString()
 
-    // Non-nil only inside `keyDown`, so `insertText` queues text there and commits it immediately elsewhere.
     var keyTextAccumulator: [String]?
 
     var accessibilityContentsCache: (value: String, fetchedAt: ContinuousClock.Instant)?

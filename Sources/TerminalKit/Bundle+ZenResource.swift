@@ -12,7 +12,6 @@ extension Bundle {
     }
 
     static func zenResourceBundle(
-        // `searchRoots` is injectable because under `swift test` the real roots miss and `fallback` hides it.
         named name: String, searchRoots: [URL?], fallback: @autoclosure () -> Bundle
     ) -> Bundle {
         for root in searchRoots {
