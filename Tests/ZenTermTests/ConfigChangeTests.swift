@@ -3,8 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Unit tests for the change-kind diff. The gate in the `.configDidChange` observers is
-/// only as good as this diff: a kind that fails to light up when its field moves is stale chrome.
 final class ConfigChangeTests: XCTestCase {
     private static func terminalTheme(fontName: String = "Menlo", fontSize: CGFloat = 14)
         -> TerminalTheme
@@ -15,8 +13,6 @@ final class ConfigChangeTests: XCTestCase {
             cursor: color, selectionBackground: color, ansi: Array(repeating: color, count: 16))
     }
 
-    /// The real resolution shape: the terminal theme carries the general config's font, and the
-    /// chrome roles derive from that theme — so a font edit moves the `AppTheme`.
     private func theme(_ config: GeneralConfig) -> AppTheme {
         let terminal = Self.terminalTheme(fontName: config.fontName, fontSize: config.fontSize)
         return AppTheme(terminal: terminal, chrome: ChromeThemeDeriver.derive(from: terminal))
@@ -45,17 +41,11 @@ final class ConfigChangeTests: XCTestCase {
         XCTAssertEqual(result, .keymap)
     }
 
-    /// An unbind can move on its own, with the map and the diagnostics both unchanged: an action
-    /// that already held no chord gains a `= none` line and nothing else shifts. An open Shortcuts
-    /// card rebuilds the whole keybind block from what it last read, so missing this write means the
-    /// next edit from that card deletes the line.
     func test_unboundActionAlone_yieldsKeymap() {
         let result = change(from: { $0.unboundActions = [.checkForUpdates] })
         XCTAssertEqual(result, .keymap)
     }
 
-    /// The load-bearing one: a rebind must NOT light up the chrome-layout kind, or the gate saves
-    /// nothing on the very write the ticket is about.
     func test_keybindRebind_doesNotYieldChromeLayout() {
         let result = change(from: {
             $0.keymap[Chord(command: true, shift: true, option: true, control: true, key: "q")] =
@@ -108,8 +98,6 @@ final class ConfigChangeTests: XCTestCase {
         XCTAssertEqual(change(from: { _ in }, newTheme: other), .theme)
     }
 
-    /// A font edit resolves into the `AppTheme` rather than being read on its own, so it must reach
-    /// observers as `.theme` — the kind the surface re-appearance and chrome recolor gate on.
     func test_fontChange_reachesObserversAsTheme() {
         let old = GeneralConfig.builtIn
         var new = old
@@ -128,8 +116,6 @@ final class ConfigChangeTests: XCTestCase {
         XCTAssertEqual(result, [.chromeLayout, .motion, .terminalBehavior])
     }
 
-    /// The fail-safe: a notification posted without a change set must read as "everything moved",
-    /// so a caller that doesn't diff gets the old do-everything behavior instead of stale chrome.
     func test_notificationWithoutUserInfo_readsAsAll() {
         let note = Notification(name: .configDidChange)
         XCTAssertEqual(ConfigChange.from(note), .all)
@@ -148,11 +134,6 @@ final class ConfigChangeTests: XCTestCase {
         XCTAssertEqual(ConfigChange.from(note), .keymap)
     }
 
-    /// `.all` must actually contain every kind — a kind added to the type but left out of `.all`
-    /// would make the fail-safe silently partial.
-    /// The two stickiness keys are read when a notification fires, so they deliberately light up
-    /// nothing: a live window has no state derived from them to re-point. Only the duration does,
-    /// because the presenter holds it.
     func test_toastDismissalModes_yieldNoChange() {
         XCTAssertEqual(change(from: { $0.attentionToast = .auto }), [])
         XCTAssertEqual(change(from: { $0.completionToast = .auto }), [])

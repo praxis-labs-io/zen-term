@@ -3,10 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The shared `DirectoryPickerField` (workspace folder + tool-float directory both use it): a text
-/// field plus a Choose button that opens a directory panel. The panel is presented through an
-/// injectable seam, so these assert the Choose → present → fill wiring without popping a real
-/// `NSOpenPanel` (which would flash a sheet and depend on a live window server).
 final class DirectoryPickerFieldTests: XCTestCase {
     func test_chooseButton_isAKeyboardFocusStop() {
         let picker = DirectoryPickerField(placeholder: "Type a path, or Choose")
@@ -28,7 +24,7 @@ final class DirectoryPickerFieldTests: XCTestCase {
 
     func test_filledField_opensThePanelAtTheExistingDirectory() {
         let picker = DirectoryPickerField(placeholder: "Type a path, or Choose")
-        let dir = FileManager.default.temporaryDirectory  // a real directory, outside home
+        let dir = FileManager.default.temporaryDirectory
         picker.setText(PathDisplay.abbreviatingHome(dir.path))
         var startedAt: URL?
         picker.presentPanel = { _, start, _ in startedAt = start }
@@ -56,7 +52,7 @@ final class DirectoryPickerFieldTests: XCTestCase {
         picker.setText("~/keep-me")
         var pickedRan = false
         picker.onPicked = { _ in pickedRan = true }
-        picker.presentPanel = { _, _, completion in completion(nil) }  // user cancelled
+        picker.presentPanel = { _, _, completion in completion(nil) }
 
         picker.chooseButton.onTap()
 

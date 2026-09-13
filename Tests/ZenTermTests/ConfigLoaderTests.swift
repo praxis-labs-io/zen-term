@@ -13,7 +13,7 @@ final class ConfigLoaderTests: XCTestCase {
     }
 
     func test_missingFileYieldsBuiltInDefault() throws {
-        let root = try makeTempDir()  // empty — no `theme` file
+        let root = try makeTempDir()
         let app = ConfigLoader.loadAppTheme(configRoot: root, general: .builtIn)
         XCTAssertEqual(app.terminal.background, Theme.rosePineZen.background)
         XCTAssertEqual(app.chrome.destructive, TerminalColor(hex: "#eb6f92"))
@@ -26,22 +26,19 @@ final class ConfigLoaderTests: XCTestCase {
         let app = ConfigLoader.loadAppTheme(configRoot: root, general: .builtIn)
         XCTAssertEqual(app.terminal.background, TerminalColor(hex: "#010101"))
         XCTAssertEqual(app.chrome.background, TerminalColor(hex: "#010101"))
-        XCTAssertEqual(app.chrome.destructive, TerminalColor(hex: "#020202"))  // palette[1]
+        XCTAssertEqual(app.chrome.destructive, TerminalColor(hex: "#020202"))
     }
 
     func test_unreadableFileFallsBackWithoutCrashing() throws {
         let root = try makeTempDir()
-        // Make `theme` a directory so reading it as a file throws.
         try FileManager.default.createDirectory(
             at: root.appendingPathComponent("theme"), withIntermediateDirectories: true)
         let app = ConfigLoader.loadAppTheme(configRoot: root, general: .builtIn)
         XCTAssertEqual(app.terminal.background, Theme.rosePineZen.background)
     }
 
-    // MARK: - General config
-
     func test_loadGeneralConfig_missingFileYieldsBuiltIn() throws {
-        let root = try makeTempDir()  // empty — no `config` file
+        let root = try makeTempDir()
         XCTAssertEqual(ConfigLoader.loadGeneralConfig(configRoot: root), .builtIn)
     }
 
@@ -62,7 +59,7 @@ final class ConfigLoaderTests: XCTestCase {
     }
 
     func test_loadAppTheme_appliesConfigFontEvenWithNoThemeFile() throws {
-        let root = try makeTempDir()  // no `theme` file
+        let root = try makeTempDir()
         var general = GeneralConfig.builtIn
         general.fontName = "Menlo"
         general.fontSize = 18
@@ -71,10 +68,8 @@ final class ConfigLoaderTests: XCTestCase {
         XCTAssertEqual(app.terminal.fontSize, 18)
     }
 
-    // MARK: - Workspaces
-
     func test_loadWorkspaces_missingFileYieldsEmpty() throws {
-        let root = try makeTempDir()  // no `workspaces` file
+        let root = try makeTempDir()
         XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root), [])
     }
 
@@ -87,8 +82,6 @@ final class ConfigLoaderTests: XCTestCase {
         XCTAssertEqual(workspaces.first?.main, "nvim")
     }
 
-    /// The form every UI caller uses: the read is off the main thread, and the result has
-    /// to arrive back ON it, because what it feeds is view building.
     func test_loadWorkspaces_async_deliversTheParsedListOnTheMainThread() throws {
         let root = try makeTempDir()
         try "[ZenTerm]\npath = ~/Dev/zen-term\n\n[Notes]\npath = ~/notes\n"
@@ -106,8 +99,6 @@ final class ConfigLoaderTests: XCTestCase {
         XCTAssertTrue(onMain, "a caller building views off this must be handed it on the main thread")
     }
 
-    /// Nothing may run before the caller returns: the whole point is that the chord that triggered
-    /// the load has already put its card up.
     func test_loadWorkspaces_async_doesNotCallBackBeforeReturning() throws {
         let root = try makeTempDir()
         try "[ZenTerm]\npath = ~/Dev/zen-term\n"
@@ -122,13 +113,10 @@ final class ConfigLoaderTests: XCTestCase {
 
     func test_loadWorkspaces_unreadableFallsBackWithoutCrashing() throws {
         let root = try makeTempDir()
-        // Make `workspaces` a directory so reading it as a file throws.
         try FileManager.default.createDirectory(
             at: root.appendingPathComponent("workspaces"), withIntermediateDirectories: true)
         XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root), [])
     }
-
-    // MARK: - Named theme selection (themes/<name>)
 
     private func writeTheme(_ name: String, background: String, in root: URL) throws {
         let dir = root.appendingPathComponent("themes")
@@ -147,7 +135,7 @@ final class ConfigLoaderTests: XCTestCase {
     }
 
     func test_namedTheme_missing_fallsBackToBuiltInWithoutCrashing() throws {
-        let root = try makeTempDir()  // no themes/ dir at all
+        let root = try makeTempDir()
         var general = GeneralConfig.builtIn
         general.themeName = "nope"
         let app = ConfigLoader.loadAppTheme(configRoot: root, general: general)
@@ -156,12 +144,12 @@ final class ConfigLoaderTests: XCTestCase {
 
     func test_namedTheme_winsOverLegacyThemeFile() throws {
         let root = try makeTempDir()
-        try "background = #999999\n"  // legacy single `theme` file
+        try "background = #999999\n"
             .write(to: root.appendingPathComponent("theme"), atomically: true, encoding: .utf8)
         try writeTheme("ocean", background: "#010203", in: root)
         var general = GeneralConfig.builtIn
         general.themeName = "ocean"
         let app = ConfigLoader.loadAppTheme(configRoot: root, general: general)
-        XCTAssertEqual(app.terminal.background, TerminalColor(hex: "#010203"))  // named wins
+        XCTAssertEqual(app.terminal.background, TerminalColor(hex: "#010203"))
     }
 }

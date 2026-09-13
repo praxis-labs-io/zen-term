@@ -4,24 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Differential tests for the app-global half of the `.configDidChange` fan-out.
-///
-/// The fan-out was gated by change kind on the premise "no behavior change intended", and
-/// nothing checked it. Two regressions shipped past a green suite, both in this observer, both
-/// caught by reading the diff rather than by a failing test — and the second was the *same shape*
-/// as the first, made twenty minutes later. Re-deriving four-deep call chains by hand does not
-/// scale, so this checks the invariant directly instead of enumerating dependencies:
-///
-/// > For any config change, the **gated** fan-out must leave the app identical to the **ungated**
-/// > one.
-///
-/// A gate that is too narrow makes the two diverge, whether or not anyone knew the dependency was
-/// there. **Honest limit:** it only covers what the fingerprint samples.
-///
-/// The doubles model *resulting state*, not calls made, and each is seeded with the **old** value
-/// exactly as the real collaborator would hold it. "Was it called" is the wrong question: under
-/// `.all` every sink fires, and re-applying an unchanged value is a no-op, so a call-count
-/// comparison would report a difference on every scenario.
 final class ConfigApplierDifferentialTests: XCTestCase {
     private var originalConfig: GeneralConfig!
     private var originalTheme: AppTheme!
@@ -41,37 +23,18 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         try super.tearDownWithError()
     }
 
-    // MARK: - doubles
-
-    /// Stand-ins for the app-global collaborators, each holding the state its real counterpart
-    /// would. The update card is the exception and deliberately so: it's a **real**
-    /// `UpdateCardView`, driven through its real `reapplyTheme()`. That call chain
-    /// (`reapplyTheme` → `refreshKeycap` → the live keymap) is regression #2, and a modelled fake
-    /// would only ever prove the model right.
     private final class SinkDoubles {
         var keymap: [Chord: KeyInterceptor.ReservedChord]
-        /// The keymap the shadow report last read. That sink returns nothing (it logs), so the state
-        /// it lands on is *which* keymap it was asked about.
         var shadowKeymap: [Chord: KeyInterceptor.ReservedChord]
         var motion: GeneralConfig.ReduceMotion
         var autoChecks: Bool
         var announced: [ToastContent] = []
-        /// The notice **currently on screen**, as opposed to the log of every one ever raised. The
-        /// config notice is sticky, so this is the thing a user is actually looking at.
         var showing: ToastContent?
-        /// The chord conflicts carded, one per card.
         var conflicts: [KeybindConflict] = []
-        /// Whether a window is there to take a notice. The real sink returns false when the key
-        /// window isn't one of ours (an open panel).
         var canDeliver = true
-        /// The payload `theme.json` holds. Seeded with the *old* theme, because that is what the
-        /// file on disk already carries — nil would model "was it called", and re-publishing an
-        /// unchanged theme is a no-op that would then read as a divergence.
         var published: ThemePublisher.Payload
         let card: UpdateCardView
 
-        /// Built while `GeneralConfig.current` is still the *old* config, so the card bakes in the
-        /// old keycap and every field starts where the running app would have it.
         init(old: GeneralConfig) {
             published = ThemePublisher.payload(for: Theme.current, themeName: old.themeName)
             keymap = old.keymap
@@ -86,7 +49,6 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         var sinks: ConfigApplier.Sinks {
             ConfigApplier.Sinks(
                 setKeymap: { [unowned self] in self.keymap = $0 },
-                // The real sink takes no value either; it reads the live keymap when it runs.
                 reportBackendShadow: { [unowned self] in self.shadowKeymap = GeneralConfig.current.keymap },
                 applyMotion: { [unowned self] in self.motion = $0 },
                 announceDiagnostics: { [unowned self] content, _ in
@@ -102,12 +64,9 @@ final class ConfigApplierDifferentialTests: XCTestCase {
                 },
                 retractConflicts: { [unowned self] in self.conflicts = [] },
                 reapplyUpdateCardTheme: { [unowned self] in self.card.reapplyTheme() },
-                // The real sink re-reads the live config rather than taking a value.
                 applyAutoCheckSetting: { [unowned self] in
                     self.autoChecks = GeneralConfig.current.automaticUpdateChecks
                 },
-                // The real sink resolves the payload from the live statics, so this does too. The
-                // `nvimColorscheme` half needs the filesystem and is asserted in `ThemePublisherTests`.
                 publishTheme: { [unowned self] in
                     self.published = ThemePublisher.payload(
                         for: Theme.current, themeName: GeneralConfig.current.themeName)
@@ -115,31 +74,17 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         }
     }
 
-    /// Everything the fan-out is allowed to have moved. Equatable so gated and ungated compare
-    /// whole, rather than one assertion per field going stale as fields are added.
     private struct AppFingerprint: Equatable {
-        /// The keymap the sink holds, flattened to sorted `chord = action` lines. Flattened rather
-        /// than held as the dictionary because a failure prints the whole thing, and two raw
-        /// 33-entry maps is a wall nobody reads.
         var keymap: [String]
-        /// The keymap the shadow report ran against, same flattening as above.
         var shadowKeymap: [String]
         var motion: GeneralConfig.ReduceMotion
         var autoChecks: Bool
-        /// The glyph the card's keycap was **built** with — empty when the chord is unbound.
         var cardKeycap: String
-        /// Every label the card rendered, so a re-render that drops content shows up too.
         var cardText: [String]
         var announced: [ToastContent]
-        /// The notice left on screen. Distinct from `announced`: a gate that raised the right
-        /// warning but failed to retract it lands here, not there.
         var showing: ToastContent?
-        /// What `theme.json` holds after the fan-out.
         var published: ThemePublisher.Payload
 
-        /// Which fields moved, for the failure message. Equality above is what makes the assertion
-        /// correct; this only makes it readable, so a field missing here degrades to a vaguer
-        /// message rather than a missed regression.
         func differences(from other: AppFingerprint) -> [String] {
             var diffs: [String] = []
             if keymap != other.keymap {
@@ -192,9 +137,6 @@ final class ConfigApplierDifferentialTests: XCTestCase {
             announced: doubles.announced, showing: doubles.showing, published: doubles.published)
     }
 
-    // MARK: - harness
-
-    /// A config move: where the app starts, and where the reload leaves it.
     private struct Scenario {
         var name: String
         var old: GeneralConfig = .builtIn
@@ -203,9 +145,6 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         var newTheme: AppTheme?
     }
 
-    /// Put the statics in the scenario's *old* state, build a fresh applier against fresh doubles,
-    /// move the statics to the *new* state, and apply `change` — the exact sequence
-    /// `AppConfig.reload()` drives.
     private func run(_ scenario: Scenario, applying change: ConfigChange) -> AppFingerprint {
         GeneralConfig.setCurrentForTesting(scenario.old)
         if let oldTheme = scenario.oldTheme { Theme.setCurrentForTesting(oldTheme) }
@@ -218,8 +157,6 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         return fingerprint(doubles)
     }
 
-    /// The invariant. The gated run gets the real diff `AppConfig.reload()` would compute; the
-    /// ungated run gets `.all`, which is the earlier behavior.
     private func assertGateSkipsNothing(
         _ scenario: Scenario, file: StaticString = #filePath, line: UInt = #line
     ) {
@@ -237,12 +174,6 @@ final class ConfigApplierDifferentialTests: XCTestCase {
             """, file: file, line: line)
     }
 
-    // MARK: - scenarios
-
-    /// Regression #2's shape. `.checkForUpdates` is unbound by default, so binding it moves the
-    /// card's keycap — and the card is re-themed only when the gate lets a `.keymap` change reach
-    /// it. Gate it on `.theme` alone and the gated run keeps an empty keycap while the ungated run
-    /// shows the new glyph.
     func test_keymapRebind_leavesTheAppWhereTheUngatedFanOutWould() {
         var new = GeneralConfig.builtIn
         new.keymap[Chord(command: true, shift: true, option: true, key: "u")] = .checkForUpdates
@@ -276,14 +207,10 @@ final class ConfigApplierDifferentialTests: XCTestCase {
                 newTheme: try makeAlternateTheme()))
     }
 
-    /// A write that resolved to no change at all still has to leave the app where `.all` would —
-    /// this is the empty-change-set case, which is exactly what strands an undelivered diagnostic
-    /// when `surfaceConfigDiagnostics` is wrongly gated.
     func test_noChangeAtAll_leavesTheAppWhereTheUngatedFanOutWould() {
         assertGateSkipsNothing(Scenario(name: "nothing moved", new: .builtIn))
     }
 
-    /// Several kinds in one write (a Settings save touches more than one row).
     func test_severalKindsAtOnce_leaveTheAppWhereTheUngatedFanOutWould() {
         var new = GeneralConfig.builtIn
         new.keymap[Chord(command: true, shift: true, option: true, key: "u")] = .checkForUpdates
@@ -292,8 +219,6 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         assertGateSkipsNothing(Scenario(name: "rebind + motion + updates", new: new))
     }
 
-    /// The harness's own control. If a fingerprint isn't stable across two identical runs, every
-    /// assertion above is meaningless — a flaky probe would read as a gate bug.
     func test_theFingerprintIsDeterministic() {
         var new = GeneralConfig.builtIn
         new.keymap[Chord(command: true, shift: true, option: true, key: "u")] = .checkForUpdates
@@ -301,15 +226,6 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         XCTAssertEqual(run(scenario, applying: .all), run(scenario, applying: .all))
     }
 
-    // MARK: - sequences the differential shape can't reach
-
-    /// Regression #1. `surfaceConfigDiagnostics` is ungated because it already has a finer gate:
-    /// it records a notice as announced only once a window has actually shown it. Gate it on
-    /// `.diagnostics` and an undelivered notice is stranded forever — the diagnostics haven't
-    /// changed, so the retry never comes.
-    ///
-    /// A single-apply differential can't see this: it's about the *second* reload, whose change set
-    /// is empty precisely because nothing about the config moved.
     func test_anUndeliveredDiagnosticIsRetriedOnTheNextReload() {
         var config = GeneralConfig.builtIn
         config.configDiagnostics = [
@@ -318,14 +234,12 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         GeneralConfig.setCurrentForTesting(config)
 
         let doubles = SinkDoubles(old: config)
-        doubles.canDeliver = false  // no window of ours is key — an open panel has focus
+        doubles.canDeliver = false
         let applier = ConfigApplier(sinks: doubles.sinks)
 
         applier.apply(.diagnostics)
         XCTAssertTrue(doubles.announced.isEmpty, "nothing could have shown it")
 
-        // A window is back. The next reload changed nothing, so its change set is empty — the
-        // retry has to happen anyway.
         doubles.canDeliver = true
         applier.apply([])
         XCTAssertEqual(
@@ -333,10 +247,6 @@ final class ConfigApplierDifferentialTests: XCTestCase {
             "an undelivered config notice was never retried — it's stranded for the session")
     }
 
-    /// The notice is sticky and describes what's wrong *now*, so fixing the config has to take it
-    /// down. Nothing else does: `ConfigDiagnostic.announcement` returns nil for an empty set, which
-    /// is indistinguishable from "nothing changed", so the warning outlived the fix that made it
-    /// false and sat there contradicting a config that was already clean.
     func test_fixingTheConfig_retractsTheNoticeAlreadyOnScreen() {
         var broken = GeneralConfig.builtIn
         broken.configDiagnostics = [
@@ -349,7 +259,7 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         applier.apply(.diagnostics)
         XCTAssertNotNil(doubles.showing, "expected the problem notice up")
 
-        GeneralConfig.setCurrentForTesting(.builtIn)  // the user fixed the file
+        GeneralConfig.setCurrentForTesting(.builtIn)
         applier.apply(.diagnostics)
         XCTAssertNil(
             doubles.showing,
@@ -357,8 +267,6 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         XCTAssertEqual(doubles.announced.count, 1, "retracting must not itself announce anything")
     }
 
-    /// A changed set replaces the notice rather than stacking a second card beside one that
-    /// describes a different set of problems.
     func test_aChangedProblemSet_replacesTheNoticeRatherThanStacking() {
         var broken = GeneralConfig.builtIn
         broken.configDiagnostics = [
@@ -377,8 +285,6 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         XCTAssertEqual(doubles.showing, doubles.announced.last, "the notice on screen is the stale one")
     }
 
-    /// Replacing the notice is "all or nothing": if no window can take the new one, keep the
-    /// existing notice up and retry the replacement on the next reload.
     func test_aReplacementThatCannotBeDelivered_keepsTheCurrentNoticeUntilRetrySucceeds() {
         var broken = GeneralConfig.builtIn
         broken.configDiagnostics = [
@@ -405,7 +311,6 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         XCTAssertEqual(doubles.showing, doubles.announced.last, "retry did not replace the notice on screen")
     }
 
-    /// The same problems plus one more, so the set is genuinely different.
     private static func worsened(_ config: GeneralConfig) -> GeneralConfig {
         var worse = config
         worse.configDiagnostics.append(
@@ -415,9 +320,6 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         return worse
     }
 
-    /// The other half of that gate: once delivered, an unchanged set stays quiet. Every in-app
-    /// write reloads (a Settings rebind, a float save), and re-announcing a conflict the user
-    /// already read on each of those is noise.
     func test_aDeliveredDiagnosticIsNotReannouncedOnTheNextReload() {
         var config = GeneralConfig.builtIn
         config.configDiagnostics = [
@@ -434,10 +336,6 @@ final class ConfigApplierDifferentialTests: XCTestCase {
         XCTAssertEqual(doubles.announced.count, 1, "the same config problem announced more than once")
     }
 
-    // MARK: - helpers
-
-    /// A theme whose accent (ANSI slot 5) is a clearly distinct `#00ff00`, built through the same
-    /// `ConfigLoader.loadAppTheme` path the other re-apply tests use.
     private func makeAlternateTheme() throws -> AppTheme {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-applier-\(UUID().uuidString)", isDirectory: true)

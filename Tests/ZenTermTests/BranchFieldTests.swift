@@ -2,8 +2,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The branch field's suggestion list, driven through the real control in a real window: the list
-/// is parented to the window's content view, so nothing here works without one.
 final class BranchFieldTests: XCTestCase {
     private var window: NSWindow!
     private var field: BranchField!
@@ -54,21 +52,18 @@ final class BranchFieldTests: XCTestCase {
         XCTAssertEqual(field.matchesForTesting, ["feature/zen-454", "feature/zen-481"])
     }
 
-    /// The name the user typed in full is the one they meant, whatever the scorer says.
     func test_anExactMatch_leadsTheList() {
         type("feature/zen-45")
 
         XCTAssertEqual(field.matchesForTesting.first, "feature/zen-454")
     }
 
-    /// The choice is made, so a one-row list restating it adds nothing and traps Down inside it.
     func test_aQueryThatIsAlreadyTheOnlyMatch_closesTheList() {
         type("feature/zen-454")
 
         XCTAssertFalse(field.isListOpen)
     }
 
-    /// Still a list while the typed name is one of several: `main` is exact, but not alone.
     func test_anExactMatchWithOtherCandidates_keepsTheList() {
         field.setBranches(["main", "main-ish"], holders: [:])
 
@@ -78,7 +73,6 @@ final class BranchFieldTests: XCTestCase {
         XCTAssertEqual(field.matchesForTesting.first, "main")
     }
 
-    /// An empty filtered list renders as a bare sliver, which is worse than no list at all.
     func test_aQueryThatMatchesNothing_showsNoList() {
         type("zen")
         XCTAssertTrue(field.isListOpen)
@@ -97,7 +91,6 @@ final class BranchFieldTests: XCTestCase {
         XCTAssertEqual(field.highlightedForTesting, "feature/zen-481")
     }
 
-    /// With nothing to suggest the arrow belongs to the form, not to the field.
     func test_downLeavesTheFieldWhenNothingMatches() {
         var left = 0
         field.onArrowDown = { left += 1 }
@@ -108,7 +101,6 @@ final class BranchFieldTests: XCTestCase {
         XCTAssertEqual(left, 1)
     }
 
-    /// The entry point for "give an existing branch a worktree": nothing typed, everything offered.
     func test_downOnAnEmptyFieldOpensTheWholeList() {
         var left = 0
         field.onArrowDown = { left += 1 }
@@ -143,9 +135,6 @@ final class BranchFieldTests: XCTestCase {
         XCTAssertEqual(advanced, 1)
     }
 
-    /// Esc is answered in the field's own command routing, not at the card root:
-    /// `performKeyEquivalent` does not run for a bare Esc while a popover host holds focus, which
-    /// is the trap `ModalEscape` documents and two earlier attempts fell into.
     func test_escapeTakesTheListDownAndKeepsTheCard() {
         type("zen")
 
@@ -154,7 +143,6 @@ final class BranchFieldTests: XCTestCase {
         XCTAssertEqual(field.text, "zen")
     }
 
-    /// With no list up, Esc belongs to the card root. Consuming it here would strand the card open.
     func test_escapeWithNoListIsNotConsumed() {
         type("qqqq")
 
@@ -170,8 +158,6 @@ final class BranchFieldTests: XCTestCase {
         XCTAssertEqual(field.text, "zen")
     }
 
-    /// A branch something already holds keeps its row: hiding it leaves the user typing the name
-    /// by hand and meeting the refusal with no explanation.
     func test_aHeldBranchKeepsItsRowAndItsNote() {
         field.setBranches(
             ["feature/zen-454"],
@@ -204,7 +190,6 @@ final class BranchFieldTests: XCTestCase {
         XCTAssertEqual(left, 1)
     }
 
-    /// The list is parented to the window's content view, so nothing takes it down with the field.
     func test_leavingTheWindowTakesTheListWithIt() {
         type("zen")
 

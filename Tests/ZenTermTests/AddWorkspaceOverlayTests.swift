@@ -3,9 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction tests for the workspace add / edit form's later additions, edit-mode prefill and
-/// the Delete button — driven through the real controls in a window. A state-only test would pass
-/// while the control was dead, the failure mode the project's interaction-test rule guards against.
 final class AddWorkspaceOverlayTests: WindowTestCase {
     private final class Sink {
         var submitted: [Workspace] = []
@@ -20,10 +17,6 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         super.tearDown()
     }
 
-    // MARK: carry
-
-    /// `WorkspacesWriter.update` regenerates the whole section body, so a form that rebuilt the
-    /// workspace without `carry` would delete those lines on any unrelated edit, with nothing said.
     func test_editingAWorkspace_roundTripsCarryThroughThePicker() throws {
         let ws = Workspace(
             title: "ZenTerm", path: try makeRealDir(),
@@ -38,8 +31,6 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertEqual(sink.submitted.first?.carry, ["node_modules", ".env"])
     }
 
-    /// The catalog is read out of the folder, so choosing one has to reach the control. Nothing is
-    /// typed into CARRY, which is why the folder is the only thing that can fill it.
     func test_choosingAFolder_loadsWhatGitIgnoresThere() throws {
         let dir = try makeRealDir()
         let (overlay, _) = mount()
@@ -73,7 +64,6 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertEqual(sink.submitted.first?.carry, [".env", "node_modules"])
     }
 
-    /// A list with nothing to show is not a focus stop, so an arrow into it would strand the ring.
     func test_carryIsAVerticalStopOnlyOnceItHasAList() throws {
         let dir = try makeRealDir()
         let (overlay, _) = mount()
@@ -85,8 +75,6 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertNotNil(carry.focusStop)
     }
 
-    /// The form's own stop list, not the control's: a stop the form never splices in is a stop the
-    /// arrows cannot reach, and `verticalStops()` is private.
     func test_downFromTheEnvButton_reachesTheCarryList() throws {
         let dir = try makeRealDir()
         let ws = Workspace(
@@ -99,8 +87,6 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         let addVar = try XCTUnwrap(button(in: overlay, title: "＋ Add variable"))
         window?.makeFirstResponder(addVar)
 
-        // The real event, not the callback: AppKit puts `.function` and `.numericPad` on every
-        // arrow, and calling `onArrowDown` directly stays green while the button stops routing it.
         let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
         addVar.keyDown(
             with: try XCTUnwrap(
@@ -112,9 +98,6 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertTrue(KeyboardFocus.isFocused(list, in: window), "Down off ＋ Add variable lands on CARRY")
     }
 
-    /// A dropped cap looks fine on a laptop and turns the card into a full-height wall on a tall
-    /// display, which is the shape a layout test can settle and the eye usually cannot. Every form
-    /// card shares the cap, so `FormCardHeightTests` covers the other two.
     func test_theCard_staysUnderTheSettingsHeight_howeverMuchItHolds() throws {
         let ws = Workspace(
             title: "Big", path: try makeRealDir(), main: "nvim", right: "claude", bottom: "shell",
@@ -137,8 +120,6 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertGreaterThan(card.frame.height, 0)
     }
 
-    /// Point the folder field at `folder` and let the stubbed probe land, which is the only way a
-    /// list exists: a seeded one would be torn down when git answered.
     private func loadCarry(
         _ carry: CarryPicker, in overlay: AddWorkspaceOverlay, folder: URL, ignoring: [String]
     ) {
@@ -155,8 +136,6 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
     private func carryPicker(in overlay: NSView) -> CarryPicker? {
         descendants(of: overlay).compactMap { $0 as? CarryPicker }.first
     }
-
-    // MARK: harness
 
     private func mount(
         editing: Workspace? = nil, existingTitles: Set<String> = [], withDelete: Bool = false
@@ -189,17 +168,12 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == title }
     }
 
-    /// The segmented control whose segments include `title` — distinguishes the layout picker
-    /// ("Editor + AI + Shell") from the focus picker, which both have three segments.
     private func segment(in overlay: NSView, containing title: String) -> SegmentedControl? {
         descendants(of: overlay).compactMap { $0 as? SegmentedControl }.first { control in
             descendants(of: control).compactMap { $0 as? AppButton }.contains { $0.title == title }
         }
     }
 
-    /// Press Esc the way `NSWindow.sendEvent` does — a `performKeyEquivalent` traversal of the
-    /// contentView subtree, which is where the card root claims it. Driving the root
-    /// directly would skip the Cancel button's key equivalent, which is the point of the traversal.
     @discardableResult
     private func pressEscape() -> Bool {
         let esc = NSEvent.keyEvent(
@@ -209,7 +183,6 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         return window!.contentView!.performKeyEquivalent(with: esc)
     }
 
-    /// Override the configured preset editor / AI for one test, restoring `current` on teardown.
     private func setPresetConfig(editor: String, ai: String) {
         let original = GeneralConfig.current
         var overridden = original
@@ -219,7 +192,6 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         addTeardownBlock { GeneralConfig.setCurrentForTesting(original) }
     }
 
-    /// A real on-disk directory, so the form's "that folder exists" validation passes on submit.
     private func makeRealDir() throws -> URL {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-ws-\(UUID().uuidString)", isDirectory: true)
@@ -227,8 +199,6 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
         return dir
     }
-
-    // MARK: tests
 
     func test_editForm_prefillsTitleAndFolder() throws {
         let dir = try makeRealDir()
@@ -280,14 +250,14 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
     }
 
     func test_addForm_hasNoDeleteButton() {
-        let (overlay, _) = mount()  // add mode
+        let (overlay, _) = mount()
         XCTAssertNil(button(in: overlay, title: "Delete"), "adding a new workspace has no Delete button")
     }
 
     func test_addForm_editorAIShellPreset_usesConfiguredEditorAndAI() throws {
         setPresetConfig(editor: "vim", ai: "codex")
         let dir = try makeRealDir()
-        let (overlay, sink) = mount()  // add mode defaults to the "Editor + AI + Shell" segment
+        let (overlay, sink) = mount()
 
         field(in: overlay, placeholder: "Workspace name").setText("Beta")
         field(in: overlay, placeholder: "Type a path, or Choose")
@@ -311,10 +281,8 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertEqual(segment(in: overlay, containing: "Editor + AI + Shell")?.selectedIndex, 1)
     }
 
-    /// A workspace stamped with the built-in default (nvim/claude) still reads as the preset after
-    /// the user reconfigures editor/AI — it doesn't silently drop to Custom.
     func test_editForm_builtInDefaultRecipe_selectsPresetUnderChangedConfig() throws {
-        setPresetConfig(editor: "vim", ai: "codex")  // config now differs from the stored recipe
+        setPresetConfig(editor: "vim", ai: "codex")
         let dir = try makeRealDir()
         let ws = Workspace(
             title: "Delta", path: dir, main: "nvim", right: "claude", bottom: "shell",
@@ -324,11 +292,6 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertEqual(segment(in: overlay, containing: "Editor + AI + Shell")?.selectedIndex, 1)
     }
 
-    // MARK: Tab
-
-    /// An env row is ONE vertical stop (its KEY box), so routing the value box's Tab through
-    /// `moveVertical` jumped from KEY straight to the next row — silently skipping the value the
-    /// user was about to type. Tab walks the row in reading order instead.
     func test_tab_walksAnEnvRow_ratherThanSkippingItsValueBox() throws {
         let (overlay, _) = mount()
         let addVar = try XCTUnwrap(button(in: overlay, title: "＋ Add variable"))
@@ -346,15 +309,10 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertTrue(KeyboardFocus.isFocused(row.keyBox.field, in: window), "Shift-Tab returns to KEY")
     }
 
-    // MARK: folder picker
-
     private func picker(in overlay: NSView) -> DirectoryPickerField {
         descendants(of: overlay).compactMap { $0 as? DirectoryPickerField }.first!
     }
 
-    /// The folder field carries a Choose button that opens the picker whether the field is empty or
-    /// already holds a path — the affordance is the button, not a click on the input. Presentation
-    /// goes through the picker's seam, so no real panel is popped.
     func test_folderChooseButton_opensThePicker() throws {
         let (overlay, _) = mount()
         var opened = false
@@ -365,8 +323,6 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertTrue(opened, "the Choose button must open the folder picker")
     }
 
-    /// Choosing a folder seeds the workspace title from its last path component (until the user has
-    /// edited the title themselves).
     func test_folderPick_seedsTitleFromFolderName() throws {
         let (overlay, _) = mount()
         picker(in: overlay).presentPanel = { _, _, completion in
@@ -378,9 +334,6 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertEqual(field(in: overlay, placeholder: "Workspace name").text, "my-project")
     }
 
-    /// The Choose button is keyboard-reachable, not mouse-only: Right off the folder field lands on
-    /// it, Left returns. Guards the dead-control failure mode the project's interaction rule exists
-    /// for — a button that renders but no arrow key can reach.
     func test_folderChooseButton_isArrowReachable() throws {
         let (overlay, _) = mount()
         let win = try XCTUnwrap(window)
@@ -396,10 +349,6 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertTrue(KeyboardFocus.isFocused(folder.field, in: win), "Left must return to the field")
     }
 
-    // MARK: Esc
-
-    /// Esc closes the form from a focused text field — the case the Cancel button's key equivalent
-    /// used to cover by accident, now owned by the card root.
     func test_escape_fromFocusedTextField_cancelsTheForm() {
         let (overlay, sink) = mount()
         window!.makeFirstResponder(field(in: overlay, placeholder: "Workspace name").field)
@@ -409,8 +358,6 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertEqual(sink.cancelled, 1)
     }
 
-    /// The dead-Esc site: `wireSegment` never wired `onEsc`, so Esc on a focused segmented control
-    /// only worked because the Cancel button's key equivalent caught it. The root now owns it.
     func test_escape_fromFocusedSegmentedControl_cancelsTheForm() throws {
         let (overlay, sink) = mount()
         let layout = try XCTUnwrap(segment(in: overlay, containing: "Editor + AI + Shell"))

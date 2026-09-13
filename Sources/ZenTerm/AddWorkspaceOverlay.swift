@@ -1,27 +1,12 @@
 import AppKit
 
-/// The add / edit form card for a workspace, opened from the ⌘P picker's ＋ row (add) and the
-/// Settings → Workspaces section (add / edit). It collects a folder, title, layout recipe, and env
-/// vars, builds a `Workspace`, and hands it to `onSubmit` — the host writes it to the `workspaces`
-/// file (and, from the picker, opens it). A `ModalOverlay` like the palettes (shared card + backdrop
-/// + spring), but a multi-field form; mirrors `ToolFloatFormOverlay`, including its Delete button.
-///
-/// Fully keyboard-driven: Up/Down move between fields, Left/Right pick within a segmented control,
-/// Return advances to the next field (opens the folder panel when the empty folder field is
-/// focused), ⌘Return submits, Esc cancels. Every input is full width, the focused field/control
-/// reads as a muted fill, and each field shows its own validation message beneath it.
 final class AddWorkspaceOverlay: NSView, ModalOverlay {
-    /// A layout preset; `custom` reveals the raw recipe fields.
     private enum LayoutChoice { case minimal, editorAIShell, custom }
 
-    /// The editor / AI the "Editor + AI + Shell" preset launches, snapshotted at open (from `config`
-    /// `editor` / `ai`, falling back to the built-in defaults) so the caption shown and the recipe
-    /// stored can't disagree if the config changes while the form is up.
+    /// Snapshotted at open so the caption shown and the recipe stored cannot disagree.
     private let presetEditor: String
     private let presetAI: String
 
-    /// The layout captions, built once from the snapshot. The preset caption names the configured
-    /// editor / AI so it stays truthful when the user picks their own tools.
     private lazy var layoutCaptions: [String] = [
         "One shell, drawers closed", "\(presetEditor), \(presetAI), shell", "Set each region yourself",
     ]
@@ -30,14 +15,11 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private let existingTitles: Set<String>
     private let onSubmit: (Workspace) -> Void
     private let onCancel: () -> Void
-    /// Non-nil only when editing — its presence shows the Delete button.
     private let onDelete: (() -> Void)?
 
     private let card = CardView()
-    /// Retained so a live theme change reaches it: it bakes its color at build time.
     private var footerDivider: ThemeReapplying?
     private var dismiss = DismissGate()
-    /// Retained (not a throwaway init-local) so `reapplyTheme()` can recolor it in place.
     private let header = NSTextField(labelWithString: "")
 
     private let titleField = FieldBox(placeholder: "Workspace name")
@@ -59,10 +41,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private var bottomGroup: LabeledField?
     private let focusSegment = SegmentedControl(options: ["Main", "Right", "Bottom"], selectedIndex: 0) { _ in }
 
-    /// Captions built directly into a stack rather than wrapped by a `LabeledField` (which
-    /// retains its own caption already) — e.g. LAYOUT/ENVIRONMENT/FOCUS. Retained here so
-    /// `reapplyTheme()` can reach them too; otherwise they'd go stranded and stale on a live
-    /// theme swap while the form is open. Built via the `caption(_:required:)` instance helper.
+    /// Retained so `reapplyTheme()` can recolor captions built straight into a stack.
     private var captions: [FieldCaption] = []
     private var envRows: [EnvRow] = []
     private let envStack = NSStackView()
@@ -122,18 +101,16 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             content.bottomAnchor.constraint(equalTo: card.bottomAnchor),
         ])
 
-        prefill()  // seed the fields from the edited workspace (a no-op when adding)
-        layoutChanged(layoutSegment.selectedIndex)  // seed the caption + custom visibility
+        prefill()
+        layoutChanged(layoutSegment.selectedIndex)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    // MARK: ModalOverlay
-
     func focusInitialResponder() { window?.makeFirstResponder(titleField.field) }
 
     func animateIn() {
-        superview?.layoutSubtreeIfNeeded()  // resolve the card's frame before scaling about its center
+        superview?.layoutSubtreeIfNeeded()
         Motion.springScaleFade(card, appearing: true)
     }
 
@@ -146,12 +123,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         dismiss.isDismissing ? nil : super.hitTest(point)
     }
 
-    /// The form's Esc fallback. This card has no popover host, so Esc always ends here: a focused
-    /// button or segmented control lets it bubble to this pass, and a focused text field routes Esc
-    /// through its field editor (`cancelOperation`), which never bubbles as a card-root `keyDown`.
-    /// Claiming Esc in `performKeyEquivalent` catches both, so the card is the single Esc owner
-    /// rather than each control deciding by accident. The Cancel button carries no Esc key
-    /// equivalent; this pass is what cancels the form.
+    /// Claims Esc here because a focused field routes it through its field editor, which never bubbles.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if ModalEscape.handle(
             event, in: window, dismissing: dismiss.isDismissing, close: { self.onCancel() }
@@ -161,12 +133,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         return super.performKeyEquivalent(with: event)
     }
 
-    /// Re-apply the form's theme-dependent colors after a live theme change, IN PLACE — unlike
-    /// the palettes, this form holds uncommitted typed values (fields + dynamic env rows) that a
-    /// rebuild would lose, so nothing here is ever rebuilt, only recolored. Every leaf control
-    /// conforms to `ThemeReapplying` (Task 6/7), so they're recolored as one group instead of a
-    /// type-switch; `EnvRow` and `LabeledField` get their own small `reapplyTheme()` for the same
-    /// reason KeybindRow does — a composite that owns otherwise-stranded static labels.
+    /// Recolors in place rather than rebuilding, which would lose uncommitted typed values.
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         CardChrome.reapplyTheme(to: card)
@@ -188,8 +155,6 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         captions.forEach { $0.reapplyTheme() }
     }
 
-    // MARK: content
-
     private func buildContent() -> NSStackView {
         header.font = .systemFont(ofSize: 15, weight: .semibold)
         header.textColor = Theme.current.chrome.foreground.nsColor
@@ -204,14 +169,11 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         self.titleGroup = titleGroup
 
         wireField(folderPicker.field)
-        // Choosing a folder seeds the title from its name until the user has edited the title.
         folderPicker.onPicked = { [weak self] url in
             guard let self else { return }
             if !self.titleEditedByUser { self.titleField.setText(url.lastPathComponent) }
             self.folderChanged()
         }
-        // After `wireField`, which points this at `refreshValidity` alone. The carry catalog is
-        // read out of the folder, so it has to follow a typed path as well as a chosen one.
         folderPicker.field.onChange = { [weak self] in self?.folderChanged() }
         folderPicker.wireNav(
             onVertical: { [weak self] in self?.moveVertical($0) },
@@ -258,16 +220,12 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             button.onTab = { [weak self] in self?.moveTab(1) }
             button.onBacktab = { [weak self] in self?.moveTab(-1) }
         }
-        // Add · Cancel are a horizontal pair — Left/Right move between them (matching the layout).
         addButton.onArrowLeft = { [weak self] in self?.focus(self?.cancelButton) }
         cancelButton.onArrowRight = { [weak self] in self?.focus(self?.addButton) }
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         var footerViews: [NSView] = [spacer, cancelButton, addButton]
         if onDelete != nil {
-            // Delete sits far left, split from Cancel/Save; Left from Save walks Save → Cancel →
-            // Delete (a destructive action kept a deliberate step off the primary path). Mirrors
-            // `ToolFloatFormOverlay`.
             deleteButton.isKeyboardFocusable = true
             deleteButton.onTap = { [weak self] in self?.onDelete?() }
             deleteButton.onArrowUp = { [weak self] in self?.moveVertical(-1) }
@@ -278,10 +236,6 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             cancelButton.onArrowLeft = { [weak self] in self?.focus(self?.deleteButton) }
             footerViews = [deleteButton, spacer, cancelButton, addButton]
         }
-        // Tab walks the footer in place so Cancel (and Delete when editing) are Tab-reachable, not
-        // Left/Right-only: the primary button (Add Workspace / Save) → Cancel → Delete, mirroring the
-        // Left-arrow order. Forward Tab off the last button wraps to the top; Shift-Tab off the
-        // primary button leaves the footer upward.
         addButton.onTab = { [weak self] in self?.focus(self?.cancelButton) }
         cancelButton.onBacktab = { [weak self] in self?.focus(self?.addButton) }
         if onDelete != nil {
@@ -317,11 +271,6 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         }
     }
 
-    // MARK: keyboard focus ring
-
-    /// The vertical navigation order (Up/Down), top to bottom — rebuilt on demand so it reflects
-    /// whether the custom fields are shown and how many env rows exist. Each env row contributes a
-    /// single stop (its KEY field); its value box and remove button are reached with Left/Right.
     private func verticalStops() -> [NSView] {
         var stops: [NSView] = [titleField.field, folderPicker.field.field, layoutSegment]
         if layoutChoice == .custom {
@@ -329,22 +278,15 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         }
         for row in envRows { stops.append(row.keyBox.field) }
         stops.append(addVarButton)
-        // CARRY sits under the ＋ button, and is absent while the list has nothing to show.
         if let carryStop = carryPicker.focusStop { stops.append(carryStop) }
-        // The footer is one vertical stop anchored on Add (its default focus); Cancel is reached
-        // from it with Left/Right, not Up/Down.
         stops.append(addButton)
         return stops
     }
 
     private func moveVertical(_ delta: Int) { move(delta, wrap: false) }
 
-    /// Tab traversal: wraps at the ends where the arrows clamp, so a Tab loop never dies on the last
-    /// stop. Matches the Settings card, so the same key behaves the same way in every card.
     private func moveTab(_ delta: Int) { move(delta, wrap: true) }
 
-    /// Through the Settings mover, which reveals the destination as well as focusing it. The body
-    /// scrolls, so a stop below the fold would otherwise take focus off screen.
     private func move(_ delta: Int, wrap: Bool) {
         let stops = verticalStops()
         let anchor = currentVerticalAnchor(in: stops).flatMap { anchor in stops.firstIndex { $0 === anchor } }
@@ -353,25 +295,18 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         }
     }
 
-    /// The vertical stop that represents the current focus — the focused stop itself, or, when the
-    /// focus is on an env row's value box or remove button, that row's KEY field (its row anchor).
     private func currentVerticalAnchor(in stops: [NSView]) -> NSView? {
         if let direct = stops.first(where: isFocused) { return direct }
         for row in envRows where isFocused(row.valueBox.field) || isFocused(row.removeButton) {
             return row.keyBox.field
         }
-        // The folder Choose button shares the folder field's vertical stop; it's reached with Right.
         if isFocused(folderPicker.chooseButton) { return folderPicker.field.field }
-        // Cancel and Delete share the footer's vertical stop (Add); they're reached with Left/Right.
         if isFocused(cancelButton) || isFocused(deleteButton) { return addButton }
         return nil
     }
 
     private func isFocused(_ view: NSView) -> Bool { KeyboardFocus.isFocused(view, in: window) }
 
-    /// Tab/Shift-Tab traverse the form's own stops, exactly like Down/Up. Without this the field
-    /// editor leaked Tab to AppKit's default key-view loop while Tab on the form's buttons was
-    /// consumed as advance/retreat — the same key doing two different things in one card.
     private func wireField(_ box: FieldBox) {
         box.onChange = { [weak self] in self?.refreshValidity() }
         box.onArrowUp = { [weak self] in self?.moveVertical(-1) }
@@ -388,8 +323,6 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         segment.onBacktab = { [weak self] in self?.moveTab(-1) }
     }
 
-    // MARK: actions
-
     private func layoutChanged(_ index: Int) {
         layoutCaption.stringValue = layoutCaptions[min(index, layoutCaptions.count - 1)]
         customDetail.isHidden = (layoutChoice != .custom)
@@ -404,16 +337,12 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         row.removeButton.isKeyboardFocusable = true
         row.removeButton.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         row.removeButton.onArrowDown = { [weak self] in self?.moveVertical(1) }
-        // Left/Right step across the row: KEY · value · ✕. Return advances the same way.
         row.keyBox.onArrowRight = { [weak self, weak row] in self?.focus(row?.valueBox.field) }
         row.keyBox.onEnter = { [weak self, weak row] in self?.focus(row?.valueBox.field) }
         row.valueBox.onArrowLeft = { [weak self, weak row] in self?.focus(row?.keyBox.field) }
         row.valueBox.onArrowRight = { [weak self, weak row] in self?.focus(row?.removeButton) }
         row.valueBox.onEnter = { [weak self, weak row] in self?.focus(row?.removeButton) }
         row.removeButton.onArrowLeft = { [weak self, weak row] in self?.focus(row?.valueBox.field) }
-        // A row is ONE vertical stop (its KEY box), so Tab walks the pair in reading order — KEY →
-        // value → the next row — rather than `moveVertical` jumping from KEY straight to the next
-        // row and silently skipping the value the user was about to type.
         row.keyBox.onTab = { [weak self, weak row] in self?.focus(row?.valueBox.field) }
         row.valueBox.onTab = { [weak self] in self?.moveTab(1) }
         row.valueBox.onBacktab = { [weak self, weak row] in self?.focus(row?.keyBox.field) }
@@ -425,10 +354,6 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         return row
     }
 
-    /// Seed the fields from the workspace being edited (a no-op when adding). The layout choice is
-    /// reverse-derived from the recipe: a workspace whose recipe doesn't map cleanly onto Minimal or
-    /// Editor+AI+Shell — or that focuses a non-`.main` region — opens as Custom so every field round
-    /// trips. `titleEditedByUser` is set so choosing a folder later won't overwrite the loaded name.
     private func prefill() {
         guard let ws = editingWorkspace else { return }
         titleEditedByUser = true
@@ -451,18 +376,13 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         carryPicker.workspaceFolder = ws.path
     }
 
-    /// The preset a workspace maps back to: Minimal / Editor+AI+Shell only when the recipe matches
-    /// *and* focus is the default `.main` (those presets can't express a focus); otherwise Custom,
-    /// which carries every field verbatim.
     private func layoutChoice(for ws: Workspace) -> LayoutChoice {
         if ws.focus == .main, ws.main == nil, ws.right == nil, ws.bottom == nil { return .minimal }
         if ws.focus == .main, ws.bottom == "shell", matchesEditorAIPreset(ws) { return .editorAIShell }
         return .custom
     }
 
-    /// A workspace reads back as the "Editor + AI + Shell" preset when its editor/AI are either the
-    /// currently-configured pair or the built-in default — so a workspace stamped before the user
-    /// changed the setting still shows as the preset rather than dropping to Custom.
+    /// Accepts the built-in default pair too, so a workspace stamped before a config change stays the preset.
     private func matchesEditorAIPreset(_ ws: Workspace) -> Bool {
         (ws.main == presetEditor && ws.right == presetAI)
             || (ws.main == GeneralConfig.defaultEditor && ws.right == GeneralConfig.defaultAI)
@@ -506,8 +426,6 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         onSubmit(workspace)
     }
 
-    // MARK: model + validation
-
     private var layoutChoice: LayoutChoice {
         switch layoutSegment.selectedIndex {
         case 0: return .minimal
@@ -531,7 +449,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         var env: [String: String] = [:]
         for row in envRows {
             let key = row.key.trimmingCharacters(in: .whitespaces)
-            guard !key.isEmpty else { continue }  // a blank key isn't a variable
+            guard !key.isEmpty else { continue }
             env[key] = row.value.trimmingCharacters(in: .whitespaces)
         }
         return Workspace(
@@ -559,9 +477,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         return URL(fileURLWithPath: PathDisplay.expandingHome(text), isDirectory: true)
     }
 
-    /// Update every field's inline message and return the first offending field to focus (nil when
-    /// submittable). `includeRequired` gates the mandatory-but-empty checks: false for the live
-    /// pass (don't flag an untouched field), true on a submit attempt.
+    /// Rejects `=` and `"` where they cannot round-trip: the format has no escaping.
     @discardableResult
     private func validate(includeRequired: Bool) -> NSView? {
         var firstInvalid: NSView?
@@ -586,13 +502,12 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         if includeRequired, folderText.isEmpty {
             folderMessage = "Choose or type a workspace folder."
         } else if folderText.contains("\"") {
-            folderMessage = "The path can't contain a \" character."  // the format has no escaping
+            folderMessage = "The path can't contain a \" character."
         } else if !folderText.isEmpty, let folder = resolvedFolder(), !PathDisplay.isDirectory(folder) {
             folderMessage = "That folder doesn't exist."
         }
         flag(folderGroup, field: folderPicker.field.field, folderMessage)
 
-        // Custom command fields only matter (and only show) while the Custom layout is selected.
         if layoutChoice == .custom {
             for (box, group) in [(mainField, mainGroup), (rightField, rightGroup), (bottomField, bottomGroup)] {
                 flag(group, field: box.field, box.text.contains("\"") ? "Can't contain a \" character." : nil)
@@ -601,8 +516,6 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             for group in [mainGroup, rightGroup, bottomGroup] { group?.setMessage(nil) }
         }
 
-        // A `=` or `"` in a name, or a `"` in a value, can't round-trip (the parser splits env on
-        // the first `=` and the format has no escaping) — so reject them.
         func keyIsBad(_ row: EnvRow) -> Bool { row.key.contains("=") || row.key.contains("\"") }
         let badEnvRow = envRows.first { keyIsBad($0) || $0.value.contains("\"") }
         envError.stringValue =
@@ -622,16 +535,10 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         refreshValidity()
     }
 
-    // MARK: layout helpers
-
-    /// A small-caps caption; a required field marks it with a trailing accent asterisk.
     private static func caption(_ text: String, required: Bool) -> NSTextField {
         FieldCaption(text, required: required)
     }
 
-    /// Same as `Self.caption`, but for a caption built directly into a stack (not wrapped by a
-    /// `LabeledField`, which retains its own) — retains the created `FieldCaption` in `captions`
-    /// so `reapplyTheme()` can reach it too.
     private func caption(_ text: String, required: Bool) -> FieldCaption {
         let field = FieldCaption(text, required: required)
         captions.append(field)
@@ -656,7 +563,6 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         return stack
     }
 
-    /// A single control wrapped so it hugs the leading edge (doesn't stretch to full width).
     private static func leadingWrap(_ view: NSView) -> NSView {
         let stack = NSStackView(views: [view])
         stack.orientation = .horizontal
@@ -665,16 +571,10 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     }
 }
 
-// MARK: - Env row (a form-specific composite of the shared `FieldBox` / `AppButton` primitives)
-
-/// One environment-variable row: a KEY box, a `=`, a VALUE box, and a remove button.
 final class EnvRow: NSView {
     let keyBox = FieldBox(placeholder: "KEY")
     let valueBox = FieldBox(placeholder: "value")
-    /// A focus stop in the form's keyboard flow (arrow to it, Return removes the row).
     let removeButton = AppButton(title: "✕", variant: .secondary)
-    /// Retained (not a throwaway init-local) so `reapplyTheme()` can recolor it — otherwise this
-    /// static `=` label would go stranded, stale forever after a theme swap while the row is up.
     private let equals = NSTextField(labelWithString: "=")
 
     var key: String { keyBox.text }
@@ -704,15 +604,12 @@ final class EnvRow: NSView {
             stack.trailingAnchor.constraint(equalTo: trailingAnchor),
             stack.topAnchor.constraint(equalTo: topAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
-            // The KEY box stays narrower than the value box (a name is short, a value can be long).
             keyBox.widthAnchor.constraint(equalTo: valueBox.widthAnchor, multiplier: 0.6),
         ])
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Re-apply the live chrome colors after a config change — no relaunch: the KEY/value boxes,
-    /// the remove button (all `ThemeReapplying`), and the `=` label baked in at construction.
     func reapplyTheme() {
         keyBox.reapplyTheme()
         valueBox.reapplyTheme()

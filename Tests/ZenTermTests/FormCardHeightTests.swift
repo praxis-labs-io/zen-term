@@ -3,11 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Every form card shares one cap and one scroll, so a card that opts out of `FormCard.content`
-/// grows with its content and becomes a full-height wall on a tall display. Mounted in a window
-/// far taller than the cap, which is where a missing constraint shows and a laptop hides it.
 final class FormCardHeightTests: WindowTestCase {
-    /// The form arms a chord capture on open; nothing here presses a key.
     private final class NoCapture: KeybindCapturing {
         func beginCapture(_ handler: @escaping (NSEvent) -> Void) {}
         func endCapture() {}
@@ -28,8 +24,6 @@ final class FormCardHeightTests: WindowTestCase {
         XCTAssertLessThanOrEqual(try cardHeight(of: overlay), FormCard.maxHeight)
     }
 
-    /// A guard, not a regression catcher: this card's copy line truncates to one line, so it
-    /// cannot reach the cap today. It is here so that stops being silently true.
     func test_theCreateWorktreeCard_staysUnderTheCap() throws {
         let workspace = Workspace(
             title: "ZenTerm", path: URL(fileURLWithPath: "/tmp/zenterm-fixture"),
@@ -44,9 +38,6 @@ final class FormCardHeightTests: WindowTestCase {
         XCTAssertLessThanOrEqual(try cardHeight(of: overlay), FormCard.maxHeight)
     }
 
-    /// A guard, like the check above: this state measures 247 against the 460 cap today. It is
-    /// here because past the cap the body scrolls, and `ListPopover` is placed once with no scroll
-    /// observer, so the suggestion list would strand where the field used to be.
     func test_theCreateWorktreeCard_staysUnderTheCapWithTheExistingBranchCaption() throws {
         let branch = "feature/zen-454-create-a-worktree-from-an-existing-branch"
         let workspace = Workspace(
@@ -71,9 +62,6 @@ final class FormCardHeightTests: WindowTestCase {
         XCTAssertLessThanOrEqual(try cardHeight(of: overlay), FormCard.maxHeight)
     }
 
-    /// The cap must make the body scroll, not squash it. As a two-way equality the content-fit
-    /// constraint outranked the labels' compression resistance and laid every caption in the form
-    /// out at zero height: still present, still "visible", and invisible on screen.
     func test_aCappedCard_scrollsItsBodyRatherThanFlatteningIt() throws {
         let ws = Workspace(
             title: "W", path: FileManager.default.temporaryDirectory, main: "a", right: "b",
