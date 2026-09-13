@@ -104,7 +104,7 @@ final class WorkspacesWriterTests: XCTestCase {
                 title: "First", path: expandTilde("~/Dev/first"),
                 main: "nvim", right: nil, bottom: nil, focus: .main, env: [:]),
             configRoot: root)
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["First"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["First"])
     }
 
     func test_append_preservesExistingContentAndComments() throws {
@@ -122,7 +122,7 @@ final class WorkspacesWriterTests: XCTestCase {
 
         let text = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(text.contains("# my hand-written header"), "the comment survives")
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Existing", "Added"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["Existing", "Added"])
     }
 
     func test_append_unreadableExistingFile_throwsWithoutClobbering() throws {
@@ -173,7 +173,7 @@ final class WorkspacesWriterTests: XCTestCase {
                 return XCTFail("expected titleExists, got \(error)")
             }
         }
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).count, 1)
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).count, 1)
     }
 
     private func seed(_ text: String, in root: URL) throws {
@@ -207,7 +207,7 @@ final class WorkspacesWriterTests: XCTestCase {
                 main: "vim", right: "claude", bottom: nil, focus: .main, env: [:]),
             originalTitle: "Beta", configRoot: root)
 
-        let parsed = ConfigLoader.loadWorkspaces(configRoot: root)
+        let parsed = ConfigLoader.loadWorkspacesBlocking(configRoot: root)
         XCTAssertEqual(parsed.map(\.title), ["Alpha", "Beta", "Gamma"])
         let beta = parsed.first { $0.title == "Beta" }
         XCTAssertEqual(beta?.path, expandTilde("~/Dev/beta-moved"))
@@ -229,7 +229,7 @@ final class WorkspacesWriterTests: XCTestCase {
                 main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
             originalTitle: "Old", configRoot: root)
 
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["New"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["New"])
         XCTAssertFalse(try read(root).contains("[Old]"), "the old header is gone, not duplicated")
     }
 
@@ -248,7 +248,7 @@ final class WorkspacesWriterTests: XCTestCase {
                 return XCTFail("expected titleExists, got \(error)")
             }
         }
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["A", "B"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["A", "B"])
     }
 
     func test_update_handlesCRLFLineEndings_replacingInPlace() throws {
@@ -264,7 +264,7 @@ final class WorkspacesWriterTests: XCTestCase {
         let text = try read(root)
         XCTAssertEqual(
             text.components(separatedBy: "[Beta]").count - 1, 1, "the section is replaced, not duplicated")
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Alpha", "Beta"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["Alpha", "Beta"])
     }
 
     func test_update_missingOriginal_fallsBackToAppend() throws {
@@ -277,7 +277,7 @@ final class WorkspacesWriterTests: XCTestCase {
                 main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
             originalTitle: "Ghost", configRoot: root)
 
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["A", "Fresh"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["A", "Fresh"])
     }
 
     func test_remove_dropsSection_preservingNeighbours() throws {
@@ -288,7 +288,7 @@ final class WorkspacesWriterTests: XCTestCase {
 
         try WorkspacesWriter.remove(title: "Beta", configRoot: root)
 
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Alpha", "Gamma"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["Alpha", "Gamma"])
         let text = try read(root)
         XCTAssertFalse(text.contains("[Beta]"))
         XCTAssertFalse(text.contains("\n\n\n"), "removing a middle section leaves no triple blank")
@@ -300,7 +300,7 @@ final class WorkspacesWriterTests: XCTestCase {
 
         try WorkspacesWriter.remove(title: "Beta", configRoot: root)
 
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Alpha"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["Alpha"])
     }
 
     func test_remove_unknownTitle_isANoOp() throws {
@@ -309,7 +309,7 @@ final class WorkspacesWriterTests: XCTestCase {
 
         try WorkspacesWriter.remove(title: "Ghost", configRoot: root)
 
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Alpha"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["Alpha"])
     }
 
     private let threeSections = """
@@ -330,7 +330,7 @@ final class WorkspacesWriterTests: XCTestCase {
 
         XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
 
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Beta", "Alpha", "Gamma"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["Beta", "Alpha", "Gamma"])
     }
 
     func test_swap_movesEachSectionsFieldsWithIt() throws {
@@ -339,7 +339,7 @@ final class WorkspacesWriterTests: XCTestCase {
 
         XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
 
-        let parsed = ConfigLoader.loadWorkspaces(configRoot: root)
+        let parsed = ConfigLoader.loadWorkspacesBlocking(configRoot: root)
         XCTAssertEqual(parsed.first { $0.title == "Beta" }?.path, expandTilde("~/Dev/beta"))
         XCTAssertEqual(parsed.first { $0.title == "Beta" }?.main, "nvim")
         XCTAssertEqual(parsed.first { $0.title == "Alpha" }?.path, expandTilde("~/Dev/alpha"))
@@ -363,7 +363,7 @@ final class WorkspacesWriterTests: XCTestCase {
 
         XCTAssertTrue(try WorkspacesWriter.swap("Long", with: "Short", configRoot: root))
 
-        let parsed = ConfigLoader.loadWorkspaces(configRoot: root)
+        let parsed = ConfigLoader.loadWorkspacesBlocking(configRoot: root)
         XCTAssertEqual(parsed.map(\.title), ["Long", "Short"])
         XCTAssertEqual(parsed.first { $0.title == "Long" }?.right, "claude")
         XCTAssertEqual(parsed.first { $0.title == "Long" }?.focus, .right)
@@ -376,7 +376,7 @@ final class WorkspacesWriterTests: XCTestCase {
 
         XCTAssertTrue(try WorkspacesWriter.swap("Gamma", with: "Alpha", configRoot: root))
 
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Gamma", "Beta", "Alpha"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["Gamma", "Beta", "Alpha"])
     }
 
     func test_swap_carriesACommentAttachedToItsHeader() throws {
@@ -444,7 +444,7 @@ final class WorkspacesWriterTests: XCTestCase {
 
         XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
 
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Beta", "Alpha"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["Beta", "Alpha"])
     }
 
     func test_swap_unknownTitle_isANoOp_andReportsIt() throws {

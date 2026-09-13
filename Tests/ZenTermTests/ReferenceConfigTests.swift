@@ -17,7 +17,7 @@ final class ReferenceConfigTests: XCTestCase {
     }
 
     func test_referenceWorkspaces_isAllCommented_yieldingEmpty() {
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: docsConfig), [])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: docsConfig), [])
     }
 
     func test_referenceTheme_matchesBuiltInDefault() {

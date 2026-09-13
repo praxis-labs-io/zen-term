@@ -197,7 +197,7 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
     }
 
     private func configuredTitles() -> [String] {
-        ConfigLoader.loadWorkspaces(configRoot: tempRoot).map(\.title)
+        ConfigLoader.loadWorkspacesBlocking(configRoot: tempRoot).map(\.title)
     }
 
     func test_optionDown_movesWorkspaceDown_andPersists() throws {

@@ -104,7 +104,7 @@ enum ConfigLoader {
 
     static func loadWorkspaces(configRoot: URL = defaultRoot, completion: @escaping ([Workspace]) -> Void) {
         loadQueue.async {
-            let workspaces = loadWorkspaces(configRoot: configRoot)
+            let workspaces = loadWorkspacesBlocking(configRoot: configRoot)
             DispatchQueue.main.async { completion(workspaces) }
             validationQueue.async { warnAboutMissingDirectories(workspaces) }
         }
@@ -116,8 +116,7 @@ enum ConfigLoader {
     private static let validationQueue = DispatchQueue(
         label: "com.zenterm.config-validate", qos: .utility)
 
-    /// Blocks; call the completion form from the main thread.
-    static func loadWorkspaces(configRoot: URL = defaultRoot) -> [Workspace] {
+    static func loadWorkspacesBlocking(configRoot: URL = defaultRoot) -> [Workspace] {
         let url = configRoot.appendingPathComponent("workspaces")
         guard FileManager.default.fileExists(atPath: url.path) else { return [] }
         do {

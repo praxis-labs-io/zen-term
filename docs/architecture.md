@@ -2286,7 +2286,7 @@ at a few hundred files, which is how this was found.
   main thread.
 - **The `workspaces` file is read off the main thread, so its readers render
   twice.** `ConfigLoader.loadWorkspaces` has a completion-handler form that every
-  caller uses; the synchronous form behind it is the parse step, and calling it
+  caller uses; `loadWorkspacesBlocking` behind it is the parse step, and calling it
   from the main thread is the stall this removed. Path validation runs on its own
   queue *after* the list has been handed over, so the card never waits on a `stat`
   and a hung mount can't hold up the next load.
