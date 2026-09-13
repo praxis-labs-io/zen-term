@@ -5,10 +5,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Moving and renaming a tab, driven through the window the way a keystroke and a double-click
-/// reach it. `TabListTests` proves the ordering maths and `TabBarViewTests` the editor; what is
-/// only provable here is the wiring between them — that the chords dispatch, that a committed name
-/// reaches the bar, and that the rename editor holds the keyboard while it is open.
 @MainActor
 final class TabReorderAndRenameTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
@@ -48,8 +44,6 @@ final class TabReorderAndRenameTests: WindowTestCase {
         return controller
     }
 
-    // MARK: reorder
-
     func test_moveTabChords_shiftTheActiveTabAndKeepItActive() throws {
         let controller = makeWindow(tabs: 3)
         let order = controller.tabOrderForTesting
@@ -66,13 +60,11 @@ final class TabReorderAndRenameTests: WindowTestCase {
         XCTAssertEqual(controller.tabOrderForTesting, order, "and back")
     }
 
-    /// ⌘1-9 is resolved from `tabs.order` at render time, so a move has to renumber the tabs. If
-    /// the index were stored anywhere, this is what would catch it.
     func test_movingATab_renumbersTheSelectTabChords() throws {
         let controller = makeWindow(tabs: 3)
         let moved = try XCTUnwrap(controller.activeTabIDForTesting)
 
-        controller.handle(.moveTabLeft)  // the active tab goes from slot 3 to slot 2
+        controller.handle(.moveTabLeft)
         controller.handle(.selectTab(2))
 
         XCTAssertEqual(controller.activeTabIDForTesting, moved, "⌘2 now selects the tab that moved")
@@ -88,8 +80,6 @@ final class TabReorderAndRenameTests: WindowTestCase {
         XCTAssertEqual(controller.tabOrderForTesting, order)
         XCTAssertEqual(controller.activeTabIDForTesting, order[0])
     }
-
-    // MARK: rename
 
     private func descendants(of view: NSView) -> [NSView] {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
@@ -117,12 +107,10 @@ final class TabReorderAndRenameTests: WindowTestCase {
         XCTAssertEqual(controller.tabTitlesForTesting.last, "api server")
     }
 
-    /// The card opens holding the name the tab already has, so a small edit does not mean retyping
-    /// it, and its placeholder is the folder name the reset falls back to.
     func test_theCardOpensSeededWithTheCurrentName() throws {
         let controller = makeWindow(tabs: 2)
         let live = try XCTUnwrap(controller.tabTitlesForTesting.last)
-        try rename(controller, to: "api server")  // pin a name, so current and live now differ
+        try rename(controller, to: "api server")
 
         controller.handle(.renameTab)
 
@@ -132,8 +120,6 @@ final class TabReorderAndRenameTests: WindowTestCase {
         XCTAssertNotEqual(live, "api server", "otherwise this test proves nothing")
     }
 
-    /// The reset path. An empty commit clears the pin, so the tab goes back to reporting its own
-    /// live cwd title rather than being stuck on an empty label.
     func test_renamingToNothing_restoresTheLiveTitle() throws {
         let controller = makeWindow(tabs: 2)
         let live = try XCTUnwrap(controller.tabTitlesForTesting.last)
@@ -146,8 +132,6 @@ final class TabReorderAndRenameTests: WindowTestCase {
         XCTAssertFalse(live.isEmpty, "the live title is a real title, so the assertion means something")
     }
 
-    /// A double-click on a chip is the mouse route to the same card, and it renames the tab that
-    /// was clicked rather than whichever one happens to be active.
     func test_theBarsDoubleClickOpensTheCardForThatTab() throws {
         let controller = makeWindow(tabs: 2)
         controller.handle(.selectTab(1))
@@ -160,8 +144,6 @@ final class TabReorderAndRenameTests: WindowTestCase {
         XCTAssertEqual(controller.tabTitlesForTesting.last, "second", "the clicked tab, not the active one")
     }
 
-    /// The card takes the single modal slot, which is what gates the keyboard: `KeyInterceptor`
-    /// runs ahead of the responder chain, so ⌘W would otherwise close a pane while you type.
     func test_whileTheCardIsUp_chordsAreSwallowed() throws {
         let controller = makeWindow(tabs: 2)
         let order = controller.tabOrderForTesting
@@ -175,7 +157,6 @@ final class TabReorderAndRenameTests: WindowTestCase {
         XCTAssertNoThrow(try renameCard(controller), "and the card is still up")
     }
 
-    /// Esc closes it and renames nothing.
     func test_cancelling_leavesTheTitleAlone() throws {
         let controller = makeWindow(tabs: 2)
         let live = try XCTUnwrap(controller.tabTitlesForTesting.last)
@@ -196,11 +177,6 @@ final class TabReorderAndRenameTests: WindowTestCase {
                 isARepeat: false, keyCode: 53))
     }
 
-    // MARK: the card is a card
-
-    /// Every chord that presents a modal card closes a shown tool float first. Rename shipped in
-    /// the pass-through group instead, which stacked the card on top of the float: two modal
-    /// surfaces up at once, with the keyboard aimed at one of them.
     func test_openingTheCardOverAShownFloat_closesTheFloat() throws {
         let controller = makeWindow(tabs: 2)
         controller.floatsForTesting.toggle(
@@ -217,10 +193,6 @@ final class TabReorderAndRenameTests: WindowTestCase {
         XCTAssertNoThrow(try renameCard(controller), "and the card is up")
     }
 
-    /// A pending destructive confirm outranks the card. The keyboard route is already gated on
-    /// `isConfirmOpen`, but double-clicking the ACTIVE chip is not: `select` returns early on the
-    /// tab already being active, before its own `cancelConfirm()`, so the card would land on top
-    /// of a confirm that then cannot be answered.
     func test_doubleClickingTheActiveChip_answersAPendingConfirmFirst() throws {
         let controller = makeWindow(tabs: 2)
         var confirmed = 0
@@ -229,7 +201,7 @@ final class TabReorderAndRenameTests: WindowTestCase {
             confirmLabel: "Close", onConfirm: { confirmed += 1 })
         XCTAssertTrue(controller.isConfirmOpen)
 
-        controller.renameTabForTesting(index: 1)  // index 1 is the active tab
+        controller.renameTabForTesting(index: 1)
 
         XCTAssertFalse(controller.isConfirmOpen, "the confirm is cleared, not buried")
         XCTAssertEqual(confirmed, 0, "and cleared means cancelled, never silently confirmed")

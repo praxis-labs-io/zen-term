@@ -22,7 +22,7 @@ final class GhosttyThemeParserTests: XCTestCase {
             palette = 0=#111111
             palette = 15=#eeeeee
             """)
-        XCTAssertEqual(theme.fontName, "TestFont")  // font injected, not from file
+        XCTAssertEqual(theme.fontName, "TestFont")
         XCTAssertEqual(theme.background, TerminalColor(hex: "#000000"))
         XCTAssertEqual(theme.foreground, TerminalColor(hex: "#ffffff"))
         XCTAssertEqual(theme.cursor, TerminalColor(hex: "#ff0000"))
@@ -35,8 +35,8 @@ final class GhosttyThemeParserTests: XCTestCase {
     func test_missingKeysFallBack() {
         let theme = parse("background = #010203")
         XCTAssertEqual(theme.background, TerminalColor(hex: "#010203"))
-        XCTAssertEqual(theme.foreground, fallback.foreground)  // untouched → fallback
-        XCTAssertEqual(theme.ansi, fallback.ansi)  // no palette lines → fallback
+        XCTAssertEqual(theme.foreground, fallback.foreground)
+        XCTAssertEqual(theme.ansi, fallback.ansi)
     }
 
     func test_malformedLinesAndUnknownKeysIgnored() {
@@ -48,20 +48,17 @@ final class GhosttyThemeParserTests: XCTestCase {
             palette = 99=#ffffff
             palette = 2=#abcdef
             """)
-        XCTAssertEqual(theme.background, fallback.background)  // bad value → fallback
-        XCTAssertEqual(theme.ansi[2], TerminalColor(hex: "#abcdef"))  // valid palette line applied
-        XCTAssertEqual(theme.ansi[0], fallback.ansi[0])  // out-of-range 99 ignored
+        XCTAssertEqual(theme.background, fallback.background)
+        XCTAssertEqual(theme.ansi[2], TerminalColor(hex: "#abcdef"))
+        XCTAssertEqual(theme.ansi[0], fallback.ansi[0])
     }
 
     func test_theConfigASurfaceIsHandedNamesAColorForSelectedText() {
-        // Silent when it is missing: libghostty leaves every cell its own color, which looks
-        // correct until the text you select happens to be dark.
         let text = GhosttyConfigWriter.configText(for: AppTheme(terminal: fallback).terminal)
         XCTAssertTrue(text.contains("selection-foreground = #e0def4"), "got: \(text)")
     }
 
     func test_roundTripsGhosttyConfigWriterOutput() {
-        // Symmetry: what GhosttyConfigWriter writes, this parses back to the same colors.
         let text = GhosttyConfigWriter.configText(for: fallback)
         let theme = parse(text)
         XCTAssertEqual(theme.background, fallback.background)

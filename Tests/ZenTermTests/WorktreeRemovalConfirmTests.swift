@@ -2,8 +2,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The one sentence in front of a folder about to be deleted. Pure, so it is asserted directly
-/// rather than through the confirm toast it feeds.
 final class WorktreeRemovalConfirmTests: XCTestCase {
     private func worktree(branch: String? = "feature/zen-456") -> Worktree {
         Worktree(
@@ -17,8 +15,6 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
         WindowController.removeWorktreeMessage(
             worktree(branch: branch), state: state, carried: carried, openTabs: openTabs)
     }
-
-    // MARK: what it holds
 
     func test_unreadableState_saysSo_andNeverThatItIsClean() {
         let out = message(state: nil)
@@ -62,8 +58,6 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
                 .hasPrefix("0123456 has nothing uncommitted."))
     }
 
-    // MARK: what removing it does
-
     func test_openTabs_areCountedAndPluralized() {
         let clean = WorktreeState(uncommitted: 0, unpushed: 0)
         XCTAssertTrue(message(state: clean, openTabs: 0).contains("Removing it deletes the folder"))
@@ -93,7 +87,6 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
         for out in cases { XCTAssertTrue(out.contains("keeps the branch"), out) }
     }
 
-    /// `docs/brand-voice.md` bans the em-dash outright, and the test for it is a grep.
     func test_noEmDashAnywhere() {
         let out = message(
             state: WorktreeState(uncommitted: 2, unpushed: 1), carried: [".env", "node_modules"],

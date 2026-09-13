@@ -1,20 +1,10 @@
 import AppKit
 
-/// The chord-capture popover — built on the toast card chrome (`FloatShadow` background + hairline
-/// edge + drop shadow). A header row (tinted keyboard badge + title), a full-width muted preview box
-/// that shows the chord live (centered) with a small red validation line tucked beneath it, and a
-/// status line (the command keys, replaced by a success message on save). The input carries the
-/// accent ring while it listens, with a reset icon beside it. Shown by the section next to a
-/// capturing keybind chip.
 final class KeybindHintBubble: ShadowCardView {
     private static let width: CGFloat = 220
-    /// The card's horizontal insets, and the reset icon's width plus the gap before it.
     private static let insets: CGFloat = 28
     private static let resetSlot: CGFloat = 34 + 8
 
-    /// How wide the input box lays out. The reset icon takes its slot out of the same row, so the
-    /// box is narrower whenever one is showing, and anything measured against the box has to use
-    /// this rather than the card's own width.
     static func inputWidth(withReset: Bool) -> CGFloat {
         width - insets - (withReset ? resetSlot : 0)
     }
@@ -22,9 +12,7 @@ final class KeybindHintBubble: ShadowCardView {
     private let previewHost = NSView()
     private let statusHost = NSView()
     private let errorLabel = NSTextField(wrappingLabelWithString: "")
-    /// Reset the row to its built-in chord, beside the input it acts on. **Hidden until a host asks
-    /// for it.** The tool-float form shares this popover and has no defaults to go back to, so an
-    /// opt-out default would put a dead control on a card that never mentions it.
+    /// Hidden until a host asks: the tool-float form shares this popover and has no defaults.
     private lazy var resetButton = IconButton(
         symbol: "arrow.uturn.backward", size: NSSize(width: 34, height: 34), pointSize: 13,
         accessibilityLabel: "Reset to default", restsFilled: true
@@ -65,44 +53,28 @@ final class KeybindHintBubble: ShadowCardView {
         header.alignment = .centerY
         header.spacing = 10
 
-        // Full-width muted input-looking box holding the live chord preview, centered.
         let previewBox = NSView()
         previewBox.wantsLayer = true
         previewBox.layer?.cornerRadius = 6
         previewBox.layer?.backgroundColor = Theme.current.chrome.fill(.rest).cgColor
-        // The accent ring says the input is listening, the same signal a focused chip carries.
         previewBox.layer?.borderWidth = 1.5
         previewBox.layer?.borderColor = Theme.current.chrome.accent.nsColor.cgColor
         previewBox.translatesAutoresizingMaskIntoConstraints = false
         previewHost.translatesAutoresizingMaskIntoConstraints = false
         previewBox.addSubview(previewHost)
 
-        // Small red validation line, tucked just under the preview; collapsed until there's an error.
-        // Centered on the input it is about, not on the card: it explains the box above it, and
-        // left-aligned prose under a centered box reads as belonging to neither.
         errorLabel.font = .systemFont(ofSize: 10, weight: .medium)
         errorLabel.textColor = Theme.current.chrome.destructive.nsColor
         errorLabel.alignment = .center
-        // Wraps at the box's width, not the card's. The label is pinned to the box below, and the two
-        // differ by the reset icon whenever it shows: a wider wrap computes one line too few and the
-        // tail of the reason is clipped, which is the half of the message that says why.
         errorLabel.preferredMaxLayoutWidth = Self.inputWidth(withReset: true)
         errorLabel.isHidden = true
 
-        // The reset sits beside the input rather than under it: it acts on the same thing the input
-        // is showing, and a row of its own would read as a third command next to esc and del.
-        //
-        // The box takes whatever the icon leaves. Without this it sizes to the chord inside it, so
-        // the input shrank to a stub with dead space beside it, and a row with no icon (the common
-        // one) had a half-width box floating in a full-width card.
         previewBox.setContentHuggingPriority(.defaultLow, for: .horizontal)
         resetButton.setContentHuggingPriority(.required, for: .horizontal)
         let inputRow = NSStackView(views: [previewBox, resetButton])
         inputRow.orientation = .horizontal
         inputRow.alignment = .centerY
         inputRow.spacing = 8
-        // `.fill`, not the default gravity areas: only `.fill` grows a low-hugging view to take the
-        // slack, which is what makes the box span the row rather than sit at its content width.
         inputRow.distribution = .fill
 
         let previewGroup = NSStackView(views: [inputRow, errorLabel])
@@ -128,8 +100,6 @@ final class KeybindHintBubble: ShadowCardView {
             previewGroup.widthAnchor.constraint(equalTo: col.widthAnchor),
             inputRow.widthAnchor.constraint(equalTo: previewGroup.widthAnchor),
             previewBox.heightAnchor.constraint(equalToConstant: 34),
-            // Same width and leading edge as the box, so centering the text lands it under the box
-            // rather than under the card, which is wider whenever the reset icon is showing.
             errorLabel.widthAnchor.constraint(equalTo: previewBox.widthAnchor),
             previewHost.centerXAnchor.constraint(equalTo: previewBox.centerXAnchor),
             previewHost.centerYAnchor.constraint(equalTo: previewBox.centerYAnchor),
@@ -142,14 +112,13 @@ final class KeybindHintBubble: ShadowCardView {
             col.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -14),
         ])
 
-        resetButton.isHidden = true  // opt-in; see the property's note
+        resetButton.isHidden = true
         setPreview("")
         showInstructions()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Show the chord being typed (its display glyph) centered in the preview box, or a placeholder.
     func setPreview(_ glyph: String) {
         previewHost.subviews.forEach { $0.removeFromSuperview() }
         let content: NSView
@@ -171,38 +140,22 @@ final class KeybindHintBubble: ShadowCardView {
         ])
     }
 
-    /// Test hook: the input box's laid-out width. The box takes whatever the reset icon leaves, and
-    /// it has twice collapsed to the width of the chord inside it, so the budget is asserted rather
-    /// than eyeballed. `previewHost`'s superview *is* the box.
     var inputWidthForTesting: CGFloat { previewHost.superview?.frame.width ?? 0 }
 
-    /// The card's own width, for measuring the above against.
     static var widthForTesting: CGFloat { width }
 
-    /// Test hook: the chord the input is drawing, or nil when it shows the listening placeholder.
-    /// Reads the rendered subview rather than a stored string, so a test can't pass while the box
-    /// actually shows something else.
     var previewedChordForTesting: String? {
         (previewHost.subviews.first as? KeycapView)?.shortcut
     }
 
-    /// A small red validation line under the preview; the status controls below stay put.
     func showError(_ text: String) {
         errorLabel.stringValue = text
         errorLabel.isHidden = false
     }
     func clearError() { errorLabel.isHidden = true }
 
-    /// Whether the row this popover is over can be put back. The reset is hidden on a row already
-    /// at its default, where it would be a control that does nothing.
     func setCanResetToDefault(_ canReset: Bool) { resetButton.isHidden = !canReset }
 
-    /// The status line: what each command key does. Reset is the icon beside the input rather than a
-    /// key here, because it acts on what the input is showing rather than on the recording.
-    ///
-    /// The same two words on every row, deliberately. A conflict is answered on the card that raises
-    /// it, which carries its own Accept and Revert; this popover is for setting a shortcut. Wording
-    /// it per row meant opening a setter to unset something already unset.
     func showInstructions() {
         let cancel = Self.muted("to cancel")
         let keys = NSStackView(views: [
@@ -211,11 +164,10 @@ final class KeybindHintBubble: ShadowCardView {
         keys.orientation = .horizontal
         keys.alignment = .centerY
         keys.spacing = 5
-        keys.setCustomSpacing(12, after: cancel)  // gap between the two groups, no dot separator
+        keys.setCustomSpacing(12, after: cancel)
         setStatus(keys)
     }
 
-    /// Replace the status line with a success message before the popover closes.
     func showSuccess(_ text: String) {
         let label = NSTextField(labelWithString: text)
         label.font = .systemFont(ofSize: 12, weight: .medium)
@@ -235,7 +187,6 @@ final class KeybindHintBubble: ShadowCardView {
         ])
     }
 
-    /// A small inline key chip (`esc`, `del`): a faint rounded box with muted monospaced text.
     private static func keyCap(_ text: String) -> NSView {
         let label = NSTextField(labelWithString: text)
         label.font = .monospacedSystemFont(ofSize: 10, weight: .medium)

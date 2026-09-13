@@ -1,23 +1,16 @@
 import AppKit
 
-/// The create-a-worktree card, opened with ⌥⏎ over a ⌘P picker row. Mirrors
-/// `AddWorkspaceOverlay`'s card, keyboard model and validation shape.
 final class NewWorktreeOverlay: NSView, ModalOverlay {
     private let workspace: Workspace
     private let options: WorktreeStore.CreateOptions
     private let onSubmit: (Request) -> Void
     private let onCancel: () -> Void
     private let onDismiss: () -> Void
-    /// Opens the workspace's edit form, where carry is set. Nil leaves the link off, for a host
-    /// with nowhere to send it.
     private let onEditWorkspace: (() -> Void)?
 
     private let card = CardView()
-    /// Retained so a live theme change reaches it: it bakes its color at build time.
     private var footerDivider: ThemeReapplying?
     private var dismiss = DismissGate()
-    /// Moving the main checkout is the one thing Create does that the user did not name, so it is
-    /// asked over the card rather than done quietly.
     private lazy var confirm = ConfirmSlot(over: self)
     private let header = NSTextField(labelWithString: "")
 
@@ -43,8 +36,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         title: "Create Worktree", variant: .primary, keyEquivalent: "\r",
         keyEquivalentModifierMask: .command)
 
-    /// `WorktreeStore.create` cannot be called back, so Esc and the backdrop are locked too: a
-    /// card torn down early leaves a worktree landing with nothing to report to.
+    /// `WorktreeStore.create` can't be cancelled, so Esc and the backdrop lock while it runs.
     private var isWorking = false
 
     init(
@@ -62,8 +54,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
 
-        // Clicking out is a way out, not a way back: Esc and Cancel return to the list, this does
-        // not. The picker's own backdrop dismisses to the terminal too.
         let backdrop = BackdropView(onClick: { [weak self] in self?.dismissToTerminal() })
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
@@ -101,11 +91,8 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    // MARK: ModalOverlay
-
     var isShowingOverlaidCard: Bool { confirm.isShowing }
 
-    /// While a confirm is up the keyboard is its own, so focus goes there rather than to the field.
     func focusInitialResponder() {
         if let card = confirm.card { card.focusInitialResponder() } else { focus(branchField.field) }
     }
@@ -124,9 +111,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         dismiss.isDismissing ? nil : super.hitTest(point)
     }
 
-    /// The card root is the single Esc owner, for the reasons `AddWorkspaceOverlay` documents.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        // The confirm answers its own Esc, and the card must not close underneath it.
         if confirm.isShowing { return super.performKeyEquivalent(with: event) }
         if ModalEscape.handle(
             event, in: window, dismissing: dismiss.isDismissing || isWorking,
@@ -156,9 +141,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         captions.forEach { $0.reapplyTheme() }
     }
 
-    // MARK: the create's own state
-
-    /// The host resolves this by closing the card, or by calling `failWork`.
     func beginWork(_ phase: String) {
         isWorking = true
         errorLabel.isHidden = true
@@ -190,8 +172,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         window?.makeFirstResponder(branchField.field)
     }
 
-    // MARK: content
-
     private func buildContent() -> NSStackView {
         header.font = .systemFont(ofSize: 15, weight: .semibold)
         header.textColor = Theme.current.chrome.foreground.nsColor
@@ -219,7 +199,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         carryLabel.font = .systemFont(ofSize: 11)
         carryLabel.textColor = Theme.current.chrome.ink(.muted)
         carryLabel.lineBreakMode = .byTruncatingTail
-        // Nothing to say when nothing is set: the button already says it.
         carryLabel.stringValue = workspace.carry.joined(separator: ", ")
         carryLabel.isHidden = workspace.carry.isEmpty
         carryLink.setTitle(workspace.carry.isEmpty ? "Choose what to copy" : "Change what to copy")
@@ -264,7 +243,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         createButton.onBacktab = { [weak self] in self?.moveTab(-1) }
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        // In the footer's dead space, so a long create says so without the card changing height.
         let footer = Self.hStack([phaseGroup, spacer, cancelButton, createButton], spacing: 8)
 
         let built = FormCard.content(
@@ -274,11 +252,8 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         return built.view
     }
 
-    // MARK: keyboard
-
     private func verticalStops() -> [NSView] {
         var stops: [NSView] = [branchField.field]
-        // An existing branch is already at a commit, so the hidden base group is not a stop either.
         if !(baseGroup?.isHidden ?? false) { stops.append(baseSegment) }
         if carryLink.isKeyboardFocusable { stops.append(carryLink) }
         stops.append(createButton)
@@ -303,7 +278,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         }
     }
 
-    /// Cancel shares Create's stop; it is reached with Left/Right.
     private func currentVerticalAnchor(in stops: [NSView]) -> NSView? {
         if let direct = stops.first(where: isFocused) { return direct }
         return isFocused(cancelButton) ? createButton : nil
@@ -316,8 +290,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         window?.makeFirstResponder(view)
     }
 
-    /// The field owns its own arrows and Return while its suggestion list is up, and hands the
-    /// form back only the moves that leave it.
     private func wireBranchField() {
         branchField.onChange = { [weak self] in self?.refreshValidity() }
         branchField.onArrowUp = { [weak self] in self?.moveVertical(-1) }
@@ -335,8 +307,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         segment.onTab = { [weak self] in self?.moveTab(1) }
         segment.onBacktab = { [weak self] in self?.moveTab(-1) }
     }
-
-    // MARK: actions
 
     private func baseChanged(_ index: Int) {
         baseCaption.stringValue =
@@ -361,9 +331,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
 
     private func submit() {
         guard !isWorking, !confirm.isShowing else { return }
-        // ⌘Return reaches the button through `performKeyEquivalent` and a click never moves first
-        // responder, so neither path takes the list down on its own. Left up it draws over the
-        // confirm, and a row clicked there would edit the card mid-create.
         branchField.closeList()
         if let firstInvalid = validate(includeRequired: true) {
             window?.makeFirstResponder(firstInvalid)
@@ -390,8 +357,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
                 }))
     }
 
-    /// Names the consequence before it happens. Nothing closes: the shells already open in the
-    /// main checkout stay where they are, and the branch under them changes.
     static func moveMainCheckoutMessage(_ branch: String, to base: String) -> String {
         let local = base.hasPrefix("origin/") ? String(base.dropFirst("origin/".count)) : base
         return """
@@ -400,10 +365,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
             """
     }
 
-    // MARK: model + validation
-
-    /// What Create asks for. A branch that already exists has no base to choose, so the two are
-    /// separate cases rather than one name and a base that would mean nothing.
     enum Request: Equatable {
         case newBranch(String, WorktreeStore.Base)
         case existingBranch(String)
@@ -412,8 +373,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
     var branchName: String { branchField.text.trimmingCharacters(in: .whitespaces) }
 
     #if DEBUG
-        /// Types a branch and runs the live pass, so a test can mount the card in its
-        /// existing-branch state.
         func setBranchForTesting(_ branch: String) {
             branchField.box.setText(branch)
             refreshValidity()
@@ -422,8 +381,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
 
     var isExistingBranch: Bool { options.branches.contains(branchName) }
 
-    /// Where a moved main checkout lands. `defaultBase` is a remote ref, and checking one out
-    /// detaches HEAD, so the local name is what every message and the store both mean.
+    /// `defaultBase` is a remote ref and checking one out detaches HEAD, so this is the local name.
     private var localDefaultBranch: String? {
         guard let base = options.defaultBase else { return nil }
         return base.hasPrefix("origin/") ? String(base.dropFirst("origin/".count)) : base
@@ -437,17 +395,11 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         baseSegment.selectedIndex == 1 ? .currentCheckout : .defaultBranch
     }
 
-    /// `includeRequired` is false for the live pass, so an untouched field is not flagged.
-    ///
-    /// A branch that already exists is the affordance, not a refusal: the card takes it, hides the
-    /// base, and says so. The ref-file conflict checks below are about cutting a *new* branch, so
-    /// they stay out of that case entirely.
+    /// Refuses a leading `-`: `worktree add -b -m` hands it to `git branch`, which renames the checked-out branch.
     @discardableResult
     private func validate(includeRequired: Bool) -> NSView? {
         let branch = branchName
         var message: String?
-        // `worktree add -b -m` hands `-m` to git's own `git branch`, which has no `--` guard, and
-        // the repo's checked-out branch gets renamed.
         if branch.hasPrefix("-") {
             message = "Can't start with a dash."
         } else if branch.contains(where: \.isWhitespace) {
@@ -456,8 +408,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
             if case .worktree = options.holders[branch] {
                 message = "\(branch) already has a worktree."
             } else if case .mainCheckout = options.holders[branch], branch == localDefaultBranch {
-                // The store throws `.mainCheckoutOnDefaultBranch` for this, so confirming a move
-                // first would ask about a step that cannot happen and then fail anyway.
                 message = "\(branch) is the default branch, so your main checkout cannot move off it."
             }
         } else if let nested = options.branches.filter({ $0.hasPrefix(branch + "/") }).min() {
@@ -472,13 +422,8 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         return message == nil ? nil : branchField.field
     }
 
-    /// An existing branch is already at a commit, so BASE goes away and the caption says what
-    /// Create will do before it is pressed, the way the base caption names its ref.
     private func renderBranchMode() {
         let existing = isExistingBranch
-        // Hiding BASE changes the card's height, which moves the field under a list placed against
-        // its old frame. Lay the card out and put the list back rather than taking it down: the
-        // query that hid BASE can still have other candidates behind it.
         let moved = baseGroup?.isHidden != existing
         baseGroup?.isHidden = existing
         if moved {
@@ -498,8 +443,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         }
     }
 
-    /// Git keeps a ref in a file, so `a` and `a/b` cannot both be branches. `min()` above picks the
-    /// offender rather than any of them, so the message does not change between two identical runs.
+    /// Git keeps a ref in a file, so `a` and `a/b` can't both be branches.
     private static func branchAncestor(of branch: String, in branches: Set<String>) -> String? {
         var prefix = ""
         for part in branch.split(separator: "/").dropLast() {
@@ -510,28 +454,21 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
     }
 
     private func refreshValidity() {
-        // The message named a branch that is no longer in the field.
         errorLabel.isHidden = true
         validate(includeRequired: false)
     }
 
-    // MARK: layout helpers
-
-    /// Retained so `reapplyTheme()` can reach it. A `LabeledField` holds its own.
     private func caption(_ text: String) -> FieldCaption {
         let field = FieldCaption(text, required: false)
         captions.append(field)
         return field
     }
 
-    /// Carry is a property of the workspace, not of this create, so the link hands off to the form
-    /// that owns it rather than editing it here.
     private func editWorkspace() {
         guard !isWorking else { return }
         onEditWorkspace?()
     }
 
-    /// A single control wrapped so it hugs the leading edge rather than stretching to full width.
     private static func leadingWrap(_ view: NSView) -> NSView {
         let stack = NSStackView(views: [view])
         stack.orientation = .horizontal

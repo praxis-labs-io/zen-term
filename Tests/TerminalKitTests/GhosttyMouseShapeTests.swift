@@ -4,8 +4,6 @@ import XCTest
 @testable import TerminalKit
 
 final class GhosttyMouseShapeTests: XCTestCase {
-    // The system cursors (`.iBeam`, `.arrow`, …) are shared singletons, so identity (`===`) is
-    // the precise check that the mapping returns exactly that cursor.
     func test_textMapsToIBeam() {
         XCTAssertTrue(GhosttyHostView.nsCursor(for: GHOSTTY_MOUSE_SHAPE_TEXT) === NSCursor.iBeam)
     }
@@ -29,7 +27,6 @@ final class GhosttyMouseShapeTests: XCTestCase {
     }
 
     func test_unmappedShapeFallsBackToArrow() {
-        // Diagonal resizes have no classic NSCursor, so they take the .arrow fallback.
         XCTAssertTrue(GhosttyHostView.nsCursor(for: GHOSTTY_MOUSE_SHAPE_NWSE_RESIZE) === NSCursor.arrow)
     }
 }

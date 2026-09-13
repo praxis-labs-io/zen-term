@@ -1,45 +1,26 @@
 import AppKit
 import TerminalKit
 
-/// The `⌘P` workspace picker: a modal palette over the tab's tile region listing the
-/// workspaces configured in `~/.config/zen-term/workspaces`, led by a persistent
-/// "＋ New Workspace…" row that opens the Add-Workspace form. Enter opens the selected workspace in
-/// a new tab, Shift+Enter replaces the current tab, Esc / backdrop click dismiss. Built on
-/// `PaletteOverlay`, which owns the card/list/keyboard scaffolding; this supplies the rows + filter.
 final class RepoPickerOverlay: PaletteOverlay {
-    /// A leading action row, then one row per configured workspace, each followed by the worktrees
-    /// of its repo.
     private enum Row {
         case add
         case workspace(Workspace)
         case worktree(Worktree, parent: Workspace)
     }
 
-    /// (selected workspace, replaceCurrentTab). `replaceCurrentTab` is Shift+Enter.
     private let onChoose: (Workspace, Bool) -> Void
-    /// Open the Add-Workspace form (the ＋ row, and the empty state when there are no workspaces).
     private let onAddWorkspace: () -> Void
 
     private let entries: [Workspace]
-    /// Keyed by the workspace's standardized path, filled in when the background listing lands.
     private var listings: [URL: WorktreeListing] = [:]
 
-    /// This picker's probes in flight, cancelled when it goes away so a closed picker stops
-    /// costing the queue. Held per picker rather than cancelled queue-wide: another window's
-    /// picker is probing the same queue and its answers are not this one's to drop.
+    /// Cancelled per picker, not queue-wide: another window's picker shares the queue.
     private var churnRefreshes: [GitRepoStatus.RefreshToken] = []
-    /// Two workspaces of one repo list the same worktrees, and a relist lists them all again.
     private var churnProbed: Set<URL>
     private var worktreeRefresh: GitRepoStatus.RefreshToken?
-    /// Common dir to the workspace that shows its worktrees, in config order. Recomputed when a
-    /// listing lands, never when the query changes.
     private var worktreeOwners: [URL: URL] = [:]
-    /// Every configured workspace's path, so a worktree that already has a workspace row of its
-    /// own is not repeated as a child of one.
     private let configuredPaths: Set<URL>
     private var rows: [Row]
-    /// Worktrees whose delete is running. A row for one of these is going away, so it renders as
-    /// removing and refuses to open: a tab landed in it would start in a folder mid-delete.
     private let removals: WorktreeRemovalTracker
 
     init(
@@ -58,28 +39,18 @@ final class RepoPickerOverlay: PaletteOverlay {
         super.init(
             background: background,
             placeholder: "Search workspaces…",
-            emptyText: "",  // never shown — the ＋ row is always present, so the list is never empty
+            emptyText: "",
             footerHints: Self.footerHints(),
             rowHeight: 32,
             onDismiss: onDismiss)
 
-        // One background pass per open: the rows are up with whatever git status was already known,
-        // and the branches fill in when the probes land. Per open rather than once per process, so
-        // a branch switched in a shell shows up without a relaunch.
         GitRepoStatus.refresh(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }
-        // The counts run `git` rather than reading a file, so they land after the branch does
-        // rather than holding it up.
         refreshChurn(Array(configuredPaths))
-        // Two `git` calls per workspace, so the worktree rows land last and insert themselves under
-        // the workspace they belong to rather than holding the card back.
         relistWorktrees()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Ask git for every entry's worktrees again: once on open, and again when a removal ends,
-    /// because the listings in hand still name the folder that has gone. The whole set rather
-    /// than the one workspace that changed, since this call supersedes the one before it.
     func relistWorktrees() {
         worktreeRefresh?.cancel()
         worktreeRefresh = GitRepoStatus.refreshWorktrees(entries.map(\.path)) {
@@ -103,9 +74,6 @@ final class RepoPickerOverlay: PaletteOverlay {
         for row in rowViews { (row as? RowView)?.applyGitStatus() }
     }
 
-    /// Hand the picker one workspace's listing as the background pass answers for it, and
-    /// re-render around it. The selection is put back by identity: rows arriving under the cursor
-    /// must not move it, and a reload otherwise resets to the default.
     func setWorktrees(_ listing: WorktreeListing, for workspacePath: URL) {
         listings[workspacePath.standardizedFileURL] = listing
         let unprobed = listing.worktrees.map(\.path.standardizedFileURL).filter {
@@ -119,13 +87,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         reselect(byIdentity: held)
     }
 
-    /// Which workspace shows the worktrees of each repo, decided once from config order.
-    ///
-    /// Two workspaces can be checkouts of one repo, and `worktree list` answers the same set for
-    /// both. Deciding this from the filtered, re-sorted list would let a query move a worktree to
-    /// a different parent and so open it with a different recipe. An empty listing never claims:
-    /// a workspace inside a repo but not at its root resolves a common dir and lists nothing, and
-    /// claiming there would hide the real checkout's worktrees.
+    /// Decided from config order, never the filtered list, so a query can't move a worktree to another parent.
     private static func owners(
         among workspaces: [Workspace], listings: [URL: WorktreeListing]
     ) -> [URL: URL] {
@@ -139,8 +101,6 @@ final class RepoPickerOverlay: PaletteOverlay {
         return owners
     }
 
-    /// The ＋ row first, then a workspace row per entry, with a repo's worktrees under whichever
-    /// workspace `owners` picked for it.
     private static func rows(
         for workspaces: [Workspace], listings: [URL: WorktreeListing], configured: Set<URL>,
         owners: [URL: URL]
@@ -161,8 +121,6 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     override func numberOfRows() -> Int { rows.count }
 
-    /// Highlight the first workspace (so Enter opens it), not the pinned ＋ row; fall back to the
-    /// ＋ row when there are no workspaces (or no filter matches).
     override func defaultSelectionIndex() -> Int {
         rows.firstIndex { if case .workspace = $0 { return true } else { return false } } ?? 0
     }
@@ -184,16 +142,12 @@ final class RepoPickerOverlay: PaletteOverlay {
         return !removals.isRemoving(worktree.path)
     }
 
-    /// A confirm shown over the list, which stays put underneath it. Removing a worktree is
-    /// answered here rather than by replacing the picker: the row it is about has to remain
-    /// visible, and it becomes the progress state the moment the answer is yes.
     private lazy var confirm = ConfirmSlot(over: self)
 
     override var isShowingOverlaidCard: Bool { confirm.isShowing }
 
     func presentConfirm(_ card: ConfirmCard) { confirm.present(card) }
 
-    /// While a card is up the keyboard is its own, so focus goes there rather than to the query.
     override func focusInitialResponder() {
         if let card = confirm.card { card.focusInitialResponder() } else { focusQuery() }
     }
@@ -211,9 +165,6 @@ final class RepoPickerOverlay: PaletteOverlay {
         var presentedConfirmForTesting: ConfirmCard? { confirm.card }
     #endif
 
-    /// Take a removed worktree out of the listings in hand, and re-render around it. The claim is
-    /// cleared before this arrives, so a re-render alone puts an ordinary, openable row back for a
-    /// folder git has just deleted, and the relist that would correct it is a git call away.
     func dropWorktree(at path: URL) {
         let target = path.standardizedFileURL
         for (workspace, listing) in listings {
@@ -225,8 +176,6 @@ final class RepoPickerOverlay: PaletteOverlay {
         refreshRemovalState()
     }
 
-    /// Re-render around a removal that started or finished. Rebuilt rather than restyled: the row
-    /// changes type, and the identity carries the removal so a stale view is never reused.
     func refreshRemovalState() {
         let held = rows.indices.contains(selected) ? rowIdentity(at: selected) : nil
         applyFilter(query: currentQuery)
@@ -234,27 +183,18 @@ final class RepoPickerOverlay: PaletteOverlay {
         reselect(byIdentity: held)
     }
 
-    /// A row is the same row across a re-filter when it's the ＋ row or names the same workspace.
-    /// Workspace titles are the `[Title]` section headers, unique by construction, and a row renders
-    /// nothing but the title and its branch (which updates in place rather than by rebuilding).
     override func rowIdentity(at index: Int) -> AnyHashable? {
         switch rows[index] {
         case .add: return ["add"]
         case .workspace(let workspace): return ["workspace", workspace.title]
-        // The path and the removal state, not the branch: both change under a row that bakes its
-        // content in at construction, and a reused view would keep the old one.
         case .worktree(let worktree, _):
             return ["worktree", worktree.path.path, removals.isRemoving(worktree.path) ? "removing" : ""]
         }
     }
 
-    /// A workspace survives the filter when its own title matches or one of its worktrees does, so
-    /// a query naming a branch never renders that worktree's row orphaned. A title match keeps the
-    /// whole group; a worktree-only match narrows the group to the worktrees that matched.
     override func applyFilter(query: String) {
         let q = query.lowercased()
         guard !q.isEmpty else {
-            // The ＋ row stays pinned at the top through any filter.
             rows = Self.rows(
                 for: entries, listings: listings, configured: configuredPaths, owners: worktreeOwners)
             return
@@ -274,25 +214,19 @@ final class RepoPickerOverlay: PaletteOverlay {
         matches.sort { a, b in
             let ap = a.title.lowercased().hasPrefix(q)
             let bp = b.title.lowercased().hasPrefix(q)
-            if ap != bp { return ap }  // prefix matches rank first
+            if ap != bp { return ap }
             return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
         }
-        // Owners come from `entries`, never from `matches`: the filter re-sorts, and ownership
-        // must not move with it.
         rows = Self.rows(
             for: matches, listings: narrowed, configured: configuredPaths, owners: worktreeOwners)
     }
 
-    /// The head is searched as well as the branch: a detached worktree renders its short head, and
-    /// a row you cannot find by the text it shows is a row you cannot find.
     private static func matches(_ worktree: Worktree, _ query: String) -> Bool {
         if let branch = worktree.branch, branch.lowercased().contains(query) { return true }
         if worktree.branch == nil, worktree.head.lowercased().hasPrefix(query) { return true }
         return worktree.path.lastPathComponent.lowercased().contains(query)
     }
 
-    /// The create hint reads the live keymap and drops out when the action is unbound, unlike the
-    /// four beside it, which are fixed keys the picker owns.
     static func footerHints() -> [PaletteHint] {
         var hints = [
             PaletteHint(keys: "⏎", label: "open"),
@@ -304,20 +238,14 @@ final class RepoPickerOverlay: PaletteOverlay {
         if let chord = Chord.displayed(.removeWorktree, in: GeneralConfig.current.keymap) {
             hints.append(PaletteHint(keys: chord.displayGlyph, label: "remove worktree"))
         }
-        // No ↑↓ or ⎋ here, unlike the command palette: this footer carries up to four hints and the
-        // two worktree chords are the ones nothing else teaches. Arrowing a list and Esc are not.
         return hints
     }
 
-    /// Each worktree chord acts on some rows and not others, so its hint follows the selection
-    /// rather than teaching a key that does nothing where the reader is standing.
     override func selectionChanged() {
         setFooterHint("new worktree", isShown: createTarget != nil)
         setFooterHint("remove worktree", isShown: selectedWorktree != nil)
     }
 
-    /// Two answers, because a worktree row disagrees on them: `repo` is the row's own checkout, so
-    /// the base is the branch you can see, while `workspace` is the parent, which holds the install.
     struct CreateTarget: Equatable {
         let workspace: Workspace
         let repo: URL
@@ -334,9 +262,6 @@ final class RepoPickerOverlay: PaletteOverlay {
         }
     }
 
-    /// The selected worktree and the workspace it hangs under, or nil on any other row. The parent
-    /// comes along because removing runs `git` in its checkout and its `carry` names what goes with
-    /// the folder. A worktree already being removed is unselectable, so it can never be this.
     var selectedWorktree: (worktree: Worktree, parent: Workspace)? {
         guard rows.indices.contains(selected), case .worktree(let worktree, let parent) = rows[selected]
         else { return nil }
@@ -353,11 +278,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         }
     }
 
-    /// The parent's recipe, opened in the worktree's folder: same panes, same drawers, same env,
-    /// pinned to a tab that names both. A worktree is the project, on another branch.
     static func workspace(for worktree: Worktree, parent: Workspace) -> Workspace {
-        // The same fallback the row uses. A detached worktree's folder name is whatever directory
-        // it was made in, which reads like a branch and is not one.
         let name = worktree.branch ?? String(worktree.head.prefix(7))
         return Workspace(
             title: "\(parent.title): \(name)", path: worktree.path, main: parent.main,
@@ -365,9 +286,6 @@ final class RepoPickerOverlay: PaletteOverlay {
             carry: parent.carry)
     }
 
-    /// The persistent "＋ New Workspace…" action row. The `＋` is what distinguishes it; the accent
-    /// belongs to the selection highlight, so a permanent row wearing it competes with the thing you
-    /// actually have selected, and collides outright once the row itself is selected.
     private final class AddRowView: SelectableRowView {
         override init() {
             super.init()
@@ -397,10 +315,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
     }
 
-    /// A worktree still listed because its folder is still on disk, with its delete running. Not
-    /// selectable: opening it would land a tab in a folder being removed underneath it.
     final class RemovingRowView: SelectableRowView {
-        /// The worktree this row stands for, by the name the ordinary row would have shown.
         let name: String
 
         init(worktree: Worktree) {
@@ -429,50 +344,29 @@ final class RepoPickerOverlay: PaletteOverlay {
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
     }
 
-    /// One workspace row: title (left) and the branch its dir is on (right) when it is a repo. The
-    /// branch label is always built and starts empty — reading `HEAD` is filesystem I/O, which
-    /// can't run on the main thread, so the row shows the last-known answer now and
-    /// `applyGitStatus()` fills the branch in when a fresh probe lands.
+    /// The branch fills in later: reading `HEAD` is filesystem I/O and can't run on the main thread.
     final class RowView: SelectableRowView {
-        /// How much width a branch may take before it truncates. A cap, not a reserved column:
-        /// the counts sit against the branch, so reserving the full width would strand a `~1`
-        /// 220pt from a row reading `main`. Measured in points rather than characters, which are
-        /// proportional and so land somewhere different on every row.
         static let branchMaxWidth: CGFloat = 220
 
-        /// How little branch a row will fall to before the title starts giving way instead. Without
-        /// it the branch has the lowest compression resistance in the row and absorbs the whole
-        /// squeeze, collapsing to an ellipsis beside a title that never gave an inch.
         static let branchMinWidth: CGFloat = 120
 
-        /// How far a worktree row sits inside its workspace, on top of the row's own inset.
         static let childIndent: CGFloat = 16
 
         let workspace: Workspace
-        /// The worktree this row stands for, or nil on a workspace row.
         let worktree: Worktree?
-        /// The folder whose git status this row shows: the worktree's own, not its parent's.
         private let statusPath: URL
         private let branchLabel = NSTextField(labelWithString: "")
         private let churnLabel = NSTextField(labelWithString: "")
-        /// Held at `min(the branch's own width, branchMinWidth)`: a floor that a short branch like
-        /// `main` never reaches, so it still hugs rather than reserving a column.
         private var branchFloor: NSLayoutConstraint!
 
-        /// Extra width between one glyph-and-count group and the next, on top of the space itself.
         static let groupGap: CGFloat = 4
 
-        /// The counts, in the order and vocabulary a starship prompt writes them, each token in the
-        /// chrome role that stands for its color there. Nerd-font glyphs are out: the chrome draws
-        /// in the system font, where a private-use codepoint renders as a box.
+        /// No Nerd-font glyphs: the chrome's system font renders a private-use codepoint as a box.
         static func churnText(_ churn: GitChurn) -> NSAttributedString {
             let chrome = Theme.current.chrome
             let font = NSFont.systemFont(ofSize: 11)
             let out = NSMutableAttributedString()
             func token(_ text: String, _ role: TerminalColor) {
-                // A glyph binds to its own count and separates from the next pair, so the eye reads
-                // groups rather than one run of symbols. Kerning the gap, rather than padding with
-                // more spaces, keeps it under a point of control instead of the font's space width.
                 if out.length > 0 {
                     out.append(
                         NSAttributedString(string: " ", attributes: [.font: font, .kern: groupGap]))
@@ -493,9 +387,6 @@ final class RepoPickerOverlay: PaletteOverlay {
             return out
         }
 
-        /// What the left slot says on a worktree row. It is a type slot, not a name slot: a
-        /// worktree has no name, and its two candidates are the branch (which the right column
-        /// owns) and a folder that is either that branch's slug or a UUID.
         static let typeRail = "Worktree"
 
         convenience init(workspace: Workspace) {
@@ -504,9 +395,6 @@ final class RepoPickerOverlay: PaletteOverlay {
                 statusPath: workspace.path, indent: 0)
         }
 
-        /// A worktree of `parent`'s repo, indented under the workspace row it belongs to. Its
-        /// branch goes where every other row's branch goes, so one column means one thing at
-        /// every depth, and the left says what kind of row this is instead.
         convenience init(worktree: Worktree, parent: Workspace) {
             self.init(
                 workspace: parent, worktree: worktree, label: Self.typeRail,
@@ -522,8 +410,6 @@ final class RepoPickerOverlay: PaletteOverlay {
             self.statusPath = statusPath
             super.init()
 
-            // The rail is a type, not a name, so it is quieter and smaller than one. That is also
-            // what makes a child recede without spending an ink step on it.
             let name = NSTextField(labelWithString: label)
             name.font = .systemFont(ofSize: worktree == nil ? 13 : 11)
             name.textColor =
@@ -537,8 +423,6 @@ final class RepoPickerOverlay: PaletteOverlay {
             branchLabel.textColor = Theme.current.chrome.ink(.muted)
             branchLabel.alignment = .right
             branchLabel.lineBreakMode = .byTruncatingTail
-            // Hug the text: the branch takes the width it needs up to the cap, so the counts sit
-            // against it rather than against a reserved column edge.
             branchLabel.setContentHuggingPriority(.required, for: .horizontal)
             branchLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             branchLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -546,19 +430,12 @@ final class RepoPickerOverlay: PaletteOverlay {
 
             churnLabel.alignment = .right
             churnLabel.lineBreakMode = .byClipping
-            // The counts arrive as an attributed value, which carries its own line behaviour, so
-            // the field's own setting does not reach them. See docs/swift-conventions.md.
             churnLabel.maximumNumberOfLines = 1
             churnLabel.setContentHuggingPriority(.required, for: .horizontal)
-            // Above the title's 750 so the counts are the last thing to give, but breakable, so a
-            // row too narrow for everything still lays out.
             churnLabel.setContentCompressionResistancePriority(.defaultHigh + 1, for: .horizontal)
             churnLabel.translatesAutoresizingMaskIntoConstraints = false
             addSubview(churnLabel)
 
-            // The floor is a preference, not a law: a narrow tile can leave less room than the
-            // floor plus the counts plus a gap, and three required constraints in that row would
-            // go unsatisfiable rather than degrade.
             branchFloor = branchLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 0)
             branchFloor.priority = .defaultHigh
 
@@ -581,10 +458,6 @@ final class RepoPickerOverlay: PaletteOverlay {
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-        /// Show the branch when this workspace's folder is a known repo. Run at build time and
-        /// again whenever a `GitRepoStatus.refresh` lands.
-        /// A detached worktree's head is a commit, and announcing it as a branch tells a screen
-        /// reader the repository is in a state it is not in.
         static func headDescription(_ head: String, _ worktree: Worktree?) -> String {
             guard let worktree else { return "on branch \(head)" }
             return worktree.branch == nil

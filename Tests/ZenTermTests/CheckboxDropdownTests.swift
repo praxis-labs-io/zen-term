@@ -3,10 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction tests for the multi-select checkbox dropdown: drive the real control in a
-/// window — its actual `keyDown` and row `mouseDown` — and assert what it reports and fires. A
-/// state-only test would pass while the rows were dead, the exact failure mode the project's
-/// interaction-test rule guards against.
 final class CheckboxDropdownTests: WindowTestCase {
     private var window: NSWindow?
 
@@ -42,9 +38,6 @@ final class CheckboxDropdownTests: WindowTestCase {
                 isARepeat: false, keyCode: code)!)
     }
 
-    // MARK: type to filter
-
-    /// A carry list is as long as the repo's `.gitignore`, which is past what arrowing can reach.
     func test_typing_narrowsTheListAndShowsTheQuery() {
         let dropdown = makeDropdown([".env", "node_modules", "config/credentials/development.key"])
         press(dropdown, " ", code: 49)
@@ -57,13 +50,11 @@ final class CheckboxDropdownTests: WindowTestCase {
         XCTAssertEqual(dropdown.buttonTitleForTesting, "cr", "the button shows what is being typed")
     }
 
-    /// The one deliberate divergence from `Dropdown`: this list commits with Space, so a query
-    /// never holds one. Typing past a filter must not silently stop toggling.
     func test_space_stillTogglesRatherThanTypingIntoTheQuery() {
         var toggled: [Int] = []
         let dropdown = makeDropdown([".env", "node_modules"], onToggle: { toggled.append($0) })
-        press(dropdown, " ", code: 49)  // open
-        press(dropdown, "m", code: 46)  // filter to node_modules
+        press(dropdown, " ", code: 49)
+        press(dropdown, "m", code: 46)
         press(dropdown, "o", code: 31)
         press(dropdown, "d", code: 2)
 
@@ -79,13 +70,12 @@ final class CheckboxDropdownTests: WindowTestCase {
         press(dropdown, "n", code: 45)
         XCTAssertEqual(dropdown.visibleIndicesForTesting, [1, 0])
 
-        press(dropdown, "", code: 51)  // backspace
+        press(dropdown, "", code: 51)
 
         XCTAssertEqual(dropdown.queryForTesting, "")
         XCTAssertEqual(dropdown.visibleIndicesForTesting, [0, 1])
     }
 
-    /// Esc clears a mistyped query before it closes anything, so recovering is not a reopen.
     func test_escape_clearsTheQueryBeforeItClosesTheList() {
         let dropdown = makeDropdown([".env", "node_modules"])
         press(dropdown, " ", code: 49)
@@ -109,8 +99,8 @@ final class CheckboxDropdownTests: WindowTestCase {
         let admitted = dropdown.visibleIndicesForTesting
         XCTAssertFalse(admitted.contains(0), ".env is filtered out: \(admitted)")
 
-        press(dropdown, "", code: 125)  // Down, within the filtered set
-        press(dropdown, "\r", code: 36)  // Return toggles
+        press(dropdown, "", code: 125)
+        press(dropdown, "\r", code: 36)
 
         XCTAssertEqual(toggled, [admitted[1]], "a filtered-out row is never reachable")
         XCTAssertGreaterThan(admitted.count, 1, "the query has to leave more than one row to walk")
@@ -120,8 +110,8 @@ final class CheckboxDropdownTests: WindowTestCase {
         let dropdown = makeDropdown([".env", "node_modules"])
         press(dropdown, " ", code: 49)
         press(dropdown, "n", code: 45)
-        press(dropdown, "", code: 53)  // clear
-        press(dropdown, "", code: 53)  // close
+        press(dropdown, "", code: 53)
+        press(dropdown, "", code: 53)
 
         press(dropdown, " ", code: 49)
 
@@ -130,8 +120,6 @@ final class CheckboxDropdownTests: WindowTestCase {
         XCTAssertEqual(dropdown.buttonTitleForTesting, "All shown")
     }
 
-    /// A query that admits nothing rendered a 12pt sliver with no text in it, because the card
-    /// sized itself to zero rows.
     func test_aQueryThatMatchesNothing_saysSoRatherThanShowingASliver() {
         let dropdown = makeDropdown([".env", "node_modules"])
         press(dropdown, " ", code: 49)
@@ -143,8 +131,6 @@ final class CheckboxDropdownTests: WindowTestCase {
         XCTAssertGreaterThan(dropdown.listCardSizeForTesting.height, 20, "the card has to hold a line")
     }
 
-    /// The highlight survives a query that admits nothing, so Space was committing a row the user
-    /// could not see. In the copy list that wrote a path into the workspace on save.
     func test_spaceWithNothingMatching_togglesNothing() {
         var toggled: [Int] = []
         let dropdown = makeDropdown([".env", "node_modules"], onToggle: { toggled.append($0) })
@@ -157,9 +143,6 @@ final class CheckboxDropdownTests: WindowTestCase {
         XCTAssertEqual(toggled, [], "a filtered-out row is not committable")
     }
 
-    /// `KeyboardFocus.key` decodes eight keycodes; Home, End, the page keys and every F-key fall
-    /// past it carrying a private-use scalar, which `Character` calls printable. Unfiltered they
-    /// entered the query, emptied the list and rendered the button as tofu.
     func test_theNonPrintingKeys_doNotEnterTheQuery() {
         let dropdown = makeDropdown([".env", "node_modules"])
         press(dropdown, " ", code: 49)
@@ -172,8 +155,6 @@ final class CheckboxDropdownTests: WindowTestCase {
         XCTAssertEqual(dropdown.visibleIndicesForTesting, [0, 1])
     }
 
-    /// A window resize closes the card without going through `closeList`, so everything hanging off
-    /// a close has to happen there too or the button keeps its accent query text.
     func test_aResizeClosingTheList_clearsTheQueryAndFiresOnClosed() {
         var closed = 0
         let dropdown = makeDropdown([".env", "node_modules"])
@@ -195,7 +176,6 @@ final class CheckboxDropdownTests: WindowTestCase {
         XCTAssertFalse(dropdown.isPopoverOpen)
         press(dropdown, " ", code: 49)
         XCTAssertTrue(dropdown.isPopoverOpen)
-        // The regression Dropdown shipped once: a card that renders at ~zero size (invisible list).
         XCTAssertGreaterThan(dropdown.listCardSizeForTesting.height, 0)
         XCTAssertGreaterThan(dropdown.listCardSizeForTesting.width, 0)
     }
@@ -207,25 +187,23 @@ final class CheckboxDropdownTests: WindowTestCase {
         dropdown.onArrowUp = { bubbledUp += 1 }
         dropdown.onArrowDown = { bubbledDown += 1 }
 
-        press(dropdown, "", code: 126)  // closed: Up bubbles
-        press(dropdown, "", code: 125)  // closed: Down bubbles
+        press(dropdown, "", code: 126)
+        press(dropdown, "", code: 125)
         XCTAssertEqual(bubbledUp, 1)
         XCTAssertEqual(bubbledDown, 1)
 
-        press(dropdown, " ", code: 49)  // open
-        press(dropdown, "", code: 125)  // open: Down moves the highlight, not the focus
+        press(dropdown, " ", code: 49)
+        press(dropdown, "", code: 125)
         XCTAssertEqual(dropdown.highlightedIndexForTesting, 1)
         XCTAssertEqual(bubbledDown, 1, "an open list owns its arrows")
     }
 
-    /// The multi-select contract: a toggle reports and the list STAYS open, so several buttons can
-    /// be toggled in one visit — the single-select commit-and-close would eject the user each pick.
     func test_spaceTogglesTheHighlightedRow_andKeepsTheListOpen() {
         var toggled: [Int] = []
         let dropdown = makeDropdown(onToggle: { toggled.append($0) })
-        press(dropdown, " ", code: 49)  // open
-        press(dropdown, "", code: 125)  // highlight row 1
-        press(dropdown, " ", code: 49)  // toggle it
+        press(dropdown, " ", code: 49)
+        press(dropdown, "", code: 125)
+        press(dropdown, " ", code: 49)
         XCTAssertEqual(toggled, [1])
         XCTAssertTrue(dropdown.isPopoverOpen, "a toggle must not close a multi-select")
     }
@@ -264,9 +242,6 @@ final class CheckboxDropdownTests: WindowTestCase {
         XCTAssertEqual(backtabs, 1)
     }
 
-    /// Clicking a row toggles it and keeps the list open — driven through the row's real
-    /// `mouseDown`, the same layer the palette's click tests drive (OS hit-testing down to the row
-    /// is AppKit's job, not ours).
     func test_clickTogglesTheClickedRow_andKeepsTheListOpen() {
         var toggled: [Int] = []
         let dropdown = makeDropdown(onToggle: { toggled.append($0) })
@@ -281,11 +256,6 @@ final class CheckboxDropdownTests: WindowTestCase {
         XCTAssertTrue(dropdown.isPopoverOpen)
     }
 
-    /// The row count is fixed at init: a longer array must clamp, or arrow keys walk past the last
-    /// rendered row and Space toggles an entry the user cannot see.
-    /// A second open must not rebuild the rows. The card is already up, so fresh row views would
-    /// be mounted nowhere: the rows on screen stop repainting and the highlight moves through views
-    /// the user cannot see.
     func test_openingTwice_leavesTheMountedRowsInPlace() {
         let dropdown = makeDropdown()
 
@@ -306,9 +276,6 @@ final class CheckboxDropdownTests: WindowTestCase {
         XCTAssertEqual(dropdown.itemsForTesting.count, 3)
     }
 
-    /// The first row must render its highlight the moment the list opens — not after the first
-    /// arrow move. (The bug: painting from inside the card build, before `listCard` was assigned,
-    /// while the highlight gates on `listCard != nil`.)
     func test_openList_rendersTheInitialHighlight() {
         let dropdown = makeDropdown()
         dropdown.openListForTesting()

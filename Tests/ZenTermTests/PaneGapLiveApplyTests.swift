@@ -4,17 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// `pane-gap` has to reach a split that is already on screen.
-///
-/// A `SplitContainerView` bakes its gutter in at construction, so unlike every other Layout knob
-/// the split gap silently needed a relaunch: `reapplyChromeLayout()` rebuilt the canvas↔drawer
-/// constraints (which do carry `panelGap`) and never touched the pane canvas, so the seam beside
-/// the panes moved while the gap between them did not.
-///
-/// This is the narrow exception to "layout is the runbook's, not a test's": the question isn't
-/// where a view sits, it's whether a config value reaches the constraint at all — the silently-dead
-/// class. It measures the real gap between the two mounted pane hosts rather than a stored field,
-/// so it stays honest about what's on screen.
 @MainActor
 final class PaneGapLiveApplyTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
@@ -26,8 +15,6 @@ final class PaneGapLiveApplyTests: WindowTestCase {
         originalConfig = GeneralConfig.current
         originalOverride = TerminalSurfaceFactory.makeOverride
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
-        // Instant split. `animateSplitIn` detaches the very constraints under test while it runs,
-        // so an animated split would measure a frame mid-slide.
         Motion.isReduceMotionEnabled = { true }
     }
 
@@ -43,7 +30,6 @@ final class PaneGapLiveApplyTests: WindowTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
-    /// The gap a user actually sees between the two stacked panes.
     private func measuredPaneGap(_ controller: WindowController) -> CGFloat? {
         let root = controller.window.contentView!
         root.layoutSubtreeIfNeeded()

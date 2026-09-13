@@ -1,46 +1,27 @@
 import AppKit
 
-/// A rounded input box wrapping a borderless text field. On focus its fill lifts to the palettes'
-/// muted accent and its edge outlines with the accent. Forwards edits and keyboard navigation
-/// (arrows / Return / ⌘Return) to the host. Esc belongs to the card root (see `ModalEscape`), not
-/// to the field. A shared form-control primitive.
 final class FieldBox: NSView, NSTextFieldDelegate {
     let field = ClickField()
     var onChange: (() -> Void)?
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
-    /// Left/Right at the text boundary — used by env rows to step between KEY · value (mid-text
-    /// Left/Right still moves the cursor). Unset elsewhere, so those fields keep normal editing.
     var onArrowLeft: (() -> Void)?
     var onArrowRight: (() -> Void)?
-    /// Return in this field; defaults to `onArrowDown` (advance) when unset.
     var onEnter: (() -> Void)?
-    /// Tab / Shift-Tab out of the field (opt-in, default nil) — the Layout section uses them to move
-    /// to the next / previous focus stop. Unset elsewhere, so the field keeps default tab behavior.
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
-    /// Editing ended — the field blurred (focus moved away via keyboard nav, Return, or a click
-    /// elsewhere). Opt-in, default nil; the Layout section uses it to flush a debounced live-apply
-    /// write immediately on Return/blur. Unset elsewhere, so behavior is unchanged for other consumers.
     var onEndEditing: (() -> Void)?
-    /// ⌘Return anywhere in the field — submit the whole form.
     var onSubmit: (() -> Void)?
-    /// Esc in the field, for a control hanging a popover off it. Returns whether it consumed the
-    /// key; false lets Esc carry on to the card root, which is the single Esc owner otherwise.
-    /// Handled here rather than at that root because `performKeyEquivalent` does not run for a bare
-    /// Esc while a popover host holds focus. See `ModalEscape`.
+    // Handled here because `performKeyEquivalent` does not run for a bare Esc while a popover host holds focus.
     var onEscape: (() -> Bool)?
 
     private static var restFill: NSColor { Theme.current.chrome.fill(.rest) }
-    /// The same muted accent fill the ⌘P/⌘⇧P palettes use for the selected row.
     private static var focusFill: NSColor { Theme.current.chrome.selectionFill }
 
     var text: String { field.stringValue }
     func setText(_ value: String) { field.stringValue = value }
 
-    /// Retained so `applyPlaceholder()` can rebuild the colored attributed string on a theme swap,
-    /// and so callers (tests included) can identify a field by its placeholder — the system
-    /// `placeholderString` getter goes nil once `placeholderAttributedString` is set instead.
+    // Retained because `placeholderString` reads nil once `placeholderAttributedString` is set.
     let placeholder: String
 
     init(placeholder: String) {
@@ -75,29 +56,20 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func controlTextDidChange(_ obj: Notification) { onChange?() }
-    // `becomeFirstResponder` reliably reports focus gained (even under keyboard nav); the matching
-    // resign never fires on the field (its field editor is the real responder), so clear focus on
-    // `controlTextDidEndEditing`, which does fire when editing moves away.
+    // Focus clears here because resign never reaches the field: its field editor is the real responder.
     func controlTextDidEndEditing(_ obj: Notification) {
         setFocused(false)
         onEndEditing?()
     }
 
-    /// Re-apply the live chrome colors after a config change — no relaunch. There's no retained
-    /// `isFocused` flag (`setFocused` is only ever called from focus-transition callbacks), so
-    /// re-derive it from whether the field is currently the active editor, and re-set
-    /// `field.textColor`, which `setFocused` doesn't touch (it's set once in init).
     func reapplyTheme() {
         setFocused(field.currentEditor() != nil)
         field.textColor = Theme.current.chrome.foreground.nsColor
-        field.applyThemedCaret()  // a field holding focus across the swap keeps the old ink otherwise
+        field.applyThemedCaret()
         applyPlaceholder()
     }
 
-    /// The system `placeholderString` draws in AppKit's `placeholderTextColor`, which follows the
-    /// view's `effectiveAppearance` rather than `Theme.current` — near-white on a light theme under
-    /// a dark appearance. Build the placeholder as an attributed string colored from the chrome ink
-    /// role instead, so it stays readable and re-derives on a live theme swap.
+    // The system placeholder tint follows `effectiveAppearance`, not `Theme.current`.
     private func applyPlaceholder() {
         field.placeholderAttributedString = NSAttributedString(
             string: placeholder,
@@ -108,7 +80,6 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         )
     }
 
-    /// Focus lifts the fill to the palettes' muted accent AND outlines the box with the accent.
     private func setFocused(_ focused: Bool) {
         let chrome = Theme.current.chrome
         layer?.backgroundColor = (focused ? Self.focusFill : Self.restFill).cgColor
@@ -123,7 +94,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         case #selector(NSResponder.moveDown(_:)):
             onArrowDown?()
         case #selector(NSResponder.moveLeft(_:)):
-            guard let onArrowLeft, cursorAtStart(textView) else { return false }  // else move the cursor
+            guard let onArrowLeft, cursorAtStart(textView) else { return false }
             onArrowLeft()
         case #selector(NSResponder.moveRight(_:)):
             guard let onArrowRight, cursorAtEnd(textView) else { return false }
@@ -158,9 +129,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         return range.location == (textView.string as NSString).length && range.length == 0
     }
 
-    /// An `NSTextField` that reports its first-responder transitions so the box can show its focus
-    /// border reliably (the editing-notification delegates don't fire consistently under keyboard
-    /// navigation).
+    // Editing notifications don't fire reliably under keyboard navigation, so focus comes from responder transitions.
     final class ClickField: NSTextField {
         var onGainedFocus: (() -> Void)?
 

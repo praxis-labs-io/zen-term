@@ -3,8 +3,6 @@ import XCTest
 @testable import TerminalKit
 
 final class SecureInputTests: XCTestCase {
-    /// A throwaway object whose identity stands in for a surface. Held strongly by the test so
-    /// its `ObjectIdentifier` can't collide with a later allocation at the same address.
     private final class Surface {}
 
     private func makeManager() -> (manager: SecureInput, enables: () -> Int, disables: () -> Int) {
@@ -28,7 +26,6 @@ final class SecureInputTests: XCTestCase {
         let surface = Surface()
         manager.setScoped(ObjectIdentifier(surface), focused: true)
         XCTAssertEqual(enables(), 1)
-        // Re-asserting the same focused desire must not double-engage.
         manager.setScoped(ObjectIdentifier(surface), focused: true)
         XCTAssertEqual(enables(), 1)
         XCTAssertEqual(disables(), 0)
@@ -56,11 +53,9 @@ final class SecureInputTests: XCTestCase {
         let second = Surface()
         manager.setScoped(ObjectIdentifier(first), focused: true)
         manager.setScoped(ObjectIdentifier(second), focused: true)
-        XCTAssertEqual(enables(), 1)  // engaged once, not per surface
-        // One losing focus keeps the lock — the other still wants it.
+        XCTAssertEqual(enables(), 1)
         manager.setScoped(ObjectIdentifier(first), focused: false)
         XCTAssertEqual(disables(), 0)
-        // The last one releasing drops it.
         manager.setScoped(ObjectIdentifier(second), focused: false)
         XCTAssertEqual(disables(), 1)
     }

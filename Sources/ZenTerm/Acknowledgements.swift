@@ -1,23 +1,12 @@
 import Foundation
 
-/// Turns the shipped `THIRD-PARTY-NOTICES.md` into plain text for the Acknowledgements window, which
-/// renders a flat string rather than Markdown. The notices file is Markdown because it is also a repo
-/// doc and a top-level file in the app bundle that people read as text; the window is the one consumer
-/// that wants the scaffolding gone.
-///
-/// The transform only removes markup this file's own prose uses, and it is built so it stays harmless
-/// even on a license quoted as prose rather than fenced: it strips a `#` run only when it forms a real
-/// ATX heading (hashes then a space), and `**` only as a matched pair. So a `#define` line or an
-/// unpaired `** Copyright` banner passes through verbatim, and a fenced body is never touched at all.
-/// License bodies are quoted verbatim and their exact wording and indentation are a legal obligation.
+/// Strips `THIRD-PARTY-NOTICES.md` markup for the plain-text window. License bodies stay verbatim, as a legal obligation.
 enum Acknowledgements {
     static func plainText(fromMarkdown markdown: String) -> String {
         var lines: [String] = []
         var inFence = false
         for line in markdown.components(separatedBy: "\n") {
             if line.hasPrefix("```") {
-                // A fence delimiter itself is scaffolding; the body between delimiters is verbatim
-                // license text and passes through below, indentation intact.
                 inFence.toggle()
                 continue
             }
@@ -30,9 +19,7 @@ enum Acknowledgements {
         return lines.joined(separator: "\n")
     }
 
-    /// A heading (`### FreeType`) without its `#`s and the one space after them, or nil if the line
-    /// isn't an ATX heading. Requires the space so `#define`, a plausible line in a prose-quoted
-    /// license, is left alone.
+    /// Requires the space after the hashes, so a `#define` in a prose-quoted license is left alone.
     private static func strippedHeading(_ line: String) -> String? {
         let hashes = line.prefix(while: { $0 == "#" }).count
         guard (1...6).contains(hashes) else { return nil }
@@ -41,8 +28,6 @@ enum Acknowledgements {
         return String(line[line.index(after: afterHashes)...])
     }
 
-    /// Removes our bold markers (`**MIT**`) by unwrapping matched `**…**` pairs, leaving any unpaired
-    /// `**` — a banner like `** Copyright …` in a prose-quoted license — in place.
     private static func stripPairedBold(_ line: String) -> String {
         guard line.contains("**") else { return line }
         var result = ""

@@ -3,8 +3,6 @@ import XCTest
 
 @testable import TerminalKit
 
-/// `GHOSTTY_ACTION_COMMAND_FINISHED` carries a signed sentinel exit code and a nanosecond duration.
-/// Pin both conversions at the backend boundary so the chrome never learns those wire details.
 final class GhosttyCommandFinishedTests: XCTestCase {
     func test_reportedExitCodeAndDurationCrossTheSeam() {
         let result = GhosttySurface.commandResult(

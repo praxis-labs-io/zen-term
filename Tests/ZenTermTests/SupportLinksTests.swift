@@ -19,8 +19,6 @@ final class SupportLinksTests: XCTestCase {
     }
 
     func test_newIssueURL_encodesSpecialCharactersReversibly() {
-        // A title/body with the characters a real report carries: spaces, reserved URL chars, a
-        // newline, and an emoji. They must round-trip so the browser shows exactly what was typed.
         let title = "crash in #5 & pane <2>"
         let body = "step 1\nstep 2 🎉 done?value=x"
         let url = SupportLinks.newIssueURL(title: title, body: body)
@@ -31,8 +29,6 @@ final class SupportLinksTests: XCTestCase {
     }
 
     func test_newIssueURL_encodesPlusSoGitHubDoesNotFormDecodeItToSpace() {
-        // GitHub form-decodes the query, where a bare "+" means a space, so "C++" would arrive as
-        // "C  ". The "+" must be percent-encoded to survive.
         let url = SupportLinks.newIssueURL(title: "1+1=2", body: "C++ pane crash")
         XCTAssertFalse(url.absoluteString.contains("+"), "a literal + must be encoded, not left bare")
         XCTAssertTrue(url.absoluteString.contains("%2B"), "+ is encoded as %2B")

@@ -3,20 +3,13 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The ⌘P picker's worktree rows: a repo's linked worktrees indented under the workspace they
-/// belong to. Real rows in a real window, driven through `setWorktrees` — the seam the background
-/// listing delivers into — because a row that only exists in the model passes while it is dead.
 final class RepoPickerWorktreeRowTests: WindowTestCase {
-    /// Retained so a mounted overlay's window outlives the mount call.
     private var window: NSWindow?
 
-    /// Where "ours" is for this case, so an ordinary worktree is not reported as living somewhere
-    /// odd. Real paths, never created on disk: nothing here touches the filesystem.
     private var worktreeRoot: URL!
 
     override func setUp() {
         super.setUp()
-        // Pinned so a fading row resolves instantly and the machine's setting cannot decide a run.
         Motion.isReduceMotionEnabled = { true }
         worktreeRoot =
             FileManager.default.temporaryDirectory
@@ -33,8 +26,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         super.tearDown()
     }
 
-    // MARK: the create hint follows the keymap
-
     func test_theCreateHint_readsTheChordFromTheLiveKeymap() {
         setKeymap([Chord(command: true, shift: true, key: "n"): .createWorktree])
 
@@ -42,7 +33,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(hint?.keys, "⌘⇧N")
     }
 
-    /// Unbound in Settings, the hint would otherwise go on advertising a key that does nothing.
     func test_withTheActionUnbound_theHintIsGone() {
         setKeymap([:])
 
@@ -50,8 +40,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertNil(hints.first { $0.label == "new worktree" })
         XCTAssertEqual(hints.map(\.label), ["open", "replace tab"])
     }
-
-    // MARK: what ⌥⏎ creates from
 
     func test_theCreateTarget_isNilOnTheAddRow() {
         let overlay = makeRepoPicker(entries: [workspace("alpha")])
@@ -75,8 +63,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(target.repo, repo)
     }
 
-    /// The branch is cut from the row you can see; carry still comes from the parent, which is the
-    /// checkout holding the install.
     func test_onAWorktreeRow_theBranchIsCutFromTheWorktreeAndCarryComesFromTheParent() throws {
         let repo = path("alpha")
         let parent = workspace("alpha", path: repo)
@@ -91,8 +77,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(target.repo, worktree(repo, "feature/zen-455").path, "the base is the row")
     }
 
-    // MARK: rendering
-
     func test_worktrees_renderUnderTheirWorkspaceInListingOrder() {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo), workspace("beta")])
@@ -105,9 +89,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             ["add", "workspace:alpha", "worktree:one", "worktree:two", "workspace:beta"])
     }
 
-    /// The left slot is a type, not a name. A worktree has no name: the branch belongs to the
-    /// right column by the picker's own grammar, and the folder is either that branch's slug or a
-    /// UUID, so the slot says what kind of row this is instead.
     func test_worktreeRow_readsAsAWorktreeOnTheLeftAndItsBranchOnTheRight() throws {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
@@ -120,8 +101,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(rightColumn(of: row), "feature/zen-455")
     }
 
-    /// The proof the column means one thing at every depth: a workspace and its worktree put
-    /// their branch in the same label, so the two right-align at one x.
     func test_branchSitsInTheSameColumnOnAWorkspaceAndAWorktree() throws {
         let repo = path("alpha")
         GitRepoStatus.resetForTesting()
@@ -140,8 +119,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             accuracy: 0.5, "both branches end at the same trailing edge")
     }
 
-    /// A type recedes further than a name does, which is what lets the child recede without
-    /// spending an ink step that `.muted` already means elsewhere.
     func test_theTypeRail_isFainterAndSmallerThanAWorkspaceName() throws {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
@@ -159,8 +136,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(rail.font?.pointSize, 11)
     }
 
-    /// A detached worktree has no branch, and nothing probes a worktree path, so without the head
-    /// git already handed us the column would be blank where every other row carries a value.
     func test_detachedWorktree_showsItsShortHeadInTheBranchColumn() throws {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
@@ -175,8 +150,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(rightColumn(of: row), "abc1234", "the same slot a branch would use")
     }
 
-    /// A detached worktree's folder is named after whatever directory it was made in, which reads
-    /// like a branch and is not one. The tab says what the row says.
     func test_detachedWorktree_opensATabNamedByItsHeadNotItsFolder() {
         let repo = path("alpha")
         var chosen: (Workspace, Bool)?
@@ -197,15 +170,11 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         descendants(of: row).compactMap { $0 as? NSTextField }.first { $0.stringValue == text }
     }
 
-    /// The branch label, found by geometry rather than content: it is the right-aligned field
-    /// furthest right, and its trailing edge is pinned whether or not a probe has filled it in.
     private func branchLabel(in row: NSView) -> NSTextField? {
         descendants(of: row).compactMap { $0 as? NSTextField }
             .filter { $0.alignment == .right }
             .max { $0.frame.maxX < $1.frame.maxX }
     }
-
-    // MARK: identity and reuse
 
     func test_worktreeRows_haveTheirOwnIdentityPerPath() {
         let repo = path("alpha")
@@ -217,14 +186,11 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(Set(ids.compactMap { $0 }).count, ids.count, "every row needs a distinct identity")
     }
 
-    /// A reused row keeps whatever it baked in, so identity is the path and a re-filter that leaves
-    /// a worktree in place must hand back the same view.
     func test_worktreeRow_isReusedAcrossARefilter() {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo), workspace("beta")])
         mount(overlay)
         overlay.setWorktrees(listing(repo, "one"), for: repo)
-        // [add, alpha, worktree one, beta] — the worktree row, not the last row.
         let before = rowViews(in: overlay)[2]
 
         type("alpha", into: overlay)
@@ -232,8 +198,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(shape(of: overlay), ["add", "workspace:alpha", "worktree:one"])
         XCTAssertTrue(rowViews(in: overlay)[2] === before, "the same worktree row, not a rebuild")
     }
-
-    // MARK: filtering
 
     func test_filter_matchingAWorktreeKeepsItsWorkspaceRow() {
         let repo = path("alpha")
@@ -259,8 +223,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(
             shape(of: overlay), ["add", "workspace:alpha", "worktree:one", "worktree:two"])
     }
-
-    // MARK: activation
 
     func test_return_onAWorktreeOpensTheParentRecipeAtItsPath() {
         let repo = path("alpha")
@@ -298,10 +260,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(chosen?.1, true)
     }
 
-    // MARK: grouping
-
-    /// The case the common dir exists for. Two workspaces that are checkouts of one repo get the
-    /// same answer from `worktree list`, so the second must not repeat the first's children.
     func test_twoWorkspacesOfOneRepo_showTheWorktreesOnce() {
         let main = path("alpha")
         let inside = path("alpha-worktree")
@@ -318,7 +276,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             shape(of: overlay), ["add", "workspace:alpha", "worktree:one", "workspace:alpha wt"])
     }
 
-    /// Two unrelated repos each keep their own children: the claim is per common dir, not global.
     func test_twoRepos_eachKeepTheirOwnWorktrees() {
         let alpha = path("alpha")
         let beta = path("beta")
@@ -334,8 +291,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             ["add", "workspace:alpha", "worktree:one", "workspace:beta", "worktree:two"])
     }
 
-    /// A worktree the user configured as a workspace of its own already has a row. Repeating it as
-    /// a child would put the same folder in the list twice.
     func test_aWorktreeThatIsAlreadyAWorkspace_isNotRepeated() {
         let repo = path("alpha")
         let tree = worktree(repo, "one")
@@ -348,8 +303,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(shape(of: overlay), ["add", "workspace:alpha", "workspace:one"])
     }
 
-    /// The counts arrive as an attributed value, which carries its own line behaviour, so the
-    /// field's `lineBreakMode` does not reach them and a narrow row wrapped them out of its 32pt.
     func test_churnLabel_isCappedToOneLine() throws {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
@@ -362,11 +315,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(clipping.first?.maximumNumberOfLines, 1)
     }
 
-    // MARK: ownership
-
-    /// A workspace inside a repo but not at its root resolves a common dir and lists nothing,
-    /// because `isGitRepo` wants a `.git` entry. Claiming the group there hid the real checkout's
-    /// worktrees entirely.
     func test_aWorkspaceThatListsNothing_doesNotClaimTheGroup() {
         let docs = path("repo-docs")
         let repo = path("repo")
@@ -383,16 +331,11 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             shape(of: overlay), ["add", "workspace:Docs", "workspace:Repo", "worktree:one"])
     }
 
-    /// Ownership is decided from config order, never from the filtered list. `applyFilter` ranks
-    /// prefix matches first and then alphabetically, so a query can inverse the configured order.
-    /// Deciding ownership there moved the worktree to the other parent, and activating it opened
-    /// that workspace's recipe at this worktree's path.
     func test_ownership_doesNotMoveWhenAFilterReordersTheList() throws {
         let owner = path("owner")
         let other = path("other")
         let shared = owner.appendingPathComponent(".git")
         var chosen: (Workspace, Bool)?
-        // Config order puts "b-x" first; the query "x" prefixes neither, so "a-x" sorts ahead.
         let ownerWorkspace = Workspace(
             title: "b-x", path: owner, main: "nvim", right: nil, bottom: nil, focus: .main, env: [:])
         let overlay = makeRepoPicker(
@@ -415,8 +358,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(chosen?.0.main, "nvim", "b-x's recipe, not a-x's")
     }
 
-    /// A row you cannot find by the text it shows is a row you cannot find. A detached worktree
-    /// renders its short head, so the head has to be searchable.
     func test_filter_findsADetachedWorktreeByItsShortHead() {
         let repo = path("alpha")
         let overlay = makeRepoPicker(
@@ -432,8 +373,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(shape(of: overlay), ["add", "workspace:alpha", "worktree:abc1234"])
     }
 
-    /// Announcing a commit as a branch tells a screen reader the repository is in a state it is not
-    /// in.
     func test_accessibility_doesNotCallADetachedHeadABranch() {
         XCTAssertEqual(
             RepoPickerOverlay.RowView.headDescription("main", nil), "on branch main")
@@ -448,10 +387,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             "worktree with a detached head at abc1234")
     }
 
-    // MARK: selection
-
-    /// The listing lands while the card is already up. Rows inserted under the cursor must not
-    /// take the highlight off the row the person is standing on.
     func test_rowsArrivingAfterTheCard_keepTheSelection() {
         let repo = path("alpha")
         let overlay = makeRepoPicker(
@@ -465,8 +400,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(shape(of: overlay)[overlay.selected], "workspace:beta")
     }
 
-    // MARK: what ⌥⌫ removes from
-
     func test_theSelectedWorktree_isNilOnTheAddRow() {
         let overlay = makeRepoPicker(entries: [workspace("alpha")])
         mount(overlay)
@@ -476,8 +409,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertNil(overlay.selectedWorktree)
     }
 
-    /// A workspace is a checkout the user configured, not a worktree of ours, so ⌥⌫ over one has
-    /// nothing to remove and does nothing.
     func test_theSelectedWorktree_isNilOnAWorkspaceRow() {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
@@ -488,8 +419,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertNil(overlay.selectedWorktree)
     }
 
-    /// The parent comes along because the remove runs `git` in its checkout and its `carry` names
-    /// what goes with the folder.
     func test_onAWorktreeRow_itNamesTheWorktreeAndItsParent() throws {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
@@ -501,8 +430,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(selection.worktree.branch, "one")
         XCTAssertEqual(selection.parent.title, "alpha")
     }
-
-    // MARK: the remove hint follows the keymap
 
     func test_theRemoveHint_readsTheChordFromTheLiveKeymap() {
         setKeymap([Chord(option: true, key: "⌫"): .removeWorktree])
@@ -517,8 +444,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertNil(RepoPickerOverlay.footerHints().first { $0.label == "remove worktree" })
     }
 
-    /// ⌥⌫ acts on a worktree row and nothing else, so a hint left up over a workspace teaches a
-    /// key that does nothing there.
     func test_theRemoveHint_showsOnlyOverAWorktreeRow() throws {
         setKeymap([Chord(option: true, key: "⌫"): .removeWorktree])
         let repo = path("alpha")
@@ -539,7 +464,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertFalse(hintIsShown("remove worktree", in: overlay), "and hidden again on the way back")
     }
 
-    /// ⌥⏎ has nothing to create from on the ＋ row, which is the row that opens the form itself.
     func test_theCreateHint_isHiddenOnTheAddRow() {
         setKeymap([Chord(option: true, key: "⏎"): .createWorktree])
         let overlay = makeRepoPicker(entries: [workspace("alpha")])
@@ -553,7 +477,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertFalse(hintIsShown("new worktree", in: overlay))
     }
 
-    /// ⏎ and ⇧⏎ act on every row, so they never move.
     func test_theOpenHints_stayUpOnEveryRow() {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
@@ -569,8 +492,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertTrue(hintIsShown("replace tab", in: overlay))
     }
 
-    /// Through the real view rather than a flag: a hint hidden in the model while its row stays on
-    /// screen is the failure this is here to catch.
     private func hintIsShown(_ label: String, in overlay: NSView) -> Bool {
         func walk(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(walk) }
         guard
@@ -580,10 +501,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         return !field.isHiddenOrHasHiddenAncestor
     }
 
-    // MARK: a worktree on its way out
-
-    /// The folder is still on disk, so `worktree list` still reports it. The row has to say what is
-    /// happening rather than reading as one you can open.
     func test_aWorktreeBeingRemoved_rendersAsRemoving() {
         let repo = path("alpha")
         let removals = WorktreeRemovalTracker()
@@ -597,7 +514,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             shape(of: overlay), ["add", "workspace:alpha", "removing:one", "worktree:two"])
     }
 
-    /// Opening it would land a tab in a folder being deleted underneath it.
     func test_aWorktreeBeingRemoved_isSkippedByTheArrows() {
         let repo = path("alpha")
         let removals = WorktreeRemovalTracker()
@@ -612,8 +528,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(shape(of: overlay)[overlay.selected], "worktree:two")
     }
 
-    /// A picker open in another window when the delete starts is showing a row that just changed
-    /// meaning, so the tracker has to reach it rather than only the next picker to open.
     func test_aRemovalStartingUnderAnOpenPicker_swapsTheRowInPlace() {
         let repo = path("alpha")
         let removals = WorktreeRemovalTracker()
@@ -629,8 +543,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             shape(of: overlay), ["add", "workspace:alpha", "removing:one", "worktree:two"])
     }
 
-    /// Re-listing is what actually drops the row: the listings in hand still name the folder git
-    /// has stopped reporting, so a re-render alone puts the ordinary row back for something gone.
     func test_relisting_dropsAWorktreeGitNoLongerReports() {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
@@ -642,8 +554,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(shape(of: overlay), ["add", "workspace:alpha", "worktree:two"])
     }
 
-    /// The delete failed, so the folder is still there and the row goes back to being one you can
-    /// open. The `removed` case is the opposite, below.
     func test_aRemovalFailing_putsTheOrdinaryRowBack() {
         let repo = path("alpha")
         let removals = WorktreeRemovalTracker()
@@ -658,8 +568,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(shape(of: overlay), ["add", "workspace:alpha", "worktree:one", "worktree:two"])
     }
 
-    /// The claim is cleared before the picker hears about it, so re-rendering alone offers an
-    /// ordinary row for a folder git has just deleted. Opening it lands a tab in nothing.
     func test_aRemovalThatLanded_takesTheRowOutBeforeTheRelist() {
         let repo = path("alpha")
         let removals = WorktreeRemovalTracker()
@@ -674,9 +582,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(shape(of: overlay), ["add", "workspace:alpha", "worktree:two"])
     }
 
-    // MARK: helpers
-
-    /// The list as it reads top to bottom, so an assertion names order and nesting in one line.
     private func shape(of overlay: RepoPickerOverlay) -> [String] {
         overlay.rowViews.map { view in
             if let removing = view as? RepoPickerOverlay.RemovingRowView {
@@ -696,8 +601,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             .standardizedFileURL
     }
 
-    /// A worktree of `repo` where the app puts one, laid out the way `WorktreeStore.create` lays
-    /// it out: the branch's slug as the folder name, so a row's name and its folder differ.
     private func worktree(_ repo: URL, _ branch: String) -> Worktree {
         Worktree(
             path:
@@ -708,7 +611,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             branch: branch, head: "0000000", isLocked: false)
     }
 
-    /// The right-hand column's value: the branch, or the short head on a detached worktree.
     private func rightColumn(of row: NSView) -> String? {
         descendants(of: row).compactMap { $0 as? NSTextField }
             .map(\.stringValue).filter { !$0.isEmpty }.dropFirst().first

@@ -1,7 +1,6 @@
 import AppKit
 
-/// A rotating arc for a step whose length nothing knows. `NSProgressIndicator` tints from
-/// `effectiveAppearance`, which the chrome bans, so this draws its own, like `UpdateProgressBar`.
+// `NSProgressIndicator` tints from `effectiveAppearance`, which the chrome bans.
 final class Spinner: NSView {
     private let track = CAShapeLayer()
     private let arc = CAShapeLayer()
@@ -9,7 +8,6 @@ final class Spinner: NSView {
     private static let lineWidth: CGFloat = 2
     private static let rotationKey = "zenterm.spin"
 
-    /// Idempotent, so a card that finishes and comes back does not stack two animations.
     var isSpinning = false {
         didSet {
             guard isSpinning != oldValue else { return }
@@ -36,7 +34,6 @@ final class Spinner: NSView {
         NSSize(width: Self.diameter, height: Self.diameter)
     }
 
-    /// A layer has no autolayout, so both shapes are sized here rather than pinned.
     override func layout() {
         super.layout()
         let inset = Self.lineWidth / 2
@@ -57,10 +54,8 @@ final class Spinner: NSView {
     }
 
     private func applySpin() {
-        // A layout pass reaches this while the arc is turning, and re-adding snaps it back to 0°.
         if isSpinning, arc.animation(forKey: Self.rotationKey) != nil { return }
         arc.removeAnimation(forKey: Self.rotationKey)
-        // A stopped spinner reads as a hung app, so Reduce Motion leaves a static ring.
         guard isSpinning, !Motion.isReduceMotionEnabled() else { return }
         let spin = CABasicAnimation(keyPath: "transform.rotation.z")
         spin.fromValue = 0

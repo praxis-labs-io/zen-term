@@ -1,21 +1,15 @@
 import AppKit
 
-/// Tool-float icons in two sections: outline symbols, then brand marks. Both are line art, and
-/// they share picker cells, so a filled symbol would outweigh the marks it sits beside.
-/// A brand earns a cell only with a terminal UI behind it (`docker` for lazydocker, `postgres`
-/// for pgcli); one that only opens a window or a plain CLI can't be floated.
+// Outline symbols only: a filled symbol outweighs the line-art brand marks sharing its picker row.
 enum IconCatalog {
     static let defaultSymbol = "square.on.square"
 
-    /// A titled run of cells, laid out 8-wide under its own heading by `IconPickerField`.
     struct Section {
         let title: String
         let symbols: [String]
     }
 
-    /// 48 symbols → six full rows of the 8-wide grid (`IconCatalogTests` pins the multiple).
-    /// Grouped by metaphor, a row at a time: shell/code/build/test, pipeline/config/perf,
-    /// monitoring/infra/storage, data/docs/logs, find/files/comms, security/AI/media/panes.
+    // A multiple of 8, so the picker grid has no hole before the brands section (`IconCatalogTests`).
     static let symbols: [String] = [
         "square.on.square", "terminal", "curlybraces.square", "applescript",
         "play.rectangle", "ladybug", "hammer", "flask",
@@ -31,8 +25,7 @@ enum IconCatalog {
         "puzzlepiece", "waveform", "rectangle.3.group", "square.grid.2x2",
     ]
 
-    /// 19 marks: VCS, editors, agents, then services. Short by five of a full row, which is why
-    /// they're last — a ragged row reads as the end of the grid, not a hole in it.
+    // Last, so its short final row reads as the end of the grid.
     static let brands: [String] = [
         "git", "github", "linear", "neovim",
         "vim", "emacs", "helix", "claude",
@@ -43,8 +36,6 @@ enum IconCatalog {
 
     static let all: [String] = symbols + brands
 
-    /// The picker's sections. A float pinned to a symbol off the roster keeps its own leading
-    /// section, so editing that float never silently drops its glyph.
     static func sections(including selected: String) -> [Section] {
         var sections: [Section] = []
         if !all.contains(selected) {
@@ -55,8 +46,6 @@ enum IconCatalog {
         return sections
     }
 
-    /// The picker's label for a symbol. Roster cells are named for the job ("Run", not "Play
-    /// rectangle"), so most are overridden below; the fallback is for a user's own symbol.
     static func displayName(_ symbol: String) -> String {
         if let name = displayOverrides[symbol] { return name }
         let stem = trimmingFillSuffix(symbol)
@@ -64,8 +53,6 @@ enum IconCatalog {
         return spaced.prefix(1).uppercased() + spaced.dropFirst()
     }
 
-    /// A trailing fill marker is a rendering variant, not part of the name: "heart.fill" is a heart.
-    /// Only the suffix goes — "folder.fill.badge.gearshape" keeps its middle.
     private static func trimmingFillSuffix(_ symbol: String) -> String {
         for suffix in [".fill", ".filled"] where symbol.hasSuffix(suffix) {
             return String(symbol.dropLast(suffix.count))
@@ -73,10 +60,7 @@ enum IconCatalog {
         return symbol
     }
 
-    /// Entries for symbols off the roster are load-bearing: a float pinned to a dropped icon keeps
-    /// its label instead of falling back to the raw symbol name.
     private static let displayOverrides: [String: String] = [
-        // Roster: named for the job, not the glyph.
         "square.on.square": "Float",
         "curlybraces.square": "Code",
         "applescript": "Script",
@@ -109,7 +93,7 @@ enum IconCatalog {
         "magnifyingglass": "Search",
         "folder": "Files",
         "folder.badge.gearshape": "Config dir",
-        "envelope": "Email",  // humanizes to "Envelope" on its own; the metaphor is mail
+        "envelope": "Email",
         "bubble.left.and.bubble.right": "Chat",
         "paperplane": "HTTP client",
         "lock": "Secrets",
@@ -126,8 +110,7 @@ enum IconCatalog {
         "openai": "OpenAI",
         "opencode": "OpenCode",
         "sqlite": "SQLite",
-        "square.fill.on.square": "Float",  // ToolFloat.scratch
-        // Dropped: kept so a float still configured with one keeps its label.
+        "square.fill.on.square": "Float",
         "apple.terminal.on.rectangle": "Terminal window",
         "chevron.left.forwardslash.chevron.right": "Code",
         "wrench.and.screwdriver": "Tools",
@@ -138,15 +121,12 @@ enum IconCatalog {
         "arrow.triangle.pull": "Pull request",
         "plus.forwardslash.minus": "Diff",
         "note.text": "Notes",
-        "htop": "htop",  // lowercase is the tool's own name
+        "htop": "htop",
         "slack": "Slack",
         "spotify": "Spotify",
     ]
 
-    /// An SF Symbol, else a bundled brand mark. SF Symbol first, so a mark name must never
-    /// collide with a real symbol (`IconCatalogTests` holds the line). A mark carries no symbol
-    /// metadata and would draw at its authored 24pt, so it is sized off `pointSize` here rather
-    /// than left to the caller to remember.
+    // SF Symbols resolve first, so a brand mark name must never collide with a real symbol.
     static func image(
         _ symbol: String, pointSize: CGFloat = 14, weight: NSFont.Weight = .medium
     ) -> NSImage? {
@@ -160,13 +140,9 @@ enum IconCatalog {
         return brand
     }
 
-    /// A mark carries no internal padding where a symbol does, so it needs a slightly larger box to
-    /// read at the same size as the glyphs around it.
+    // Marks carry no internal padding, so they need a slightly larger box to match the symbols.
     static let brandNudge: CGFloat = 1.5
 
-    /// The proper Git logo (the bundled `git` brand mark), sized as a small inline badge. Shared by
-    /// the ⌘P picker and the Settings → Workspaces list to mark a workspace whose folder is a repo,
-    /// so the two never drift. A template image, so the caller tints it like any SF Symbol.
     static func gitBadge(pointSize: CGFloat = 12) -> NSImage? {
         guard let image = BrandMark.image("git") else { return nil }
         image.size = NSSize(width: pointSize, height: pointSize)

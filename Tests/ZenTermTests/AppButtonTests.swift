@@ -3,9 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Focus on a pill is an accent ring *and* accent text, so a keyboard user gets the same signal on
-/// a quiet button as on a link. `.destructive` is the one opt-out. These drive a real
-/// window-mounted button: a state-only check passes while `becomeFirstResponder` never fires.
 final class AppButtonTests: WindowTestCase {
     private func mount(_ variant: AppButton.Variant) -> (AppButton, NSWindow) {
         let button = AppButton(title: "Add workspace", variant: variant) {}
@@ -48,7 +45,6 @@ final class AppButtonTests: WindowTestCase {
             "the warning tone is the message; focus must not take it")
     }
 
-    /// The ring is the other half and has to survive the text change.
     func test_focus_stillDrawsTheAccentRing() {
         let (button, window) = mount(.muted)
         XCTAssertEqual(button.layer?.borderWidth, 0)

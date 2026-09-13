@@ -1,15 +1,10 @@
 import Foundation
 
-/// Where in-app "Report an Issue" sends people: this repo's own tracker.
 enum SupportLinks {
     static let issuesOwner = "praxis-labs-io"
     static let issuesRepo = "zen-term"
 
-    /// GitHub's prefilled "new issue" URL with the title and body baked in. Built with
-    /// `URLComponents`/`URLQueryItem` so a title or body carrying spaces, `#`, `&`, emoji, or
-    /// newlines is percent-encoded correctly (hand-rolled escaping gets the reserved characters
-    /// wrong). All the components are statically valid, so `.url` is never nil in practice; the
-    /// fallback keeps the function total without a force-unwrap.
+    /// Encodes "+" as %2B: GitHub form-decodes the query, where a bare "+" is a space.
     static func newIssueURL(title: String, body: String) -> URL {
         var components = URLComponents()
         components.scheme = "https"
@@ -19,9 +14,6 @@ enum SupportLinks {
             URLQueryItem(name: "title", value: title),
             URLQueryItem(name: "body", value: body),
         ]
-        // URLQueryItem leaves a literal "+" unescaped (it's RFC-3986-legal), but GitHub form-decodes
-        // the query, where "+" means a space — so "C++" would arrive as "C  ". Encode it to %2B; the
-        // space is already %20, so nothing else is affected.
         components.percentEncodedQuery = components.percentEncodedQuery?
             .replacingOccurrences(of: "+", with: "%2B")
         return components.url ?? URL(fileURLWithPath: "/")

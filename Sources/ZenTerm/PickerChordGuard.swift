@@ -1,5 +1,4 @@
-/// `KeyInterceptor.resolve` consumes any chord in the keymap before the picker check runs, so
-/// without this ⌥⏎ is dead everywhere, including where a TUI needs it to insert a newline.
+/// `KeyInterceptor.resolve` consumes keymap chords before the picker check, so ⌥⏎ would never reach a TUI.
 enum PickerChordGuard {
     static func shouldPassThrough(action: KeyInterceptor.ReservedChord, repoPickerIsOpen: Bool)
         -> Bool

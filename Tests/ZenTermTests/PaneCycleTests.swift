@@ -4,12 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Stepping focus through a tab's panels with ⌘⇧[ and ⌘⇧].
-///
-/// Driven through a real window with real panes, and asserted on the panel that actually holds
-/// focus rather than on the tree's bookkeeping. A cycle that updates `focusedLeaf` while the halo
-/// and the keyboard stay where they were is the failure this exists to catch, and only the live
-/// panel can tell the two apart.
 @MainActor
 final class PaneCycleTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
@@ -44,9 +38,7 @@ final class PaneCycleTests: WindowTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
-    /// Split twice, with a layout pass between. `split` refuses a pane it measures as too small to
-    /// halve, and a freshly rendered pane's bounds are zero until AppKit lays out, so back-to-back
-    /// splits in a test silently produce two panes instead of three.
+    /// Lays out between splits: `split` refuses a pane whose bounds are still zero.
     private func threePanes(_ controller: WindowController) {
         controller.handle(.splitVertical)
         controller.window.contentView?.layoutSubtreeIfNeeded()
@@ -72,13 +64,10 @@ final class PaneCycleTests: WindowTestCase {
         return controller
     }
 
-    /// The panel holding focus right now, by identity. `ObjectIdentifier` rather than the view
-    /// itself so a sequence of them compares and prints readably.
     private func focused(_ controller: WindowController) throws -> ObjectIdentifier {
         ObjectIdentifier(try XCTUnwrap(controller.focusedPanelForTesting))
     }
 
-    /// Walk `count` steps and collect the panel at each stop, starting from where focus is now.
     private func walk(
         _ controller: WindowController, _ chord: KeyInterceptor.ReservedChord, _ count: Int
     ) throws -> [ObjectIdentifier] {
@@ -89,8 +78,6 @@ final class PaneCycleTests: WindowTestCase {
         }
         return stops
     }
-
-    // MARK: three panes
 
     func test_nextPaneVisitsEveryPaneAndWrapsToTheStart() throws {
         let controller = makeWindow()
@@ -103,13 +90,6 @@ final class PaneCycleTests: WindowTestCase {
         XCTAssertEqual(stops.first, stops.last, "the third step has to wrap back to where it started")
     }
 
-    /// The mirror, and the reason it is its own case: a sign slip cycles forward both ways, which
-    /// looks correct in every assertion about distinctness.
-    ///
-    /// A full backward lap also crosses the front of the ring, which is the end nobody writes by
-    /// hand: `(i - 1) % n` is negative in Swift, so an unguarded modulo traps there rather than
-    /// landing on the last panel. Three panes is the smallest ring that can tell the two directions
-    /// apart at all, since with two every step is both.
     func test_prevPaneWalksTheSameRingBackwards() throws {
         let controller = makeWindow()
         threePanes(controller)
@@ -120,10 +100,6 @@ final class PaneCycleTests: WindowTestCase {
         XCTAssertEqual(backward, forward.reversed())
     }
 
-    // MARK: the panels that are not canvas panes
-
-    /// An open drawer is in the ring. Left out, focus could cycle out of a drawer and never back
-    /// in, which is worse than not cycling at all.
     func test_anOpenDrawerJoinsTheRing() throws {
         let controller = makeWindow()
         controller.handle(.splitVertical)
@@ -137,8 +113,6 @@ final class PaneCycleTests: WindowTestCase {
         XCTAssertTrue(panesOnly.isSubset(of: withDrawer))
     }
 
-    /// One panel means nowhere to go. Silently, the way `cycleTab` is for one tab: the whole tab is
-    /// on screen, so there is nothing a toast could tell you that you cannot see.
     func test_onePaneCyclesToItselfAndSaysNothing() throws {
         let controller = makeWindow()
         let before = try focused(controller)
@@ -150,8 +124,6 @@ final class PaneCycleTests: WindowTestCase {
         XCTAssertTrue(toastViews(in: controller).isEmpty, "a single pane is not a problem to report")
     }
 
-    // MARK: the chord, and the surfaces that name it
-
     func test_theShippedChordsAreTheShiftedBrackets() {
         XCTAssertEqual(KeymapDefaults.map[Chord(command: true, shift: true, key: "[")], .prevPane)
         XCTAssertEqual(KeymapDefaults.map[Chord(command: true, shift: true, key: "]")], .nextPane)
@@ -159,8 +131,6 @@ final class PaneCycleTests: WindowTestCase {
         XCTAssertEqual(KeymapDefaults.map[Chord(command: true, key: "]")], .nextTab)
     }
 
-    /// Both wrap, so holding one never lands anywhere the user aimed — the reason tab cycling
-    /// declines key repeat, and the same one here.
     func test_neitherRepeatsOnAHeldKey() {
         XCTAssertFalse(KeyInterceptor.ReservedChord.prevPane.shouldRepeat)
         XCTAssertFalse(KeyInterceptor.ReservedChord.nextPane.shouldRepeat)

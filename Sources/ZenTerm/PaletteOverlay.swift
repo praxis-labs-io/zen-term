@@ -1,23 +1,15 @@
 import AppKit
 
-/// A row inside a palette list. The overlay drives selection highlighting through this.
 protocol PaletteRowView: NSView {
     var isSelected: Bool { get set }
-    /// Run when the row is clicked. The overlay re-binds this on every (re)load, so a row REUSED at
-    /// a new index after a filter activates *that* index rather than the one it was built at.
     var onActivate: (() -> Void)? { get set }
 }
 
-/// One footer hint: a key glyph string (rendered as a keycap, same as a row's shortcut)
-/// and the action it performs. e.g. `PaletteHint(keys: "⏎", label: "run")`.
 struct PaletteHint {
     let keys: String
     let label: String
 }
 
-/// A selectable palette row with the shared selection chrome: rounded corners, an accent
-/// highlight when selected, and a single click that runs the row (Raycast / Spotlight, not a
-/// select-then-double-click). Subclasses add their own content in `init` after calling `super.init`.
 class SelectableRowView: NSView, PaletteRowView {
     var onActivate: (() -> Void)?
     var isSelected = false { didSet { updateBackground() } }
@@ -30,8 +22,7 @@ class SelectableRowView: NSView, PaletteRowView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    // Accept the press so the matching mouseUp lands here, then run the row on release — but only
-    // if it lands back inside the row, so a press-and-drag-off cancels like any button.
+    /// Accepts the press so the release lands here; `mouseUp` runs the row only if it lands inside.
     override func mouseDown(with event: NSEvent) {}
     override func mouseUp(with event: NSEvent) {
         if bounds.contains(convert(event.locationInWindow, from: nil)) { onActivate?() }
@@ -42,14 +33,6 @@ class SelectableRowView: NSView, PaletteRowView {
     }
 }
 
-/// Shared scaffold for the modal command-style overlays over a tab's tile region: a
-/// transparent click-catching backdrop, a centered rounded card with a search field, a
-/// scrollable keyboard-driven list, and a hint footer. Fully keyboard-driven — arrows
-/// move the selection, Enter activates, Esc closes; a backdrop click also dismisses.
-///
-/// Subclasses supply the model + row content via the template hooks (`numberOfRows`,
-/// `makeRow`, `applyFilter`, `activate`); the base owns all the chrome and navigation.
-/// `RepoPickerOverlay` (⌘⇧P) and `CommandPaletteOverlay` (⌘P) are the two consumers.
 class PaletteOverlay: NSView, ModalOverlay {
     private let onDismiss: () -> Void
 
@@ -59,37 +42,25 @@ class PaletteOverlay: NSView, ModalOverlay {
     private let searchField = NSTextField()
     private let searchPlaceholder: String
     private let divider = NSView()
-    /// The same hairline under the footer's top edge, so the hint row reads as its own band the way
-    /// the search row does rather than floating over the end of the list.
     private let footerDivider = NSView()
     private let rowsStack = NSStackView()
     private let scrollView = NSScrollView()
     private let emptyLabel: NSTextField
-    /// The footer hints' labels + keycaps, retained so `reapplyTheme()` can recolor them — they're
-    /// built once in `init` (never rebuilt by a row re-render) and bake their ink color in.
     private var footerHintLabels: [NSTextField] = []
-    /// One entry per hint, keyed on its label, so a subclass can hide the ones that only apply to
-    /// some rows. Hiding an arranged subview collapses it, so the row closes up rather than gapping.
     private var footerHintItems: [String: NSView] = [:]
     private var footerKeycaps: [KeycapView] = []
     private let defaultRowHeight: CGFloat
     private let maxListHeight: CGFloat
     private let emptyListHeight: CGFloat
-    /// Breathing room between the search divider (and footer) and the row highlights, so a
-    /// selected row never touches the search field's bottom border.
     private let listVerticalInset: CGFloat = 8
     private var listHeight: NSLayoutConstraint!
-    /// One laid-out row: its reuse identity (nil = never reuse), the view, and the height constraint
-    /// the base owns — a reload retunes the constant instead of rebuilding the constraint.
     private struct LaidOutRow {
         let id: AnyHashable?
         let view: PaletteRowView
         let height: NSLayoutConstraint
     }
     private var laidOutRows: [LaidOutRow] = []
-    /// The highlighted row, for a subclass that rebuilds its rows and wants the selection back.
     private(set) var selected = 0
-    /// Set for the span of one reload, so only rows arriving from a background pass ease in.
     private var animatesNextReload = false
 
     init(
@@ -107,7 +78,6 @@ class PaletteOverlay: NSView, ModalOverlay {
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
 
-        // Transparent click-catcher (no dimming) — still dismisses on an outside click.
         let backdrop = BackdropView(onClick: onDismiss)
         backdrop.wantsLayer = true
         backdrop.translatesAutoresizingMaskIntoConstraints = false
@@ -117,7 +87,6 @@ class PaletteOverlay: NSView, ModalOverlay {
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
 
-        // Search row: a magnifier glyph + a borderless field.
         searchGlyph.font = .systemFont(ofSize: 16)
         searchGlyph.textColor = Theme.current.chrome.ink(.muted)
         searchField.font = .systemFont(ofSize: 15)
@@ -140,7 +109,6 @@ class PaletteOverlay: NSView, ModalOverlay {
             hairline.heightAnchor.constraint(equalToConstant: 1).isActive = true
         }
 
-        // List: a flipped document view (top-down scroll coords) holding a vertical stack.
         rowsStack.orientation = .vertical
         rowsStack.spacing = 0
         rowsStack.alignment = .leading
@@ -150,9 +118,6 @@ class PaletteOverlay: NSView, ModalOverlay {
         doc.addSubview(rowsStack)
         scrollView.drawsBackground = false
         scrollView.hasVerticalScroller = true
-        // Force a slim, auto-hiding overlay bar even when the system is set to always show
-        // scroll bars (which would otherwise swap in the wide legacy track once the list
-        // overflows — visible on the taller command palette, not the short repo picker).
         scrollView.verticalScroller = SlimScroller()
         scrollView.scrollerStyle = .overlay
         scrollView.autohidesScrollers = true
@@ -166,8 +131,6 @@ class PaletteOverlay: NSView, ModalOverlay {
         emptyLabel.isHidden = true
         scrollView.contentView.addSubview(emptyLabel)
 
-        // The hints get the same keycap treatment as the list rows: each key in a box
-        // (SF Symbols where available), its action beside it. Centered in the footer row.
         let (footer, footerLabels, footerKeycaps, footerItems) = Self.makeFooter(footerHints)
         self.footerHintLabels = footerLabels
         self.footerKeycaps = footerKeycaps
@@ -186,8 +149,6 @@ class PaletteOverlay: NSView, ModalOverlay {
 
         listHeight = scrollView.heightAnchor.constraint(equalToConstant: maxListHeight)
 
-        // Preferred 560pt width, but `.defaultHigh` so the required ≤0.92×tile cap wins on
-        // a narrow window rather than the two conflicting as required constraints.
         let cardWidth = card.widthAnchor.constraint(equalToConstant: 560)
         cardWidth.priority = .defaultHigh
 
@@ -221,8 +182,6 @@ class PaletteOverlay: NSView, ModalOverlay {
             doc.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
             doc.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
             rowsStack.topAnchor.constraint(equalTo: doc.topAnchor, constant: listVerticalInset),
-            // Inset the rows so a selected row's highlight keeps a margin from the list
-            // edges (and the overlay scroller) instead of touching them.
             rowsStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor, constant: 8),
             rowsStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -8),
             rowsStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -listVerticalInset),
@@ -236,42 +195,30 @@ class PaletteOverlay: NSView, ModalOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Make the search field first responder — called by the host after presenting.
     func focusInitialResponder() { focusQuery() }
 
-    /// Focus the query field, past any override of `focusInitialResponder`. A subclass showing a
-    /// card over the list sends focus there instead, and needs this to hand it back.
     func focusQuery() {
         window?.makeFirstResponder(searchField)
-        searchField.applyThemedCaret()  // the editor exists only once the field has focus
+        searchField.applyThemedCaret()
     }
 
-    /// Spring the card in (fade + subtle scale about its center). Call after presenting.
     func animateIn() {
-        superview?.layoutSubtreeIfNeeded()  // resolve the card's frame before scaling about its center
+        superview?.layoutSubtreeIfNeeded()
         Motion.springScaleFade(card, appearing: true)
     }
 
-    /// Spring the card back out, then run `completion` (the host removes the overlay).
-    /// Idempotent — a second call while already dismissing is ignored.
     func animateOut(completion: @escaping () -> Void) {
         guard dismiss.begin() else { return }
         Motion.springScaleFade(card, appearing: false, completion: completion)
     }
 
-    /// Once dismissal starts, stop intercepting clicks so a tap during the exit animation
-    /// falls through to the terminal instead of the still-present backdrop.
     override func hitTest(_ point: NSPoint) -> NSView? {
         dismiss.isDismissing ? nil : super.hitTest(point)
     }
 
-    /// Declared on the class as well as the protocol: `performKeyEquivalent` below reads it, and a
-    /// protocol-extension default would bind statically to false there, past any subclass.
+    /// Declared on the class: a protocol-extension default would bind statically in `performKeyEquivalent`.
     var isShowingOverlaidCard: Bool { false }
 
-    /// The card root owns Esc — inherited by both palettes. Claimed in `performKeyEquivalent` so
-    /// every card agrees on one Esc owner, rather than each host deciding by accident; it also
-    /// covers the search field, whose `cancelOperation` used to handle this separately.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if !isShowingOverlaidCard,
             ModalEscape.handle(
@@ -282,22 +229,12 @@ class PaletteOverlay: NSView, ModalOverlay {
         return super.performKeyEquivalent(with: event)
     }
 
-    /// Whether a subclass has put a card over the list. That card owns Esc for as long as it is up,
-    /// so answering it must not take the whole palette down with it.
-
-    /// Re-apply the card's theme-dependent colors after a live theme change: the retained shell
-    /// (card fill/border, search glyph, search field text, divider, empty label, footer hints),
-    /// then re-render the rows for the CURRENT query so per-row content (title/shortcut ink,
-    /// name/git ink, add-row accent — all read fresh from `Theme.current` in the row builders)
-    /// comes back correct too, for free. The typed query lives in `searchField`, untouched by
-    /// this — nothing is lost. `reloadRows()` does reset the selection to the top as a normal
-    /// side effect of any re-render; that's an acceptable trade for a theme swap.
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         CardChrome.reapplyTheme(to: card)
         searchGlyph.textColor = chrome.ink(.muted)
         searchField.textColor = chrome.foreground.nsColor
-        searchField.applyThemedCaret()  // the field holds focus across the swap, so re-tint in place
+        searchField.applyThemedCaret()
         applyPlaceholder()
         for hairline in [divider, footerDivider] {
             hairline.layer?.backgroundColor = chrome.fill(alpha: ChromeTheme.hairline).cgColor
@@ -305,18 +242,13 @@ class PaletteOverlay: NSView, ModalOverlay {
         emptyLabel.textColor = chrome.ink(.muted)
         footerHintLabels.forEach { $0.textColor = chrome.ink(.muted) }
         footerKeycaps.forEach { $0.reapplyTheme() }
-        // Drop every built row first: the reload reuses a row whose identity survives, and a row
-        // bakes its colors in at construction, so reusing one here would leave it in the old theme.
         laidOutRows.forEach { $0.view.removeFromSuperview() }
         laidOutRows = []
         applyFilter(query: searchField.stringValue)
         reloadRows()
     }
 
-    /// The system `placeholderString` draws in AppKit's `placeholderTextColor`, which follows the
-    /// view's `effectiveAppearance` rather than `Theme.current` — near-white on a light theme under
-    /// a dark appearance. Build the placeholder as an attributed string colored from the chrome ink
-    /// role instead, so it stays readable and re-derives on a live theme swap.
+    /// `placeholderString` draws in `placeholderTextColor`, which follows `effectiveAppearance`, not `Theme.current`.
     private func applyPlaceholder() {
         searchField.placeholderAttributedString = NSAttributedString(
             string: searchPlaceholder,
@@ -327,45 +259,23 @@ class PaletteOverlay: NSView, ModalOverlay {
         )
     }
 
-    // MARK: template hooks (subclass overrides)
-
-    /// Number of rows for the current (filtered) model.
     func numberOfRows() -> Int { fatalError("subclass must override numberOfRows()") }
 
-    /// Build the row view at `index`. The base wires the click itself (`onActivate`), so a row
-    /// carries no index of its own.
     func makeRow(at index: Int) -> PaletteRowView { fatalError("subclass must override makeRow(at:)") }
 
-    /// What makes the row at `index` the same row across a re-filter, so its view can be reused
-    /// rather than rebuilt on every keystroke. Two rows sharing an identity must render identically
-    /// — a row bakes its content in at construction, so the identity has to cover everything shown.
-    /// nil means "never reuse this row", the safe default: identity by position would hand one
-    /// row's baked-in content to a different model entry.
+    /// Nil by default: reuse by position would hand one row's baked-in content to a different entry.
     func rowIdentity(at index: Int) -> AnyHashable? { nil }
 
-    /// Height of the row at `index`. Defaults to the uniform row height; override to give
-    /// some rows (e.g. section headers) a different height.
     func rowHeight(at index: Int) -> CGFloat { defaultRowHeight }
 
-    /// Whether the row at `index` can be selected/activated. Non-selectable rows (e.g.
-    /// section headers) are skipped by the arrow keys and ignored on click/Enter.
     func isSelectable(at index: Int) -> Bool { true }
 
-    /// Recompute the filtered model for `query`. The base resets the selection and
-    /// rebuilds rows around this call — implementations only update their own model.
     func applyFilter(query: String) { fatalError("subclass must override applyFilter(query:)") }
 
-    /// Activate the row at `index`. `modifiers` carries the live event flags (e.g. Shift).
     func activate(index: Int, modifiers: NSEvent.ModifierFlags) {
         fatalError("subclass must override activate(index:modifiers:)")
     }
 
-    // MARK: selection + list (base-owned)
-
-    /// Run the row at `index` from a click: select it, then activate with the default action.
-    /// Clicks on non-selectable rows (headers) are ignored. A click activates with no modifiers —
-    /// modifier-qualified activation (e.g. Shift+Enter to replace) stays keyboard-only, matching
-    /// the prior picker.
     func activateRow(at index: Int) {
         guard isSelectable(at: index) else { return }
         selected = index
@@ -373,16 +283,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         activate(index: index, modifiers: [])
     }
 
-    /// Re-render the list for the current filtered model, reusing the view of every row whose
-    /// identity survived the filter. Typing runs this per keystroke, and rebuilding meant a fresh
-    /// view tree (and, for a command row, a fresh `KeycapView` resolving SF Symbols) for every row
-    /// on every character.
-    ///
-    /// A reused row stays in the view hierarchy throughout — `insertArrangedSubview` moves an
-    /// already-arranged view, so the ordering falls out of the same loop. Detaching it instead
-    /// would drop the width constraint (it crosses to the stack) while LEAVING the height
-    /// constraint active (it's anchored to the row itself), so re-adding would stack up a second
-    /// height constraint per reload.
+    /// Reused rows stay arranged: detaching drops the width constraint but keeps the height one, stacking a duplicate.
     private func reloadRows() {
         var reusable: [AnyHashable: LaidOutRow] = [:]
         for row in laidOutRows {
@@ -396,8 +297,6 @@ class PaletteOverlay: NSView, ModalOverlay {
         for index in 0..<count {
             let height = rowHeight(at: index)
             let id = rowIdentity(at: index)
-            // Positions 0..<index already hold `next`, so any row still waiting to be dropped sits
-            // at or after `index` — inserting there lands each row at its final position.
             let row: LaidOutRow
             if let id, let reused = reusable.removeValue(forKey: id) {
                 reused.height.constant = height
@@ -406,7 +305,7 @@ class PaletteOverlay: NSView, ModalOverlay {
             } else {
                 let view = makeRow(at: index)
                 if animatesNextReload { arrived.append(view) }
-                rowsStack.insertArrangedSubview(view, at: index)  // width pins to the stack, so insert first
+                rowsStack.insertArrangedSubview(view, at: index)
                 let heightConstraint = view.heightAnchor.constraint(equalToConstant: height)
                 NSLayoutConstraint.activate([
                     view.widthAnchor.constraint(equalTo: rowsStack.widthAnchor), heightConstraint,
@@ -425,21 +324,17 @@ class PaletteOverlay: NSView, ModalOverlay {
         laidOutRows = next
 
         emptyLabel.isHidden = count != 0
-        // Empty → keep a small fixed height so the "no results" label isn't clipped by a
-        // zero-height scroll view.
         setListHeight(count == 0 ? emptyListHeight : min(total + 2 * listVerticalInset, maxListHeight))
         selected = defaultSelectionIndex()
         updateHighlight()
         scrollSelectedToVisible()
         for row in arrived {
             row.wantsLayer = true
-            row.layer?.opacity = 0  // `Motion.fade` reads the model value as its start
+            row.layer?.opacity = 0
             Motion.fade(row, to: 1)
         }
     }
 
-    /// The list grows to meet rows that arrive after the card is up, instead of snapping. Only an
-    /// animated reload eases: a filter keystroke replaces the whole list and has to stay instant.
     private func setListHeight(_ height: CGFloat) {
         guard animatesNextReload, !Motion.isReduceMotionEnabled() else {
             listHeight.constant = height
@@ -452,27 +347,16 @@ class PaletteOverlay: NSView, ModalOverlay {
         }
     }
 
-    /// The laid-out row views, in list order — for a subclass that updates its rows in place (the
-    /// repo picker's git badges, which land after a background probe) instead of re-rendering.
     var rowViews: [PaletteRowView] { laidOutRows.map(\.view) }
 
-    /// The query the list is filtered by right now — for a subclass rebuilding its model outside a
-    /// keystroke, where the filter in force is not the empty one.
     var currentQuery: String { searchField.stringValue }
 
-    /// Re-render the rows from the subclass's current model. Pair it with `reselect(byIdentity:)`:
-    /// a reload resets the selection to the default, which yanks the highlight off the row the
-    /// person is standing on when new rows arrive mid-session.
-    /// `animated` is for rows landing under the cursor from a background pass. A filter keystroke
-    /// passes false: easing a list the person is typing into reads as lag, not polish.
     func refreshRows(animated: Bool = false) {
         animatesNextReload = animated
         reloadRows()
         animatesNextReload = false
     }
 
-    /// Put the selection back on the row with `identity`. A no-op when that row is gone or is not
-    /// selectable, leaving whatever default the reload chose.
     func reselect(byIdentity identity: AnyHashable?) {
         guard let identity, let index = laidOutRows.firstIndex(where: { $0.id == identity }),
             isSelectable(at: index)
@@ -482,15 +366,11 @@ class PaletteOverlay: NSView, ModalOverlay {
         scrollSelectedToVisible()
     }
 
-    /// The row highlighted after a (re)load — the first selectable row by default. A subclass
-    /// overrides to prefer a different default (e.g. the repo picker highlights the first
-    /// workspace, not its pinned ＋ row, so Enter opens a workspace).
     func defaultSelectionIndex() -> Int { firstSelectableIndex() }
 
     private func moveSelection(_ delta: Int) {
         let step = delta < 0 ? -1 : 1
         var i = selected + step
-        // Skip over non-selectable rows (headers) in the direction of travel.
         while laidOutRows.indices.contains(i) {
             if isSelectable(at: i) {
                 selected = i
@@ -502,7 +382,6 @@ class PaletteOverlay: NSView, ModalOverlay {
         }
     }
 
-    /// The first selectable row, or 0 when there is none (empty list).
     private func firstSelectableIndex() -> Int {
         (0..<laidOutRows.count).first { isSelectable(at: $0) } ?? 0
     }
@@ -512,30 +391,18 @@ class PaletteOverlay: NSView, ModalOverlay {
         selectionChanged()
     }
 
-    /// The selection landed somewhere new. A subclass overrides to track it; the base does nothing.
     func selectionChanged() {}
 
-    /// Show or hide one footer hint by its label, for a chord that only acts on some rows. A hint
-    /// left up over a row the chord ignores teaches a key that does nothing there.
     func setFooterHint(_ label: String, isShown: Bool) {
         footerHintItems[label]?.isHidden = !isShown
     }
 
-    /// Reveal the selected row through the shared keyboard reveal, so a palette scrolls exactly like a
-    /// Settings section: the section header above a group's first row comes with it, and the row lands
-    /// inside the list rather than flush against the edge it arrived at. The stops are the selectable
-    /// rows, which is what makes the headers between them read as a header rather than a stop.
-    /// `travelling` is `.unknown` from a reload, where the selection was recomputed rather than moved.
     private func scrollSelectedToVisible(travelling: KeyboardFocus.Travel = .unknown) {
         guard laidOutRows.indices.contains(selected) else { return }
         let stops = laidOutRows.indices.filter { isSelectable(at: $0) }.map { laidOutRows[$0].view }
         KeyboardFocus.reveal(laidOutRows[selected].view, among: stops, travelling: travelling)
     }
 
-    /// Build the footer: a centered horizontal row of hints, each a keycap box + its label.
-    /// Returns the labels + keycaps it created too, so `init` can retain them for
-    /// `reapplyTheme()` — the footer is built once and never rebuilt by a row re-render, so
-    /// nothing here may be a throwaway local.
     private static func makeFooter(_ hints: [PaletteHint]) -> (
         view: NSStackView, labels: [NSTextField], keycaps: [KeycapView], items: [String: NSView]
     ) {
@@ -566,15 +433,14 @@ class PaletteOverlay: NSView, ModalOverlay {
 }
 
 extension PaletteOverlay: NSTextFieldDelegate {
-    /// A click focuses the field without going through `focusInitialResponder`, and the field editor is
-    /// shared per window, so it arrives carrying whatever tint the last field left on it.
+    /// A click focuses the field past `focusInitialResponder`, and the shared field editor keeps the last field's tint.
     func controlTextDidBeginEditing(_ obj: Notification) {
         searchField.applyThemedCaret()
     }
 
     func controlTextDidChange(_ obj: Notification) {
         applyFilter(query: searchField.stringValue)
-        reloadRows()  // resets the selection to the first selectable row
+        reloadRows()
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy sel: Selector) -> Bool {

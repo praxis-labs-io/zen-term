@@ -5,13 +5,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The built-in Scratch float driven through the real chord on a real window.
-///
-/// `ToolFloatControllerTests` already covers `persist:window` against the engine's seam, so these
-/// assert only what is specific to the built-in: that it reaches the engine at all with an empty
-/// config, and that it launches a shell rather than a command. The launch config is the one that
-/// matters most — every other float goes through `-c <command>`, and a Scratch that quietly took
-/// that path would look identical on screen until the user's `shell-args` were ignored.
 @MainActor
 final class ScratchFloatInteractionTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
@@ -24,8 +17,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         try super.setUpWithError()
         originalOverride = TerminalSurfaceFactory.makeOverride
         originalConfig = GeneralConfig.current
-        // Reduce Motion completes `animateOut` synchronously, so a dismissed card is out of the
-        // view tree by the time an assertion reads it.
         Motion.isReduceMotionEnabled = { true }
         TerminalSurfaceFactory.makeOverride = { [weak self] in
             let surface = RecordingSurface()
@@ -35,7 +26,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         root = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-scratch-window-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        // The empty config is the point: the built-in has to be reachable without one.
         GeneralConfig.setCurrentForTesting(.builtIn)
     }
 
@@ -48,8 +38,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         try? FileManager.default.removeItem(at: root)
         try super.tearDownWithError()
     }
-
-    // MARK: harness
 
     private func makeWindow() -> WindowController {
         let c = WindowController(
@@ -69,17 +57,12 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         return descendants(of: content).compactMap { $0 as? SurfaceFloatOverlay }
     }
 
-    /// The rendered text of every toast on screen. Read off the real labels, not the content
-    /// struct: what could still be broken is a card showing something other than what it was
-    /// handed.
     private func toastText(_ c: WindowController) -> [String] {
         guard let content = c.window.contentView else { return [] }
         return descendants(of: content).compactMap { $0 as? ToastView }
             .flatMap { descendants(of: $0).compactMap { ($0 as? NSTextField)?.stringValue } }
     }
 
-    /// A plain workspace for the ⇧⏎ replace path: no recipe, so nothing but the replace itself
-    /// is under test.
     private func elsewhere() -> Workspace {
         Workspace(
             title: "Elsewhere", path: root, main: nil, right: nil, bottom: nil, focus: .main,
@@ -90,9 +73,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         c.handle(.toggleToolFloat(ToolFloat.scratch.id))
     }
 
-    /// Open Scratch and hand back the surface it spawned. A Scratch shell and a pane's launch the
-    /// same way, so nothing in the config tells them apart — the spawn this toggle caused is the
-    /// only reliable handle, and asserting it caused exactly one is half the point.
     private func openScratch(
         _ c: WindowController, file: StaticString = #filePath, line: UInt = #line
     ) -> RecordingSurface {
@@ -100,14 +80,9 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         toggleScratch(c)
         XCTAssertEqual(
             spawned.count, before + 1, "the open must spawn exactly one shell", file: file, line: line)
-        // A stand-in rather than `spawned[before]` when the spawn didn't happen: indexing traps,
-        // and a trap here takes the whole suite down with it — the rest of a failing test reads
-        // false, which is what a reader needs to see.
         guard spawned.count > before else { return RecordingSurface() }
         return spawned[before]
     }
-
-    // MARK: tests
 
     func test_theChordOpensAScratchCard_withNoConfigAtAll() {
         let c = makeWindow()
@@ -117,9 +92,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         XCTAssertEqual(cards(c).count, 1)
     }
 
-    /// The launch config, which is the whole reason `spawn` branches. Every other float runs
-    /// `$SHELL -l -i -c <command>`; this one takes a pane's launch, so the backend rewrites argv[0]
-    /// to a login shell and the user's `shell-args` are honored.
     func test_theScratchShell_launchesWithNoCommand() {
         let c = makeWindow()
 
@@ -141,9 +113,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         XCTAssertEqual(launched?.args, ["-l", "-i"])
     }
 
-    /// No nav token: the engine has no `PanelRef` to gate a route on, and directional nav is
-    /// blocked while a card is up, so there is nowhere for the protocol to hop. Pinned so a later
-    /// "make it exactly like a drawer" change has to argue with a test.
     func test_theScratchShell_carriesNoNavEnvironment() {
         let c = makeWindow()
 
@@ -152,8 +121,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         XCTAssertNil(environment["ZEN_PANE"], "a pane gets one; the float has no panel to route to")
     }
 
-    /// The drawer behavior the float was asked for: the chord hides the card and leaves the shell
-    /// running, and the next press returns the same one.
     func test_hidingAndReopening_keepsTheSameShell() {
         let c = makeWindow()
         let surface = openScratch(c)
@@ -169,8 +136,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         XCTAssertEqual(surface.startCount, 1, "nor restart the one it has")
     }
 
-    /// The other half: `exit` really kills it, and the next open is cold rather than resurrecting
-    /// a dead surface.
     func test_theShellExiting_closesTheCard_andTheNextOpenRespawns() {
         let c = makeWindow()
         let surface = openScratch(c)
@@ -178,25 +143,20 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         surface.delegate?.surfaceDidExit(surface, code: 0)
         XCTAssertTrue(cards(c).isEmpty, "the card goes with the shell")
 
-        // `openScratch` asserts the spawn, which is the claim: cold, not resurrected.
         XCTAssertFalse(openScratch(c) === surface)
     }
 
-    /// A tab change dismisses the card and must leave the shell behind it running — the half of
-    /// the old window-wide contract that survives `scope: .tab`.
     func test_aTabChangeDismissesTheCard_notTheShell() {
         let c = makeWindow()
         let surface = openScratch(c)
 
-        c.handle(.newTab)  // spawns the new tab's pane, and dismisses the card
+        c.handle(.newTab)
 
         XCTAssertTrue(cards(c).isEmpty)
         XCTAssertFalse(surface.terminated, "a tab change dismisses the card, not the shell")
         XCTAssertEqual(surface.startCount, 1)
     }
 
-    /// The point of `scope: .tab`: a second tab gets its own scratch shell, the way it gets its own
-    /// drawers. `openScratch` asserts the spawn, which IS the claim.
     func test_eachTabGetsItsOwnScratchShell() {
         let c = makeWindow()
         let first = openScratch(c)
@@ -208,9 +168,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         XCTAssertFalse(first.terminated, "and must not take the first tab's shell down to get one")
     }
 
-    /// Going back reveals that tab's own shell, not the one the other tab is running. Reads the
-    /// card's view tree rather than the registry: what could break is a card showing the wrong
-    /// surface while the bookkeeping looks right.
     func test_returningToATab_revealsThatTabsOwnShell() {
         let c = makeWindow()
         let first = openScratch(c)
@@ -228,20 +185,17 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         XCTAssertFalse(shown.contains(second.view), "never the other tab's")
     }
 
-    /// A tab's scratch is the tab's, so closing the tab stops it — the same rule as its drawers.
     func test_closingATabKillsThatTabsScratchShell() {
         let c = makeWindow()
         c.handle(.newTab)
         let surface = openScratch(c)
-        toggleScratch(c)  // dismissed but alive: the case with no on-screen trace
+        toggleScratch(c)
 
         c.closeTabForTesting(index: 1)
 
         XCTAssertTrue(surface.terminated, "a closed tab must not leak its scratch shell")
     }
 
-    /// The other side of that: an over-broad teardown that took the whole registry with it would
-    /// pass the test above and silently kill every other tab's shell.
     func test_closingATabLeavesTheOtherTabsScratchAlone() {
         let c = makeWindow()
         let first = openScratch(c)
@@ -255,9 +209,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         XCTAssertFalse(first.terminated, "the surviving tab keeps its own shell")
     }
 
-    /// ⌘W on the last pane IS a tab close, so a busy scratch has to be weighed the way a busy
-    /// drawer is. Two tabs, so the window-close term can't be what answers, and the card is
-    /// dismissed first so the float-modal notice isn't either.
     func test_closingTheLastPaneOfATab_confirmsWhenItsScratchIsBusy() {
         let c = makeWindow()
         c.handle(.newTab)
@@ -274,7 +225,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
             "the confirm names the real effect: \(toastText(c))")
     }
 
-    /// The dock dots a dismissed-but-running float. A tab-scoped one dots only where it runs.
     func test_theDockDotsScratchOnlyInTheTabItIsRunningIn() {
         let c = makeWindow()
         _ = openScratch(c)
@@ -288,8 +238,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
             "a tab with no scratch running must not dot one")
     }
 
-    /// What surfaces a hidden Scratch button, and it is tab-scoped the way the dot is. Read through
-    /// the wrong registry key it answers false forever, and the button just never appears.
     func test_scratchBusy_isAnsweredOnlyInTheTabItIsRunningIn() {
         let c = makeWindow()
         let surface = openScratch(c)
@@ -307,8 +255,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
             "a tab with no scratch running must not get its button back")
     }
 
-    /// Hiding the button in Settings while its shell is working must not drop the handle on that
-    /// work. The fan-out has to re-render, since only a render grants a hidden button its handle.
     func test_hidingScratchWhileItWorks_keepsItsButtonThroughTheFanOut() throws {
         let c = makeWindow()
         let dock = try XCTUnwrap(
@@ -332,16 +278,12 @@ final class ScratchFloatInteractionTests: WindowTestCase {
             "hiding it mid-job left a running shell with no handle: \(dock.visibleLayoutForTesting)")
     }
 
-    /// A hidden scratch asking for input is usually not in the tab that happens to be up, and the
-    /// banner's click has to land where the prompt is. The engine reports the owning tab because it
-    /// is the only thing that knows it — the window would otherwise guess the active one, which is
-    /// wrong exactly when the notification matters most.
     func test_aBackgroundTabsScratchNotification_carriesItsOwnTab() {
         let c = makeWindow()
         let owner = c.activeTabIDForTesting
         let surface = openScratch(c)
         toggleScratch(c)
-        c.handle(.newTab)  // the scratch is now in a background tab
+        c.handle(.newTab)
         XCTAssertNotEqual(c.activeTabIDForTesting, owner)
 
         var relayed: [(ToolFloat, TabID?)] = []
@@ -353,8 +295,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         XCTAssertEqual(relayed.first?.1, owner, "the banner routes to the tab the shell is in")
     }
 
-    /// ⇧⏎ replaces a tab in place, keeping its id. Without a scope teardown the replacement session
-    /// inherits the old one's scratch shell — same cwd, same scrollback, from a session that is gone.
     func test_replacingATab_doesNotHandTheNewSessionTheOldScratch() {
         let c = makeWindow()
         let surface = openScratch(c)
@@ -366,8 +306,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         XCTAssertFalse(openScratch(c) === surface, "and the new session gets a cold one")
     }
 
-    /// The confirm on that path, which weighs the tab's live work. The scratch is part of the tab
-    /// now, so a busy one has to stop the silent clobber.
     func test_replacingABusyTab_confirmsBeforeItStopsTheScratch() {
         let c = makeWindow()
         let surface = openScratch(c)
@@ -380,8 +318,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         XCTAssertFalse(surface.terminated, "nothing dies before the answer")
     }
 
-    /// ⌘W over a float is a notice, not a close — the built-in follows the same rule as every
-    /// other float rather than the drawer's ⌘W-kills.
     func test_closePaneWhileScratchIsOpen_saysSoRatherThanClosing() {
         let c = makeWindow()
         toggleScratch(c)

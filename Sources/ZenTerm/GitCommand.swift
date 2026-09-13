@@ -1,7 +1,6 @@
 import Foundation
 
-/// Runs `git` and hands back its stdout. Blocking on purpose: the caller owns the queue hop, the
-/// way `GitRepoStatus` wraps `GitRepo`. Never call this on the main thread.
+// Blocking by design: callers own the hop off the main thread.
 enum GitCommand {
     struct Failure: Error, LocalizedError, Equatable {
         let status: Int32
@@ -12,8 +11,7 @@ enum GitCommand {
             return reason.isEmpty ? "git exited with \(status)." : reason
         }
 
-        /// Git writes progress to stderr beside the failure, so handing the whole stream to a
-        /// person reads as a crash dump. The `fatal:` / `error:` line is the part they need.
+        // Git writes progress to stderr beside the failure; only the `fatal:` or `error:` line is for a person.
         private static func reason(in stderr: String) -> String {
             let lines = stderr.split(separator: "\n")
                 .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -27,12 +25,7 @@ enum GitCommand {
         }
     }
 
-    /// Whether a real `git` exists to run. Resolved once, off any hot path.
-    ///
-    /// `/usr/bin/git` is always present as an `xcrun` shim, so its existence proves nothing: on a
-    /// Mac without the Command Line Tools, running it opens the system "install developer tools"
-    /// modal. A picker probing one repo per row would stack a prompt per workspace, from work the
-    /// user never asked for. `xcode-select -p` answers the same question and opens nothing.
+    // `/usr/bin/git` is an xcrun shim that opens the install-tools prompt without CLT; `xcode-select -p` opens nothing.
     static let isAvailable: Bool = {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/xcode-select")
@@ -48,7 +41,7 @@ enum GitCommand {
         return process.terminationStatus == 0
     }()
 
-    /// Trimmed stdout on success. `dir` must exist; git resolves the repo from it.
+    // Drains both pipes before waiting, or a child filling the 64K stderr buffer deadlocks.
     static func run(_ args: [String], in dir: URL) -> Result<String, Error> {
         guard isAvailable else {
             return .failure(Failure(status: -1, stderr: "git is not available."))
@@ -69,8 +62,6 @@ enum GitCommand {
             return .failure(error)
         }
 
-        // Both pipes drain at once, and both before waiting: a child that fills the 64K stderr
-        // buffer blocks on write while this thread blocks reading stdout, and neither ever moves.
         var errData = Data()
         let errDrain = DispatchQueue(label: "GitCommand.stderr")
         let drained = DispatchGroup()

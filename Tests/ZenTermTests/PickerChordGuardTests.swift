@@ -2,7 +2,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The truth table for the chords that only mean something over the workspace picker.
 final class PickerChordGuardTests: XCTestCase {
     private static let pickerOnly: [KeyInterceptor.ReservedChord] = [.createWorktree, .removeWorktree]
 
@@ -22,7 +21,6 @@ final class PickerChordGuardTests: XCTestCase {
         }
     }
 
-    /// A new case joining the pass-through arm would hand a working chord to the terminal.
     func test_everyOtherAction_isNeverPassedThrough() {
         for action in SettingsKeybindGroupsTests.everyAction where !Self.pickerOnly.contains(action) {
             for pickerIsOpen in [true, false] {

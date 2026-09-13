@@ -3,8 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The confirm shown over a card that stays put, driven through its real controls in a window.
-/// It answers a consequence that cannot be taken back, so every way out of it has to work.
 final class ConfirmCardTests: WindowTestCase {
     private final class Sink {
         var confirmed = 0
@@ -31,7 +29,6 @@ final class ConfirmCardTests: WindowTestCase {
         XCTAssertTrue(text.contains("feature/one has 3 uncommitted files."), "\(text)")
     }
 
-    /// Return answers the question the card just asked, so the affirmative holds focus.
     func test_returnOnTheFocusedButton_confirms() throws {
         let (card, sink) = mount()
         card.focusInitialResponder()
@@ -54,7 +51,6 @@ final class ConfirmCardTests: WindowTestCase {
         XCTAssertEqual(sink.confirmed, 0)
     }
 
-    /// Clicking out of a confirm answers it: no.
     func test_clickingTheBackdropCancels() throws {
         let (card, sink) = mount()
 
@@ -73,7 +69,6 @@ final class ConfirmCardTests: WindowTestCase {
         XCTAssertEqual(sink.confirmed, 0)
     }
 
-    /// Left and right walk the pair, so the safe answer is reachable without the mouse.
     func test_leftFromRemove_reachesCancel() throws {
         let (card, _) = mount()
         card.focusInitialResponder()
@@ -83,8 +78,6 @@ final class ConfirmCardTests: WindowTestCase {
 
         XCTAssertTrue(KeyboardFocus.isFocused(try XCTUnwrap(button(in: card, title: "Cancel")), in: window))
     }
-
-    // MARK: harness
 
     private func mount(message: String = "feature/one has nothing uncommitted.") -> (
         card: ConfirmCard, sink: Sink
@@ -140,8 +133,6 @@ final class ConfirmCardTests: WindowTestCase {
                 isARepeat: false, keyCode: 53))
     }
 
-    /// AppKit hangs `.function` and `.numericPad` on every arrow; without them this is a
-    /// keystroke macOS never sends.
     private func arrowLeft() throws -> NSEvent {
         let character = String(UnicodeScalar(NSLeftArrowFunctionKey)!)
         return try XCTUnwrap(

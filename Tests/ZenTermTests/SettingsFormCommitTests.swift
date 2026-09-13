@@ -3,19 +3,9 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction tests for the `SettingsFormSection` numeric commit pipeline: clamp/range
-/// validation, blank-stage-vs-debounce, integer rounding, and Return/blur early-commit. A
-/// regression here writes garbage into the config file that every window then hot-reloads, so this
-/// drives real form rows and asserts what actually landed in the config file.
-///
-/// The whole write→reload pipeline is rooted at `ConfigLoader.defaultRoot`; the tests point that
-/// at a temp dir through the `defaultRootOverrideForTesting` seam so they never touch the real
-/// config (an env-based redirect is unreliable — `ProcessInfo.environment` caches).
 final class SettingsFormCommitTests: WindowTestCase {
     private var tempRoot: URL!
-    /// The section + host window are retained for the test's lifetime: the row's `onChange`
-    /// captures the section `[weak self]`, so if the section deallocated the write would silently
-    /// no-op (guard let self else return) and the commit would never fire.
+    /// Retained: the row's `onChange` captures the section weakly.
     private var section: SettingsFormSection?
     private var hostWindow: NSWindow?
 
@@ -25,21 +15,18 @@ final class SettingsFormCommitTests: WindowTestCase {
             .appendingPathComponent("zenterm-settings-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
-        AppConfig.reload()  // GeneralConfig.current now reflects the empty temp root (= builtIn)
+        AppConfig.reload()
     }
 
     override func tearDownWithError() throws {
-        // Must precede clearing the override: an in-flight debounce then fires into a released
-        // section (`[weak self]`) rather than into the real `~/.config/zen-term/config`.
         section = nil
         hostWindow = nil
         ConfigLoader.defaultRootOverrideForTesting = nil
-        AppConfig.reload()  // restore the process's real config state
+        AppConfig.reload()
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }
 
-    /// Mount a section in a host window (both retained) and return its live detail view.
     private func mountDetail(_ section: SettingsFormSection) -> NSView {
         self.section = section
         let detail = section.makeDetailView()
@@ -60,19 +47,14 @@ final class SettingsFormCommitTests: WindowTestCase {
         descendants(of: detail).compactMap { $0 as? LayoutRow }
     }
 
-    /// Mount a section and return its single numeric field, reached by walking the live view tree.
     private func mountField(_ section: SettingsFormSection) -> FieldBox {
         editableFields(in: mountDetail(section)).first!
     }
 
-    /// Read the sandboxed config file straight from the root the writer used, so the read path
-    /// can't drift from the write path.
     private func configText() -> String {
         (try? String(
             contentsOf: ConfigLoader.defaultRoot.appendingPathComponent("config"), encoding: .utf8)) ?? ""
     }
-
-    // MARK: font-size (CGFloat, range 6…72)
 
     private final class FontSizeSection: SettingsFormSection {
         override var navTitle: String { "Appearance" }
@@ -89,13 +71,13 @@ final class SettingsFormCommitTests: WindowTestCase {
         let box = mountField(FontSizeSection())
         box.setText("50")
         box.onChange?()
-        box.onEndEditing?()  // blur flushes the debounce immediately
+        box.onEndEditing?()
         XCTAssertTrue(configText().contains("font-size = 50"), "got: \(configText())")
     }
 
     func test_outOfRangeValue_isRejectedAndNeverWritten() {
         let box = mountField(FontSizeSection())
-        box.setText("100")  // above the 6…72 range
+        box.setText("100")
         box.onChange?()
         box.onEndEditing?()
         XCTAssertFalse(configText().contains("font-size"), "out-of-range value must not be written")
@@ -117,16 +99,15 @@ final class SettingsFormCommitTests: WindowTestCase {
         XCTAssertTrue(configText().contains("font-size = 50"))
 
         box.setText("")
-        box.onChange?()  // stages the removal without live-applying mid-edit
-        box.onEndEditing?()  // blur commits the blank → key removed
+        box.onChange?()
+        box.onEndEditing?()
         XCTAssertFalse(configText().contains("font-size"), "blank field must remove the key (→ default)")
     }
 
     func test_validValue_commitsAfterDebounceWithoutBlur() {
         let box = mountField(FontSizeSection())
         box.setText("40")
-        box.onChange?()  // schedules the debounced apply; no blur
-        // Wait on the observable outcome (the file content), not a fixed delay tied to `applyDelay`.
+        box.onChange?()
         let committed = XCTNSPredicateExpectation(
             predicate: NSPredicate { [weak self] _, _ in
                 self?.configText().contains("font-size = 40") ?? false
@@ -134,8 +115,6 @@ final class SettingsFormCommitTests: WindowTestCase {
         wait(for: [committed], timeout: 2)
         XCTAssertTrue(configText().contains("font-size = 40"), "debounce should commit; got: \(configText())")
     }
-
-    // MARK: cursor-thickness (integer key, range 1…12)
 
     private final class ThicknessSection: SettingsFormSection {
         override var navTitle: String { "Cursor" }
@@ -150,14 +129,12 @@ final class SettingsFormCommitTests: WindowTestCase {
 
     func test_integerKey_roundsFractionalInputOnCommit() {
         let box = mountField(ThicknessSection())
-        box.setText("5.7")  // valid (in 1…12), but an integer key must round it
+        box.setText("5.7")
         box.onChange?()
         box.onEndEditing?()
         XCTAssertTrue(configText().contains("cursor-thickness = 6"), "got: \(configText())")
         XCTAssertFalse(configText().contains("5.7"))
     }
-
-    // MARK: diagnostics refresh must not stomp a live error
 
     private final class TwoNumericSection: SettingsFormSection {
         override var navTitle: String { "Terminal" }
@@ -172,15 +149,12 @@ final class SettingsFormCommitTests: WindowTestCase {
         }
     }
 
-    /// A live invalid-range error on one row must survive a *different* row's successful commit — that
-    /// commit reloads and refreshes every row, and the diagnostics pass must skip rows mid-`.failure`
-    /// rather than clear the feedback while the field still holds invalid text.
     func test_liveRangeError_survivesAnUnrelatedRowsCommit() {
         let detail = mountDetail(TwoNumericSection())
-        let fields = editableFields(in: detail)  // [font-size, cursor-thickness]
-        fields[0].setText("3")  // below 6 → a .failure range error; invalid, so nothing is written
+        let fields = editableFields(in: detail)
+        fields[0].setText("3")
         fields[0].onChange?()
-        fields[1].setText("5")  // valid → commits, which reloads + refreshes every row
+        fields[1].setText("5")
         fields[1].onChange?()
         fields[1].onEndEditing?()
         let messages = layoutRows(in: detail).compactMap { $0.renderedMessageForTesting }

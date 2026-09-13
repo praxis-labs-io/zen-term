@@ -4,13 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// `TabBarView` is persistent chrome: it must recolor live on a theme swap, not just
-/// on next construction. Per the house rule "GUI controls need interaction tests", this drives
-/// the real window-mounted view and asserts `reapplyTheme()` performs its two real effects
-/// (re-renders the stored snapshot; resets the tracer's baked-in color) — the window-based
-/// behavior the manual runbook then confirms end-to-end with an actual theme file. (A
-/// DEBUG-only `Theme.setCurrentForTesting(_:)` seam exists for direct before/after color
-/// assertions; the `ReapplyThemeTests` suite uses it.)
 final class TabBarViewTests: WindowTestCase {
     private func mount(_ tabBar: TabBarView) {
         tabBar.translatesAutoresizingMaskIntoConstraints = true
@@ -29,10 +22,6 @@ final class TabBarViewTests: WindowTestCase {
         TabBarItem(id: TabID(id), index: index, title: title, isActive: active, attentionState: .idle)
     }
 
-    /// A re-render keeps each tab's chip. It used to rebuild them all, which took the hovered chip out
-    /// of the window mid-hover: its tooltip was torn down and re-armed behind the hover delay, so the
-    /// 1.5s title poll read as a blinking tooltip. The chip surviving is what fixes that, and
-    /// the label still has to follow the new title.
     func test_render_keepsEachTabsChipAcrossARerender() throws {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         mount(tabBar)
@@ -49,8 +38,6 @@ final class TabBarViewTests: WindowTestCase {
             tabBar.chipLabelsForTesting.first?.string, "1 renamed", "the kept chip shows the new title")
     }
 
-    /// A chip was as wide as whatever it held, so one long title pushed every other tab off the
-    /// strip. A worktree tab carries a project, a mark and a branch, which made that routine.
     func test_render_capsAChipsWidthAndTruncatesTheTitle() throws {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         mount(tabBar)
@@ -66,9 +53,6 @@ final class TabBarViewTests: WindowTestCase {
             try XCTUnwrap(widths.last), try XCTUnwrap(widths.first),
             "a long title still takes more room than a short one, up to the cap")
 
-        // Width alone passed while the label wrapped to a second line and bled out of the chip:
-        // an attributed value carries its own line behaviour, so the label's own setting is not
-        // enough on its own.
         let chip = try XCTUnwrap(tabBar.chipsForTesting.last)
         let label = try XCTUnwrap(
             descendants(of: chip).compactMap { $0 as? NSTextField }.first)
@@ -93,23 +77,19 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertNil(closing.superview, "the closed tab's chip leaves the bar")
     }
 
-    /// Renumbering after a close has to reach the tooltip's keycap, which resolves at hover time from
-    /// the chip's own index rather than one captured when it was built.
     func test_render_renumbersAKeptChipsShortcut() {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         mount(tabBar)
         tabBar.render([item(1, "one", index: 1, active: true), item(2, "two", index: 2)])
         XCTAssertEqual(tabBar.chipTooltipsForTesting[1].shortcut, CommandCatalog.spec(for: .selectTab(2)).shortcut)
 
-        tabBar.render([item(2, "two", index: 1, active: true)])  // tab 1 closed, tab 2 becomes tab 1
+        tabBar.render([item(2, "two", index: 1, active: true)])
 
         XCTAssertEqual(
             tabBar.chipTooltipsForTesting[0].shortcut, CommandCatalog.spec(for: .selectTab(1)).shortcut,
             "the kept chip's tooltip names its new number")
     }
 
-    /// The chip persists now, so a theme swap has to recolor the label it already has. This is what the
-    /// old "reapplyTheme rebuilds the chip" assertion was really protecting.
     func test_reapplyTheme_recolorsTheKeptChipsLabel() throws {
         let original = Theme.current
         defer { Theme.setCurrentForTesting(original) }
@@ -126,14 +106,11 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertNotEqual(labelInk(tabBar), inkBefore, "the label picked up the new theme's ink")
     }
 
-    /// The title run's foreground color — the second attribute run, after the number prefix.
     private func labelInk(_ tabBar: TabBarView) -> NSColor? {
         guard let label = tabBar.chipLabelsForTesting.first, label.length > 2 else { return nil }
         return label.attribute(.foregroundColor, at: label.length - 1, effectiveRange: nil) as? NSColor
     }
 
-    /// A theme with a clearly different foreground, built through the real loader so `chrome`'s derived
-    /// roles are populated the way a genuine swap produces them (as `ReapplyThemeTests` does).
     private func makeAlternateTheme() throws -> AppTheme {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-tabbar-theme-\(UUID().uuidString)", isDirectory: true)
@@ -165,22 +142,16 @@ final class TabBarViewTests: WindowTestCase {
 
         tabBar.reapplyTheme()
 
-        // The tracer's color is set once in init and never touched by render(); reapplyTheme()
-        // must reset it explicitly or an accent swap leaves the underline stale-colored.
         XCTAssertEqual(tabBar.tracerColorForTesting, Theme.current.chrome.accent.nsColor)
     }
 
     func test_reapplyTheme_beforeAnyRender_doesNotCrash() {
-        // No render() call before reapplyTheme() — must not crash on an empty snapshot; with no
-        // tabs rendered the bar holds no chips (new-tab lives in the footer dock now).
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         tabBar.reapplyTheme()
         XCTAssertTrue(tabBar.chipsForTesting.isEmpty)
     }
 
     func test_tabLabel_isBareNumberWithNoCommandGlyph() {
-        // The inline label is a bare number for every tab now — the ⌘N shortcut moved to the
-        // hover tooltip, so the glyph never sits inline.
         let one = TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle)
         let nine = TabBarItem(id: TabID(9), index: 9, title: "nine", isActive: false, attentionState: .idle)
         let ten = TabBarItem(id: TabID(10), index: 10, title: "ten", isActive: false, attentionState: .idle)
@@ -193,8 +164,6 @@ final class TabBarViewTests: WindowTestCase {
     }
 
     func test_chipTooltip_readsFocusTabWithCommandShortcut() {
-        // The tooltip reads "Focus tab" (not the tab's name); tabs 1–9 resolve a ⌘N keycap from
-        // the live keymap, 10+ have no binding so no keycap.
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         tabBar.render([
             TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle),
@@ -203,7 +172,6 @@ final class TabBarViewTests: WindowTestCase {
         let tooltips = tabBar.chipTooltipsForTesting
         XCTAssertEqual(tooltips.count, 2)
         XCTAssertEqual(tooltips[0].label, "Focus tab")
-        // ⌘1, resolved from the live keymap rather than hard-coded.
         XCTAssertEqual(tooltips[0].shortcut, CommandCatalog.spec(for: .selectTab(1)).shortcut)
         XCTAssertEqual(tooltips[1].label, "Focus tab")
         XCTAssertNil(tooltips[1].shortcut)
@@ -256,15 +224,10 @@ final class TabBarViewTests: WindowTestCase {
         tabBar.layoutSubtreeIfNeeded()
         XCTAssertFalse(tabBar.isLeadingFadedForTesting, "at the start there's nothing off the left edge")
 
-        tabBar.scrollToForTesting(x: 80)  // drag the strip rightward
+        tabBar.scrollToForTesting(x: 80)
         XCTAssertTrue(tabBar.isLeadingFadedForTesting, "scrolling tabs off the left must fade that edge")
     }
 
-    // MARK: - resting weight
-
-    /// The number and the title are one label and must read as one: same color per state, full
-    /// bright on the active tab and resting on the others. Read off the rendered runs rather than the
-    /// constants, so a test cannot restate the values and pass against its own copy of them.
     @MainActor
     func test_theNumberAndTitle_shareOneColorPerState() throws {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
@@ -293,8 +256,6 @@ final class TabBarViewTests: WindowTestCase {
             activeColor.alphaComponent, idleColor.alphaComponent, "the active tab still stands out")
     }
 
-    /// The attention states still speak through the number alone: that is a signal about the tab, not
-    /// a weight, so it survives the two halves sharing one ink.
     @MainActor
     func test_aWaitingTab_stillMarksItsNumberWithTheAttentionColor() throws {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
@@ -312,9 +273,6 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertEqual(titleColor, TabBarView.idleInkForTesting)
     }
 
-    // MARK: rename
-
-    /// A keyed window: the chip's click path only matters with a window that can take focus.
     private func mountKeyed(_ tabBar: TabBarView) -> NSWindow {
         tabBar.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
@@ -336,8 +294,6 @@ final class TabBarViewTests: WindowTestCase {
         view.mouseDown(with: event)
     }
 
-    /// The bar asks; the window opens the card. Renaming is not the bar's job, so all it owes is
-    /// the right tab id off a double-click.
     func test_doubleClickingAChip_asksToRenameThatTab() throws {
         var renamed: [TabID] = []
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { renamed.append($0) })
@@ -349,7 +305,6 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertEqual(renamed, [TabID(2)], "the chip that was double-clicked, not the active tab")
     }
 
-    /// A single click must still just select, or a rename card would open on every tab switch.
     func test_singleClickingAChip_selectsAndAsksForNoRename() throws {
         var selected: [TabID] = []
         var renamed: [TabID] = []
@@ -364,11 +319,6 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertTrue(renamed.isEmpty)
     }
 
-    // MARK: revealing a moved tab
-
-    /// ⌘⌃] keeps the same tab active while walking it along the bar, so the reveal cannot key off
-    /// the selection: the tab slides under the edge fade and off-screen with its underline
-    /// following it out of view.
     func test_movingTheActiveTabScrollsItBackIntoView() throws {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         mount(tabBar)
@@ -381,7 +331,6 @@ final class TabBarViewTests: WindowTestCase {
         tabBar.render(snapshot(active: 1))
         tabBar.layoutSubtreeIfNeeded()
 
-        // The same tab stays active and walks to the far end of an overflowing strip.
         var moved = names
         let carried = moved.removeFirst()
         moved.append(carried)
@@ -397,8 +346,6 @@ final class TabBarViewTests: WindowTestCase {
             "the moved tab has to be scrolled back into view, not left off the end of the strip")
     }
 
-    /// The reveal must not fire on a title poll, which would yank the strip back under a user who
-    /// is scrolling it. A title changing never changes a tab's slot.
     func test_aTitleChangeDoesNotYankTheStripBack() throws {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         mount(tabBar)

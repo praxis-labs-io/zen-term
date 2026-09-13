@@ -1,9 +1,6 @@
 import AppKit
 import TerminalKit
 
-/// The Appearance settings section: theme and accent pickers plus the chrome Layout knobs and the
-/// Motion preference. A subclass of `SettingsFormSection` — it only declares its groups; the base
-/// owns the row builders, live-apply debounce, focus stops, and Reset-all.
 final class SettingsAppearanceSection: SettingsFormSection {
     override var navTitle: String { "Appearance" }
 
@@ -11,8 +8,6 @@ final class SettingsAppearanceSection: SettingsFormSection {
     private weak var themeDropdown: Dropdown?
     private weak var accentDropdown: Dropdown?
 
-    /// The accent picker's rows: "Theme default" first, then the 16 ANSI slots. Index 0 clears the
-    /// key, so it stays correct when a theme swap moves what the default resolves to.
     private static let accentSlots: [AccentSlot?] = [nil] + AccentSlot.allCases
 
     override func populate() {
@@ -66,10 +61,6 @@ final class SettingsAppearanceSection: SettingsFormSection {
 
     private weak var toolbarList: CheckboxDropdown?
 
-    /// The footer-toolbar multi-select: a dropdown of checkboxes, one per built-in button, checked
-    /// = shown. A toggle recomputes the hidden set from the live config and writes
-    /// `hide-toolbar-buttons` (or removes the key when nothing is hidden, so an all-shown config
-    /// stays clean); the list stays open so several buttons can be toggled in one visit.
     private func addToolbarButtonsRow() {
         registerScalarKey("hide-toolbar-buttons")
         let list = CheckboxDropdown(
@@ -98,8 +89,6 @@ final class SettingsAppearanceSection: SettingsFormSection {
             })
     }
 
-    /// Checked = shown (the intuitive polarity; the config key stores the inverse). Static so the
-    /// closures capture no `self` (the section's retain-cycle rule, see `reduceMotionIndex`).
     private static func toolbarItems() -> [CheckboxDropdownItem] {
         let hidden = GeneralConfig.current.hiddenToolbarButtons
         return ToolbarButton.allCases.map {
@@ -107,7 +96,6 @@ final class SettingsAppearanceSection: SettingsFormSection {
         }
     }
 
-    /// The closed button's summary: the at-a-glance count that says whether anything is hidden.
     private static func toolbarSummary() -> String {
         let hidden = GeneralConfig.current.hiddenToolbarButtons.count
         return hidden == 0 ? "All shown" : "\(hidden) hidden"
@@ -166,8 +154,6 @@ final class SettingsAppearanceSection: SettingsFormSection {
             refresh: { [weak self] in self?.refreshAccentRow() })
     }
 
-    /// Swatches and hexes resolve against the *live* theme, so switching theme re-renders this row
-    /// with the new palette's colors under the same names.
     private func accentItems(selected: Int) -> [DropdownItem] {
         let terminal = Theme.current.terminal
         return Self.accentSlots.enumerated().map { index, slot in
@@ -196,19 +182,12 @@ final class SettingsAppearanceSection: SettingsFormSection {
         accentDropdown?.setItems(accentItems(selected: selected), selectedIndex: selected)
     }
 
-    /// A theme change this card didn't make reaches sections through `reapplyTheme()`, which
-    /// recolors controls but does not re-supply row *data* (`refreshRows()` runs only after this
-    /// card's own write). The accent row is the only row whose contents are theme-derived, so
-    /// without this its swatches and hexes keep the old palette until the section is rebuilt.
-    /// The paths that get here: another window's Settings write, and ⌘⇧, after a hand-edit.
     override func reapplyTheme() {
         super.reapplyTheme()
         refreshAccentRow()
     }
 
-    /// Reduce-motion shown as On/Off; `system` resolves via the OS accessibility setting. Static so the
-    /// `read` closure the base stores per row doesn't capture `self` (which would retain-cycle through
-    /// the section's `refreshers`); it reads only the passed config and the OS setting.
+    /// Static so the stored read closure doesn't retain the section.
     private static func reduceMotionIndex(_ config: GeneralConfig) -> Int {
         switch config.reduceMotion {
         case .on: return 0

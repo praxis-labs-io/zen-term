@@ -1,8 +1,6 @@
 import AppKit
 
-/// A confirmation over a card that stays put, for a consequence that cannot be taken back:
-/// closing a pane keeps the toast confirm, deleting a folder does not. Full-bleed, so its
-/// backdrop swallows clicks on the list underneath, and it owns Esc and Return while it is up.
+// Full-bleed so its backdrop swallows clicks on the list underneath.
 final class ConfirmCard: NSView {
     private let onCancel: () -> Void
     private let onConfirm: () -> Void
@@ -25,7 +23,6 @@ final class ConfirmCard: NSView {
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
 
-        // Clicking out of a confirm answers it: no, the same as Esc.
         let backdrop = BackdropView(onClick: { [weak self] in self?.cancel() })
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
@@ -60,8 +57,6 @@ final class ConfirmCard: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// The affirmative takes focus, so Return answers the question the card just asked. Esc and a
-    /// click outside are the other way out, and both are one key or one click away.
     func focusInitialResponder() { window?.makeFirstResponder(confirmButton) }
 
     func animateIn() {

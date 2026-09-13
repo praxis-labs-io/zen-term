@@ -1,10 +1,7 @@
 import AppLog
 import Foundation
 
-/// Parses `~/.config/zen-term/workspaces` into `[Workspace]`. INI-style: each `[Title]` section is
-/// one workspace, with `key = value` lines (`path`, `main`, `right`, `bottom`, `focus`, and
-/// repeatable `env` and `carry`). Best-effort like the other config parsers: an unknown key is
-/// ignored, a bad entry is logged and skipped, a section with no `path` is dropped, nothing throws.
+// Best-effort: unknown keys are ignored, bad entries logged and skipped, and nothing throws.
 enum WorkspacesParser {
     static func parse(_ text: String) -> [Workspace] {
         var workspaces: [Workspace] = []
@@ -13,7 +10,7 @@ enum WorkspacesParser {
         func flush() {
             defer { current = nil }
             guard let workspace = current?.build() else { return }
-            workspaces.removeAll { $0.title == workspace.title }  // last section of a title wins
+            workspaces.removeAll { $0.title == workspace.title }
             workspaces.append(workspace)
         }
 
@@ -22,7 +19,7 @@ enum WorkspacesParser {
             if line.isEmpty { continue }
 
             if line.hasPrefix("[") && line.hasSuffix("]") {
-                flush()  // a header closes the previous section
+                flush()
                 let title = String(line.dropFirst().dropLast()).trimmingCharacters(in: .whitespaces)
                 if title.isEmpty {
                     Log.warning(
@@ -44,11 +41,10 @@ enum WorkspacesParser {
             }
             current?.set(key: key, value: value)
         }
-        flush()  // finalize the trailing section
+        flush()
         return workspaces
     }
 
-    /// A section accumulated line by line, then resolved into a `Workspace` by `build()`.
     private struct Section {
         let title: String
         var path: String?
@@ -60,7 +56,7 @@ enum WorkspacesParser {
         var carry: [String] = []
 
         mutating func set(key: String, value: String) {
-            if key != "env", value.isEmpty { return }  // `right =` (empty) → absent, not a "" command
+            if key != "env", value.isEmpty { return }
             switch key {
             case "path": path = value
             case "main": main = value
@@ -81,16 +77,10 @@ enum WorkspacesParser {
                         category: .workspace)
                     return
                 }
-                // Trim + unquote the value so `env = KEY= v` and `env = KEY="a b"` behave like the
-                // rest of the parser (whitespace-trimmed, quotes optional) instead of keeping them literal.
                 let raw = String(value[value.index(after: equals)...]).trimmingCharacters(in: .whitespaces)
                 env.append((name, ConfigText.unquote(raw)))
             case "carry":
-                // A trailing slash is how a .gitignore names a directory, so accept it and let the
-                // entry mean the same thing either way.
                 let entry = value.hasSuffix("/") ? String(value.dropLast()) : value
-                // A carried entry is copied into a worktree by path, so one that escapes the
-                // workspace would reach into somewhere else entirely. Refuse rather than clamp.
                 guard !entry.hasPrefix("/"), !entry.hasPrefix("~"),
                     !entry.split(separator: "/").contains("..")
                 else {
@@ -101,7 +91,7 @@ enum WorkspacesParser {
                 }
                 carry.append(entry)
             default:
-                break  // unknown key — ignored
+                break
             }
         }
 
@@ -118,7 +108,7 @@ enum WorkspacesParser {
                     category: .workspace)
             }
             var envMap: [String: String] = [:]
-            for entry in env { envMap[entry.key] = entry.value }  // last wins for a repeated key
+            for entry in env { envMap[entry.key] = entry.value }
             return Workspace(
                 title: title,
                 path: URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true),

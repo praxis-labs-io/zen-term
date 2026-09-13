@@ -4,15 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The seven actions taken off libghostty, and the seam methods they ride.
-///
-/// The sister suite to `ScrollAndFindChordTests`, and the failure is the same shape: every one of
-/// these worked before, answered by the backend's own keymap under the pane. The moment we unbind
-/// libghostty's copy, a chord wired to nothing looks identical to one wired to the wrong pane.
-///
-/// Three of them ship with no chord at all, so the palette and the Shortcuts card are the only way
-/// in. `CommandCatalogTests` and `SettingsKeybindGroupsTests` hold those; this holds what the
-/// action does once something fires it.
 @MainActor
 final class ScreenAndPromptChordTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
@@ -55,8 +46,6 @@ final class ScreenAndPromptChordTests: WindowTestCase {
         try XCTUnwrap(controller.focusedScrollTargetForTesting?.surface as? RecordingSurface)
     }
 
-    // MARK: the screen
-
     func test_theThreeScreenActionsReachTheFocusedPane() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
@@ -70,9 +59,6 @@ final class ScreenAndPromptChordTests: WindowTestCase {
         XCTAssertEqual(surface.writeScreenFileCount, 1)
     }
 
-    /// Writing the file and disposing of the path is one backend call, so the three actions differ
-    /// only by what they ask for. A copy-paste slip here sends all three down the same branch, and
-    /// the pane looks identical for two of them: the file is written either way.
     func test_theThreeWriteScreenActionsAskForDifferentDispositions() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
@@ -84,10 +70,6 @@ final class ScreenAndPromptChordTests: WindowTestCase {
         XCTAssertEqual(surface.screenFileDispositions, [.paste, .copy, .open])
     }
 
-    // MARK: the prompt marks
-
-    /// Negative is up the buffer, toward older output, matching every other scroll the seam takes.
-    /// Flip the sign and ⌘↑ walks the wrong way while still looking like it works.
     func test_thePromptJumpsMoveTheViewportInTheRightDirection() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
@@ -107,9 +89,6 @@ final class ScreenAndPromptChordTests: WindowTestCase {
         XCTAssertEqual(surface.scrolls, [.selection])
     }
 
-    /// libghostty's prompt jump moves the viewport and leaves the keyboard with the shell. Routing
-    /// it through scroll mode would leave the pane deaf until Esc, which is the opposite of what a
-    /// one-press chord is for.
     func test_aPromptJumpDoesNotEnterScrollMode() throws {
         let controller = makeWindow()
 
@@ -117,8 +96,6 @@ final class ScreenAndPromptChordTests: WindowTestCase {
 
         XCTAssertFalse(controller.scrollMode.isActive)
     }
-
-    // MARK: paste the selection
 
     func test_pasteSelectionPutsTheMouseSelectionBackInThePane() throws {
         let controller = makeWindow()
@@ -130,9 +107,6 @@ final class ScreenAndPromptChordTests: WindowTestCase {
         XCTAssertEqual(surface.pastes, ["./bin/check"])
     }
 
-    /// The other selection model: scroll mode's `v` is the chrome's own overlay and the backend
-    /// cannot see it, so reading only `copySelection` would leave ⌘⇧V dead over exactly the
-    /// selection the keyboard just made.
     func test_pasteSelectionReadsScrollModesOwnSelectionToo() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)
@@ -147,9 +121,6 @@ final class ScreenAndPromptChordTests: WindowTestCase {
         XCTAssertEqual(surface.pastes, [selected])
     }
 
-    /// With nothing selected the chord does nothing, rather than pasting the pasteboard. ⌘V is
-    /// what pastes the pasteboard, and a ⌘⇧V that quietly became a second one would put a command
-    /// nobody chose on the prompt.
     func test_pasteSelectionWithNothingSelectedPastesNothing() throws {
         let controller = makeWindow()
         let surface = try focusedSurface(controller)

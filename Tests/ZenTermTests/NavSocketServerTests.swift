@@ -3,9 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// End-to-end coverage of the one piece unit tests can't reach: the real `AF_UNIX` bind +
-/// accept + read path (the `sockaddr_un` byte-copy in particular). Binds a temp socket,
-/// connects a plain POSIX client, and asserts decoded commands are dispatched.
 final class NavSocketServerTests: XCTestCase {
     func test_bindsAndDispatchesValidCommands_droppingGarbage() throws {
         let path = "/tmp/zt-nav-\(getpid()).sock"
@@ -22,17 +19,15 @@ final class NavSocketServerTests: XCTestCase {
 
         try sendLine(#"{"cmd":"focus","dir":"left","pane":5}"#, to: path)
         try sendLine(#"{"cmd":"setvim","pane":5,"vim":true}"#, to: path)
-        try sendLine("garbage not json", to: path)  // must be dropped, never dispatched
+        try sendLine("garbage not json", to: path)
 
         wait(for: [focusReceived, vimReceived], timeout: 3)
-        XCTAssertEqual(commands.count, 2)  // the garbage line added nothing
+        XCTAssertEqual(commands.count, 2)
         XCTAssertTrue(commands.contains(.focus(token: 5, dir: .left)))
         XCTAssertTrue(commands.contains(.setVim(token: 5, presence: .latched)))
     }
 
     func test_persistentConnection_dispatchesEachLineBeforeClose() throws {
-        // One connection, two lines sent with a wait between them and no close until the end:
-        // proves each line dispatches as it arrives rather than waiting on EOF/timeout.
         let path = "/tmp/zt-nav-persist-\(getpid()).sock"
         let first = expectation(description: "first line")
         let second = expectation(description: "second line")
@@ -61,14 +56,10 @@ final class NavSocketServerTests: XCTestCase {
         server.start()
         XCTAssertTrue(FileManager.default.fileExists(atPath: path))
         server.stop()
-        // The listen fd closes on the source's queue; the socket file is unlinked in stop().
         XCTAssertFalse(FileManager.default.fileExists(atPath: path))
     }
 
     func test_restart_rebindsAndStillDispatches() throws {
-        // A stop→start cycle must rebind cleanly: the new listener owns its own fd (captured
-        // per-source), so a prior source's cancel handler can't clobber it. If the fd were
-        // shared, the restarted server would accept(-1) forever and this dispatch would time out.
         let path = "/tmp/zt-nav-restart-\(getpid()).sock"
         var commands: [NavCommand] = []
         let firstRound = expectation(description: "first round dispatched")
@@ -80,7 +71,7 @@ final class NavSocketServerTests: XCTestCase {
         }
 
         server.start()
-        defer { server.stop() }  // registered before the first throwing sendLine, so a throw can't leak the listener
+        defer { server.stop() }
         try sendLine(#"{"cmd":"focus","dir":"left","pane":1}"#, to: path)
         wait(for: [firstRound], timeout: 3)
 
@@ -93,15 +84,10 @@ final class NavSocketServerTests: XCTestCase {
     }
 
     func test_socketPath_isPerProcess() {
-        // A shared well-known path let a second ZenTerm instance steal (bind-over)
-        // and then delete (quit-unlink) the first instance's socket. The path must embed
-        // the pid so instances can never collide.
         XCTAssertTrue(NavSocketServer.socketPath.hasSuffix("nav.\(getpid()).sock"))
     }
 
     func test_secondServer_neverDisturbsFirst() throws {
-        // The mechanism, inverted: with per-instance paths, a second server's full
-        // start→stop lifecycle must leave the first server's file AND dispatch intact.
         let pathA = "/tmp/zt-nav-a-\(getpid()).sock"
         let pathB = "/tmp/zt-nav-b-\(getpid()).sock"
         var commands: [NavCommand] = []
@@ -132,17 +118,14 @@ final class NavSocketServerTests: XCTestCase {
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(atPath: dir) }
 
-        // Live = a real listener answers the sweep's connect probe (the foreign-pid name
-        // proves liveness comes from the probe, not pid arithmetic). Dead = a socket file
-        // nobody answers — what a crashed instance leaves behind.
         let live = "\(dir)/nav.99999.sock"
         let liveServer = NavSocketServer(path: live) { _ in }
         liveServer.start()
         defer { liveServer.stop() }
 
         let deadPerPid = "\(dir)/nav.4242.sock"
-        let deadLegacy = "\(dir)/nav.sock"  // a crashed pre-per-pid build's leftover
-        let ownPid = "\(dir)/nav.\(getpid()).sock"  // skipped: probing it could race our own bind
+        let deadLegacy = "\(dir)/nav.sock"
+        let ownPid = "\(dir)/nav.\(getpid()).sock"
         let unrelated = "\(dir)/notes.txt"
         for path in [deadPerPid, deadLegacy, ownPid, unrelated] {
             FileManager.default.createFile(atPath: path, contents: nil)
@@ -158,8 +141,6 @@ final class NavSocketServerTests: XCTestCase {
     }
 
     func test_heldConnection_clearsVimWhenTheClientDies() throws {
-        // The fix. A held connection owns the flag, and the kernel closes its fd however nvim
-        // dies — so EOF, not an autocmd, is what clears the pane.
         let path = "/tmp/zt-nav-held-\(getpid()).sock"
         var commands: [NavCommand] = []
         let flagged = expectation(description: "setvim held")
@@ -175,13 +156,11 @@ final class NavSocketServerTests: XCTestCase {
         let fd = try connectClient(to: path)
         writeLine(#"{"cmd":"setvim","pane":9,"vim":true,"hold":true}"#, to: fd)
         wait(for: [flagged], timeout: 3)
-        close(fd)  // stands in for the nvim process dying
+        close(fd)
         wait(for: [cleared], timeout: 3)
     }
 
     func test_latchedConnection_survivesClose() throws {
-        // Back-compat, and the reason `hold` is on the wire at all: a pre-`hold` plugin closes
-        // after every line, so inferring presence from the close would clear its flag instantly.
         let path = "/tmp/zt-nav-latch-\(getpid()).sock"
         var commands: [NavCommand] = []
         let flagged = expectation(description: "setvim latched")
@@ -197,17 +176,12 @@ final class NavSocketServerTests: XCTestCase {
         try sendLine(#"{"cmd":"setvim","pane":9,"vim":true}"#, to: path)
         wait(for: [flagged], timeout: 3)
 
-        // The barrier has to be a command the server dispatches, not a main-queue hop: the
-        // test's own hop can be enqueued ahead of the server's, so a spurious clear would
-        // still be in flight when the assertion runs.
         try sendLine(#"{"cmd":"focus","dir":"left","pane":9}"#, to: path)
         wait(for: [barrier], timeout: 3)
         XCTAssertFalse(commands.contains(.setVim(token: 9, presence: .off)), "\(commands)")
     }
 
     func test_heldConnection_survivesIdlePastTheSilenceBound() throws {
-        // `SO_RCVTIMEO` bounds a wedged client, and a held connection is idle by nature: without
-        // clearing the bound on hold, the server closes the channel out from under a live nvim.
         let path = "/tmp/zt-nav-idle-\(getpid()).sock"
         let flagged = expectation(description: "setvim held")
         let moved = expectation(description: "focus after idle")
@@ -232,8 +206,6 @@ final class NavSocketServerTests: XCTestCase {
     }
 
     func test_cleanLeaveThenClose_clearsExactlyOnce() throws {
-        // A clean `:qa` sends `vim:false` and then the channel closes. Both are clears, and two
-        // of them would log a phantom crash for every ordinary quit.
         let path = "/tmp/zt-nav-once-\(getpid()).sock"
         var clears = 0
         let cleared = expectation(description: "explicit clear")
@@ -261,8 +233,6 @@ final class NavSocketServerTests: XCTestCase {
     }
 
     func test_multipleHolds_clearEveryTokenOnClose() throws {
-        // A second hold must not abandon the first. It used to overwrite it, which left the
-        // earlier pane flagged forever: exactly the stale latch this mechanism removes.
         let path = "/tmp/zt-nav-multihold-\(getpid()).sock"
         let bothHeld = expectation(description: "both holds claimed")
         bothHeld.expectedFulfillmentCount = 2
@@ -286,8 +256,6 @@ final class NavSocketServerTests: XCTestCase {
     }
 
     func test_downgradeToLatched_survivesClose() throws {
-        // A latch is documented to persist until an explicit `vim:false`. A connection that
-        // held the token and then downgraded must not clear it on the way out.
         let path = "/tmp/zt-nav-downgrade-\(getpid()).sock"
         var commands: [NavCommand] = []
         let latched = expectation(description: "downgraded to latched")
@@ -312,8 +280,6 @@ final class NavSocketServerTests: XCTestCase {
     }
 
     func test_releasedHold_regainsTheSilenceBound() throws {
-        // Holding clears the silence bound. Releasing has to restore it, or a client that
-        // holds, sends `vim:false`, then goes quiet parks a reader for the process lifetime.
         let path = "/tmp/zt-nav-rebound-\(getpid()).sock"
         let released = expectation(description: "hold released")
         let server = NavSocketServer(path: path, recvTimeout: 1) { command in
@@ -328,24 +294,18 @@ final class NavSocketServerTests: XCTestCase {
         writeLine(#"{"cmd":"setvim","pane":9,"vim":false}"#, to: fd)
         wait(for: [released], timeout: 3)
 
-        // With the bound restored the server drops this idle connection, so the client sees
-        // EOF. Without it the read blocks forever and this times out.
         var timeout = timeval(tv_sec: 4, tv_usec: 0)
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
         var byte: UInt8 = 0
         XCTAssertEqual(read(fd, &byte, 1), 0, "the silence bound was not restored (errno \(errno))")
     }
 
-    /// Connect a throwaway `AF_UNIX` client, write one newline-terminated line, close.
     private func sendLine(_ line: String, to path: String) throws {
         let fd = try connectClient(to: path)
         defer { close(fd) }
         writeLine(line, to: fd)
     }
 
-    /// Open and connect an `AF_UNIX` stream client to `path`, returning the socket fd.
-    /// The log line is the point of ZEN-441, and nothing at runtime depends on it — drop the
-    /// `Log.info` from `dispatch` and every other test still passes. This is what fails.
     func test_dispatch_logsEachAcceptedCommand() throws {
         let path = "/tmp/zt-nav-log-\(getpid()).sock"
         let directory = URL(fileURLWithPath: NSTemporaryDirectory())
@@ -375,7 +335,6 @@ final class NavSocketServerTests: XCTestCase {
         sink.flush()
 
         let written = try sink.fileURLs.map { try String(contentsOf: $0, encoding: .utf8) }.joined()
-        // `contains`, not equality: `Log.fileSink` is process-wide, so another test may interleave.
         XCTAssertTrue(written.contains("NavSocket: setvim pane=4242 vim=latched"), written)
         XCTAssertTrue(written.contains("NavSocket: focus pane=4242 dir=left"), written)
         XCTAssertFalse(written.contains("garbage"), "an undecodable line must never be logged")
@@ -402,14 +361,11 @@ final class NavSocketServerTests: XCTestCase {
             }
         }
         XCTAssertEqual(connected, 0, "connect failed, errno=\(errno)")
-        // Without this, writing to a server that has closed the connection kills the whole
-        // test process with SIGPIPE instead of failing the one assertion that cares.
         var on: Int32 = 1
         setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
         return fd
     }
 
-    /// Write one newline-terminated line to a connected client fd.
     private func writeLine(_ line: String, to fd: Int32) {
         let payload = Array((line + "\n").utf8)
         _ = payload.withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }

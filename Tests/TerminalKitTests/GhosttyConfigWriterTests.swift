@@ -34,7 +34,6 @@ final class GhosttyConfigWriterTests: XCTestCase {
     func test_nilThemeStillEmitsBehaviorBaseline() {
         let text = GhosttyConfigWriter.configText(for: nil)
         XCTAssertTrue(text.contains("cursor-style = block\n"))
-        // Without this, shell integration swaps the block for a bar at the prompt.
         XCTAssertTrue(text.contains("shell-integration-features = no-cursor\n"))
         XCTAssertTrue(text.contains("mouse-hide-while-typing = true\n"))
         XCTAssertFalse(text.contains("font-family"))
@@ -48,7 +47,6 @@ final class GhosttyConfigWriterTests: XCTestCase {
     }
 
     func test_nilBehaviorEmitsHistoricalBaseline() {
-        // The earlier defaults, so an absent config is byte-identical to before.
         let text = GhosttyConfigWriter.configText(for: theme, behavior: nil)
         XCTAssertTrue(text.contains("cursor-style = block\n"))
         XCTAssertTrue(text.contains("cursor-style-blink = true\n"))
@@ -62,7 +60,7 @@ final class GhosttyConfigWriterTests: XCTestCase {
         XCTAssertTrue(text.contains("cursor-style = bar\n"))
         XCTAssertTrue(text.contains("cursor-style-blink = false\n"))
         XCTAssertTrue(text.contains("macos-option-as-alt = false\n"))
-        XCTAssertTrue(text.contains("adjust-cursor-thickness = 3\n"))  // 4px = base 1 + delta 3
+        XCTAssertTrue(text.contains("adjust-cursor-thickness = 3\n"))
     }
 
     func test_cursorThickness_ofOne_emitsNoAdjustment() {
@@ -75,8 +73,6 @@ final class GhosttyConfigWriterTests: XCTestCase {
         XCTAssertTrue(text.contains("font-thicken = true\n"))
     }
 
-    /// Off by default, and nothing is emitted then, so ghostty's own default rules rather than
-    /// being pinned. The chrome shipped `font-thicken = true` unconditionally until this key existed.
     func test_fontThicken_defaultsOff_emittingNoKey() {
         XCTAssertFalse(TerminalBehavior().fontThicken)
         XCTAssertFalse(
@@ -93,15 +89,10 @@ final class GhosttyConfigWriterTests: XCTestCase {
     func test_cursorShaderEmitsGhosttyKeyWithAnimation() {
         let behavior = TerminalBehavior(cursorShader: "/a/cursor_warp.glsl")
         let text = GhosttyConfigWriter.configText(for: theme, behavior: behavior)
-        // The chrome's single `cursor-shader` maps to ghostty's own `custom-shader` key.
         XCTAssertTrue(text.contains("custom-shader = /a/cursor_warp.glsl\n"))
-        // The animation loop is pinned on only when there's a shader to animate.
         XCTAssertTrue(text.contains("custom-shader-animation = true\n"))
     }
 
-    /// The settle-burst's whole mechanism is this one token: `always` is what keeps ghostty's
-    /// draw timer running on a blurred surface so the cursor tail can decay. Emit
-    /// `true` here and the burst silently does nothing.
     func test_alwaysAnimation_emitsAlways_soABlurredSurfaceKeepsAnimating() {
         let behavior = TerminalBehavior(cursorShader: "/a/cursor_warp.glsl")
         let text = GhosttyConfigWriter.configText(
@@ -110,8 +101,6 @@ final class GhosttyConfigWriterTests: XCTestCase {
         XCTAssertFalse(text.contains("custom-shader-animation = true\n"))
     }
 
-    /// A per-surface config is written beside the app-global one, never over it: sharing the
-    /// path would leave every other surface loading one blurred pane's config.
     func test_variantConfig_writesItsOwnFile_leavingTheAppGlobalOneIntact() throws {
         let behavior = TerminalBehavior(cursorShader: "/a/cursor_warp.glsl")
         let shared = try XCTUnwrap(GhosttyConfigWriter.writeConfig(for: theme, behavior: behavior))
@@ -123,8 +112,6 @@ final class GhosttyConfigWriterTests: XCTestCase {
         XCTAssertTrue(sharedText.contains("custom-shader-animation = true\n"))
     }
 
-    /// What actually stops a tracer: an unfocused surface runs no shader pass at all, so a
-    /// cursor move after the blur has nothing to freeze into a smear.
     func test_strippedShader_emitsNoShaderKeys_soAnUnfocusedSurfaceCannotSmear() {
         var unshaded = TerminalBehavior(cursorShader: "/a/cursor_warp.glsl")
         unshaded.cursorShader = nil
@@ -132,23 +119,17 @@ final class GhosttyConfigWriterTests: XCTestCase {
         XCTAssertFalse(text.contains("custom-shader"))
     }
 
-    /// The chrome's `background-alpha` maps to ghostty's own `background-opacity`.
     func test_backgroundAlphaEmitsGhosttyOpacityKey() {
         let behavior = TerminalBehavior(backgroundAlpha: 0.7)
         let text = GhosttyConfigWriter.configText(for: theme, behavior: behavior)
         XCTAssertTrue(text.contains("background-opacity = 0.7\n"))
     }
 
-    /// Nothing is emitted at full opacity, so an unset key leaves the generated config exactly
-    /// what it has always been — and ghostty keeps its own default rather than being pinned.
     func test_solidBackground_emitsNoOpacityKey() {
         let text = GhosttyConfigWriter.configText(for: theme, behavior: TerminalBehavior())
         XCTAssertFalse(text.contains("background-opacity"))
     }
 
-    /// `BackendShadowSweepTests` covers this end to end, but it skips when `ghostty_surface_new`
-    /// fails, which a locked screen does. On that run nothing else would notice the one line that
-    /// writes all of these going missing.
     func test_configTextEmitsAnUnbindLineForEveryTakenBackChord() {
         let text = GhosttyConfigWriter.configText(for: nil)
 
@@ -173,7 +154,7 @@ final class GhosttyConfigWriterTests: XCTestCase {
         XCTAssertTrue(behavior.isBackgroundSolid)
         XCTAssertNil(behavior.ghosttyBackgroundOpacity)
         XCTAssertEqual(behavior.ghosttyCursorStyle, "block")
-        XCTAssertEqual(behavior.ghosttyCursorThicknessDelta, 1)  // 2px = base 1 + delta 1
+        XCTAssertEqual(behavior.ghosttyCursorThicknessDelta, 1)
         XCTAssertEqual(TerminalBehavior(cursorStyle: .bar).ghosttyCursorStyle, "bar")
         XCTAssertEqual(TerminalBehavior(cursorStyle: .underline).ghosttyCursorStyle, "underline")
     }

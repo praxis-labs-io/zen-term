@@ -1,32 +1,16 @@
 import AppKit
 
-/// The Tools settings section: the configured tool floats, with add / edit / reorder. Each float is a
-/// focusable `ToolFloatRow` — Return / click opens the edit form (delete lives there), Up/Down move
-/// between rows, ⌥Up/⌥Down move the float itself (the order the dock, ⌘P, and this list all read),
-/// Left exits to the nav, Esc closes the card. A trailing "Add tool float" button opens a blank
-/// form. Add / edit route out through `onEditFloat`; the host presents `ToolFloatFormOverlay`, which
-/// writes on submit / delete and reloads, so the dock button, ⌘P entry, and keybind update with no
-/// restart.
 final class SettingsToolsSection: SettingsSection {
     var navTitle: String { "Tools" }
     var onExitToNav: (() -> Void)?
-    /// Set by the host: open the add / edit form. `nil` adds a new float; a value edits that one.
     var onEditFloat: ((ToolFloat?) -> Void)?
-    /// Set by the host: persist a new float order. The array order *is* the intent — the host stamps
-    /// `order:` from it and reloads, and this section then rebuilds from the reloaded config, so a
-    /// reorder follows the same write → reload → rebuild path as an add / edit / delete.
     var onReorder: (([ToolFloat]) -> Void)?
 
     private var rows: [ToolFloatRow] = []
     private let addButton = AppButton(title: "＋ Add tool float", variant: .muted)
-    /// Rebuilt fresh by `populateRows` on each `makeDetailView` (the card rebuilds a section's detail
-    /// on every switch), so their width constraints never accumulate on a retained view. Weak refs
-    /// just let `reapplyTheme` recolor whichever pair is currently mounted.
     private weak var caption: NSTextField?
     private weak var emptyHint: NSTextField?
     private weak var reorderHint: NSTextField?
-    /// The dropped-`float`-line notice, when the config has any. A dropped float never becomes
-    /// a row, so this top-of-section note is its only in-Settings home.
     private weak var droppedFloatNotice: NSTextField?
     private var rowsStack: NSStackView?
 
@@ -60,8 +44,6 @@ final class SettingsToolsSection: SettingsSection {
         addButton.reapplyTheme()
     }
 
-    /// The `.message` of every dropped-`float`-line diagnostic in the live config — what the
-    /// top-of-section notice lists, since a dropped float has no row of its own.
     private func droppedFloatMessages() -> [String] {
         GeneralConfig.current.configDiagnostics.compactMap {
             if case .toolFloat = $0.scope { return $0.message }
@@ -69,8 +51,6 @@ final class SettingsToolsSection: SettingsSection {
         }
     }
 
-    /// The sub-field diagnostics for one surviving float (matched by id), joined for its row — a float
-    /// with a bad `width:` and a bad `order:` shows both. Nil when the float is clean.
     private func fieldDiagnosticMessages(for id: String) -> String? {
         let messages = GeneralConfig.current.configDiagnostics.compactMap { diagnostic -> String? in
             if case .toolFloatField(let fieldID, _) = diagnostic.scope, fieldID == id {
@@ -81,16 +61,12 @@ final class SettingsToolsSection: SettingsSection {
         return messages.isEmpty ? nil : messages.joined(separator: "\n")
     }
 
-    // MARK: rows
-
     private func makeReorderHint() -> NSTextField {
         let hint = SettingsDetail.reorderHint()
         reorderHint = hint
         return hint
     }
 
-    /// Fill the rows stack from the live config. The list refreshes after an add / edit / delete
-    /// because the form hands back to a freshly-built Settings → Tools (no in-place mutation here).
     private func populateRows() {
         guard let stack = rowsStack else { return }
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
@@ -100,8 +76,6 @@ final class SettingsToolsSection: SettingsSection {
         self.caption = caption
 
         let floats = GeneralConfig.current.floats
-        // ⌥↑/⌥↓ is invisible without this — nothing else on the row says a float can move. Only shown
-        // with something to reorder, so it never advertises a keystroke that would do nothing.
         let header = SettingsDetail.headerRow(
             caption: caption, hint: floats.count > 1 ? makeReorderHint() : nil)
         stack.addArrangedSubview(header)
@@ -115,7 +89,7 @@ final class SettingsToolsSection: SettingsSection {
             droppedFloatNotice = notice
             stack.addArrangedSubview(notice)
             notice.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-            stack.setCustomSpacing(10, after: notice)  // header→notice spacing is set below, uniformly
+            stack.setCustomSpacing(10, after: notice)
         }
 
         if floats.isEmpty {
@@ -131,7 +105,7 @@ final class SettingsToolsSection: SettingsSection {
         } else {
             for float in floats {
                 let row = ToolFloatRow(float: float)
-                row.showMessage(fieldDiagnosticMessages(for: float.id))  // a bad width:/order:/persist:
+                row.showMessage(fieldDiagnosticMessages(for: float.id))
                 row.onActivate = { [weak self, weak row] in row.map { self?.onEditFloat?($0.float) } }
                 row.onArrowUp = { [weak self, weak row] in self?.moveFocus(from: row, delta: -1) }
                 row.onArrowDown = { [weak self, weak row] in self?.moveFocus(from: row, delta: 1) }
@@ -153,26 +127,19 @@ final class SettingsToolsSection: SettingsSection {
         stack.setCustomSpacing(18, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
     }
 
-    /// Move a float one slot and persist the whole list in its new order, then rebuild and keep focus
-    /// on the row that moved so ⌥↓⌥↓ walks a float down without re-finding it.
-    ///
-    /// Deferred to the next runloop turn because the rebuild *frees this row*: `populateRows` drops
-    /// the last reference to it while its own `keyDown` is still on the stack. (The edit path gets away
-    /// with a synchronous callback only because modal teardown is animated.)
+    // Deferred a runloop turn: the rebuild frees this row while its `keyDown` is still on the stack.
     private func move(_ row: ToolFloatRow?, delta: Int) {
         guard let row else { return }
         var floats = GeneralConfig.current.floats
         guard let from = floats.firstIndex(where: { $0.id == row.float.id }) else { return }
         let to = from + delta
-        guard floats.indices.contains(to) else { return }  // already at an end
+        guard floats.indices.contains(to) else { return }
         floats.swapAt(from, to)
 
         let movedID = row.float.id
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.onReorder?(floats)
-            // Unconditional: on a failed write the config is unchanged, so the rebuild simply puts the
-            // row back where it was rather than leaving the list lying about the file.
             self.populateRows()
             guard let moved = self.rows.first(where: { $0.float.id == movedID }) else { return }
             moved.window?.makeFirstResponder(moved)
@@ -187,9 +154,6 @@ final class SettingsToolsSection: SettingsSection {
         SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta) { $0 }
     }
 
-    /// Tab traversal, which differs from the arrows at the ends: Tab wraps from the last stop back
-    /// to the first, and Shift-Tab retreats one stop, exiting to the nav only from the first —
-    /// mirroring how Left exits.
     private func moveTab(from view: NSView?, delta: Int) {
         guard let view else { return }
         let stops = rows + [addButton]
@@ -202,9 +166,6 @@ final class SettingsToolsSection: SettingsSection {
     }
 }
 
-/// One Tools row: a float's icon, title, its command, and its shortcut keycap. The whole row is one
-/// focus stop — Return / click opens the edit form (where delete lives), Up/Down (and Tab/Shift-Tab)
-/// move rows, ⌥Up/⌥Down reorder the float itself, Left exits to nav. Mirrors `KeybindRow`.
 final class ToolFloatRow: NSView {
     let float: ToolFloat
     var onActivate: (() -> Void)?
@@ -219,11 +180,7 @@ final class ToolFloatRow: NSView {
     private let iconView = NSImageView()
     private let titleLabel: NSTextField
     private let subtitleLabel: NSTextField
-    /// The trailing shortcut cell: a keycap, or a muted "Not set" when the float has none. Reads
-    /// like the Keybinds section's unbound chip rather than drawing an empty cap.
     private let shortcutView: NSView
-    /// A surviving float's sub-field diagnostic: a bad `width:`/`order:`/`persist:` shows here,
-    /// in warning tone, since the float still works and has this row.
     private let messageLabel = NSTextField(labelWithString: "")
     private var isFocused = false { didSet { restyle() } }
 
@@ -231,10 +188,6 @@ final class ToolFloatRow: NSView {
         self.float = float
         titleLabel = NSTextField(labelWithString: float.title)
         subtitleLabel = NSTextField(labelWithString: float.command)
-        // Resolved from the live keymap, not from `float.toggle`, which is the raw config value.
-        // A `key:` the assembler refused (a menu chord) is still on the float, so drawing it here
-        // would advertise a shortcut that does something else entirely. The dock and the palette
-        // already resolve this way.
         let shortcut = CommandCatalog.spec(for: .toggleToolFloat(float.id)).shortcut
         shortcutView = shortcut.isEmpty ? Self.unsetLabel() : KeycapView(shortcut: shortcut)
 
@@ -283,8 +236,6 @@ final class ToolFloatRow: NSView {
             stack.topAnchor.constraint(equalTo: topAnchor, constant: 6),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
             controls.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            // Pin the wrapping message to the row width too — the `.leading` stack won't stretch it, so
-            // without this the multi-line label sizes to its full intrinsic width and overflows the row.
             messageLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
         restyle()
@@ -311,25 +262,18 @@ final class ToolFloatRow: NSView {
         return label
     }
 
-    /// Show (or clear, with nil) the row's inline sub-field diagnostic.
     func showMessage(_ text: String?) {
         messageLabel.stringValue = text ?? ""
         messageLabel.isHidden = (text == nil)
     }
 
-    /// Test hook: the inline message as actually rendered — nil when the label is hidden, so a test
-    /// can't pass while the row shows nothing.
     var renderedMessageForTesting: String? {
         messageLabel.isHidden ? nil : messageLabel.stringValue
     }
 
-    /// Test hook: what the trailing cell draws — the keycap's glyph, or the unset placeholder's
-    /// text. Reads the mounted view, so a test can't pass while the row draws an empty cap.
     var renderedShortcutForTesting: String {
         (shortcutView as? KeycapView)?.shortcut ?? (shortcutView as? NSTextField)?.stringValue ?? ""
     }
-
-    // MARK: focus + keyboard
 
     override var acceptsFirstResponder: Bool { true }
     override func becomeFirstResponder() -> Bool { isFocused = true; return true }
@@ -338,9 +282,6 @@ final class ToolFloatRow: NSView {
 
     override func keyDown(with event: NSEvent) {
         let key = KeyboardFocus.key(for: event)
-        // ⌥Up/⌥Down reorder the float instead of moving focus. `KeyboardFocus.key(for:)` decodes the
-        // keyCode alone, so ⌥↑ arrives indistinguishable from a plain `.up` — the modifier check has
-        // to happen here.
         if KeyboardFocus.isOptionOnly(event) {
             switch key {
             case .up: onMoveUp?(); return

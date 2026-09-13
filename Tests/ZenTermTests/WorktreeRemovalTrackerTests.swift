@@ -18,8 +18,6 @@ final class WorktreeRemovalTrackerTests: XCTestCase {
         XCTAssertFalse(tracker.isRemoving(path))
     }
 
-    /// The path reaches this from a `git worktree list` record on one side and a picker row on the
-    /// other, so the two spellings of one folder have to agree.
     func test_anUnstandardizedPathMatchesTheOneThatBegan() {
         tracker.begin(path)
         let noisy = URL(fileURLWithPath: "/tmp/zenterm-worktrees/app-abc/./feature-x")
@@ -31,9 +29,6 @@ final class WorktreeRemovalTrackerTests: XCTestCase {
         XCTAssertFalse(tracker.isRemoving(path.deletingLastPathComponent().appendingPathComponent("other")))
     }
 
-    /// The delete runs here rather than on the window that asked, because removing a worktree
-    /// closes the tabs open in it and closing a window's last tab closes the window. The claim and
-    /// the fan-out have to land whether or not anything is still listening.
     func test_removeClearsTheClaimAndSaysToRelist() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-removal-\(UUID().uuidString)", isDirectory: true)
@@ -67,9 +62,6 @@ final class WorktreeRemovalTrackerTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: treePath.path))
     }
 
-    /// Two windows can each raise a confirm for one worktree. A second delete fails and toasts,
-    /// and the first finish would clear the sole claim while the second was still running: quit
-    /// would then read idle mid-delete, which is the one thing `whenIdle` exists to stop.
     func test_removeIgnoresAPathAlreadyInFlight() {
         let worktree = Worktree(path: path, branch: "probe", head: "abc1234", isLocked: false)
         tracker.begin(path)
@@ -89,7 +81,6 @@ final class WorktreeRemovalTrackerTests: XCTestCase {
         XCTAssertTrue(ran)
     }
 
-    /// Quit waits on this. Firing early would let the process exit mid-delete.
     func test_whenIdleWaitsForTheLastRemoval() {
         let other = path.deletingLastPathComponent().appendingPathComponent("other")
         tracker.begin(path)
@@ -103,7 +94,6 @@ final class WorktreeRemovalTrackerTests: XCTestCase {
         XCTAssertTrue(ran)
     }
 
-    /// A `git` that has stopped answering must not hold the process open.
     func test_whenIdleGivesUpAfterItsBudget() {
         tracker.begin(path)
         let ran = expectation(description: "the wait gives up")
@@ -111,8 +101,6 @@ final class WorktreeRemovalTrackerTests: XCTestCase {
         wait(for: [ran], timeout: 5)
     }
 
-    /// `.terminateLater` takes exactly one reply, so a budget expiring after the removal landed
-    /// must not send a second.
     func test_whenIdleRunsOnceWhenBothTheFinishAndTheBudgetLand() {
         tracker.begin(path)
         var runs = 0

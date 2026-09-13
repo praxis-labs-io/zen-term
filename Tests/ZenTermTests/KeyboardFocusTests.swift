@@ -4,8 +4,6 @@ import XCTest
 @testable import ZenTerm
 
 final class KeyboardFocusTests: XCTestCase {
-    // MARK: key decoding — the shared keyCode → focus-key map every focus stop routes through
-
     func test_key_mapsEachNavigationKeyCode() throws {
         XCTAssertEqual(KeyboardFocus.key(for: try keyDown(126)), .up)
         XCTAssertEqual(KeyboardFocus.key(for: try keyDown(125)), .down)
@@ -15,14 +13,14 @@ final class KeyboardFocusTests: XCTestCase {
     }
 
     func test_key_bundlesReturnEnterSpaceAsActivate() throws {
-        XCTAssertEqual(KeyboardFocus.key(for: try keyDown(36)), .activate)  // return
-        XCTAssertEqual(KeyboardFocus.key(for: try keyDown(76)), .activate)  // keypad enter
-        XCTAssertEqual(KeyboardFocus.key(for: try keyDown(49)), .activate)  // space
+        XCTAssertEqual(KeyboardFocus.key(for: try keyDown(36)), .activate)
+        XCTAssertEqual(KeyboardFocus.key(for: try keyDown(76)), .activate)
+        XCTAssertEqual(KeyboardFocus.key(for: try keyDown(49)), .activate)
     }
 
     func test_key_bundlesBothDeletesAsDelete() throws {
-        XCTAssertEqual(KeyboardFocus.key(for: try keyDown(51)), .delete)  // backspace
-        XCTAssertEqual(KeyboardFocus.key(for: try keyDown(117)), .delete)  // forward-delete
+        XCTAssertEqual(KeyboardFocus.key(for: try keyDown(51)), .delete)
+        XCTAssertEqual(KeyboardFocus.key(for: try keyDown(117)), .delete)
     }
 
     func test_key_tabCarriesShiftState() throws {
@@ -31,7 +29,7 @@ final class KeyboardFocusTests: XCTestCase {
     }
 
     func test_key_unmappedKeyIsNil() throws {
-        XCTAssertNil(KeyboardFocus.key(for: try keyDown(0)))  // 'a' — not a focus key
+        XCTAssertNil(KeyboardFocus.key(for: try keyDown(0)))
     }
 
     private func keyDown(_ code: UInt16, shift: Bool = false) throws -> NSEvent {
@@ -44,14 +42,14 @@ final class KeyboardFocusTests: XCTestCase {
 
     func test_step_movesAndClampsAtEnds() {
         XCTAssertEqual(KeyboardFocus.step(from: 0, delta: 1, count: 3), 1)
-        XCTAssertEqual(KeyboardFocus.step(from: 2, delta: 1, count: 3), nil)  // clamp at end
-        XCTAssertEqual(KeyboardFocus.step(from: 0, delta: -1, count: 3), nil)  // clamp at start
+        XCTAssertEqual(KeyboardFocus.step(from: 2, delta: 1, count: 3), nil)
+        XCTAssertEqual(KeyboardFocus.step(from: 0, delta: -1, count: 3), nil)
         XCTAssertEqual(KeyboardFocus.step(from: 1, delta: -1, count: 3), 0)
     }
 
     func test_step_noAnchor_jumpsToEnd() {
-        XCTAssertEqual(KeyboardFocus.step(from: nil, delta: 1, count: 3), 0)  // first
-        XCTAssertEqual(KeyboardFocus.step(from: nil, delta: -1, count: 3), 2)  // last
+        XCTAssertEqual(KeyboardFocus.step(from: nil, delta: 1, count: 3), 0)
+        XCTAssertEqual(KeyboardFocus.step(from: nil, delta: -1, count: 3), 2)
     }
 
     func test_step_emptyStops_isNil() {

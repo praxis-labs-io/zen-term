@@ -1,11 +1,6 @@
 import AppKit
 
-/// A small-caps field caption ("WORKSPACE NAME ✳"); a required field marks it with a trailing
-/// accent asterisk. Its attributed string bakes in two color runs (the label ink, the required
-/// asterisk's accent) that `LabeledField` — a shared primitive with no insight into that structure
-/// — can't recolor itself, so this rebuilds its own string fresh in `reapplyTheme()` and conforms
-/// to `ThemeReapplying` so `LabeledField` can reach it generically. Shared by the modal forms
-/// (`AddWorkspaceOverlay`, `ToolFloatFormOverlay`).
+// Rebuilds its own string on a theme swap because `LabeledField` can't recolor its two color runs.
 final class FieldCaption: NSTextField, ThemeReapplying {
     private let text: String
     private let isRequired: Bool

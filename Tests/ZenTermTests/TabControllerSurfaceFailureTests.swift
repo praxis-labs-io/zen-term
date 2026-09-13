@@ -4,11 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// A tab-owned surface that fails to start (here the bottom drawer) must warn and tear
-/// itself down so the next toggle spawns a fresh one — never mount a dead blank drawer. Regression
-/// guard for the identity-dispatch bug: the failure callback used to fire synchronously inside
-/// `start()`, before `bottomDrawerSurface` was assigned, so every identity check missed and the
-/// failure was silently dropped. Fixed by delivering the callback asynchronously.
 final class TabControllerSurfaceFailureTests: WindowTestCase {
     private var window: NSWindow?
     private var controller: TabController?
@@ -20,8 +15,6 @@ final class TabControllerSurfaceFailureTests: WindowTestCase {
         super.tearDown()
     }
 
-    /// Let any pending main-queue work run. The surface-failure callback is delivered async and
-    /// the main queue is FIFO, so a drain enqueued after the toggle runs strictly after it.
     private func drainMainQueue() {
         let drained = expectation(description: "main queue drained")
         DispatchQueue.main.async { drained.fulfill() }
@@ -51,8 +44,6 @@ final class TabControllerSurfaceFailureTests: WindowTestCase {
     }
 
     func test_bottomDrawerSurfaceFailsToStart_warnsAndTearsDown() {
-        // Arm failure only around the drawer toggle, so exactly the drawer surface — created
-        // synchronously inside `toggleBottomDrawer()` — fails, and the initial pane doesn't.
         var armFailure = false
         var armedDrawer: RecordingSurface?
         let controller = TabController(
@@ -80,12 +71,12 @@ final class TabControllerSurfaceFailureTests: WindowTestCase {
 
         armFailure = true
         controller.toggleBottomDrawer()
-        armFailure = false  // only the drawer spawned during the toggle is armed
+        armFailure = false
         guard let drawer = armedDrawer else {
             return XCTFail("opening the drawer must spawn its surface")
         }
 
-        drainMainQueue()  // the failure callback is delivered async
+        drainMainQueue()
 
         XCTAssertTrue(
             toasts.contains { $0.variant == .warning },

@@ -1,9 +1,5 @@
 import AppKit
 
-/// The rename-a-tab card, opened by double-clicking a tab or from the palette's Rename Tab.
-/// One field seeded with the tab's current name; Return or Rename commits, Esc or Cancel closes,
-/// and an empty value clears the pin so the tab goes back to its folder name. Why a card rather
-/// than an editor in the bar is in `docs/architecture.md`.
 final class RenameTabOverlay: NSView, ModalOverlay {
     private let onSubmit: (String) -> Void
     private let onCancel: () -> Void
@@ -16,9 +12,6 @@ final class RenameTabOverlay: NSView, ModalOverlay {
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private let renameButton = AppButton(title: "Rename", variant: .primary, keyEquivalent: "\r")
 
-    /// `current` is what the field starts with; `liveTitle` is the folder-derived name it falls
-    /// back to. It IS the placeholder: empty the field and you read the name you get back, which
-    /// is shorter and more concrete than a line of prose explaining the same rule.
     init(
         current: String, liveTitle: String, background: NSColor,
         onSubmit: @escaping (String) -> Void, onCancel: @escaping () -> Void
@@ -64,15 +57,12 @@ final class RenameTabOverlay: NSView, ModalOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Test hooks: the field a test types into, and the button it clicks.
     var nameFieldForTesting: FieldBox { nameField }
     var renameButtonForTesting: AppButton { renameButton }
 
-    // MARK: ModalOverlay
-
     func focusInitialResponder() {
         window?.makeFirstResponder(nameField.field)
-        nameField.field.applyThemedCaret()  // the editor exists only once the field has focus
+        nameField.field.applyThemedCaret()
         nameField.field.currentEditor()?.selectAll(nil)
     }
 
@@ -106,8 +96,6 @@ final class RenameTabOverlay: NSView, ModalOverlay {
         let controls: [ThemeReapplying] = [nameField, cancelButton, renameButton]
         controls.forEach { $0.reapplyTheme() }
     }
-
-    // MARK: content
 
     private func buildContent() -> NSStackView {
         header.font = .systemFont(ofSize: 15, weight: .semibold)

@@ -3,12 +3,6 @@ import CoreGraphics
 import Foundation
 import TerminalKit
 
-/// Parses `~/.config/zen-term/config` (ghostty-flavored `key = value`, plus repeatable
-/// `float =` / `keybind =` lines) into a `GeneralConfig`. Best-effort, symmetric with
-/// `GhosttyThemeParser`: unknown keys are ignored, a malformed value falls back to the
-/// corresponding `fallback` field, and an out-of-range number is clamped to the nearest
-/// valid extreme — every adjustment logs one warning AND collects a `ConfigDiagnostic` so a
-/// Settings row can show it in place, and nothing ever throws.
 enum GeneralConfigParser {
     @MainActor
     static func parse(_ text: String, fallback: GeneralConfig) -> GeneralConfig {
@@ -16,8 +10,6 @@ enum GeneralConfigParser {
         var floats: [ToolFloat] = []
         var floatLineIndex = 0
         var keybinds: [KeybindParser.Line] = []
-        // The non-keybind diagnostics collected as scalars/enums/floats are read; the keybind ones
-        // come from `KeymapAssembler` below and are merged in at the end.
         var diagnostics: [ConfigDiagnostic] = []
 
         for rawLine in text.split(whereSeparator: \.isNewline) {
@@ -37,8 +29,6 @@ enum GeneralConfigParser {
                 if !value.isEmpty { config.fontName = value }
             case "font-size":
                 if let n = parseDouble(value, key, &diagnostics) {
-                    // The same range ⌘+ / ⌘- step within — one concept, one set of bounds, whichever
-                    // way the user reaches it.
                     config.fontSize = CGFloat(
                         clamp(
                             n, Double(SessionFontSize.range.lowerBound),
@@ -61,8 +51,6 @@ enum GeneralConfigParser {
                     config.scrollMultiplier = clamp(n, 0.1, 10, key, &diagnostics)
                 }
             case "cursor-shader":
-                // Single-select: store the raw bundled-shader name (last line wins). ConfigLoader
-                // resolves it to a bundled path (the parser stays text-pure and off the filesystem).
                 if !value.isEmpty { config.cursorShader = value }
             case "background-alpha":
                 if let n = parseDouble(value, key, &diagnostics) {
@@ -129,10 +117,6 @@ enum GeneralConfigParser {
             case "float":
                 let (float, floatDiagnostics) = ToolFloatParser.parseLine(value, fallbackOrder: floatLineIndex)
                 if let float, ToolFloat.isBuiltIn(float.id) {
-                    // A built-in's id keys its toolbar button, its Shortcuts row, its palette entry
-                    // and its default chord. Shadowing it would repoint that chord at the user's
-                    // command while every one of those still said the built-in's name, so the line
-                    // is refused where the user can see it instead.
                     Log.warning(
                         "GeneralConfig: float `\(float.id)` uses a reserved name: ignored",
                         category: .keybinds)
@@ -141,12 +125,10 @@ enum GeneralConfigParser {
                             scope: .toolFloat(label: float.title),
                             problem: .floatReservedID(float.id)))
                 } else if let float {
-                    floats.removeAll { $0.id == float.id }  // last declaration of an id wins
+                    floats.removeAll { $0.id == float.id }
                     floats.append(float)
                 }
                 diagnostics.append(contentsOf: floatDiagnostics)
-                // Counts every float line, parsed or not, so a dropped line leaves a gap rather than
-                // shifting the floats below it out of file order.
                 floatLineIndex += 1
             case "keybind":
                 if let line = KeybindParser.parse(value) {
@@ -168,23 +150,15 @@ enum GeneralConfigParser {
         return config
     }
 
-    /// Toolbar / palette / Settings order — one array, so all three surfaces stay in agreement. The key
-    /// is the config `order:` with the float's line order as the tie-break: Swift's sort isn't stable,
-    /// so two floats sharing an `order:` would otherwise be free to shuffle between launches.
+    /// Line order breaks ties explicitly: Swift's sort isn't stable.
     private static func sortedByOrder(_ floats: [ToolFloat]) -> [ToolFloat] {
         floats.enumerated()
             .sorted { ($0.element.order, $0.offset) < ($1.element.order, $1.offset) }
             .map(\.element)
     }
 
-    /// A keybind line that didn't parse. A removed action gets a named migration warning, because
-    /// "unparseable" hides what changed: each carries the replacement `float =` recipe with the
-    /// chord from the user's own dropped line, so following the log reproduces what they had.
-    /// Those stay log-only, since a terse toast loses the recipe. Everything else takes a diagnostic.
     private static func warnUnparseableKeybind(_ value: String, _ diagnostics: inout [ConfigDiagnostic]) {
         let equals = value.firstIndex(of: "=")
-        // Exact-match on the action left of `=`, the same split `KeybindParser` uses, so a typo
-        // like `diff_viewer_old` still reads unparseable rather than claiming a migration.
         let action = (equals.map { value[..<$0] } ?? Substring(value))
             .trimmingCharacters(in: .whitespaces)
         let bound = equals.map {
@@ -193,7 +167,6 @@ enum GeneralConfigParser {
         let chord = bound.flatMap { $0.isEmpty ? nil : $0 } ?? "cmd+g"
         switch action {
         case "toggle_lazygit":
-            // The recipe matches the old built-in card's icon, title and height, so it is parity.
             Log.warning(
                 "GeneralConfig: `toggle_lazygit` was removed — lazygit is a regular tool float now; "
                     + "replace this keybind with: float = command:\"lazygit\" "
@@ -227,11 +200,10 @@ enum GeneralConfigParser {
         }
     }
 
+    /// Rejects `nan` and `inf`, which `Double(_:)` accepts but which trap in `Int(_:)`.
     private static func parseDouble(
         _ value: String, _ key: String, _ diagnostics: inout [ConfigDiagnostic]
     ) -> Double? {
-        // `Double("nan")`/`"inf"` parse successfully but poison clamp() (min/max propagate NaN)
-        // and would trap in `Int(nan)` — reject non-finite so nothing can crash the load.
         guard let n = Double(value), n.isFinite else {
             Log.warning(
                 "GeneralConfig: `\(key)` expected a finite number, got `\(value)` — using default",
@@ -258,8 +230,6 @@ enum GeneralConfigParser {
         }
     }
 
-    /// The 16 ANSI hue names. The expected-value list is built from `AccentSlot.allCases` rather
-    /// than spelled out, so a new slot can't leave the diagnostic naming a stale set.
     private static func parseAccentSlot(
         _ value: String, _ diagnostics: inout [ConfigDiagnostic]
     ) -> AccentSlot? {
@@ -272,12 +242,7 @@ enum GeneralConfigParser {
         return nil
     }
 
-    /// The `hide-toolbar-buttons` list: comma-separated `ToolbarButton` slugs. Empty segments
-    /// (trailing/doubled commas) pass silently; an unknown slug is dropped with a diagnostic while
-    /// the known slugs on the same line still apply. The expected-value list is built from
-    /// `ToolbarButton.allCases` rather than spelled out, mirroring `parseAccentSlot`.
-    /// Slugs that named a button ZenTerm has since removed. They are not typos, and the button
-    /// they hid is already gone, so they pass without a diagnostic rather than nagging forever.
+    /// Slugs for buttons since removed, dropped without a diagnostic because the line already holds.
     private static let retiredToolbarSlugs: Set<String> = ["diff-viewer"]
 
     private static func parseHiddenToolbarButtons(
@@ -288,8 +253,6 @@ enum GeneralConfigParser {
             let slug = raw.trimmingCharacters(in: .whitespaces).lowercased()
             guard !slug.isEmpty else { continue }
             guard let button = ToolbarButton(rawValue: slug) else {
-                // A retired slug is dropped silently. It named a button that no longer exists, so
-                // the line already does what it says, and a card every launch has nothing to offer.
                 guard !Self.retiredToolbarSlugs.contains(slug) else { continue }
                 let expected = ToolbarButton.allCases.map(\.rawValue).joined(separator: ", ")
                 Log.warning(
@@ -322,7 +285,6 @@ enum GeneralConfigParser {
         }
     }
 
-    /// Shared by `attention-toast` and `completion-toast`, so `key` names which one is at fault.
     private static func parseToastDismissal(
         _ value: String, _ key: String, _ diagnostics: inout [ConfigDiagnostic]
     ) -> GeneralConfig.ToastDismissal? {
@@ -338,8 +300,6 @@ enum GeneralConfigParser {
         }
     }
 
-    /// Clamp a right-typed value to `[lower, upper]`, logging + collecting a diagnostic once if it
-    /// had to move.
     private static func clamp(
         _ value: Double, _ lower: Double, _ upper: Double, _ key: String,
         _ diagnostics: inout [ConfigDiagnostic]
@@ -361,7 +321,5 @@ enum GeneralConfigParser {
         ConfigDiagnostic(scope: .setting(key: key), problem: .invalidValue(got: got, expected: expected))
     }
 
-    /// A config number without a trailing `.0` (`200`, not `200.0`; `0.95` stays `0.95`) — the form
-    /// the value reads as in the file, so a diagnostic names it the way the user typed it.
     private static func numberText(_ value: Double) -> String { String(format: "%g", value) }
 }

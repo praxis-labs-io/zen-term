@@ -1,39 +1,25 @@
 #!/usr/bin/env swift
-// Renders the DMG installer window background as a PNG.
-// Source of truth for the installer art: regenerate with `icon/make-dmg-background.sh`.
-// Palette is Rosé Pine Zen (the app's theme), matching icon/make-icon.swift so the
-// installer window reads as the same surface as the app icon it hands over.
-//
-//   swift make-dmg-background.swift <output.png> [scale]   scale 1 (default) or 2
-//
-// The two icons the user drags (ZenTerm.app, Applications) are NOT drawn here: Finder
-// overlays the real icons on top, at the positions bin/make-dmg sets. This draws only
-// the static layer beneath them: gradient, glow, wordmark, arrow, and the instruction.
+// Renders the DMG window background; Finder draws the two icons on top at the positions bin/make-dmg sets.
 import AppKit
 
-// MARK: - Palette (sRGB), shared with make-icon.swift
 func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
     CGColor(
         srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
         blue: CGFloat(hex & 0xFF) / 255, alpha: a)
 }
-let iris = rgb(0xC4A7E7)  // release mark accent (Rosé Pine Zen iris)
-let bgTop = rgb(0x221E33)  // deep-indigo tile top, the icon's background
-let bgBottom = rgb(0x141120)  // tile bottom, the darker gradient end
-let textColor = rgb(0xE0DEF4)  // Rosé Pine Zen text: the wordmark
-let mutedColor = rgb(0x908CAA)  // Rosé Pine Zen subtle: the instruction line
+let iris = rgb(0xC4A7E7)
+let bgTop = rgb(0x221E33)
+let bgBottom = rgb(0x141120)
+let textColor = rgb(0xE0DEF4)
+let mutedColor = rgb(0x908CAA)
 
-// MARK: - Layout (1x design space; the window content is BASE_W × BASE_H points)
-// Positions authored top-down (y grows downward, Finder's convention) so the icon
-// centers here line up with the {x, y} bin/make-dmg hands Finder. Y() flips into the
-// bottom-up space CoreGraphics draws in.
 let BASE_W: CGFloat = 660
 let BASE_H: CGFloat = 400
-let ICON_ROW_Y: CGFloat = 200  // vertical center of the drag row (icons + arrow)
-let APP_X: CGFloat = 170  // ZenTerm.app icon center
-let APPS_X: CGFloat = 490  // Applications alias icon center
+// Layout is top-down, Finder's convention, so centers match the coordinates bin/make-dmg hands Finder.
+let ICON_ROW_Y: CGFloat = 200
+let APP_X: CGFloat = 170
+let APPS_X: CGFloat = 490
 
-// MARK: - SVG path → polylines (Lucide's 24-unit grid, y-down), shared with make-icon.swift
 func vecAngle(_ ux: CGFloat, _ uy: CGFloat, _ vx: CGFloat, _ vy: CGFloat) -> CGFloat {
     let len = (ux * ux + uy * uy).squareRoot() * (vx * vx + vy * vy).squareRoot()
     let c = max(-1, min(1, (ux * vx + uy * vy) / len))
@@ -119,7 +105,6 @@ func parsePath(_ d: String) -> [[CGPoint]] {
     return subpaths
 }
 
-// The origami mark (Lucide `origami`), same three `d` strings as the app icon.
 let origamiPaths = [
     "M12 12V4a1 1 0 0 1 1-1h6.297a1 1 0 0 1 .651 1.759l-4.696 4.025",
     "m12 21-7.414-7.414A2 2 0 0 1 4 12.172V6.415a1.002 1.002 0 0 1 1.707-.707L20 20.009",
@@ -133,7 +118,7 @@ let origamiCenter = CGPoint(
     x: (origamiXs.min()! + origamiXs.max()!) / 2, y: (origamiYs.min()! + origamiYs.max()!) / 2)
 let origamiExtent = max(origamiXs.max()! - origamiXs.min()!, origamiYs.max()! - origamiYs.min()!)
 
-// MARK: - Draw
+// Keeps clear of the bottom ~28px, which Finder's title-bar-inclusive window bounds clip.
 func render(scale: CGFloat) -> CGImage {
     let pxW = Int(BASE_W * scale), pxH = Int(BASE_H * scale)
     let space = CGColorSpaceCreateDeviceRGB()
@@ -142,16 +127,14 @@ func render(scale: CGFloat) -> CGImage {
         space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
     ctx.interpolationQuality = .high
     ctx.setAllowsAntialiasing(true)
-    ctx.scaleBy(x: scale, y: scale)  // author everything in 1x design space
+    ctx.scaleBy(x: scale, y: scale)
 
-    func Y(_ topDown: CGFloat) -> CGFloat { BASE_H - topDown }  // top-down → bottom-up
+    func Y(_ topDown: CGFloat) -> CGFloat { BASE_H - topDown }
 
-    // Vertical indigo gradient, the icon-tile background
     let bg = CGGradient(colorsSpace: space, colors: [bgTop, bgBottom] as CFArray, locations: [0, 1])!
     ctx.drawLinearGradient(
         bg, start: CGPoint(x: BASE_W / 2, y: BASE_H), end: CGPoint(x: BASE_W / 2, y: 0), options: [])
 
-    // Soft iris glow behind the drag row, echoing the icon's centered glow
     let glow = CGGradient(
         colorsSpace: space, colors: [rgb(0xC4A7E7, 0.12), rgb(0xC4A7E7, 0)] as CFArray,
         locations: [0, 1])!
@@ -159,15 +142,13 @@ func render(scale: CGFloat) -> CGImage {
         glow, startCenter: CGPoint(x: BASE_W / 2, y: Y(ICON_ROW_Y)), startRadius: 0,
         endCenter: CGPoint(x: BASE_W / 2, y: Y(ICON_ROW_Y)), endRadius: 320, options: [])
 
-    // Origami mark, centered on (cx, cyTopDown), fit to a box of the given height, stroked.
     func drawOrigami(cx: CGFloat, cyTopDown: CGFloat, height: CGFloat, color: CGColor) {
         let k = height / origamiExtent
         func P(_ p: CGPoint) -> CGPoint {
-            // Lucide's y-down grid flips into the bottom-up canvas; center on the anchor.
             CGPoint(x: cx + (p.x - origamiCenter.x) * k, y: Y(cyTopDown) - (p.y - origamiCenter.y) * k)
         }
         ctx.setStrokeColor(color)
-        ctx.setLineWidth(1.5 * k)  // Lucide 1.5/24 stroke, matching the app icon
+        ctx.setLineWidth(1.5 * k)
         ctx.setLineCap(.round)
         ctx.setLineJoin(.round)
         for sp in origamiSubpaths {
@@ -179,7 +160,6 @@ func render(scale: CGFloat) -> CGImage {
         }
     }
 
-    // Text drawn centered on (cx, cyTopDown) via AppKit, bridged like make-icon's Dev chip.
     func drawText(_ string: String, cx: CGFloat, cyTopDown: CGFloat, font: NSFont, color: CGColor) {
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor(cgColor: color)!]
         let s = NSAttributedString(string: string, attributes: attrs)
@@ -190,7 +170,6 @@ func render(scale: CGFloat) -> CGImage {
         NSGraphicsContext.restoreGraphicsState()
     }
 
-    // Wordmark near the top: origami mark + "ZenTerm", the pair centered as a unit.
     let markH: CGFloat = 30
     let wordFont = NSFont.systemFont(ofSize: 30, weight: .semibold)
     let word = NSAttributedString(string: "ZenTerm", attributes: [.font: wordFont])
@@ -202,9 +181,6 @@ func render(scale: CGFloat) -> CGImage {
     drawOrigami(cx: startX + markH / 2, cyTopDown: wordmarkY, height: markH, color: iris)
     drawText("ZenTerm", cx: startX + markH + gap + wordW / 2, cyTopDown: wordmarkY, font: wordFont, color: textColor)
 
-    // Arrow in the gap between the icons, pointing app → Applications. Shaft and head are
-    // one path stroked in a single pass: two passes would composite the translucent stroke
-    // over itself where they meet at the tip, and that overlap reads as a brighter node.
     let arrowY = Y(ICON_ROW_Y)
     let arrowMidX = (APP_X + APPS_X) / 2
     let shaftHalf: CGFloat = 34
@@ -223,9 +199,6 @@ func render(scale: CGFloat) -> CGImage {
     ctx.addPath(arrow)
     ctx.strokePath()
 
-    // Instruction below the icon row, muted. Copy per docs/brand-voice.md. Kept well clear
-    // of the bottom edge: Finder's window bounds include the title bar, so the lowest ~28px
-    // of this art fall outside the visible content and anything down there is clipped.
     drawText(
         "Drag ZenTerm to your Applications folder to install.", cx: BASE_W / 2, cyTopDown: 316,
         font: NSFont.systemFont(ofSize: 15, weight: .regular), color: mutedColor)
@@ -233,7 +206,6 @@ func render(scale: CGFloat) -> CGImage {
     return ctx.makeImage()!
 }
 
-// MARK: - Emit
 guard CommandLine.arguments.count > 1 else {
     FileHandle.standardError.write(Data("usage: make-dmg-background.swift <output.png> [scale]\n".utf8))
     exit(1)
@@ -247,6 +219,6 @@ guard let scaleValue = Double(scaleArg), scaleValue > 0 else {
 let scale = CGFloat(scaleValue)
 let image = render(scale: scale)
 let rep = NSBitmapImageRep(cgImage: image)
-rep.size = NSSize(width: BASE_W, height: BASE_H)  // points, so the PNG carries its 1x size
+rep.size = NSSize(width: BASE_W, height: BASE_H)
 try rep.representation(using: .png, properties: [:])!.write(to: out)
 print("✓ wrote \(out.path) (\(Int(BASE_W * scale))×\(Int(BASE_H * scale)))")

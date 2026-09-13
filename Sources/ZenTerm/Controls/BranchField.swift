@@ -1,10 +1,6 @@
 import AppKit
 
-/// A branch name field that suggests the repo's existing branches as you type. Typing a name that
-/// exists picks that branch; typing a new one cuts it.
-///
-/// A `ListPopover` rather than a `Dropdown`: the text field has to keep first responder while the
-/// list advises it, and a `Dropdown` is a closed select that takes the keyboard for itself.
+/// A `ListPopover`, not a `Dropdown`, so the text field keeps first responder while the list is up.
 final class BranchField: NSView, ThemeReapplying {
     let box = FieldBox(placeholder: "feature/name")
     var field: NSTextField { box.field }
@@ -19,7 +15,6 @@ final class BranchField: NSView, ThemeReapplying {
 
     private var branches: [String] = []
     private var holders: [String: WorktreeStore.Holder] = [:]
-    /// Indices into `branches`, in the order the list shows them.
     private var matches: [String] = []
     private var highlighted = 0
     private lazy var popover = ListPopover(anchor: box)
@@ -68,7 +63,6 @@ final class BranchField: NSView, ThemeReapplying {
             self?.onSubmit?()
         }
         box.onEndEditing = { [weak self] in self?.closeList() }
-        // The list owns Esc only while it is up. The card root gets every other one.
         box.onEscape = { [weak self] in
             guard let self, self.isListOpen else { return false }
             self.closeList()
@@ -78,7 +72,6 @@ final class BranchField: NSView, ThemeReapplying {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// The list is parented to the window's content view, so nothing takes it down with this view.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window == nil { closeList() }
@@ -94,11 +87,8 @@ final class BranchField: NSView, ThemeReapplying {
         closeList()
     }
 
-    /// Where `text` is checked out, when it names a branch something already holds.
     var holderOfTypedBranch: WorktreeStore.Holder? { holders[text] }
 
-    /// Put an open list back against the field. The popover is frame-placed once, so anything that
-    /// moves the field on screen has to say so.
     func repositionList() {
         guard popover.isOpen else { return }
         popover.reposition()
@@ -110,13 +100,8 @@ final class BranchField: NSView, ThemeReapplying {
         rowViews = []
     }
 
-    // MARK: keyboard
-
-    /// Down opens the list when there is one to open, so an empty field still reaches the branches.
     private func arrow(_ delta: Int) {
         guard popover.isOpen else {
-            // Ranked here rather than read: an untouched field has never filtered, and Down on an
-            // empty one is how the whole branch list is reached.
             if delta > 0 {
                 matches = suggestions(for: text)
                 highlighted = 0
@@ -148,8 +133,6 @@ final class BranchField: NSView, ThemeReapplying {
         onChange?()
     }
 
-    // MARK: the list
-
     private func refreshMatches() {
         matches = suggestions(for: text)
         guard !matches.isEmpty else {
@@ -160,16 +143,11 @@ final class BranchField: NSView, ThemeReapplying {
         if popover.isOpen { rerenderList() } else { openList() }
     }
 
-    /// What the list should show for `query`. Empty when there is nothing worth showing: nothing
-    /// matches, which would render as a bare sliver, or the query is already the only match, where
-    /// the choice is made and a one-row list restating it would trap Down inside itself.
     private func suggestions(for query: String) -> [String] {
         let ranked = ranked(for: query)
         return ranked == [query] ? [] : ranked
     }
 
-    /// An exact match leads, then `FuzzyMatch` order, then the alphabetical listing as the
-    /// tiebreak so the same query never reorders between two runs.
     private func ranked(for query: String) -> [String] {
         guard !query.isEmpty else { return branches }
         let scored = branches.compactMap { branch -> (String, Int)? in
@@ -199,8 +177,6 @@ final class BranchField: NSView, ThemeReapplying {
 
     private func renderRows() {
         let chrome = Theme.current.chrome
-        // The list caps at 260pt, so past nine branches the highlight walks off the bottom and
-        // Return commits one the user cannot see. `Dropdown` and `CheckboxDropdown` do the same.
         if rowViews.indices.contains(highlighted) {
             let row = rowViews[highlighted]
             row.scrollToVisible(row.bounds)
@@ -213,8 +189,6 @@ final class BranchField: NSView, ThemeReapplying {
         }
     }
 
-    /// Held branches keep their row: hiding one leaves the user typing the name by hand and
-    /// meeting the refusal with no explanation.
     private static func note(for holder: WorktreeStore.Holder?) -> String? {
         switch holder {
         case .worktree: return "has a worktree"
@@ -229,7 +203,6 @@ final class BranchField: NSView, ThemeReapplying {
         rerenderList()
     }
 
-    /// One branch in the open list: the ref icon, the name, and where it is checked out.
     private final class BranchRowView: NSView {
         private let onClick: () -> Void
         private let icon = NSImageView()

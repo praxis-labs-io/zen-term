@@ -1,13 +1,5 @@
 import AppKit
 
-/// A standalone window listing the third-party notices, opened from the app menu under About. Its
-/// own window rather than the About panel's credits: the full license text is a long read that
-/// crams into the About box as a wall of noise.
-///
-/// One shared window, reused across openings — a second invocation refocuses it rather than stacking
-/// a duplicate. Unlike the system About panel (which follows `effectiveAppearance`), this is our own
-/// chrome, so every color resolves from `Theme.current`, re-applied on each `show()` so a theme swap
-/// while it was closed is picked up on reopen.
 final class AcknowledgementsWindow {
     static let shared = AcknowledgementsWindow()
 
@@ -29,7 +21,6 @@ final class AcknowledgementsWindow {
             backing: .buffered,
             defer: false)
         window.title = "Acknowledgements"
-        // Reused across openings, so it must survive its own close rather than being freed under us.
         window.isReleasedWhenClosed = false
         window.center()
 
@@ -44,8 +35,6 @@ final class AcknowledgementsWindow {
         text.isEditable = false
         text.isSelectable = true
         text.isRichText = false
-        // License text is preformatted: monospace preserves the indentation and column alignment the
-        // bodies rely on, which a proportional font would collapse.
         text.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         text.textContainerInset = NSSize(width: 20, height: 20)
         text.string = Self.notices()

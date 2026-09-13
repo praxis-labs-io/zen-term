@@ -4,9 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Which tabs belong to a folder that is about to be deleted, and closing them. Removing a worktree
-/// asks this of every window, and getting it wrong leaves a shell running inside a folder that is
-/// gone.
 @MainActor
 final class WindowControllerTabsAtPathTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
@@ -37,8 +34,6 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
         try super.tearDownWithError()
     }
 
-    // MARK: harness
-
     private func makeWindow() -> WindowController {
         let c = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: root)
@@ -58,8 +53,6 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
             title: title, path: path, main: nil, right: nil, bottom: nil, focus: .main, env: [:])
     }
 
-    // MARK: tests
-
     func test_countsOnlyTheTabsOpenedAtThatPath() throws {
         let c = makeWindow()
         let wanted = try folder("feature-x")
@@ -72,9 +65,6 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
         XCTAssertEqual(c.tabCount(atPath: other), 1)
     }
 
-    /// The match is on where the tab was opened, not where its shell now is. A tab whose shell has
-    /// `cd`'d out still belongs to the worktree, and matching the live cwd would leave that tab
-    /// running inside the folder being deleted.
     func test_aTabWhoseShellHasMovedStillCounts() throws {
         let c = makeWindow()
         let wanted = try folder("feature-x")
@@ -110,8 +100,6 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
         XCTAssertEqual(c.tabOrderForTesting.count, before - 2)
     }
 
-    /// The reported bug: confirming closed the tab, which closed the window, which took the picker
-    /// showing the progress with it. Nothing may go until the folder actually has.
     func test_aRemovalThatHasOnlyStarted_leavesTheTabOpen() throws {
         let c = makeWindow()
         let wanted = try folder("feature-x")
@@ -132,7 +120,6 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
         XCTAssertEqual(c.tabCount(atPath: wanted), 0)
     }
 
-    /// The folder is still there, so the shell in it is still working.
     func test_aRemovalThatFailed_leavesTheTabOpen() throws {
         let c = makeWindow()
         let wanted = try folder("feature-x")
@@ -143,9 +130,6 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
         XCTAssertEqual(c.tabCount(atPath: wanted), 1)
     }
 
-    /// A ⌘T from a worktree tab inherits the shell's cwd, which is a subdirectory of it. That tab
-    /// is in the folder being deleted just the same, so the confirm has to count it and the
-    /// removal has to close it.
     func test_aTabOpenedInsideTheWorktreeCountsAndCloses() throws {
         let c = makeWindow()
         let wanted = try folder("feature-x")
@@ -159,7 +143,6 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
         XCTAssertEqual(c.tabCount(atPath: wanted), 0)
     }
 
-    /// A sibling whose name merely starts the same is a different folder.
     func test_aSiblingSharingAPathPrefixIsNotInside() throws {
         let c = makeWindow()
         let wanted = try folder("feature-x")

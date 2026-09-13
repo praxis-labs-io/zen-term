@@ -3,18 +3,8 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction test for the General settings section: mount the real section in a window, drive its
-/// On/Off segmented controls the way a click would, and assert the value that actually lands in the
-/// config file. A state-only assertion would pass while the control is dead — exactly how a broken
-/// dropdown once shipped past two reviews — so this drives the controls themselves. Notifications
-/// and Updates share this section, so both toggles are exercised here.
-///
-/// The write→reload pipeline is rooted at `ConfigLoader.defaultRoot`; the test points that at a temp
-/// dir via `defaultRootOverrideForTesting` so it never touches the real config.
 final class SettingsGeneralSectionTests: WindowTestCase {
     private var tempRoot: URL!
-    /// Retained for the test's lifetime: the row's `onChange` captures the section `[weak self]`, so
-    /// a deallocated section would silently no-op the write.
     private var section: SettingsFormSection?
     private var hostWindow: NSWindow?
 
@@ -24,7 +14,7 @@ final class SettingsGeneralSectionTests: WindowTestCase {
             .appendingPathComponent("zenterm-general-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
-        AppConfig.reload()  // GeneralConfig.current now reflects the empty temp root (= builtIn: on)
+        AppConfig.reload()
     }
 
     override func tearDownWithError() throws {
@@ -40,8 +30,6 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
-    /// Mount the section (section + window retained) and return its segmented controls in
-    /// `populate()` order, which `Segment` names.
     private func mountSegments() -> [SegmentedControl] {
         let section = SettingsGeneralSection()
         self.section = section
@@ -60,8 +48,6 @@ final class SettingsGeneralSectionTests: WindowTestCase {
             contentsOf: ConfigLoader.defaultRoot.appendingPathComponent("config"), encoding: .utf8)) ?? ""
     }
 
-    /// The segmented rows the section builds, in the order `populate()` adds them. Named rather
-    /// than indexed inline: a row added in the middle silently re-points every bare number.
     private enum Segment: Int {
         case notifications, attentionToast, completionToast, updates
     }
@@ -80,15 +66,12 @@ final class SettingsGeneralSectionTests: WindowTestCase {
     }
 
     func test_notifications_selectingOff_writesFalse() {
-        segment(.notifications).select(1)  // drive the Off segment as a click would
+        segment(.notifications).select(1)
 
         XCTAssertTrue(
             configText().contains("agent-notifications = false"), "got: \(configText())")
     }
 
-    /// The two toast rows share a parse helper and a token function, so each has to prove it writes
-    /// its own key: a copy-paste that pointed both at `attention-toast` would leave the completion
-    /// row silently editing the wrong setting.
     func test_attentionToast_selectingAuto_writesItsOwnKey() {
         segment(.attentionToast).select(1)
 
@@ -106,19 +89,15 @@ final class SettingsGeneralSectionTests: WindowTestCase {
     func test_updates_selectingOff_thenOn_writesFalseThenTrue() {
         let updates = segment(.updates)
 
-        updates.select(1)  // Off
+        updates.select(1)
         XCTAssertTrue(
             configText().contains("automatic-update-checks = false"), "got: \(configText())")
 
-        updates.select(0)  // back to On
+        updates.select(0)
         XCTAssertTrue(
             configText().contains("automatic-update-checks = true"), "got: \(configText())")
     }
 
-    // MARK: back to the nav — a section of stacked segmented rows had no arrow path out
-
-    /// An arrow key as AppKit delivers it: keyCode plus the `.function`/`.numericPad` pair every
-    /// arrow keyDown actually carries (a bare-modifier fake is a keystroke macOS never sends).
     private func arrow(_ keyCode: UInt16) -> NSEvent {
         NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: [.function, .numericPad], timestamp: 0,
@@ -134,7 +113,7 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         section?.onExitToNav = { exited += 1 }
 
         hostWindow?.makeFirstResponder(notifications)
-        notifications.keyDown(with: arrow(Self.leftKey))  // On is leftmost — nothing left to cycle
+        notifications.keyDown(with: arrow(Self.leftKey))
 
         XCTAssertEqual(exited, 1, "Left at the leftmost segment returns to the nav")
         XCTAssertEqual(notifications.selectedIndex, 0, "exiting must not flip the toggle")
@@ -144,7 +123,7 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         let notifications = mountSegments()[0]
         var exited = 0
         section?.onExitToNav = { exited += 1 }
-        notifications.select(1)  // Off — now there's a segment to the left
+        notifications.select(1)
 
         hostWindow?.makeFirstResponder(notifications)
         notifications.keyDown(with: arrow(Self.leftKey))
@@ -153,12 +132,8 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         XCTAssertEqual(exited, 0, "cycling within the control must not exit to the nav")
     }
 
-    /// Up at the first stop holds, the way it does in Shortcuts, Tools and Workspaces. It used to
-    /// exit here, back when a segmented first row had no other way out; Left at the leftmost segment is
-    /// that way out now (see the test above), so the extra path only made this section lose your place
-    /// where the list sections keep it.
     func test_upFromFirstStop_staysPut() {
-        let notifications = mountSegments()[0]  // the first vertical stop in the section
+        let notifications = mountSegments()[0]
         var exited = 0
         section?.onExitToNav = { exited += 1 }
 

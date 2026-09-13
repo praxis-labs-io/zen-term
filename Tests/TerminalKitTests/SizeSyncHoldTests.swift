@@ -3,36 +3,23 @@ import XCTest
 
 @testable import TerminalKit
 
-/// The grid freeze that stops a layout animation reflowing the terminal on every frame is a
-/// *count*, not a flag, because its holders overlap: a drawer slide freezes every surface in the
-/// tab while a split-in freezes every surface on the canvas, and those sets intersect. Held as a
-/// flag, whichever animation landed first thawed panes the other was still animating and the
-/// per-frame reflow came back for the rest of that slide. Nothing on screen shows it — the damage
-/// is rewrapped scrollback in a full-frame TUI — so this is the silently-dead class that earns a
-/// test rather than a runbook line.
-///
-/// No `start()` here: the view stays pointer-less on purpose, so this covers the hold arithmetic
-/// without a Metal layer or a PTY. `syncSizeAndScale` no-ops against a nil surface.
 final class SizeSyncHoldTests: XCTestCase {
     func test_overlappingHolds_keepTheGridFrozenUntilTheLastReleases() {
         let view = GhosttyHostView()
 
-        view.setSizeSyncSuspended(true)  // a drawer slide begins
-        view.setSizeSyncSuspended(true)  // a split-in begins over it
+        view.setSizeSyncSuspended(true)
+        view.setSizeSyncSuspended(true)
         XCTAssertTrue(view.isSizeSyncSuspended)
 
-        view.setSizeSyncSuspended(false)  // the drawer lands first
+        view.setSizeSyncSuspended(false)
         XCTAssertTrue(
             view.isSizeSyncSuspended,
             "the split-in is still animating this surface — releasing the drawer's hold must not thaw it")
 
-        view.setSizeSyncSuspended(false)  // the split-in lands
+        view.setSizeSyncSuspended(false)
         XCTAssertFalse(view.isSizeSyncSuspended, "the last hold released, so the grid reconciles")
     }
 
-    /// A surface created while an animation is already in flight never took that animation's hold,
-    /// but still receives its release. That must leave the surface thawed — the safe direction —
-    /// rather than driving the count negative, where a later real hold would fail to freeze.
     func test_releaseWithoutAHold_cannotDriveTheCountNegative() {
         let view = GhosttyHostView()
 
@@ -48,15 +35,8 @@ final class SizeSyncHoldTests: XCTestCase {
     }
 }
 
-/// Auto Layout walks a view through intermediate frames before the one it settles on, and each one
-/// reached libghostty, which rewrapped the whole buffer for it. A frame a few pixels wide rewraps
-/// the scrollback into a column or two, and libghostty evicts by bytes, so history went and never
-/// came back. Silent while it happens: the damage is missing lines afterwards.
 final class SizePushCoalescingTests: XCTestCase {
-    /// Windowless and pointer-less, like the suite above: hosting this view in a real window wants
-    /// a Metal layer and crashes. So `sizePushesForTesting` counts the pushes coalescing *allows*,
-    /// stopping short of the window, size and surface guards below it. Those are out of a unit
-    /// test's reach here, and this counter does not pretend to cover them.
+    // Windowless because hosting this view in a real window wants a Metal layer and crashes.
     private func hostedView() -> GhosttyHostView { GhosttyHostView() }
 
     private func settleRunloop() {
@@ -82,8 +62,6 @@ final class SizePushCoalescingTests: XCTestCase {
             "and it is the frame the pass settled on, not one it passed through")
     }
 
-    /// A later pass is a later turn, so it gets its own push. Coalescing that would freeze the grid
-    /// at whatever the first pass produced, which is a different bug wearing this fix's clothes.
     func test_aLaterPassPushesAgain() {
         let view = hostedView()
 
@@ -95,10 +73,6 @@ final class SizePushCoalescingTests: XCTestCase {
         XCTAssertEqual(view.sizePushesForTesting, 2)
     }
 
-    /// The drawer slide and the split-in lay out at the geometry the animation lands on and freeze
-    /// in the same turn, so that layout's push has to land *before* the freeze. Dropped instead, the
-    /// terminals hold their pre-animation grid for the whole slide and reflow after it — the jank
-    /// both callers were written to avoid.
     func test_aHoldFlushesTheQueuedPushRatherThanDroppingIt() {
         let view = hostedView()
 
@@ -112,7 +86,6 @@ final class SizePushCoalescingTests: XCTestCase {
         XCTAssertEqual(view.sizePushesForTesting, 1, "and the turn does not push it a second time")
     }
 
-    /// Frames that arrive while frozen are what the freeze is for, and must not queue up behind it.
     func test_framesDuringAHoldPushNothing() {
         let view = hostedView()
         view.setSizeSyncSuspended(true)

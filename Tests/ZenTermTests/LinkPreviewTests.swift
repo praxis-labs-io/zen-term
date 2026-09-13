@@ -4,10 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// A surface reporting a hovered link puts one URL preview in the window, and reporting
-/// nil takes it down. Window-mounted per the house rule, and the assertions read the card out of
-/// the real view tree rather than the presenter's state — a presenter that recorded the URL but
-/// never mounted the card has to fail.
 final class LinkPreviewTests: WindowTestCase {
     private var window: NSWindow!
     private var controller: PaneCanvasController!
@@ -17,7 +13,6 @@ final class LinkPreviewTests: WindowTestCase {
         super.setUp()
         originalConfig = GeneralConfig.current
         GeneralConfig.setCurrentForTesting(.builtIn)
-        // `split` branches on Reduce Motion, so pin it rather than inherit the machine's setting.
         Motion.isReduceMotionEnabled = { true }
         controller = PaneCanvasController(makeSurface: { RecordingSurface() })
         window = NSWindow(
@@ -55,7 +50,6 @@ final class LinkPreviewTests: WindowTestCase {
         XCTAssertTrue(shownPreviews().isEmpty, "leaving the link left the preview mounted")
     }
 
-    /// One preview is ever live: hovering a second link replaces the card, it never stacks.
     func test_aSecondLinkReplacesThePreview() throws {
         let surface = try XCTUnwrap(controller.allSurfaces.first)
 
@@ -66,9 +60,6 @@ final class LinkPreviewTests: WindowTestCase {
         XCTAssertEqual(shownPreviews().first?.urlForTesting, "https://example.com/second")
     }
 
-    /// Pane-to-pane moves deliver the old pane's clear and the new pane's hover in no guaranteed
-    /// order, so a stale clear from a pane that no longer owns the preview must not tear down the
-    /// newer pane's card.
     func test_aStaleClearFromAnotherPaneDoesNotHideThePreview() throws {
         controller.split(.vertical)
         controller.canvasView.layoutSubtreeIfNeeded()
@@ -84,9 +75,6 @@ final class LinkPreviewTests: WindowTestCase {
             "the old pane's clear tore down the new pane's preview")
     }
 
-    /// Closing a pane mid-hover is reachable (⌘W is a Cmd chord, so it fires exactly while
-    /// previews show), and the dead surface can never send the empty-URL clear. The presenter
-    /// sweeps the owner's validity on the next input event instead.
     func test_closingTheOwningPaneDismissesThePreviewOnTheNextEvent() throws {
         controller.split(.vertical)
         controller.canvasView.layoutSubtreeIfNeeded()
@@ -102,8 +90,6 @@ final class LinkPreviewTests: WindowTestCase {
         XCTAssertTrue(shownPreviews().isEmpty, "the closed pane's preview outlived its owner")
     }
 
-    /// The sweep is validity-triggered, not event-triggered: input while the owner is live
-    /// leaves the card alone (moving along a link must not blink the preview).
     func test_anInputEventWithALiveOwnerKeepsThePreview() throws {
         let surface = try XCTUnwrap(controller.allSurfaces.first)
         controller.surface(surface, hoveredLinkDidChange: "https://example.com/live")
@@ -113,8 +99,6 @@ final class LinkPreviewTests: WindowTestCase {
         XCTAssertEqual(shownPreviews().count, 1)
     }
 
-    /// A real event through `NSApp.sendEvent`, which is where the presenter's local monitor
-    /// listens; calling the sweep directly would pass with the monitor never installed.
     private func sendMouseMoved() throws {
         let event = try XCTUnwrap(
             NSEvent.mouseEvent(
@@ -125,10 +109,6 @@ final class LinkPreviewTests: WindowTestCase {
         NSApp.sendEvent(event)
     }
 
-    /// The width budget is the one visual property the eye cannot check: a URL a few characters
-    /// past the cap looks identical to one under it, so measure it (the ToastView rule). The card
-    /// must cap at the text budget plus its insets while the full URL survives for the ends the
-    /// truncation keeps.
     func test_aLongURLTruncatesInsteadOfGrowingTheCard() throws {
         let surface = try XCTUnwrap(controller.allSurfaces.first)
         let longURL = "https://example.com/" + String(repeating: "segment/", count: 60)

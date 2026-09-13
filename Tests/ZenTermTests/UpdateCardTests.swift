@@ -3,21 +3,8 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Two things about `UpdateCardView` that the eye can't verify at a glance:
-///
-/// 1. The notes column wraps at the card's *real* inner width. This is the one measured budget
-///    (the same reason `ToastView.messageMaxWidth` is measured): a bullet that overruns the column
-///    or wraps early is invisible until you see the exact release, so we pin the exposed
-///    `notesMaxWidth` to the width the mounted card actually lays the notes out at. Placement,
-///    color, and motion stay in the runbook.
-/// 2. The bullet parser turns the appcast's markdown `<description>` into clean lines. Pure logic
-///    that can silently rot (stop stripping the dash, leak blank lines), so it's unit-tested.
 final class UpdateCardTests: WindowTestCase {
-    // MARK: - Measured: the notes column wraps at the real inner width
-
     func test_notesColumn_wrapsAtTheExposedBudgetWidth() {
-        // A line far wider than the column, so it must wrap — its label width is then pinned to the
-        // column, not its text.
         let card = UpdateCardView(
             state: .available(
                 version: "0.2.0",
@@ -40,16 +27,12 @@ final class UpdateCardTests: WindowTestCase {
 
         let notes = firstTextField(in: card) { $0.hasPrefix("•") }
         let label = try? XCTUnwrap(notes)
-        // The honest wrap column is the alignment rect, not the frame: a wrapping NSTextField lays
-        // itself ~2pt wider on each side than its usable text width.
         let textWidth = label.map { $0.alignmentRect(forFrame: $0.frame).width } ?? -1
         XCTAssertEqual(
             textWidth, UpdateCardView.notesMaxWidth, accuracy: 0.5,
             "the notes text wraps at \(textWidth)pt but notesMaxWidth is "
                 + "\(UpdateCardView.notesMaxWidth)pt — the wrap column and the exposed budget disagree")
     }
-
-    // MARK: - Bullet parsing
 
     func test_bullets_stripsDashAndAsteriskMarkers() {
         XCTAssertEqual(
@@ -64,8 +47,6 @@ final class UpdateCardTests: WindowTestCase {
     }
 
     func test_bullets_dropsUnmarkedLinesAndHeaders() {
-        // The appcast <description> is the whole notes file, prose and headers included; only the
-        // marked bullets belong on the card.
         XCTAssertEqual(
             ZenUpdateDriver.bullets(from: "## Requirements\nmacOS 14 or later.\n- The real bullet"),
             ["The real bullet"])
@@ -80,11 +61,7 @@ final class UpdateCardTests: WindowTestCase {
         XCTAssertEqual(ZenUpdateDriver.bullets(from: nil), [])
     }
 
-    // MARK: - The title is theme-driven, not a system color
-
     func test_title_usesThemeForeground_notASystemColor() {
-        // A title left at NSColor.labelColor follows effectiveAppearance, not Theme.current, and
-        // washes out to invisible on a light theme (it shipped that way once). Pin it to the theme.
         let card = UpdateCardView(
             state: .available(version: "9.9.9", current: "You're on 1.0", notes: [], notesURL: nil),
             actions: .init())
@@ -94,23 +71,16 @@ final class UpdateCardTests: WindowTestCase {
             "the title must use the theme foreground, not a system color")
     }
 
-    // MARK: - Sparkle reply fires exactly once
-
     func test_fireOnce_repliesOnlyOnce() {
         final class Counter: @unchecked Sendable { var n = 0 }
         let counter = Counter()
         let choose = ZenUpdateDriver.fireOnce { _ in counter.n += 1 }
         choose(.install)
-        choose(.skip)  // a second tap (double-click, or Install then Skip) must be swallowed
+        choose(.skip)
         choose(.dismiss)
         XCTAssertEqual(counter.n, 1)
     }
 
-    // MARK: - The buttons are live
-
-    /// The card measured its notes and parsed its bullets but never pressed a button, so a dead
-    /// button — the whole point of the "dead click" report — would ship green. Drive the real
-    /// NSButton action end to end and confirm the wired action runs.
     func test_installButton_firesItsActionWhenClicked() {
         final class Flag: @unchecked Sendable { var tapped = false }
         let flag = Flag()
@@ -131,8 +101,6 @@ final class UpdateCardTests: WindowTestCase {
 
         XCTAssertTrue(flag.tapped, "clicking Install must fire its wired action end to end")
     }
-
-    // MARK: - Helpers
 
     private func firstButton(in view: NSView, where match: (String) -> Bool) -> AppButton? {
         for sub in view.subviews {

@@ -25,7 +25,7 @@ final class LogFileSinkTests: XCTestCase {
 
     func testRotatesWhenActiveFileExceedsSizeCap() {
         let sink = LogFileSink(directory: dir, fileName: "zen-term.log", maxBytes: 64, maxFiles: 2)
-        for i in 0..<10 { sink.writeLine("line number \(i)") }  // ~14 bytes each, well past 64
+        for i in 0..<10 { sink.writeLine("line number \(i)") }
         sink.flush()
 
         XCTAssertTrue(exists("zen-term.log"), "active log should exist")
@@ -34,9 +34,9 @@ final class LogFileSinkTests: XCTestCase {
 
     func testDropsOldestRotationBeyondMaxFiles() {
         let sink = LogFileSink(directory: dir, fileName: "zen-term.log", maxBytes: 40, maxFiles: 2)
-        for _ in 0..<5 { sink.writeLine("AAAAAAAAAAAAAAAA") }  // first generation
+        for _ in 0..<5 { sink.writeLine("AAAAAAAAAAAAAAAA") }
         sink.flush()
-        for _ in 0..<5 { sink.writeLine("BBBBBBBBBBBBBBBB") }  // second generation
+        for _ in 0..<5 { sink.writeLine("BBBBBBBBBBBBBBBB") }
         sink.flush()
 
         XCTAssertFalse(exists("zen-term.log.2"), "maxFiles=2 keeps only the active file and one rotation")
@@ -49,7 +49,7 @@ final class LogFileSinkTests: XCTestCase {
         let sink = LogFileSink(directory: dir, fileName: "zen-term.log", maxBytes: 40, maxFiles: 3)
         XCTAssertEqual(sink.fileURLs, [], "nothing to list before the first write")
 
-        for _ in 0..<3 { sink.writeLine("AAAAAAAAAAAAAAAA") }  // ~17 bytes each, forces one rotation
+        for _ in 0..<3 { sink.writeLine("AAAAAAAAAAAAAAAA") }
         sink.flush()
 
         let names = sink.fileURLs.map(\.lastPathComponent)
@@ -63,9 +63,6 @@ final class LogFileSinkTests: XCTestCase {
         let count = 500
         for i in 0..<count { sink.writeLine("entry-\(i)") }
 
-        // No flush(): reading fileURLs must itself drain the write queue. Without that, the file on
-        // disk still holds only a prefix of the 500 just-queued lines, and Export Diagnostics would
-        // ship a truncated log missing the newest, most relevant lines.
         let active = try XCTUnwrap(sink.fileURLs.first)
         let contents = try String(contentsOf: active, encoding: .utf8)
 

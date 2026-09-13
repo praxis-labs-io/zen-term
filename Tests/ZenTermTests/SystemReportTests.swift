@@ -16,7 +16,6 @@ final class SystemReportTests: XCTestCase {
     }
 
     func test_plainText_dropsBuildFragmentWhenNil() {
-        // A `swift run` build has no CFBundleVersion; the block must not render a bare "(build )".
         let report = SystemReport(
             appVersion: "0.0.0+src", build: nil, osVersion: "15.5 (24F74)", architecture: "arm64")
         XCTAssertEqual(

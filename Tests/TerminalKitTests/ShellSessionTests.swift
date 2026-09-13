@@ -15,8 +15,6 @@ final class ShellSessionTests: XCTestCase {
 
     private var leaderPID: pid_t?
 
-    /// A session leader with a child parked in its own process group: the shape a SIGHUP to
-    /// the leader's process group misses, and the whole reason this type exists.
     private func startSessionFixture() throws -> pid_t {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("zen269-\(UUID().uuidString)")
@@ -35,8 +33,6 @@ final class ShellSessionTests: XCTestCase {
 
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/sh")
-        // Backgrounded inside sh: sh is the process group leader, perl is not, so its
-        // setsid() succeeds. Run perl directly and setsid fails with EPERM.
         p.arguments = ["-c", "/usr/bin/perl -MPOSIX '\(script.path)' '\(pidFile.path)' & wait"]
         try p.run()
         fixture = p
@@ -59,7 +55,6 @@ final class ShellSessionTests: XCTestCase {
 
     func test_membersFindsProcessesOutsideTheLeadersProcessGroup() throws {
         let leader = try startSessionFixture()
-        // The forked child needs a moment to land in the process table.
         Thread.sleep(forTimeInterval: 1.0)
 
         XCTAssertEqual(getsid(leader), leader, "fixture is not a session leader")
@@ -72,8 +67,6 @@ final class ShellSessionTests: XCTestCase {
     }
 
     func test_leaderChildrenIgnoresOrdinaryHelperSubprocesses() throws {
-        // A plain helper (the shape of a git probe) stays in our session, so it must not
-        // read as a shell. This is the discriminator the pid capture in start() relies on.
         let helper = Process()
         helper.executableURL = URL(fileURLWithPath: "/bin/sleep")
         helper.arguments = ["30"]
@@ -114,7 +107,6 @@ extension ShellSessionTests {
             if calls == 1 { done.fulfill() }
         }
         wait(for: [done], timeout: 2.0)
-        // Past the timeout deadline, so a second fire would have landed by now.
         Thread.sleep(forTimeInterval: 0.5)
         XCTAssertEqual(calls, 1, "drain must reply exactly once")
     }

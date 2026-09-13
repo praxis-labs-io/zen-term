@@ -4,15 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// An open modal card paints above the toast stack, and a tool float still paints below it.
-///
-/// A card owns the keyboard and dims the tile behind it, so a passive notice landing on top of it read
-/// as broken. A float is the opposite case on purpose: the ⌘W guard toast ("Close btop first, then
-/// ⌘W") fires while a float is open and is telling you to close that float, so it has to stay readable.
-///
-/// Z-order is not provable from "is it mounted": both views are in the tree either way. These compare
-/// sibling-index paths from the window's content view and order them lexicographically, which is what
-/// paint order actually is across differing depths.
 @MainActor
 final class ModalZOrderTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
@@ -23,7 +14,6 @@ final class ModalZOrderTests: WindowTestCase {
         try super.setUpWithError()
         originalOverride = TerminalSurfaceFactory.makeOverride
         originalConfig = GeneralConfig.current
-        // Instant present/dismiss, so a card is mounted by the time the assertion reads the tree.
         Motion.isReduceMotionEnabled = { true }
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
         GeneralConfig.setCurrentForTesting(.builtIn)
@@ -51,8 +41,6 @@ final class ModalZOrderTests: WindowTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
-    /// Where `view` sits in paint order, as its chain of sibling indexes from `root`. A later path
-    /// (lexicographically) paints on top, whatever depth each view is at.
     private func paintPath(of view: NSView, from root: NSView) -> [Int]? {
         guard view !== root else { return [] }
         guard let parent = view.superview, let above = paintPath(of: parent, from: root),
@@ -81,8 +69,6 @@ final class ModalZOrderTests: WindowTestCase {
             descendants(of: content).compactMap { $0 as? ModalOverlay }.first, "no card is mounted")
     }
 
-    // MARK: a card over the toasts
-
     func test_aToastFiredWhileACardIsOpen_paintsBelowIt() throws {
         let c = makeWindow()
         let card = try openCard(in: c)
@@ -96,8 +82,6 @@ final class ModalZOrderTests: WindowTestCase {
             "a passive notice must not cover the card that owns the keyboard")
     }
 
-    /// The other order: the stack already exists, then the card opens. This is the common one, and the
-    /// one a plain `addSubview` gets right on its own.
     func test_aCardOpenedOverALiveToastStack_paintsAboveIt() throws {
         let c = makeWindow()
         c.showToast(ToastContent(variant: .info, title: "notice", message: "body"))
@@ -108,8 +92,6 @@ final class ModalZOrderTests: WindowTestCase {
         let content = try XCTUnwrap(c.window.contentView)
         XCTAssertTrue(try paintsAbove(card, stack, in: content), "the card opens on top of the notice")
     }
-
-    // MARK: a float still under them
 
     func test_aToolFloatStaysBelowTheToastStack() throws {
         let c = makeWindow()
@@ -131,10 +113,6 @@ final class ModalZOrderTests: WindowTestCase {
             "the ⌘W guard toast fires while a float is open and has to stay readable")
     }
 
-    // MARK: the geometry the card no longer inherits
-
-    /// Window-hosted, the card owns its own gutter constraints. A live `window-gutter` edit used to
-    /// re-inset the tile for free; now it has to reach the card too (the bug class).
     func test_aLiveGutterEdit_reInsetsAnOpenCard() throws {
         let c = makeWindow()
         let card = try openCard(in: c)
@@ -153,10 +131,6 @@ final class ModalZOrderTests: WindowTestCase {
             card.frame.width, before.width, "a wider gutter has to shrink the open card with the tile")
     }
 
-    // MARK: the ⌘P route to the tool form
-
-    /// Settings was the only way to create a tool float. The palette command opens the same form in
-    /// its create state, and closing it must not conjure the Settings card the user never opened.
     func test_newToolCommand_opensTheFormInCreateState_andClosesToNothing() throws {
         let c = makeWindow()
         let content = try XCTUnwrap(c.window.contentView)
@@ -181,19 +155,12 @@ final class ModalZOrderTests: WindowTestCase {
             "and the form itself is gone")
     }
 
-    // MARK: the review's findings
-
-    /// The card's rect is the tile region, and the tile's top carries the traffic-light clearance. Taking
-    /// the plain gutter for the top ran the card up under the window buttons and dimmed a strip that was
-    /// never part of the tile.
     func test_theCardsTop_clearsTheWindowButtonsLikeTheTileDoes() throws {
         let c = makeWindow()
         let card = try openCard(in: c)
         c.window.contentView?.layoutSubtreeIfNeeded()
         let content = try XCTUnwrap(c.window.contentView)
 
-        // Against the tile itself, not a constant: the card's whole job is to cover that region, and
-        // `container` is not the content view (it sits 2pt in), so a constant would encode that offset.
         let tile = try XCTUnwrap(c.focusedPanelForTesting, "expected a mounted pane to measure against")
         XCTAssertEqual(
             card.convert(card.bounds, to: content).minY,
@@ -204,9 +171,6 @@ final class ModalZOrderTests: WindowTestCase {
             "premise: window-chrome is on, so the tile's top is inset past the buttons")
     }
 
-    /// A pending destructive confirm outranks opening a card. `handle` already gates every chord on it;
-    /// the Help menu reaches `openReportIssue` directly, and a card over a confirm leaves it both hidden
-    /// and unanswerable.
     func test_reportIssue_isRefusedWhileAConfirmIsWaiting() throws {
         let c = makeWindow()
         var confirmed = 0
@@ -224,11 +188,9 @@ final class ModalZOrderTests: WindowTestCase {
         XCTAssertEqual(confirmed, 0)
     }
 
-    /// The chord is bindable, so it can be pressed with Settings already up. The gate closes that card,
-    /// and cancelling has to put it back rather than drop the user on a bare terminal.
     func test_newToolFromInsideSettings_handsBackToSettings() throws {
         let c = makeWindow()
-        _ = try openCard(in: c)  // Settings
+        _ = try openCard(in: c)
 
         c.handle(.newTool)
         let content = try XCTUnwrap(c.window.contentView)

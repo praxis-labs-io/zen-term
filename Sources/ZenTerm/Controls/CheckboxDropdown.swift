@@ -3,10 +3,7 @@ import AppKit
 struct CheckboxDropdownItem: Equatable {
     let title: String
     let isChecked: Bool
-    /// A muted trailing word, for what the title alone does not say (how many files a folded
-    /// folder stands in for). Nil on an ordinary row.
     let note: String?
-    /// An SF Symbol shown before the title, where the rows are of more than one kind.
     let symbol: String?
 
     init(title: String, isChecked: Bool, note: String? = nil, symbol: String? = nil) {
@@ -17,21 +14,10 @@ struct CheckboxDropdownItem: Equatable {
     }
 }
 
-/// A themed dropdown whose open list is a row of real checkboxes — the chrome's multi-select
-/// control. Closed, it reads like `Dropdown`: a compact button with a summary title and chevron,
-/// bubbling Up/Down to the form as one focus stop. Return/Space/click opens the floating list;
-/// Up/Down move the highlight, Space/Return toggle the highlighted row, and a click toggles its
-/// row — the list STAYS open on a toggle, because a multi-select is several picks per visit.
-/// Esc, an outside click (focus loss), or leaving the window closes it.
-///
-/// The control renders state it never owns: `onToggle` reports the toggled index and the owner
-/// re-syncs via `setItems` once the write lands, which re-renders the open rows in place.
 final class CheckboxDropdown: NSView {
     private(set) var items: [CheckboxDropdownItem]
     private let onToggle: (Int) -> Void
-    /// The row count is fixed at init — this list renders a static catalog whose checked states
-    /// move. `setItems` clamps to it, so a longer array can never outgrow the built rows (arrowing
-    /// past the last rendered row would toggle entries the user cannot see).
+    /// Fixed at init; `setItems` clamps to it so arrowing never reaches a row that was not rendered.
     private let rowCount: Int
 
     var onArrowUp: (() -> Void)?
@@ -39,22 +25,14 @@ final class CheckboxDropdown: NSView {
     var onArrowLeft: (() -> Void)?
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
-    /// Fired once when the open list closes, then cleared. An owner that needs to rebuild the
-    /// control waits on this rather than pulling the card out from under a multi-select in progress.
     var onClosed: (() -> Void)?
 
-    /// The closed-state title. The query displaces it in the same label while one is being typed.
     private var summary: String
     private let titleLabel = NSTextField(labelWithString: "")
-    /// Retained (not a throwaway init-local) so `reapplyTheme()` can re-tint it on a theme swap.
     private let chevron = NSImageView()
-    /// The floating list. Built lazily because it holds an `unowned` reference back to this view,
-    /// and because the self-close hook it carries reaches back through `self` too.
+    /// A window resize closes the card without `closeList`, so the self-close hook repeats that cleanup.
     private lazy var popover: ListPopover = {
         let popover = ListPopover(anchor: self)
-        // A window resize closes the list on its own; drop the lit border and the stale rows with it.
-        // A window resize closes the card without going through `closeList`, so everything that
-        // hangs off a close has to be done here too: a stranded `onClosed` never fires again.
         popover.onSelfClose = { [weak self] in
             self?.rowViews = []
             self?.query = ""
@@ -65,22 +43,13 @@ final class CheckboxDropdown: NSView {
         return popover
     }()
     private var rowViews: [CheckboxRowView] = []
-    /// The item indices the query admits, in ranked order. The rows the card holds, one per entry.
     private var visible: [Int] = []
-    /// Type-to-filter, live only while the list is open. A carry list is as long as the repo's
-    /// `.gitignore`, which is past what arrowing can reach.
     private var query = ""
-    /// An index into `items`, not into `visible`.
     private var highlighted = 0
-    /// The rows shown while nothing is typed. A query searches every item, so a row left out of
-    /// this is reachable by name but not by scrolling: the copy list folds a noisy folder into one
-    /// row at rest and still lets you pick a single file out of it.
     var restingIndices: [Int]?
     private var isFocusedStop = false
 
     private static let rowHeight: CGFloat = 28
-
-    // MARK: test hooks
 
     var buttonTitleForTesting: String { titleLabel.stringValue }
     var itemsForTesting: [CheckboxDropdownItem] { items }
@@ -88,7 +57,6 @@ final class CheckboxDropdown: NSView {
     var highlightedIndexForTesting: Int { highlighted }
     var queryForTesting: String { query }
     var visibleIndicesForTesting: [Int] { visible }
-    /// The open list's row views in list order, for click tests that drive a row's real `mouseDown`.
     var rowViewsForTesting: [NSView] { rowViews }
     func openListForTesting() { openList() }
     var listCardSizeForTesting: NSSize { popover.cardFrame.size }
@@ -131,9 +99,6 @@ final class CheckboxDropdown: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Programmatic sync after a config reload — never fires `onToggle`, and an open list re-renders
-    /// its rows in place (a toggle's own reload lands here, and closing on it would eject the user
-    /// mid-multi-select). Clamped to the init row count; see `rowCount`.
     func setItems(_ items: [CheckboxDropdownItem], title: String) {
         self.items = Array(items.prefix(rowCount))
         summary = title
@@ -141,15 +106,11 @@ final class CheckboxDropdown: NSView {
         refreshRows()
     }
 
-    /// Re-apply the live chrome colors after a config change — no relaunch. The open list is
-    /// rebuilt fresh (reading `Theme.current`) on every open, so only the button needs recoloring.
     func reapplyTheme() {
         restyle()
         renderTitle()
         chevron.contentTintColor = Theme.current.chrome.ink(.muted)
     }
-
-    // MARK: focus
 
     override var acceptsFirstResponder: Bool { true }
     override func becomeFirstResponder() -> Bool {
@@ -165,9 +126,7 @@ final class CheckboxDropdown: NSView {
     }
     override func drawFocusRingMask() {}
 
-    /// The open list card is parented to the window's content view (so it escapes this control's
-    /// bounds), not to this subtree — so tearing out an ancestor (the Settings modal) can't strand
-    /// a dead list over every tab. Same lifetime binding as `Dropdown`.
+    /// The open card lives on the window's content view, so it would outlive a torn-out ancestor.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window == nil { closeList() }
@@ -177,24 +136,20 @@ final class CheckboxDropdown: NSView {
         PopoverButtonStyle.apply(to: self, isFocused: isFocusedStop, isOpen: popover.isOpen)
     }
 
-    // MARK: keyboard
-
     override func keyDown(with event: NSEvent) {
         if popover.isOpen {
             switch KeyboardFocus.key(for: event) {
             case .up: moveHighlight(-1)
             case .down: moveHighlight(1)
-            case .activate: toggleHighlight()  // return / enter / space — the list stays open
-            // Local Esc is what makes layered dismissal work: it reaches this keyDown before any
-            // card-root performKeyEquivalent, so the list closes and the Settings card stays.
+            case .activate: toggleHighlight()
             case .escape: escapePressed()
             case .delete: backspace()
-            default: typed(event)  // consume every other key while the list is open
+            default: typed(event)
             }
             return
         }
         switch KeyboardFocus.key(for: event) {
-        case .activate: openList()  // return / enter / space
+        case .activate: openList()
         case .up: onArrowUp?()
         case .down: onArrowDown?()
         case .left where onArrowLeft != nil: onArrowLeft?()
@@ -208,25 +163,18 @@ final class CheckboxDropdown: NSView {
         popover.isOpen ? closeList() : openList()
     }
 
-    /// The whole control is one click target — without this the title label and chevron swallow
-    /// the click and only the padding gaps would open the list.
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard !isHidden, alphaValue > 0 else { return nil }
         return bounds.contains(convert(point, from: superview)) ? self : nil
     }
 
-    // MARK: list
-
+    /// Guarded before `buildRows()`, which would leave the mounted rows pointing at views in no card.
     private func openList() {
-        // Guarded before `buildRows()`, which reassigns `rowViews`: a second open would leave those
-        // pointing at fresh views that are in no card, so the mounted rows stop repainting.
         guard !popover.isOpen, window?.contentView != nil else { return }
         query = ""
         refilter()
         highlighted = visible.first ?? 0
         popover.open(rows: buildRows())
-        // After the open: `refreshRows` gates the highlight on the list being up, so painting
-        // before it would leave the first row unhighlighted until an arrow moves.
         refreshRows()
         restyle()
     }
@@ -248,8 +196,6 @@ final class CheckboxDropdown: NSView {
         closed()
     }
 
-    /// Esc clears a mistyped query before it closes anything, so recovering does not mean
-    /// reopening. Mirrors `Dropdown`.
     private func escapePressed() {
         guard !query.isEmpty else { return closeList() }
         query = ""
@@ -262,13 +208,7 @@ final class CheckboxDropdown: NSView {
         rerenderList()
     }
 
-    /// A printable key filters. **Space is not one:** it toggles, the way a checkbox list should,
-    /// and a fuzzy query over paths has no use for one. That is the one deliberate divergence from
-    /// `Dropdown`, which owns Space because it commits on Return instead.
     private func typed(_ event: NSEvent) {
-        // Home, End, the page keys and every F-key decode to no focus key and arrive here carrying
-        // a private-use scalar, which is printable as far as `Character` is concerned: unfiltered
-        // they entered the query, emptied the list and rendered the button as tofu.
         guard event.modifierFlags.isDisjoint(with: [.command, .control, .option]),
             let characters = event.charactersIgnoringModifiers, !characters.isEmpty,
             characters.unicodeScalars.allSatisfy(Self.isTypable)
@@ -277,16 +217,13 @@ final class CheckboxDropdown: NSView {
         rerenderList()
     }
 
-    /// Whether a scalar belongs in a query: not whitespace, not a control code, and outside the
-    /// private-use block AppKit encodes the non-printing keys in.
+    /// AppKit encodes Home, End, the page keys and F-keys as private-use scalars `Character` calls printable.
     private static func isTypable(_ scalar: Unicode.Scalar) -> Bool {
         !CharacterSet.whitespacesAndNewlines.contains(scalar)
             && !CharacterSet.controlCharacters.contains(scalar)
             && !(0xF700...0xF8FF).contains(scalar.value)
     }
 
-    /// Recompute `visible` from `query`, ranked by the scorer the command palette uses, so "cred"
-    /// finds `config/credentials/development.key`.
     private func refilter() {
         guard !query.isEmpty else {
             visible = restingIndices.map { $0.filter(items.indices.contains) } ?? Array(items.indices)
@@ -298,22 +235,16 @@ final class CheckboxDropdown: NSView {
                 guard let score = FuzzyMatch.score(query, items[index].title) else { return nil }
                 return (index, score)
             }
-            // Stable on ties so equally-scored rows keep catalog order rather than shuffling.
             .sorted { $0.score == $1.score ? $0.index < $1.index : $0.score > $1.score }
             .map(\.index)
     }
 
-    /// Re-render the open card after the query moved. `ListPopover.open` no-ops while one is up,
-    /// so it comes down first; the query and highlight live here, not in the card.
     private func rerenderList() {
         renderTitle()
         guard popover.isOpen else { return }
         let before = visible
         refilter()
         guard visible != before else { return }
-        // Back to the top match on every query change, unlike `Dropdown`, whose highlight starts on
-        // the current selection. This one starts on row 0, so keeping it would let Return commit a
-        // lower-ranked row than the one the query just promoted.
         highlighted = visible.first ?? highlighted
         popover.close()
         popover.open(rows: buildRows())
@@ -336,15 +267,11 @@ final class CheckboxDropdown: NSView {
         row.scrollToVisible(row.bounds)
     }
 
-    /// A row the query filtered out is not committable: the highlight survives a query that admits
-    /// nothing, and toggling it would change an entry the user cannot see.
     private func toggleHighlight() {
         guard visible.contains(highlighted) else { return }
         toggle(highlighted)
     }
 
-    /// Report a toggle and keep the list open — several picks per visit is the point of a
-    /// multi-select. The owner's write triggers a reload whose `setItems` re-renders the rows.
     private func toggle(_ index: Int) {
         guard items.indices.contains(index) else { return }
         highlighted = index
@@ -362,8 +289,6 @@ final class CheckboxDropdown: NSView {
         }
     }
 
-    /// One row per item the query admits; `ListPopover` sizes them and assembles the card. A query
-    /// that admits nothing gets a line saying so, or the card renders as an empty sliver.
     private func buildRows() -> [ListPopover.Row] {
         rowViews = []
         guard !visible.isEmpty else {
@@ -391,9 +316,6 @@ final class CheckboxDropdown: NSView {
         return host
     }
 
-    /// One checkbox row in the open list: a fixed-width check slot (titles align whether checked
-    /// or not) and the title. Checked rows show an accent check and full-strength title; unchecked
-    /// rows dim the title. The keyboard highlight fills like a `Dropdown` row.
     private final class CheckboxRowView: NSView {
         private let onClick: () -> Void
         private let check = NSImageView()

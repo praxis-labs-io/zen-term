@@ -3,19 +3,8 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction test for the Terminal section's custom-shader picker: mount the real section in a
-/// window, drive the dropdown with the key events AppKit actually delivers (Return opens/commits,
-/// arrows move the highlight), and assert the token that lands in the config file. A state-only
-/// assertion would pass while the control is dead — exactly how a broken dropdown once shipped past
-/// two reviews — so this drives the control itself, through its real keyDown.
-///
-/// The picker lives in Terminal (not Appearance) because a shader only affects the terminal surface.
-/// The write→reload pipeline is rooted at `ConfigLoader.defaultRoot`; the test points that at a temp
-/// dir so it never touches the real config.
 final class SettingsTerminalShaderPickerTests: WindowTestCase {
     private var tempRoot: URL!
-    /// Retained: the dropdown's `onChange` captures the section `[weak self]`, so a deallocated
-    /// section would silently no-op the write.
     private var section: SettingsFormSection?
     private var hostWindow: NSWindow?
 
@@ -25,7 +14,7 @@ final class SettingsTerminalShaderPickerTests: WindowTestCase {
             .appendingPathComponent("zenterm-shader-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
-        AppConfig.reload()  // empty temp root = builtIn: no shader
+        AppConfig.reload()
     }
 
     override func tearDownWithError() throws {
@@ -41,8 +30,6 @@ final class SettingsTerminalShaderPickerTests: WindowTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
-    /// Mount the section and return its shader dropdown — the one whose button reads "Off" by
-    /// default (the Terminal section's only dropdown), so the test drives the shader control.
     private func mountShaderDropdown() -> Dropdown {
         let section = SettingsTerminalSection()
         self.section = section
@@ -63,7 +50,6 @@ final class SettingsTerminalShaderPickerTests: WindowTestCase {
     }
 
     private func key(_ keyCode: UInt16, arrow: Bool) -> NSEvent {
-        // Arrows carry the .function/.numericPad pair AppKit always attaches; Return is a plain key.
         NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: arrow ? [.function, .numericPad] : [],
             timestamp: 0, windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "",
@@ -83,7 +69,6 @@ final class SettingsTerminalShaderPickerTests: WindowTestCase {
         let dropdown = mountShaderDropdown()
         hostWindow?.makeFirstResponder(dropdown)
 
-        // Open (Return), move down to "Cursor Warp" (index 1), commit (Return).
         dropdown.keyDown(with: key(Self.returnKey, arrow: false))
         dropdown.keyDown(with: key(Self.downKey, arrow: true))
         dropdown.keyDown(with: key(Self.returnKey, arrow: false))
@@ -92,7 +77,6 @@ final class SettingsTerminalShaderPickerTests: WindowTestCase {
             configText().contains("cursor-shader = cursor_warp"), "got: \(configText())")
         XCTAssertEqual(dropdown.buttonTitleForTesting, "Cursor Warp")
 
-        // Back to Off (Return to open, Up to index 0, Return) clears the key entirely.
         dropdown.keyDown(with: key(Self.returnKey, arrow: false))
         dropdown.keyDown(with: key(Self.upKey, arrow: true))
         dropdown.keyDown(with: key(Self.returnKey, arrow: false))

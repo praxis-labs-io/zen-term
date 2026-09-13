@@ -20,8 +20,6 @@ final class IssueReportTests: XCTestCase {
     }
 
     func test_body_ownCopyHasNoEmDash() {
-        // Brand voice: the body's own fixed copy (the diagnostics instruction, any truncation notice)
-        // carries no em-dash. User text isn't governed, so this uses none.
         let issue = IssueReport(title: "t", whatHappened: "w", report: report)
         XCTAssertFalse(issue.body.contains("—"), "no em-dash in the issue body's own copy")
     }
@@ -36,7 +34,7 @@ final class IssueReportTests: XCTestCase {
     }
 
     func test_body_overBudget_capsTheUrlAndKeepsTheRest() {
-        let huge = String(repeating: "A", count: 20_000)  // far past the URL cap
+        let huge = String(repeating: "A", count: 20_000)
         let issue = IssueReport(title: "big", whatHappened: huge, report: report)
         let body = issue.body
 
@@ -50,8 +48,6 @@ final class IssueReportTests: XCTestCase {
     }
 
     func test_body_overBudget_withNonASCII_stillCapsTheEncodedURL() {
-        // Percent-encoding triples each of these 3-byte characters, so a raw-byte cap would let the
-        // encoded URL overflow. The cap measures the real URL, so it holds regardless.
         let huge = String(repeating: "行", count: 8_000)
         let issue = IssueReport(title: "big", whatHappened: huge, report: report)
 
