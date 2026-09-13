@@ -137,6 +137,48 @@ final class RepoPickerPresentationTests: WindowTestCase {
         XCTAssertFalse(c.isConfirmOpen, "a card, never the toast confirm")
     }
 
+    func test_clickingAndDraggingAcrossTheConfirm_opensNoRowBeneathIt() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        let picker = try XCTUnwrap(pickers(in: c).first)
+        let alpha = URL(
+            fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
+        giveWorktrees(picker, under: alpha, "feature/one")
+        moveDown(in: picker)
+        c.handle(.removeWorktree)
+        waitUntil(picker.presentedConfirmForTesting != nil, "the remove confirm to be presented")
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let card = try XCTUnwrap(picker.presentedConfirmForTesting)
+        let text = try XCTUnwrap(
+            descendants(of: card).compactMap { $0 as? NSTextField }.first { $0.stringValue.hasPrefix("Couldn't read") })
+        var opened = 0
+        for row in descendants(of: picker).compactMap({ $0 as? SelectableRowView }) {
+            let activate = row.onActivate
+            row.onActivate = {
+                opened += 1
+                activate?()
+            }
+        }
+        func mouse(_ type: NSEvent.EventType, atX x: CGFloat) throws -> NSEvent {
+            let point = text.convert(NSPoint(x: x, y: text.bounds.midY), to: nil)
+            return try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        }
+
+        c.window.makeKeyAndOrderFront(nil)
+        c.window.sendEvent(try mouse(.leftMouseDown, atX: text.bounds.minX + 10))
+        c.window.sendEvent(try mouse(.leftMouseDragged, atX: text.bounds.midX))
+        c.window.sendEvent(try mouse(.leftMouseUp, atX: text.bounds.midX))
+
+        XCTAssertEqual(opened, 0)
+        XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "the picker is still up")
+        XCTAssertTrue(picker.presentedConfirmForTesting === card, "the question is still up")
+    }
+
     func test_removeWorktree_overAWorkspaceRow_confirmsNothing() throws {
         try seedWorkspaces(twoWorkspaces)
         let c = makeWindow()

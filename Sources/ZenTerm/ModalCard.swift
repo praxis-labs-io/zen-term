@@ -14,7 +14,13 @@ extension ModalOverlay {
 }
 
 /// Swallows clicks so a tap on the card doesn't reach the dismissing backdrop.
-final class CardView: ShadowCardView { override func mouseDown(with event: NSEvent) {} }
+final class CardView: ShadowCardView {
+    override func mouseDown(with event: NSEvent) {}
+    override func mouseDragged(with event: NSEvent) {}
+    override func mouseUp(with event: NSEvent) {}
+    override func rightMouseDown(with event: NSEvent) {}
+    override func rightMouseUp(with event: NSEvent) {}
+}
 
 enum CardChrome {
     static let cornerRadius: CGFloat = 12

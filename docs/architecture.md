@@ -2166,14 +2166,19 @@ files are always untracked and git refuses without it. The branch is untouched. 
 **locked** worktree is refused instead, because git wants the force twice there and
 a lock is the user's own "not this one", usually a drive that comes and goes.
 
-`state` counts uncommitted files and `rev-list --count HEAD --not --remotes`, and
-returns **nil, not zero**, when git cannot be read: telling someone about to delete
-an unreadable tree that it holds nothing is the one thing it exists to get right.
-Unpushed is zero in a repo with **no remote at all**, because `--not --remotes`
-excludes nothing without remote-tracking refs and would otherwise report the whole
-history as at risk, when `remove` leaves the branch in place anyway. There is no
-stash count beside those, because `refs/stash` is shared across every worktree of a
-repo.
+`state` lists every uncommitted and untracked file with its status, from one `git status
+--porcelain=v2 --untracked-files=all -z`, and returns **nil, not empty**, when git cannot
+be read: telling someone about to delete an unreadable tree that it holds nothing is the
+one thing it exists to get right. `-z` because git prints a path raw, so a space or newline
+in one would split a line-based parse. `--untracked-files=all` because the default collapses
+an untracked folder of hundreds into one entry.
+
+**A commit is lost only when nothing else holds it.** `remove` deletes the worktree's own HEAD
+and nothing more, so a commit any ref or another worktree's HEAD reaches survives it. The count
+is `rev-list --count HEAD --not --glob=refs/*` plus every other worktree's HEAD, which leaves
+out branches, tags, remotes and the stash. On a branch it is zero. It runs on every removal
+rather than only for a worktree the picker listed as detached, because the listing is taken
+when the picker opens and a checkout can detach and commit after that.
 
 ### Removing one, with ⌥⌫
 
@@ -2206,11 +2211,26 @@ listing the worktree. A Cancel button would leave you worse off than either fini
 never starting.
 
 **The confirm carries the whole weight, because git never gets to refuse.** `--force` is
-unconditional, so nothing downstream will stop a mistake. One sentence names all of it:
-what is uncommitted and unpushed, the tabs that close, the carried entries that go with
-the folder, and the branch that stays. Splitting that into two dialogs for one decision
-is worse than one long sentence. A nil `WorktreeState` reads as "could not be read",
-never as "clean", and keeps the destructive framing.
+unconditional, so nothing downstream will stop a mistake. The card is a checklist, one item
+per consequence, each behind a mark that says how much it costs: an x for what is lost, a
+warning triangle only when git could not read the worktree, an info circle for what is
+expected (the copied files deleted, the tabs closing), and a check for what is kept. Items run
+in that order, so the branch and its commits come last, and only on a worktree with a branch
+that loses no commits.
+The uncommitted files and the copied files each list their entries under their item, so both
+lists sit together. A nil `WorktreeState` reads as "Couldn't read", never as "clean".
+`WorktreeRemovalMessage` builds the items and is pure, so every case is asserted without a
+window, and `ConfirmCardChecklist` draws them.
+
+**Each list holds at most 8 rows.** Past 8 copied files, the list shows 7 and an `and N more`
+row. `WorktreeRemovalRollup` shows every uncommitted file while they fit.
+Past that, the deepest folder holding more than one row collapses into one row with a count
+per status, then the next, and a last `and N more` row counts what still spills. Rows keep
+the glyphs and colors of the picker's churn counts, from `GitStatusCategory`, so a file reads
+the same in both places. `ConfirmCardList` draws them: the path truncates in the middle, so
+the file name survives, and the rows rebuild their colors on a theme change because an
+attributed string bakes them in. Ignored files are not listed: most are rebuilt or
+reinstalled, and the copied entries that matter are already named.
 
 **The read runs off-main and the confirm is presented on the way back**, so it checks the
 picker is still the one that was up, by identity. Otherwise it lands over whatever the user

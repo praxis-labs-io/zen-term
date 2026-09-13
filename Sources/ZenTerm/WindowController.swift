@@ -992,18 +992,18 @@ final class WindowController: NSObject {
         let (worktree, parent) = selection
         let openTabs = onCountTabsAtPath?(worktree.path) ?? tabCount(atPath: worktree.path)
         DispatchQueue.global(qos: .userInitiated).async {
-            let state = WorktreeStore.state(worktree)
-            let carried = parent.carry.filter {
-                FileManager.default.fileExists(
-                    atPath: worktree.path.appendingPathComponent($0).path)
+            let carried = parent.carry.compactMap { entry -> String? in
+                let url = worktree.path.appendingPathComponent(entry)
+                guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+                return PathDisplay.isDirectory(url) ? entry + "/" : entry
             }
+            let items = WorktreeRemovalMessage.items(
+                for: worktree, state: WorktreeStore.state(worktree), carried: carried, openTabs: openTabs)
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.modal?.overlay === picker,
                     !self.worktreeRemovals.isRemoving(worktree.path)
                 else { return }
-                self.confirmRemoveWorktree(
-                    picker, worktree, from: parent, state: state, carried: carried,
-                    openTabs: openTabs)
+                self.confirmRemoveWorktree(picker, worktree, from: parent, items: items)
             }
         }
     }
@@ -1011,14 +1011,11 @@ final class WindowController: NSObject {
     // A card, not the toast confirm, because this deletes a folder and cannot be undone.
     private func confirmRemoveWorktree(
         _ picker: RepoPickerOverlay, _ worktree: Worktree, from parent: Workspace,
-        state: WorktreeState?, carried: [String], openTabs: Int
+        items: [ConfirmCardChecklist.Item]
     ) {
-        let name = Self.worktreeName(worktree)
+        let name = WorktreeRemovalMessage.name(worktree)
         let card = ConfirmCard(
-            title: "Remove Worktree",
-            message: Self.removeWorktreeMessage(
-                worktree, state: state, carried: carried, openTabs: openTabs),
-            confirmLabel: "Remove",
+            title: "Remove Worktree", items: items, confirmLabel: "Remove",
             background: Theme.current.chrome.background.nsColor,
             onCancel: { [weak picker] in picker?.dismissConfirm() },
             onConfirm: { [weak self, weak picker] in
@@ -1036,46 +1033,6 @@ final class WindowController: NSObject {
                     variant: .warning, title: "Couldn't Remove \(name)",
                     message: error.localizedDescription))
         }
-    }
-
-    // A detached worktree's folder name reads like a branch, so its short head stands in.
-    static func worktreeName(_ worktree: Worktree) -> String {
-        worktree.branch ?? String(worktree.head.prefix(7))
-    }
-
-    // A nil state reads as "could not be read", never as empty.
-    static func removeWorktreeMessage(
-        _ worktree: Worktree, state: WorktreeState?, carried: [String], openTabs: Int
-    ) -> String {
-        let name = worktreeName(worktree)
-        var does: [String] = []
-        if openTabs == 1 { does.append("closes its tab") }
-        if openTabs > 1 { does.append("closes its \(openTabs) tabs") }
-        does.append(
-            carried.isEmpty
-                ? "deletes the folder" : "deletes the folder with the \(joined(carried)) it copied")
-        does.append("keeps the branch")
-        let consequence = "Removing it \(joined(does))."
-
-        guard let state else {
-            return "\(name) could not be read, so what it holds is unknown. \(consequence)"
-        }
-        guard !state.isClean else { return "\(name) has nothing uncommitted. \(consequence)" }
-        var lost: [String] = []
-        if state.uncommitted > 0 {
-            lost.append("\(state.uncommitted) uncommitted file\(state.uncommitted == 1 ? "" : "s")")
-        }
-        if state.unpushed > 0 {
-            let verb = state.unpushed == 1 ? "is" : "are"
-            lost.append("\(state.unpushed) commit\(state.unpushed == 1 ? "" : "s") that \(verb) on no remote")
-        }
-        return "\(name) has \(joined(lost)). \(consequence)"
-    }
-
-    private static func joined(_ items: [String]) -> String {
-        guard items.count > 1 else { return items.first ?? "" }
-        guard items.count > 2 else { return items.joined(separator: " and ") }
-        return items.dropLast().joined(separator: ", ") + ", and " + (items.last ?? "")
     }
 
     // Checks the confirm itself because the Help menu bypasses `handle`'s `isConfirmOpen` gate.

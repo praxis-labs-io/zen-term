@@ -359,32 +359,19 @@ final class RepoPickerOverlay: PaletteOverlay {
         private let churnLabel = NSTextField(labelWithString: "")
         private var branchFloor: NSLayoutConstraint!
 
-        static let groupGap: CGFloat = 4
-
-        /// No Nerd-font glyphs: the chrome's system font renders a private-use codepoint as a box.
         static func churnText(_ churn: GitChurn) -> NSAttributedString {
             let chrome = Theme.current.chrome
-            let font = NSFont.systemFont(ofSize: 11)
-            let out = NSMutableAttributedString()
-            func token(_ text: String, _ role: TerminalColor) {
-                if out.length > 0 {
-                    out.append(
-                        NSAttributedString(string: " ", attributes: [.font: font, .kern: groupGap]))
-                }
-                out.append(
-                    NSAttributedString(
-                        string: text, attributes: [.foregroundColor: role.nsColor, .font: font]))
+            func token(_ text: String, _ role: TerminalColor) -> NSAttributedString {
+                NSAttributedString(
+                    string: text, attributes: [.foregroundColor: role.nsColor, .font: StatusTokens.font])
             }
-
-            if churn.ahead > 0 { token("⇡\(churn.ahead)", chrome.info) }
-            if churn.behind > 0 { token("⇣\(churn.behind)", chrome.destructive) }
-            if churn.staged > 0 { token("+\(churn.staged)", chrome.positive) }
-            if churn.modified > 0 { token("~\(churn.modified)", chrome.warning) }
-            if churn.untracked > 0 { token("?\(churn.untracked)", chrome.attention) }
-            if churn.renamed > 0 { token("»\(churn.renamed)", chrome.info) }
-            if churn.deleted > 0 { token("-\(churn.deleted)", chrome.destructive) }
-            if churn.conflicted > 0 { token("≠\(churn.conflicted)", chrome.accent) }
-            return out
+            var groups: [NSAttributedString] = []
+            if churn.ahead > 0 { groups.append(token("⇡\(churn.ahead)", chrome.info)) }
+            if churn.behind > 0 { groups.append(token("⇣\(churn.behind)", chrome.destructive)) }
+            groups += GitStatusCategory.tokens(counting: churn.count(of:)).map {
+                token($0.text, chrome[keyPath: $0.category.role])
+            }
+            return StatusTokens.joined(groups)
         }
 
         static let typeRail = "Worktree"

@@ -14,11 +14,11 @@ struct WorktreeListing: Equatable {
 }
 
 struct WorktreeState: Equatable {
-    let uncommitted: Int
-    /// Zero with no remote: `remove` keeps the branch, so there is nothing to lose.
-    let unpushed: Int
+    let files: [WorktreeFileChange]
+    let lostCommits: Int
 
-    var isClean: Bool { uncommitted == 0 && unpushed == 0 }
+    var uncommitted: Int { files.count }
+    var isClean: Bool { files.isEmpty && lostCommits == 0 }
 }
 
 /// Every call blocks on git, so callers run them off-main.
@@ -122,23 +122,31 @@ enum WorktreeStore {
     }
 
     /// Nil when git fails, never a zero that would read as clean.
-    static func state(_ worktree: Worktree) -> WorktreeState? { state(at: worktree.path) }
-
-    /// Counts untracked files one by one, and skips unpushed without remotes, where `--not --remotes` excludes nothing.
-    static func state(at checkout: URL) -> WorktreeState? {
-        guard let status = try? git(["status", "--porcelain", "--untracked-files=all"], in: checkout),
-            let remotes = try? git(["remote"], in: checkout)
-        else { return nil }
-        guard !remotes.isEmpty else {
-            return WorktreeState(uncommitted: lineCount(status), unpushed: 0)
-        }
-        guard
-            let counted = try? git(
-                ["rev-list", "--count", "HEAD", "--not", "--remotes"], in: checkout),
-            let unpushed = Int(counted)
-        else { return nil }
-        return WorktreeState(uncommitted: lineCount(status), unpushed: unpushed)
+    static func state(_ worktree: Worktree) -> WorktreeState? {
+        state(at: worktree.path, countingLostCommits: true)
     }
+
+    static func state(at checkout: URL, countingLostCommits: Bool = false) -> WorktreeState? {
+        guard let status = try? git(untrackedStatus, in: checkout) else { return nil }
+        let files = WorktreeFileChange.parse(status)
+        guard countingLostCommits else { return WorktreeState(files: files, lostCommits: 0) }
+        guard let listing = try? porcelain(in: checkout),
+            let counted = try? git(
+                ["rev-list", "--count", "HEAD", "--not", "--glob=refs/*"] + heads(in: listing, besides: checkout),
+                in: checkout),
+            let commits = Int(counted)
+        else { return nil }
+        return WorktreeState(files: files, lostCommits: commits)
+    }
+
+    private static func heads(in listing: String, besides checkout: URL) -> [String] {
+        let own = checkout.resolvingSymlinksInPath().standardizedFileURL
+        return parse(listing)
+            .filter { $0.path.resolvingSymlinksInPath().standardizedFileURL != own && !$0.head.isEmpty }
+            .map(\.head)
+    }
+
+    private static let untrackedStatus = ["status", "--porcelain=v2", "--untracked-files=all", "-z"]
 
     static func commonDir(of repo: URL) -> URL? {
         guard let answer = try? git(["rev-parse", "--git-common-dir"], in: repo), !answer.isEmpty
@@ -465,10 +473,6 @@ enum WorktreeStore {
 
     private static func branchExists(_ branch: String, in repo: URL) -> Bool {
         (try? git(["show-ref", "--verify", "--quiet", "refs/heads/\(branch)"], in: repo)) != nil
-    }
-
-    private static func lineCount(_ output: String) -> Int {
-        output.isEmpty ? 0 : output.split(separator: "\n").count
     }
 
     @discardableResult

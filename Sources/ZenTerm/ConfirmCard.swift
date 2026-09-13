@@ -9,13 +9,33 @@ final class ConfirmCard: NSView {
     private var dismiss = DismissGate()
     private let header = NSTextField(labelWithString: "")
     private let messageLabel = NSTextField(labelWithString: "")
+    private let checklist: ConfirmCardChecklist?
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private let confirmButton: AppButton
 
-    init(
+    convenience init(
         title: String, message: String, confirmLabel: String, background: NSColor,
         onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
     ) {
+        self.init(
+            title: title, message: message, checklist: nil, confirmLabel: confirmLabel,
+            background: background, onCancel: onCancel, onConfirm: onConfirm)
+    }
+
+    convenience init(
+        title: String, items: [ConfirmCardChecklist.Item], confirmLabel: String, background: NSColor,
+        onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
+    ) {
+        self.init(
+            title: title, message: "", checklist: ConfirmCardChecklist(items: items), confirmLabel: confirmLabel,
+            background: background, onCancel: onCancel, onConfirm: onConfirm)
+    }
+
+    private init(
+        title: String, message: String, checklist: ConfirmCardChecklist?, confirmLabel: String,
+        background: NSColor, onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
+    ) {
+        self.checklist = checklist
         self.onCancel = onCancel
         self.onConfirm = onConfirm
         confirmButton = AppButton(title: confirmLabel, variant: .destructive)
@@ -87,6 +107,7 @@ final class ConfirmCard: NSView {
         CardChrome.reapplyTheme(to: card)
         header.textColor = chrome.foreground.nsColor
         messageLabel.textColor = chrome.ink(.muted)
+        checklist?.reapplyTheme()
         cancelButton.reapplyTheme()
         confirmButton.reapplyTheme()
     }
@@ -129,7 +150,7 @@ final class ConfirmCard: NSView {
         footer.alignment = .centerY
         footer.spacing = 8
 
-        let content = NSStackView(views: [header, messageLabel, footer])
+        let content = NSStackView(views: [header, checklist ?? messageLabel, footer])
         content.orientation = .vertical
         content.alignment = .leading
         content.spacing = 14
