@@ -34,8 +34,6 @@ final class LayoutFormatTests: XCTestCase {
         XCTAssertEqual(LayoutFormat.splitArgs(""), [])
     }
 
-    /// The token orders by toolbar position, not set order, so a given hide set always writes the
-    /// same file text.
     func test_hideToolbarButtons_token_ordersByToolbarPosition() {
         XCTAssertEqual(
             LayoutFormat.hideToolbarButtonsToken([.commandPalette, .newTab, .bottomDrawer]),

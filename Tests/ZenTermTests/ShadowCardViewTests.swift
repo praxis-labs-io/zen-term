@@ -3,10 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Every shadowed chrome card derives an explicit `layer.shadowPath` from its rounded
-/// bounds (no offscreen shadow pass) and keeps it current as the card resizes.
 final class ShadowCardViewTests: WindowTestCase {
-    /// Retained so the card stays window-mounted for the duration of each test.
     private var window: NSWindow!
 
     override func tearDown() {
@@ -46,7 +43,7 @@ final class ShadowCardViewTests: WindowTestCase {
 
     func test_degenerateFrame_clampsRadiusWithoutTrapping() {
         let card = ShadowCardView()
-        mount(card, size: NSSize(width: 8, height: 8))  // radius 12 > 8/2 would trap CGPath
+        mount(card, size: NSSize(width: 8, height: 8))
         XCTAssertNotNil(card.layer?.shadowPath)
     }
 

@@ -1,25 +1,16 @@
 import AppKit
 
-/// The CARRY control in the workspace form: a multi-select over what git ignores in the workspace
-/// folder. Carry names what a worktree needs and git leaves out, so the candidates are already
-/// known and nothing here is typed.
 final class CarryPicker: NSView, ThemeReapplying {
-    /// What git ignores in a workspace, given what it already copies. Blocking, so it runs
-    /// off-main. Tests replace it.
     var probe: (URL, Set<String>) -> IgnoredCatalog? = WorktreeCarry.ignoredEntries
 
-    /// The list or its selection changed: a catalog landed, or an entry was toggled.
     var onChanged: (() -> Void)?
 
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
-    /// The control stopped being a focus stop while it held the ring. The form moves on rather
-    /// than leaving the next arrow press with nowhere to go.
     var onFocusLost: (() -> Void)?
 
-    /// The folder the catalog is read from. Setting it reloads.
     var workspaceFolder: URL? {
         didSet {
             guard workspaceFolder != oldValue else { return }
@@ -27,21 +18,14 @@ final class CarryPicker: NSView, ThemeReapplying {
         }
     }
 
-    /// Checked, in catalog order.
     private(set) var carried: [String] = []
 
-    /// What the list offers: what git ignores today, plus anything already carried that git no
-    /// longer ignores, so a hand-authored entry survives a save instead of vanishing from the file.
+    /// Keeps carried entries git no longer ignores, so a hand-authored entry survives a save.
     private(set) var catalog: [String] = []
-    /// The rows shown while nothing is typed. A folded folder stands in for its files here; the
-    /// files stay in `catalog`, reachable by typing their name.
     private(set) var resting: [String] = []
     private var fileCounts: [String: Int] = [:]
     private var directories: Set<String> = []
 
-    /// The stop the form arrows to. The placeholder is one while git is being asked, so the ring
-    /// does not gain a stop under the user the moment the catalog lands; the settled states with
-    /// nothing to pick are skipped.
     var focusStop: NSView? { dropdown ?? (isLoading ? status : nil) }
 
     var isLoadingForTesting: Bool { isLoading }
@@ -56,11 +40,8 @@ final class CarryPicker: NSView, ThemeReapplying {
     private let detail = NSTextField(labelWithString: "")
     private let status = PlaceholderSelect()
     private var dropdown: CheckboxDropdown?
-    /// Bumped per reload so a superseded probe's answer is dropped rather than landing over a
-    /// newer one. `DispatchWorkItem.cancel` cannot stop one that has already started.
+    /// `DispatchWorkItem.cancel` cannot stop a probe that has already started.
     private var generation = 0
-    /// Coalesces the reload, so walking a path costs a single `git status` rather than one per
-    /// character typed.
     private var pending: DispatchWorkItem?
     private var isLoading = false
     private var deferredWork: (() -> Void)?
@@ -105,8 +86,6 @@ final class CarryPicker: NSView, ThemeReapplying {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Seed from the workspace being edited. No list yet: the catalog is whatever git says plus
-    /// these, and building one from these alone would be torn down the moment the probe lands.
     func setCarried(_ entries: [String]) {
         carried = entries
         catalog = catalog.isEmpty ? entries : catalog
@@ -121,15 +100,11 @@ final class CarryPicker: NSView, ThemeReapplying {
         dropdown?.reapplyTheme()
     }
 
-    // MARK: loading
-
     private func reload() {
         generation += 1
         let token = generation
         pending?.cancel()
         guard let folder = workspaceFolder else {
-            // The whole catalog, not just `catalog`: a stale `resting` claims git ignores nothing
-            // here, and a stale count renders `170 files` against an unrelated row.
             isLoading = false
             catalog = carried
             resting = carried
@@ -156,14 +131,7 @@ final class CarryPicker: NSView, ThemeReapplying {
         DispatchQueue.main.asyncAfter(deadline: .now() + settle, execute: work)
     }
 
-    /// How long the folder field is given to stop changing before git is asked. It changes per
-    /// keystroke, and a typed path passes through real directories on the way.
-
-    /// Nil is not "nothing ignored": the folder is not a repo, or git could not be asked, and the
-    /// message says so rather than showing an empty list that reads as a repo with nothing to carry.
-    /// Run `work` once no list is open. Everything that reshapes this control goes through here:
-    /// swapping `catalog` under an open list leaves the rows the user can see indexing entries they
-    /// cannot, so a click carries whatever now sits at that row's position.
+    /// Swapping `catalog` under an open list would make a click carry whatever now sits at that row.
     private func whenListIdle(_ work: @escaping () -> Void) {
         guard let dropdown, dropdown.isPopoverOpen else { return work() }
         deferredWork = work
@@ -209,15 +177,12 @@ final class CarryPicker: NSView, ThemeReapplying {
         show(.list)
     }
 
-    // MARK: the list
-
     private enum Content {
         case message(String)
         case list
     }
 
     private func show(_ content: Content) {
-        // Read before the teardown below: a view out of the tree has no window to be focused in.
         let placeholderHadFocus = KeyboardFocus.isFocused(status, in: window)
         for view in slot.arrangedSubviews { slot.removeArrangedSubview(view) }
         status.removeFromSuperview()
@@ -231,8 +196,6 @@ final class CarryPicker: NSView, ThemeReapplying {
             status.isHidden = false
             slot.addArrangedSubview(status)
             status.widthAnchor.constraint(equalTo: slot.widthAnchor).isActive = true
-            // Both directions, or the ring lands nowhere: loading to a settled message leaves the
-            // placeholder unfocusable, and a list replaced by one takes the focus out with it.
             guard placeholderHadFocus || listHadFocus else { return }
             if status.isFocusable {
                 window?.makeFirstResponder(status)
@@ -240,8 +203,6 @@ final class CarryPicker: NSView, ThemeReapplying {
                 onFocusLost?()
             }
         case .list:
-            // Hand focus on rather than dropping it: the placeholder holding it is about to leave
-            // the view tree, and a form whose ring lands nowhere eats the next arrow press.
             status.isHidden = true
             status.isFocusable = false
             buildDropdown()
@@ -249,8 +210,7 @@ final class CarryPicker: NSView, ThemeReapplying {
         }
     }
 
-    /// Rebuilt rather than re-seeded: `CheckboxDropdown` fixes its row count at init, and the
-    /// catalog's length is not known until git answers.
+    /// Rebuilt rather than re-seeded: `CheckboxDropdown` fixes its row count at init.
     private func buildDropdown() {
         let list = CheckboxDropdown(title: summary(), items: items()) { [weak self] index in
             self?.toggle(index)
@@ -288,16 +248,11 @@ final class CarryPicker: NSView, ThemeReapplying {
         }
     }
 
-    /// A checked row is shown at rest wherever it sits, so a file picked out of a folded folder
-    /// does not disappear behind that folder the moment the list reopens.
     private func restingIndices() -> [Int] {
         let shown = Set(resting).union(carried)
         return catalog.indices.filter { shown.contains(catalog[$0]) }
     }
 
-    /// The control's shape while there is no list: a select-sized box holding the reason, and a
-    /// spinner while git is being asked. A bare line of text read as the control having failed to
-    /// render rather than as a state it was in.
     private final class PlaceholderSelect: NSView {
         private let label = NSTextField(labelWithString: "")
         private let spinner = Spinner()
@@ -305,7 +260,6 @@ final class CarryPicker: NSView, ThemeReapplying {
         var title: String { label.stringValue }
         var isSpinning: Bool { spinner.isSpinning }
 
-        /// A stop only while there is a reason to stand here. Set by the owner per state.
         var isFocusable = false {
             didSet {
                 guard !isFocusable, isFocused else { return }
@@ -335,8 +289,6 @@ final class CarryPicker: NSView, ThemeReapplying {
 
         override func drawFocusRingMask() {}
 
-        /// Consumes everything else, the way the open list does: there is nothing here to activate,
-        /// and letting a key fall through would run it against whatever is behind the card.
         override func keyDown(with event: NSEvent) {
             switch KeyboardFocus.key(for: event) {
             case .up: onArrowUp?()
@@ -401,9 +353,6 @@ final class CarryPicker: NSView, ThemeReapplying {
         carried.isEmpty ? "Nothing chosen" : "\(carried.count) file\(carried.count == 1 ? "" : "s")"
     }
 
-    /// The line under the select: what the control is for until something is chosen, then what is
-    /// chosen. A count alone meant opening the list and scrolling all of it to see the selection,
-    /// and these are full paths, which no button-width summary can hold.
     static let captionText = "Files git ignores that a worktree needs to run."
 
     private func renderDetail() {

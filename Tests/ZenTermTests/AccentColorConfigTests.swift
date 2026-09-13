@@ -3,9 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The `accent-color` key's parse and load path: a token resolves to a slot, a bad one
-/// falls back with a diagnostic the Settings row can render, and the whole thing reaches
-/// `Theme.current.chrome.accent` through a real config file rather than a hand-built struct.
 final class AccentColorConfigTests: XCTestCase {
     private var tempRoot: URL!
 
@@ -46,8 +43,6 @@ final class AccentColorConfigTests: XCTestCase {
         XCTAssertNil(ConfigLoader.loadGeneralConfig().accentColor)
     }
 
-    /// A bad value must fall back *and* leave a trail on the row that owns the key — the app's
-    /// contract is that nothing in the config can crash it and every fallback is visible.
     func test_unknownToken_fallsBackAndReportsOnTheRow() throws {
         try writeConfig("accent-color = chartreuse\n")
         let config = ConfigLoader.loadGeneralConfig()
@@ -58,7 +53,6 @@ final class AccentColorConfigTests: XCTestCase {
             "expected a diagnostic scoped to the accent-color row, got: \(config.configDiagnostics)")
     }
 
-    /// The end of the chain: a config file has to actually move the color the chrome paints with.
     func test_theKeyReachesTheResolvedChromeAccent() throws {
         try writeConfig("accent-color = green\n")
         AppConfig.reload()
@@ -68,13 +62,10 @@ final class AccentColorConfigTests: XCTestCase {
             Theme.current.chrome.accent,
             Theme.current.terminal.ansi[AccentSlot.themeDefault.ansiIndex],
             "the key has not moved the accent off its default slot")
-        // The roles that carry meaning stay where they were.
         XCTAssertEqual(Theme.current.chrome.info, Theme.current.terminal.ansi[4])
         XCTAssertEqual(Theme.current.chrome.destructive, Theme.current.terminal.ansi[1])
     }
 
-    /// The slot is stored, not the color, so a theme swap re-resolves the same name against the new
-    /// palette. Without this the accent would strand a color from the theme the user left behind.
     func test_theSlotReResolvesAgainstANewTheme() throws {
         let themes = tempRoot.appendingPathComponent("themes", isDirectory: true)
         try FileManager.default.createDirectory(at: themes, withIntermediateDirectories: true)

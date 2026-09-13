@@ -3,14 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The reload notice for config problems. The inline note on a Settings row only reaches
-/// someone already looking at that row, and a user who broke their config by hand has no reason to
-/// go there, so the reload has to announce itself.
-///
-/// `.chordTaken` is not among them. A chord conflict carries its own answer, so it gets a
-/// card each with Accept and Revert rather than a line in this shared list. Its sentence still
-/// renders here, because the row and that card both show it; `ConfigApplierDiagnosticFilterTests`
-/// holds it out of the shared notice.
 final class ConfigDiagnosticToastTests: XCTestCase {
     private var tempRoot: URL!
 
@@ -20,7 +12,7 @@ final class ConfigDiagnosticToastTests: XCTestCase {
             .appendingPathComponent("zenterm-diagnostic-toast-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
-        AppConfig.reload()  // pin to defaults, never the real user config
+        AppConfig.reload()
     }
 
     override func tearDownWithError() throws {
@@ -30,7 +22,6 @@ final class ConfigDiagnosticToastTests: XCTestCase {
         try super.tearDownWithError()
     }
 
-    /// `action` lost `chord` to `winner`.
     private func diagnostic(
         _ action: KeyInterceptor.ReservedChord, lost chord: Chord, to winner: KeyInterceptor.ReservedChord
     ) -> ConfigDiagnostic {
@@ -41,8 +32,6 @@ final class ConfigDiagnosticToastTests: XCTestCase {
         diagnostic(.splitVertical, lost: Chord(command: true, shift: true, key: "\\"), to: .toggleZoom)
     }
 
-    /// A problem that does reach a toast: a keybind line on a chord the menu bar owns. The announce
-    /// gate is about these.
     private var paletteOnAMenuChord: ConfigDiagnostic {
         ConfigDiagnostic(
             scope: .keybind(.toggleCommandPalette),
@@ -61,19 +50,12 @@ final class ConfigDiagnosticToastTests: XCTestCase {
         XCTAssertNil(ConfigDiagnostic.toast(for: []), "a clean config must stay silent")
     }
 
-    // MARK: the announce gate
-    //
-    // Every in-app write reloads too, so the toast is gated on the conflict set CHANGING. That gate
-    // is the one thing that can silently suppress the whole feature, so it gets a truth table.
-
     func test_announce_newConflict_speaksUp() {
         let one = [paletteOnAMenuChord]
         XCTAssertNotNil(ConfigDiagnostic.announcement(for: one, alreadyAnnounced: []))
     }
 
     func test_announce_sameConflictTwice_staysQuiet() {
-        // A Settings rebind reloads the config; re-announcing an unchanged conflict on every edit
-        // would nag, and the Keybinds row already says it inline.
         let one = [paletteOnAMenuChord]
         XCTAssertNil(ConfigDiagnostic.announcement(for: one, alreadyAnnounced: one))
     }
@@ -85,7 +67,6 @@ final class ConfigDiagnosticToastTests: XCTestCase {
     }
 
     func test_announce_conflictResolved_staysQuiet() {
-        // Fixing the config shouldn't toast "all clear" — the chip coming back says it.
         let before = [paletteOnAMenuChord]
         XCTAssertNil(ConfigDiagnostic.announcement(for: [], alreadyAnnounced: before))
     }
@@ -95,16 +76,12 @@ final class ConfigDiagnosticToastTests: XCTestCase {
     }
 
     func test_oneProblem_keepsTheFullSentence() throws {
-        // A single problem has no list to be terse for, and its title isn't doing the framing a
-        // count does — so it says where this came from.
         let content = try XCTUnwrap(ConfigDiagnostic.toast(for: [newTabUnusableBind]))
         XCTAssertEqual(content.variant, .warning, "a working-but-surprising config is a warning, not a failure")
         XCTAssertEqual(content.title, "New Tab has an unusable shortcut")
         XCTAssertEqual(content.message, "new_tab=cmd+| can't be typed on your keyboard. Ignoring it.")
     }
 
-    /// The sentence a chord conflict carries. Present tense and no "in your config": the row and
-    /// the card both show it beside the two buttons that answer it.
     func test_chordTaken_readsAsAStandingState() {
         XCTAssertEqual(splitVerticalLostBackslash.message, "⌘⇧\\ goes to toggle_focus_mode.")
         XCTAssertTrue(splitVerticalLostBackslash.isChordConflict, "it gets its own card")
@@ -129,14 +106,10 @@ final class ConfigDiagnosticToastTests: XCTestCase {
             "the title already says it; repeating it per line is what forced the wrap")
     }
 
-    /// Measures the copy against the card's real budget. The string assertion above can't see this:
-    /// the first version of this listing read fine as text and wrapped mid-phrase at 236pt, because
-    /// character count isn't width. Every word in a summary line pays rent here.
     func test_summaryLines_fitTheToastWithoutWrapping() throws {
         let realistic: [ConfigDiagnostic] = [
             splitVerticalLostBackslash,
             newTabLostCmdT,
-            // The wide end of what's reachable: a long action title and a long winning token.
             diagnostic(.toggleBottomDrawer, lost: Chord(command: true, key: "b"), to: .toggleRightDrawer),
             ConfigDiagnostic(
                 scope: .keybind(.toggleCommandPalette),
@@ -154,15 +127,12 @@ final class ConfigDiagnosticToastTests: XCTestCase {
     }
 
     func test_unusableBind_readsDifferentlyFromAStolenChord() {
-        // Different claims: the action still HAS its default; the config line is what's dead.
         let unusable = ConfigDiagnostic(
             scope: .keybind(.splitVertical), problem: .unusableBind(Chord(command: true, key: "|")))
         XCTAssertEqual(unusable.headline, "Split Vertically has an unusable shortcut")
         XCTAssertEqual(unusable.detail, "cmd+| can't be typed")
         XCTAssertTrue(unusable.message.contains("split_vertical=cmd+|"), unusable.message)
     }
-
-    // MARK: non-keybind diagnostics
 
     func test_invalidValue_phrasings() {
         let diagnostic = ConfigDiagnostic(
@@ -218,8 +188,6 @@ final class ConfigDiagnosticToastTests: XCTestCase {
         XCTAssertTrue(content.message.contains("Open Lazygit"), content.message)
     }
 
-    /// The same width budget the keybind summaries are measured against, for the non-keybind cases —
-    /// a long setting key or float title plus its detail can't wrap mid-phrase in the 236pt column.
     func test_nonKeybindSummaryLines_fitTheToastWithoutWrapping() {
         let realistic: [ConfigDiagnostic] = [
             ConfigDiagnostic(
@@ -245,33 +213,23 @@ final class ConfigDiagnosticToastTests: XCTestCase {
     }
 
     func test_announce_sameConflictsInADifferentOrder_staysQuiet() {
-        // Diagnostics come out in config-line order and ConfigWriter SORTS the lines it emits, so a
-        // Settings write can reorder them without changing a thing. An order-sensitive gate would
-        // re-toast conflicts the user already saw.
         let a = splitVerticalLostBackslash
         let b = newTabLostCmdT
         XCTAssertNil(ConfigDiagnostic.announcement(for: [a, b], alreadyAnnounced: [b, a]))
     }
 
     func test_aFloatLosingItsChord_isSurfacedByTheToast() throws {
-        // Tool floats have no Keybinds row (they're file-only), so the inline note can never reach
-        // them — the toast is the only thing that can tell a user their float toggle went dead.
         try "float = title:btop command:btop key:cmd+y title:BTop\nkeybind = new_tab=cmd+y\n"
             .write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         AppConfig.reload()
 
         XCTAssertEqual(GeneralConfig.current.configDiagnostics.map(\.scope), [.keybind(.toggleToolFloat("btop"))])
         let content = try XCTUnwrap(ConfigDiagnostic.toast(for: GeneralConfig.current.configDiagnostics))
-        // "BTop", the float's title — not "btop", its id. The headline has to be derived on READ:
-        // diagnostics are built inside the parse, while GeneralConfig.current still holds the old
-        // config, so resolving the name back then reads the previous launch's floats and finds none.
         XCTAssertTrue(content.title.contains("BTop"), content.title)
         XCTAssertFalse(content.title.contains("btop has"), "fell back to the raw id: \(content.title)")
         XCTAssertTrue(content.message.contains("new_tab"), content.message)
     }
 
-    /// The real config path: a hand-edited file that steals a chord must produce a toast-worthy
-    /// diagnostic, not just an inline row note.
     func test_aConfigThatStealsAChord_producesAToast() throws {
         try "keybind = toggle_focus_mode=cmd+d\n"
             .write(to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)

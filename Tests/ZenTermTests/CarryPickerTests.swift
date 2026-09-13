@@ -3,10 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The CARRY control: a multi-select over what git ignores in the workspace folder. Driven through
-/// the real dropdown in a real window; the git probe runs through an injectable seam, so these
-/// assert the load / render / toggle wiring without standing up a repo per case
-/// (`WorktreeCarryTests` covers what git actually reports).
 final class CarryPickerTests: WindowTestCase {
     private let folder = URL(fileURLWithPath: "/tmp/carry-picker-fixture", isDirectory: true)
     private var window: NSWindow?
@@ -24,7 +20,6 @@ final class CarryPickerTests: WindowTestCase {
         picker(catalogProvider: { catalog })
     }
 
-    /// Let the stub answer differently per call, for the cases that change folder mid-flight.
     private func picker(catalogProvider: @escaping () -> IgnoredCatalog?) -> CarryPicker {
         let picker = CarryPicker()
         picker.settle = 0
@@ -39,7 +34,6 @@ final class CarryPickerTests: WindowTestCase {
         return picker
     }
 
-    /// One `onChanged` per catalog landing, so a test waits on the load rather than sleeping.
     private func load(_ picker: CarryPicker) {
         let landed = expectation(description: "catalog")
         picker.onChanged = { landed.fulfill() }
@@ -49,7 +43,6 @@ final class CarryPickerTests: WindowTestCase {
         window?.layoutIfNeeded()
     }
 
-    /// Let the probe's hop off-main and back land, for a case with no single `onChanged` to await.
     private func spin() {
         let settled = expectation(description: "settled")
         DispatchQueue.global(qos: .userInitiated).async {
@@ -58,7 +51,6 @@ final class CarryPickerTests: WindowTestCase {
         wait(for: [settled], timeout: 2)
     }
 
-    /// Open the list, walk down to `index`, and toggle it — the keys a user actually presses.
     private func toggle(_ list: CheckboxDropdown, row index: Int) {
         window?.makeFirstResponder(list)
         press(list, " ", code: 49)
@@ -123,7 +115,6 @@ final class CarryPickerTests: WindowTestCase {
         XCTAssertEqual(list.buttonTitleForTesting, "Nothing chosen")
     }
 
-    /// The list stays open across a pick, because carrying is several picks per visit.
     func test_theListStaysOpenAcrossAPick() throws {
         let picker = picker(ignoring: ["node_modules", ".env"])
         load(picker)
@@ -134,8 +125,6 @@ final class CarryPickerTests: WindowTestCase {
         XCTAssertTrue(list.isPopoverOpen)
     }
 
-    /// A `carry` line naming something not on disk is legal: a section covers a repo before and
-    /// after its first install. Dropping it from the catalog would delete it on the next save.
     func test_anEntryGitNoLongerIgnores_staysInTheListAndStaysCarried() {
         let picker = picker(ignoring: ["node_modules"])
         picker.setCarried([".env"])
@@ -158,11 +147,9 @@ final class CarryPickerTests: WindowTestCase {
         XCTAssertEqual(picker.carried, ["a", "b", "c"], "a pick re-seats the set in catalog order")
     }
 
-    /// Opening the form on a workspace that already carries something used to build a list from the
-    /// seeded entries, then tear it down when git answered. Anyone reading it watched it vanish.
     func test_whileTheProbeIsInFlight_thereIsNoListToTearDown() {
         let picker = picker(ignoring: ["node_modules", ".env"])
-        picker.settle = 10  // never lands during this test
+        picker.settle = 10
 
         picker.setCarried([".env"])
         picker.workspaceFolder = folder
@@ -172,9 +159,6 @@ final class CarryPickerTests: WindowTestCase {
         XCTAssertNil(picker.dropdownForTesting, "no list to close under the user")
     }
 
-    /// A catalog landing on an open list has to wait, and the whole catalog with it. Swapping
-    /// `catalog` while the rows stay stale leaves the user clicking a row that reads `node_modules`
-    /// and carrying whatever now sits at that index.
     func test_aCatalogLandingOnAnOpenList_changesNothingUntilItCloses() throws {
         var rows = ["aaa", "bbb"]
         let picker = picker(catalogProvider: {
@@ -194,10 +178,10 @@ final class CarryPickerTests: WindowTestCase {
         XCTAssertTrue(picker.dropdownForTesting === list, "and is the same control")
         XCTAssertEqual(picker.catalog, ["aaa", "bbb"], "the catalog it is indexing has not moved")
 
-        press(list, " ", code: 49)  // toggle row 0, which still reads 'aaa'
+        press(list, " ", code: 49)
         XCTAssertEqual(picker.carried, ["aaa"], "so a pick means the row that was on screen")
 
-        press(list, "", code: 53)  // Esc closes, and the waiting catalog lands
+        press(list, "", code: 53)
         spin()
 
         XCTAssertEqual(
@@ -205,8 +189,6 @@ final class CarryPickerTests: WindowTestCase {
             "the new catalog, with the pick kept the way any carried entry git stopped ignoring is")
     }
 
-    /// A window resize closes the card without going through `closeList`. The waiting catalog used
-    /// to be stranded there forever, and the form submitted against rows it never showed.
     func test_aResizeClosingTheList_doesNotStrandTheWaitingCatalog() throws {
         var rows = ["aaa", "bbb"]
         let picker = picker(catalogProvider: {
@@ -227,8 +209,6 @@ final class CarryPickerTests: WindowTestCase {
         XCTAssertEqual(picker.catalog, ["zzz"], "and the waiting catalog landed")
     }
 
-    /// Loading held the ring, then git answered with nothing to pick. The placeholder stops being
-    /// a stop, and without the hand-off the next arrow press has nowhere to go.
     func test_losingTheStopWhileFocused_tellsTheForm() throws {
         let picker = picker(ignoring: [])
         picker.settle = 0.05
@@ -246,8 +226,6 @@ final class CarryPickerTests: WindowTestCase {
         XCTAssertEqual(lost, 1)
     }
 
-    /// Clearing the folder claimed git ignored nothing there, and could render a stale `170 files`
-    /// note against an unrelated row, because only `catalog` was reset.
     func test_clearingTheFolder_resetsTheWholeCatalog() {
         let picker = picker(
             catalog: IgnoredCatalog(
@@ -261,7 +239,6 @@ final class CarryPickerTests: WindowTestCase {
         XCTAssertEqual(picker.resting, [])
     }
 
-    /// Nil is not "nothing ignored". An empty list there would read as a repo with nothing to carry.
     func test_aFolderGitCannotAnswerFor_saysSo() {
         let picker = picker(ignoring: nil)
         load(picker)
@@ -277,8 +254,6 @@ final class CarryPickerTests: WindowTestCase {
         XCTAssertEqual(picker.statusForTesting, "Git ignores nothing here yet.")
     }
 
-    /// The reload is coalesced, so walking a path in the folder field costs one `git status`
-    /// rather than one per character typed.
     func test_walkingAPath_asksGitOnce() {
         let picker = picker(ignoring: [])
         picker.settle = 0.05

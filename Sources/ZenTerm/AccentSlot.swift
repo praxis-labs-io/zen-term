@@ -1,16 +1,5 @@
 import TerminalKit
 
-/// Which ANSI slot of the active theme the chrome's `accent` role points at, set by
-/// `accent-color` in the config.
-///
-/// The slot is what gets stored — never a resolved color. `accent` is the chrome's primary and is
-/// read live at every site that paints it (the pane focus halo and border, primary buttons, focus
-/// rings, the tab tracer, activity dots, the brand mark), so keeping this a slot means a theme swap
-/// re-resolves all of them against the new palette instead of stranding a color from the old one.
-/// Role → slot → color, so a bring-your-own theme recolors it.
-///
-/// The names are the conventional ANSI hues, not literal color claims — a theme is free to put iris
-/// in the magenta slot, which is why the Settings picker shows a swatch beside each name.
 enum AccentSlot: String, CaseIterable {
     case black
     case red
@@ -29,8 +18,7 @@ enum AccentSlot: String, CaseIterable {
     case brightCyan = "bright-cyan"
     case brightWhite = "bright-white"
 
-    /// Index into `TerminalTheme.ansi`: 0–7 normal, 8–15 bright. Spelled out rather than derived
-    /// from `allCases` order so reordering a case can't silently repoint every user's accent.
+    /// Spelled out rather than derived from `allCases`, so reordering a case cannot repoint a user's accent.
     var ansiIndex: Int {
         switch self {
         case .black: return 0
@@ -52,21 +40,16 @@ enum AccentSlot: String, CaseIterable {
         }
     }
 
-    /// The default the chrome uses with no `accent-color` set. Blue is the conventional accent and
-    /// the slot most themes treat as their primary; `accent-color` repoints it per user.
     static let themeDefault: AccentSlot = .blue
 
-    /// Title case, derived from the token so the two can't drift: `bright-cyan` → `Bright cyan`.
     var displayName: String {
         let spaced = rawValue.replacingOccurrences(of: "-", with: " ")
         return spaced.prefix(1).uppercased() + spaced.dropFirst()
     }
 
-    /// Groups the Settings picker's rows into "Normal" and "Bright".
     var isBright: Bool { ansiIndex >= 8 }
 
-    /// This slot's color in a given palette. Falls back to the foreground for a theme file that
-    /// declared fewer than 16 entries, so a short palette can never trap.
+    /// Falls back to the foreground so a theme with fewer than 16 entries cannot trap.
     func color(in terminal: TerminalTheme) -> TerminalColor {
         terminal.ansi.indices.contains(ansiIndex) ? terminal.ansi[ansiIndex] : terminal.foreground
     }
