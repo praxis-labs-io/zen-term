@@ -34,13 +34,12 @@ enum WorktreeRemovalMessage {
         switch (state.detachedCommits > 0, state.files.isEmpty) {
         case (true, false):
             return Content(
-                leadLines: ["\(name) has \(commits) on no branch and \(files).", "Removing it loses both."],
-                rows: rows, trailLines: aside)
+                leadLines: ["Removing \(name) loses \(commits) on no branch and \(files)."], rows: rows,
+                trailLines: aside)
         case (true, true):
-            let loses = state.detachedCommits == 1 ? "Removing it loses that commit." : "Removing it loses them."
-            return Content(leadLines: ["\(name) has \(commits) on no branch.", loses], rows: [], trailLines: aside)
+            return Content(leadLines: ["Removing \(name) loses \(commits) on no branch."], rows: [], trailLines: aside)
         default:
-            return Content(leadLines: ["\(name) has \(files)."], rows: rows, trailLines: aside + stays)
+            return Content(leadLines: ["Removing \(name) loses \(files)."], rows: rows, trailLines: aside + stays)
         }
     }
 

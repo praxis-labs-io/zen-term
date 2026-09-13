@@ -27,14 +27,15 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
     func test_branchWithFiles_listsThemAndSaysTheBranchStays() {
         let out = content(state: state(files: 6), carried: [".env"], openTabs: 2)
 
-        XCTAssertEqual(out.leadLines, ["feature/zen-483 has 6 uncommitted files."])
+        XCTAssertEqual(out.leadLines, ["Removing feature/zen-483 loses 6 uncommitted files."])
         XCTAssertEqual(out.rows.count, 6)
         XCTAssertEqual(
             out.trailLines, ["Closes 2 tabs and deletes the copied .env.", "The branch and its commits stay."])
     }
 
     func test_oneFile_isSingular() {
-        XCTAssertEqual(content(state: state(files: 1)).leadLines, ["feature/zen-483 has 1 uncommitted file."])
+        XCTAssertEqual(
+            content(state: state(files: 1)).leadLines, ["Removing feature/zen-483 loses 1 uncommitted file."])
     }
 
     func test_cleanBranch_isOneBlockWithNoList() {
@@ -63,24 +64,24 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
         let out = content(state: state(files: 3, commits: 2), branch: nil, openTabs: 1)
 
         XCTAssertEqual(
-            out.leadLines, ["0123456 has 2 commits on no branch and 3 uncommitted files.", "Removing it loses both."])
+            out.leadLines, ["Removing 0123456 loses 2 commits on no branch and 3 uncommitted files."])
         XCTAssertEqual(out.rows.count, 3)
         XCTAssertEqual(out.trailLines, ["Closes 1 tab."])
     }
 
     func test_detachedWithCommitsOnly_hasNoList() {
         XCTAssertEqual(
-            content(state: state(commits: 2), branch: nil).leadLines,
-            ["0123456 has 2 commits on no branch.", "Removing it loses them."])
+            content(state: state(commits: 2), branch: nil).leadLines, ["Removing 0123456 loses 2 commits on no branch."]
+        )
         let single = content(state: state(commits: 1), branch: nil)
-        XCTAssertEqual(single.leadLines, ["0123456 has 1 commit on no branch.", "Removing it loses that commit."])
+        XCTAssertEqual(single.leadLines, ["Removing 0123456 loses 1 commit on no branch."])
         XCTAssertEqual(single.rows, [])
     }
 
     func test_detachedWithFilesOnly_neverSaysABranchStays() {
         let out = content(state: state(files: 2), branch: nil)
 
-        XCTAssertEqual(out.leadLines, ["0123456 has 2 uncommitted files."])
+        XCTAssertEqual(out.leadLines, ["Removing 0123456 loses 2 uncommitted files."])
         XCTAssertEqual(out.trailLines, [])
     }
 
