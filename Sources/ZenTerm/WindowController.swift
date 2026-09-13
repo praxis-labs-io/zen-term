@@ -1394,8 +1394,8 @@ final class WindowController: NSObject {
     }
 
     /// Remove the worktree the picker has selected: read what it would cost, then confirm once with
-    /// the whole consequence. `WorktreeStore.state` shells out to git, so it runs off-main and
-    /// the confirm is presented on the way back.
+    /// the whole consequence. The git read and the rollup of what it finds run off-main, and the
+    /// confirm is presented on the way back.
     private func removeSelectedWorktreeInPicker() {
         guard let picker = modal?.overlay as? RepoPickerOverlay,
             let selection = picker.selectedWorktree
@@ -1403,20 +1403,19 @@ final class WindowController: NSObject {
         let (worktree, parent) = selection
         let openTabs = onCountTabsAtPath?(worktree.path) ?? tabCount(atPath: worktree.path)
         DispatchQueue.global(qos: .userInitiated).async {
-            let state = WorktreeStore.state(worktree)
             let carried = parent.carry.filter {
                 FileManager.default.fileExists(
                     atPath: worktree.path.appendingPathComponent($0).path)
             }
+            let content = WorktreeRemovalMessage.content(
+                for: worktree, state: WorktreeStore.state(worktree), carried: carried, openTabs: openTabs)
             DispatchQueue.main.async { [weak self] in
                 // The picker may be long gone, or another window may have started this removal.
                 // Either way the question is stale, and nothing is destroyed by dropping it.
                 guard let self, self.modal?.overlay === picker,
                     !self.worktreeRemovals.isRemoving(worktree.path)
                 else { return }
-                self.confirmRemoveWorktree(
-                    picker, worktree, from: parent, state: state, carried: carried,
-                    openTabs: openTabs)
+                self.confirmRemoveWorktree(picker, worktree, from: parent, content: content)
             }
         }
     }
@@ -1426,11 +1425,9 @@ final class WindowController: NSObject {
     /// and ⌘Q use, because this one deletes a folder and cannot be taken back.
     private func confirmRemoveWorktree(
         _ picker: RepoPickerOverlay, _ worktree: Worktree, from parent: Workspace,
-        state: WorktreeState?, carried: [String], openTabs: Int
+        content: WorktreeRemovalMessage.Content
     ) {
         let name = WorktreeRemovalMessage.name(worktree)
-        let content = WorktreeRemovalMessage.content(
-            for: worktree, state: state, carried: carried, openTabs: openTabs)
         let card = ConfirmCard(
             title: "Remove Worktree", leadLines: content.leadLines, rows: content.rows.map(\.listRow),
             trailLines: content.trailLines, confirmLabel: "Remove",
