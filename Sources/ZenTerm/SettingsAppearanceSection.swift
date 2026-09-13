@@ -89,7 +89,6 @@ final class SettingsAppearanceSection: SettingsFormSection {
             })
     }
 
-    /// Static so the stored closures don't retain the section.
     private static func toolbarItems() -> [CheckboxDropdownItem] {
         let hidden = GeneralConfig.current.hiddenToolbarButtons
         return ToolbarButton.allCases.map {

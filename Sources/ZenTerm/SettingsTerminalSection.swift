@@ -119,7 +119,6 @@ final class SettingsTerminalSection: SettingsFormSection {
         shaderDropdown?.setItems(shaderItems(selected: selected), selectedIndex: selected)
     }
 
-    /// Static so the stored read closure doesn't retain the section.
     private static func currentShaderToken() -> String? {
         GeneralConfig.current.cursorShader.map {
             URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent

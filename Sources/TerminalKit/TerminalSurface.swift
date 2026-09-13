@@ -160,7 +160,6 @@ public enum ScreenFileDisposition: Equatable {
     /// Types the path into the pane.
     case paste
     case copy
-    /// Opens the file with the system default app.
     case open
 }
 

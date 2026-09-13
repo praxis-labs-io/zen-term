@@ -9,7 +9,6 @@ protocol KeyModeHosting: AnyObject {
     var modeHandler: ((NSEvent) -> Bool)? { get set }
 }
 
-// Un-reserved chords pass through untouched, so the program in the terminal still receives Ctrl+hjkl.
 final class KeyInterceptor {
     enum ReservedChord: Hashable {
         case splitVertical, splitHorizontal
