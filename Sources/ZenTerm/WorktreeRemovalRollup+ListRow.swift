@@ -12,11 +12,9 @@ extension WorktreeRemovalRollup.Row {
                 path: [.init(text: folder, tone: .ink(.muted)), .init(text: name, tone: .ink(.subtle))],
                 status: [glyphs])
         case .folder(let path, let files):
-            let counts = GitStatusCategory.allCases.compactMap { category -> [ConfirmCardList.Run]? in
-                let count = files.filter { $0.categories.contains(category) }.count
-                guard count > 0 else { return nil }
-                return [.init(text: "\(category.glyph)\(count)", tone: .role(category.role))]
-            }
+            let counts = GitStatusCategory.tokens { category in
+                files.filter { $0.categories.contains(category) }.count
+            }.map { [ConfirmCardList.Run(text: $0.text, tone: .role($0.category.role))] }
             return .entry(path: [.init(text: "\(path)/", tone: .ink(.subtle))], status: counts)
         case .more(let hiddenFiles):
             return .note("and \(hiddenFiles) more")

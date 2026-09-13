@@ -26,6 +26,14 @@ enum GitStatusCategory: CaseIterable {
         return categories
     }
 
+    /// Each category `count` finds any of, with its glyph and count, in the order a starship prompt writes them.
+    static func tokens(counting count: (GitStatusCategory) -> Int) -> [(category: GitStatusCategory, text: String)] {
+        allCases.compactMap { category in
+            let found = count(category)
+            return found > 0 ? (category, "\(category.glyph)\(found)") : nil
+        }
+    }
+
     /// Nerd-font glyphs render as a box in the system font the chrome draws in.
     var glyph: String {
         switch self {

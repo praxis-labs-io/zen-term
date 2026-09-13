@@ -459,34 +459,21 @@ final class RepoPickerOverlay: PaletteOverlay {
         /// `main` never reaches, so it still hugs rather than reserving a column.
         private var branchFloor: NSLayoutConstraint!
 
-        /// Extra width between one glyph-and-count group and the next, on top of the space itself.
-        static let groupGap: CGFloat = 4
-
         /// The counts, in the order and vocabulary a starship prompt writes them, each token in the
         /// chrome role that stands for its color there.
         static func churnText(_ churn: GitChurn) -> NSAttributedString {
             let chrome = Theme.current.chrome
-            let font = NSFont.systemFont(ofSize: 11)
-            let out = NSMutableAttributedString()
-            func token(_ text: String, _ role: TerminalColor) {
-                // A glyph binds to its own count and separates from the next pair, so the eye reads
-                // groups rather than one run of symbols. Kerning the gap, rather than padding with
-                // more spaces, keeps it under a point of control instead of the font's space width.
-                if out.length > 0 {
-                    out.append(
-                        NSAttributedString(string: " ", attributes: [.font: font, .kern: groupGap]))
-                }
-                out.append(
-                    NSAttributedString(
-                        string: text, attributes: [.foregroundColor: role.nsColor, .font: font]))
+            func token(_ text: String, _ role: TerminalColor) -> NSAttributedString {
+                NSAttributedString(
+                    string: text, attributes: [.foregroundColor: role.nsColor, .font: StatusTokens.font])
             }
-
-            if churn.ahead > 0 { token("⇡\(churn.ahead)", chrome.info) }
-            if churn.behind > 0 { token("⇣\(churn.behind)", chrome.destructive) }
-            for category in GitStatusCategory.allCases where churn.count(of: category) > 0 {
-                token("\(category.glyph)\(churn.count(of: category))", chrome[keyPath: category.role])
+            var groups: [NSAttributedString] = []
+            if churn.ahead > 0 { groups.append(token("⇡\(churn.ahead)", chrome.info)) }
+            if churn.behind > 0 { groups.append(token("⇣\(churn.behind)", chrome.destructive)) }
+            groups += GitStatusCategory.tokens(counting: churn.count(of:)).map {
+                token($0.text, chrome[keyPath: $0.category.role])
             }
-            return out
+            return StatusTokens.joined(groups)
         }
 
         /// What the left slot says on a worktree row. It is a type slot, not a name slot: a

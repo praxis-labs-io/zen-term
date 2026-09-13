@@ -19,7 +19,6 @@ final class ConfirmCardList: NSView, ThemeReapplying {
 
     static let rowHeight: CGFloat = 20
     static let pathFont = NSFont.monospacedSystemFont(ofSize: 11.5, weight: .regular)
-    static let statusFont = NSFont.systemFont(ofSize: 11)
     static let noteFont = NSFont.systemFont(ofSize: 12)
 
     private let rowViews: [RowView]
@@ -93,9 +92,9 @@ final class ConfirmCardList: NSView, ThemeReapplying {
                 leading.attributedStringValue = Self.text(
                     path, font: ConfirmCardList.pathFont, truncation: .byTruncatingMiddle, chrome: chrome)
                 let groups = status.map {
-                    Self.text($0, font: ConfirmCardList.statusFont, truncation: .byClipping, chrome: chrome)
+                    Self.text($0, font: StatusTokens.font, truncation: .byClipping, chrome: chrome)
                 }
-                trailing.attributedStringValue = Self.joined(groups)
+                trailing.attributedStringValue = StatusTokens.joined(groups)
             case .note(let text):
                 leading.attributedStringValue = Self.text(
                     [Run(text: text, tone: .ink(.muted))], font: ConfirmCardList.noteFont,
@@ -122,23 +121,6 @@ final class ConfirmCardList: NSView, ThemeReapplying {
                         attributes: [
                             .font: font, .paragraphStyle: paragraph, .foregroundColor: color(run.tone, chrome),
                         ]))
-            }
-            return out
-        }
-
-        private static func joined(_ groups: [NSAttributedString]) -> NSAttributedString {
-            let out = NSMutableAttributedString()
-            for group in groups {
-                if out.length > 0 {
-                    out.append(
-                        NSAttributedString(
-                            string: " ",
-                            attributes: [
-                                .font: ConfirmCardList.statusFont, .paragraphStyle: paragraph(.byClipping),
-                                .kern: RepoPickerOverlay.RowView.groupGap,
-                            ]))
-                }
-                out.append(group)
             }
             return out
         }
