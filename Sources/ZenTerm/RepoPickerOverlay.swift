@@ -359,8 +359,6 @@ final class RepoPickerOverlay: PaletteOverlay {
         private let churnLabel = NSTextField(labelWithString: "")
         private var branchFloor: NSLayoutConstraint!
 
-        /// The counts, in the order and vocabulary a starship prompt writes them, each token in the
-        /// chrome role that stands for its color there.
         static func churnText(_ churn: GitChurn) -> NSAttributedString {
             let chrome = Theme.current.chrome
             func token(_ text: String, _ role: TerminalColor) -> NSAttributedString {

@@ -42,7 +42,6 @@ final class WorktreeFileChangeTests: XCTestCase {
         XCTAssertEqual(changes.map(\.path), ["a b.txt", "d/e/un tracked.txt"])
     }
 
-    /// The old path is a field of its own, so one shaped like a record would otherwise be read as one.
     func test_parse_readsARenameByItsNewPathAndSkipsTheOldOne() {
         let changes = parse([
             "2 R. N... 100644 100644 100644 aaa aaa R100 new name.txt", "? looks-untracked.txt",

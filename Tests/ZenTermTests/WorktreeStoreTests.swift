@@ -528,7 +528,6 @@ final class WorktreeStoreTests: XCTestCase {
         XCTAssertEqual(state.uncommitted, 3)
     }
 
-    /// `remove` leaves the branch in place, so a commit on it is not lost whether or not it was pushed.
     func test_state_neverCountsCommitsOnABranch() throws {
         let worktree = try WorktreeStore.create(branch: "local-work", in: repo)
         try GitFixture.write("committed\n", to: worktree.path.appendingPathComponent("tracked.txt"))
@@ -557,8 +556,6 @@ final class WorktreeStoreTests: XCTestCase {
         XCTAssertEqual(WorktreeStore.state(worktree)?.detachedCommits, 0, "a local branch holds them now")
     }
 
-    /// Git collapses an untracked folder into one entry by default, and this list is what stands
-    /// between the user and `--force`.
     func test_state_listsEveryFileInAnUntrackedDirectory() throws {
         let worktree = try WorktreeStore.create(branch: "untracked-dir", in: repo)
         let nested = worktree.path.appendingPathComponent("scratch", isDirectory: true)

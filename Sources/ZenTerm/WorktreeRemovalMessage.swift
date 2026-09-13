@@ -3,12 +3,10 @@ import Foundation
 enum WorktreeRemovalMessage {
     typealias Item = ConfirmCardChecklist.Item
 
-    /// A detached worktree's folder reads like a branch and is not one, so its short head stands in.
     static func name(_ worktree: Worktree) -> String {
         worktree.branch ?? String(worktree.head.prefix(7))
     }
 
-    /// `carried` names each copied entry as it should read, a folder with its trailing slash.
     static func items(
         for worktree: Worktree, state: WorktreeState?, carried: [String], openTabs: Int
     ) -> [Item] {

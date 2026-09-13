@@ -8,7 +8,6 @@ enum GitStatusCategory: CaseIterable {
     case deleted
     case conflicted
 
-    /// Each half of `XY` counts on its own, so a staged edit later deleted is both staged and deleted.
     static func categories(index: Character, worktree: Character, isRename: Bool) -> [GitStatusCategory] {
         var categories: [GitStatusCategory] = []
         if index == "D" {
@@ -26,7 +25,6 @@ enum GitStatusCategory: CaseIterable {
         return categories
     }
 
-    /// Each category `count` finds any of, with its glyph and count, in the order a starship prompt writes them.
     static func tokens(counting count: (GitStatusCategory) -> Int) -> [(category: GitStatusCategory, text: String)] {
         allCases.compactMap { category in
             let found = count(category)
@@ -34,7 +32,6 @@ enum GitStatusCategory: CaseIterable {
         }
     }
 
-    /// Nerd-font glyphs render as a box in the system font the chrome draws in.
     var glyph: String {
         switch self {
         case .staged: return "+"

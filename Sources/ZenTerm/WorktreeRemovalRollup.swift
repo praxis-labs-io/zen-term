@@ -29,7 +29,6 @@ enum WorktreeRemovalRollup {
         return Array(rows.prefix(rowLimit - 1)) + [.more(hiddenFiles: hidden)]
     }
 
-    /// One pass in rank order picks what repeated deepest-first collapsing would: ranks never change, rows only drop.
     private static func foldersToCollapse(_ sorted: [WorktreeFileChange]) -> Set<String> {
         var filesInside: [String: Int] = [:]
         for file in sorted {

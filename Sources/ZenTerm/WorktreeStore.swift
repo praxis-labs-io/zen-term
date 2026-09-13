@@ -15,7 +15,6 @@ struct WorktreeListing: Equatable {
 
 struct WorktreeState: Equatable {
     let files: [WorktreeFileChange]
-    /// Always zero on a branch, which `remove` leaves holding its commits. No stash count: `refs/stash` is shared.
     let detachedCommits: Int
 
     var uncommitted: Int { files.count }
@@ -122,15 +121,11 @@ enum WorktreeStore {
         return parse(listing).filter { $0.path != main }
     }
 
-    /// What removing the worktree would destroy, or nil when that cannot be determined.
-    ///
-    /// **Nil is not "clean".** Reporting zero when git failed would put "nothing uncommitted" in
-    /// front of a person about to delete a tree we could not read.
+    /// Nil when git fails, never a zero that would read as clean.
     static func state(_ worktree: Worktree) -> WorktreeState? {
         state(at: worktree.path, detached: worktree.branch == nil)
     }
 
-    /// The same answer for any checkout, including the main one, which `list` leaves out.
     static func state(at checkout: URL, detached: Bool = false) -> WorktreeState? {
         guard let status = try? git(untrackedStatus, in: checkout) else { return nil }
         let files = WorktreeFileChange.parse(status)
@@ -142,13 +137,8 @@ enum WorktreeStore {
         return WorktreeState(files: files, detachedCommits: commits)
     }
 
-    /// Git's default collapses an untracked folder of hundreds into one entry.
     private static let untrackedStatus = ["status", "--porcelain=v2", "--untracked-files=all", "-z"]
 
-    /// The git directory every checkout of this repo shares, canonicalized: the identity two
-    /// worktrees of one repo agree on where their paths do not. Nil outside a repo. Unlike
-    /// `mainCheckout` nothing takes its parent, so the submodule layout that makes it a bad source
-    /// for a folder name is harmless here.
     static func commonDir(of repo: URL) -> URL? {
         guard let answer = try? git(["rev-parse", "--git-common-dir"], in: repo), !answer.isEmpty
         else { return nil }

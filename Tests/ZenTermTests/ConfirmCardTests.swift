@@ -79,8 +79,6 @@ final class ConfirmCardTests: WindowTestCase {
         XCTAssertTrue(KeyboardFocus.isFocused(try XCTUnwrap(button(in: card, title: "Cancel")), in: window))
     }
 
-    // MARK: checklist
-
     func test_theChecklist_readsInOrder_withEachListUnderItsItem() {
         let card = mountChecklist([
             .init(
@@ -108,7 +106,6 @@ final class ConfirmCardTests: WindowTestCase {
         XCTAssertNil(list(in: card))
     }
 
-    /// An attributed label ignores the field's own `lineBreakMode`, so the truncation lives in the string.
     func test_aLongPath_truncatesInTheMiddleOnOneLine() throws {
         let longFolder = String(repeating: "deeply/nested/", count: 8)
         let card = mountChecklist([
@@ -138,8 +135,6 @@ final class ConfirmCardTests: WindowTestCase {
         XCTAssertLessThanOrEqual(
             label.alignmentRect(forFrame: label.frame).maxX, try XCTUnwrap(label.superview).bounds.maxX)
     }
-
-    // MARK: harness
 
     private func mount(message: String = "feature/one has nothing uncommitted.") -> (
         card: ConfirmCard, sink: Sink

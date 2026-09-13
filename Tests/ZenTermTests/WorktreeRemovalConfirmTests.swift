@@ -30,8 +30,6 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
         }
     }
 
-    // MARK: on a branch
-
     func test_branchWithEverything_ordersLossThenCopiesThenTabsThenWhatStays() {
         XCTAssertEqual(
             lines(state: state(files: 6), carried: [".env", "node_modules/"], openTabs: 2),
@@ -80,7 +78,6 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
             ["kept feature/zen-483 has nothing uncommitted", "kept Branch and commits preserved"])
     }
 
-    /// Nil is not clean: this is the one message that must never tell someone a tree holds nothing.
     func test_unreadable_warnsInOneLine_andNeverSaysItIsClean() {
         XCTAssertEqual(
             lines(state: nil),
@@ -89,8 +86,6 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
                 "kept Branch and commits preserved",
             ])
     }
-
-    // MARK: detached
 
     func test_detachedWithCommitsAndFiles_losesBoth_andKeepsNothing() {
         let out = items(state: state(files: 3, commits: 2), branch: nil, openTabs: 1)
@@ -118,8 +113,6 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
         XCTAssertEqual(
             lines(state: nil, branch: nil), ["warning Couldn't read 0123456 to check for uncommitted files or commits"])
     }
-
-    // MARK: rows
 
     func test_aFileRow_splitsItsFolderFromItsName_andCarriesEveryGlyph() {
         let row = WorktreeRemovalRollup.Row.file(

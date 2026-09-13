@@ -985,9 +985,6 @@ final class WindowController: NSObject {
             ToastContent(variant: .warning, title: "Couldn't Copy Everything", message: "\(list)."))
     }
 
-    /// Remove the worktree the picker has selected: read what it would cost, then confirm once with
-    /// the whole consequence. The git read and the rollup of what it finds run off-main, and the
-    /// confirm is presented on the way back.
     private func removeSelectedWorktreeInPicker() {
         guard let picker = modal?.overlay as? RepoPickerOverlay,
             let selection = picker.selectedWorktree
@@ -1038,10 +1035,7 @@ final class WindowController: NSObject {
         }
     }
 
-    /// Open the "Report an Issue" composer (Help menu + Settings). Non-private: `AppDelegate` routes
-    /// the Help-menu item here, and the Settings nav button calls it too. It's terminal, so opening
-    /// the GitHub issue or cancelling just closes back to the terminal (Settings doesn't reopen).
-    /// Reusing the single modal slot means opening it from Settings dismisses Settings first.
+    // Checks the confirm itself because the Help menu bypasses `handle`'s `isConfirmOpen` gate.
     func openReportIssue() {
         if isConfirmOpen { return }
         if modal?.kind == .reportIssue { closeModal(); return }
