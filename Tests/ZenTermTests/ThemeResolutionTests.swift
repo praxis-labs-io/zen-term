@@ -26,7 +26,7 @@ final class ThemeResolutionTests: XCTestCase {
     }
 
     func test_bundledName_resolvesToBundledColors() throws {
-        let root = try makeTempRoot()  // no user themes/ dir
+        let root = try makeTempRoot()
         let theme = ConfigLoader.loadAppTheme(configRoot: root, general: config(themeName: "catppuccin-mocha"))
         XCTAssertNotEqual(theme.terminal.background, Theme.rosePineZen.background)
     }
@@ -35,7 +35,6 @@ final class ThemeResolutionTests: XCTestCase {
         let root = try makeTempRoot()
         let themes = root.appendingPathComponent("themes")
         try FileManager.default.createDirectory(at: themes, withIntermediateDirectories: true)
-        // A user file whose colors are clearly not Catppuccin's.
         try "background = 010203\nforeground = fefefe\n".write(
             to: themes.appendingPathComponent("catppuccin-mocha"), atomically: true, encoding: .utf8)
 

@@ -1,10 +1,5 @@
 import AppKit
 
-/// One `ConfirmCard` shown over an overlay that stays put underneath it: the row or the form being
-/// asked about has to remain visible while the question is answered.
-///
-/// The slot is cleared in the exit animation's completion, not before it. The card is on screen for
-/// that whole spring, and releasing it early hands Esc back to the host, which closes the host.
 @MainActor
 final class ConfirmSlot {
     private unowned let host: NSView
@@ -31,7 +26,7 @@ final class ConfirmSlot {
         card.animateIn()
     }
 
-    /// Take the confirm down and run `then` so the host can take its keyboard back.
+    /// Clears the slot in the exit completion: releasing it early hands Esc back to the host, which closes the host.
     func dismiss(then: @escaping () -> Void) {
         guard let card else { return }
         card.animateOut { [weak self, weak card] in

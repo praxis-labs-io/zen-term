@@ -21,7 +21,6 @@ final class LayoutWriteTests: XCTestCase {
 
     func test_scalarWrite_thenReset_roundTripsThroughLoader() throws {
         let dir = try makeTempDir()
-        // Write two edited knobs the way the section does.
         try ConfigWriter.apply(
             scalars: [
                 "backdrop-alpha": LayoutFormat.number(0.5), "reduce-motion": "on",
@@ -30,7 +29,6 @@ final class LayoutWriteTests: XCTestCase {
         XCTAssertEqual(loaded.backdropAlpha, 0.5, accuracy: 0.0001)
         XCTAssertEqual(loaded.reduceMotion, .on)
 
-        // Per-row reset = removal → the key drops out, parser returns builtIn.
         try ConfigWriter.apply(removals: ["backdrop-alpha", "reduce-motion"], configRoot: dir)
         loaded = ConfigLoader.loadGeneralConfig(configRoot: dir)
         XCTAssertEqual(loaded.backdropAlpha, GeneralConfig.builtIn.backdropAlpha, accuracy: 0.0001)

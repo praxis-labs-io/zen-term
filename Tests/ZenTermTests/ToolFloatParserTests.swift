@@ -36,8 +36,8 @@ final class ToolFloatParserTests: XCTestCase {
 
     func test_widthHeight_clampedToSaneRange() {
         let float = ToolFloatParser.parse("title:x command:c key:cmd+shift+j width:5 height:0")
-        XCTAssertEqual(float?.widthFraction, 1.0)  // 5 → clamped to 1.0
-        XCTAssertEqual(float?.heightFraction, 0.2)  // 0 → clamped to 0.2 (never an invalid multiplier)
+        XCTAssertEqual(float?.widthFraction, 1.0)
+        XCTAssertEqual(float?.heightFraction, 0.2)
     }
 
     func test_git_caseInsensitive() {
@@ -46,17 +46,11 @@ final class ToolFloatParserTests: XCTestCase {
     }
 
     func test_missingRequiredFields_returnNil() {
-        XCTAssertNil(ToolFloatParser.parse("command:foo key:cmd+shift+j"))  // no title
-        XCTAssertNil(ToolFloatParser.parse("title:x key:cmd+shift+j"))  // no command
-        XCTAssertNil(ToolFloatParser.parse("title:x command:foo"))  // no key
-        XCTAssertNil(ToolFloatParser.parse("title:x command:foo key:nope+"))  // unparseable key
+        XCTAssertNil(ToolFloatParser.parse("command:foo key:cmd+shift+j"))
+        XCTAssertNil(ToolFloatParser.parse("title:x key:cmd+shift+j"))
+        XCTAssertNil(ToolFloatParser.parse("title:x command:foo"))
+        XCTAssertNil(ToolFloatParser.parse("title:x command:foo key:nope+"))
     }
-
-    // MARK: dropped-line diagnostics
-    //
-    // A dropped float never becomes a row, so `parseLine`'s diagnostic is the only way its reason
-    // reaches the user (the Tools notice + the reload toast). `parse` swallows it; `parseLine` carries
-    // it, labelled by the line's title so the notice names the right line.
 
     func test_parseLine_missingTitle_reportsMissingTitle() {
         let result = ToolFloatParser.parseLine("command:foo key:cmd+shift+j")
@@ -83,8 +77,6 @@ final class ToolFloatParserTests: XCTestCase {
     }
 
     func test_parseLine_emptyKey_reportsMissingNotUnusable() {
-        // `key:` with no value is missing, not an unusable key — reporting `.floatUnusableKey("")`
-        // would name a blank chord and read as a keyboard limitation.
         let result = ToolFloatParser.parseLine("title:Notes command:foo key:")
         XCTAssertNil(result.float)
         XCTAssertEqual(
@@ -106,14 +98,9 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertTrue(result.diagnostics.isEmpty)
     }
 
-    // MARK: surviving-float sub-field diagnostics (order/persist/width/height)
-    //
-    // These floats still work, so they keep their row; the fallback must not be silent. width/height/
-    // order gained a log too (they used to fall back with no trace at all).
-
     func test_parseLine_unparseableWidth_keepsFloatAndReportsInvalid() {
         let result = ToolFloatParser.parseLine("title:Notes command:c key:cmd+shift+n width:big")
-        XCTAssertEqual(result.float?.widthFraction, ToolFloatParser.defaultFraction)  // fell back
+        XCTAssertEqual(result.float?.widthFraction, ToolFloatParser.defaultFraction)
         XCTAssertEqual(
             result.diagnostics,
             [
@@ -125,7 +112,7 @@ final class ToolFloatParserTests: XCTestCase {
 
     func test_parseLine_outOfRangeHeight_keepsFloatAndReportsClamp() {
         let result = ToolFloatParser.parseLine("title:Notes command:c key:cmd+shift+n height:5")
-        XCTAssertEqual(result.float?.heightFraction, 1.0)  // clamped to the 0.2…1.0 range
+        XCTAssertEqual(result.float?.heightFraction, 1.0)
         XCTAssertEqual(
             result.diagnostics,
             [
@@ -138,7 +125,7 @@ final class ToolFloatParserTests: XCTestCase {
     func test_parseLine_nonIntegerOrder_keepsFloatAndReportsInvalid() {
         let result = ToolFloatParser.parseLine(
             "title:Notes command:c key:cmd+shift+n order:nope", fallbackOrder: 3)
-        XCTAssertEqual(result.float?.order, 3)  // fell back to file order
+        XCTAssertEqual(result.float?.order, 3)
         XCTAssertEqual(
             result.diagnostics,
             [
@@ -150,7 +137,7 @@ final class ToolFloatParserTests: XCTestCase {
 
     func test_parseLine_unknownPersist_keepsFloatAndReportsInvalid() {
         let result = ToolFloatParser.parseLine("title:Notes command:c key:cmd+shift+n persist:banana")
-        XCTAssertEqual(result.float?.persist, .ephemeral)  // `none` = ephemeral
+        XCTAssertEqual(result.float?.persist, .ephemeral)
         XCTAssertEqual(
             result.diagnostics,
             [
@@ -161,40 +148,29 @@ final class ToolFloatParserTests: XCTestCase {
     }
 
     func test_parseLine_omittedOptionalFields_areSilent() {
-        // Absent order:/width:/height:/persist: are valid — they take defaults with no diagnostic.
         let result = ToolFloatParser.parseLine("title:Notes command:c key:cmd+shift+n")
         XCTAssertTrue(result.diagnostics.isEmpty)
     }
 
-    // MARK: identity
-
-    /// The title is the source of truth; the id is its slug and is never authored. Renaming a float is
-    /// therefore the only thing that can change its id.
     func test_id_isSlugOfTitle() {
         XCTAssertEqual(slugOf("Open GitDash"), "open-gitdash")
         XCTAssertEqual(slugOf("BTop"), "btop")
         XCTAssertEqual(slugOf("Scratch Terminal"), "scratch-terminal")
-        XCTAssertEqual(slugOf("spotify_player"), "spotify-player")  // runs of punctuation collapse
-        XCTAssertEqual(slugOf("  Notes  "), "notes")  // and never lead or trail with a dash
-        XCTAssertEqual(slugOf("Rack 2"), "rack-2")  // digits are kept, not treated as separators
+        XCTAssertEqual(slugOf("spotify_player"), "spotify-player")
+        XCTAssertEqual(slugOf("  Notes  "), "notes")
+        XCTAssertEqual(slugOf("Rack 2"), "rack-2")
     }
 
-    /// `isLetter`/`isNumber`, not an ASCII range — a CJK title must slug to itself, not to nothing,
-    /// which would make the float unaddressable and drop the line.
     func test_id_slugsNonASCIITitle() {
         XCTAssertEqual(slugOf("日本語"), "日本語")
         XCTAssertEqual(slugOf("Café Notes"), "café-notes")
     }
 
-    /// A title with nothing to slug leaves no id to key the float's keybind, live instance, or config
-    /// line by — so the line drops rather than minting a float nothing could ever address.
     func test_titleWithoutLettersOrNumbers_returnsNil() {
         XCTAssertNil(ToolFloatParser.parse("title:🎉 command:foo key:cmd+shift+j"))
         XCTAssertNil(ToolFloatParser.parse("title:\"---\" command:foo key:cmd+shift+j"))
     }
 
-    /// `id:` is a dead field from before floats could be reordered. It must be inert — silently ignored like any unknown
-    /// field — never resurrected as an identity that could disagree with the title's slug.
     func test_legacyIDField_isIgnored() {
         let float = ToolFloatParser.parse("id:legacy title:Notes command:foo key:cmd+shift+j")
         XCTAssertEqual(float?.id, "notes")
@@ -224,8 +200,6 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertEqual(ToolFloatParser.parse("title:x command:c key:cmd+shift+j persist:dir")?.persist, .directory)
     }
 
-    /// `tab` was cut before it ever shipped (daily driving showed tab scoping is the wrong axis —
-    /// the pivot). A config that says it must degrade like any unknown token, keeping the float.
     func test_persist_tab_isNoLongerAMode_degradesToEphemeral() {
         let float = ToolFloatParser.parse("title:x command:c key:cmd+shift+j persist:tab")
         XCTAssertEqual(float?.persist, .ephemeral)
@@ -236,21 +210,15 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertEqual(ToolFloatParser.parse("title:x command:c key:cmd+shift+j persist:DIR")?.persist, .directory)
     }
 
-    /// An unknown value must not drop the whole float — the float still works, just ephemerally.
     func test_persist_unknownValue_fallsBackToEphemeral() {
         let float = ToolFloatParser.parse("title:x command:c key:cmd+shift+j persist:banana")
         XCTAssertEqual(float?.persist, .ephemeral)
         XCTAssertEqual(float?.id, "x")
     }
 
-    /// `window` landed later, so it must parse rather than degrade to `none` — the mode is
-    /// what keeps a tool alive for the whole window, and silently ephemeral would look like
-    /// persistence failing.
     func test_persist_window_parses() {
         XCTAssertEqual(ToolFloatParser.parse("title:x command:c key:cmd+shift+j persist:window")?.persist, .window)
     }
-
-    // MARK: toolbar:
 
     func test_toolbar_defaultsToShown() {
         XCTAssertEqual(
@@ -269,9 +237,6 @@ final class ToolFloatParserTests: XCTestCase {
             false)
     }
 
-    /// The default is true, so garbage must keep the button AND surface — a typo'd `toolbar:fales`
-    /// silently hiding the button is the failure a bare `== "true"` comparison (fine for `git:`,
-    /// whose default is false) would allow.
     func test_toolbar_unknownValue_staysShown_andCollectsDiagnostic() {
         let (float, diagnostics) = ToolFloatParser.parseLine(
             "title:x command:c key:cmd+shift+j toolbar:maybe")
@@ -299,8 +264,6 @@ final class ToolFloatParserTests: XCTestCase {
         XCTAssertEqual(float?.dir?.path, "/tmp/my notes")
     }
 
-    /// A pinned dir gives `persist:dir` a fixed identity — the instance never re-anchors. That's
-    /// the intended way to keep a tool alive at one place, so both fields parse together cleanly.
     func test_dirWithPersistDir_pinsALivingFloat() {
         let float = ToolFloatParser.parse("title:x command:c key:cmd+shift+j dir:/tmp persist:dir")
         XCTAssertEqual(float?.persist, .directory)

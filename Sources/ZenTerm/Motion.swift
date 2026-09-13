@@ -1,19 +1,7 @@
 import AppKit
 
-/// One motion system for the whole chrome. All timing lives here so every animation feels
-/// like the same system. Overlay cards use a snappy spring with a slight overshoot; the
-/// focus halo and button/chip tints use a smooth ease.
-///
-/// Honors Reduce Motion globally — when on, every primitive applies its final state
-/// instantly and runs the completion **synchronously**, so callers that sequence work in
-/// the completion behave identically.
-///
-/// Chrome-only (AppKit + Core Animation). Never touches a terminal backend.
+/// Under Reduce Motion every primitive applies its final state and runs its completion synchronously.
 enum Motion {
-    // MARK: - Timing
-
-    /// Structural spring — panels/cards appearing, new pane/tab. ~0.7 damping ratio
-    /// (gentle overshoot), ~0.16s settle. Snappy over smooth.
     enum Spring {
         static let mass: CGFloat = 1
         static let stiffness: CGFloat = 1400
@@ -30,38 +18,18 @@ enum Motion {
         }
     }
 
-    /// Halo / tint ease — a smooth crossfade as focus moves, still quick enough to keep up
-    /// with ⌘hjkl nav.
     static let haloDuration: CFTimeInterval = 0.18
-    /// Canvas page-slide on a tab switch — decelerating hard so it lands.
     static let pageSlideDuration: CFTimeInterval = 0.28
-    /// Hard-decelerating ease-out — a slide lands/locks in rather than drifting. Shared by the tab
-    /// page-slide and the drawer / split push slides so they read as one motion.
     static let landingTiming = CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)
-    /// Opacity ramp for a surface that appears in place rather than travelling.
     static let fadeDuration: CFTimeInterval = 0.18
-    /// The opacity ramp of a scale-fade entrance. Kept short and decoupled from the
-    /// spring settle so the card *reads* as present fast — the dominant snappiness cue —
-    /// while the scale settles under the spring behind it.
     static let entranceFadeDuration: CFTimeInterval = 0.11
-    /// Scale a card rests at while faded out during a scale-fade entrance.
     static let entranceScale: CGFloat = 0.97
-    /// Scale the full-screen (zoom) pop starts from — more pronounced than the card entrance so it
-    /// reads as a zoom.
     static let zoomScale: CGFloat = 0.9
 
-    // MARK: - Reduce Motion
-
-    /// Overridable so tests can exercise both paths; production reads the system setting.
     static var isReduceMotionEnabled: () -> Bool = {
         NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     }
 
-    // MARK: - Primitives
-
-    /// Opacity 0↔1 + scale `entranceScale`↔1.0 about the view's center. Float cards, a
-    /// new pane, a new tab. `appearing` false runs it in reverse (caller removes the view
-    /// in `completion`).
     static func springScaleFade(_ view: NSView, appearing: Bool, completion: (() -> Void)? = nil) {
         view.wantsLayer = true
         view.layoutSubtreeIfNeeded()
@@ -73,17 +41,12 @@ enum Motion {
         let targetOpacity: Float = appearing ? 1 : 0
 
         if isReduceMotionEnabled() {
-            layer.transform = targetTransform  // final model state, same as the animated path
+            layer.transform = targetTransform
             layer.opacity = targetOpacity
             completion?()
             return
         }
 
-        // Start from the explicit opposite state (hidden when appearing, shown when
-        // disappearing) — a freshly-presented card already sits at the shown state, so
-        // reading its current value would animate from→to as a no-op. Only when a motion
-        // animation is already in flight do we pick up its mid-flight presentation value,
-        // so a rapid open→close stays smooth.
         let interrupting = layer.animation(forKey: "motion.transform") != nil
         let fromTransform: CATransform3D
         let fromOpacity: Float
@@ -113,20 +76,15 @@ enum Motion {
         }
     }
 
-    /// The full-screen (zoom) transition: a scale settle + fade on the landing ease-out. Directional
-    /// so it never overshoots — `growing` (zoom in, ending large) settles up from `zoomScale`; a
-    /// shrink (zoom out, ending small) settles *down* from just above 1, so coming from full-screen
-    /// it keeps moving inward instead of dipping under the target and bouncing back. Honors Reduce
-    /// Motion.
     static func zoomPop(_ view: NSView, growing: Bool) {
         view.wantsLayer = true
         view.layoutSubtreeIfNeeded()
         guard let layer = view.layer else { return }
-        layer.transform = CATransform3DIdentity  // model rests shown
+        layer.transform = CATransform3DIdentity
         layer.opacity = 1
         if isReduceMotionEnabled() { return }
 
-        let fromScale = growing ? zoomScale : 2 - zoomScale  // below the target growing, above it shrinking
+        let fromScale = growing ? zoomScale : 2 - zoomScale
         let scale = CABasicAnimation(keyPath: "transform")
         scale.fromValue = NSValue(caTransform3D: centeredScale(fromScale, in: layer.bounds))
         scale.toValue = NSValue(caTransform3D: CATransform3DIdentity)
@@ -145,15 +103,12 @@ enum Motion {
         }
     }
 
-    /// Slide `incoming` in from a horizontal offset of `dx` while `outgoing` slides out the
-    /// opposite way (a page turn), then run `completion` (the caller removes the outgoing).
-    /// Transform-based, so neither terminal reflows. Honors Reduce Motion.
     static func slideSwap(
         incoming: NSView, outgoing: NSView?, dx: CGFloat,
         duration: CFTimeInterval = pageSlideDuration, completion: @escaping () -> Void
     ) {
         incoming.wantsLayer = true
-        outgoing?.wantsLayer = true  // both slide — don't rely on the caller having layer-backed it
+        outgoing?.wantsLayer = true
         guard let inLayer = incoming.layer else {
             completion()
             return
@@ -163,7 +118,7 @@ enum Motion {
             completion()
             return
         }
-        inLayer.transform = CATransform3DIdentity  // model rests on-screen
+        inLayer.transform = CATransform3DIdentity
         let slideIn = CABasicAnimation(keyPath: "transform.translation.x")
         slideIn.fromValue = dx
         slideIn.toValue = 0
@@ -171,7 +126,7 @@ enum Motion {
         slideIn.timingFunction = landingTiming
 
         let outLayer = outgoing?.layer
-        outLayer?.transform = CATransform3DMakeTranslation(-dx, 0, 0)  // model ends off-screen
+        outLayer?.transform = CATransform3DMakeTranslation(-dx, 0, 0)
         let slideOut = CABasicAnimation(keyPath: "transform.translation.x")
         slideOut.fromValue = 0
         slideOut.toValue = -dx
@@ -184,7 +139,6 @@ enum Motion {
         }
     }
 
-    /// Opacity ramp — a new-tab canvas fading in. Honors Reduce Motion.
     static func fade(
         _ view: NSView, to opacity: Float,
         duration: CFTimeInterval = fadeDuration, completion: (() -> Void)? = nil
@@ -199,7 +153,7 @@ enum Motion {
             completion?()
             return
         }
-        let from = layer.opacity  // model value — callers set it before fading
+        let from = layer.opacity
         layer.opacity = opacity
         let anim = CABasicAnimation(keyPath: "opacity")
         anim.fromValue = from
@@ -211,10 +165,7 @@ enum Motion {
         }
     }
 
-    /// Explicit ease of a single layer property old→new. Layer-backed `NSView`s disable
-    /// implicit layer animations, so halo border/shadow and button/chip tints must be
-    /// animated explicitly. Reads the current presentation value as the start so rapid
-    /// interruptions stay smooth.
+    /// Layer-backed views disable implicit layer animations, so these properties are animated explicitly.
     static func ease(
         _ layer: CALayer,
         keyPath: String,
@@ -241,11 +192,7 @@ enum Motion {
         }
     }
 
-    // MARK: - Pure helpers (unit-tested)
-
-    /// A scale transform about the center of `bounds`, independent of the layer's
-    /// `anchorPoint` — so a card scales from its middle whether AppKit anchored its
-    /// backing layer at the center or a corner.
+    /// Independent of `anchorPoint`, which AppKit may put at the center or a corner.
     static func centeredScale(_ scale: CGFloat, in bounds: CGRect) -> CATransform3D {
         let cx = bounds.midX
         let cy = bounds.midY
@@ -253,8 +200,6 @@ enum Motion {
         t = CATransform3DScale(t, scale, scale, 1)
         return CATransform3DTranslate(t, -cx, -cy, 0)
     }
-
-    // MARK: - Internals
 
     private static func run(completion: (() -> Void)?, _ add: () -> Void) {
         CATransaction.begin()

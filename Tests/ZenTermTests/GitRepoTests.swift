@@ -33,7 +33,6 @@ final class GitRepoTests: XCTestCase {
     }
 
     func test_isGitRepo_matchesDotGitFile() throws {
-        // A worktree/submodule has `.git` as a file, not a directory — `fileExists` matches both.
         let worktree = try makeDir("worktree")
         FileManager.default.createFile(
             atPath: worktree.appendingPathComponent(".git").path, contents: Data("gitdir: …".utf8))
@@ -55,7 +54,6 @@ final class GitRepoTests: XCTestCase {
         XCTAssertEqual(GitRepo.currentBranch(repo), "main")
     }
 
-    /// A branch name carries its own slashes, so only the `refs/heads/` prefix comes off.
     func test_currentBranch_keepsSlashesInsideTheBranchName() throws {
         let repo = try makeDir("slashed")
         try writeHead(
@@ -64,8 +62,6 @@ final class GitRepoTests: XCTestCase {
         XCTAssertEqual(GitRepo.currentBranch(repo), "feature/zen-450-branch")
     }
 
-    /// A detached HEAD holds a bare sha. Showing its short form beats showing nothing: the row
-    /// would otherwise look like a folder that isn't a repo at all.
     func test_currentBranch_shortensADetachedHead() throws {
         let repo = try makeDir("detached")
         try writeHead(
@@ -74,8 +70,6 @@ final class GitRepoTests: XCTestCase {
         XCTAssertEqual(GitRepo.currentBranch(repo), "9fceb02")
     }
 
-    /// A worktree's `.git` is a file pointing at the real git dir, which holds the worktree's own
-    /// HEAD — the branch the worktree is on, not the main checkout's.
     func test_currentBranch_followsAWorktreeGitdirPointer() throws {
         let main = try makeDir("main-checkout")
         let gitDir = main.appendingPathComponent(".git/worktrees/wt", isDirectory: true)
