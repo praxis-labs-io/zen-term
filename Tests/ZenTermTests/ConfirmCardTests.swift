@@ -84,33 +84,43 @@ final class ConfirmCardTests: WindowTestCase {
         XCTAssertTrue(KeyboardFocus.isFocused(try XCTUnwrap(button(in: card, title: "Cancel")), in: window))
     }
 
-    // MARK: list
+    // MARK: checklist
 
-    func test_theList_sitsBetweenTheLeadAndTrailLines() {
-        let card = mountList(
-            lead: ["feature/one has 2 uncommitted files."],
-            rows: [entry("Sources/", "App.swift", status: "~"), entry("", "notes.md", status: "?")],
-            trail: ["Closes 1 tab.", "The branch and its commits stay."])
+    func test_theChecklist_readsInOrder_withEachListUnderItsItem() {
+        let card = mountChecklist([
+            .init(
+                mark: .lost, text: [.init(text: "Removing feature/one loses 2 uncommitted files", tone: .ink(.muted))],
+                rows: [entry("Sources/", "App.swift", status: "~"), entry("", "notes.md", status: "?")]),
+            .init(mark: .info, text: [.init(text: "Closes 1 tab", tone: .ink(.muted))], rows: []),
+            .init(mark: .kept, text: [.init(text: "Branch and commits preserved", tone: .ink(.muted))], rows: []),
+        ])
 
         XCTAssertEqual(
             visibleText(in: card).filter { !$0.isEmpty },
             [
-                "Remove Worktree", "feature/one has 2 uncommitted files.", "Sources/App.swift", "~", "notes.md",
-                "?", "Closes 1 tab.\nThe branch and its commits stay.", "Cancel", "Remove",
+                "Remove Worktree", "Removing feature/one loses 2 uncommitted files", "Sources/App.swift", "~",
+                "notes.md", "?", "Closes 1 tab", "Branch and commits preserved", "Cancel", "Remove",
             ])
+        let icons = descendants(of: card).compactMap { $0 as? NSImageView }
+        XCTAssertEqual(icons.count, 3)
+        XCTAssertTrue(icons.allSatisfy { $0.image != nil }, "every mark resolves to a symbol")
     }
 
-    func test_aPlainMessage_hasNoListAndNoEmptyTrail() {
+    func test_aPlainMessage_hasNoChecklist() {
         let (card, _) = mount()
 
+        XCTAssertNil(descendants(of: card).first { $0 is ConfirmCardChecklist })
         XCTAssertNil(list(in: card))
-        XCTAssertFalse(visibleText(in: card).contains(""))
     }
 
     /// An attributed label ignores the field's own `lineBreakMode`, so the truncation lives in the string.
     func test_aLongPath_truncatesInTheMiddleOnOneLine() throws {
         let longFolder = String(repeating: "deeply/nested/", count: 8)
-        let card = mountList(lead: ["x"], rows: [entry(longFolder, "Keep.swift", status: "+~")], trail: [])
+        let card = mountChecklist([
+            .init(
+                mark: .lost, text: [.init(text: "x", tone: .ink(.muted))],
+                rows: [entry(longFolder, "Keep.swift", status: "+~")])
+        ])
         let path = try XCTUnwrap(
             descendants(of: try XCTUnwrap(list(in: card)))
                 .compactMap { $0 as? NSTextField }
@@ -121,6 +131,17 @@ final class ConfirmCardTests: WindowTestCase {
         XCTAssertEqual(path.maximumNumberOfLines, 1)
         XCTAssertLessThan(path.frame.width, path.attributedStringValue.size().width)
         XCTAssertLessThanOrEqual(path.frame.height, ConfirmCardList.rowHeight)
+    }
+
+    func test_aLongItem_wrapsInsideTheCard() throws {
+        let sentence = "Removing " + String(repeating: "feature/a-very-long-branch-name-", count: 4) + " loses 3 files"
+        let card = mountChecklist([.init(mark: .lost, text: [.init(text: sentence, tone: .ink(.muted))], rows: [])])
+        let label = try XCTUnwrap(
+            descendants(of: card).compactMap { $0 as? NSTextField }.first { $0.stringValue == sentence })
+
+        XCTAssertGreaterThan(label.frame.height, ConfirmCardChecklist.textFont.boundingRectForFont.height * 1.5)
+        XCTAssertLessThanOrEqual(
+            label.alignmentRect(forFrame: label.frame).maxX, try XCTUnwrap(label.superview).bounds.maxX)
     }
 
     // MARK: harness
@@ -144,9 +165,9 @@ final class ConfirmCardTests: WindowTestCase {
         return (card, sink)
     }
 
-    private func mountList(lead: [String], rows: [ConfirmCardList.Row], trail: [String]) -> ConfirmCard {
+    private func mountChecklist(_ items: [ConfirmCardChecklist.Item]) -> ConfirmCard {
         let card = ConfirmCard(
-            title: "Remove Worktree", leadLines: lead, rows: rows, trailLines: trail, confirmLabel: "Remove",
+            title: "Remove Worktree", items: items, confirmLabel: "Remove",
             background: Theme.current.chrome.background.nsColor, onCancel: {}, onConfirm: {})
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 400),

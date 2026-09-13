@@ -2197,13 +2197,15 @@ listing the worktree. A Cancel button would leave you worse off than either fini
 never starting.
 
 **The confirm carries the whole weight, because git never gets to refuse.** `--force` is
-unconditional, so nothing downstream will stop a mistake. The card shows what goes before
-anything else: the lines above its list name the uncommitted files, and a detached HEAD's
-commits, and the list shows the files themselves. The lines below it name the tabs that
-close, the copied entries that go with the folder, and on a branch, that the branch and its
-commits stay. A nil `WorktreeState` reads as "Couldn't read", never as "clean".
-`WorktreeRemovalMessage` builds those lines and is pure, so every case is asserted without a
-window.
+unconditional, so nothing downstream will stop a mistake. The card is a checklist, one item
+per consequence, each behind a mark that says how much it costs: an x for what is lost, a
+warning triangle only when git could not read the worktree, an info circle for what is
+expected (the copied files deleted, the tabs closing), and a check for what is kept. Items run
+in that order, so the branch and its commits come last, and only on a worktree with a branch.
+The uncommitted files and the copied files each list their entries under their item, so both
+lists sit together. A nil `WorktreeState` reads as "Couldn't read", never as "clean".
+`WorktreeRemovalMessage` builds the items and is pure, so every case is asserted without a
+window, and `ConfirmCardChecklist` draws them.
 
 **The list holds at most 8 rows.** `WorktreeRemovalRollup` shows every file while they fit.
 Past that, the deepest folder holding more than one row collapses into one row with a count

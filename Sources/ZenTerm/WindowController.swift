@@ -1403,11 +1403,12 @@ final class WindowController: NSObject {
         let (worktree, parent) = selection
         let openTabs = onCountTabsAtPath?(worktree.path) ?? tabCount(atPath: worktree.path)
         DispatchQueue.global(qos: .userInitiated).async {
-            let carried = parent.carry.filter {
-                FileManager.default.fileExists(
-                    atPath: worktree.path.appendingPathComponent($0).path)
+            let carried = parent.carry.compactMap { entry -> String? in
+                let url = worktree.path.appendingPathComponent(entry)
+                guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+                return PathDisplay.isDirectory(url) ? entry + "/" : entry
             }
-            let content = WorktreeRemovalMessage.content(
+            let items = WorktreeRemovalMessage.items(
                 for: worktree, state: WorktreeStore.state(worktree), carried: carried, openTabs: openTabs)
             DispatchQueue.main.async { [weak self] in
                 // The picker may be long gone, or another window may have started this removal.
@@ -1415,7 +1416,7 @@ final class WindowController: NSObject {
                 guard let self, self.modal?.overlay === picker,
                     !self.worktreeRemovals.isRemoving(worktree.path)
                 else { return }
-                self.confirmRemoveWorktree(picker, worktree, from: parent, content: content)
+                self.confirmRemoveWorktree(picker, worktree, from: parent, items: items)
             }
         }
     }
@@ -1425,12 +1426,11 @@ final class WindowController: NSObject {
     /// and ⌘Q use, because this one deletes a folder and cannot be taken back.
     private func confirmRemoveWorktree(
         _ picker: RepoPickerOverlay, _ worktree: Worktree, from parent: Workspace,
-        content: WorktreeRemovalMessage.Content
+        items: [ConfirmCardChecklist.Item]
     ) {
         let name = WorktreeRemovalMessage.name(worktree)
         let card = ConfirmCard(
-            title: "Remove Worktree", leadLines: content.leadLines, rows: content.rows.map(\.listRow),
-            trailLines: content.trailLines, confirmLabel: "Remove",
+            title: "Remove Worktree", items: items, confirmLabel: "Remove",
             background: Theme.current.chrome.background.nsColor,
             onCancel: { [weak picker] in picker?.dismissConfirm() },
             onConfirm: { [weak self, weak picker] in

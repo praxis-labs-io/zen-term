@@ -103,6 +103,24 @@ final class ReapplyThemeTests: WindowTestCase {
         XCTAssertNotEqual(colorBefore, statusColor())
     }
 
+    func test_reapplyTheme_recolorsConfirmCardChecklistMarks() throws {
+        let checklist = ConfirmCardChecklist(items: [
+            .init(mark: .lost, text: [.init(text: "Removing it loses 1 file", tone: .ink(.muted))], rows: [])
+        ])
+        let window = makeWindow()
+        window.contentView?.addSubview(checklist)
+        window.contentView?.layoutSubtreeIfNeeded()
+        func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
+        let icon = try XCTUnwrap(descendants(checklist).compactMap { $0 as? NSImageView }.first)
+        let colorBefore = icon.contentTintColor
+        XCTAssertNotNil(colorBefore)
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        checklist.reapplyTheme()
+
+        XCTAssertNotEqual(colorBefore, icon.contentTintColor)
+    }
+
     func test_reapplyTheme_recolorsFieldBox() throws {
         let field = FieldBox(placeholder: "Name")
         field.translatesAutoresizingMaskIntoConstraints = true

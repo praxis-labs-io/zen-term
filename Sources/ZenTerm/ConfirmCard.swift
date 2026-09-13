@@ -10,9 +10,8 @@ final class ConfirmCard: NSView {
     private let card = CardView()
     private var dismiss = DismissGate()
     private let header = NSTextField(labelWithString: "")
-    private let leadLabel = NSTextField(labelWithString: "")
-    private let trailLabel = NSTextField(labelWithString: "")
-    private let list: ConfirmCardList?
+    private let messageLabel = NSTextField(labelWithString: "")
+    private let checklist: ConfirmCardChecklist?
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private let confirmButton: AppButton
 
@@ -21,16 +20,24 @@ final class ConfirmCard: NSView {
         onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
     ) {
         self.init(
-            title: title, leadLines: [message], rows: [], trailLines: [], confirmLabel: confirmLabel,
+            title: title, message: message, checklist: nil, confirmLabel: confirmLabel,
             background: background, onCancel: onCancel, onConfirm: onConfirm)
     }
 
-    init(
-        title: String, leadLines: [String], rows: [ConfirmCardList.Row], trailLines: [String],
-        confirmLabel: String, background: NSColor,
+    convenience init(
+        title: String, items: [ConfirmCardChecklist.Item], confirmLabel: String, background: NSColor,
         onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
     ) {
-        list = rows.isEmpty ? nil : ConfirmCardList(rows: rows)
+        self.init(
+            title: title, message: "", checklist: ConfirmCardChecklist(items: items), confirmLabel: confirmLabel,
+            background: background, onCancel: onCancel, onConfirm: onConfirm)
+    }
+
+    private init(
+        title: String, message: String, checklist: ConfirmCardChecklist?, confirmLabel: String,
+        background: NSColor, onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
+    ) {
+        self.checklist = checklist
         self.onCancel = onCancel
         self.onConfirm = onConfirm
         confirmButton = AppButton(title: confirmLabel, variant: .destructive)
@@ -47,7 +54,7 @@ final class ConfirmCard: NSView {
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
 
-        let content = buildContent(title: title, leadLines: leadLines, trailLines: trailLines)
+        let content = buildContent(title: title, message: message)
         card.addSubview(content)
 
         let cardWidth = card.widthAnchor.constraint(equalToConstant: 420)
@@ -104,9 +111,8 @@ final class ConfirmCard: NSView {
         let chrome = Theme.current.chrome
         CardChrome.reapplyTheme(to: card)
         header.textColor = chrome.foreground.nsColor
-        leadLabel.textColor = chrome.ink(.muted)
-        trailLabel.textColor = chrome.ink(.muted)
-        list?.reapplyTheme()
+        messageLabel.textColor = chrome.ink(.muted)
+        checklist?.reapplyTheme()
         cancelButton.reapplyTheme()
         confirmButton.reapplyTheme()
     }
@@ -116,18 +122,16 @@ final class ConfirmCard: NSView {
         onCancel()
     }
 
-    private func buildContent(title: String, leadLines: [String], trailLines: [String]) -> NSStackView {
+    private func buildContent(title: String, message: String) -> NSStackView {
         header.font = .systemFont(ofSize: 15, weight: .semibold)
         header.textColor = Theme.current.chrome.foreground.nsColor
         header.stringValue = title
 
-        for (label, lines) in [(leadLabel, leadLines), (trailLabel, trailLines)] {
-            label.font = .systemFont(ofSize: 12)
-            label.textColor = Theme.current.chrome.ink(.muted)
-            label.lineBreakMode = .byWordWrapping
-            label.maximumNumberOfLines = 0
-            label.stringValue = lines.joined(separator: "\n")
-        }
+        messageLabel.font = .systemFont(ofSize: 12)
+        messageLabel.textColor = Theme.current.chrome.ink(.muted)
+        messageLabel.lineBreakMode = .byWordWrapping
+        messageLabel.maximumNumberOfLines = 0
+        messageLabel.stringValue = message
 
         cancelButton.onTap = { [weak self] in self?.cancel() }
         confirmButton.onTap = { [weak self] in
@@ -151,8 +155,7 @@ final class ConfirmCard: NSView {
         footer.alignment = .centerY
         footer.spacing = 8
 
-        let body: [NSView] = [leadLabel] + [list].compactMap { $0 } + (trailLines.isEmpty ? [] : [trailLabel])
-        let content = NSStackView(views: [header] + body + [footer])
+        let content = NSStackView(views: [header, checklist ?? messageLabel, footer])
         content.orientation = .vertical
         content.alignment = .leading
         content.spacing = 14

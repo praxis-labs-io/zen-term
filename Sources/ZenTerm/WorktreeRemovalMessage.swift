@@ -1,65 +1,67 @@
 import Foundation
 
 enum WorktreeRemovalMessage {
-    struct Content: Equatable {
-        let leadLines: [String]
-        let rows: [WorktreeRemovalRollup.Row]
-        let trailLines: [String]
-    }
+    typealias Item = ConfirmCardChecklist.Item
 
     /// A detached worktree's folder reads like a branch and is not one, so its short head stands in.
     static func name(_ worktree: Worktree) -> String {
         worktree.branch ?? String(worktree.head.prefix(7))
     }
 
-    static func content(
+    /// `carried` names each copied entry as it should read, a folder with its trailing slash.
+    static func items(
         for worktree: Worktree, state: WorktreeState?, carried: [String], openTabs: Int
-    ) -> Content {
+    ) -> [Item] {
         let name = name(worktree)
         let detached = worktree.branch == nil
-        let aside = [closesAndDeletes(openTabs: openTabs, carried: carried)].compactMap { $0 }
-        let stays = detached ? [] : ["The branch and its commits stay."]
+        var items = [whatItHolds(name: name, detached: detached, state: state)]
+        if !carried.isEmpty {
+            let rows = carried.map {
+                ConfirmCardList.Row.entry(path: [.init(text: $0, tone: .ink(.subtle))], status: [])
+            }
+            items.append(Item(mark: .info, text: plain("Deletes the copied files"), rows: rows))
+        }
+        if openTabs > 0 {
+            items.append(Item(mark: .info, text: plain("Closes \(counted(openTabs, "tab"))"), rows: []))
+        }
+        if !detached {
+            items.append(Item(mark: .kept, text: plain("Branch and commits preserved"), rows: []))
+        }
+        return items
+    }
 
+    private static func whatItHolds(name: String, detached: Bool, state: WorktreeState?) -> Item {
         guard let state else {
-            let holds = detached ? "It may hold uncommitted files and commits." : "It may hold uncommitted files."
-            return Content(leadLines: ["Couldn't read \(name).", holds] + aside + stays, rows: [], trailLines: [])
+            let checked = detached ? "uncommitted files or commits" : "uncommitted files"
+            return Item(mark: .warning, text: naming(name, "Couldn't read ", " to check for \(checked)"), rows: [])
         }
-        guard !state.isClean else {
-            return Content(leadLines: ["\(name) has nothing uncommitted."] + aside + stays, rows: [], trailLines: [])
-        }
-
-        let rows = WorktreeRemovalRollup.rows(for: state.files)
         let files = counted(state.files.count, "uncommitted file")
         let commits = counted(state.detachedCommits, "commit")
+        let rows = WorktreeRemovalRollup.rows(for: state.files).map(\.listRow)
         switch (state.detachedCommits > 0, state.files.isEmpty) {
         case (true, false):
-            return Content(
-                leadLines: ["Removing \(name) loses \(commits) on no branch and \(files)."], rows: rows,
-                trailLines: aside)
+            return Item(mark: .lost, text: naming(name, "Removing ", " loses \(commits) and \(files)"), rows: rows)
         case (true, true):
-            return Content(leadLines: ["Removing \(name) loses \(commits) on no branch."], rows: [], trailLines: aside)
-        default:
-            return Content(leadLines: ["Removing \(name) loses \(files)."], rows: rows, trailLines: aside + stays)
+            return Item(mark: .lost, text: naming(name, "Removing ", " loses \(commits)"), rows: [])
+        case (false, false):
+            return Item(mark: .lost, text: naming(name, "Removing ", " loses \(files)"), rows: rows)
+        case (false, true):
+            return Item(mark: .kept, text: naming(name, "", " has nothing uncommitted"), rows: [])
         }
     }
 
-    private static func closesAndDeletes(openTabs: Int, carried: [String]) -> String? {
-        var clauses: [String] = []
-        if openTabs == 1 { clauses.append("closes 1 tab") }
-        if openTabs > 1 { clauses.append("closes \(openTabs) tabs") }
-        if !carried.isEmpty { clauses.append("deletes the copied \(joined(carried))") }
-        guard !clauses.isEmpty else { return nil }
-        let sentence = clauses.joined(separator: " and ")
-        return sentence.prefix(1).uppercased() + sentence.dropFirst() + "."
+    private static func naming(_ name: String, _ before: String, _ after: String) -> [ConfirmCardList.Run] {
+        [
+            .init(text: before, tone: .ink(.muted)), .init(text: name, tone: .ink(.subtle)),
+            .init(text: after, tone: .ink(.muted)),
+        ].filter { !$0.text.isEmpty }
+    }
+
+    private static func plain(_ text: String) -> [ConfirmCardList.Run] {
+        [.init(text: text, tone: .ink(.muted))]
     }
 
     private static func counted(_ count: Int, _ noun: String) -> String {
         "\(count) \(noun)\(count == 1 ? "" : "s")"
-    }
-
-    private static func joined(_ items: [String]) -> String {
-        guard items.count > 1 else { return items.first ?? "" }
-        guard items.count > 2 else { return items.joined(separator: " and ") }
-        return items.dropLast().joined(separator: ", ") + ", and " + (items.last ?? "")
     }
 }

@@ -51,6 +51,13 @@ final class ConfirmCardList: NSView, ThemeReapplying {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    static func color(_ tone: Tone, _ chrome: ChromeTheme) -> NSColor {
+        switch tone {
+        case .ink(let level): return chrome.ink(level)
+        case .role(let role): return chrome[keyPath: role].nsColor
+        }
+    }
+
     func reapplyTheme() {
         layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
         rowViews.forEach { $0.reapplyTheme() }
@@ -119,17 +126,11 @@ final class ConfirmCardList: NSView, ThemeReapplying {
                     NSAttributedString(
                         string: run.text,
                         attributes: [
-                            .font: font, .paragraphStyle: paragraph, .foregroundColor: color(run.tone, chrome),
+                            .font: font, .paragraphStyle: paragraph,
+                            .foregroundColor: ConfirmCardList.color(run.tone, chrome),
                         ]))
             }
             return out
-        }
-
-        private static func color(_ tone: Tone, _ chrome: ChromeTheme) -> NSColor {
-            switch tone {
-            case .ink(let level): return chrome.ink(level)
-            case .role(let role): return chrome[keyPath: role].nsColor
-            }
         }
     }
 }

@@ -15,97 +15,108 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
             detachedCommits: commits)
     }
 
-    private func content(
+    private func items(
         state: WorktreeState?, branch: String? = "feature/zen-483", carried: [String] = [], openTabs: Int = 0
-    ) -> WorktreeRemovalMessage.Content {
-        WorktreeRemovalMessage.content(
+    ) -> [WorktreeRemovalMessage.Item] {
+        WorktreeRemovalMessage.items(
             for: worktree(branch: branch), state: state, carried: carried, openTabs: openTabs)
+    }
+
+    private func lines(
+        state: WorktreeState?, branch: String? = "feature/zen-483", carried: [String] = [], openTabs: Int = 0
+    ) -> [String] {
+        items(state: state, branch: branch, carried: carried, openTabs: openTabs).map { item in
+            "\(item.mark) \(item.text.map(\.text).joined())"
+        }
     }
 
     // MARK: on a branch
 
-    func test_branchWithFiles_listsThemAndSaysTheBranchStays() {
-        let out = content(state: state(files: 6), carried: [".env"], openTabs: 2)
-
-        XCTAssertEqual(out.leadLines, ["Removing feature/zen-483 loses 6 uncommitted files."])
-        XCTAssertEqual(out.rows.count, 6)
+    func test_branchWithEverything_ordersLossThenCopiesThenTabsThenWhatStays() {
         XCTAssertEqual(
-            out.trailLines, ["Closes 2 tabs and deletes the copied .env.", "The branch and its commits stay."])
+            lines(state: state(files: 6), carried: [".env", "node_modules/"], openTabs: 2),
+            [
+                "lost Removing feature/zen-483 loses 6 uncommitted files",
+                "info Deletes the copied files",
+                "info Closes 2 tabs",
+                "kept Branch and commits preserved",
+            ])
     }
 
-    func test_oneFile_isSingular() {
+    func test_theLostFiles_andTheCopiedFiles_eachListTheirOwnRows() {
+        let out = items(state: state(files: 6), carried: [".env", "node_modules/"])
+
+        XCTAssertEqual(out[0].rows.count, 6)
         XCTAssertEqual(
-            content(state: state(files: 1)).leadLines, ["Removing feature/zen-483 loses 1 uncommitted file."])
+            out[1].rows,
+            [
+                .entry(path: [.init(text: ".env", tone: .ink(.subtle))], status: []),
+                .entry(path: [.init(text: "node_modules/", tone: .ink(.subtle))], status: []),
+            ])
+        XCTAssertEqual(out.last?.rows, [])
     }
 
-    func test_cleanBranch_isOneBlockWithNoList() {
-        let out = content(state: state(), openTabs: 1)
-
+    func test_theWorktreeName_standsOutFromTheSentence() {
         XCTAssertEqual(
-            out.leadLines,
-            ["feature/zen-483 has nothing uncommitted.", "Closes 1 tab.", "The branch and its commits stay."])
-        XCTAssertEqual(out.rows, [])
-        XCTAssertEqual(out.trailLines, [])
+            items(state: state(files: 2))[0].text,
+            [
+                .init(text: "Removing ", tone: .ink(.muted)), .init(text: "feature/zen-483", tone: .ink(.subtle)),
+                .init(text: " loses 2 uncommitted files", tone: .ink(.muted)),
+            ])
+    }
+
+    func test_counts_areSingularAtOne() {
+        XCTAssertEqual(
+            lines(state: state(files: 1), openTabs: 1),
+            [
+                "lost Removing feature/zen-483 loses 1 uncommitted file", "info Closes 1 tab",
+                "kept Branch and commits preserved",
+            ])
+    }
+
+    func test_cleanBranch_hasNothingLost() {
+        XCTAssertEqual(
+            lines(state: state()),
+            ["kept feature/zen-483 has nothing uncommitted", "kept Branch and commits preserved"])
     }
 
     /// Nil is not clean: this is the one message that must never tell someone a tree holds nothing.
-    func test_unreadable_neverSaysItIsClean() {
-        let out = content(state: nil)
-
+    func test_unreadable_warnsInOneLine_andNeverSaysItIsClean() {
         XCTAssertEqual(
-            out.leadLines,
-            ["Couldn't read feature/zen-483.", "It may hold uncommitted files.", "The branch and its commits stay."])
-        XCTAssertEqual(out.rows, [])
+            lines(state: nil),
+            [
+                "warning Couldn't read feature/zen-483 to check for uncommitted files",
+                "kept Branch and commits preserved",
+            ])
     }
 
     // MARK: detached
 
-    func test_detachedWithCommitsAndFiles_losesBoth() {
-        let out = content(state: state(files: 3, commits: 2), branch: nil, openTabs: 1)
+    func test_detachedWithCommitsAndFiles_losesBoth_andKeepsNothing() {
+        let out = items(state: state(files: 3, commits: 2), branch: nil, openTabs: 1)
 
         XCTAssertEqual(
-            out.leadLines, ["Removing 0123456 loses 2 commits on no branch and 3 uncommitted files."])
-        XCTAssertEqual(out.rows.count, 3)
-        XCTAssertEqual(out.trailLines, ["Closes 1 tab."])
+            out.map { "\($0.mark) \($0.text.map(\.text).joined())" },
+            ["lost Removing 0123456 loses 2 commits and 3 uncommitted files", "info Closes 1 tab"])
+        XCTAssertEqual(out[0].rows.count, 3)
     }
 
     func test_detachedWithCommitsOnly_hasNoList() {
-        XCTAssertEqual(
-            content(state: state(commits: 2), branch: nil).leadLines, ["Removing 0123456 loses 2 commits on no branch."]
-        )
-        let single = content(state: state(commits: 1), branch: nil)
-        XCTAssertEqual(single.leadLines, ["Removing 0123456 loses 1 commit on no branch."])
-        XCTAssertEqual(single.rows, [])
+        let out = items(state: state(commits: 1), branch: nil)
+
+        XCTAssertEqual(out.map(\.mark), [.lost])
+        XCTAssertEqual(out[0].text.map(\.text).joined(), "Removing 0123456 loses 1 commit")
+        XCTAssertEqual(out[0].rows, [])
     }
 
-    func test_detachedWithFilesOnly_neverSaysABranchStays() {
-        let out = content(state: state(files: 2), branch: nil)
-
-        XCTAssertEqual(out.leadLines, ["Removing 0123456 loses 2 uncommitted files."])
-        XCTAssertEqual(out.trailLines, [])
+    func test_detachedWithFilesOnly() {
+        XCTAssertEqual(lines(state: state(files: 2), branch: nil), ["lost Removing 0123456 loses 2 uncommitted files"])
     }
 
     func test_detachedCleanAndUnreadable_neverMentionABranch() {
-        XCTAssertEqual(content(state: state(), branch: nil).leadLines, ["0123456 has nothing uncommitted."])
+        XCTAssertEqual(lines(state: state(), branch: nil), ["kept 0123456 has nothing uncommitted"])
         XCTAssertEqual(
-            content(state: nil, branch: nil).leadLines,
-            ["Couldn't read 0123456.", "It may hold uncommitted files and commits."])
-    }
-
-    // MARK: what else goes
-
-    func test_tabsAndCopiedFiles_shareOneSentence() {
-        func aside(carried: [String], openTabs: Int) -> String? {
-            content(state: state(), branch: nil, carried: carried, openTabs: openTabs).leadLines.dropFirst().first
-        }
-
-        XCTAssertNil(aside(carried: [], openTabs: 0))
-        XCTAssertEqual(aside(carried: [], openTabs: 4), "Closes 4 tabs.")
-        XCTAssertEqual(
-            aside(carried: [".env", "node_modules"], openTabs: 0), "Deletes the copied .env and node_modules.")
-        XCTAssertEqual(
-            aside(carried: [".env", "node_modules", ".venv"], openTabs: 1),
-            "Closes 1 tab and deletes the copied .env, node_modules, and .venv.")
+            lines(state: nil, branch: nil), ["warning Couldn't read 0123456 to check for uncommitted files or commits"])
     }
 
     // MARK: rows
@@ -149,12 +160,10 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
     /// `docs/brand-voice.md` bans the em-dash outright, and the test for it is a grep.
     func test_noEmDashAnywhere() {
         let cases = [
-            content(state: nil),
-            content(state: state(files: 3, commits: 2), branch: nil, carried: [".env"], openTabs: 2),
-            content(state: state(), carried: [".env", "node_modules"], openTabs: 1),
+            lines(state: nil), lines(state: state(files: 3, commits: 2), branch: nil, carried: [".env"], openTabs: 2),
+            lines(state: state(), carried: [".env", "node_modules/"], openTabs: 1),
         ]
-        for out in cases {
-            let text = (out.leadLines + out.trailLines).joined(separator: " ")
+        for text in cases.flatMap({ $0 }) {
             XCTAssertFalse(text.contains("—"), text)
         }
     }
