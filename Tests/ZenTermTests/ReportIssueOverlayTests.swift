@@ -3,9 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction tests for the Report-an-Issue composer, driven through the real controls in a window.
-/// A state-only test would pass while a control was dead, the failure mode the project's
-/// interaction-test rule guards against.
 final class ReportIssueOverlayTests: WindowTestCase {
     private final class Sink {
         var opened: [URL] = []
@@ -22,8 +19,6 @@ final class ReportIssueOverlayTests: WindowTestCase {
         window = nil
         super.tearDown()
     }
-
-    // MARK: harness
 
     private func mount() -> (overlay: ReportIssueOverlay, sink: Sink) {
         let sink = Sink()
@@ -71,8 +66,6 @@ final class ReportIssueOverlayTests: WindowTestCase {
         URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == name }?.value
     }
 
-    // MARK: tests
-
     func test_focusInitialResponder_focusesTitle() {
         let (overlay, _) = mount()
         overlay.focusInitialResponder()
@@ -111,7 +104,7 @@ final class ReportIssueOverlayTests: WindowTestCase {
 
     func test_openOnGitHub_withEmptyRequiredField_doesNotOpen() {
         let (overlay, sink) = mount()
-        whatHappened(overlay).setText("something broke")  // title left empty
+        whatHappened(overlay).setText("something broke")
 
         button(overlay, "Open on GitHub")?.onTap()
 

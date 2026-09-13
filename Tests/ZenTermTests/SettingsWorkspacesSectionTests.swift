@@ -3,20 +3,13 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Interaction tests for the Workspaces settings section: mount the real section over a
-/// sandboxed `workspaces` file, assert it renders a row per configured workspace and that add / edit
-/// route out through `onEditWorkspace`. Mirrors `SettingsToolsSectionTests`.
 final class SettingsWorkspacesSectionTests: WindowTestCase {
-    /// Records the workspace `onEditWorkspace` was invoked with (`nil` = add).
     private final class EditSink {
         var calls: [Workspace?] = []
     }
 
     private var tempRoot: URL!
     private var window: NSWindow?
-    /// The mounted section, retained the way the Settings card retains it while it's on screen —
-    /// its rows update in place when the background git probe lands, and a released section would
-    /// simply drop that.
     private var section: SettingsWorkspacesSection?
 
     override func setUpWithError() throws {
@@ -31,15 +24,11 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
     override func tearDownWithError() throws {
         window = nil
         section = nil
-        // Empties the cache; it does not cancel probes already in flight. Enough here because no
-        // assertion depends on a path another case also probes.
         GitRepoStatus.resetForTesting()
         ConfigLoader.defaultRootOverrideForTesting = nil
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }
-
-    // MARK: harness
 
     private func seed(_ text: String) throws {
         try text.write(to: tempRoot.appendingPathComponent("workspaces"), atomically: true, encoding: .utf8)
@@ -63,9 +52,6 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         return detail
     }
 
-    /// The section reads the `workspaces` file off the main thread, so a freshly mounted
-    /// detail has neither rows nor the empty-state hint until the load lands. Either one appearing
-    /// means it settled; waiting on rows alone would hang on an empty file.
     private func waitForLoad(in detail: NSView) {
         waitUntil(
             !rows(in: detail).isEmpty || emptyHint(in: detail) != nil,
@@ -89,8 +75,6 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         path = ~/Dev/beta
         main = nvim
         """
-
-    // MARK: tests
 
     func test_rendersRowPerConfiguredWorkspace() throws {
         try seed(twoWorkspaces)
@@ -120,8 +104,6 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         XCTAssertNil(sink.calls.first ?? nil, "the add button adds a new workspace (nil)")
     }
 
-    /// A row builds its badge from the cache, not from a hidden-by-default view. Deterministic
-    /// where the mounted test below cannot be: nothing turns the run loop, so no probe can land.
     func test_row_buildsWithItsBadgeHidden_whenNothingHasProbedTheFolder() {
         let row = WorkspaceRow(
             workspace: Workspace(
@@ -130,15 +112,12 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         XCTAssertEqual(badge?.isHidden, true, "nothing has probed the folder yet")
     }
 
-    /// The probe is off-main, so the badge fills in when the answer lands. That fill can go
-    /// silently dead, so this observes the transition rather than priming the cache first.
     func test_gitRepoWorkspace_showsGitBadge_plainDoesNot() throws {
-        // A real repo dir (has `.git`) and a plain dir, so `GitRepo.isGitRepo` is genuinely exercised.
         let repo = tempRoot.appendingPathComponent("repo", isDirectory: true)
         let plain = tempRoot.appendingPathComponent("plain", isDirectory: true)
         try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: plain, withIntermediateDirectories: true)
-        try Data().write(to: repo.appendingPathComponent(".git"))  // a worktree-style `.git` file
+        try Data().write(to: repo.appendingPathComponent(".git"))
         try seed("[Repo]\npath = \(repo.path)\n\n[Plain]\npath = \(plain.path)\n")
         let detail = mount(SettingsWorkspacesSection())
 
@@ -146,8 +125,6 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
             let row = rows(in: detail).first { $0.workspace.title == title }!
             return descendants(of: row).compactMap { $0 as? NSImageView }.first
         }
-        // Each path is probed on its own, so wait for BOTH answers: a still-hidden badge on the plain
-        // row would otherwise pass whether it had been answered or simply not reached yet.
         waitUntil(badge(inRowTitled: "Repo")?.isHidden == false, "the repo's git badge to land")
         waitUntil(GitRepoStatus.known(plain) != nil, "the plain folder to be answered too")
 
@@ -156,15 +133,11 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         XCTAssertEqual(badge(inRowTitled: "Plain")?.isHidden, true, "a plain folder keeps its badge hidden")
     }
 
-    /// The rows arrive after the mount, and the empty-state hint is the answer for an empty FILE.
-    /// Showing it while the read is still out tells the user their workspaces are gone, so the
-    /// section renders neither until it knows.
     func test_whileLoading_showsNeitherRowsNorTheEmptyStateHint() throws {
         try seed(twoWorkspaces)
 
         let detail = mount(SettingsWorkspacesSection(), waitingForLoad: false)
 
-        // Nothing has turned the run loop since the mount, so the load cannot have landed yet.
         XCTAssertTrue(rows(in: detail).isEmpty, "no rows before the file has been read")
         XCTAssertNil(emptyHint(in: detail), "and no 'no workspaces yet' hint for a file that has two")
 
@@ -173,16 +146,11 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         XCTAssertNil(emptyHint(in: detail))
     }
 
-    /// The rows land after the mount, and rebuilding tears the focused view out of the window, which
-    /// makes AppKit reset first responder to the window itself: the focus ring vanishes and arrows,
-    /// Tab and Return are dead until the user clicks. Reachable whenever the read is slow, which is
-    /// the premise of loading it off the main thread at all.
     func test_focusSurvivesTheRowsLanding() throws {
         try seed(twoWorkspaces)
         let detail = mount(SettingsWorkspacesSection(), waitingForLoad: false)
         let window = try XCTUnwrap(self.window)
         let section = try XCTUnwrap(self.section)
-        // Before the load the add button is the only stop, so that's what entering the detail lands on.
         let addButton = try XCTUnwrap(section.detailStops().first)
         XCTAssertTrue(window.makeFirstResponder(addButton))
 
@@ -206,14 +174,6 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         XCTAssertEqual(sink.calls.first??.title, "Beta")
     }
 
-    // MARK: reorder
-
-    /// An arrow keyDown, built the way AppKit really delivers one.
-    ///
-    /// `.function` and `.numericPad` are NOT decoration: macOS sets both on every arrow event, and
-    /// omitting them is how a reorder that was dead in the app once passed four green tests —
-    /// masking with `deviceIndependentFlagsMask` keeps those bits, so the comparison with `.option`
-    /// never matched a real keystroke.
     private func arrow(_ keyCode: UInt16, _ modifiers: NSEvent.ModifierFlags = []) -> NSEvent {
         NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: modifiers.union([.function, .numericPad]),
@@ -224,16 +184,12 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
     private var optionDown: NSEvent { arrow(125, .option) }
     private var optionUp: NSEvent { arrow(126, .option) }
 
-    /// The section defers its write to the next runloop turn (it re-renders the very row whose
-    /// `keyDown` is still on the stack), so a test has to let that turn happen before asserting.
     private func settleReorder() {
         let done = expectation(description: "reorder applied")
         DispatchQueue.main.async { done.fulfill() }
         wait(for: [done], timeout: 2)
     }
 
-    /// Wire the section to the same write the host uses, so these tests cover the real path rather
-    /// than a test-local imitation of it.
     private func wireReorder(_ section: SettingsWorkspacesSection) {
         section.onReorder = { moved, neighbour in
             (try? WorkspacesWriter.swap(moved.title, with: neighbour.title)) ?? false
@@ -244,8 +200,6 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         ConfigLoader.loadWorkspaces(configRoot: tempRoot).map(\.title)
     }
 
-    /// ⌥↓ moves the workspace itself and persists it. Asserted through the file, because that's the
-    /// thing the ⌘⇧P picker reads — a reordered list of views that never reached disk is the failure.
     func test_optionDown_movesWorkspaceDown_andPersists() throws {
         try seed(twoWorkspaces)
         let section = SettingsWorkspacesSection()
@@ -271,8 +225,6 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         XCTAssertEqual(configuredTitles(), ["Beta", "Alpha"])
     }
 
-    /// Focus follows the workspace, not the slot — otherwise ⌥↓⌥↓ walks a different row down each
-    /// time and the user has to re-find the one they were moving.
     func test_reorder_keepsFocusOnTheMovedRow() throws {
         try seed(twoWorkspaces)
         let section = SettingsWorkspacesSection()
@@ -289,7 +241,6 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         XCTAssertEqual(focused?.workspace.title, "Alpha", "focus follows the workspace that moved")
     }
 
-    /// Holding ⌥↓ on a row that's already last must not wrap it to the top or rewrite the file.
     func test_optionDown_atTheEnd_doesNothing() throws {
         try seed(twoWorkspaces)
         let section = SettingsWorkspacesSection()
@@ -302,8 +253,6 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         XCTAssertEqual(configuredTitles(), ["Alpha", "Beta"])
     }
 
-    /// Plain Up/Down must still move focus rather than reorder — the modifier is the whole
-    /// difference between navigating the list and rearranging it.
     func test_plainArrow_movesFocus_withoutReordering() throws {
         try seed(twoWorkspaces)
         let section = SettingsWorkspacesSection()
@@ -321,7 +270,6 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
             (window.firstResponder as? WorkspaceRow)?.workspace.title, "Beta", "it moves focus instead")
     }
 
-    /// ⌥⌘↓ is a different chord and must not reorder — the check is "Option and nothing else".
     func test_optionCommandArrow_doesNotReorder() throws {
         try seed(twoWorkspaces)
         let section = SettingsWorkspacesSection()
@@ -334,15 +282,11 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         XCTAssertEqual(configuredTitles(), ["Alpha", "Beta"])
     }
 
-    /// The file can change under an open card (a hand-edit, another window), leaving a row naming a
-    /// section that no longer exists. The swap can't happen, so the list must not slide either — a
-    /// re-render here shows an order the file never had, and it survives until the next load.
     func test_staleRow_whoseSectionIsGoneFromTheFile_leavesTheListAlone() throws {
         try seed(twoWorkspaces)
         let section = SettingsWorkspacesSection()
         wireReorder(section)
         let detail = mount(section)
-        // The card is up on Alpha + Beta; now the file loses Beta behind its back.
         try seed("[Alpha]\npath = ~/Dev/alpha\n")
 
         rows(in: detail).first?.keyDown(with: optionDown)
@@ -352,8 +296,6 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         XCTAssertEqual(configuredTitles(), ["Alpha"], "and the file is untouched")
     }
 
-    /// A failed write must leave the list alone: a row that slides while the file refuses shows an
-    /// order that vanishes the next time the section loads.
     func test_failedWrite_leavesTheListAlone() throws {
         try seed(twoWorkspaces)
         let section = SettingsWorkspacesSection()
@@ -366,8 +308,6 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         XCTAssertEqual(rows(in: detail).map(\.workspace.title), ["Alpha", "Beta"])
     }
 
-    /// ⌥↑/⌥↓ is otherwise undiscoverable — nothing on a row suggests a workspace can move — but a
-    /// one-row list has nothing to reorder, so the hint would name a keystroke that does nothing.
     func test_reorderHint_shownOnlyWhenThereIsSomethingToReorder() throws {
         func hint(in view: NSView) -> NSTextField? {
             descendants(of: view).compactMap { $0 as? NSTextField }

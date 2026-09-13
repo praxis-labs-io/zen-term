@@ -1,14 +1,5 @@
 import AppKit
 
-/// The "Report an Issue" composer card, opened from the Help menu and the Settings nav. It collects
-/// a title and a "what happened" description, shows the environment being sent (read-only), then
-/// opens a prefilled GitHub new-issue in the browser via `onOpenURL` — the app has no backend, so the
-/// browser files the report and a dragged-in diagnostics zip attaches the logs. A `ModalOverlay` like
-/// `AddWorkspaceOverlay`, sharing its card + backdrop + spring and its keyboard model.
-///
-/// Fully keyboard-driven: Up/Down move between fields, Return in the title advances (in the text area
-/// it inserts a newline), ⌘Return opens the issue, Esc cancels. Uses the pure `IssueReport` builder,
-/// so the submit path is assertable by capturing the URL handed to `onOpenURL` (no real browser).
 final class ReportIssueOverlay: NSView, ModalOverlay {
     private let report: SystemReport
     private let onOpenURL: (URL) -> Void
@@ -18,8 +9,6 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
     private let card = CardView()
     private var dismiss = DismissGate()
 
-    /// Retained (not throwaway init-locals) so `reapplyTheme()` can recolor them in place — this form
-    /// holds uncommitted typed values, so nothing here is ever rebuilt, only recolored.
     private let header = NSTextField(labelWithString: "")
     private let titleField = FieldBox(placeholder: "A short summary")
     private let whatHappened = TextAreaBox(placeholder: "What went wrong, and what you expected instead")
@@ -81,8 +70,6 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    // MARK: ModalOverlay
-
     func focusInitialResponder() { window?.makeFirstResponder(titleField.field) }
 
     func animateIn() {
@@ -99,9 +86,7 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         dismiss.isDismissing ? nil : super.hitTest(point)
     }
 
-    /// The card is the single Esc owner: a focused button lets Esc bubble here, a focused
-    /// text field/area routes it through the field editor's `cancelOperation`; claiming it in
-    /// `performKeyEquivalent` catches both.
+    /// Esc is claimed here because a focused text field's editor consumes it before `keyDown`.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if ModalEscape.handle(
             event, in: window, dismissing: dismiss.isDismissing, close: { self.onCancel() }
@@ -123,8 +108,6 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         whatGroup?.reapplyTheme()
         envCaption.reapplyTheme()
     }
-
-    // MARK: content
 
     private func buildContent() -> NSStackView {
         header.font = .systemFont(ofSize: 15, weight: .semibold)
@@ -178,13 +161,10 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
             button.onArrowUp = { [weak self] in self?.moveVertical(-1) }
             button.onArrowDown = { [weak self] in self?.moveVertical(1) }
         }
-        // The footer reads left to right as Export · Cancel · Open, walked with Left/Right; Open is
-        // the footer's single vertical stop (its default focus), Cancel and Export hang off it.
         exportButton.onArrowRight = { [weak self] in self?.focus(self?.cancelButton) }
         cancelButton.onArrowLeft = { [weak self] in self?.focus(self?.exportButton) }
         cancelButton.onArrowRight = { [weak self] in self?.focus(self?.openButton) }
         openButton.onArrowLeft = { [weak self] in self?.focus(self?.cancelButton) }
-        // Tab walks every button in reading order, then wraps to the top; Shift-Tab reverses.
         exportButton.onTab = { [weak self] in self?.focus(self?.cancelButton) }
         exportButton.onBacktab = { [weak self] in self?.focus(self?.whatHappened.textView) }
         cancelButton.onTab = { [weak self] in self?.focus(self?.openButton) }
@@ -197,10 +177,6 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         return Self.hStack([spacer, exportButton, cancelButton, openButton], spacing: 8)
     }
 
-    // MARK: keyboard focus ring
-
-    /// Up/Down order, top to bottom. The footer is one vertical stop anchored on Open; Cancel and
-    /// Export are reached from it with Left/Right, not Up/Down.
     private func verticalStops() -> [NSView] {
         [titleField.field, whatHappened.textView, openButton]
     }
@@ -220,8 +196,6 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         window?.makeFirstResponder(stops[next])
     }
 
-    /// The vertical stop representing the current focus — the focused stop itself, or Open when the
-    /// focus is on Cancel or Export (the footer's Left/Right pair).
     private func currentVerticalAnchor(in stops: [NSView]) -> NSView? {
         if let direct = stops.first(where: isFocused) { return direct }
         if isFocused(cancelButton) || isFocused(exportButton) { return openButton }
@@ -244,8 +218,6 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         window?.makeFirstResponder(view)
     }
 
-    // MARK: submit + validation
-
     private func submit() {
         if let firstInvalid = validate(includeRequired: true) {
             window?.makeFirstResponder(firstInvalid)
@@ -258,9 +230,6 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         onOpenURL(issue.url)
     }
 
-    /// Set each field's inline message and return the first offending field to focus (nil when
-    /// submittable). `includeRequired` gates the mandatory-but-empty checks: false on the live pass
-    /// (don't flag an untouched field), true on a submit attempt.
     @discardableResult
     private func validate(includeRequired: Bool) -> NSView? {
         var firstInvalid: NSView?
@@ -279,8 +248,6 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
     }
 
     private func refreshValidity() { validate(includeRequired: false) }
-
-    // MARK: layout helpers
 
     private static func hStack(_ views: [NSView], spacing: CGFloat) -> NSStackView {
         let stack = NSStackView(views: views)

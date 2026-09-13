@@ -4,18 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The float half: a tool float's card follows a background its own program repainted.
-///
-/// A float is the one host that genuinely needs the `backgroundOverride` **pull**. A persistent
-/// float keeps its surface running while hidden but is torn down to that surface, so an OSC 11 it
-/// emits in the background reaches a controller with no card to paint. The next open builds a
-/// fresh `SurfaceFloatOverlay`, which has to come up already wearing the color rather than on the
-/// theme's. Panes and drawers need no pull: their host and surface are created and destroyed
-/// together.
-///
-/// `background-alpha` is pinned rather than inherited, because it decides which view paints the
-/// card's interior and an unpinned suite mounting a `SurfaceFloatOverlay` is exactly the shape
-/// that caused the cross-suite flakiness.
 final class FloatBackgroundOverrideTests: WindowTestCase {
     private var windows: [NSWindow] = []
     private var floatControllers: [ToolFloatController] = []
@@ -28,7 +16,7 @@ final class FloatBackgroundOverrideTests: WindowTestCase {
         try super.setUpWithError()
         originalConfig = GeneralConfig.current
         GeneralConfig.setCurrentForTesting(.builtIn)
-        Motion.isReduceMotionEnabled = { true }  // instant present, so the card is mounted on return
+        Motion.isReduceMotionEnabled = { true }
         root = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-float-bg-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -85,7 +73,6 @@ final class FloatBackgroundOverrideTests: WindowTestCase {
             persist: persist, toggle: Chord(command: true, shift: true, key: "j"))
     }
 
-    /// The card actually in the view tree, found by walking it rather than asking the controller.
     private func mountedCard(in host: NSView) -> SurfaceFloatOverlay? {
         host.subviews.compactMap { $0 as? SurfaceFloatOverlay }.last
     }
@@ -116,8 +103,6 @@ final class FloatBackgroundOverrideTests: WindowTestCase {
         assertPaints(card, osc11, "the shown card kept the theme background")
     }
 
-    /// The pull. A persistent float repaints while hidden, so the event lands with no card; the
-    /// card built by the next open has to take the color from the surface itself.
     func test_aRepaintWhileHiddenReachesTheCardBuiltOnReopen() throws {
         let (floats, spawned, host) = makeFloats()
         let float = spec("lazygit", persist: .directory)
@@ -125,7 +110,7 @@ final class FloatBackgroundOverrideTests: WindowTestCase {
         let surface = try XCTUnwrap(spawned().last)
 
         floats.close()
-        surface.backgroundOverride = osc11  // the program repaints with no card mounted
+        surface.backgroundOverride = osc11
         floats.toggle(float)
 
         let reopened = try XCTUnwrap(mountedCard(in: host))
@@ -135,7 +120,6 @@ final class FloatBackgroundOverrideTests: WindowTestCase {
             "the reopened card came back on the theme while its terminal stayed repainted")
     }
 
-    /// A repaint in one float must not reach another float's card.
     func test_repaintDoesNotReachAForeignCard() throws {
         let (floats, spawned, host) = makeFloats()
         floats.toggle(spec("lazygit", persist: .ephemeral))

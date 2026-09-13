@@ -5,9 +5,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The canvas reuses each leaf's `PanelHostView` across restructures instead of
-/// rebuilding the pane chrome on every reconcile. Window-mounted per the house rule, so the
-/// assertions run against the real built view tree.
 final class PaneCanvasControllerTests: WindowTestCase {
     private var window: NSWindow!
     private var controller: PaneCanvasController!
@@ -92,16 +89,11 @@ final class PaneCanvasControllerTests: WindowTestCase {
                 host.superview === superviewsBefore[id],
                 "an in-place resize must not rebuild the split containers")
         }
-        // `.right` on the flush-right focused pane moves the shared divider right:
-        // ratio 0.5 → 0.54, so the first (left) pane grows by one step.
         let expected = 0.54 * 900 - ChromeMetrics.panelGap / 2
         XCTAssertEqual(controller.hostsForTesting[first]?.bounds.width ?? 0, expected, accuracy: 1.0)
         XCTAssertEqual(controller.focusedLeafID, second, "resize keeps focus where it was")
     }
 
-    /// Covers the defensive fallback in `resize(_:)` by driving the controller API directly —
-    /// the chrome never resizes while zoomed (`TabController` blocks the chord), so zooming is
-    /// just the only way to reach a split with no built container.
     func test_resize_withoutBuiltContainers_fallsBackToRebuild() {
         let first = controller.focusedLeafID
         controller.split(.vertical)
@@ -109,7 +101,7 @@ final class PaneCanvasControllerTests: WindowTestCase {
 
         controller.zoomFocusedLeaf()
         layout()
-        controller.resize(.right)  // no built containers while zoomed → full-rebuild fallback
+        controller.resize(.right)
         controller.unzoom()
         layout()
 
@@ -121,8 +113,6 @@ final class PaneCanvasControllerTests: WindowTestCase {
         controller.split(.vertical)
         layout()
 
-        // One layout pass per nudge, like the runloop between key-repeat events — the
-        // pixel clamp reads the split container's live bounds.
         for _ in 0..<20 {
             controller.resize(.left)
             layout()
@@ -196,12 +186,6 @@ final class PaneCanvasControllerTests: WindowTestCase {
         XCTAssertTrue(controller.hostsForTesting[first] === survivor)
     }
 
-    // MARK: surface-creation failure
-
-    /// Window-mount a fresh controller and run its first reconcile. Returns the window so the
-    /// caller retains it for the test's duration. Unlike the shared `setUp` controller, this
-    /// lets a test wire `onSurfaceStartFailed` BEFORE `start()`, since the failure fires
-    /// synchronously during that first reconcile.
     private func windowMounted(_ controller: PaneCanvasController) -> NSWindow {
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
@@ -214,9 +198,6 @@ final class PaneCanvasControllerTests: WindowTestCase {
         return win
     }
 
-    /// Let any pending main-queue work run. The surface-failure callback is delivered
-    /// asynchronously (see `TerminalSurfaceDelegate`), and the main queue is FIFO, so a drain
-    /// enqueued after `start()` runs strictly after the failure it scheduled.
     private func drainMainQueue() {
         let drained = expectation(description: "main queue drained")
         DispatchQueue.main.async { drained.fulfill() }
@@ -234,16 +215,15 @@ final class PaneCanvasControllerTests: WindowTestCase {
             captured = (retry, close)
         }
         let window = windowMounted(controller)
-        _ = window  // retain the host window for the test's lifetime
+        _ = window
         defer { controller.shutdown() }
-        drainMainQueue()  // the failure callback is delivered async
+        drainMainQueue()
 
         XCTAssertEqual(surface.startCount, 1, "the pane started once")
         XCTAssertEqual(failureCount, 1, "the dead surface fired the failure hook")
         XCTAssertEqual(controller.paneCount, 1, "the dead pane stays put until retry/close answers")
         guard let captured else { return XCTFail("the failure hook must hand up retry/close actions") }
 
-        // Retry replays the SAME launch on the SAME surface; a now-succeeding start must not re-fire.
         surface.failOnStart = false
         captured.retry()
         XCTAssertEqual(surface.startCount, 2, "retry replays the stored launch")
@@ -262,7 +242,7 @@ final class PaneCanvasControllerTests: WindowTestCase {
         let window = windowMounted(controller)
         _ = window
         defer { controller.shutdown() }
-        drainMainQueue()  // the failure callback is delivered async
+        drainMainQueue()
 
         guard let close = captured else { return XCTFail("the failure hook must hand up a close action") }
         close()
@@ -271,9 +251,6 @@ final class PaneCanvasControllerTests: WindowTestCase {
     }
 
     func test_aHaloRefreshDoesNotUndoTheUnfocusedRender() throws {
-        // `updateHalo` writes the same surface state on every restructure and focus toggle. A mode
-        // that only pushed its unfocused render once would have the shell's blinking cursor come
-        // back underneath it at the next reconcile, with no path back until the mode ended.
         let surface = try XCTUnwrap(controller.surface(for: controller.focusedLeafID) as? RecordingSurface)
 
         controller.setFocusedSurfaceRendersFocused(false)
@@ -299,8 +276,6 @@ final class PaneCanvasControllerTests: WindowTestCase {
     }
 
     func test_focusComingBackFromADrawerAnnouncesTheMove() {
-        // Same leaf id either side, so narrowing `focus` to an id comparison would swallow this.
-        // The tab's focus is on the drawer, and only this announcement puts it back on the pane.
         controller.setPanesFocused(false)
         var moves = 0
         controller.onFocusChanged = { moves += 1 }

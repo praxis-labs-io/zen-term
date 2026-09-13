@@ -1,16 +1,11 @@
 import AppKit
 import TerminalKit
 
-/// The Terminal settings section: font, cursor, input, and shell knobs. A subclass of
-/// `SettingsFormSection` — it only declares its groups. Font/cursor/input apply live to every open
-/// surface; shell/shell-args still apply to new tabs only, since a running shell process can't be
-/// hot-swapped.
 final class SettingsTerminalSection: SettingsFormSection {
     override var navTitle: String { "Terminal" }
 
     private static let cursorStyles: [TerminalBehavior.CursorStyle] = [.block, .bar, .underline]
 
-    /// The custom-shader picker's options: nil = Off (no shader), then each bundled catalog token.
     private var shaderTokens: [String?] = []
     private weak var shaderDropdown: Dropdown?
 
@@ -79,16 +74,11 @@ final class SettingsTerminalSection: SettingsFormSection {
         }
     }
 
-    /// Cursor style shown by index; static so the `read` closure the base stores per row doesn't
-    /// capture `self` (which would retain-cycle through the section's `refreshers`).
+    /// Static so the stored read closure doesn't retain the section.
     private static func cursorStyleIndex(_ c: GeneralConfig) -> Int {
         cursorStyles.firstIndex(of: c.cursorStyle) ?? 0
     }
 
-    /// The cursor-shader picker: Off plus each bundled, vetted shader (bundled-only, so nothing
-    /// un-tested is selectable). It lives here, not in Appearance, because a shader only affects the
-    /// terminal surface. A pick writes `cursor-shader = <token>` (or clears it) and applies live to
-    /// every open surface via the config-reload fan-out.
     private func addShaderRow() {
         shaderTokens = [nil] + ShaderCatalog.bundled.map { $0.token }
         let selected = currentShaderIndex()
@@ -120,7 +110,7 @@ final class SettingsTerminalSection: SettingsFormSection {
         if let token = shaderTokens[index] {
             write("cursor-shader", token, row: "cursor-shader")
         } else {
-            writeOrRemove("cursor-shader", nil, row: "cursor-shader")  // Off clears the key
+            writeOrRemove("cursor-shader", nil, row: "cursor-shader")
         }
     }
 
@@ -129,9 +119,7 @@ final class SettingsTerminalSection: SettingsFormSection {
         shaderDropdown?.setItems(shaderItems(selected: selected), selectedIndex: selected)
     }
 
-    /// The active shader's catalog token, derived from the resolved path in config (`cursorShader`
-    /// holds the absolute path post-resolution), or nil for Off. Static so the read doesn't capture
-    /// `self` into a row's refresh closure (which would retain-cycle through `refreshers`).
+    /// Static so the stored read closure doesn't retain the section.
     private static func currentShaderToken() -> String? {
         GeneralConfig.current.cursorShader.map {
             URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent

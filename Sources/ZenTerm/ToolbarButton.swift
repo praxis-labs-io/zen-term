@@ -1,27 +1,20 @@
-/// The footer toolbar's built-in buttons, in toolbar order. The raw value is the config slug the
-/// `hide-toolbar-buttons` list uses. Hiding a button is purely visual: its chord and palette
-/// entry stay live, so the slugs never touch `KeyInterceptor` or `CommandCatalog`.
+/// The raw value is the `hide-toolbar-buttons` slug. Hiding is visual only.
 enum ToolbarButton: String, CaseIterable {
     case newTab = "new-tab"
     case splitHorizontal = "split-h"
     case splitVertical = "split-v"
     case bottomDrawer = "bottom-drawer"
     case rightDrawer = "right-drawer"
-    /// The built-in Scratch float. Fixed rather than part of the config-driven float tail: it has
-    /// no `float =` line, so `hide-toolbar-buttons` is the only thing that can hide it.
     case scratch = "scratch"
     case focusMode = "focus-mode"
     case commandPalette = "command-palette"
 
-    /// The divider grouping: create │ layout │ overlays. The tool-float group is not here —
-    /// `ToggleDock` appends it from the float catalog, since its membership is config-driven.
     static let groups: [[ToolbarButton]] = [
         [.newTab],
         [.splitHorizontal, .splitVertical, .bottomDrawer, .rightDrawer, .scratch, .focusMode],
         [.commandPalette],
     ]
 
-    /// The Settings checkbox label.
     var displayName: String {
         switch self {
         case .newTab: return "New tab"
