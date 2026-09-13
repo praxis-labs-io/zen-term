@@ -124,7 +124,12 @@ final class NavSocketServer {
         acceptSource = source
     }
 
-    private func errnoText() -> String { "errno \(errno): \(String(cString: strerror(errno)))" }
+    private func errnoText() -> String {
+        let code = errno
+        var message = [CChar](repeating: 0, count: 256)
+        strerror_r(code, &message, message.count)
+        return "errno \(code): \(String(cString: message))"
+    }
 
     func stop() {
         acceptSource?.cancel()
