@@ -21,13 +21,12 @@ struct WorktreeListing: Equatable {
 
 /// What a worktree would lose if it were removed now.
 struct WorktreeState: Equatable {
-    let uncommitted: Int
-    /// Commits on this worktree's HEAD that no remote has, and zero in a repo with no remote at
-    /// all: `remove` leaves the branch alone, so with nowhere to push there is nothing to lose.
-    /// There is no stash count beside it: `refs/stash` is shared across every worktree of a repo.
-    let unpushed: Int
+    let files: [WorktreeFileChange]
+    /// Always zero on a branch, which `remove` leaves holding its commits. No stash count: `refs/stash` is shared.
+    let detachedCommits: Int
 
-    var isClean: Bool { uncommitted == 0 && unpushed == 0 }
+    var uncommitted: Int { files.count }
+    var isClean: Bool { files.isEmpty && detachedCommits == 0 }
 }
 
 /// Lists, creates and removes the worktrees of a repo, under `~/.zenterm/worktrees/`.
@@ -160,27 +159,24 @@ enum WorktreeStore {
     ///
     /// **Nil is not "clean".** Reporting zero when git failed would put "nothing uncommitted" in
     /// front of a person about to delete a tree we could not read.
-    static func state(_ worktree: Worktree) -> WorktreeState? { state(at: worktree.path) }
+    static func state(_ worktree: Worktree) -> WorktreeState? {
+        state(at: worktree.path, detached: worktree.branch == nil)
+    }
 
     /// The same answer for any checkout, including the main one, which `list` leaves out.
-    static func state(at checkout: URL) -> WorktreeState? {
-        // `--untracked-files=all`, because the default collapses an untracked directory into one
-        // entry and the confirm would offer "1 uncommitted file" for a folder of hundreds.
-        guard let status = try? git(["status", "--porcelain", "--untracked-files=all"], in: checkout),
-            let remotes = try? git(["remote"], in: checkout)
-        else { return nil }
-        // `--not --remotes` excludes nothing when there are no remote-tracking refs, so the count
-        // would be the repo's whole history rather than the work a push would carry off.
-        guard !remotes.isEmpty else {
-            return WorktreeState(uncommitted: lineCount(status), unpushed: 0)
-        }
+    static func state(at checkout: URL, detached: Bool = false) -> WorktreeState? {
+        guard let status = try? git(untrackedStatus, in: checkout) else { return nil }
+        let files = WorktreeFileChange.parse(status)
+        guard detached else { return WorktreeState(files: files, detachedCommits: 0) }
         guard
-            let counted = try? git(
-                ["rev-list", "--count", "HEAD", "--not", "--remotes"], in: checkout),
-            let unpushed = Int(counted)
+            let counted = try? git(["rev-list", "--count", "HEAD", "--not", "--branches", "--remotes"], in: checkout),
+            let commits = Int(counted)
         else { return nil }
-        return WorktreeState(uncommitted: lineCount(status), unpushed: unpushed)
+        return WorktreeState(files: files, detachedCommits: commits)
     }
+
+    /// Git's default collapses an untracked folder of hundreds into one entry.
+    private static let untrackedStatus = ["status", "--porcelain=v2", "--untracked-files=all", "-z"]
 
     /// The git directory every checkout of this repo shares, canonicalized: the identity two
     /// worktrees of one repo agree on where their paths do not. Nil outside a repo. Unlike
@@ -606,10 +602,6 @@ enum WorktreeStore {
 
     private static func branchExists(_ branch: String, in repo: URL) -> Bool {
         (try? git(["show-ref", "--verify", "--quiet", "refs/heads/\(branch)"], in: repo)) != nil
-    }
-
-    private static func lineCount(_ output: String) -> Int {
-        output.isEmpty ? 0 : output.split(separator: "\n").count
     }
 
     @discardableResult

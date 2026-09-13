@@ -2153,14 +2153,18 @@ files are always untracked and git refuses without it. The branch is untouched. 
 **locked** worktree is refused instead, because git wants the force twice there and
 a lock is the user's own "not this one", usually a drive that comes and goes.
 
-`state` counts uncommitted files and `rev-list --count HEAD --not --remotes`, and
-returns **nil, not zero**, when git cannot be read: telling someone about to delete
-an unreadable tree that it holds nothing is the one thing it exists to get right.
-Unpushed is zero in a repo with **no remote at all**, because `--not --remotes`
-excludes nothing without remote-tracking refs and would otherwise report the whole
-history as at risk, when `remove` leaves the branch in place anyway. There is no
-stash count beside those, because `refs/stash` is shared across every worktree of a
-repo.
+`state` lists every uncommitted and untracked file with its status, from one `git status
+--porcelain=v2 --untracked-files=all -z`, and returns **nil, not empty**, when git cannot
+be read: telling someone about to delete an unreadable tree that it holds nothing is the
+one thing it exists to get right. `-z` because git prints a path raw, so a space or newline
+in one would split a line-based parse. `--untracked-files=all` because the default collapses
+an untracked folder of hundreds into one entry.
+
+**Only a detached worktree counts commits.** `remove` leaves a branch in place, and its
+commits with it, pushed or not, so a worktree on a branch never loses one and never runs the
+count. A detached HEAD's commits are lost when nothing else reaches them, which is what
+`rev-list --count HEAD --not --branches --remotes` counts. There is no stash count beside
+either, because `refs/stash` is shared across every worktree of a repo.
 
 ### Removing one, with ⌥⌫
 
@@ -2193,11 +2197,22 @@ listing the worktree. A Cancel button would leave you worse off than either fini
 never starting.
 
 **The confirm carries the whole weight, because git never gets to refuse.** `--force` is
-unconditional, so nothing downstream will stop a mistake. One sentence names all of it:
-what is uncommitted and unpushed, the tabs that close, the carried entries that go with
-the folder, and the branch that stays. Splitting that into two dialogs for one decision
-is worse than one long sentence. A nil `WorktreeState` reads as "could not be read",
-never as "clean", and keeps the destructive framing.
+unconditional, so nothing downstream will stop a mistake. The card shows what goes before
+anything else: the lines above its list name the uncommitted files, and a detached HEAD's
+commits, and the list shows the files themselves. The lines below it name the tabs that
+close, the copied entries that go with the folder, and on a branch, that the branch and its
+commits stay. A nil `WorktreeState` reads as "Couldn't read", never as "clean".
+`WorktreeRemovalMessage` builds those lines and is pure, so every case is asserted without a
+window.
+
+**The list holds at most 8 rows.** `WorktreeRemovalRollup` shows every file while they fit.
+Past that, the deepest folder holding more than one row collapses into one row with a count
+per status, then the next, and a last `and N more` row counts what still spills. Rows keep
+the glyphs and colors of the picker's churn counts, from `GitStatusCategory`, so a file reads
+the same in both places. `ConfirmCardList` draws them: the path truncates in the middle, so
+the file name survives, and the rows rebuild their colors on a theme change because an
+attributed string bakes them in. Ignored files are not listed: most are rebuilt or
+reinstalled, and the copied entries that matter are already named.
 
 **The read runs off-main and the confirm is presented on the way back**, so it checks the
 picker is still the one that was up, by identity. Otherwise it lands over whatever the user

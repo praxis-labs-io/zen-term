@@ -569,28 +569,61 @@ final class WorktreeStoreTests: XCTestCase {
     func test_state_ofAFreshWorktreeIsClean() throws {
         let worktree = try WorktreeStore.create(branch: "clean", in: repo)
 
-        XCTAssertEqual(WorktreeStore.state(worktree), WorktreeState(uncommitted: 0, unpushed: 0))
+        XCTAssertEqual(WorktreeStore.state(worktree), WorktreeState(files: [], detachedCommits: 0))
         XCTAssertEqual(WorktreeStore.state(worktree)?.isClean, true)
     }
 
-    func test_state_countsUncommittedAndUnpushed() throws {
+    func test_state_listsEachFileWithItsStatus() throws {
         let worktree = try WorktreeStore.create(branch: "busy", in: repo)
         try GitFixture.write("changed\n", to: worktree.path.appendingPathComponent("tracked.txt"))
-        try GitFixture.run(["commit", "-qam", "one"], in: worktree.path)
-        try GitFixture.write("again\n", to: worktree.path.appendingPathComponent("tracked.txt"))
+        try GitFixture.write("staged\n", to: worktree.path.appendingPathComponent("staged file.txt"))
+        try GitFixture.run(["add", "staged file.txt"], in: worktree.path)
         try GitFixture.write("new\n", to: worktree.path.appendingPathComponent("untracked.txt"))
 
         let state = try XCTUnwrap(WorktreeStore.state(worktree))
 
-        XCTAssertEqual(state.uncommitted, 2)
-        XCTAssertEqual(state.unpushed, 1)
-        XCTAssertFalse(state.isClean)
+        XCTAssertEqual(
+            state.files.sorted { $0.path < $1.path },
+            [
+                WorktreeFileChange(path: "staged file.txt", categories: [.staged]),
+                WorktreeFileChange(path: "tracked.txt", categories: [.modified]),
+                WorktreeFileChange(path: "untracked.txt", categories: [.untracked]),
+            ])
+        XCTAssertEqual(state.uncommitted, 3)
     }
 
-    /// `git status --porcelain` collapses an untracked directory into one entry by default, and
-    /// the confirm this feeds is what stands between the user and `--force`. Reporting "1
-    /// uncommitted file" for a folder of three is the one number here that must not be wrong.
-    func test_state_countsEveryFileInAnUntrackedDirectory() throws {
+    /// `remove` leaves the branch in place, so a commit on it is not lost whether or not it was pushed.
+    func test_state_neverCountsCommitsOnABranch() throws {
+        let worktree = try WorktreeStore.create(branch: "local-work", in: repo)
+        try GitFixture.write("committed\n", to: worktree.path.appendingPathComponent("tracked.txt"))
+        try GitFixture.run(["commit", "-qam", "unpushed"], in: worktree.path)
+
+        let state = try XCTUnwrap(WorktreeStore.state(worktree))
+
+        XCTAssertEqual(state.detachedCommits, 0)
+        XCTAssertTrue(state.isClean)
+    }
+
+    func test_state_countsCommitsOnlyADetachedHeadHolds() throws {
+        let detached = root.appendingPathComponent("detached", isDirectory: true)
+        try GitFixture.run(["worktree", "add", "--detach", detached.path], in: repo)
+        let worktree = Worktree(path: detached, branch: nil, head: "", isLocked: false)
+        XCTAssertEqual(WorktreeStore.state(worktree)?.detachedCommits, 0, "a HEAD still on main holds nothing alone")
+
+        for message in ["second", "third"] {
+            try GitFixture.write("\(message)\n", to: detached.appendingPathComponent("tracked.txt"))
+            try GitFixture.run(["commit", "-qam", message], in: detached)
+        }
+
+        XCTAssertEqual(WorktreeStore.state(worktree)?.detachedCommits, 2)
+
+        try GitFixture.run(["branch", "kept"], in: detached)
+        XCTAssertEqual(WorktreeStore.state(worktree)?.detachedCommits, 0, "a local branch holds them now")
+    }
+
+    /// Git collapses an untracked folder into one entry by default, and this list is what stands
+    /// between the user and `--force`.
+    func test_state_listsEveryFileInAnUntrackedDirectory() throws {
         let worktree = try WorktreeStore.create(branch: "untracked-dir", in: repo)
         let nested = worktree.path.appendingPathComponent("scratch", isDirectory: true)
         try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
@@ -600,21 +633,7 @@ final class WorktreeStoreTests: XCTestCase {
 
         let state = try XCTUnwrap(WorktreeStore.state(worktree))
 
-        XCTAssertEqual(state.uncommitted, 3)
-    }
-
-    /// `--not --remotes` excludes nothing when there are no remote-tracking refs, so the count is
-    /// the repo's whole history. A local-only worktree would never read as clean.
-    func test_state_countsNothingUnpushedInARepoWithNoRemote() throws {
-        let solo = try GitFixture.makeRepo(at: root.appendingPathComponent("solo"))
-        try GitFixture.write("two\n", to: solo.appendingPathComponent("tracked.txt"))
-        try GitFixture.run(["commit", "-qam", "second"], in: solo)
-        let worktree = try WorktreeStore.create(branch: "local-only", in: solo)
-
-        let state = try XCTUnwrap(WorktreeStore.state(worktree))
-
-        XCTAssertEqual(state.unpushed, 0)
-        XCTAssertTrue(state.isClean)
+        XCTAssertEqual(state.files.map(\.path).sorted(), ["scratch/a.txt", "scratch/b.txt", "scratch/c.txt"])
     }
 
     /// Nil is not "clean". Reporting zero here would tell someone about to delete an unreadable

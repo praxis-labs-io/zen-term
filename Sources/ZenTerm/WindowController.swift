@@ -1394,7 +1394,7 @@ final class WindowController: NSObject {
     }
 
     /// Remove the worktree the picker has selected: read what it would cost, then confirm once with
-    /// the whole consequence. `WorktreeStore.state` shells out to git twice, so it runs off-main and
+    /// the whole consequence. `WorktreeStore.state` shells out to git, so it runs off-main and
     /// the confirm is presented on the way back.
     private func removeSelectedWorktreeInPicker() {
         guard let picker = modal?.overlay as? RepoPickerOverlay,
@@ -1428,12 +1428,12 @@ final class WindowController: NSObject {
         _ picker: RepoPickerOverlay, _ worktree: Worktree, from parent: Workspace,
         state: WorktreeState?, carried: [String], openTabs: Int
     ) {
-        let name = Self.worktreeName(worktree)
+        let name = WorktreeRemovalMessage.name(worktree)
+        let content = WorktreeRemovalMessage.content(
+            for: worktree, state: state, carried: carried, openTabs: openTabs)
         let card = ConfirmCard(
-            title: "Remove Worktree",
-            message: Self.removeWorktreeMessage(
-                worktree, state: state, carried: carried, openTabs: openTabs),
-            confirmLabel: "Remove",
+            title: "Remove Worktree", leadLines: content.leadLines, rows: content.rows.map(\.listRow),
+            trailLines: content.trailLines, confirmLabel: "Remove",
             background: Theme.current.chrome.background.nsColor,
             onCancel: { [weak picker] in picker?.dismissConfirm() },
             onConfirm: { [weak self, weak picker] in
@@ -1454,49 +1454,6 @@ final class WindowController: NSObject {
                     variant: .warning, title: "Couldn't Remove \(name)",
                     message: error.localizedDescription))
         }
-    }
-
-    /// A detached worktree's folder name is whatever directory it was made in, which reads like a
-    /// branch and is not one, so the short head stands in.
-    static func worktreeName(_ worktree: Worktree) -> String {
-        worktree.branch ?? String(worktree.head.prefix(7))
-    }
-
-    /// One confirm carrying every consequence: the work that goes, the tabs that close, the
-    /// carried files that go with the folder, and the branch that does not. A nil state reads as
-    /// "could not be read", never "empty": that is the one sentence here that could cost a day.
-    static func removeWorktreeMessage(
-        _ worktree: Worktree, state: WorktreeState?, carried: [String], openTabs: Int
-    ) -> String {
-        let name = worktreeName(worktree)
-        var does: [String] = []
-        if openTabs == 1 { does.append("closes its tab") }
-        if openTabs > 1 { does.append("closes its \(openTabs) tabs") }
-        does.append(
-            carried.isEmpty
-                ? "deletes the folder" : "deletes the folder with the \(joined(carried)) it copied")
-        does.append("keeps the branch")
-        let consequence = "Removing it \(joined(does))."
-
-        guard let state else {
-            return "\(name) could not be read, so what it holds is unknown. \(consequence)"
-        }
-        guard !state.isClean else { return "\(name) has nothing uncommitted. \(consequence)" }
-        var lost: [String] = []
-        if state.uncommitted > 0 {
-            lost.append("\(state.uncommitted) uncommitted file\(state.uncommitted == 1 ? "" : "s")")
-        }
-        if state.unpushed > 0 {
-            let verb = state.unpushed == 1 ? "is" : "are"
-            lost.append("\(state.unpushed) commit\(state.unpushed == 1 ? "" : "s") that \(verb) on no remote")
-        }
-        return "\(name) has \(joined(lost)). \(consequence)"
-    }
-
-    private static func joined(_ items: [String]) -> String {
-        guard items.count > 1 else { return items.first ?? "" }
-        guard items.count > 2 else { return items.joined(separator: " and ") }
-        return items.dropLast().joined(separator: ", ") + ", and " + (items.last ?? "")
     }
 
     /// Open the "Report an Issue" composer (Help menu + Settings). Non-private: `AppDelegate` routes
