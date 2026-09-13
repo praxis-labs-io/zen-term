@@ -266,7 +266,7 @@ enum WorktreeStore {
         }
 
         do {
-            try move.map { try git(["checkout", $0.to], in: $0.checkout) }
+            if let move { try git(["checkout", move.to], in: move.checkout) }
             try git(["worktree", "add", destination.path, branch], in: repo)
         } catch {
             throw takingBack(claim, at: destination, undoing: move, in: repo, after: error)
