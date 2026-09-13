@@ -1,6 +1,5 @@
 import Foundation
 
-/// A window's layout tree plus its focused leaf.
 public struct PaneTree: Sendable {
     public var root: PaneNode
     public var focusedLeaf: PaneID
