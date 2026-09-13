@@ -22,7 +22,6 @@ enum ChromeThemeDeriver {
     /// A fixed anchor, not the catalog's median, so adding a theme doesn't re-weight the others.
     private static let referenceSeparation: CGFloat = 0.714
 
-    /// Never scales down and caps at 1.8; `docs/architecture.md` says why.
     static func fillScale(for terminal: TerminalTheme) -> CGFloat {
         let separation = abs(perceivedLuminance(terminal.foreground) - perceivedLuminance(terminal.background))
         guard separation > 0.01 else { return 1.8 }

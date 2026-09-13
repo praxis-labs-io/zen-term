@@ -11,7 +11,6 @@ final class PaneCanvasController: NSObject {
     private var cwdByLeaf: [PaneID: URL] = [:]
     private var hostByLeaf: [PaneID: PanelHostView] = [:]
     private var launchByLeaf: [PaneID: TerminalSurfaceConfig] = [:]
-    /// Exported to the pane's shell as `$ZEN_PANE`.
     private var tokenByLeaf: [PaneID: Int] = [:]
     /// Consumed on first start; a split never inherits it.
     private var startupCommandByLeaf: [PaneID: String] = [:]
@@ -352,7 +351,6 @@ final class PaneCanvasController: NSObject {
         return min(0.5, floor / Double(extent))
     }
 
-    /// Returns false for the last pane, and the caller closes the window.
     @discardableResult
     func closeFocused() -> Bool {
         let dying = tree.focusedLeaf

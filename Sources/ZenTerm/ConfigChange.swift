@@ -8,7 +8,6 @@ struct ConfigChange: OptionSet {
     /// Excludes the drawer fractions: a built tab never re-reads them.
     static let chromeLayout = ConfigChange(rawValue: 1 << 1)
 
-    /// Background alpha is in here and also drives a chrome recolor of the padding ring.
     static let terminalBehavior = ConfigChange(rawValue: 1 << 2)
 
     static let floats = ConfigChange(rawValue: 1 << 3)

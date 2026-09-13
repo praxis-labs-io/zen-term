@@ -18,7 +18,6 @@ struct GeneralConfig: Equatable {
 
     var backgroundAlpha: Double
 
-    /// Nil falls back to the legacy single `theme` file, then the built-in default.
     var themeName: String?
 
     var accentColor: AccentSlot?
@@ -35,7 +34,6 @@ struct GeneralConfig: Equatable {
     var rightDrawerFraction: CGFloat
     var drawerResizeStep: CGFloat
     var maxDrawerFraction: CGFloat
-    /// Visual only: a hidden button's shortcut and palette entry stay live.
     var hiddenToolbarButtons: Set<ToolbarButton> = []
 
     var reduceMotion: ReduceMotion
@@ -46,15 +44,12 @@ struct GeneralConfig: Equatable {
     var completionToast: ToastDismissal
     var toastDuration: TimeInterval
 
-    /// Inert in an unpackaged dev build.
     var automaticUpdateChecks: Bool
 
-    /// `ZENTERM_LOG_VERBOSE=1` is the environment equivalent.
     var debug: Bool
 
     var shell: String?
     var shellArgs: [String]
-    /// Governs ⌘T and ⌘N only; a pane split always inherits.
     var tabInheritCWD: Bool
 
     var editor: String?

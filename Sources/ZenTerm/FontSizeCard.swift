@@ -4,7 +4,6 @@ import AppKit
 final class FontSizeCard: ShadowCardView {
     private let label: NSTextField
 
-    /// Tabular digits so the label does not shift sideways on every step.
     private static let font: NSFont = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
 
     init(text: String) {

@@ -28,7 +28,6 @@ enum Acknowledgements {
         return String(line[line.index(after: afterHashes)...])
     }
 
-    /// Leaves an unpaired `**`, such as a quoted license's banner, in place.
     private static func stripPairedBold(_ line: String) -> String {
         guard line.contains("**") else { return line }
         var result = ""

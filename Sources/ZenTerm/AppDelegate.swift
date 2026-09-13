@@ -244,7 +244,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         drainSessionSweeps(then: completion)
     }
 
-    /// Only safe once `tearDownForQuit()` has run on every window, so nothing the reaper sweeps is live work.
     private func drainSessionSweeps(then completion: @escaping () -> Void) {
         ShellSessionReaper.shared.drainForQuit(
             timeout: ShellSessionReaper.quitSweepBudget, completion: completion)

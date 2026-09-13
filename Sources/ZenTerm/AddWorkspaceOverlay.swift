@@ -41,7 +41,6 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private var bottomGroup: LabeledField?
     private let focusSegment = SegmentedControl(options: ["Main", "Right", "Bottom"], selectedIndex: 0) { _ in }
 
-    /// Retained so `reapplyTheme()` can recolor captions built straight into a stack.
     private var captions: [FieldCaption] = []
     private var envRows: [EnvRow] = []
     private let envStack = NSStackView()

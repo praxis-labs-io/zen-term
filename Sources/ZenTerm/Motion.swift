@@ -1,6 +1,5 @@
 import AppKit
 
-/// Under Reduce Motion every primitive applies its final state and runs its completion synchronously.
 enum Motion {
     enum Spring {
         static let mass: CGFloat = 1

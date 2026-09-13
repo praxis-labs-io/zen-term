@@ -27,7 +27,7 @@ final class ConfigApplier {
         self.sinks = sinks
     }
 
-    /// Notices run ungated to retry an undelivered one; the update card also re-resolves its keycap on `.keymap`.
+    /// Notices run ungated to retry an undelivered one.
     func apply(_ change: ConfigChange) {
         if change.contains(.keymap) {
             sinks.setKeymap(GeneralConfig.current.keymap)

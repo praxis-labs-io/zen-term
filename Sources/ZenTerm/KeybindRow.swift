@@ -2,12 +2,9 @@ import AppKit
 
 final class KeybindRow: NSView {
     enum MessageKind: Equatable {
-        /// Owned by the section's refresh, for as long as the config says so.
         case diagnostic
         case explanation
-        /// Transient: the next refresh clears it.
         case notice
-        /// Outlives a refresh; only a write that lands clears it.
         case failure
     }
 

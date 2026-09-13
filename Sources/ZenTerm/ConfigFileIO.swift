@@ -7,7 +7,6 @@ enum ConfigFileIO {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    /// Writes atomically to a symlink's target, so a dotfiles symlink stays a symlink.
     static func writePreservingSymlink(_ contents: String, to url: URL) throws {
         try contents.write(to: url.resolvingSymlinksInPath(), atomically: true, encoding: .utf8)
     }

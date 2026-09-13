@@ -49,7 +49,6 @@ enum AccentSlot: String, CaseIterable {
 
     var isBright: Bool { ansiIndex >= 8 }
 
-    /// Falls back to the foreground so a theme with fewer than 16 entries cannot trap.
     func color(in terminal: TerminalTheme) -> TerminalColor {
         terminal.ansi.indices.contains(ansiIndex) ? terminal.ansi[ansiIndex] : terminal.foreground
     }

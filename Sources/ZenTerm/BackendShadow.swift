@@ -9,7 +9,6 @@ enum BackendShadow {
         let disposition: ChordDisposition
     }
 
-    /// Two cases because an empty list must not also mean the backend never answered.
     enum Finding: Equatable {
         case backendSilent
         case freed([FreedChord])

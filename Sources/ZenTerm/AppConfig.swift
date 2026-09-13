@@ -1,7 +1,6 @@
 import Foundation
 
 extension Notification.Name {
-    /// Carries a `ConfigChange` in `userInfo`; a post without one reads as `.all`.
     static let configDidChange = Notification.Name("ZenTerm.configDidChange")
 }
 

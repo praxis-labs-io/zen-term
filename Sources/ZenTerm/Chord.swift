@@ -24,7 +24,6 @@ struct Chord: Hashable {
         "<": ",", ">": ".", "?": "/",
     ]
 
-    /// Accepts ghostty's modifier and key spellings, so a pasted ghostty keybind resolves.
     static func parse(_ spec: String) -> Chord? {
         var command = false
         var shift = false

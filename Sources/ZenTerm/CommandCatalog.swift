@@ -7,7 +7,6 @@ struct PaletteCommand {
     let chord: KeyInterceptor.ReservedChord
 }
 
-// `spec(for:)` is exhaustive, so a new chord fails to compile until it has a palette title.
 enum CommandCatalog {
     private enum Category {
         static let panes = "Panes"

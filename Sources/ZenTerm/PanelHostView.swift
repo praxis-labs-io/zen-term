@@ -63,7 +63,7 @@ final class PanelHostView: NSView, TerminalModeHost {
     /// An `NSView` cannot paint outside its bounds, and the glow has to.
     private static let haloOutset: CGFloat = 16
 
-    /// Not the card's old 0.3: a CGContext shadow renders far weaker than a CALayer one.
+    /// A CGContext shadow renders far weaker than a CALayer one.
     private static let haloOpacity: Float = 0.45
 
     private static let haloBlur: CGFloat = 8
