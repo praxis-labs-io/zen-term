@@ -2222,7 +2222,8 @@ lists sit together. A nil `WorktreeState` reads as "Couldn't read", never as "cl
 `WorktreeRemovalMessage` builds the items and is pure, so every case is asserted without a
 window, and `ConfirmCardChecklist` draws them.
 
-**The list holds at most 8 rows.** `WorktreeRemovalRollup` shows every file while they fit.
+**Each list holds at most 8 rows.** Past 8 copied files, the list shows 7 and an `and N more`
+row. `WorktreeRemovalRollup` shows every uncommitted file while they fit.
 Past that, the deepest folder holding more than one row collapses into one row with a count
 per status, then the next, and a last `and N more` row counts what still spills. Rows keep
 the glyphs and colors of the picker's churn counts, from `GitStatusCategory`, so a file reads

@@ -14,12 +14,7 @@ enum WorktreeRemovalMessage {
         let detached = worktree.branch == nil
         var items = [whatItHolds(name: name, detached: detached, state: state)]
         if !carried.isEmpty {
-            items.append(
-                Item(
-                    mark: .info, text: plain("Deletes the copied files"),
-                    rows: carried.map {
-                        ConfirmCardList.Row.entry(path: [.init(text: $0, tone: .ink(.subtle))], status: [])
-                    }))
+            items.append(Item(mark: .info, text: plain("Deletes the copied files"), rows: copiedRows(carried)))
         }
         if openTabs > 0 {
             items.append(Item(mark: .info, text: plain("Closes \(counted(openTabs, "tab"))"), rows: []))
@@ -48,6 +43,13 @@ enum WorktreeRemovalMessage {
         case (false, true):
             return Item(mark: .kept, text: naming(name, "", " has nothing uncommitted"), rows: [])
         }
+    }
+
+    private static func copiedRows(_ carried: [String]) -> [ConfirmCardList.Row] {
+        let limit = WorktreeRemovalRollup.rowLimit
+        let shown = carried.count > limit ? Array(carried.prefix(limit - 1)) : carried
+        let rows = shown.map { ConfirmCardList.Row.entry(path: [.init(text: $0, tone: .ink(.subtle))], status: []) }
+        return carried.count > limit ? rows + [.note("and \(carried.count - shown.count) more")] : rows
     }
 
     private static func naming(_ name: String, _ before: String, _ after: String) -> [ConfirmCardList.Run] {

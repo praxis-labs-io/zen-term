@@ -110,6 +110,15 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
             ["lost Removing feature/zen-483 loses 2 commits and 1 uncommitted file"])
     }
 
+    func test_manyCopiedEntries_spillIntoACountRow() {
+        let carried = (1...10).map { "copy\($0)" }
+
+        let rows = items(state: state(), carried: carried)[1].rows
+
+        XCTAssertEqual(rows.count, WorktreeRemovalRollup.rowLimit)
+        XCTAssertEqual(rows.last, .note("and 3 more"))
+    }
+
     func test_detachedWithFilesOnly() {
         XCTAssertEqual(lines(state: state(files: 2), branch: nil), ["lost Removing 0123456 loses 2 uncommitted files"])
     }
