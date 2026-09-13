@@ -2173,11 +2173,12 @@ one thing it exists to get right. `-z` because git prints a path raw, so a space
 in one would split a line-based parse. `--untracked-files=all` because the default collapses
 an untracked folder of hundreds into one entry.
 
-**Only a detached worktree counts commits.** `remove` leaves a branch in place, and its
-commits with it, pushed or not, so a worktree on a branch never loses one and never runs the
-count. A detached HEAD's commits are lost when nothing else reaches them, which is what
-`rev-list --count HEAD --not --branches --remotes` counts. There is no stash count beside
-either, because `refs/stash` is shared across every worktree of a repo.
+**A commit is lost only when nothing else holds it.** `remove` deletes the worktree's own HEAD
+and nothing more, so a commit any ref or another worktree's HEAD reaches survives it. The count
+is `rev-list --count HEAD --not --glob=refs/*` plus every other worktree's HEAD, which leaves
+out branches, tags, remotes and the stash. On a branch it is zero. It runs on every removal
+rather than only for a worktree the picker listed as detached, because the listing is taken
+when the picker opens and a checkout can detach and commit after that.
 
 ### Removing one, with ⌥⌫
 
@@ -2214,7 +2215,8 @@ unconditional, so nothing downstream will stop a mistake. The card is a checklis
 per consequence, each behind a mark that says how much it costs: an x for what is lost, a
 warning triangle only when git could not read the worktree, an info circle for what is
 expected (the copied files deleted, the tabs closing), and a check for what is kept. Items run
-in that order, so the branch and its commits come last, and only on a worktree with a branch.
+in that order, so the branch and its commits come last, and only on a worktree with a branch
+that loses no commits.
 The uncommitted files and the copied files each list their entries under their item, so both
 lists sit together. A nil `WorktreeState` reads as "Couldn't read", never as "clean".
 `WorktreeRemovalMessage` builds the items and is pure, so every case is asserted without a

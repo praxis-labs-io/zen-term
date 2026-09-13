@@ -15,10 +15,10 @@ struct WorktreeListing: Equatable {
 
 struct WorktreeState: Equatable {
     let files: [WorktreeFileChange]
-    let detachedCommits: Int
+    let lostCommits: Int
 
     var uncommitted: Int { files.count }
-    var isClean: Bool { files.isEmpty && detachedCommits == 0 }
+    var isClean: Bool { files.isEmpty && lostCommits == 0 }
 }
 
 /// Every call blocks on git, so callers run them off-main.
@@ -123,18 +123,27 @@ enum WorktreeStore {
 
     /// Nil when git fails, never a zero that would read as clean.
     static func state(_ worktree: Worktree) -> WorktreeState? {
-        state(at: worktree.path, detached: worktree.branch == nil)
+        state(at: worktree.path, countingLostCommits: true)
     }
 
-    static func state(at checkout: URL, detached: Bool = false) -> WorktreeState? {
+    static func state(at checkout: URL, countingLostCommits: Bool = false) -> WorktreeState? {
         guard let status = try? git(untrackedStatus, in: checkout) else { return nil }
         let files = WorktreeFileChange.parse(status)
-        guard detached else { return WorktreeState(files: files, detachedCommits: 0) }
-        guard
-            let counted = try? git(["rev-list", "--count", "HEAD", "--not", "--branches", "--remotes"], in: checkout),
+        guard countingLostCommits else { return WorktreeState(files: files, lostCommits: 0) }
+        guard let listing = try? porcelain(in: checkout),
+            let counted = try? git(
+                ["rev-list", "--count", "HEAD", "--not", "--glob=refs/*"] + heads(in: listing, besides: checkout),
+                in: checkout),
             let commits = Int(counted)
         else { return nil }
-        return WorktreeState(files: files, detachedCommits: commits)
+        return WorktreeState(files: files, lostCommits: commits)
+    }
+
+    private static func heads(in listing: String, besides checkout: URL) -> [String] {
+        let own = checkout.resolvingSymlinksInPath().standardizedFileURL
+        return parse(listing)
+            .filter { $0.path.resolvingSymlinksInPath().standardizedFileURL != own && !$0.head.isEmpty }
+            .map(\.head)
     }
 
     private static let untrackedStatus = ["status", "--porcelain=v2", "--untracked-files=all", "-z"]

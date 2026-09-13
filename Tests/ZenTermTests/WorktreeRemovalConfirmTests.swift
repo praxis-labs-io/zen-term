@@ -12,7 +12,7 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
     private func state(files: Int = 0, commits: Int = 0) -> WorktreeState {
         WorktreeState(
             files: (0..<files).map { WorktreeFileChange(path: "file\($0).txt", categories: [.modified]) },
-            detachedCommits: commits)
+            lostCommits: commits)
     }
 
     private func items(
@@ -102,6 +102,12 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
         XCTAssertEqual(out.map(\.mark), [.lost])
         XCTAssertEqual(out[0].text.map(\.text).joined(), "Removing 0123456 loses 1 commit")
         XCTAssertEqual(out[0].rows, [])
+    }
+
+    func test_commitsLostOnABranchWorktree_dropThePreservedLine() {
+        XCTAssertEqual(
+            lines(state: state(files: 1, commits: 2)),
+            ["lost Removing feature/zen-483 loses 2 commits and 1 uncommitted file"])
     }
 
     func test_detachedWithFilesOnly() {

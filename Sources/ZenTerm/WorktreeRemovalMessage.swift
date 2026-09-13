@@ -14,15 +14,17 @@ enum WorktreeRemovalMessage {
         let detached = worktree.branch == nil
         var items = [whatItHolds(name: name, detached: detached, state: state)]
         if !carried.isEmpty {
-            let rows = carried.map {
-                ConfirmCardList.Row.entry(path: [.init(text: $0, tone: .ink(.subtle))], status: [])
-            }
-            items.append(Item(mark: .info, text: plain("Deletes the copied files"), rows: rows))
+            items.append(
+                Item(
+                    mark: .info, text: plain("Deletes the copied files"),
+                    rows: carried.map {
+                        ConfirmCardList.Row.entry(path: [.init(text: $0, tone: .ink(.subtle))], status: [])
+                    }))
         }
         if openTabs > 0 {
             items.append(Item(mark: .info, text: plain("Closes \(counted(openTabs, "tab"))"), rows: []))
         }
-        if !detached {
+        if !detached, (state?.lostCommits ?? 0) == 0 {
             items.append(Item(mark: .kept, text: plain("Branch and commits preserved"), rows: []))
         }
         return items
@@ -34,9 +36,9 @@ enum WorktreeRemovalMessage {
             return Item(mark: .warning, text: naming(name, "Couldn't read ", " to check for \(checked)"), rows: [])
         }
         let files = counted(state.files.count, "uncommitted file")
-        let commits = counted(state.detachedCommits, "commit")
+        let commits = counted(state.lostCommits, "commit")
         let rows = WorktreeRemovalRollup.rows(for: state.files).map(\.listRow)
-        switch (state.detachedCommits > 0, state.files.isEmpty) {
+        switch (state.lostCommits > 0, state.files.isEmpty) {
         case (true, false):
             return Item(mark: .lost, text: naming(name, "Removing ", " loses \(commits) and \(files)"), rows: rows)
         case (true, true):
