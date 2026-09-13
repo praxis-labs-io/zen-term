@@ -1,33 +1,20 @@
 import Foundation
 
-/// Backend-neutral terminal behavior the chrome dials from user config — the seam's
-/// vocabulary for the non-appearance knobs (cursor shape/thickness, Option semantics, glyph
-/// thickening, scroll feel, custom render shaders). The libghostty backend maps the cursor,
-/// Option, thickening, and shader fields to ghostty config; the scroll multiplier is applied in
-/// `GhosttyHostView`'s own scroll handling, not via config.
+/// Non-appearance terminal settings from user config: cursor, Option, glyph thickening, scroll, shader.
 public struct TerminalBehavior: Equatable, Sendable {
     public enum CursorStyle: Sendable, Equatable { case block, bar, underline }
 
     public var cursorStyle: CursorStyle
     public var cursorBlink: Bool
-    /// Cursor thickness in pixels, for the bar/underline styles (block fills the cell, so it's
-    /// unaffected). ghostty's base is 1px — nearly invisible on Retina — so the default is 2.
+    /// Pixels, for bar and underline cursors. Defaults to 2 because ghostty's 1px base is faint on Retina.
     public var cursorThickness: Int
     public var optionAsAlt: Bool
-    /// Fake-bold every glyph by dilating its coverage. Off by default, matching stock ghostty:
-    /// its thickening strength is maxed out, so on a Retina panel it reads as a permanent bold
-    /// rather than a nudge.
+    /// Off by default: ghostty's thickening is at full strength and reads as permanent bold on Retina.
     public var fontThicken: Bool
     public var scrollMultiplier: Double
-    /// Absolute path to a single GLSL cursor shader (a post-process pass), or nil for none. The
-    /// chrome resolves a bundled shader name to this path before it crosses the seam; the backend
-    /// emits it to ghostty config. Single by design — the chrome ships one selectable effect,
-    /// not a stack.
+    /// Absolute path to one GLSL cursor shader, or nil.
     public var cursorShader: String?
-    /// Translucency of the terminal background, 0…1. 1 (the default) is a solid surface; below
-    /// that the backend renders its background with alpha and the chrome shows through. The
-    /// backend also has to stop asserting opacity to the compositor at that point — see
-    /// `GhosttySurface`, where an opaque layer would discard the alpha outright.
+    /// Terminal background opacity, 0 to 1. Below 1 the chrome shows through.
     public var backgroundAlpha: Double
 
     public init(
@@ -50,14 +37,10 @@ public struct TerminalBehavior: Equatable, Sendable {
         self.backgroundAlpha = backgroundAlpha
     }
 
-    /// Whether the surface composites as a solid one — the fast path, and what every layer
-    /// standing between the terminal and the window backdrop keys off.
     public var isBackgroundSolid: Bool { backgroundAlpha >= 1 }
 
-    /// The shipped baseline used when no config is present.
     public static let `default` = TerminalBehavior()
 
-    /// ghostty's `cursor-style` token for this shape.
     public var ghosttyCursorStyle: String {
         switch cursorStyle {
         case .block: return "block"
@@ -66,14 +49,12 @@ public struct TerminalBehavior: Equatable, Sendable {
         }
     }
 
-    /// ghostty's `adjust-cursor-thickness` delta (its base thickness is 1px), or nil when no
-    /// adjustment is needed so the generated config stays clean.
+    /// ghostty's `adjust-cursor-thickness` over its 1px base, or nil when none is needed.
     public var ghosttyCursorThicknessDelta: Int? {
         cursorThickness > 1 ? cursorThickness - 1 : nil
     }
 
-    /// ghostty's `background-opacity`, or nil at full opacity so the generated config stays
-    /// clean and the shipped baseline is unchanged.
+    /// ghostty's `background-opacity`, or nil at full opacity.
     public var ghosttyBackgroundOpacity: Double? {
         isBackgroundSolid ? nil : backgroundAlpha
     }

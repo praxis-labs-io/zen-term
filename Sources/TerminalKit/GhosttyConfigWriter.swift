@@ -1,31 +1,17 @@
 import AppLog
 import Foundation
 
-/// Translates the chrome's `TerminalTheme` into ghostty config-file text, so the chrome stays the
-/// source of truth for appearance. libghostty accepts configuration only from files, so
-/// `GhosttyApp` writes this text to a scratch file and loads it. Nothing here reads or touches any
-/// user-level ghostty config.
+// Writes the chrome's theme as ghostty config text; libghostty only accepts config from files.
 enum GhosttyConfigWriter {
-    /// When ghostty runs the cursor shader's draw timer. `.true` animates only while the surface
-    /// is focused, so a blur freezes the tail mid-decay into a permanent tracer; `.always`
-    /// animates regardless.
+    // `.whileFocused` freezes a blurred cursor tail mid-decay into a tracer; `.always` does not.
     enum ShaderAnimation: String {
         case whileFocused = "true"
         case always
     }
 
-    /// Blank space libghostty leaves between the surface's edge and the first cell, in points.
-    /// Kept here because this is where it is written.
     static let gridInset: CGFloat = 2
 
-    /// The full generated config: theme-derived colors and font, plus the terminal behavior the
-    /// chrome dials from user config. A nil `behavior` uses `TerminalBehavior.default`.
-    ///
-    /// `fontSize` overrides the theme's own size for a config bound to ONE surface, and is
-    /// load-bearing rather than a convenience: `Surface.updateConfig` resets the size of any
-    /// surface libghostty has not marked `font_size_adjusted` to whatever the config carries, so a
-    /// per-surface push built from the theme alone silently drops a pane's stepped size. Nil for
-    /// the app-global config, whose size is the theme's by definition.
+    // `fontSize` must carry a surface's stepped size: `updateConfig` resets unadjusted sizes to the config's.
     static func configText(
         for theme: TerminalTheme?, behavior: TerminalBehavior? = nil,
         shaderAnimation: ShaderAnimation = .whileFocused,
@@ -37,25 +23,15 @@ enum GhosttyConfigWriter {
             "theme = light:\(lightSchemeThemePath),dark:\(darkSchemeThemePath)",
             "cursor-style = \(behavior.ghosttyCursorStyle)",
             "cursor-style-blink = \(behavior.cursorBlink)",
-            // Shell integration's cursor-shape-per-mode would override the block with a bar at
-            // the prompt. Keep the rest (cwd, prompt marking) and let cursor-style rule.
             "shell-integration-features = no-cursor",
             "mouse-hide-while-typing = true",
-            // Emitted rather than left to the default because the chrome draws ON the grid: a
-            // default that moved on a pin bump would put every scroll-mode band out of true.
             "window-padding-x = \(Int(gridInset))",
             "window-padding-y = \(Int(gridInset))",
-            // Option acts as Alt/Meta — ⌥f/⌥b word-nav in readline, Meta chords in
-            // vim/emacs — the terminal convention, chosen over macOS accent composing.
             "macos-option-as-alt = \(behavior.optionAsAlt)",
         ]
-        // Widen the bar/underline cursor (ghostty's base is a nearly invisible 1px). A delta
-        // from that base; the block cursor fills the cell and ignores it.
         if let delta = behavior.ghosttyCursorThicknessDelta {
             lines.append("adjust-cursor-thickness = \(delta)")
         }
-        // Fake-bold, off by default like stock ghostty. Only emitted when on, so the default
-        // config text carries nothing about it and ghostty's own default rules.
         if behavior.fontThicken {
             lines.append("font-thicken = true")
         }
@@ -66,8 +42,6 @@ enum GhosttyConfigWriter {
             lines.append("foreground = \(theme.foreground.hex)")
             lines.append("cursor-color = \(theme.cursor.hex)")
             lines.append("selection-background = \(theme.selectionBackground.hex)")
-            // The optionality is for a caller below the seam holding an unresolved theme:
-            // emitting an empty value would be worse than saying nothing.
             if let color = theme.selectionForeground {
                 lines.append("selection-foreground = \(color.hex)")
             }
@@ -83,36 +57,18 @@ enum GhosttyConfigWriter {
                 lines.append("palette = \(index)=\(color.hex)")
             }
         }
-        // The path is already absolute, so ghostty's file-relative resolution, which would look
-        // next to this temp config, never applies. `custom-shader-animation` is pinned so it
-        // animates regardless of ghostty's default drift.
         if let shader = behavior.cursorShader {
             lines.append("custom-shader = \(shader)")
             lines.append("custom-shader-animation = \(shaderAnimation.rawValue)")
         }
-        // The chrome's `background-alpha` maps to ghostty's `background-opacity`. Only emitted
-        // below 1, so the default config text is unchanged.
         if let opacity = behavior.ghosttyBackgroundOpacity {
             lines.append("background-opacity = \(opacity)")
         }
-        // Take back the chords ZenTerm already answers, and the ones libghostty binds to an action
-        // our apprt never implements. Both are keys the pane's program should be getting.
         lines += GhosttyUnboundChords.triggers.map { "keybind = \($0)=unbind" }
         return lines.joined(separator: "\n") + "\n"
     }
 
-    /// The two files the generated config's `theme` line points at, and the only reason that line
-    /// exists.
-    ///
-    /// **They theme nothing.** libghostty answers the color-scheme query out of the *Config's*
-    /// conditional state, which only carries `.theme` when `theme` is a light/dark pair whose two
-    /// halves differ. Without the pair, every surface reports "light" for the life of the process
-    /// however dark the theme is, and `set_color_scheme` changes nothing.
-    ///
-    /// Two constraints hold it up. The files must stay empty of settings, because they really are
-    /// opened and applied. Only the two paths need to differ, because `finalize` compares the
-    /// strings rather than the contents. `docs/architecture.md` carries the check to re-run on a
-    /// ghostty pin bump.
+    // libghostty reports a color scheme only when `theme` is a light/dark pair of distinct paths.
     private static var lightSchemeThemePath: String { schemeThemePath("light") }
     private static var darkSchemeThemePath: String { schemeThemePath("dark") }
 
@@ -123,18 +79,9 @@ enum GhosttyConfigWriter {
             ).path
     }
 
-    /// Whether this process has already laid down its scheme theme files.
-    ///
-    /// A flag rather than a `fileExists` check: the names are pid-scoped, pids are reused, and the
-    /// temp directory is not reliably swept, so a leftover file would be loaded as a theme and its
-    /// keys applied.
+    // Not `fileExists`: names are pid-scoped and a stale file from a reused pid would load as a theme.
     private static var didWriteSchemeThemeFiles = false
 
-    /// Put the two scheme theme files on disk, once per process.
-    ///
-    /// A failure is not fatal and deliberately does not block the config: `finalize` inserts
-    /// `.theme` on the strength of the `theme` line alone, so the scheme still reports correctly
-    /// against a missing file.
     private static func writeSchemeThemeFiles() {
         guard !didWriteSchemeThemeFiles else { return }
         didWriteSchemeThemeFiles = true
@@ -156,13 +103,7 @@ enum GhosttyConfigWriter {
         }
     }
 
-    /// Write the generated config where libghostty can load it and return the path, or nil if the
-    /// write failed and the caller should fall back to ghostty's defaults. The file lives for the
-    /// process's lifetime.
-    ///
-    /// `variant` names a separate scratch file, so a per-surface config never overwrites the
-    /// app-global one that every surface loads from. Writes within a variant safely share a path:
-    /// this runs on the main thread and libghostty loads the file inside the same call.
+    // `variant` keeps a per-surface config from overwriting the app-global one.
     static func writeConfig(
         for theme: TerminalTheme?, behavior: TerminalBehavior? = nil,
         shaderAnimation: ShaderAnimation = .whileFocused, variant: String? = nil,

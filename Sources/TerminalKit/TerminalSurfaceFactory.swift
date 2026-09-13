@@ -1,10 +1,7 @@
-/// The one place the chrome asks for a terminal. Chrome only ever calls
-/// `TerminalSurfaceFactory.make()`; libghostty is the sole backend.
+/// The one place the chrome gets a terminal.
 public enum TerminalSurfaceFactory {
     #if DEBUG
-        /// Test seam: when set, `make()` returns this instead of a live libghostty surface, so
-        /// tests can mount the chrome with a headless stub rather than booting a real ghostty
-        /// app. Compiled out of release builds entirely, mirroring `Theme.setCurrentForTesting`.
+        /// When set, `make()` returns this instead of a libghostty surface. Debug builds only.
         public static var makeOverride: (() -> TerminalSurface)?
     #endif
 

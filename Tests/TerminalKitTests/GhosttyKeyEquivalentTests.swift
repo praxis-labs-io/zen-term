@@ -3,8 +3,6 @@ import XCTest
 
 @testable import TerminalKit
 
-/// Keys AppKit claims before `keyDown` runs: Ctrl-Return goes to the default context-menu
-/// equivalent, Ctrl-/ to the first view in the hierarchy, where macOS beeps at it.
 final class GhosttyKeyEquivalentTests: XCTestCase {
     private var window: NSWindow!
     private var view: GhosttyHostView!
@@ -13,8 +11,6 @@ final class GhosttyKeyEquivalentTests: XCTestCase {
         super.setUp()
         _ = NSApplication.shared
 
-        // A window per test method, closed in tearDown and not released when closed: the same
-        // shape, and the same reasons, as GhosttyInputForwardingTests.
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
             styleMask: [.titled], backing: .buffered, defer: false)
@@ -32,10 +28,6 @@ final class GhosttyKeyEquivalentTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: Delivery
-
-    /// Driven through the window, which walks the view tree the way AppKit does. Without the
-    /// override, `NSView`'s default declines and the pane never sees the key.
     func test_theSurfaceTakesCtrlReturn_ratherThanLeavingItToTheContextMenuEquivalent() throws {
         XCTAssertTrue(window.firstResponder === view, "the surface has to be first responder")
 
@@ -44,8 +36,6 @@ final class GhosttyKeyEquivalentTests: XCTestCase {
             "Ctrl-Return declined here goes to the default context-menu equivalent instead")
     }
 
-    /// macOS sends Ctrl-/ to the first view in the hierarchy rather than to the first responder, so
-    /// an unfocused pane is offered keys that are not its to take.
     func test_anUnfocusedSurfaceDeclinesKeyEquivalents() throws {
         window.makeFirstResponder(nil)
 
@@ -54,8 +44,6 @@ final class GhosttyKeyEquivalentTests: XCTestCase {
             "this pane does not have the keyboard, so it must not claim the key")
     }
 
-    /// Declined on the first pass so a menu item still wins it, claimed on the second, when
-    /// `doCommand`'s redispatch sends the same event back.
     func test_aControlKeyIsDeclinedOnceAndTakenOnTheWayBack() throws {
         let event = try controlE()
 
@@ -67,8 +55,6 @@ final class GhosttyKeyEquivalentTests: XCTestCase {
             "the same event coming back is one nothing else claimed, so it is the pane's")
     }
 
-    /// What `doCommand` sends back, and only that. The redispatch itself needs a live
-    /// `NSApp.currentEvent`, which no test has, so the decision behind it is what is driven here.
     func test_onlyThePendingEventIsSentBackThroughTheEventSystem() throws {
         let event = try controlE()
         XCTAssertNil(view.eventToRedispatch(event), "nothing is pending, so nothing goes back")
@@ -82,8 +68,6 @@ final class GhosttyKeyEquivalentTests: XCTestCase {
         XCTAssertNil(view.eventToRedispatch(nil))
     }
 
-    /// The pointer-less surfaces here return at `keyDown`'s `surfacePtr` guard, so none of them can
-    /// see it run. This one starts a real surface and reads the ledger `recordKeyPress` writes.
     func test_aClaimedKeyEquivalentReachesKeyDown() throws {
         let liveWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
@@ -110,14 +94,10 @@ final class GhosttyKeyEquivalentTests: XCTestCase {
             host.retireKeyPress(for: event),
             "the ledger owes a release, so keyDown ran and libghostty was told the key went down")
 
-        // And a keyDown leaves nothing pending. `interpretKeyEvents` is what dispatches
-        // `doCommand`, so a timestamp surviving one is a key sent back through the system forever.
         host.lastPerformKeyEvent = 99
         host.keyDown(with: try key("h", keyCode: 0x04))
         XCTAssertNil(host.lastPerformKeyEvent)
     }
-
-    // MARK: Translation
 
     func test_ctrlReturnIsPassedThroughVerbatim() throws {
         let event = try key("\r", keyCode: 36, flags: .control)
@@ -132,8 +112,6 @@ final class GhosttyKeyEquivalentTests: XCTestCase {
             "plain Return belongs to the responder chain; only the control chord is claimed here")
     }
 
-    /// Ctrl-/ is rewritten to Ctrl-_, the one macOS does not beep at, and the one the program
-    /// inside the pane is waiting for anyway.
     func test_ctrlSlashIsRewrittenToUnderscore() throws {
         let event = try key("/", keyCode: 44, flags: .control)
         let result = try XCTUnwrap(view.keyEquivalentEvent(for: event))
@@ -150,8 +128,6 @@ final class GhosttyKeyEquivalentTests: XCTestCase {
         }
     }
 
-    /// AppKit synthesizes zero-stamped events, the escape behind ⌘. among them. A zero stamp is no
-    /// identity, so one recorded could never be matched on the way back.
     func test_aZeroStampedEventIsNeverRecorded() throws {
         let event = try key("e", keyCode: 0x0E, flags: .command, timestamp: 0)
         XCTAssertNil(view.keyEquivalentEvent(for: event))
@@ -169,8 +145,6 @@ final class GhosttyKeyEquivalentTests: XCTestCase {
             "a plain keystroke landed in between, so this is a new chord, not one coming back")
     }
 
-    /// Only the exact event that was declined may be claimed. Another keystroke with the same
-    /// modifiers is a new chord and takes its own first pass.
     func test_aDifferentTimestampStartsOver() throws {
         XCTAssertNil(view.keyEquivalentEvent(for: try controlE(timestamp: 1)))
         XCTAssertNil(
@@ -181,10 +155,6 @@ final class GhosttyKeyEquivalentTests: XCTestCase {
         XCTAssertEqual(result.characters, "\u{05}", "the claimed event carries the control code")
     }
 
-    // MARK: Events
-
-    /// Ctrl-E as AppKit delivers it: ENQ in `characters`, the bare letter in
-    /// `charactersIgnoringModifiers`.
     private func controlE(timestamp: TimeInterval = 12.5) throws -> NSEvent {
         try key(
             "\u{05}", ignoringModifiers: "e", keyCode: 0x0E, flags: .control, timestamp: timestamp)

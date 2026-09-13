@@ -1,20 +1,10 @@
 import AppKit
 import GhosttyKit
 
-/// NSAccessibility for `GhosttyHostView`, ported from ghostty's own `SurfaceView`
-/// accessibility conformance. This is what makes the terminal readable to VoiceOver and other
-/// assistive tools: the view answers as a single text area whose value is the full screen
-/// contents (scrollback included).
-///
-/// The screen read is a synchronous in-memory copy on the main thread. That is deliberate
-/// despite the no-main-thread-blocking rule: `ghostty_surface_read_text` must run where every
-/// other surface call runs, it is a memory copy rather than I/O, it only executes while an
-/// assistive client is querying, and the cache below bounds how often a query burst pays it.
+// Reads the screen synchronously on main: libghostty calls must run there, and it is a cached memory copy.
 extension GhosttyHostView {
     override func isAccessibilityElement() -> Bool { true }
 
-    // A text area rather than a static text element: the terminal is a place users both read
-    // and type, and the role decides which navigation commands VoiceOver offers.
     override func accessibilityRole() -> NSAccessibility.Role? { .textArea }
 
     override func accessibilityHelp() -> String? { "Terminal content area" }
@@ -44,18 +34,13 @@ extension GhosttyHostView {
     override func accessibilityLine(for index: Int) -> Int {
         let contents = screenContents() as NSString
         let clamped = min(max(index, 0), contents.length)
-        // Count separators rather than splitting: VoiceOver walks lines one query at a
-        // time, and a components() split re-allocates every line above the probe on each.
         let prefix = contents.substring(to: clamped)
         return prefix.unicodeScalars.lazy.filter(CharacterSet.newlines.contains).count
     }
 
+    // Clients probe stale ranges up to NSNotFound, where `NSMaxRange` would overflow past the bounds check.
     override func accessibilityString(for range: NSRange) -> String? {
         let contents = screenContents() as NSString
-        // Assistive clients probe with ranges from earlier snapshots — including NSNotFound
-        // and near-Int.max values — so out-of-bounds is an expected answer, not a programmer
-        // error. Subtraction, not NSMaxRange: the addition inside NSMaxRange wraps on those
-        // probes, slips past a `<= length` check, and the range then raises in substring.
         guard range.location >= 0, range.length >= 0,
             range.location <= contents.length,
             range.length <= contents.length - range.location
@@ -63,14 +48,11 @@ extension GhosttyHostView {
         return contents.substring(with: range)
     }
 
-    /// Carries the terminal's font so VoiceOver renders what it reads; styling beyond the font
-    /// would need ghostty core to expose it (its own app has the same limit).
+    // ghostty returns a +1 CTFont, released here after the attribute retains it.
     override func accessibilityAttributedString(for range: NSRange) -> NSAttributedString? {
         guard let plain = accessibilityString(for: range) else { return nil }
         var attributes: [NSAttributedString.Key: Any] = [:]
         if let surfacePtr, let fontRaw = ghostty_surface_quicklook_font(surfacePtr) {
-            // The C side hands back a +1 CTFont; take it unretained and balance the retain
-            // ourselves, matching ghostty's own handling.
             let font = Unmanaged<CTFont>.fromOpaque(fontRaw)
             attributes[.font] = font.takeUnretainedValue()
             font.release()
@@ -78,9 +60,7 @@ extension GhosttyHostView {
         return NSAttributedString(string: plain, attributes: attributes)
     }
 
-    /// The full screen contents, cached briefly. VoiceOver asks in bursts — value, count,
-    /// range, line — and each answer derives from this one string; without the cache every
-    /// question in a burst would re-copy the whole scrollback.
+    // Cached 500ms because VoiceOver asks value, count, range and line in one burst.
     private func screenContents() -> String {
         let now = ContinuousClock.now
         if let cache = accessibilityContentsCache, now - cache.fetchedAt < .milliseconds(500) {

@@ -1,64 +1,38 @@
 import Darwin
 import Foundation
 
-/// Tears down the process sessions behind terminated surfaces.
-///
-/// `SIGTERM` first so a dev server can flush and release its port, a short grace, then
-/// `SIGKILL` for whatever ignored it. libghostty already sends `SIGHUP` to the shell's own
-/// process group when the surface is freed; this sweeps up everything that group never
-/// covered (background jobs, children in their own process groups, `nohup`, `disown`).
+/// Kills what a closed surface's shell session left behind: `SIGTERM`, a short grace, then `SIGKILL`.
 public final class ShellSessionReaper {
     public static let shared = ShellSessionReaper()
 
-    /// How long a process gets to exit on its own after `SIGTERM`.
     private static let grace: TimeInterval = 0.15
 
-    /// How long quit lets the shells exit gracefully before sweeping them outright.
-    ///
-    /// Not a leak/hang trade: whatever has not gone by then is swept anyway, so reaching this
-    /// costs a pause and nothing survives either way. Bounds the graceful wait only, and the sweep
-    /// that follows always gets `sweepReserve` on top.
+    /// How long quit waits for shells to exit on their own before sweeping them.
     public static let quitSweepBudget: TimeInterval = 3.0
 
-    /// Held back from `quitSweepBudget` for the sweep itself: one full graced pass plus slack for
-    /// the two process-table walks around it.
-    ///
-    /// Load-bearing: spending the whole budget on the leader wait leaves `drain` a timeout of
-    /// about zero, so the process exits before the `SIGKILL` pass runs and anything that ignores
-    /// `SIGTERM` survives the quit.
+    // Without this reserve the leader wait eats the budget and quit exits before the `SIGKILL` pass.
     private static var sweepReserve: TimeInterval { grace + 0.1 }
 
-    /// How often the quit drain re-checks whether the shells have gone.
     private static let quitPoll: TimeInterval = 0.02
 
-    /// How long a burst of leader exits is gathered before sweeping.
-    ///
-    /// Every watched leader fires its own source, and one sweep per fire would queue one graced
-    /// pass per leader on the serial queue: twenty panes closing together would serialize twenty
-    /// 150ms passes, and the tail would still be waiting when quit's budget ran out.
+    // One sweep per leader exit would serialize a graced pass per pane on the queue.
     private static let coalesce: TimeInterval = 0.02
 
     private let queue = DispatchQueue(
         label: "com.drucial.zenterm.shell-session-reaper", qos: .userInitiated)
     private let pending = DispatchGroup()
 
-    /// Guards `sweepScheduled`, which collapses a burst of leader exits into one sweep.
     private let coalesceLock = NSLock()
     private var sweepScheduled = false
 
     private init() {}
 
-    /// Sweep `session` off the main thread. Safe to call for a session that is already gone.
+    /// Sweeps `session` off the main thread. Safe for a session that is already gone.
     public func reap(session: pid_t) {
         reap(sessions: [session])
     }
 
-    /// Sweep every session in `sessions` in ONE graced pass: one `SIGTERM` sweep over all of them,
-    /// one grace period, one `SIGKILL` sweep.
-    ///
-    /// A batch and not a loop of single reaps, because per-session waits serialize: twenty
-    /// sessions measured 3.07s that way, and a quit capped below that swept three of them and left
-    /// seventeen dev servers running. Batched, twenty cost the same 0.15s as one.
+    /// Sweeps every session in one graced pass. Per-session passes serialize and outlast quit's budget.
     public func reap(sessions: Set<pid_t>) {
         let live = sessions.filter { $0 > 1 }
         guard !live.isEmpty else { return }
@@ -68,23 +42,13 @@ public final class ShellSessionReaper {
             let doomed = live.flatMap { ShellSession.members(of: $0) }
             guard !doomed.isEmpty else { return }
             for pid in doomed { kill(pid, SIGTERM) }
-            // Off-main by construction (see `queue`), so sleeping here blocks nothing the
-            // user can see.
             Thread.sleep(forTimeInterval: Self.grace)
             for pid in live.flatMap({ ShellSession.members(of: $0) }) { kill(pid, SIGKILL) }
         }
     }
 
-    /// Sweep every session whose leader has exited, right now.
-    ///
-    /// Sweeps whatever is orphaned rather than "this surface's" session, because nothing can say
-    /// which session a surface owned. That is the point: a live pane's leader is alive, so a live
-    /// pane is never in reach. Cheap to call speculatively, since `takeOrphans` hands each session
-    /// out once. Internal because it is a synchronous process-table walk that must not run on main.
+    // Synchronous process-table walk; never call it on main.
     func sweepOrphans() {
-        // Held across the take so the group is never transiently empty between a session
-        // leaving the ledger and its sweep entering: a quit draining in that gap would see
-        // idle and exit with the signals still unsent.
         pending.enter()
         defer { pending.leave() }
         let orphans = ShellSessionLedger.shared.takeOrphans()
@@ -92,9 +56,6 @@ public final class ShellSessionReaper {
         reap(sessions: Set(orphans))
     }
 
-    /// Gather a burst of leader exits into one sweep, so a window's worth of panes closing
-    /// together costs one graced pass rather than one per pane. Called by every watched leader's
-    /// exit; the first arrival schedules the sweep and the rest join it.
     func scheduleSweep() {
         coalesceLock.lock()
         if sweepScheduled {
@@ -104,13 +65,9 @@ public final class ShellSessionReaper {
         sweepScheduled = true
         coalesceLock.unlock()
 
-        // Entered here rather than inside the sweep: a quit draining between now and the sweep
-        // running must see work outstanding, not an idle group.
         pending.enter()
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + Self.coalesce) {
             defer { self.pending.leave() }
-            // Cleared before sweeping, not after, so a leader exiting during the sweep schedules
-            // the next one instead of being swallowed.
             self.coalesceLock.lock()
             self.sweepScheduled = false
             self.coalesceLock.unlock()
@@ -118,14 +75,7 @@ public final class ShellSessionReaper {
         }
     }
 
-    /// Sweep the sessions a torn-down surface left behind. The leader usually has not exited yet,
-    /// which is fine: its own watch fires the moment it goes, and this is the immediate look
-    /// rather than the mechanism.
-    ///
-    /// **`pending.enter()` runs on the caller's thread, before the dispatch.** A drain can follow
-    /// on the very next statement, and an enter inside the async block would leave the group empty
-    /// at that point, so the drain would report done before a single signal went out. See
-    /// `docs/swift-conventions.md`.
+    /// Sweeps sessions whose leader has exited, off the main thread. A `drain` right after it waits for it.
     public func reapOrphans() {
         pending.enter()
         DispatchQueue.global(qos: .userInitiated).async {
@@ -134,8 +84,7 @@ public final class ShellSessionReaper {
         }
     }
 
-    /// Wait for outstanding sweeps, capped by `timeout` so a quit can never hang on a
-    /// stubborn process. `completion` runs exactly once, on the main queue.
+    /// Waits for outstanding sweeps, up to `timeout`. `completion` runs once, on main.
     public func drain(timeout: TimeInterval, completion: @escaping () -> Void) {
         var fired = false
         let fire = {
@@ -143,34 +92,20 @@ public final class ShellSessionReaper {
             fired = true
             completion()
         }
-        // Both paths land on main, so the `fired` check needs no further synchronization.
         pending.notify(queue: .main) { fire() }
         DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { fire() }
     }
 
-    /// Hold quit open until every shell this app started has gone and been swept, capped by
-    /// `timeout`. `completion` runs exactly once, on the main queue.
-    ///
-    /// Waits on the ledger emptying rather than on outstanding work: the leaders have not exited
-    /// when the last surface is freed, so a drain watching for idle would see none in flight and
-    /// let the process go before a single signal went out.
+    /// Waits until every recorded shell has exited and been swept, up to `timeout`. `completion` runs
+    /// once, on main. Call only after every surface is torn down.
     public func drainForQuit(timeout: TimeInterval, completion: @escaping () -> Void) {
-        // The budget bounds the wait for leaders. The sweep is always given `sweepReserve` on
-        // top, so the SIGKILL half can never be cut off by a leader that took its time.
         let waitDeadline = Date().addingTimeInterval(max(0, timeout - Self.sweepReserve))
         pending.enter()
         DispatchQueue.global(qos: .userInitiated).async {
             defer { self.pending.leave() }
-            // Give the shells the chance to go on their own first, so the ordinary quit is the
-            // graceful one: leaders exit about 45ms after their pty closes and their sessions
-            // sweep through the normal watch path.
             while ShellSessionLedger.shared.count > 0, Date() < waitDeadline {
-                // Off-main by construction, so sleeping here blocks nothing the user can see.
                 Thread.sleep(forTimeInterval: Self.quitPoll)
             }
-            // Whatever is still recorded belongs to an already-torn-down surface, so its leader is
-            // merely slow, never a live pane. Only a leader exiting empties the ledger, so waiting
-            // out the budget would cost the full hang and still leave the dev server running.
             let stragglers = ShellSessionLedger.shared.takeAll()
             if !stragglers.isEmpty { self.reap(sessions: Set(stragglers)) }
             let left = Self.sweepReserve + max(0, waitDeadline.timeIntervalSinceNow)

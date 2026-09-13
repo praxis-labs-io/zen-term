@@ -1,7 +1,5 @@
 import AppKit
 
-/// An 8-bit-per-channel RGB color — the seam's backend-neutral color vocabulary.
-/// Backends translate this into their own representation.
 public struct TerminalColor: Sendable, Equatable {
     public let red: UInt8
     public let green: UInt8
@@ -13,13 +11,9 @@ public struct TerminalColor: Sendable, Equatable {
         self.blue = blue
     }
 
-    /// Parse a `#rrggbb` or `#rgb` hex string (case-insensitive, surrounding
-    /// whitespace tolerated). The inverse of `hex`; `nil` for any other form.
+    /// Parses `#rrggbb` or `#rgb`, `#` optional, case-insensitive. Nil for any other form, named colors included.
     public init?(hex: String) {
         var text = hex.trimmingCharacters(in: .whitespaces)
-        // Leading `#` is optional: ghostty's own config parser accepts bare hex
-        // (`background = 1d1f21`) as well as `#`-prefixed, so a theme written either way
-        // applies. (Named X11 colors — `foreground = white` — are not supported.)
         if text.hasPrefix("#") { text.removeFirst() }
         let sixDigit: String
         switch text.count {
@@ -34,23 +28,12 @@ public struct TerminalColor: Sendable, Equatable {
             blue: UInt8(value & 0xFF))
     }
 
-    /// `#rrggbb` — the color syntax ghostty's config parser accepts, and the inverse of
-    /// `init?(hex:)`. Public because the chrome shows it too: the accent picker labels each ANSI
-    /// slot with the hex the active theme put there.
+    /// `#rrggbb`, the inverse of `init?(hex:)`.
     public var hex: String {
         String(format: "#%02x%02x%02x", red, green, blue)
     }
 
-    /// Whether this color reads as dark, by the W3C perceived-luminance formula
-    /// (<https://www.w3.org/TR/AERT/#color-contrast>) against a 0.5 midpoint.
-    ///
-    /// Deliberately the same formula and threshold ghostty applies to a background when it has
-    /// to decide light from dark itself (`RGB.perceivedLuminance`, used by its GTK apprt for
-    /// `window-theme = auto`). Matching it means the scheme zen-term reports to programs and the
-    /// one ghostty would infer never disagree. Note it is the *perceived* luminance, not the
-    /// WCAG relative luminance ghostty also carries: that one linearizes each channel for
-    /// contrast ratios, and ghostty's own comment marks this one as "better for determining
-    /// light vs dark".
+    /// W3C perceived luminance at or below 0.5, the same test ghostty uses to tell light from dark.
     public var isDark: Bool {
         let luminance =
             0.299 * (Double(red) / 255) + 0.587 * (Double(green) / 255)
