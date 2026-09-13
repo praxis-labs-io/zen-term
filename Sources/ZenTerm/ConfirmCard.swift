@@ -10,14 +10,27 @@ final class ConfirmCard: NSView {
     private let card = CardView()
     private var dismiss = DismissGate()
     private let header = NSTextField(labelWithString: "")
-    private let messageLabel = NSTextField(labelWithString: "")
+    private let leadLabel = NSTextField(labelWithString: "")
+    private let trailLabel = NSTextField(labelWithString: "")
+    private let list: ConfirmCardList?
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private let confirmButton: AppButton
 
-    init(
+    convenience init(
         title: String, message: String, confirmLabel: String, background: NSColor,
         onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
     ) {
+        self.init(
+            title: title, leadLines: [message], rows: [], trailLines: [], confirmLabel: confirmLabel,
+            background: background, onCancel: onCancel, onConfirm: onConfirm)
+    }
+
+    init(
+        title: String, leadLines: [String], rows: [ConfirmCardList.Row], trailLines: [String],
+        confirmLabel: String, background: NSColor,
+        onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
+    ) {
+        list = rows.isEmpty ? nil : ConfirmCardList(rows: rows)
         self.onCancel = onCancel
         self.onConfirm = onConfirm
         confirmButton = AppButton(title: confirmLabel, variant: .destructive)
@@ -34,7 +47,7 @@ final class ConfirmCard: NSView {
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
 
-        let content = buildContent(title: title, message: message)
+        let content = buildContent(title: title, leadLines: leadLines, trailLines: trailLines)
         card.addSubview(content)
 
         let cardWidth = card.widthAnchor.constraint(equalToConstant: 420)
@@ -91,7 +104,9 @@ final class ConfirmCard: NSView {
         let chrome = Theme.current.chrome
         CardChrome.reapplyTheme(to: card)
         header.textColor = chrome.foreground.nsColor
-        messageLabel.textColor = chrome.ink(.muted)
+        leadLabel.textColor = chrome.ink(.muted)
+        trailLabel.textColor = chrome.ink(.muted)
+        list?.reapplyTheme()
         cancelButton.reapplyTheme()
         confirmButton.reapplyTheme()
     }
@@ -101,16 +116,18 @@ final class ConfirmCard: NSView {
         onCancel()
     }
 
-    private func buildContent(title: String, message: String) -> NSStackView {
+    private func buildContent(title: String, leadLines: [String], trailLines: [String]) -> NSStackView {
         header.font = .systemFont(ofSize: 15, weight: .semibold)
         header.textColor = Theme.current.chrome.foreground.nsColor
         header.stringValue = title
 
-        messageLabel.font = .systemFont(ofSize: 12)
-        messageLabel.textColor = Theme.current.chrome.ink(.muted)
-        messageLabel.lineBreakMode = .byWordWrapping
-        messageLabel.maximumNumberOfLines = 0
-        messageLabel.stringValue = message
+        for (label, lines) in [(leadLabel, leadLines), (trailLabel, trailLines)] {
+            label.font = .systemFont(ofSize: 12)
+            label.textColor = Theme.current.chrome.ink(.muted)
+            label.lineBreakMode = .byWordWrapping
+            label.maximumNumberOfLines = 0
+            label.stringValue = lines.joined(separator: "\n")
+        }
 
         cancelButton.onTap = { [weak self] in self?.cancel() }
         confirmButton.onTap = { [weak self] in
@@ -134,7 +151,8 @@ final class ConfirmCard: NSView {
         footer.alignment = .centerY
         footer.spacing = 8
 
-        let content = NSStackView(views: [header, messageLabel, footer])
+        let body: [NSView] = [leadLabel] + [list].compactMap { $0 } + (trailLines.isEmpty ? [] : [trailLabel])
+        let content = NSStackView(views: [header] + body + [footer])
         content.orientation = .vertical
         content.alignment = .leading
         content.spacing = 14

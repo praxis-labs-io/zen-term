@@ -80,6 +80,29 @@ final class ReapplyThemeTests: WindowTestCase {
         XCTAssertNotEqual(colorBefore, attributedTitleColor(button))
     }
 
+    func test_reapplyTheme_recolorsConfirmCardListStatus() throws {
+        let list = ConfirmCardList(rows: [
+            .entry(
+                path: [.init(text: "gone.swift", tone: .ink(.subtle))],
+                status: [[.init(text: "-", tone: .role(\.destructive))]])
+        ])
+        let window = makeWindow()
+        window.contentView?.addSubview(list)
+        window.contentView?.layoutSubtreeIfNeeded()
+        func statusColor() -> NSColor? {
+            func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
+            let label = descendants(list).compactMap { $0 as? NSTextField }.first { $0.stringValue == "-" }
+            return label?.attributedStringValue.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+        }
+        let colorBefore = statusColor()
+        XCTAssertNotNil(colorBefore)
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        list.reapplyTheme()
+
+        XCTAssertNotEqual(colorBefore, statusColor())
+    }
+
     func test_reapplyTheme_recolorsFieldBox() throws {
         let field = FieldBox(placeholder: "Name")
         field.translatesAutoresizingMaskIntoConstraints = true

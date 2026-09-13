@@ -84,6 +84,45 @@ final class ConfirmCardTests: WindowTestCase {
         XCTAssertTrue(KeyboardFocus.isFocused(try XCTUnwrap(button(in: card, title: "Cancel")), in: window))
     }
 
+    // MARK: list
+
+    func test_theList_sitsBetweenTheLeadAndTrailLines() {
+        let card = mountList(
+            lead: ["feature/one has 2 uncommitted files."],
+            rows: [entry("Sources/", "App.swift", status: "~"), entry("", "notes.md", status: "?")],
+            trail: ["Closes 1 tab.", "The branch and its commits stay."])
+
+        XCTAssertEqual(
+            visibleText(in: card).filter { !$0.isEmpty },
+            [
+                "Remove Worktree", "feature/one has 2 uncommitted files.", "Sources/App.swift", "~", "notes.md",
+                "?", "Closes 1 tab.\nThe branch and its commits stay.", "Cancel", "Remove",
+            ])
+    }
+
+    func test_aPlainMessage_hasNoListAndNoEmptyTrail() {
+        let (card, _) = mount()
+
+        XCTAssertNil(list(in: card))
+        XCTAssertFalse(visibleText(in: card).contains(""))
+    }
+
+    /// An attributed label ignores the field's own `lineBreakMode`, so the truncation lives in the string.
+    func test_aLongPath_truncatesInTheMiddleOnOneLine() throws {
+        let longFolder = String(repeating: "deeply/nested/", count: 8)
+        let card = mountList(lead: ["x"], rows: [entry(longFolder, "Keep.swift", status: "+~")], trail: [])
+        let path = try XCTUnwrap(
+            descendants(of: try XCTUnwrap(list(in: card)))
+                .compactMap { $0 as? NSTextField }
+                .first { $0.stringValue.hasSuffix("Keep.swift") })
+
+        let style = path.attributedStringValue.attribute(.paragraphStyle, at: 0, effectiveRange: nil)
+        XCTAssertEqual((style as? NSParagraphStyle)?.lineBreakMode, .byTruncatingMiddle)
+        XCTAssertEqual(path.maximumNumberOfLines, 1)
+        XCTAssertLessThan(path.frame.width, path.attributedStringValue.size().width)
+        XCTAssertLessThanOrEqual(path.frame.height, ConfirmCardList.rowHeight)
+    }
+
     // MARK: harness
 
     private func mount(message: String = "feature/one has nothing uncommitted.") -> (
@@ -103,6 +142,30 @@ final class ConfirmCardTests: WindowTestCase {
         win.contentView?.layoutSubtreeIfNeeded()
         window = win
         return (card, sink)
+    }
+
+    private func mountList(lead: [String], rows: [ConfirmCardList.Row], trail: [String]) -> ConfirmCard {
+        let card = ConfirmCard(
+            title: "Remove Worktree", leadLines: lead, rows: rows, trailLines: trail, confirmLabel: "Remove",
+            background: Theme.current.chrome.background.nsColor, onCancel: {}, onConfirm: {})
+        let win = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 400),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        win.contentView?.addSubview(card)
+        card.frame = win.contentView!.bounds
+        win.contentView?.layoutSubtreeIfNeeded()
+        window = win
+        return card
+    }
+
+    private func entry(_ folder: String, _ file: String, status: String) -> ConfirmCardList.Row {
+        .entry(
+            path: [.init(text: folder, tone: .ink(.muted)), .init(text: file, tone: .ink(.subtle))],
+            status: [status.map { .init(text: String($0), tone: .role(\.warning)) }])
+    }
+
+    private func list(in card: NSView) -> ConfirmCardList? {
+        descendants(of: card).compactMap { $0 as? ConfirmCardList }.first
     }
 
     private func descendants(of view: NSView) -> [NSView] {
