@@ -3,8 +3,6 @@ import XCTest
 @testable import ZenTerm
 
 final class ConfigTextTests: XCTestCase {
-    // MARK: stripComment
-
     func test_stripComment_wholeLine() {
         XCTAssertEqual(ConfigText.stripComment("# just a note"), "")
     }
@@ -19,15 +17,12 @@ final class ConfigTextTests: XCTestCase {
     }
 
     func test_stripComment_hashWithoutLeadingSpaceIsNotAComment() {
-        // A `#` that neither starts the line nor follows whitespace is literal (e.g. `C#`).
         XCTAssertEqual(ConfigText.stripComment("lang = C#sharp"), "lang = C#sharp")
     }
 
     func test_stripComment_noComment() {
         XCTAssertEqual(ConfigText.stripComment("font-size = 14"), "font-size = 14")
     }
-
-    // MARK: trailingComment — the inverse half of the same scan
 
     func test_trailingComment_returnsCommentIncludingHash() {
         XCTAssertEqual(ConfigText.trailingComment(of: "cursor-style = bar   # note"), "# note")
@@ -42,8 +37,6 @@ final class ConfigTextTests: XCTestCase {
         XCTAssertEqual(
             ConfigText.stripComment(line) + (ConfigText.trailingComment(of: line) ?? ""), line)
     }
-
-    // MARK: unquote
 
     func test_unquote_stripsOnePair() {
         XCTAssertEqual(ConfigText.unquote("\"npm run dev\""), "npm run dev")

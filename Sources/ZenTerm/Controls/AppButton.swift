@@ -1,40 +1,18 @@
 import AppKit
 
-/// The shared labeled button across the chrome (the text-button counterpart to `IconButton`):
-/// a flat, rounded-6 pill that's theme-tinted, lifts a faint background on hover, and grows with
-/// its title. Used by the Add-Workspace form and the confirm toasts.
-///
-/// Variants:
-/// - `primary` — accent text; dims when disabled (a form's Add).
-/// - `secondary` — muted ghost, transparent at rest (Cancel / a toast's cancel); accent text on focus.
-/// - `muted` — muted text on a subtle fill (a form's Add-variable); accent text on focus.
-/// - `destructive` — destructive-tinted, subtle fill (a toast's confirm). Not focus-tinted: its
-///   tone is the message.
-/// - `segment` — an accent toggle that fills when `isOn` (a form's focus selector).
-/// - `link` — plain muted text, no fill or pill; brightens on hover, accent + underline on focus (a
-///   quiet footer affordance like Settings' Report an Issue).
 final class AppButton: NSButton {
     enum Variant { case primary, secondary, muted, destructive, segment, link }
 
     var onTap: () -> Void
-    /// Segment selection state — fills with the accent when true. Ignored by other variants.
     var isOn = false { didSet { restyle() } }
 
-    /// Opt into the form keyboard flow: the button becomes a focus stop that shows an accent
-    /// ring, moves focus on Up/Down (via the callbacks), and activates on Return/Space. Off by
-    /// default so toast buttons stay click-only; a toast's keys belong to its card root, not here.
     var isKeyboardFocusable = false
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onArrowLeft: (() -> Void)?
     var onArrowRight: (() -> Void)?
-    /// Tab / Shift-Tab, when the host wants them to differ from Down / Up — the Settings sections do
-    /// (Tab wraps at the last stop; Shift-Tab retreats, exiting to the nav only from the first).
-    /// Unset elsewhere, so the forms keep Tab as a plain advance/retreat through their stops.
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
-    /// Draw the accent focus outline without being first responder — used by `SegmentedControl`
-    /// to outline its selected segment while the control (not the segment) holds focus.
     var showsFocusOutline = false { didSet { restyle() } }
 
     private let variant: Variant
@@ -44,8 +22,6 @@ final class AppButton: NSButton {
     private var isFocusedStop = false { didSet { restyle() } }
     private var trackingAreaRef: NSTrackingArea?
 
-    /// Breathing room on each side of the title so the pill grows with its label instead of the
-    /// text touching the rounded edges (a borderless NSButton's intrinsic width is otherwise tight).
     private let horizontalPadding: CGFloat = 8
     private let height: CGFloat = 26
 
@@ -87,18 +63,12 @@ final class AppButton: NSButton {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Change the button's label after init (e.g. "Set" → "Change" as a keybind row's recorded
-    /// state changes) and restyle so the new title picks up the current variant/state colors.
     func setTitle(_ title: String) {
         labelText = title
         restyle()
     }
 
-    /// Re-apply the live chrome colors after a config change — no relaunch. `restyle()` already
-    /// reads `Theme.current` fresh on every call; it just needs re-triggering.
     func reapplyTheme() { restyle() }
-
-    // MARK: keyboard focus (form flow)
 
     override var acceptsFirstResponder: Bool { isKeyboardFocusable && isEnabled }
 
@@ -113,7 +83,7 @@ final class AppButton: NSButton {
         return super.resignFirstResponder()
     }
 
-    /// We draw our own accent ring via the layer border, so suppress the system focus ring.
+    // The accent ring is drawn on the layer border instead.
     override func drawFocusRingMask() {}
 
     override func keyDown(with event: NSEvent) {
@@ -123,16 +93,13 @@ final class AppButton: NSButton {
         case .down: onArrowDown?()
         case .left where onArrowLeft != nil: onArrowLeft?()
         case .right where onArrowRight != nil: onArrowRight?()
-        // Tab / Shift-Tab advance and retreat like Down / Up unless the host wires them apart — and
-        // stay consumed here either way, so focus can't jump the key-view loop out of the card's 2D
-        // model.
         case .tab(let shift):
             if shift {
                 (onBacktab ?? onArrowUp)?()
             } else {
                 (onTab ?? onArrowDown)?()
             }
-        case .activate: fire()  // return / enter / space → activate
+        case .activate: fire()
         default: super.keyDown(with: event)
         }
     }
@@ -158,8 +125,6 @@ final class AppButton: NSButton {
         var background: NSColor
         switch variant {
         case .primary:
-            // The accent text is what makes this the primary action; the fill is the same tier as
-            // every other button's, not a louder one.
             textColor = isEnabled ? chrome.accent.nsColor : chrome.ink(.faint)
             background = chrome.fill(isHovered && isEnabled ? .hover : .rest)
         case .secondary:
@@ -169,8 +134,6 @@ final class AppButton: NSButton {
             textColor = focusTinted(chrome.muted.nsColor, chrome)
             background = chrome.fill(isHovered ? .hover : .rest)
         case .destructive:
-            // Deliberately not focus-tinted: losing the warning tone at the moment you are about to
-            // press it costs more than the inconsistency with the other pills.
             textColor = chrome.destructive.nsColor
             background = chrome.fill(isHovered ? .hover : .rest)
         case .segment:
@@ -183,19 +146,15 @@ final class AppButton: NSButton {
             background = .clear
         }
         layer?.backgroundColor = background.cgColor
-        // Focus (as a stop, or an outlined segment) reads as an accent outline, not a fill — except a
-        // link, which has no pill to outline and shows focus as accent text + an underline instead.
         let outlined = (isFocusedStop || showsFocusOutline) && variant != .link
         layer?.borderWidth = outlined ? 1.5 : 0
         layer?.borderColor = outlined ? chrome.accent.nsColor.cgColor : nil
         if symbolName != nil {
-            contentTintColor = textColor  // tint the SF Symbol like the variant's text would be
+            contentTintColor = textColor
         } else {
             let isLink = variant == .link
             var attributes: [NSAttributedString.Key: Any] = [
                 .foregroundColor: textColor,
-                // A link matches the nav rows' 13pt regular so it reads as one of them; the pill
-                // variants stay 12pt semibold.
                 .font: NSFont.systemFont(ofSize: isLink ? 13 : 12, weight: isLink ? .regular : .semibold),
             ]
             if isLink, isFocusedStop { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
@@ -203,8 +162,7 @@ final class AppButton: NSButton {
         }
     }
 
-    /// Focus tints a pill's text accent alongside its ring, so a keyboard user gets the same signal
-    /// on a quiet button as on a link. `.destructive` opts out; its tone is the message.
+    // `.destructive` opts out: losing the warning tone right before the press costs more than consistency.
     private func focusTinted(_ resting: NSColor, _ chrome: ChromeTheme) -> NSColor {
         isFocusedStop ? chrome.accent.nsColor : resting
     }

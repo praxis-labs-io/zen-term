@@ -1,10 +1,5 @@
 import AppKit
 
-/// The Settings card — a `ModalOverlay` like the palettes (shared card + backdrop + spring), with
-/// a left nav of sections and a right detail pane. Keyboard-driven, arrows primary: Up/Down move
-/// within the nav, Right/Tab enter the detail pane, Left returns to the nav, Esc closes (owned by
-/// the card root — see `ModalEscape`). In the detail pane Tab/Shift-Tab advance/retreat stops,
-/// wrapping forward at the last and exiting to the nav from the first. Config edits apply live.
 final class SettingsOverlay: NSView, ModalOverlay {
     private let sections: [SettingsSection]
     private let capturer: KeybindCapturing?
@@ -14,19 +9,14 @@ final class SettingsOverlay: NSView, ModalOverlay {
     private var dismiss = DismissGate()
 
     private let navStack = NSStackView()
-    private let navScroll = NSScrollView()  // scrolls the nav rows when they'd overflow the column
+    private let navScroll = NSScrollView()
     private var navRows: [SettingsNavRow] = []
     private let detailContainer = NSView()
     private var selectedIndex = 0
     private let heading = NSTextField(labelWithString: "Settings".uppercased())
     private let divider = NSView()
-    /// Nav footer: the origami brand mark + the app version, pinned to the bottom of the nav column.
     private let brandMark = NSImageView()
     private let versionLabel = NSTextField(labelWithString: "")
-    /// A quiet "Report an Issue" text link sitting just below the version line (where someone looks
-    /// to cite the version in a report). A `.link` button, not a section row or a pill, so it reads as
-    /// a footer affordance rather than a nav destination. A keyboard stop after the section rows;
-    /// fired via `onReportIssue`, and also reachable from the command palette and Help menu.
     private let reportButton = AppButton(title: "Report an Issue", variant: .link)
     var onReportIssue: (() -> Void)?
 
@@ -77,8 +67,6 @@ final class SettingsOverlay: NSView, ModalOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    // MARK: ModalOverlay
-
     func focusInitialResponder() {
         guard navRows.indices.contains(selectedIndex) else { return }
         window?.makeFirstResponder(navRows[selectedIndex])
@@ -89,18 +77,12 @@ final class SettingsOverlay: NSView, ModalOverlay {
     }
     func animateOut(completion: @escaping () -> Void) {
         guard dismiss.begin() else { return }
-        capturer?.endCapture()  // never leave a capture handler armed after the card closes
+        capturer?.endCapture()
         Motion.springScaleFade(card, appearing: false, completion: completion)
     }
     override func hitTest(_ point: NSPoint) -> NSView? { dismiss.isDismissing ? nil : super.hitTest(point) }
 
-    /// The card root's Esc fallback. A bare Esc reaches the focused control's `keyDown` first, so an
-    /// open dropdown (the Theme picker) closes itself there and the card stays — this pass never runs
-    /// while a popover is up (verified in the running app). It fires when the focus doesn't
-    /// consume Esc: a plain nav row lets it bubble here and closes the card. Claimed in
-    /// `performKeyEquivalent`, not a card-root `keyDown`, so it also catches Esc from a focused text
-    /// field, whose field editor consumes it (`cancelOperation`) before it could bubble as a keyDown
-    /// — one Esc owner per card. No Esc-key-equivalent button exists here; this is the owner.
+    // Here, not `keyDown`, so Esc from a focused text field's field editor still closes the card.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if ModalEscape.handle(
             event, in: window, dismissing: dismiss.isDismissing, close: { self.onClose() }
@@ -110,14 +92,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
         return super.performKeyEquivalent(with: event)
     }
 
-    /// Re-apply the card's theme-dependent colors after a live theme change: the retained shell
-    /// (card fill/border, heading, divider), the nav rows, and every section IN PLACE — never via
-    /// `selectSection`, which would call `sectionWillHide()` on the current section even though its
-    /// index didn't change. That matters across windows: a theme edit in one window fires
-    /// `.configDidChange` globally, so a *different* window sitting on Keybinds with a capture armed
-    /// must not have it silently cancelled by this window's theme swap. Every section (not just the
-    /// visible one) is recolored — a hidden section's rows are unparented (harmless to recolor) but
-    /// its persistent Reset-all button/flash must be right for when it's next shown.
+    // In place, not via `selectSection`, which would cancel another window's armed keybind capture.
     func reapplyTheme() {
         CardChrome.reapplyTheme(to: card)
         heading.textColor = Theme.current.chrome.ink(.muted)
@@ -129,16 +104,13 @@ final class SettingsOverlay: NSView, ModalOverlay {
         sections.forEach { $0.reapplyTheme() }
     }
 
-    // MARK: content
-
+    // The clip view goes in before `drawsBackground = false`, which only applies to the current clip view.
     private func buildContent() -> NSView {
         navStack.orientation = .vertical
         navStack.alignment = .leading
         navStack.spacing = 2
         navStack.edgeInsets = NSEdgeInsets(top: 18, left: 12, bottom: 16, right: 12)
 
-        // Top-level "SETTINGS" heading, styled like the detail pane's section captions. Wrapped so
-        // its text is inset the same 10pt as the nav rows' labels, keeping them left-aligned.
         heading.font = .systemFont(ofSize: 10, weight: .semibold)
         heading.textColor = Theme.current.chrome.ink(.muted)
         heading.translatesAutoresizingMaskIntoConstraints = false
@@ -174,9 +146,6 @@ final class SettingsOverlay: NSView, ModalOverlay {
 
         let footer = makeNavFooter()
 
-        // The Report link is the trailing keyboard stop after the section rows: Down from the last row
-        // focuses it, Up/Shift-Tab returns. It doesn't select a section, so it makes itself first
-        // responder directly rather than going through `moveNav`/`selectSection`.
         reportButton.isKeyboardFocusable = true
         reportButton.onTap = { [weak self] in self?.onReportIssue?() }
         reportButton.onArrowUp = { [weak self] in self?.focusNavTail() }
@@ -184,15 +153,8 @@ final class SettingsOverlay: NSView, ModalOverlay {
         reportButton.translatesAutoresizingMaskIntoConstraints = false
         navRows.last?.onArrowDown = { [weak self] in self?.focusReportButton() }
 
-        // The nav rows scroll when they'd overflow the column (many sections on a short window),
-        // instead of clipping or colliding with the version footer pinned below. Keyboard
-        // nav scrolls the selected row into view in `selectSection`.
         navScroll.translatesAutoresizingMaskIntoConstraints = false
-        // Install the flipped clip view BEFORE `drawsBackground = false`: that property forwards to
-        // the scroll view's CURRENT clip view, so swapping the clip view afterwards resurrects the
-        // default opaque system background — an appearance-following wash over the nav column that
-        // ignores Theme.current and reads as a mismatched sidebar panel.
-        navScroll.contentView = FlippedClipView()  // top-down: the list starts at the top and scrolls down
+        navScroll.contentView = FlippedClipView()
         navScroll.drawsBackground = false
         navScroll.borderType = .noBorder
         navScroll.hasVerticalScroller = true
@@ -214,8 +176,6 @@ final class SettingsOverlay: NSView, ModalOverlay {
             navScroll.widthAnchor.constraint(equalToConstant: Self.navWidth),
             navScroll.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -8),
 
-            // The Report link sits at the very bottom of the column, just under the version line,
-            // centered like the footer.
             reportButton.centerXAnchor.constraint(equalTo: navScroll.centerXAnchor),
             reportButton.leadingAnchor.constraint(
                 greaterThanOrEqualTo: root.leadingAnchor, constant: Self.footerTrailingInset),
@@ -223,14 +183,10 @@ final class SettingsOverlay: NSView, ModalOverlay {
                 lessThanOrEqualTo: navScroll.trailingAnchor, constant: -Self.footerTrailingInset),
             reportButton.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -14),
 
-            // navStack is the scrolling document: full content width, height intrinsic (scrolls tall).
             navStack.topAnchor.constraint(equalTo: navScroll.contentView.topAnchor),
             navStack.leadingAnchor.constraint(equalTo: navScroll.contentView.leadingAnchor),
             navStack.widthAnchor.constraint(equalTo: navScroll.contentView.widthAnchor),
 
-            // The version footer sits below the scrolling list, above the Report link, centered
-            // across the nav column (the mark + version read as one unit, so they center together
-            // rather than hanging off the leading edge).
             footer.centerXAnchor.constraint(equalTo: navScroll.centerXAnchor),
             footer.leadingAnchor.constraint(
                 greaterThanOrEqualTo: root.leadingAnchor, constant: Self.footerTrailingInset),
@@ -251,16 +207,6 @@ final class SettingsOverlay: NSView, ModalOverlay {
         return root
     }
 
-    /// The origami brand mark + the app version, sitting at the very bottom of the nav column.
-    /// Informational only — non-interactive. The mark is the app icon's crane, tinted with the
-    /// live accent; the label is muted like the section captions.
-    ///
-    /// The mark carries the brand, so the label is the bare version — no "ZenTerm" wordmark. It used
-    /// to have one, and it overflowed the column on every dev build: `bin/package-app` stamps
-    /// `<tag>-dev`, and "ZenTerm v0.0.0-dev" is 124pt of the 111pt beside the mark, so the label ran
-    /// under the divider (a plain label doesn't truncate on its own). Release builds fit, which is
-    /// why it only ever showed locally. `versionMaxWidth` + tail truncation is the backstop, so no
-    /// future version string can spill again — `SettingsNavFooterTests` measures the real one.
     private func makeNavFooter() -> NSView {
         brandMark.image = BrandMark.image("origami")
         brandMark.contentTintColor = Theme.current.chrome.accent.nsColor
@@ -285,27 +231,18 @@ final class SettingsOverlay: NSView, ModalOverlay {
         return stack
     }
 
-    /// The footer's version line, and the width it has to live in — exposed so a test can measure
-    /// the real string against the real column instead of eyeballing it.
     static var versionText: String { "v\(AppVersion.current)" }
     static let versionFont: NSFont = .systemFont(ofSize: 13, weight: .medium)
     private static let brandMarkSize: CGFloat = 16
     private static let footerSpacing: CGFloat = 7
     private static let navWidth: CGFloat = 168
-    /// Breathing room on each side of the centered footer, so a long version never touches either
-    /// the card edge or the divider.
     private static let footerTrailingInset: CGFloat = 12
-    /// What's left of the nav column once both insets, the mark, and the stack spacing are taken.
     static var versionMaxWidth: CGFloat {
         navWidth - footerTrailingInset * 2 - brandMarkSize - footerSpacing
     }
 
-    // MARK: selection + focus
-
     private func selectSection(_ index: Int) {
         guard sections.indices.contains(index) else { return }
-        // Let the outgoing section end any in-flight interaction (e.g. an armed keybind capture)
-        // before its detail view — and any capture backdrop/popover on it — is removed.
         if sections.indices.contains(selectedIndex) { sections[selectedIndex].sectionWillHide() }
         selectedIndex = index
         for (rowIndex, row) in navRows.enumerated() { row.setSelected(rowIndex == index) }
@@ -313,8 +250,6 @@ final class SettingsOverlay: NSView, ModalOverlay {
         let detail = sections[index].makeDetailView()
         detail.translatesAutoresizingMaskIntoConstraints = false
         detailContainer.addSubview(detail)
-        // The section fills the detail area edge-to-edge (no outer gap); a scrolling section owns its
-        // own inner padding via content insets, so its list can scroll right up to the card edges.
         NSLayoutConstraint.activate([
             detail.leadingAnchor.constraint(equalTo: detailContainer.leadingAnchor),
             detail.trailingAnchor.constraint(equalTo: detailContainer.trailingAnchor),
@@ -322,7 +257,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
             detail.bottomAnchor.constraint(equalTo: detailContainer.bottomAnchor),
         ])
         window?.makeFirstResponder(navRows[index])
-        navRows[index].scrollToVisible(navRows[index].bounds)  // keep the selected row on screen when the list scrolls
+        navRows[index].scrollToVisible(navRows[index].bounds)
     }
 
     private func moveNav(_ delta: Int, wrap: Bool = false) {
@@ -344,6 +279,5 @@ final class SettingsOverlay: NSView, ModalOverlay {
 
     private func focusReportButton() { window?.makeFirstResponder(reportButton) }
 
-    /// Return focus from the Report button to the last nav row, which is the one it's reached from.
     private func focusNavTail() { window?.makeFirstResponder(navRows.last) }
 }

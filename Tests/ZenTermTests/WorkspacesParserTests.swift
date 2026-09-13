@@ -33,10 +33,10 @@ final class WorkspacesParserTests: XCTestCase {
     func test_minimalSection_pathOnly_defaultsMinimal() {
         let ws = WorkspacesParser.parse("[Scratch]\npath = ~/\n").first
         XCTAssertEqual(ws?.title, "Scratch")
-        XCTAssertNil(ws?.main)  // absent → plain shell first pane
-        XCTAssertNil(ws?.right)  // absent → drawer stays closed
+        XCTAssertNil(ws?.main)
+        XCTAssertNil(ws?.right)
         XCTAssertNil(ws?.bottom)
-        XCTAssertEqual(ws?.focus, .main)  // default
+        XCTAssertEqual(ws?.focus, .main)
         XCTAssertEqual(ws?.env, [:])
     }
 
@@ -49,7 +49,7 @@ final class WorkspacesParserTests: XCTestCase {
             [HasPath]
             path = ~/Dev/wire
             """)
-        XCTAssertEqual(workspaces.map(\.title), ["HasPath"])  // the pathless section is gone
+        XCTAssertEqual(workspaces.map(\.title), ["HasPath"])
     }
 
     func test_tildeExpansion() {
@@ -74,7 +74,7 @@ final class WorkspacesParserTests: XCTestCase {
 
     func test_envValue_mayContainEquals() {
         let ws = WorkspacesParser.parse("[X]\npath = ~/x\nenv = DSN=a=b=c\n").first
-        XCTAssertEqual(ws?.env["DSN"], "a=b=c")  // only the first `=` splits key from value
+        XCTAssertEqual(ws?.env["DSN"], "a=b=c")
     }
 
     func test_envValue_isTrimmedAndUnquoted() {
@@ -86,11 +86,9 @@ final class WorkspacesParserTests: XCTestCase {
             env  = QUOTED="hello world"
             """
         ).first
-        XCTAssertEqual(ws?.env["SPACED"], "value")  // leading whitespace after `=` trimmed
-        XCTAssertEqual(ws?.env["QUOTED"], "hello world")  // surrounding quotes stripped
+        XCTAssertEqual(ws?.env["SPACED"], "value")
+        XCTAssertEqual(ws?.env["QUOTED"], "hello world")
     }
-
-    // MARK: carry
 
     func test_carry_isRepeatable_andKeepsAuthoredOrder() {
         let ws = WorkspacesParser.parse(
@@ -108,8 +106,6 @@ final class WorkspacesParserTests: XCTestCase {
         XCTAssertEqual(WorkspacesParser.parse("[Scratch]\npath = ~/\n").first?.carry, [])
     }
 
-    /// A carried entry is copied by path, so one that escapes the workspace would reach into
-    /// somewhere else. Bad entries drop; the good one in the same section survives.
     func test_carry_dropsEntriesThatLeaveTheWorkspace() {
         let ws = WorkspacesParser.parse(
             """
@@ -125,10 +121,6 @@ final class WorkspacesParserTests: XCTestCase {
         XCTAssertEqual(ws?.carry, [".env"])
     }
 
-    /// Nothing creates a destination's parent, so a nested entry would die at copy time with an
-    /// errno that reads as a missing source. It is refused where the reason is still legible.
-    /// A Rails app keeps its dev key under `config/credentials/`, so a nested entry is the common
-    /// case rather than an exotic one.
     func test_carry_keepsANestedEntry() {
         let ws = WorkspacesParser.parse(
             """
@@ -151,11 +143,10 @@ final class WorkspacesParserTests: XCTestCase {
     }
 
     func test_emptyValue_treatedAsAbsent() {
-        // `right =` with no value must not become a "" command that launches an empty program.
         let ws = WorkspacesParser.parse("[X]\npath = ~/x\nmain =\nright =\nfocus =\n").first
         XCTAssertNil(ws?.main)
         XCTAssertNil(ws?.right)
-        XCTAssertEqual(ws?.focus, .main)  // empty focus → default, not a parse of ""
+        XCTAssertEqual(ws?.focus, .main)
     }
 
     func test_inlineComments_andHashInsideQuotes() {
@@ -167,7 +158,7 @@ final class WorkspacesParserTests: XCTestCase {
             """
         ).first
         XCTAssertEqual(ws?.path, expandTilde("~/Dev/c"))
-        XCTAssertEqual(ws?.bottom, "echo # hi")  // `#` inside quotes survives comment-stripping
+        XCTAssertEqual(ws?.bottom, "echo # hi")
     }
 
     func test_quotedCommand_isUnquoted() {

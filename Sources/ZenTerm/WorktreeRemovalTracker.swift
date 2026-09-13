@@ -1,25 +1,18 @@
 import Foundation
 
-/// The worktrees whose delete is still running, and the place those deletes run from. One stays
-/// on disk and in `git worktree list` for the whole delete, so the picker refuses to open its row.
-/// App-wide, because another window listing it as ordinary would drop a tab into a folder that is
-/// going away. Main-thread only.
+// App-wide, so no window opens a tab into a worktree still being deleted. Main-thread only.
 final class WorktreeRemovalTracker {
-    /// The longest a quit waits on a delete. Seconds is the measured cost of the worst case, so a
-    /// wait past this is a `git` that has stopped answering and must not hold the process open.
+    // Past this, `git` has stopped answering and must not hold the process open.
     static let quitBudget: TimeInterval = 15
 
     private(set) var inFlight: Set<URL> = []
 
-    /// What happened to one worktree. `removed` is the only case where the folder is gone, so it
-    /// is the only one that closes the tabs that were open in it.
     enum Change {
         case began(URL)
         case removed(URL)
         case failed(URL)
     }
 
-    /// Told each of the above. `AppDelegate` fans it out to every window.
     var onChanged: ((Change) -> Void)?
 
     private final class Waiter {
@@ -28,12 +21,7 @@ final class WorktreeRemovalTracker {
     }
     private var waiters: [Waiter] = []
 
-    /// Delete the worktree, holding the claim until the files are gone. Owned here rather than by
-    /// the window that asked, which may not outlive the call: the tabs close when the folder goes,
-    /// and a window's last tab closing closes the window. `completion` is the caller's to weaken.
     func remove(_ worktree: Worktree, in parent: URL, completion: @escaping (Error?) -> Void) {
-        // Two windows can each raise a confirm for one worktree. A second delete would fail and
-        // toast, and the first `finish` would clear the sole claim while it was still running.
         guard !isRemoving(worktree.path) else { return }
         begin(worktree.path)
         onChanged?(.began(worktree.path))
@@ -53,8 +41,7 @@ final class WorktreeRemovalTracker {
         }
     }
 
-    /// Run `completion` once nothing is in flight, or once `budget` has passed. Quit waits on this:
-    /// exiting mid-delete leaves a half-removed folder and git's entry for it still in place.
+    // Quit waits on this: exiting mid-delete leaves a half-removed folder and git's entry for it.
     func whenIdle(within budget: TimeInterval = quitBudget, then completion: @escaping () -> Void) {
         dispatchPrecondition(condition: .onQueue(.main))
         guard !inFlight.isEmpty else { return completion() }

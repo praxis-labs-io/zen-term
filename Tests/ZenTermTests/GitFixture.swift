@@ -3,11 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Real git repositories on disk for the tests that drive `GitCommand` and `WorktreeStore`.
-/// Shared rather than copied per suite: every git test needs the same working repo with a remote,
-/// and three private copies of it drift apart.
 enum GitFixture {
-    /// A working repo on `main` at `<root>/work`, pushed to a bare `<root>/origin.git` beside it.
     @discardableResult
     static func makeRepoWithOrigin(under root: URL) throws -> URL {
         let origin = root.appendingPathComponent("origin.git", isDirectory: true)
@@ -19,7 +15,6 @@ enum GitFixture {
         return work
     }
 
-    /// A working repo on `main` with one commit and no remote.
     @discardableResult
     static func makeRepo(at work: URL) throws -> URL {
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
@@ -33,7 +28,6 @@ enum GitFixture {
         return work
     }
 
-    /// A repo with a `.git` directory and no commit at all, so `HEAD` is unborn.
     @discardableResult
     static func makeEmptyRepo(at dir: URL) throws -> URL {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -52,7 +46,6 @@ enum GitFixture {
 
     static func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath: url.path) }
 
-    /// The local branches in `repo`, short names, sorted.
     static func branches(in repo: URL) throws -> [String] {
         let output = try run(["for-each-ref", "--format=%(refname:short)", "refs/heads"], in: repo)
         return output.split(separator: "\n").map(String.init).sorted()

@@ -1,7 +1,5 @@
 import Foundation
 
-/// One palette entry: a display title, its shortcut glyph string, the group it belongs to,
-/// and the chord it runs.
 struct PaletteCommand {
     let title: String
     let shortcut: String
@@ -9,9 +7,7 @@ struct PaletteCommand {
     let chord: KeyInterceptor.ReservedChord
 }
 
-/// The command palette's action list, derived from `KeyInterceptor.ReservedChord`. The
-/// `spec(for:)` switch is exhaustive, so the palette can't drift out of sync with the
-/// keybindings: adding a chord fails to compile until it has a title here.
+// `spec(for:)` is exhaustive, so a new chord fails to compile until it has a palette title.
 enum CommandCatalog {
     private enum Category {
         static let panes = "Panes"
@@ -23,9 +19,6 @@ enum CommandCatalog {
         static let help = "Help"
     }
 
-    /// Title, display shortcut, and group for a chord. Exhaustive over `ReservedChord`. The
-    /// glyph is read from the live keymap (`displayGlyph`), so it tracks user rebinds instead
-    /// of showing a stale default.
     static func spec(for chord: KeyInterceptor.ReservedChord) -> PaletteCommand {
         let glyph = displayGlyph(for: chord)
         switch chord {
@@ -80,38 +73,24 @@ enum CommandCatalog {
         case .openScreenFile: return pane("Write Screen to File and Open", glyph, chord)
         case .dismissToast: return window("Dismiss Notice", glyph, chord)
         case .dismissAllToasts: return window("Dismiss All Notices", glyph, chord)
-        // Present for exhaustiveness; all are omitted from `commands(tabCount:)`.
         case .newWindow: return tab("New Window", glyph, chord)
-        // Edit > Select All is the whole of how ⌘A is offered, the same as Copy and Paste. Listing
-        // it here too would advertise a second, rebindable spelling of a chord the menu owns.
         case .selectAll: return pane("Select All", glyph, chord)
         case .toggleCommandPalette: return tool("Command Palette", glyph, chord)
-        // Opening the palette runs `endModes`, which takes the find bar down, so both would reach
-        // `navigate` with no search running and do nothing every time. Keyboard-only by necessity
-        // rather than by choice. `CommandCatalogTests` holds them out.
         case .findNext: return pane("Find Next", glyph, chord)
-        // Both need a selected picker row, so a palette entry would run and do nothing.
         case .createWorktree: return tool("New Worktree…", glyph, chord)
         case .removeWorktree: return tool("Remove Worktree…", glyph, chord)
         case .findPrevious: return pane("Find Previous", glyph, chord)
         }
     }
 
-    /// The glyph currently bound to an action, from the live keymap — empty if unbound.
     private static func displayGlyph(for chord: KeyInterceptor.ReservedChord) -> String {
         Chord.displayed(chord, in: GeneralConfig.current.keymap)?.displayGlyph ?? ""
     }
 
-    /// The ordered commands shown for a window with `tabCount` tabs, grouped by category
-    /// (Tools → Config → Drawers → Tabs → Panes → Window). Tools leads with the workspace picker,
-    /// then the configured tool floats; Config holds Settings, Reload Config, Check for Updates;
-    /// Window holds Fill
-    /// Screen. `.selectTab` expands to one entry per open tab (capped at the bound ⌘1–⌘9). The
-    /// command palette itself and New Window aren't shown.
     static func commands(tabCount: Int) -> [PaletteCommand] {
         var chords: [KeyInterceptor.ReservedChord] = [.toggleRepoPicker]
         chords += ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
-        chords += [.newTool]  // Settings was the only way to create one
+        chords += [.newTool]
         chords += [.openSettings, .reloadConfig, .checkForUpdates, .reportIssue]
         chords += [
             .toggleBottomDrawer, .toggleRightDrawer,

@@ -1,7 +1,5 @@
 import AppKit
 
-/// One toast's content: a tone (`variant`), a terse title, a description, and an optional
-/// icon override (defaults to the variant's glyph).
 struct ToastContent: Equatable {
     let variant: ToastVariant
     let title: String
@@ -16,56 +14,27 @@ struct ToastContent: Equatable {
     }
 }
 
-/// A transient notification card: a tinted icon badge, a title (with a close affordance when the
-/// card has buttons), a muted description, and an optional small actions row — on the shared
-/// overlay-card chrome
-/// (`FloatShadow` bg + hairline edge + drop shadow). Fixed width; springs in/out on `Motion`.
-/// The `ToastPresenter` owns placement (top-right) and lifetime.
 final class ToastView: ShadowCardView {
-    /// This card's dismissal: the "×", a passive toast's body click, and the dismiss chords all
-    /// run it. A card that sets none is not dismissible from the keyboard either, which is the
-    /// point for the surface-failure notice, whose only ways out are Retry and Close Pane.
     var onClose: (() -> Void)?
-    /// Fired after the presenter has taken this card out of the stack, so an owner holding it by
-    /// id can drop its handle instead of keeping a detached view alive.
     var onDismissed: (() -> Void)?
     private(set) var isDismissing = false
     private let hasActions: Bool
-    /// Only a modal confirm (actionable AND arming Return/Esc) should take first responder;
-    /// a non-modal sticky toast must not, or it would steal input from the terminal.
+    // A non-modal toast must never take first responder, or it steals terminal input.
     private let gatesFocus: Bool
-    /// The affirmative action (`primary` / `destructive`), answered by Return. Nil on a card with
-    /// no such button.
     private let confirmAction: (() -> Void)?
-    /// The `cancel` action, answered by Delete and Esc on a confirm. Deliberately NOT what the
-    /// dismiss chords run: `cancel` is a card's negative *answer*, not a dismissal, and on a
-    /// keybind-conflict card it is "Revert", which rewrites the config. `onClose` is the dismissal.
+    // Not what the dismiss chords run: on a keybind-conflict card it is Revert, which rewrites the config.
     private let cancelAction: (() -> Void)?
-    /// The border tone (neutral for info, tinted for warning/destructive) — re-derived in
-    /// `reapplyTheme()` since it's a `Theme.current.chrome`-sourced value baked at init.
     private let variant: ToastVariant
-    /// Retained (not throwaway init-locals) so `reapplyTheme()` can recolor them — otherwise an
-    /// already-visible toast (e.g. a confirm left up across ⌘⇧,) stays stale after a live theme
-    /// change, since a passive `show()` toast is never rebuilt while an old one lingers.
     private let titleLabel: NSTextField
     private let messageLabel: NSTextField
-    /// Retained so `reapplyTheme()` can recolor it, like every other baked-color control here.
     private var closeButton: IconButton?
-    /// Dismiss / Switch / a confirm. Retained for the same reason: an `AppButton` bakes its variant
-    /// colors at build time, so an unretained one keeps the old accent across a live theme change.
     private var actionButtons: [AppButton] = []
-    /// Same reason: both the badge's accent fill and its glyph's tint are baked from the live
-    /// accent at init, so a toast up across a theme change kept the old one on a recolored card.
     private let badgeFill = NSView()
     private let badgeIcon = NSImageView()
 
-    /// Fixed card width — toasts read as a consistent column rather than sizing to their text.
     private static let width: CGFloat = 300
 
-    /// The message column's wrap width (card width minus badge + gaps + insets) and its font.
-    /// Exposed so copy can be *measured* against the real budget instead of eyeballed: a line that
-    /// reads fine in a commit message wraps mid-phrase at 236pt, and asserting the string tells you
-    /// nothing about that.
+    // Exposed so copy can be measured against the real wrap budget.
     static let messageMaxWidth: CGFloat = 236
     static let messageFont: NSFont = .systemFont(ofSize: 12)
     private static var titleColor: NSColor { Theme.current.chrome.foreground.nsColor }
@@ -75,8 +44,6 @@ final class ToastView: ShadowCardView {
         self.init(content: content, actions: [])
     }
 
-    /// The action keycaps, retained so a live toast can re-resolve them (a tab closing under it) and
-    /// recolor them on a theme swap.
     private var shortcutSlots: [ShortcutSlot] = []
 
     init(
@@ -100,7 +67,6 @@ final class ToastView: ShadowCardView {
         layer?.borderColor = FloatShadow.edge.cgColor
         FloatShadow.applyShadow(to: self)
 
-        // Tinted icon badge (accent glyph on an accent-at-15% rounded square).
         badgeFill.wantsLayer = true
         badgeFill.layer?.cornerRadius = 7
         badgeFill.translatesAutoresizingMaskIntoConstraints = false
@@ -112,13 +78,8 @@ final class ToastView: ShadowCardView {
         badgeFill.addSubview(badgeIcon)
         applyBadgeTheme()
 
-        // A card with buttons gets a close affordance; a passive one dismisses on body-click or
-        // its timer and needs none. Without it an actionable card could only be answered, and a
-        // conflict card has to be dismissible without writing to the config.
         titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         titleLabel.textColor = Self.titleColor
-        // The title shares its row with the keycap now, and it's a tab title — arbitrary length.
-        // Truncate it rather than let it push the keycap off the card's edge.
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
@@ -126,10 +87,6 @@ final class ToastView: ShadowCardView {
         messageLabel.textColor = Self.messageColor
         messageLabel.preferredMaxLayoutWidth = Self.messageMaxWidth
 
-        // Title leading, keycaps trailing, with a spacer holding them apart. The keycap names an
-        // app-level binding rather than labelling a button (the toast arms nothing), so
-        // the card's top-right corner reads as "this toast's chord" instead of implying the button
-        // beside it has a key equivalent.
         let headerSpacer = NSView()
         headerSpacer.setContentHuggingPriority(.init(rawValue: 1), for: .horizontal)
         headerSpacer.setContentCompressionResistancePriority(.init(rawValue: 1), for: .horizontal)
@@ -144,19 +101,12 @@ final class ToastView: ShadowCardView {
         messageLabel.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
         header.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
 
-        // Appended after the spacer, so a keycap lands on the trailing edge.
         for resolve in actions.compactMap(\.shortcut) {
             let slot = ShortcutSlot(group: header, resolve: resolve)
             shortcutSlots.append(slot)
             slot.refresh()
         }
 
-        // Last, so the × takes the trailing corner even on a card that also carries a keycap.
-        //
-        // Opt-in rather than "any card with buttons": the button does nothing unless its host wires
-        // `onClose`, and only the conflict card does. On by default it drew a dead × on the config
-        // notice, both attention toasts, the terminal-failure toast and every confirm, and a confirm
-        // gates keyboard focus, so clicking it left the card up and the terminal deaf.
         if showsClose {
             let close = IconButton(
                 symbol: "xmark", size: NSSize(width: 20, height: 20), pointSize: 10,
@@ -167,7 +117,6 @@ final class ToastView: ShadowCardView {
         }
 
         if !actions.isEmpty {
-            // Small buttons hugging the leading edge (a trailing spacer absorbs the slack).
             let spacer = NSView()
             spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
             actionButtons = actions.map(Self.button(for:))
@@ -183,7 +132,7 @@ final class ToastView: ShadowCardView {
         let root = NSStackView(views: [badgeFill, col])
         root.orientation = .horizontal
         root.alignment = .top
-        root.distribution = .fill  // stretch `col` to fill the fixed card width (badge stays 28)
+        root.distribution = .fill
         root.spacing = 12
         root.translatesAutoresizingMaskIntoConstraints = false
         addSubview(root)
@@ -203,14 +152,7 @@ final class ToastView: ShadowCardView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Build a toast action button on the shared `AppButton`: `cancel` → a muted `secondary`,
-    /// `destructive` → the destructive-tinted `destructive`, `primary` → the accent `primary`.
-    ///
-    /// Click-only, deliberately. Return and Esc used to ride here as `NSButton.keyEquivalent`s,
-    /// which answer only from a `performKeyEquivalent` traversal that reaches this button: it does
-    /// nothing when a view earlier in the subview order claims the key first, and nothing at all on
-    /// the paths where AppKit skips the traversal. The card owns those keys now, on both entry
-    /// points and by keyCode.
+    // Click-only: a `keyEquivalent` answers only when the traversal reaches the button, so the card owns Return and Esc.
     private static func button(for action: ToastAction) -> AppButton {
         let variant: AppButton.Variant
         switch action.kind {
@@ -221,9 +163,6 @@ final class ToastView: ShadowCardView {
         return AppButton(title: action.title, variant: variant, onTap: action.run)
     }
 
-    /// One action's keycap slot: the row it lives in and the query for its current glyph. The glyph
-    /// isn't baked — a toast for tab 3 must stop reading "⌘3" once a tab before it closes — and
-    /// `KeycapView` bakes its own at construction, so refreshing rebuilds the keycap.
     private final class ShortcutSlot {
         private let group: NSStackView
         private let resolve: () -> String
@@ -234,15 +173,13 @@ final class ToastView: ShadowCardView {
             self.resolve = resolve
         }
 
-        /// Re-resolve the glyph and rebuild the keycap when it changed. A no-op when it didn't, so
-        /// the common re-render (a tab switch that moves nothing) doesn't churn views.
         func refresh() {
             let glyph = resolve()
             guard glyph != keycap?.shortcut else { return }
             keycap.map { group.removeArrangedSubview($0) }
             keycap?.removeFromSuperview()
             keycap = nil
-            guard !glyph.isEmpty else { return }  // unbound (a tab past ⌘9) → no keycap at all
+            guard !glyph.isEmpty else { return }
             let cap = KeycapView(shortcut: glyph)
             group.addArrangedSubview(cap)
             keycap = cap
@@ -251,14 +188,9 @@ final class ToastView: ShadowCardView {
         func reapplyTheme() { keycap?.reapplyTheme() }
     }
 
-    /// A modal confirm takes keyboard focus so terminal input is gated while it's up; a
-    /// non-modal sticky toast never does (its buttons are click-only).
     override var acceptsFirstResponder: Bool { gatesFocus }
 
-    /// A confirm answers from the card root, like every other modal card in the app. Both entry
-    /// points, because neither alone is enough: `performKeyEquivalent` isn't invoked for a bare key
-    /// while some focused hosts hold it (see `ModalEscape`), and `keyDown` only arrives while the
-    /// card actually holds first responder, which anything else in the window can take back.
+    // Both entry points: this misses bare keys under some focused hosts, and `keyDown` needs first responder.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if answer(event) { return true }
         return super.performKeyEquivalent(with: event)
@@ -268,13 +200,7 @@ final class ToastView: ShadowCardView {
         if !answer(event) { super.keyDown(with: event) }
     }
 
-    /// Answer a confirm: Return runs the affirmative, Delete and Esc cancel. Returns whether the
-    /// key was claimed. Declines for anything that isn't a modal confirm, so a sticky notice keeps
-    /// arming nothing and the terminal keeps every key.
-    ///
-    /// Bare keys only. The buttons this replaced carried an empty `keyEquivalentModifierMask`, so
-    /// they answered an unmodified Return alone; matching on keyCode without the same guard would
-    /// let an unbound ⌥⏎ quit the app.
+    // Bare keys only, or an unbound ⌥⏎ would quit the app.
     private func answer(_ event: NSEvent) -> Bool {
         guard gatesFocus, !isDismissing, KeyboardFocus.isUnmodified(event) else { return false }
         if KeyboardFocus.isReturn(event) {
@@ -289,42 +215,33 @@ final class ToastView: ShadowCardView {
         return ModalEscape.handle(event, in: window, dismissing: isDismissing, close: cancelAction)
     }
 
-    /// A body click dismisses a passive toast; an actionable one ignores it, so a misclick can't
-    /// answer a question. Its "×" and its buttons are the only ways out.
     override func mouseDown(with event: NSEvent) {
         if !hasActions { onClose?() }
     }
 
-    /// A toast animating out ignores clicks, so a fast replace (a refreshed notification whose
-    /// old card is still fading) can't have the outgoing card's Dismiss fire against the new one.
+    // Ignored while animating out, so an outgoing card's Dismiss cannot fire against its replacement.
     override func hitTest(_ point: NSPoint) -> NSView? {
         isDismissing ? nil : super.hitTest(point)
     }
 
-    /// Re-apply the live chrome colors after a config change — no relaunch. Needed for a toast
-    /// left up across the change (e.g. a `.reloadConfig` confirm, which has no modal gate): a
-    /// passive `show()` toast is only ever built fresh, so an already-visible one would
-    /// otherwise stay stale until it's dismissed and replaced.
     func reapplyTheme() {
         layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
         layer?.borderColor = FloatShadow.edge.cgColor
         titleLabel.textColor = Self.titleColor
         messageLabel.textColor = Self.messageColor
-        shortcutSlots.forEach { $0.reapplyTheme() }  // else the keycap ink goes stale on a theme swap
+        shortcutSlots.forEach { $0.reapplyTheme() }
         closeButton?.reapplyTheme()
         actionButtons.forEach { $0.reapplyTheme() }
         applyBadgeTheme()
     }
 
-    /// The badge's fill and glyph, from one place so init and `reapplyTheme()` cannot drift.
     private func applyBadgeTheme() {
         let chrome = Theme.current.chrome
-        let role = variant.role(in: chrome)  // the variant's tone, never the chrome accent
+        let role = variant.role(in: chrome)
         badgeFill.layer?.backgroundColor = chrome.tint(role, alpha: ChromeTheme.badgeTint).cgColor
         badgeIcon.contentTintColor = role.nsColor
     }
 
-    /// Test hook: an action button's painted title colour, which is where a stale accent shows.
     var actionTitleColorsForTesting: [NSColor] {
         actionButtons.compactMap {
             $0.attributedTitle.length > 0
@@ -333,26 +250,18 @@ final class ToastView: ShadowCardView {
         }
     }
 
-    /// Test hooks: the badge paints from the live theme, so a stale one is only visible by reading
-    /// what was actually painted rather than what init was handed.
     var badgeFillForTesting: CGColor? { badgeFill.layer?.backgroundColor }
     var badgeIconTintForTesting: NSColor? { badgeIcon.contentTintColor }
 
-    /// Re-resolve every action keycap against the live keymap and tab order. The host calls this
-    /// whenever tabs mutate: a toast is built once per notification, so one for tab 3 would keep
-    /// reading "⌘3" after tab 1 closes and point at the wrong tab.
     func refreshShortcuts() {
         shortcutSlots.forEach { $0.refresh() }
     }
 
-    /// Spring the card in (fade + subtle scale about its center). Call after adding it.
     func animateIn() {
-        superview?.layoutSubtreeIfNeeded()  // resolve the frame before scaling about its center
+        superview?.layoutSubtreeIfNeeded()
         Motion.springScaleFade(self, appearing: true)
     }
 
-    /// Spring the card back out, then run `completion` (the presenter removes it).
-    /// Idempotent — a second call (click + auto-dismiss racing) is ignored.
     func animateOut(completion: @escaping () -> Void) {
         guard !isDismissing else { return }
         isDismissing = true

@@ -2,22 +2,16 @@ import AppLog
 import Foundation
 import TerminalKit
 
-/// Publishes the resolved theme to `theme.json` so an editor running inside a pane can follow a
-/// theme switch. `docs/nvim-theme-protocol.md` is the contract; `zen-theme.nvim` reads it.
+// Writes `theme.json` for editors in panes; `docs/nvim-theme-protocol.md` is the contract.
 enum ThemePublisher {
-    /// `~/Library/Application Support/ZenTerm/theme.json`. A fixed path, unlike the per-pid nav
-    /// socket: a tool float launches with no environment, so a reader cannot be handed a path.
-    /// Two running instances are last-writer-wins, and a stale value self-corrects on the next
-    /// theme change.
+    // A fixed path, not per-pid: a tool float launches with no environment to carry one.
     static var stateURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ZenTerm", isDirectory: true)
             .appendingPathComponent("theme.json")
     }
 
-    /// The published shape — property names are the JSON keys, so renaming one is a wire change.
-    /// `dark` is the resolved background's own reading rather than the catalog's flag, so a user
-    /// theme reports it as accurately as a bundled one.
+    // Property names are the JSON keys, so renaming one is a wire change.
     struct Payload: Encodable, Equatable, Sendable {
         let name: String
         let dark: Bool
@@ -30,13 +24,9 @@ enum ThemePublisher {
         let ansi: [String]
     }
 
-    /// Serial, so two writes land in the order the theme actually changed.
+    // Serial, so writes land in the order the theme changed.
     private static let queue = DispatchQueue(label: "com.zenterm.theme-publisher")
 
-    /// Snapshot the resolved theme on the main actor, then encode and write off it. Everything
-    /// that touches the filesystem — resolving the theme file, reading its `nvim-colorscheme`,
-    /// the write itself — runs on `queue`, because the chrome is the product and a stalled main
-    /// thread is a beachball.
     @MainActor
     static func publish(
         theme: AppTheme = Theme.current, general: GeneralConfig = .current,
@@ -48,13 +38,9 @@ enum ThemePublisher {
     }
 
     #if DEBUG
-        /// Test hook: block until the queued write lands. The publish is deliberately asynchronous,
-        /// so a test asserting the file exists would otherwise race it.
         static func waitForPendingWritesForTesting() { queue.sync {} }
     #endif
 
-    /// The payload bar `nvimColorscheme`, which only the theme file can answer. Pure: no
-    /// filesystem, so it is safe on the main actor and directly assertable in a test.
     static func payload(for theme: AppTheme, themeName: String?) -> Payload {
         let terminal = theme.terminal
         return Payload(
@@ -68,8 +54,6 @@ enum ThemePublisher {
             ansi: terminal.ansi.map(\.hex))
     }
 
-    /// Fill in `nvimColorscheme` from the active theme file. Off-main only — it resolves the file
-    /// and reads it.
     static func resolvingColorscheme(_ payload: Payload, configRoot: URL, themeName: String?) -> Payload {
         var payload = payload
         payload.nvimColorscheme = ConfigLoader.activeThemeURL(configRoot: configRoot, themeName: themeName)
@@ -77,9 +61,7 @@ enum ThemePublisher {
         return payload
     }
 
-    /// The theme file's `nvim-colorscheme` value, or nil when it names none. `GhosttyThemeParser`
-    /// drops the key as unknown, so this is a second read of the same file rather than a field on
-    /// `TerminalTheme`: which colorscheme an editor should wear is no business of the seam.
+    // A second read, because `GhosttyThemeParser` drops the key as unknown.
     static func nvimColorscheme(inThemeAt url: URL) -> String? {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
         for rawLine in text.split(whereSeparator: \.isNewline) {
@@ -92,9 +74,6 @@ enum ThemePublisher {
         return nil
     }
 
-    /// Write atomically so a reader watching the file never sees a half-written payload. Sorted
-    /// keys so an unchanged theme produces an unchanged file, and a failure is logged and dropped:
-    /// nothing in the app depends on the write landing.
     private static func write(_ payload: Payload, to url: URL) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

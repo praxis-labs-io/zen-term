@@ -1,31 +1,18 @@
 import AppKit
 import PaneKit
 
-/// Recursively lays out a PaneNode: a leaf hosts its provided view; a split places
-/// two child containers along its axis at the fixed ratio with a gutter gap.
 final class SplitContainerView: NSView {
-    /// The constraint carrying this split's ratio (nil on a leaf container). A multiplier
-    /// constraint is immutable, so `setRatio` swaps it for a fresh one instead of mutating.
+    // A multiplier is immutable, so `setRatio` swaps the constraint.
     private var ratioConstraint: NSLayoutConstraint?
     private var firstChild: NSView?
     private var secondChild: NSView?
-    /// The along-axis link pinning `second` a gutter past `first` (`second.leading == first.trailing`
-    /// / `second.top == first.bottom`). Held so `animateSplitIn` can detach it while the new pane
-    /// slides in at a fixed size, then restore it.
     private var secondFollowsFirst: NSLayoutConstraint?
     private var splitAxis: SplitAxis?
     private var gutter: CGFloat = 0
-    /// True while `animateSplitIn` owns `first`'s sizing via the temp extents below; a `setRatio`
-    /// resize finalizes it first so the fixed-extent and ratio constraints can't both be required.
     private var isAnimatingIn = false
     private var splitInExtents: [NSLayoutConstraint] = []
-    /// The in-flight `animateSplitIn`'s grid freeze, held so `settleSplitIn` can lift it. Non-nil
-    /// only while `isAnimatingIn`.
     private var suspendGrids: ((Bool) -> Void)?
 
-    /// Called for every split node as its container is built, with the split's id and its
-    /// container view. Lets the pane controller clamp resizes to a pixel min instead of a
-    /// bare ratio, and retarget the ratio in place via `setRatio`.
     init(
         node: PaneNode, gutter: CGFloat = ChromeMetrics.panelGap,
         register: ((SplitID, SplitContainerView) -> Void)? = nil, leafView: (PaneID) -> NSView
@@ -37,29 +24,14 @@ final class SplitContainerView: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Re-point this split at a new `pane-gap` without rebuilding any views, so a Settings edit
-    /// lands on a live split. The gutter is otherwise fixed at construction (it defaults to
-    /// `ChromeMetrics.panelGap` and is stored), which is why the split gap used to need a relaunch
-    /// while the canvas↔drawer seam next to it re-applied live: that seam's constraints are rebuilt
-    /// by `relayoutPanels()`, these are not.
-    ///
-    /// Both constraints carrying it are mutated in place. `self.gutter` is updated first so a later
-    /// `setRatio` builds its replacement against the new value.
     func setGutter(_ next: CGFloat) {
         guard gutter != next else { return }
         gutter = next
         secondFollowsFirst?.constant = next
-        // `first` is sized to its ratio of the space minus half the gutter (see
-        // `makeRatioConstraint`), so the ratio constraint carries it too.
         ratioConstraint?.constant = -next / 2
     }
 
-    /// Re-point this split at a new ratio without rebuilding any views — the ⌥-arrow resize
-    /// path, hot under key repeat. Only the one constraint is swapped; layout flows on the
-    /// next pass.
     func setRatio(_ ratio: Double) {
-        // A split-in push has `first` pinned to a fixed extent for the slide; finalize it first so the
-        // resize doesn't add a second, conflicting required width — and so the resize still lands.
         settleSplitIn()
         guard let firstChild, let splitAxis, let old = ratioConstraint else { return }
         old.isActive = false
@@ -68,20 +40,13 @@ final class SplitContainerView: NSView {
         ratioConstraint = next
     }
 
-    /// Finish an in-flight `animateSplitIn` immediately (or from its own completion): drop the temp
-    /// extents, stop the slide, unclip, and — unless a rebuild reparented the children into a fresh
-    /// container — restore the canonical ratio constraints. Idempotent.
     private func settleSplitIn() {
         guard isAnimatingIn else { return }
         isAnimatingIn = false
-        // Deferred, so the grids unfreeze on *every* exit below — including the reparented-children
-        // early-out, which would otherwise strand them frozen for the surface's life.
         defer {
             suspendGrids?(false)
             suspendGrids = nil
         }
-        // Release the temp extents unconditionally — they're attached to the child views, so leaving
-        // them active after a reparent would wrongly constrain the children in their new container.
         splitInExtents.forEach { $0.isActive = false }
         splitInExtents = []
         secondChild?.layer?.removeAnimation(forKey: "split.slide")
@@ -94,20 +59,6 @@ final class SplitContainerView: NSView {
         secondFollowsFirst?.isActive = true
     }
 
-    /// Animate this freshly-built split in like a drawer push: the pre-existing child (`first`)
-    /// compresses from filling the container to its ratio while the new child (`second`, always the
-    /// just-added pane) slides in at its final size from the trailing (vertical split) or bottom
-    /// (horizontal split) edge. The two stay one gutter apart the whole way, mirroring the drawer
-    /// push. `content` is clipped for the duration so the parked new pane doesn't spill into
-    /// siblings; on completion the canonical ratio constraints are restored (same size, no jump).
-    /// The caller guards Reduce Motion. Must be called once the split is laid out at its final ratio
-    /// (so the final child sizes are known).
-    ///
-    /// `first` compresses as a real view resize, but its *grid* is held for the duration via
-    /// `suspendGrids` — the caller owns the surfaces, this view only knows children. Because the
-    /// caller has already laid the split out at its final ratio, that grid is correct on entry, so
-    /// freezing here means one reflow instead of one per animation frame. `suspendGrids(false)` runs
-    /// from `settleSplitIn` on every exit path. See `TerminalSurface.setSizeSyncSuspended`.
     func animateSplitIn(
         duration: CFTimeInterval, timing: CAMediaTimingFunction,
         suspendGrids: @escaping (Bool) -> Void = { _ in }
@@ -122,13 +73,10 @@ final class SplitContainerView: NSView {
         suspendGrids(true)
         self.suspendGrids = suspendGrids
 
-        // Read the final child sizes from the canonical (ratio) layout before swapping it out.
         let finalFirst = vertical ? first.bounds.width : first.bounds.height
         let finalSecond = vertical ? second.bounds.width : second.bounds.height
         let slide = finalSecond + gutter
 
-        // Detach the two children's sizing: `first` gets an animatable extent (full → final); `second`
-        // a fixed final extent it slides into from the outer edge (no grow-from-zero reflow jitter).
         ratioConstraint.isActive = false
         secondFollowsFirst.isActive = false
         let firstExtent = (vertical ? first.widthAnchor : first.heightAnchor).constraint(equalToConstant: extent)
@@ -137,15 +85,13 @@ final class SplitContainerView: NSView {
         firstExtent.isActive = true
         secondExtent.isActive = true
         splitInExtents = [firstExtent, secondExtent]
-        layoutSubtreeIfNeeded()  // first fills; second sits at final size against the trailing/bottom edge
+        layoutSubtreeIfNeeded()
 
-        // Park `second` just past that edge and clip, so it doesn't spill into siblings as it slides
-        // (the expanded clip spares the freshly-focused pane's halo — see SlideClip).
         SlideClip.apply(to: self)
         second.wantsLayer = true
         let keyPath = vertical ? "transform.translation.x" : "transform.translation.y"
-        let from: CGFloat = vertical ? slide : -slide  // right for a vertical split, down for horizontal
-        second.layer?.transform = CATransform3DIdentity  // model rests in place
+        let from: CGFloat = vertical ? slide : -slide
+        second.layer?.transform = CATransform3DIdentity
         let slideAnim = CABasicAnimation(keyPath: keyPath)
         slideAnim.fromValue = from
         slideAnim.toValue = 0
@@ -162,20 +108,12 @@ final class SplitContainerView: NSView {
         }
     }
 
-    /// Settle an in-flight slide when this container is torn out of the view tree. A rebuild
-    /// (`PaneCanvasController.rebuildViews`) drops every split view from both the canvas and
-    /// `splitViewByID` in one pass, which releases the last reference to a container still
-    /// animating — so its `runAnimationGroup` completion, which captures `self` weakly, never runs.
-    /// The grid holds taken by `animateSplitIn` would then never be released and those panes would
-    /// stop reflowing for the life of the surface. Settling here releases them at teardown instead
-    /// of relying on a completion the rebuild can prevent.
+    // A rebuild can free this view before its animation completion runs, which would strand its grids frozen.
     override func viewDidMoveToSuperview() {
         super.viewDidMoveToSuperview()
         if superview == nil { settleSplitIn() }
     }
 
-    /// The one ratio formula, shared by `build` and `setRatio` so the two paths can't drift:
-    /// `first` sized to `ratio` of the container along the axis, minus its half of the gutter.
     private func makeRatioConstraint(_ ratio: Double, first: NSView, axis: SplitAxis) -> NSLayoutConstraint {
         axis == .vertical
             ? first.widthAnchor.constraint(
@@ -201,7 +139,7 @@ final class SplitContainerView: NSView {
             ])
 
         case .split(let id, let axis, let ratio, let a, let b):
-            register?(id, self)  // `self` is this split's container; its axis-extent is the split size
+            register?(id, self)
             let first = SplitContainerView(node: a, gutter: gutter, register: register, leafView: leafView)
             let second = SplitContainerView(node: b, gutter: gutter, register: register, leafView: leafView)
             addSubview(first)
@@ -213,8 +151,6 @@ final class SplitContainerView: NSView {
             let ratioConstraint = makeRatioConstraint(ratio, first: first, axis: axis)
             self.ratioConstraint = ratioConstraint
 
-            // Common cross-axis pinning + gutter along the split axis, with `first`
-            // sized to `ratio` of the available space (minus half the gutter).
             let follows =
                 axis == .vertical
                 ? second.leadingAnchor.constraint(equalTo: first.trailingAnchor, constant: gutter)

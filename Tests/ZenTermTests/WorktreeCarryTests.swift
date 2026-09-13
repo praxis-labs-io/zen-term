@@ -2,9 +2,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The carry step, over real repos on disk. Every claim about `copyfile` here was probed on
-/// macOS 25.5 before the code leaned on it, because the flags do not behave uniformly: a clone
-/// onto an existing *file* fails, and onto an existing *directory* succeeds having copied nothing.
 final class WorktreeCarryTests: XCTestCase {
     private var root: URL!
     private var repo: URL!
@@ -15,7 +12,6 @@ final class WorktreeCarryTests: XCTestCase {
         root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("worktree-carry-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        // `.gitignore` here already carries `.build/` and `.env`.
         repo = try GitFixture.makeRepo(at: root.appendingPathComponent("work", isDirectory: true))
         worktree = root.appendingPathComponent("tree", isDirectory: true)
         try FileManager.default.createDirectory(at: worktree, withIntermediateDirectories: true)
@@ -26,9 +22,6 @@ final class WorktreeCarryTests: XCTestCase {
         try super.tearDownWithError()
     }
 
-    // MARK: what comes across
-
-    /// Every entry in authored order, including the ones that go on to be skipped.
     func test_copy_namesEveryEntryAsItStarts() throws {
         try GitFixture.write("SECRET=1\n", to: repo.appendingPathComponent(".env"))
 
@@ -66,8 +59,6 @@ final class WorktreeCarryTests: XCTestCase {
                 encoding: .utf8), "{}\n")
     }
 
-    /// A pnpm `node_modules` is mostly symlinks. `COPYFILE_CLONE` implies `COPYFILE_NOFOLLOW_SRC`,
-    /// so the link is cloned rather than the tree it points at, which is what keeps the copy cheap.
     func test_copy_bringsASymlinkAsASymlinkRatherThanItsTarget() throws {
         let store = repo.appendingPathComponent("node_modules/.store", isDirectory: true)
         try FileManager.default.createDirectory(at: store, withIntermediateDirectories: true)
@@ -102,10 +93,6 @@ final class WorktreeCarryTests: XCTestCase {
             ])
     }
 
-    // MARK: what can be carried
-
-    /// The form offers what git ignores, so the candidates come from git rather than a directory
-    /// walk. An ignored directory collapses to one entry, which is the granularity carry copies at.
     func test_ignoredEntries_listsIgnoredFilesAndCollapsesIgnoredDirectories() throws {
         try GitFixture.write("SECRET=1\n", to: repo.appendingPathComponent(".env"))
         let build = repo.appendingPathComponent(".build/x", isDirectory: true)
@@ -116,8 +103,6 @@ final class WorktreeCarryTests: XCTestCase {
             WorktreeCarry.ignoredEntries(in: repo, chosen: [])?.resting, [".build", ".env"])
     }
 
-    /// A Rails `log/` holds a tracked `.keep`, so git cannot collapse it and reports every rotated
-    /// log on its own: 170 of craftwork's 249 rows came from one folder. One row instead.
     func test_ignoredEntries_foldsAFolderThatSpraysIgnoredFiles() throws {
         let log = repo.appendingPathComponent("log", isDirectory: true)
         try FileManager.default.createDirectory(at: log, withIntermediateDirectories: true)
@@ -132,10 +117,6 @@ final class WorktreeCarryTests: XCTestCase {
         XCTAssertEqual(WorktreeCarry.ignoredEntries(in: repo, chosen: [])?.resting, [".env", "log"])
     }
 
-    /// Porcelain paths are relative to the repo root, not to the directory git ran in, so a
-    /// workspace pointing at a package inside a monorepo got `pkg/web/node_modules` and resolved it
-    /// to `<workspace>/pkg/web/node_modules`. Every entry then read as absent, and absent is the one
-    /// refusal the toast stays silent about, so nothing copied and nothing said so.
     func test_ignoredEntries_areRelativeToTheWorkspace_notTheRepoRoot() throws {
         let web = repo.appendingPathComponent("pkg/web/node_modules", isDirectory: true)
         try FileManager.default.createDirectory(at: web, withIntermediateDirectories: true)
@@ -151,8 +132,6 @@ final class WorktreeCarryTests: XCTestCase {
         XCTAssertEqual(catalog.resting, ["node_modules"])
     }
 
-    /// Nothing ignored under a folder is a folder with nothing to bring, and stays quiet. Git
-    /// refusing to say is declined out loud, the way `isTracked` declines rather than guessing.
     func test_copy_ofATrackedFolderWithNothingIgnoredInIt_saysNothingIsThere() throws {
         let src = repo.appendingPathComponent("src", isDirectory: true)
         try FileManager.default.createDirectory(at: src, withIntermediateDirectories: true)
@@ -167,9 +146,6 @@ final class WorktreeCarryTests: XCTestCase {
         XCTAssertEqual(report.skipped, [CarryReport.Skipped(name: "src", reason: .notThere)])
     }
 
-    /// `containedPath` is lexical. A worktree that checks out a symlink where a carried entry
-    /// lands had `copyfile` follow it: probed, the file wrote outside the worktree and the folder
-    /// came back reported as carried.
     func test_copy_refusesToWriteThroughASymlinkedParentInTheWorktree() throws {
         let outside = root.appendingPathComponent("outside", isDirectory: true)
         try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
@@ -195,8 +171,6 @@ final class WorktreeCarryTests: XCTestCase {
             "nothing may be written through the link")
     }
 
-    /// The per-entry path skipped the symlink check the whole-entry path does, so a link out of
-    /// the workspace cloned as a dangling entry while the folder was reported as carried.
     func test_copy_ofAPartlyTrackedFolder_refusesASymlinkPointingOut() throws {
         let bystander = root.appendingPathComponent("bystander.txt")
         try GitFixture.write("untouched\n", to: bystander)
@@ -217,8 +191,6 @@ final class WorktreeCarryTests: XCTestCase {
             report.skipped, [CarryReport.Skipped(name: "config", reason: .leavesTheWorkspace)])
     }
 
-    /// A fold is the resting view, not a wall: the files stay in the catalog so a query can reach
-    /// one. Without that, picking a single file out of a folded folder is impossible from the form.
     func test_ignoredEntries_keepsTheFoldedFilesReachableBehindTheFolder() throws {
         let log = repo.appendingPathComponent("log", isDirectory: true)
         try FileManager.default.createDirectory(at: log, withIntermediateDirectories: true)
@@ -239,8 +211,6 @@ final class WorktreeCarryTests: XCTestCase {
         XCTAssertEqual(catalog.fileCounts, ["log": 2], "so the row can say what it stands for")
     }
 
-    /// A fold tidies a choice nobody has made yet. Once one exists inside the folder, hiding its
-    /// context is wrong: copying every key is a different act from copying one.
     func test_ignoredEntries_doesNotFoldAFolderHoldingSomethingAlreadyChosen() throws {
         let credentials = repo.appendingPathComponent("config/credentials", isDirectory: true)
         try FileManager.default.createDirectory(at: credentials, withIntermediateDirectories: true)
@@ -262,8 +232,6 @@ final class WorktreeCarryTests: XCTestCase {
             "a chosen child expands it, so the pick sits among its siblings")
     }
 
-    /// Folding a parent whose ignored children are directories would offer the package folder
-    /// itself, hiding the difference between a node_modules worth carrying and a .cache that is not.
     func test_ignoredEntries_doesNotFoldAFolderWhoseChildrenAreDirectories() throws {
         for name in ["pkg/node_modules", "pkg/.turbo"] {
             let dir = repo.appendingPathComponent(name, isDirectory: true)
@@ -280,8 +248,6 @@ final class WorktreeCarryTests: XCTestCase {
             ["pkg/.turbo", "pkg/node_modules"])
     }
 
-    /// One ignored file under a folder is already one row. Folding it would rename that row to its
-    /// parent and quietly widen what it means.
     func test_ignoredEntries_doesNotFoldASingleFile() throws {
         let config = repo.appendingPathComponent("config", isDirectory: true)
         try FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
@@ -295,8 +261,6 @@ final class WorktreeCarryTests: XCTestCase {
             WorktreeCarry.ignoredEntries(in: repo, chosen: [])?.resting, ["config/master.key"])
     }
 
-    /// The whole point of folding: the row has to copy what it says it copies, and leave the
-    /// tracked file that stopped git collapsing the folder in the first place.
     func test_copy_ofAPartlyTrackedFolder_bringsTheIgnoredFilesAndLeavesTheTrackedOne() throws {
         let log = repo.appendingPathComponent("log", isDirectory: true)
         try FileManager.default.createDirectory(at: log, withIntermediateDirectories: true)
@@ -335,23 +299,16 @@ final class WorktreeCarryTests: XCTestCase {
             ["config/credentials/development.key"])
     }
 
-    /// A tracked file is refused at copy time, so offering it would be offering a mistake.
     func test_ignoredEntries_leavesOutWhatGitTracks() throws {
         try GitFixture.write("SECRET=1\n", to: repo.appendingPathComponent(".env"))
 
         XCTAssertEqual(WorktreeCarry.ignoredEntries(in: repo, chosen: [])?.resting, [".env"])
     }
 
-    /// Nil is not "nothing ignored": the form says it could not ask rather than showing an empty
-    /// list that reads as a repo with nothing to carry.
     func test_ignoredEntries_isNilWhenTheFolderIsNotARepo() {
         XCTAssertNil(WorktreeCarry.ignoredEntries(in: root, chosen: []))
     }
 
-    // MARK: nested entries
-
-    /// A Rails app keeps its dev key at `config/credentials/development.key`, under a directory
-    /// git already tracks, so the worktree has the parent and only the file has to come across.
     func test_copy_bringsANestedEntryUnderAParentTheWorktreeHas() throws {
         let credentials = repo.appendingPathComponent("config/credentials", isDirectory: true)
         try FileManager.default.createDirectory(at: credentials, withIntermediateDirectories: true)
@@ -373,8 +330,6 @@ final class WorktreeCarryTests: XCTestCase {
             "key\n")
     }
 
-    /// The whole directory is gitignored, so the worktree has no parent to copy into. Nothing used
-    /// to make one, and `copyfile` died with an `ENOENT` that read as a missing source.
     func test_copy_createsTheParentTheWorktreeDoesNotHave() throws {
         let claude = repo.appendingPathComponent(".claude", isDirectory: true)
         try FileManager.default.createDirectory(at: claude, withIntermediateDirectories: true)
@@ -424,8 +379,6 @@ final class WorktreeCarryTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: bystander, encoding: .utf8), "untouched\n")
     }
 
-    // MARK: what it refuses, and what it leaves alone
-
     func test_copy_reportsAnEntryThatIsNotThere() {
         let report = WorktreeCarry.copy(["node_modules"], from: repo, into: worktree)
 
@@ -435,8 +388,6 @@ final class WorktreeCarryTests: XCTestCase {
         XCTAssertEqual(try? FileManager.default.contentsOfDirectory(atPath: worktree.path), [])
     }
 
-    /// Carrying a tracked path leaves git reporting a modification that never goes away, which is
-    /// the whole reason the check exists. `tracked.txt` is committed by the fixture.
     func test_copy_refusesATrackedPath() throws {
         try GitFixture.write("edited\n", to: repo.appendingPathComponent("tracked.txt"))
         try GitFixture.run(["worktree", "add", "-b", "side", worktree.path], in: repo)
@@ -464,8 +415,6 @@ final class WorktreeCarryTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: bystander, encoding: .utf8), "untouched\n")
     }
 
-    /// Probed: `fileExists` follows links, so a dangling one reads as absent. `copyfile` then fails
-    /// `EEXIST` and the cleanup would delete an entry the worktree already had.
     func test_copy_leavesADanglingSymlinkTheWorktreeAlreadyHas() throws {
         let source = repo.appendingPathComponent("node_modules", isDirectory: true)
         try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
@@ -484,8 +433,6 @@ final class WorktreeCarryTests: XCTestCase {
             try FileManager.default.destinationOfSymbolicLink(atPath: existing.path), "../gone")
     }
 
-    /// `--` ends option parsing but not pathspec globbing, so without `--literal-pathspecs` this
-    /// matches the fixture's tracked `tracked.txt` and is refused as tracked.
     func test_copy_doesNotTreatAGlobAsAMatchOnTrackedFiles() throws {
         try GitFixture.write("ignored\n", to: repo.appendingPathComponent("*.txt"))
 
@@ -495,8 +442,6 @@ final class WorktreeCarryTests: XCTestCase {
         XCTAssertEqual(report.skipped, [])
     }
 
-    /// `COPYFILE_CLONE` implies `COPYFILE_NOFOLLOW_SRC`, so this arrives as a link holding its
-    /// original relative target. A worktree sits under a different parent, so it would dangle.
     func test_copy_refusesASymlinkPointingOutsideTheWorkspace() throws {
         let outside = root.appendingPathComponent("shared", isDirectory: true)
         try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
@@ -512,8 +457,6 @@ final class WorktreeCarryTests: XCTestCase {
         XCTAssertFalse(GitFixture.exists(worktree.appendingPathComponent(".env")))
     }
 
-    /// Probed: `copyfile` with `COPYFILE_CLONE` returns 0 for a directory that already exists,
-    /// having copied none of it. Trusting that would report an entry as carried when it was not.
     func test_copy_refusesAnEntryTheWorktreeAlreadyHas() throws {
         let source = repo.appendingPathComponent("node_modules", isDirectory: true)
         try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
@@ -532,8 +475,6 @@ final class WorktreeCarryTests: XCTestCase {
         XCTAssertTrue(GitFixture.exists(existing.appendingPathComponent("stale.txt")))
     }
 
-    /// A recursive copy can die partway through, and half a `node_modules` reads to a package
-    /// manager as an install it need not redo. An unreadable member is how that is reproduced.
     func test_copy_removesAPartialEntryWhenTheCopyFails() throws {
         let source = repo.appendingPathComponent("node_modules/pkg", isDirectory: true)
         try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
