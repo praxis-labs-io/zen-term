@@ -8,8 +8,7 @@ enum GitStatusCategory: CaseIterable {
     case deleted
     case conflicted
 
-    /// The categories one `1` or `2` record's `XY` code counts under: `index` is the index against
-    /// HEAD and `worktree` the working tree against the index. A delete on both sides counts twice.
+    /// Each half of `XY` counts on its own, so a staged edit later deleted is both staged and deleted.
     static func categories(index: Character, worktree: Character, isRename: Bool) -> [GitStatusCategory] {
         var categories: [GitStatusCategory] = []
         if index == "D" {
@@ -27,8 +26,7 @@ enum GitStatusCategory: CaseIterable {
         return categories
     }
 
-    /// Nerd-font glyphs are out: the chrome draws in the system font, where a private-use codepoint
-    /// renders as a box.
+    /// Nerd-font glyphs render as a box in the system font the chrome draws in.
     var glyph: String {
         switch self {
         case .staged: return "+"

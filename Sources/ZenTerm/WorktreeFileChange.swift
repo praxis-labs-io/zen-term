@@ -4,8 +4,7 @@ struct WorktreeFileChange: Equatable {
     let path: String
     let categories: [GitStatusCategory]
 
-    /// Reads `git status --porcelain=v2 --untracked-files=all -z`. `-z` because a path is printed
-    /// raw there, so a space or newline in one stays inside its field.
+    /// Takes `git status --porcelain=v2 --untracked-files=all -z`: git prints paths raw, so only `-z` keeps one whole.
     static func parse(_ output: String) -> [WorktreeFileChange] {
         let fields = output.split(separator: "\0")
         var changes: [WorktreeFileChange] = []

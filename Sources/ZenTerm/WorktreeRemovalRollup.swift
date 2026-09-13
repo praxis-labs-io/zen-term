@@ -9,8 +9,6 @@ enum WorktreeRemovalRollup {
         case more(hiddenFiles: Int)
     }
 
-    /// Every file while they fit in `rowLimit` rows. Past that, the deepest folder holding more than
-    /// one row collapses into one, then the next, and a final `.more` row counts what still spills.
     static func rows(for files: [WorktreeFileChange]) -> [Row] {
         var rows = files.sorted { $0.path < $1.path }.map(Row.file)
         while rows.count > rowLimit, let folder = deepestCrowdedFolder(in: rows) {
