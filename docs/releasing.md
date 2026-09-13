@@ -4,10 +4,10 @@ How a public ZenTerm release is cut, and the parts of `bin/release` that are
 load-bearing. The `release` skill drives the flow; this file is the reference
 behind it.
 
-Public releases are cut locally with `bin/release`: preflight (clean main, cert,
-notary profile) → `bin/check` → assemble and Developer ID sign (`bin/package-app`)
-→ notarize and staple app and DMG → verify gates → curated notes → tag `vX.Y.Z` →
-publish the DMG and the appcast to this repo's Releases. arm64-only. The version's
+Public releases are cut locally with `bin/release`: preflight (clean main, tags,
+cert, notary profile, Sparkle key, Finder access) → `bin/check` → curated notes →
+assemble and Developer ID sign (`bin/package-app`) → notarize and staple app and DMG →
+verify → appcast → tag `vX.Y.Z` → publish to this repo's Releases. arm64-only. The version's
 source of truth is the git tag.
 
 ## zen-term-releases stays archived
@@ -40,7 +40,7 @@ Three details in that script are load-bearing and cost a wrong document if chang
   about something else. raw.githubusercontent is case-sensitive, so pointing at the
   lowercase path publishes the wrong document as the app's license disclosure. APFS is
   case-insensitive, so check this with `git ls-files` rather than `ls`.
-- **The theme file is `themes/rose-pine-zen`.**
+- **The example theme is `docs/config/themes/rose-pine-zen`.**
 
 ## Versioning
 
@@ -61,8 +61,8 @@ does not ascend past the last tag, including one named by hand.
 **Rerun a failed run the way you invoked it**, `bin/release minor` again rather than
 bare. Until the tag exists nothing records which bump an interrupted run intended, so
 a run that died in notarization and is restarted bare resolves to a patch: `0.10.1`
-where `0.11.0` was meant, published and permanent. Once the tag is there, any
-invocation resumes it.
+where `0.11.0` was meant, published and permanent. Once the tag is there, a bare or
+bump invocation resumes it; naming a different version starts a new release.
 
 Two rules are not negotiable, because a published tag is permanent: never reuse a
 version, even after a release that failed halfway, and never go backwards.
@@ -119,8 +119,8 @@ xcrun notarytool store-credentials zenterm-notary --apple-id <id> --team-id <tea
 with an app-specific password, plus `gh auth login` with push access to this repo.
 
 Keychain reachability from the tool shell is not a fixed property: password items
-are ACL-gated to the requesting context and the grant persists once made. Run the
-probe before claiming a credential is unreachable. Finder Automation (AppleScript)
+are ACL-gated to the requesting context and the grant persists once made, so try the
+read before calling a credential unreachable. Finder Automation (AppleScript)
 is a **separate** TCC permission, so `bin/make-dmg`, which drives Finder, can fail
 even when keychain reads succeed.
 

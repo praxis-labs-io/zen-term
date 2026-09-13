@@ -6,7 +6,7 @@ against it. Both ends are backend-agnostic: nothing here depends on the terminal
 backend behind the seam.
 
 The goal: `Ctrl-hjkl` walks across nvim splits and ZenTerm panes as one motion.
-It is **opt-in**: default `⌘-hjkl` pane nav is untouched. A user enables it by
+It is **opt-in**: default ⌘⌥ arrow pane nav is untouched. A user enables it by
 (a) binding `ctrl+hjkl → nav_*` in their ZenTerm keybind config and
 (b) installing the plugin.
 
@@ -25,7 +25,7 @@ not running under ZenTerm).
 > **Long-lived sessions:** both vars are captured at shell launch, and the
 > socket is per app instance. A shell that outlives its instance (a reattached
 > tmux/screen session) holds a dead `$ZEN_SOCK`; hand-offs silently no-op there
-> until nvim is restarted in a fresh pane. `⌘-hjkl` always works.
+> until nvim is restarted in a fresh pane. ⌘⌥ arrow pane nav always works.
 
 ## Socket
 
@@ -38,8 +38,9 @@ not running under ZenTerm).
 - Framing: newline-delimited (`\n`) UTF-8 JSON, one command per line. A
   short-lived connection that writes one line and closes is fine, but a client
   that wants clear-on-death presence holds one connection open (see below).
-- ZenTerm silently drops malformed lines, unknown commands, unknown directions,
-  and commands naming a token with no live pane.
+- ZenTerm silently drops malformed lines, unknown commands and unknown directions.
+  A `focus` naming a token with no live pane does nothing; a `setvim` for one is
+  recorded and has no effect.
 
 ## Commands (plugin → ZenTerm)
 
@@ -94,7 +95,7 @@ then reaches the recovered shell and does nothing.
 A clean quit sends `vim: false` and then closes. ZenTerm treats that as one
 clear, not two.
 
-`⌘-hjkl` pane nav is never routed through any of this and always works.
+⌘⌥ arrow pane nav is never routed through any of this and always works.
 
 ## Plugin behavior (reference)
 

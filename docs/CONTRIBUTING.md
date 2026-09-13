@@ -4,6 +4,7 @@
 
 ```sh
 git clone https://github.com/praxis-labs-io/zen-term.git && cd zen-term
+xcodebuild -downloadComponent MetalToolchain
 bin/build-ghosttykit
 brew install swiftlint
 bin/run
@@ -26,7 +27,7 @@ Instruments; everything else is the terminal.
 
 ## The gate
 
-`bin/check` is the whole thing, and it is what CI runs.
+`bin/check` is the whole thing, and it runs the same four steps CI does.
 
 | Command | Does |
 | --- | --- |
@@ -59,7 +60,7 @@ Sources/
 Three rules the codebase will not bend on. Each has a failure behind it.
 
 **The seam.** `TerminalKit` is the only target allowed to `import GhosttyKit`.
-`ZenTerm` depends on `TerminalKit` alone, and `Package.swift` enforces it by not
+`ZenTerm` has no backend dependency, and `Package.swift` enforces it by not
 giving the app target a backend to import. Anything only one terminal backend can
 do stays below the seam. The protocol grows to hold what the chrome needs from
 *any* terminal, not what libghostty happens to offer.

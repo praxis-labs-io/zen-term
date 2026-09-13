@@ -8,7 +8,7 @@ notices before tagging.
 Three rules learned the hard way:
 
 - **Probe the linked executable, not `libghostty-fat.a`.** The archive is a bag of object
-  files the linker draws from selectively: it is ~141 MB against a ~16 MB binary. The
+  files the linker draws from selectively: it is ~141 MB against a ~18 MB binary. The
   original audit probed the archive and still under-counted the shipped set by eight
   libraries, because it went looking for names it already expected.
 - **Symbols cannot see data.** Fonts are embedded bytes with no symbols, so a symbol probe
@@ -29,7 +29,7 @@ swift build -c release
 
 ```sh
 nm -U .build/release/ZenTerm | awk '$2=="T"||$2=="t"{ $1=""; $2=""; print }' | c++filt > /tmp/defined.txt
-wc -l < /tmp/defined.txt   # ~13k at the v1.3.1 pin
+wc -l < /tmp/defined.txt   # ~17.5k at the v1.3.1 pin
 
 for p in google_breakpad simdutf glslang spirv_cross ImGui "utf8::" "hwy::" \
          FT_ onig_ png_ sentry_ wuffs inflate libintl mpack; do
@@ -125,8 +125,8 @@ find -L Sources/ZenTerm/Resources Sources/ZenTerm/Themes Sources/ZenTerm/Shaders
 the themes and shell integration vanish from the output there. The `sed` collapses ghostty's
 shell-integration and themes trees to one line each.
 
-Every file here owes a notice unless we authored it, and so does artwork with no file of its
-own: the app icon is Lucide's `origami` pasted into `icon/make-icon.swift` as SVG path data.
+Every file here owes a notice unless we authored it, and so does artwork drawn in code: the
+app icon is Lucide's `origami` in `icon/make-icon.swift` (it also ships as `Resources/origami.svg`).
 Ghostty's terminfo is ghostty's own and rides its MIT entry; `bash-preexec.sh` sits inside the
 same tree and does not.
 
@@ -159,16 +159,16 @@ over the result catches these, and they should read as the plain character.
 
 ## 6. Confirm the notices still open
 
-The file is a SwiftPM resource loaded via `Bundle.module`, so it resolves in both a dev and a
-packaged build. **zen-term → Acknowledgements…** (under About) opens it in its own themed,
+The file is a SwiftPM resource loaded through `ZenTermResources.bundle`, so it resolves in both a dev and a
+packaged build. **ZenTerm → Acknowledgements…** (under About) opens it in its own themed,
 scrollable window (the markdown scaffolding is stripped by `Acknowledgements.plainText`; the
 license bodies pass through verbatim). Separately, **About zen-term** shows the version:
 
-- [ ] `bin/run`, then **zen-term → Acknowledgements…**. The window opens, themed from
+- [ ] `bin/run`, then **ZenTerm → Acknowledgements…**. The window opens, themed from
       `Theme.current` (background and text follow the active theme, not the system appearance),
       and scrolls the full notices. Reopening it refocuses the same window rather than stacking
       a second. This is the dev path, resolving out of `.build`.
-- [ ] **zen-term → About zen-term** reads `AppVersion.current`, not a blank version.
+- [ ] **ZenTerm → About ZenTerm** reads `AppVersion.current`, not a blank version.
 - [ ] `bin/package-app`, then the same two menu items on the packaged app. Acknowledgements
       resolves out of the app's resource bundle, About reads the tag stamp (e.g.
       `0.1.0+6 (133)`), and `ls "$HOME/Applications/ZenTerm Dev.app/Contents/Resources/THIRD-PARTY-NOTICES.md"`

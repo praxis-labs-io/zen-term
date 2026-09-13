@@ -37,8 +37,8 @@ The epic's record is **Linear** and git, so `docs/` does not re-copy that histor
 
 ## Build / run / test
 
-Terminal-native, no Xcode required (`open Package.swift` only for a
-debugger/Instruments session).
+Terminal-native. Xcode must be installed for the toolchain, but you never open it
+(`open Package.swift` only for a debugger or Instruments session).
 
 - `bin/build-ghosttykit` once per machine and per ghostty pin move. Its outputs are
   gitignored, so a new git worktree needs `Frameworks/GhosttyKit.xcframework` and
@@ -84,8 +84,8 @@ view-level test covers that.
 
 - `Sources/TerminalKit/` owns the seam (`TerminalSurface` protocol + types) and the
   libghostty backend. It is the **only** target that depends on `GhosttyKit`.
-- `Sources/ZenTerm/` is the chrome. It depends on `TerminalKit` **only** and must
-  never `import GhosttyKit` (or any backend). This is enforced at the module level
+- `Sources/ZenTerm/` is the chrome. It depends on no backend (`TerminalKit`, `PaneKit`,
+  `TabKit`, `AppLog`, Sparkle) and must never `import GhosttyKit`. This is enforced at the module level
   in `Package.swift`: the app target has no backend dependency to import.
 - Anything only one backend can do stays **below** the seam. The protocol grows only
   to hold what the chrome needs from *any* terminal.
@@ -112,7 +112,8 @@ view-level test covers that.
 
 **These rules govern any word a person outside the project reads:** in-app copy
 (toasts, empty states, button labels, Settings captions, errors), `docs/config/*`, the
-README, and release notes (curated for the person downloading, not a git log).
+README, and release notes (curated for the person downloading, not a git log). The
+full standard is `docs/brand-voice.md` in `zen-term-website`.
 
 - **No em-dashes. Anywhere**, including inside quotes. The test is a grep, not a
   judgment call. Titles take a colon.

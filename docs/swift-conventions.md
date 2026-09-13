@@ -14,8 +14,8 @@ minimum, clamping the window small while the modal is up. `HostWindow.init` pins
 ## Event routing and the responder chain
 
 **A nil-target menu action reaches the window delegate before the app delegate.** The chain is first
-responder, its ancestors, the window, the window's delegate (`WindowController`), the window
-controller, `NSApp`, then `NSApp`'s delegate. Conditional routing belongs on the first responder that
+responder, its ancestors, the window, the window's delegate (`WindowController`, a plain
+`NSObject`), `NSApp`, then `NSApp`'s delegate. Conditional routing belongs on the first responder that
 is actually reached; a copy of the guard in `AppDelegate` never runs. `PaneCanvasController` and
 `TabController` are plain `NSObject`, reached only through `WindowController`'s own dispatch.
 
@@ -195,7 +195,7 @@ running app, and do not trust the last log line or an empty `DiagnosticReports` 
 
 **The compiler enforces most of it, and two pieces are load-bearing.** `@MainActor` on
 `loadGeneralConfig` / `loadAppTheme` / `AppConfig.reload`, and
-`.treatWarning("ActorIsolatedCall", as: .error)` on the ZenTerm target, since in Swift 5 mode a
+`.treatWarning("ActorIsolatedCall", as: .error)` on every target, since in Swift 5 mode a
 violation inside a closure is otherwise only a warning. Every target pins `.swiftLanguageMode(.v5)`.
 
 **A `DispatchWorkItem` erases isolation, so the TIS sites guard at runtime.**
@@ -249,7 +249,7 @@ operation; enqueue the fulfill there.
 **A weak reference to an AppKit view clears when the autorelease pool drains.** Wrap open and close in
 `autoreleasepool` when testing for a leak.
 
-**`kill(pid, 0)` succeeds on a zombie.** Assert on elapsed time instead (`OrphanWatcherTests`).
+**`kill(pid, 0)` succeeds on a zombie.** Where a zombie could answer, assert on elapsed time.
 
 **Tests must not mutate or read real OS and user state.** Snapshot and restore `NSPasteboard.general`,
 inject pasteboards (`ScrollModeController.yankPasteboard`) and panel presenters, pin
@@ -282,7 +282,7 @@ firing fails nothing.
 
 **`mountAndStart()` does not order the window in, so it forces layout itself.** AppKit runs no
 automatic layout for a window never ordered in; views keep zero bounds and `split` refuses on
-`minSplitExtent`. Suites testing key routing order the window in explicitly. Count windows with
+`minSplitExtent`. Suites testing key routing order the window in explicitly. To count leaked windows by hand, use
 `CGWindowListCopyWindowInfo`, not the accessibility API, which cannot see xctest's windows.
 
 **When the suite hangs, `sample <pid>` names the spinning function.** The processes are named

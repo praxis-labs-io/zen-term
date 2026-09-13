@@ -64,7 +64,7 @@ A theme file names the colorscheme Neovim should wear:
 nvim-colorscheme = kanagawa-dragon
 ```
 
-Every bundled theme carries one. Add the line to a `.ghostty` file in
+Every bundled theme carries one. Add the line to your theme file in
 `~/.config/zen-term/themes/` and your own theme is mapped too, in the same file that
 holds its colors. A shared ZenTerm theme carries its Neovim mapping with it.
 

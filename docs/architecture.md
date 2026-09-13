@@ -5,7 +5,7 @@ history, rejected designs, measurements or copy reasoning. Shortcuts live in `do
 
 ## The seam (load-bearing)
 
-`TerminalSurface` (`Sources/TerminalKit/TerminalSurface.swift`) is the whole
+`TerminalSurface` (`Sources/TerminalKit/TerminalSurface.swift`) is the
 contract. A surface vends an `NSView`, a title, a cwd, a busy flag and the background
 its program last reported. It takes `start`, `focus`, `terminate`, `paste`,
 `copySelection`, `applyAppearance`, `setFontSize` and `scroll`, reports its grid as
@@ -39,15 +39,15 @@ Contract details that are not decoration:
 ZenTerm unbinds most of libghostty's keymap. `GhosttyUnboundChords` holds the
 decision, and `GhosttyConfigWriter` emits one `keybind = <trigger>=unbind` line per
 chord. What survives is `GhosttyUnboundChords.kept`: terminal encoding only (`⌘←/→`
-to `^A/^E`, `⌥←/→` to word moves, `⇧`-arrow selection).
+to `^A/^E`, `⌥←/→` to word moves, `⌘⌫`, `⇧` arrow/Home/End/Page selection).
 
 - `BackendShadowSweepTests` walks every typeable chord against a live surface and
   fails unless the surviving shadow is exactly `kept`. Re-run it on a ghostty pin bump.
 - `BackendShadow` asks the same question at load time, because a user keybind can free
   a chord for the backend. `AppDelegate` runs it once a surface exists and
   `ConfigApplier` re-runs it when the keymap changes. It logs only.
-- Its liveness canary (⌥←) must come from `kept`. A surface can exist before its
-  backend surface does, and then every chord reads `.ignores`.
+- Its liveness canary (⌥←) catches a surface whose backend never started, where every
+  chord reads `.ignores`. It must come from `kept`, or unbinding it reads as dead.
 
 ## Targets
 
@@ -56,12 +56,11 @@ GhosttyKit (binaryTarget: Frameworks/GhosttyKit.xcframework)
      ↑
 TerminalKit          the ONLY target that may import GhosttyKit
      ↑
-  PaneKit            seam types only, no AppKit
+  PaneKit            imports no AppKit; TerminalKit for the seam types
      ↑
   ZenTerm            the chrome
-     ↑
-  TabKit             pure: imports nothing
 
+  TabKit             pure leaf used by ZenTerm: imports nothing
   AppLog             Foundation + os leaf used by TerminalKit and ZenTerm
 ```
 
@@ -100,9 +99,9 @@ share `SystemReport`, and never carry the environment or config.
 - **A stepped font size stops following config.** `setFontSize` marks the surface
   `font_size_adjusted`, after which reloads skip its font, so the chrome re-pushes
   `SessionFontSize.points` after every `applyAppearance`.
-- **The `theme` line names two empty files on purpose.** libghostty answers the
-  color-scheme query (DSR 996) only when `theme` is a light/dark pair with differing
-  paths. The files stay empty. On a pin bump, diff `ghostty +show-config` with and
+- **The `theme` line names two settings-free files on purpose.** libghostty answers DSR 996
+  from conditional theme state, which follows the pane's scheme only when `theme` is a
+  light/dark pair with differing paths. The files hold only comments. On a pin bump, diff `ghostty +show-config` with and
   without the line: only `window-theme` may move.
 - **Shader paths are absolute** (a relative one resolves against the temp config file).
   Shaders get sRGB colors; use them raw. Layer opacity follows `background-alpha` only.
@@ -143,7 +142,7 @@ share `SystemReport`, and never carry the environment or config.
 
 ## The pane tree
 
-`PaneKit`: no AppKit, no global state, ids supplied by callers.
+`PaneKit`: no AppKit import, no global state, ids supplied by callers.
 
 ```swift
 public indirect enum PaneNode {
@@ -168,7 +167,8 @@ root. Resize swaps one constraint in place and clamps against the rendered exten
 ## Tabs and windows
 
 `TabList` (TabKit) holds `order` and `activeIndex` and always holds at least one tab:
-`close` returns false instead of emptying it. Tab numbers, tooltips and keycaps derive
+`close` returns false when it removes the last tab, and
+the caller closes the window. Tab numbers, tooltips and keycaps derive
 from `order` at render time. A label is `pinnedTitle ?? liveTitle`.
 
 `WindowController` owns one window: tabs, toast presenter, tool floats, the single modal
@@ -182,7 +182,7 @@ drawers.
   `select`/`addTab`/`closeTab` keeps a card from outliving its tab.
 - **Hidden drawers are detached, not `isHidden`**: a 0x0 view resizes its PTY to zero
   columns and crashes TUIs.
-- **Titles and drawer busy state are polled** every 1.5s (no push event on `cd`).
+- **Titles update on push**, re-read every 1.5s as a backstop that also polls drawer busy.
 - **Background command completion:** OSC 133 `COMMAND_FINISHED` over 10s in a
   background tab marks the tab and raises one sticky toast. An agent notification
   replaces it, never the reverse.
@@ -210,7 +210,7 @@ drawers.
 - **Tool floats are window-level** because a surface is one `NSView`. `ToolFloatController`
   reaches the active tab through closures. `ToolFloat.Scope.tab` floats are filed under
   `tabID/id` and shut down with their tab; Scratch is the only one.
-- **Every silent no-op is a toast**, throttled at 3s per verb because held chords repeat.
+- **Every silent no-op is a toast**, throttled at 3s per kind because held chords repeat.
 - **A surface stating current state is retracted when the cause clears.**
 - **A toast's keys live on the card root** (`ToastView.performKeyEquivalent` and
   `keyDown`). A confirm refuses Space. A non-modal sticky card claims no keys;
@@ -263,10 +263,10 @@ below chord routing so a mode never swallows ⌘T or the palette.
   them first. A view with its own selection model must answer `selectAll(_:)` itself.
 - **`TextEditingChords`** lists chords a text view owns (⌘⇧↑/↓, ⌘⏎, ⌘⇧⏎) so the
   interceptor defers them while a text view is first responder.
-- **macOS takes ⌘⌥D and ⌃⌘D first**; a chord bound there is dead while tests pass.
+- **macOS takes ⌘⌥D, ⌃⌘D, ⌘↑ and ⌘↓ first**; a chord bound there is dead while tests pass.
 - **Chord conflicts** get one sticky card each (`KeybindConflict`,
   `ConfigApplier.surfaceConflicts`). Accept writes `= none` for the loser; Revert returns
-  the winner to its defaults. A float gets Accept only. Settings rows show the conflict
+  the winner to its defaults. A user float that takes a chord gets Accept only; one that loses it gets Revert only. Settings rows show the conflict
   but do not resolve it.
 - **The modal gate** in `WindowController.handle(_:)` runs confirm, modal card, tool
   float, then dispatch. App-global chords bypass it in `AppDelegate.route`; a palette pick
@@ -294,7 +294,7 @@ Bundled themes carry an `nvim-colorscheme` key.
 `ModeChrome` hangs the header, find bar and cursor off the host.
 
 - `ScrollKeymap.key(for:pending:hasSelection:)` is a pure decode; counts and two-key
-  commands arrive as `Pending`. Every key is consumed, mapped or not.
+  commands arrive as `Pending`. Every key is consumed except unmapped ⌘ and ⌥ keys.
 - **The cursor is the chrome's.** `ScrollCursorView` paints the band, cell, selection and
   yank pulse from `TerminalCellMetrics`, read at draw time and converted from backing
   pixels. It returns nil from `hitTest`. `GhosttyConfigWriter` emits `window-padding-x/y`
@@ -330,10 +330,10 @@ Bundled themes carry an `nvim-colorscheme` key.
 - **Two keyboard phases.** While the field has focus the mode handler claims nothing.
   ⏎ hands focus back, starts scroll mode, and `SearchController.key(for:)` takes
   `n`/`N`/⏎/⇧⏎/Esc.
-- **The bar and a live prompt never coexist.** `WindowController.wireModes` ends search
-  whenever scroll mode ends. Esc leaves a scroll mode the reader started themselves
-  (`didStartScrollMode`), and the viewport is restored only if search moved it
-  (`didMoveViewport`).
+- **After ⏎ the bar never outlives scroll mode:** `WindowController.wireModes` ends search
+  whenever scroll mode ends. Esc ends scroll mode only if search started it
+  (`didStartScrollMode`), and restores the viewport only if search moved it
+  (`didMoveViewport`) and the reader does not own the mode.
 - **A match only in history is previewed once per needle** when none is on screen.
 - **The match cell is inferred.** `SEARCH_SELECTED` carries only an index. `matchCell`
   scans the viewport by direction (libghostty walks newest to oldest), checks whether
@@ -346,7 +346,7 @@ Bundled themes carry an `nvim-colorscheme` key.
 ## Config
 
 Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `workspaces`,
-`theme`, `themes/<name>`. A fresh install writes nothing until the first Settings save.
+`theme`, `themes/<name>`. A fresh install writes nothing until the user saves a change in the app.
 
 - **Nothing here can crash the app.** Missing, unreadable, typo'd and out-of-range values
   fall back per key, log once, and collect a `ConfigDiagnostic` shown on the owning
@@ -360,7 +360,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   `SessionFontSize.range`. It re-seeds inside `AppConfig.reload()` before the broadcast,
   only when `font-size` moved, and new surfaces are spawned with it.
 - **Live reload works because call sites re-read** `GeneralConfig.current` and
-  `Theme.current`. Built constraints and started shells are fixed up by
+  `Theme.current`. Built constraints and live surfaces are fixed up by
   `reapplyChromeLayout` and `applyAppearance`. A surface's shell is fixed for its life.
 - **`AppConfig.reload()` order:** general config, then theme, then post
   `.configDidChange`. `AppConfig.loadAtLaunch()` does the first load; the statics are not
@@ -382,7 +382,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
 `ChromeThemeDeriver` maps ANSI slots onto chrome roles (info ansi[4], warning ansi[3],
 destructive ansi[1], accent ansi[4], attention ansi[6], positive ansi[2], muted a fg/bg
 blend). Sixty-five themes ship; a user file shadows a bundled one. `accent-color` repoints
-`accent` alone. The usage rules are CLAUDE.md's Colors section.
+`accent`, and the search highlight when the theme sets no search colors. The usage rules are CLAUDE.md's Colors section.
 
 - **Ink levels** `faint` 0.35, `muted` 0.5, `subtle` 0.7, `normal` 1.0, lifted by
   `inkBoost`. Check `1 / inkBoost` before raising it: a level above it clamps to 1.
@@ -400,11 +400,10 @@ blend). Sixty-five themes ship; a user file shadows a bundled one. `accent-color
 callers hop off-main. The ⌘P picker lists them under each workspace, creates with ⌥⏎ and
 removes with ⌥⌫. Settings does not list them.
 
-- **Git is the whole registry.** `git worktree list --porcelain -z`: record one is the
-  main checkout, `prunable` records are dropped. Prune runs only when something is
-  prunable and nothing prunable sits on an unmounted volume.
+- **Git is the whole registry** (`worktree list --porcelain -z`): record one is the main
+  checkout, `prunable` records drop, and only a create rollback prunes.
 - **Rows group on `git rev-parse --git-common-dir`**, canonicalized, not
-  `GitRepo.repoRoot`. The first workspace in config order claims a common dir.
+  `GitRepo.repoRoot`. The first workspace in config order with worktrees claims a common dir.
 - **Location:** `~/.zenterm/worktrees/<repo-slug>-<digest>/<branch-slug>`, keyed on the
   main checkout. Branch slugs are lossy, so `destinationExists` names the holding branch.
 
@@ -422,14 +421,15 @@ removes with ⌥⌫. Settings does not list them.
 - **Rollback order:** `worktree remove --force`, directory, `prune`, then `branch -D`.
   Unfinished steps are named in `rollbackIncomplete`.
 - **Existing branch** (`create(existingBranch:in:)`): no branch claim and the rollback never
-  touches the branch. `holders(in:)` refuses a branch held by a linked worktree, or by a
-  dirty main checkout (unreadable counts as dirty). A clean main checkout moves to the
+  touches the branch. It refuses a branch held by a linked worktree or by a dirty
+  main checkout (unreadable counts as dirty, via `holders(in:)`), and a main checkout with
+  no local default to move to. A clean main checkout moves to the
   local default branch after confirming, after the folder claim, and moves back on
   failure.
 
 The create card replaces the picker and reopens it on cancel. `BranchField` is a
 `FieldBox` plus `ListPopover`; Esc is handled in its `doCommandBy`.
-`RepoPickerOverlay.CreateTarget` carries the branch base and the carry source separately.
+`RepoPickerOverlay.CreateTarget` carries the repo to branch in and the workspace to carry from.
 
 ### Carry
 
@@ -443,7 +443,7 @@ The workspace `carry` key names ignored files to copy into a new worktree.
 - **`copyfile(3)` with `COPYFILE_CLONE`**, which falls back to a byte copy across volumes
   and keeps symlinks as symlinks. An entry that is itself a link out of the workspace is
   refused.
-- **Refusals:** tracked entries, unreadable repos, entries resolving outside the workspace
+- **Refusals:** tracked files (a tracked folder copies only its ignored contents), unreadable repos, entries resolving outside the workspace
   (checked on resolved paths), and destinations that exist (`COPYFILE_CLONE` onto a
   directory returns 0 having copied nothing). Parents are created first; a partial copy is
   removed. Errors use `strerror_r`.
@@ -461,13 +461,13 @@ The workspace `carry` key names ignored files to copy into a new worktree.
   `ConfirmCardList` draw them; lists cap at 8 rows via `WorktreeRemovalRollup`. The read
   runs off-main and presents only if the same picker is still up.
 - **`WorktreeRemovalTracker` is app-wide and runs the delete**, because closing tabs can
-  close the window first. A removing row reads `Removing…`. Tabs close on
+  close the window first. A removing row reads `Removing <name>…`. Tabs close on
   `Change.removed`, never on confirm or `failed`, matched by `TabController.openedCWD`,
   and closing them leaves the card up. The finish re-lists.
 
 ### GitCommand
 
-`GitCommand.run` is the app's only `Process()` site, blocking by design. Both pipes drain
+`GitCommand` holds the app's only `Process()` sites, blocking by design. Both pipes drain
 concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. It gates on
 `xcode-select -p`, since `/usr/bin/git` without Command Line Tools opens a system prompt.
 
@@ -484,13 +484,13 @@ concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. It gates
 - **The `workspaces` file loads off-main** (`ConfigLoader.loadWorkspaces`). A card that
   renders it is built after the load; `pendingModal` tracks the press in between.
 - **Interactive git probes go through `GitRepoStatus`.** The branch is a file read
-  (`GitRepo.currentBranch`); churn is `git status --porcelain=v2 --branch
-  --no-optional-locks` on `churnQueue` (width four), with per-caller cancel tokens. No
+  (`GitRepo.currentBranch`); churn is `git --no-optional-locks status
+  --porcelain=v2 --branch` on `churnQueue` (width four), with per-caller cancel tokens. No
   probe fetches.
 - **A float open is cancellable during its repo-root probe** (`cancelPendingOpen()`).
 - **Palette rows are reused**, so they never carry an index; order is the stack's arranged
   subviews.
-- **Swift's sort is not stable**, so floats sort by `(order, lineIndex)`.
+- **Swift's sort is not stable**, so floats sort by `(order, parse position)`.
 
 ## What does not exist
 
