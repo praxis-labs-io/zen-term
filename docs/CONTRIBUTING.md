@@ -124,14 +124,15 @@ For a pull request:
   you are done, so CI runs once rather than on every push.
 - Tests belong in the same commit as the behavior they verify.
 - Keep implementation, cleanup, and unrelated refactors in separate commits.
+- Comments come in three kinds only: a one-line file purpose, a short contract doc on a
+  public name, and a one-line why on a declaration. None inside a function body.
 - No `TODO` / `FIXME` / `HACK` markers. Fix it, or say in the pull request what
   you left and why.
 
 ## Copy
 
-Any word a person outside the project reads is governed by
-[`docs/brand-voice.md`](brand-voice.md): in-app strings, the config reference, the
-README, release notes. Read it before writing copy, not after.
+Any word a person outside the project reads follows these rules: in-app strings, the
+config reference, the README, release notes.
 
 The three rules that get broken most: no em-dashes anywhere, no hype words, no
 adverbs. A confirmation states the consequence and never asks "Are you sure?".
@@ -139,17 +140,15 @@ adverbs. A confirmation states the consequence and never asks "Are you sure?".
 ## Docs describe today
 
 Everything in `docs/` describes what is true right now. If your change makes a doc
-wrong, the change fixes the doc. Docs do not describe cancelled features or how
-something used to work, except where a past failure explains why the code is
-shaped the way it is.
+wrong, the change fixes the doc. Docs hold only what is load-bearing now: no history,
+rejected designs, or measurements. The why of a change goes in the pull request.
 
 | You changed | Read |
 | --- | --- |
 | a config key or default | `docs/config/config` |
-| a keyboard shortcut | `docs/config/config`, `docs/onboarding.md` |
+| a keyboard shortcut | `docs/config/config` |
 | how a subsystem fits together | `docs/architecture.md` |
 | an AppKit trap you hit | `docs/swift-conventions.md`, add to it |
-| anything a user reads | `docs/brand-voice.md` first |
 | a dependency or bundled resource | `docs/third-party-notices.md` |
 
 ## Agents

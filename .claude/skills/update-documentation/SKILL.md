@@ -27,12 +27,10 @@ value that does nothing. Read the parser/default, not the ticket.
 | `docs/config/config` | every config key + default | this repo → website `reference/config` (`sync-docs`, drift-checked) |
 | `docs/config/workspaces` | workspace file fields | same path → website `reference/workspaces` |
 | `docs/config/themes/` | example theme file | this repo → website `reference/themes` (`sync-docs`) |
-| `docs/onboarding.md` | first-run / install narrative | published here. Website has its own install Guide |
 | `docs/architecture.md` | the one architecture doc | public, but for contributors rather than users |
-| `docs/gui-runbook.md` | how to hand over a manual check list | public, maintainer-facing |
-| `docs/releasing.md` | `bin/release`, versioning guards, notarization | public, maintainer-facing |
+| `docs/releasing.md` | `bin/release`, versioning guards, notarization, Sparkle | public, maintainer-facing |
 | `docs/third-party-notices.md` | re-probing the notices after a ghostty pin move | public, maintainer-facing |
-| `docs/sparkle-auto-updates.md` | how updates ship, and how to verify one | public, maintainer-facing |
+| `docs/swift-conventions.md` | AppKit and Swift traps | public, contributor-facing |
 | `docs/release-notes/vX.Y.Z.md` | per-version notes | curated at release. One file per version; never edit a shipped one |
 | `README.md` | this repo's readme | not mirrored; the website's own copy is separate and hand-kept |
 

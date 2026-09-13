@@ -131,7 +131,7 @@ Ghostty's terminfo is ghostty's own and rides its MIT entry; `bash-preexec.sh` s
 same tree and does not.
 
 No root is known-uncovered as of this writing. The last one was
-`Sources/ZenTerm/Themes`, closed in ZEN-422.
+`Sources/ZenTerm/Themes`.
 
 Two things learned attributing those, worth carrying into the next resource that lands:
 

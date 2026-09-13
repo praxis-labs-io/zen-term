@@ -42,7 +42,7 @@ appcast are public and permanent.
 
 Run the `update-documentation` skill across the release range.
 
-This matters more here than at merge time. `docs/onboarding.md`, `docs/config/*`,
+This matters more here than at merge time. `docs/config/*`
 and the shipped `THIRD-PARTY-NOTICES.md` are public the moment the tag lands, and
 the marketing site reads them from it, so a doc that is wrong at this moment becomes
 the public documentation for a shipped version. v0.2.1 was itself a case
@@ -53,8 +53,8 @@ Fix what the range made wrong before writing the notes.
 
 ## 3. Curate the notes
 
-Write `docs/release-notes/vX.Y.Z.md`. **Read `docs/brand-voice.md` first**, the
-"Release notes" surface: curated, not a git log, written for the person
+Write `docs/release-notes/vX.Y.Z.md`. **Follow the Copy rules in `CLAUDE.md`**:
+curated, not a git log, written for the person
 downloading rather than the person who wrote the patch.
 
 Structure, as the existing files establish it:
@@ -91,7 +91,7 @@ update", which stopped being true when auto-update shipped.
 Before showing Drew, run the mechanical checks. These are cheap and catch what
 rereading your own copy does not:
 
-    grep -c '—' docs/release-notes/vX.Y.Z.md    # must be 0, per brand-voice
+    grep -c '—' docs/release-notes/vX.Y.Z.md    # must be 0
     grep -nEi 'seamless|powerful|beautiful|just works|simply|easily|quickly' docs/release-notes/vX.Y.Z.md
     awk '/<!--[[:space:]]*card/{f=1;next} f&&/-->/{f=0} f' docs/release-notes/vX.Y.Z.md | grep -c '^-'  # card bullets, must be >0
 
@@ -163,8 +163,8 @@ pulled), open a PR, and merge. Render deploys from `main`.
 *published* state: raw.githubusercontent for the docs, and the GitHub Releases API for
 the notes.
 
-An unsynced site is a real failure. ZEN-423 repointed the script at
-`praxis-labs-io/zen-term` and pinned every fetch to the release tag; `docs/releasing.md`,
+An unsynced site is a real failure. The script reads
+`praxis-labs-io/zen-term` and pins every fetch to the release tag; `docs/releasing.md`,
 under "The website reads the repo", holds the three details that cost a wrong document
 if they move.
 

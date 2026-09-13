@@ -9,7 +9,7 @@
 #   --build     CFBundleVersion override (default: commit count). Testing-only: bin/release never
 #               passes it. Build a release variant BELOW the feed's latest version to make the real
 #               signed release show up as an available update, so the whole flow can be exercised
-#               locally. See docs/sparkle-auto-updates.md.
+#               locally. See docs/releasing.md.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

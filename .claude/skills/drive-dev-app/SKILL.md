@@ -7,7 +7,7 @@ description: Drive an in-flight `bin/run` dev build of ZenTerm to verify behavio
 
 Some behavior is only true in the running app: process teardown across a real pane,
 a chord crossing `KeyInterceptor`, anything spanning the chrome and a live shell.
-`docs/gui-runbook.md` covers what to **hand to Drew**. This covers what can be
+The `runbook` skill covers what to **hand to Drew**. This covers what can be
 **verified without him**, which is anything with a machine-checkable outcome (a
 process died, a port freed, a window closed).
 

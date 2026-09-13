@@ -8,5 +8,5 @@ contact_links:
     url: https://github.com/praxis-labs-io/zen-term/security/advisories/new
     about: Report privately instead. See SECURITY.md.
   - name: Question about using ZenTerm
-    url: https://github.com/praxis-labs-io/zen-term/blob/main/docs/onboarding.md
-    about: The onboarding doc covers install, shortcuts, and configuration.
+    url: https://zenterm.io/docs
+    about: The docs cover install, shortcuts, and configuration.

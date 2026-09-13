@@ -10,52 +10,18 @@ notary profile) → `bin/check` → assemble and Developer ID sign (`bin/package
 publish the DMG and the appcast to this repo's Releases. arm64-only. The version's
 source of truth is the git tag.
 
-## Retiring zen-term-releases
+## zen-term-releases stays archived
 
-Through v0.10.0 the downloads lived in a second repo, `zen-term/zen-term-releases`,
-because a private repo's Releases are not downloadable. v1.0.0 moved them here.
-
-`SUFeedURL` is frozen into each build's Info.plist, so a copy installed before 1.0.0
-polls the old appcast forever and no change to `bin/package-app` reaches it. At the
-1.0.0 cut that was **7 downloads of the 0.10.0 DMG** and around 18 appcast polls a
-day: three to five machines, all of them people we can message. So it was a one-time
-hand-off rather than anything `bin/release` carries.
-
-**That hand-off is done.** v1.0.0's `dist/appcast.xml` was uploaded to the old repo on
-2026-08-23, under its own name and with no DMG: the enclosure inside points at the
-asset here and `SUPublicEDKey` never changed, so the signature verifies. Every
-pre-1.0.0 install that checks for updates now lands on this repo's feed.
-
-**The repo is archived, and that is where it should stay.** Archiving makes it
-read-only, not invisible: its Releases still serve, so the frozen pre-1.0.0 feed URL
-still returns 200 and still hands back the v1.0.0 hand-off item. Verified against the
-live URL at the v1.2.0 cut. Anyone still on an old build crosses over on their next
-check with nothing to do by hand.
-
-**Deleting it is the step that strands people, and it cannot be undone.** Delete the
-repo and that frozen URL 404s forever. An install that has not checked since, a laptop
-that was shut for a month, has no path back except downloading the DMG by hand, and the
-failure is silent: no card, no toast, nothing that says why updates stopped. Archived
-costs nothing. There is no deadline here, and no reason to force one.
-
-If it is ever deleted, the signal to watch is the hand-off item's fetch count going
-flat, which means nothing is polling any more:
-
-```
-gh release view v1.0.0 --repo zen-term/zen-term-releases \
-    --json assets --jq '.assets[] | "\(.name) \(.downloadCount)"'
-```
-
-Do not publish anything else to the old repo. Creating a release there moves its
-`latest` and repoints every machine still on the old feed, and there is no error and
-no recovery short of a manual download when that goes wrong. Archiving already blocks
-this, which is another reason to leave it archived.
+Builds before v1.0.0 poll a frozen `SUFeedURL` in `zen-term/zen-term-releases`, which
+now serves a hand-off appcast pointing here. **Never delete that repo** (the old feed
+404s and those installs stop updating silently) and **never publish a release there**
+(it moves `latest` for every old install).
 
 ## The website reads the repo
 
 `zen-term-website`'s `scripts/sync-docs.mjs` pulls the config references and the
 shipped third-party notices from `praxis-labs-io/zen-term`, and the release notes from
-this repo's Releases API. ZEN-423 repointed it off `zen-term-releases`; run
+this repo's Releases API. Run
 `pnpm sync-docs` on a branch there after a release, then commit and merge.
 
 **It reads published state, so ordering is the whole trap.** Run it before
@@ -74,8 +40,7 @@ Three details in that script are load-bearing and cost a wrong document if chang
   about something else. raw.githubusercontent is case-sensitive, so pointing at the
   lowercase path publishes the wrong document as the app's license disclosure. APFS is
   case-insensitive, so check this with `git ls-files` rather than `ls`.
-- **The theme file is `themes/rose-pine-zen`**, renamed from `rose-pine-moon` in
-  ZEN-416.
+- **The theme file is `themes/rose-pine-zen`.**
 
 ## Versioning
 
@@ -119,8 +84,7 @@ breaking someone's config costs a major.
 ## Notes
 
 Notes live in `docs/release-notes/vX.Y.Z.md`, one file per version, curated from the
-git log into copy for the person downloading (`docs/brand-voice.md`, the "Release
-notes" surface). Write the file, then cut the release pointed at it:
+git log into copy for the person downloading (the copy rules in `CLAUDE.md`). Write the file, then cut the release pointed at it:
 
 ```
 bin/release --notes-file docs/release-notes/vX.Y.Z.md
@@ -173,4 +137,18 @@ shipped library set by eight libraries.
 
 ## Auto-updates
 
-Sparkle setup, the appcast, and how an update is verified: `docs/sparkle-auto-updates.md`.
+Sparkle fetches `appcast.xml` from `releases/latest/download/`, verifies its EdDSA
+signature and installs. `bin/release` uploads a single-item appcast beside each DMG, and
+its enclosure points at `releases/download/vX.Y.Z/`, never `latest`, because the
+signature covers one exact file. `ZenUpdateDriver` routes Sparkle's UI into
+`UpdateCardView`. A `swift run` build has no `SUFeedURL`, so updates are inert in dev.
+
+**The signing key exists. A new release machine imports it, never generates one.**
+Every shipped build freezes the public half as `SUPublicEDKey`, so a second key signs
+updates every install rejects. Move it over a trusted channel and shred the file:
+
+```
+.build/artifacts/sparkle/Sparkle/bin/generate_keys -x zenterm-eddsa.key   # old machine
+.build/artifacts/sparkle/Sparkle/bin/generate_keys -f zenterm-eddsa.key   # new machine
+.build/artifacts/sparkle/Sparkle/bin/generate_keys -p                     # must print SUPublicEDKey from bin/package-app
+```

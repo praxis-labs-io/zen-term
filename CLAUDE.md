@@ -8,24 +8,26 @@ libghostty (the sole backend, embedded as `GhosttyKit`). Global workflow rules i
 ## The docs
 
 **Everything in `docs/` describes what is true today.** If a change makes a doc
-wrong, the change fixes it. The app's current state is the benchmark: docs do not
-describe cancelled features, speculative work, or how something used to be, except
-where a past failure explains why the code is shaped the way it is.
+wrong, the change fixes it. Docs never describe cancelled features, speculative work,
+or how something used to be.
 
-| File | Holds |
-|---|---|
-| `docs/architecture.md` | what the app is and how it fits together |
-| `docs/swift-conventions.md` | AppKit and Swift traps past what a linter catches |
-| `docs/brand-voice.md` | every word a person outside the project reads |
-| `docs/gui-runbook.md` | how to hand over a manual check list |
-| `docs/releasing.md` | `bin/release`, versioning guards, notarization |
-| `docs/third-party-notices.md` | re-probing the notices after a ghostty pin move |
-| `docs/sparkle-auto-updates.md` | how updates ship, and how to verify one |
-| `docs/nvim-navigator-protocol.md` | the nav socket wire contract |
-| `docs/nvim-theme-protocol.md` | the published theme contract |
-| `docs/config/*` | the reference config files users open |
-| `docs/onboarding.md` | the install and first-run narrative |
-| `docs/CONTRIBUTING.md` | what an outside contributor reads: setup, the gate, the boundaries |
+| File | Holds | Budget |
+|---|---|---|
+| `docs/architecture.md` | how the app fits together, and the constraints that shape it | 500 lines |
+| `docs/swift-conventions.md` | AppKit and Swift traps past what a linter catches | 300 lines |
+| `docs/releasing.md` | `bin/release`, versioning guards, notarization, Sparkle | |
+| `docs/third-party-notices.md` | re-probing the notices after a ghostty pin move | |
+| `docs/nvim-navigator-protocol.md` | the nav socket wire contract | |
+| `docs/nvim-theme-protocol.md` | the published theme contract | |
+| `docs/config/*` | the reference config files users open | |
+| `docs/release-notes/*` | one curated file per version | |
+| `docs/CONTRIBUTING.md` | what an outside contributor reads: setup, the gate, the boundaries | |
+
+**Internal docs accumulate stale detail, so they hold only what is load-bearing now.**
+No history, rejected designs, measurements, ticket ids, UI copy reasoning, or anything
+already in `docs/config` or this file. The why of a change goes in the commit or pull
+request. A change that pushes a doc past its budget cuts something first
+(`wc -l docs/*.md`). User-facing guides live on the website, not in `docs/`.
 
 A spec or plan is **scratch**, not a doc. It lives in `docs/` while an epic is in
 flight, to work out implementation details and to write the tickets from, and it is
@@ -38,7 +40,10 @@ The epic's record is **Linear** and git, so `docs/` does not re-copy that histor
 Terminal-native, no Xcode required (`open Package.swift` only for a
 debugger/Instruments session).
 
-- `swift build` / `swift run ZenTerm` / `swift test`
+- `bin/build-ghosttykit` once per machine and per ghostty pin move. Its outputs are
+  gitignored, so a new git worktree needs `Frameworks/GhosttyKit.xcframework` and
+  `Sources/TerminalKit/Resources/ghostty-resources` symlinked from the main checkout.
+- `bin/run` (build and launch, filters linker noise) / `swift build` / `swift test`
 - `bin/check` is **the full local gate** (mirrors CI): build, test,
   `swift format lint --strict`, `swiftlint --strict`. `bin/check --fix`
   auto-applies formatter and linter fixes. Requires `swiftlint`.
@@ -70,11 +75,10 @@ an assertion.
 
 The failures behind each of these are in `docs/swift-conventions.md`.
 
-**A runbook is handed over in chat, never written to disk.** One per PR, as a
-checklist Drew can work down at the machine. `docs/gui-runbook.md` says how to
-build one and when it is required. A new chord always gets a line, because a
-keyboard path crosses `KeyInterceptor`'s event monitor *before* the responder
-chain and no view-level test covers that.
+**A runbook is handed over in chat, never written to disk** (the `runbook` and
+`interactive-runbook` skills). A new chord always gets a line, because a keyboard
+path crosses `KeyInterceptor`'s event monitor *before* the responder chain and no
+view-level test covers that.
 
 ## Architecture: the seam (load-bearing)
 
@@ -97,23 +101,18 @@ chain and no view-level test covers that.
   for the UI update.
 - Per global rules: no `TODO`/`FIXME`/`HACK` markers. Fix it now, or file a Linear
   ticket for genuinely out-of-scope work.
-- **Comments cap at 2 lines for `//` and 4 for `///`.** This repo writes far too
-  many: 21% of its Swift lines are comment, and 405 doc blocks run past 6 lines.
-  Nothing is exempt, file headers included. A block that wants more is the signal
-  the global rules already name, that the code needs the work instead of the
-  explanation. Long comments already in the tree come down as their files are
-  touched, not in a sweep.
+- **Comments follow the global comment rules exactly.** Only three kinds: a one-line
+  file purpose, contract docs on public names (3 lines max), and a one-line why on a
+  declaration. Nothing inside a function or method body. The tree was brought in line
+  in one pass; keep it there.
 - **Read `docs/swift-conventions.md` before touching window sizing, event routing,
   layers, config live-apply, or interaction tests.** Add to it when a new trap bites.
 
-## Copy: read `docs/brand-voice.md` first (load-bearing)
+## Copy (load-bearing)
 
-**Any word a person outside the project reads is governed by
-`docs/brand-voice.md`.** In-app copy (toasts, empty states, button labels, Settings
-captions, errors), `docs/config/*`, the README, release notes, and anything in
-`zen-term-website`. Read it before writing, not after.
-
-The rules that get violated most:
+**These rules govern any word a person outside the project reads:** in-app copy
+(toasts, empty states, button labels, Settings captions, errors), `docs/config/*`, the
+README, and release notes (curated for the person downloading, not a git log).
 
 - **No em-dashes. Anywhere**, including inside quotes. The test is a grep, not a
   judgment call. Titles take a colon.
@@ -124,13 +123,8 @@ The rules that get violated most:
   plainly in a spec line or the docs, never the headline. The agentic bent is a
   lean, never the frame. Never write "the terminal for the agentic era".
 - **One word per concept** (pane not split, workspace not project/repo, shortcut not
-  keybind). The vocabulary table is in the doc.
+  keybind, copy not carry).
 - Confirmations state the consequence and never ask "Are you sure?".
-
-`docs/brand-voice.md` is the source here and is mirrored into the website repo. Edit
-it here, then copy it out. It is public along with the rest of this repo, which is
-right: it is the standard a contributor's copy is reviewed against, so it has to be
-readable by the person writing that copy.
 
 ## Colors: always theme-driven
 
@@ -170,9 +164,9 @@ role and derive it in `ChromeThemeDeriver`. Never reach for a literal.
 
 ## Linear: ZenTerm workspace
 
-The Linear MCP (`linear-zenterm`) is connected to the **ZenTerm** workspace. Every
-issue lives on the single **ZenTerm** team (`121e9ab2-6c26-43c8-92f7-953be0396d82`,
-key `ZEN`). Status ladder: Backlog, Todo, In Progress, In Review, Done.
+The Linear MCP (`linear-zen-term`) is connected to the **ZenTerm** workspace. Every
+issue lives on the single **ZenTerm** team (key `ZEN`). Status ladder: Backlog, Todo,
+In Progress, In Review, Done.
 
 - **Address statuses and projects by name, never a UUID.** `save_issue` takes
   `state: "In Review"` and `project: "Polish & Bugs"` directly. Hardcoded ids are

@@ -39,7 +39,7 @@ which macOS does not ship:
 brew install --cask font-jetbrains-mono-nerd-font
 ```
 
-ZenTerm updates itself from then on. [`docs/onboarding.md`](docs/onboarding.md) walks
+ZenTerm updates itself from then on. The [docs](https://zenterm.io/docs) walk
 through the first hour.
 
 ## What it does
@@ -158,7 +158,7 @@ Tools alone.
 
 ## Documentation
 
-- [`docs/onboarding.md`](docs/onboarding.md) walks through the app for someone
+- [zenterm.io/docs](https://zenterm.io/docs) walks through the app for someone
   opening it for the first time.
 - [`docs/config/config`](docs/config/config) and
   [`docs/config/workspaces`](docs/config/workspaces) are the reference files.
