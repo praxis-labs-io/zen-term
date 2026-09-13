@@ -1,11 +1,6 @@
 import CoreGraphics
 import TerminalKit
 
-/// Parses a ghostty-format theme (`key = value` lines) into a `TerminalTheme`. Best-effort:
-/// any missing, malformed, or unknown key keeps the corresponding `fallback` value, so a
-/// partial or extra-laden file (even a full ghostty config) still yields a usable theme.
-/// Font is injected by the caller — ghostty *themes* carry no font. The inverse of
-/// `GhosttyConfigWriter.configText`.
 enum GhosttyThemeParser {
     static func parse(
         _ text: String, fontName: String, fontSize: CGFloat, fallback: TerminalTheme
@@ -15,8 +10,6 @@ enum GhosttyThemeParser {
         var cursor = fallback.cursor
         var selectionBackground = fallback.selectionBackground
         var ansi = fallback.ansi
-        // Left nil unless the file names them, so a theme that says nothing gets the derived value
-        // from `ChromeThemeDeriver.withHighlightColors` rather than the fallback's copy of it.
         var selectionForeground: TerminalColor?
         var searchForeground: TerminalColor?
         var searchBackground: TerminalColor?
@@ -47,7 +40,6 @@ enum GhosttyThemeParser {
             case "search-selected-background":
                 if let color = TerminalColor(hex: value) { searchSelectedBackground = color }
             case "palette":
-                // value form: "N=#rrggbb"
                 guard let separator = value.firstIndex(of: "="),
                     let index = Int(value[..<separator].trimmingCharacters(in: .whitespaces)),
                     ansi.indices.contains(index),

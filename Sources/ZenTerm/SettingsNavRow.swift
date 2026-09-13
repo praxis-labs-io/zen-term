@@ -1,15 +1,8 @@
 import AppKit
 
-/// One left-nav entry in the Settings card: a selectable, keyboard-focusable label. Focus reads
-/// as an accent background fill — the same highlight the command palette and repo picker rows use
-/// (`chrome.selectionFill`), not a border — over a subtler selected-section fill.
-/// Keyboard follows the shared 2D model (Up/Down move, Right/Tab enter the detail pane; Esc closes
-/// the card, owned by the card root — see `ModalEscape`).
 final class SettingsNavRow: NSView {
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
-    /// Shift-Tab retreats a row like Up, but wraps at the first row (Up clamps) — so the nav's
-    /// Shift-Tab is a loop, matching the detail pane's wrapping Tab loop instead of dead-ending.
     var onBacktab: (() -> Void)?
     var onEnterDetail: (() -> Void)?
 
@@ -44,8 +37,6 @@ final class SettingsNavRow: NSView {
         refreshFill()
     }
 
-    /// Re-apply the live chrome colors after a config change — no relaunch. `refreshFill()`
-    /// already reads `Theme.current` fresh, but doesn't touch `label` (set once in init).
     func reapplyTheme() {
         label.textColor = Theme.current.chrome.foreground.nsColor
         refreshFill()
@@ -53,7 +44,6 @@ final class SettingsNavRow: NSView {
 
     private func refreshFill() {
         if isFocusedStop {
-            // Share the palette/repo-picker row highlight so every focus background matches.
             layer?.backgroundColor = Theme.current.chrome.selectionFill.cgColor
         } else if isSelected {
             layer?.backgroundColor = Theme.current.chrome.fill(.rest).cgColor
@@ -70,10 +60,10 @@ final class SettingsNavRow: NSView {
 
     override func keyDown(with event: NSEvent) {
         switch KeyboardFocus.key(for: event) {
-        case .up: onArrowUp?()  // clamps at the first row
-        case .tab(shift: true): onBacktab?()  // Shift-Tab retreats a row and wraps at the first
+        case .up: onArrowUp?()
+        case .tab(shift: true): onBacktab?()
         case .down: onArrowDown?()
-        case .right, .tab(shift: false): onEnterDetail?()  // Right or Tab enters the detail pane
+        case .right, .tab(shift: false): onEnterDetail?()
         default: super.keyDown(with: event)
         }
     }

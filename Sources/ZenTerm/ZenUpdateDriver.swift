@@ -2,53 +2,30 @@ import AppKit
 import AppLog
 import Sparkle
 
-/// Drives Sparkle's user-facing moments into the one `UpdateCardView`. Sparkle keeps the
-/// appcast fetch, EdDSA check, download and install; we own every pixel. Sparkle invokes these on the
-/// main thread, so each one maps the callback to a card state and routes it to `UpdateController`.
-///
-/// There is no `SPUStandardUserDriver` fallback: `SUEnableAutomaticChecks = true` in the packaged
-/// plist suppresses the stock permission prompt, and the card only ever surfaces the success path
-/// (an available update, its download, and the relaunch). A failed or empty automatic check stays
-/// silent — nothing was asked, so nothing is answered.
+// No `SPUStandardUserDriver` fallback: `SUEnableAutomaticChecks` in the plist suppresses Sparkle's permission prompt.
 final class ZenUpdateDriver: NSObject, SPUUserDriver {
-    /// Weak + set after construction: the `UpdateController` builds the `SPUUpdater` from this
-    /// driver, so the driver can't hold it at init without a retain cycle or a chicken-and-egg.
+    // Weak and set late: `UpdateController` builds the `SPUUpdater` from this driver.
     weak var controller: UpdateController?
 
-    /// Download accounting for the progress bar. Reset when a download starts; `expectedLength` is
-    /// nil until Sparkle reports it, which the bar renders as an indeterminate sweep.
     private var expectedLength: UInt64?
     private var receivedLength: UInt64 = 0
 
-    /// The version being installed, captured from the appcast item at `showUpdateFound`. The later
-    /// `showReady` callback carries no appcast item, so without this the ready card would name
-    /// `AppVersion.current` — the old, still-running version — instead of the update's target.
+    // Captured at `showUpdateFound` because `showReady` carries no appcast item.
     private var pendingVersion: String?
 
-    /// True while a user-initiated check ("Check for Updates") is in flight. A manual check
-    /// reports its result even when nothing's found (an up-to-date / failure toast); a scheduled one
-    /// stays silent. Set at `showUserInitiatedUpdateCheck`, cleared once the outcome is delivered.
     private var userInitiated = false
-
-    // MARK: - Permission / check (no card)
 
     func show(
         _ request: SPUUpdatePermissionRequest,
         reply: @escaping @Sendable (SUUpdatePermissionResponse) -> Void
     ) {
-        // Automatic checks are enabled in the plist, so this normally isn't reached; grant them
-        // without a prompt if it ever is. No system profile — we send nothing about the machine.
         reply(.init(automaticUpdateChecks: true, sendSystemProfile: false))
     }
 
     func showUserInitiatedUpdateCheck(cancellation: @escaping () -> Void) {
-        // The "Check for Updates" command started this check. Remember it so the outcome
-        // reports back — an up-to-date or failure toast a scheduled check would swallow silently.
         userInitiated = true
         Log.info("manual update check started", category: .update)
     }
-
-    // MARK: - Update found → the "available" card
 
     func showUpdateFound(
         with appcastItem: SUAppcastItem,
@@ -56,7 +33,7 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         reply: @escaping @Sendable (SPUUserUpdateChoice) -> Void
     ) {
         pendingVersion = appcastItem.displayVersionString
-        userInitiated = false  // the card carries the result now; no separate toast
+        userInitiated = false
         Log.info(
             "update found: \(appcastItem.displayVersionString) (stage \(Self.label(state.stage)))",
             category: .update)
@@ -76,18 +53,12 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     }
 
     func showUpdateReleaseNotes(with downloadData: SPUDownloadData) {
-        // The notes come straight off the appcast item's <description>, so the downloaded release-
-        // notes payload is unused.
     }
 
     func showUpdateReleaseNotesFailedToDownloadWithError(_ error: any Error) {
-        // See showUpdateReleaseNotes — nothing depends on the downloaded notes.
     }
 
-    // MARK: - Nothing to show (stay silent)
-
     func showUpdateNotFoundWithError(_ error: any Error, acknowledgement: @escaping () -> Void) {
-        // Unconditional: a scheduled check that finds nothing left no trace at all.
         Log.info("no update available: \(error.localizedDescription)", category: .update)
         controller?.dismiss()
         if userInitiated {
@@ -101,8 +72,6 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
     }
 
     func showUpdaterError(_ error: any Error, acknowledgement: @escaping () -> Void) {
-        // Unconditional: before this, a failure after Install produced no card, no toast,
-        // and no log line — the reason the report couldn't be traced in a diagnostics bundle.
         Log.warning("update failed: \(error.localizedDescription)", category: .update)
         controller?.dismiss()
         if userInitiated {
@@ -115,8 +84,6 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         acknowledgement()
     }
 
-    // MARK: - Download / extract → the progress card
-
     func showDownloadInitiated(cancellation: @escaping () -> Void) {
         expectedLength = nil
         receivedLength = 0
@@ -126,7 +93,6 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
 
     func showDownloadDidReceiveExpectedContentLength(_ expectedContentLength: UInt64) {
         expectedLength = expectedContentLength
-        // Logged once here, not per chunk: showDownloadDidReceiveData fires hundreds of times.
         Log.info("update download expected length: \(expectedContentLength) bytes", category: .update)
         controller?.present(state: .downloading(fraction: downloadFraction), actions: .init())
     }
@@ -141,15 +107,13 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         controller?.present(state: .downloading(fraction: nil), actions: .init())
     }
 
+    // Sparkle fires this continuously through extraction, so only start and finish are logged.
     func showExtractionReceivedProgress(_ progress: Double) {
-        // Start and finish only — Sparkle fires this continuously through extraction.
         if progress <= 0 || progress >= 1 {
             Log.info("update extraction progress: \(Int(progress * 100))%", category: .update)
         }
         controller?.present(state: .downloading(fraction: progress), actions: .init())
     }
-
-    // MARK: - Ready → the relaunch card
 
     func showReady(toInstallAndRelaunch reply: @escaping @Sendable (SPUUserUpdateChoice) -> Void) {
         Log.info("update ready to install: \(pendingVersion ?? AppVersion.current)", category: .update)
@@ -165,7 +129,6 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         withApplicationTerminated applicationTerminated: Bool,
         retryTerminatingApplication: @escaping () -> Void
     ) {
-        // The app is quitting to install; the card goes with it. Nothing to morph.
         Log.info("update installing (app terminated: \(applicationTerminated))", category: .update)
     }
 
@@ -182,26 +145,18 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         controller?.dismiss()
     }
 
-    // MARK: - Helpers
-
-    /// The download fraction, or nil while the total is unknown (an indeterminate sweep).
     private var downloadFraction: Double? {
         guard let expectedLength, expectedLength > 0 else { return nil }
         return Double(receivedLength) / Double(expectedLength)
     }
 
-    /// Wrap a Sparkle reply so it fires at most once. Every button on the card closes over the same
-    /// one-shot reply and all three stay live until the card morphs, so a double-tap (or Install then
-    /// Skip) would otherwise call reply twice and break Sparkle's exactly-once contract. Sparkle
-    /// invokes the driver on the main thread and taps land there too, so the plain flag is safe.
+    // Every card button shares one Sparkle reply, which must fire exactly once.
     static func fireOnce(
         _ reply: @escaping @Sendable (SPUUserUpdateChoice) -> Void
     ) -> (SPUUserUpdateChoice) -> Void {
         var fired = false
         return { choice in
             guard !fired else {
-                // A swallowed repeat. Paired with the tap log, this separates "clicked five
-                // times, forwarded once" (working as designed) from "clicked five, forwarded zero".
                 Log.info("update choice ignored, already answered: \(Self.label(choice))", category: .update)
                 return
             }
@@ -211,7 +166,6 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         }
     }
 
-    /// A non-sensitive label for a Sparkle choice, for the diagnostic log.
     private static func label(_ choice: SPUUserUpdateChoice) -> String {
         switch choice {
         case .install: return "install"
@@ -221,8 +175,6 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         }
     }
 
-    /// A non-sensitive label for the update's stage at `showUpdateFound` — it changes what `.install`
-    /// does inside Sparkle (resume a downloaded update vs. start one), so the log names it.
     private static func label(_ stage: SPUUserUpdateStage) -> String {
         switch stage {
         case .notDownloaded: return "not-downloaded"
@@ -232,10 +184,6 @@ final class ZenUpdateDriver: NSObject, SPUUserDriver {
         }
     }
 
-    /// Pull the bulleted lines out of the appcast `<description>`. The release pipeline feeds this a
-    /// short list (the notes file's `<!-- card ... -->` block), so this keeps only lines marked
-    /// "- " / "* " (stripped) and ignores any stray prose — "What's new" links the full notes for
-    /// anyone who wants them. Capped so a long list can't grow the card without bound.
     static func bullets(from description: String?) -> [String] {
         guard let description else { return [] }
         return

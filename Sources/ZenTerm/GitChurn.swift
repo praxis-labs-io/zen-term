@@ -1,8 +1,5 @@
 import Foundation
 
-/// What a repo has in flight: how far its branch has drifted from the remote, and what its working
-/// tree is holding. Parsed from one `git status --porcelain=v2 --branch`, in the vocabulary a
-/// starship prompt already uses, so a row reads the way the shell below it does.
 struct GitChurn: Equatable {
     var ahead = 0
     var behind = 0
@@ -15,9 +12,7 @@ struct GitChurn: Equatable {
 
     var isEmpty: Bool { self == GitChurn() }
 
-    /// Parse `git status --porcelain=v2 --branch` output. Format v2 rather than v1: it reports
-    /// ahead/behind on a `# branch.ab` header, so the remote drift and the working tree come back
-    /// from one call instead of two.
+    /// Porcelain v2 because its `# branch.ab` header carries ahead/behind, so one call covers remote and worktree.
     static func parse(_ output: String) -> GitChurn {
         var churn = GitChurn()
         for line in output.split(whereSeparator: \.isNewline) {

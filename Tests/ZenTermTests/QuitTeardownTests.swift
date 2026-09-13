@@ -4,8 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Quitting must terminate every surface. `windowWillClose` does not fire on app termination,
-/// so the window's teardown has to be driven explicitly or every shell is orphaned.
 final class QuitTeardownTests: WindowTestCase {
     private var spawned: [RecordingSurface] = []
     private var controller: WindowController?
@@ -45,8 +43,6 @@ final class QuitTeardownTests: WindowTestCase {
         XCTAssertTrue(spawned.allSatisfy { $0.terminated }, "quit left surfaces running")
     }
 
-    /// A drawer's shell is not on the pane canvas, and it is the case in the bug report: a dev
-    /// server running in a drawer when the window went away.
     func test_tearDownForQuitTerminatesDrawerSurfaces() {
         let c = makeController()
         c.handle(.toggleBottomDrawer)
@@ -57,10 +53,6 @@ final class QuitTeardownTests: WindowTestCase {
         XCTAssertTrue(spawned.allSatisfy { $0.terminated }, "quit left the drawer's shell running")
     }
 
-    /// The half that actually changed. `tearDownForQuit` is a thin alias for the teardown the
-    /// close button already drove, so the two tests above pass with or without this fix: what
-    /// was broken is that NOTHING called it on the quit path. This drives that path, and waits
-    /// on the sweep the way the real quit does.
     func test_quitTeardownTerminatesEverySurfaceThenCompletesOnce() {
         let delegate = AppDelegate()
         delegate.addWindowForTesting()
@@ -77,8 +69,6 @@ final class QuitTeardownTests: WindowTestCase {
 
         XCTAssertTrue(spawned.allSatisfy { $0.terminated }, "quit left surfaces running")
 
-        // The reply must land exactly once: `.terminateLater` treats two as a crash and none as
-        // a quit that hangs forever. Wait past the cap so a second fire would have arrived.
         let settled = expectation(description: "past the drain cap")
         DispatchQueue.main.asyncAfter(deadline: .now() + ShellSessionReaper.quitSweepBudget + 0.3) {
             settled.fulfill()
@@ -87,22 +77,17 @@ final class QuitTeardownTests: WindowTestCase {
         XCTAssertEqual(completions, 1, "quit must complete exactly once")
     }
 
-    /// Closing the last window terminates the app without a confirm, and `windows` is already
-    /// empty by then. That path used to answer `.terminateNow` and exit while the sweep from
-    /// `windowWillClose` was still waiting for the leader to go, so nothing was ever signalled.
     func test_terminatingWithNoWindowsStillWaitsForTheSweep() {
         let delegate = AppDelegate()
         XCTAssertEqual(
             delegate.applicationShouldTerminate(NSApp), .terminateLater,
             "quit with no windows must wait for the in-flight sweep, not exit immediately")
-        // Nothing replied to a request AppKit never made, so let the pending reply resolve.
         NSApp.reply(toApplicationShouldTerminate: false)
     }
 
     func test_tearDownForQuitIsIdempotentWithTheCloseButton() {
         let c = makeController()
         c.tearDownForQuit()
-        // A native close landing after the quit teardown must not trap or double-fire.
         c.windowWillClose(Notification(name: NSWindow.willCloseNotification))
 
         XCTAssertTrue(spawned.allSatisfy { $0.terminated })

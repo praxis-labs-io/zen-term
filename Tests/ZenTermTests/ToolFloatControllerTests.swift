@@ -4,13 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Lifecycle tests for the tool-float engine (lifted to window scope): drive
-/// `toggle` on a window-mounted `ToolFloatController` and assert what the `persist:` mode does to
-/// the underlying surface. Asserts through the real spawn/terminate path
-/// (`RecordingSurface.startCount` / `.terminated`) rather than the registry, because a state-only
-/// test would pass while the surface was actually being killed. The window-scope claims the engine
-/// exists for — one instance across two tabs, a card that rides a tab switch — need real tabs and
-/// live in `WindowControllerToolFloatTests`.
 final class ToolFloatControllerTests: WindowTestCase {
     private var windows: [NSWindow] = []
     private var floatControllers: [ToolFloatController] = []
@@ -31,8 +24,6 @@ final class ToolFloatControllerTests: WindowTestCase {
         try super.tearDownWithError()
     }
 
-    // MARK: harness
-
     private func makeDir(_ name: String, git: Bool) throws -> URL {
         let dir = root.appendingPathComponent(name, isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -43,20 +34,6 @@ final class ToolFloatControllerTests: WindowTestCase {
         return dir
     }
 
-    /// A window-mounted float engine over `cwd`, recording every surface it spawns.
-    ///
-    /// Hosts cards in a real view tree (the re-host and snap-away assertions walk
-    /// `surface.view.superview`, and `animateIn` lays out against a live window), and reaches the
-    /// "focused pane's cwd" through the same closure seam `WindowController` wires up — so
-    /// `setCWD` here stands in for a pane's shell `cd`-ing, which is exactly what the engine sees.
-    ///
-    /// The repo-root probe is injected synchronously: in the app it runs off the main thread,
-    /// so a toggle that needs one takes a hop, and every assertion here would have
-    /// to become an expectation. `onProbe` fires on each probe, for the tests that care whether one
-    /// happened at all. What the async delivery itself does to the open path is a runbook step.
-    /// Pass `resolveRepoRoot` to hold the probe instead, which is the window the real walk leaves
-    /// open while it hits the filesystem: the tests that assert an open can be called off deliver
-    /// the answer by hand, after the cancelling event.
     private func makeFloats(
         cwd: URL, onProbe: (() -> Void)? = nil,
         resolveRepoRoot: ((URL?, @escaping (URL?) -> Void) -> Void)? = nil
@@ -109,13 +86,9 @@ final class ToolFloatControllerTests: WindowTestCase {
             persist: persist, toggle: Chord(command: true, shift: true, key: "j"))
     }
 
-    /// The surfaces for one float, filtered by the command its spec launches, so a test driving
-    /// two floats can tell them apart.
     private func floatSurfaces(_ spawned: [RecordingSurface], command: String) -> [RecordingSurface] {
         spawned.filter { $0.lastConfig?.args == ["-l", "-i", "-c", command] }
     }
-
-    // MARK: tests
 
     func test_ephemeralFloat_terminatesOnDismiss() throws {
         let dir = try makeDir("plain", git: false)
@@ -161,7 +134,7 @@ final class ToolFloatControllerTests: WindowTestCase {
         let first = floatSurfaces(spawned(), command: "lazygit")[0]
         floats.close()
 
-        setCWD(repoB)  // the focused pane cd'd to another repo
+        setCWD(repoB)
         floats.toggle(float)
 
         XCTAssertTrue(first.terminated, "the stale instance must be discarded")
@@ -179,7 +152,7 @@ final class ToolFloatControllerTests: WindowTestCase {
 
         floats.toggle(float)
         floats.close()
-        setCWD(sub)  // same repo, different subdir
+        setCWD(sub)
         floats.toggle(float)
 
         XCTAssertEqual(
@@ -224,7 +197,7 @@ final class ToolFloatControllerTests: WindowTestCase {
 
         floats.toggle(float)
         let first = floatSurfaces(spawned(), command: "lazygit")[0]
-        floats.surfaceDidExit(first, code: 0)  // `q` inside the tool
+        floats.surfaceDidExit(first, code: 0)
 
         floats.toggle(float)
         XCTAssertEqual(
@@ -240,21 +213,14 @@ final class ToolFloatControllerTests: WindowTestCase {
         floats.toggle(float)
         let first = floatSurfaces(spawned(), command: "lazygit")[0]
         floats.close()
-        floats.surfaceDidExit(first, code: 0)  // the tool died while hidden
+        floats.surfaceDidExit(first, code: 0)
 
         floats.toggle(float)
         XCTAssertEqual(floatSurfaces(spawned(), command: "lazygit").count, 2)
     }
 
-    // MARK: overlay slot / view re-host (regression coverage for the review-fix pass)
-
-    /// Reopening a persistent float while its old card is still springing out must re-host the
-    /// shared `surface.view` in the NEW card and drop the old one from the view tree — not leave
-    /// both fighting over the same view's constraints. Walks the real view hierarchy
-    /// (`surface.view.superview`) rather than the private `dismissingFloatOverlay`/`persistentFloats`
-    /// state, so a broken re-host would fail this test even if the bookkeeping looked fine.
     func test_persistentFloat_reopenBeforeDismissAnimationCompletes_rehostsView_dropsOldCard() throws {
-        Motion.isReduceMotionEnabled = { false }  // force the async path so the old card is still parked
+        Motion.isReduceMotionEnabled = { false }
         let dir = try makeDir("plain", git: false)
         let (floats, spawned, setCWD) = makeFloats(cwd: dir)
         let float = spec("btop", persist: .directory)
@@ -264,8 +230,8 @@ final class ToolFloatControllerTests: WindowTestCase {
         let oldOverlay = surface.view.superview?.superview
         XCTAssertNotNil(oldOverlay, "the surface's view must be hosted inside a float card")
 
-        floats.close()  // a persistent dismiss parks the still-springing-out card
-        floats.toggle(float)  // reopen before its exit animation finishes
+        floats.close()
+        floats.toggle(float)
 
         let newOverlay = surface.view.superview?.superview
         XCTAssertNotNil(newOverlay?.superview, "the view must be re-hosted in a card that's actually on screen")
@@ -273,12 +239,6 @@ final class ToolFloatControllerTests: WindowTestCase {
         XCTAssertNil(oldOverlay?.superview, "the old dismissing card must be detached, not left dangling on screen")
     }
 
-    /// Reduce Motion completes `Motion.springScaleFade`'s completion synchronously (see
-    /// `MotionTests`), so `closeToolFloat` must park the outgoing overlay in `dismissingFloatOverlay`
-    /// BEFORE calling `animateOut` — parking it after would assign a strong reference the
-    /// already-run completion never gets a chance to clear, stranding the card. Proven with a weak
-    /// reference (no private-state peeking): if the card is truly dropped, every strong ref to it
-    /// is gone the instant `closeToolFloat` returns and ARC deallocates it synchronously.
     func test_persistentFloat_dismissUnderReduceMotion_doesNotStrandTheOverlay() throws {
         Motion.isReduceMotionEnabled = { true }
         let dir = try makeDir("plain", git: false)
@@ -286,16 +246,13 @@ final class ToolFloatControllerTests: WindowTestCase {
         let float = spec("btop", persist: .directory)
 
         weak var weakOverlay: SurfaceFloatOverlay?
-        // AppKit views are autoreleased, so a weak ref doesn't clear the instant the last strong ref
-        // drops — it clears when the pool drains. Do the open/close inside the pool so the assertion
-        // measures stranding rather than autorelease timing.
         autoreleasepool {
             floats.toggle(float)
             let surface = floatSurfaces(spawned(), command: "btop")[0]
             weakOverlay = surface.view.superview?.superview as? SurfaceFloatOverlay
             XCTAssertNotNil(weakOverlay, "the surface's view must be hosted inside a float card")
 
-            floats.close()  // Reduce Motion runs `animateOut`'s completion synchronously
+            floats.close()
         }
 
         XCTAssertNil(
@@ -303,7 +260,7 @@ final class ToolFloatControllerTests: WindowTestCase {
             "a synchronously-completed dismiss must drop every strong ref to the card — a stray "
                 + "`dismissingFloatOverlay` assignment after the fact would strand it")
 
-        floats.toggle(float)  // reopening after must still reuse, not respawn
+        floats.toggle(float)
         XCTAssertEqual(floatSurfaces(spawned(), command: "btop").count, 1)
     }
 
@@ -319,10 +276,6 @@ final class ToolFloatControllerTests: WindowTestCase {
             "a pinned dir: must win over the focused pane's cwd")
     }
 
-    /// A pinned `dir:` gives a `persist:dir` float a FIXED identity, so the re-anchor comparison
-    /// can never fire — the intended way to keep a tool alive at one place. Proven at the engine
-    /// level by doing exactly what forces a respawn for an unpinned `persist:dir` float — see
-    /// `test_dirFloat_respawnsWhenAnchorChanges` — and asserting it does NOT happen here.
     func test_dirField_pinnedAnchor_neverReanchorsOnCWDChange() throws {
         let paneDir = try makeDir("pane", git: false)
         let pinned = try makeDir("notes", git: false)
@@ -334,7 +287,7 @@ final class ToolFloatControllerTests: WindowTestCase {
         let first = floatSurfaces(spawned(), command: "notes")[0]
         floats.close()
 
-        setCWD(elsewhere)  // would force a respawn without a pinned dir:
+        setCWD(elsewhere)
         floats.toggle(float)
 
         XCTAssertFalse(first.terminated, "a pinned dir: has a fixed identity — persist:dir can never re-anchor")
@@ -344,11 +297,6 @@ final class ToolFloatControllerTests: WindowTestCase {
         XCTAssertEqual(all[0].lastConfig?.workingDirectory, pinned)
     }
 
-    // MARK: git guard checks where the float runs, not the focused pane
-
-    /// The guard in `toggleToolFloat` must check `floatCWD(spec)` — where the tool actually runs —
-    /// not the focused pane's raw cwd. A `dir:`-pinned float into a repo must open even though the
-    /// pane itself sits outside any repo.
     func test_gitGuard_opensWhenPinnedDirIsARepo_evenIfPaneCWDIsNot() throws {
         let paneDir = try makeDir("plain", git: false)
         let repoDir = try makeDir("repo", git: true)
@@ -362,9 +310,6 @@ final class ToolFloatControllerTests: WindowTestCase {
             "the git guard must check floatCWD (the pinned dir:), not the focused pane's raw cwd")
     }
 
-    /// The inverse: a float pinned to a non-repo directory must be BLOCKED even though the focused
-    /// pane itself happens to sit inside a real repo — the guard exists to protect where the tool
-    /// runs, not where the pane is.
     func test_gitGuard_blocksWhenPinnedDirIsNotARepo_evenIfPaneCWDIs() throws {
         let repoDir = try makeDir("repo", git: true)
         let plainDir = try makeDir("plain", git: false)
@@ -378,9 +323,6 @@ final class ToolFloatControllerTests: WindowTestCase {
             "a float pinned to a non-repo dir: must be blocked even though the pane sits in a real repo")
     }
 
-    /// The repo root feeds exactly two things — the `git:` guard and a `.directory` float's anchor —
-    /// so a float wanting neither must open without walking the filesystem at all. The walk
-    /// is a run of stats per ancestor, unbounded on a network mount.
     func test_plainEphemeralFloat_opensWithoutProbingTheFilesystem() throws {
         let dir = try makeDir("plain", git: false)
         var probes = 0
@@ -403,10 +345,6 @@ final class ToolFloatControllerTests: WindowTestCase {
         XCTAssertEqual(probes, 1, "one walk per press, shared by the guard and the anchor")
     }
 
-    // MARK: calling off an open that is still resolving its repo root
-
-    /// A held probe plus the float engine driving it. `deliver` runs the walk's answer back, so a
-    /// test can put the cancelling event between the press and the landing.
     private func makeHeldProbeFloats(cwd: URL) -> (
         floats: ToolFloatController, spawned: () -> [RecordingSurface], setCWD: (URL) -> Void,
         deliver: () -> Void
@@ -424,16 +362,13 @@ final class ToolFloatControllerTests: WindowTestCase {
         )
     }
 
-    /// The open crosses a queue hop now, so a close landing inside that window has to call it off.
-    /// Otherwise the card arrives after the user has already moved on — `closeFloatForTabChange`
-    /// no-ops on a float that isn't shown yet, and the float lands on the tab they switched to.
     func test_closeDuringTheProbe_callsTheOpenOff() throws {
         let repo = try makeDir("repo", git: true)
         let (floats, spawned, _, deliver) = makeHeldProbeFloats(cwd: repo)
 
         floats.toggle(spec("lazygit", persist: .directory))
-        floats.close()  // what a tab change does
-        deliver()  // the walk finishes afterwards
+        floats.close()
+        deliver()
 
         XCTAssertTrue(
             floatSurfaces(spawned(), command: "lazygit").isEmpty,
@@ -441,8 +376,6 @@ final class ToolFloatControllerTests: WindowTestCase {
         XCTAssertFalse(floats.isOpen)
     }
 
-    /// Same window, at teardown: a probe landing after `shutdown()` would spawn a fresh shell into
-    /// the registry of a window that is gone, leaving a process nothing can reach.
     func test_shutdownDuringTheProbe_callsTheOpenOff() throws {
         let repo = try makeDir("repo", git: true)
         let (floats, spawned, _, deliver) = makeHeldProbeFloats(cwd: repo)
@@ -456,7 +389,6 @@ final class ToolFloatControllerTests: WindowTestCase {
             "the window is gone; nothing may spawn into it")
     }
 
-    /// The window calls this when a modal card goes up, so the two can't end up stacked.
     func test_cancelPendingOpen_stopsTheCardFromLanding() throws {
         let repo = try makeDir("repo", git: true)
         let (floats, spawned, _, deliver) = makeHeldProbeFloats(cwd: repo)
@@ -469,15 +401,13 @@ final class ToolFloatControllerTests: WindowTestCase {
         XCTAssertFalse(floats.isOpen)
     }
 
-    /// Two presses of a toggle must not leave it open. The second press can't see a card yet, so it
-    /// has to recognise the float already on its way in and call it off.
     func test_secondPressDuringTheProbe_cancelsInsteadOfOpening() throws {
         let repo = try makeDir("repo", git: true)
         let (floats, spawned, _, deliver) = makeHeldProbeFloats(cwd: repo)
         let float = spec("lazygit", persist: .directory)
 
         floats.toggle(float)
-        floats.toggle(float)  // impatient second press, nothing on screen yet
+        floats.toggle(float)
         deliver()
 
         XCTAssertTrue(
@@ -491,7 +421,7 @@ final class ToolFloatControllerTests: WindowTestCase {
         let (floats, spawned, _, deliver) = makeHeldProbeFloats(cwd: repo)
 
         floats.toggle(spec("lazygit", persist: .directory))
-        floats.prune(against: [])  // the float was removed from the config
+        floats.prune(against: [])
         deliver()
 
         XCTAssertTrue(
@@ -499,16 +429,13 @@ final class ToolFloatControllerTests: WindowTestCase {
             "a float with no config entry left has no card to open")
     }
 
-    /// The anchor a persistent float is registered under and the directory its shell actually runs
-    /// in have to come from one reading. They were the same call before the walk went async; now the
-    /// cwd is captured at the press, and `spawn` must use that rather than re-reading after the hop.
     func test_directoryFloat_spawnsAtThePressTimeCWD_whenThePaneMovesDuringTheProbe() throws {
         let repoA = try makeDir("a", git: true)
         let repoB = try makeDir("b", git: true)
         let (floats, spawned, setCWD, deliver) = makeHeldProbeFloats(cwd: repoA)
 
         floats.toggle(spec("lazygit", persist: .directory))
-        setCWD(repoB)  // the focused pane cd'd while the walk was out
+        setCWD(repoB)
         deliver()
 
         let opened = floatSurfaces(spawned(), command: "lazygit")
@@ -517,8 +444,6 @@ final class ToolFloatControllerTests: WindowTestCase {
             opened[0].lastConfig?.workingDirectory, repoA,
             "the shell must start where the anchor was resolved, not wherever the pane ended up")
     }
-
-    // MARK: config-reload reconciliation (review findings on the shipped registry)
 
     func test_pruneToolFloats_terminatesADeletedHiddenFloat_andKeepsSurvivors() throws {
         let dir = try makeDir("plain", git: false)
@@ -533,7 +458,7 @@ final class ToolFloatControllerTests: WindowTestCase {
         let doomedSurface = floatSurfaces(spawned(), command: "dev")[0]
         let keptSurface = floatSurfaces(spawned(), command: "mon")[0]
 
-        floats.prune(against: [kept])  // "dev" was deleted in Settings
+        floats.prune(against: [kept])
 
         XCTAssertTrue(
             doomedSurface.terminated,
@@ -563,7 +488,7 @@ final class ToolFloatControllerTests: WindowTestCase {
         let old = floatSurfaces(spawned(), command: "btop")[0]
         floats.close()
 
-        floats.toggle(spec("mon", persist: .directory, command: "htop"))  // Settings edit
+        floats.toggle(spec("mon", persist: .directory, command: "htop"))
 
         XCTAssertTrue(old.terminated, "the instance still running the OLD command must be discarded")
         XCTAssertEqual(
@@ -583,8 +508,8 @@ final class ToolFloatControllerTests: WindowTestCase {
             return XCTFail("expected X's view hosted inside a float card")
         }
 
-        floats.toggle(ySpec)  // parks X's card, opens Y
-        floats.toggle(xSpec)  // parks Y (displacing X's parked card), reopens X
+        floats.toggle(ySpec)
+        floats.toggle(xSpec)
 
         XCTAssertNil(
             xFirstCard.superview,
@@ -604,7 +529,7 @@ final class ToolFloatControllerTests: WindowTestCase {
         floats.close()
 
         XCTAssertFalse(floats.hasBusy)
-        surface.isBusy = true  // e.g. a build watcher doing live work while dismissed
+        surface.isBusy = true
         XCTAssertTrue(
             floats.hasBusy,
             "the ⌘W confirm reads this — a hidden busy float is invisible, so this flag is the only "
@@ -628,8 +553,6 @@ final class ToolFloatControllerTests: WindowTestCase {
                 + "points at the focused pane, which is a repo and irrelevant: \(toasts[0].message)")
     }
 
-    // MARK: live-in-background
-
     func test_isLiveInBackground_trueOnlyWhileLiveAndHidden() throws {
         let dir = try makeDir("plain", git: false)
         let (floats, _, _) = makeFloats(cwd: dir)
@@ -637,19 +560,16 @@ final class ToolFloatControllerTests: WindowTestCase {
 
         XCTAssertFalse(floats.isLiveInBackground("btop"), "never launched → nothing to dot")
 
-        floats.toggle(float)  // shown
+        floats.toggle(float)
         XCTAssertFalse(floats.isLiveInBackground("btop"), "the float on screen is not 'in background'")
 
-        floats.close()  // hidden, process still alive
+        floats.close()
         XCTAssertTrue(floats.isLiveInBackground("btop"), "live but dismissed → dot it")
 
-        floats.toggle(float)  // shown again
+        floats.toggle(float)
         XCTAssertFalse(floats.isLiveInBackground("btop"))
     }
 
-    /// Busy is not liveness, and the gap between them is why the dock surfaces a hidden Scratch
-    /// button on this rather than on registry membership: a persistent float stays live at an idle
-    /// prompt for the rest of its scope's life, so membership would put the button back for good.
     func test_isBusy_tracksTheSurface_notMereLiveness() throws {
         let dir = try makeDir("plain", git: false)
         let (floats, spawned, _) = makeFloats(cwd: dir)
@@ -662,7 +582,7 @@ final class ToolFloatControllerTests: WindowTestCase {
         XCTAssertFalse(floats.isBusy("btop"), "shown, but sitting at a prompt")
 
         surface.isBusy = true
-        floats.close()  // dismissed, process still working
+        floats.close()
         XCTAssertTrue(floats.isBusy("btop"), "dismissed and working is the whole point")
 
         surface.isBusy = false
@@ -670,8 +590,6 @@ final class ToolFloatControllerTests: WindowTestCase {
         XCTAssertTrue(floats.isLiveInBackground("btop"), "while liveness still says yes")
     }
 
-    /// An `.ephemeral` float never enters the registry — its process dies with the card, so there
-    /// is no background state to dot.
     func test_isLiveInBackground_ephemeralFloat_neverDots() throws {
         let dir = try makeDir("plain", git: false)
         let (floats, _, _) = makeFloats(cwd: dir)
@@ -683,9 +601,6 @@ final class ToolFloatControllerTests: WindowTestCase {
         XCTAssertFalse(floats.isLiveInBackground("yazi"))
     }
 
-    /// The stale dot: a hidden float's tool quitting is the one path that ends live-in-background
-    /// without the card opening or closing, and it never fired `onStateChanged` — so the dock kept
-    /// dotting a tool that had already exited.
     func test_hiddenFloatExits_clearsLiveInBackground_andNotifies() throws {
         let dir = try makeDir("plain", git: false)
         let (floats, spawned, _) = makeFloats(cwd: dir)
@@ -693,17 +608,15 @@ final class ToolFloatControllerTests: WindowTestCase {
         floats.toggle(spec("btop", persist: .window))
         floats.close()
         XCTAssertTrue(floats.isLiveInBackground("btop"))
-        floats.onStateChanged = { stateChanges += 1 }  // count only the exit
+        floats.onStateChanged = { stateChanges += 1 }
 
         let surface = try XCTUnwrap(floatSurfaces(spawned(), command: "btop").first)
-        surface.delegate?.surfaceDidExit(surface, code: 0)  // the user quit the tool from inside
+        surface.delegate?.surfaceDidExit(surface, code: 0)
 
         XCTAssertFalse(floats.isLiveInBackground("btop"), "the tool exited — nothing left to dot")
         XCTAssertEqual(stateChanges, 1, "the dock must be told, or the dot outlives the process")
     }
 
-    /// A float deleted in Settings is pruned from the registry; the dock must re-render or it keeps
-    /// a dot for a float that no longer has a button at all.
     func test_prune_clearsLiveInBackground_andNotifies() throws {
         let dir = try makeDir("plain", git: false)
         let (floats, _, _) = makeFloats(cwd: dir)
@@ -712,16 +625,12 @@ final class ToolFloatControllerTests: WindowTestCase {
         floats.close()
         floats.onStateChanged = { stateChanges += 1 }
 
-        floats.prune(against: [])  // the float was deleted in Settings
+        floats.prune(against: [])
 
         XCTAssertFalse(floats.isLiveInBackground("btop"))
         XCTAssertEqual(stateChanges, 1)
     }
 
-    /// The repo-root walk resolves off-main, so `toggle` doesn't open within its own turn:
-    /// the card lands a hop later, when the probe delivers. Drives a resolver held open by hand, the
-    /// default resolver in `makeFloats` being synchronous. What a SECOND press inside that gap does
-    /// belongs to `test_secondPressDuringTheProbe_cancelsInsteadOfOpening`.
     func test_toggle_resolvesRepoRootOffMain() throws {
         let repo = try makeDir("repo", git: true)
         let (floats, spawned, _) = makeFloats(cwd: repo)
@@ -733,7 +642,7 @@ final class ToolFloatControllerTests: WindowTestCase {
         XCTAssertFalse(floats.isOpen, "toggle must not open synchronously — the resolve is off-main")
         XCTAssertEqual(pending.count, 1)
 
-        pending[0](repo)  // the off-main resolve lands
+        pending[0](repo)
         XCTAssertTrue(floats.isOpen, "the float opens once the root resolves")
         XCTAssertEqual(
             floatSurfaces(spawned(), command: "lazygit").count, 1, "exactly one float, not two")

@@ -3,17 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Window-mounted recolor tests for the palette overlays + Add-Workspace form's
-/// `reapplyTheme()`. Same pattern as `ReapplyThemeTests`: swap
-/// `Theme.current` via `Theme.setCurrentForTesting(_:)`, call `reapplyTheme()`, assert a real
-/// color-bearing property changed. These overlays additionally hold IN-PROGRESS user input
-/// (a typed search query, a typed field value, a typed env var) that a naive rebuild would
-/// lose — the state-preservation assertions (the typed value is unchanged after the recolor)
-/// are the point of this file, not just the color change.
-///
-/// Every property under test here is `private` on its owning overlay, so tests reach it the
-/// same way `ReapplyThemeTests` reaches `SettingsOverlay`'s card/button: walk the live subview
-/// tree (a runtime, not compile-time, operation — Swift's `private` doesn't hide it).
 final class OverlayReapplyThemeTests: WindowTestCase {
     private var originalTheme: AppTheme!
     private var tempRoots: [URL] = []
@@ -30,9 +19,6 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         try super.tearDownWithError()
     }
 
-    /// A theme whose background/foreground/accent/destructive are all clearly distinct from
-    /// Rosé Pine Moon's — same construction `ReapplyThemeTests` uses, kept independent here so
-    /// this file has no cross-file test dependency.
     private func makeAlternateTheme() throws -> AppTheme {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-overlay-reapply-\(UUID().uuidString)", isDirectory: true)
@@ -56,13 +42,9 @@ final class OverlayReapplyThemeTests: WindowTestCase {
             styleMask: [.borderless], backing: .buffered, defer: false)
     }
 
-    /// Every subview beneath `view`, recursively — walks the live AppKit tree regardless of the
-    /// Swift access level of the property that stored it.
     private func descendants(of view: NSView) -> [NSView] {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
-
-    // MARK: PaletteOverlay (RepoPickerOverlay)
 
     func test_reapplyTheme_recolorsPaletteOverlayAndPreservesSearchQuery() throws {
         let overlay = RepoPickerOverlay(
@@ -88,7 +70,6 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         overlay.reapplyTheme()
 
         XCTAssertNotEqual(colorBefore, searchField.textColor)
-        // The typed query lives in `searchField`, untouched by the row re-render — it must survive.
         XCTAssertEqual(searchField.stringValue, "swap")
     }
 
@@ -111,8 +92,6 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
         XCTAssertNotEqual(colorBefore, card.layer?.borderColor)
     }
-
-    // MARK: AddWorkspaceOverlay
 
     func test_reapplyTheme_recolorsAddWorkspaceOverlayAndPreservesTypedTitle() throws {
         let overlay = AddWorkspaceOverlay(
@@ -147,7 +126,6 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
         XCTAssertNotEqual(headerColorBefore, header.textColor)
         XCTAssertNotEqual(titleColorBefore, titleField.field.textColor)
-        // The typed title lives in `titleField`, untouched by the in-place recolor.
         XCTAssertEqual(titleField.text, "my-project")
     }
 
@@ -171,9 +149,6 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertNotEqual(colorBefore, card.layer?.borderColor)
     }
 
-    // MARK: NewWorktreeOverlay
-
-    /// A `FieldCaption` built straight into a stack has nothing but the retained list reaching it.
     func test_reapplyTheme_recolorsNewWorktreeOverlayAndPreservesTypedBranch() throws {
         let overlay = makeWorktreeCard()
         let window = makeWindow()
@@ -202,7 +177,6 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
         let headerColorBefore = header.textColor
         XCTAssertNotNil(headerColorBefore)
-        // `FieldCaption` bakes its color into an attributed string, so `textColor` never moves.
         let captionBefore = caption.attributedStringValue
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
@@ -213,7 +187,6 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertEqual(branchField.text, "feature/zen-473", "the typed branch survives the recolor")
     }
 
-    /// The spinner draws in `CAShapeLayer`s, which no view-level recolor reaches on its own.
     func test_reapplyTheme_recolorsTheSpinnerArc() throws {
         let overlay = makeWorktreeCard()
         let window = makeWindow()
@@ -233,8 +206,6 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertNotEqual(colorsBefore, colorsAfter)
     }
 
-    /// The suggestion rows bake their colors at render time, and the list is parented to the
-    /// window rather than to the card, so nothing reaches them but the field's own recolor.
     func test_reapplyTheme_recolorsTheOpenBranchListAndKeepsTheQuery() throws {
         let field = BranchField()
         let window = makeWindow()
@@ -284,8 +255,6 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         return overlay
     }
 
-    /// The footer hairline bakes its color at build time like every other one in the app, so a
-    /// card that does not retain and recolor it keeps the old rule after a live theme change.
     func test_reapplyTheme_recolorsTheFormCardsFooterHairline() throws {
         let overlay = AddWorkspaceOverlay(
             existingTitles: [], background: Theme.current.chrome.background.nsColor,
@@ -354,7 +323,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         else {
             return XCTFail("expected the add-variable button")
         }
-        addVarButton.onTap()  // adds one dynamic EnvRow
+        addVarButton.onTap()
 
         guard
             let keyBox = descendants(of: overlay).compactMap({ $0 as? FieldBox })
@@ -380,9 +349,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         overlay.reapplyTheme()
 
         XCTAssertNotEqual(keyColorBefore, keyBox.field.textColor)
-        // The `=` label is otherwise-stranded static chrome — it must recolor too, not just the boxes.
         XCTAssertNotEqual(equalsColorBefore, equalsLabel.textColor)
-        // The typed env key survives — this row is never rebuilt, only recolored in place.
         XCTAssertEqual(keyBox.text, "FOO")
     }
 
@@ -415,10 +382,6 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertNotEqual(colorBefore, colorAfter)
     }
 
-    /// Regression: LAYOUT/ENVIRONMENT/FOCUS are captions built directly into a stack rather than
-    /// wrapped by a `LabeledField` (which retains its own caption already) — before this fix they
-    /// were built bare via `Self.caption(_:required:)` and never retained, so `reapplyTheme()`
-    /// couldn't reach them and they stayed stale on a live theme swap while the form was open.
     func test_reapplyTheme_recolorsBareGroupCaption() throws {
         let overlay = AddWorkspaceOverlay(
             existingTitles: [], background: Theme.current.chrome.background.nsColor,
@@ -448,17 +411,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertNotEqual(colorBefore, colorAfter)
     }
 
-    // MARK: ToastView
-
-    /// Regression: `titleColor`/`messageColor` are computed from `Theme.current.chrome`, so a
-    /// freshly-built toast always themes correctly — but an already-visible one (e.g. a confirm
-    /// left up across a `.reloadConfig` swap, which has no modal gate) was never recolored in
-    /// place. `WindowController` now calls `confirmToast?.reapplyTheme()` from its
-    /// `.configDidChange` observer; this exercises `ToastView.reapplyTheme()` directly.
     func test_reapplyTheme_recolorsToastView() throws {
-        // `.destructive`'s border derives from ANSI slot 1, which `makeAlternateTheme()`
-        // overrides — so the border assertion below is guaranteed to move, unlike `.info`
-        // (a fixed `FloatShadow.edge`) or `.warning` (slot 3, which the fixture leaves untouched).
         let toast = ToastView(
             content: ToastContent(variant: .destructive, title: "Reload Config", message: "Reloaded."))
         toast.translatesAutoresizingMaskIntoConstraints = true
@@ -484,20 +437,13 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
         XCTAssertNotEqual(colorBefore, titleLabel.textColor)
         XCTAssertNotEqual(borderBefore, toast.layer?.borderColor)
-        // Both halves of the badge bake their colour at init. The fill was the one that stayed
-        // stale on a theme swap while the card around it recolored.
         XCTAssertNotEqual(badgeBefore, toast.badgeFillForTesting, "the badge fill stayed stale")
         XCTAssertNotEqual(glyphBefore, toast.badgeIconTintForTesting, "the badge glyph stayed stale")
-        // "It changed" is too weak on its own: painting the badge from `chrome.accent` also changes
-        // across a swap, and that flattens every variant to one colour. Pin the tone instead.
         XCTAssertEqual(
             toast.badgeIconTintForTesting, Theme.current.chrome.destructive.nsColor,
             "a destructive toast's badge must carry the destructive role, not the chrome accent")
     }
 
-    /// Every baked-colour control on the card, not just the ones someone remembered. The badge was
-    /// fixed first and the action buttons were missed, so a toast up across a theme change re-tinted
-    /// its icon while `Switch` kept the previous accent.
     func test_reapplyTheme_recolorsToastActionButtons() throws {
         let toast = ToastView(
             content: ToastContent(variant: .info, title: "shell", message: "Waiting."),
@@ -522,8 +468,6 @@ final class OverlayReapplyThemeTests: WindowTestCase {
             "the primary action must carry the new accent")
     }
 
-    /// The badge is the only thing that tells two toasts apart at a glance, so two variants must
-    /// never paint it the same. This is what a "did it change" assertion cannot see.
     func test_toastBadge_carriesTheVariantTone_notTheChromeAccent() throws {
         let window = makeWindow()
         func badge(_ variant: ToastVariant) -> NSColor? {

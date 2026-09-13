@@ -4,12 +4,8 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Drives the Appearance theme picker in a real window, on the accent picker's template: catalog
-/// tests cannot see a disconnected callback, and a state-only check passes with a dead control.
 final class SettingsThemePickerTests: WindowTestCase {
     private var tempRoot: URL!
-    /// Retained: the dropdown's `onChange` captures the section `[weak self]`, so a deallocated
-    /// section would silently no-op the write.
     private var section: SettingsFormSection?
     private var hostWindow: NSWindow?
 
@@ -19,7 +15,7 @@ final class SettingsThemePickerTests: WindowTestCase {
             .appendingPathComponent("zenterm-theme-picker-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
-        AppConfig.reload()  // empty temp root = builtIn: no theme key
+        AppConfig.reload()
     }
 
     override func tearDownWithError() throws {
@@ -35,8 +31,6 @@ final class SettingsThemePickerTests: WindowTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
-    /// Mount Appearance and return its theme dropdown. The accent picker beside it reads "Theme
-    /// default", so the theme control is the one whose title is not that.
     private func mountThemeDropdown() -> Dropdown {
         let section = SettingsAppearanceSection()
         self.section = section
@@ -63,7 +57,6 @@ final class SettingsThemePickerTests: WindowTestCase {
     }
 
     private func key(_ keyCode: UInt16, arrow: Bool) -> NSEvent {
-        // Arrows carry the .function/.numericPad pair AppKit always attaches; Return is a plain key.
         NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: arrow ? [.function, .numericPad] : [],
             timestamp: 0, windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "",
@@ -73,16 +66,12 @@ final class SettingsThemePickerTests: WindowTestCase {
     private static let downKey: UInt16 = 125
     private static let upKey: UInt16 = 126
 
-    /// The default has no picker row of its own any more, so an absent key has to select its token.
     func test_noThemeKey_showsTheDefaultSelected() {
         let dropdown = mountThemeDropdown()
         XCTAssertEqual(dropdown.buttonTitleForTesting, "Rosé Pine Zen")
         XCTAssertFalse(configText().contains("theme"))
     }
 
-    /// Steps from the default to whichever theme the alphabetical list puts after it. Resolved from
-    /// the catalog rather than hardcoded: the list is sorted by display name, so a magic index means
-    /// a different theme every time a theme is added.
     func test_selectingATheme_writesTheToken_andReturningWritesTheDefaultsOwn() throws {
         let entries = ThemeCatalog.entries(configRoot: tempRoot)
         let defaultIndex = try XCTUnwrap(entries.firstIndex { $0.name == ThemeCatalog.defaultThemeName })
@@ -92,9 +81,7 @@ final class SettingsThemePickerTests: WindowTestCase {
         let dropdown = mountThemeDropdown()
         hostWindow?.makeFirstResponder(dropdown)
 
-        dropdown.keyDown(with: key(Self.returnKey, arrow: false))  // opens: the button holds focus
-        // Past here the query field holds it, so the keys route through the field editor. Driving
-        // `keyDown` instead would exercise a fallback no user reaches.
+        dropdown.keyDown(with: key(Self.returnKey, arrow: false))
         _ = dropdown.fieldCommandForTesting(#selector(NSResponder.moveDown(_:)))
         _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
 
@@ -109,9 +96,6 @@ final class SettingsThemePickerTests: WindowTestCase {
         XCTAssertEqual(dropdown.buttonTitleForTesting, "Rosé Pine Zen")
     }
 
-    /// Committing has to move the colors the app paints with, not just the file. Asserts the live
-    /// palette lands on the *stepped-to* theme's own values, read from its file, so the check holds
-    /// whatever the alphabetical list puts next to the default.
     func test_committingASelection_movesTheLiveTheme() throws {
         let entries = ThemeCatalog.entries(configRoot: tempRoot)
         let defaultIndex = try XCTUnwrap(entries.firstIndex { $0.name == ThemeCatalog.defaultThemeName })
@@ -125,9 +109,7 @@ final class SettingsThemePickerTests: WindowTestCase {
         hostWindow?.makeFirstResponder(dropdown)
         XCTAssertEqual(Theme.current.terminal.ansi[2], TerminalColor(red: 0x3E, green: 0x8F, blue: 0xB0))
 
-        dropdown.keyDown(with: key(Self.returnKey, arrow: false))  // opens: the button holds focus
-        // Past here the query field holds it, so the keys route through the field editor. Driving
-        // `keyDown` instead would exercise a fallback no user reaches.
+        dropdown.keyDown(with: key(Self.returnKey, arrow: false))
         _ = dropdown.fieldCommandForTesting(#selector(NSResponder.moveDown(_:)))
         _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
 
@@ -136,14 +118,11 @@ final class SettingsThemePickerTests: WindowTestCase {
         XCTAssertNotEqual(Theme.current.terminal.ansi[2], TerminalColor(red: 0x3E, green: 0x8F, blue: 0xB0))
     }
 
-    /// A user file named for the default shadows the bundled row in the picker, so resolution has
-    /// to honour it with no `theme` key too. Otherwise Settings shows a theme that is not painting.
     func test_aUserFileNamedForTheDefault_isBothSelectedAndActive() throws {
         try writeUserTheme(ThemeCatalog.defaultThemeName, "background = #00ff00\n")
         AppConfig.reload()
 
         XCTAssertEqual(Theme.current.terminal.background, TerminalColor(red: 0, green: 0xFF, blue: 0))
-        // User entries display the raw token, so the shadowing row reads as the filename.
         XCTAssertEqual(mountThemeDropdown().buttonTitleForTesting, ThemeCatalog.defaultThemeName)
     }
 }

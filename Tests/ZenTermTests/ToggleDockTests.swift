@@ -4,12 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Guards the dock's live rebuild: a float added / edited / removed in Settings must
-/// change the toolbar's per-float buttons, not just recolor them. The bug shipped because the
-/// config-change fan-out only re-themed the dock; the button set was built once and never rebuilt.
 final class ToggleDockTests: XCTestCase {
-    /// `title` doubles as the id — a real float's id is always `slug(title)`, and a factory that let
-    /// the two diverge would be building a float the config could never produce.
     private func float(_ id: String, order: Int = 0) -> ToolFloat {
         ToolFloat(
             id: id, order: order, title: id, icon: "square.on.square", command: "cmd", dir: nil,
@@ -27,18 +22,16 @@ final class ToggleDockTests: XCTestCase {
         let dock = makeDock([float("dev")])
         XCTAssertEqual(dock.toolFloatButtonIDsForTesting, ["dev"])
 
-        dock.setToolFloats([float("dev"), float("top")])  // add
+        dock.setToolFloats([float("dev"), float("top")])
         XCTAssertEqual(dock.toolFloatButtonIDsForTesting, ["dev", "top"])
 
-        dock.setToolFloats([float("top")])  // remove one
+        dock.setToolFloats([float("top")])
         XCTAssertEqual(dock.toolFloatButtonIDsForTesting, ["top"])
 
-        dock.setToolFloats([])  // remove all
+        dock.setToolFloats([])
         XCTAssertTrue(dock.toolFloatButtonIDsForTesting.isEmpty)
     }
 
-    /// The dock renders the catalog in array order, left to right — it does no sorting of its own, so
-    /// a reorder in Settings reaches the toolbar only if this holds.
     func test_setToolFloats_rendersButtonsInCatalogOrder() {
         let dock = makeDock([float("dev", order: 1), float("top", order: 2), float("notes", order: 3)])
         XCTAssertEqual(dock.toolFloatButtonIDsForTesting, ["dev", "top", "notes"])
@@ -64,7 +57,6 @@ final class ToggleDockTests: XCTestCase {
     }
 
     func test_render_dotShowsEvenWhileDrawerOpen() {
-        // The dot signals a live process regardless of whether the drawer is currently shown.
         let dock = makeDock([])
         var overlay = OverlayState()
         overlay.isBottomOpen = true
@@ -80,12 +72,9 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertFalse(dock.rightActivityForTesting)
     }
 
-    // MARK: live-in-background float dots
-
     func test_render_dotsFloatsLiveInBackground_notTheShownOne() {
         let dock = makeDock([float("dev"), float("top")])
 
-        // "dev" is shown, "top" is alive behind the scenes — only the hidden one earns a dot.
         dock.render(
             overlay: OverlayState(), floatID: "dev", paletteOpen: false,
             isLiveInBackground: { $0 == "top" })
@@ -99,8 +88,6 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertTrue(dock.dottedToolFloatIDsForTesting.isEmpty)
     }
 
-    /// The dot must clear when the tool dies, not just when a card opens — a dot outliving its
-    /// process is the stale-dot bug.
     func test_render_dotClearsWhenTheFloatIsNoLongerLive() {
         let dock = makeDock([float("top")])
         dock.render(
@@ -113,10 +100,6 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertTrue(dock.dottedToolFloatIDsForTesting.isEmpty, "a re-render after exit clears the dot")
     }
 
-    // MARK: the built-in Scratch button
-
-    /// Press the real button rather than calling the closure: `accessibilityPerformPress` is the
-    /// same path `mouseDown` takes, so a button wired to nothing fails here.
     private func press(_ label: String, in dock: ToggleDock) {
         let button = descendants(of: dock).compactMap { $0 as? IconButton }
             .first { $0.accessibilityLabel() == label }
@@ -139,8 +122,6 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertEqual(toggled, ["scratch"])
     }
 
-    /// The Scratch button is the card, so it must stay lit while its own float is open — the
-    /// dimming that hides the drawer and zoom pips behind a card must not reach it.
     func test_render_scratchButtonStaysLitWhileItsOwnCardIsUp() {
         let dock = makeDock([])
         var overlay = OverlayState()
@@ -152,8 +133,6 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertFalse(dock.scratchActivityForTesting, "shown, so no background dot")
     }
 
-    /// The other side of the same rule: a DIFFERENT float's card dims the drawer pips, and must
-    /// leave Scratch dark rather than lit.
     func test_render_scratchButtonIsDarkWhileAnotherFloatsCardIsUp() {
         let dock = makeDock([float("dev")])
 
@@ -162,8 +141,6 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertFalse(dock.scratchActiveForTesting)
     }
 
-    /// Its dot lives on the fixed button, which `dottedToolFloatIDsForTesting` never walks — that
-    /// hook only covers the config-driven tail.
     func test_render_dotsScratchWhileItRunsHidden() {
         let dock = makeDock([])
 
@@ -177,12 +154,8 @@ final class ToggleDockTests: XCTestCase {
     }
 
     func test_newTabButton_isMounted() {
-        // New-tab moved from the tab strip into the dock; it must always be present so it
-        // never scrolls away with the tabs.
         XCTAssertTrue(makeDock([]).hasNewTabButtonForTesting)
     }
-
-    // MARK: hidden buttons + divider grouping
 
     private static let fixedDefault = [
         "New tab", "│",
@@ -192,7 +165,6 @@ final class ToggleDockTests: XCTestCase {
     ]
 
     func test_defaultLayout_groupsWithTwoDividers_noTrailingDivider() {
-        // No floats: the third divider must not dangle at the tail.
         XCTAssertEqual(makeDock([]).visibleLayoutForTesting, Self.fixedDefault)
     }
 
@@ -242,14 +214,11 @@ final class ToggleDockTests: XCTestCase {
         dock.setHiddenButtons(Set(ToolbarButton.allCases))
         XCTAssertTrue(dock.visibleLayoutForTesting.isEmpty)
 
-        // A float alone gets no divider — there is nothing visible to its left.
         dock.setToolFloats([float("dev")])
         XCTAssertEqual(dock.visibleLayoutForTesting, ["dev"])
     }
 
     func test_hiddenNewTab_reportsNotMounted() {
-        // Guards the arrangedSubviews trap: a hidden arranged subview stays in the array, so the
-        // hook must read `isHidden`, not mere membership.
         let dock = makeDock([])
         dock.setHiddenButtons([.newTab])
         XCTAssertFalse(dock.hasNewTabButtonForTesting)
@@ -264,14 +233,10 @@ final class ToggleDockTests: XCTestCase {
         dock.setToolFloats([hidden])
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
 
-        // A render with the tool idle keeps it hidden — surfacing is for running tools only.
         dock.render(overlay: OverlayState(), floatID: nil, paletteOpen: false)
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
     }
 
-    /// The liveness handle: a `toolbar:false` float's button must surface (dot and all) while its
-    /// tool runs in the background, and hide again when it dies — otherwise a hidden persistent
-    /// float is a running process with no visible trace anywhere (the dot is its only one).
     func test_hiddenFloat_surfacesWhileLiveInBackground_andRehidesWhenItDies() {
         var hidden = float("dev")
         hidden.showsInToolbar = false
@@ -297,8 +262,6 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault + ["│", "dev"])
     }
 
-    // MARK: hidden drawers and Scratch surface while they work
-
     private static let bottomHidden = fixedDefault.filter { $0 != "Toggle bottom drawer" }
     private static let scratchHidden = fixedDefault.filter { $0 != "Scratch" }
 
@@ -312,8 +275,6 @@ final class ToggleDockTests: XCTestCase {
             isFloatBusy: { scratchBusy && $0 == ToolFloat.scratch.id })
     }
 
-    /// A hidden drawer running something has no other trace on screen, so the button comes back
-    /// with its dot and leaves again when the work ends.
     func test_hiddenDrawer_surfacesWhileBusy_andRehidesWhenIdle() {
         let dock = makeDock([])
         dock.setHiddenButtons([.bottomDrawer])
@@ -328,7 +289,6 @@ final class ToggleDockTests: XCTestCase {
             dock.visibleLayoutForTesting, Self.bottomHidden, "the handle leaves with the process")
     }
 
-    /// Open is not a reason: the drawer is already on screen, so the button would add nothing.
     func test_hiddenDrawer_staysHiddenWhileIdleAndOpen() {
         let dock = makeDock([])
         dock.setHiddenButtons([.bottomDrawer])
@@ -337,8 +297,6 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.bottomHidden)
     }
 
-    /// The spawn flash: a shell reads busy until its first prompt mark, and a drawer only ever
-    /// spawns one while it is on screen. Busy alone would pop the button in and out on every open.
     func test_hiddenDrawer_staysHiddenWhileBusyAndOnScreen() {
         let dock = makeDock([])
         dock.setHiddenButtons([.bottomDrawer])
@@ -347,8 +305,6 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.bottomHidden)
     }
 
-    /// Pressing a surfaced button opens the drawer, and the button must not vanish under the
-    /// pointer that just pressed it. It holds until the drawer is closed and the work is done.
     func test_surfacedDrawer_holdsWhileYouOpenAndUseIt() {
         let dock = makeDock([])
         dock.setHiddenButtons([.bottomDrawer])
@@ -365,8 +321,6 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.bottomHidden)
     }
 
-    /// The hold is one tab's answer. Without scoping it, arriving in a tab whose drawer is open
-    /// froze the previous tab's answer, and its button sat lit in a tab with no work behind it.
     func test_surfacedDrawer_doesNotFollowATabSwitch() {
         let dock = makeDock([])
         dock.setHiddenButtons([.bottomDrawer])
@@ -380,8 +334,6 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault, "still working back here")
     }
 
-    /// Focus mode on a pane takes an open drawer off screen, so a busy one is out of sight again
-    /// and earns its handle back.
     func test_hiddenDrawer_surfacesWhileBusyAndZoomedAway() {
         let dock = makeDock([])
         dock.setHiddenButtons([.bottomDrawer])
@@ -390,8 +342,6 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
     }
 
-    /// A tab that never opened a drawer reaches the dock as this same idle state, so one input
-    /// covers both: nothing has ever run, and nothing is running now.
     func test_hiddenDrawer_staysHiddenWhileIdleAndClosed() {
         let dock = makeDock([])
         dock.setHiddenButtons([.rightDrawer])
@@ -401,7 +351,6 @@ final class ToggleDockTests: XCTestCase {
             dock.visibleLayoutForTesting, Self.fixedDefault.filter { $0 != "Toggle right drawer" })
     }
 
-    /// Surfacing is only ever a hidden button's business: a shown one is already there, busy or not.
     func test_shownDrawer_isUnaffectedByBusy() {
         let dock = makeDock([])
 
@@ -409,8 +358,6 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
     }
 
-    /// Hiding a drawer that is mid-job (a live Settings edit) leaves it on screen, rather than
-    /// dropping the handle on work already running. The window pairs the two calls.
     func test_hidingABusyDrawer_leavesItOnScreen() {
         let dock = makeDock([])
         dock.setHiddenButtons([.bottomDrawer])
@@ -419,19 +366,15 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
     }
 
-    /// A hold on a button nothing was hiding is state with no meaning, and hiding that button later
-    /// read it as a reason to keep it on screen with no work behind it.
     func test_hidingAnIdleDrawer_isNotBlockedByAnEarlierBusySpell() {
         let dock = makeDock([])
-        render(dock, OverlayState(bottomBusy: true))  // busy and closed, but nothing is hidden yet
-        render(dock, OverlayState(isBottomOpen: true))  // reopened, and the job ended on screen
+        render(dock, OverlayState(bottomBusy: true))
+        render(dock, OverlayState(isBottomOpen: true))
 
         dock.setHiddenButtons([.bottomDrawer])
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.bottomHidden)
     }
 
-    /// Scratch keys off busy, not the liveness every other float uses: its shell stays live for the
-    /// tab's life once opened, so liveness would put a hidden button back for good after one ⌘;.
     func test_hiddenScratch_surfacesWhileBusy_notMerelyLive() {
         let dock = makeDock([])
         dock.setHiddenButtons([.scratch])
@@ -444,8 +387,6 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertTrue(dock.scratchActivityForTesting)
     }
 
-    /// The reported flash: opening Scratch spawns a shell that reads busy until its first prompt
-    /// mark, and the card is up the whole time, so the button must not appear and then drop.
     func test_hiddenScratch_staysHiddenWhileItsOwnCardIsUp() {
         let dock = makeDock([])
         dock.setHiddenButtons([.scratch])
@@ -454,8 +395,6 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.scratchHidden)
     }
 
-    /// A surfaced button counts for the divider grouping too, or the middle group comes back with
-    /// no divider between it and the palette.
     func test_surfacedDrawer_bringsBackItsGroupDivider() {
         let dock = makeDock([])
         dock.setHiddenButtons([
@@ -469,9 +408,6 @@ final class ToggleDockTests: XCTestCase {
             ["New tab", "│", "Toggle right drawer", "│", "Command palette"])
     }
 
-    /// The stack order and recolor list derive from `ToolbarButton.groups` / `allCases`, so a case
-    /// missing from `groups` would silently never mount. Order-sensitive on purpose: the groups
-    /// flattened ARE the toolbar order.
     func test_toolbarButtonGroups_coverEveryCaseInOrder() {
         XCTAssertEqual(ToolbarButton.groups.flatMap { $0 }, ToolbarButton.allCases)
     }

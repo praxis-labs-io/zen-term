@@ -3,13 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Regression guard for the Settings nav column's background. The nav rows
-/// scroll inside an `NSScrollView`, and `drawsBackground` FORWARDS to the scroll view's current
-/// clip view — so installing the flipped clip view after clearing the flag silently resurrected
-/// the default opaque system background: an appearance-following wash over the whole column that
-/// ignores `Theme.current` and reads as a mismatched sidebar panel.
 final class SettingsOverlayNavTests: WindowTestCase {
-    /// Retained so a mounted card's window outlives the mount call (Esc is dispatched through it).
     private var window: NSWindow?
 
     override func tearDown() {
@@ -26,7 +20,6 @@ final class SettingsOverlayNavTests: WindowTestCase {
         func reapplyTheme() {}
     }
 
-    /// A section whose single detail stop is a real `Dropdown`.
     private final class DropdownSection: SettingsSection {
         let navTitle = "Picker"
         var onExitToNav: (() -> Void)?
@@ -73,8 +66,6 @@ final class SettingsOverlayNavTests: WindowTestCase {
                 + "appearance-following sidebar wash this test guards against")
     }
 
-    // MARK: Report an Issue button
-
     private func mountNav(onReportIssue: @escaping () -> Void) -> (overlay: SettingsOverlay, window: NSWindow) {
         let overlay = SettingsOverlay(
             sections: [BareSection()], capturer: nil,
@@ -113,8 +104,6 @@ final class SettingsOverlayNavTests: WindowTestCase {
             KeyboardFocus.isFocused(reportButton(overlay)!, in: win),
             "Down from the last section row focuses the Report button")
     }
-
-    // MARK: Esc
 
     private func mount(_ section: SettingsSection, onClose: @escaping () -> Void) -> NSWindow {
         let overlay = SettingsOverlay(

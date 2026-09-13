@@ -5,8 +5,6 @@ import XCTest
 
 @MainActor
 final class NavRegistryTests: XCTestCase {
-    // A fresh instance per test — `NavRegistry.shared` is process-wide, so tests use their
-    // own to stay isolated.
     private func makeRegistry() -> NavRegistry { NavRegistry() }
 
     func test_mintToken_isMonotonic() {
@@ -30,7 +28,6 @@ final class NavRegistryTests: XCTestCase {
 
     func test_route_unknownTokenIsNoOp() {
         let registry = makeRegistry()
-        // No throw / no crash for a token that was never registered.
         registry.route(focus: 999, .left)
     }
 

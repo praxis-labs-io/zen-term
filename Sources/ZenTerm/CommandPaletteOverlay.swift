@@ -1,12 +1,5 @@
 import AppKit
 
-/// The `⌘P` command palette: a modal, fuzzy-searchable list of every chrome action bound
-/// to a keyboard shortcut, each row showing its shortcut in a keycap box. Enter runs the
-/// selected command, Esc / backdrop click dismiss. Built on `PaletteOverlay`.
-///
-/// Unfiltered, the list is grouped under muted section headers (Panes, Tabs, …). Typing
-/// collapses it to a single fuzzy-ranked list with no headers — ranking crosses groups, so
-/// headers would no longer bound anything.
 final class CommandPaletteOverlay: PaletteOverlay {
     private enum Row {
         case header(String)
@@ -18,9 +11,7 @@ final class CommandPaletteOverlay: PaletteOverlay {
 
     private let onRun: (KeyInterceptor.ReservedChord) -> Void
 
-    /// Re-resolved rather than snapshotted: a `PaletteCommand` bakes its shortcut glyph in when the
-    /// catalog builds it, so an open palette held a stale chord after a rebind — `reapplyTheme()`
-    /// rebuilt the row views but replayed the shortcut captured at construction.
+    /// Re-resolved rather than snapshotted: a `PaletteCommand` bakes in its shortcut glyph when built.
     private let resolveCommands: () -> [PaletteCommand]
     private var commands: [PaletteCommand]
     private var rows: [Row]
@@ -49,18 +40,11 @@ final class CommandPaletteOverlay: PaletteOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Re-resolve the catalog before the base class rebuilds the rows, so a rebind while the
-    /// palette is open reaches the shortcut column. `WindowController` drives this from
-    /// `.configDidChange` on `.theme` or `.keymap`; the base's `reapplyTheme` re-filters and
-    /// reloads, and a row's identity includes its shortcut, so a moved chord rebuilds its row.
     override func reapplyTheme() {
         commands = resolveCommands()
         super.reapplyTheme()
     }
 
-    /// Test hook: the glyph each mounted row's keycap was **built** with, so a test can tell a
-    /// palette row's shortcut from the drawer header's. The two resolve through different paths,
-    /// and only one of them was ever stale after a rebind.
     var builtRowShortcutsForTesting: [String] {
         func descendants(of view: NSView) -> [NSView] {
             view.subviews.flatMap { [$0] + descendants(of: $0) }
@@ -80,11 +64,7 @@ final class CommandPaletteOverlay: PaletteOverlay {
         }
     }
 
-    /// A row is the same row across a re-filter when it names the same section, or the same command
-    /// with the same shortcut. The identity has to cover everything the row renders, and a command
-    /// row renders both: a tool float's title comes from user config and nothing stops it colliding
-    /// with a built-in command's, so keying on the title alone would let one row inherit the other's
-    /// keycap and show a chord that doesn't run it.
+    /// Includes the shortcut: a user float's title can collide with a built-in command's.
     override func rowIdentity(at index: Int) -> AnyHashable? {
         switch rows[index] {
         case .header(let title): return ["header", title]
@@ -102,18 +82,15 @@ final class CommandPaletteOverlay: PaletteOverlay {
         return false
     }
 
+    /// A category-only hit ranks below every title hit, so it never preselects a command the query did not name.
     override func applyFilter(query: String) {
         let q = query.trimmingCharacters(in: .whitespaces)
         if q.isEmpty {
-            rows = Self.grouped(commands)  // no query → grouped, with headers
+            rows = Self.grouped(commands)
         } else {
             rows =
                 commands
                 .compactMap { command -> (command: PaletteCommand, isTitleMatch: Bool, score: Int)? in
-                    // Match the section name too, so `config` surfaces the whole Config section and
-                    // `panes` the whole Panes section — but a category-only hit ranks *below* every
-                    // title hit, so it can never preselect (and Enter-run) a command the query
-                    // didn't name, even when the category scores higher than a weak title match.
                     if let titleScore = FuzzyMatch.score(q, command.title) {
                         return (command, true, titleScore)
                     }
@@ -123,11 +100,11 @@ final class CommandPaletteOverlay: PaletteOverlay {
                     return nil
                 }
                 .sorted { a, b in
-                    if a.isTitleMatch != b.isTitleMatch { return a.isTitleMatch }  // title matches first
-                    if a.score != b.score { return a.score > b.score }  // then higher score
+                    if a.isTitleMatch != b.isTitleMatch { return a.isTitleMatch }
+                    if a.score != b.score { return a.score > b.score }
                     return a.command.title.localizedCaseInsensitiveCompare(b.command.title) == .orderedAscending
                 }
-                .map { .command($0.command) }  // flat, no headers while searching
+                .map { .command($0.command) }
         }
     }
 
@@ -136,7 +113,6 @@ final class CommandPaletteOverlay: PaletteOverlay {
         onRun(command.chord)
     }
 
-    /// Insert a header row wherever the category changes, preserving `commands` order.
     private static func grouped(_ commands: [PaletteCommand]) -> [Row] {
         var rows: [Row] = []
         var current: String?
@@ -150,10 +126,9 @@ final class CommandPaletteOverlay: PaletteOverlay {
         return rows
     }
 
-    /// A muted, small-caps section header. Non-selectable — the base skips it.
     private final class HeaderRowView: NSView, PaletteRowView {
-        var isSelected = false  // headers never highlight
-        var onActivate: (() -> Void)?  // headers aren't selectable, so this is never run
+        var isSelected = false
+        var onActivate: (() -> Void)?
 
         init(title: String) {
             super.init(frame: .zero)
@@ -169,8 +144,6 @@ final class CommandPaletteOverlay: PaletteOverlay {
             addSubview(label)
             NSLayoutConstraint.activate([
                 label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-                // Sit toward the bottom of the row so the header reads as a lead-in to the
-                // group below it rather than floating between two groups.
                 label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
             ])
         }
@@ -178,7 +151,6 @@ final class CommandPaletteOverlay: PaletteOverlay {
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
     }
 
-    /// One command row: the action name (left) and its shortcut keycap (right).
     private final class RowView: SelectableRowView {
         init(command: PaletteCommand) {
             super.init()
@@ -194,14 +166,12 @@ final class CommandPaletteOverlay: PaletteOverlay {
                 title.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
 
-            // A command with no bound shortcut skips the keycap rather than render an empty pill.
             guard !command.shortcut.isEmpty else { return }
             let keycap = KeycapView(shortcut: command.shortcut)
             addSubview(keycap)
             NSLayoutConstraint.activate([
                 keycap.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
                 keycap.centerYAnchor.constraint(equalTo: centerYAnchor),
-                // Keep the title from colliding with the keycap on a narrow card.
                 title.trailingAnchor.constraint(lessThanOrEqualTo: keycap.leadingAnchor, constant: -8),
             ])
         }

@@ -1,15 +1,10 @@
 import TerminalKit
 
-/// The resolved appearance: the terminal theme handed to surfaces, plus the chrome roles
-/// derived from it. `Theme.current` holds one for the process.
 struct AppTheme: Equatable {
     let terminal: TerminalTheme
     let chrome: ChromeTheme
 
-    /// Derive the chrome roles from the terminal theme, then paint the selection and search
-    /// highlight colors back onto the terminal theme from those roles. One call so neither half can
-    /// be built without the other: a terminal theme handed to a surface without them renders
-    /// selections and matches in libghostty's defaults rather than ours.
+    /// Paints selection and search colors back onto `terminal`, or surfaces fall back to libghostty's defaults.
     init(terminal: TerminalTheme, accent: AccentSlot? = nil) {
         let chrome = ChromeThemeDeriver.derive(from: terminal, accent: accent)
         self.chrome = chrome

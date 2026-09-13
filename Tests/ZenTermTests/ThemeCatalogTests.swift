@@ -25,10 +25,7 @@ final class ThemeCatalogTests: XCTestCase {
         let entries = ThemeCatalog.entries(configRoot: root)
         XCTAssertEqual(Set(entries.map(\.name)), Set(ThemeCatalog.bundled.map(\.token)))
         XCTAssertTrue(entries.allSatisfy { $0.source == .bundled })
-        // The default is a real token, so an unset `theme` key has something to select. It is no
-        // longer first: the list is alphabetical, and sixty-five entries need finding by name.
         XCTAssertTrue(entries.contains { $0.name == ThemeCatalog.defaultThemeName })
-        // Alphabetical by display name, the string the picker renders.
         XCTAssertEqual(
             entries.map(\.displayName),
             entries.map(\.displayName).sorted {
@@ -63,8 +60,6 @@ final class ThemeCatalogTests: XCTestCase {
         XCTAssertFalse(entries.contains { $0.name == "a-folder" })
     }
 
-    /// A fallback no real theme could coincide with, so "equals the fallback" means "not parsed".
-    /// Comparing against the built-in instead would let a file that shares its hexes pass empty.
     private var sentinelFallback: TerminalTheme {
         let magenta = TerminalColor(red: 0xFF, green: 0x00, blue: 0xFF)
         return TerminalTheme(
@@ -80,13 +75,6 @@ final class ThemeCatalogTests: XCTestCase {
             fontName: fallback.fontName, fontSize: fallback.fontSize, fallback: fallback)
     }
 
-    /// The catalog's `isDark` is hand-declared per entry and drives the "Dark"/"Light" note beside
-    /// every row in the theme picker. Nothing else reads it, so a wrong one mislabels a row and
-    /// stays wrong: catching it by eye means checking sixty-five rows against sixty-five files.
-    ///
-    /// Held to `TerminalColor.isDark` on the theme's own background, which is what `ThemePublisher`
-    /// sends nvim as `dark`. Two independent readings of the same property can disagree otherwise,
-    /// and then the picker says Light while the editor goes dark.
     func test_everyBundledTheme_declaresTheLightnessItsBackgroundReports() throws {
         for entry in ThemeCatalog.bundled {
             let theme = try parseBundled(entry.token)
@@ -112,8 +100,6 @@ final class ThemeCatalogTests: XCTestCase {
         }
     }
 
-    /// Compiled fallback and shipped file are one theme, so a hex edit to either has to reach the
-    /// other. Through `AppTheme`: the file names keys the fallback leaves to derivation.
     func test_bundledDefault_matchesTheCompiledInFallback() throws {
         let fromFile = AppTheme(terminal: try parseBundled(ThemeCatalog.defaultThemeName)).terminal
         let compiled = AppTheme(terminal: Theme.rosePineZen).terminal
@@ -126,17 +112,15 @@ final class ThemeCatalogTests: XCTestCase {
         XCTAssertEqual(fromFile.ansi, compiled.ansi)
     }
 
-    /// Main and Moon must carry their own upstream values, and Zen must be the blend it claims:
-    /// Moon's palette on Main's base. Shipping Moon under Main's name is the bug this catalog had.
     func test_theRosePines_carryTheirOwnUpstreamValues() throws {
         let main = try parseBundled("rose-pine")
         let moon = try parseBundled("rose-pine-moon")
         let zen = try parseBundled(ThemeCatalog.defaultThemeName)
 
         XCTAssertEqual(main.background, TerminalColor(red: 0x19, green: 0x17, blue: 0x24))
-        XCTAssertEqual(main.ansi[2], TerminalColor(red: 0x31, green: 0x74, blue: 0x8F))  // Main's pine
+        XCTAssertEqual(main.ansi[2], TerminalColor(red: 0x31, green: 0x74, blue: 0x8F))
         XCTAssertEqual(moon.background, TerminalColor(red: 0x23, green: 0x21, blue: 0x36))
-        XCTAssertEqual(moon.ansi[2], TerminalColor(red: 0x3E, green: 0x8F, blue: 0xB0))  // Moon's pine
+        XCTAssertEqual(moon.ansi[2], TerminalColor(red: 0x3E, green: 0x8F, blue: 0xB0))
         XCTAssertEqual(zen.background, main.background)
         XCTAssertEqual(zen.ansi, moon.ansi)
     }

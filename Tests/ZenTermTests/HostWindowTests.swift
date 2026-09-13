@@ -3,10 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The `window-chrome` config drives whether the standard macOS window buttons (traffic lights)
-/// show. A state-only check on the config wouldn't catch a window that ignores it, so this builds
-/// a real `HostWindow` and asserts the buttons' actual `isHidden`, and that the runtime setter the
-/// live Settings toggle calls flips them.
 @MainActor
 final class HostWindowTests: WindowTestCase {
     private var originalConfig: GeneralConfig!

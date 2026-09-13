@@ -4,13 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// `focusedCWD` answers "which directory am I in", and two things ask it: ⌘T and ⌘N under
-/// `tab-inherit-cwd`, and where a `persist:dir` tool float anchors. It used to read the pane
-/// canvas unconditionally, so a drawer you had `cd`'d elsewhere reported the pane's directory
-/// and both of those went to the wrong place.
-///
-/// Driven through the real drawer chord, because the bug was in which panel the tab *considered*
-/// focused: a test that read the canvas directly would agree with the bug.
 @MainActor
 final class FocusedCWDTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
@@ -53,8 +46,6 @@ final class FocusedCWDTests: WindowTestCase {
         return c
     }
 
-    /// A drawer holding focus reports *its* directory, not the pane's. This is the reported bug:
-    /// `cd` in a drawer, press ⌘D, and the main pane's repo came up.
     func test_focusedCWD_followsTheFocusedDrawer() throws {
         let elsewhere = root.appendingPathComponent("elsewhere", isDirectory: true)
         try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
@@ -62,7 +53,6 @@ final class FocusedCWDTests: WindowTestCase {
         let pane = try XCTUnwrap(spawned.first)
         pane.currentDirectory = root
 
-        // Opening the bottom drawer focuses it (`focusDrawer`), and its shell is a new surface.
         c.handle(.toggleBottomDrawer)
         let drawer = try XCTUnwrap(spawned.last)
         XCTAssertFalse(drawer === pane, "the drawer spawns its own shell")
@@ -73,8 +63,6 @@ final class FocusedCWDTests: WindowTestCase {
             "a focused drawer's cwd is the tab's cwd — this is what ⌘D walks for a repo root")
     }
 
-    /// Focus back on the canvas and the pane answers again, so the fix doesn't just swap which
-    /// panel is hardcoded.
     func test_focusedCWD_returnsToThePaneWhenTheDrawerCloses() throws {
         let elsewhere = root.appendingPathComponent("elsewhere", isDirectory: true)
         try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
@@ -86,12 +74,10 @@ final class FocusedCWDTests: WindowTestCase {
         try XCTUnwrap(spawned.last).currentDirectory = elsewhere
         XCTAssertEqual(c.focusedCWD, elsewhere)
 
-        c.handle(.toggleBottomDrawer)  // dismissed, focus returns to the canvas
+        c.handle(.toggleBottomDrawer)
         XCTAssertEqual(c.focusedCWD, root, "with the drawer shut the pane answers again")
     }
 
-    /// A drawer whose backend can't resolve a cwd falls back to the pane rather than nil, because
-    /// nil reads downstream as "not a repository" rather than "unknown".
     func test_focusedCWD_unresolvableDrawer_fallsBackToThePane() throws {
         let c = makeWindow()
         let pane = try XCTUnwrap(spawned.first)

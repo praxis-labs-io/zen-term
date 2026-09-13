@@ -4,13 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The keyboard paths into the toast stack: answering a modal confirm, and the two chords that
-/// clear notices.
-///
-/// Every key here is driven as a real event through the window, never by calling an action closure.
-/// Nothing covered the confirm's keyboard path before, which is how Return and Esc could ride on
-/// `NSButton.keyEquivalent` — a single `performKeyEquivalent` traversal, answered only if it reaches
-/// the button — without anything going red.
 @MainActor
 final class ToastKeyboardTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
@@ -29,8 +22,6 @@ final class ToastKeyboardTests: WindowTestCase {
         super.tearDown()
     }
 
-    // MARK: harness
-
     private func makeController() -> WindowController {
         let controller = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
@@ -47,9 +38,6 @@ final class ToastKeyboardTests: WindowTestCase {
         return descendants(of: root).compactMap { $0 as? ToastView }
     }
 
-    /// The characters macOS actually puts on each of these keys. They have to be real: an
-    /// `NSButton` key equivalent matches on `charactersIgnoringModifiers`, so an event carrying ""
-    /// would fail the old path for the wrong reason and the falsification would prove nothing.
     private static let characters: [UInt16: String] = [
         36: "\r", 76: "\u{3}", 49: " ", 51: "\u{7f}", 53: "\u{1b}",
     ]
@@ -62,9 +50,6 @@ final class ToastKeyboardTests: WindowTestCase {
             keyCode: keyCode)!
     }
 
-    /// Press a key the way the window does: the `performKeyEquivalent` sweep of the content view,
-    /// then, if nothing claimed it, the first responder's `keyDown`. Driving both is the point —
-    /// the confirm has to answer whether or not it still holds focus.
     private func press(_ keyCode: UInt16, flags: NSEvent.ModifierFlags = [], in c: WindowController) {
         let event = keyEvent(keyCode, flags: flags)
         guard let content = c.window.contentView else { return }
@@ -80,7 +65,6 @@ final class ToastKeyboardTests: WindowTestCase {
         static let escape: UInt16 = 53
     }
 
-    /// Pump the runloop past a spring-out and the stack collapse behind it.
     private func settle(_ seconds: TimeInterval = 0.4) {
         let deadline = Date().addingTimeInterval(seconds)
         while Date() < deadline {
@@ -99,8 +83,6 @@ final class ToastKeyboardTests: WindowTestCase {
         return c
     }
 
-    // MARK: answering a confirm
-
     func test_return_confirms() {
         let c = makeController()
         var confirmed = 0
@@ -112,8 +94,6 @@ final class ToastKeyboardTests: WindowTestCase {
         XCTAssertFalse(c.isConfirmOpen, "and take the card down")
     }
 
-    /// Caps Lock rides in `modifierFlags` and survives `deviceIndependentFlagsMask`, so anything
-    /// answering Return by comparing masks refuses it. Matching on keyCode is what makes this hold.
     func test_return_withCapsLockOn_stillConfirms() {
         let c = makeController()
         var confirmed = 0
@@ -124,8 +104,6 @@ final class ToastKeyboardTests: WindowTestCase {
         XCTAssertEqual(confirmed, 1, "Caps Lock is not a modifier the confirm may refuse")
     }
 
-    /// AppKit tags keypad Enter with `.numericPad` and `.function`, and its character is ETX, not
-    /// CR. Both are reasons a character-or-mask comparison misses it; keyCode 76 does not.
     func test_keypadEnter_confirms() {
         let c = makeController()
         var confirmed = 0
@@ -160,8 +138,6 @@ final class ToastKeyboardTests: WindowTestCase {
         XCTAssertFalse(c.isConfirmOpen)
     }
 
-    /// The buttons this replaced carried an empty `keyEquivalentModifierMask`, so they answered a
-    /// bare Return alone. Matching on keyCode without the same guard let an unbound ⌥⏎ quit the app.
     func test_modifiedReturn_doesNotConfirm() {
         for flags: NSEvent.ModifierFlags in [.option, .command, .control, [.command, .shift]] {
             let c = makeController()
@@ -188,8 +164,6 @@ final class ToastKeyboardTests: WindowTestCase {
         XCTAssertTrue(c.isConfirmOpen)
     }
 
-    /// `KeyboardFocus.key(for:)` folds Space into the same `.activate` as Return. A confirm's
-    /// affirmative closes tabs and quits the app, so it takes Return alone.
     func test_space_doesNotConfirm() {
         let c = makeController()
         var confirmed = 0
@@ -203,7 +177,6 @@ final class ToastKeyboardTests: WindowTestCase {
         XCTAssertTrue(c.isConfirmOpen, "and the card is still waiting")
     }
 
-    /// The card stays key-live through its spring-out, so a held Return would answer twice.
     func test_heldReturn_confirmsOnce() {
         let c = makeController()
         var confirmed = 0
@@ -215,10 +188,6 @@ final class ToastKeyboardTests: WindowTestCase {
         XCTAssertEqual(confirmed, 1)
     }
 
-    // MARK: the sticky contract
-
-    /// A sticky notice is non-modal: it must answer none of these, or a bell card would eat the
-    /// Return the shell under it was waiting for.
     func test_stickyToast_answersNoKey() throws {
         let c = makeController()
         c.newTabForTesting()
@@ -235,8 +204,6 @@ final class ToastKeyboardTests: WindowTestCase {
         }
         XCTAssertEqual(toastViews(in: c).count, 1, "and none of them took it down")
     }
-
-    // MARK: the dismiss chords
 
     func test_dismissToast_takesTheOldestAndWalksDown() {
         let c = makeController()
@@ -258,12 +225,9 @@ final class ToastKeyboardTests: WindowTestCase {
         settle()
         XCTAssertTrue(toastViews(in: c).isEmpty)
 
-        c.handle(.dismissToast)  // an empty stack is a no-op, not a crash
+        c.handle(.dismissToast)
     }
 
-    /// The chord answers the card the way its own Dismiss button does, so the tab's colored number
-    /// clears with it. Removing the view alone would leave the tab flagged with nothing on screen
-    /// explaining why.
     func test_dismissToast_clearsTheTabAttentionMarker() throws {
         let c = makeController()
         c.newTabForTesting()
@@ -292,8 +256,6 @@ final class ToastKeyboardTests: WindowTestCase {
         XCTAssertTrue(toastViews(in: c).isEmpty)
     }
 
-    /// A confirm swallows every chord, so neither dismiss can pull the question out from under the
-    /// answer.
     func test_dismissChords_areRefusedWhileAConfirmIsWaiting() {
         let c = makeController()
         openConfirm(in: c)
@@ -306,8 +268,6 @@ final class ToastKeyboardTests: WindowTestCase {
         XCTAssertEqual(toastViews(in: c).count, 1)
     }
 
-    /// The float gate's `default: return` swallows anything not named in its pass-through list.
-    /// Notices stack over an open float, so a chord dead there is dead exactly when the pile grows.
     func test_dismissChords_workWhileAToolFloatIsOpen() {
         let c = makeController()
         c.showToast(ToastContent(variant: .info, title: "First", message: "one"))
@@ -320,9 +280,6 @@ final class ToastKeyboardTests: WindowTestCase {
         XCTAssertTrue(toastViews(in: c).isEmpty, "the float must not swallow the dismiss chords")
     }
 
-    /// A card's `cancel` button is its negative answer, not a dismissal. The surface-failure notice
-    /// offers only Retry and Close Pane, so a chord that took it down would strand a dead pane with
-    /// no way to retry and nothing on screen saying why.
     func test_dismissChords_leaveACardThatDeclaresNoDismissal() {
         let c = makeController()
         var retried = 0
@@ -339,8 +296,6 @@ final class ToastKeyboardTests: WindowTestCase {
         XCTAssertEqual(closed, 0)
     }
 
-    /// Dismissing must never be what builds the stack: a window that has shown no notice has no
-    /// presenter, and constructing one to clear nothing mounts a view for the life of the window.
     func test_dismissChords_doNotBuildTheStack() {
         let c = makeController()
         XCTAssertFalse(c.hasBuiltToastsForTesting)

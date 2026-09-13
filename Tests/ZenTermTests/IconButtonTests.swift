@@ -3,11 +3,8 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The shared icon button gained a hover tooltip and a busy activity dot.
 final class IconButtonTests: XCTestCase {
     func test_tooltip_labelAndLiveShortcut() {
-        // The shortcut resolves at hover time (via the closure), so it can track the live keymap
-        // instead of freezing a literal.
         let withShortcut = IconButton(
             symbol: "plus", accessibilityLabel: "New tab", shortcut: { "⌘T" }, onClick: {})
         XCTAssertEqual(withShortcut.tooltipLabelForTesting, "New tab")
@@ -31,11 +28,6 @@ final class IconButtonTests: XCTestCase {
         XCTAssertTrue(button.activityDotHiddenForTesting)
     }
 
-    // MARK: - resting weight
-
-    /// A toolbar icon is the thing you click, so it must not read at the weight of the hints and
-    /// subtitles beside it. It shared their weight exactly, which is
-    /// the kind of drift no assertion catches and no glance reliably does either: both look "grey".
     @MainActor
     func test_theRestingIcon_readsStrongerThanSecondaryText() {
         let button = IconButton(symbol: "plus", accessibilityLabel: "New tab", onClick: {})
@@ -48,7 +40,6 @@ final class IconButtonTests: XCTestCase {
             "the resting icon is at or below secondary-text weight")
     }
 
-    /// And below the hover weight, or the hover shift stops reading at all.
     @MainActor
     func test_theRestingIcon_staysBelowTheHoverTint() {
         XCTAssertLessThan(
@@ -57,12 +48,7 @@ final class IconButtonTests: XCTestCase {
     }
 }
 
-/// Glyph geometry the eye can't police to a point: a quarter point of vertical skew is invisible
-/// one glyph at a time and obvious in a row of eight. Measured, not looked at.
 final class IconGlyphSizeTests: XCTestCase {
-    /// Where the glyph's image box sits inside a laid-out button, in exact layout coordinates.
-    /// Pixels can't resolve this: a quarter point is half a device pixel at 2x, so a rasterised
-    /// check passes with the bug in place.
     private func glyphCentreOffset(_ symbol: String) throws -> CGFloat {
         let button = IconButton(symbol: symbol, pointSize: 12, accessibilityLabel: symbol) {}
         button.translatesAutoresizingMaskIntoConstraints = true
@@ -73,9 +59,6 @@ final class IconGlyphSizeTests: XCTestCase {
         return image.frame.midY - button.bounds.midY
     }
 
-    /// An SF Symbol's alignment rect is baseline-derived and sits off-centre in the image, so Auto
-    /// Layout hangs it high beside a brand mark whose rect is its whole bounds. A quarter point is
-    /// invisible one glyph at a time and obvious in a row of eight.
     func test_symbolsAndBrandMarks_shareAVerticalCentre() throws {
         let symbols = try ["terminal.fill", "folder.fill", "doc.text.fill", "square.stack.fill"]
             .map(glyphCentreOffset)

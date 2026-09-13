@@ -4,18 +4,12 @@ import XCTest
 @testable import ZenTerm
 
 final class MotionTests: XCTestCase {
-    /// The one suite here that is not a `WindowTestCase`, so it carries its own copy of that
-    /// base class's capture and restore. Captured in the property initializer, which XCTest runs
-    /// before any setup hook, and put back rather than assumed: `MotionConfig.apply` rewrites the
-    /// closure, and a case below reads the OS setting as its subject.
     private let originalReduceMotion = Motion.isReduceMotionEnabled
 
     override func tearDown() {
         Motion.isReduceMotionEnabled = originalReduceMotion
         super.tearDown()
     }
-
-    // MARK: - Reduce Motion collapses to an instant, synchronous apply
 
     func test_reduceMotion_springScaleFadeAppearing_appliesFinalStateSynchronously() {
         Motion.isReduceMotionEnabled = { true }
@@ -38,7 +32,6 @@ final class MotionTests: XCTestCase {
 
         XCTAssertTrue(ran)
         XCTAssertEqual(view.layer?.opacity, 0)
-        // Final model state matches the animated path: scaled (hidden), not identity.
         XCTAssertFalse(CATransform3DIsIdentity(view.layer!.transform))
     }
 
@@ -54,8 +47,6 @@ final class MotionTests: XCTestCase {
         XCTAssertEqual(layer.opacity, 1)
     }
 
-    // MARK: - Config override
-
     func test_motionConfig_forcesOnAndOff() {
         MotionConfig.apply(.on)
         XCTAssertTrue(Motion.isReduceMotionEnabled())
@@ -64,16 +55,12 @@ final class MotionTests: XCTestCase {
     }
 
     func test_motionConfig_systemRestoresTheSystemReader() {
-        // `.system` runs on every config change now, so it must UNDO a prior on/off override and
-        // fall back to reading the OS setting — not leave the forced closure in place.
         let systemValue = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         MotionConfig.apply(.on)
         XCTAssertTrue(Motion.isReduceMotionEnabled())
         MotionConfig.apply(.system)
         XCTAssertEqual(Motion.isReduceMotionEnabled(), systemValue, "`.system` must restore the OS reader")
     }
-
-    // MARK: - Pure geometry
 
     func test_centeredScale_holdsTheCenterFixed() {
         let bounds = CGRect(x: 0, y: 0, width: 200, height: 100)

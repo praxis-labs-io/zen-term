@@ -4,21 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Differential tests for the window half of the `.configDidChange` fan-out. The
-/// app-global half is `ConfigApplierDifferentialTests`; the invariant is the same one:
-///
-/// > For any config change, the **gated** fan-out must leave the chrome identical to the
-/// > **ungated** one.
-///
-/// `WindowControllerConfigFanOutTests` asserts specific gates hold for specific probes, which is
-/// worth keeping: those give a named failure ("the rebind never reached the drawer header keycap")
-/// where this one only says two fingerprints differ. But they only cover the dependencies someone
-/// already thought of, and the regressions were exactly the ones nobody thought of. This is
-/// the net under them: it needs no dependency list to be right.
-///
-/// **Honest limit:** it only covers what the fingerprint samples. Every probe added protects every
-/// change kind at once, so widening the fingerprint is the way to shrink the blind spot — but it
-/// does not close it.
 @MainActor
 final class ConfigFanOutDifferentialTests: WindowTestCase {
     private var originalConfig: GeneralConfig!
@@ -31,9 +16,6 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
         originalConfig = GeneralConfig.current
         originalTheme = Theme.current
         originalOverride = TerminalSurfaceFactory.makeOverride
-        // Instant everything. `animateSplitIn` detaches the very constraints the frames are read
-        // from, so an animated run would fingerprint a frame mid-slide — and two runs would catch
-        // different frames, which reads as a gate bug (see `PaneGapLiveApplyTests`).
         Motion.isReduceMotionEnabled = { true }
     }
 
@@ -46,55 +28,25 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
         try super.tearDownWithError()
     }
 
-    // MARK: - the fingerprint
-
-    /// The appearance a live surface was last handed across the seam.
     private struct SurfaceAppearance: Equatable {
         var theme: TerminalTheme
         var behavior: TerminalBehavior
     }
 
-    /// What the chrome looks like after a reload. Equatable so gated and ungated compare whole:
-    /// adding a probe protects every change kind at once, with no per-kind assertion to remember.
     private struct ChromeFingerprint: Equatable {
-        /// The tab bar's tracer underline, baked to `chrome.accent` at init and reset only by
-        /// `TabBarView.reapplyTheme()`.
         var tracer: String?
-        /// The glyphs the mounted panel headers were **built** with. `builtHeaderKeycapForTesting`
-        /// reads the built value; `contentForTesting` re-resolves live and so goes green whether or
-        /// not the rebuild happened. That distinction is what makes this able to fail.
         var headerKeycaps: [String]
-        /// Every mounted keycap's glyph, in tree order — palette rows, toasts, drawer headers. One
-        /// probe covering every surface that resolves a chord from the live keymap.
         var keycaps: [String]
-        /// Every mounted panel host's frame in window coordinates. Subsumes the pane gap, the
-        /// window gutter, the drawer split, and the top inset the traffic lights clear.
         var panelFrames: [String]
-        /// Where the toast stack sits — its insets are frozen at construction.
         var toastFrames: [String]
         var trafficLightsHidden: Bool?
-        /// Theme color plus `backdrop-alpha`, the one probe covering both halves of that gate.
         var backdropTint: String?
-        /// Every mounted view's resolved fill and text ink, in tree order, **except the tab bar's
-        /// subtree** (see `fingerprint` for why: it is the one part of the chrome the real mouse
-        /// position changes). The broad colour probe: `.theme` recolors the dock, both drawers, the
-        /// confirm and waiting toasts, float chrome, and every pane border, and sampling only the
-        /// two named colours above left all of that invisible to a theme gate that was too narrow.
-        /// Positional, so an added or removed view shows up as well as a recolored one.
         var colors: [String]
-        /// Text the chrome rendered, so a re-render that drops or restates content is caught too.
-        /// Same tab-bar exclusion, so a tooltip appearing under the cursor can't shift it.
         var text: [String]
         var dockFloatIDs: [String]
-        /// The toolbar's visible buttons and dividers left-to-right — the probe that catches a
-        /// `.toolbarButtons` gate skipping the hide/show re-apply.
         var dockLayout: [String]
-        /// What each live surface was last handed. Nil means it was never told anything.
         var surfaces: [SurfaceAppearance?]
 
-        /// Which fields moved, for the failure message. Equality is what makes the assertion
-        /// correct; this only makes it readable, so a field missing here degrades to a vaguer
-        /// message rather than a missed regression.
         func differences(from other: ChromeFingerprint) -> [String] {
             var diffs: [String] = []
             func note<Value: Equatable>(_ label: String, _ lhs: Value, _ rhs: Value) {
@@ -110,8 +62,6 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
             note("backdrop tint", backdropTint, other.backdropTint)
             note("dock float buttons", dockFloatIDs, other.dockFloatIDs)
             note("toolbar layout", dockLayout, other.dockLayout)
-            // Listed rather than dumped: these run to hundreds of entries, and printing both whole
-            // arrays produces a wall that hides the handful of views that actually moved.
             if colors != other.colors {
                 diffs.append("colors at \(Self.firstFew(differing: colors, from: other.colors))")
             }
@@ -126,8 +76,6 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
             return diffs
         }
 
-        /// The first few positions where two lists disagree, with both values. A length change
-        /// shifts every later index, so this reports the leading edge rather than the whole tail.
         private static func firstFew(differing lhs: [String], from rhs: [String]) -> String {
             func at(_ list: [String], _ index: Int) -> String {
                 list.indices.contains(index) ? list[index] : "absent"
@@ -145,8 +93,6 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
-    /// Rounded so float noise can't read as a divergence. A gate that skipped a relayout moves a
-    /// frame by points, not by hundredths.
     private func describe(_ rect: NSRect) -> String {
         let round = { (value: CGFloat) in (value * 100).rounded() / 100 }
         return "(\(round(rect.minX)), \(round(rect.minY)), \(round(rect.width)), \(round(rect.height)))"
@@ -158,18 +104,6 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
         let root = controller.window.contentView!
         root.layoutSubtreeIfNeeded()
         let views = descendants(of: root)
-        // The tab bar's own subtree is excluded from the broad colour and text sweep below, because
-        // it is the one part of the chrome whose appearance is driven by the **real** mouse:
-        // `TabBarView.refreshHover()` recomputes hover from `mouseLocationOutsideOfEventStream` on
-        // every relayout while the window is key, and hover tints a chip. Worse than a wrong value,
-        // it changes whether a chip is sampled *at all* — an un-hovered chip has no layer colour
-        // until `updateBackground()` first assigns one, so a chip that has ever been hovered adds an
-        // entry and shifts every index after it. Sampling it would make the suite pass in CI and on
-        // any machine whose pointer is elsewhere, then read as a gate regression on the one whose
-        // pointer happens to rest over the test window.
-        //
-        // Nothing is lost: `tracer` above is a deterministic probe of the same view's re-theme, and
-        // `reapplyTheme()` rebuilds the chips from it.
         let hoverDriven = Set(
             views.compactMap { $0 as? TabBarView }
                 .flatMap { [$0] + descendants(of: $0) }
@@ -201,15 +135,9 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
             })
     }
 
-    // MARK: - harness
-
-    /// A config move. The theme is *derived* from the config rather than set alongside it, because
-    /// that's the real resolution order: `AppConfig.reload()` re-resolves the general config first,
-    /// then the theme, which reads the general font.
     private struct Scenario {
         var name: String
         var mutate: (inout GeneralConfig) -> Void
-        /// Also point the theme at a different file, on top of any font change.
         var swapsTheme = false
     }
 
@@ -232,8 +160,6 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
             newTheme: appTheme(font: new, palette: newBase))
     }
 
-    /// The config's font over a palette, with the chrome roles derived from the result — the shape
-    /// `ConfigLoader` produces.
     private func appTheme(font config: GeneralConfig, palette: TerminalTheme) -> AppTheme {
         var terminal = palette
         terminal.fontName = config.fontName
@@ -241,8 +167,6 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
         return AppTheme(terminal: terminal, chrome: ChromeThemeDeriver.derive(from: terminal))
     }
 
-    /// Collects the stub surfaces this run created, so the fingerprint can see what the fan-out
-    /// pushed across the seam.
     private final class SurfaceLog {
         var surfaces: [RecordingSurface] = []
     }
@@ -253,9 +177,6 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
         wait(for: [drained], timeout: 5)
     }
 
-    /// Build a dressed window in the scenario's *old* state, move the statics to the *new* state,
-    /// post `change`, and fingerprint what's on screen. Torn down before returning, so the next run
-    /// starts from nothing and the global notification only ever reaches one window.
     private func run(_ resolved: Resolved, applying change: ConfigChange) -> ChromeFingerprint {
         GeneralConfig.setCurrentForTesting(resolved.old)
         Theme.setCurrentForTesting(resolved.oldTheme)
@@ -270,9 +191,6 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
         let controller = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
         controller.mountAndStart()
-        // Dress it: two panes (a split gutter to measure), a drawer (a panel header keycap), a
-        // toast (which is what freezes the stack's insets), and an open palette (rows whose
-        // shortcut column resolves from the live keymap).
         controller.handle(.splitHorizontal)
         controller.handle(.toggleBottomDrawer)
         controller.showToast(ToastContent(variant: .info, title: "notice", message: "body"))
@@ -308,10 +226,6 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
             """, file: file, line: line)
     }
 
-    // MARK: - scenarios
-
-    /// The ticket's motivating write, and the one both regressions rode in on: a rebind
-    /// reaches every surface that renders a keycap, none of which sounds like a keymap consumer.
     func test_keymapRebind() throws {
         try assertGateSkipsNothing(
             Scenario(name: "rebind Focus Mode") {
@@ -325,8 +239,6 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
         try assertGateSkipsNothing(Scenario(name: "theme swap", mutate: { _ in }, swapsTheme: true))
     }
 
-    /// A font edit resolves into the `AppTheme` rather than being read on its own, so it has to
-    /// reach observers as `.theme`.
     func test_fontSize() throws {
         try assertGateSkipsNothing(Scenario(name: "font-size") { $0.fontSize += 4 })
     }
@@ -347,8 +259,6 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
         try assertGateSkipsNothing(Scenario(name: "backdrop-alpha") { $0.backdropAlpha = 0.3 })
     }
 
-    /// Reaches further than the other `TerminalBehavior` keys: it also has to recolor the panel,
-    /// which fills its padding ring to match the surface.
     func test_backgroundAlpha() throws {
         try assertGateSkipsNothing(Scenario(name: "background-alpha") { $0.backgroundAlpha = 0.6 })
     }
@@ -381,9 +291,6 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
             })
     }
 
-    /// App-global kinds the window observer reads nothing from. Cheap, and they're the assertion
-    /// that it genuinely reads nothing — a window that quietly grew a dependency on one would show
-    /// up here rather than as stale chrome.
     func test_reduceMotion() throws {
         try assertGateSkipsNothing(Scenario(name: "reduce-motion") { $0.reduceMotion = .on })
     }
@@ -402,7 +309,6 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
             })
     }
 
-    /// Several kinds at once — a Settings save touches more than one row.
     func test_severalKindsAtOnce() throws {
         try assertGateSkipsNothing(
             Scenario(name: "gap + cursor + rebind") {
@@ -413,8 +319,6 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
             })
     }
 
-    /// The harness's own control. If a fingerprint isn't stable across two identical runs, every
-    /// assertion above is meaningless — a flaky probe reads as a gate bug.
     func test_theFingerprintIsDeterministic() throws {
         let resolved = try resolve(Scenario(name: "control") { $0.panelGap += 32 })
         XCTAssertEqual(
@@ -422,11 +326,6 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
             "two identical runs fingerprinted differently — the probes aren't stable")
     }
 
-    // MARK: - helpers
-
-    /// A theme whose accent (ANSI slot 5) is a clearly distinct `#00ff00`, built through the same
-    /// `ConfigLoader.loadAppTheme` path the other re-apply tests use, so every derived chrome role
-    /// is populated exactly like a real theme swap.
     private func makeAlternateTheme() throws -> AppTheme {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-differential-\(UUID().uuidString)", isDirectory: true)

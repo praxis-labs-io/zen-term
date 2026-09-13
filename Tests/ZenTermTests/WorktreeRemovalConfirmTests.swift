@@ -157,7 +157,6 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
         XCTAssertEqual(WorktreeRemovalRollup.Row.more(hiddenFiles: 35).listRow, .note("and 35 more"))
     }
 
-    /// `docs/brand-voice.md` bans the em-dash outright, and the test for it is a grep.
     func test_noEmDashAnywhere() {
         let cases = [
             lines(state: nil), lines(state: state(files: 3, commits: 2), branch: nil, carried: [".env"], openTabs: 2),

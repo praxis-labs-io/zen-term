@@ -8,8 +8,6 @@ final class GeneralConfigParserTests: XCTestCase {
     }
 
     func test_cursorShader_isSingleSelect_lastNonEmptyWins() {
-        // Single-select: the parser stores the raw bundled-shader name (ConfigLoader resolves it),
-        // last non-empty line wins, and an empty value is skipped.
         let config = parse(
             """
             cursor-shader = cursor_warp
@@ -75,49 +73,49 @@ final class GeneralConfigParserTests: XCTestCase {
 
     func test_editorAndAI_absent_fallsBackToNil() {
         let config = parse("font-size = 14\n")
-        XCTAssertNil(config.editor)  // absent → nil → the preset's nvim/claude fallback
+        XCTAssertNil(config.editor)
         XCTAssertNil(config.ai)
     }
 
     func test_automaticUpdateChecks_parsesAndDefaultsOn() {
         XCTAssertFalse(parse("automatic-update-checks = false\n").automaticUpdateChecks)
         XCTAssertTrue(parse("automatic-update-checks = true\n").automaticUpdateChecks)
-        XCTAssertTrue(parse("automatic-update-checks = maybe\n").automaticUpdateChecks)  // malformed → default
-        XCTAssertTrue(parse("font-size = 14\n").automaticUpdateChecks)  // absent → default (on)
+        XCTAssertTrue(parse("automatic-update-checks = maybe\n").automaticUpdateChecks)
+        XCTAssertTrue(parse("font-size = 14\n").automaticUpdateChecks)
     }
 
     func test_fontThicken_parsesAndDefaultsOff() {
         XCTAssertTrue(parse("font-thicken = true\n").fontThicken)
         XCTAssertFalse(parse("font-thicken = false\n").fontThicken)
-        XCTAssertFalse(parse("font-thicken = maybe\n").fontThicken)  // malformed → default (off)
-        XCTAssertFalse(parse("font-size = 14\n").fontThicken)  // absent → default (off)
+        XCTAssertFalse(parse("font-thicken = maybe\n").fontThicken)
+        XCTAssertFalse(parse("font-size = 14\n").fontThicken)
     }
 
     func test_tabInheritCWD_parsesAndDefaultsOff() {
         XCTAssertTrue(parse("tab-inherit-cwd = true\n").tabInheritCWD)
         XCTAssertFalse(parse("tab-inherit-cwd = false\n").tabInheritCWD)
-        XCTAssertFalse(parse("tab-inherit-cwd = maybe\n").tabInheritCWD)  // malformed → default (off)
-        XCTAssertFalse(parse("font-size = 14\n").tabInheritCWD)  // absent → default (off)
+        XCTAssertFalse(parse("tab-inherit-cwd = maybe\n").tabInheritCWD)
+        XCTAssertFalse(parse("font-size = 14\n").tabInheritCWD)
     }
 
     func test_debug_parsesAndDefaultsOff() {
         XCTAssertTrue(parse("debug = true\n").debug)
         XCTAssertFalse(parse("debug = false\n").debug)
-        XCTAssertFalse(parse("debug = maybe\n").debug)  // malformed → default (off)
-        XCTAssertFalse(parse("font-size = 14\n").debug)  // absent → default (off)
+        XCTAssertFalse(parse("debug = maybe\n").debug)
+        XCTAssertFalse(parse("font-size = 14\n").debug)
     }
 
     func test_themeKey_setsThemeName() {
         XCTAssertEqual(parse("theme = catppuccin-mocha\n").themeName, "catppuccin-mocha")
-        XCTAssertNil(parse("font-size = 14\n").themeName)  // absent → nil (legacy/default path)
+        XCTAssertNil(parse("font-size = 14\n").themeName)
     }
 
     func test_partial_fallsBackForUnsetKeys() {
         let config = parse("font-size = 20\n")
         XCTAssertEqual(config.fontSize, 20)
-        XCTAssertEqual(config.cursorStyle, GeneralConfig.builtIn.cursorStyle)  // untouched
+        XCTAssertEqual(config.cursorStyle, GeneralConfig.builtIn.cursorStyle)
         XCTAssertEqual(config.backdropAlpha, GeneralConfig.builtIn.backdropAlpha)
-        XCTAssertEqual(config.backgroundAlpha, GeneralConfig.builtIn.backgroundAlpha)  // 1 = solid
+        XCTAssertEqual(config.backgroundAlpha, GeneralConfig.builtIn.backgroundAlpha)
     }
 
     func test_malformedValues_fallBack() {
@@ -129,46 +127,41 @@ final class GeneralConfigParserTests: XCTestCase {
             window-chrome = sometimes
             backdrop-alpha = 0.3
             """)
-        XCTAssertEqual(config.fontSize, GeneralConfig.builtIn.fontSize)  // "abc" → fallback
-        XCTAssertEqual(config.cursorStyle, GeneralConfig.builtIn.cursorStyle)  // "wiggle" → fallback
-        XCTAssertEqual(config.optionAsAlt, GeneralConfig.builtIn.optionAsAlt)  // "maybe" → fallback
-        XCTAssertEqual(config.windowChrome, GeneralConfig.builtIn.windowChrome)  // "sometimes" → fallback (true)
-        XCTAssertEqual(config.backdropAlpha, 0.3)  // the valid line still applies
+        XCTAssertEqual(config.fontSize, GeneralConfig.builtIn.fontSize)
+        XCTAssertEqual(config.cursorStyle, GeneralConfig.builtIn.cursorStyle)
+        XCTAssertEqual(config.optionAsAlt, GeneralConfig.builtIn.optionAsAlt)
+        XCTAssertEqual(config.windowChrome, GeneralConfig.builtIn.windowChrome)
+        XCTAssertEqual(config.backdropAlpha, 0.3)
     }
 
     func test_outOfRange_clamps() {
         let config = parse(
             "backdrop-alpha = 2.5\nbackground-alpha = -0.5\nfont-size = 2\nmax-drawer-fraction = 0.99\n")
-        XCTAssertEqual(config.backdropAlpha, 1.0)  // clamped to [0, 1]
-        XCTAssertEqual(config.backgroundAlpha, 0)  // clamped to [0, 1]
-        XCTAssertEqual(config.fontSize, 6)  // clamped to [6, 32]
-        XCTAssertEqual(config.maxDrawerFraction, 0.95)  // clamped to [0.3, 0.95]
+        XCTAssertEqual(config.backdropAlpha, 1.0)
+        XCTAssertEqual(config.backgroundAlpha, 0)
+        XCTAssertEqual(config.fontSize, 6)
+        XCTAssertEqual(config.maxDrawerFraction, 0.95)
     }
 
-    /// The ceiling came down to 32 so that ⌘+ / ⌘- and the config file bound the size
-    /// the same way. A config asking for more lands on 32 rather than the old 72.
     func test_fontSize_clampsToTheSteppingCeiling() {
         XCTAssertEqual(parse("font-size = 40\n").fontSize, 32)
-        XCTAssertEqual(parse("font-size = 32\n").fontSize, 32)  // the ceiling itself is legal
+        XCTAssertEqual(parse("font-size = 32\n").fontSize, 32)
     }
 
     func test_nonFiniteValues_fallBackWithoutCrashing() {
-        // `Double("nan")`/`"inf"` parse but must not reach Int(NaN)/clamp — regression guard.
         let config = parse("cursor-thickness = nan\nscroll-multiplier = inf\nfont-size = 20\n")
         XCTAssertEqual(config.cursorThickness, GeneralConfig.builtIn.cursorThickness)
         XCTAssertEqual(config.scrollMultiplier, GeneralConfig.builtIn.scrollMultiplier)
-        XCTAssertEqual(config.fontSize, 20)  // the finite line still applies
+        XCTAssertEqual(config.fontSize, 20)
     }
 
     func test_cursorThickness_parsesAndClamps() {
         XCTAssertEqual(parse("cursor-thickness = 4\n").cursorThickness, 4)
-        XCTAssertEqual(parse("cursor-thickness = 99\n").cursorThickness, 12)  // clamped to [1, 12]
+        XCTAssertEqual(parse("cursor-thickness = 99\n").cursorThickness, 12)
         XCTAssertEqual(parse("cursor-thickness = 0\n").cursorThickness, 1)
     }
 
     func test_trailingInlineComments_stripped() {
-        // Uncommenting a documented reference line leaves a trailing `# …` comment; it must
-        // not corrupt the value.
         let config = parse(
             """
             cursor-style = bar                # block | bar | underline
@@ -186,7 +179,7 @@ final class GeneralConfigParserTests: XCTestCase {
     func test_unknownKeysAndComments_ignored() {
         let config = parse("# a comment\nbackground = #000000\n\nfont-size = 18\n")
         XCTAssertEqual(config.fontSize, 18)
-        XCTAssertEqual(config.fontName, GeneralConfig.builtIn.fontName)  // no theme keys leak in
+        XCTAssertEqual(config.fontName, GeneralConfig.builtIn.fontName)
     }
 
     func test_floatsAndKeybinds_populateStructuredFields() {
@@ -197,7 +190,6 @@ final class GeneralConfigParserTests: XCTestCase {
             """)
         XCTAssertEqual(config.floats.map(\.id), ["gitdash"])
         XCTAssertEqual(config.keymap[Chord(command: true, key: "f")], .toggleCommandPalette)
-        // The float's key becomes a dynamic chord in the keymap.
         XCTAssertEqual(config.keymap[Chord(command: true, shift: true, key: "g")], .toggleToolFloat("gitdash"))
     }
 
@@ -211,10 +203,6 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.floats.first?.command, "two")
     }
 
-    // MARK: float order
-
-    /// `config.floats` is the single array the dock, ⌘P, and Settings → Tools all read, so this sort
-    /// is what "reorder" actually means end to end.
     func test_floats_sortByOrderField() {
         let config = parse(
             """
@@ -225,8 +213,6 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.floats.map(\.id), ["a", "b", "c"])
     }
 
-    /// A config written before `order:` existed must be untouched by it: no `order:` anywhere means
-    /// the floats keep the order their lines appear in.
     func test_floats_withoutOrder_keepFileOrder() {
         let config = parse(
             """
@@ -237,8 +223,6 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.floats.map(\.id), ["c", "a", "b"])
     }
 
-    /// Swift's sort isn't stable, so a shared `order:` has to be broken by line order explicitly —
-    /// otherwise the dock could silently shuffle between launches of an unchanged config.
     func test_floats_tiedOrder_brokenByFileOrder_deterministically() {
         let text = """
             float = order:1 title:a command:a key:cmd+shift+a
@@ -250,10 +234,6 @@ final class GeneralConfigParserTests: XCTestCase {
         }
     }
 
-    /// A half-numbered config — what you get by hand-editing one line of a config Settings hasn't
-    /// reordered yet. An unnumbered float's order *is* its line position, so numbers and positions
-    /// sort on one scale: here `a` is pushed behind the two unnumbered floats holding positions 1 and
-    /// 2, rather than numbered floats forming a separate group that jumps the queue.
     func test_floats_mixedOrderAndUnordered_sortOnOneScale() {
         let config = parse(
             """
@@ -263,8 +243,6 @@ final class GeneralConfigParserTests: XCTestCase {
             """)
         XCTAssertEqual(config.floats.map(\.id), ["b", "c", "a"])
     }
-
-    // MARK: hide-toolbar-buttons
 
     func test_hideToolbarButtons_absent_hidesNothing() {
         XCTAssertEqual(parse("font-size = 14\n").hiddenToolbarButtons, [])
@@ -283,9 +261,6 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertTrue(config.configDiagnostics.isEmpty)
     }
 
-    /// `.ignoredListItem`, not `.invalidValue`: the latter's rendered message claims "Using the
-    /// default." while the known slugs on the line still apply — the message would contradict the
-    /// visibly hidden button.
     func test_hideToolbarButtons_unknownSlug_diagnosesAndKeepsKnownOnes() {
         let config = parse("hide-toolbar-buttons = split-h,zoom,command-palette\n")
         XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal, .commandPalette])
@@ -299,11 +274,6 @@ final class GeneralConfigParserTests: XCTestCase {
                         expected: ToolbarButton.allCases.map(\.rawValue).joined(separator: ", ")))
             ])
     }
-
-    // MARK: config diagnostics
-    //
-    // The scalar/enum/float fallbacks used to log-and-drop with no trace a surface could show. Each
-    // now collects a `ConfigDiagnostic` too — the piece that can go silently dead, so it's asserted.
 
     func test_invalidScalars_collectInvalidValueDiagnostics() {
         let diagnostics = parse(
@@ -328,8 +298,6 @@ final class GeneralConfigParserTests: XCTestCase {
             ])
     }
 
-    // MARK: toasts
-
     func test_toastKeys_parse() {
         let config = parse(
             """
@@ -342,7 +310,6 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.toastDuration, 8)
     }
 
-    /// Both notification cards wait by default, so nothing moves for anyone who sets neither.
     func test_toastKeys_defaultToSticky() {
         let config = parse("")
         XCTAssertEqual(config.attentionToast, .sticky)
@@ -350,7 +317,6 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.toastDuration, 4)
     }
 
-    /// The two share one parse helper, so the diagnostic has to name which key was wrong.
     func test_invalidToastDismissal_namesTheKeyThatWasWrong() {
         let diagnostics = parse(
             """
@@ -388,7 +354,6 @@ final class GeneralConfigParserTests: XCTestCase {
     }
 
     func test_nonFiniteNumber_collectsInvalidValueNotClamp() {
-        // "inf" is rejected in parseDouble before clamp ever runs, so it reads as invalid, not clamped.
         XCTAssertEqual(
             parse("scroll-multiplier = inf\n").configDiagnostics,
             [
@@ -410,24 +375,17 @@ final class GeneralConfigParserTests: XCTestCase {
             [ConfigDiagnostic(scope: .keybindLine, problem: .unparseableLine("totally bogus"))])
     }
 
-    /// A removed action is not a typo. `diff_viewer` shipped a default chord for six versions, so
-    /// plenty of configs bind it; a card every launch saying only "unparseable" tells the user
-    /// their file is broken with no way to learn what replaced it. The migration goes to the log,
-    /// like `toggle_lazygit`, because the replacement is a `float =` recipe a toast cannot hold.
     func test_retiredKeybindAction_takesNoDiagnostic() {
         XCTAssertEqual(parse("keybind = diff_viewer=cmd+g\n").configDiagnostics, [])
         XCTAssertEqual(parse("keybind = diff_viewer=cmd+shift+g\n").configDiagnostics, [])
     }
 
-    /// The exact-match guard: only the retired token itself migrates, so a typo still reports.
     func test_aTypoOnTheRetiredAction_stillReportsUnparseable() {
         XCTAssertEqual(
             parse("keybind = diff_viewer_old=cmd+g\n").configDiagnostics,
             [ConfigDiagnostic(scope: .keybindLine, problem: .unparseableLine("diff_viewer_old=cmd+g"))])
     }
 
-    /// Same reasoning on the other surface. The button it named is gone, so the line already does
-    /// what it says and the Appearance row has nothing to tell anyone.
     func test_retiredToolbarSlug_isDroppedWithoutADiagnostic() {
         let config = parse("hide-toolbar-buttons = split-h,diff-viewer\n")
         XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal])
@@ -436,13 +394,11 @@ final class GeneralConfigParserTests: XCTestCase {
 
     func test_droppedFloatLine_collectsADiagnostic() {
         XCTAssertEqual(
-            parse("float = title:Notes key:cmd+shift+n\n").configDiagnostics,  // no command:
+            parse("float = title:Notes key:cmd+shift+n\n").configDiagnostics,
             [ConfigDiagnostic(scope: .toolFloat(label: "Notes"), problem: .floatMissingField("command:"))])
     }
 
     func test_keybindConflict_stillCollected_alongsideScalarDiagnostics() {
-        // The keybind diagnostics come from KeymapAssembler; the scalar ones from the parse loop.
-        // Both must land in the one `configDiagnostics` array.
         let diagnostics = parse(
             """
             font-size = 200

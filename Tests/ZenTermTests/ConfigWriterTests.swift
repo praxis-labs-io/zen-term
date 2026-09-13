@@ -77,7 +77,7 @@ final class ConfigWriterTests: XCTestCase {
         let garbage = Data([0xFF, 0xFE, 0xFF])
         try garbage.write(to: url)
         XCTAssertThrowsError(try ConfigWriter.apply(scalars: ["theme": "x"], configRoot: dir))
-        XCTAssertEqual(try Data(contentsOf: url), garbage)  // byte-identical: not clobbered
+        XCTAssertEqual(try Data(contentsOf: url), garbage)
     }
 
     func test_writesThroughSymlink() throws {
@@ -93,20 +93,18 @@ final class ConfigWriterTests: XCTestCase {
         try ConfigWriter.apply(scalars: ["theme": "new"], configRoot: dir)
 
         let attrs = try FileManager.default.attributesOfItem(atPath: link.path)
-        XCTAssertEqual(attrs[.type] as? FileAttributeType, .typeSymbolicLink)  // link intact
-        XCTAssertEqual(try String(contentsOf: realFile, encoding: .utf8), "theme = new\n")  // wrote target
+        XCTAssertEqual(attrs[.type] as? FileAttributeType, .typeSymbolicLink)
+        XCTAssertEqual(try String(contentsOf: realFile, encoding: .utf8), "theme = new\n")
     }
 
     func test_keybind_emitsOnlyNonDefaultOverrides() throws {
         let dir = try makeTempDir()
         try seed("# ─── Keybinds ───\n", in: dir)
-        // Move the command palette to cmd+shift+o; keep everything else at its default.
         var desired = KeymapOverrides(binds: KeymapDefaults.map)
         desired.bind(.toggleCommandPalette, to: [Chord(command: true, shift: true, key: "o")])
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
         let text = try read(dir)
         XCTAssertTrue(text.contains("keybind = toggle_command_palette=cmd+shift+o"), text)
-        // No other action changed → exactly one keybind line.
         XCTAssertEqual(text.components(separatedBy: "\n").filter { $0.hasPrefix("keybind = ") }.count, 1)
     }
 
@@ -114,7 +112,7 @@ final class ConfigWriterTests: XCTestCase {
         let dir = try makeTempDir()
         try seed("theme = x\nkeybind = toggle_zoom=cmd+shift+z\n", in: dir)
         try ConfigWriter.apply(
-            keybinds: KeymapOverrides(binds: KeymapDefaults.map), configRoot: dir)  // all defaults → no overrides
+            keybinds: KeymapOverrides(binds: KeymapDefaults.map), configRoot: dir)
         let text = try read(dir)
         XCTAssertFalse(text.contains("keybind = "), text)
         XCTAssertTrue(text.contains("theme = x"), text)
@@ -124,10 +122,10 @@ final class ConfigWriterTests: XCTestCase {
         let dir = try makeTempDir()
         try seed("keybind = toggle_float:dev=cmd+shift+d\nkeybind = toggle_zoom=cmd+shift+z\n", in: dir)
         try ConfigWriter.apply(
-            keybinds: KeymapOverrides(binds: KeymapDefaults.map), configRoot: dir)  // reset reserved to defaults
+            keybinds: KeymapOverrides(binds: KeymapDefaults.map), configRoot: dir)
         let text = try read(dir)
-        XCTAssertTrue(text.contains("keybind = toggle_float:dev=cmd+shift+d"), text)  // float bind kept
-        XCTAssertFalse(text.contains("toggle_zoom"), text)  // reserved override dropped
+        XCTAssertTrue(text.contains("keybind = toggle_float:dev=cmd+shift+d"), text)
+        XCTAssertFalse(text.contains("toggle_zoom"), text)
     }
 
     func test_keybind_leavesFloatDefinitionLinesUntouched() throws {
@@ -140,8 +138,6 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertTrue(text.contains("float = title:dev command:\"npm run dev\" key:cmd+shift+d"), text)
     }
 
-    // MARK: unbinding
-
     func test_keybind_unboundAction_emitsANoneLine() throws {
         let dir = try makeTempDir()
         var desired = KeymapOverrides(binds: KeymapDefaults.map)
@@ -152,10 +148,6 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(text.components(separatedBy: "\n").filter { $0.hasPrefix("keybind = ") }.count, 1)
     }
 
-    /// Write, read, write. The second write regenerates the whole block from what the parser handed
-    /// back, so a line the parser cannot represent is a line the second write deletes. This is the
-    /// reason `KeymapOverrides` exists at all: with `unbound` absent, the action reads as "at its
-    /// defaults" and its line vanishes on the next Settings edit.
     func test_keybind_unboundAction_survivesAReadAndRewrite() throws {
         let dir = try makeTempDir()
         var desired = KeymapOverrides(binds: KeymapDefaults.map)
@@ -173,8 +165,6 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertTrue(rewritten.contains("keybind = search_next=none"), rewritten)
     }
 
-    /// The ticket's "done when", spelled as the user hits it: Find Next is unbound in the file, then
-    /// an unrelated row is rebound in Settings. The rebind must not carry the unbind away with it.
     func test_keybind_rebindingOneAction_leavesAnotherActionsUnbindOnDisk() throws {
         let dir = try makeTempDir()
         try seed("keybind = find_next=none\n", in: dir)
@@ -186,20 +176,16 @@ final class ConfigWriterTests: XCTestCase {
 
         let text = try read(dir)
         XCTAssertTrue(text.contains("keybind = split_vertical=cmd+shift+u"), text)
-        // Seeded with the legacy `find_next`, rewritten as the canonical `search_next`: the
-        // unbind survives the rewrite, which is what this is about, and the token canonicalizes.
         XCTAssertTrue(text.contains("keybind = search_next=none"), text)
     }
 
-    /// Binding an unbound action back has to take the line away, or the file says both things and
-    /// the assembler has to keep picking a winner.
     func test_keybind_bindingAnUnboundActionBack_dropsTheNoneLine() throws {
         let dir = try makeTempDir()
         try seed("keybind = clear_screen=none\n", in: dir)
         let loaded = ConfigLoader.loadGeneralConfig(configRoot: dir)
 
         var desired = KeymapOverrides(binds: loaded.keymap, unbound: loaded.unboundActions)
-        desired.bind(.clearScreen, to: [Chord(command: true, key: "k")])  // back to its default
+        desired.bind(.clearScreen, to: [Chord(command: true, key: "k")])
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
 
         let text = try read(dir)
@@ -216,13 +202,9 @@ final class ConfigWriterTests: XCTestCase {
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
         let keymap = ConfigLoader.loadGeneralConfig(configRoot: dir).keymap
         XCTAssertEqual(keymap[Chord(command: true, shift: true, key: "z")], .toggleZoom)
-        XCTAssertNil(keymap[Chord(command: true, shift: true, key: "⏎")])  // old ⌘⇧⏎ default was dropped
+        XCTAssertNil(keymap[Chord(command: true, shift: true, key: "⏎")])
     }
 
-    // MARK: floats
-
-    /// A float built the way the config produces one: the id is always `slug(title)`, never authored
-    /// beside it — so a test can't assert a float the parser could never hand back.
     private func float(
         title: String, order: Int = 1, icon: String = ToolFloatParser.defaultIcon,
         command: String, dir: URL? = nil, width: CGFloat = 0.85, height: CGFloat = 0.85,
@@ -249,8 +231,6 @@ final class ConfigWriterTests: XCTestCase {
             ConfigWriter.serializeFloat(lean), "float = order:1 title:dev key:cmd+shift+d command:vim")
     }
 
-    /// `toolbar:` follows the omit-defaults rule: only a hidden button earns the token, and the
-    /// written line parses back to the same float.
     func test_float_serialize_emitsToolbarFalse_andRoundTrips() throws {
         var hidden = float(title: "dev", command: "vim", toggle: Chord(command: true, shift: true, key: "d"))
         hidden.showsInToolbar = false
@@ -290,8 +270,6 @@ final class ConfigWriterTests: XCTestCase {
     func test_float_upsertWithRemoval_movesFloatToNewTitle() throws {
         let dir = try makeTempDir()
         try seed("float = title:dev command:vim key:cmd+shift+d\n", in: dir)
-        // A rename: the new title slugs to a new id, so the float is upserted under that id AND the
-        // old line removed in the same write. This is the only path that changes a float's id.
         let renamed = float(title: "devbox", command: "vim", toggle: Chord(command: true, shift: true, key: "d"))
         try ConfigWriter.apply(floatUpserts: [renamed], floatRemovals: ["dev"], configRoot: dir)
         XCTAssertEqual(
@@ -299,11 +277,6 @@ final class ConfigWriterTests: XCTestCase {
             "the rename drops the old id, leaving exactly one float — not a duplicate")
     }
 
-    // MARK: float order
-
-    /// Reordering only renumbers: every float's line stays exactly where it was, and the comments,
-    /// blanks, and unrelated keys around it are untouched. That's the payoff of `order:` being a field
-    /// instead of the file's line order — the user's file stays theirs.
     func test_floatOrder_renumbersInPlace_preservingTheFileAround() throws {
         let dir = try makeTempDir()
         try seed(
@@ -332,8 +305,6 @@ final class ConfigWriterTests: XCTestCase {
             """)
     }
 
-    /// The order the caller passes is the order that comes back out of the file — the assertion that
-    /// makes ⌥↑/⌥↓ mean anything, since the dock re-reads the config rather than the row list.
     func test_floatOrder_roundTripsThroughLoader() throws {
         let dir = try makeTempDir()
         try seed(
@@ -351,9 +322,6 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(ConfigLoader.loadGeneralConfig(configRoot: dir).floats.map(\.id), ["c", "a", "b"])
     }
 
-    /// Stamps *every* float, not just the ones that moved: a config with no `order:` at all becomes a
-    /// full contiguous sequence on the first reorder, rather than a mix that sorts half by number and
-    /// half by line position.
     func test_floatOrder_stampsEveryFloat_evenWhenNoneHadOrder() throws {
         let dir = try makeTempDir()
         try seed(
@@ -364,17 +332,13 @@ final class ConfigWriterTests: XCTestCase {
             """, in: dir)
         let loaded = ConfigLoader.loadGeneralConfig(configRoot: dir).floats
 
-        try ConfigWriter.applyFloatOrder(loaded, configRoot: dir)  // same order — still stamps
+        try ConfigWriter.applyFloatOrder(loaded, configRoot: dir)
 
         let text = try read(dir)
         XCTAssertTrue(text.contains("float = order:1 title:a"), text)
         XCTAssertTrue(text.contains("float = order:2 title:b"), text)
     }
 
-    /// A rename must not move the float. It's a remove(old) + upsert(new) in one write, and the new
-    /// line has no existing line to replace — so if it lands at the end of the block, the floats that
-    /// never had an `order:` inherit the line positions it used to hold and the renamed float silently
-    /// slides down the dock, the palette, and Settings.
     func test_float_rename_keepsItsPositionInTheDock() throws {
         let dir = try makeTempDir()
         try seed(
@@ -387,7 +351,6 @@ final class ConfigWriterTests: XCTestCase {
         let loaded = ConfigLoader.loadGeneralConfig(configRoot: dir).floats
         XCTAssertEqual(loaded.map(\.id), ["a", "b", "c"])
 
-        // Exactly what `submitToolFloat` does for a rename: same order, new title, old id removed.
         let renamed = float(
             title: "a2", order: loaded[0].order, command: "a",
             toggle: Chord(command: true, shift: true, key: "a"))
@@ -416,7 +379,6 @@ final class ConfigWriterTests: XCTestCase {
             title: "note", command: "echo #1", toggle: Chord(command: true, shift: true, key: "n"))
         let line = ConfigWriter.serializeFloat(original)
         XCTAssertTrue(line.contains("command:\"echo #1\""), line)
-        // The whole line must survive the parser's comment strip (the `#` is inside quotes).
         let stripped = ConfigText.stripComment(line)
         XCTAssertEqual(ToolFloatParser.parse(String(stripped.dropFirst("float = ".count))), original)
     }
@@ -442,10 +404,6 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(ToolFloatParser.parse(String(line.dropFirst("float = ".count))), original)
     }
 
-    /// The review fix for the bug where `dir:~/notes` was silently rewritten to an absolute path:
-    /// `serializeFloat` must abbreviate a home-relative `dir` back to `~`, the same way
-    /// `WorkspacesWriter` does for workspace paths, or a synced dotfiles config breaks on every
-    /// other machine/username the moment any Settings-form edit rewrites the float's line.
     func test_serializeFloat_dirUnderHome_abbreviatesToTilde_andRoundTrips() throws {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let dir = URL(fileURLWithPath: home.path + "/notes").standardizedFileURL
@@ -453,7 +411,7 @@ final class ConfigWriterTests: XCTestCase {
             title: "notes", command: "vim", dir: dir, toggle: Chord(command: true, shift: true, key: "n"))
 
         let line = ConfigWriter.serializeFloat(original)
-        XCTAssertTrue(line.contains("dir:~/notes"), line)  // not the expanded absolute path
+        XCTAssertTrue(line.contains("dir:~/notes"), line)
 
         let value = String(line.dropFirst("float = ".count))
         XCTAssertEqual(ToolFloatParser.parse(value), original)
@@ -465,7 +423,7 @@ final class ConfigWriterTests: XCTestCase {
             title: "tmp", command: "vim", dir: dir, toggle: Chord(command: true, shift: true, key: "t"))
 
         let line = ConfigWriter.serializeFloat(original)
-        XCTAssertTrue(line.contains("dir:/tmp/x"), line)  // no home prefix to abbreviate
+        XCTAssertTrue(line.contains("dir:/tmp/x"), line)
 
         let value = String(line.dropFirst("float = ".count))
         XCTAssertEqual(ToolFloatParser.parse(value), original)
@@ -473,15 +431,6 @@ final class ConfigWriterTests: XCTestCase {
 
     func test_keybind_narrowingMultiChordAction_persistsAndRoundTrips() throws {
         let dir = try makeTempDir()
-        // A user can point two chords at one action, then drop one. The per-action diff has to
-        // write the whole surviving set, and narrowing back to exactly the defaults must write no
-        // line at all — leaving the extra chord behind either way would resurrect a bind the user
-        // deleted. (Earlier splitVertical shipped with two default chords and this guarded
-        // that; canonicalization collapsed them to one, so the multi-chord case is now reachable
-        // only from config — which is exactly where it still has to hold.)
-        // The extra has to be a chord no default holds, or narrowing back does not leave it nil:
-        // it falls to whichever action ships on it. It was ⌘⇧V until that became
-        // paste_selection.
         XCTAssertNil(
             KeymapDefaults.map[Chord(command: true, shift: true, key: "u")],
             "a default claimed the fixture's extra chord; move the fixture to a free one")
@@ -489,8 +438,8 @@ final class ConfigWriterTests: XCTestCase {
         desired.bind(
             .splitVertical,
             to: [
-                Chord(command: true, shift: true, key: "\\"),  // its default
-                Chord(command: true, shift: true, key: "u"),  // plus an extra
+                Chord(command: true, shift: true, key: "\\"),
+                Chord(command: true, shift: true, key: "u"),
             ])
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
         var text = try read(dir)
@@ -500,14 +449,12 @@ final class ConfigWriterTests: XCTestCase {
             ConfigLoader.loadGeneralConfig(configRoot: dir).keymap[Chord(command: true, shift: true, key: "u")],
             .splitVertical)
 
-        // Narrow back to the default alone: the action's set now equals the defaults, so nothing is
-        // written — and the assembler's defaults must stand on their own.
         desired.bind(.splitVertical, to: [Chord(command: true, shift: true, key: "\\")])
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
         text = try read(dir)
         XCTAssertFalse(text.contains("split_vertical=cmd+shift+u"), text)
         let keymap = ConfigLoader.loadGeneralConfig(configRoot: dir).keymap
         XCTAssertEqual(keymap[Chord(command: true, shift: true, key: "\\")], .splitVertical)
-        XCTAssertNil(keymap[Chord(command: true, shift: true, key: "u")])  // the dropped chord is gone
+        XCTAssertNil(keymap[Chord(command: true, shift: true, key: "u")])
     }
 }

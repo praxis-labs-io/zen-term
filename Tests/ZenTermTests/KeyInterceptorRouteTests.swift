@@ -3,10 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The order `KeyInterceptor.route` resolves a keystroke in. Getting it wrong is
-/// invisible until it isn't: a mode placed above chord routing swallows ⌘T and pane nav for as
-/// long as it's up, and one placed below the modifier fast-bail never sees a bare `j` at all,
-/// which is every key scroll mode exists to claim.
 final class KeyInterceptorRouteTests: XCTestCase {
     private func keyDown(
         _ characters: String, flags: NSEvent.ModifierFlags = [], isARepeat: Bool = false
@@ -18,7 +14,6 @@ final class KeyInterceptorRouteTests: XCTestCase {
                 isARepeat: isARepeat, keyCode: 0))
     }
 
-    /// An interceptor with one bound chord (⌘T), so a test can tell a reserved hit from a miss.
     private func interceptor() -> KeyInterceptor {
         let keys = KeyInterceptor()
         keys.setKeymap([Chord(command: true, key: "t"): .newTab])
@@ -50,7 +45,6 @@ final class KeyInterceptorRouteTests: XCTestCase {
     }
 
     func test_aReservedChordFiresAndNeverReachesTheMode() throws {
-        // The mode must not be able to brick the app's own chords while it's up.
         let keys = interceptor()
         var fired: [KeyInterceptor.ReservedChord] = []
         var reachedMode = false
@@ -64,12 +58,8 @@ final class KeyInterceptorRouteTests: XCTestCase {
         XCTAssertFalse(reachedMode, "chord routing must win, so ⌘T still opens a tab in scroll mode")
     }
 
-    /// the defaults sit on keys that type no character, and that is the shape of a keymap
-    /// entry that looks right and never fires: `Chord.init`'s own comment names the trap. The
-    /// event has to be the one macOS really sends, `.function` bit included, or the test proves
-    /// nothing about ⌘Home. This drives `route`, which is the monitor's whole decision.
     func test_aKeyThatTypesNoCharacterStillFiresItsShippedDefault() throws {
-        let keys = KeyInterceptor()  // the shipped defaults, not the one-chord stub
+        let keys = KeyInterceptor()
         var fired: [KeyInterceptor.ReservedChord] = []
         keys.onReservedChord = { fired.append($0) }
 
@@ -81,10 +71,6 @@ final class KeyInterceptorRouteTests: XCTestCase {
         XCTAssertEqual(fired, [.scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown])
     }
 
-    /// No default binds Tab: ⌘[ and ⌘] are tab cycling and ⌃⇥ would be a second spelling of them.
-    /// A user's own `keybind = next_tab=ctrl+tab` still has to fire, which is what keeps `Chord`'s
-    /// glyph entry honest. Tab is the one key in that table typing a real character, so leaving it
-    /// out looks fine and fails here: ⌃⇥ decodes to "\t", misses the entry, and reaches the program.
     func test_aUserBoundCtrlTab_fires() throws {
         let keys = KeyInterceptor()
         keys.setKeymap([Chord.parse("ctrl+tab")!: .nextTab])
@@ -95,15 +81,12 @@ final class KeyInterceptorRouteTests: XCTestCase {
         XCTAssertEqual(fired, [.nextTab])
     }
 
-    /// And the shipped keymap leaves it alone, so ⌃⇥ reaches whatever the program does with it.
     func test_ctrlTab_isNotAShippedDefault() throws {
-        let keys = KeyInterceptor()  // the shipped defaults, not the one-chord stub
+        let keys = KeyInterceptor()
         let event = try tabKeyDown(flags: .control)
         XCTAssertIdentical(keys.route(event), event)
     }
 
-    /// A bare Tab carries no modifier, so chord routing never looks at it and it reaches the
-    /// program. Claiming it would break Tab completion in every shell.
     func test_bareTab_reachesTheProgram() throws {
         let keys = KeyInterceptor()
         let event = try tabKeyDown(flags: [])
@@ -118,9 +101,6 @@ final class KeyInterceptorRouteTests: XCTestCase {
                 keyCode: 48))
     }
 
-    /// Holding a page key keeps scrolling, and holding Home does not keep jumping to a top it is
-    /// already at. A repeat the action declines is still consumed either way, so the difference is
-    /// invisible except in what fires.
     func test_aHeldPageKeyRepeatsAndAHeldHomeKeyDoesNot() throws {
         let keys = KeyInterceptor()
         var fired: [KeyInterceptor.ReservedChord] = []
@@ -132,9 +112,6 @@ final class KeyInterceptorRouteTests: XCTestCase {
         XCTAssertEqual(fired, [.scrollPageDown])
     }
 
-    /// An arrow keyDown carries `.numericPad` as well as `.function`, so a chord matched against
-    /// `.deviceIndependentFlagsMask` would see three modifiers where the user held two and fire
-    /// nothing. `docs/swift-conventions.md` has the failure.
     func test_theShiftedArrowSpellingOfAPromptJumpFires() throws {
         let keys = KeyInterceptor()
         var fired: [KeyInterceptor.ReservedChord] = []
@@ -146,13 +123,6 @@ final class KeyInterceptorRouteTests: XCTestCase {
         XCTAssertEqual(fired, [.jumpToPreviousPrompt, .jumpToNextPrompt])
     }
 
-    /// ghostty binds the prompt jump on bare ⌘↑ and ⌘↓ as well, and ZenTerm deliberately does not:
-    /// macOS claims both, so the keypress never arrives, and binding them would have put the dead
-    /// spelling on the keycap. `Chord.displayed` renders the lowest config token and `cmd+down`
-    /// sorts under `cmd+shift+down`, so Jump to Next Prompt would have advertised ⌘↓.
-    ///
-    /// A miss rather than a claim, so nothing is swallowed on a machine whose system leaves the
-    /// chord alone.
     func test_theBareArrowSpellingIsNotClaimed() throws {
         let keys = KeyInterceptor()
         var fired: [KeyInterceptor.ReservedChord] = []
@@ -166,8 +136,6 @@ final class KeyInterceptorRouteTests: XCTestCase {
         XCTAssertEqual(fired, [])
     }
 
-    /// Walking back through prompts is a hold, the way pane nav is: each press moves one further
-    /// and the buffer's oldest prompt is where it stops.
     func test_aHeldPromptJumpRepeats() throws {
         let keys = KeyInterceptor()
         var fired: [KeyInterceptor.ReservedChord] = []
@@ -181,8 +149,6 @@ final class KeyInterceptorRouteTests: XCTestCase {
         XCTAssertEqual(fired, [.jumpToPreviousPrompt])
     }
 
-    /// ⌘Home as AppKit delivers it: the private-use character, and `.function` alongside `.command`.
-    /// A synthesized `.command`-only event is a keystroke macOS never sends.
     private func functionKeyDown(keyCode: UInt16, character: String, isARepeat: Bool = false) throws
         -> NSEvent
     {
@@ -193,8 +159,6 @@ final class KeyInterceptorRouteTests: XCTestCase {
                 charactersIgnoringModifiers: character, isARepeat: isARepeat, keyCode: keyCode))
     }
 
-    /// The shipped ⌥⏎ has to decode and route as the real keystroke. The guard's truth table and
-    /// `handle(.createWorktree)` both skip `Chord`, so the default could be dead with them green.
     func test_theShippedCreateWorktreeChord_routesAndDefersByPickerState() throws {
         let keys = KeyInterceptor()
         keys.setKeymap(KeymapDefaults.map)
@@ -215,8 +179,6 @@ final class KeyInterceptorRouteTests: XCTestCase {
         XCTAssertEqual(fired, [.createWorktree], "no second dispatch")
     }
 
-    /// Return carries no `.function`, unlike an arrow: a synthesized event that adds it is a
-    /// keystroke macOS never sends and would match a chord the real key cannot.
     private func optionReturn() throws -> NSEvent {
         try XCTUnwrap(
             NSEvent.keyEvent(
@@ -225,8 +187,6 @@ final class KeyInterceptorRouteTests: XCTestCase {
                 charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36))
     }
 
-    /// An arrow keyDown as AppKit delivers it: `.numericPad` on top of everything `functionKeyDown`
-    /// already carries.
     private func arrowKeyDown(
         keyCode: UInt16, character: String, shift: Bool = false, option: Bool = false,
         control: Bool = false, isARepeat: Bool = false
@@ -242,13 +202,8 @@ final class KeyInterceptorRouteTests: XCTestCase {
                 charactersIgnoringModifiers: character, isARepeat: isARepeat, keyCode: keyCode))
     }
 
-    /// Pane focus and resize are arrow-only, so an arrow that decodes wrong costs the app its
-    /// directional nav outright. AppKit hangs `.function` and `.numericPad` on every arrow keyDown,
-    /// and the flags a caller did not hold are the ones that break a match: `Chord` has to read the
-    /// four reservable modifiers and ignore the rest. Both families in one case, because they differ
-    /// only by which modifier rides along, so a slip that loses one loses both.
     func test_theNavAndResizeArrowsFireThroughTheRealEventShape() throws {
-        let keys = KeyInterceptor()  // the shipped defaults, not the one-chord stub
+        let keys = KeyInterceptor()
         var fired: [KeyInterceptor.ReservedChord] = []
         keys.onReservedChord = { fired.append($0) }
 
@@ -266,8 +221,6 @@ final class KeyInterceptorRouteTests: XCTestCase {
     }
 
     func test_anUnboundModifiedKeyFallsToTheMode() throws {
-        // ⌃d is not a chord anyone can reserve (it's terminal EOF), so it reaches the mode only
-        // because the fast-bail hands misses on rather than returning early.
         let keys = interceptor()
         var seen = false
         keys.modeHandler = { _ in
@@ -279,10 +232,6 @@ final class KeyInterceptorRouteTests: XCTestCase {
     }
 
     func test_aChordTheGuardVetoedGoesToTheTerminalNotTheMode() throws {
-        // The veto's contract is that the PROGRAM receives the real key (⌃j inside nvim). Letting
-        // a vetoed chord fall to a sticky mode means neither the chrome nor the program acts on
-        // it, so the key does nothing at all over an nvim pane while doing something over any
-        // other pane.
         let keys = KeyInterceptor()
         keys.setKeymap([Chord(control: true, key: "j"): .navDown])
         keys.passThroughGuard = { _, _ in true }
@@ -301,9 +250,8 @@ final class KeyInterceptorRouteTests: XCTestCase {
     }
 
     func test_anUnvetoedMissStillReachesTheMode() throws {
-        // The mirror of the case above: nothing claimed the chord, so the mode may have it.
         let keys = interceptor()
-        keys.passThroughGuard = { _, _ in true }  // never consulted; ⌃d hits no keymap entry
+        keys.passThroughGuard = { _, _ in true }
         var reachedMode = false
         keys.modeHandler = { _ in
             reachedMode = true
@@ -315,7 +263,6 @@ final class KeyInterceptorRouteTests: XCTestCase {
     }
 
     func test_captureBeatsTheModeEntirely() throws {
-        // Recording a keybind in Settings must capture the literal keystroke, mode or not.
         let keys = interceptor()
         var captured = 0
         var reachedMode = false
@@ -329,11 +276,6 @@ final class KeyInterceptorRouteTests: XCTestCase {
         XCTAssertFalse(reachedMode)
     }
 
-    // MARK: Auto-repeat
-
-    /// Auto-repeat is the silently-destructive kind: nothing looks wrong, the app just does the
-    /// thing thirty times. `route` read no `isARepeat` at all, so leaning on ⌘N opened windows
-    /// until the key came up.
     func test_aHeldChordWhoseActionDoesNotRepeatFiresOnce() throws {
         let keys = interceptor()
         var fired: [KeyInterceptor.ReservedChord] = []
@@ -348,8 +290,6 @@ final class KeyInterceptorRouteTests: XCTestCase {
         XCTAssertEqual(fired, [.newTab], "a held ⌘T opens one tab, not one per repeat")
     }
 
-    /// The other half. Nav, resize and font size accumulate toward something the eye tracks, and
-    /// each runs out of room on its own, so a hold is the point rather than the bug.
     func test_aHeldChordWhoseActionRepeatsFiresOnEveryRepeat() throws {
         let keys = KeyInterceptor()
         keys.setKeymap([Chord(command: true, key: "h"): .navLeft])
@@ -363,8 +303,6 @@ final class KeyInterceptorRouteTests: XCTestCase {
         XCTAssertEqual(fired, 3, "holding pane-nav keeps walking; it stops at the edge pane")
     }
 
-    /// A repeat the guard handed to the program is the program's, repeat or not. Holding `ctrl+h`
-    /// in nvim is how you walk a buffer.
     func test_aVetoedChordStillRepeatsIntoTheProgram() throws {
         let keys = KeyInterceptor()
         keys.setKeymap([Chord(control: true, key: "h"): .navLeft])
@@ -375,7 +313,6 @@ final class KeyInterceptorRouteTests: XCTestCase {
     }
 
     func test_flagsChangedNeverReachesTheMode() throws {
-        // A bare ⇧ press is not a scroll key. Routing it would fire the decoder on every modifier.
         let keys = interceptor()
         var reachedMode = false
         keys.modeHandler = { _ in

@@ -4,12 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Scroll mode is sticky: once ⌘⇧S is pressed it holds an app-global key handler until something
-/// takes it down. Every one of those retractions is the test.
-///
-/// The failure is not cosmetic. A mode left up over a pane you walked away from keeps swallowing
-/// every keystroke that isn't a reserved chord, so the terminal you switched to goes deaf, and the
-/// only visible clue is a header on a panel you're no longer looking at.
 @MainActor
 final class ScrollModeLifecycleTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
@@ -19,8 +13,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     private var hosts: [ModeHostSpy] = []
     private var root = FileManager.default.temporaryDirectory
 
-    /// A float to open in the "a float takes the keyboard" case. There are no built-in floats,
-    /// so a test that opens one has to configure it.
     private static func spec(_ id: String) -> ToolFloat {
         ToolFloat(
             id: id, order: 0, title: id, icon: ToolFloatParser.defaultIcon, command: id, dir: nil,
@@ -67,14 +59,10 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         return controller
     }
 
-    /// A fake interceptor, so a test can see whether the app-global key handler is installed
-    /// rather than only whether a flag flipped.
     private final class ModeHostSpy: KeyModeHosting {
         var modeHandler: ((NSEvent) -> Bool)?
         var isInstalled: Bool { modeHandler != nil }
     }
-
-    // MARK: entering
 
     func test_theChordEntersTheModeAndInstallsTheKeyHandler() throws {
         let controller = makeWindow()
@@ -112,13 +100,10 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertFalse(panel.isHeaderVisibleForTesting, "the header must come down with the mode")
     }
 
-    // MARK: where it opens
-
-    /// Puts the band where the reader was already looking, not a screenful away on the last row.
     func test_enteringOverASelection_landsOnItsFirstCell() throws {
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
-        surface.selectionOrigin = TerminalViewportCell(row: 2, column: 4)  // row 2 is "❯ seq 1 3"
+        surface.selectionOrigin = TerminalViewportCell(row: 2, column: 4)
 
         controller.handle(.toggleScrollMode)
 
@@ -127,13 +112,11 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_enteringOverASelectionOnAWideRowLandsOnTheCharacterNotTheOffset() throws {
-        // The backend reports the selection's start in pixels, so it arrives as a cell. A column is
-        // an offset, and on a wide row the two are different characters.
         let controller = makeWindow()
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         let surface = try XCTUnwrap(spawned.first)
-        surface.rows[3] = "你ab"  // 你 takes cells 0 and 1
-        surface.selectionOrigin = TerminalViewportCell(row: 3, column: 2)  // the `a`
+        surface.rows[3] = "你ab"
+        surface.selectionOrigin = TerminalViewportCell(row: 3, column: 2)
 
         controller.handle(.toggleScrollMode)
 
@@ -151,8 +134,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_theEntryRowIsReadBeforeTheHeaderBlanksThePrompt() throws {
-        // The header costs the grid rows and SIGWINCHes the pty, and a shell redrawing a multi-line
-        // prompt clears it first. Read after that, the walk-up skips it and stops on older output.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         surface.rows[11] = "❯ echo hello"
@@ -168,8 +149,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_theEntryRowFollowsThePromptTheResizeMoved() throws {
-        // The whole sequence the app runs: the header resizes the surface, the reflow reports from
-        // inside that resize, and the shell repaints its prompt elsewhere a frame later.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         surface.rows[11] = "❯ echo hello"
@@ -182,14 +161,12 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
         controller.handle(.toggleScrollMode)
         var repainted = Array(repeating: "", count: 24)
-        repainted[9] = "❯ echo hello"  // two rows up, the grid having lost two
+        repainted[9] = "❯ echo hello"
         surface.rows = repainted
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
 
         XCTAssertEqual(controller.scrollMode.cursorRow, 9, "the band followed the prompt")
     }
-
-    // MARK: the keys, through the real handler
 
     func test_aKeyThroughTheInstalledHandlerScrollsTheFocusedSurface() throws {
         let controller = makeWindow()
@@ -204,11 +181,8 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertTrue(handler(try keyDown("u", flags: .control)))
         XCTAssertTrue(handler(try keyDown("G", unshifted: "g", flags: .shift)))
 
-        // Rows, not a fraction: the mode works out the distance so it knows where the band lands.
         XCTAssertEqual(surface.scrolls, [.lines(12), .lines(-12), .bottom])
     }
-
-    // MARK: the motions counts came with
 
     func test_caretGoesToTheFirstCellHoldingSomething() throws {
         let controller = makeWindow()
@@ -227,8 +201,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_hmlLandOnTheTopMiddleAndLastWrittenRow() throws {
-        // `L` reckons from the last row with anything on it. The grid's own bottom is empty space
-        // below the prompt, and parking the band out there names nothing the reader can read.
         let controller = makeWindow()
         let host = ModeHostSpy()
         hosts.append(host)
@@ -247,8 +219,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aMotionReadsTheScreenAgainRatherThanTheLastKeystrokesCopy() throws {
-        // A program repainting in place moves no viewport and grows no buffer, so libghostty
-        // reports nothing and no invalidation fires. The header's own SIGWINCH is one.
         let controller = makeWindow()
         let host = ModeHostSpy()
         hosts.append(host)
@@ -259,15 +229,13 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertTrue(handler(try keyDown("L", unshifted: "l", flags: .shift)))
         XCTAssertEqual(controller.scrollMode.cursorRow, 11, "precondition: the prompt row")
 
-        surface.rows[12] = "❯ redrawn"  // the shell repaints, with no report behind it
+        surface.rows[12] = "❯ redrawn"
 
         XCTAssertTrue(handler(try keyDown("L", unshifted: "l", flags: .shift)))
         XCTAssertEqual(controller.scrollMode.cursorRow, 12, "the screen it has now, not the cached one")
     }
 
     func test_landingOnAMatchReadsTheViewportItLandedOn() throws {
-        // A search step moves the viewport before its scroll report arrives, and the find bar works
-        // the match's cell out from a fresh read. Clamping against cached rows undoes that.
         let controller = makeWindow()
         let host = ModeHostSpy()
         hosts.append(host)
@@ -275,17 +243,15 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         controller.handle(.toggleScrollMode)
         let handler = try XCTUnwrap(host.modeHandler)
         let surface = try XCTUnwrap(spawned.first)
-        XCTAssertTrue(handler(try keyDown("L", unshifted: "l", flags: .shift)))  // caches the screen
+        XCTAssertTrue(handler(try keyDown("L", unshifted: "l", flags: .shift)))
 
-        surface.rows[12] = "❯ rg needle"  // the step scrolled a new screen in
+        surface.rows[12] = "❯ rg needle"
         controller.scrollMode.land(on: ScrollCell(row: 12, column: 10))
 
         XCTAssertEqual(controller.scrollMode.cursor.column, 10, "not clamped to the old row's end")
     }
 
     func test_theEndOfLineReadsTheRowAgainAfterARepaint() throws {
-        // `$` off a cached row parks the band where the text used to end, which is what a prompt
-        // blanked by the entry SIGWINCH and then redrawn leaves behind.
         let controller = makeWindow()
         let host = ModeHostSpy()
         hosts.append(host)
@@ -344,24 +310,20 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         controller.handle(.toggleScrollMode)
         let handler = try XCTUnwrap(host.modeHandler)
 
-        for _ in 0..<3 { XCTAssertTrue(handler(try keyDown("k"))) }  // onto "hi"
+        for _ in 0..<3 { XCTAssertTrue(handler(try keyDown("k"))) }
         XCTAssertEqual(controller.scrollMode.cursorRow, 8, "precondition")
         XCTAssertTrue(handler(try keyDown("*", unshifted: "8", flags: .shift)))
 
         XCTAssertEqual(panel.findBarForTesting?.needle, "hi")
     }
 
-    // MARK: wide characters
-
-    /// A column is an offset and every consumer wants a cell, so each wide character earlier in the
-    /// row was a cell of drift: the band drew left of true and a yank stopped short of the band.
     func test_aYankPastAWideCharacterTakesTheWholeOfIt() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
         hosts.append(host)
         controller.keyModeHost = host
         let surface = try XCTUnwrap(spawned.first)
-        surface.rows[11] = "你好 world"  // 10 cells, 8 characters
+        surface.rows[11] = "你好 world"
         let board = NSPasteboard(name: NSPasteboard.Name("zenterm-yank-\(UUID().uuidString)"))
         controller.handle(.toggleScrollMode)
         controller.scrollMode.yankPasteboard = board
@@ -375,8 +337,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(board.string(forType: .string), "你好 world", "not `你好 worl`")
     }
 
-    /// `$` sits on the last character, which has no next character to end it. Ended at the grid's
-    /// edge instead, the selection drew clean across the pane while the yank still read correctly.
     func test_aSelectionToTheEndOfTheRowStopsAtTheText() throws {
         let controller = makeWindow()
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
@@ -384,7 +344,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         hosts.append(host)
         controller.keyModeHost = host
         let surface = try XCTUnwrap(spawned.first)
-        surface.rows[11] = "你好 world"  // 10 cells, so the last one is 9
+        surface.rows[11] = "你好 world"
         controller.handle(.toggleScrollMode)
         let handler = try XCTUnwrap(host.modeHandler)
 
@@ -403,7 +363,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         hosts.append(host)
         controller.keyModeHost = host
         let surface = try XCTUnwrap(spawned.first)
-        surface.rows[11] = "ab你"  // cells 0, 1, then 2 and 3
+        surface.rows[11] = "ab你"
         controller.handle(.toggleScrollMode)
         let handler = try XCTUnwrap(host.modeHandler)
 
@@ -427,7 +387,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         let handler = try XCTUnwrap(host.modeHandler)
 
         XCTAssertTrue(handler(try keyDown("0")))
-        for _ in 0..<2 { XCTAssertTrue(handler(try keyDown("l"))) }  // onto 你
+        for _ in 0..<2 { XCTAssertTrue(handler(try keyDown("l"))) }
 
         let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
         XCTAssertEqual(state.cursorCells, 2...3, "the cursor outlines the whole character")
@@ -445,28 +405,26 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         let handler = try XCTUnwrap(host.modeHandler)
 
         XCTAssertTrue(handler(try keyDown("0")))
-        for _ in 0..<3 { XCTAssertTrue(handler(try keyDown("l"))) }  // onto the `c` after it
+        for _ in 0..<3 { XCTAssertTrue(handler(try keyDown("l"))) }
 
         let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
         XCTAssertEqual(state.cursorCells, 4...4, "offset 3, but cell 4: 你 took two")
     }
 
     func test_aSelectionDraggedBackwardsStillCoversWholeCharacters() throws {
-        // Ordered before converting, or the anchor's last cell becomes the span's start and the
-        // cursor's first becomes its end, halving a wide character at both ends.
         let controller = makeWindow()
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         let host = ModeHostSpy()
         hosts.append(host)
         controller.keyModeHost = host
         let surface = try XCTUnwrap(spawned.first)
-        surface.rows[11] = "你好世界"  // four wide characters, cells 0 through 7
+        surface.rows[11] = "你好世界"
         controller.handle(.toggleScrollMode)
         let handler = try XCTUnwrap(host.modeHandler)
 
-        XCTAssertTrue(handler(try keyDown("$", unshifted: "4", flags: .shift)))  // anchor on 界
+        XCTAssertTrue(handler(try keyDown("$", unshifted: "4", flags: .shift)))
         XCTAssertTrue(handler(try keyDown("v")))
-        for _ in 0..<2 { XCTAssertTrue(handler(try keyDown("h"))) }  // back to 好
+        for _ in 0..<2 { XCTAssertTrue(handler(try keyDown("h"))) }
 
         let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
         XCTAssertEqual(
@@ -475,8 +433,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_theBandStopsAtACharacterAGapFollows() throws {
-        // A right-aligned segment leaves cells no program wrote, and libghostty drops a run of
-        // those at the end of a read. A search counting a prefix reads that as no character.
         let controller = makeWindow()
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         let host = ModeHostSpy()
@@ -491,8 +447,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aColumnInsideAGapIsTheCellItSitsOn() throws {
-        // The gap reads back as spaces once something written follows, so the motions walk it. Each
-        // one has to land on its own cell rather than on wherever the gap ends.
         let controller = makeWindow()
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         let host = ModeHostSpy()
@@ -504,13 +458,11 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         let handler = try XCTUnwrap(host.modeHandler)
 
         XCTAssertTrue(handler(try keyDown("0")))
-        XCTAssertTrue(handler(try keyDown("l")))  // the first space of the gap
+        XCTAssertTrue(handler(try keyDown("l")))
 
         let state = try XCTUnwrap(panel.scrollCursorForTesting.state)
         XCTAssertEqual(state.cursorCells, 2...2, "cell 2, the first of the gap")
     }
-
-    // MARK: the two-key commands, through the real handler
 
     func test_yyTakesWholeRowsWithoutAVisualFirst() throws {
         let controller = makeWindow()
@@ -522,7 +474,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         controller.scrollMode.yankPasteboard = board
         let handler = try XCTUnwrap(host.modeHandler)
 
-        for _ in 0..<4 { XCTAssertTrue(handler(try keyDown("k"))) }  // onto "❯ echo hi"
+        for _ in 0..<4 { XCTAssertTrue(handler(try keyDown("k"))) }
         XCTAssertTrue(handler(try keyDown("y")))
         XCTAssertTrue(handler(try keyDown("y")))
 
@@ -540,7 +492,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         controller.scrollMode.yankPasteboard = board
         let handler = try XCTUnwrap(host.modeHandler)
 
-        for _ in 0..<9 { XCTAssertTrue(handler(try keyDown("k"))) }  // onto "❯ seq 1 3"
+        for _ in 0..<9 { XCTAssertTrue(handler(try keyDown("k"))) }
         XCTAssertTrue(handler(try keyDown("2")))
         XCTAssertTrue(handler(try keyDown("y")))
         XCTAssertTrue(handler(try keyDown("y")))
@@ -590,8 +542,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_repeatingATillFindClearsTheCellItIsAlreadySittingOn() throws {
-        // A `t` parks one cell short of its target, so repeating from there finds that same target
-        // and the cursor never moves. Vim special-cases it; so does this.
         let controller = makeWindow()
         let host = ModeHostSpy()
         hosts.append(host)
@@ -610,8 +560,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursor.column, 6, "one short of the second, not stuck")
     }
 
-    /// A count on `{`/`}` repeats the motion. Folded into the delta it became the row scan's
-    /// stride, which steps straight over the blank lines the motion is looking for.
     func test_aCountOnAParagraphMotionRepeatsItRatherThanStriding() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
@@ -624,7 +572,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertTrue(handler(try keyDown("2")))
         XCTAssertTrue(handler(try keyDown("{", unshifted: "[", flags: .shift)))
 
-        // One `{` lands on the blank at 9, a second on the blank at 6. Striding by two skips both.
         XCTAssertEqual(controller.scrollMode.cursorRow, 6)
     }
 
@@ -643,8 +590,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursorRow, 0, "parked at the top, not still walking")
     }
 
-    /// A `t` parks next to its target, so every hop after the first has to clear it. Without that
-    /// `2t.` finds the same dot twice and behaves exactly like `t.`.
     func test_aCountedTillFindClearsEachTargetItParksBeside() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
@@ -662,15 +607,13 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursor.column, 6, "one short of the second dot")
     }
 
-    /// A page that spends the last of the buffer lands on a screen it cannot see yet, so its own
-    /// clamp uses the old bottom. The report that follows re-clamps against the new one.
     func test_aPageOntoTheLastScreenReclampsWhenTheNewRowsArrive() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
         hosts.append(host)
         controller.keyModeHost = host
         let surface = try XCTUnwrap(spawned.first)
-        surface.rows = (0..<24).map { "line \($0)" }  // a full screen, so the old clamp allows 23
+        surface.rows = (0..<24).map { "line \($0)" }
         controller.handle(.toggleScrollMode)
         let handler = try XCTUnwrap(host.modeHandler)
         XCTAssertTrue(handler(try keyDown("G", unshifted: "g", flags: .shift)))
@@ -679,7 +622,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
             scrollPositionDidChange: TerminalScrollPosition(total: 30, offset: 4, viewport: 24))
 
         XCTAssertTrue(handler(try keyDown("d", flags: .control)))
-        // The last screen of the buffer: the prompt sits at row 5 with blank space under it.
         var atEnd = Array(repeating: "", count: 24)
         for row in 0...5 { atEnd[row] = "tail \(row)" }
         surface.rows = atEnd
@@ -689,8 +631,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
         XCTAssertEqual(controller.scrollMode.cursorRow, 5, "the last written row of the new screen")
     }
-
-    // MARK: counts, through the real handler
 
     func test_aCountCarriesTheCursorThatManyRows() throws {
         let controller = makeWindow()
@@ -723,8 +663,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aCountRunsOutAtTheEdge_movingTheCursorThenTheBuffer() throws {
-        // Vim clamps and beeps. Here the cursor takes what it can and the buffer takes the rest, so
-        // nothing the reader asked for is silently thrown away.
         let controller = makeWindow()
         let host = ModeHostSpy()
         hosts.append(host)
@@ -735,14 +673,12 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
         XCTAssertTrue(handler(try keyDown("1")))
         XCTAssertTrue(handler(try keyDown("5")))
-        XCTAssertTrue(handler(try keyDown("k")))  // eleven rows of room, fifteen asked for
+        XCTAssertTrue(handler(try keyDown("k")))
 
         XCTAssertEqual(controller.scrollMode.cursorRow, 0)
         XCTAssertEqual(surface.scrolls, [.lines(-4)], "the four rows the cursor could not take")
     }
 
-    /// Vim's rule. Without it the last half page of a buffer is unreachable by paging: the viewport
-    /// stops, the cursor is left mid-screen, and only `gg` or a run of `k` finishes the journey.
     func test_aPageMoveAgainstTheEndCarriesTheCursorToIt() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
@@ -751,7 +687,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         controller.handle(.toggleScrollMode)
         let surface = try XCTUnwrap(spawned.first)
         let handler = try XCTUnwrap(host.modeHandler)
-        // Resting at the top of the buffer: nothing above to scroll into view.
         surface.delegate?.surface(
             surface, scrollPositionDidChange: TerminalScrollPosition(total: 100, offset: 0, viewport: 24))
 
@@ -770,7 +705,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         let surface = try XCTUnwrap(spawned.first)
         let handler = try XCTUnwrap(host.modeHandler)
         for _ in 0..<9 { XCTAssertTrue(handler(try keyDown("k"))) }
-        // Resting at the bottom: `linesBelow` is zero.
         surface.delegate?.surface(
             surface, scrollPositionDidChange: TerminalScrollPosition(total: 24, offset: 0, viewport: 24))
 
@@ -811,32 +745,23 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursorRow, 7, "one row, not another three")
     }
 
-    // MARK: the cursor
-
     func test_theModeOpensOnTheLastWrittenLineNotTheBottomOfThePane() throws {
-        // On a half-filled screen the bottom of the viewport is empty space below everything
-        // there is to read. Row 11 is the fixture's prompt and its last written row.
         let controller = makeWindow()
         controller.handle(.toggleScrollMode)
         XCTAssertEqual(controller.scrollMode.cursorRow, 11)
     }
 
     func test_theEntryRowIsReadFromTheScreenNotTheShellCursor() throws {
-        // The shell's cursor is reported against the LIVE screen with no account of scrolling, so
-        // a viewport the reader already scrolled with the trackpad put the band on an unrelated
-        // row. The last written row of the viewport is right in every case.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         var rows = Array(repeating: "", count: 24)
-        rows[3] = "scrolled-back output"  // history, nowhere near the live prompt
+        rows[3] = "scrolled-back output"
         surface.rows = rows
         controller.handle(.toggleScrollMode)
         XCTAssertEqual(controller.scrollMode.cursorRow, 3)
     }
 
     func test_theModeFallsBackToTheBottomRowOnAnEmptyScreen() throws {
-        // Nothing written anywhere still has to open somewhere sensible, and an empty pane's
-        // prompt is at the bottom.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         surface.rows = Array(repeating: "", count: 24)
@@ -845,8 +770,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_kMovesTheCursorWithoutScrolling() throws {
-        // The distinction that makes it a cursor rather than a scrollbar: for the height of the
-        // viewport, `k` moves a marker and the text underneath stays put.
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
@@ -868,11 +791,11 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         let surface = try XCTUnwrap(spawned.first)
         let handler = try XCTUnwrap(host.modeHandler)
 
-        for _ in 0..<11 { XCTAssertTrue(handler(try keyDown("k"))) }  // cursor to the top row
+        for _ in 0..<11 { XCTAssertTrue(handler(try keyDown("k"))) }
         XCTAssertEqual(controller.scrollMode.cursorRow, 0)
         XCTAssertEqual(surface.scrolls, [])
 
-        XCTAssertTrue(handler(try keyDown("k")))  // nowhere left to go
+        XCTAssertTrue(handler(try keyDown("k")))
 
         XCTAssertEqual(controller.scrollMode.cursorRow, 0, "the cursor stays pinned at the edge")
         XCTAssertEqual(surface.scrolls, [.lines(-1)], "and the buffer moves under it instead")
@@ -894,8 +817,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_theBraceMotionLandsOnTheBlankRowAfterTheBlockAbove() throws {
-        // The fixture screen: a command block, a blank, another block, a blank, the prompt on 11.
-        // From the prompt, `{` crosses "~/bin" and stops on the blank at 9.
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
@@ -911,8 +832,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_repeatedBraceMotionsWalkBlockByBlock() throws {
-        // Each press crosses one block of text and stops on the blank before it, which is what
-        // makes it useful for stepping back through command output.
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
@@ -940,7 +859,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_theClosingBraceRunsToTheEndWhenOnlyBlanksFollow() throws {
-        // Vim's behavior: } with no further paragraph goes to the end.
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
@@ -953,8 +871,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_theMotionReadsTheScreenNotAScrollAction() throws {
-        // The whole reason this is the chrome's own motion: jump_to_prompt scrolls the viewport to
-        // a prompt ABOVE the screen, so it can never reach a prompt you are looking at.
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
@@ -969,27 +885,20 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aScreenTheBackendCannotReadStopsTheMotion() throws {
-        // An unreadable row counts as blank, so the motion terminates instead of running the
-        // cursor to the edge of a grid it knows nothing about.
         XCTAssertTrue(ScrollModeController.isBlank(nil))
         XCTAssertTrue(ScrollModeController.isBlank("   \t "))
         XCTAssertFalse(ScrollModeController.isBlank(" x "))
     }
 
-    /// A page move advances the cursor, and the viewport takes as much of that as it can so the
-    /// band parks at the middle of the screen. The first press has nowhere to park from, so it
-    /// walks the cursor down to the middle without moving the buffer at all.
     func test_aPageMoveWalksToTheMiddleBeforeItMovesTheBuffer() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
         hosts.append(host)
         controller.keyModeHost = host
         let surface = try XCTUnwrap(spawned.first)
-        // An odd grid, so half a page and the middle row are the same number and the first press
-        // needs no scroll at all.
         surface.cellMetrics = TerminalCellMetrics(
             columns: 80, rows: 25, cellWidth: 8, cellHeight: 16, gridInset: 2)
-        surface.rows = (0..<25).map { "line \($0)" }  // a full screen, so the middle is reachable
+        surface.rows = (0..<25).map { "line \($0)" }
         controller.handle(.toggleScrollMode)
         let handler = try XCTUnwrap(host.modeHandler)
         XCTAssertTrue(handler(try keyDown("g")))
@@ -1011,7 +920,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_theCursorIsClampedToAShrunkenGrid() throws {
-        // A pane resized smaller while the mode is up must not leave the band off the grid.
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
@@ -1056,9 +964,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_theModeDeclinesMenuKeyEquivalents() throws {
-        // KeyInterceptor is a local monitor, so it runs before NSApp resolves menu equivalents.
-        // ⌘C, ⌘V and ⌘Q are menu items rather than reserved chords, so nothing above the mode
-        // claims them and swallowing them kills Copy and Quit for as long as the mode is up.
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
@@ -1072,7 +977,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_theModeStillSwallowsKeysThatWouldReachTheShell() throws {
-        // The other half: a bare or Control key would land in the buffer behind the mode.
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
@@ -1084,8 +988,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aCloseConfirmEndsTheMode() throws {
-        // A confirm answers with Return and Esc, both dispatched after the local monitor. Left
-        // up, the mode eats the Return and reads the Esc as its own exit.
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
@@ -1101,8 +1003,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_closingTheWindowEndsTheMode() throws {
-        // A window closed while still key never resigns key, so the app-global handler would
-        // outlive it and swallow keys in every other window.
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
@@ -1128,15 +1028,11 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertFalse(host.isInstalled)
     }
 
-    // MARK: the retractions
-
     func test_movingPaneFocusEndsTheMode() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
         controller.handle(.splitVertical)
-        // Pane nav scores real geometry, so an unlaid-out canvas has every frame at zero and
-        // finds no neighbor to move to.
         controller.window.contentView?.layoutSubtreeIfNeeded()
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         controller.handle(.toggleScrollMode)
@@ -1151,8 +1047,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertFalse(panel.isHeaderVisibleForTesting)
     }
 
-    /// The counter-case to every test above it: Focus Mode zooms the pane the reader is already in,
-    /// so the mode has to survive it. Same panel, same buffer, nothing to point somewhere else.
     func test_focusModeKeepsTheModeUpOverTheSamePane() throws {
         let controller = makeWindow()
         let host = ModeHostSpy()
@@ -1184,8 +1078,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_focusModeLeavesTheShellsCursorDark() throws {
-        // A multi-pane zoom reparents the canvas, so the pane takes first responder again and the
-        // live cursor comes back under a mode that is still holding the keyboard.
         let controller = makeWindow()
         controller.handle(.splitVertical)
         controller.window.contentView?.layoutSubtreeIfNeeded()
@@ -1228,8 +1120,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_openingAToolFloatEndsTheMode() throws {
-        // A float takes the keyboard without moving pane focus, so nothing in the focus path
-        // fires. Left up, the mode would swallow every key typed at the float.
         let controller = makeWindow()
         let host = ModeHostSpy()
         controller.keyModeHost = host
@@ -1269,9 +1159,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aTabSwitchGivesTheOldTabItsLiveCursorBack() throws {
-        // The mode's unfocused render is pushed at the controller that is active when the mode
-        // ends. Torn down after the switch, it restores the wrong tab and the one you left keeps
-        // drawing a hollow block for as long as it stays open.
         let controller = makeWindow()
         let first = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
         controller.handle(.toggleScrollMode)
@@ -1286,8 +1173,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(
             first.focusRenders.last, true, "no mode is up, so the pane's own cursor is live again")
     }
-
-    // MARK: the indicator's live text
 
     func test_theHeaderTracksTheReportedScrollPosition() throws {
         let controller = makeWindow()
@@ -1322,11 +1207,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
             "a busy sibling pane must not rewrite the header of the pane being read")
     }
 
-    // MARK: holding the screen against live output
-
     func test_outputAtTheLiveEndIsPulledBackOffTheBand() throws {
-        // Resting at the bottom, the viewport follows the active area, so a `tail -f` under the
-        // band scrolls every line it is reading out from under it.
         let controller = makeWindow()
         controller.handle(.toggleScrollMode)
         let surface = try XCTUnwrap(spawned.first)
@@ -1342,8 +1223,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aReaderReachingTheLiveEndIsLeftThere() throws {
-        // A scroll the reader asked for moves the viewport and leaves the buffer's size alone,
-        // which is what tells it from output.
         let controller = makeWindow()
         controller.handle(.toggleScrollMode)
         let surface = try XCTUnwrap(spawned.first)
@@ -1355,7 +1234,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_outputUnderAScrolledBackReaderMovesNothing() throws {
-        // Above the active area libghostty pins the viewport itself. One pull is the whole fix.
         let controller = makeWindow()
         controller.handle(.toggleScrollMode)
         let surface = try XCTUnwrap(spawned.first)
@@ -1369,7 +1247,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_leavingHandsBackTheLiveEndItHeld() throws {
-        // A pane still frozen with no header over it reads as a hung shell.
         let controller = makeWindow()
         controller.handle(.toggleScrollMode)
         let surface = try XCTUnwrap(spawned.first)
@@ -1398,8 +1275,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_leavingKeepsAPlaceTheReaderChoseAfterAHold() throws {
-        // The hold is the mode's doing and leaving undoes it, but only until the reader moves the
-        // viewport themselves. Snapping them to the live end throws away where they went to read.
         let controller = makeWindow()
         controller.handle(.toggleScrollMode)
         let surface = try XCTUnwrap(spawned.first)
@@ -1411,7 +1286,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
             surface,
             scrollPositionDidChange: TerminalScrollPosition(total: 203, offset: 176, viewport: 24))
 
-        // The find bar steps back to a match, or the reader scrolls there themselves.
         surface.delegate?.surface(
             surface,
             scrollPositionDidChange: TerminalScrollPosition(total: 203, offset: 40, viewport: 24))
@@ -1421,8 +1295,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aHeldPushStillDropsTheRowCache() throws {
-        // One burst can rewrite a visible cell as well as push the view. The pull back restores the
-        // viewport, so the rows are the same rows, but not the same text.
         let controller = makeWindow()
         let host = ModeHostSpy()
         hosts.append(host)
@@ -1444,14 +1316,12 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aRewrapAtTheLiveEndIsNotReadAsOutput() throws {
-        // A narrowing drag rewraps rows into the buffer and, resting at the bottom, moves the
-        // viewport by exactly as many. That is the signature output has.
         let controller = makeWindow()
         controller.handle(.toggleScrollMode)
         let surface = try XCTUnwrap(spawned.first)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
 
-        controller.scrollMode.refreshGeometry()  // what a divider drag reports, before the report
+        controller.scrollMode.refreshGeometry()
         surface.delegate?.surface(
             surface,
             scrollPositionDidChange: TerminalScrollPosition(total: 203, offset: 179, viewport: 24))
@@ -1460,8 +1330,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aSelectionSurvivesOutputAtTheLiveEnd() throws {
-        // The push and the pull back are one event. Read as two scrolls it drops the selection the
-        // reader is holding, which is the thing they opened the mode to take.
         let controller = makeWindow()
         let host = ModeHostSpy()
         hosts.append(host)
@@ -1480,15 +1348,11 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertNotNil(controller.scrollMode.selection, "the screen came back to where it was")
     }
 
-    // MARK: selection and yank
-
-    /// A key handler and a pasteboard of its own, so a yank in the suite never clobbers the
-    /// developer's clipboard.
     private func enterModeForYanking(_ controller: WindowController) throws -> (
         handler: (NSEvent) -> Bool, board: NSPasteboard
     ) {
         let host = ModeHostSpy()
-        hosts.append(host)  // `keyModeHost` is weak, so the spy needs an owner outlasting this call
+        hosts.append(host)
         controller.keyModeHost = host
         controller.handle(.toggleScrollMode)
         let board = NSPasteboard(name: NSPasteboard.Name("zenterm-yank-\(UUID().uuidString)"))
@@ -1496,8 +1360,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         return (try XCTUnwrap(host.modeHandler), board)
     }
 
-    /// The yanking harness over a screen of distinctly numbered rows, so an assertion on yanked text
-    /// names the rows it covered. Every row is written, so the mode opens on the last one.
     private func enterModeOverNumberedRows(_ controller: WindowController) throws -> (
         surface: RecordingSurface, handler: (NSEvent) -> Bool, board: NSPasteboard
     ) {
@@ -1511,7 +1373,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         let controller = makeWindow()
         let (handler, board) = try enterModeForYanking(controller)
 
-        // Row 11 is the prompt the mode opens on; nine k's put the cursor on the `seq` command.
         for _ in 0..<9 { _ = handler(try keyDown("k")) }
         _ = handler(try keyDown("v"))
         _ = handler(try keyDown("$", unshifted: "4", flags: .shift))
@@ -1524,8 +1385,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         let controller = makeWindow()
         let (handler, board) = try enterModeForYanking(controller)
 
-        // `V` on row 11, then up to row 10: the anchor is the LOWER end, which is the ordering an
-        // unsorted span reads backwards and reads back as nothing.
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
         _ = handler(try keyDown("k"))
         _ = handler(try keyDown("y"))
@@ -1573,8 +1432,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aScrollThatLandsGivesTheAnchorBack() throws {
-        // `Point.pin` clamps an exact coordinate to the grid height for every tag, so a selection
-        // that survived a page move would cover rows it no longer names.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         let (handler, board) = try enterModeForYanking(controller)
@@ -1589,15 +1446,12 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aScrollCarriesTheAnchorWithTheTextUnderIt() throws {
-        // The anchor names a place in the text, so a scroll moves it by exactly the offset delta and
-        // the selection grows by the rows that arrived. Releasing it here cost the reader the drag.
         let controller = makeWindow()
         let (surface, handler, board) = try enterModeOverNumberedRows(controller)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 100))
 
-        for _ in 0..<3 { _ = handler(try keyDown("k")) }  // off the last row, onto row 20
+        for _ in 0..<3 { _ = handler(try keyDown("k")) }
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
-        // Scrolled back two, so every row slid down two and the anchor rode with "row 20".
         surface.rows = Self.slidDown(surface.rows, by: 2)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 98))
         _ = handler(try keyDown("y"))
@@ -1606,8 +1460,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aScrollThatTakesTheAnchorOffScreenGivesItBack() throws {
-        // The one case that still has to release: a selection is viewport-bounded, so an anchor
-        // scrolled past the edge would highlight rows it no longer covers.
         let controller = makeWindow()
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         let (surface, handler, board) = try enterModeOverNumberedRows(controller)
@@ -1626,15 +1478,13 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aScrollKeyThatMovesNothingKeepsTheSelection() throws {
-        // `j` at the end of the buffer asks for a scroll that cannot happen. Releasing on the
-        // keystroke took the selection away with nothing on screen having moved.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         let (handler, board) = try enterModeForYanking(controller)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
 
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
-        for _ in 0..<14 { _ = handler(try keyDown("j")) }  // to the bottom row, then past it
+        for _ in 0..<14 { _ = handler(try keyDown("j")) }
         _ = handler(try keyDown("y"))
 
         XCTAssertNotNil(
@@ -1643,9 +1493,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aScrollDoesNotLeaveThePreviousScreenInTheRowCache() throws {
-        // The row read that clamps the cursor happens between asking for the scroll and the frame
-        // that serves it, so it describes the old viewport. Cached under the new one, the next
-        // motion walks text that is no longer on screen.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         let host = ModeHostSpy()
@@ -1654,7 +1501,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         controller.handle(.toggleScrollMode)
         let handler = try XCTUnwrap(host.modeHandler)
 
-        for _ in 0..<13 { _ = handler(try keyDown("j")) }  // to the bottom row, then one past it
+        for _ in 0..<13 { _ = handler(try keyDown("j")) }
         XCTAssertEqual(surface.scrolls, [.lines(1)], "precondition: the last j asked for a scroll")
 
         surface.rows[23] = "❯ what the scroll brought up"
@@ -1665,13 +1512,11 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aFontStepOverABlankAnchorRowGivesItBack() throws {
-        // A blank row has no content to be found by, exactly as the cursor's own line does not. The
-        // selection goes now rather than coming back anchored to whatever took that row number.
         let controller = makeWindow()
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         let (handler, board) = try enterModeForYanking(controller)
 
-        for _ in 0..<5 { _ = handler(try keyDown("k")) }  // row 6, the blank between blocks
+        for _ in 0..<5 { _ = handler(try keyDown("k")) }
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
         XCTAssertEqual(panel.headerContentForTesting?.title, "VISUAL: 1 LINE")
 
@@ -1683,9 +1528,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aKeyBeforeTheReflowReportCallsOffTheReanchor() throws {
-        // libghostty emits a scrollbar only from a draw and only when it differs, so a font step in
-        // a short buffer produces no report at all. Left armed, the re-anchor fires on whatever
-        // report comes next and drags the cursor off the row the reader has since chosen.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         let host = ModeHostSpy()
@@ -1698,7 +1540,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursorRow, 2, "precondition: on the seq command")
         controller.applySessionFontSize()
 
-        _ = handler(try keyDown("k"))  // the reader moves on, before any report arrives
+        _ = handler(try keyDown("k"))
         surface.rows = Self.slidDown(surface.rows, by: 3)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
 
@@ -1707,9 +1549,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aGridThatLosesRowsKeepsTheCursorsColumn() throws {
-        // The row is clamped and the column bounded against it. Bounded against the pre-clamp row
-        // instead, the backend refuses the read, the empty text reads as a zero-length row, and the
-        // cursor snaps to the left margin with the selection's moving end behind it.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         surface.rows[11] = "❯ tail -f /var/log/system.log"
@@ -1724,7 +1563,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
         surface.cellMetrics = TerminalCellMetrics(
             columns: 80, rows: 8, cellWidth: 8, cellHeight: 16, gridInset: 2)
-        controller.applySessionFontSize()  // any refresh re-clamps against the new grid
+        controller.applySessionFontSize()
 
         XCTAssertEqual(controller.scrollMode.cursorRow, 7)
         XCTAssertEqual(
@@ -1732,9 +1571,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_theEndOfLineStopsAtTheLastCharacterThePaneShows() throws {
-        // `read_text` reads with `trim = false`, so a row a program painted edge to edge comes back
-        // padded to the grid width. `$` on the padding parks the cursor out past the text and a
-        // `v$y` copies a run of spaces.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         surface.rows[11] = "❯ ls" + String(repeating: " ", count: 76)
@@ -1749,12 +1585,10 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aYankOfABlankRowStillConfirms() throws {
-        // The pulse is the only evidence a yank happened. Dropping out on an empty read left the
-        // screen identical to before the keystroke, which is exactly what a failed copy looks like.
         let controller = makeWindow()
         let (handler, board) = try enterModeForYanking(controller)
 
-        _ = handler(try keyDown("G", unshifted: "g", flags: .shift))  // the blank bottom row
+        _ = handler(try keyDown("G", unshifted: "g", flags: .shift))
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
         _ = handler(try keyDown("y"))
 
@@ -1807,8 +1641,8 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         let (handler, board) = try enterModeForYanking(controller)
 
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
-        controller.handle(.toggleScrollMode)  // out
-        controller.handle(.toggleScrollMode)  // and back in
+        controller.handle(.toggleScrollMode)
+        controller.handle(.toggleScrollMode)
         let reopened = try XCTUnwrap((controller.keyModeHost as? ModeHostSpy)?.modeHandler)
         controller.scrollMode.yankPasteboard = board
         _ = reopened(try keyDown("y"))
@@ -1817,8 +1651,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aFontStepRedrawsTheBandThoughNothingAboutItMoved() throws {
-        // No layout pass runs and the overlay's state is identical either way, so a redraw keyed
-        // off that state leaves the band at the old row height.
         let controller = makeWindow()
         controller.handle(.toggleScrollMode)
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
@@ -1833,8 +1665,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aFontStepKeepsTheBandOnTheLineItWasReading() throws {
-        // A font step resizes the grid in both directions and the text rewraps into it, so the row
-        // INDEX the band held names a different line afterward.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         let host = ModeHostSpy()
@@ -1847,7 +1677,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursorRow, 2, "precondition: on the seq command")
 
         controller.applySessionFontSize()
-        // The reflow: a smaller font fits three more rows, so everything on screen slid down.
         surface.rows = Self.slidDown(surface.rows, by: 3)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
 
@@ -1856,7 +1685,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aReflowThatLosesTheLineLeavesTheBandWhereItIs() throws {
-        // Nothing to re-find is not a reason to jump.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         let host = ModeHostSpy()
@@ -1876,8 +1704,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aResizeKeepsTheBandOnTheLineItWasReading() throws {
-        // The bug: the cursor is a viewport row number, a resize rewraps the text under it, and
-        // nothing re-numbered it. The band kept its row and the reader's line moved out from under.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         let host = ModeHostSpy()
@@ -1890,9 +1716,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursorRow, 2, "precondition: on the seq command")
 
         surface.delegate?.surfaceGridDidReflow(surface)
-        // The reflow the resize asked for: a taller window fits three more rows, so the text slid
-        // down into them. Sent after the event, as libghostty does it: the grid resizes
-        // synchronously and the buffer rewraps on its IO thread afterwards.
         surface.rows = Self.slidDown(surface.rows, by: 3)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
 
@@ -1901,14 +1724,12 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aResizeKeepsTheSelectionOverTheSameText() throws {
-        // Both ends are re-found by content, so a rewrap that moves every row three down leaves the
-        // selection covering the words it covered before, not the row numbers.
         let controller = makeWindow()
         let (surface, handler, board) = try enterModeOverNumberedRows(controller)
 
-        for _ in 0..<3 { _ = handler(try keyDown("k")) }  // anchor on row 20
+        for _ in 0..<3 { _ = handler(try keyDown("k")) }
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
-        for _ in 0..<2 { _ = handler(try keyDown("k")) }  // cursor up to row 18
+        for _ in 0..<2 { _ = handler(try keyDown("k")) }
 
         surface.delegate?.surfaceGridDidReflow(surface)
         surface.rows = Self.slidDown(surface.rows, by: 3)
@@ -1919,8 +1740,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aReflowKeepsTheHighlightPaintedWhileTheAnchorIsUnresolved() throws {
-        // A held resize reflows on every step. Hiding the span until each report resolved it made
-        // the highlight strobe in and out under the reader's hands.
         let controller = makeWindow()
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         let (_, handler, _) = try enterModeOverNumberedRows(controller)
@@ -1928,7 +1747,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         for _ in 0..<3 { _ = handler(try keyDown("k")) }
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
 
-        controller.applySessionFontSize()  // arms the re-find; no report follows
+        controller.applySessionFontSize()
 
         XCTAssertNotNil(
             panel.scrollCursorForTesting.state?.selection, "the highlight blinked off mid-resize")
@@ -1936,8 +1755,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_anUnresolvedSpanIsNotReadableUntilSomethingResolvesIt() throws {
-        // `⌘E` and `⌘F` are reserved chords and never reach `handle`, so they can read the span
-        // before anything has placed its anchor. Painted is not the same as readable.
         let controller = makeWindow()
         let (_, handler, _) = try enterModeOverNumberedRows(controller)
 
@@ -1953,16 +1770,14 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aKeyAfterAReflowThatNeverReportedResolvesTheSpanRatherThanDropIt() throws {
-        // The key itself is the proof the grid settled, so the anchor is placed against it there and
-        // then. Dropping instead answered the `y` the reader was in the middle of with nothing.
         let controller = makeWindow()
         let (surface, handler, board) = try enterModeOverNumberedRows(controller)
 
-        for _ in 0..<3 { _ = handler(try keyDown("k")) }  // anchor on row 20
+        for _ in 0..<3 { _ = handler(try keyDown("k")) }
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
-        for _ in 0..<2 { _ = handler(try keyDown("k")) }  // cursor up to row 18
+        for _ in 0..<2 { _ = handler(try keyDown("k")) }
 
-        controller.applySessionFontSize()  // arms the re-find; no report follows
+        controller.applySessionFontSize()
         surface.rows = Self.slidDown(surface.rows, by: 3)
 
         _ = handler(try keyDown("y"))
@@ -1973,8 +1788,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aResizeThatCrossesTheTwoEndsGivesTheSelectionBack() throws {
-        // Each end is re-found on its own and "nearest match" can settle on a repeated prompt. A
-        // pair that comes back crossed covers text the reader never dragged over, so it goes.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         var rows = (0..<24).map { "filler \($0)" }
@@ -1984,12 +1797,10 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         let (handler, board) = try enterModeForYanking(controller)
 
-        for _ in 0..<3 { _ = handler(try keyDown("k")) }  // anchor on row 20
+        for _ in 0..<3 { _ = handler(try keyDown("k")) }
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
-        for _ in 0..<10 { _ = handler(try keyDown("k")) }  // cursor up to row 10, above the anchor
+        for _ in 0..<10 { _ = handler(try keyDown("k")) }
 
-        // The rewrap leaves a second copy of the anchor's line above the cursor, nearer to nothing
-        // in particular, and the cursor's own line below it.
         surface.delegate?.surfaceGridDidReflow(surface)
         var reflowed = (0..<24).map { "filler \($0)" }
         reflowed[5] = "❯ ls the anchor"
@@ -2005,8 +1816,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aReflowFromAnotherPaneLeavesTheModeAlone() throws {
-        // Every surface in the window reports its own reflow, and a divider drag reflows one side
-        // only. Unscoped, the untouched pane's mode dropped its selection and re-read its rows.
         let controller = makeWindow()
         let (handler, board) = try enterModeForYanking(controller)
         let other = RecordingSurface()
@@ -2020,10 +1829,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aResizeAfterAPageMoveDoesNotChaseTheLineTheReaderScrolledAwayFrom() throws {
-        // A page move slides the viewport under a cursor that stayed put, so the line the band is
-        // on changes with no cursor move to record it. The row read on that path describes the old
-        // screen by the code's own admission, so remembering it left a resize anchoring to a line
-        // the reader had already scrolled past, and the band chased it across the pane.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         let host = ModeHostSpy()
@@ -2035,8 +1840,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         for _ in 0..<9 { _ = handler(try keyDown("k")) }
         XCTAssertEqual(controller.scrollMode.cursorRow, 2, "precondition: on the seq command")
 
-        _ = handler(try keyDown("d", flags: .control))  // page down: the buffer moves, the band does not
-        // The frame that serves it: the seq command is now six rows further down the viewport.
+        _ = handler(try keyDown("d", flags: .control))
         var scrolled = Array(repeating: "", count: 24)
         scrolled[8] = "❯ seq 1 3"
         surface.rows = scrolled
@@ -2050,24 +1854,16 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aShrinkThatCutsTheCursorsRowStillFindsTheLine() throws {
-        // The grid changes shape before the reflow is announced, so a band sitting in the rows the
-        // resize cut names a row the backend will not read by the time anyone asks. Read at that
-        // moment it came back empty, the anchor was never armed, and the band silently stopped
-        // following — the same failure this whole mechanism exists to prevent, in the one direction
-        // nothing covered.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
-        surface.rows[20] = "❯ make test"  // the reader's line, low enough to be cut
+        surface.rows[20] = "❯ make test"
         let host = ModeHostSpy()
         hosts.append(host)
         controller.keyModeHost = host
         controller.handle(.toggleScrollMode)
         XCTAssertEqual(controller.scrollMode.cursorRow, 20, "precondition: opened on that line")
-        // Output lands before the resize, which drops the row cache. Without that the cache still
-        // holds row 20's text and hides the bug behind a lucky hit.
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 100))
 
-        // The resize lands: six rows fewer, and row 20 is past the bottom edge from here on.
         surface.cellMetrics = TerminalCellMetrics(
             columns: 80, rows: 18, cellWidth: 8, cellHeight: 16, gridInset: 2)
         surface.delegate?.surfaceGridDidReflow(surface)
@@ -2081,8 +1877,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aReportLongAfterTheReflowLeavesTheBandAlone() throws {
-        // A resize that rewraps nothing reports nothing, so an anchor left armed fired on whatever
-        // came next: a background line minutes later moved the band off the row the reader chose.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         var clock = ContinuousClock.now
@@ -2097,7 +1891,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursorRow, 2, "precondition: on the seq command")
 
         surface.delegate?.surfaceGridDidReflow(surface)
-        clock = clock.advanced(by: .seconds(60))  // the report that never came, and then output
+        clock = clock.advanced(by: .seconds(60))
         surface.rows = Self.slidDown(surface.rows, by: 3)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
 
@@ -2106,8 +1900,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aNarrowerWindowFindsTheLineByTheFragmentLeftOfIt() throws {
-        // A width change rewraps and rows are read one at a time, so none holds the whole of what
-        // was remembered. Exact matching found nothing, and the line slid out from under the band.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         let long = "❯ tail -f /var/log/system.log | grep -i kernel | less -R"
@@ -2122,7 +1914,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursorRow, 2, "precondition: on the long command")
 
         surface.delegate?.surfaceGridDidReflow(surface)
-        // The rewrap: the line no longer fits, so it takes two rows and row 2 holds neither whole.
         var rewrapped = Array(repeating: "", count: 24)
         rewrapped[6] = "❯ tail -f /var/log/system.log | grep"
         rewrapped[7] = "-i kernel | less -R"
@@ -2135,8 +1926,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aWiderWindowFindsTheLineThatAbsorbedTheFragment() throws {
-        // The same reflow the other way: two rows merge back into one, so the remembered text is
-        // now a prefix of the row rather than the row being a prefix of it.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         surface.rows[2] = "❯ tail -f /var/log/system.log | grep"
@@ -2157,8 +1946,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_theBufferMovingUnderASelection_stopsPaintingIt() throws {
-        // The anchor is given back whenever the rows move, but the overlay holds the rects it was
-        // last handed: the highlight stayed painted over rows it no longer covered.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
@@ -2181,8 +1968,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aWiderWindowFindsTheLineThatSwallowedAContinuationRow() throws {
-        // A cursor on the SECOND visual row of a wrapped line holds a suffix, not a prefix, so
-        // widening puts the remembered text mid-row and both the exact and prefix passes miss.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         surface.rows[2] = "-i kernel | less -R --quit-if-one-screen"
@@ -2205,11 +1990,9 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aContainedMatchStillNeedsEnoughSharedText() throws {
-        // Containment matches far more loosely than the passes above it, so the same floor applies:
-        // a short run inside an unrelated row must not drag the band to it.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
-        surface.rows[2] = "kernel"  // 6 characters, under minimumFragmentMatch
+        surface.rows[2] = "kernel"
         let host = ModeHostSpy()
         hosts.append(host)
         controller.keyModeHost = host
@@ -2229,9 +2012,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aPromptSigilIsNotEnoughSharedTextToMoveTheBand() throws {
-        // Every line on screen starts with the prompt. Without a floor on how much a fragment has
-        // to share, a reflow that lost the line entirely anchored the band to whichever bare
-        // prompt sat nearest, which is a jump to an unrelated row dressed up as a re-find.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         surface.rows[2] = "❯ seq 1 3"
@@ -2244,7 +2024,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         for _ in 0..<9 { _ = handler(try keyDown("k")) }
         surface.delegate?.surfaceGridDidReflow(surface)
         var scrolledAway = Array(repeating: "", count: 24)
-        scrolledAway[5] = "❯"  // shares the sigil and nothing else
+        scrolledAway[5] = "❯"
         surface.rows = scrolledAway
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
 
@@ -2252,10 +2032,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_aDragOfSeveralReflowsKeepsTheLineTheReaderChose() throws {
-        // A drag fires one reflow per boundary it crosses and can produce no scroll report at all
-        // along the way, so every one of them re-arms the anchor. Only a cursor move changes which
-        // line the reader is on: if a geometry refresh also re-reads the row, the second reflow
-        // records whatever the first one's rewrap left there and the third anchors to it.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
         let host = ModeHostSpy()
@@ -2268,7 +2044,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(controller.scrollMode.cursorRow, 2, "precondition: on the seq command")
 
         surface.delegate?.surfaceGridDidReflow(surface)
-        surface.rows = Self.slidDown(surface.rows, by: 3)  // that reflow lands, mid-drag
+        surface.rows = Self.slidDown(surface.rows, by: 3)
         surface.delegate?.surfaceGridDidReflow(surface)
         surface.delegate?.surfaceGridDidReflow(surface)
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
@@ -2278,9 +2054,6 @@ final class ScrollModeLifecycleTests: WindowTestCase {
     }
 
     func test_theModeRendersTheTerminalUnfocusedAndGivesItBackOnExit() throws {
-        // The shell takes no keys while the mode is up, so its blinking cursor competes with the
-        // mode's own. Left focused it blinks through the whole session; left unfocused after the
-        // mode ends, the pane you are typing into has a dead cursor and nothing says why.
         let controller = makeWindow()
         let surface = try XCTUnwrap(spawned.first)
 
@@ -2291,17 +2064,10 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         XCTAssertEqual(surface.focusRenders.last, true)
     }
 
-    // MARK: helpers
-
-    /// A report against a 200-line buffer. Only `offset` matters to these tests: it is what says
-    /// the rows on screen moved.
     private static func position(offset: Int) -> TerminalScrollPosition {
         TerminalScrollPosition(total: 200, offset: offset, viewport: 24)
     }
 
-    /// A viewport whose text slid down by `count` rows, which is what a reflow into a grid that
-    /// fits more rows looks like. The rows pushed past the bottom are gone; the ones opened at the
-    /// top are blank.
     private static func slidDown(_ rows: [String], by count: Int) -> [String] {
         var reflowed = Array(repeating: "", count: rows.count)
         for (offset, text) in rows.enumerated() where offset + count < rows.count {

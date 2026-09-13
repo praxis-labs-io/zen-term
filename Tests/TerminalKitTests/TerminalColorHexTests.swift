@@ -17,15 +17,14 @@ final class TerminalColorHexTests: XCTestCase {
     }
 
     func test_acceptsBareHexWithoutLeadingHash() {
-        // ghostty's config parser accepts `#`-less hex, so we must too.
         XCTAssertEqual(TerminalColor(hex: "191724"), TerminalColor(red: 0x19, green: 0x17, blue: 0x24))
         XCTAssertEqual(TerminalColor(hex: "abc"), TerminalColor(red: 0xaa, green: 0xbb, blue: 0xcc))
     }
 
     func test_rejectsInvalid() {
-        XCTAssertNil(TerminalColor(hex: "12"))  // wrong length
-        XCTAssertNil(TerminalColor(hex: "#gggggg"))  // non-hex
-        XCTAssertNil(TerminalColor(hex: "white"))  // named colors unsupported
+        XCTAssertNil(TerminalColor(hex: "12"))
+        XCTAssertNil(TerminalColor(hex: "#gggggg"))
+        XCTAssertNil(TerminalColor(hex: "white"))
         XCTAssertNil(TerminalColor(hex: ""))
     }
 }

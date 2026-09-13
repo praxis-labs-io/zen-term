@@ -1,11 +1,6 @@
 import AppKit
 
-/// Shared scaffolding for the Settings card's scrolling detail sections — the flipped-document
-/// scroll wrapper and the Reset-all success flash — so each section doesn't re-hand-roll them.
 enum SettingsDetail {
-    /// Wrap a section's rows stack in the standard detail scroll: a flipped document (top-down
-    /// coords, so it opens at the top), a slim auto-hiding overlay scroller, and the shared content
-    /// insets (18 top/bottom, 20 leading/trailing). The rows stack becomes the document's content.
     static func scroll(for rowsStack: NSStackView) -> NSScrollView {
         let doc = FlippedView()
         doc.translatesAutoresizingMaskIntoConstraints = false
@@ -32,9 +27,6 @@ enum SettingsDetail {
         return scroll
     }
 
-    /// A section group caption: 10pt semibold, uppercased, muted ink. The identical builder lived
-    /// in every settings section; the caller retains the returned label so `reapplyTheme` can
-    /// recolor it (the ink role re-derives from `Theme.current` here).
     static func groupCaption(_ title: String) -> NSTextField {
         let caption = NSTextField(labelWithString: title.uppercased())
         caption.font = .systemFont(ofSize: 10, weight: .semibold)
@@ -42,10 +34,6 @@ enum SettingsDetail {
         return caption
     }
 
-    /// The trailing hint that tells a reorderable list its rows can move. ⌥↑/⌥↓ is otherwise
-    /// undiscoverable: nothing on a row suggests it. The caller retains the label so `reapplyTheme`
-    /// can recolor it, and only builds one when there is more than one row, so the hint never
-    /// advertises a keystroke that would do nothing.
     static func reorderHint() -> NSTextField {
         let hint = NSTextField(labelWithString: "⌥↑ ⌥↓ to reorder")
         hint.font = .systemFont(ofSize: 10, weight: .medium)
@@ -54,8 +42,6 @@ enum SettingsDetail {
         return hint
     }
 
-    /// A group caption with an optional hint pinned to its trailing edge. The caller pins the row's
-    /// width to the list stack.
     static func headerRow(caption: NSTextField, hint: NSTextField?) -> NSView {
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -67,14 +53,6 @@ enum SettingsDetail {
         return row
     }
 
-    /// Move keyboard focus to the `delta`-neighbor of `stops` and scroll it into view — the shared
-    /// core of every section's arrow-nav. `anchor` is the current stop's index (nil = none focused).
-    /// `wrap` is off for arrows (a no-op at the ends) and on for Tab, which loops within the card.
-    /// `scrollTarget` maps the destination stop to the view actually revealed (e.g. the whole row, so
-    /// its inline message shows), which `KeyboardFocus.reveal` scrolls in.
-    ///
-    /// A step with nowhere to go is a no-op: arrows clamp at the ends, and each section's `moveTab`
-    /// decides for itself whether Shift-Tab at the first stop exits to the nav, before calling here.
     static func moveFocus(
         stops: [NSView], from anchor: Int?, delta: Int, wrap: Bool = false,
         scrollTarget: (NSView) -> NSView
@@ -83,8 +61,6 @@ enum SettingsDetail {
         else { return }
         let target = stops[next]
         target.window?.makeFirstResponder(target)
-        // From the index it landed on, not from `delta`: Tab's wrap from the last stop back to the first
-        // is a `+1` that travels up the list.
         let travel: KeyboardFocus.Travel =
             switch anchor {
             case .some(let from) where next < from: .up
@@ -94,10 +70,6 @@ enum SettingsDetail {
         KeyboardFocus.reveal(scrollTarget(target), among: stops, travelling: travel)
     }
 
-    /// Wrap a control in a full-width row that right-aligns it: a leading spacer takes the slack so
-    /// the control lands in the same right-hand column as the row editors. The caller pins the row's
-    /// width to the list stack. Used for the Reset-all and Restart buttons (and the reset flash) so
-    /// every button sits on the right, uniform with the field/segmented controls above.
     static func trailingRow(_ view: NSView) -> NSStackView {
         view.setContentHuggingPriority(.defaultHigh, for: .horizontal)
         let spacer = NSView()
@@ -109,8 +81,6 @@ enum SettingsDetail {
     }
 }
 
-/// The "Defaults restored." line tucked under a section's Reset-all button: a muted-accent label
-/// that flashes on reset and auto-hides after a couple seconds. Shared by the Settings sections.
 final class ResetFlashLabel: NSTextField {
     private var hideTimer: DispatchWorkItem?
 
@@ -127,7 +97,6 @@ final class ResetFlashLabel: NSTextField {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Show the message, then fade it after a beat. Re-flashing restarts the timer.
     func flash(_ text: String) {
         stringValue = text
         isHidden = false
@@ -137,8 +106,6 @@ final class ResetFlashLabel: NSTextField {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: hide)
     }
 
-    /// Re-apply the live chrome colors after a config change — no relaunch. Matches the accent
-    /// role set once in `init`.
     func reapplyTheme() {
         textColor = Theme.current.chrome.accent.nsColor
     }

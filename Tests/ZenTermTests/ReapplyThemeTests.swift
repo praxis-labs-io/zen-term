@@ -3,17 +3,9 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Window-mounted recolor tests for the shared leaf controls' `reapplyTheme()`:
-/// each test swaps `Theme.current` via the test-only `Theme.setCurrentForTesting(_:)` hook,
-/// calls `reapplyTheme()`, and asserts a real color-bearing property actually changed — not
-/// just that the method exists. Per the house rule "GUI controls need interaction tests," the
-/// controls are mounted in a real (borderless) `NSWindow` rather than tested state-only.
 final class ReapplyThemeTests: WindowTestCase {
     private var originalTheme: AppTheme!
     private var tempRoots: [URL] = []
-    /// The float below reads `GeneralConfig.current` at construction to pick which arrangement
-    /// paints its card, so without this it is built against the developer's own
-    /// `~/.config/zen-term` rather than a known one.
     private var originalConfig: GeneralConfig!
 
     override func setUp() {
@@ -31,10 +23,6 @@ final class ReapplyThemeTests: WindowTestCase {
         try super.tearDownWithError()
     }
 
-    /// A theme whose background/foreground/accent/destructive are all clearly distinct from
-    /// Rosé Pine Moon's, built via the same `ConfigLoader.loadAppTheme(configRoot:general:)`
-    /// path `ConfigLoaderTests`/`ThemeResolutionTests` use, so `chrome`'s derived roles (accent,
-    /// muted, etc.) are populated exactly like a real theme swap would produce them.
     private func makeAlternateTheme() throws -> AppTheme {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-reapply-\(UUID().uuidString)", isDirectory: true)
@@ -143,11 +131,6 @@ final class ReapplyThemeTests: WindowTestCase {
         return placeholder.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
     }
 
-    /// The system `placeholderString` draws in AppKit's own `placeholderTextColor`, which tracks
-    /// the view's `effectiveAppearance` rather than `Theme.current` — near-white on a light theme
-    /// under a dark appearance. `FieldBox` builds a `placeholderAttributedString` colored
-    /// from `chrome.ink(.muted)` instead, so it must both match that role and actually change
-    /// on a live theme swap.
     func test_reapplyTheme_recolorsFieldBoxPlaceholder() throws {
         let field = FieldBox(placeholder: "0.82")
         field.translatesAutoresizingMaskIntoConstraints = true
@@ -232,8 +215,6 @@ final class ReapplyThemeTests: WindowTestCase {
         window.contentView?.addSubview(overlay)
         overlay.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
 
-        // Construction order is backdrop then card (SurfaceFloatOverlay.swift), so the card is
-        // the second subview.
         guard overlay.subviews.count == 2 else {
             return XCTFail("expected backdrop + card subviews")
         }
@@ -246,11 +227,6 @@ final class ReapplyThemeTests: WindowTestCase {
         XCTAssertNotEqual(colorBefore, card.layer?.borderColor)
     }
 
-    /// A surface float wears the accent focus halo, not the neutral hairline every other card
-    /// gets — and `CardChrome.reapplyTheme` defaults `halo` to `false`, so an omitted argument
-    /// there silently drops the float back to the neutral edge on the next theme swap. The
-    /// recolor test above can't see that: both colors are theme-derived, so it changes either
-    /// way. This pins WHICH role the border lands on after the swap.
     func test_reapplyTheme_keepsTheAccentHaloOnSurfaceFloatOverlay() throws {
         let overlay = SurfaceFloatOverlay(
             content: NSView(), widthFraction: 0.6, heightFraction: 0.6, contentInset: 12,
@@ -276,14 +252,6 @@ final class ReapplyThemeTests: WindowTestCase {
             "a float that reverts to the neutral hairline no longer signals it holds focus")
     }
 
-    /// A `SettingsSection` fake that mirrors the real sections' persistent-reset-control shape:
-    /// the Reset-all button is constructed ONCE (like `SettingsFormSection.resetAllButton` /
-    /// `SettingsKeybindsSection.resetAllButton`) and `makeDetailView()` only re-parents it — it
-    /// never rebuilds a fresh button. This is the exact shape that hid the original bug: a
-    /// detail-rebuild-based `reapplyTheme()` (routing through `makeDetailView()` via
-    /// `selectSection`) would re-parent this already-themed button without ever recoloring it,
-    /// because a fresh-per-call fake (the old `FakeSettingsSection`, which built a brand-new
-    /// `AppButton` every `makeDetailView()`) can't distinguish "recolored" from "rebuilt".
     private final class FakeSettingsSection: SettingsSection {
         var navTitle: String { "Fake" }
         var onExitToNav: (() -> Void)?
@@ -322,8 +290,6 @@ final class ReapplyThemeTests: WindowTestCase {
         overlay.reapplyTheme()
 
         XCTAssertNotEqual(shellColorBefore, card.layer?.borderColor)
-        // Same button instance before and after — a rebuild would swap it out; an in-place recolor
-        // must actually change its color, not just re-parent the stale one.
         XCTAssertNotEqual(resetColorBefore, attributedTitleColor(section.resetButton))
     }
 
@@ -337,18 +303,11 @@ final class ReapplyThemeTests: WindowTestCase {
         window.contentView?.addSubview(overlay)
         overlay.frame = NSRect(x: 0, y: 0, width: 620, height: 460)
 
-        // `SettingsOverlay.init` itself calls `selectSection(0)` once to mount the initial detail
-        // view, which also calls `sectionWillHide()` on that section as a pre-existing quirk
-        // (unrelated to theme changes) — so the baseline is 1, not 0. What must NOT happen is a
-        // *second* call from `reapplyTheme()`.
         let callsBefore = section.sectionWillHideCallCount
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
         overlay.reapplyTheme()
 
-        // A rebuild-based `reapplyTheme()` routes through `selectSection`, which calls
-        // `sectionWillHide()` on the current section even though its index didn't change — in the
-        // real keybinds section that cancels an in-progress capture. It must never fire from here.
         XCTAssertEqual(section.sectionWillHideCallCount, callsBefore)
     }
 
@@ -360,8 +319,6 @@ final class ReapplyThemeTests: WindowTestCase {
         row.frame = NSRect(x: 0, y: 0, width: 300, height: 40)
         row.render(currentShortcut: "⌘T")
 
-        // Focus so the chip's box carries a border color, not just an unfocused fill — the fill
-        // alone (ink 0.06) is theme-derived too, but the border makes the regression unmissable.
         window.makeFirstResponder(row.chip)
         let borderBefore = row.chip.layer?.borderColor
         let fillBefore = row.chip.layer?.backgroundColor
@@ -388,8 +345,6 @@ final class ReapplyThemeTests: WindowTestCase {
         Theme.setCurrentForTesting(try makeAlternateTheme())
         overlay.reapplyTheme()
 
-        // The overlay opens on section 0 — `hidden` never becomes the selected section, but its
-        // persistent Reset-all control still must recolor for when it's next shown.
         XCTAssertEqual(hidden.reapplyThemeCallCount, 1)
         XCTAssertEqual(hidden.sectionWillHideCallCount, 0)
     }

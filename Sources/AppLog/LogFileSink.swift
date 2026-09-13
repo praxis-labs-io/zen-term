@@ -1,9 +1,6 @@
 import Foundation
 
-/// Appends log lines to a size-capped, rotated file set, written on a serial background queue so a
-/// write never touches the main thread. The active file is `fileName`; when a write would
-/// push it past `maxBytes` it rotates (`fileName` → `fileName.1` → …), keeping at most `maxFiles`
-/// files total and dropping the oldest.
+/// Appends lines to a file that rotates to `fileName.1`, `.2`, … past `maxBytes`, keeping `maxFiles` files.
 public final class LogFileSink {
     private let directory: URL
     private let fileName: String
@@ -18,32 +15,24 @@ public final class LogFileSink {
         self.maxFiles = max(1, maxFiles)
     }
 
-    /// The shipping sink: `~/Library/Logs/ZenTerm/zen-term.log`, ~5 MB × 2 files. The directory is
-    /// created lazily on the first write, so constructing this touches no disk.
+    /// `~/Library/Logs/ZenTerm/zen-term.log`, 5 MB x 2 files. Touches no disk until the first write.
     public static func standard() -> LogFileSink {
         let logs = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Logs/ZenTerm", isDirectory: true)
         return LogFileSink(directory: logs, fileName: "zen-term.log", maxBytes: 5 * 1024 * 1024, maxFiles: 2)
     }
 
-    /// Append one line (a trailing newline is added). Returns immediately; the line is *formatted*
-    /// and written on the serial queue (the `@autoclosure` defers it), so the caller thread never
-    /// touches the shared date formatter or the disk.
+    /// Formats and appends `line` plus a newline on a background queue. Returns immediately.
     public func writeLine(_ line: @autoclosure @escaping () -> String) {
         queue.async { [weak self] in self?.append(Data((line() + "\n").utf8)) }
     }
 
-    /// Block until every queued write has landed. For tests and for a clean shutdown.
+    /// Blocks until every queued write has landed.
     public func flush() {
         queue.sync {}
     }
 
-    /// The log files that currently exist, active file first then each present rotation — the set
-    /// Export Diagnostics bundles. Keeps the naming scheme here rather than leaking
-    /// `fileName`/`.1` to callers. Runs on the write queue, so lines still queued when an export
-    /// starts are on disk before this returns (the newest line is the one a bug report most needs)
-    /// and a concurrent `rotate()` can't tear the listing. Blocks until the queue drains, so call it
-    /// off the main thread.
+    /// The log files that exist, active first. Waits for queued writes, so call it off the main thread.
     public var fileURLs: [URL] {
         queue.sync {
             let fileManager = FileManager.default
@@ -79,16 +68,14 @@ public final class LogFileSink {
         try? handle.write(contentsOf: data)
     }
 
-    /// Shift the active file down the rotated chain, dropping anything past `maxFiles`.
     private func rotate() {
         let fm = FileManager.default
         let lastIndex = maxFiles - 1
         guard lastIndex >= 1 else {
-            // Keep only the active file: drop it so a fresh one takes its place.
             try? fm.removeItem(at: activeURL)
             return
         }
-        try? fm.removeItem(at: rotatedURL(lastIndex))  // drop the oldest
+        try? fm.removeItem(at: rotatedURL(lastIndex))
         var index = lastIndex - 1
         while index >= 1 {
             let from = rotatedURL(index)

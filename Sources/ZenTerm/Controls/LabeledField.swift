@@ -1,11 +1,6 @@
 import AppKit
 
-/// A caption + control + inline validation message, stacked. The message sits directly beneath
-/// its field and is hidden until `setMessage` gives it text. A shared form-control primitive.
 final class LabeledField: NSView {
-    /// Retained (not a throwaway init-local) so `reapplyTheme()` can recolor it — its color is
-    /// baked into an attributed string this view has no insight into, so recoloring routes
-    /// through `ThemeReapplying` when the caller's concrete caption type conforms.
     private let caption: NSView
     private let messageLabel = NSTextField(labelWithString: "")
 
@@ -41,9 +36,6 @@ final class LabeledField: NSView {
         messageLabel.isHidden = (text == nil)
     }
 
-    /// Re-apply the live chrome colors after a config change — no relaunch. The message label's
-    /// role is known here (`destructive`); the caption's isn't (it's an opaque `NSView`), so it
-    /// only recolors when the concrete caption conforms to `ThemeReapplying`.
     func reapplyTheme() {
         messageLabel.textColor = Theme.current.chrome.destructive.nsColor
         (caption as? ThemeReapplying)?.reapplyTheme()

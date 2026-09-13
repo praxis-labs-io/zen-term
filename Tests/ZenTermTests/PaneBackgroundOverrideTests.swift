@@ -5,20 +5,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// A program that repaints its own background (OSC 11) moves the fill of ITS pane and
-/// nothing else. libghostty already repaints the grid below the seam, so what is at stake here is
-/// the padding the chrome paints around that grid: get the routing wrong and a repainted pane sits
-/// inside a ring of the old theme color, which is the state this ticket found.
-///
-/// Window-mounted per the house rule, and the assertions read the colors off the real layer and
-/// ring view (`paintedBackgroundForTesting`) rather than off the `backgroundOverride` that was set
-/// (a hook that never reached the paint has to fail).
-///
-/// `background-alpha` decides which of the two arrangements paints, so it is pinned rather than
-/// inherited: unpinned, Drew's own config (`background-alpha = 0`) runs only the ring path locally
-/// while CI runs only the clip path, and the half the change rewrote goes unexercised on both.
-/// `solid`/`translucent` run each. That unpinned shape once cost a run of intermittent
-/// failures in unrelated suites, so it is pinned here too rather than left to luck.
 final class PaneBackgroundOverrideTests: WindowTestCase {
     private var window: NSWindow!
     private var controller: PaneCanvasController!
@@ -30,8 +16,6 @@ final class PaneBackgroundOverrideTests: WindowTestCase {
         super.setUp()
         originalConfig = GeneralConfig.current
         GeneralConfig.setCurrentForTesting(.builtIn)
-        // `split` branches on Reduce Motion, so pin it rather than inherit the machine's setting.
-        // Instant, so the assertions never read a frame mid-slide.
         Motion.isReduceMotionEnabled = { true }
         controller = PaneCanvasController(makeSurface: { RecordingSurface() })
         window = NSWindow(
@@ -54,15 +38,10 @@ final class PaneBackgroundOverrideTests: WindowTestCase {
 
     private func layout() { controller.canvasView.layoutSubtreeIfNeeded() }
 
-    /// The host that actually contains a surface's view, found by walking the built tree rather
-    /// than by asking the controller: the same containment the user sees, so a surface routed to
-    /// the wrong host can't satisfy it.
     private func host(showing surface: TerminalSurface) -> PanelHostView? {
         controller.hostsForTesting.values.first { surface.view.isDescendant(of: $0) }
     }
 
-    /// The color a panel is painting its interior with: the clip's fill while the background is
-    /// solid, the ring's while it is translucent.
     private func paintedColor(_ host: PanelHostView) -> NSColor? {
         let painted = host.paintedBackgroundForTesting
         guard let fill = painted.fill else { return painted.ring }
@@ -98,8 +77,6 @@ final class PaneBackgroundOverrideTests: WindowTestCase {
             "a program repainted a pane it does not own")
     }
 
-    /// The other arrangement: below `background-alpha` 1 the clip stops filling and the ring paints
-    /// the padding instead, so the override has to reach a different view entirely.
     func test_backgroundChangeReachesTheRingWhenTranslucent() throws {
         var config = GeneralConfig.builtIn
         config.backgroundAlpha = 0.5
@@ -120,8 +97,6 @@ final class PaneBackgroundOverrideTests: WindowTestCase {
             "the ring has to blend at the same alpha the terminal does")
     }
 
-    /// A reset (OSC 111) reaches the chrome as an ordinary change carrying the restored color, so
-    /// the pane follows it back the same way it followed the repaint out.
     func test_aLaterChangeReplacesTheEarlierOne() throws {
         let surface = try XCTUnwrap(controller.allSurfaces.first)
         let host = try XCTUnwrap(host(showing: surface))
@@ -133,9 +108,6 @@ final class PaneBackgroundOverrideTests: WindowTestCase {
         assertPaints(host, restored, "the second change did not replace the first")
     }
 
-    /// A theme reload re-runs `applyBackground` on every pane. libghostty keeps the color a program
-    /// set through a config change, so the grid stays repainted, and the chrome has to as well or
-    /// the reload is what reintroduces the mismatched ring.
     func test_themeReloadDoesNotClobberTheOverride() throws {
         let surface = try XCTUnwrap(controller.allSurfaces.first)
         let host = try XCTUnwrap(host(showing: surface))

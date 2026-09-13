@@ -1,9 +1,5 @@
 import AppKit
 
-/// The General settings section: app-wide preferences that aren't about the terminal surface or the
-/// chrome's look. Today it holds Notifications and Updates, each its own group. A
-/// `SettingsFormSection` subclass, so it only declares its groups; the base owns the row builder,
-/// live-apply debounce, focus stops, and Reset-all. Both toggles default on.
 final class SettingsGeneralSection: SettingsFormSection {
     override var navTitle: String { "General" }
 
@@ -43,8 +39,6 @@ final class SettingsGeneralSection: SettingsFormSection {
         }
     }
 
-    /// The segment order for the two toast rows, and the lookup back. `static` so the row closures
-    /// don't capture `self` into `refreshers` and retain the section (see `SettingsAppearanceSection`).
     private static let dismissals: [GeneralConfig.ToastDismissal] = [.sticky, .auto]
     private static let dismissalTitles = ["Sticky", "Auto"]
     private static func dismissalIndex(_ dismissal: GeneralConfig.ToastDismissal) -> Int {

@@ -386,6 +386,11 @@ entirely, so forwarding `NSEvent.momentumPhase` is inert and the macOS coast com
 from the OS's decaying deltas. The landing "stutter on rows" is that quantization
 and is unfixable below the seam.
 
+**Shader paths are written absolute.** ghostty resolves a relative `custom-shader`
+path against the config file, and that file is a temp file `GhosttyConfigWriter`
+writes. `ShaderCatalog` hands the writer the bundled shader's absolute path, so that
+resolution never applies.
+
 **Custom shaders get sRGB color, and gate opacity.** ghostty hands shaders the
 cursor and color uniforms as **sRGB** (raw `/255`), and the pipeline is not linear,
 so a shader that runs `sRGBToLinear(iCurrentCursorColor.rgb)` comes out nearly
@@ -694,6 +699,10 @@ hierarchy and beeps at (rewritten to Ctrl-_). Every other ⌘ or ⌃ key is decl
 timestamp recorded, so a menu item still wins the first pass; `doCommand`'s redispatch is what
 sends one back to be claimed on the second. Ported from ghostty, minus its binding branch, which
 `KeyInterceptor` already covers. The failure modes are in `docs/swift-conventions.md`.
+
+**Key text reaches libghostty only when it starts at 0x20 or above.** For a control character
+`GhosttyHostView` sends the key with no text, and libghostty encodes it from the keycode and
+modifiers. That is what keeps ctrl+key correct.
 
 **`Chord` canonicalization** is the sharpest rule in the codebase. A shifted glyph
 folds onto its base key **only when Shift is set**, because
@@ -2091,6 +2100,10 @@ directory stay correct because they point within it, but a carried entry that is
 a link out of the workspace would arrive holding a target that no longer resolves, so
 that one is refused.
 
+**A failed copy's message comes from `strerror_r`.** `strerror` returns a shared static
+buffer, so two creates failing at the same time can report each other's message. The nav
+socket reads errno text the same way.
+
 **A folder git tracks something inside copies its ignored content, not the folder.** Git
 collapses an ignored folder only when it tracks nothing there, so a Rails `log/` holding a
 tracked `.keep` reports every rotated log on its own: 170 of craftwork's 249 rows came from
@@ -2297,13 +2310,17 @@ at a few hundred files, which is how this was found.
   before their rc files run, so an `exec`'d shell is not injected: no OSC 7, cwd
   frozen at the seed forever, prompt marks never fire, `isBusy` breaks. The re-arm
   restages the redirect.
+- **`ApplePressAndHoldEnabled` is registered false before the first surface
+  exists.** With press-and-hold on, holding a key opens the macOS accent popup, and
+  its auto-repeats and the number key that picks an accent leak into the shell.
+  `AppDelegate` registers it at launch, ahead of any window.
 - **`GitRepo.repoRoot` terminates on the path not shrinking**, not on
   `parent == dir`. `deletingLastPathComponent()` is not monotonic on a
   FileManager-vended URL: it walks past `/` forever, and an equality check spins the
   main thread.
 - **The `workspaces` file is read off the main thread, so its readers render
   twice.** `ConfigLoader.loadWorkspaces` has a completion-handler form that every
-  caller uses; the synchronous form behind it is the parse step, and calling it
+  caller uses; `loadWorkspacesBlocking` behind it is the parse step, and calling it
   from the main thread is the stall this removed. Path validation runs on its own
   queue *after* the list has been handed over, so the card never waits on a `stat`
   and a hung mount can't hold up the next load.

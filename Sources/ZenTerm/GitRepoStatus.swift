@@ -1,22 +1,6 @@
 import Foundation
 
-/// The last-known git answers per directory — is it a repo, and what branch is it on — probed off
-/// the main thread.
-///
-/// Both answers are filesystem reads, and the chrome must never block the main queue on
-/// filesystem I/O — a workspace on a network share or FUSE mount makes that read
-/// unbounded, and the ⌘P picker used to run one per row per keystroke. So a row renders
-/// from `known` / `branch` (instant, nil until something has probed the path) and its host calls
-/// `refresh` to fill them in when the answers land.
-///
-/// Refreshing per open, rather than answering once for the life of the process, is what makes a
-/// freshly `git init`ed folder answer without a relaunch, and a branch switched in a shell show up
-/// the next time the picker opens.
-///
-/// Main-thread only: `known` reads the cache, and `refresh` hops back to main before writing it.
 enum GitRepoStatus {
-    /// One directory's answers. `branch` is nil for a directory that isn't a repo, and for a repo
-    /// whose `HEAD` can't be read. `churn` arrives separately and later — see `refreshChurn`.
     private struct Status {
         var isRepo = false
         var branch: String?
@@ -25,12 +9,8 @@ enum GitRepoStatus {
 
     private static var cache: [URL: Status] = [:]
 
-    /// One caller's probes, so it can cancel its own without touching another caller's. Two
-    /// windows each hold an open picker, and a global cancel takes the other window's answers with
-    /// it.
+    /// Per caller, because two windows' pickers share the queue and a global cancel drops the other's answers.
     final class RefreshToken {
-        /// Read on the main queue before delivering. `Operation.cancel()` cannot stop one that has
-        /// already started, so a superseded probe still finishes and would answer over the newer one.
         fileprivate(set) var isCancelled = false
         fileprivate var operations: [Operation] = []
 
@@ -40,27 +20,12 @@ enum GitRepoStatus {
         }
     }
 
-    /// Whether `dir` is a repo, or nil when nothing has probed it yet.
     static func known(_ dir: URL) -> Bool? { cache[dir.standardizedFileURL]?.isRepo }
 
-    /// The branch `dir` is on, or nil when nothing has probed it, it isn't a repo, or its `HEAD`
-    /// didn't read.
     static func branch(_ dir: URL) -> String? { cache[dir.standardizedFileURL]?.branch }
 
-    /// What `dir` has in flight, or nil until `refreshChurn` has answered for it.
     static func churn(_ dir: URL) -> GitChurn? { cache[dir.standardizedFileURL]?.churn }
 
-    /// Probe every directory in `dirs` off-main, recording each answer and running `completion` on
-    /// the main thread as it lands.
-    ///
-    /// One probe per directory rather than one pass over all of them: a single unreachable path
-    /// would otherwise hold every other answer behind it, so the local repos in a list would sit
-    /// badgeless until a dead mount finally timed out. That is the unbounded wait this type exists
-    /// to remove, and batching would only have moved it off the main thread rather than removed it.
-    ///
-    /// `completion` therefore runs once per directory, not once per call, and never at all for an
-    /// empty list. Callers re-read `known` for everything they render, which makes each run
-    /// idempotent.
     static func refresh(_ dirs: [URL], completion: @escaping () -> Void) {
         for dir in dirs.map(\.standardizedFileURL) {
             DispatchQueue.global(qos: .userInitiated).async {
@@ -69,8 +34,6 @@ enum GitRepoStatus {
                 DispatchQueue.main.async {
                     cache[dir, default: Status()].isRepo = isRepo
                     cache[dir, default: Status()].branch = branch
-                    // A folder that stopped being a repo must not keep the counts it had when it
-                    // was one.
                     if !isRepo { cache[dir, default: Status()].churn = nil }
                     completion()
                 }
@@ -78,10 +41,7 @@ enum GitRepoStatus {
         }
     }
 
-    /// Churn probes run here rather than on the global queue: each is a blocking `git`, one per
-    /// workspace, and an unbounded fan-out of them is what starves the very queue
-    /// `GitRepoStatus.repoRoot` and the tool floats' `git:` gating share. Four at a time keeps a
-    /// stalled mount from taking the app's worker threads with it.
+    /// Bounded so a stalled mount cannot take the app's worker threads with it.
     private static let churnQueue: OperationQueue = {
         let queue = OperationQueue()
         queue.maxConcurrentOperationCount = 4
@@ -89,10 +49,6 @@ enum GitRepoStatus {
         return queue
     }()
 
-    /// Probe every directory for churn off-main, answering on the main thread as each lands,
-    /// including the "none" answers so a caller counting completions never waits on one that will
-    /// not come. Separate from `refresh` because it costs an order of magnitude more. The returned
-    /// token cancels this call's probes, by token not by queue: another window's picker shares it.
     @discardableResult
     static func refreshChurn(_ dirs: [URL], completion: @escaping () -> Void) -> RefreshToken {
         let token = RefreshToken()
@@ -101,8 +57,6 @@ enum GitRepoStatus {
                 let churn = churnNow(for: dir)
                 DispatchQueue.main.async {
                     guard !token.isCancelled else { return }
-                    // A probe that failed clears the counts rather than leaving the last run's.
-                    // `git status` exits nonzero on an `index.lock` held by a concurrent git.
                     cache[dir, default: Status()].churn = churn
                     completion()
                 }
@@ -113,8 +67,6 @@ enum GitRepoStatus {
         return token
     }
 
-    /// Its own queue rather than `churnQueue`: the two passes run together on every picker open,
-    /// and sharing one would let a slow `git status` hold the worktree rows back.
     private static let worktreeQueue: OperationQueue = {
         let queue = OperationQueue()
         queue.maxConcurrentOperationCount = 4
@@ -122,13 +74,6 @@ enum GitRepoStatus {
         return queue
     }()
 
-    /// List every directory's worktrees off-main, delivering each answer on the main thread as it
-    /// lands. Uncached: the picker holds the listings for the life of one open, and a worktree made
-    /// or removed in a shell has to show up the next time it opens.
-    ///
-    /// `WorktreeStore` blocks by contract, and each call is two `git` invocations, so this is the
-    /// same bounded fan-out as `refreshChurn` for the same reason: a stalled mount must not take
-    /// the app's worker threads with it.
     @discardableResult
     static func refreshWorktrees(
         _ dirs: [URL], completion: @escaping (URL, WorktreeListing) -> Void
@@ -137,7 +82,6 @@ enum GitRepoStatus {
         for dir in dirs.map(\.standardizedFileURL) {
             let probe = BlockOperation {
                 let commonDir = WorktreeStore.commonDir(of: dir)
-                // A read, not a write: the picker lists on every open, and pruning there is final.
                 let worktrees = (try? WorktreeStore.list(in: dir, pruning: false)) ?? []
                 DispatchQueue.main.async {
                     guard !token.isCancelled else { return }
@@ -150,10 +94,8 @@ enum GitRepoStatus {
         return token
     }
 
-    /// One directory's counts, or nil when it isn't a repo or `git` can't answer for it.
+    /// `--no-optional-locks` so a probe never takes the index lock from the user's own git.
     private static func churnNow(for dir: URL) -> GitChurn? {
-        // `--no-optional-locks` so a probe never takes the index lock: four of these run at once
-        // against repos the user also has a shell in, and a collision drops the row's counts.
         guard GitRepo.isGitRepo(dir),
             case .success(let output) = GitCommand.run(
                 ["--no-optional-locks", "status", "--porcelain=v2", "--branch"], in: dir)
@@ -161,8 +103,6 @@ enum GitRepoStatus {
         return GitChurn.parse(output)
     }
 
-    /// Uncached: it seeds a collision check and two captions that have to be right for the repo as
-    /// it stands the moment the card opens.
     static func createOptions(in dir: URL, completion: @escaping (WorktreeStore.CreateOptions) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             let options = WorktreeStore.createOptions(in: dir)
@@ -170,10 +110,6 @@ enum GitRepoStatus {
         }
     }
 
-    /// The enclosing repo root for `cwd`, resolved off-main and delivered on the main thread.
-    /// Uncached on purpose: this answers for a pane's live cwd, which moves with every `cd`, and the
-    /// walk is what has to leave the main queue — `GitRepo.repoRoot` probes every ancestor, so it's
-    /// a run of stats rather than the single one `refresh` does per directory.
     static func repoRoot(for cwd: URL?, completion: @escaping (URL?) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             let root = GitRepo.repoRoot(for: cwd)
@@ -182,8 +118,6 @@ enum GitRepoStatus {
     }
 
     #if DEBUG
-        /// Test-only reset, so one test's probes can't decide another test's assertions. Compiled
-        /// out of release builds entirely, mirroring `ConfigLoader.defaultRootOverrideForTesting`.
         static func resetForTesting() { cache = [:] }
     #endif
 }

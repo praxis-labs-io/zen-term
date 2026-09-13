@@ -14,9 +14,6 @@ final class WorkspacesWriterTests: XCTestCase {
         return dir
     }
 
-    // MARK: serialize → parse round-trips
-
-    /// The heart of the writer: whatever it emits must parse back to an equal `Workspace`.
     private func assertRoundTrips(_ ws: Workspace, file: StaticString = #filePath, line: UInt = #line) {
         let parsed = WorkspacesParser.parse(WorkspacesWriter.serialize(ws))
         XCTAssertEqual(parsed.count, 1, "expected exactly one section", file: file, line: line)
@@ -53,8 +50,6 @@ final class WorkspacesWriterTests: XCTestCase {
         assertRoundTrips(ws)
     }
 
-    /// The inverse of the env case: env is a map and sorts, carry is a list the user authored, so
-    /// the order it comes back in has to be the order it went out in.
     func test_carry_roundTrips_inAuthoredOrder() {
         assertRoundTrips(
             Workspace(
@@ -84,8 +79,6 @@ final class WorkspacesWriterTests: XCTestCase {
             Workspace(
                 title: "Bare", path: expandTilde("~/x"),
                 main: nil, right: nil, bottom: nil, focus: .main, env: [:]))
-        // Check for the emitted key at the start of a line, so a coincidental substring in a path
-        // or title can't false-pass (or false-fail) the "field omitted" assertion.
         func emitsKey(_ key: String) -> Bool {
             serialized.split(separator: "\n").contains { $0.hasPrefix(key) }
         }
@@ -99,21 +92,19 @@ final class WorkspacesWriterTests: XCTestCase {
             title: "Hashy", path: expandTilde("~/Dev/hashy"),
             main: nil, right: nil, bottom: "echo # done", focus: .main, env: ["TAG": "v1 #rc"])
         let serialized = WorkspacesWriter.serialize(ws)
-        XCTAssertTrue(serialized.contains("\"echo # done\""))  // a whitespace-preceded # must be quoted
+        XCTAssertTrue(serialized.contains("\"echo # done\""))
         XCTAssertTrue(serialized.contains("TAG=\"v1 #rc\""))
-        assertRoundTrips(ws)  // the parser keeps the # only because it's inside quotes
+        assertRoundTrips(ws)
     }
 
-    // MARK: append
-
     func test_append_createsDirAndFile() throws {
-        let root = try makeTempDir()  // does not exist yet
+        let root = try makeTempDir()
         try WorkspacesWriter.append(
             Workspace(
                 title: "First", path: expandTilde("~/Dev/first"),
                 main: "nvim", right: nil, bottom: nil, focus: .main, env: [:]),
             configRoot: root)
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["First"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["First"])
     }
 
     func test_append_preservesExistingContentAndComments() throws {
@@ -131,14 +122,14 @@ final class WorkspacesWriterTests: XCTestCase {
 
         let text = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(text.contains("# my hand-written header"), "the comment survives")
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Existing", "Added"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["Existing", "Added"])
     }
 
     func test_append_unreadableExistingFile_throwsWithoutClobbering() throws {
         let root = try makeTempDir()
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let url = root.appendingPathComponent("workspaces")
-        let invalidUTF8 = Data([0xFF, 0xFE, 0xFF])  // not decodable as UTF-8 → the read must throw
+        let invalidUTF8 = Data([0xFF, 0xFE, 0xFF])
         try invalidUTF8.write(to: url)
 
         let ws = Workspace(
@@ -182,11 +173,8 @@ final class WorkspacesWriterTests: XCTestCase {
                 return XCTFail("expected titleExists, got \(error)")
             }
         }
-        // The rejected write left the file with a single section.
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).count, 1)
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).count, 1)
     }
-
-    // MARK: update
 
     private func seed(_ text: String, in root: URL) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -219,14 +207,12 @@ final class WorkspacesWriterTests: XCTestCase {
                 main: "vim", right: "claude", bottom: nil, focus: .main, env: [:]),
             originalTitle: "Beta", configRoot: root)
 
-        // Order preserved, only Beta changed.
-        let parsed = ConfigLoader.loadWorkspaces(configRoot: root)
+        let parsed = ConfigLoader.loadWorkspacesBlocking(configRoot: root)
         XCTAssertEqual(parsed.map(\.title), ["Alpha", "Beta", "Gamma"])
         let beta = parsed.first { $0.title == "Beta" }
         XCTAssertEqual(beta?.path, expandTilde("~/Dev/beta-moved"))
         XCTAssertEqual(beta?.main, "vim")
         XCTAssertEqual(beta?.right, "claude")
-        // The hand-written header comment and the untouched neighbours survive verbatim.
         let text = try read(root)
         XCTAssertTrue(text.contains("# my workspaces"))
         XCTAssertTrue(text.contains("[Alpha]"))
@@ -243,7 +229,7 @@ final class WorkspacesWriterTests: XCTestCase {
                 main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
             originalTitle: "Old", configRoot: root)
 
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["New"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["New"])
         XCTAssertFalse(try read(root).contains("[Old]"), "the old header is gone, not duplicated")
     }
 
@@ -251,7 +237,6 @@ final class WorkspacesWriterTests: XCTestCase {
         let root = try makeTempDir()
         try seed("[A]\npath = ~/Dev/a\n\n[B]\npath = ~/Dev/b\n", in: root)
 
-        // Renaming A → B would shadow the real B under last-wins; the writer must refuse.
         XCTAssertThrowsError(
             try WorkspacesWriter.update(
                 Workspace(
@@ -263,7 +248,7 @@ final class WorkspacesWriterTests: XCTestCase {
                 return XCTFail("expected titleExists, got \(error)")
             }
         }
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["A", "B"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["A", "B"])
     }
 
     func test_update_handlesCRLFLineEndings_replacingInPlace() throws {
@@ -276,12 +261,10 @@ final class WorkspacesWriterTests: XCTestCase {
                 main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
             originalTitle: "Beta", configRoot: root)
 
-        // With a stray `\r` defeating header detection, the edit would append a duplicate `[Beta]`
-        // instead of replacing in place. Assert exactly one header survives.
         let text = try read(root)
         XCTAssertEqual(
             text.components(separatedBy: "[Beta]").count - 1, 1, "the section is replaced, not duplicated")
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Alpha", "Beta"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["Alpha", "Beta"])
     }
 
     func test_update_missingOriginal_fallsBackToAppend() throws {
@@ -294,10 +277,8 @@ final class WorkspacesWriterTests: XCTestCase {
                 main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
             originalTitle: "Ghost", configRoot: root)
 
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["A", "Fresh"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["A", "Fresh"])
     }
-
-    // MARK: remove
 
     func test_remove_dropsSection_preservingNeighbours() throws {
         let root = try makeTempDir()
@@ -307,7 +288,7 @@ final class WorkspacesWriterTests: XCTestCase {
 
         try WorkspacesWriter.remove(title: "Beta", configRoot: root)
 
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Alpha", "Gamma"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["Alpha", "Gamma"])
         let text = try read(root)
         XCTAssertFalse(text.contains("[Beta]"))
         XCTAssertFalse(text.contains("\n\n\n"), "removing a middle section leaves no triple blank")
@@ -319,7 +300,7 @@ final class WorkspacesWriterTests: XCTestCase {
 
         try WorkspacesWriter.remove(title: "Beta", configRoot: root)
 
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Alpha"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["Alpha"])
     }
 
     func test_remove_unknownTitle_isANoOp() throws {
@@ -328,10 +309,8 @@ final class WorkspacesWriterTests: XCTestCase {
 
         try WorkspacesWriter.remove(title: "Ghost", configRoot: root)
 
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Alpha"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["Alpha"])
     }
-
-    // MARK: swap
 
     private let threeSections = """
         [Alpha]
@@ -351,27 +330,22 @@ final class WorkspacesWriterTests: XCTestCase {
 
         XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
 
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Beta", "Alpha", "Gamma"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["Beta", "Alpha", "Gamma"])
     }
 
-    /// Order is the only thing a swap may change. A section's fields riding along with its header is
-    /// the whole point — a swap that moved headers alone would silently repoint every workspace at
-    /// its neighbour's folder.
     func test_swap_movesEachSectionsFieldsWithIt() throws {
         let root = try makeTempDir()
         try seed(threeSections, in: root)
 
         XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
 
-        let parsed = ConfigLoader.loadWorkspaces(configRoot: root)
+        let parsed = ConfigLoader.loadWorkspacesBlocking(configRoot: root)
         XCTAssertEqual(parsed.first { $0.title == "Beta" }?.path, expandTilde("~/Dev/beta"))
         XCTAssertEqual(parsed.first { $0.title == "Beta" }?.main, "nvim")
         XCTAssertEqual(parsed.first { $0.title == "Alpha" }?.path, expandTilde("~/Dev/alpha"))
         XCTAssertNil(parsed.first { $0.title == "Alpha" }?.main)
     }
 
-    /// Sections of unequal length: splicing the shorter block into the longer one's slot first would
-    /// shift the indices under the second splice and shred both sections.
     func test_swap_handlesSectionsOfUnequalLength() throws {
         let root = try makeTempDir()
         try seed(
@@ -389,27 +363,22 @@ final class WorkspacesWriterTests: XCTestCase {
 
         XCTAssertTrue(try WorkspacesWriter.swap("Long", with: "Short", configRoot: root))
 
-        let parsed = ConfigLoader.loadWorkspaces(configRoot: root)
+        let parsed = ConfigLoader.loadWorkspacesBlocking(configRoot: root)
         XCTAssertEqual(parsed.map(\.title), ["Long", "Short"])
         XCTAssertEqual(parsed.first { $0.title == "Long" }?.right, "claude")
         XCTAssertEqual(parsed.first { $0.title == "Long" }?.focus, .right)
         XCTAssertEqual(parsed.first { $0.title == "Short" }?.path, expandTilde("~/Dev/short"))
     }
 
-    /// The two rows a user swaps need not be neighbours in the file — a shadowed duplicate section
-    /// can sit between them — so the writer exchanges the two *named* blocks rather than moving one
-    /// past whatever line happens to be adjacent.
     func test_swap_exchangesNonAdjacentSections() throws {
         let root = try makeTempDir()
         try seed(threeSections, in: root)
 
         XCTAssertTrue(try WorkspacesWriter.swap("Gamma", with: "Alpha", configRoot: root))
 
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Gamma", "Beta", "Alpha"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["Gamma", "Beta", "Alpha"])
     }
 
-    /// A comment sitting directly on a header documents that workspace, so it travels with it —
-    /// the convention `remove` already states when it refuses to swallow comments as separators.
     func test_swap_carriesACommentAttachedToItsHeader() throws {
         let root = try makeTempDir()
         try seed(
@@ -433,8 +402,6 @@ final class WorkspacesWriterTests: XCTestCase {
         XCTAssertLessThan(betaHeader, alphaHeader, "and Beta really did move above Alpha")
     }
 
-    /// A blank line below a comment block detaches it: the file's top banner documents the file, not
-    /// the first section, and must not be dragged into the middle by the first reorder.
     func test_swap_leavesABlankSeparatedBannerAtTheTop() throws {
         let root = try makeTempDir()
         try seed(
@@ -457,8 +424,6 @@ final class WorkspacesWriterTests: XCTestCase {
         XCTAssertEqual(lines[3], "[Beta]", "the banner stays; only the sections below it move")
     }
 
-    /// The blank separators belong to the file's shape, not to either block, so a swap must leave
-    /// exactly as many as it found — no run-together sections, no growing gap per reorder.
     func test_swap_preservesTheBlankSeparators() throws {
         let root = try makeTempDir()
         try seed(threeSections, in: root)
@@ -473,19 +438,15 @@ final class WorkspacesWriterTests: XCTestCase {
             "a swap rearranges lines, it does not add or drop any")
     }
 
-    /// A `\r` left by a CRLF-editing tool defeats a naive `hasSuffix("]")` header check, which would
-    /// leave the swap finding nothing and silently doing nothing.
     func test_swap_handlesCRLFLineEndings() throws {
         let root = try makeTempDir()
         try seed("[Alpha]\r\npath = ~/Dev/alpha\r\n\r\n[Beta]\r\npath = ~/Dev/beta\r\n", in: root)
 
         XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
 
-        XCTAssertEqual(ConfigLoader.loadWorkspaces(configRoot: root).map(\.title), ["Beta", "Alpha"])
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["Beta", "Alpha"])
     }
 
-    /// A title that isn't in the file has to be reported, not just skipped: the caller re-renders its
-    /// list on a `true`, so a silent no-op would leave the list showing an order the file never had.
     func test_swap_unknownTitle_isANoOp_andReportsIt() throws {
         let root = try makeTempDir()
         try seed(threeSections, in: root)

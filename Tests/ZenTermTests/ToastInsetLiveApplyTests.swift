@@ -4,12 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The toast stack's insets have to survive a chrome-layout change.
-///
-/// `ToastPresenter` pins its stack once at construction, and the presenter is built on the first
-/// toast — so a `window-gutter` edit (or a `window-chrome` toggle, which moves `topInset` by the
-/// 28pt traffic-light clearance) left an already-used window's toasts at the old offset until
-/// relaunch. Same frozen-at-construction shape as the pane gap; different surface.
 @MainActor
 final class ToastInsetLiveApplyTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
@@ -21,7 +15,7 @@ final class ToastInsetLiveApplyTests: WindowTestCase {
         originalConfig = GeneralConfig.current
         originalOverride = TerminalSurfaceFactory.makeOverride
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
-        Motion.isReduceMotionEnabled = { true }  // no spring-in mid-measurement
+        Motion.isReduceMotionEnabled = { true }
     }
 
     override func tearDownWithError() throws {
@@ -36,7 +30,6 @@ final class ToastInsetLiveApplyTests: WindowTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
-    /// Where the mounted toast actually sits, in window coordinates.
     private func toastOrigin(_ controller: WindowController) -> CGPoint? {
         let root = controller.window.contentView!
         root.layoutSubtreeIfNeeded()
@@ -61,7 +54,6 @@ final class ToastInsetLiveApplyTests: WindowTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700), initialCWD: nil)
         self.controller = controller
         controller.mountAndStart()
-        // Build the presenter, which is what freezes the insets.
         controller.showToast(ToastContent(variant: .info, title: "notice", message: "body"))
         drainMainQueue()
 
@@ -75,15 +67,11 @@ final class ToastInsetLiveApplyTests: WindowTestCase {
         drainMainQueue()
 
         let after = try XCTUnwrap(toastOrigin(controller))
-        // The gutter grew by 40, so the stack's trailing inset must pull it 40pt further left.
         XCTAssertEqual(
             before.x - after.x, 40, accuracy: 0.5,
             "a window-gutter edit never reached the mounted toast stack")
     }
 
-    /// The re-point must not bring the presenter into existence. A window that has never shown a
-    /// toast must still have no toast stack mounted after a gutter edit — otherwise the fix trades
-    /// a stale inset for the z-order that building on first use exists to protect.
     func test_gutterChange_doesNotBuildTheToastStackInAWindowThatNeverShowedOne() throws {
         var config = GeneralConfig.builtIn
         config.windowGutter = 8

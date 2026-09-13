@@ -1,32 +1,16 @@
 import AppKit
 
-/// The add / edit form for a tool float, opened from the Settings → Tools section. It collects a
-/// float's fields — title, icon, shortcut, command, size, and a git-only toggle — builds a
-/// `ToolFloat`, and hands it to `onSubmit` (the host writes it via `ConfigWriter` + reloads, so the
-/// dock button, ⌘P entry, and its keybind appear with no restart). A `ModalOverlay` like the
-/// palettes and `AddWorkspaceOverlay`, which it mirrors.
-///
-/// There is no id field: a float's id is `slug(title)`, so the title is the only name the user gives
-/// it. `existingIDs` is therefore a set of slugs — the form rejects a title that collides
-/// with one, which is what keeps the config's last-wins rule from ever silently eating a float.
-///
-/// Fully keyboard-driven: Up/Down move between fields, the shortcut chip captures a chord (Return to
-/// arm, then press keys; Backspace clears), Return advances, ⌘Return submits, Esc cancels. Every
-/// input is full width, and each field shows its own validation message beneath it.
 final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private let editingFloat: ToolFloat?
     private let existingIDs: Set<String>
     private let capturer: KeybindCapturing?
     private let onSubmit: (ToolFloat) -> Void
     private let onCancel: () -> Void
-    /// Non-nil only when editing — its presence shows the Delete button.
     private let onDelete: (() -> Void)?
 
     private let card = CardView()
-    /// Retained so a live theme change reaches it: it bakes its color at build time.
     private var footerDivider: ThemeReapplying?
     private var dismiss = DismissGate()
-    /// Retained (not a throwaway init-local) so `reapplyTheme()` can recolor it in place.
     private let header = NSTextField(labelWithString: "")
 
     private let titleField = FieldBox(placeholder: "Open GitDash")
@@ -36,9 +20,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private let widthField = FieldBox(placeholder: "0.85")
     private let heightField = FieldBox(placeholder: "0.85")
     private let gitSegment = SegmentedControl(options: ["Any folder", "Git repos only"], selectedIndex: 0) { _ in }
-    /// Segment index ↔ `Persistence` ↔ title, all derived from this one array so the mapping (and the
-    /// segment count) can never drift out of sync — a titles array of a different length than the
-    /// modes would otherwise crash on submit (index out of range) or leave a mode unselectable.
     private static let persistOptions: [(mode: ToolFloat.Persistence, title: String)] = [
         (.ephemeral, "Fresh each time"), (.directory, "Per directory"), (.window, "Per window"),
     ]
@@ -55,15 +36,9 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private var dirGroup: LabeledField?
     private var sizeGroup: LabeledField?
 
-    /// Captions built directly into a stack (not wrapped by a `LabeledField`, which retains its own).
-    /// Retained so `reapplyTheme()` can reach them after a live theme swap while the form is open.
     private var captions: [FieldCaption] = []
 
-    /// The chord captured for the shortcut, or nil until one is recorded. The float's single source
-    /// of truth for its key — rendered into the chip and written as the `key:` token.
     private var capturedChord: Chord?
-    /// The shared keybind-capture popover (same as the Keybinds section) + its modal backdrop and the
-    /// timer that closes it after a successful capture.
     private var hintBubble: KeybindHintBubble?
     private var hintBackdrop: NSView?
     private var captureCloseTimer: DispatchWorkItem?
@@ -125,19 +100,17 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    // MARK: ModalOverlay
-
     func focusInitialResponder() { window?.makeFirstResponder(titleField.field) }
 
     func animateIn() {
-        superview?.layoutSubtreeIfNeeded()  // resolve the card's frame before scaling about its center
+        superview?.layoutSubtreeIfNeeded()
         Motion.springScaleFade(card, appearing: true)
     }
 
     func animateOut(completion: @escaping () -> Void) {
         guard dismiss.begin() else { return }
         captureCloseTimer?.cancel()
-        capturer?.endCapture()  // never leave a capture handler armed after the form closes
+        capturer?.endCapture()
         hideHint()
         Motion.springScaleFade(card, appearing: false, completion: completion)
     }
@@ -146,13 +119,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         dismiss.isDismissing ? nil : super.hitTest(point)
     }
 
-    /// The form's Esc fallback. A bare Esc reaches the focused control's `keyDown` first, so an open
-    /// icon grid closes itself there (`IconPickerField.keyDown`) and a typed-in form survives
-    /// untouched — this pass never runs while the grid is up. Claimed in
-    /// `performKeyEquivalent`, not a card-root `keyDown`, so it also catches Esc from a focused text
-    /// field, whose field editor consumes it (`cancelOperation`) before it could bubble as a keyDown
-    /// — one Esc owner per card, so a stray Esc can't discard a filled-in form. The Cancel
-    /// button carries no Esc key equivalent; this pass is the owner.
+    /// Esc is claimed here because a focused text field's editor consumes it before `keyDown`.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if ModalEscape.handle(
             event, in: window, dismissing: dismiss.isDismissing, close: { self.onCancel() }
@@ -162,9 +129,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         return super.performKeyEquivalent(with: event)
     }
 
-    /// Re-apply the form's theme-dependent colors after a live theme change, IN PLACE — this form
-    /// holds uncommitted typed values a rebuild would lose, so nothing here is rebuilt, only
-    /// recolored. Every leaf control conforms to `ThemeReapplying`, so they recolor as one group.
+    /// Recolors in place, because a rebuild would lose typed values.
     func reapplyTheme() {
         CardChrome.reapplyTheme(to: card)
         header.textColor = Theme.current.chrome.foreground.nsColor
@@ -182,8 +147,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         }
         captions.forEach { $0.reapplyTheme() }
     }
-
-    // MARK: content
 
     private func buildContent() -> NSStackView {
         header.font = .systemFont(ofSize: 15, weight: .semibold)
@@ -211,9 +174,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         chordChip.onArrowDown = { [weak self] in self?.moveVertical(1) }
         chordChip.onTab = { [weak self] in self?.moveTab(1) }
         chordChip.onBacktab = { [weak self] in self?.moveTab(-1) }
-        // The chip is a fixed 110pt; a bare `LabeledField` would pin that width to the whole group
-        // (required) and collapse the card. Wrap it in a leading row so the group fills width while
-        // the chip keeps its natural size.
         let chordSpacer = NSView()
         chordSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let chordRow = Self.hStack([chordChip, chordSpacer], spacing: 0)
@@ -234,16 +194,11 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         let dirGroup = LabeledField(caption: caption("DIRECTORY", required: false), control: dirPicker)
         self.dirGroup = dirGroup
 
-        // Width × Height share one row (a fraction of the tile). Width is the row's vertical stop;
-        // Height is reached with Right (like an env row's value box).
         for box in [widthField, heightField] { wireField(box) }
         widthField.onChange = { [weak self] in self?.refreshValidity() }
         heightField.onChange = { [weak self] in self?.refreshValidity() }
         widthField.onArrowRight = { [weak self] in self?.focus(self?.heightField.field) }
         heightField.onArrowLeft = { [weak self] in self?.focus(self?.widthField.field) }
-        // Width × Height are one vertical stop, so Tab walks the pair in reading order — Width →
-        // Height → the next stop — instead of `moveVertical` skipping Height (which isn't a stop)
-        // and leaving it reachable only by Right.
         widthField.onTab = { [weak self] in self?.focus(self?.heightField.field) }
         heightField.onTab = { [weak self] in self?.moveTab(1) }
         heightField.onBacktab = { [weak self] in self?.focus(self?.widthField.field) }
@@ -251,8 +206,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         times.font = .systemFont(ofSize: 13)
         times.textColor = Theme.current.chrome.ink(.muted)
         times.setContentHuggingPriority(.required, for: .horizontal)
-        // Two compact, equal-width fields left-aligned; a trailing spacer absorbs the rest of the
-        // group so they don't stretch to the full card width.
         let sizeSpacer = NSView()
         sizeSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let sizeRow = Self.hStack([widthField, times, heightField, sizeSpacer], spacing: 8)
@@ -267,7 +220,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         wireSegment(persistSegment)
         let persistGroup = Self.vStack([caption("KEEP RUNNING", required: false), persistSegment], spacing: 6)
 
-        // Hidden pulls the button from the toolbar; the shortcut and palette entry stay live.
         wireSegment(toolbarSegment)
         let toolbarGroup = Self.vStack([caption("TOOLBAR BUTTON", required: false), toolbarSegment], spacing: 6)
 
@@ -287,8 +239,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         var footerViews: [NSView] = [spacer, cancelButton, submitButton]
         if onDelete != nil {
-            // Delete sits far left, split from Cancel/Save; Left from Save walks Save → Cancel →
-            // Delete (a destructive action kept a deliberate step off the primary path).
             deleteButton.isKeyboardFocusable = true
             deleteButton.onTap = { [weak self] in self?.onDelete?() }
             deleteButton.onArrowUp = { [weak self] in self?.moveVertical(-1) }
@@ -299,9 +249,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             cancelButton.onArrowLeft = { [weak self] in self?.focus(self?.deleteButton) }
             footerViews = [deleteButton, spacer, cancelButton, submitButton]
         }
-        // Tab walks the footer in place so Cancel (and Delete when editing) are Tab-reachable, not
-        // Left/Right-only: Submit → Cancel → Delete, mirroring the Left-arrow order. Forward Tab off
-        // the last button wraps to the top; Shift-Tab off Submit leaves the footer upward.
         submitButton.onTab = { [weak self] in self?.focus(self?.cancelButton) }
         cancelButton.onBacktab = { [weak self] in self?.focus(self?.submitButton) }
         if onDelete != nil {
@@ -321,15 +268,11 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         return built.view
     }
 
-    /// Seed the fields from the float being edited (all blank for a new float). The chord renders
-    /// into the chip; blank optional fields show their placeholder default.
+    /// Seeds only a chord capture would accept, or Save writes back a `key:` the load refused.
     private func prefill() {
         chordChip.render(shortcut: "")
         guard let float = editingFloat else { return }
         titleField.setText(float.title)
-        // Seed only what capture would accept. A `key:` the menu owns, or one another bind took,
-        // was already refused at load, so re-offering it hands back a chord the recorder rejects
-        // and Save writes it straight to `key:` — the config can never be fixed from here.
         if MenuShortcuts.owner(of: float.toggle) == nil, chordConflict(float.toggle) == nil {
             capturedChord = float.toggle
             chordChip.render(shortcut: float.toggle.displayGlyph)
@@ -344,18 +287,11 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         gitSegment.setSelection(float.requiresGitRepo ? 1 : 0)
         if let dir = float.dir { dirPicker.setText(PathDisplay.abbreviatingHome(dir.path)) }
         if let index = Self.persistOptions.firstIndex(where: { $0.mode == float.persist }) {
-            persistSegment.setSelection(index)  // programmatic sync must not fire onChange
+            persistSegment.setSelection(index)
         }
         toolbarSegment.setSelection(float.showsInToolbar ? 0 : 1)
     }
 
-    // MARK: chord capture
-
-    /// Arm the shortcut chip and float the shared keybind-capture popover (`KeybindHintBubble`) beside
-    /// it — the same UX as the Keybinds section. The next chord records through the interceptor (so an
-    /// already-bound chord isn't pre-empted); an invalid chord (no modifier) shows an error in the
-    /// popover and stays armed, a valid one commits with a success line and closes. A backdrop makes
-    /// it modal: an outside click cancels. Esc cancels; Backspace clears.
     private func beginCapture() {
         guard let capturer else {
             chordGroup?.setMessage("Shortcut capture is unavailable.")
@@ -367,50 +303,44 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         capturer.beginCapture { [weak self] event in self?.handleCaptureEvent(event) }
     }
 
+    /// Refuses menu chords itself: the live keymap `chordConflict` asks never contains them.
     private func handleCaptureEvent(_ event: NSEvent) {
-        if event.type == .flagsChanged {  // live modifier preview (⌘, ⌘⇧, …) before a key lands
+        if event.type == .flagsChanged {
             hintBubble?.setPreview(Chord.modifierGlyph(event.modifierFlags))
             return
         }
         switch KeyboardFocus.key(for: event) {
-        case .escape: endCapture(); renderChord(); return  // cancel — keep the current chord
-        case .delete: endCapture(); clearChord(); return  // Backspace → clear
+        case .escape: endCapture(); renderChord(); return
+        case .delete: endCapture(); clearChord(); return
         default: break
         }
-        guard let chord = Chord(event: event) else { return }  // unmappable key — keep waiting
+        guard let chord = Chord(event: event) else { return }
         hintBubble?.setPreview(chord.displayGlyph)
         hintBubble?.clearError()
         guard chord.command || chord.shift || chord.option || chord.control else {
             hintBubble?.showError("Add at least one modifier (⌘ ⇧ ⌥ ⌃).")
             positionHint()
-            return  // stay armed
+            return
         }
-        // Menu chords are refused here, not by `chordConflict`. That check asks the live keymap,
-        // and the keymap is exactly where a menu chord never appears, so it would pass every one
-        // of them straight through to a `key:` the next config load refuses.
         if let menuItem = MenuShortcuts.owner(of: chord) {
             hintBubble?.showError("\(chord.displayGlyph) is the \(menuItem) menu shortcut.")
             positionHint()
-            return  // stay armed
+            return
         }
         if let conflict = chordConflict(chord) {
             hintBubble?.showError(conflict)
             positionHint()
-            return  // stay armed
+            return
         }
         commit(chord)
     }
 
-    /// Reject a chord already bound to another action or float (mirrors the Keybinds section's
-    /// block-on-conflict) so a new float can't silently shadow an existing shortcut. The float being
-    /// edited keeps its own current chord.
     private func chordConflict(_ chord: Chord) -> String? {
         let ownAction: KeyInterceptor.ReservedChord? = editingFloat.map { .toggleToolFloat($0.id) }
         guard let owner = GeneralConfig.current.keymap[chord], owner != ownAction else { return nil }
         return "That shortcut is already in use."
     }
 
-    /// Apply a validated chord: flash a success line in the popover, then close after a short beat.
     private func commit(_ chord: Chord) {
         capturedChord = chord
         capturer?.endCapture()
@@ -427,7 +357,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         refreshValidity()
     }
 
-    /// End an armed capture immediately (Esc / Delete / outside click); the caller restores or clears.
     private func endCapture() {
         captureCloseTimer?.cancel()
         capturer?.endCapture()
@@ -443,10 +372,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         refreshValidity()
     }
 
-    // MARK: capture popover
-
-    /// Float the shared `KeybindHintBubble` over the form, just below the shortcut chip, behind a
-    /// transparent modal backdrop that cancels on an outside click. Mirrors the Keybinds section.
     private func showHint() {
         hideHint()
         let backdrop = BackdropView { [weak self] in self?.cancelCapture() }
@@ -456,7 +381,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         hintBackdrop = backdrop
         let bubble = KeybindHintBubble()
         bubble.translatesAutoresizingMaskIntoConstraints = true
-        addSubview(bubble)  // above the backdrop
+        addSubview(bubble)
         hintBubble = bubble
         positionHint()
     }
@@ -466,9 +391,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         renderChord()
     }
 
-    /// (Re)place the bubble just below the chip — re-run when its height changes (an error/success
-    /// line replacing the instructions grows it). `self` isn't flipped: below the chip = a smaller y;
-    /// if that runs off the top, flip below the chip.
     private func positionHint() {
         guard let bubble = hintBubble else { return }
         bubble.layoutSubtreeIfNeeded()
@@ -489,10 +411,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         hintBackdrop = nil
     }
 
-    // MARK: keyboard focus ring
-
-    /// The vertical navigation order (Up/Down), top to bottom. Height is reached from Width with
-    /// Right, and Cancel from Submit with Left — neither is its own vertical stop.
     private func verticalStops() -> [NSView] {
         [
             titleField.field, iconPicker, chordChip, commandField.field,
@@ -503,12 +421,8 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
 
     private func moveVertical(_ delta: Int) { move(delta, wrap: false) }
 
-    /// Tab traversal: wraps at the ends where the arrows clamp, so a Tab loop never dies on the last
-    /// stop. Matches the Settings card, so the same key behaves the same way in every card.
     private func moveTab(_ delta: Int) { move(delta, wrap: true) }
 
-    /// Through the Settings mover, which reveals the destination as well as focusing it: the body
-    /// scrolls, so a stop below the fold would otherwise take focus off screen.
     private func move(_ delta: Int, wrap: Bool) {
         let stops = verticalStops()
         let anchor = currentVerticalAnchor(in: stops).flatMap { anchor in stops.firstIndex { $0 === anchor } }
@@ -517,12 +431,9 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         }
     }
 
-    /// The vertical stop representing the current focus — the focused stop itself, or the row anchor
-    /// when focus is on Height (→ Width) or Cancel (→ Submit).
     private func currentVerticalAnchor(in stops: [NSView]) -> NSView? {
         if let direct = stops.first(where: isFocused) { return direct }
         if isFocused(heightField.field) { return widthField.field }
-        // The Choose button shares the directory field's vertical stop; it's reached with Right.
         if isFocused(dirPicker.chooseButton) { return dirPicker.field.field }
         if isFocused(cancelButton) || isFocused(deleteButton) { return submitButton }
         return nil
@@ -535,13 +446,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         window?.makeFirstResponder(view)
     }
 
-    /// Tab/Shift-Tab traverse the form's own stops, exactly like Down/Up. Without this the field
-    /// editor leaked Tab to AppKit's default key-view loop while Tab on the form's buttons was
-    /// consumed as advance/retreat — the same key doing two different things in one card.
-    ///
-    /// Height is deliberately NOT wired here: it isn't a vertical stop (it hangs off Width with
-    /// Right), so routing its Tab through `moveVertical` would skip straight past it and leave the
-    /// field unreachable by Tab entirely. It gets its own wiring in `buildContent`.
+    /// Height is not wired here: it isn't a vertical stop, so `moveVertical` would skip it.
     private func wireField(_ box: FieldBox) {
         box.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         box.onArrowDown = { [weak self] in self?.moveVertical(1) }
@@ -556,8 +461,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         segment.onTab = { [weak self] in self?.moveTab(1) }
         segment.onBacktab = { [weak self] in self?.moveTab(-1) }
     }
-
-    // MARK: submit + validation
 
     private func submit() {
         if let firstInvalid = validate(includeRequired: true) {
@@ -589,16 +492,11 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             showsInToolbar: toolbarSegment.selectedIndex == 0)
     }
 
-    /// A new float lands at the end of the dock; editing keeps the float's existing slot. Reads the
-    /// live catalog rather than a passed-in value for the same reason `chordConflict` does — the form
-    /// is built fresh on every open, so the config it reads is the config it's about to be written to.
     private static func nextOrder() -> Int {
         (GeneralConfig.current.floats.map(\.order).max() ?? 0) + 1
     }
 
-    /// Update every field's inline message and return the first offending field to focus (nil when
-    /// submittable). `includeRequired` gates the mandatory-but-empty checks: false for the live pass
-    /// (don't flag an untouched field), true on a submit attempt.
+    /// The float grammar has no quote escape, so a `"` can't round-trip.
     @discardableResult
     private func validate(includeRequired: Bool) -> NSView? {
         var firstInvalid: NSView?
@@ -607,12 +505,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             if message != nil, firstInvalid == nil { firstInvalid = field }
         }
 
-        // The title is the float's whole identity now: it names the tool AND slugs to the id that keys
-        // its keybind, its live instance, and its config line. So the checks a bare label wouldn't
-        // need — a `"` can't round-trip (`serializeFloat` quotes it and the parser has no escape, so
-        // it corrupts or drops the float on reload); a title of pure emoji or punctuation slugs to
-        // nothing, leaving a float nothing could address; and two titles that slug alike would collide,
-        // where the config's last-wins rule silently eats one.
         let title = titleField.text.trimmingCharacters(in: .whitespaces)
         var titleMessage: String?
         if title.contains("\"") {
@@ -629,21 +521,16 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         let command = commandField.text.trimmingCharacters(in: .whitespaces)
         var commandMessage: String?
         if command.contains("\"") {
-            commandMessage = "Can't contain a \" character."  // the grammar has no escape
+            commandMessage = "Can't contain a \" character."
         } else if includeRequired, command.isEmpty {
             commandMessage = "Enter a command."
         }
         flag(commandGroup, field: commandField.field, commandMessage)
 
-        // Same round-trip constraint as title/command, plus a folder-exists check (mirroring
-        // `AddWorkspaceOverlay`'s DIRECTORY field) — an empty field stays valid, since nil means
-        // "follow the pane's cwd" rather than a folder that must exist. The exists check runs on
-        // submit only (`includeRequired`): it stats the filesystem on the main thread, and a path
-        // under a dead network mount can block for seconds — per keystroke that's a beachball.
         let dirText = dirPicker.text.trimmingCharacters(in: .whitespaces)
         var dirMessage: String?
         if dirText.contains("\"") {
-            dirMessage = "Can't contain a \" character."  // the grammar has no escape
+            dirMessage = "Can't contain a \" character."
         } else if includeRequired, let dirURL = ToolFloatParser.resolveDir(dirText),
             !PathDisplay.isDirectory(dirURL)
         {
@@ -664,8 +551,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         return firstInvalid
     }
 
-    /// The first of Width / Height carrying a non-empty, out-of-range value — a blank field is valid
-    /// (it falls back to the default). Shares the parser's range so the two never disagree.
     private func firstInvalidSizeField() -> NSView? {
         for box in [widthField, heightField] {
             let text = box.text.trimmingCharacters(in: .whitespaces)
@@ -679,17 +564,12 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
 
     private func refreshValidity() { validate(includeRequired: false) }
 
-    /// A width/height field's fraction: its parsed value clamped to the valid range, or the default
-    /// when blank. Invalid text never reaches here (validation blocks submit first).
     private func fraction(_ box: FieldBox) -> CGFloat {
         let text = box.text.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty, let value = Double(text) else { return ToolFloatParser.defaultFraction }
         return ToolFloatParser.clampedFraction(value)
     }
 
-    // MARK: layout helpers
-
-    /// A caption retained in `captions` so `reapplyTheme()` can reach it after a theme swap.
     private func caption(_ text: String, required: Bool) -> FieldCaption {
         let field = FieldCaption(text, required: required)
         captions.append(field)

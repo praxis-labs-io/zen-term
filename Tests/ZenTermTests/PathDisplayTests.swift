@@ -13,8 +13,6 @@ final class PathDisplayTests: XCTestCase {
         XCTAssertEqual(PathDisplay.abbreviatingHome(home + "/Dev/zen-term"), "~/Dev/zen-term")
     }
 
-    /// Regression for the AddWorkspace drift bug: a sibling directory that merely shares the home
-    /// prefix (no `/` boundary) must NOT be mangled to `~2/proj`.
     func test_abbreviatingHome_siblingPrefixIsLeftUntouched() {
         let sibling = home + "2/proj"
         XCTAssertEqual(PathDisplay.abbreviatingHome(sibling), sibling)

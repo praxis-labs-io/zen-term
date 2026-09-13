@@ -4,10 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// A pane surface that fails to start must surface an actionable toast rather than a
-/// dead blank pane. Mounts the real chrome and drives the toast's ACTUAL buttons (per the house
-/// rule that a control tested only through its view-model can ship dead) — asserting each button
-/// runs its closure and dismisses the toast.
 @MainActor
 final class SurfaceFailureToastTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
@@ -16,7 +12,6 @@ final class SurfaceFailureToastTests: WindowTestCase {
     override func setUp() {
         super.setUp()
         originalOverride = TerminalSurfaceFactory.makeOverride
-        // A real ghostty surface needs a live libghostty app; inject a headless stub instead.
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
     }
 

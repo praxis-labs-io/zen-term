@@ -2,11 +2,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The off-main git cache behind the ⌘P picker's branch labels and Settings → Workspaces' badges.
-/// Pure logic over a real temp tree — no AppKit — so it pins the two things those
-/// rows depend on: an unprobed directory answers "unknown" rather than "not a repo", and a refresh
-/// re-answers, which is what lets a freshly `git init`ed folder, or a branch just switched in a
-/// shell, show up without a relaunch.
 final class GitRepoStatusTests: XCTestCase {
     private var root: URL!
 
@@ -24,9 +19,6 @@ final class GitRepoStatusTests: XCTestCase {
         try super.tearDownWithError()
     }
 
-    /// The whole production path the picker's worktree rows hang off. The row tests drive
-    /// `setWorktrees` directly, so without this the background seam could stop populating the UI
-    /// and every one of them would still pass.
     func test_refreshWorktrees_deliversTheCommonDirAndLinkedWorktreesOnMain() throws {
         let repo = try GitFixture.makeRepo(at: root.appendingPathComponent("work", isDirectory: true))
         try GitFixture.run(
@@ -48,8 +40,6 @@ final class GitRepoStatusTests: XCTestCase {
         XCTAssertEqual(answered?.listing.commonDir, WorktreeStore.commonDir(of: repo))
     }
 
-    /// A directory that is not a repo still answers, so a caller counting completions is never
-    /// left waiting on one that will not come.
     func test_refreshWorktrees_answersForADirectoryThatIsNotARepo() throws {
         let plain = try makeDir("plain", git: false)
 
@@ -65,9 +55,6 @@ final class GitRepoStatusTests: XCTestCase {
         XCTAssertNil(listing?.commonDir)
     }
 
-    /// Two windows each hold an open picker, so two callers probe the same bounded queue. The
-    /// second starting must not take the first's answers with it: a picker missing a delivery goes
-    /// on showing a worktree row for a folder that has been removed.
     func test_refreshWorktrees_aSecondCallerDoesNotCancelTheFirstsProbes() throws {
         let dirs = try (1...6).map { try makeDir("first-\($0)", git: false) }
         let other = try makeDir("second", git: false)
@@ -79,7 +66,6 @@ final class GitRepoStatusTests: XCTestCase {
             answered.insert(dir)
             allLanded.fulfill()
         }
-        // Synchronous, so it lands while the queue (four at a time) still has the tail pending.
         GitRepoStatus.refreshWorktrees([other]) { _, _ in }
 
         wait(for: [allLanded], timeout: 20)
@@ -101,18 +87,12 @@ final class GitRepoStatusTests: XCTestCase {
         return dir
     }
 
-    /// `refresh` answers one directory at a time (a dead mount must not hold up the others), so its
-    /// completion runs once per directory. Counting those is what makes a RE-probe waitable: the
-    /// cache already holds an answer then, so waiting on "an answer exists" would return before the
-    /// fresh one landed and read the stale value.
     private func refresh(_ dirs: [URL]) {
         var landed = 0
         GitRepoStatus.refresh(dirs) { landed += 1 }
         waitUntil(landed == dirs.count, "every probe to land")
     }
 
-    /// Unknown is not "no": a row that read nil as false would flash the wrong answer, and a row
-    /// that never gets refreshed would show it forever.
     func test_known_isNilUntilSomethingProbes() throws {
         let repo = try makeDir("repo", git: true)
         XCTAssertNil(GitRepoStatus.known(repo))
@@ -128,8 +108,6 @@ final class GitRepoStatusTests: XCTestCase {
         XCTAssertEqual(GitRepoStatus.known(plain), false)
     }
 
-    /// One probe answers both questions, so a row never renders a branch for a folder the same pass
-    /// called a non-repo.
     func test_refresh_answersTheBranchAlongsideTheRepoAnswer() throws {
         let repo = try makeRepo("repo", on: "feature/zen-450")
         let plain = try makeDir("plain", git: false)
@@ -140,8 +118,6 @@ final class GitRepoStatusTests: XCTestCase {
         XCTAssertNil(GitRepoStatus.branch(plain))
     }
 
-    /// The picker probes per open, which is what makes a branch switched in a shell show up on the
-    /// next ⌘P rather than at the next relaunch.
     func test_refresh_picksUpASwitchedBranch() throws {
         let repo = try makeRepo("repo", on: "main")
         refresh([repo])
@@ -159,9 +135,6 @@ final class GitRepoStatusTests: XCTestCase {
         XCTAssertNil(GitRepoStatus.branch(repo))
     }
 
-    /// `refreshChurn` answers for every directory it was given, including the ones with no answer.
-    /// A caller counting completions (which is the only way to wait on a re-probe) hangs rather
-    /// than fails if a failure path returns without calling back.
     func test_refreshChurn_answersEvenForDirectoriesWithNoChurn() throws {
         let repo = try makeRepo("repo", on: "main")
         let plain = try makeDir("plain", git: false)
@@ -173,9 +146,6 @@ final class GitRepoStatusTests: XCTestCase {
         XCTAssertNil(GitRepoStatus.churn(plain), "a non-repo has no counts")
     }
 
-    /// A probe that cannot answer clears the counts rather than leaving the previous run's on the
-    /// row. `git status` exits nonzero on an `index.lock` held by a concurrent git, and a stale
-    /// `~3` asserts work that may already be committed.
     func test_refreshChurn_clearsCountsWhenAProbeStopsAnswering() throws {
         let repo = root.appendingPathComponent("real-repo", isDirectory: true)
         try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
@@ -194,8 +164,6 @@ final class GitRepoStatusTests: XCTestCase {
         XCTAssertNil(GitRepoStatus.churn(repo), "the stale count must not survive")
     }
 
-    /// Every open refreshes, so a folder that becomes a repo between two opens answers correctly on
-    /// the second — the reason the cache isn't a once-per-process answer.
     func test_refresh_picksUpAFolderThatBecameARepo() throws {
         let dir = try makeDir("later", git: false)
         refresh([dir])
@@ -207,8 +175,6 @@ final class GitRepoStatusTests: XCTestCase {
         XCTAssertEqual(GitRepoStatus.known(dir), true)
     }
 
-    /// The picker asks with the URL it parsed from the config; the cache must not care whether that
-    /// carries a trailing slash or a `.` component.
     func test_known_matchesRegardlessOfPathSpelling() throws {
         let repo = try makeDir("repo", git: true)
         refresh([repo])
@@ -218,10 +184,6 @@ final class GitRepoStatusTests: XCTestCase {
         XCTAssertEqual(GitRepoStatus.known(unstandardized), true)
     }
 
-    /// One unreachable path must not hold the others' badges hostage, so each directory is probed
-    /// and published on its own rather than as one batch. No test can make a real path hang, but a
-    /// batched pass can only ever report once for the whole list, so the per-directory callback is
-    /// the property that pins the independence.
     func test_refresh_answersEachDirectoryOnItsOwn() throws {
         let repo = try makeDir("repo", git: true)
         let plain = try makeDir("plain", git: false)
@@ -234,9 +196,6 @@ final class GitRepoStatusTests: XCTestCase {
         XCTAssertEqual(GitRepoStatus.known(plain), false)
     }
 
-    /// The walk-up, plus the delivery thread its callers depend on: `WindowController` and
-    /// `ToolFloatController` both continue straight into AppKit from this completion, so delivering
-    /// it off-main would touch the UI from a background queue rather than fail an assertion here.
     func test_repoRoot_walksUpFromASubdirectory_andDeliversOnMain() throws {
         let repo = try makeDir("repo", git: true)
         let nested = repo.appendingPathComponent("a/b", isDirectory: true)
@@ -267,8 +226,6 @@ final class GitRepoStatusTests: XCTestCase {
         }
         wait(for: [landed], timeout: 2)
 
-        // Unwrap the OUTER optional first: it proves the completion actually delivered, so the
-        // "resolved to nil" assertion can't pass just because nothing ever ran.
         XCTAssertNil(try XCTUnwrap(resolved), "a directory with no enclosing .git resolves to nil")
     }
 }

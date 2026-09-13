@@ -1,8 +1,7 @@
 import Foundation
 import os
 
-/// A logging category — the `os.Logger` category and the `[name]` tag in the file line. Free-form,
-/// with the known surfaces as statics so call sites stay consistent.
+/// The `os.Logger` category and the `[name]` tag in the file line.
 public struct LogCategory: Hashable, Sendable {
     public let name: String
     public init(_ name: String) { self.name = name }
@@ -20,19 +19,15 @@ public struct LogCategory: Hashable, Sendable {
     public static let drawers = LogCategory("drawers")
 }
 
-/// The app's logging facade: every line goes to `os.Logger` (subsystem `com.drucial.ZenTerm`, keyed
-/// by category) and is teed to a rotating file for bug reports. `debug` is verbose-only.
+/// Writes each line to `os.Logger` (subsystem `com.drucial.ZenTerm`) and to `fileSink`.
 public enum Log {
-    /// Verbose gate. Seeded from the environment; the app overrides it from config at launch.
+    /// Seeded from `ZENTERM_LOG_VERBOSE=1`; the app overrides it from config at launch.
     public static var isVerbose: Bool = ProcessInfo.processInfo.environment["ZENTERM_LOG_VERBOSE"] == "1"
 
-    /// The file sink; nil disables disk logging. The app installs the real sink
-    /// (`LogFileSink.standard()`) at launch — it stays nil under `swift test` (which never launches
-    /// the app), so a test run never writes to the user's `~/Library/Logs/ZenTerm/zen-term.log`.
+    /// Nil disables file logging. The app installs `LogFileSink.standard()` at launch.
     public static var fileSink: LogFileSink?
 
-    /// Verbose-only diagnostics. The message is not even built when verbose is off, so an expensive
-    /// dump (e.g. a nav-frame trace) costs nothing on a normal run.
+    /// Builds and writes `message` only when `isVerbose` is on.
     public static func debug(_ message: @autoclosure () -> String, category: LogCategory) {
         guard isVerbose else { return }
         write(.debug, message(), category)
@@ -52,8 +47,6 @@ public enum Log {
 
     private static func write(_ level: LogLevel, _ text: String, _ category: LogCategory) {
         logger(for: category).log(level: level.osLogType, "\(text, privacy: .public)")
-        // Timestamp is captured now (on the caller thread) for accuracy; `fileLine()` runs on the
-        // sink's serial queue via the @autoclosure, so the shared ISO formatter is touched single-threaded.
         let entry = LogEntry(level: level, category: category.name, message: text, timestamp: Date())
         fileSink?.writeLine(entry.fileLine())
     }
@@ -62,7 +55,6 @@ public enum Log {
     private static let loggersLock = NSLock()
     private static var loggers: [String: Logger] = [:]
 
-    /// One cached `os.Logger` per category, so repeated calls don't re-create it.
     private static func logger(for category: LogCategory) -> Logger {
         loggersLock.lock()
         defer { loggersLock.unlock() }

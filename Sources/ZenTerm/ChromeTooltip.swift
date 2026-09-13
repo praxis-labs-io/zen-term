@@ -1,9 +1,5 @@
 import AppKit
 
-/// A small branded hover tooltip: the shared hover-card idiom holding a muted label and, when
-/// known, the action's live keybind chip. Replaces the native `NSView.toolTip`, which is OS-drawn
-/// — unbranded, not centered on the trigger, and unaware of the window. Positioned by
-/// `TooltipPresenter`.
 final class ChromeTooltip: HoverCardView {
     init(label: String, shortcut: String?) {
         super.init(frame: .zero)

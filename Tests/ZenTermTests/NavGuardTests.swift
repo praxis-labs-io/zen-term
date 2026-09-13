@@ -21,7 +21,6 @@ final class NavGuardTests: XCTestCase {
     }
 
     func test_cmdNavOverVimPane_consumed() {
-        // The default ⌘-nav is never diverted, even over an nvim pane.
         XCTAssertFalse(
             NavGuard.shouldPassThrough(
                 chord: Chord(command: true, key: "h"), action: .navLeft, focusedPaneIsVim: true,
@@ -29,7 +28,6 @@ final class NavGuardTests: XCTestCase {
     }
 
     func test_ctrlCmdNav_consumed() {
-        // A chord carrying ⌘ alongside Ctrl is not the seamless-nav opt-in chord.
         XCTAssertFalse(
             NavGuard.shouldPassThrough(
                 chord: Chord(command: true, control: true, key: "h"), action: .navLeft,
@@ -37,18 +35,13 @@ final class NavGuardTests: XCTestCase {
     }
 
     func test_ctrlNonNavOverVimPane_consumed() {
-        // Only nav is diverted — a Ctrl-bound non-nav chord still fires normally.
         XCTAssertFalse(
             NavGuard.shouldPassThrough(
                 chord: Chord(control: true, key: "w"), action: .closePane, focusedPaneIsVim: true,
                 toolFloatIsOpen: false))
     }
 
-    // MARK: tool floats
-
     func test_ctrlNavOverToolFloat_passesThrough() {
-        // The window swallows nav while a float is up, so consuming the chord only steals it from
-        // the tool. Pass it through whatever the float is running — nvim moves its own splits.
         for action in [KeyInterceptor.ReservedChord.navLeft, .navRight, .navUp, .navDown] {
             XCTAssertTrue(
                 NavGuard.shouldPassThrough(
@@ -59,7 +52,6 @@ final class NavGuardTests: XCTestCase {
     }
 
     func test_cmdNavOverToolFloat_consumed() {
-        // ⌘-nav means nothing to the tool inside the float, so it stays ZenTerm's.
         XCTAssertFalse(
             NavGuard.shouldPassThrough(
                 chord: Chord(command: true, key: "h"), action: .navLeft, focusedPaneIsVim: false,
@@ -67,7 +59,6 @@ final class NavGuardTests: XCTestCase {
     }
 
     func test_ctrlNonNavOverToolFloat_consumed() {
-        // Only nav is diverted over a float — a non-nav chord still fires its own action.
         XCTAssertFalse(
             NavGuard.shouldPassThrough(
                 chord: Chord(control: true, key: "w"), action: .closePane, focusedPaneIsVim: false,
@@ -105,10 +96,6 @@ final class KeyInterceptorResolveTests: XCTestCase {
             NavGuard.shouldPassThrough(
                 chord: chord, action: action, focusedPaneIsVim: true, toolFloatIsOpen: false)
         }
-        // Ctrl-nav vetoed → handed to the program; ⌘-nav still consumed. `deferToTerminal` rather
-        // than `passThrough`: the veto means the program is meant to receive this key, so nothing
-        // below chord routing may claim it either. A sticky mode ate it while the two were one
-        // case.
         XCTAssertEqual(interceptor.resolve(Chord(control: true, key: "h")), .deferToTerminal)
         XCTAssertEqual(interceptor.resolve(Chord(command: true, key: "h")), .consume(.navLeft))
     }

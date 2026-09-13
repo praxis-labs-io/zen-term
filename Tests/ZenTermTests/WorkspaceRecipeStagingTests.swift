@@ -4,12 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// A ⏎ workspace open stages its recipe behind the canvas slide: the tab arrives, *then* its
-/// drawers push open, because a drawer travelling the same direction as the canvas it rides in on
-/// has no readable motion of its own. The staging runs from the slide's completion, which is the
-/// silently-dead part — a dropped callback, a guard that never passes, or a released controller
-/// leaves the workspace open with no drawers at all and nothing on screen to say a step was
-/// skipped. A ⇧⏎ replace has no motion to wait for and must still apply its recipe inline.
 @MainActor
 final class WorkspaceRecipeStagingTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
@@ -17,13 +11,8 @@ final class WorkspaceRecipeStagingTests: WindowTestCase {
 
     override func setUp() {
         super.setUp()
-        // Staging is only observable while the slide is in flight, and Reduce Motion collapses it.
-        // Pin it off by default so the developer's own accessibility setting can't turn the
-        // staging tests into no-ops; the Reduce Motion test below opts back in explicitly.
         Motion.isReduceMotionEnabled = { false }
         originalOverride = TerminalSurfaceFactory.makeOverride
-        // Headless surfaces: no libghostty, and an idle tab, so a replace isn't gated by the
-        // "Replace Tab" confirm a busy one raises.
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
     }
 
@@ -43,8 +32,6 @@ final class WorkspaceRecipeStagingTests: WindowTestCase {
         return descendants(of: root).compactMap { $0 as? PanelHostView }
     }
 
-    /// Revealed drawers in the window. A drawer carries an always-on header; a resting pane's is
-    /// hidden, which is what separates the two — every panel is a `PanelHostView`.
     private func revealedDrawerCount(in controller: WindowController) -> Int {
         panels(in: controller).filter(\.isHeaderVisibleForTesting).count
     }
@@ -57,15 +44,12 @@ final class WorkspaceRecipeStagingTests: WindowTestCase {
         return controller
     }
 
-    /// Both drawers named, so a revealed recipe shows two.
     private func bothDrawers() -> Workspace {
         Workspace(
             title: "probe", path: URL(fileURLWithPath: NSTemporaryDirectory()), main: nil,
             right: "shell", bottom: "shell", focus: .main, env: [:])
     }
 
-    /// The same recipe, but landing focus on a drawer — the only part of a recipe whose result
-    /// differs depending on whether it ran before or after the tab started.
     private func focusedOnTheRightDrawer() -> Workspace {
         Workspace(
             title: "probe", path: URL(fileURLWithPath: NSTemporaryDirectory()), main: nil,
@@ -86,13 +70,6 @@ final class WorkspaceRecipeStagingTests: WindowTestCase {
             "both of the workspace's drawers to open once the canvas slide lands")
     }
 
-    /// Reduce Motion collapses the slide, and `Motion.slideSwap` then runs its completion
-    /// synchronously, inside `mount` — before `installController` has reached `c.start()`. Staging
-    /// through that completion puts the recipe ahead of the tab's own start, breaking the order
-    /// `applyRecipe`'s contract depends on ("called once right after `start()`"): `start()` ends in
-    /// `focusFrontmost()`, so a recipe applied first has its `focus: right` immediately taken back
-    /// by the main pane. The drawers still open either way, so the ordering is only visible in
-    /// which region ends up wearing the focus halo.
     func test_reduceMotion_appliesTheRecipeAfterStart_soItsFocusSticks() {
         Motion.isReduceMotionEnabled = { true }
         let controller = makeController()

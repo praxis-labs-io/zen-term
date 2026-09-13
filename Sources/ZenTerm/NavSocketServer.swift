@@ -1,23 +1,9 @@
 import AppLog
 import Foundation
 
-/// A tiny `AF_UNIX` stream listener that carries the nvim navigator protocol. Neovim
-/// connects natively via `sockconnect('pipe', $ZEN_SOCK)` and writes one newline-delimited
-/// JSON line (`NavCommand`) per hop — no process spawn per keystroke. Read the line(s),
-/// decode, hand the command to `apply` on the main actor.
-///
-/// A connection that sends `setvim` with `hold` owns that pane's nvim flag for as long as
-/// it stays open, and the flag clears when it closes. That is the whole point: the kernel
-/// closes the fd however nvim dies, where an autocmd-driven clear never runs.
-///
-/// Kept deliberately small: a listen socket + a `DispatchSource` that accepts, plus a
-/// bounded read per connection. The wire format and all routing live elsewhere
-/// (`NavCommand`, `NavRegistry`).
+/// A `setvim` hold clears when its connection closes, since the kernel closes the fd however nvim dies.
 final class NavSocketServer {
-    /// `~/Library/Application Support/ZenTerm/nav.<pid>.sock`. Exported to panes as
-    /// `$ZEN_SOCK`. Per-instance: a shared well-known path let a second running ZenTerm
-    /// (a `swift run` dev build beside the installed app) bind over this instance's socket
-    /// and then delete it on quit, leaving every nvim here deaf until relaunch.
+    /// Per pid: a shared path let a second instance bind over this one and delete it on quit.
     static var socketURL: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ZenTerm", isDirectory: true)
@@ -25,11 +11,7 @@ final class NavSocketServer {
     }
     static var socketPath: String { socketURL.path }
 
-    /// Remove nav socket files nobody is listening on — a crashed instance never reaches
-    /// its quit-unlink, so files would otherwise accumulate. Liveness is a connect probe,
-    /// not a pid check: it can't be fooled by pid recycling, and it also collects a dead
-    /// legacy `nav.sock` from a pre-per-pid build while leaving a live one alone. Our own
-    /// file is skipped by pid because the probe runs off-main and must never race our bind.
+    /// Probes liveness with a connect rather than a pid check, which pid recycling could fool.
     static func sweepStaleSockets(in directory: String) {
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory) else { return }
         for name in names where name.hasPrefix("nav.") && name.hasSuffix(".sock") {
@@ -39,9 +21,7 @@ final class NavSocketServer {
         }
     }
 
-    /// Whether an `AF_UNIX` connect to `path` succeeds — i.e. some process is listening.
-    /// Errs on the side of "live" when the probe itself can't run, so the sweep never
-    /// deletes a file it couldn't actually check.
+    /// Answers live when the probe cannot run, so the sweep never deletes a file it did not check.
     private static func hasListener(at path: String) -> Bool {
         guard var addr = socketAddress(for: path) else { return true }
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
@@ -55,7 +35,6 @@ final class NavSocketServer {
         return connected == 0
     }
 
-    /// `sockaddr_un` for `path`, or nil when the path overflows `sun_path` (NUL included).
     private static func socketAddress(for path: String) -> sockaddr_un? {
         var addr = sockaddr_un()
         addr.sun_family = sa_family_t(AF_UNIX)
@@ -71,30 +50,19 @@ final class NavSocketServer {
         return addr
     }
 
-    /// The two env vars a pane or drawer shell needs so an nvim inside it can address itself
-    /// over the nav socket: the socket path and this surface's token.
     static func env(token: Int) -> [String: String] {
         ["ZEN_SOCK": socketPath, "ZEN_PANE": String(token)]
     }
 
-    /// `base` with the nav vars layered on top (last-writer-wins), the single recipe both
-    /// pane and drawer launches use so their nvim socket env never drifts apart.
     static func env(base: [String: String], token: Int) -> [String: String] {
         base.merging(env(token: token)) { _, new in new }
     }
 
-    /// Applied on the main actor for every decoded command.
     private let apply: (NavCommand) -> Void
-    /// The bound socket path. Defaults to this instance's per-pid `$ZEN_SOCK` location;
-    /// overridden in tests so they never touch the real socket.
     private let path: String
-    /// How long a connection may stay silent before it is dropped. Bounds a wedged client
-    /// that never sends anything; cleared outright once a connection declares a hold.
-    /// Injected only so tests need not idle for real seconds.
     private let recvTimeout: time_t
     private let queue = DispatchQueue(label: "com.zenterm.nav-socket")
-    /// Reads block, and a held connection blocks for the life of an nvim. Its own queue
-    /// keeps those parked threads off the shared global pool the rest of the app uses.
+    /// Its own queue: a held connection parks a thread for the life of an nvim.
     private let connections = DispatchQueue(
         label: "com.zenterm.nav-connections", qos: .utility, attributes: .concurrent)
     private var acceptSource: DispatchSourceRead?
@@ -108,26 +76,18 @@ final class NavSocketServer {
         self.apply = apply
     }
 
-    /// Bind the socket and start accepting. Removes a stale socket file first (a prior run
-    /// that didn't clean up), so a relaunch always rebinds. Silently no-ops on failure —
-    /// the ⌘-nav path never depends on this, so a socket that can't bind just leaves the
-    /// seamless-nav opt-in inert.
     func start() {
         stop()
 
         try? FileManager.default.createDirectory(
             at: URL(fileURLWithPath: path).deletingLastPathComponent(), withIntermediateDirectories: true)
 
-        // Crash hygiene, before the bind attempts so it runs even when binding fails, and
-        // off the main thread (start() runs at launch on main). Only the production server
-        // sweeps: a custom-path server (tests) must never touch files beside its injected
-        // path, and it only ever cleans ZenTerm's own directory.
         if path == Self.socketPath {
             let directory = URL(fileURLWithPath: path).deletingLastPathComponent().path
             queue.async { Self.sweepStaleSockets(in: directory) }
         }
 
-        unlink(path)  // clear a stale socket from a prior run of this same pid
+        unlink(path)
 
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else {
@@ -157,9 +117,6 @@ final class NavSocketServer {
             return
         }
 
-        // The source owns the listen fd, captured per-source rather than through a shared ivar —
-        // it's closed in the cancel handler (which runs on `queue` after the last accept), so a
-        // stop→start cycle can never clobber a new listener's fd with a stale handler.
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
         source.setEventHandler { [weak self] in self?.acceptOne(listenFD: fd) }
         source.setCancelHandler { close(fd) }
@@ -167,11 +124,13 @@ final class NavSocketServer {
         acceptSource = source
     }
 
-    /// `errno` rendered as a human string, for the bind-failure logs above.
-    private func errnoText() -> String { "errno \(errno): \(String(cString: strerror(errno)))" }
+    private func errnoText() -> String {
+        let code = errno
+        var message = [CChar](repeating: 0, count: 256)
+        strerror_r(code, &message, message.count)
+        return "errno \(code): \(String(cString: message))"
+    }
 
-    /// Stop accepting and remove the file so the next launch rebinds. The listen fd is closed
-    /// by the source's cancel handler, not here, to keep all fd access on `queue`.
     func stop() {
         acceptSource?.cancel()
         acceptSource = nil
@@ -181,9 +140,6 @@ final class NavSocketServer {
     private func acceptOne(listenFD: Int32) {
         let conn = accept(listenFD, nil, nil)
         guard conn >= 0 else { return }
-        // A wedged client must not stall the accept queue: bound the read, then read off a
-        // concurrent queue so one slow connection can't head-of-line the rest. Close the
-        // connection even if `self` is gone by the time the read block runs.
         Self.setRecvTimeout(recvTimeout, on: conn)
         connections.async { [weak self] in
             guard let self else {
@@ -194,17 +150,12 @@ final class NavSocketServer {
         }
     }
 
-    /// `seconds == 0` means block forever, which is what a held connection wants.
     private static func setRecvTimeout(_ seconds: time_t, on fd: Int32) {
         var timeout = timeval(tv_sec: seconds, tv_usec: 0)
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
     }
 
     private func readConnection(_ fd: Int32) {
-        // The tokens this connection holds the nvim flag for, cleared on EOF however the
-        // client died. Local to the connection, so no shared state and no locking. A set,
-        // not one token: a second hold must not silently abandon the first, which would
-        // leave exactly the stale flag this whole mechanism exists to clear.
         var heldTokens: Set<Int> = []
         defer {
             close(fd)
@@ -221,36 +172,23 @@ final class NavSocketServer {
             let n = read(fd, &chunk, chunk.count)
             if n <= 0 { break }
             pending.append(contentsOf: chunk[0..<n])
-            // Dispatch each complete line as it arrives, so a client that holds the channel
-            // open (rather than closing after one line) sees no EOF/timeout latency.
             while let newline = pending.firstIndex(of: 0x0A) {
                 let command = dispatch(pending[pending.startIndex..<newline])
                 pending.removeSubrange(pending.startIndex...newline)
                 guard case .setVim(let token, let presence) = command else { continue }
                 switch presence {
                 case .held:
-                    // The client is staying: the silence bound would otherwise close this
-                    // connection out from under a live nvim after `recvTimeout` idle seconds.
                     Self.setRecvTimeout(0, on: fd)
                     heldTokens.insert(token)
                 case .off, .latched:
-                    // `.off` is a clean VimLeave, `.latched` a downgrade to a flag that
-                    // outlives the connection. Either way this connection stops owning the
-                    // token, so it must not clear it again at EOF.
                     heldTokens.remove(token)
                 }
-                // Holding nothing again means the silence bound applies again, or a client
-                // that holds, releases, then goes quiet parks a thread for the process life.
                 if heldTokens.isEmpty { Self.setRecvTimeout(recvTimeout, on: fd) }
             }
-            // A single unterminated line grown past the cap is junk (never a nav command):
-            // drop it rather than buffer unboundedly or later decode a truncated tail.
             if pending.count > 64 * 1024 { pending.removeAll(keepingCapacity: false) }
         }
     }
 
-    /// Hand one decoded line to `apply` on main, returning it so the caller can track what
-    /// this connection has claimed. Nil for anything undecodable.
     @discardableResult
     private func dispatch(_ lineData: Data) -> NavCommand? {
         guard let line = String(data: lineData, encoding: .utf8),

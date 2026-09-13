@@ -3,10 +3,6 @@ import XCTest
 @testable import ZenTerm
 
 final class CommandCatalogTests: XCTestCase {
-    /// The catalog reads `GeneralConfig.current` (floats and, through the keymap, chord
-    /// displacement), so an unpinned suite varies by the developer's real config — a user float
-    /// claiming a built-in's chord (e.g. zoom's ⌘F) strips that entry's palette glyph and
-    /// fails the every-entry-has-a-shortcut assertion on that machine only.
     private var originalConfig = GeneralConfig.current
 
     override func setUp() {
@@ -21,8 +17,6 @@ final class CommandCatalogTests: XCTestCase {
     }
 
     func test_baseCommands_orderAndCount() {
-        // User-defined tool floats are config-driven and vary by machine, so filter them out
-        // and assert the fixed structural commands.
         let names = CommandCatalog.commands(tabCount: 0)
             .filter { if case .toggleToolFloat = $0.chord { return false } else { return true } }
             .map(\.title)
@@ -50,35 +44,24 @@ final class CommandCatalogTests: XCTestCase {
             ])
     }
 
-    /// Opening the palette runs `endModes`, which takes the find bar down, so a Find Next picked
-    /// from it reaches `SearchController.navigate` with no search running and does nothing. Every
-    /// time, not sometimes. A row that can never fire is worse than no row: it reads as a feature
-    /// and answers with silence.
     func test_findNextAndPreviousAreNotInThePalette() {
         let titles = CommandCatalog.commands(tabCount: 3).map(\.title)
         XCTAssertFalse(titles.contains("Find Next"))
         XCTAssertFalse(titles.contains("Find Previous"))
-        // Find Selection stays: a mouse selection is libghostty's and survives `endModes`, so the
-        // action still has something to search for when the palette hands it over.
         XCTAssertTrue(titles.contains("Find Selection"))
     }
 
-    /// Select All is Edit > Select All's, the same as Copy and Paste, and neither of those is a
-    /// palette row either. A second listing would advertise it as a rebindable action when the
-    /// chord belongs to the menu.
     func test_selectAll_isNotInThePalette() {
         let titles = CommandCatalog.commands(tabCount: 3).map(\.title)
         XCTAssertFalse(titles.contains("Select All"))
     }
 
     func test_addWorkspace_isNotInThePalette() {
-        // The ⌘P entry was removed: adding a workspace is a Settings-only action now.
         let titles = CommandCatalog.commands(tabCount: 3).map(\.title)
         XCTAssertFalse(titles.contains { $0.localizedCaseInsensitiveContains("add workspace") })
     }
 
     func test_categories_areContiguousInOrder() {
-        // Grouping relies on same-category commands being adjacent, in this order.
         let categories = CommandCatalog.commands(tabCount: 3).map(\.category)
         var seen: [String] = []
         for category in categories where seen.last != category {
@@ -120,17 +103,12 @@ final class CommandCatalogTests: XCTestCase {
     }
 
     func test_checkForUpdates_isPresent_andUnboundByDefault() {
-        // Check for Updates ships without a default chord, so it's in the palette but shows
-        // no glyph — an unbound glyph would lie. Binding a chord fills it via the live keymap.
         let entry = CommandCatalog.commands(tabCount: 0).first { $0.title == "Check for Updates" }
         XCTAssertNotNil(entry)
         if case .checkForUpdates = entry!.chord {} else { XCTFail("expected .checkForUpdates") }
         XCTAssertEqual(entry!.shortcut, "", "Check for Updates has no default binding")
     }
 
-    /// Every screen action on ghostty's own chord, including the two write-to-file variants that
-    /// differ only in what happens to the path. Three rows one keystroke apart is exactly where a
-    /// glyph drifts from the chord that fires.
     func test_theScreenActions_showTheirChords() {
         let entries = CommandCatalog.commands(tabCount: 3)
         for (title, shortcut) in [
@@ -143,9 +121,6 @@ final class CommandCatalogTests: XCTestCase {
     }
 
     func test_everyEntry_hasTitle_andShortcut() {
-        // Every palette command shows its glyph, except the four shipped deliberately unbound:
-        // Check for Updates and Report an Issue are the menu bar's errands, New Tool is a
-        // once-in-a-while errand, and Rename Tab is reached by double-clicking the tab.
         let unbound: Set<String> = [
             KeyInterceptor.ReservedChord.checkForUpdates.actionToken,
             KeyInterceptor.ReservedChord.reportIssue.actionToken,
@@ -159,18 +134,13 @@ final class CommandCatalogTests: XCTestCase {
         }
     }
 
-    /// `spec(for:)` is exhaustive, so a new chord cannot compile without a palette title. Nothing
-    /// forced it into `commands(tabCount:)`, the list the palette renders: three tab actions
-    /// shipped with titles and no way to reach them. This catches an action listed in Settings but
-    /// not the palette. It cannot catch one missing from both, because `everyAction` is hand-kept
-    /// too (ZEN-439).
     func test_everyEditableAction_isReachableFromThePalette() {
         let excluded: Set<String> = [
-            "new_window",  // the menu bar owns it
-            "toggle_command_palette",  // it is the palette
-            "search_next", "search_previous",  // `n` / `N` step a live search
-            "create_worktree",  // needs a selected picker row, so a palette entry would be dead
-            "remove_worktree",  // same
+            "new_window",
+            "toggle_command_palette",
+            "search_next", "search_previous",
+            "create_worktree",
+            "remove_worktree",
         ]
         let listed = Set(CommandCatalog.commands(tabCount: 9).map(\.chord.actionToken))
 

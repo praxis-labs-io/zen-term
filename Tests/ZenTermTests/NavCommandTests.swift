@@ -16,8 +16,6 @@ final class NavCommandTests: XCTestCase {
     }
 
     func test_setvim_withoutHold_isTheLegacyLatch() {
-        // The back-compat guarantee: a plugin that predates `hold` still latches, so an old
-        // client is never silently downgraded to a presence that clears on close.
         XCTAssertEqual(
             NavCommand.decode(#"{"cmd":"setvim","pane":3,"vim":true}"#), .setVim(token: 3, presence: .latched))
         XCTAssertEqual(
@@ -34,8 +32,6 @@ final class NavCommandTests: XCTestCase {
     }
 
     func test_setvim_holdWithoutVim_isOff() {
-        // Holding a cleared flag is asking for nothing; `off` has to win or a client could
-        // park a hold that clears a flag it never set.
         XCTAssertEqual(
             NavCommand.decode(#"{"cmd":"setvim","pane":3,"vim":false,"hold":true}"#),
             .setVim(token: 3, presence: .off))
@@ -76,8 +72,6 @@ final class NavCommandTests: XCTestCase {
         XCTAssertNil(NavCommand.decode("   "))
     }
 
-    // The log line is the whole point of recording these: a bug report has to name the token
-    // and which presence was claimed, or a stale nvim flag is unattributable after the fact.
     func test_logLine_namesTokenAndVimState() {
         XCTAssertEqual(NavCommand.setVim(token: 14, presence: .held).logLine, "setvim pane=14 vim=held")
         XCTAssertEqual(

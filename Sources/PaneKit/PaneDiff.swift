@@ -1,4 +1,3 @@
-/// Which leaves were created, removed, or retained between two tree snapshots.
 public struct PaneDiff: Equatable, Sendable {
     public let created: [PaneID]
     public let removed: [PaneID]

@@ -2,9 +2,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// The `git status --porcelain=v2 --branch` parse behind the picker's counts. Pure logic over
-/// fixture output: the row shows whatever this returns, so a miscount is invisible on screen —
-/// "3" and "4" look equally plausible beside a branch name.
 final class GitChurnTests: XCTestCase {
     func test_parse_readsAheadAndBehind() {
         let churn = GitChurn.parse(
@@ -19,8 +16,6 @@ final class GitChurnTests: XCTestCase {
         XCTAssertEqual(churn.behind, 5)
     }
 
-    /// A branch with no upstream has no `# branch.ab` line at all, and must read as "in sync"
-    /// rather than as a parse that silently kept the previous row's numbers.
     func test_parse_noUpstreamIsZeroDrift() {
         let churn = GitChurn.parse("# branch.head main")
 
@@ -28,9 +23,6 @@ final class GitChurnTests: XCTestCase {
         XCTAssertEqual(churn.behind, 0)
     }
 
-    /// `XY` is two independent answers: the index against HEAD, and the working tree against the
-    /// index. A file edited and then staged is one entry that counts on both sides, which is the
-    /// whole reason staged and modified are separate numbers.
     func test_parse_countsStagedAndModifiedSeparately() {
         let churn = GitChurn.parse(
             """
@@ -59,8 +51,6 @@ final class GitChurnTests: XCTestCase {
         XCTAssertEqual(churn.conflicted, 1)
     }
 
-    /// A deletion is reported as an ordinary `1` entry with `D` in one half. Counting it as
-    /// "staged" or "modified" as well would double it, and a row would claim more work than exists.
     func test_parse_aDeletionCountsOnlyOnce() {
         let staged = GitChurn.parse("1 D. N... 100644 100644 000000 aaa bbb gone.swift")
         XCTAssertEqual(staged.deleted, 1)
@@ -73,9 +63,6 @@ final class GitChurnTests: XCTestCase {
         XCTAssertEqual(worktree.modified, 0)
     }
 
-    /// `X` and `Y` are independent answers, so a `D` in one must not speak for the other. `MD` is a
-    /// staged edit the worktree then deleted: reporting only the delete hides staged work that a
-    /// commit would still capture.
     func test_parse_aDeleteInOneHalfKeepsTheOtherHalfsChange() {
         let editedThenDeleted = GitChurn.parse(
             "1 MD N... 100644 100644 000000 aaa bbb both.swift")
@@ -89,8 +76,6 @@ final class GitChurnTests: XCTestCase {
         XCTAssertEqual(addedThenDeleted.deleted, 1)
     }
 
-    /// A rename whose file was edited afterwards is both. Reading only the staged half would drop
-    /// the edit, which is the same loss `MD` shows on the other side.
     func test_parse_aRenameKeepsAWorktreeEdit() {
         let churn = GitChurn.parse(
             "2 RM N... 100644 100644 100644 aaa bbb R100 new.swift\tolds.swift")
@@ -105,8 +90,6 @@ final class GitChurnTests: XCTestCase {
         XCTAssertFalse(GitChurn.parse("? untracked.swift").isEmpty)
     }
 
-    /// Real output, from a real repo, so the fixtures above can't drift from the format git
-    /// actually writes.
     func test_parse_matchesRealGitOutput() throws {
         let repo = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-churn-\(UUID().uuidString)", isDirectory: true)
