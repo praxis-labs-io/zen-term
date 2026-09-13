@@ -87,6 +87,10 @@ synthesized `modifierFlags: .option` event is a keystroke macOS never sends: it 
 ⌥-arrow reorder past four green tests and a mutation check, because both only ever exercised the fake
 event.
 
+**Keypad Enter is not CR, and it is not a bare key.** AppKit tags it with `.numericPad` and
+`.function`, and its character is ETX (U+0003). A check on the character or on a flag mask misses
+it. Match keyCode 76 beside Return's 36, as `KeyboardFocus` and `SearchController` do.
+
 **A synthesized mouse event cannot carry a button number.** `NSEvent.mouseEvent` has no
 `buttonNumber` parameter and every event it builds reports 0, whatever the type, so a test cannot
 send a real middle click or side button. Split the coverage instead: drive an `.otherMouseDown`
@@ -187,13 +191,21 @@ The fix is to queue the work to the end of the runloop turn (`GhosttyHostView.sc
 so a pass lands as one push at the size it settled on. That is not the same as debouncing: a drag
 delivers one turn per event, so live reflow is unchanged and only the garbage inside a single pass
 is dropped. Any state guarding the work (here the `setSizeSyncSuspended` hold) has to be re-read
-when the queued work runs, not only when it was queued.
+when the queued work runs, not only when it was queued. The push also skips any size under 1px: the
+view has no bounds until the chrome lays it out, and a 0×0 push collapses libghostty's default grid.
 
 **An `NSTextField` label sized to the exact glyph advances truncates to `…`.** A label insets its text
 a couple of points inside its frame, so a column sized to `characters * digitWidth` is a hair too
 narrow and clips even a single digit. Size a content-fit label to its string plus a few points of
 padding, or measure the actual string with the label's own attributes and pad, never the raw
 advance sum.
+
+**Measure a wrapping label's text width from its alignment rect, not its frame.** A wrapping
+`NSTextField` sits about 2pt wider on each side than the width its text can use, so copy checked
+against `frame.width` wraps sooner than the test says. `UpdateCardTests` reads
+`alignmentRect(forFrame:)`. An `NSTextView` hides an inset too: its text container adds 5pt of
+`lineFragmentPadding` at each end by default. `TextAreaBox` sets it to 0 so its text lines up with
+`FieldBox`.
 
 **A non-truncating label holds its container, and the window, open.** A label defaults to a high
 horizontal compression resistance and no truncation, so its intrinsic width becomes a hard floor for
@@ -484,6 +496,12 @@ the file read from the parse, keep the parse on main, and verify in the app. It 
 that and then dropped it: the measured win was about 2.5 ms against a 180 ms debounce, which did not
 justify the async seam it needed. The constraint above is the part worth keeping.
 
+**`UCKeyTranslate` takes the old Carbon modifier byte.** Its modifier argument is
+`(shiftKey >> 8) & 0xFF` from the Carbon event record, not `NSEvent.ModifierFlags`. It also answers
+for keys that type nothing: the arrows come back as U+001C to U+001F and Return as CR, each one
+character long. `KeyboardLayout.glyphsByKeyCode` drops anything below 0x20 and 0x7F so a caller
+never gets a control character as a glyph.
+
 ## Testing AppKit
 
 **AppKit controls get window-based interaction tests, not state-only tests.** A test that only reads
@@ -531,6 +549,23 @@ about the state *before* async work lands has to sit where nothing has turned th
 which usually means building the view directly instead of mounting it. Removing such an assertion
 without replacing it loses real coverage: with `applyGitStatus()` deleted from `WorkspaceRow.init`,
 the mounted test still passed.
+
+**`RunLoop.run(mode:before:)` returns at once when nothing is attached to the run loop.** One call
+waits for nothing, so an "it is still there" assertion after it passes whether or not the thing
+went away. Loop to a deadline, like `waitUntil` and `WindowControllerToastSeamTests.settle`.
+
+**Drain on the queue the observer runs on.** An observer registered with `queue: .main` runs as an
+`OperationQueue.main` operation, and a `DispatchQueue.main` hop isn't guaranteed to run after it. To
+wait for that observer, enqueue the fulfill on `OperationQueue.main`, as
+`WindowControllerConfigFanOutTests` does.
+
+**A weak reference to an AppKit view clears when the autorelease pool drains**, not when the last
+strong reference goes. A test that checks a view was freed wraps the open and close in
+`autoreleasepool`, or it measures autorelease timing instead of a leak (`ToolFloatControllerTests`).
+
+**`kill(pid, 0)` succeeds on a zombie.** A process that has exited but hasn't been reaped still
+answers, so a liveness check right after a sweep races the kernel. `OrphanWatcherTests` asserts on
+elapsed time instead.
 
 **Tests must not mutate real OS state.** They run on the developer's machine. Do not clobber
 `NSPasteboard.general` (snapshot it in `setUp`, restore in `tearDown`), and do not present a real
