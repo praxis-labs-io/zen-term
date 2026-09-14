@@ -311,7 +311,7 @@
 # Chord syntax: `+`-joined modifiers then one key, e.g. cmd+shift+g.
 #   modifiers: cmd (command/super), shift, opt (option/alt), ctrl (control)
 #   key:       a single character (letter, digit, or symbol like - \ [ ])
-#              or one of: up down left right enter tab home end page_up page_down
+#              or one of: up down left right enter tab backspace home end page_up page_down
 #              (ghostty's arrow_up and friends work too)
 #
 # Write the key as it's printed *unshifted*, and add `shift` yourself: cmd+shift+-
