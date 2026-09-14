@@ -230,7 +230,7 @@ enum KeymapDefaults {
         map[Chord(command: true, shift: true, key: "p")] = .toggleCommandPalette
         map[Chord(command: true, key: "p")] = .toggleRepoPicker
         map[Chord(option: true, key: "⏎")] = .createWorktree
-        map[Chord(option: true, key: "⌫")] = .removeWorktree
+        map[Chord(command: true, shift: true, key: "⌫")] = .removeWorktree
         map[Chord(command: true, key: "\\")] = .toggleRightDrawer
         map[Chord(command: true, key: "b")] = .toggleBottomDrawer
         map[ToolFloat.scratch.toggle] = .toggleToolFloat(ToolFloat.scratch.id)

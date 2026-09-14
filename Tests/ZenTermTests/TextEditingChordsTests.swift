@@ -117,6 +117,51 @@ final class TextEditingChordsTests: WindowTestCase {
         XCTAssertEqual(fired, [.fillScreen, .toggleZoom])
     }
 
+    private func pickerInterceptor() -> KeyInterceptor {
+        let keys = KeyInterceptor()
+        keys.passThroughGuard = { [weak self] chord, action in
+            TextEditingChords.owns(chord, firstResponder: self?.window.firstResponder)
+                || PickerChordGuard.shouldPassThrough(action: action, repoPickerIsOpen: true)
+        }
+        return keys
+    }
+
+    func test_optionDeleteInThePickersField_deletesAWordAndRemovesNothing() throws {
+        view.string = "zen term"
+        window.makeFirstResponder(view)
+        view.setSelectedRange(NSRange(location: 8, length: 0))
+        let keys = pickerInterceptor()
+        var fired: [KeyInterceptor.ReservedChord] = []
+        keys.onReservedChord = { fired.append($0) }
+
+        let event = try deleteKeyDown(flags: .option)
+        XCTAssertIdentical(keys.route(event), event, "the field has to get the real event")
+        view.keyDown(with: event)
+
+        XCTAssertEqual(fired, [], "⌥⌫ while filtering must not raise the remove confirm")
+        XCTAssertEqual(view.string, "zen ")
+    }
+
+    func test_commandShiftDeleteInThePickersField_removesTheWorktree() throws {
+        view.string = "zen term"
+        window.makeFirstResponder(view)
+        let keys = pickerInterceptor()
+        var fired: [KeyInterceptor.ReservedChord] = []
+        keys.onReservedChord = { fired.append($0) }
+
+        XCTAssertNil(keys.route(try deleteKeyDown(flags: [.command, .shift])))
+        XCTAssertEqual(fired, [.removeWorktree])
+        XCTAssertEqual(view.string, "zen term")
+    }
+
+    private func deleteKeyDown(flags: NSEvent.ModifierFlags) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, characters: "\u{7f}",
+                charactersIgnoringModifiers: "\u{7f}", isARepeat: false, keyCode: 51))
+    }
+
     private func returnKeyDown(flags: NSEvent.ModifierFlags) throws -> NSEvent {
         try XCTUnwrap(
             NSEvent.keyEvent(

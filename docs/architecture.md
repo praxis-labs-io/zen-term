@@ -273,7 +273,7 @@ below chord routing so a mode never swallows ⌘T or the palette.
   of one returns there through `onAppGlobalCommand`. A card swallows other chords; a float
   raises a notice for pane commands and passes reading chords to its own buffer
   (`modeTarget`).
-- **Picker chords go through `PickerChordGuard`** (⌥⏎, ⌥⌫), because a bound chord is
+- **Picker chords go through `PickerChordGuard`** (⌥⏎, ⌘⇧⌫), because a bound chord is
   otherwise consumed app-wide and those keys belong to shells and TUIs.
 
 **The nav socket** backs zen-navigator.nvim (`docs/nvim-navigator-protocol.md`).
@@ -398,7 +398,7 @@ blend). Sixty-five themes ship; a user file shadows a bundled one. `accent-color
 
 `WorktreeStore` lists, creates and removes a repo's worktrees. Headless and blocking;
 callers hop off-main. The ⌘P picker lists them under each workspace, creates with ⌥⏎ and
-removes with ⌥⌫. Settings does not list them.
+removes with ⌘⇧⌫. Settings does not list them.
 
 - **Git is the whole registry** (`worktree list --porcelain -z`): record one is the main
   checkout, `prunable` records drop, and only a create rollback prunes.
