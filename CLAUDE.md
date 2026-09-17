@@ -26,8 +26,11 @@ or how something used to be.
 **Internal docs accumulate stale detail, so they hold only what is load-bearing now.**
 No history, rejected designs, measurements, ticket ids, UI copy reasoning, or anything
 already in `docs/config` or this file. The why of a change goes in the commit or pull
-request. A change that pushes a doc past its budget cuts something first
-(`wc -l docs/*.md`). User-facing guides live on the website, not in `docs/`.
+request. A change that pushes a doc past its budget rereads it for something stale first
+(`wc -l docs/*.md`): a line that stopped being true, or that now lives in `docs/config` or
+this file. Cut that. If nothing has gone stale, the doc grows and the budget moves. Never
+delete a true, load-bearing line to buy room for another one. User-facing guides live on
+the website, not in `docs/`.
 
 A spec or plan is **scratch**, not a doc. It lives in `docs/` while an epic is in
 flight, to work out implementation details and to write the tickets from, and it is
