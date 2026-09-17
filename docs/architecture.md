@@ -440,13 +440,14 @@ The workspace `carry` key names ignored files to copy into a new worktree.
 - **Picked, never typed:** the workspace form lists `git status --porcelain --ignored`
   merged with existing `carry` entries. A folder spraying ignored files folds to one row;
   folded files stay searchable. Users read "copy", the key stays `carry`.
+- **Allowlist, not denylist.**
 - **`copyfile(3)` with `COPYFILE_CLONE`**, which falls back to a byte copy across volumes
   and keeps symlinks as symlinks. An entry that is itself a link out of the workspace is
   refused.
 - **Refusals:** tracked files (a tracked folder copies only its ignored contents), unreadable
   repos, entries resolving outside the workspace (checked on resolved paths), and destinations
   that exist (`COPYFILE_CLONE` onto a directory returns 0 having copied nothing). Parents are
-  created first; a partial copy is removed.
+  created first; a partial copy is removed. Errors use `strerror_r`.
 
 ### Removing
 
@@ -480,7 +481,8 @@ concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. It gates
   integration (no OSC 7, no prompt marks, broken `isBusy`).
 - **`ApplePressAndHoldEnabled` is registered false at launch**, or the accent popup leaks
   keys into the shell.
-- **`GitRepo.repoRoot` refuses `$HOME` as an enclosing repo**, or dotfiles at `~` claim every folder under it.
+- **`GitRepo.repoRoot` stops when the path stops shrinking**, not on `parent == dir`, and
+  **refuses `$HOME` as an enclosing repo**, or dotfiles at `~` claim every folder under it.
 - **The `workspaces` file loads off-main** (`ConfigLoader.loadWorkspaces`). A card that
   renders it is built after the load; `pendingModal` tracks the press in between.
 - **Interactive git probes go through `GitRepoStatus`.** It resolves and caches the
