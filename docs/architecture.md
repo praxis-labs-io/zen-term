@@ -122,7 +122,7 @@ share `SystemReport`, and never carry the environment or config.
   catches the rest, so a missing override drops events silently. Modifier events carry
   which side moved (`ghosttySidedMods`, key events only; mouse callbacks take unsided
   `ghosttyMods` or every row redraws). `GhosttyHostView` forwards a release only for a
-  press it reported, and only the focused pane hears `flagsChanged`.
+  press it reported, and that ledger is also what makes `modifiersDidChange` idempotent.
 - **Key text is sent only from 0x20 up**; control keys encode from keycode and mods.
 
 ### What the backend will and won't do
@@ -239,10 +239,12 @@ New modal surfaces compose the existing primitives.
 the responder chain. A control's own `keyDown` test can pass while the key never reaches
 it.
 
-`KeyInterceptor.route(_:)` order: capture mode consumes everything; `flagsChanged` passes;
-a chord resolves; whatever is left goes to `modeHandler`, then the PTY. `modeHandler` sits
-below chord routing so a mode never swallows ⌘T or the palette.
+`KeyInterceptor.route(_:)` order: capture mode consumes everything; `flagsChanged` fans out
+and passes; a chord resolves; whatever is left goes to `modeHandler`, then the PTY.
+`modeHandler` sits below chord routing so a mode never swallows ⌘T or the palette.
 
+- **`flagsChanged` fans out** because the chain reaches one pane while mouse mods are per
+  surface, so the rest never highlight a ⌘-hovered link. Active tab and floats only.
 - **`Route` has two ways of not consuming.** `passThrough`: nothing claimed it, a mode may.
   `deferToTerminal`: a chord matched and `passThroughGuard` handed it to the program
   (Ctrl-nav over nvim), so nothing else may touch it.
@@ -252,8 +254,7 @@ below chord routing so a mode never swallows ⌘T or the palette.
   Ctrl-_, and declines other ⌘/⌃ keys once so menus win.
 - **`Chord` folds a shifted glyph onto its base key only when Shift is set.** The fold
   table is US-only; a non-US layout can mislabel a chord but never invent one. Keys that
-  type no character are named by keyCode (`specialKeyGlyphs`), written as words in config
-  (`home`, `backspace`) and as glyphs in the app.
+  type no character are named by keyCode (`specialKeyGlyphs`).
 - **`KeymapAssembler.assemble`**: defaults, then float chords, then user keybinds, later
   winning. A user keybind moves its action, dropping its defaults. `= none` is a value:
   `KeymapOverrides` carries `binds` and `unbound` so `ConfigWriter` does not delete the
@@ -266,8 +267,8 @@ below chord routing so a mode never swallows ⌘T or the palette.
 - **macOS takes ⌘⌥D, ⌃⌘D, ⌘↑ and ⌘↓ first**; a chord bound there is dead while tests pass.
 - **Chord conflicts** get one sticky card each (`KeybindConflict`,
   `ConfigApplier.surfaceConflicts`). Accept writes `= none` for the loser; Revert returns
-  the winner to its defaults. A user float that takes a chord gets Accept only; one that loses it gets Revert only. Settings rows show the conflict
-  but do not resolve it.
+  the winner to its defaults; a user float gets whichever of the two applies. Settings
+  rows show the conflict but do not resolve it.
 - **The modal gate** in `WindowController.handle(_:)` runs confirm, modal card, tool
   float, then dispatch. App-global chords bypass it in `AppDelegate.route`; a palette pick
   of one returns there through `onAppGlobalCommand`. A card swallows other chords; a float
@@ -484,9 +485,8 @@ concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. It gates
 - **The `workspaces` file loads off-main** (`ConfigLoader.loadWorkspaces`). A card that
   renders it is built after the load; `pendingModal` tracks the press in between.
 - **Interactive git probes go through `GitRepoStatus`.** The branch is a file read
-  (`GitRepo.currentBranch`); churn is `git --no-optional-locks status
-  --porcelain=v2 --branch` on `churnQueue` (width four), with per-caller cancel tokens. No
-  probe fetches.
+  (`GitRepo.currentBranch`); churn is `git --no-optional-locks status --porcelain=v2
+  --branch` on `churnQueue` (width four), with per-caller cancel tokens. No probe fetches.
 - **A float open is cancellable during its repo-root probe** (`cancelPendingOpen()`).
 - **Palette rows are reused**, so they never carry an index; order is the stack's arranged
   subviews.

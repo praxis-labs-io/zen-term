@@ -321,6 +321,11 @@ public protocol TerminalSurface: AnyObject {
 
     /// What the backend would do with `key` under the current config. Do not cache across reloads.
     func disposition(of key: TerminalKey) -> ChordDisposition
+
+    /// Tells a surface a modifier moved, for the surfaces the responder chain skips. Idempotent, so
+    /// the caller need not exclude the one that already took the event. Takes the `NSEvent` because
+    /// which side of a pair moved survives in no other form.
+    func modifiersDidChange(_ event: NSEvent)
 }
 
 public extension TerminalSurface {
@@ -355,4 +360,6 @@ public extension TerminalSurface {
     func clearScreen() {}
     func selectAll() {}
     func writeScreenToFile(_ disposition: ScreenFileDisposition) {}
+
+    func modifiersDidChange(_ event: NSEvent) {}
 }

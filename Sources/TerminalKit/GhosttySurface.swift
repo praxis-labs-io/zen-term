@@ -261,6 +261,10 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         handleFocusChange(focused)
     }
 
+    public func modifiersDidChange(_ event: NSEvent) {
+        hostView.flagsChanged(with: event)
+    }
+
     private func handleFocusChange(_ focused: Bool) {
         paneFocused = focused
         syncFocus()

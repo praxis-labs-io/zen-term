@@ -66,6 +66,9 @@ final class KeyInterceptor {
     // Consulted after chord routing, so a sticky mode can never swallow ⌘T or pane nav.
     var modeHandler: ((NSEvent) -> Bool)?
 
+    // The responder chain hands `flagsChanged` to one pane, and every other pane needs it too.
+    var onModifierChange: ((NSEvent) -> Void)?
+
     func start() {
         stop()
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
@@ -79,6 +82,7 @@ final class KeyInterceptor {
             captureHandler(event)
             return nil
         }
+        if event.type == .flagsChanged { onModifierChange?(event) }
         guard event.type == .keyDown else { return event }
         let reservableModifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
         if !event.modifierFlags.intersection(reservableModifiers).isEmpty {

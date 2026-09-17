@@ -75,6 +75,17 @@ final class WindowController: NSObject {
         controllers.values.flatMap { $0.allSurfaces } + floats.allSurfaces
     }
 
+    /// Fans a modifier move out to the visible surfaces, which the responder chain reaches only one
+    /// of. Each surface drops the event if it already took it, so the first responder is included.
+    func modifiersDidChange(_ event: NSEvent) {
+        for surface in visibleTerminalSurfaces { surface.modifiersDidChange(event) }
+    }
+
+    // Background tabs are excluded: nothing of theirs is on screen for a modifier to change.
+    private var visibleTerminalSurfaces: [TerminalSurface] {
+        (activeController?.allSurfaces ?? []) + floats.allSurfaces
+    }
+
     func presentUpdateCard(_ card: UpdateCardView) { toasts.present(card: card) }
 
     func dismissUpdateCard(_ card: UpdateCardView) {
