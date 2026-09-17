@@ -631,7 +631,7 @@ final class WindowController: NSObject {
             canvas.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             canvas.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             canvas.topAnchor.constraint(equalTo: container.topAnchor),
-            canvas.bottomAnchor.constraint(equalTo: tabBar.topAnchor),
+            canvas.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -ChromeMetrics.footerGap),
         ])
     }
 
@@ -651,7 +651,8 @@ final class WindowController: NSObject {
             trailing: overlay.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -gutter),
             top: overlay.topAnchor.constraint(
                 equalTo: container.topAnchor, constant: ChromeMetrics.topInset),
-            bottom: overlay.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -gutter)
+            bottom: overlay.bottomAnchor.constraint(
+                equalTo: tabBar.topAnchor, constant: -ChromeMetrics.footerGap)
         )
         floatGutter = insets
         NSLayoutConstraint.activate([insets.leading, insets.trailing, insets.top, insets.bottom])
@@ -668,7 +669,8 @@ final class WindowController: NSObject {
                 equalTo: container.trailingAnchor, constant: -gutter),
             top: overlay.topAnchor.constraint(
                 equalTo: container.topAnchor, constant: ChromeMetrics.topInset),
-            bottom: overlay.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -gutter)
+            bottom: overlay.bottomAnchor.constraint(
+                equalTo: tabBar.topAnchor, constant: -ChromeMetrics.footerGap)
         )
         modalGutter = insets
         NSLayoutConstraint.activate([insets.leading, insets.trailing, insets.top, insets.bottom])
@@ -680,7 +682,7 @@ final class WindowController: NSObject {
         floatGutter.leading.constant = gutter
         floatGutter.trailing.constant = -gutter
         floatGutter.top.constant = ChromeMetrics.topInset
-        floatGutter.bottom.constant = -gutter
+        floatGutter.bottom.constant = -ChromeMetrics.footerGap
     }
 
     private func reapplyModalLayout() {
@@ -689,7 +691,7 @@ final class WindowController: NSObject {
         modalGutter.leading.constant = gutter
         modalGutter.trailing.constant = -gutter
         modalGutter.top.constant = ChromeMetrics.topInset
-        modalGutter.bottom.constant = -gutter
+        modalGutter.bottom.constant = -ChromeMetrics.footerGap
     }
 
     private func newTab() {

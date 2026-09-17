@@ -7,6 +7,9 @@ enum ChromeMetrics {
     /// The standard macOS titlebar height.
     private static let trafficLightClearance: CGFloat = 28
 
+    // Fixed, not the gutter: the dock's buttons overhang the tab bar, so a gutter of 0 would collide.
+    static let footerGap: CGFloat = 8
+
     static var topInset: CGFloat {
         windowGutter + (GeneralConfig.current.windowChrome ? trafficLightClearance : 0)
     }
