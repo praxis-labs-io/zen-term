@@ -56,6 +56,59 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertTrue(dock.rightActivityForTesting)
     }
 
+    func test_render_aWaitingDrawer_dotsItsToggleEvenWhenIdle() {
+        let dock = makeDock([])
+
+        dock.render(
+            overlay: OverlayState(), floatID: nil, paletteOpen: false, tab: nil,
+            drawerAttention: { $0 == .right ? .waiting : .idle })
+
+        XCTAssertTrue(
+            dock.rightActivityForTesting,
+            "a hidden drawer holding a blocked agent has to say so, busy or not")
+        XCTAssertEqual(dock.rightActivityStateForTesting, .waiting)
+    }
+
+    func test_render_theDotTakesTheAttentionColor() {
+        let dock = makeDock([])
+        let chrome = Theme.current.chrome
+
+        dock.render(
+            overlay: OverlayState(), floatID: nil, paletteOpen: false, tab: nil,
+            drawerAttention: { _ in .waiting })
+        XCTAssertEqual(dock.rightActivityColorForTesting, chrome.attention.nsColor)
+
+        dock.render(
+            overlay: OverlayState(), floatID: nil, paletteOpen: false, tab: nil,
+            drawerAttention: { _ in .completed })
+        XCTAssertEqual(dock.rightActivityColorForTesting, chrome.positive.nsColor)
+    }
+
+    func test_render_aBusyDrawerWithNothingPending_keepsTheNeutralDot() {
+        let dock = makeDock([])
+        var overlay = OverlayState()
+        overlay.rightBusy = true
+
+        dock.render(
+            overlay: overlay, floatID: nil, paletteOpen: false, tab: nil,
+            drawerAttention: { _ in .working })
+
+        XCTAssertTrue(dock.rightActivityForTesting)
+        XCTAssertEqual(
+            dock.rightActivityColorForTesting, Theme.current.chrome.accent.nsColor,
+            "working is not asking for you, so the dot stays the colour it has always been")
+    }
+
+    func test_render_aWaitingFloat_dotsItsButton() {
+        let dock = makeDock([float("dev")])
+
+        dock.render(
+            overlay: OverlayState(), floatID: nil, paletteOpen: false, tab: nil,
+            floatAttention: { $0 == "dev" ? .waiting : .idle })
+
+        XCTAssertEqual(dock.dottedToolFloatIDsForTesting, ["dev"])
+    }
+
     func test_render_dotShowsEvenWhileDrawerOpen() {
         let dock = makeDock([])
         var overlay = OverlayState()

@@ -96,6 +96,14 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         return liveFloats[registryKey(id, in: currentTabID())]?.surface.isBusy == true
     }
 
+    func surfaceID(_ id: String) -> SurfaceID? {
+        let live = liveFloats[id] ?? liveFloats[registryKey(id, in: currentTabID())]
+        guard let surface = live?.surface ?? (activeID == id ? activeFloat?.surface : nil) else {
+            return nil
+        }
+        return idBySurface[ObjectIdentifier(surface)]
+    }
+
     var allSurfaces: [TerminalSurface] {
         var result = liveFloats.values.map(\.surface)
         if let active = activeFloat, !result.contains(where: { $0 === active.surface }) {

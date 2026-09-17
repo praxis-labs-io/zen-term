@@ -146,11 +146,11 @@ final class WindowController: NSObject {
         }
         controller.onSurfaceReleased = { [weak self] surface in
             self?.attention.release(surface)
-            self?.renderTabBar()
+            self?.renderAttention()
         }
         controller.onShown = { [weak self] surface in
             self?.attention.markSeen(surface)
-            self?.renderTabBar()
+            self?.renderAttention()
         }
         controller.onNotification = { [weak self] surface, n, spec, owner in
             self?.floatNotified(surface: surface, n, from: spec, owner: owner)
@@ -1746,7 +1746,7 @@ final class WindowController: NSObject {
         c.onTitleChanged = { [weak self] in
             guard let self, let c = self.controllers[id] else { return }
             self.titles[id] = c.title
-            self.renderTabBar()
+            self.renderAttention()
         }
         c.onLastPaneClosed = { [weak self] in self?.closeTab(id) }
         c.onOverlayStateChanged = { [weak self] in self?.renderDock() }
@@ -1767,7 +1767,7 @@ final class WindowController: NSObject {
         }
         c.onSurfacesReleased = { [weak self] ids in
             ids.forEach { self?.attention.release($0) }
-            self?.renderTabBar()
+            self?.renderAttention()
         }
         c.onNotification = { [weak self] surface, n in
             self?.agentNotified(surface: surface, id: id, notification: n)
@@ -1799,7 +1799,7 @@ final class WindowController: NSObject {
 
             guard !shown else { return }
             self.presentWaitingToast(for: target, title: spec.title, message: message)
-            if !wasWaiting { self.renderTabBar() }
+            if !wasWaiting { self.renderAttention() }
         }
     }
 
@@ -1820,7 +1820,7 @@ final class WindowController: NSObject {
 
             guard id != self.tabs.activeID else { return }
             self.presentWaitingToast(for: id, title: self.titles[id] ?? "shell", message: message)
-            if !wasWaiting { self.renderTabBar() }
+            if !wasWaiting { self.renderAttention() }
         }
     }
 
@@ -1833,7 +1833,7 @@ final class WindowController: NSObject {
 
             surface.map { self.attention.record($0, .completed, seen: false) }
             self.presentCompletedToast(for: id, result: result)
-            self.renderTabBar()
+            self.renderAttention()
         }
     }
 
@@ -1853,7 +1853,7 @@ final class WindowController: NSObject {
             ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
                 guard let self else { return }
                 self.clearAttention(id)
-                self.renderTabBar()
+                self.renderAttention()
             },
             ToastAction(
                 title: "Switch", kind: .primary,
@@ -1889,7 +1889,7 @@ final class WindowController: NSObject {
             ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
                 guard let self else { return }
                 self.clearAttention(id)
-                self.renderTabBar()
+                self.renderAttention()
             },
             ToastAction(
                 title: "Switch", kind: .primary,
@@ -1908,7 +1908,7 @@ final class WindowController: NSObject {
         toast.onClose = { [weak self] in
             guard let self else { return }
             self.clearAttention(id)
-            self.renderTabBar()
+            self.renderAttention()
         }
         toast.onDismissed = { [weak self, weak toast] in
             guard let self, let toast, self.attentionCards[id] === toast else { return }
@@ -2026,6 +2026,12 @@ final class WindowController: NSObject {
         AgentNotifier.shared.clear(windowID: windowID, tabID: id)
     }
 
+    /// The tab number and the dock's dots are the same signal at two altitudes, so they move together.
+    private func renderAttention() {
+        renderTabBar()
+        renderDock()
+    }
+
     private func renderTabBar() {
         let items = tabs.order.enumerated().map { i, id in
             TabBarItem(
@@ -2048,8 +2054,18 @@ final class WindowController: NSObject {
         dock.render(
             overlay: overlay, floatID: floats.activeID, paletteOpen: modal?.kind == .commandPalette,
             tab: tabs.order.isEmpty ? nil : tabs.activeID,
-            isLiveInBackground: floats.isLiveInBackground, isFloatBusy: floats.isBusy)
+            isLiveInBackground: floats.isLiveInBackground, isFloatBusy: floats.isBusy,
+            drawerAttention: { [weak self] edge in self?.drawerAttention(edge) ?? .idle },
+            floatAttention: { [weak self] id in
+                self?.floats.surfaceID(id).map { self?.attention.state(of: $0) ?? .idle } ?? .idle
+            })
         lastBusyDots = busyDots()
+    }
+
+    private func drawerAttention(_ edge: DrawerEdge) -> SurfaceAttention {
+        guard let ids = activeController?.drawerSurfaceIDs else { return .idle }
+        guard let id = edge == .bottom ? ids.bottom : ids.right else { return .idle }
+        return attention.state(of: id)
     }
 
     private func bindFirstControllerIfNeeded() {
