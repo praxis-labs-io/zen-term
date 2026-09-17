@@ -254,7 +254,8 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   Ctrl-_, and declines other ⌘/⌃ keys once so menus win.
 - **`Chord` folds a shifted glyph onto its base key only when Shift is set.** The fold
   table is US-only; a non-US layout can mislabel a chord but never invent one. Keys that
-  type no character are named by keyCode (`specialKeyGlyphs`).
+  type no character are named by keyCode (`specialKeyGlyphs`), written as words in config
+  (`home`, `backspace`) and as glyphs in the app.
 - **`KeymapAssembler.assemble`**: defaults, then float chords, then user keybinds, later
   winning. A user keybind moves its action, dropping its defaults. `= none` is a value:
   `KeymapOverrides` carries `binds` and `unbound` so `ConfigWriter` does not delete the
@@ -267,8 +268,8 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
 - **macOS takes ⌘⌥D, ⌃⌘D, ⌘↑ and ⌘↓ first**; a chord bound there is dead while tests pass.
 - **Chord conflicts** get one sticky card each (`KeybindConflict`,
   `ConfigApplier.surfaceConflicts`). Accept writes `= none` for the loser; Revert returns
-  the winner to its defaults; a user float gets whichever of the two applies. Settings
-  rows show the conflict but do not resolve it.
+  the winner to its defaults. A user float that takes a chord gets Accept only; one that
+  loses it gets Revert only. Settings rows show the conflict but do not resolve it.
 - **The modal gate** in `WindowController.handle(_:)` runs confirm, modal card, tool
   float, then dispatch. App-global chords bypass it in `AppDelegate.route`; a palette pick
   of one returns there through `onAppGlobalCommand`. A card swallows other chords; a float
