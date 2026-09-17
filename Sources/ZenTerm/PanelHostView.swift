@@ -58,7 +58,13 @@ final class PanelHostView: NSView, TerminalModeHost {
 
     private let padding: CGFloat = 10
 
-    static let cornerRadius: CGFloat = 12
+    /// Concentric with the window, so the reveal stays an even width around the corner arc.
+    @MainActor static var cornerRadius: CGFloat {
+        max(minCornerRadius, WindowCorner.radius - ChromeMetrics.windowGutter)
+    }
+
+    /// A pane far from the window corner still reads as a pane, so the concentric result has a floor.
+    private static let minCornerRadius: CGFloat = 6
 
     /// An `NSView` cannot paint outside its bounds, and the glow has to.
     private static let haloOutset: CGFloat = 16
@@ -187,6 +193,14 @@ final class PanelHostView: NSView, TerminalModeHost {
         applyBackground()
         chrome.reapplyTheme()
         updateHalo()
+    }
+
+    func reapplyChromeLayout() {
+        let radius = Self.cornerRadius
+        pane.layer?.cornerRadius = radius
+        clip.layer?.cornerRadius = radius
+        halo.cornerRadius = radius
+        ring.cornerRadius = radius
     }
 
     /// Translucent, the clip stops filling, or it repaints the terminal background behind a see-through surface.
