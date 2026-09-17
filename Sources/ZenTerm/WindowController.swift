@@ -11,8 +11,8 @@ final class WindowController: NSObject {
     private var tabs: TabList
     private var controllers: [TabID: TabController] = [:]
     private var titles: [TabID: String] = [:]
-    private var attentionToasts: [TabID: ToastView] = [:]
-    private var attentionStates: [TabID: TabAttentionState] = [:]
+    private var attentionCards: [TabID: ToastView] = [:]
+    private let attention = AttentionStore()
     private static let commandCompletionThreshold: TimeInterval = 10
     private var nextTabID = 1
 
@@ -138,6 +138,17 @@ final class WindowController: NSObject {
             })
         controller.onStateChanged = { [weak self] in self?.renderDock() }
         controller.onRequestToast = { [weak self] content in self?.toasts.show(content) }
+        controller.onSurfaceRegistered = { [weak self] surface, tab in
+            self?.attention.register(surface, tab: tab)
+        }
+        controller.onSurfaceReleased = { [weak self] surface in
+            self?.attention.release(surface)
+            self?.renderTabBar()
+        }
+        controller.onShown = { [weak self] surface in
+            self?.attention.markSeen(surface)
+            self?.renderTabBar()
+        }
         controller.onNotification = { [weak self] surface, n, spec, owner in
             self?.floatNotified(surface: surface, n, from: spec, owner: owner)
         }
@@ -364,7 +375,7 @@ final class WindowController: NSObject {
                     self.tabBar.reapplyTheme()
                     self.dock.reapplyTheme()
                     self.confirmToast?.reapplyTheme()
-                    self.attentionToasts.values.forEach { $0.reapplyTheme() }
+                    self.attentionCards.values.forEach { $0.reapplyTheme() }
                     self.fontSizeCard?.reapplyTheme()
                 }
                 if change.contains(.toasts) {
@@ -813,6 +824,7 @@ final class WindowController: NSObject {
         controllers[id] = nil
         titles[id] = nil
         clearAttention(id)
+        attention.dropTab(id)
         if !survived { window.close(); return }
         clearAttention(tabs.activeID)
         mount(.instant)
@@ -1744,6 +1756,13 @@ final class WindowController: NSObject {
             self?.endModes()
         }
         c.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
+        c.onSurfacesRegistered = { [weak self] ids in
+            ids.forEach { self?.attention.register($0, tab: id) }
+        }
+        c.onSurfacesReleased = { [weak self] ids in
+            ids.forEach { self?.attention.release($0) }
+            self?.renderTabBar()
+        }
         c.onNotification = { [weak self] surface, n in
             self?.agentNotified(surface: surface, id: id, notification: n)
         }
@@ -1780,8 +1799,10 @@ final class WindowController: NSObject {
                     windowID: self.windowID, tabID: id, title: self.titles[id] ?? "shell", body: message)
             }
 
+            let wasWaiting = self.attention.state(tab: id) == .waiting
+            surface.map { self.attention.record($0, .waiting, seen: id == self.tabs.activeID) }
+
             guard id != self.tabs.activeID else { return }
-            let wasWaiting = self.attentionStates[id] == .waiting
             self.presentWaitingToast(for: id, message: message)
             if !wasWaiting { self.renderTabBar() }
         }
@@ -1791,16 +1812,17 @@ final class WindowController: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.tabs.order.contains(id), id != self.tabs.activeID,
                 result.duration >= Self.commandCompletionThreshold,
-                self.attentionStates[id] != .waiting
+                self.attention.state(tab: id) != .waiting
             else { return }
 
+            surface.map { self.attention.record($0, .completed, seen: false) }
             self.presentCompletedToast(for: id, result: result)
             self.renderTabBar()
         }
     }
 
     private func presentCompletedToast(for id: TabID, result: TerminalCommandResult) {
-        if let old = attentionToasts[id] { toasts.dismiss(old) }
+        if let old = attentionCards[id] { toasts.dismiss(old) }
         let content = ToastContent(
             variant: result.exitCode.map { $0 == 0 ? .positive : .warning } ?? .positive,
             title: titles[id] ?? "shell", message: Self.commandResultMessage(result))
@@ -1815,8 +1837,7 @@ final class WindowController: NSObject {
                 shortcut: { [weak self] in self?.selectTabShortcut(for: id) ?? "" }
             ) { [weak self] in self?.select(id) },
         ]
-        attentionStates[id] = .completed
-        attentionToasts[id] = mountAttentionToast(
+        attentionCards[id] = mountAttentionToast(
             for: id, content: content, actions: actions,
             autoDismiss: GeneralConfig.current.completionToast == .auto)
     }
@@ -1838,7 +1859,7 @@ final class WindowController: NSObject {
     }
 
     private func presentWaitingToast(for id: TabID, message: String) {
-        if let old = attentionToasts[id] { toasts.dismiss(old) }
+        if let old = attentionCards[id] { toasts.dismiss(old) }
         let content = ToastContent(
             variant: .info, title: titles[id] ?? "shell", message: message, icon: "bell.fill")
         let actions = [
@@ -1852,8 +1873,7 @@ final class WindowController: NSObject {
                 shortcut: { [weak self] in self?.selectTabShortcut(for: id) ?? "" }
             ) { [weak self] in self?.select(id) },
         ]
-        attentionStates[id] = .waiting
-        attentionToasts[id] = mountAttentionToast(
+        attentionCards[id] = mountAttentionToast(
             for: id, content: content, actions: actions,
             autoDismiss: GeneralConfig.current.attentionToast == .auto)
     }
@@ -1868,8 +1888,8 @@ final class WindowController: NSObject {
             self.renderTabBar()
         }
         toast.onDismissed = { [weak self, weak toast] in
-            guard let self, let toast, self.attentionToasts[id] === toast else { return }
-            self.attentionToasts[id] = nil
+            guard let self, let toast, self.attentionCards[id] === toast else { return }
+            self.attentionCards[id] = nil
         }
         return toast
     }
@@ -1911,24 +1931,27 @@ final class WindowController: NSObject {
 
     func notifyAgentForTesting(tabIndex: Int, message: String) {
         guard tabs.order.indices.contains(tabIndex) else { return }
+        let id = tabs.order[tabIndex]
         agentNotified(
-            surface: nil, id: tabs.order[tabIndex],
+            surface: controllers[id]?.focusedSurfaceID, id: id,
             notification: TerminalNotification(title: "claude", body: message))
     }
 
     func waitingToastForTesting(tabIndex: Int) -> ToastView? {
         guard tabs.order.indices.contains(tabIndex) else { return nil }
-        return attentionToasts[tabs.order[tabIndex]]
+        return attentionCards[tabs.order[tabIndex]]
     }
 
     func notifyCommandFinishedForTesting(tabIndex: Int, result: TerminalCommandResult) {
         guard tabs.order.indices.contains(tabIndex) else { return }
-        commandFinished(surface: nil, id: tabs.order[tabIndex], result: result)
+        let id = tabs.order[tabIndex]
+        commandFinished(surface: controllers[id]?.focusedSurfaceID, id: id, result: result)
     }
 
     func attentionStateForTesting(tabIndex: Int) -> TabAttentionState? {
         guard tabs.order.indices.contains(tabIndex) else { return nil }
-        return attentionStates[tabs.order[tabIndex]]
+        let state = attention.state(tab: tabs.order[tabIndex]).tabState
+        return state == .idle ? nil : state
     }
 
     func newTabForTesting() { handle(.newTab) }
@@ -1961,8 +1984,8 @@ final class WindowController: NSObject {
     }
 
     private func clearAttention(_ id: TabID) {
-        attentionStates[id] = nil
-        if let toast = attentionToasts.removeValue(forKey: id) { toasts.dismiss(toast) }
+        attention.markSeen(tab: id)
+        if let toast = attentionCards.removeValue(forKey: id) { toasts.dismiss(toast) }
         AgentNotifier.shared.clear(windowID: windowID, tabID: id)
     }
 
@@ -1972,10 +1995,10 @@ final class WindowController: NSObject {
                 id: id, index: i + 1,
                 title: titles[id] ?? "shell",
                 isActive: id == tabs.activeID,
-                attentionState: attentionStates[id] ?? .idle)
+                attentionState: attention.state(tab: id).tabState)
         }
         tabBar.render(items)
-        attentionToasts.values.forEach { $0.refreshShortcuts() }
+        attentionCards.values.forEach { $0.refreshShortcuts() }
     }
 
     private func selectTabShortcut(for id: TabID) -> String {

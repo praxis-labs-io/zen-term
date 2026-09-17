@@ -134,6 +134,19 @@ final class TabController: NSObject {
 
     var isDrawerFocused: Bool { focusedPanel != .pane }
 
+    /// The surface the user is on in this tab, whichever panel holds focus.
+    var focusedSurfaceID: SurfaceID? {
+        switch focusedPanel {
+        case .pane: return paneCanvas.focusedSurfaceID
+        case .bottomDrawer: return bottomDrawerSurfaceID
+        case .rightDrawer: return rightDrawerSurfaceID
+        }
+    }
+
+    var drawerSurfaceIDs: (bottom: SurfaceID?, right: SurfaceID?) {
+        (bottomDrawerSurfaceID, rightDrawerSurfaceID)
+    }
+
     var focusedDrawerIsBusy: Bool { focusedDrawerSurface?.isBusy == true }
 
     var overlayState: OverlayState {
