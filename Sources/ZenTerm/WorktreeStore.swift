@@ -114,7 +114,7 @@ enum WorktreeStore {
 
     /// The picker passes `pruning: false`: a prune is final, and a moved worktree loses `git worktree repair`.
     static func list(in repo: URL, pruning: Bool = true) throws -> [Worktree] {
-        guard GitRepo.isGitRepo(repo) else { throw WorktreeError.notARepo(repo) }
+        guard GitRepo.repoRoot(for: repo) != nil else { throw WorktreeError.notARepo(repo) }
         let listing = try porcelain(in: repo)
         if pruning, shouldPrune(listing) { _ = try? git(["worktree", "prune"], in: repo) }
         let main = mainPath(in: listing)
@@ -195,7 +195,7 @@ enum WorktreeStore {
     }
 
     static func create(branch: String, base: Base = .defaultBranch, in repo: URL) throws -> Worktree {
-        guard GitRepo.isGitRepo(repo) else { throw WorktreeError.notARepo(repo) }
+        guard GitRepo.repoRoot(for: repo) != nil else { throw WorktreeError.notARepo(repo) }
         guard isUsableBranchName(branch, in: repo) else { throw WorktreeError.invalidBranchName(branch) }
 
         let baseRef = try resolveBase(base, in: repo)
@@ -211,7 +211,7 @@ enum WorktreeStore {
     }
 
     static func create(existingBranch branch: String, in repo: URL) throws -> Worktree {
-        guard GitRepo.isGitRepo(repo) else { throw WorktreeError.notARepo(repo) }
+        guard GitRepo.repoRoot(for: repo) != nil else { throw WorktreeError.notARepo(repo) }
         guard isUsableBranchName(branch, in: repo) else { throw WorktreeError.invalidBranchName(branch) }
         guard branchExists(branch, in: repo) else { throw WorktreeError.branchNotThere(branch) }
 

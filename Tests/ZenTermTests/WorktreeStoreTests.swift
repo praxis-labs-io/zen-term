@@ -703,6 +703,56 @@ final class WorktreeStoreTests: XCTestCase {
         XCTAssertEqual(try WorktreeStore.list(in: sub), [])
     }
 
+    func test_list_worksFromASubdirectoryOfTheRepo() throws {
+        let package = try makePackage()
+        _ = try WorktreeStore.create(branch: "side", in: repo)
+
+        XCTAssertEqual(try WorktreeStore.list(in: package).compactMap(\.branch), ["side"])
+    }
+
+    func test_create_fromASubdirectoryIsStoredAgainstTheRepoRoot() throws {
+        let package = try makePackage()
+
+        let worktree = try WorktreeStore.create(branch: "from-package", in: package)
+
+        XCTAssertEqual(
+            worktree.path.deletingLastPathComponent().lastPathComponent,
+            WorktreeStore.directoryName(for: repo), "a worktree belongs to the repo, not the package")
+        XCTAssertTrue(
+            GitFixture.exists(worktree.path.appendingPathComponent("tracked.txt")),
+            "the worktree holds the whole repo tree")
+    }
+
+    func test_createFromASubdirectory_carriesIntoTheMatchingFolder() throws {
+        let package = try makePackage()
+        try GitFixture.write("secret\n", to: package.appendingPathComponent(".env"))
+        let parent = Workspace(
+            title: "rails", path: package, main: nil, right: nil, bottom: nil, focus: .main,
+            env: [:], carry: [".env"])
+
+        let worktree = try WorktreeStore.create(branch: "carried", in: package)
+        let opened = RepoPickerOverlay.workspace(
+            for: worktree, parent: parent, repoRoot: GitRepo.repoRoot(for: package))
+        let report = WorktreeCarry.copy(parent.carry, from: parent.path, into: opened.path)
+
+        XCTAssertEqual(report.carried, [".env"])
+        XCTAssertTrue(
+            GitFixture.exists(worktree.path.appendingPathComponent("apps/rails/.env")),
+            "carry lands beside the package, not at the repo root")
+        XCTAssertFalse(GitFixture.exists(worktree.path.appendingPathComponent(".env")))
+        XCTAssertEqual(opened.path.path, worktree.path.appendingPathComponent("apps/rails").path)
+    }
+
+    private func makePackage() throws -> URL {
+        let package = repo.appendingPathComponent("apps/rails", isDirectory: true)
+        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+        try GitFixture.write("app\n", to: package.appendingPathComponent("app.txt"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "package"], in: repo)
+        try GitFixture.run(["push", "origin", "main"], in: repo)
+        return package
+    }
+
     func test_create_fromInsideAWorktreeUsesTheRepoOneHome() throws {
         let first = try WorktreeStore.create(branch: "one", in: repo)
 
