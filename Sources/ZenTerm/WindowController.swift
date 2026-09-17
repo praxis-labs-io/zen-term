@@ -138,8 +138,8 @@ final class WindowController: NSObject {
             })
         controller.onStateChanged = { [weak self] in self?.renderDock() }
         controller.onRequestToast = { [weak self] content in self?.toasts.show(content) }
-        controller.onNotification = { [weak self] n, spec, owner in
-            self?.floatNotified(n, from: spec, owner: owner)
+        controller.onNotification = { [weak self] surface, n, spec, owner in
+            self?.floatNotified(surface: surface, n, from: spec, owner: owner)
         }
         controller.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
         return controller
@@ -1744,13 +1744,17 @@ final class WindowController: NSObject {
             self?.endModes()
         }
         c.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
-        c.onNotification = { [weak self] n in self?.agentNotified(id: id, notification: n) }
-        c.onCommandFinished = { [weak self] result in self?.commandFinished(id: id, result: result) }
+        c.onNotification = { [weak self] surface, n in
+            self?.agentNotified(surface: surface, id: id, notification: n)
+        }
+        c.onCommandFinished = { [weak self] surface, result in
+            self?.commandFinished(surface: surface, id: id, result: result)
+        }
     }
 
     // The banner lands on `owner`: a hidden Scratch asking for input is usually not in the active tab.
     private func floatNotified(
-        _ notification: TerminalNotification, from spec: ToolFloat, owner: TabID?
+        surface: SurfaceID?, _ notification: TerminalNotification, from spec: ToolFloat, owner: TabID?
     ) {
         DispatchQueue.main.async { [weak self] in
             guard let self, !self.tabs.order.isEmpty,
@@ -1764,7 +1768,7 @@ final class WindowController: NSObject {
         }
     }
 
-    private func agentNotified(id: TabID, notification: TerminalNotification) {
+    private func agentNotified(surface: SurfaceID?, id: TabID, notification: TerminalNotification) {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.tabs.order.contains(id) else { return }
             let message = notification.body.isEmpty ? notification.title : notification.body
@@ -1783,7 +1787,7 @@ final class WindowController: NSObject {
         }
     }
 
-    private func commandFinished(id: TabID, result: TerminalCommandResult) {
+    private func commandFinished(surface: SurfaceID?, id: TabID, result: TerminalCommandResult) {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.tabs.order.contains(id), id != self.tabs.activeID,
                 result.duration >= Self.commandCompletionThreshold,
@@ -1908,7 +1912,8 @@ final class WindowController: NSObject {
     func notifyAgentForTesting(tabIndex: Int, message: String) {
         guard tabs.order.indices.contains(tabIndex) else { return }
         agentNotified(
-            id: tabs.order[tabIndex], notification: TerminalNotification(title: "claude", body: message))
+            surface: nil, id: tabs.order[tabIndex],
+            notification: TerminalNotification(title: "claude", body: message))
     }
 
     func waitingToastForTesting(tabIndex: Int) -> ToastView? {
@@ -1918,7 +1923,7 @@ final class WindowController: NSObject {
 
     func notifyCommandFinishedForTesting(tabIndex: Int, result: TerminalCommandResult) {
         guard tabs.order.indices.contains(tabIndex) else { return }
-        commandFinished(id: tabs.order[tabIndex], result: result)
+        commandFinished(surface: nil, id: tabs.order[tabIndex], result: result)
     }
 
     func attentionStateForTesting(tabIndex: Int) -> TabAttentionState? {

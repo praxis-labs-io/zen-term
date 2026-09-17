@@ -35,7 +35,7 @@ final class TabControllerSurfaceFailureTests: WindowTestCase {
         controller.toggleBottomDrawer()
         let drawer = try XCTUnwrap(spawned.last)
         var received: TerminalCommandResult?
-        controller.onCommandFinished = { received = $0 }
+        controller.onCommandFinished = { received = $1 }
         let result = TerminalCommandResult(exitCode: 2, duration: 18)
 
         drawer.delegate?.surface(drawer, commandDidFinish: result)

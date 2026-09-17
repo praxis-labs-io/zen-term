@@ -26,7 +26,19 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     var onStateChanged: (() -> Void)?
     var onRequestToast: ((ToastContent) -> Void)?
-    var onNotification: ((TerminalNotification, ToolFloat, TabID?) -> Void)?
+    var onNotification: ((SurfaceID, TerminalNotification, ToolFloat, TabID?) -> Void)?
+
+    var onProgress: ((SurfaceID, TerminalProgress?) -> Void)?
+
+    var onSurfaceRegistered: ((SurfaceID, TabID?) -> Void)?
+
+    var onSurfaceReleased: ((SurfaceID) -> Void)?
+
+    /// A float is seen when it is shown, not when it takes first responder: showing is the only moment it is looked at.
+    var onShown: ((SurfaceID) -> Void)?
+
+    // Keyed by the surface object: `surfaceForFloat` reuses a live surface, and a rebuilt registry key can disagree.
+    private var idBySurface: [ObjectIdentifier: SurfaceID] = [:]
 
     var onSurfaceEvent: ((TerminalSurface, SurfaceEvent) -> Void)?
 
@@ -161,6 +173,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         yieldFocus()
         surface.focus()
         overlay.animateIn()
+        idBySurface[ObjectIdentifier(surface)].map { onShown?($0) }
         onStateChanged?()
     }
 
@@ -193,6 +206,9 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     private func spawn(_ spec: ToolFloat, cwd: URL?) -> TerminalSurface {
         let surface = makeSurface()
         surface.delegate = self
+        let surfaceID = SurfaceIDs.mint()
+        idBySurface[ObjectIdentifier(surface)] = surfaceID
+        onSurfaceRegistered?(surfaceID, scopedTab(for: spec))
         if spec.command.isEmpty {
             surface.start(ShellLaunch.shell(cwd: cwd))
         } else {
@@ -209,8 +225,14 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// Clears the entry before terminate so a synchronous `surfaceDidExit` cannot resurrect it.
     private func discard(_ key: String) {
         guard let live = liveFloats.removeValue(forKey: key) else { return }
-        live.surface.terminate()
+        release(live.surface)
         onStateChanged?()
+    }
+
+    /// Terminates `surface` and drops its `SurfaceID`, so attention for a gone float cannot outlive it.
+    private func release(_ surface: TerminalSurface) {
+        if let id = idBySurface.removeValue(forKey: ObjectIdentifier(surface)) { onSurfaceReleased?(id) }
+        surface.terminate()
     }
 
     /// By surface: a key rebuilt from a spec can disagree with the key the entry was filed under.
@@ -235,7 +257,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
             overlay.removeFromSuperview()
             if self?.dismissingOverlay === overlay { self?.dismissingOverlay = nil }
         }
-        if active.spec.persist == .ephemeral { active.surface.terminate() }
+        if active.spec.persist == .ephemeral { release(active.surface) }
         restoreFocus()
         onStateChanged?()
     }
@@ -245,10 +267,10 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
             cancelPendingOpen()
             activeFloat = nil
             active.overlay.removeFromSuperview()
-            active.surface.terminate()
+            release(active.surface)
         }
         for key in Array(liveFloats.keys) where liveFloats[key]?.tab == tab {
-            liveFloats.removeValue(forKey: key)?.surface.terminate()
+            liveFloats.removeValue(forKey: key).map { release($0.surface) }
         }
         onStateChanged?()
     }
@@ -256,7 +278,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     func shutdown() {
         cancelPendingOpen()
         activeFloat?.overlay.removeFromSuperview()
-        activeFloat?.surface.terminate()
+        activeFloat.map { release($0.surface) }
         activeFloat = nil
         dismissingOverlay?.removeFromSuperview()
         dismissingOverlay = nil
@@ -309,8 +331,13 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     }
 
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {
-        guard let entry = entry(for: s) else { return }
-        onNotification?(n, entry.spec, entry.tab)
+        guard let entry = entry(for: s), let id = idBySurface[ObjectIdentifier(s)] else { return }
+        onNotification?(id, n, entry.spec, entry.tab)
+    }
+
+    func surface(_ s: TerminalSurface, progressDidChange p: TerminalProgress?) {
+        guard let id = idBySurface[ObjectIdentifier(s)] else { return }
+        onProgress?(id, p)
     }
 
     func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor) {
@@ -334,13 +361,13 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
             activeFloat = nil
             removeEntry(forSurface: s)
             active.overlay.animateOut { active.overlay.removeFromSuperview() }
-            active.surface.terminate()
+            release(active.surface)
             restoreFocus()
             onStateChanged?()
             return
         }
         if removeEntry(forSurface: s) {
-            s.terminate()
+            release(s)
             onStateChanged?()
         }
     }

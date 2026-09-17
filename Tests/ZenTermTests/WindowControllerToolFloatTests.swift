@@ -165,7 +165,7 @@ final class WindowControllerToolFloatTests: WindowTestCase {
         c.handle(.toggleToolFloat("btop"))
 
         var relayed: [(TerminalNotification, ToolFloat, TabID?)] = []
-        c.floatsForTesting.onNotification = { relayed.append(($0, $1, $2)) }
+        c.floatsForTesting.onNotification = { relayed.append(($1, $2, $3)) }
         surface.delegate?.surface(
             surface, didPostNotification: TerminalNotification(title: "Claude", body: "needs input"))
 

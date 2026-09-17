@@ -287,7 +287,7 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         XCTAssertNotEqual(c.activeTabIDForTesting, owner)
 
         var relayed: [(ToolFloat, TabID?)] = []
-        c.floatsForTesting.onNotification = { relayed.append(($1, $2)) }
+        c.floatsForTesting.onNotification = { relayed.append(($2, $3)) }
         surface.delegate?.surface(
             surface, didPostNotification: TerminalNotification(title: "Claude", body: "needs input"))
 
