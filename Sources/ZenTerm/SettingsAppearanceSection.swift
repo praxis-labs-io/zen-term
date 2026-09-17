@@ -30,7 +30,7 @@ final class SettingsAppearanceSection: SettingsFormSection {
                 key: "backdrop-alpha", caption: "Backdrop alpha", blurb: "Tint strength over the window blur",
                 range: 0...1, read: { $0.backdropAlpha }, width: 64)
             self.addNumericRow(
-                key: "window-gutter", caption: "Window gutter", blurb: "Space around the window edge",
+                key: "window-gutter", caption: "Window gutter", blurb: "Space at the window top and sides",
                 range: 0...64, read: { $0.windowGutter }, width: 64)
             self.addNumericRow(
                 key: "pane-gap", caption: "Pane gap", blurb: "Space between split panes",
