@@ -163,6 +163,14 @@ theme-independent value (the black drop shadow in `FloatShadow`), and it must be
 commented as such. If the chrome needs a role `ChromeTheme` does not expose, add the
 role and derive it in `ChromeThemeDeriver`. Never reach for a literal.
 
+## Designs
+
+**Every ZenTerm design lives on one canvas: [ZenTerm Designs](https://claude.ai/artifact/GJiTtwXDjTu1qw9cWFoTo5).**
+It has one page per feature (Workspace Sidebar, Worktrees, Tool Float Icons). A new
+design is added to that canvas, never made as a separate artifact: new artboards go on
+the feature's page, in a titled section, and a new feature gets a new page. Read
+`project/canvas.json` first and keep what is already there.
+
 ## Linear: ZenTerm workspace
 
 The Linear MCP (`linear-zen-term`) is connected to the **ZenTerm** workspace. Every
