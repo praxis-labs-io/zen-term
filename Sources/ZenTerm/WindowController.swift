@@ -138,6 +138,9 @@ final class WindowController: NSObject {
             })
         controller.onStateChanged = { [weak self] in self?.renderDock() }
         controller.onRequestToast = { [weak self] content in self?.toasts.show(content) }
+        controller.onProgress = { [weak self] surface, progress in
+            self?.progressChanged(surface: surface, progress: progress)
+        }
         controller.onSurfaceRegistered = { [weak self] surface, tab in
             self?.attention.register(surface, tab: tab)
         }
@@ -1756,6 +1759,9 @@ final class WindowController: NSObject {
             self?.endModes()
         }
         c.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
+        c.onProgress = { [weak self] surface, progress in
+            self?.progressChanged(surface: surface, progress: progress)
+        }
         c.onSurfacesRegistered = { [weak self] ids in
             ids.forEach { self?.attention.register($0, tab: id) }
         }
@@ -1818,6 +1824,13 @@ final class WindowController: NSObject {
             surface.map { self.attention.record($0, .completed, seen: false) }
             self.presentCompletedToast(for: id, result: result)
             self.renderTabBar()
+        }
+    }
+
+    // Only `indeterminate` means working: a determinate report is a real progress bar, not an agent turn.
+    private func progressChanged(surface: SurfaceID, progress: TerminalProgress?) {
+        DispatchQueue.main.async { [weak self] in
+            self?.attention.setWorking(surface, progress?.state == .indeterminate)
         }
     }
 
@@ -1952,6 +1965,18 @@ final class WindowController: NSObject {
         guard tabs.order.indices.contains(tabIndex) else { return nil }
         let state = attention.state(tab: tabs.order[tabIndex]).tabState
         return state == .idle ? nil : state
+    }
+
+    func notifyProgressForTesting(tabIndex: Int, progress: TerminalProgress?) {
+        guard tabs.order.indices.contains(tabIndex),
+            let surface = controllers[tabs.order[tabIndex]]?.focusedSurfaceID
+        else { return }
+        progressChanged(surface: surface, progress: progress)
+    }
+
+    func surfaceAttentionForTesting(tabIndex: Int) -> SurfaceAttention? {
+        guard tabs.order.indices.contains(tabIndex) else { return nil }
+        return attention.state(tab: tabs.order[tabIndex])
     }
 
     func newTabForTesting() { handle(.newTab) }
