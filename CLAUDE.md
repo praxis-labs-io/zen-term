@@ -203,11 +203,9 @@ In Progress, In Review, Done.
 
 - **An epic IS a Linear Project, never an issue.** Task tickets belong directly to
   the project. There is no "epic tracking issue".
-- **Create tickets as we go**, never a full backlog dumped up front.
 - **A ticket is PR-sized: 1 ticket = 1 branch = 1 PR.** Size to the pull request,
   not to plan tasks. A PR-sized ticket usually bundles several plan steps into one
-  independently reviewable, independently mergeable change. Keep descriptions lean:
-  a title and a short goal or scope line. The exception is a
+  independently reviewable, independently mergeable change. The exception is a
   tightly-coupled foundational stack where nothing is separately mergeable; when
   that happens, still create a ticket per task afterward so each keeps its history.
 
