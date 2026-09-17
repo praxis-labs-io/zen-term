@@ -15,8 +15,7 @@ final class AccentColorConfigTests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
-        ConfigLoader.defaultRootOverrideForTesting = nil
-        AppConfig.reload()
+        ConfigReset.toBuiltIn()
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }

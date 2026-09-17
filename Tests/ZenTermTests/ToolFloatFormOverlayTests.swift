@@ -194,8 +194,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
         defer {
-            ConfigLoader.defaultRootOverrideForTesting = nil
-            AppConfig.reload()
+            ConfigReset.toBuiltIn()
             try? FileManager.default.removeItem(at: tempRoot)
         }
         try "float = title:existing command:htop key:cmd+shift+g\n"
@@ -261,8 +260,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
         defer {
-            ConfigLoader.defaultRootOverrideForTesting = nil
-            AppConfig.reload()
+            ConfigReset.toBuiltIn()
             try? FileManager.default.removeItem(at: tempRoot)
         }
         try "float = order:4 title:existing command:htop key:cmd+shift+h\n"
@@ -393,8 +391,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
         defer {
-            ConfigLoader.defaultRootOverrideForTesting = nil
-            AppConfig.reload()
+            ConfigReset.toBuiltIn()
             try? FileManager.default.removeItem(at: tempRoot)
         }
         try "keybind = new_tab=cmd+shift+l\n".write(

@@ -373,10 +373,14 @@ final class DropdownTests: WindowTestCase {
     }
 
     private static func contrastingTheme() -> TerminalTheme {
-        var theme = Theme.rosePineZen
-        theme.background = TerminalColor(red: 0xFA, green: 0xF4, blue: 0xED)
-        theme.foreground = TerminalColor(red: 0x57, green: 0x52, blue: 0x79)
+        var theme = Theme.current.terminal
+        theme.background = inverted(theme.background)
+        theme.foreground = inverted(theme.foreground)
         return theme
+    }
+
+    private static func inverted(_ color: TerminalColor) -> TerminalColor {
+        TerminalColor(red: 255 - color.red, green: 255 - color.green, blue: 255 - color.blue)
     }
 
     private func click() -> NSEvent {

@@ -21,8 +21,7 @@ final class SettingsDetailScrollTests: WindowTestCase {
     override func tearDownWithError() throws {
         window = nil
         section = nil
-        ConfigLoader.defaultRootOverrideForTesting = nil
-        AppConfig.reload()
+        ConfigReset.toBuiltIn()
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }
