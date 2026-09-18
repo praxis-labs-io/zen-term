@@ -54,6 +54,10 @@ final class AttentionCenterWindowTests: WindowTestCase {
         AttentionCenter.shared.waiting.contains { $0.windowID == c.windowID }
     }
 
+    private func waitingCount(_ c: WindowController) -> Int {
+        AttentionCenter.shared.waiting.first { $0.windowID == c.windowID }?.count ?? 0
+    }
+
     func test_visitingATabFocusedOnItsDrawer_takesTheWindowOffTheList() {
         let c = makeWindow()
         c.handle(.toggleRightDrawer)
@@ -66,6 +70,20 @@ final class AttentionCenterWindowTests: WindowTestCase {
         drainMainQueue()
 
         XCTAssertFalse(isListed(c))
+    }
+
+    func test_closingTheTabThatAsked_intoATabFocusedOnItsDrawer_takesTheWindowOffTheList() {
+        let c = makeWindow()
+        c.newTabForTesting()
+        c.handle(.toggleRightDrawer)
+        c.notifyAgentForTesting(tabIndex: 0, message: "needs you")
+        drainMainQueue()
+        XCTAssertEqual(waitingCount(c), 1)
+
+        c.closeTabForTesting(index: 0)
+        drainMainQueue()
+
+        XCTAssertEqual(waitingCount(c), 0)
     }
 
     func test_closingAWindowWithAClosedDrawerAsking_leavesItOffTheList() throws {
