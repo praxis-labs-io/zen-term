@@ -25,8 +25,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
-        ConfigLoader.defaultRootOverrideForTesting = nil
-        AppConfig.reload()
+        ConfigReset.toBuiltIn()
         try? FileManager.default.removeItem(at: tempRoot)
         super.tearDown()
     }

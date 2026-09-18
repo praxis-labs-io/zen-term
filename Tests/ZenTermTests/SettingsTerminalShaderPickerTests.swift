@@ -20,8 +20,7 @@ final class SettingsTerminalShaderPickerTests: WindowTestCase {
     override func tearDownWithError() throws {
         section = nil
         hostWindow = nil
-        ConfigLoader.defaultRootOverrideForTesting = nil
-        AppConfig.reload()
+        ConfigReset.toBuiltIn()
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }

@@ -21,8 +21,7 @@ final class SettingsRowDescriptionTests: WindowTestCase {
     override func tearDownWithError() throws {
         window = nil
         overlay = nil
-        ConfigLoader.defaultRootOverrideForTesting = nil
-        AppConfig.reload()
+        ConfigReset.toBuiltIn()
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }
