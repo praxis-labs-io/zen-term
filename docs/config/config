@@ -101,13 +101,14 @@
 # In-app Settings edit: applies live.
 # window-chrome = true                # true | false
 
-# Hide any of the footer toolbar's built-in buttons (bottom-right of the tab bar).
-# Comma-separated, any order. Hiding is visual only: every hidden button's
-# shortcut and palette entry stay live. A hidden bottom-drawer, right-drawer or
-# scratch button comes back while its shell is busy out of sight, or while
-# something there needs you, so work you cannot see keeps a handle in the footer.
-# Buttons, in toolbar order:
-#   new-tab, split-h, split-v, bottom-drawer, right-drawer, scratch, focus-mode
+# Hide any of the built-in buttons in the footer toolbar (bottom-right of the tab
+# bar) or the sidebar footer. Comma-separated, any order. Hiding is visual only:
+# every hidden button's shortcut stays live. A hidden bottom-drawer, right-drawer
+# or scratch button comes back while its shell is busy out of sight, or while
+# something there needs you, so work you cannot see keeps a handle in the toolbar.
+# Buttons, in toolbar order, then the sidebar footer's:
+#   new-tab, split-h, split-v, bottom-drawer, right-drawer, scratch, focus-mode,
+#   command-palette, settings
 # In-app Settings edit: applies live.
 # hide-toolbar-buttons =              # e.g. split-h,split-v
 

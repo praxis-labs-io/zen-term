@@ -251,7 +251,7 @@ final class GeneralConfigParserTests: XCTestCase {
     func test_hideToolbarButtons_parsesEverySlug() {
         let config = parse(
             "hide-toolbar-buttons = new-tab,split-h,split-v,bottom-drawer,right-drawer,scratch,"
-                + "focus-mode\n")
+                + "focus-mode,command-palette,settings\n")
         XCTAssertEqual(config.hiddenToolbarButtons, Set(ToolbarButton.allCases))
     }
 
@@ -392,9 +392,9 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.configDiagnostics, [])
     }
 
-    func test_commandPaletteSlug_movedToTheSidebar_isDroppedWithoutADiagnostic() {
-        let config = parse("hide-toolbar-buttons = split-h,command-palette\n")
-        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal])
+    func test_sidebarFooterSlugs_parseAsButtons() {
+        let config = parse("hide-toolbar-buttons = split-h,command-palette,settings\n")
+        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal, .commandPalette, .settings])
         XCTAssertEqual(config.configDiagnostics, [])
     }
 

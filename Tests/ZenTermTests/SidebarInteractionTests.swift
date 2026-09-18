@@ -100,14 +100,15 @@ final class SidebarInteractionTests: WindowTestCase {
             SidebarView.width + Self.paneGap, "docked, the panes sit one pane-gap from the sidebar, as from a drawer")
     }
 
-    func test_footerToggle_collapses_andTheLeadToggleDocksAgain() throws {
+    func test_toggle_collapses_andDocksAgain() throws {
         let controller = makeController()
         let sidebar = controller.sidebarForTesting
 
-        try click(sidebar.view.toggleButtonForTesting)
+        try click(sidebar.toggleButtonForTesting)
 
         XCTAssertFalse(sidebar.isDocked)
         XCTAssertTrue(sidebar.view.isHidden, "collapsed, the palette and Settings buttons go with the sidebar")
+        XCTAssertFalse(sidebar.toggleButtonForTesting.isHidden, "the toggle stays")
         XCTAssertFalse(sidebar.lead.isHidden)
         XCTAssertEqual(frame(of: try pane(in: controller), in: controller).minX, Self.gutter)
         XCTAssertEqual(
@@ -115,7 +116,7 @@ final class SidebarInteractionTests: WindowTestCase {
             frame(of: sidebar.lead, in: controller).maxX, "the toggle and workspace name lead the tab bar")
         XCTAssertGreaterThan(frame(of: sidebar.lead, in: controller).width, 0)
 
-        try click(sidebar.lead.toggleButtonForTesting)
+        try click(sidebar.toggleButtonForTesting)
 
         XCTAssertTrue(sidebar.isDocked)
         XCTAssertFalse(sidebar.view.isHidden)
@@ -123,6 +124,18 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertEqual(
             frame(of: try pane(in: controller), in: controller).minX,
             SidebarView.width + Self.paneGap, "docked, the panes sit one pane-gap from the sidebar, as from a drawer")
+    }
+
+    func test_toggle_holdsItsWindowPosition_dockedAndCollapsed() throws {
+        let controller = makeController()
+        let sidebar = controller.sidebarForTesting
+        let docked = frame(of: sidebar.toggleButtonForTesting, in: controller)
+
+        try click(sidebar.toggleButtonForTesting)
+        let collapsed = frame(of: sidebar.toggleButtonForTesting, in: controller)
+
+        XCTAssertEqual(docked, collapsed, "the toggle never moves between docked and collapsed")
+        XCTAssertFalse(sidebar.toggleButtonForTesting.isHidden)
     }
 
     func test_collapsedLead_namesTheActiveWorkspace() throws {
@@ -148,6 +161,46 @@ final class SidebarInteractionTests: WindowTestCase {
 
         XCTAssertNil(keys.route(event))
         XCTAssertTrue(controller.sidebarForTesting.isDocked)
+    }
+
+    private func press(
+        _ key: String, _ flags: NSEvent.ModifierFlags, keyCode: UInt16, in controller: WindowController
+    ) throws {
+        let keys = KeyInterceptor()
+        keys.setKeymap(KeymapDefaults.map)
+        keys.onReservedChord = { controller.handle($0) }
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0,
+                context: nil, characters: key, charactersIgnoringModifiers: key, isARepeat: false,
+                keyCode: keyCode))
+        XCTAssertNil(keys.route(event), "the shortcut is claimed, not passed to the pane")
+    }
+
+    private func hiding(_ buttons: Set<ToolbarButton>) {
+        var config = GeneralConfig.current
+        config.hiddenToolbarButtons = buttons
+        GeneralConfig.setCurrentForTesting(config)
+    }
+
+    func test_hidingCommandPalette_hidesItsFooterButton_andItsShortcutStillWorks() throws {
+        hiding([.commandPalette])
+        let controller = makeController()
+
+        XCTAssertTrue(controller.sidebarForTesting.view.paletteButtonForTesting.isHidden)
+        XCTAssertFalse(controller.sidebarForTesting.view.settingsButtonForTesting.isHidden)
+        try press("p", [.command, .shift], keyCode: 35, in: controller)
+        XCTAssertEqual(modals(CommandPaletteOverlay.self, in: controller).count, 1)
+    }
+
+    func test_hidingSettings_hidesItsFooterButton_andItsShortcutStillWorks() throws {
+        hiding([.settings])
+        let controller = makeController()
+
+        XCTAssertTrue(controller.sidebarForTesting.view.settingsButtonForTesting.isHidden)
+        XCTAssertFalse(controller.sidebarForTesting.view.paletteButtonForTesting.isHidden)
+        try press(",", [.command], keyCode: 43, in: controller)
+        XCTAssertEqual(modals(SettingsOverlay.self, in: controller).count, 1)
     }
 
     func test_footerPaletteButton_opensTheCommandPalette() throws {

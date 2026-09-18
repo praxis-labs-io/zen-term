@@ -241,8 +241,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **The sidebar owns the canvas's leading edge.** The canvas, tool floats and tab bar
   start from `SidebarController.canvasLeadingAnchor`; modals and toasts stay window-wide.
   Docking slides through `Motion.drawerSlide`, the drawers' path, holding the active
-  tab's grids so they reflow once. Rows read the window's workspaces, never a copy. A new
-  window opens the way the last toggle left one, for the launch only.
+  tab's grids so they reflow once. Its toggle sits on the window, outside the sliding
+  view, so it holds one spot docked and collapsed. Rows read the window's workspaces,
+  never a copy. A new window opens the way the last toggle left one, for the launch only.
 - **Fill Screen** is a maximize, not native fullscreen. `window-chrome = false` hides
   the traffic lights and `ChromeMetrics.topInset` follows.
 - **Tool floats are window-level** because a surface is one `NSView`. `ToolFloatController`

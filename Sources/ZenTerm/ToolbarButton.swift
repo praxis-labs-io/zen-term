@@ -7,11 +7,16 @@ enum ToolbarButton: String, CaseIterable {
     case rightDrawer = "right-drawer"
     case scratch = "scratch"
     case focusMode = "focus-mode"
+    case commandPalette = "command-palette"
+    case settings = "settings"
 
     static let groups: [[ToolbarButton]] = [
         [.newTab],
         [.splitHorizontal, .splitVertical, .bottomDrawer, .rightDrawer, .scratch, .focusMode],
     ]
+
+    /// In the sidebar footer rather than the toolbar.
+    static let sidebarFooter: [ToolbarButton] = [.commandPalette, .settings]
 
     var displayName: String {
         switch self {
@@ -22,6 +27,8 @@ enum ToolbarButton: String, CaseIterable {
         case .rightDrawer: return "Right drawer"
         case .scratch: return "Scratch"
         case .focusMode: return "Focus mode"
+        case .commandPalette: return "Command palette"
+        case .settings: return "Settings"
         }
     }
 }

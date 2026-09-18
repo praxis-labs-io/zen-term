@@ -417,6 +417,7 @@ final class WindowController: NSObject {
                 }
                 if change.contains(.toolbarButtons) {
                     self.dock.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
+                    self.sidebar.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
                     self.renderDock()
                 }
                 if change.contains(.theme) || change.contains(.keymap) || change.contains(.floats) {
@@ -453,6 +454,7 @@ final class WindowController: NSObject {
         container.addSubview(tabBar)
         container.addSubview(dock)
         sidebar.install(in: container, besideTabBar: tabBar)
+        sidebar.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
         NSLayoutConstraint.activate([
             tabBar.leadingAnchor.constraint(equalTo: sidebar.lead.trailingAnchor),
             tabBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),

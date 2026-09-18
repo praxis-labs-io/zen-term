@@ -484,7 +484,7 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertEqual(dock.visibleLayoutForTesting, ["New tab", "│", "Toggle right drawer"])
     }
 
-    func test_toolbarButtonGroups_coverEveryCaseInOrder() {
-        XCTAssertEqual(ToolbarButton.groups.flatMap { $0 }, ToolbarButton.allCases)
+    func test_toolbarGroupsThenSidebarFooter_coverEveryCaseInOrder() {
+        XCTAssertEqual(ToolbarButton.groups.flatMap { $0 } + ToolbarButton.sidebarFooter, ToolbarButton.allCases)
     }
 }

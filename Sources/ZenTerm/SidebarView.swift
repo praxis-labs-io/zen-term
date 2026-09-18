@@ -12,31 +12,29 @@ final class SidebarView: NSView {
     private static let padding: CGFloat = 8
     private static let captionHeight: CGFloat = 28
     private static let captionInset: CGFloat = 10
-    private static let footerInset: CGFloat = 6
-    private static let footerButtonSize = NSSize(width: 22, height: 22)
+    static let footerSpacing: CGFloat = 2
+    static let footerButtonSize = NSSize(width: 22, height: 22)
     private static let footerIconPointSize: CGFloat = 11
 
-    let footer = NSView()
+    /// Palette and Settings. The window places it after the sidebar toggle, which stays put while this slides.
+    let footer = NSStackView()
     private let caption = FieldCaption("Workspaces", required: false)
     private let rowStack = NSStackView()
     private var rows: [WorkspaceID: SettingsNavRow] = [:]
     private let paletteButton: IconButton
     private let settingsButton: IconButton
-    private let toggleButton: IconButton
 
-    init(onPalette: @escaping () -> Void, onSettings: @escaping () -> Void, onToggle: @escaping () -> Void) {
-        func button(
-            _ symbol: String, _ label: String, _ action: KeyInterceptor.ReservedChord,
-            _ onClick: @escaping () -> Void
-        ) -> IconButton {
-            IconButton(
-                symbol: symbol, size: Self.footerButtonSize, pointSize: Self.footerIconPointSize,
-                accessibilityLabel: label, shortcut: { CommandCatalog.spec(for: action).shortcut },
-                onClick: onClick)
-        }
-        paletteButton = button("command", "Command palette", .toggleCommandPalette, onPalette)
-        settingsButton = button("gearshape", "Settings", .openSettings, onSettings)
-        toggleButton = button("sidebar.left", "Toggle sidebar", .toggleSidebar, onToggle)
+    static func footerButton(
+        _ symbol: String, _ label: String, _ action: KeyInterceptor.ReservedChord, _ onClick: @escaping () -> Void
+    ) -> IconButton {
+        IconButton(
+            symbol: symbol, size: footerButtonSize, pointSize: footerIconPointSize,
+            accessibilityLabel: label, shortcut: { CommandCatalog.spec(for: action).shortcut }, onClick: onClick)
+    }
+
+    init(onPalette: @escaping () -> Void, onSettings: @escaping () -> Void) {
+        paletteButton = Self.footerButton("command", "Command palette", .toggleCommandPalette, onPalette)
+        settingsButton = Self.footerButton("gearshape", "Settings", .openSettings, onSettings)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
@@ -44,9 +42,13 @@ final class SidebarView: NSView {
         rowStack.alignment = .leading
         rowStack.spacing = 0
         rowStack.translatesAutoresizingMaskIntoConstraints = false
+        footer.orientation = .horizontal
+        footer.alignment = .centerY
+        footer.spacing = Self.footerSpacing
         footer.translatesAutoresizingMaskIntoConstraints = false
+        footer.addArrangedSubview(paletteButton)
+        footer.addArrangedSubview(settingsButton)
         for view in [caption, rowStack, footer] { addSubview(view) }
-        for view in [paletteButton, settingsButton, toggleButton] { footer.addSubview(view) }
 
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: Self.width),
@@ -55,15 +57,7 @@ final class SidebarView: NSView {
             rowStack.topAnchor.constraint(equalTo: topAnchor, constant: Self.captionHeight),
             rowStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.padding),
             rowStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.padding),
-            footer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.padding + Self.footerInset),
-            footer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -(Self.padding + Self.footerInset)),
             footer.heightAnchor.constraint(equalToConstant: Self.footerButtonSize.height),
-            paletteButton.leadingAnchor.constraint(equalTo: footer.leadingAnchor),
-            paletteButton.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
-            settingsButton.leadingAnchor.constraint(equalTo: paletteButton.trailingAnchor, constant: 2),
-            settingsButton.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
-            toggleButton.trailingAnchor.constraint(equalTo: footer.trailingAnchor),
-            toggleButton.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
         ])
     }
 
@@ -95,6 +89,11 @@ final class SidebarView: NSView {
         return row
     }
 
+    func setHiddenButtons(_ hidden: Set<ToolbarButton>) {
+        paletteButton.isHidden = hidden.contains(.commandPalette)
+        settingsButton.isHidden = hidden.contains(.settings)
+    }
+
     func setOpenModal(palette: Bool, settings: Bool) {
         paletteButton.isActive = palette
         settingsButton.isActive = settings
@@ -103,11 +102,10 @@ final class SidebarView: NSView {
     func reapplyTheme() {
         caption.reapplyTheme()
         for row in rows.values { row.reapplyTheme() }
-        for button in [paletteButton, settingsButton, toggleButton] { button.reapplyTheme() }
+        for button in [paletteButton, settingsButton] { button.reapplyTheme() }
     }
 
     var rowsForTesting: [SettingsNavRow] { rowStack.arrangedSubviews.compactMap { $0 as? SettingsNavRow } }
     var paletteButtonForTesting: IconButton { paletteButton }
     var settingsButtonForTesting: IconButton { settingsButton }
-    var toggleButtonForTesting: IconButton { toggleButton }
 }

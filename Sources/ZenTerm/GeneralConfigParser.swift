@@ -243,7 +243,7 @@ enum GeneralConfigParser {
     }
 
     /// Slugs for buttons since removed, dropped without a diagnostic because the line already holds.
-    private static let retiredToolbarSlugs: Set<String> = ["diff-viewer", "command-palette"]
+    private static let retiredToolbarSlugs: Set<String> = ["diff-viewer"]
 
     private static func parseHiddenToolbarButtons(
         _ value: String, _ diagnostics: inout [ConfigDiagnostic]
