@@ -5,7 +5,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// A closed drawer is out of sight in the tab you are in, so it has to be able to ask for you there.
 @MainActor
 final class DrawerAttentionTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
@@ -60,7 +59,6 @@ final class DrawerAttentionTests: WindowTestCase {
         view.subviews + view.subviews.flatMap { descendants(of: $0) }
     }
 
-    /// Opens the right drawer once so its surface exists, then closes it.
     private func closedRightDrawer(_ c: WindowController) throws -> RecordingSurface {
         let before = spawned.count
         c.handle(.toggleRightDrawer)

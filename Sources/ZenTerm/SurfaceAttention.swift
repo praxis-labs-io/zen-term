@@ -4,7 +4,7 @@ enum SurfaceAttention: Int, Comparable, CaseIterable {
 
     static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
 
-    /// The loudest surface wins its tab, the loudest tab wins the window, and a workspace tier folds the same way.
+    /// The loudest surface wins its tab, and the loudest tab wins the window.
     static func rollup(_ states: some Sequence<SurfaceAttention>) -> SurfaceAttention {
         states.reduce(.idle, max)
     }

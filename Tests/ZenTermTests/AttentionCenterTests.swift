@@ -65,7 +65,6 @@ final class AttentionCenterTests: XCTestCase {
     }
 }
 
-/// The summary feeds one line that says how many agents want you. Anything short of waiting must stay out of it.
 final class AttentionStoreWaitingCountTests: XCTestCase {
     private let tab = TabID(1)
 

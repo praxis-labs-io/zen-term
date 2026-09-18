@@ -2117,7 +2117,7 @@ final class WindowController: NSObject {
         takeDownCard(id)
     }
 
-    /// Answers what the tab shows on arrival. A closed drawer or a Scratch that asked keeps its dot and its card.
+    /// Answers what the tab shows on arrival; a closed drawer or Scratch keeps its dot and card.
     private func visit(_ id: TabID) {
         attention.visit(id) { isOnScreen($0, in: id) }
         if isOnScreen(cardSurfaces[id], in: id) { takeDownCard(id) }

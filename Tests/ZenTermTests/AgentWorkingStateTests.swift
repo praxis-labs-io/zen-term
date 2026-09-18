@@ -4,7 +4,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// OSC 9;4 is the one signal that says an agent is mid-turn. It must not reach the tab bar.
 final class AgentWorkingStateTests: WindowTestCase {
     private var controller: WindowController?
 

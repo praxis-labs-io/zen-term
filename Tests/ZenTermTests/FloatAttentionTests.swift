@@ -5,7 +5,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// A hidden float holding an agent used to ask for you silently: an OS banner, but never a mark in the window.
 @MainActor
 final class FloatAttentionTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?

@@ -15,7 +15,7 @@ final class AttentionCenter {
 
     private var byWindow: [Int: WindowAttention] = [:]
 
-    /// Only `waiting` counts. A working agent is not asking, and a finished command is not either.
+    /// Lists the window while `waitingCount` is above zero, and drops it at zero.
     func update(windowID: Int, waitingCount: Int, since: Date?) {
         guard waitingCount > 0 else {
             byWindow[windowID] = nil
@@ -28,7 +28,7 @@ final class AttentionCenter {
         byWindow[windowID] = nil
     }
 
-    /// Every agent waiting outside this window, for the sidebar's one line.
+    /// Every agent waiting outside this window.
     func waitingCount(excluding windowID: Int) -> Int {
         byWindow.values.filter { $0.windowID != windowID }.reduce(0) { $0 + $1.count }
     }

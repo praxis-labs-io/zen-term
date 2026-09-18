@@ -13,7 +13,6 @@ final class AttentionStore {
 
     private var entries: [SurfaceID: Entry] = [:]
 
-    // An unseen latch outlives the surface that raised it, the way tab-keyed state did before.
     // `waiting` is a count, not a flag: two agents that each asked and exited are still two.
     private var residual: [TabID: (state: SurfaceAttention, since: Date?, waiting: Int)] = [:]
 
@@ -58,7 +57,7 @@ final class AttentionStore {
         residual[tab] = nil
     }
 
-    /// A visit: only what `isOnScreen` shows is seen. Latches of surfaces that already closed drop, since nothing else can show them.
+    /// A visit: surfaces `isOnScreen` accepts are seen, and latches left by closed surfaces drop.
     func visit(_ tab: TabID, isOnScreen: (SurfaceID) -> Bool) {
         for id in ids(in: tab) where isOnScreen(id) { markSeen(id) }
         residual[tab] = nil
