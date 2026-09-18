@@ -33,7 +33,12 @@ final class TabController: NSObject {
 
     private var bottomDrawerSurface: TerminalSurface?
     private var bottomDrawerPanel: PanelHostView?
-    private var isBottomOpen = false { didSet { onOverlayStateChanged?() } }
+    private var isBottomOpen = false {
+        didSet {
+            onOverlayStateChanged?()
+            if isBottomOpen, let id = bottomDrawerSurfaceID { onSurfaceShown?(id) }
+        }
+    }
     private var bottomDrawerToken: Int?
     private var bottomDrawerSurfaceID: SurfaceID?
 
@@ -41,7 +46,12 @@ final class TabController: NSObject {
     private var rightDrawerPanel: PanelHostView?
 
     var bottomDrawerPanelForTesting: PanelHostView? { bottomDrawerPanel }
-    private var isRightOpen = false { didSet { onOverlayStateChanged?() } }
+    private var isRightOpen = false {
+        didSet {
+            onOverlayStateChanged?()
+            if isRightOpen, let id = rightDrawerSurfaceID { onSurfaceShown?(id) }
+        }
+    }
     private var rightDrawerToken: Int?
     private var rightDrawerSurfaceID: SurfaceID?
 
@@ -143,6 +153,13 @@ final class TabController: NSObject {
         }
     }
 
+    /// Whether `surface` is visible while this tab is active. A closed drawer is not; a pane always is.
+    func isOnScreen(_ surface: SurfaceID) -> Bool {
+        if surface == bottomDrawerSurfaceID { return isBottomOpen }
+        if surface == rightDrawerSurfaceID { return isRightOpen }
+        return true
+    }
+
     var drawerSurfaceIDs: (bottom: SurfaceID?, right: SurfaceID?) {
         (bottomDrawerSurfaceID, rightDrawerSurfaceID)
     }
@@ -173,6 +190,9 @@ final class TabController: NSObject {
     var onSurfacesRegistered: (([SurfaceID]) -> Void)?
 
     var onSurfacesReleased: (([SurfaceID]) -> Void)?
+
+    /// A drawer came on screen, so whatever it was asking has now been seen.
+    var onSurfaceShown: ((SurfaceID) -> Void)?
 
     var rightDrawerCommand: String?
 

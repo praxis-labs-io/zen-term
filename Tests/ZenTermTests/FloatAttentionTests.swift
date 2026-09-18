@@ -165,6 +165,32 @@ final class FloatAttentionTests: WindowTestCase {
 
         XCTAssertEqual(c.floatsForTesting.activeID, "btop", "Switch on a float's card opens the float")
         XCTAssertEqual(c.windowAttentionForTesting, .idle)
+        XCTAssertTrue(toastViews(c).isEmpty, "the card goes once you are looking at the float")
+    }
+
+    func test_openingAFloatByItsOwnChord_takesItsCardDown() throws {
+        let c = makeWindow()
+        c.handle(.toggleToolFloat("btop"))
+        let surface = try floatSurface()
+        c.handle(.toggleToolFloat("btop"))
+        notify(surface, "needs input")
+        XCTAssertEqual(toastViews(c).count, 1)
+
+        c.handle(.toggleToolFloat("btop"))
+        drainMainQueue()
+
+        XCTAssertTrue(toastViews(c).isEmpty, "the float answered is the card answered, whichever way you got there")
+    }
+
+    func test_aHiddenFloatAsking_dotsItsButton() throws {
+        let c = makeWindow()
+        c.handle(.toggleToolFloat("btop"))
+        let surface = try floatSurface()
+        c.handle(.toggleToolFloat("btop"))
+
+        notify(surface, "needs input")
+
+        XCTAssertEqual(c.dockForTesting.dottedToolFloatIDsForTesting, ["btop"])
     }
 
     func test_aWindowScopedFloat_marksNoSingleTab() throws {
