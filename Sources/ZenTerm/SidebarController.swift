@@ -28,6 +28,7 @@ final class SidebarController {
     private var edgeLeading: NSLayoutConstraint?
     private var canvasOffset: NSLayoutConstraint?
     private var leadWidth: NSLayoutConstraint?
+    private var tabBarLeading: NSLayoutConstraint?
     private var sidebarTop: NSLayoutConstraint?
     private var slideID = 0
     private var entries: [Entry] = []
@@ -52,10 +53,12 @@ final class SidebarController {
         let edgeLeading = edge.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: edgeOffset)
         let canvasOffset = canvasEdge.leadingAnchor.constraint(equalTo: edge.leadingAnchor, constant: canvasGap)
         let leadWidth = lead.widthAnchor.constraint(equalToConstant: leadOffset)
+        let tabBarLeading = tabBar.leadingAnchor.constraint(equalTo: lead.trailingAnchor, constant: tabBarPull)
         let sidebarTop = view.topAnchor.constraint(equalTo: container.topAnchor, constant: ChromeMetrics.topInset)
         self.edgeLeading = edgeLeading
         self.canvasOffset = canvasOffset
         self.leadWidth = leadWidth
+        self.tabBarLeading = tabBarLeading
         self.sidebarTop = sidebarTop
         NSLayoutConstraint.activate([
             edgeLeading,
@@ -76,18 +79,21 @@ final class SidebarController {
             lead.leadingAnchor.constraint(equalTo: edge.leadingAnchor),
             lead.centerYAnchor.constraint(equalTo: tabBar.chipBandCenterYAnchor),
             leadWidth,
+            tabBarLeading,
         ])
         settle()
     }
 
     private var edgeOffset: CGFloat { isDocked ? SidebarView.width : 0 }
     private var leadOffset: CGFloat { isDocked ? 0 : lead.contentWidth }
+    // Collapsed, the bar tucks under the lead so the divider sits as far from the first title as from the name.
+    private var tabBarPull: CGFloat { isDocked ? 0 : CollapsedSidebarLead.dividerGap - TabBarView.titleInset }
     // The canvas insets itself by window-gutter; docked, it sits one pane-gap from the sidebar, as from a drawer.
     private var canvasGap: CGFloat { isDocked ? ChromeMetrics.panelGap - ChromeMetrics.windowGutter : 0 }
 
     /// Holds `surfaces`' grids for the slide, so they reflow once. Snaps under reduced motion, as a drawer does.
     func toggle(holding surfaces: [TerminalSurface], in root: NSView) {
-        guard let edgeLeading, let canvasOffset, let leadWidth else { return }
+        guard let edgeLeading, let canvasOffset, let leadWidth, let tabBarLeading else { return }
         isDocked.toggle()
         Self.lastChoiceIsDocked = isDocked
         view.isHidden = false
@@ -99,6 +105,7 @@ final class SidebarController {
             edgeLeading.constant = edgeOffset
             canvasOffset.constant = canvasGap
             leadWidth.constant = leadOffset
+            tabBarLeading.constant = tabBarPull
             settle()
             root.layoutSubtreeIfNeeded()
             return
@@ -106,7 +113,10 @@ final class SidebarController {
         let id = slideID
         Motion.drawerSlide(
             panel: view, opening: isDocked, parkOffset: CGVector(dx: -SidebarView.width, dy: 0),
-            animate: [(edgeLeading, edgeOffset), (canvasOffset, canvasGap), (leadWidth, leadOffset)], in: root,
+            animate: [
+                (edgeLeading, edgeOffset), (canvasOffset, canvasGap), (leadWidth, leadOffset),
+                (tabBarLeading, tabBarPull),
+            ], in: root,
             beforeSlide: { surfaces.forEach { $0.setSizeSyncSuspended(true) } }
         ) { [weak self] in
             surfaces.forEach { $0.setSizeSyncSuspended(false) }

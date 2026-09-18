@@ -2,6 +2,9 @@ import AppKit
 
 /// Leads the tab bar while the sidebar is collapsed with the active workspace's name, clear of the sidebar toggle.
 final class CollapsedSidebarLead: NSView {
+    /// Either side of the divider: from the name, and on to the first tab's title.
+    static let dividerGap: CGFloat = 12
+
     private let nameLabel = NSTextField(labelWithString: "")
     private let divider = ToggleDock.divider()
     private let content = NSStackView()
@@ -16,7 +19,7 @@ final class CollapsedSidebarLead: NSView {
         nameLabel.lineBreakMode = .byTruncatingTail
         content.orientation = .horizontal
         content.alignment = .centerY
-        content.spacing = 8
+        content.spacing = Self.dividerGap
         content.edgeInsets = NSEdgeInsets(top: 0, left: leadingInset, bottom: 0, right: 0)
         content.translatesAutoresizingMaskIntoConstraints = false
         content.addArrangedSubview(nameLabel)

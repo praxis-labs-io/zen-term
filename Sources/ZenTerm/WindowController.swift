@@ -456,7 +456,6 @@ final class WindowController: NSObject {
         sidebar.install(in: container, besideTabBar: tabBar)
         sidebar.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
         NSLayoutConstraint.activate([
-            tabBar.leadingAnchor.constraint(equalTo: sidebar.lead.trailingAnchor),
             tabBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             tabBar.heightAnchor.constraint(equalToConstant: TabBarView.height),
             dock.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),

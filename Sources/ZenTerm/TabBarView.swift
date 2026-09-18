@@ -31,6 +31,8 @@ final class TabBarView: NSView {
     // The rename editor matches it, or the text reflows on open.
     static let titleKern: CGFloat = 0.4
     fileprivate static let labelInset: CGFloat = 9
+    /// From the bar's leading edge to the first tab's title.
+    static let titleInset: CGFloat = leadingInset + labelInset
     static let maxChipWidth: CGFloat = 220
 
     fileprivate static var activeInk: NSColor { Theme.current.chrome.ink(.normal) }

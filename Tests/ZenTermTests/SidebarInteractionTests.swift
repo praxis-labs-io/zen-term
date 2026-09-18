@@ -112,8 +112,9 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertFalse(sidebar.lead.isHidden)
         XCTAssertEqual(frame(of: try pane(in: controller), in: controller).minX, Self.gutter)
         XCTAssertEqual(
-            frame(of: try tabBar(in: controller), in: controller).minX,
-            frame(of: sidebar.lead, in: controller).maxX, "the toggle and workspace name lead the tab bar")
+            frame(of: try tabBar(in: controller), in: controller).minX + TabBarView.titleInset,
+            frame(of: sidebar.lead, in: controller).maxX + CollapsedSidebarLead.dividerGap,
+            "the toggle and workspace name lead the tab bar, the divider one gap from the first title")
         XCTAssertGreaterThan(frame(of: sidebar.lead, in: controller).width, 0)
 
         try click(sidebar.toggleButtonForTesting)
