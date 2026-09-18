@@ -99,6 +99,7 @@ final class ToggleDock: NSView {
     var scratchActivityStateForTesting: SurfaceAttention { scratchBtn.activityState }
     var rightActivityColorForTesting: NSColor { rightBtn.activityColorForTesting }
     var scratchActiveForTesting: Bool { scratchBtn.isActive }
+    var rightActiveForTesting: Bool { rightBtn.isActive }
 
     var dottedToolFloatIDsForTesting: Set<String> {
         Set(toolFloatBtns.filter { $0.value.showsActivity }.keys)

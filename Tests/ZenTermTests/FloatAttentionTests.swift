@@ -205,7 +205,8 @@ final class FloatAttentionTests: WindowTestCase {
 
         let copy = toastViews(c).flatMap { descendants(of: $0) }
             .compactMap { ($0 as? NSTextField)?.stringValue }
-        XCTAssertTrue(copy.contains("\(tab): Scratch"), "got \(copy)")
+        XCTAssertTrue(copy.contains(tab), "got \(copy)")
+        XCTAssertTrue(copy.contains(": Scratch"), "got \(copy)")
     }
 
     func test_aWindowScopedFloat_marksNoSingleTab() throws {

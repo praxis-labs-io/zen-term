@@ -1785,13 +1785,14 @@ final class WindowController: NSObject {
             guard let self, !self.tabs.order.isEmpty else { return }
             let message = notification.body.isEmpty ? notification.title : notification.body
             let target = owner.flatMap { self.tabs.order.contains($0) ? $0 : nil } ?? self.tabs.activeID
-            let title = owner == nil ? spec.title : "\(self.titles[target] ?? "shell"): \(spec.title)"
+            let title = owner == nil ? spec.title : self.titles[target] ?? "shell"
+            let tail = owner == nil ? nil : ": \(spec.title)"
 
             if AgentNotifier.shouldPushNotification(
                 appActive: NSApp.isActive, enabled: GeneralConfig.current.agentNotifications)
             {
                 AgentNotifier.shared.notify(
-                    windowID: self.windowID, tabID: target, title: title, body: message)
+                    windowID: self.windowID, tabID: target, title: title + (tail ?? ""), body: message)
             }
 
             let shown = self.floats.activeID == spec.id
@@ -1807,7 +1808,7 @@ final class WindowController: NSObject {
                     if self.floats.activeID != spec.id { self.handle(.toggleToolFloat(spec.id)) }
                 })
             self.presentWaitingToast(
-                for: target, title: title, message: message, surface: surface,
+                for: target, title: title, titleTail: tail, message: message, surface: surface,
                 destination: destination)
             if self.attentionSnapshot(surface, in: target) != before { self.renderAttention() }
         }
@@ -1817,13 +1818,14 @@ final class WindowController: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.tabs.order.contains(id) else { return }
             let message = notification.body.isEmpty ? notification.title : notification.body
+            let edge = self.drawerEdge(of: surface, in: id)
 
             if AgentNotifier.shouldPushNotification(
                 appActive: NSApp.isActive, enabled: GeneralConfig.current.agentNotifications)
             {
                 AgentNotifier.shared.notify(
-                    windowID: self.windowID, tabID: id, title: self.cardTitle(for: surface, in: id),
-                    body: message)
+                    windowID: self.windowID, tabID: id,
+                    title: (self.titles[id] ?? "shell") + (self.drawerTail(edge) ?? ""), body: message)
             }
 
             let seen = self.isOnScreen(surface, in: id)
@@ -1832,7 +1834,9 @@ final class WindowController: NSObject {
 
             guard !seen else { return }
             self.presentWaitingToast(
-                for: id, title: self.cardTitle(for: surface, in: id), message: message, surface: surface)
+                for: id, title: self.titles[id] ?? "shell", titleTail: self.drawerTail(edge),
+                message: message, surface: surface,
+                destination: edge.map { self.drawerDestination($0, in: id) })
             if self.attentionSnapshot(surface, in: id) != before { self.renderAttention() }
         }
     }
@@ -1859,19 +1863,23 @@ final class WindowController: NSObject {
 
     private func presentCompletedToast(for id: TabID, surface: SurfaceID?, result: TerminalCommandResult) {
         if let old = attentionCards[id] { toasts.dismiss(old) }
+        let edge = drawerEdge(of: surface, in: id)
         let content = ToastContent(
             variant: result.exitCode.map { $0 == 0 ? .positive : .warning } ?? .positive,
-            title: cardTitle(for: surface, in: id), message: Self.commandResultMessage(result))
+            title: titles[id] ?? "shell", titleTail: drawerTail(edge),
+            message: Self.commandResultMessage(result))
+        let destination =
+            edge.map { drawerDestination($0, in: id) }
+            ?? CardDestination(
+                shortcut: { [weak self] in self?.selectTabShortcut(for: id) ?? "" },
+                open: { [weak self] in self?.select(id) })
         let actions = [
             ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
-                guard let self else { return }
-                self.clearAttention(id)
-                self.renderAttention()
+                self?.answer(id, surface: surface)
             },
-            ToastAction(
-                title: "Switch", kind: .primary,
-                shortcut: { [weak self] in self?.selectTabShortcut(for: id) ?? "" }
-            ) { [weak self] in self?.select(id) },
+            ToastAction(title: "Switch", kind: .primary, shortcut: destination.shortcut) {
+                destination.open()
+            },
         ]
         attentionCards[id] = mountAttentionToast(
             for: id, surface: surface, content: content, actions: actions,
@@ -1901,12 +1909,12 @@ final class WindowController: NSObject {
     }
 
     private func presentWaitingToast(
-        for id: TabID, title: String, message: String, surface: SurfaceID?,
+        for id: TabID, title: String, titleTail: String? = nil, message: String, surface: SurfaceID?,
         destination: CardDestination? = nil
     ) {
         if let old = attentionCards[id] { toasts.dismiss(old) }
         let content = ToastContent(
-            variant: .info, title: title, message: message, icon: "bell.fill")
+            variant: .info, title: title, titleTail: titleTail, message: message, icon: "bell.fill")
         let destination =
             destination
             ?? CardDestination(
@@ -1925,13 +1933,30 @@ final class WindowController: NSObject {
             autoDismiss: GeneralConfig.current.attentionToast == .auto)
     }
 
-    /// Names where a card came from: the tab, then the drawer when a drawer is what asked.
-    private func cardTitle(for surface: SurfaceID?, in id: TabID) -> String {
-        let tab = titles[id] ?? "shell"
-        guard let surface, let drawers = controllers[id]?.drawerSurfaceIDs else { return tab }
-        if surface == drawers.right { return "\(tab): right drawer" }
-        if surface == drawers.bottom { return "\(tab): bottom drawer" }
-        return tab
+    private func drawerEdge(of surface: SurfaceID?, in id: TabID) -> DrawerEdge? {
+        guard let surface, let drawers = controllers[id]?.drawerSurfaceIDs else { return nil }
+        if surface == drawers.right { return .right }
+        if surface == drawers.bottom { return .bottom }
+        return nil
+    }
+
+    /// The part of a card's title naming the drawer that asked, after its tab's name.
+    private func drawerTail(_ edge: DrawerEdge?) -> String? {
+        edge.map { $0 == .right ? ": right drawer" : ": bottom drawer" }
+    }
+
+    /// Switch on a drawer's card opens the drawer, in its own tab: selecting a tab you are already in does nothing.
+    private func drawerDestination(_ edge: DrawerEdge, in id: TabID) -> CardDestination {
+        let chord: KeyInterceptor.ReservedChord = edge == .right ? .toggleRightDrawer : .toggleBottomDrawer
+        return CardDestination(
+            shortcut: { CommandCatalog.spec(for: chord).shortcut },
+            open: { [weak self] in
+                guard let self else { return }
+                if id != self.tabs.activeID { self.select(id) }
+                let overlay = self.controllers[id]?.overlayState
+                let isOpen = edge == .right ? overlay?.isRightOpen : overlay?.isBottomOpen
+                if isOpen != true { self.handle(chord) }
+            })
     }
 
     /// A surface is seen while it is on screen: its tab is active and, for a drawer, the drawer is open.

@@ -104,7 +104,25 @@ final class DrawerAttentionTests: WindowTestCase {
 
         let copy = toastViews(c).flatMap { descendants(of: $0) }
             .compactMap { ($0 as? NSTextField)?.stringValue }
-        XCTAssertTrue(copy.contains("\(tab): right drawer"), "got \(copy)")
+        XCTAssertTrue(copy.contains(tab), "got \(copy)")
+        XCTAssertTrue(copy.contains(": right drawer"), "got \(copy)")
+    }
+
+    func test_switchOnADrawersCard_opensTheDrawer() throws {
+        let c = makeWindow()
+        let drawer = try closedRightDrawer(c)
+        notify(drawer)
+        let card = try XCTUnwrap(toastViews(c).first)
+        let switchButton = try XCTUnwrap(
+            descendants(of: card).compactMap { $0 as? AppButton }.first { $0.title == "Switch" })
+
+        switchButton.performClick(nil)
+        drainMainQueue()
+
+        XCTAssertTrue(
+            c.dockForTesting.rightActiveForTesting,
+            "you are already in this tab, so Switch has to open the drawer or it does nothing")
+        XCTAssertTrue(toastViews(c).isEmpty)
     }
 
     func test_openingTheDrawer_answersIt() throws {
