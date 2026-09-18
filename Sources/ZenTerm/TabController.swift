@@ -151,7 +151,6 @@ final class TabController: NSObject {
 
     var isDrawerFocused: Bool { focusedPanel != .pane }
 
-    /// The surface the user is on in this tab, whichever panel holds focus.
     var focusedSurfaceID: SurfaceID? {
         switch focusedPanel {
         case .pane: return paneCanvas.focusedSurfaceID
@@ -160,7 +159,6 @@ final class TabController: NSObject {
         }
     }
 
-    /// Whether `surface` is visible while this tab is active. A closed drawer is not, a pane always is, and a float is not this tab's to show.
     func isOnScreen(_ surface: SurfaceID) -> Bool {
         if surface == bottomDrawerSurfaceID { return isBottomOpen }
         if surface == rightDrawerSurfaceID { return isRightOpen }

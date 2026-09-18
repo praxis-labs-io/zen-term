@@ -1856,7 +1856,6 @@ final class WindowController: NSObject {
         }
     }
 
-    // Terminal end of the responder chain for Copy, Paste and Select All; an open card swallows them.
     @objc func copy(_ sender: Any?) {
         if isConfirmOpen || isModalOverlayOpen { return }
         if floats.isOpen { floats.copyFromSurface(sender) } else { activeController?.copyFromSurface(sender) }
