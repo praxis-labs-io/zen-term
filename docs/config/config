@@ -28,7 +28,10 @@
 
 # The chrome's accent: the color for focus, active state, and confirm. It paints
 # the focused pane's glow and border, focus rings, the active tab's underline, a
-# tool's activity dot, primary buttons, and the progress bar. Pick any slot of the
+# tool's activity dot while nothing there needs you, primary buttons, and the
+# progress bar. A dot takes the theme's attention color when an agent there is
+# waiting on you, and its positive color when a long command there finished
+# unseen, the same colors a tab's number takes. Pick any slot of the
 # theme's palette and the whole chrome follows; the terminal is untouched, so a
 # program printing in that color is unaffected.
 #
@@ -101,8 +104,9 @@
 # Hide any of the footer toolbar's built-in buttons (bottom-right of the tab bar).
 # Comma-separated, any order. Hiding is visual only: every hidden button's
 # shortcut and palette entry stay live. A hidden bottom-drawer, right-drawer or
-# scratch button comes back while its shell is busy out of sight, so work you
-# cannot see keeps a handle in the footer. Buttons, in toolbar order:
+# scratch button comes back while its shell is busy out of sight, or while
+# something there needs you, so work you cannot see keeps a handle in the footer.
+# Buttons, in toolbar order:
 #   new-tab, split-h, split-v, bottom-drawer, right-drawer, scratch, focus-mode,
 #   command-palette
 # In-app Settings edit: applies live.
@@ -172,9 +176,10 @@
 # In-app Settings edit: applies live.
 # agent-notifications = true          # true | false
 
-# The in-app card for a background tab that needs you. Sticky waits to be
-# answered; auto clears itself after `toast-duration`. Either way the tab's
-# colored number stays until you visit the tab or press Dismiss.
+# The in-app card for a background tab, or a tool out of sight, that needs you.
+# Sticky waits to be answered; auto clears itself after `toast-duration`. Either
+# way the tab's colored number and the tool's dot stay until you visit it or
+# press Dismiss. Switch on a tool's card opens that tool.
 # In-app Settings edit: applies to the next notification.
 # attention-toast = sticky            # sticky | auto
 
