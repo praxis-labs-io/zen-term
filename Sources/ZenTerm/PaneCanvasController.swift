@@ -12,6 +12,7 @@ final class PaneCanvasController: NSObject {
     private var hostByLeaf: [PaneID: PanelHostView] = [:]
     private var launchByLeaf: [PaneID: TerminalSurfaceConfig] = [:]
     private var tokenByLeaf: [PaneID: Int] = [:]
+    private var surfaceIDByLeaf: [PaneID: SurfaceID] = [:]
     /// Consumed on first start; a split never inherits it.
     private var startupCommandByLeaf: [PaneID: String] = [:]
     private let workspaceEnv: [String: String]
@@ -44,9 +45,15 @@ final class PaneCanvasController: NSObject {
 
     var onSocketFocus: ((Direction) -> Void)?
 
-    var onNotification: ((TerminalNotification) -> Void)?
+    var onNotification: ((SurfaceID, TerminalNotification) -> Void)?
 
-    var onCommandFinished: ((TerminalCommandResult) -> Void)?
+    var onCommandFinished: ((SurfaceID, TerminalCommandResult) -> Void)?
+
+    var onProgress: ((SurfaceID, TerminalProgress?) -> Void)?
+
+    var onSurfacesRegistered: (([SurfaceID]) -> Void)?
+
+    var onSurfacesReleased: (([SurfaceID]) -> Void)?
 
     var onZoomEnded: (() -> Void)?
 
@@ -147,8 +154,12 @@ final class PaneCanvasController: NSObject {
     private func reconcileAndRender() {
         let diff = paneDiff(from: Array(registry.ids), to: tree.leafIDs)
         let created = registry.apply(diff)
+        var registered: [(SurfaceID, PaneID)] = []
         for (id, surface) in created {
             surface.delegate = self
+            let surfaceID = SurfaceIDs.mint()
+            surfaceIDByLeaf[id] = surfaceID
+            registered.append((surfaceID, id))
             let token = registerNavToken(for: id)
             let launch: TerminalSurfaceConfig
             if let cmd = startupCommandByLeaf.removeValue(forKey: id) {
@@ -160,13 +171,17 @@ final class PaneCanvasController: NSObject {
             surface.start(launch)
             Log.info("surface started (pane \(id))", category: .surface)
         }
+        var released: [SurfaceID] = []
         for id in diff.removed {
             Log.info("surface stopped (pane \(id))", category: .surface)
             cwdByLeaf[id] = nil
             hostByLeaf[id] = nil
             launchByLeaf[id] = nil
+            if let surfaceID = surfaceIDByLeaf.removeValue(forKey: id) { released.append(surfaceID) }
             if let token = tokenByLeaf.removeValue(forKey: id) { NavRegistry.shared.unregister(token: token) }
         }
+        if !registered.isEmpty { onSurfacesRegistered?(registered.map(\.0)) }
+        if !released.isEmpty { onSurfacesReleased?(released) }
         if !diff.removed.isEmpty { onPanesRemoved?(diff.removed) }
         rebuildViews()
     }
@@ -398,6 +413,8 @@ final class PaneCanvasController: NSObject {
 
     func shutdown() {
         registry.terminateAll()
+        if !surfaceIDByLeaf.isEmpty { onSurfacesReleased?(Array(surfaceIDByLeaf.values)) }
+        surfaceIDByLeaf.removeAll()
         for token in tokenByLeaf.values { NavRegistry.shared.unregister(token: token) }
         tokenByLeaf.removeAll()
         canvasView.subviews.forEach { $0.removeFromSuperview() }
@@ -438,10 +455,16 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
         focus(id)
     }
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {
-        onNotification?(n)
+        guard let id = surfaceID(of: s) else { return }
+        onNotification?(id, n)
     }
     func surface(_ s: TerminalSurface, commandDidFinish result: TerminalCommandResult) {
-        onCommandFinished?(result)
+        guard let id = surfaceID(of: s) else { return }
+        onCommandFinished?(id, result)
+    }
+    func surface(_ s: TerminalSurface, progressDidChange p: TerminalProgress?) {
+        guard let id = surfaceID(of: s) else { return }
+        onProgress?(id, p)
     }
     func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor) {
         guard let id = leafID(of: s) else { return }
@@ -484,4 +507,12 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     private func leafID(of surface: TerminalSurface) -> PaneID? {
         registry.ids.first { registry.surface(for: $0) === surface }
     }
+
+    private func surfaceID(of surface: TerminalSurface) -> SurfaceID? {
+        leafID(of: surface).flatMap { surfaceIDByLeaf[$0] }
+    }
+
+    var focusedSurfaceID: SurfaceID? { surfaceIDByLeaf[tree.focusedLeaf] }
+
+    var liveSurfaceIDs: [SurfaceID] { tree.leafIDs.compactMap { surfaceIDByLeaf[$0] } }
 }

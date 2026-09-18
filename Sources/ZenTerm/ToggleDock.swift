@@ -94,7 +94,12 @@ final class ToggleDock: NSView {
     var rightActivityForTesting: Bool { rightBtn.showsActivity }
 
     var scratchActivityForTesting: Bool { scratchBtn.showsActivity }
+
+    var rightActivityStateForTesting: SurfaceAttention { rightBtn.activityState }
+    var scratchActivityStateForTesting: SurfaceAttention { scratchBtn.activityState }
+    var rightActivityColorForTesting: NSColor { rightBtn.activityColorForTesting }
     var scratchActiveForTesting: Bool { scratchBtn.isActive }
+    var rightActiveForTesting: Bool { rightBtn.isActive }
 
     var dottedToolFloatIDsForTesting: Set<String> {
         Set(toolFloatBtns.filter { $0.value.showsActivity }.keys)
@@ -158,7 +163,9 @@ final class ToggleDock: NSView {
     func render(
         overlay: OverlayState, floatID: String?, paletteOpen: Bool, tab: TabID? = nil,
         isLiveInBackground: (String) -> Bool = { _ in false },
-        isFloatBusy: (String) -> Bool = { _ in false }
+        isFloatBusy: (String) -> Bool = { _ in false },
+        drawerAttention: (DrawerEdge) -> SurfaceAttention = { _ in .idle },
+        floatAttention: (String) -> SurfaceAttention = { _ in .idle }
     ) {
         if tab != surfacedTab {
             surfacedTab = tab
@@ -168,13 +175,18 @@ final class ToggleDock: NSView {
         paletteBtn.isActive = paletteOpen
         for (id, btn) in toolFloatBtns {
             let isLive = isLiveInBackground(id)
+            let attention = floatAttention(id)
             btn.isActive = floatID == id
-            btn.showsActivity = isLive
+            btn.activityState = attention
+            btn.showsActivity = isLive || attention != .idle
             btn.isHidden = toolbarHiddenFloatIDs.contains(id) && floatID != id && !isLive
         }
 
         scratchBtn.isActive = floatID == ToolFloat.scratch.id
-        scratchBtn.showsActivity = isLiveInBackground(ToolFloat.scratch.id)
+        let scratchAttention = floatAttention(ToolFloat.scratch.id)
+        scratchBtn.activityState = scratchAttention
+        scratchBtn.showsActivity =
+            isLiveInBackground(ToolFloat.scratch.id) || scratchAttention != .idle
 
         let floatCoversTab = floatID != nil
         if floatCoversTab {
@@ -199,13 +211,18 @@ final class ToggleDock: NSView {
             }
         }
 
-        bottomBtn.showsActivity = overlay.bottomBusy
-        rightBtn.showsActivity = overlay.rightBusy
+        let bottomAttention = drawerAttention(.bottom)
+        let rightAttention = drawerAttention(.right)
+        bottomBtn.activityState = bottomAttention
+        rightBtn.activityState = rightAttention
+        bottomBtn.showsActivity = overlay.bottomBusy || bottomAttention != .idle
+        rightBtn.showsActivity = overlay.rightBusy || rightAttention != .idle
 
-        surface(.bottomDrawer, busy: overlay.bottomBusy, onScreen: bottomBtn.isActive)
-        surface(.rightDrawer, busy: overlay.rightBusy, onScreen: rightBtn.isActive)
+        surface(.bottomDrawer, busy: bottomBtn.showsActivity, onScreen: bottomBtn.isActive)
+        surface(.rightDrawer, busy: rightBtn.showsActivity, onScreen: rightBtn.isActive)
         surface(
-            .scratch, busy: isFloatBusy(ToolFloat.scratch.id), onScreen: scratchBtn.isActive)
+            .scratch, busy: isFloatBusy(ToolFloat.scratch.id) || scratchAttention != .idle,
+            onScreen: scratchBtn.isActive)
         refreshVisibility()
     }
 

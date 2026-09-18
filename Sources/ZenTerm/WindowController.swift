@@ -11,8 +11,10 @@ final class WindowController: NSObject {
     private var tabs: TabList
     private var controllers: [TabID: TabController] = [:]
     private var titles: [TabID: String] = [:]
-    private var attentionToasts: [TabID: ToastView] = [:]
-    private var attentionStates: [TabID: TabAttentionState] = [:]
+    private var attentionCards: [TabID: ToastView] = [:]
+    // A card is keyed by the tab it sits on but answers one surface, which may be a drawer or a float.
+    private var cardSurfaces: [TabID: SurfaceID] = [:]
+    private let attention = AttentionStore()
     private static let commandCompletionThreshold: TimeInterval = 10
     private var nextTabID = 1
 
@@ -138,8 +140,19 @@ final class WindowController: NSObject {
             })
         controller.onStateChanged = { [weak self] in self?.renderDock() }
         controller.onRequestToast = { [weak self] content in self?.toasts.show(content) }
-        controller.onNotification = { [weak self] n, spec, owner in
-            self?.floatNotified(n, from: spec, owner: owner)
+        controller.onProgress = { [weak self] surface, progress in
+            self?.progressChanged(surface: surface, progress: progress)
+        }
+        controller.onSurfaceRegistered = { [weak self] surface, tab in
+            self?.attention.register(surface, tab: tab)
+        }
+        controller.onSurfaceReleased = { [weak self] surface in
+            self?.attention.release(surface)
+            self?.renderAttention()
+        }
+        controller.onShown = { [weak self] surface in self?.surfaceShown(surface) }
+        controller.onNotification = { [weak self] surface, n, spec, owner in
+            self?.floatNotified(surface: surface, n, from: spec, owner: owner)
         }
         controller.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
         return controller
@@ -364,7 +377,7 @@ final class WindowController: NSObject {
                     self.tabBar.reapplyTheme()
                     self.dock.reapplyTheme()
                     self.confirmToast?.reapplyTheme()
-                    self.attentionToasts.values.forEach { $0.reapplyTheme() }
+                    self.attentionCards.values.forEach { $0.reapplyTheme() }
                     self.fontSizeCard?.reapplyTheme()
                 }
                 if change.contains(.toasts) {
@@ -725,8 +738,11 @@ final class WindowController: NSObject {
         }
         old?.shutdown()
         floats.shutdownScope(id)
+        clearAttention(id)
+        attention.dropTab(id)
         installController(
             id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: workspace, transition: .instant)
+        renderAttention()
     }
 
     // The recipe waits for the canvas motion: a drawer sliding the same way as its canvas has no readable motion.
@@ -753,13 +769,13 @@ final class WindowController: NSObject {
         guard tabs.order.contains(id), id != tabs.activeID else { return }
         Log.info("tab switched", category: .tabs)
         closeFloatForTabChange()
-        clearAttention(id)
         cancelConfirm()
         let oldIndex = tabs.order.firstIndex(of: tabs.activeID) ?? 0
         tabs.select(id)
+        visit(id)
         let newIndex = tabs.order.firstIndex(of: id) ?? 0
         mount(.slide(from: slideFrom ?? (newIndex > oldIndex ? .fromRight : .fromLeft)))
-        renderTabBar()
+        renderAttention()
     }
 
     private func cycleTab(_ delta: Int) {
@@ -813,10 +829,11 @@ final class WindowController: NSObject {
         controllers[id] = nil
         titles[id] = nil
         clearAttention(id)
+        attention.dropTab(id)
         if !survived { window.close(); return }
-        clearAttention(tabs.activeID)
+        visit(tabs.activeID)
         mount(.instant)
-        renderTabBar()
+        renderAttention()
     }
 
     private func presentModal(_ overlay: ModalOverlay, kind: ModalKind) {
@@ -1731,7 +1748,7 @@ final class WindowController: NSObject {
         c.onTitleChanged = { [weak self] in
             guard let self, let c = self.controllers[id] else { return }
             self.titles[id] = c.title
-            self.renderTabBar()
+            self.renderAttention()
         }
         c.onLastPaneClosed = { [weak self] in self?.closeTab(id) }
         c.onOverlayStateChanged = { [weak self] in self?.renderDock() }
@@ -1744,76 +1761,134 @@ final class WindowController: NSObject {
             self?.endModes()
         }
         c.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
-        c.onNotification = { [weak self] n in self?.agentNotified(id: id, notification: n) }
-        c.onCommandFinished = { [weak self] result in self?.commandFinished(id: id, result: result) }
+        c.onProgress = { [weak self] surface, progress in
+            self?.progressChanged(surface: surface, progress: progress)
+        }
+        c.onSurfaceShown = { [weak self] surface in self?.surfaceShown(surface) }
+        c.onSurfacesRegistered = { [weak self] ids in
+            ids.forEach { self?.attention.register($0, tab: id) }
+        }
+        c.onSurfacesReleased = { [weak self] ids in
+            ids.forEach { self?.attention.release($0) }
+            self?.renderAttention()
+        }
+        c.onNotification = { [weak self] surface, n in
+            self?.agentNotified(surface: surface, id: id, notification: n)
+        }
+        c.onCommandFinished = { [weak self] surface, result in
+            self?.commandFinished(surface: surface, id: id, result: result)
+        }
     }
 
     // The banner lands on `owner`: a hidden Scratch asking for input is usually not in the active tab.
     private func floatNotified(
-        _ notification: TerminalNotification, from spec: ToolFloat, owner: TabID?
+        surface: SurfaceID?, _ notification: TerminalNotification, from spec: ToolFloat, owner: TabID?
     ) {
         DispatchQueue.main.async { [weak self] in
-            guard let self, !self.tabs.order.isEmpty,
-                AgentNotifier.shouldPushNotification(
-                    appActive: NSApp.isActive, enabled: GeneralConfig.current.agentNotifications)
-            else { return }
-            let target = owner.flatMap { self.tabs.order.contains($0) ? $0 : nil } ?? self.tabs.activeID
-            AgentNotifier.shared.notify(
-                windowID: self.windowID, tabID: target, title: spec.title,
-                body: notification.body.isEmpty ? notification.title : notification.body)
-        }
-    }
-
-    private func agentNotified(id: TabID, notification: TerminalNotification) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.tabs.order.contains(id) else { return }
+            guard let self, !self.tabs.order.isEmpty else { return }
             let message = notification.body.isEmpty ? notification.title : notification.body
+            let target = owner.flatMap { self.tabs.order.contains($0) ? $0 : nil } ?? self.tabs.activeID
+            let title = owner == nil ? spec.title : self.titles[target] ?? "shell"
+            let tail = owner == nil ? nil : ": \(spec.title)"
 
             if AgentNotifier.shouldPushNotification(
                 appActive: NSApp.isActive, enabled: GeneralConfig.current.agentNotifications)
             {
                 AgentNotifier.shared.notify(
-                    windowID: self.windowID, tabID: id, title: self.titles[id] ?? "shell", body: message)
+                    windowID: self.windowID, tabID: target, title: title + (tail ?? ""), body: message)
             }
 
-            guard id != self.tabs.activeID else { return }
-            let wasWaiting = self.attentionStates[id] == .waiting
-            self.presentWaitingToast(for: id, message: message)
-            if !wasWaiting { self.renderTabBar() }
+            let shown = self.floats.activeID == spec.id && self.floats.surfaceID(spec.id) == surface
+            let before = self.attentionSnapshot(surface, in: target)
+            surface.map { self.attention.record($0, .waiting, seen: shown) }
+
+            guard !shown else { return }
+            let destination = CardDestination(
+                shortcut: { CommandCatalog.spec(for: .toggleToolFloat(spec.id)).shortcut },
+                open: { [weak self] in
+                    guard let self else { return }
+                    if let owner, owner != self.tabs.activeID { self.select(owner) }
+                    if self.floats.activeID != spec.id { self.handle(.toggleToolFloat(spec.id)) }
+                })
+            self.presentWaitingToast(
+                for: target, title: title, titleTail: tail, message: message, surface: surface,
+                destination: destination)
+            if self.attentionSnapshot(surface, in: target) != before { self.renderAttention() }
         }
     }
 
-    private func commandFinished(id: TabID, result: TerminalCommandResult) {
+    private func agentNotified(surface: SurfaceID?, id: TabID, notification: TerminalNotification) {
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.tabs.order.contains(id), id != self.tabs.activeID,
+            guard let self, self.tabs.order.contains(id) else { return }
+            let message = notification.body.isEmpty ? notification.title : notification.body
+            let edge = self.drawerEdge(of: surface, in: id)
+
+            if AgentNotifier.shouldPushNotification(
+                appActive: NSApp.isActive, enabled: GeneralConfig.current.agentNotifications)
+            {
+                AgentNotifier.shared.notify(
+                    windowID: self.windowID, tabID: id,
+                    title: (self.titles[id] ?? "shell") + (self.drawerTail(edge) ?? ""), body: message)
+            }
+
+            let seen = self.isOnScreen(surface, in: id)
+            let before = self.attentionSnapshot(surface, in: id)
+            surface.map { self.attention.record($0, .waiting, seen: seen) }
+
+            guard !seen else { return }
+            self.presentWaitingToast(
+                for: id, title: self.titles[id] ?? "shell", titleTail: self.drawerTail(edge),
+                message: message, surface: surface,
+                destination: edge.map { self.drawerDestination($0, in: id) })
+            if self.attentionSnapshot(surface, in: id) != before { self.renderAttention() }
+        }
+    }
+
+    private func commandFinished(surface: SurfaceID?, id: TabID, result: TerminalCommandResult) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.tabs.order.contains(id), !self.isOnScreen(surface, in: id),
                 result.duration >= Self.commandCompletionThreshold,
-                self.attentionStates[id] != .waiting
+                self.attention.state(tab: id) != .waiting
             else { return }
 
-            self.presentCompletedToast(for: id, result: result)
-            self.renderTabBar()
+            surface.map { self.attention.record($0, .completed, seen: false) }
+            self.presentCompletedToast(for: id, surface: surface, result: result)
+            self.renderAttention()
         }
     }
 
-    private func presentCompletedToast(for id: TabID, result: TerminalCommandResult) {
-        if let old = attentionToasts[id] { toasts.dismiss(old) }
+    // Only `indeterminate` means working: a determinate report is a real progress bar, not an agent turn.
+    private func progressChanged(surface: SurfaceID, progress: TerminalProgress?) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let before = self.attention.state(of: surface)
+            self.attention.setWorking(surface, progress?.state == .indeterminate)
+            if self.attention.state(of: surface) != before { self.renderDock() }
+        }
+    }
+
+    private func presentCompletedToast(for id: TabID, surface: SurfaceID?, result: TerminalCommandResult) {
+        if let old = attentionCards[id] { toasts.dismiss(old) }
+        let edge = drawerEdge(of: surface, in: id)
         let content = ToastContent(
             variant: result.exitCode.map { $0 == 0 ? .positive : .warning } ?? .positive,
-            title: titles[id] ?? "shell", message: Self.commandResultMessage(result))
+            title: titles[id] ?? "shell", titleTail: drawerTail(edge),
+            message: Self.commandResultMessage(result))
+        let destination =
+            edge.map { drawerDestination($0, in: id) }
+            ?? CardDestination(
+                shortcut: { [weak self] in self?.selectTabShortcut(for: id) ?? "" },
+                open: { [weak self] in self?.select(id) })
         let actions = [
             ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
-                guard let self else { return }
-                self.clearAttention(id)
-                self.renderTabBar()
+                self?.answer(id, surface: surface)
             },
-            ToastAction(
-                title: "Switch", kind: .primary,
-                shortcut: { [weak self] in self?.selectTabShortcut(for: id) ?? "" }
-            ) { [weak self] in self?.select(id) },
+            ToastAction(title: "Switch", kind: .primary, shortcut: destination.shortcut) {
+                destination.open()
+            },
         ]
-        attentionStates[id] = .completed
-        attentionToasts[id] = mountAttentionToast(
-            for: id, content: content, actions: actions,
+        attentionCards[id] = mountAttentionToast(
+            for: id, surface: surface, content: content, actions: actions,
             autoDismiss: GeneralConfig.current.completionToast == .auto)
     }
 
@@ -1833,39 +1908,99 @@ final class WindowController: NSObject {
         return "\(remainder)s"
     }
 
-    private func presentWaitingToast(for id: TabID, message: String) {
-        if let old = attentionToasts[id] { toasts.dismiss(old) }
+    /// A card whose Switch opens something other than a tab, with that thing's own shortcut.
+    private struct CardDestination {
+        let shortcut: () -> String
+        let open: () -> Void
+    }
+
+    private func presentWaitingToast(
+        for id: TabID, title: String, titleTail: String? = nil, message: String, surface: SurfaceID?,
+        destination: CardDestination? = nil
+    ) {
+        if let old = attentionCards[id] { toasts.dismiss(old) }
         let content = ToastContent(
-            variant: .info, title: titles[id] ?? "shell", message: message, icon: "bell.fill")
+            variant: .info, title: title, titleTail: titleTail, message: message, icon: "bell.fill")
+        let destination =
+            destination
+            ?? CardDestination(
+                shortcut: { [weak self] in self?.selectTabShortcut(for: id) ?? "" },
+                open: { [weak self] in self?.select(id) })
         let actions = [
             ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
-                guard let self else { return }
-                self.clearAttention(id)
-                self.renderTabBar()
+                self?.answer(id, surface: surface)
             },
-            ToastAction(
-                title: "Switch", kind: .primary,
-                shortcut: { [weak self] in self?.selectTabShortcut(for: id) ?? "" }
-            ) { [weak self] in self?.select(id) },
+            ToastAction(title: "Switch", kind: .primary, shortcut: destination.shortcut) {
+                destination.open()
+            },
         ]
-        attentionStates[id] = .waiting
-        attentionToasts[id] = mountAttentionToast(
-            for: id, content: content, actions: actions,
+        attentionCards[id] = mountAttentionToast(
+            for: id, surface: surface, content: content, actions: actions,
             autoDismiss: GeneralConfig.current.attentionToast == .auto)
     }
 
+    private func drawerEdge(of surface: SurfaceID?, in id: TabID) -> DrawerEdge? {
+        guard let surface, let drawers = controllers[id]?.drawerSurfaceIDs else { return nil }
+        if surface == drawers.right { return .right }
+        if surface == drawers.bottom { return .bottom }
+        return nil
+    }
+
+    /// The part of a card's title naming the drawer that asked, after its tab's name.
+    private func drawerTail(_ edge: DrawerEdge?) -> String? {
+        edge.map { $0 == .right ? ": right drawer" : ": bottom drawer" }
+    }
+
+    /// Switch on a drawer's card opens the drawer, in its own tab: selecting a tab you are already in does nothing.
+    private func drawerDestination(_ edge: DrawerEdge, in id: TabID) -> CardDestination {
+        let chord: KeyInterceptor.ReservedChord = edge == .right ? .toggleRightDrawer : .toggleBottomDrawer
+        return CardDestination(
+            shortcut: { CommandCatalog.spec(for: chord).shortcut },
+            open: { [weak self] in
+                guard let self else { return }
+                if id != self.tabs.activeID { self.select(id) }
+                let overlay = self.controllers[id]?.overlayState
+                let isOpen = edge == .right ? overlay?.isRightOpen : overlay?.isBottomOpen
+                if isOpen != true { self.handle(chord) }
+            })
+    }
+
+    /// A surface is seen while it is on screen: its tab is active and, for a drawer, the drawer is open.
+    private func isOnScreen(_ surface: SurfaceID?, in id: TabID) -> Bool {
+        guard id == tabs.activeID else { return false }
+        guard let surface else { return true }
+        return controllers[id]?.isOnScreen(surface) ?? true
+    }
+
+    private func attentionSnapshot(_ surface: SurfaceID?, in id: TabID) -> [SurfaceAttention] {
+        [attention.state(tab: id)] + (surface.map { [attention.state(of: $0)] } ?? [])
+    }
+
+    /// Answers whatever `surface` asked now that it is on screen, and takes down the card it raised.
+    private func surfaceShown(_ surface: SurfaceID) {
+        attention.markSeen(surface)
+        if let tab = cardSurfaces.first(where: { $0.value == surface })?.key { takeDownCard(tab) }
+        renderAttention()
+    }
+
+    /// Clears the tab and the surface that asked. A window float belongs to no tab, so the tab alone would miss it.
+    private func answer(_ id: TabID, surface: SurfaceID?) {
+        surface.map { attention.markSeen($0) }
+        clearAttention(id)
+        renderAttention()
+    }
+
     private func mountAttentionToast(
-        for id: TabID, content: ToastContent, actions: [ToastAction], autoDismiss: Bool
+        for id: TabID, surface: SurfaceID? = nil, content: ToastContent, actions: [ToastAction],
+        autoDismiss: Bool
     ) -> ToastView {
         let toast = toasts.showSticky(content, actions: actions, autoDismiss: autoDismiss)
-        toast.onClose = { [weak self] in
-            guard let self else { return }
-            self.clearAttention(id)
-            self.renderTabBar()
-        }
+        cardSurfaces[id] = surface
+        toast.onClose = { [weak self] in self?.answer(id, surface: surface) }
         toast.onDismissed = { [weak self, weak toast] in
-            guard let self, let toast, self.attentionToasts[id] === toast else { return }
-            self.attentionToasts[id] = nil
+            guard let self, let toast, self.attentionCards[id] === toast else { return }
+            self.attentionCards[id] = nil
+            self.cardSurfaces[id] = nil
         }
         return toast
     }
@@ -1907,23 +2042,48 @@ final class WindowController: NSObject {
 
     func notifyAgentForTesting(tabIndex: Int, message: String) {
         guard tabs.order.indices.contains(tabIndex) else { return }
+        let id = tabs.order[tabIndex]
         agentNotified(
-            id: tabs.order[tabIndex], notification: TerminalNotification(title: "claude", body: message))
+            surface: controllers[id]?.focusedSurfaceID, id: id,
+            notification: TerminalNotification(title: "claude", body: message))
     }
 
     func waitingToastForTesting(tabIndex: Int) -> ToastView? {
         guard tabs.order.indices.contains(tabIndex) else { return nil }
-        return attentionToasts[tabs.order[tabIndex]]
+        return attentionCards[tabs.order[tabIndex]]
     }
 
     func notifyCommandFinishedForTesting(tabIndex: Int, result: TerminalCommandResult) {
         guard tabs.order.indices.contains(tabIndex) else { return }
-        commandFinished(id: tabs.order[tabIndex], result: result)
+        let id = tabs.order[tabIndex]
+        commandFinished(surface: controllers[id]?.focusedSurfaceID, id: id, result: result)
     }
 
     func attentionStateForTesting(tabIndex: Int) -> TabAttentionState? {
         guard tabs.order.indices.contains(tabIndex) else { return nil }
-        return attentionStates[tabs.order[tabIndex]]
+        let state = attention.state(tab: tabs.order[tabIndex]).tabState
+        return state == .idle ? nil : state
+    }
+
+    func notifyProgressForTesting(tabIndex: Int, progress: TerminalProgress?) {
+        guard tabs.order.indices.contains(tabIndex),
+            let surface = controllers[tabs.order[tabIndex]]?.focusedSurfaceID
+        else { return }
+        progressChanged(surface: surface, progress: progress)
+    }
+
+    var windowAttentionForTesting: SurfaceAttention { attention.windowState }
+
+    var dockForTesting: ToggleDock { dock }
+
+    func tabTitleForTesting(index: Int) -> String? {
+        guard tabs.order.indices.contains(index) else { return nil }
+        return titles[tabs.order[index]]
+    }
+
+    func surfaceAttentionForTesting(tabIndex: Int) -> SurfaceAttention? {
+        guard tabs.order.indices.contains(tabIndex) else { return nil }
+        return attention.state(tab: tabs.order[tabIndex])
     }
 
     func newTabForTesting() { handle(.newTab) }
@@ -1956,9 +2116,29 @@ final class WindowController: NSObject {
     }
 
     private func clearAttention(_ id: TabID) {
-        attentionStates[id] = nil
-        if let toast = attentionToasts.removeValue(forKey: id) { toasts.dismiss(toast) }
+        attention.markSeen(tab: id)
+        takeDownCard(id)
+    }
+
+    /// Answers what the tab shows on arrival; a closed drawer or Scratch keeps its dot and card.
+    private func visit(_ id: TabID) {
+        attention.visit(id) { isOnScreen($0, in: id) }
+        if isOnScreen(cardSurfaces[id], in: id) { takeDownCard(id) }
+    }
+
+    private func takeDownCard(_ id: TabID) {
+        cardSurfaces[id] = nil
+        if let toast = attentionCards.removeValue(forKey: id) { toasts.dismiss(toast) }
         AgentNotifier.shared.clear(windowID: windowID, tabID: id)
+    }
+
+    /// The tab number and the dock's dots are the same signal at two altitudes, so they move together.
+    private func renderAttention() {
+        renderTabBar()
+        renderDock()
+        guard !didTearDown else { return }
+        AttentionCenter.shared.update(
+            windowID: windowID, waitingCount: attention.waitingCount, since: attention.waitingSince)
     }
 
     private func renderTabBar() {
@@ -1967,10 +2147,10 @@ final class WindowController: NSObject {
                 id: id, index: i + 1,
                 title: titles[id] ?? "shell",
                 isActive: id == tabs.activeID,
-                attentionState: attentionStates[id] ?? .idle)
+                attentionState: attention.state(tab: id).tabState)
         }
         tabBar.render(items)
-        attentionToasts.values.forEach { $0.refreshShortcuts() }
+        attentionCards.values.forEach { $0.refreshShortcuts() }
     }
 
     private func selectTabShortcut(for id: TabID) -> String {
@@ -1983,8 +2163,18 @@ final class WindowController: NSObject {
         dock.render(
             overlay: overlay, floatID: floats.activeID, paletteOpen: modal?.kind == .commandPalette,
             tab: tabs.order.isEmpty ? nil : tabs.activeID,
-            isLiveInBackground: floats.isLiveInBackground, isFloatBusy: floats.isBusy)
+            isLiveInBackground: floats.isLiveInBackground, isFloatBusy: floats.isBusy,
+            drawerAttention: { [weak self] edge in self?.drawerAttention(edge) ?? .idle },
+            floatAttention: { [weak self] id in
+                self?.floats.surfaceID(id).map { self?.attention.state(of: $0) ?? .idle } ?? .idle
+            })
         lastBusyDots = busyDots()
+    }
+
+    private func drawerAttention(_ edge: DrawerEdge) -> SurfaceAttention {
+        guard let ids = activeController?.drawerSurfaceIDs else { return .idle }
+        guard let id = edge == .bottom ? ids.bottom : ids.right else { return .idle }
+        return attention.state(of: id)
     }
 
     private func bindFirstControllerIfNeeded() {
@@ -1996,6 +2186,7 @@ final class WindowController: NSObject {
     private func tearDown() {
         guard !didTearDown else { return }
         didTearDown = true
+        AttentionCenter.shared.forget(windowID: windowID)
         pendingModal = nil
         cancelConfirm()
         keybindCapturer?.endCapture()

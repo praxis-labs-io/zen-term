@@ -33,15 +33,27 @@ final class TabController: NSObject {
 
     private var bottomDrawerSurface: TerminalSurface?
     private var bottomDrawerPanel: PanelHostView?
-    private var isBottomOpen = false { didSet { onOverlayStateChanged?() } }
+    private var isBottomOpen = false {
+        didSet {
+            onOverlayStateChanged?()
+            if isBottomOpen, let id = bottomDrawerSurfaceID { onSurfaceShown?(id) }
+        }
+    }
     private var bottomDrawerToken: Int?
+    private var bottomDrawerSurfaceID: SurfaceID?
 
     private var rightDrawerSurface: TerminalSurface?
     private var rightDrawerPanel: PanelHostView?
 
     var bottomDrawerPanelForTesting: PanelHostView? { bottomDrawerPanel }
-    private var isRightOpen = false { didSet { onOverlayStateChanged?() } }
+    private var isRightOpen = false {
+        didSet {
+            onOverlayStateChanged?()
+            if isRightOpen, let id = rightDrawerSurfaceID { onSurfaceShown?(id) }
+        }
+    }
     private var rightDrawerToken: Int?
+    private var rightDrawerSurfaceID: SurfaceID?
 
     private let isToolFloatOpen: () -> Bool
 
@@ -132,6 +144,26 @@ final class TabController: NSObject {
 
     var isDrawerFocused: Bool { focusedPanel != .pane }
 
+    /// The surface the user is on in this tab, whichever panel holds focus.
+    var focusedSurfaceID: SurfaceID? {
+        switch focusedPanel {
+        case .pane: return paneCanvas.focusedSurfaceID
+        case .bottomDrawer: return bottomDrawerSurfaceID
+        case .rightDrawer: return rightDrawerSurfaceID
+        }
+    }
+
+    /// Whether `surface` is visible while this tab is active. A closed drawer is not, a pane always is, and a float is not this tab's to show.
+    func isOnScreen(_ surface: SurfaceID) -> Bool {
+        if surface == bottomDrawerSurfaceID { return isBottomOpen }
+        if surface == rightDrawerSurfaceID { return isRightOpen }
+        return paneCanvas.liveSurfaceIDs.contains(surface)
+    }
+
+    var drawerSurfaceIDs: (bottom: SurfaceID?, right: SurfaceID?) {
+        (bottomDrawerSurfaceID, rightDrawerSurfaceID)
+    }
+
     var focusedDrawerIsBusy: Bool { focusedDrawerSurface?.isBusy == true }
 
     var overlayState: OverlayState {
@@ -149,9 +181,18 @@ final class TabController: NSObject {
 
     var onFocusChanged: (() -> Void)?
 
-    var onNotification: ((TerminalNotification) -> Void)?
+    var onNotification: ((SurfaceID, TerminalNotification) -> Void)?
 
-    var onCommandFinished: ((TerminalCommandResult) -> Void)?
+    var onCommandFinished: ((SurfaceID, TerminalCommandResult) -> Void)?
+
+    var onProgress: ((SurfaceID, TerminalProgress?) -> Void)?
+
+    var onSurfacesRegistered: (([SurfaceID]) -> Void)?
+
+    var onSurfacesReleased: (([SurfaceID]) -> Void)?
+
+    /// A drawer came on screen, so whatever it was asking has now been seen.
+    var onSurfaceShown: ((SurfaceID) -> Void)?
 
     var rightDrawerCommand: String?
 
@@ -194,8 +235,11 @@ final class TabController: NSObject {
         paneCanvas.onPanesRemoved = { [weak self] closed in self?.pruneNavReturn(closed: closed) }
         paneCanvas.onSocketFocus = { [weak self] dir in self?.navigate(dir) }
         paneCanvas.onZoomEnded = { [weak self] in self?.paneZoomEndedInternally() }
-        paneCanvas.onNotification = { [weak self] n in self?.onNotification?(n) }
-        paneCanvas.onCommandFinished = { [weak self] result in self?.onCommandFinished?(result) }
+        paneCanvas.onNotification = { [weak self] id, n in self?.onNotification?(id, n) }
+        paneCanvas.onCommandFinished = { [weak self] id, result in self?.onCommandFinished?(id, result) }
+        paneCanvas.onProgress = { [weak self] id, p in self?.onProgress?(id, p) }
+        paneCanvas.onSurfacesRegistered = { [weak self] ids in self?.onSurfacesRegistered?(ids) }
+        paneCanvas.onSurfacesReleased = { [weak self] ids in self?.onSurfacesReleased?(ids) }
         paneCanvas.onSurfaceEvent = { [weak self] surface, event in
             self?.onSurfaceEvent?(surface, event)
         }
@@ -302,6 +346,9 @@ final class TabController: NSObject {
         surface.delegate = self
         let token = registerDrawerToken(.bottomDrawer)
         bottomDrawerToken = token
+        let surfaceID = SurfaceIDs.mint()
+        bottomDrawerSurfaceID = surfaceID
+        onSurfacesRegistered?([surfaceID])
         surface.start(drawerConfig(command: bottomDrawerCommand, token: token))
         bottomDrawerSurface = surface
         let panel = makeDrawerPanel(edge: .bottom, surface: surface)
@@ -339,9 +386,13 @@ final class TabController: NSObject {
         case .bottomDrawer:
             bottomDrawerToken.map(NavRegistry.shared.unregister)
             bottomDrawerToken = nil
+            bottomDrawerSurfaceID.map { onSurfacesReleased?([$0]) }
+            bottomDrawerSurfaceID = nil
         case .rightDrawer:
             rightDrawerToken.map(NavRegistry.shared.unregister)
             rightDrawerToken = nil
+            rightDrawerSurfaceID.map { onSurfacesReleased?([$0]) }
+            rightDrawerSurfaceID = nil
         case .pane:
             break
         }
@@ -376,6 +427,9 @@ final class TabController: NSObject {
         surface.delegate = self
         let token = registerDrawerToken(.rightDrawer)
         rightDrawerToken = token
+        let surfaceID = SurfaceIDs.mint()
+        rightDrawerSurfaceID = surfaceID
+        onSurfacesRegistered?([surfaceID])
         surface.start(drawerConfig(command: rightDrawerCommand, token: token))
         rightDrawerSurface = surface
         let panel = makeDrawerPanel(edge: .right, surface: surface)
@@ -1020,11 +1074,22 @@ extension TabController: TerminalSurfaceDelegate {
         if s === bottomDrawerSurface { focusDrawer(.bottom) } else if s === rightDrawerSurface { focusDrawer(.right) }
     }
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {
-        onNotification?(n)
+        guard let id = drawerSurfaceID(of: s) else { return }
+        onNotification?(id, n)
     }
     func surface(_ s: TerminalSurface, commandDidFinish result: TerminalCommandResult) {
-        guard s === bottomDrawerSurface || s === rightDrawerSurface else { return }
-        onCommandFinished?(result)
+        guard let id = drawerSurfaceID(of: s) else { return }
+        onCommandFinished?(id, result)
+    }
+    func surface(_ s: TerminalSurface, progressDidChange p: TerminalProgress?) {
+        guard let id = drawerSurfaceID(of: s) else { return }
+        onProgress?(id, p)
+    }
+
+    private func drawerSurfaceID(of s: TerminalSurface) -> SurfaceID? {
+        if s === bottomDrawerSurface { return bottomDrawerSurfaceID }
+        if s === rightDrawerSurface { return rightDrawerSurfaceID }
+        return nil
     }
     func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor) {
         if s === bottomDrawerSurface {

@@ -33,7 +33,7 @@ final class PaneCanvasControllerTests: WindowTestCase {
 
     func test_commandCompletionRelaysFromPaneToTabOwner() throws {
         var received: TerminalCommandResult?
-        controller.onCommandFinished = { received = $0 }
+        controller.onCommandFinished = { received = $1 }
         let surface = try XCTUnwrap(controller.surface(for: controller.focusedLeafID))
         let result = TerminalCommandResult(exitCode: 0, duration: 42)
 

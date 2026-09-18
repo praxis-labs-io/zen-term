@@ -14,7 +14,11 @@ final class IconButton: NSView {
     var isActive = false { didSet { update() } }
 
     var showsActivity = false { didSet { activityDot.isHidden = !showsActivity } }
+
+    /// Colors the same dot that already says "something is live here", so it says what rather than whether.
+    var activityState: SurfaceAttention = .idle { didSet { update() } }
     var activityDotHiddenForTesting: Bool { activityDot.isHidden }
+    var activityColorForTesting: NSColor { activityColor }
     private let activityDot = NSView()
     private static let dotDiameter: CGFloat = 4
     private static let dotInset: CGFloat = dotDiameter / 2 + 2
@@ -107,6 +111,15 @@ final class IconButton: NSView {
 
     func reapplyTheme() { update() }
 
+    private var activityColor: NSColor {
+        let chrome = Theme.current.chrome
+        switch activityState {
+        case .completed: return chrome.positive.nsColor
+        case .waiting: return chrome.attention.nsColor
+        case .idle, .working: return chrome.accent.nsColor
+        }
+    }
+
     private func update() {
         let chrome = Theme.current.chrome
         let bg: NSColor
@@ -121,6 +134,6 @@ final class IconButton: NSView {
         }
         if let layer { Motion.ease(layer, keyPath: "backgroundColor", to: bg.cgColor) }
         icon.contentTintColor = tint
-        activityDot.layer?.backgroundColor = Theme.current.chrome.accent.nsColor.cgColor
+        activityDot.layer?.backgroundColor = activityColor.cgColor
     }
 }

@@ -47,6 +47,27 @@ final class ToastPresenterTests: WindowTestCase {
             isARepeat: false, keyCode: keyCode)!
     }
 
+    func test_aLongTitle_givesWayBeforeItsTail() throws {
+        let host = makeHost()
+        let presenter = ToastPresenter(host: host, topInset: 12, trailingInset: 12)
+        let tab = "A workspace name long enough to crowd the card"
+        let tail = ": bottom drawer"
+        let toast = presenter.showSticky(
+            ToastContent(variant: .info, title: tab, titleTail: tail, message: "needs you"),
+            actions: [ToastAction(title: "Switch", kind: .primary, shortcut: { "⌘\\" }) {}],
+            autoDismiss: false)
+        host.layoutSubtreeIfNeeded()
+        func descendants(of view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants(of: $0) } }
+        let labels = descendants(of: toast).compactMap { $0 as? NSTextField }
+        let tabLabel = try XCTUnwrap(labels.first { $0.stringValue == tab })
+        let tailLabel = try XCTUnwrap(labels.first { $0.stringValue == tail })
+
+        XCTAssertGreaterThanOrEqual(
+            tailLabel.frame.width, tailLabel.intrinsicContentSize.width,
+            "the drawer name is why the title exists, so it is the part that never clips")
+        XCTAssertLessThan(tabLabel.frame.width, tabLabel.intrinsicContentSize.width)
+    }
+
     func test_stickyToast_claimsNeitherReturnNorEsc() {
         let presenter = ToastPresenter(host: makeHost(), topInset: 12, trailingInset: 12)
         let toast = presenter.showSticky(content(), actions: actions())

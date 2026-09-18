@@ -77,6 +77,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         let controller = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
         self.controller = controller
+        controller.mountAndStart()
         return controller
     }
 

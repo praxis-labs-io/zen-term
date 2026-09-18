@@ -183,10 +183,25 @@ drawers.
 - **Hidden drawers are detached, not `isHidden`**: a 0x0 view resizes its PTY to zero
   columns and crashes TUIs.
 - **Titles update on push**, re-read every 1.5s as a backstop that also polls drawer busy.
-- **Background command completion:** OSC 133 `COMMAND_FINISHED` over 10s in a
-  background tab marks the tab and raises one sticky toast. An agent notification
-  replaces it, never the reverse.
-- Notification identity is `(windowID, tabID)`; `TabID` is per window.
+- **Attention has one owner per window**, `AttentionStore`, keyed by `SurfaceID` across
+  panes, drawers and floats. Each surface latches a `SurfaceAttention` beside a `seen`
+  flag, and one ranked fold (`rollup`) is both the priority rule and the rollup at every
+  level: surface, tab, window. A new level is a call, not a new concept.
+- **`seen` means on screen, not focused.** A pane is on screen while its tab is active, a
+  drawer while its tab is active and it is open, a float while it is shown. Focus would
+  mark a background split in the active tab, which nothing asks for. Coming on screen
+  answers a surface and takes down the card it raised. A visit answers only what it puts
+  on screen: a closed drawer or float keeps its latch and its card. Releasing an unseen
+  surface folds its latch into a per-tab residual, so a closed pane does not unmark the
+  tab it left; the next visit drops it.
+- **A state only the chrome can act on never reaches the tab number.** `working` (OSC 9;4)
+  says an agent is mid-turn, not that it wants you, so it stops at the dock's dot. The dot
+  and the tab number are one signal at two altitudes; a hidden drawer or float asks
+  through its dot because it has no number.
+- **Background command completion:** OSC 133 `COMMAND_FINISHED` over a threshold in a
+  background tab raises one sticky toast; the rank keeps it under a waiting agent.
+- Notification identity is `(windowID, tabID)`; `TabID` is per window. `AttentionCenter`
+  records which windows are asking and since when, and answers nothing else.
 - `tearDown()` is idempotent, the single close path, and cancels pending confirms and
   keybind capture (a stranded capture swallows every key app-wide).
 
@@ -503,4 +518,4 @@ concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. It gates
 - No left sidebar, no web panes, no built-in floats besides Scratch, no second backend
   (DEBUG `makeOverride` is for test stubs).
 - No session restore or detach/reattach, no smooth scroll, no tab drag-to-reorder.
-- `surfaceDidRingBell` and `progressDidChange` are emitted with no consumers.
+- `surfaceDidRingBell` is emitted with no consumers.
