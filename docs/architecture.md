@@ -486,8 +486,9 @@ concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. It gates
 - **The `workspaces` file loads off-main** (`ConfigLoader.loadWorkspaces`). A card that
   renders it is built after the load; `pendingModal` tracks the press in between.
 - **Interactive git probes go through `GitRepoStatus`.** The branch is a file read
-  (`GitRepo.currentBranch`); churn is `git --no-optional-locks status --porcelain=v2
-  --branch` on `churnQueue` (width four), with per-caller cancel tokens. No probe fetches.
+  (`GitRepo.currentBranch`); churn is `git --no-optional-locks status
+  --porcelain=v2 --branch` on `churnQueue` (width four), with per-caller cancel tokens. No
+  probe fetches.
 - **A float open is cancellable during its repo-root probe** (`cancelPendingOpen()`).
 - **Palette rows are reused**, so they never carry an index; order is the stack's arranged
   subviews.
