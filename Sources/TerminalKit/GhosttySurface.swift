@@ -261,17 +261,25 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         handleFocusChange(focused)
     }
 
+    public func modifiersDidChange(_ event: NSEvent) {
+        let isPress = GhosttyHostView.modifierTransition(for: event) == GHOSTTY_ACTION_PRESS
+        guard !isPress || hostView.window?.isKeyWindow == true else { return }
+        hostView.flagsChanged(with: event)
+    }
+
     private func handleFocusChange(_ focused: Bool) {
         paneFocused = focused
         syncFocus()
     }
 
+    // Releases go to another app on resign, so an unfocused surface settles its own; `syncFocus` covers the focused one.
     private func handleAppActiveChange(_ active: Bool) {
         isAppActive = active
+        if !active, !lastFocused { hostView.releaseHeldModifiers() }
         syncFocus()
     }
 
-    // Forgets held modifiers on effective blur, since a pane keeps first responder across ⌘-Tab.
+    // Forgets held modifiers on the blur transition, because that is when libghostty retires them.
     private func syncFocus() {
         let focused = paneFocused && isAppActive
         if let surfacePtr { ghostty_surface_set_focus(surfacePtr, focused) }

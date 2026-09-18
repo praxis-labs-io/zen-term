@@ -48,7 +48,8 @@ chrome claims depends on the user's config.
 **Focus-loss cleanup must match what libghostty retires, and only on the transition.** Its focus
 callback returns early when focus has not moved, and it releases only its single pressed key plus
 modifiers. A clear above `GhosttySurface.syncFocus`'s dedupe, or a clear of every held key, strands or
-over-clears releases.
+over-clears releases. A surface already unfocused retires nothing on resign, so it sends its own
+(`releaseHeldModifiers`).
 
 **Synthesized `NSEvent`s must match what AppKit delivers.** Every arrow `keyDown` carries `.function`
 and `.numericPad`, so compare against `flags.intersection([.command, .shift, .option, .control])`,

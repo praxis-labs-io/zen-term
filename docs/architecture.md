@@ -122,7 +122,7 @@ share `SystemReport`, and never carry the environment or config.
   catches the rest, so a missing override drops events silently. Modifier events carry
   which side moved (`ghosttySidedMods`, key events only; mouse callbacks take unsided
   `ghosttyMods` or every row redraws). `GhosttyHostView` forwards a release only for a
-  press it reported, and only the focused pane hears `flagsChanged`.
+  press it reported, and that ledger is also what makes `modifiersDidChange` idempotent.
 - **Key text is sent only from 0x20 up**; control keys encode from keycode and mods.
 
 ### What the backend will and won't do
@@ -239,10 +239,12 @@ New modal surfaces compose the existing primitives.
 the responder chain. A control's own `keyDown` test can pass while the key never reaches
 it.
 
-`KeyInterceptor.route(_:)` order: capture mode consumes everything; `flagsChanged` passes;
-a chord resolves; whatever is left goes to `modeHandler`, then the PTY. `modeHandler` sits
-below chord routing so a mode never swallows ⌘T or the palette.
+`KeyInterceptor.route(_:)` order: capture mode consumes everything; `flagsChanged` fans out
+and passes; a chord resolves; whatever is left goes to `modeHandler`, then the PTY.
+`modeHandler` sits below chord routing so a mode never swallows ⌘T or the palette.
 
+- **`flagsChanged` reaches every surface**, since mouse mods are per surface. Only one on
+  screen in the key window takes a press; any takes the release it is owed.
 - **`Route` has two ways of not consuming.** `passThrough`: nothing claimed it, a mode may.
   `deferToTerminal`: a chord matched and `passThroughGuard` handed it to the program
   (Ctrl-nav over nvim), so nothing else may touch it.
@@ -266,8 +268,8 @@ below chord routing so a mode never swallows ⌘T or the palette.
 - **macOS takes ⌘⌥D, ⌃⌘D, ⌘↑ and ⌘↓ first**; a chord bound there is dead while tests pass.
 - **Chord conflicts** get one sticky card each (`KeybindConflict`,
   `ConfigApplier.surfaceConflicts`). Accept writes `= none` for the loser; Revert returns
-  the winner to its defaults. A user float that takes a chord gets Accept only; one that loses it gets Revert only. Settings rows show the conflict
-  but do not resolve it.
+  the winner to its defaults. A user float that takes a chord gets Accept only; one that
+  loses it gets Revert only. Settings rows show the conflict but do not resolve it.
 - **The modal gate** in `WindowController.handle(_:)` runs confirm, modal card, tool
   float, then dispatch. App-global chords bypass it in `AppDelegate.route`; a palette pick
   of one returns there through `onAppGlobalCommand`. A card swallows other chords; a float

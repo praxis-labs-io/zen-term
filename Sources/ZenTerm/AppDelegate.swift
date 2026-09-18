@@ -77,6 +77,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 focusedPaneIsVim: controller?.focusedPaneIsVim == true,
                 toolFloatIsOpen: controller?.isToolFloatOpen == true)
         }
+        keys.onModifierChange = { [weak self] event in
+            self?.windows.forEach { $0.modifiersDidChange(event) }
+        }
         keys.setKeymap(GeneralConfig.current.keymap)
         keys.start()
 

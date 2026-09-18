@@ -75,6 +75,11 @@ final class WindowController: NSObject {
         controllers.values.flatMap { $0.allSurfaces } + floats.allSurfaces
     }
 
+    // Every surface, not only visible ones: a surface that took a press is owed its release wherever it went.
+    func modifiersDidChange(_ event: NSEvent) {
+        for surface in allTerminalSurfaces { surface.modifiersDidChange(event) }
+    }
+
     func presentUpdateCard(_ card: UpdateCardView) { toasts.present(card: card) }
 
     func dismissUpdateCard(_ card: UpdateCardView) {

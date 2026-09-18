@@ -20,6 +20,16 @@ final class KeyInterceptorRouteTests: XCTestCase {
         return keys
     }
 
+    private func commandDown() throws -> NSEvent {
+        let sided = NSEvent.ModifierFlags(
+            rawValue: NSEvent.ModifierFlags.command.rawValue | UInt(NX_DEVICELCMDKEYMASK))
+        return try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .flagsChanged, location: .zero, modifierFlags: sided, timestamp: 0,
+                windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "",
+                isARepeat: false, keyCode: 0x37))
+    }
+
     func test_aBareKeyReachesTheModeHandler() throws {
         let keys = interceptor()
         var seen: [String] = []
@@ -326,5 +336,29 @@ final class KeyInterceptorRouteTests: XCTestCase {
                 isARepeat: false, keyCode: 56))
         XCTAssertIdentical(keys.route(flags), flags)
         XCTAssertFalse(reachedMode)
+    }
+
+    func test_aModifierMoveFansOutAndStillReachesTheResponderChain() throws {
+        let keys = interceptor()
+        var fanned: [UInt16] = []
+        keys.onModifierChange = { fanned.append($0.keyCode) }
+
+        let event = try commandDown()
+        XCTAssertIdentical(
+            keys.route(event), event,
+            "the fan-out observes the event; consuming it would starve the focused pane")
+        XCTAssertEqual(
+            fanned, [0x37],
+            "every pane but one is skipped by the responder chain, so route has to fan the move out")
+    }
+
+    func test_aModifierMoveNeverFansOutWhileCapturingAKeybind() throws {
+        let keys = interceptor()
+        var fanned = 0
+        keys.onModifierChange = { _ in fanned += 1 }
+        keys.beginCapture { _ in }
+
+        XCTAssertNil(keys.route(try commandDown()))
+        XCTAssertEqual(fanned, 0, "a captured chord reaches no pane, so the fan-out must not either")
     }
 }
