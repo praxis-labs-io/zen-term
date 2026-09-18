@@ -11,10 +11,10 @@ rule and the symptom.
 range from content constraints, and a modal card sized as a fraction of its container collapses that
 minimum, clamping the window small while the modal is up. `HostWindow.init` pins the floor.
 
-**AppKit exposes no window corner radius, and the value changed.** macOS 26 raised it from 11 to 16,
-so anything flush to the window edge reads ragged against a constant. `CUIWindowFrameLayer` draws the
-rounding as frame art, so no layer carries it; the private `_cornerRadius` does, on both `NSWindow`
-and its theme frame. `WindowCorner.radius` reads it once from a probe window and falls back to 11.
+**AppKit exposes no window corner radius, and it changes between macOS versions.** Anything flush to
+the window edge reads ragged against a constant. `CUIWindowFrameLayer` draws the rounding as frame art,
+so no layer carries it; the private `_cornerRadius` does, on both `NSWindow` and its theme frame.
+`WindowCorner.radius` reads it once from a probe window, with a fallback for when that stops working.
 
 ## Event routing and the responder chain
 
