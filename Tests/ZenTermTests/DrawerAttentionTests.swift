@@ -163,6 +163,19 @@ final class DrawerAttentionTests: WindowTestCase {
             c.dockForTesting.rightActivityColorForTesting, Theme.current.chrome.positive.nsColor)
     }
 
+    func test_aClosedDrawerWorking_dotsItsButton_andClearingLowersIt() throws {
+        let c = makeWindow()
+        let drawer = try closedRightDrawer(c)
+
+        drawer.delegate?.surface(drawer, progressDidChange: TerminalProgress(state: .indeterminate))
+        drainMainQueue()
+        XCTAssertEqual(c.dockForTesting.rightActivityStateForTesting, .working)
+
+        drawer.delegate?.surface(drawer, progressDidChange: nil)
+        drainMainQueue()
+        XCTAssertEqual(c.dockForTesting.rightActivityStateForTesting, .idle)
+    }
+
     func test_aPaneInTheActiveTab_isStillSeen() throws {
         let c = makeWindow()
 

@@ -1857,7 +1857,10 @@ final class WindowController: NSObject {
     // Only `indeterminate` means working: a determinate report is a real progress bar, not an agent turn.
     private func progressChanged(surface: SurfaceID, progress: TerminalProgress?) {
         DispatchQueue.main.async { [weak self] in
-            self?.attention.setWorking(surface, progress?.state == .indeterminate)
+            guard let self else { return }
+            let before = self.attention.state(of: surface)
+            self.attention.setWorking(surface, progress?.state == .indeterminate)
+            if self.attention.state(of: surface) != before { self.renderDock() }
         }
     }
 
