@@ -11,7 +11,7 @@ final class KeybindParserTests: XCTestCase {
     func test_actionToken_roundTripsEveryCase() {
         let cases: [KeyInterceptor.ReservedChord] = [
             .splitVertical, .splitHorizontal, .navLeft, .navRight, .navUp, .navDown,
-            .closePane, .newTab, .newWindow, .prevTab, .nextTab,
+            .closePane, .closeTab, .closeWindow, .newTab, .newWindow, .prevTab, .nextTab,
             .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
             .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
             .toggleRepoPicker, .createWorktree, .toggleCommandPalette, .openSettings,
