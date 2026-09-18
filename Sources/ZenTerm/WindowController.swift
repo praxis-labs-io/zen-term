@@ -1798,7 +1798,16 @@ final class WindowController: NSObject {
             surface.map { self.attention.record($0, .waiting, seen: shown) }
 
             guard !shown else { return }
-            self.presentWaitingToast(for: target, title: spec.title, message: message)
+            let destination = CardDestination(
+                shortcut: { CommandCatalog.spec(for: .toggleToolFloat(spec.id)).shortcut },
+                open: { [weak self] in
+                    guard let self else { return }
+                    if let owner, owner != self.tabs.activeID { self.select(owner) }
+                    if self.floats.activeID != spec.id { self.handle(.toggleToolFloat(spec.id)) }
+                })
+            self.presentWaitingToast(
+                for: target, title: spec.title, message: message, surface: surface,
+                destination: destination)
             if !wasWaiting { self.renderAttention() }
         }
     }
@@ -1819,7 +1828,8 @@ final class WindowController: NSObject {
             surface.map { self.attention.record($0, .waiting, seen: id == self.tabs.activeID) }
 
             guard id != self.tabs.activeID else { return }
-            self.presentWaitingToast(for: id, title: self.titles[id] ?? "shell", message: message)
+            self.presentWaitingToast(
+                for: id, title: self.titles[id] ?? "shell", message: message, surface: surface)
             if !wasWaiting { self.renderAttention() }
         }
     }
@@ -1881,35 +1891,50 @@ final class WindowController: NSObject {
         return "\(remainder)s"
     }
 
-    private func presentWaitingToast(for id: TabID, title: String, message: String) {
+    /// A card whose Switch opens something other than a tab, with that thing's own shortcut.
+    private struct CardDestination {
+        let shortcut: () -> String
+        let open: () -> Void
+    }
+
+    private func presentWaitingToast(
+        for id: TabID, title: String, message: String, surface: SurfaceID?,
+        destination: CardDestination? = nil
+    ) {
         if let old = attentionCards[id] { toasts.dismiss(old) }
         let content = ToastContent(
             variant: .info, title: title, message: message, icon: "bell.fill")
+        let destination =
+            destination
+            ?? CardDestination(
+                shortcut: { [weak self] in self?.selectTabShortcut(for: id) ?? "" },
+                open: { [weak self] in self?.select(id) })
         let actions = [
             ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
-                guard let self else { return }
-                self.clearAttention(id)
-                self.renderAttention()
+                self?.answer(id, surface: surface)
             },
-            ToastAction(
-                title: "Switch", kind: .primary,
-                shortcut: { [weak self] in self?.selectTabShortcut(for: id) ?? "" }
-            ) { [weak self] in self?.select(id) },
+            ToastAction(title: "Switch", kind: .primary, shortcut: destination.shortcut) {
+                destination.open()
+            },
         ]
         attentionCards[id] = mountAttentionToast(
-            for: id, content: content, actions: actions,
+            for: id, surface: surface, content: content, actions: actions,
             autoDismiss: GeneralConfig.current.attentionToast == .auto)
     }
 
+    /// Clears the tab and the surface that asked. A window float belongs to no tab, so the tab alone would miss it.
+    private func answer(_ id: TabID, surface: SurfaceID?) {
+        surface.map { attention.markSeen($0) }
+        clearAttention(id)
+        renderAttention()
+    }
+
     private func mountAttentionToast(
-        for id: TabID, content: ToastContent, actions: [ToastAction], autoDismiss: Bool
+        for id: TabID, surface: SurfaceID? = nil, content: ToastContent, actions: [ToastAction],
+        autoDismiss: Bool
     ) -> ToastView {
         let toast = toasts.showSticky(content, actions: actions, autoDismiss: autoDismiss)
-        toast.onClose = { [weak self] in
-            guard let self else { return }
-            self.clearAttention(id)
-            self.renderAttention()
-        }
+        toast.onClose = { [weak self] in self?.answer(id, surface: surface) }
         toast.onDismissed = { [weak self, weak toast] in
             guard let self, let toast, self.attentionCards[id] === toast else { return }
             self.attentionCards[id] = nil

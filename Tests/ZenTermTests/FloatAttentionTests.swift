@@ -134,6 +134,39 @@ final class FloatAttentionTests: WindowTestCase {
         XCTAssertEqual(c.windowAttentionForTesting, .idle)
     }
 
+    func test_dismissingAFloatsCard_answersTheFloat() throws {
+        let c = makeWindow()
+        c.handle(.toggleToolFloat("btop"))
+        let surface = try floatSurface()
+        c.handle(.toggleToolFloat("btop"))
+        notify(surface, "needs input")
+        XCTAssertEqual(c.windowAttentionForTesting, .waiting)
+
+        c.handle(.dismissToast)
+        drainMainQueue()
+
+        XCTAssertEqual(
+            c.windowAttentionForTesting, .idle,
+            "Dismiss is an answer: the float must stop asking, not just lose its card")
+    }
+
+    func test_aFloatsCard_switchesToTheFloat() throws {
+        let c = makeWindow()
+        c.handle(.toggleToolFloat("btop"))
+        let surface = try floatSurface()
+        c.handle(.toggleToolFloat("btop"))
+        notify(surface, "needs input")
+        let card = try XCTUnwrap(toastViews(c).first)
+        let switchButton = try XCTUnwrap(
+            descendants(of: card).compactMap { $0 as? AppButton }.first { $0.title == "Switch" })
+
+        switchButton.performClick(nil)
+        drainMainQueue()
+
+        XCTAssertEqual(c.floatsForTesting.activeID, "btop", "Switch on a float's card opens the float")
+        XCTAssertEqual(c.windowAttentionForTesting, .idle)
+    }
+
     func test_aWindowScopedFloat_marksNoSingleTab() throws {
         let c = makeWindow()
         c.handle(.toggleToolFloat("btop"))
