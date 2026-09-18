@@ -1839,8 +1839,10 @@ final class WindowController: NSObject {
     }
 
     // Named one level down from the window: its workspaces, and the floats the window itself holds.
+    // One workspace is the only place anything could be running, so naming it says nothing.
     private func runningNamesInWindow() -> [String] {
-        workspaces.filter(isRunning(workspace:)).map(\.name) + floats.hiddenRunningTitles(scope: nil)
+        let named = workspaces.count > 1 ? workspaces.filter(isRunning(workspace:)).map(\.name) : []
+        return named + floats.hiddenRunningTitles(scope: nil)
     }
 
     private static func drawerName(_ edge: DrawerEdge) -> String {

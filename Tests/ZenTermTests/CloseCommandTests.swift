@@ -212,6 +212,43 @@ final class CloseCommandTests: WindowTestCase {
         XCTAssertFalse(c.window.isVisible)
     }
 
+    func test_closeWindow_withOneWorkspace_namesNothing() throws {
+        let c = onScreen()
+        try firstPane().isBusy = true
+
+        c.handle(.closeWindow)
+
+        XCTAssertTrue(
+            toastText(c).contains("Closing this window will stop everything running in it."),
+            "one workspace is the only place it could be, so naming it says nothing")
+    }
+
+    func test_closeWindow_withOneWorkspace_stillNamesAFloatRunningOutOfSight() throws {
+        var config = GeneralConfig.builtIn
+        config.floats = [
+            ToolFloat(
+                id: "btop", order: 0, title: "btop", icon: ToolFloatParser.defaultIcon,
+                command: "btop", dir: nil, widthFraction: 0.85, heightFraction: 0.85,
+                requiresGitRepo: false, persist: .window,
+                toggle: Chord(command: true, shift: true, key: "j"))
+        ]
+        GeneralConfig.setCurrentForTesting(config)
+        let c = onScreen()
+        let before = spawned.count
+        c.handle(.toggleToolFloat("btop"))
+        let float = try XCTUnwrap(spawned.dropFirst(before).first)
+        float.isBusy = true
+        c.handle(.toggleToolFloat("btop"))
+        drainMainQueue()
+
+        c.handle(.closeWindow)
+
+        XCTAssertTrue(
+            toastText(c).contains(
+                "Closing this window will stop everything running in it, including btop."),
+            "a tool running out of sight is the one thing the window close has to say")
+    }
+
     func test_closeWindow_namesTheWorkspacesWithSomethingRunning() throws {
         let c = onScreen()
         try firstPane().isBusy = true
