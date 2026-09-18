@@ -1783,7 +1783,7 @@ final class WindowController: NSObject {
             closesWindow ? .lastPane(running: windowIsRunning) : (lastPane ? .tab : .pane)
         let names =
             closesWindow
-            ? namesClosingWindow()
+            ? runningNamesInWindow()
             : (lastPane ? activeWorkspace.activeID.map(hiddenRunningNames(inTab:)) ?? [] : [])
         presentConfirm(
             variant: .warning, title: subject.title,
@@ -1800,7 +1800,7 @@ final class WindowController: NSObject {
         guard closesWindow || isRunning(tab: id) else { closeTab(id); return }
         let subject: CloseWarning.Subject =
             closesWindow ? .lastTab(running: windowIsRunning) : .tab
-        let names = closesWindow ? namesClosingWindow() : hiddenRunningNames(inTab: id)
+        let names = closesWindow ? runningNamesInWindow() : hiddenRunningNames(inTab: id)
         presentConfirm(
             variant: .warning, title: subject.title,
             message: CloseWarning.message(closing: subject, naming: names),
@@ -1824,12 +1824,6 @@ final class WindowController: NSObject {
         workspaces.contains(where: isRunning(workspace:)) || floats.hasBusy
     }
 
-    // The one tab left is the useful level to name, so this takes its hidden surfaces and the window's floats.
-    private func namesClosingWindow() -> [String] {
-        let inTab = activeWorkspace.activeID.map(hiddenRunningNames(inTab:)) ?? []
-        return inTab + floats.hiddenRunningTitles(scope: nil)
-    }
-
     private func isRunning(tab id: TabID) -> Bool {
         controller(id)?.allSurfaces.contains(where: \.isBusy) == true || floats.hasBusyInScope(id)
     }
@@ -1845,10 +1839,16 @@ final class WindowController: NSObject {
         return drawers + floats.hiddenRunningTitles(scope: id)
     }
 
-    // Named one level down from the window: its workspaces, and the floats the window itself holds.
-    // One workspace is the only place anything could be running, so naming it says nothing.
+    // One level down from whatever the window holds, so the name is always the next thing in.
     private func runningNamesInWindow() -> [String] {
-        let named = workspaces.count > 1 ? workspaces.filter(isRunning(workspace:)).map(\.name) : []
+        let named: [String]
+        if workspaces.count > 1 {
+            named = workspaces.filter(isRunning(workspace:)).map(\.name)
+        } else if activeWorkspace.tabIDs.count > 1 {
+            named = activeWorkspace.tabIDs.filter(isRunning(tab:)).map(title(of:))
+        } else {
+            named = activeWorkspace.activeID.map(hiddenRunningNames(inTab:)) ?? []
+        }
         return named + floats.hiddenRunningTitles(scope: nil)
     }
 
@@ -2229,6 +2229,10 @@ final class WindowController: NSObject {
     func selectTabForTesting(index: Int) {
         guard activeWorkspace.tabIDs.indices.contains(index) else { return }
         select(activeWorkspace.tabIDs[index])
+    }
+
+    func renameActiveTabForTesting(to name: String) {
+        activeWorkspace.activeID.map { renameTab($0, to: name) }
     }
 
     func renameTabForTesting(index: Int) {

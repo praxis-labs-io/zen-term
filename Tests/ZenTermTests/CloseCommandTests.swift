@@ -294,6 +294,33 @@ final class CloseCommandTests: WindowTestCase {
             "a tool running out of sight is the one thing the window close has to say")
     }
 
+    func test_closeWindow_withOneWorkspace_namesTheTabsWithSomethingRunning() throws {
+        let c = onScreen()
+        c.renameActiveTabForTesting(to: "api")
+        spareTab(c)
+        c.renameActiveTabForTesting(to: "web")
+        try activePane(c).isBusy = true
+
+        c.handle(.closeWindow)
+
+        XCTAssertTrue(
+            toastText(c).contains(
+                "Closing this window will stop everything running in it, including web."),
+            "one workspace with several tabs names the tabs, not nothing")
+    }
+
+    func test_closeWindow_withOneWorkspaceAndOneTab_namesThatTabsHiddenSurfaces() throws {
+        let c = onScreen()
+        try hiddenDrawer(c, .toggleBottomDrawer).isBusy = true
+
+        c.handle(.closeWindow)
+
+        XCTAssertTrue(
+            toastText(c).contains(
+                "Closing this window will stop everything running in it, including the bottom drawer."),
+            "the same drawer ⌘W names, named the same way")
+    }
+
     func test_closeWindow_namesTheWorkspacesWithSomethingRunning() throws {
         let c = onScreen()
         try firstPane().isBusy = true
