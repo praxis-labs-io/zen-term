@@ -2031,7 +2031,7 @@ final class WindowController: NSObject {
         renderTabBar()
         renderDock()
         AttentionCenter.shared.update(
-            windowID: windowID, state: attention.windowState, since: attention.waitingSince)
+            windowID: windowID, waitingCount: attention.waitingCount, since: attention.waitingSince)
     }
 
     private func renderTabBar() {

@@ -80,10 +80,17 @@ final class AttentionStore {
         SurfaceAttention.rollup(entries.values.map(effective) + residual.values.map(\.state))
     }
 
-    /// When the oldest thing still asking for you started asking, for the app-level summary.
+    /// When the oldest agent still waiting on you started waiting. A completion is not waiting.
     var waitingSince: Date? {
-        let latched = entries.values.filter { !$0.seen && $0.latched != .idle }.compactMap(\.since)
-        return (latched + residual.values.compactMap(\.since)).min()
+        let latched = entries.values.filter { !$0.seen && $0.latched == .waiting }.compactMap(\.since)
+        let folded = residual.values.filter { $0.state == .waiting }.compactMap(\.since)
+        return (latched + folded).min()
+    }
+
+    /// How many agents are waiting on you. A residual counts: something asked, and you have not looked.
+    var waitingCount: Int {
+        entries.values.filter { !$0.seen && $0.latched == .waiting }.count
+            + residual.values.filter { $0.state == .waiting }.count
     }
 
     private func ids(in tab: TabID) -> [SurfaceID] {
