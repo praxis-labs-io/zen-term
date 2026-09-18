@@ -187,7 +187,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   `workspace(of:)` and `controller(_:)` span them all. Reading the active workspace where
   a lookup belongs fails silently.
 - **Inactive tabs and workspaces are detached but retained**, so shells keep running.
-- **Closing the last tab closes its workspace, and the last workspace closes the window.**
+- **Closing the last tab closes its workspace, and the last workspace is replaced by a fresh
+  default one.** A window never closes as a side effect: `close_window` is the only thing
+  that closes it, and `closeWorkspace` is the single path a workspace goes through.
 - **Window stack, back to front:** canvas, tool float, tab bar and dock, toast stack,
   modal card. Toasts sit above floats (the ⌘W guard toast is about the float); a card
   sits above toasts because it owns the keyboard. `closeModal()` in

@@ -36,6 +36,8 @@ enum CommandCatalog {
         case .toggleZoom: return pane("Focus Mode", glyph, chord)
         case .fillScreen: return window("Fill Screen", glyph, chord)
         case .closePane: return pane("Close Pane", glyph, chord)
+        case .closeTab: return tab("Close Tab", glyph, chord)
+        case .closeWindow: return window("Close Window", glyph, chord)
         case .newTab: return tab("New Tab", glyph, chord)
         case .prevTab: return tab("Previous Tab", glyph, chord)
         case .nextTab: return tab("Next Tab", glyph, chord)
@@ -93,7 +95,7 @@ enum CommandCatalog {
         chords += [.openSettings, .reloadConfig, .checkForUpdates, .reportIssue]
         chords += [
             .toggleBottomDrawer, .toggleRightDrawer,
-            .newTab, .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab,
+            .newTab, .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab, .closeTab,
         ]
         if tabCount > 0 {
             chords += (1...min(tabCount, 9)).map { .selectTab($0) }
@@ -109,7 +111,7 @@ enum CommandCatalog {
             .copyScreenFilePath, .openScreenFile,
             .closePane,
         ]
-        chords += [.fillScreen, .increaseFontSize, .decreaseFontSize, .resetFontSize]
+        chords += [.fillScreen, .closeWindow, .increaseFontSize, .decreaseFontSize, .resetFontSize]
         chords += [.dismissToast, .dismissAllToasts]
         return chords.map(spec(for:))
     }

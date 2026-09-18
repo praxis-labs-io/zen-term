@@ -70,6 +70,14 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         liveFloats.values.contains { $0.tab == tab && $0.surface.isBusy }
     }
 
+    /// Titles of running floats with nothing on screen to look at. `tab` takes that tab's, nil the window-scoped ones.
+    func hiddenRunningTitles(scope tab: TabID?) -> [String] {
+        liveFloats.values
+            .filter { $0.tab == tab && $0.surface.isBusy && activeFloat?.surface !== $0.surface }
+            .map(\.spec.title)
+            .sorted()
+    }
+
     /// A float id is a slug, so the `/` in `tab/id` can never collide with a user float's id.
     private func registryKey(_ id: String, in tab: TabID?) -> String {
         guard let tab else { return id }

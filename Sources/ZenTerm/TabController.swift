@@ -142,6 +142,14 @@ final class TabController: NSObject {
         bottomDrawerSurface?.isBusy == true || rightDrawerSurface?.isBusy == true
     }
 
+    /// The running drawers a closed drawer hides, which a close has to name because nothing on screen does.
+    var hiddenRunningDrawers: [DrawerEdge] {
+        var edges: [DrawerEdge] = []
+        if bottomDrawerSurface?.isBusy == true, !isBottomOpen { edges.append(.bottom) }
+        if rightDrawerSurface?.isBusy == true, !isRightOpen { edges.append(.right) }
+        return edges
+    }
+
     var isDrawerFocused: Bool { focusedPanel != .pane }
 
     /// The surface the user is on in this tab, whichever panel holds focus.
