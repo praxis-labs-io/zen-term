@@ -146,6 +146,20 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertEqual(controller.sidebarForTesting.lead.workspaceNameForTesting, "Home")
     }
 
+    func test_collapsedLead_truncatesALongWorkspaceNameAtATabTitlesWidth() throws {
+        let controller = makeController()
+        let long = controller.addWorkspaceForTesting(name: String(repeating: "workspace-", count: 20), folder: root)
+        controller.activateWorkspaceForTesting(long)
+
+        controller.handle(.toggleSidebar)
+
+        controller.containerForTesting.layoutSubtreeIfNeeded()
+        let name = controller.sidebarForTesting.lead.workspaceNameLabelForTesting
+        XCTAssertLessThanOrEqual(
+            name.alignmentRect(forFrame: name.frame).width, TabBarView.maxChipWidth,
+            "a long name truncates instead of pushing the tabs off the bar")
+    }
+
     func test_ctrlCmdS_throughTheInterceptor_togglesTheSidebar() throws {
         let controller = makeController()
         let keys = KeyInterceptor()

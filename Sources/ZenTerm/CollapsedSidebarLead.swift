@@ -17,6 +17,8 @@ final class CollapsedSidebarLead: NSView {
 
         nameLabel.font = TabBarView.chipFont
         nameLabel.lineBreakMode = .byTruncatingTail
+        nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        nameLabel.widthAnchor.constraint(lessThanOrEqualToConstant: TabBarView.maxChipWidth).isActive = true
         content.orientation = .horizontal
         content.alignment = .centerY
         content.spacing = Self.dividerGap
@@ -52,4 +54,5 @@ final class CollapsedSidebarLead: NSView {
     }
 
     var workspaceNameForTesting: String { nameLabel.stringValue }
+    var workspaceNameLabelForTesting: NSView { nameLabel }
 }
