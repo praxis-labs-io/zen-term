@@ -224,6 +224,21 @@ final class FloatAttentionTests: WindowTestCase {
         XCTAssertEqual(toastViews(c).count, 1, "the Scratch on screen is this tab's, not the one that asked")
     }
 
+    func test_visitingTheTab_leavesItsScratchAsking() throws {
+        let c = makeWindow()
+        let before = spawned.count
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        let scratch = try XCTUnwrap(spawned.dropFirst(before).first)
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        c.newTabForTesting()
+        notify(scratch, "needs input")
+
+        c.selectTabForTesting(index: 0)
+        drainMainQueue()
+
+        XCTAssertEqual(c.dockForTesting.scratchActivityStateForTesting, .waiting)
+    }
+
     func test_aWindowScopedFloat_marksNoSingleTab() throws {
         let c = makeWindow()
         c.handle(.toggleToolFloat("btop"))

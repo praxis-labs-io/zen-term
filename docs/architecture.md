@@ -190,9 +190,10 @@ drawers.
 - **`seen` means on screen, not focused.** A pane is on screen while its tab is active, a
   drawer while its tab is active and it is open, a float while it is shown. Focus would
   mark a background split in the active tab, which nothing asks for. Coming on screen
-  answers a surface and takes down the card it raised. A visit zeroes that tab's latches,
-  and releasing an unseen surface folds its latch into a per-tab residual, so a closed
-  pane does not unmark the tab it left.
+  answers a surface and takes down the card it raised. A visit answers only what it puts
+  on screen: a closed drawer or float keeps its latch and its card. Releasing an unseen
+  surface folds its latch into a per-tab residual, so a closed pane does not unmark the
+  tab it left; the next visit drops it.
 - **A state only the chrome can act on never reaches the tab number.** `working` (OSC 9;4)
   says an agent is mid-turn, not that it wants you, so it stops at the dock's dot. The dot
   and the tab number are one signal at two altitudes; a hidden drawer or float asks

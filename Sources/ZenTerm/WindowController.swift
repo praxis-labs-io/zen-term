@@ -766,10 +766,10 @@ final class WindowController: NSObject {
         guard tabs.order.contains(id), id != tabs.activeID else { return }
         Log.info("tab switched", category: .tabs)
         closeFloatForTabChange()
-        clearAttention(id)
         cancelConfirm()
         let oldIndex = tabs.order.firstIndex(of: tabs.activeID) ?? 0
         tabs.select(id)
+        visit(id)
         let newIndex = tabs.order.firstIndex(of: id) ?? 0
         mount(.slide(from: slideFrom ?? (newIndex > oldIndex ? .fromRight : .fromLeft)))
         renderTabBar()
@@ -828,7 +828,7 @@ final class WindowController: NSObject {
         clearAttention(id)
         attention.dropTab(id)
         if !survived { window.close(); return }
-        clearAttention(tabs.activeID)
+        visit(tabs.activeID)
         mount(.instant)
         renderTabBar()
     }
@@ -1976,11 +1976,7 @@ final class WindowController: NSObject {
     /// Answers whatever `surface` asked now that it is on screen, and takes down the card it raised.
     private func surfaceShown(_ surface: SurfaceID) {
         attention.markSeen(surface)
-        if let tab = cardSurfaces.first(where: { $0.value == surface })?.key {
-            cardSurfaces[tab] = nil
-            attentionCards.removeValue(forKey: tab).map { toasts.dismiss($0) }
-            AgentNotifier.shared.clear(windowID: windowID, tabID: tab)
-        }
+        if let tab = cardSurfaces.first(where: { $0.value == surface })?.key { takeDownCard(tab) }
         renderAttention()
     }
 
@@ -2118,6 +2114,16 @@ final class WindowController: NSObject {
 
     private func clearAttention(_ id: TabID) {
         attention.markSeen(tab: id)
+        takeDownCard(id)
+    }
+
+    /// Answers what the tab shows on arrival. A closed drawer or a Scratch that asked keeps its dot and its card.
+    private func visit(_ id: TabID) {
+        attention.visit(id) { isOnScreen($0, in: id) }
+        if isOnScreen(cardSurfaces[id], in: id) { takeDownCard(id) }
+    }
+
+    private func takeDownCard(_ id: TabID) {
         cardSurfaces[id] = nil
         if let toast = attentionCards.removeValue(forKey: id) { toasts.dismiss(toast) }
         AgentNotifier.shared.clear(windowID: windowID, tabID: id)

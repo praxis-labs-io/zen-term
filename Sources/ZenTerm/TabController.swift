@@ -153,11 +153,11 @@ final class TabController: NSObject {
         }
     }
 
-    /// Whether `surface` is visible while this tab is active. A closed drawer is not; a pane always is.
+    /// Whether `surface` is visible while this tab is active. A closed drawer is not, a pane always is, and a float is not this tab's to show.
     func isOnScreen(_ surface: SurfaceID) -> Bool {
         if surface == bottomDrawerSurfaceID { return isBottomOpen }
         if surface == rightDrawerSurfaceID { return isRightOpen }
-        return true
+        return paneCanvas.liveSurfaceIDs.contains(surface)
     }
 
     var drawerSurfaceIDs: (bottom: SurfaceID?, right: SurfaceID?) {

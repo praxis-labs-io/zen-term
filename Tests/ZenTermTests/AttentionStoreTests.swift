@@ -68,7 +68,7 @@ final class AttentionStoreTests: XCTestCase {
         XCTAssertEqual(store.state(of: drawer), .waiting)
     }
 
-    func test_visitingATab_clearsEverySurfaceInIt() {
+    func test_answeringATab_clearsEverySurfaceInIt() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         let drawer = SurfaceIDs.mint()
@@ -82,7 +82,7 @@ final class AttentionStoreTests: XCTestCase {
         XCTAssertEqual(store.state(tab: tab), .idle)
     }
 
-    func test_aLaterEventAfterAVisit_colorsTheTabAgain() {
+    func test_aLaterEventAfterAnAnswer_colorsTheTabAgain() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
@@ -123,9 +123,24 @@ final class AttentionStoreTests: XCTestCase {
         store.record(pane, .waiting, seen: false)
         store.release(pane)
 
-        store.markSeen(tab: tab)
+        store.visit(tab) { _ in true }
 
         XCTAssertEqual(store.state(tab: tab), .idle)
+    }
+
+    func test_visitingATab_leavesWhatIsOffScreenLatched() {
+        let store = makeStore()
+        let pane = SurfaceIDs.mint()
+        let drawer = SurfaceIDs.mint()
+        store.register(pane, tab: tab)
+        store.register(drawer, tab: tab)
+        store.record(pane, .completed, seen: false)
+        store.record(drawer, .waiting, seen: false)
+
+        store.visit(tab) { $0 == pane }
+
+        XCTAssertEqual(store.state(of: pane), .idle)
+        XCTAssertEqual(store.state(of: drawer), .waiting)
     }
 
     func test_working_risesAndFallsWithProgress() {

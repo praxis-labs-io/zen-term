@@ -52,9 +52,15 @@ final class AttentionStore {
         entries[id]?.working = on
     }
 
-    /// A visit: everything in the tab is seen and its latches drop, which is what clearing a tab meant before.
+    /// Answers the whole tab: every surface in it is seen and its latches drop.
     func markSeen(tab: TabID) {
         for id in ids(in: tab) { markSeen(id) }
+        residual[tab] = nil
+    }
+
+    /// A visit: only what `isOnScreen` shows is seen. Latches of surfaces that already closed drop, since nothing else can show them.
+    func visit(_ tab: TabID, isOnScreen: (SurfaceID) -> Bool) {
+        for id in ids(in: tab) where isOnScreen(id) { markSeen(id) }
         residual[tab] = nil
     }
 

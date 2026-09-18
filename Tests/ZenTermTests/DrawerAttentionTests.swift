@@ -176,6 +176,19 @@ final class DrawerAttentionTests: WindowTestCase {
         XCTAssertEqual(c.dockForTesting.rightActivityStateForTesting, .idle)
     }
 
+    func test_visitingTheTab_leavesAClosedDrawerAsking() throws {
+        let c = makeWindow()
+        let drawer = try closedRightDrawer(c)
+        c.newTabForTesting()
+        notify(drawer)
+
+        c.selectTabForTesting(index: 0)
+        drainMainQueue()
+
+        XCTAssertEqual(c.dockForTesting.rightActivityStateForTesting, .waiting)
+        XCTAssertEqual(toastViews(c).count, 1, "the drawer is still closed, so its card still has somewhere to go")
+    }
+
     func test_aPaneInTheActiveTab_isStillSeen() throws {
         let c = makeWindow()
 
