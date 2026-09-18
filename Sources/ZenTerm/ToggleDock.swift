@@ -242,13 +242,13 @@ final class ToggleDock: NSView {
         for divider in dividers { divider.layer?.backgroundColor = dividerColor }
     }
 
-    static func divider(height: CGFloat = 12) -> NSView {
+    static func divider() -> NSView {
         let v = NSView()
         v.wantsLayer = true
         v.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
         v.translatesAutoresizingMaskIntoConstraints = false
         v.widthAnchor.constraint(equalToConstant: 1).isActive = true
-        v.heightAnchor.constraint(equalToConstant: height).isActive = true
+        v.heightAnchor.constraint(equalToConstant: 12).isActive = true
         return v
     }
 }

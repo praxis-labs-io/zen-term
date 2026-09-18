@@ -23,7 +23,7 @@ final class TabBarView: NSView {
 
     private static let leadingInset: CGFloat = 12
     private static let chipSpacing: CGFloat = 4
-    static let chipHeight: CGFloat = 22
+    private static let chipHeight: CGFloat = 22
     private static let bandNudge: CGFloat = 6
     private static let fadeWidth: CGFloat = 28
 

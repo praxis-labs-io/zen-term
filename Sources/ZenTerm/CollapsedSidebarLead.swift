@@ -3,8 +3,7 @@ import AppKit
 /// Leads the tab bar while the sidebar is collapsed with the active workspace's name, clear of the sidebar toggle.
 final class CollapsedSidebarLead: NSView {
     private let nameLabel = NSTextField(labelWithString: "")
-    // The chip's height, so it spans the tab chip beside it from title to underline.
-    private let divider = ToggleDock.divider(height: TabBarView.chipHeight)
+    private let divider = ToggleDock.divider()
     private let content = NSStackView()
 
     init(leadingInset: CGFloat) {
