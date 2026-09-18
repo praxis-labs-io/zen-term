@@ -90,6 +90,28 @@ final class ToolFloatControllerTests: WindowTestCase {
         spawned.filter { $0.lastConfig?.args == ["-l", "-i", "-c", command] }
     }
 
+    func test_hiddenRunningTitles_namesAWindowFloatOnlyWhileItRunsOutOfSight() throws {
+        let dir = try makeDir("plain", git: false)
+        let (floats, spawned, _) = makeFloats(cwd: dir)
+        let float = spec("btop", persist: .window)
+
+        floats.toggle(float)
+        let surface = try XCTUnwrap(floatSurfaces(spawned(), command: "btop").first)
+
+        XCTAssertEqual(floats.hiddenRunningTitles(scope: nil), [], "idle and on screen")
+
+        surface.isBusy = true
+        XCTAssertEqual(
+            floats.hiddenRunningTitles(scope: nil), [],
+            "it is on screen to look at, so a close naming it says nothing new")
+
+        floats.toggle(float)
+        XCTAssertEqual(floats.hiddenRunningTitles(scope: nil), ["btop"])
+
+        surface.isBusy = false
+        XCTAssertEqual(floats.hiddenRunningTitles(scope: nil), [], "hidden, but nothing is running")
+    }
+
     func test_ephemeralFloat_terminatesOnDismiss() throws {
         let dir = try makeDir("plain", git: false)
         let (floats, spawned, setCWD) = makeFloats(cwd: dir)

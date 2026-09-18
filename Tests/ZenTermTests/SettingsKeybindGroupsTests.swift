@@ -9,7 +9,7 @@ final class SettingsKeybindGroupsTests: XCTestCase {
 
     static let everyAction: [KeyInterceptor.ReservedChord] =
         [
-            .splitHorizontal, .splitVertical, .closePane, .toggleZoom,
+            .splitHorizontal, .splitVertical, .closePane, .closeTab, .closeWindow, .toggleZoom,
             .toggleScrollMode, .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown,
             .jumpToPreviousPrompt, .jumpToNextPrompt, .scrollToSelection,
             .toggleSearch, .searchSelection, .findNext, .findPrevious,

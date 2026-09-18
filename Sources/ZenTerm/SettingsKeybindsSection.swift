@@ -25,10 +25,13 @@ final class SettingsKeybindsSection: SettingsSection {
         ("Resize", [.resizeLeft, .resizeDown, .resizeUp, .resizeRight]),
         (
             "Tabs",
-            [.newTab, .newWindow, .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab]
+            [
+                .newTab, .newWindow, .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab,
+                .closeTab,
+            ]
                 + (1...9).map { .selectTab($0) }
         ),
-        ("Window", [.fillScreen, .dismissToast, .dismissAllToasts]),
+        ("Window", [.fillScreen, .closeWindow, .dismissToast, .dismissAllToasts]),
         ("Drawers", [.toggleBottomDrawer, .toggleRightDrawer]),
         (
             "Surfaces & Tools",

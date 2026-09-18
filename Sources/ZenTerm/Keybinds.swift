@@ -13,6 +13,8 @@ extension KeyInterceptor.ReservedChord {
         case .prevPane: return "prev_pane"
         case .nextPane: return "next_pane"
         case .closePane: return "close_pane"
+        case .closeTab: return "close_tab"
+        case .closeWindow: return "close_window"
         case .newTab: return "new_tab"
         case .newWindow: return "new_window"
         case .selectTab(let n): return "select_tab_\(n)"
@@ -72,7 +74,8 @@ extension KeyInterceptor.ReservedChord {
         case .increaseFontSize, .decreaseFontSize: return true
         case .scrollPageUp, .scrollPageDown: return true
         case .jumpToPreviousPrompt, .jumpToNextPrompt: return true
-        case .splitVertical, .splitHorizontal, .closePane, .newTab, .newWindow, .selectTab,
+        case .splitVertical, .splitHorizontal, .closePane, .closeTab, .closeWindow,
+            .newTab, .newWindow, .selectTab,
             .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab,
             .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
             .prevPane, .nextPane,
@@ -96,7 +99,7 @@ extension KeyInterceptor.ReservedChord {
         case .reloadConfig: return false
         case .checkForUpdates, .reportIssue: return false
         case .selectAll: return false
-        case .splitVertical, .splitHorizontal, .closePane, .toggleZoom,
+        case .splitVertical, .splitHorizontal, .closePane, .closeTab, .closeWindow, .toggleZoom,
             .toggleScrollMode, .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown,
             .scrollToSelection, .jumpToPreviousPrompt, .jumpToNextPrompt,
             .toggleSearch, .searchSelection, .findNext, .findPrevious,
@@ -125,6 +128,8 @@ extension KeyInterceptor.ReservedChord {
         case "prev_pane": self = .prevPane
         case "next_pane": self = .nextPane
         case "close_pane": self = .closePane
+        case "close_tab": self = .closeTab
+        case "close_window": self = .closeWindow
         case "new_tab": self = .newTab
         case "new_window": self = .newWindow
         case "prev_tab": self = .prevTab
@@ -212,6 +217,8 @@ enum KeymapDefaults {
         map[Chord(command: true, shift: true, key: "[")] = .prevPane
         map[Chord(command: true, shift: true, key: "]")] = .nextPane
         map[Chord(command: true, key: "w")] = .closePane
+        map[Chord(command: true, control: true, key: "w")] = .closeTab
+        map[Chord(command: true, shift: true, key: "w")] = .closeWindow
         map[Chord(command: true, shift: true, key: "s")] = .toggleScrollMode
 
         map[Chord(command: true, key: "[")] = .prevTab

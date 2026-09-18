@@ -15,6 +15,7 @@ final class KeyInterceptor {
         case navLeft, navRight, navUp, navDown
         case prevPane, nextPane
         case closePane
+        case closeTab, closeWindow
         case newTab, newWindow
         case selectTab(Int)
         case prevTab, nextTab

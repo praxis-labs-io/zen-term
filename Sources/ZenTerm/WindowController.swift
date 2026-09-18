@@ -338,7 +338,7 @@ final class WindowController: NSObject {
         nextTabID = 2
 
         onSelect = { [weak self] in self?.select($0) }
-        onClose = { [weak self] in self?.closeTab($0) }
+        onClose = { [weak self] in self?.requestCloseTab($0) }
         onRename = { [weak self] in self?.openRenameTab($0) }
         onNewTab = { [weak self] in self?.newTab() }
         onSplitH = { [weak self] in self?.handle(.splitHorizontal) }
@@ -876,7 +876,7 @@ final class WindowController: NSObject {
         floats.shutdownScope(id)
         clearAttention(id)
         attention.dropTab(id)
-        guard workspace.close(id) else { return closeEmptied(workspace) }
+        guard workspace.close(id) else { return closeWorkspace(workspace) }
         if isOnScreen {
             if let active = activeWorkspace.activeID { visit(active) }
             mount(.instant)
@@ -884,8 +884,8 @@ final class WindowController: NSObject {
         renderAttention()
     }
 
-    /// The last tab took its workspace with it. The window goes only when there is nothing left to show.
-    private func closeEmptied(_ workspace: WorkspaceController) {
+    private func closeWorkspace(_ workspace: WorkspaceController) {
+        Log.info("workspace closed", category: .workspace)
         workspaces.removeAll { $0 === workspace }
         guard let next = workspaces.first else { window.close(); return }
         guard workspace === activeWorkspace else { renderAttention(); return }
@@ -1616,7 +1616,8 @@ final class WindowController: NSObject {
             case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue, .newTool,
                 .renameTab:
                 floats.close()
-            case .toggleToolFloat, .newTab, .newWindow, .selectTab, .prevTab, .nextTab,
+            case .toggleToolFloat, .newTab, .newWindow, .closeTab, .closeWindow,
+                .selectTab, .prevTab, .nextTab,
                 .moveTabLeft, .moveTabRight, .fillScreen,
                 .increaseFontSize, .decreaseFontSize, .resetFontSize, .selectAll,
                 .toggleScrollMode, .toggleSearch, .searchSelection, .findNext, .findPrevious,
@@ -1659,6 +1660,12 @@ final class WindowController: NSObject {
         case .closePane:
             Log.info("close pane", category: .panes)
             requestClosePane()
+        case .closeTab:
+            Log.info("close tab", category: .tabs)
+            activeWorkspace.activeID.map(requestCloseTab)
+        case .closeWindow:
+            Log.info("close window", category: .tabs)
+            requestCloseWindow()
         case .newWindow, .reloadConfig, .checkForUpdates,
             .increaseFontSize, .decreaseFontSize, .resetFontSize:
             onAppGlobalCommand?(chord)
@@ -1753,42 +1760,102 @@ final class WindowController: NSObject {
         if active.isDrawerFocused {
             guard active.focusedDrawerIsBusy else { active.closeFocusedDrawer(); return }
             presentConfirm(
-                variant: .warning, title: "Close Drawer",
-                message: "Closing this drawer will stop the process running in it.",
+                variant: .warning, title: CloseWarning.Subject.drawer.title,
+                message: CloseWarning.message(closing: .drawer, naming: []),
                 confirmLabel: "Close"
             ) { [weak self] in self?.activeController?.closeFocusedDrawer() }
             return
         }
 
         let lastPane = active.isSinglePane
-        let busy = active.focusedPaneIsBusy
         let closesWindow = lastPane && activeWorkspace.tabIDs.count == 1 && workspaces.count == 1
-
         let needsConfirm =
-            busy
-            || (lastPane
-                && (active.hasBusyDrawer
-                    || activeWorkspace.activeID.map(floats.hasBusyInScope) ?? false))
-            || (closesWindow && floats.hasBusy)
+            closesWindow
+            || active.focusedPaneIsBusy
+            || (lastPane && activeWorkspace.activeID.map(isRunning(tab:)) ?? false)
         guard needsConfirm else {
             if active.closeFocused() == false { activeWorkspace.activeID.map { closeTab($0) } }
             return
         }
 
-        let title = lastPane ? "Close Tab" : "Close Pane"
-        let message =
-            lastPane
-            ? "Closing this tab will stop everything running in it."
-            : "Closing this pane will stop the process running in it."
+        let subject: CloseWarning.Subject =
+            closesWindow ? .lastPane(running: windowIsRunning) : (lastPane ? .tab : .pane)
+        let names =
+            closesWindow
+            ? runningNamesInWindow()
+            : (lastPane ? activeWorkspace.activeID.map(hiddenRunningNames(inTab:)) ?? [] : [])
         presentConfirm(
-            variant: .warning, title: title, message: message, confirmLabel: "Close"
+            variant: .warning, title: subject.title,
+            message: CloseWarning.message(closing: subject, naming: names), confirmLabel: "Close"
         ) { [weak self] in
             guard let self, let active = self.activeController else { return }
             if active.closeFocused() == false { self.activeWorkspace.activeID.map { self.closeTab($0) } }
         }
     }
 
-    // Terminal end of the responder chain for Copy, Paste and Select All; an open card swallows them.
+    private func requestCloseTab(_ id: TabID) {
+        guard let workspace = workspace(of: id) else { return }
+        let closesWindow = workspace.tabIDs.count == 1 && workspaces.count == 1
+        guard closesWindow || isRunning(tab: id) else { closeTab(id); return }
+        let subject: CloseWarning.Subject =
+            closesWindow ? .lastTab(running: windowIsRunning) : .tab
+        let names = closesWindow ? runningNamesInWindow() : hiddenRunningNames(inTab: id)
+        presentConfirm(
+            variant: .warning, title: subject.title,
+            message: CloseWarning.message(closing: subject, naming: names),
+            confirmLabel: "Close"
+        ) { [weak self] in self?.closeTab(id) }
+    }
+
+    private func requestCloseWindow() {
+        guard windowIsRunning else {
+            window.close()
+            return
+        }
+        presentConfirm(
+            variant: .warning, title: CloseWarning.Subject.window.title,
+            message: CloseWarning.message(closing: .window, naming: runningNamesInWindow()),
+            confirmLabel: "Close"
+        ) { [weak self] in self?.window.close() }
+    }
+
+    private var windowIsRunning: Bool {
+        workspaces.contains(where: isRunning(workspace:)) || floats.hasBusy
+    }
+
+    private func isRunning(tab id: TabID) -> Bool {
+        controller(id)?.allSurfaces.contains(where: \.isBusy) == true || floats.hasBusyInScope(id)
+    }
+
+    private func isRunning(workspace: WorkspaceController) -> Bool {
+        workspace.allSurfaces.contains(where: \.isBusy)
+            || workspace.tabIDs.contains(where: floats.hasBusyInScope)
+    }
+
+    private func hiddenRunningNames(inTab id: TabID) -> [String] {
+        let drawers = (controller(id)?.hiddenRunningDrawers ?? []).map(Self.drawerName)
+        return drawers + floats.hiddenRunningTitles(scope: id)
+    }
+
+    private func runningNamesInWindow() -> [String] {
+        let named: [String]
+        if workspaces.count > 1 {
+            named = workspaces.filter(isRunning(workspace:)).map(\.name)
+        } else if activeWorkspace.tabIDs.count > 1 {
+            named = activeWorkspace.tabIDs.filter(isRunning(tab:)).map(title(of:))
+        } else {
+            named = activeWorkspace.activeID.map(hiddenRunningNames(inTab:)) ?? []
+        }
+        return named + floats.hiddenRunningTitles(scope: nil)
+    }
+
+    private static func drawerName(_ edge: DrawerEdge) -> String {
+        switch edge {
+        case .bottom: return "the bottom drawer"
+        case .right: return "the right drawer"
+        }
+    }
+
     @objc func copy(_ sender: Any?) {
         if isConfirmOpen || isModalOverlayOpen { return }
         if floats.isOpen { floats.copyFromSurface(sender) } else { activeController?.copyFromSurface(sender) }
@@ -2160,6 +2227,10 @@ final class WindowController: NSObject {
         select(activeWorkspace.tabIDs[index])
     }
 
+    func renameActiveTabForTesting(to name: String) {
+        activeWorkspace.activeID.map { renameTab($0, to: name) }
+    }
+
     func renameTabForTesting(index: Int) {
         guard activeWorkspace.tabIDs.indices.contains(index) else { return }
         openRenameTab(activeWorkspace.tabIDs[index])
@@ -2312,6 +2383,12 @@ final class WindowController: NSObject {
 }
 
 extension WindowController: NSWindowDelegate {
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard windowIsRunning else { return true }
+        requestCloseWindow()
+        return false
+    }
+
     func windowWillClose(_ notification: Notification) { tearDown() }
 
     func windowDidResignKey(_ notification: Notification) { endModes() }

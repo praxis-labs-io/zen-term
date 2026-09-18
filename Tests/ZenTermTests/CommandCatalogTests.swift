@@ -28,7 +28,7 @@ final class CommandCatalogTests: XCTestCase {
                 "Report an Issue…",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "New Tab", "Previous Tab", "Next Tab", "Move Tab Left", "Move Tab Right",
-                "Rename Tab…",
+                "Rename Tab…", "Close Tab",
                 "Split Horizontally", "Split Vertically",
                 "Focus Pane Left", "Focus Pane Down", "Focus Pane Up", "Focus Pane Right",
                 "Focus Previous Pane", "Focus Next Pane",
@@ -39,7 +39,8 @@ final class CommandCatalogTests: XCTestCase {
                 "Clear Screen", "Paste Selection", "Write Screen to File",
                 "Write Screen to File, Copy Path", "Write Screen to File and Open",
                 "Close Pane",
-                "Fill Screen", "Increase Font Size", "Decrease Font Size", "Reset Font Size",
+                "Fill Screen", "Close Window",
+                "Increase Font Size", "Decrease Font Size", "Reset Font Size",
                 "Dismiss Notice", "Dismiss All Notices",
             ])
     }
