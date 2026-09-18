@@ -828,29 +828,10 @@ final class TabController: NSObject {
         panel: PanelHostView, opening: Bool, parkOffset: CGVector,
         animate: [(constraint: NSLayoutConstraint, to: CGFloat)], isCurrent: @escaping () -> Bool
     ) {
-        let slideStarts = animate.map(\.constraint.constant)
-        for (constraint, target) in animate { constraint.constant = target }
-        content.layoutSubtreeIfNeeded()
-        beginDrawerSlide()
-        for (pair, start) in zip(animate, slideStarts) { pair.constraint.constant = start }
-        content.layoutSubtreeIfNeeded()
-
-        let parked = CATransform3DMakeTranslation(parkOffset.dx, parkOffset.dy, 0)
-        let restT = opening ? CATransform3DIdentity : parked
-        panel.wantsLayer = true
-        panel.layer?.transform = restT
-        let slideAnim = CABasicAnimation(keyPath: "transform")
-        slideAnim.fromValue = NSValue(caTransform3D: opening ? parked : CATransform3DIdentity)
-        slideAnim.toValue = NSValue(caTransform3D: restT)
-        slideAnim.duration = Motion.pageSlideDuration
-        slideAnim.timingFunction = Motion.landingTiming
-
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = Motion.pageSlideDuration
-            ctx.timingFunction = Motion.landingTiming
-            for (constraint, target) in animate { constraint.animator().constant = target }
-            panel.layer?.add(slideAnim, forKey: "drawer.slide")
-        } completionHandler: { [weak self] in
+        Motion.drawerSlide(
+            panel: panel, opening: opening, parkOffset: parkOffset, animate: animate, in: content,
+            beforeSlide: { [weak self] in self?.beginDrawerSlide() }
+        ) { [weak self] in
             guard let self else { return }
             let isLastSlide = self.activeDrawerSlides <= 1
             if isCurrent() {

@@ -138,6 +138,40 @@ enum Motion {
         }
     }
 
+    /// Moves `animate` to their targets while `panel` slides in from, or out to, `parkOffset`. Lays `root` out at
+    /// the final size before `beforeSlide`, so a caller that suspends terminal size sync there reflows once.
+    static func drawerSlide(
+        panel: NSView, opening: Bool, parkOffset: CGVector,
+        animate: [(constraint: NSLayoutConstraint, to: CGFloat)], in root: NSView,
+        beforeSlide: () -> Void, completion: @escaping () -> Void
+    ) {
+        let slideStarts = animate.map(\.constraint.constant)
+        for (constraint, target) in animate { constraint.constant = target }
+        root.layoutSubtreeIfNeeded()
+        beforeSlide()
+        for (pair, start) in zip(animate, slideStarts) { pair.constraint.constant = start }
+        root.layoutSubtreeIfNeeded()
+
+        let parked = CATransform3DMakeTranslation(parkOffset.dx, parkOffset.dy, 0)
+        let restT = opening ? CATransform3DIdentity : parked
+        panel.wantsLayer = true
+        panel.layer?.transform = restT
+        let slideAnim = CABasicAnimation(keyPath: "transform")
+        slideAnim.fromValue = NSValue(caTransform3D: opening ? parked : CATransform3DIdentity)
+        slideAnim.toValue = NSValue(caTransform3D: restT)
+        slideAnim.duration = pageSlideDuration
+        slideAnim.timingFunction = landingTiming
+
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = pageSlideDuration
+            ctx.timingFunction = landingTiming
+            for (constraint, target) in animate { constraint.animator().constant = target }
+            panel.layer?.add(slideAnim, forKey: "drawer.slide")
+        } completionHandler: {
+            completion()
+        }
+    }
+
     static func fade(
         _ view: NSView, to opacity: Float,
         duration: CFTimeInterval = fadeDuration, completion: (() -> Void)? = nil
