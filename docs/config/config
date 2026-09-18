@@ -176,10 +176,11 @@
 # In-app Settings edit: applies live.
 # agent-notifications = true          # true | false
 
-# The in-app card for a background tab, or a tool out of sight, that needs you.
-# Sticky waits to be answered; auto clears itself after `toast-duration`. Either
-# way the tab's colored number and the tool's dot stay until you visit it or
-# press Dismiss. Switch on a tool's card opens that tool.
+# The in-app card for a background tab, or a drawer or tool out of sight, that
+# needs you. Sticky waits to be answered; auto clears itself after
+# `toast-duration`. Either way the tab's colored number and the drawer's or
+# tool's dot stay until you look at it or press Dismiss. Switch on a tool's card
+# opens that tool.
 # In-app Settings edit: applies to the next notification.
 # attention-toast = sticky            # sticky | auto
 

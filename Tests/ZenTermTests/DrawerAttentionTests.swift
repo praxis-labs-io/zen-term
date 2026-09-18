@@ -95,6 +95,18 @@ final class DrawerAttentionTests: WindowTestCase {
         XCTAssertEqual(toastViews(c).count, 1, "out of sight is out of sight, even in the tab you are in")
     }
 
+    func test_aDrawersCard_namesItsTabAndTheDrawer() throws {
+        let c = makeWindow()
+        let drawer = try closedRightDrawer(c)
+        let tab = try XCTUnwrap(c.tabTitleForTesting(index: 0))
+
+        notify(drawer)
+
+        let copy = toastViews(c).flatMap { descendants(of: $0) }
+            .compactMap { ($0 as? NSTextField)?.stringValue }
+        XCTAssertTrue(copy.contains("\(tab): right drawer"), "got \(copy)")
+    }
+
     func test_openingTheDrawer_answersIt() throws {
         let c = makeWindow()
         let drawer = try closedRightDrawer(c)

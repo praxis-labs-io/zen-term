@@ -193,6 +193,21 @@ final class FloatAttentionTests: WindowTestCase {
         XCTAssertEqual(c.dockForTesting.dottedToolFloatIDsForTesting, ["btop"])
     }
 
+    func test_aScratchCard_namesItsTabAndScratch() throws {
+        let c = makeWindow()
+        let before = spawned.count
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        let scratch = try XCTUnwrap(spawned.dropFirst(before).first)
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        let tab = try XCTUnwrap(c.tabTitleForTesting(index: 0))
+
+        notify(scratch, "needs input")
+
+        let copy = toastViews(c).flatMap { descendants(of: $0) }
+            .compactMap { ($0 as? NSTextField)?.stringValue }
+        XCTAssertTrue(copy.contains("\(tab): Scratch"), "got \(copy)")
+    }
+
     func test_aWindowScopedFloat_marksNoSingleTab() throws {
         let c = makeWindow()
         c.handle(.toggleToolFloat("btop"))

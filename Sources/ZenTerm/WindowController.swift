@@ -1785,12 +1785,13 @@ final class WindowController: NSObject {
             guard let self, !self.tabs.order.isEmpty else { return }
             let message = notification.body.isEmpty ? notification.title : notification.body
             let target = owner.flatMap { self.tabs.order.contains($0) ? $0 : nil } ?? self.tabs.activeID
+            let title = owner == nil ? spec.title : "\(self.titles[target] ?? "shell"): \(spec.title)"
 
             if AgentNotifier.shouldPushNotification(
                 appActive: NSApp.isActive, enabled: GeneralConfig.current.agentNotifications)
             {
                 AgentNotifier.shared.notify(
-                    windowID: self.windowID, tabID: target, title: spec.title, body: message)
+                    windowID: self.windowID, tabID: target, title: title, body: message)
             }
 
             let shown = self.floats.activeID == spec.id
@@ -1806,7 +1807,7 @@ final class WindowController: NSObject {
                     if self.floats.activeID != spec.id { self.handle(.toggleToolFloat(spec.id)) }
                 })
             self.presentWaitingToast(
-                for: target, title: spec.title, message: message, surface: surface,
+                for: target, title: title, message: message, surface: surface,
                 destination: destination)
             if self.attentionSnapshot(surface, in: target) != before { self.renderAttention() }
         }
@@ -1821,7 +1822,8 @@ final class WindowController: NSObject {
                 appActive: NSApp.isActive, enabled: GeneralConfig.current.agentNotifications)
             {
                 AgentNotifier.shared.notify(
-                    windowID: self.windowID, tabID: id, title: self.titles[id] ?? "shell", body: message)
+                    windowID: self.windowID, tabID: id, title: self.cardTitle(for: surface, in: id),
+                    body: message)
             }
 
             let seen = self.isOnScreen(surface, in: id)
@@ -1830,7 +1832,7 @@ final class WindowController: NSObject {
 
             guard !seen else { return }
             self.presentWaitingToast(
-                for: id, title: self.titles[id] ?? "shell", message: message, surface: surface)
+                for: id, title: self.cardTitle(for: surface, in: id), message: message, surface: surface)
             if self.attentionSnapshot(surface, in: id) != before { self.renderAttention() }
         }
     }
@@ -1859,7 +1861,7 @@ final class WindowController: NSObject {
         if let old = attentionCards[id] { toasts.dismiss(old) }
         let content = ToastContent(
             variant: result.exitCode.map { $0 == 0 ? .positive : .warning } ?? .positive,
-            title: titles[id] ?? "shell", message: Self.commandResultMessage(result))
+            title: cardTitle(for: surface, in: id), message: Self.commandResultMessage(result))
         let actions = [
             ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
                 guard let self else { return }
@@ -1921,6 +1923,15 @@ final class WindowController: NSObject {
         attentionCards[id] = mountAttentionToast(
             for: id, surface: surface, content: content, actions: actions,
             autoDismiss: GeneralConfig.current.attentionToast == .auto)
+    }
+
+    /// Names where a card came from: the tab, then the drawer when a drawer is what asked.
+    private func cardTitle(for surface: SurfaceID?, in id: TabID) -> String {
+        let tab = titles[id] ?? "shell"
+        guard let surface, let drawers = controllers[id]?.drawerSurfaceIDs else { return tab }
+        if surface == drawers.right { return "\(tab): right drawer" }
+        if surface == drawers.bottom { return "\(tab): bottom drawer" }
+        return tab
     }
 
     /// A surface is seen while it is on screen: its tab is active and, for a drawer, the drawer is open.
@@ -2037,6 +2048,11 @@ final class WindowController: NSObject {
     var windowAttentionForTesting: SurfaceAttention { attention.windowState }
 
     var dockForTesting: ToggleDock { dock }
+
+    func tabTitleForTesting(index: Int) -> String? {
+        guard tabs.order.indices.contains(index) else { return nil }
+        return titles[tabs.order[index]]
+    }
 
     func surfaceAttentionForTesting(tabIndex: Int) -> SurfaceAttention? {
         guard tabs.order.indices.contains(tabIndex) else { return nil }
