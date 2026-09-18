@@ -132,6 +132,49 @@ final class AttentionStoreWaitingCountTests: XCTestCase {
             "it asked and you never looked, which is exactly why its tab is still marked")
     }
 
+    func test_twoAgentsThatExitedWhileWaitingInOneTab_countTwice() {
+        let store = makeStore()
+        let a = SurfaceIDs.mint()
+        let b = SurfaceIDs.mint()
+        store.register(a, tab: tab)
+        store.register(b, tab: tab)
+        store.record(a, .waiting, seen: false)
+        store.record(b, .waiting, seen: false)
+
+        store.release(a)
+        store.release(b)
+
+        XCTAssertEqual(store.waitingCount, 2, "two agents asked, so N is two however many tabs they shared")
+    }
+
+    func test_visitingATab_clearsEveryAgentItRemembers() {
+        let store = makeStore()
+        let a = SurfaceIDs.mint()
+        let b = SurfaceIDs.mint()
+        store.register(a, tab: tab)
+        store.register(b, tab: tab)
+        store.record(a, .waiting, seen: false)
+        store.record(b, .waiting, seen: false)
+        store.release(a)
+        store.release(b)
+
+        store.markSeen(tab: tab)
+
+        XCTAssertEqual(store.waitingCount, 0)
+    }
+
+    func test_closingATab_forgetsTheAgentsItRemembers() {
+        let store = makeStore()
+        let a = SurfaceIDs.mint()
+        store.register(a, tab: tab)
+        store.record(a, .waiting, seen: false)
+        store.release(a)
+
+        store.dropTab(tab)
+
+        XCTAssertEqual(store.waitingCount, 0)
+    }
+
     func test_aCompletionThatExited_doesNotCount() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()

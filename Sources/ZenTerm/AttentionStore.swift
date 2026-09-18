@@ -14,7 +14,8 @@ final class AttentionStore {
     private var entries: [SurfaceID: Entry] = [:]
 
     // An unseen latch outlives the surface that raised it, the way tab-keyed state did before.
-    private var residual: [TabID: (state: SurfaceAttention, since: Date?)] = [:]
+    // `waiting` is a count, not a flag: two agents that each asked and exited are still two.
+    private var residual: [TabID: (state: SurfaceAttention, since: Date?, waiting: Int)] = [:]
 
     private let now: () -> Date
 
@@ -33,7 +34,8 @@ final class AttentionStore {
         let existing = residual[tab]
         residual[tab] = (
             max(existing?.state ?? .idle, entry.latched),
-            earliest(existing?.since, entry.since)
+            earliest(existing?.since, entry.since),
+            (existing?.waiting ?? 0) + (entry.latched == .waiting ? 1 : 0)
         )
     }
 
@@ -90,7 +92,7 @@ final class AttentionStore {
     /// How many agents are waiting on you. A residual counts: something asked, and you have not looked.
     var waitingCount: Int {
         entries.values.filter { !$0.seen && $0.latched == .waiting }.count
-            + residual.values.filter { $0.state == .waiting }.count
+            + residual.values.reduce(0) { $0 + $1.waiting }
     }
 
     private func ids(in tab: TabID) -> [SurfaceID] {
