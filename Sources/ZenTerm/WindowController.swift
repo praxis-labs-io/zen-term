@@ -359,6 +359,7 @@ final class WindowController: NSObject {
         activeWorkspace.setController(makeController(cwd: initialCWD), for: firstID)
 
         layoutContainer()
+        window.reserveContentWidth(sidebar.isDocked ? SidebarView.width : 0)
         window.delegate = self
         wireModes()
 
@@ -1714,8 +1715,10 @@ final class WindowController: NSObject {
         case .fillScreen: toggleFillScreen()
         case .toggleSidebar:
             Log.info("sidebar toggled", category: .workspace)
+            if !sidebar.isDocked { window.reserveContentWidth(SidebarView.width) }
             let onScreen = (activeController?.allSurfaces ?? []) + [floats.shownSurface].compactMap { $0 }
             sidebar.toggle(holding: onScreen, in: container)
+            if !sidebar.isDocked { window.reserveContentWidth(0) }
         case .toggleToolFloat(let id):
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }

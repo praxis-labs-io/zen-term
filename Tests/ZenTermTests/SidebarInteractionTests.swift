@@ -139,6 +139,51 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertFalse(sidebar.toggleButtonForTesting.isHidden)
     }
 
+    private func contentWidth(_ controller: WindowController) -> CGFloat {
+        controller.window.contentRect(forFrameRect: controller.window.frame).width
+    }
+
+    func test_docking_growsAWindowNarrowerThanTheDockedMinimum() throws {
+        let controller = makeController()
+        controller.handle(.toggleSidebar)
+        controller.window.setContentSize(controller.window.contentMinSize)
+        let narrow = contentWidth(controller)
+
+        controller.handle(.toggleSidebar)
+
+        XCTAssertGreaterThanOrEqual(contentWidth(controller), narrow + SidebarView.width)
+        XCTAssertEqual(controller.window.contentMinSize.width, narrow + SidebarView.width)
+    }
+
+    func test_collapsing_lowersTheMinimumAgain() throws {
+        let controller = makeController()
+        let docked = controller.window.contentMinSize.width
+
+        controller.handle(.toggleSidebar)
+
+        XCTAssertEqual(controller.window.contentMinSize.width, docked - SidebarView.width)
+    }
+
+    func test_dockedAtTheMinimumWidth_withAUserFloat_theTabBarKeepsRoom() throws {
+        var config = GeneralConfig.current
+        config.floats = [
+            ToolFloat(
+                id: "dev", order: 0, title: "dev", icon: "square.on.square", command: "cmd", dir: nil,
+                widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false,
+                persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "d"))
+        ]
+        GeneralConfig.setCurrentForTesting(config)
+        let controller = makeController()
+        controller.window.setContentSize(controller.window.contentMinSize)
+
+        let bar = frame(of: try tabBar(in: controller), in: controller)
+        let dock = frame(of: controller.dockForTesting, in: controller)
+
+        XCTAssertGreaterThanOrEqual(bar.minX, SidebarView.width, "the tab bar starts after the docked sidebar")
+        XCTAssertGreaterThan(bar.width, 0, "the tab bar keeps room between the sidebar and the toolbar")
+        XCTAssertLessThanOrEqual(bar.maxX, dock.minX)
+    }
+
     func test_collapsedLead_namesTheActiveWorkspace() throws {
         let controller = makeController()
         controller.handle(.toggleSidebar)
