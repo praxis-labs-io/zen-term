@@ -3,12 +3,18 @@ import AppKit
 struct ToastContent: Equatable {
     let variant: ToastVariant
     let title: String
+    /// Follows `title` and never truncates, so a long title gives way before it does.
+    let titleTail: String?
     let message: String
     let icon: String?
 
-    init(variant: ToastVariant, title: String, message: String, icon: String? = nil) {
+    init(
+        variant: ToastVariant, title: String, titleTail: String? = nil, message: String,
+        icon: String? = nil
+    ) {
         self.variant = variant
         self.title = title
+        self.titleTail = titleTail
         self.message = message
         self.icon = icon
     }
@@ -26,6 +32,7 @@ final class ToastView: ShadowCardView {
     private let cancelAction: (() -> Void)?
     private let variant: ToastVariant
     private let titleLabel: NSTextField
+    private let titleTailLabel: NSTextField?
     private let messageLabel: NSTextField
     private var closeButton: IconButton?
     private var actionButtons: [AppButton] = []
@@ -56,6 +63,7 @@ final class ToastView: ShadowCardView {
         self.cancelAction = actions.first { $0.kind == .cancel }?.run
         self.variant = content.variant
         self.titleLabel = NSTextField(labelWithString: content.title)
+        self.titleTailLabel = content.titleTail.map { NSTextField(labelWithString: $0) }
         self.messageLabel = NSTextField(wrappingLabelWithString: content.message)
         super.init(frame: .zero)
 
@@ -82,6 +90,9 @@ final class ToastView: ShadowCardView {
         titleLabel.textColor = Self.titleColor
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        titleTailLabel?.font = titleLabel.font
+        titleTailLabel?.textColor = Self.titleColor
+        titleTailLabel?.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         messageLabel.font = Self.messageFont
         messageLabel.textColor = Self.messageColor
@@ -90,7 +101,10 @@ final class ToastView: ShadowCardView {
         let headerSpacer = NSView()
         headerSpacer.setContentHuggingPriority(.init(rawValue: 1), for: .horizontal)
         headerSpacer.setContentCompressionResistancePriority(.init(rawValue: 1), for: .horizontal)
-        let header = NSStackView(views: [titleLabel, headerSpacer])
+        let titleRow = NSStackView(views: [titleLabel] + (titleTailLabel.map { [$0] } ?? []))
+        titleRow.orientation = .horizontal
+        titleRow.spacing = 0
+        let header = NSStackView(views: [titleRow, headerSpacer])
         header.orientation = .horizontal
         header.alignment = .centerY
         header.spacing = 6
@@ -228,6 +242,7 @@ final class ToastView: ShadowCardView {
         layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
         layer?.borderColor = FloatShadow.edge.cgColor
         titleLabel.textColor = Self.titleColor
+        titleTailLabel?.textColor = Self.titleColor
         messageLabel.textColor = Self.messageColor
         shortcutSlots.forEach { $0.reapplyTheme() }
         closeButton?.reapplyTheme()
