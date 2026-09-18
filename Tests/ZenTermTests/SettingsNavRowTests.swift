@@ -35,6 +35,21 @@ final class SettingsNavRowTests: WindowTestCase {
         XCTAssertEqual(row.layer?.backgroundColor, NSColor.clear.cgColor)
     }
 
+    func test_hidingAnAncestor_clearsTheHoverFill() {
+        let (row, window) = mountedRow()
+        let holder = NSView(frame: window.contentView?.bounds ?? .zero)
+        window.contentView?.addSubview(holder)
+        holder.addSubview(row)
+        row.mouseEntered(with: crossing(.mouseEntered, over: row))
+
+        holder.isHidden = true
+        holder.isHidden = false
+
+        XCTAssertEqual(
+            row.layer?.backgroundColor, NSColor.clear.cgColor,
+            "hiding delivers no mouseExited, so a row shown again would keep a hover the pointer left")
+    }
+
     func test_hoverFillSitsBetweenFocusAndSelection() {
         let (row, window) = mountedRow()
         row.setSelected(true)

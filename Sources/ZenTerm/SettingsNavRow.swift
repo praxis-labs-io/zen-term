@@ -93,6 +93,12 @@ final class SettingsNavRow: NSView {
     override func mouseEntered(with event: NSEvent) { isHovered = true; refreshFill() }
     override func mouseExited(with event: NSEvent) { isHovered = false; refreshFill() }
 
+    override func viewDidHide() {
+        super.viewDidHide()
+        isHovered = false
+        refreshFill()
+    }
+
     override func mouseDown(with event: NSEvent) {
         if isFocusable { window?.makeFirstResponder(self) }
         onActivate()
