@@ -88,6 +88,16 @@ Check `## Install` against current reality rather than copying the last file
 forward. It has already gone stale once: the pre-v0.2.0 notes say "re-download to
 update", which stopped being true when auto-update shipped.
 
+**Every claim traces to the code, not to the commit subject.** A subject says what
+was built. It does not say what a user sees, and the gap between those is where a
+bullet goes wrong. v1.4.0 shipped one saying OSC 9;4 progress "shows activity on
+its pane, its tab and its toolbar button", written off the subject "Read OSC 9;4
+progress as the working level". `SurfaceAttention.tabState` maps `.working` to
+`.idle`, and `progressChanged` only calls `renderDock()`, so the footer dot is the
+one surface it reaches. The correction cost an edit to a public release body and a
+second website sync. Find where each claim renders before you write it, and check
+the bullet that sounds obvious as closely as the one you doubt.
+
 Before showing Drew, run the mechanical checks. These are cheap and catch what
 rereading your own copy does not:
 
