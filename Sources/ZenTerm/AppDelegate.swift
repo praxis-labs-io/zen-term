@@ -78,7 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 toolFloatIsOpen: controller?.isToolFloatOpen == true)
         }
         keys.onModifierChange = { [weak self] event in
-            self?.keyController()?.modifiersDidChange(event)
+            self?.windows.forEach { $0.modifiersDidChange(event) }
         }
         keys.setKeymap(GeneralConfig.current.keymap)
         keys.start()

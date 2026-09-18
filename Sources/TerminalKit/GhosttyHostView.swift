@@ -348,6 +348,21 @@ final class GhosttyHostView: NSView {
     // Leaves `reportedKeys`: libghostty releases only its single `pressed_key` on blur.
     func forgetHeldModifiers() { reportedModifierKeys.removeAll() }
 
+    // For a surface libghostty already holds unfocused, which retires nothing when the app resigns.
+    func releaseHeldModifiers() {
+        for keyCode in reportedModifierKeys {
+            guard
+                let release = NSEvent.keyEvent(
+                    with: .flagsChanged, location: .zero, modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: window?.windowNumber ?? 0, context: nil, characters: "",
+                    charactersIgnoringModifiers: "", isARepeat: false, keyCode: keyCode)
+            else { continue }
+            keyAction(GHOSTTY_ACTION_RELEASE, event: release)
+        }
+        reportedModifierKeys.removeAll()
+    }
+
     // Nothing upstream forwards modifier moves, and kitty's report-all-keys mode needs them.
     override func flagsChanged(with event: NSEvent) {
         guard let action = modifierActionToForward(for: event) else { return }

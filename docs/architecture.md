@@ -243,8 +243,8 @@ it.
 and passes; a chord resolves; whatever is left goes to `modeHandler`, then the PTY.
 `modeHandler` sits below chord routing so a mode never swallows ⌘T or the palette.
 
-- **`flagsChanged` fans out** because the chain reaches one pane while mouse mods are per
-  surface, so the rest never highlight a ⌘-hovered link. Active tab and floats only.
+- **`flagsChanged` reaches every surface**, since mouse mods are per surface. Only one on
+  screen in the key window takes a press; any takes the release it is owed.
 - **`Route` has two ways of not consuming.** `passThrough`: nothing claimed it, a mode may.
   `deferToTerminal`: a chord matched and `passThroughGuard` handed it to the program
   (Ctrl-nav over nvim), so nothing else may touch it.
@@ -489,8 +489,7 @@ concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. It gates
   (`GitRepo.currentBranch`); churn is `git --no-optional-locks status --porcelain=v2
   --branch` on `churnQueue` (width four), with per-caller cancel tokens. No probe fetches.
 - **A float open is cancellable during its repo-root probe** (`cancelPendingOpen()`).
-- **Palette rows are reused**, so they never carry an index; order is the stack's arranged
-  subviews.
+- **Palette rows are reused** and carry no index; order is the stack's `arrangedSubviews`.
 - **Swift's sort is not stable**, so floats sort by `(order, parse position)`.
 
 ## What does not exist
