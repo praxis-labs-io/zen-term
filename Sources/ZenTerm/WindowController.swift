@@ -738,8 +738,11 @@ final class WindowController: NSObject {
         }
         old?.shutdown()
         floats.shutdownScope(id)
+        clearAttention(id)
+        attention.dropTab(id)
         installController(
             id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: workspace, transition: .instant)
+        renderAttention()
     }
 
     // The recipe waits for the canvas motion: a drawer sliding the same way as its canvas has no readable motion.
