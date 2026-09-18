@@ -13,8 +13,8 @@ or how something used to be.
 
 | File | Holds | Budget |
 |---|---|---|
-| `docs/architecture.md` | how the app fits together, and the constraints that shape it | 500 lines |
-| `docs/swift-conventions.md` | AppKit and Swift traps past what a linter catches | 300 lines |
+| `docs/architecture.md` | how the app fits together, and the constraints that shape it | 550 lines |
+| `docs/swift-conventions.md` | AppKit and Swift traps past what a linter catches | 350 lines |
 | `docs/releasing.md` | `bin/release`, versioning guards, notarization, Sparkle | |
 | `docs/third-party-notices.md` | re-probing the notices after a ghostty pin move | |
 | `docs/nvim-navigator-protocol.md` | the nav socket wire contract | |
