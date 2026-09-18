@@ -64,7 +64,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     var isOpen: Bool { activeFloat != nil }
     var activeID: String? { activeFloat?.spec.id }
 
-    var hasBusy: Bool { liveFloats.values.contains { $0.surface.isBusy } }
+    var hasBusy: Bool { allSurfaces.contains(where: \.isBusy) }
 
     func hasBusyInScope(_ tab: TabID) -> Bool {
         liveFloats.values.contains { $0.tab == tab && $0.surface.isBusy }

@@ -83,6 +83,24 @@ final class CloseCommandTests: WindowTestCase {
         try XCTUnwrap(spawned.first)
     }
 
+    private func configureFloat(_ id: String, persist: ToolFloat.Persistence) {
+        var config = GeneralConfig.builtIn
+        config.floats = [
+            ToolFloat(
+                id: id, order: 0, title: id, icon: ToolFloatParser.defaultIcon,
+                command: id, dir: nil, widthFraction: 0.85, heightFraction: 0.85,
+                requiresGitRepo: false, persist: persist,
+                toggle: Chord(command: true, shift: true, key: "j"))
+        ]
+        GeneralConfig.setCurrentForTesting(config)
+    }
+
+    private func openRunningFloat(_ c: WindowController, _ id: String) throws {
+        let before = spawned.count
+        c.handle(.toggleToolFloat(id))
+        try XCTUnwrap(spawned.dropFirst(before).first, "opening the float spawns a shell").isBusy = true
+    }
+
     private func activePane(_ c: WindowController) throws -> RecordingSurface {
         let tab = try XCTUnwrap(c.activeTabIDForTesting)
         let controller = try XCTUnwrap(c.controllerForTesting(tab: tab))
@@ -260,15 +278,7 @@ final class CloseCommandTests: WindowTestCase {
     }
 
     func test_closeWindow_withOneWorkspace_stillNamesAFloatRunningOutOfSight() throws {
-        var config = GeneralConfig.builtIn
-        config.floats = [
-            ToolFloat(
-                id: "btop", order: 0, title: "btop", icon: ToolFloatParser.defaultIcon,
-                command: "btop", dir: nil, widthFraction: 0.85, heightFraction: 0.85,
-                requiresGitRepo: false, persist: .window,
-                toggle: Chord(command: true, shift: true, key: "j"))
-        ]
-        GeneralConfig.setCurrentForTesting(config)
+        configureFloat("btop", persist: .window)
         let c = onScreen()
         let before = spawned.count
         c.handle(.toggleToolFloat("btop"))
@@ -310,6 +320,29 @@ final class CloseCommandTests: WindowTestCase {
             toastText(c).contains(
                 "Closing this window will stop everything running in it, including the bottom drawer."),
             "the same drawer ⌘W names, named the same way")
+    }
+
+    func test_closeWindow_withAnOpenEphemeralFloatRunning_asksFirst() throws {
+        configureFloat("yazi", persist: .ephemeral)
+        let c = onScreen()
+        try openRunningFloat(c, "yazi")
+
+        c.handle(.closeWindow)
+
+        XCTAssertTrue(c.isConfirmOpen, "an ephemeral float is running on screen, so closing ends it")
+        XCTAssertTrue(c.window.isVisible)
+    }
+
+    func test_closeTab_takingTheWindow_withAnOpenEphemeralFloatRunning_saysSo() throws {
+        configureFloat("yazi", persist: .ephemeral)
+        let c = onScreen()
+        try openRunningFloat(c, "yazi")
+
+        c.handle(.closeTab)
+
+        XCTAssertTrue(
+            toastText(c).contains(
+                "Closing this tab will close the window and stop everything running in it."))
     }
 
     func test_closeWindow_namesTheWorkspacesWithSomethingRunning() throws {
