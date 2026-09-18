@@ -70,7 +70,6 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         liveFloats.values.contains { $0.tab == tab && $0.surface.isBusy }
     }
 
-    /// Titles of running floats with nothing on screen to look at. `tab` takes that tab's, nil the window-scoped ones.
     func hiddenRunningTitles(scope tab: TabID?) -> [String] {
         liveFloats.values
             .filter { $0.tab == tab && $0.surface.isBusy && activeFloat?.surface !== $0.surface }

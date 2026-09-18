@@ -884,7 +884,6 @@ final class WindowController: NSObject {
         renderAttention()
     }
 
-    // The one path that closes a workspace, so a close command and the sidebar can never disagree.
     private func closeWorkspace(_ workspace: WorkspaceController) {
         Log.info("workspace closed", category: .workspace)
         workspaces.removeAll { $0 === workspace }
@@ -1833,13 +1832,11 @@ final class WindowController: NSObject {
             || workspace.tabIDs.contains(where: floats.hasBusyInScope)
     }
 
-    // Named one level down from the tab: only what a closed drawer or an unshown float hides.
     private func hiddenRunningNames(inTab id: TabID) -> [String] {
         let drawers = (controller(id)?.hiddenRunningDrawers ?? []).map(Self.drawerName)
         return drawers + floats.hiddenRunningTitles(scope: id)
     }
 
-    // One level down from whatever the window holds, so the name is always the next thing in.
     private func runningNamesInWindow() -> [String] {
         let named: [String]
         if workspaces.count > 1 {

@@ -79,7 +79,6 @@ final class CloseCommandTests: WindowTestCase {
         drainMainQueue()
     }
 
-    /// The tab's own pane, which `mountAndStart` spawns first.
     private func firstPane() throws -> RecordingSurface {
         try XCTUnwrap(spawned.first)
     }
@@ -90,13 +89,11 @@ final class CloseCommandTests: WindowTestCase {
         return try XCTUnwrap(controller.allSurfaces.first as? RecordingSurface)
     }
 
-    /// A second tab, so a tab close is not also a window close.
     private func spareTab(_ c: WindowController) {
         c.newTabForTesting()
         c.window.contentView?.layoutSubtreeIfNeeded()
     }
 
-    /// Lays out between splits: `split` refuses a pane whose bounds are still zero.
     private func split(
         _ c: WindowController, _ count: Int, file: StaticString = #filePath, line: UInt = #line
     ) {
@@ -129,8 +126,6 @@ final class CloseCommandTests: WindowTestCase {
         drainMainQueue()
         return scratch
     }
-
-    // MARK: ⌘W, the cascade
 
     func test_closePane_closesThePane_andLeavesTheTab() throws {
         let c = makeWindow()
@@ -207,8 +202,6 @@ final class CloseCommandTests: WindowTestCase {
                     + "including the bottom drawer."))
     }
 
-    // MARK: ⌘⌃W, the tab
-
     func test_closeTab_closesTheWholeTab_whateverThePaneCount() {
         let c = makeWindow()
         c.newTabForTesting()
@@ -233,8 +226,6 @@ final class CloseCommandTests: WindowTestCase {
 
         XCTAssertFalse(c.window.isVisible)
     }
-
-    // MARK: ⌘⇧W, the window
 
     func test_closeWindow_closesTheWindow() {
         let c = onScreen()
@@ -332,8 +323,6 @@ final class CloseCommandTests: WindowTestCase {
             toastText(c).contains(
                 "Closing this window will stop everything running in it, including Home."))
     }
-
-    // MARK: what the confirm names
 
     func test_closeTab_withOnlyAVisiblePaneRunning_namesNothing() throws {
         let c = makeWindow()

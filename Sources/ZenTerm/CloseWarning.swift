@@ -1,8 +1,6 @@
-/// The confirm copy for a close, naming what it ends that nothing on screen shows.
 enum CloseWarning {
     enum Subject: Equatable {
         case pane, drawer, tab, window
-        /// The last pane or tab, whose close takes the window with it.
         case lastPane(running: Bool), lastTab(running: Bool)
 
         var title: String {
@@ -30,7 +28,6 @@ enum CloseWarning {
         }
     }
 
-    /// The consequence on its own, or with the names appended as an `including` clause.
     static func message(closing subject: Subject, naming names: [String]) -> String {
         guard !names.isEmpty else { return subject.consequence + "." }
         return subject.consequence + ", including " + list(names) + "."
