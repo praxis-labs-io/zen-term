@@ -460,7 +460,7 @@ final class WindowController: NSObject {
             tabBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             tabBar.heightAnchor.constraint(equalToConstant: TabBarView.height),
             dock.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
-            dock.centerYAnchor.constraint(equalTo: tabBar.centerYAnchor, constant: -6),
+            dock.centerYAnchor.constraint(equalTo: tabBar.chipBandCenterYAnchor),
             tabBar.trailingAnchor.constraint(equalTo: dock.leadingAnchor, constant: -8),
         ])
     }

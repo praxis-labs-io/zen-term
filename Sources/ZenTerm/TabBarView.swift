@@ -23,7 +23,7 @@ final class TabBarView: NSView {
 
     private static let leadingInset: CGFloat = 12
     private static let chipSpacing: CGFloat = 4
-    private static let chipHeight: CGFloat = 22
+    static let chipHeight: CGFloat = 22
     private static let bandNudge: CGFloat = 6
     private static let fadeWidth: CGFloat = 28
 
@@ -107,6 +107,9 @@ final class TabBarView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     deinit { NotificationCenter.default.removeObserver(self) }
+
+    /// The line the chips center on, lifted off the bar's center to clear their underline.
+    var chipBandCenterYAnchor: NSLayoutYAxisAnchor { scrollView.centerYAnchor }
 
     func render(_ items: [TabBarItem]) {
         lastItems = items

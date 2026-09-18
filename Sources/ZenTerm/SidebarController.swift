@@ -42,7 +42,7 @@ final class SidebarController {
 
     var canvasLeadingAnchor: NSLayoutXAxisAnchor { canvasEdge.leadingAnchor }
 
-    func install(in container: NSView, besideTabBar tabBar: NSView) {
+    func install(in container: NSView, besideTabBar tabBar: TabBarView) {
         container.addSubview(view)
         container.addSubview(lead)
         container.addSubview(footer)
@@ -70,11 +70,11 @@ final class SidebarController {
             sidebarTop,
             view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             toggleButton.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: Self.toggleInset),
-            toggleButton.centerYAnchor.constraint(equalTo: tabBar.centerYAnchor),
+            toggleButton.centerYAnchor.constraint(equalTo: tabBar.chipBandCenterYAnchor),
             footer.leadingAnchor.constraint(equalTo: toggleButton.trailingAnchor, constant: SidebarFooter.spacing),
             footer.centerYAnchor.constraint(equalTo: toggleButton.centerYAnchor),
             lead.leadingAnchor.constraint(equalTo: edge.leadingAnchor),
-            lead.centerYAnchor.constraint(equalTo: tabBar.centerYAnchor),
+            lead.centerYAnchor.constraint(equalTo: tabBar.chipBandCenterYAnchor),
             leadWidth,
         ])
         settle()
