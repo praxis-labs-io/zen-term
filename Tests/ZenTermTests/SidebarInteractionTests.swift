@@ -187,8 +187,8 @@ final class SidebarInteractionTests: WindowTestCase {
         hiding([.commandPalette])
         let controller = makeController()
 
-        XCTAssertTrue(controller.sidebarForTesting.view.paletteButtonForTesting.isHidden)
-        XCTAssertFalse(controller.sidebarForTesting.view.settingsButtonForTesting.isHidden)
+        XCTAssertTrue(controller.sidebarForTesting.footer.paletteButtonForTesting.isHidden)
+        XCTAssertFalse(controller.sidebarForTesting.footer.settingsButtonForTesting.isHidden)
         try press("p", [.command, .shift], keyCode: 35, in: controller)
         XCTAssertEqual(modals(CommandPaletteOverlay.self, in: controller).count, 1)
     }
@@ -197,8 +197,8 @@ final class SidebarInteractionTests: WindowTestCase {
         hiding([.settings])
         let controller = makeController()
 
-        XCTAssertTrue(controller.sidebarForTesting.view.settingsButtonForTesting.isHidden)
-        XCTAssertFalse(controller.sidebarForTesting.view.paletteButtonForTesting.isHidden)
+        XCTAssertTrue(controller.sidebarForTesting.footer.settingsButtonForTesting.isHidden)
+        XCTAssertFalse(controller.sidebarForTesting.footer.paletteButtonForTesting.isHidden)
         try press(",", [.command], keyCode: 43, in: controller)
         XCTAssertEqual(modals(SettingsOverlay.self, in: controller).count, 1)
     }
@@ -206,19 +206,19 @@ final class SidebarInteractionTests: WindowTestCase {
     func test_footerPaletteButton_opensTheCommandPalette() throws {
         let controller = makeController()
 
-        try click(controller.sidebarForTesting.view.paletteButtonForTesting)
+        try click(controller.sidebarForTesting.footer.paletteButtonForTesting)
 
         XCTAssertEqual(modals(CommandPaletteOverlay.self, in: controller).count, 1)
-        XCTAssertTrue(controller.sidebarForTesting.view.paletteButtonForTesting.isActive)
+        XCTAssertTrue(controller.sidebarForTesting.footer.paletteButtonForTesting.isActive)
     }
 
     func test_footerSettingsButton_opensSettings() throws {
         let controller = makeController()
 
-        try click(controller.sidebarForTesting.view.settingsButtonForTesting)
+        try click(controller.sidebarForTesting.footer.settingsButtonForTesting)
 
         XCTAssertEqual(modals(SettingsOverlay.self, in: controller).count, 1)
-        XCTAssertTrue(controller.sidebarForTesting.view.settingsButtonForTesting.isActive)
+        XCTAssertTrue(controller.sidebarForTesting.footer.settingsButtonForTesting.isActive)
     }
 
     func test_toolbar_noLongerCarriesThePaletteButton() throws {

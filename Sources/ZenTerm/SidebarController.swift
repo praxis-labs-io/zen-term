@@ -19,6 +19,7 @@ final class SidebarController {
     private static let leadNameGap: CGFloat = 6
 
     let view: SidebarView
+    let footer: SidebarFooter
     let lead: CollapsedSidebarLead
     private let toggleButton: IconButton
     private let edge = NSLayoutGuide()
@@ -32,10 +33,11 @@ final class SidebarController {
     private var entries: [Entry] = []
 
     init(onPalette: @escaping () -> Void, onSettings: @escaping () -> Void, onToggle: @escaping () -> Void) {
-        view = SidebarView(onPalette: onPalette, onSettings: onSettings)
-        toggleButton = SidebarView.footerButton("sidebar.left", "Toggle sidebar", .toggleSidebar, onToggle)
+        view = SidebarView()
+        footer = SidebarFooter(onPalette: onPalette, onSettings: onSettings)
+        toggleButton = SidebarFooter.button("sidebar.left", "Toggle sidebar", .toggleSidebar, onToggle)
         lead = CollapsedSidebarLead(
-            leadingInset: Self.toggleInset + SidebarView.footerButtonSize.width + Self.leadNameGap)
+            leadingInset: Self.toggleInset + SidebarFooter.buttonSize.width + Self.leadNameGap)
     }
 
     var canvasLeadingAnchor: NSLayoutXAxisAnchor { canvasEdge.leadingAnchor }
@@ -43,6 +45,7 @@ final class SidebarController {
     func install(in container: NSView, besideTabBar tabBar: NSView) {
         container.addSubview(view)
         container.addSubview(lead)
+        container.addSubview(footer)
         container.addSubview(toggleButton)
         container.addLayoutGuide(edge)
         container.addLayoutGuide(canvasEdge)
@@ -67,12 +70,11 @@ final class SidebarController {
             sidebarTop,
             view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             toggleButton.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: Self.toggleInset),
-            toggleButton.centerYAnchor.constraint(equalTo: tabBar.centerYAnchor, constant: -TabBarView.bandNudge),
-            view.footer.leadingAnchor.constraint(
-                equalTo: toggleButton.trailingAnchor, constant: SidebarView.footerSpacing),
-            view.footer.centerYAnchor.constraint(equalTo: toggleButton.centerYAnchor),
+            toggleButton.centerYAnchor.constraint(equalTo: tabBar.centerYAnchor),
+            footer.leadingAnchor.constraint(equalTo: toggleButton.trailingAnchor, constant: SidebarFooter.spacing),
+            footer.centerYAnchor.constraint(equalTo: toggleButton.centerYAnchor),
             lead.leadingAnchor.constraint(equalTo: edge.leadingAnchor),
-            lead.centerYAnchor.constraint(equalTo: tabBar.centerYAnchor, constant: -TabBarView.bandNudge),
+            lead.centerYAnchor.constraint(equalTo: tabBar.centerYAnchor),
             leadWidth,
         ])
         settle()
@@ -90,6 +92,8 @@ final class SidebarController {
         Self.lastChoiceIsDocked = isDocked
         view.isHidden = false
         lead.isHidden = false
+        footer.isHidden = false
+        Motion.fade(footer, to: isDocked ? 1 : 0, duration: Motion.pageSlideDuration)
         slideID &+= 1
         guard !Motion.isReduceMotionEnabled() else {
             edgeLeading.constant = edgeOffset
@@ -114,6 +118,8 @@ final class SidebarController {
 
     private func settle() {
         view.isHidden = !isDocked
+        footer.isHidden = !isDocked
+        footer.layer?.opacity = isDocked ? 1 : 0
         lead.isHidden = isDocked
     }
 
@@ -141,12 +147,13 @@ final class SidebarController {
             })
     }
 
-    func setOpenModal(palette: Bool, settings: Bool) { view.setOpenModal(palette: palette, settings: settings) }
+    func setOpenModal(palette: Bool, settings: Bool) { footer.setOpenModal(palette: palette, settings: settings) }
 
-    func setHiddenButtons(_ hidden: Set<ToolbarButton>) { view.setHiddenButtons(hidden) }
+    func setHiddenButtons(_ hidden: Set<ToolbarButton>) { footer.setHiddenButtons(hidden) }
 
     func reapplyTheme() {
         view.reapplyTheme()
+        footer.reapplyTheme()
         lead.reapplyTheme()
         toggleButton.reapplyTheme()
     }
