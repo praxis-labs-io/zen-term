@@ -20,7 +20,6 @@ final class SidebarView: NSView {
     private let caption = FieldCaption("Workspaces", required: false)
     private let rowStack = NSStackView()
     private var rows: [WorkspaceID: SettingsNavRow] = [:]
-    private var rowNames: [WorkspaceID: String] = [:]
     private let paletteButton: IconButton
     private let settingsButton: IconButton
     private let toggleButton: IconButton
@@ -75,7 +74,6 @@ final class SidebarView: NSView {
         for (id, row) in rows where !ids.contains(id) {
             row.removeFromSuperview()
             rows[id] = nil
-            rowNames[id] = nil
         }
         for (index, item) in items.enumerated() {
             let row = self.row(for: item)
@@ -91,11 +89,9 @@ final class SidebarView: NSView {
     }
 
     private func row(for item: SidebarRowItem) -> SettingsNavRow {
-        if let row = rows[item.id], rowNames[item.id] == item.name { return row }
-        rows[item.id]?.removeFromSuperview()
+        if let row = rows[item.id] { return row }
         let row = SettingsNavRow(title: item.name, isFocusable: false) {}
         rows[item.id] = row
-        rowNames[item.id] = item.name
         return row
     }
 
