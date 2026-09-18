@@ -1,4 +1,4 @@
-/// Tab order and the active tab for one window. Discard it once `close` returns false.
+/// Tab order and the active tab for one workspace. Discard it once `close` returns false.
 public struct TabList {
     public private(set) var order: [TabID]
     public private(set) var activeIndex: Int
