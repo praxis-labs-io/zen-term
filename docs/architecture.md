@@ -489,7 +489,8 @@ concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. It gates
   (`GitRepo.currentBranch`); churn is `git --no-optional-locks status --porcelain=v2
   --branch` on `churnQueue` (width four), with per-caller cancel tokens. No probe fetches.
 - **A float open is cancellable during its repo-root probe** (`cancelPendingOpen()`).
-- **Palette rows are reused** and carry no index; order is the stack's `arrangedSubviews`.
+- **Palette rows are reused**, so they never carry an index; order is the stack's arranged
+  subviews.
 - **Swift's sort is not stable**, so floats sort by `(order, parse position)`.
 
 ## What does not exist
