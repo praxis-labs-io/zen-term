@@ -83,6 +83,23 @@ final class CloseCommandTests: WindowTestCase {
         try XCTUnwrap(spawned.first)
     }
 
+    private func middleClick(tab index: Int, in c: WindowController) throws {
+        let content = try XCTUnwrap(c.window.contentView)
+        content.layoutSubtreeIfNeeded()
+        let chips = descendants(of: content)
+            .filter { String(describing: type(of: $0)) == "Chip" }
+            .sorted { $0.convert($0.bounds, to: nil).minX < $1.convert($1.bounds, to: nil).minX }
+        let chip = try XCTUnwrap(chips.indices.contains(index) ? chips[index] : nil, "no tab \(index)")
+        let cg = try XCTUnwrap(
+            CGEvent(
+                mouseEventSource: nil, mouseType: .otherMouseDown, mouseCursorPosition: .zero,
+                mouseButton: .center))
+        let event = try XCTUnwrap(NSEvent(cgEvent: cg))
+        XCTAssertEqual(event.buttonNumber, 2, "a middle click is AppKit button 2")
+        chip.otherMouseDown(with: event)
+        drainMainQueue()
+    }
+
     private func configureFloat(_ id: String, persist: ToolFloat.Persistence) {
         var config = GeneralConfig.builtIn
         config.floats = [
@@ -343,6 +360,69 @@ final class CloseCommandTests: WindowTestCase {
         XCTAssertTrue(
             toastText(c).contains(
                 "Closing this tab will close the window and stop everything running in it."))
+    }
+
+    func test_middleClickingAnIdleTab_closesItStraightAway() throws {
+        let c = makeWindow()
+        spareTab(c)
+
+        try middleClick(tab: 1, in: c)
+
+        XCTAssertFalse(c.isConfirmOpen)
+        XCTAssertEqual(c.tabOrderForTesting.count, 1)
+    }
+
+    func test_middleClickingARunningTab_asksFirst() throws {
+        let c = makeWindow()
+        spareTab(c)
+        try activePane(c).isBusy = true
+
+        try middleClick(tab: 1, in: c)
+
+        XCTAssertTrue(c.isConfirmOpen)
+        XCTAssertEqual(c.tabOrderForTesting.count, 2, "the tab waits on the answer")
+        XCTAssertTrue(toastText(c).contains("Closing this tab will stop everything running in it."))
+    }
+
+    func test_middleClickingTheLastTab_asksBeforeTakingTheWindow() throws {
+        let c = onScreen()
+
+        try middleClick(tab: 0, in: c)
+
+        XCTAssertTrue(c.isConfirmOpen)
+        XCTAssertTrue(c.window.isVisible)
+        XCTAssertTrue(toastText(c).contains("Closing this tab will close the window."))
+    }
+
+    func test_theWindowCloseButton_withSomethingRunning_asksFirst() throws {
+        let c = onScreen()
+        try firstPane().isBusy = true
+
+        c.window.performClose(nil)
+
+        XCTAssertTrue(c.isConfirmOpen)
+        XCTAssertTrue(c.window.isVisible, "the window waits on the answer")
+        try pressClose(c)
+        XCTAssertFalse(c.window.isVisible)
+    }
+
+    func test_theWindowCloseButton_withNothingRunning_closesStraightAway() {
+        let c = onScreen()
+
+        c.window.performClose(nil)
+
+        XCTAssertFalse(c.isConfirmOpen)
+        XCTAssertFalse(c.window.isVisible)
+    }
+
+    func test_closingTabsAtAPath_takesTheWindowWithoutAsking() throws {
+        let c = onScreen()
+        try firstPane().isBusy = true
+
+        c.closeTabs(atPath: root)
+
+        XCTAssertFalse(c.isConfirmOpen, "worktree removal already asked, upstream of this")
+        XCTAssertFalse(c.window.isVisible)
     }
 
     func test_closeWindow_namesTheWorkspacesWithSomethingRunning() throws {

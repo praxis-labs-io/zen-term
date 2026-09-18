@@ -338,7 +338,7 @@ final class WindowController: NSObject {
         nextTabID = 2
 
         onSelect = { [weak self] in self?.select($0) }
-        onClose = { [weak self] in self?.closeTab($0) }
+        onClose = { [weak self] in self?.requestCloseTab($0) }
         onRename = { [weak self] in self?.openRenameTab($0) }
         onNewTab = { [weak self] in self?.newTab() }
         onSplitH = { [weak self] in self?.handle(.splitHorizontal) }
@@ -1662,7 +1662,7 @@ final class WindowController: NSObject {
             requestClosePane()
         case .closeTab:
             Log.info("close tab", category: .tabs)
-            requestCloseTab()
+            activeWorkspace.activeID.map(requestCloseTab)
         case .closeWindow:
             Log.info("close window", category: .tabs)
             requestCloseWindow()
@@ -1793,9 +1793,9 @@ final class WindowController: NSObject {
         }
     }
 
-    private func requestCloseTab() {
-        guard let id = activeWorkspace.activeID else { return }
-        let closesWindow = activeWorkspace.tabIDs.count == 1 && workspaces.count == 1
+    private func requestCloseTab(_ id: TabID) {
+        guard let workspace = workspace(of: id) else { return }
+        let closesWindow = workspace.tabIDs.count == 1 && workspaces.count == 1
         guard closesWindow || isRunning(tab: id) else { closeTab(id); return }
         let subject: CloseWarning.Subject =
             closesWindow ? .lastTab(running: windowIsRunning) : .tab
@@ -2383,6 +2383,12 @@ final class WindowController: NSObject {
 }
 
 extension WindowController: NSWindowDelegate {
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard windowIsRunning else { return true }
+        requestCloseWindow()
+        return false
+    }
+
     func windowWillClose(_ notification: Notification) { tearDown() }
 
     func windowDidResignKey(_ notification: Notification) { endModes() }
