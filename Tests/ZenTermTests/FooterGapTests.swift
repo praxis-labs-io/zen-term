@@ -54,7 +54,7 @@ final class FooterGapTests: WindowTestCase {
         let pane = try XCTUnwrap(controller.focusedPanelForTesting, "no focused pane")
         let barRect = bar.convert(bar.bounds, to: root)
         let paneRect = pane.convert(pane.bounds, to: root)
-        return (paneRect.minY - barRect.maxY, paneRect.minX - root.bounds.minX)
+        return (paneRect.minY - barRect.maxY, paneRect.minX - controller.sidebarForTesting.edgeOffsetForTesting)
     }
 
     func test_footerSeam_holdsAtEveryGutter() throws {

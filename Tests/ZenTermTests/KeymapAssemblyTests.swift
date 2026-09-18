@@ -27,6 +27,7 @@ final class KeymapAssemblyTests: XCTestCase {
         let map = assemble()
         XCTAssertEqual(map[Chord(command: true, key: "f")], .toggleSearch)
         XCTAssertEqual(map[Chord(command: true, key: "⏎")], .fillScreen)
+        XCTAssertEqual(map[Chord(command: true, control: true, key: "s")], .toggleSidebar)
         XCTAssertEqual(map[Chord(command: true, key: "d")], .splitVertical)
         XCTAssertEqual(map[Chord(command: true, shift: true, key: ",")], .reloadConfig)
     }

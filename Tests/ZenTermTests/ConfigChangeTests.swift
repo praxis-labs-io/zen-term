@@ -82,7 +82,7 @@ final class ConfigChangeTests: XCTestCase {
         XCTAssertEqual(change(from: { $0.floats = [float] }), .floats)
         XCTAssertEqual(change(from: { $0.reduceMotion = .on }), .motion)
         XCTAssertEqual(change(from: { $0.automaticUpdateChecks.toggle() }), .updates)
-        XCTAssertEqual(change(from: { $0.hiddenToolbarButtons = [.commandPalette] }), .toolbarButtons)
+        XCTAssertEqual(change(from: { $0.hiddenToolbarButtons = [.focusMode] }), .toolbarButtons)
         XCTAssertEqual(change(from: { $0.toastDuration = 9 }), .toasts)
         XCTAssertEqual(
             change(from: {

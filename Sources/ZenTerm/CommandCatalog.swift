@@ -35,6 +35,7 @@ enum CommandCatalog {
         case .resizeRight: return pane("Resize Pane Right", glyph, chord)
         case .toggleZoom: return pane("Focus Mode", glyph, chord)
         case .fillScreen: return window("Fill Screen", glyph, chord)
+        case .toggleSidebar: return window("Toggle Sidebar", glyph, chord)
         case .closePane: return pane("Close Pane", glyph, chord)
         case .closeTab: return tab("Close Tab", glyph, chord)
         case .closeWindow: return window("Close Window", glyph, chord)
@@ -111,7 +112,7 @@ enum CommandCatalog {
             .copyScreenFilePath, .openScreenFile,
             .closePane,
         ]
-        chords += [.fillScreen, .closeWindow, .increaseFontSize, .decreaseFontSize, .resetFontSize]
+        chords += [.toggleSidebar, .fillScreen, .closeWindow, .increaseFontSize, .decreaseFontSize, .resetFontSize]
         chords += [.dismissToast, .dismissAllToasts]
         return chords.map(spec(for:))
     }

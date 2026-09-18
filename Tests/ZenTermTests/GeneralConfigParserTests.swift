@@ -251,19 +251,19 @@ final class GeneralConfigParserTests: XCTestCase {
     func test_hideToolbarButtons_parsesEverySlug() {
         let config = parse(
             "hide-toolbar-buttons = new-tab,split-h,split-v,bottom-drawer,right-drawer,scratch,"
-                + "focus-mode,command-palette\n")
+                + "focus-mode\n")
         XCTAssertEqual(config.hiddenToolbarButtons, Set(ToolbarButton.allCases))
     }
 
     func test_hideToolbarButtons_toleratesWhitespaceAndStrayCommas() {
-        let config = parse("hide-toolbar-buttons = split-h , ,command-palette,\n")
-        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal, .commandPalette])
+        let config = parse("hide-toolbar-buttons = split-h , ,focus-mode,\n")
+        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal, .focusMode])
         XCTAssertTrue(config.configDiagnostics.isEmpty)
     }
 
     func test_hideToolbarButtons_unknownSlug_diagnosesAndKeepsKnownOnes() {
-        let config = parse("hide-toolbar-buttons = split-h,zoom,command-palette\n")
-        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal, .commandPalette])
+        let config = parse("hide-toolbar-buttons = split-h,zoom,focus-mode\n")
+        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal, .focusMode])
         XCTAssertEqual(
             config.configDiagnostics,
             [
@@ -388,6 +388,12 @@ final class GeneralConfigParserTests: XCTestCase {
 
     func test_retiredToolbarSlug_isDroppedWithoutADiagnostic() {
         let config = parse("hide-toolbar-buttons = split-h,diff-viewer\n")
+        XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal])
+        XCTAssertEqual(config.configDiagnostics, [])
+    }
+
+    func test_commandPaletteSlug_movedToTheSidebar_isDroppedWithoutADiagnostic() {
+        let config = parse("hide-toolbar-buttons = split-h,command-palette\n")
         XCTAssertEqual(config.hiddenToolbarButtons, [.splitHorizontal])
         XCTAssertEqual(config.configDiagnostics, [])
     }

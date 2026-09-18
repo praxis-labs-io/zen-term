@@ -107,8 +107,7 @@
 # scratch button comes back while its shell is busy out of sight, or while
 # something there needs you, so work you cannot see keeps a handle in the footer.
 # Buttons, in toolbar order:
-#   new-tab, split-h, split-v, bottom-drawer, right-drawer, scratch, focus-mode,
-#   command-palette
+#   new-tab, split-h, split-v, bottom-drawer, right-drawer, scratch, focus-mode
 # In-app Settings edit: applies live.
 # hide-toolbar-buttons =              # e.g. split-h,split-v
 
@@ -333,7 +332,7 @@
 #   new_tab  new_window  close_tab  close_window  prev_tab  next_tab  select_tab_1 … select_tab_9
 #   move_tab_left  move_tab_right
 #   rename_tab          (no default binding; double-click a tab, or use the palette)
-#   toggle_bottom_drawer  toggle_right_drawer  toggle_focus_mode  fill_screen
+#   toggle_sidebar  toggle_bottom_drawer  toggle_right_drawer  toggle_focus_mode  fill_screen
 #   toggle_scroll_mode  toggle_search
 #   scroll_to_top  scroll_to_bottom  scroll_page_up  scroll_page_down
 #   jump_to_previous_prompt  jump_to_next_prompt  scroll_to_selection
@@ -382,6 +381,7 @@
 # keybind = move_tab_left=cmd+ctrl+[            # shift the active tab one slot along the bar
 # keybind = move_tab_right=cmd+ctrl+]
 # keybind = select_tab_1=cmd+1                    # … through select_tab_9=cmd+9
+# keybind = toggle_sidebar=cmd+ctrl+s            # dock or collapse the workspace sidebar
 # keybind = toggle_bottom_drawer=cmd+b
 # keybind = toggle_right_drawer=cmd+\
 # keybind = toggle_float:scratch=cmd+;           # the built-in scratch shell

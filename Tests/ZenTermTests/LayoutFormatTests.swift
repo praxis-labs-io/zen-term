@@ -36,8 +36,8 @@ final class LayoutFormatTests: XCTestCase {
 
     func test_hideToolbarButtons_token_ordersByToolbarPosition() {
         XCTAssertEqual(
-            LayoutFormat.hideToolbarButtonsToken([.commandPalette, .newTab, .bottomDrawer]),
-            "new-tab,bottom-drawer,command-palette")
+            LayoutFormat.hideToolbarButtonsToken([.focusMode, .newTab, .bottomDrawer]),
+            "new-tab,bottom-drawer,focus-mode")
         XCTAssertEqual(LayoutFormat.hideToolbarButtonsToken([]), "")
     }
 }

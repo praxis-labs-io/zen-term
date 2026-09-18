@@ -176,6 +176,7 @@ final class WindowController: NSObject {
 
     private let tabBar: TabBarView
     private let dock: ToggleDock
+    private let sidebar: SidebarController
     private var mountedCanvas: NSView?
 
     private enum ModalKind {
@@ -323,6 +324,8 @@ final class WindowController: NSObject {
         var onSplitH: () -> Void = {}
         var onSplitV: () -> Void = {}
         var onPalette: () -> Void = {}
+        var onSettings: () -> Void = {}
+        var onToggleSidebar: () -> Void = {}
         var onBottom: () -> Void = {}
         var onRight: () -> Void = {}
         var onZoom: () -> Void = {}
@@ -330,10 +333,12 @@ final class WindowController: NSObject {
         dock = ToggleDock(
             onNewTab: { onNewTab() },
             onSplitH: { onSplitH() }, onSplitV: { onSplitV() },
-            onPalette: { onPalette() }, onBottom: { onBottom() },
+            onBottom: { onBottom() },
             onRight: { onRight() }, onZoom: { onZoom() },
             toolFloats: ToolFloatCatalog.userDefined, onToolFloat: { onToolFloat($0) },
             hiddenButtons: GeneralConfig.current.hiddenToolbarButtons)
+        sidebar = SidebarController(
+            onPalette: { onPalette() }, onSettings: { onSettings() }, onToggle: { onToggleSidebar() })
         super.init()
         nextTabID = 2
 
@@ -344,6 +349,8 @@ final class WindowController: NSObject {
         onSplitH = { [weak self] in self?.handle(.splitHorizontal) }
         onSplitV = { [weak self] in self?.handle(.splitVertical) }
         onPalette = { [weak self] in self?.handle(.toggleCommandPalette) }
+        onSettings = { [weak self] in self?.handle(.openSettings) }
+        onToggleSidebar = { [weak self] in self?.handle(.toggleSidebar) }
         onBottom = { [weak self] in self?.handle(.toggleBottomDrawer) }
         onRight = { [weak self] in self?.handle(.toggleRightDrawer) }
         onZoom = { [weak self] in self?.handle(.toggleZoom) }
@@ -369,6 +376,7 @@ final class WindowController: NSObject {
                 }
                 if change.contains(.chromeLayout) {
                     self.window.setWindowChromeVisible(GeneralConfig.current.windowChrome)
+                    self.sidebar.reapplyChromeLayout()
                     for controller in self.allTabControllers { controller.reapplyChromeLayout() }
                     self.reapplyFloatLayout()
                     self.reapplyModalLayout()
@@ -386,6 +394,7 @@ final class WindowController: NSObject {
                 if change.contains(.theme) {
                     self.tabBar.reapplyTheme()
                     self.dock.reapplyTheme()
+                    self.sidebar.reapplyTheme()
                     self.confirmToast?.reapplyTheme()
                     self.attentionCards.values.forEach { $0.reapplyTheme() }
                     self.fontSizeCard?.reapplyTheme()
@@ -443,8 +452,9 @@ final class WindowController: NSObject {
         dock.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(tabBar)
         container.addSubview(dock)
+        sidebar.install(in: container, besideTabBar: tabBar)
         NSLayoutConstraint.activate([
-            tabBar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            tabBar.leadingAnchor.constraint(equalTo: sidebar.lead.trailingAnchor),
             tabBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             tabBar.heightAnchor.constraint(equalToConstant: TabBarView.height),
             dock.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
@@ -663,7 +673,7 @@ final class WindowController: NSObject {
         canvas.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(canvas, positioned: .below, relativeTo: nil)
         NSLayoutConstraint.activate([
-            canvas.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            canvas.leadingAnchor.constraint(equalTo: sidebar.canvasLeadingAnchor),
             canvas.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             canvas.topAnchor.constraint(equalTo: container.topAnchor),
             canvas.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -ChromeMetrics.footerGap),
@@ -682,7 +692,7 @@ final class WindowController: NSObject {
         container.addSubview(overlay, positioned: .below, relativeTo: tabBar)
         let gutter = ChromeMetrics.windowGutter
         let insets = (
-            leading: overlay.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: gutter),
+            leading: overlay.leadingAnchor.constraint(equalTo: sidebar.canvasLeadingAnchor, constant: gutter),
             trailing: overlay.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -gutter),
             top: overlay.topAnchor.constraint(
                 equalTo: container.topAnchor, constant: ChromeMetrics.topInset),
@@ -1618,7 +1628,7 @@ final class WindowController: NSObject {
                 floats.close()
             case .toggleToolFloat, .newTab, .newWindow, .closeTab, .closeWindow,
                 .selectTab, .prevTab, .nextTab,
-                .moveTabLeft, .moveTabRight, .fillScreen,
+                .moveTabLeft, .moveTabRight, .fillScreen, .toggleSidebar,
                 .increaseFontSize, .decreaseFontSize, .resetFontSize, .selectAll,
                 .toggleScrollMode, .toggleSearch, .searchSelection, .findNext, .findPrevious,
                 .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown, .scrollToSelection,
@@ -1701,6 +1711,9 @@ final class WindowController: NSObject {
         case .openScreenFile: modeTarget?.surface.writeScreenToFile(.open)
         case .pasteSelection: pasteSelection()
         case .fillScreen: toggleFillScreen()
+        case .toggleSidebar:
+            Log.info("sidebar toggled", category: .workspace)
+            sidebar.toggle(holding: activeController?.allSurfaces ?? [], in: container)
         case .toggleToolFloat(let id):
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
@@ -2245,6 +2258,10 @@ final class WindowController: NSObject {
 
     var workspaceIDsForTesting: [WorkspaceID] { workspaces.map(\.id) }
 
+    var sidebarForTesting: SidebarController { sidebar }
+
+    var containerForTesting: NSView { container }
+
     var activeWorkspaceIDForTesting: WorkspaceID { activeWorkspace.id }
 
     func addWorkspaceForTesting(name: String, folder: URL) -> WorkspaceID {
@@ -2329,6 +2346,7 @@ final class WindowController: NSObject {
                 attentionState: attention.state(tab: id).tabState)
         }
         tabBar.render(items)
+        sidebar.render(workspaces: workspaces, active: activeWorkspace)
         attentionCards.values.forEach { $0.refreshShortcuts() }
     }
 
@@ -2341,7 +2359,7 @@ final class WindowController: NSObject {
     private func renderDock() {
         let overlay = activeController?.overlayState ?? OverlayState()
         dock.render(
-            overlay: overlay, floatID: floats.activeID, paletteOpen: modal?.kind == .commandPalette,
+            overlay: overlay, floatID: floats.activeID,
             tab: activeWorkspace.activeID,
             isLiveInBackground: floats.isLiveInBackground, isFloatBusy: floats.isBusy,
             drawerAttention: { [weak self] edge in self?.drawerAttention(edge) ?? .idle },
@@ -2349,6 +2367,7 @@ final class WindowController: NSObject {
                 self?.floats.surfaceID(id).map { self?.attention.state(of: $0) ?? .idle } ?? .idle
             })
         lastBusyDots = busyDots()
+        sidebar.setOpenModal(palette: modal?.kind == .commandPalette, settings: modal?.kind == .settings)
     }
 
     private func drawerAttention(_ edge: DrawerEdge) -> SurfaceAttention {
@@ -2392,6 +2411,8 @@ extension WindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) { tearDown() }
 
     func windowDidResignKey(_ notification: Notification) { endModes() }
+
+    func windowDidBecomeKey(_ notification: Notification) { sidebar.refreshBranches() }
 
     // Quit never fires `windowWillClose`, so without this every shell is orphaned.
     func tearDownForQuit() { tearDown() }

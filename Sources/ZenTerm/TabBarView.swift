@@ -24,12 +24,12 @@ final class TabBarView: NSView {
     private static let leadingInset: CGFloat = 12
     private static let chipSpacing: CGFloat = 4
     private static let chipHeight: CGFloat = 22
-    private static let bandNudge: CGFloat = 6
+    static let bandNudge: CGFloat = 6
     private static let fadeWidth: CGFloat = 28
 
     static let chipFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
     // The rename editor matches it, or the text reflows on open.
-    fileprivate static let titleKern: CGFloat = 0.4
+    static let titleKern: CGFloat = 0.4
     fileprivate static let labelInset: CGFloat = 9
     static let maxChipWidth: CGFloat = 220
 
