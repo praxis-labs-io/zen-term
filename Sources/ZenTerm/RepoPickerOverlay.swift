@@ -286,7 +286,8 @@ final class RepoPickerOverlay: PaletteOverlay {
         let name = worktree.branch ?? String(worktree.head.prefix(7))
         return Workspace(
             title: "\(parent.title): \(name)",
-            path: GitRepo.mirrored(parent.path, from: repoRoot, into: worktree.path),
+            path: GitRepo.mirrored(parent.path, from: repoRoot, into: worktree.path)
+                ?? worktree.path.standardizedFileURL,
             main: parent.main, right: parent.right, bottom: parent.bottom, focus: parent.focus,
             env: parent.env, carry: parent.carry)
     }

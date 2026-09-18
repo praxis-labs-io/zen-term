@@ -408,7 +408,9 @@ hop off-main. The ⌘P picker lists them under each workspace, creates with ⌥�
   main checkout. Branch slugs are lossy, so `destinationExists` names the holding branch.
 - **A workspace inside a repo belongs to the repo.** The worktree is cut and keyed at the root
   and holds the whole tree, so the tab and `carry` land at `GitRepo.mirrored`: the workspace's
-  own folder in the new checkout, or its root when the base branch has no such folder.
+  own folder in the new checkout. When the base branch has no such folder, `mirrored` is nil:
+  the tab opens at the worktree root and `carry` skips every entry as
+  `workspaceNotInTheWorktree` rather than copying to the root.
 
 ### Creating
 

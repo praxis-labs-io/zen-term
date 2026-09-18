@@ -57,18 +57,18 @@ final class GitRepoTests: XCTestCase {
         _ = try makeDir("wt/apps/rails")
 
         XCTAssertEqual(
-            GitRepo.mirrored(package, from: repo, into: checkout).path,
+            GitRepo.mirrored(package, from: repo, into: checkout)?.path,
             checkout.appendingPathComponent("apps/rails").standardizedFileURL.path)
     }
 
-    func test_mirrored_fallsBackWhenTheFolderIsNotInThatCheckout() throws {
+    func test_mirrored_isNilWhenTheFolderIsNotInThatCheckout() throws {
         let repo = try makeDir("mono", git: true)
         let package = try makeDir("mono/apps/rails")
         let checkout = try makeDir("wt")
 
-        XCTAssertEqual(
-            GitRepo.mirrored(package, from: repo, into: checkout).path,
-            checkout.standardizedFileURL.path, "the base branch may not have that folder")
+        XCTAssertNil(
+            GitRepo.mirrored(package, from: repo, into: checkout),
+            "the base branch may not have that folder, and the root is not a stand-in for it")
     }
 
     func test_mirrored_isTheCheckoutForTheRepoRootItself() throws {
@@ -76,10 +76,10 @@ final class GitRepoTests: XCTestCase {
         let checkout = try makeDir("wt")
 
         XCTAssertEqual(
-            GitRepo.mirrored(repo, from: repo, into: checkout).path,
+            GitRepo.mirrored(repo, from: repo, into: checkout)?.path,
             checkout.standardizedFileURL.path)
         XCTAssertEqual(
-            GitRepo.mirrored(repo, from: nil, into: checkout).path,
+            GitRepo.mirrored(repo, from: nil, into: checkout)?.path,
             checkout.standardizedFileURL.path)
     }
 

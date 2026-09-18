@@ -925,11 +925,12 @@ final class WindowController: NSObject {
                 case .existingBranch(let branch):
                     worktree = try WorktreeStore.create(existingBranch: branch, in: target.repo)
                 }
+                let repoRoot = GitRepo.repoRoot(for: workspace.path)
                 let opened = RepoPickerOverlay.workspace(
-                    for: worktree, parent: workspace,
-                    repoRoot: GitRepo.repoRoot(for: workspace.path))
+                    for: worktree, parent: workspace, repoRoot: repoRoot)
                 let report = WorktreeCarry.copy(
-                    workspace.carry, from: workspace.path, into: opened.path,
+                    workspace.carry, from: workspace.path, intoCheckout: worktree.path,
+                    repoRoot: repoRoot,
                     onEntry: { name in
                         DispatchQueue.main.async { [weak self, weak card] in
                             guard let card, self?.isPresenting(card) == true else { return }

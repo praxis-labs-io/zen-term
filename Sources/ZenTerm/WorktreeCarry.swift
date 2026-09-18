@@ -10,6 +10,7 @@ struct CarryReport: Equatable {
             case tracked
             case unreadable
             case alreadyInTheWorktree
+            case workspaceNotInTheWorktree
             case copyFailed(String)
         }
 
@@ -31,6 +32,7 @@ extension CarryReport.Skipped.Reason {
         case .tracked: return "is tracked by git"
         case .unreadable: return "couldn't be checked with git"
         case .alreadyInTheWorktree: return "was already in the worktree"
+        case .workspaceNotInTheWorktree: return "needs a folder this worktree doesn't have"
         case .copyFailed(let reason): return "didn't copy: \(reason)"
         }
     }
@@ -45,6 +47,19 @@ struct IgnoredCatalog: Equatable {
 
 // Blocking, and it can move gigabytes: never call it on main.
 enum WorktreeCarry {
+    /// Copies into `workspace`'s own folder inside `checkout`, skipping every entry when the checkout lacks that folder.
+    static func copy(
+        _ entries: [String], from workspace: URL, intoCheckout checkout: URL, repoRoot: URL?,
+        onEntry: ((String) -> Void)? = nil
+    ) -> CarryReport {
+        guard let destination = GitRepo.mirrored(workspace, from: repoRoot, into: checkout) else {
+            return CarryReport(
+                carried: [],
+                skipped: entries.map { CarryReport.Skipped(name: $0, reason: .workspaceNotInTheWorktree) })
+        }
+        return copy(entries, from: workspace, into: destination, onEntry: onEntry)
+    }
+
     static func copy(
         _ entries: [String], from source: URL, into worktree: URL,
         onEntry: ((String) -> Void)? = nil
