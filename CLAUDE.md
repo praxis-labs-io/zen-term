@@ -11,26 +11,25 @@ libghostty (the sole backend, embedded as `GhosttyKit`). Global workflow rules i
 wrong, the change fixes it. Docs never describe cancelled features, speculative work,
 or how something used to be.
 
-| File | Holds | Budget |
-|---|---|---|
-| `docs/architecture.md` | how the app fits together, and the constraints that shape it | 550 lines |
-| `docs/swift-conventions.md` | AppKit and Swift traps past what a linter catches | 350 lines |
-| `docs/releasing.md` | `bin/release`, versioning guards, notarization, Sparkle | |
-| `docs/third-party-notices.md` | re-probing the notices after a ghostty pin move | |
-| `docs/nvim-navigator-protocol.md` | the nav socket wire contract | |
-| `docs/nvim-theme-protocol.md` | the published theme contract | |
-| `docs/config/*` | the reference config files users open | |
-| `docs/release-notes/*` | one curated file per version | |
-| `docs/CONTRIBUTING.md` | what an outside contributor reads: setup, the gate, the boundaries | |
+| File | Holds |
+|---|---|
+| `docs/architecture.md` | how the app fits together, and the constraints that shape it |
+| `docs/swift-conventions.md` | AppKit and Swift traps past what a linter catches |
+| `docs/releasing.md` | `bin/release`, versioning guards, notarization, Sparkle |
+| `docs/third-party-notices.md` | re-probing the notices after a ghostty pin move |
+| `docs/nvim-navigator-protocol.md` | the nav socket wire contract |
+| `docs/nvim-theme-protocol.md` | the published theme contract |
+| `docs/config/*` | the reference config files users open |
+| `docs/release-notes/*` | one curated file per version |
+| `docs/CONTRIBUTING.md` | what an outside contributor reads: setup, the gate, the boundaries |
 
 **Internal docs accumulate stale detail, so they hold only what is load-bearing now.**
 No history, rejected designs, measurements, ticket ids, UI copy reasoning, or anything
 already in `docs/config` or this file. The why of a change goes in the commit or pull
-request. A change that pushes a doc past its budget rereads it for something stale first
-(`wc -l docs/*.md`): a line that stopped being true, or that now lives in `docs/config` or
-this file. Cut that. If nothing has gone stale, the doc grows and the budget moves. Never
-delete a true, load-bearing line to buy room for another one. User-facing guides live on
-the website, not in `docs/`.
+request. A change that adds to one of these docs rereads it for something stale first: a
+line that stopped being true, or that now lives in `docs/config` or this file. Cut that.
+Never delete a true, load-bearing line to buy room for another one. User-facing guides
+live on the website, not in `docs/`.
 
 A spec or plan is **scratch**, not a doc. It lives in `docs/` while an epic is in
 flight, to work out implementation details and to write the tickets from, and it is
