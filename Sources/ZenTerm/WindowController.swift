@@ -772,7 +772,7 @@ final class WindowController: NSObject {
         visit(id)
         let newIndex = tabs.order.firstIndex(of: id) ?? 0
         mount(.slide(from: slideFrom ?? (newIndex > oldIndex ? .fromRight : .fromLeft)))
-        renderTabBar()
+        renderAttention()
     }
 
     private func cycleTab(_ delta: Int) {
@@ -830,7 +830,7 @@ final class WindowController: NSObject {
         if !survived { window.close(); return }
         visit(tabs.activeID)
         mount(.instant)
-        renderTabBar()
+        renderAttention()
     }
 
     private func presentModal(_ overlay: ModalOverlay, kind: ModalKind) {
@@ -2133,6 +2133,7 @@ final class WindowController: NSObject {
     private func renderAttention() {
         renderTabBar()
         renderDock()
+        guard !didTearDown else { return }
         AttentionCenter.shared.update(
             windowID: windowID, waitingCount: attention.waitingCount, since: attention.waitingSince)
     }
