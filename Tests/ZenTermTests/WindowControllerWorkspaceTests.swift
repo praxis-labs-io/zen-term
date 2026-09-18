@@ -159,18 +159,14 @@ final class WindowControllerWorkspaceTests: WindowTestCase {
         XCTAssertEqual(c.activeTabIDForTesting, c.tabIDsForTesting(workspace: first).first)
     }
 
-    func test_emptyingTheLastWorkspace_keepsTheWindow_andOpensAFreshOne() {
+    func test_emptyingTheLastWorkspace_closesTheWindow() {
         let c = makeWindow()
-        let before = c.activeWorkspaceIDForTesting
         var closed = false
         c.onClosed = { closed = true }
 
         c.closeTabForTesting(index: 0)
 
-        XCTAssertFalse(closed, "a window never closes as a side effect of emptying a workspace")
-        XCTAssertEqual(c.workspaceIDsForTesting.count, 1)
-        XCTAssertNotEqual(c.activeWorkspaceIDForTesting, before)
-        XCTAssertEqual(c.tabOrderForTesting.count, 1)
+        XCTAssertTrue(closed)
     }
 
     func test_tabCountAtPath_countsEveryWorkspace() {

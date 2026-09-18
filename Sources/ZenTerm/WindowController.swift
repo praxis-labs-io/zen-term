@@ -307,7 +307,9 @@ final class WindowController: NSObject {
         windowID = WindowController.nextWindowID
         WindowController.nextWindowID += 1
         let firstID = TabID(1)
-        let defaultWorkspace = Self.makeDefaultWorkspace(id: WorkspaceID(raw: 1), firstTab: firstID)
+        let defaultWorkspace = WorkspaceController(
+            id: WorkspaceID(raw: 1), name: Self.defaultWorkspaceName,
+            folder: FileManager.default.homeDirectoryForCurrentUser, firstTab: firstID)
         workspaces = [defaultWorkspace]
         activeWorkspace = defaultWorkspace
         var onSelect: (TabID) -> Void = { _ in }
@@ -596,12 +598,6 @@ final class WindowController: NSObject {
         return c
     }
 
-    private static func makeDefaultWorkspace(id: WorkspaceID, firstTab: TabID) -> WorkspaceController {
-        WorkspaceController(
-            id: id, name: defaultWorkspaceName,
-            folder: FileManager.default.homeDirectoryForCurrentUser, firstTab: firstTab)
-    }
-
     private func mintTabID() -> TabID { defer { nextTabID += 1 }; return TabID(nextTabID) }
 
     private func mintWorkspaceID() -> WorkspaceID {
@@ -888,24 +884,15 @@ final class WindowController: NSObject {
         renderAttention()
     }
 
-    // The one path that closes a workspace: a window never closes as a side effect, so the last one is replaced.
+    // The one path that closes a workspace, so a close command and the sidebar can never disagree.
     private func closeWorkspace(_ workspace: WorkspaceController) {
+        Log.info("workspace closed", category: .workspace)
         workspaces.removeAll { $0 === workspace }
-        guard let next = workspaces.first else { return openDefaultWorkspace() }
+        guard let next = workspaces.first else { window.close(); return }
         guard workspace === activeWorkspace else { renderAttention(); return }
         activeWorkspace = next
         mount(.instant)
         if let tab = next.activeID { visit(tab) }
-        renderAttention()
-    }
-
-    private func openDefaultWorkspace() {
-        let tab = mintTabID()
-        let workspace = Self.makeDefaultWorkspace(id: mintWorkspaceID(), firstTab: tab)
-        workspaces = [workspace]
-        activeWorkspace = workspace
-        installController(
-            id: tab, cwd: workspace.folder, pinnedTitle: nil, config: nil, transition: .instant)
         renderAttention()
     }
 
@@ -1782,16 +1769,22 @@ final class WindowController: NSObject {
         }
 
         let lastPane = active.isSinglePane
+        let closesWindow = lastPane && activeWorkspace.tabIDs.count == 1 && workspaces.count == 1
         let needsConfirm =
-            active.focusedPaneIsBusy
+            closesWindow
+            || active.focusedPaneIsBusy
             || (lastPane && activeWorkspace.activeID.map(isRunning(tab:)) ?? false)
         guard needsConfirm else {
             if active.closeFocused() == false { activeWorkspace.activeID.map { closeTab($0) } }
             return
         }
 
-        let subject: CloseWarning.Subject = lastPane ? .tab : .pane
-        let names = lastPane ? activeWorkspace.activeID.map(hiddenRunningNames(inTab:)) ?? [] : []
+        let subject: CloseWarning.Subject =
+            closesWindow ? .lastPane(running: windowIsRunning) : (lastPane ? .tab : .pane)
+        let names =
+            closesWindow
+            ? namesClosingWindow()
+            : (lastPane ? activeWorkspace.activeID.map(hiddenRunningNames(inTab:)) ?? [] : [])
         presentConfirm(
             variant: .warning, title: subject.title,
             message: CloseWarning.message(closing: subject, naming: names), confirmLabel: "Close"
@@ -1803,16 +1796,20 @@ final class WindowController: NSObject {
 
     private func requestCloseTab() {
         guard let id = activeWorkspace.activeID else { return }
-        guard isRunning(tab: id) else { closeTab(id); return }
+        let closesWindow = activeWorkspace.tabIDs.count == 1 && workspaces.count == 1
+        guard closesWindow || isRunning(tab: id) else { closeTab(id); return }
+        let subject: CloseWarning.Subject =
+            closesWindow ? .lastTab(running: windowIsRunning) : .tab
+        let names = closesWindow ? namesClosingWindow() : hiddenRunningNames(inTab: id)
         presentConfirm(
-            variant: .warning, title: CloseWarning.Subject.tab.title,
-            message: CloseWarning.message(closing: .tab, naming: hiddenRunningNames(inTab: id)),
+            variant: .warning, title: subject.title,
+            message: CloseWarning.message(closing: subject, naming: names),
             confirmLabel: "Close"
         ) { [weak self] in self?.closeTab(id) }
     }
 
     private func requestCloseWindow() {
-        guard workspaces.contains(where: isRunning(workspace:)) || floats.hasBusy else {
+        guard windowIsRunning else {
             window.close()
             return
         }
@@ -1821,6 +1818,16 @@ final class WindowController: NSObject {
             message: CloseWarning.message(closing: .window, naming: runningNamesInWindow()),
             confirmLabel: "Close"
         ) { [weak self] in self?.window.close() }
+    }
+
+    private var windowIsRunning: Bool {
+        workspaces.contains(where: isRunning(workspace:)) || floats.hasBusy
+    }
+
+    // The one tab left is the useful level to name, so this takes its hidden surfaces and the window's floats.
+    private func namesClosingWindow() -> [String] {
+        let inTab = activeWorkspace.activeID.map(hiddenRunningNames(inTab:)) ?? []
+        return inTab + floats.hiddenRunningTitles(scope: nil)
     }
 
     private func isRunning(tab id: TabID) -> Bool {

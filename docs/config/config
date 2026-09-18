@@ -376,7 +376,7 @@
 # keybind = new_tab=cmd+t
 # keybind = new_window=cmd+n
 # keybind = close_tab=cmd+ctrl+w                # the whole tab, however many panes it holds
-# keybind = close_window=cmd+shift+w            # the only command that closes a window
+# keybind = close_window=cmd+shift+w            # closes the window outright, without asking twice
 # keybind = prev_tab=cmd+[
 # keybind = next_tab=cmd+]
 # keybind = move_tab_left=cmd+ctrl+[            # shift the active tab one slot along the bar

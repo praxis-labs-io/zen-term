@@ -84,6 +84,18 @@ final class CloseCommandTests: WindowTestCase {
         try XCTUnwrap(spawned.first)
     }
 
+    private func activePane(_ c: WindowController) throws -> RecordingSurface {
+        let tab = try XCTUnwrap(c.activeTabIDForTesting)
+        let controller = try XCTUnwrap(c.controllerForTesting(tab: tab))
+        return try XCTUnwrap(controller.allSurfaces.first as? RecordingSurface)
+    }
+
+    /// A second tab, so a tab close is not also a window close.
+    private func spareTab(_ c: WindowController) {
+        c.newTabForTesting()
+        c.window.contentView?.layoutSubtreeIfNeeded()
+    }
+
     /// Lays out between splits: `split` refuses a pane whose bounds are still zero.
     private func split(
         _ c: WindowController, _ count: Int, file: StaticString = #filePath, line: UInt = #line
@@ -153,16 +165,46 @@ final class CloseCommandTests: WindowTestCase {
         XCTAssertEqual(c.activeWorkspaceIDForTesting, home)
     }
 
-    func test_closePane_onTheLastTabOfTheLastWorkspace_opensAFreshOne_andKeepsTheWindow() {
+    func test_closePane_onTheLastTabOfTheLastWorkspace_asksBeforeTakingTheWindow() throws {
         let c = onScreen()
-        let before = c.activeWorkspaceIDForTesting
 
         c.handle(.closePane)
 
-        XCTAssertTrue(c.window.isVisible, "the window must never close as a side effect of ⌘W")
-        XCTAssertEqual(c.workspaceIDsForTesting.count, 1)
-        XCTAssertNotEqual(c.activeWorkspaceIDForTesting, before, "the emptied workspace is replaced")
-        XCTAssertEqual(c.tabOrderForTesting.count, 1, "the fresh workspace opens with one tab")
+        XCTAssertTrue(c.isConfirmOpen, "the window goes with it, so it says so first")
+        XCTAssertTrue(c.window.isVisible, "the window waits on the answer")
+        XCTAssertTrue(toastText(c).contains("Close Window"))
+        XCTAssertTrue(
+            toastText(c).contains("Closing this pane will close the window."),
+            "nothing is running, so the sentence is only the consequence")
+
+        try pressClose(c)
+
+        XCTAssertFalse(c.window.isVisible)
+    }
+
+    func test_closePane_onTheLastTabOfTheLastWorkspace_cancelKeepsEverything() {
+        let c = onScreen()
+
+        c.handle(.closePane)
+        c.handle(.closePane)
+
+        XCTAssertTrue(c.window.isVisible)
+        XCTAssertEqual(c.tabOrderForTesting.count, 1)
+        XCTAssertEqual(
+            c.activeTabIDForTesting.flatMap { c.controllerForTesting(tab: $0)?.allSurfaces.count }, 1,
+            "a second ⌘W is swallowed by the open card, it does not close the pane behind it")
+    }
+
+    func test_closePane_takingTheWindow_withSomethingRunning_saysBoth() throws {
+        let c = onScreen()
+        try hiddenDrawer(c, .toggleBottomDrawer).isBusy = true
+
+        c.handle(.closePane)
+
+        XCTAssertTrue(
+            toastText(c).contains(
+                "Closing this pane will close the window and stop everything running in it, "
+                    + "including the bottom drawer."))
     }
 
     // MARK: ⌘⌃W, the tab
@@ -178,15 +220,18 @@ final class CloseCommandTests: WindowTestCase {
         XCTAssertEqual(c.tabOrderForTesting.count, 1, "three panes go with the tab, not one at a time")
     }
 
-    func test_closeTab_onTheLastTabOfTheLastWorkspace_opensAFreshOne_andKeepsTheWindow() {
+    func test_closeTab_onTheLastTabOfTheLastWorkspace_asksBeforeTakingTheWindow() throws {
         let c = onScreen()
-        let before = c.activeWorkspaceIDForTesting
 
         c.handle(.closeTab)
 
-        XCTAssertTrue(c.window.isVisible)
-        XCTAssertEqual(c.workspaceIDsForTesting.count, 1)
-        XCTAssertNotEqual(c.activeWorkspaceIDForTesting, before)
+        XCTAssertTrue(c.isConfirmOpen)
+        XCTAssertTrue(
+            toastText(c).contains("Closing this tab will close the window."))
+
+        try pressClose(c)
+
+        XCTAssertFalse(c.window.isVisible)
     }
 
     // MARK: ⌘⇧W, the window
@@ -265,7 +310,8 @@ final class CloseCommandTests: WindowTestCase {
 
     func test_closeTab_withOnlyAVisiblePaneRunning_namesNothing() throws {
         let c = makeWindow()
-        try firstPane().isBusy = true
+        spareTab(c)
+        try activePane(c).isBusy = true
 
         c.handle(.closeTab)
 
@@ -276,6 +322,7 @@ final class CloseCommandTests: WindowTestCase {
 
     func test_closeTab_withARunningHiddenDrawer_namesTheDrawer() throws {
         let c = makeWindow()
+        spareTab(c)
         try hiddenDrawer(c, .toggleBottomDrawer).isBusy = true
 
         c.handle(.closeTab)
@@ -287,6 +334,7 @@ final class CloseCommandTests: WindowTestCase {
 
     func test_closeTab_withARunningScratch_namesScratch() throws {
         let c = makeWindow()
+        spareTab(c)
         try hiddenScratch(c).isBusy = true
 
         c.handle(.closeTab)
@@ -298,6 +346,7 @@ final class CloseCommandTests: WindowTestCase {
 
     func test_closeTab_withSeveralRunning_readsAsAList() throws {
         let c = makeWindow()
+        spareTab(c)
         try hiddenDrawer(c, .toggleBottomDrawer).isBusy = true
         try hiddenDrawer(c, .toggleRightDrawer).isBusy = true
         try hiddenScratch(c).isBusy = true
@@ -312,6 +361,7 @@ final class CloseCommandTests: WindowTestCase {
 
     func test_closePane_onTheLastPane_withARunningHiddenDrawer_asksAsTheTab() throws {
         let c = makeWindow()
+        spareTab(c)
         try hiddenDrawer(c, .toggleRightDrawer).isBusy = true
 
         c.handle(.closePane)
