@@ -38,14 +38,43 @@ enum GitRepo {
         return gitDir.appendingPathComponent("HEAD")
     }
 
+    #if DEBUG
+        static var homeOverrideForTesting: URL?
+    #endif
+
+    private static var home: URL {
+        #if DEBUG
+            if let homeOverrideForTesting { return homeOverrideForTesting }
+        #endif
+        return FileManager.default.homeDirectoryForCurrentUser
+    }
+
     /// Stops when the path stops shrinking: `deletingLastPathComponent()` on a FileManager URL walks past "/" into "/..".
+    /// Home is never an enclosing repo, or dotfiles tracked at `~` would claim every folder under it.
     static func repoRoot(for cwd: URL?) -> URL? {
         guard var dir = cwd?.standardizedFileURL else { return nil }
+        let ceiling = home.standardizedFileURL.path
         while true {
             if isGitRepo(dir) { return dir }
             let parent = dir.deletingLastPathComponent()
-            guard parent.path.count < dir.path.count else { return nil }
+            guard parent.path.count < dir.path.count, parent.path != ceiling else { return nil }
             dir = parent
         }
+    }
+
+    /// Where `path` sits inside `checkout`: the same spot under `repoRoot`, or `checkout` for the root itself.
+    /// Nil when `path` is below `repoRoot` and that folder is not in `checkout`.
+    static func mirrored(_ path: URL, from repoRoot: URL?, into checkout: URL) -> URL? {
+        let checkout = checkout.standardizedFileURL
+        guard let base = repoRoot?.standardizedFileURL.path else { return checkout }
+        let inside = path.standardizedFileURL.path
+        guard inside.hasPrefix(base + "/") else { return checkout }
+        let mirrored = checkout.appendingPathComponent(String(inside.dropFirst(base.count + 1)))
+            .standardizedFileURL
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: mirrored.path, isDirectory: &isDirectory),
+            isDirectory.boolValue
+        else { return nil }
+        return mirrored
     }
 }

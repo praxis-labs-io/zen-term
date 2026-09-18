@@ -3,6 +3,7 @@ import Foundation
 enum GitRepoStatus {
     private struct Status {
         var isRepo = false
+        var repoRoot: URL?
         var branch: String?
         var churn: GitChurn?
     }
@@ -26,15 +27,18 @@ enum GitRepoStatus {
 
     static func churn(_ dir: URL) -> GitChurn? { cache[dir.standardizedFileURL]?.churn }
 
+    static func repoRoot(_ dir: URL) -> URL? { cache[dir.standardizedFileURL]?.repoRoot }
+
     static func refresh(_ dirs: [URL], completion: @escaping () -> Void) {
         for dir in dirs.map(\.standardizedFileURL) {
             DispatchQueue.global(qos: .userInitiated).async {
-                let isRepo = GitRepo.isGitRepo(dir)
-                let branch = isRepo ? GitRepo.currentBranch(dir) : nil
+                let root = GitRepo.repoRoot(for: dir)
+                let branch = root.flatMap(GitRepo.currentBranch)
                 DispatchQueue.main.async {
-                    cache[dir, default: Status()].isRepo = isRepo
+                    cache[dir, default: Status()].isRepo = root != nil
+                    cache[dir, default: Status()].repoRoot = root
                     cache[dir, default: Status()].branch = branch
-                    if !isRepo { cache[dir, default: Status()].churn = nil }
+                    if root == nil { cache[dir, default: Status()].churn = nil }
                     completion()
                 }
             }
@@ -96,7 +100,7 @@ enum GitRepoStatus {
 
     /// `--no-optional-locks` so a probe never takes the index lock from the user's own git.
     private static func churnNow(for dir: URL) -> GitChurn? {
-        guard GitRepo.isGitRepo(dir),
+        guard GitRepo.repoRoot(for: dir) != nil,
             case .success(let output) = GitCommand.run(
                 ["--no-optional-locks", "status", "--porcelain=v2", "--branch"], in: dir)
         else { return nil }

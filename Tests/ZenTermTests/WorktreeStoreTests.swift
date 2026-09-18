@@ -703,6 +703,108 @@ final class WorktreeStoreTests: XCTestCase {
         XCTAssertEqual(try WorktreeStore.list(in: sub), [])
     }
 
+    func test_list_worksFromASubdirectoryOfTheRepo() throws {
+        let package = try makePackage()
+        _ = try WorktreeStore.create(branch: "side", in: repo)
+
+        XCTAssertEqual(try WorktreeStore.list(in: package).compactMap(\.branch), ["side"])
+    }
+
+    func test_create_fromASubdirectoryIsStoredAgainstTheRepoRoot() throws {
+        let package = try makePackage()
+
+        let worktree = try WorktreeStore.create(branch: "from-package", in: package)
+
+        XCTAssertEqual(
+            worktree.path.deletingLastPathComponent().lastPathComponent,
+            WorktreeStore.directoryName(for: repo), "a worktree belongs to the repo, not the package")
+        XCTAssertTrue(
+            GitFixture.exists(worktree.path.appendingPathComponent("tracked.txt")),
+            "the worktree holds the whole repo tree")
+    }
+
+    func test_createFromASubdirectory_carriesIntoTheMatchingFolder() throws {
+        let package = try makePackage()
+        try GitFixture.write("secret\n", to: package.appendingPathComponent(".env"))
+        let parent = Workspace(
+            title: "rails", path: package, main: nil, right: nil, bottom: nil, focus: .main,
+            env: [:], carry: [".env"])
+
+        let worktree = try WorktreeStore.create(branch: "carried", in: package)
+        let opened = RepoPickerOverlay.workspace(
+            for: worktree, parent: parent, repoRoot: GitRepo.repoRoot(for: package))
+        let report = WorktreeCarry.copy(
+            parent.carry, from: parent.path, intoCheckout: worktree.path,
+            repoRoot: GitRepo.repoRoot(for: package))
+
+        XCTAssertEqual(report.carried, [".env"])
+        XCTAssertTrue(
+            GitFixture.exists(worktree.path.appendingPathComponent("apps/rails/.env")),
+            "carry lands beside the package, not at the repo root")
+        XCTAssertFalse(GitFixture.exists(worktree.path.appendingPathComponent(".env")))
+        XCTAssertEqual(opened.path.path, worktree.path.appendingPathComponent("apps/rails").path)
+    }
+
+    func test_createFromASubdirectory_skipsCarryWhenTheBaseHasNoSuchFolder() throws {
+        let package = try makePackage(pushed: false)
+        try GitFixture.write("secret\n", to: package.appendingPathComponent(".env"))
+        let modules = package.appendingPathComponent("node_modules", isDirectory: true)
+        try FileManager.default.createDirectory(at: modules, withIntermediateDirectories: true)
+        try GitFixture.write("dep\n", to: modules.appendingPathComponent("dep.js"))
+        try GitFixture.write("node_modules/\n", to: package.appendingPathComponent(".gitignore"))
+        let parent = Workspace(
+            title: "rails", path: package, main: nil, right: nil, bottom: nil, focus: .main,
+            env: [:], carry: [".env", "node_modules"])
+
+        let worktree = try WorktreeStore.create(branch: "predates", in: package)
+        let report = WorktreeCarry.copy(
+            parent.carry, from: parent.path, intoCheckout: worktree.path,
+            repoRoot: GitRepo.repoRoot(for: package))
+
+        XCTAssertEqual(report.carried, [])
+        XCTAssertEqual(
+            report.skipped,
+            [
+                CarryReport.Skipped(name: ".env", reason: .workspaceNotInTheWorktree),
+                CarryReport.Skipped(name: "node_modules", reason: .workspaceNotInTheWorktree),
+            ])
+        XCTAssertFalse(
+            GitFixture.exists(worktree.path.appendingPathComponent(".env")),
+            "nothing lands at the repo root in the folder's place")
+        XCTAssertFalse(GitFixture.exists(worktree.path.appendingPathComponent("node_modules")))
+        XCTAssertEqual(
+            RepoPickerOverlay.workspace(
+                for: worktree, parent: parent, repoRoot: GitRepo.repoRoot(for: package)
+            ).path.path,
+            worktree.path.standardizedFileURL.path, "the tab still opens at the worktree root")
+    }
+
+    func test_createFromTheRepoRoot_stillCarries() throws {
+        try GitFixture.write("secret\n", to: repo.appendingPathComponent(".env"))
+        let parent = Workspace(
+            title: "work", path: repo, main: nil, right: nil, bottom: nil, focus: .main,
+            env: [:], carry: [".env"])
+
+        let worktree = try WorktreeStore.create(branch: "at-root", in: repo)
+        let report = WorktreeCarry.copy(
+            parent.carry, from: parent.path, intoCheckout: worktree.path,
+            repoRoot: GitRepo.repoRoot(for: repo))
+
+        XCTAssertEqual(report.carried, [".env"], "the root workspace mirrors to the root, not a fallback")
+        XCTAssertEqual(report.skipped, [])
+        XCTAssertTrue(GitFixture.exists(worktree.path.appendingPathComponent(".env")))
+    }
+
+    private func makePackage(pushed: Bool = true) throws -> URL {
+        let package = repo.appendingPathComponent("apps/rails", isDirectory: true)
+        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+        try GitFixture.write("app\n", to: package.appendingPathComponent("app.txt"))
+        try GitFixture.run(["add", "."], in: repo)
+        try GitFixture.run(["commit", "-m", "package"], in: repo)
+        if pushed { try GitFixture.run(["push", "origin", "main"], in: repo) }
+        return package
+    }
+
     func test_create_fromInsideAWorktreeUsesTheRepoOneHome() throws {
         let first = try WorktreeStore.create(branch: "one", in: repo)
 

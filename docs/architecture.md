@@ -396,16 +396,21 @@ blend). Sixty-five themes ship; a user file shadows a bundled one. `accent-color
 
 ## Worktrees
 
-`WorktreeStore` lists, creates and removes a repo's worktrees. Headless and blocking;
-callers hop off-main. The ⌘P picker lists them under each workspace, creates with ⌥⏎ and
-removes with ⌘⇧⌫. Settings does not list them.
+`WorktreeStore` lists, creates and removes a repo's worktrees. Headless and blocking; callers
+hop off-main. The ⌘P picker lists them under each workspace, creates with ⌥⏎ and removes with
+⌘⇧⌫. Settings does not list them.
 
 - **Git is the whole registry** (`worktree list --porcelain -z`): record one is the main
   checkout, `prunable` records drop, and only a create rollback prunes.
-- **Rows group on `git rev-parse --git-common-dir`**, canonicalized, not
-  `GitRepo.repoRoot`. The first workspace in config order with worktrees claims a common dir.
+- **Rows group on `git rev-parse --git-common-dir`**, canonicalized, not `GitRepo.repoRoot`.
+  The first workspace in config order with worktrees claims a common dir.
 - **Location:** `~/.zenterm/worktrees/<repo-slug>-<digest>/<branch-slug>`, keyed on the
   main checkout. Branch slugs are lossy, so `destinationExists` names the holding branch.
+- **A workspace inside a repo belongs to the repo.** The worktree is cut and keyed at the root
+  and holds the whole tree, so the tab and `carry` land at `GitRepo.mirrored`: the workspace's
+  own folder in the new checkout. When the base branch has no such folder, `mirrored` is nil:
+  the tab opens at the worktree root and `carry` skips every entry as
+  `workspaceNotInTheWorktree` rather than copying to the root.
 
 ### Creating
 
@@ -414,22 +419,20 @@ removes with ⌘⇧⌫. Settings does not list them.
 
 - **Branch names are validated before any mutating command**, and a leading dash is
   rejected by hand (`check-ref-format` accepts `-m`).
-- **Branch and folder are claimed, not checked:** `git branch --no-track -- <name> <base>`,
-  then `createDirectory(withIntermediateDirectories: false)`, then `worktree add` without
-  `-b`. The rollback deletes only what was claimed, and leaves a branch that moved.
-- **`--no-track`** so the first push is not refused under `push.default=simple`.
+- **Branch and folder are claimed, not checked:** `git branch --no-track -- <name> <base>`
+  (or `push.default=simple` refuses the first push), then
+  `createDirectory(withIntermediateDirectories: false)`, then `worktree add` without `-b`.
+  The rollback deletes only what was claimed, and leaves a branch that moved.
 - **Rollback order:** `worktree remove --force`, directory, `prune`, then `branch -D`.
   Unfinished steps are named in `rollbackIncomplete`.
-- **Existing branch** (`create(existingBranch:in:)`): no branch claim and the rollback never
-  touches the branch. It refuses a branch held by a linked worktree or by a dirty
-  main checkout (unreadable counts as dirty, via `holders(in:)`), and a main checkout with
-  no local default to move to. A clean main checkout moves to the
-  local default branch after confirming, after the folder claim, and moves back on
-  failure.
+- **Existing branch** (`create(existingBranch:in:)`): no branch claim, and the rollback never
+  touches the branch. It refuses a branch held by a linked worktree or a dirty main checkout
+  (unreadable counts as dirty, via `holders(in:)`), and one with no local default to move to.
+  A clean main checkout moves to the local default after the folder claim, and back on failure.
 
-The create card replaces the picker and reopens it on cancel. `BranchField` is a
-`FieldBox` plus `ListPopover`; Esc is handled in its `doCommandBy`.
-`RepoPickerOverlay.CreateTarget` carries the repo to branch in and the workspace to carry from.
+The create card replaces the picker and reopens it on cancel. `BranchField` is a `FieldBox`
+plus `ListPopover`, Esc handled in its `doCommandBy`. `CreateTarget` carries the repo to
+branch in and the workspace to carry from.
 
 ### Carry
 
@@ -443,10 +446,10 @@ The workspace `carry` key names ignored files to copy into a new worktree.
 - **`copyfile(3)` with `COPYFILE_CLONE`**, which falls back to a byte copy across volumes
   and keeps symlinks as symlinks. An entry that is itself a link out of the workspace is
   refused.
-- **Refusals:** tracked files (a tracked folder copies only its ignored contents), unreadable repos, entries resolving outside the workspace
-  (checked on resolved paths), and destinations that exist (`COPYFILE_CLONE` onto a
-  directory returns 0 having copied nothing). Parents are created first; a partial copy is
-  removed. Errors use `strerror_r`.
+- **Refusals:** tracked files (a tracked folder copies only its ignored contents), unreadable
+  repos, entries resolving outside the workspace (checked on resolved paths), and destinations
+  that exist (`COPYFILE_CLONE` onto a directory returns 0 having copied nothing). Parents are
+  created first; a partial copy is removed. Errors use `strerror_r`.
 
 ### Removing
 
@@ -480,13 +483,14 @@ concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. It gates
   integration (no OSC 7, no prompt marks, broken `isBusy`).
 - **`ApplePressAndHoldEnabled` is registered false at launch**, or the accent popup leaks
   keys into the shell.
-- **`GitRepo.repoRoot` stops when the path stops shrinking**, not on `parent == dir`.
+- **`GitRepo.repoRoot` stops when the path stops shrinking**, not on `parent == dir`, and
+  **refuses `$HOME` as an enclosing repo**, or dotfiles at `~` claim every folder under it.
 - **The `workspaces` file loads off-main** (`ConfigLoader.loadWorkspaces`). A card that
   renders it is built after the load; `pendingModal` tracks the press in between.
-- **Interactive git probes go through `GitRepoStatus`.** The branch is a file read
-  (`GitRepo.currentBranch`); churn is `git --no-optional-locks status
-  --porcelain=v2 --branch` on `churnQueue` (width four), with per-caller cancel tokens. No
-  probe fetches.
+- **Interactive git probes go through `GitRepoStatus`.** It resolves and caches the
+  enclosing repo, reads the branch off that root (`GitRepo.currentBranch`), and runs churn
+  (`git --no-optional-locks status --porcelain=v2 --branch`, repo-wide) on `churnQueue`
+  (width four) with per-caller cancel tokens. No probe fetches.
 - **A float open is cancellable during its repo-root probe** (`cancelPendingOpen()`).
 - **Palette rows are reused**, so they never carry an index; order is the stack's arranged
   subviews.

@@ -15,8 +15,61 @@ final class GitRepoStatusTests: XCTestCase {
 
     override func tearDownWithError() throws {
         GitRepoStatus.resetForTesting()
+        GitRepo.homeOverrideForTesting = nil
         try? FileManager.default.removeItem(at: root)
         try super.tearDownWithError()
+    }
+
+    func test_refresh_answersASubdirectoryOfARepoWithTheRepoBranch() throws {
+        let repo = try GitFixture.makeRepo(at: root.appendingPathComponent("mono", isDirectory: true))
+        let package = repo.appendingPathComponent("apps/rails", isDirectory: true)
+        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+
+        refresh([package])
+
+        XCTAssertEqual(GitRepoStatus.known(package), true, "a package inside a monorepo is in a repo")
+        XCTAssertEqual(GitRepoStatus.branch(package), "main")
+        XCTAssertEqual(GitRepoStatus.repoRoot(package)?.path, repo.standardizedFileURL.path)
+    }
+
+    func test_refresh_refusesAPlainFolderUnderARepoAtHome() throws {
+        GitRepo.homeOverrideForTesting = root
+        _ = try GitFixture.makeRepo(at: root)
+        let plain = root.appendingPathComponent("notes", isDirectory: true)
+        try FileManager.default.createDirectory(at: plain, withIntermediateDirectories: true)
+
+        refresh([plain])
+
+        XCTAssertEqual(GitRepoStatus.known(plain), false, "dotfiles at home light up nothing")
+        XCTAssertNil(GitRepoStatus.branch(plain))
+        XCTAssertNil(GitRepoStatus.repoRoot(plain))
+    }
+
+    func test_refreshChurn_isNilForAPlainFolderUnderARepoAtHome() throws {
+        GitRepo.homeOverrideForTesting = root
+        _ = try GitFixture.makeRepo(at: root)
+        let plain = root.appendingPathComponent("notes", isDirectory: true)
+        try FileManager.default.createDirectory(at: plain, withIntermediateDirectories: true)
+        try GitFixture.write("loose\n", to: root.appendingPathComponent("untracked.txt"))
+
+        var landed = 0
+        GitRepoStatus.refreshChurn([plain]) { landed += 1 }
+        waitUntil(landed == 1, "the probe to land")
+
+        XCTAssertNil(GitRepoStatus.churn(plain), "home's churn is not this folder's")
+    }
+
+    func test_refreshChurn_countsTheWholeRepoFromASubdirectory() throws {
+        let repo = try GitFixture.makeRepo(at: root.appendingPathComponent("mono", isDirectory: true))
+        let package = repo.appendingPathComponent("apps/rails", isDirectory: true)
+        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+        try GitFixture.write("loose\n", to: repo.appendingPathComponent("elsewhere.txt"))
+
+        var landed = 0
+        GitRepoStatus.refreshChurn([package]) { landed += 1 }
+        waitUntil(landed == 1, "the probe to land")
+
+        XCTAssertEqual(GitRepoStatus.churn(package)?.untracked, 1, "counts are repo-wide, as git reports them")
     }
 
     func test_refreshWorktrees_deliversTheCommonDirAndLinkedWorktreesOnMain() throws {

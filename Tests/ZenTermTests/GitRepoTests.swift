@@ -12,7 +12,75 @@ final class GitRepoTests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
+        GitRepo.homeOverrideForTesting = nil
         try? FileManager.default.removeItem(at: root)
+    }
+
+    func test_repoRoot_walksUpToTheEnclosingRepo() throws {
+        let repo = try makeDir("mono", git: true)
+        let package = try makeDir("mono/apps/rails")
+
+        XCTAssertEqual(GitRepo.repoRoot(for: package)?.path, repo.standardizedFileURL.path)
+    }
+
+    func test_repoRoot_refusesARepoAtHomeAsAnEnclosingRepo() throws {
+        GitRepo.homeOverrideForTesting = root
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent(".git", isDirectory: true),
+            withIntermediateDirectories: true)
+        let plain = try makeDir("notes")
+
+        XCTAssertNil(
+            GitRepo.repoRoot(for: plain), "dotfiles at home must not claim every folder under it")
+    }
+
+    func test_repoRoot_stillAnswersWhenHomeItselfIsTheWorkspace() throws {
+        GitRepo.homeOverrideForTesting = root
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent(".git", isDirectory: true),
+            withIntermediateDirectories: true)
+
+        XCTAssertEqual(GitRepo.repoRoot(for: root)?.path, root.standardizedFileURL.path)
+    }
+
+    func test_repoRoot_findsARepoBelowHome() throws {
+        GitRepo.homeOverrideForTesting = root
+        let repo = try makeDir("Dev/thing", git: true)
+
+        XCTAssertEqual(GitRepo.repoRoot(for: repo)?.path, repo.standardizedFileURL.path)
+    }
+
+    func test_mirrored_landsOnTheSameFolderInTheOtherCheckout() throws {
+        let repo = try makeDir("mono", git: true)
+        let package = try makeDir("mono/apps/rails")
+        let checkout = try makeDir("wt")
+        _ = try makeDir("wt/apps/rails")
+
+        XCTAssertEqual(
+            GitRepo.mirrored(package, from: repo, into: checkout)?.path,
+            checkout.appendingPathComponent("apps/rails").standardizedFileURL.path)
+    }
+
+    func test_mirrored_isNilWhenTheFolderIsNotInThatCheckout() throws {
+        let repo = try makeDir("mono", git: true)
+        let package = try makeDir("mono/apps/rails")
+        let checkout = try makeDir("wt")
+
+        XCTAssertNil(
+            GitRepo.mirrored(package, from: repo, into: checkout),
+            "the base branch may not have that folder, and the root is not a stand-in for it")
+    }
+
+    func test_mirrored_isTheCheckoutForTheRepoRootItself() throws {
+        let repo = try makeDir("mono", git: true)
+        let checkout = try makeDir("wt")
+
+        XCTAssertEqual(
+            GitRepo.mirrored(repo, from: repo, into: checkout)?.path,
+            checkout.standardizedFileURL.path)
+        XCTAssertEqual(
+            GitRepo.mirrored(repo, from: nil, into: checkout)?.path,
+            checkout.standardizedFileURL.path)
     }
 
     private func makeDir(_ name: String, git: Bool = false) throws -> URL {

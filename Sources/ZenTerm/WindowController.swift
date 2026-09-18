@@ -916,7 +916,7 @@ final class WindowController: NSObject {
         let card = modal?.overlay as? NewWorktreeOverlay
         card?.beginWork("Creating \(Self.branchName(of: request))")
         DispatchQueue.global(qos: .userInitiated).async {
-            let result: Result<(Worktree, CarryReport), Error>
+            let result: Result<(Workspace, CarryReport), Error>
             do {
                 let worktree: Worktree
                 switch request {
@@ -925,15 +925,19 @@ final class WindowController: NSObject {
                 case .existingBranch(let branch):
                     worktree = try WorktreeStore.create(existingBranch: branch, in: target.repo)
                 }
+                let repoRoot = GitRepo.repoRoot(for: workspace.path)
+                let opened = RepoPickerOverlay.workspace(
+                    for: worktree, parent: workspace, repoRoot: repoRoot)
                 let report = WorktreeCarry.copy(
-                    workspace.carry, from: workspace.path, into: worktree.path,
+                    workspace.carry, from: workspace.path, intoCheckout: worktree.path,
+                    repoRoot: repoRoot,
                     onEntry: { name in
                         DispatchQueue.main.async { [weak self, weak card] in
                             guard let card, self?.isPresenting(card) == true else { return }
                             card.setPhase("Copying \(name)")
                         }
                     })
-                result = .success((worktree, report))
+                result = .success((opened, report))
             } catch {
                 result = .failure(error)
             }
@@ -941,11 +945,9 @@ final class WindowController: NSObject {
                 guard let self else { return }
                 let stillUp = card.map(self.isPresenting) ?? false
                 switch result {
-                case .success(let (worktree, report)):
+                case .success(let (opened, report)):
                     if stillUp { self.closeModal() }
-                    self.openWorkspace(
-                        RepoPickerOverlay.workspace(for: worktree, parent: workspace),
-                        replaceCurrentTab: false)
+                    self.openWorkspace(opened, replaceCurrentTab: false)
                     self.reportCarry(report)
                 case .failure(let error):
                     if stillUp {

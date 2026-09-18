@@ -274,16 +274,22 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .add: onAddWorkspace()
         case .workspace(let workspace): onChoose(workspace, modifiers.contains(.shift))
         case .worktree(let worktree, let parent):
-            onChoose(Self.workspace(for: worktree, parent: parent), modifiers.contains(.shift))
+            onChoose(
+                Self.workspace(
+                    for: worktree, parent: parent, repoRoot: GitRepoStatus.repoRoot(parent.path)),
+                modifiers.contains(.shift))
         }
     }
 
-    static func workspace(for worktree: Worktree, parent: Workspace) -> Workspace {
+    /// A worktree is cut at the repo root, so a parent pointing into the repo opens at its own folder inside it.
+    static func workspace(for worktree: Worktree, parent: Workspace, repoRoot: URL?) -> Workspace {
         let name = worktree.branch ?? String(worktree.head.prefix(7))
         return Workspace(
-            title: "\(parent.title): \(name)", path: worktree.path, main: parent.main,
-            right: parent.right, bottom: parent.bottom, focus: parent.focus, env: parent.env,
-            carry: parent.carry)
+            title: "\(parent.title): \(name)",
+            path: GitRepo.mirrored(parent.path, from: repoRoot, into: worktree.path)
+                ?? worktree.path.standardizedFileURL,
+            main: parent.main, right: parent.right, bottom: parent.bottom, focus: parent.focus,
+            env: parent.env, carry: parent.carry)
     }
 
     private final class AddRowView: SelectableRowView {
