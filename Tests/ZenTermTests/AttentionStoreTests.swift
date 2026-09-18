@@ -68,6 +68,17 @@ final class AttentionStoreTests: XCTestCase {
         XCTAssertEqual(store.state(of: drawer), .waiting)
     }
 
+    func test_anEventSeenOnScreen_isNotRevivedByALaterOneOffScreen() {
+        let store = makeStore()
+        let pane = SurfaceIDs.mint()
+        store.register(pane, tab: tab)
+        store.record(pane, .waiting, seen: true)
+
+        store.record(pane, .completed, seen: false)
+
+        XCTAssertEqual(store.state(tab: tab), .completed)
+    }
+
     func test_answeringATab_clearsEverySurfaceInIt() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()

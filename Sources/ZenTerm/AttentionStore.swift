@@ -39,10 +39,11 @@ final class AttentionStore {
     }
 
     func record(_ id: SurfaceID, _ event: SurfaceAttention, seen: Bool) {
+        guard !seen else { return markSeen(id) }
         guard var entry = entries[id] else { return }
         entry.latched = max(entry.latched, event)
-        entry.seen = seen
-        entry.since = seen || entry.latched == .idle ? nil : (entry.since ?? now())
+        entry.seen = false
+        entry.since = entry.latched == .idle ? nil : (entry.since ?? now())
         entries[id] = entry
     }
 
