@@ -588,7 +588,7 @@ final class WindowController: NSObject {
 
     deinit { titlePoll?.invalidate() }
 
-    private func makeController(cwd: URL?, workspace ws: Workspace? = nil) -> TabController {
+    private func makeController(cwd: URL?, config ws: Workspace? = nil) -> TabController {
         let mainCommand = ws?.main.flatMap { $0 == "shell" ? nil : $0 }
         let c = TabController(
             initialCWD: cwd, initialCommand: mainCommand, env: ws?.env ?? [:],
@@ -734,18 +734,18 @@ final class WindowController: NSObject {
         addTab(cwd: ShellLaunch.newSessionCWD(focused: activeController?.focusedCWD), pinnedTitle: nil)
     }
 
-    private func addTab(cwd: URL?, pinnedTitle: String?, workspace: Workspace? = nil) {
+    private func addTab(cwd: URL?, pinnedTitle: String?, config: Workspace? = nil) {
         Log.info("tab opened", category: .tabs)
         closeModal()
         closeFloatForTabChange()
         let id = mintTabID()
         activeWorkspace.add(id)
         installController(
-            id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: workspace,
+            id: id, cwd: cwd, pinnedTitle: pinnedTitle, config: config,
             transition: .slide(from: .fromRight))
     }
 
-    private func replaceActiveTab(cwd: URL, pinnedTitle: String?, workspace: Workspace?) {
+    private func replaceActiveTab(cwd: URL, pinnedTitle: String?, config: Workspace?) {
         closeFloatForTabChange()
         guard let id = activeWorkspace.activeID else { return }
         let old = activeWorkspace.controller(id)
@@ -758,25 +758,25 @@ final class WindowController: NSObject {
         clearAttention(id)
         attention.dropTab(id)
         installController(
-            id: id, cwd: cwd, pinnedTitle: pinnedTitle, workspace: workspace, transition: .instant)
+            id: id, cwd: cwd, pinnedTitle: pinnedTitle, config: config, transition: .instant)
         renderAttention()
     }
 
     // The recipe waits for the canvas motion: a drawer sliding the same way as its canvas has no readable motion.
     private func installController(
-        id: TabID, cwd: URL?, pinnedTitle: String?, workspace: Workspace?, transition: MountTransition
+        id: TabID, cwd: URL?, pinnedTitle: String?, config: Workspace?, transition: MountTransition
     ) {
-        let c = makeController(cwd: cwd, workspace: workspace)
+        let c = makeController(cwd: cwd, config: config)
         c.pinnedTitle = pinnedTitle
         activeWorkspace.setController(c, for: id)
         wire(c, id: id)
         let landed = mount(transition) { [weak self, weak c] in
-            guard let self, let c, let workspace, self.controller(id) === c else { return }
-            c.applyRecipe(workspace)
+            guard let self, let c, let config, self.controller(id) === c else { return }
+            c.applyRecipe(config)
             if self.activeWorkspace.activeID != id { self.restoreFocusToActive() }
         }
         c.start()
-        if landed, let workspace { c.applyRecipe(workspace) }
+        if landed, let config { c.applyRecipe(config) }
         renderTabBar()
     }
 
@@ -798,7 +798,11 @@ final class WindowController: NSObject {
     /// Brings a tab on screen wherever it lives: its workspace first, then the tab itself.
     private func reveal(_ id: TabID) {
         guard let workspace = workspace(of: id) else { return }
-        activate(workspace.id)
+        guard workspace === activeWorkspace else {
+            workspace.select(id)
+            activate(workspace.id)
+            return
+        }
         select(id)
     }
 
@@ -855,10 +859,14 @@ final class WindowController: NSObject {
 
     private func closeTab(_ id: TabID, dismissingModal: Bool = true) {
         Log.info("tab closed", category: .tabs)
-        if dismissingModal { closeModal() }
-        closeFloatForTabChange()
-        cancelConfirm()
         guard let workspace = workspace(of: id) else { return }
+        // A background workspace's tab closes without touching what is on screen, or it answers the wrong tab.
+        let isOnScreen = workspace === activeWorkspace
+        if isOnScreen {
+            if dismissingModal { closeModal() }
+            closeFloatForTabChange()
+            cancelConfirm()
+        }
         let tabController = workspace.controller(id)
         if mountedCanvas === tabController?.view {
             tabController?.view.removeFromSuperview()
@@ -869,8 +877,10 @@ final class WindowController: NSObject {
         clearAttention(id)
         attention.dropTab(id)
         guard workspace.close(id) else { return closeEmptied(workspace) }
-        if let active = activeWorkspace.activeID { visit(active) }
-        mount(.instant)
+        if isOnScreen {
+            if let active = activeWorkspace.activeID { visit(active) }
+            mount(.instant)
+        }
         renderAttention()
     }
 
@@ -1541,11 +1551,11 @@ final class WindowController: NSObject {
     private func openWorkspace(_ ws: Workspace, replaceCurrentTab: Bool) {
         closeModal()
         guard replaceCurrentTab else {
-            addTab(cwd: ws.path, pinnedTitle: ws.title, workspace: ws)
+            addTab(cwd: ws.path, pinnedTitle: ws.title, config: ws)
             return
         }
         let replace = { [weak self] in
-            self?.replaceActiveTab(cwd: ws.path, pinnedTitle: ws.title, workspace: ws)
+            self?.replaceActiveTab(cwd: ws.path, pinnedTitle: ws.title, config: ws)
         }
         let tabIsBusy =
             activeController?.allSurfaces.contains(where: { $0.isBusy }) == true
@@ -1931,7 +1941,7 @@ final class WindowController: NSObject {
             edge.map { drawerDestination($0, in: id) }
             ?? CardDestination(
                 shortcut: { [weak self] in self?.selectTabShortcut(for: id) ?? "" },
-                open: { [weak self] in self?.select(id) })
+                open: { [weak self] in self?.reveal(id) })
         let actions = [
             ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
                 self?.answer(id, surface: surface)
@@ -1978,7 +1988,7 @@ final class WindowController: NSObject {
             destination
             ?? CardDestination(
                 shortcut: { [weak self] in self?.selectTabShortcut(for: id) ?? "" },
-                open: { [weak self] in self?.select(id) })
+                open: { [weak self] in self?.reveal(id) })
         let actions = [
             ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
                 self?.answer(id, surface: surface)
@@ -2193,6 +2203,14 @@ final class WindowController: NSObject {
     }
 
     func attentionStateForTesting(tab id: TabID) -> SurfaceAttention { attention.state(tab: id) }
+
+    func waitingToastForTesting(tab id: TabID) -> ToastView? { attentionCards[id] }
+
+    func notifyCommandFinishedForTesting(tab id: TabID, result: TerminalCommandResult) {
+        commandFinished(surface: controller(id)?.focusedSurfaceID, id: id, result: result)
+    }
+
+    func closeTabForTesting(tab id: TabID) { closeTab(id) }
 
     func workspaceAttentionForTesting(_ id: WorkspaceID) -> SurfaceAttention {
         guard let workspace = workspaces.first(where: { $0.id == id }) else { return .idle }

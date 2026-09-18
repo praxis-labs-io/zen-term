@@ -48,6 +48,16 @@ final class WindowControllerWorkspaceTests: WindowTestCase {
         wait(for: [drained], timeout: 2)
     }
 
+    private func descendants(of view: NSView) -> [NSView] {
+        view.subviews + view.subviews.flatMap { descendants(of: $0) }
+    }
+
+    private func pressSwitch(on card: ToastView) throws {
+        let button = try XCTUnwrap(
+            descendants(of: card).compactMap { $0 as? AppButton }.first { $0.title == "Switch" })
+        button.performClick(nil)
+    }
+
     private func surface(of c: WindowController, tab: TabID) throws -> RecordingSurface {
         let controller = try XCTUnwrap(c.controllerForTesting(tab: tab))
         return try XCTUnwrap(controller.allSurfaces.first as? RecordingSurface)
@@ -181,5 +191,79 @@ final class WindowControllerWorkspaceTests: WindowTestCase {
         XCTAssertEqual(c.workspaceIDsForTesting, [first])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, first)
         XCTAssertFalse(closed)
+    }
+
+    func test_switchOnAPaneCard_reachesATabInABackgroundWorkspace() throws {
+        let c = makeWindow()
+        let first = c.activeWorkspaceIDForTesting
+        let home = try XCTUnwrap(c.tabIDsForTesting(workspace: first).first)
+        let second = c.addWorkspaceForTesting(name: "Other", folder: root)
+        c.activateWorkspaceForTesting(second)
+        c.notifyAgentForTesting(tab: home, message: "needs you")
+        drainMainQueue()
+        let card = try XCTUnwrap(c.waitingToastForTesting(tab: home))
+
+        try pressSwitch(on: card)
+        drainMainQueue()
+
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, first)
+        XCTAssertEqual(c.activeTabIDForTesting, home)
+        XCTAssertEqual(c.attentionStateForTesting(tab: home), .idle)
+    }
+
+    func test_switchOnACompletionCard_reachesATabInABackgroundWorkspace() throws {
+        let c = makeWindow()
+        let first = c.activeWorkspaceIDForTesting
+        let home = try XCTUnwrap(c.tabIDsForTesting(workspace: first).first)
+        let second = c.addWorkspaceForTesting(name: "Other", folder: root)
+        c.activateWorkspaceForTesting(second)
+        c.notifyCommandFinishedForTesting(
+            tab: home, result: TerminalCommandResult(exitCode: 0, duration: 30))
+        drainMainQueue()
+        let card = try XCTUnwrap(c.waitingToastForTesting(tab: home))
+
+        try pressSwitch(on: card)
+        drainMainQueue()
+
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, first)
+        XCTAssertEqual(c.activeTabIDForTesting, home)
+    }
+
+    func test_revealingATab_landsOnItWithoutShowingItsWorkspacesPreviousTab() throws {
+        let c = makeWindow()
+        let first = c.activeWorkspaceIDForTesting
+        let home = try XCTUnwrap(c.tabIDsForTesting(workspace: first).first)
+        c.newTabForTesting()
+        let asking = try XCTUnwrap(c.activeTabIDForTesting)
+        XCTAssertNotEqual(asking, home)
+        c.selectTabForTesting(index: 0)
+        let second = c.addWorkspaceForTesting(name: "Other", folder: root)
+        c.activateWorkspaceForTesting(second)
+        c.notifyAgentForTesting(tab: asking, message: "needs you")
+        drainMainQueue()
+        c.notifyAgentForTesting(tab: home, message: "also needs you")
+        drainMainQueue()
+
+        c.selectTab(asking)
+        drainMainQueue()
+
+        XCTAssertEqual(c.activeTabIDForTesting, asking)
+        XCTAssertEqual(
+            c.attentionStateForTesting(tab: home), .waiting,
+            "home was never on screen, so revealing its neighbour must not answer it")
+    }
+
+    func test_closingABackgroundWorkspacesTab_leavesTheVisibleFloatOpen() throws {
+        let c = makeWindow()
+        let second = c.addWorkspaceForTesting(name: "Other", folder: root)
+        let stray = try XCTUnwrap(c.tabIDsForTesting(workspace: second).first)
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        drainMainQueue()
+        XCTAssertTrue(c.isToolFloatOpen)
+
+        c.closeTabForTesting(tab: stray)
+        drainMainQueue()
+
+        XCTAssertTrue(c.isToolFloatOpen, "a tab closing out of sight must not shut the float on screen")
     }
 }
