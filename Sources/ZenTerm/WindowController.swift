@@ -2030,6 +2030,8 @@ final class WindowController: NSObject {
     private func renderAttention() {
         renderTabBar()
         renderDock()
+        AttentionCenter.shared.update(
+            windowID: windowID, state: attention.windowState, since: attention.waitingSince)
     }
 
     private func renderTabBar() {
@@ -2077,6 +2079,7 @@ final class WindowController: NSObject {
     private func tearDown() {
         guard !didTearDown else { return }
         didTearDown = true
+        AttentionCenter.shared.forget(windowID: windowID)
         pendingModal = nil
         cancelConfirm()
         keybindCapturer?.endCapture()
