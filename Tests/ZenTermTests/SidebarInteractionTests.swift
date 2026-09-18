@@ -10,9 +10,18 @@ final class SidebarInteractionTests: WindowTestCase {
     private var controllers: [WindowController] = []
     private var surfaces: [RecordingSurface] = []
     private var root: URL!
+    private var originalConfig: GeneralConfig!
+
+    private static let gutter: CGFloat = 20
+    private static let paneGap: CGFloat = 6
 
     override func setUpWithError() throws {
         try super.setUpWithError()
+        originalConfig = GeneralConfig.current
+        var config = GeneralConfig.builtIn
+        config.windowGutter = Self.gutter
+        config.panelGap = Self.paneGap
+        GeneralConfig.setCurrentForTesting(config)
         Motion.isReduceMotionEnabled = { true }
         SidebarController.resetLastChoiceForTesting()
         GitRepoStatus.resetForTesting()
@@ -35,6 +44,7 @@ final class SidebarInteractionTests: WindowTestCase {
         TerminalSurfaceFactory.makeOverride = originalOverride
         SidebarController.resetLastChoiceForTesting()
         GitRepoStatus.resetForTesting()
+        GeneralConfig.setCurrentForTesting(originalConfig)
         try? FileManager.default.removeItem(at: root)
         try super.tearDownWithError()
     }
@@ -87,7 +97,7 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertEqual(frame(of: try tabBar(in: controller), in: controller).minX, SidebarView.width)
         XCTAssertEqual(
             frame(of: try pane(in: controller), in: controller).minX,
-            SidebarView.width + ChromeMetrics.windowGutter)
+            SidebarView.width + Self.paneGap, "docked, the panes sit one pane-gap from the sidebar, as from a drawer")
     }
 
     func test_footerToggle_collapses_andTheLeadToggleDocksAgain() throws {
@@ -99,7 +109,7 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertFalse(sidebar.isDocked)
         XCTAssertTrue(sidebar.view.isHidden, "collapsed, the palette and Settings buttons go with the sidebar")
         XCTAssertFalse(sidebar.lead.isHidden)
-        XCTAssertEqual(frame(of: try pane(in: controller), in: controller).minX, ChromeMetrics.windowGutter)
+        XCTAssertEqual(frame(of: try pane(in: controller), in: controller).minX, Self.gutter)
         XCTAssertEqual(
             frame(of: try tabBar(in: controller), in: controller).minX,
             frame(of: sidebar.lead, in: controller).maxX, "the toggle and workspace name lead the tab bar")
@@ -112,7 +122,7 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(sidebar.lead.isHidden)
         XCTAssertEqual(
             frame(of: try pane(in: controller), in: controller).minX,
-            SidebarView.width + ChromeMetrics.windowGutter)
+            SidebarView.width + Self.paneGap, "docked, the panes sit one pane-gap from the sidebar, as from a drawer")
     }
 
     func test_collapsedLead_namesTheActiveWorkspace() throws {
@@ -172,7 +182,7 @@ final class SidebarInteractionTests: WindowTestCase {
 
         XCTAssertFalse(second.sidebarForTesting.isDocked)
         XCTAssertFalse(second.sidebarForTesting.lead.isHidden)
-        XCTAssertEqual(frame(of: try pane(in: second), in: second).minX, ChromeMetrics.windowGutter)
+        XCTAssertEqual(frame(of: try pane(in: second), in: second).minX, Self.gutter)
     }
 
     func test_rows_listTheWindowsWorkspaces_andMarkTheActiveOne() throws {
@@ -196,6 +206,19 @@ final class SidebarInteractionTests: WindowTestCase {
         waitUntil(
             controller.sidebarForTesting.view.rowsForTesting.last?.detailForTesting == "main",
             "the branch to land once it is read off the main thread")
+    }
+
+    func test_slide_holdsAnOpenFloatsGridToo() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let controller = makeController()
+        controller.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        waitUntil(controller.floatsForTesting.isOpen, "the scratch float to open")
+        let floatSurface = try XCTUnwrap(controller.floatsForTesting.shownSurface as? RecordingSurface)
+
+        controller.handle(.toggleSidebar)
+
+        XCTAssertEqual(floatSurface.sizeSyncHolds, 1, "the float's edge moves with the canvas, so its grid is held")
+        waitUntil(floatSurface.sizeSyncHolds == 0, "the float's hold to release once the slide lands")
     }
 
     func test_slide_holdsThePaneGridUntilItLands() throws {

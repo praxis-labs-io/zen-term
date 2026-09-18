@@ -119,6 +119,8 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         return result
     }
 
+    var shownSurface: TerminalSurface? { activeFloat?.surface }
+
     func refocus() { activeFloat?.surface.focus() }
 
     func reapplyTheme() { activeFloat?.overlay.reapplyTheme() }

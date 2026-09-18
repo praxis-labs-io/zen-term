@@ -1,7 +1,7 @@
 import AppKit
 import TerminalKit
 
-/// Docks and collapses one window's sidebar, and owns the edge the canvas, tool floats and tab bar start from.
+/// Docks and collapses one window's sidebar, and owns the edges the canvas, tool floats and tab bar start from.
 @MainActor
 final class SidebarController {
     // Per launch, not persisted: a new window opens the way the last toggle left one.
@@ -17,8 +17,10 @@ final class SidebarController {
     let view: SidebarView
     let lead: CollapsedSidebarLead
     private let edge = NSLayoutGuide()
+    private let canvasEdge = NSLayoutGuide()
     private(set) var isDocked = SidebarController.lastChoiceIsDocked
     private var edgeLeading: NSLayoutConstraint?
+    private var canvasOffset: NSLayoutConstraint?
     private var leadWidth: NSLayoutConstraint?
     private var sidebarTop: NSLayoutConstraint?
     private var slideID = 0
@@ -29,16 +31,19 @@ final class SidebarController {
         lead = CollapsedSidebarLead(onToggle: onToggle)
     }
 
-    var canvasLeadingAnchor: NSLayoutXAxisAnchor { edge.leadingAnchor }
+    var canvasLeadingAnchor: NSLayoutXAxisAnchor { canvasEdge.leadingAnchor }
 
     func install(in container: NSView, besideTabBar tabBar: NSView) {
         container.addSubview(view)
         container.addSubview(lead)
         container.addLayoutGuide(edge)
+        container.addLayoutGuide(canvasEdge)
         let edgeLeading = edge.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: edgeOffset)
+        let canvasOffset = canvasEdge.leadingAnchor.constraint(equalTo: edge.leadingAnchor, constant: canvasGap)
         let leadWidth = lead.widthAnchor.constraint(equalToConstant: leadOffset)
         let sidebarTop = view.topAnchor.constraint(equalTo: container.topAnchor, constant: ChromeMetrics.topInset)
         self.edgeLeading = edgeLeading
+        self.canvasOffset = canvasOffset
         self.leadWidth = leadWidth
         self.sidebarTop = sidebarTop
         NSLayoutConstraint.activate([
@@ -46,6 +51,10 @@ final class SidebarController {
             edge.widthAnchor.constraint(equalToConstant: 0),
             edge.topAnchor.constraint(equalTo: container.topAnchor),
             edge.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            canvasOffset,
+            canvasEdge.widthAnchor.constraint(equalToConstant: 0),
+            canvasEdge.topAnchor.constraint(equalTo: container.topAnchor),
+            canvasEdge.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             sidebarTop,
             view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
@@ -59,10 +68,12 @@ final class SidebarController {
 
     private var edgeOffset: CGFloat { isDocked ? SidebarView.width : 0 }
     private var leadOffset: CGFloat { isDocked ? 0 : lead.contentWidth }
+    // The canvas insets itself by window-gutter; docked, it sits one pane-gap from the sidebar, as from a drawer.
+    private var canvasGap: CGFloat { isDocked ? ChromeMetrics.panelGap - ChromeMetrics.windowGutter : 0 }
 
     /// Holds `surfaces`' grids for the slide, so they reflow once. Snaps under reduced motion, as a drawer does.
     func toggle(holding surfaces: [TerminalSurface], in root: NSView) {
-        guard let edgeLeading, let leadWidth else { return }
+        guard let edgeLeading, let canvasOffset, let leadWidth else { return }
         isDocked.toggle()
         Self.lastChoiceIsDocked = isDocked
         view.isHidden = false
@@ -70,6 +81,7 @@ final class SidebarController {
         slideID &+= 1
         guard !Motion.isReduceMotionEnabled() else {
             edgeLeading.constant = edgeOffset
+            canvasOffset.constant = canvasGap
             leadWidth.constant = leadOffset
             settle()
             root.layoutSubtreeIfNeeded()
@@ -78,7 +90,7 @@ final class SidebarController {
         let id = slideID
         Motion.drawerSlide(
             panel: view, opening: isDocked, parkOffset: CGVector(dx: -SidebarView.width, dy: 0),
-            animate: [(edgeLeading, edgeOffset), (leadWidth, leadOffset)], in: root,
+            animate: [(edgeLeading, edgeOffset), (canvasOffset, canvasGap), (leadWidth, leadOffset)], in: root,
             beforeSlide: { surfaces.forEach { $0.setSizeSyncSuspended(true) } }
         ) { [weak self] in
             surfaces.forEach { $0.setSizeSyncSuspended(false) }
@@ -124,9 +136,10 @@ final class SidebarController {
         lead.reapplyTheme()
     }
 
-    func reapplyChromeLayout() { sidebarTop?.constant = ChromeMetrics.topInset }
-
-    var edgeOffsetForTesting: CGFloat { edgeLeading?.constant ?? -1 }
+    func reapplyChromeLayout() {
+        sidebarTop?.constant = ChromeMetrics.topInset
+        canvasOffset?.constant = canvasGap
+    }
 
     static func resetLastChoiceForTesting() { lastChoiceIsDocked = true }
 }

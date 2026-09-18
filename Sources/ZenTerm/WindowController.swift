@@ -1713,7 +1713,8 @@ final class WindowController: NSObject {
         case .fillScreen: toggleFillScreen()
         case .toggleSidebar:
             Log.info("sidebar toggled", category: .workspace)
-            sidebar.toggle(holding: activeController?.allSurfaces ?? [], in: container)
+            let onScreen = (activeController?.allSurfaces ?? []) + [floats.shownSurface].compactMap { $0 }
+            sidebar.toggle(holding: onScreen, in: container)
         case .toggleToolFloat(let id):
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }

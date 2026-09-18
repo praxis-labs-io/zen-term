@@ -121,12 +121,14 @@
 # In-app Settings edit: applies live.
 # backdrop-alpha = 0.82               # clamped to 0…1
 
-# Inset from the window edge to the tiled panes, on the left, right and top (px).
-# The footer keeps its own spacing at any gutter.
+# Inset from the window edge to the tiled panes, on the right and top, and on the
+# left while the sidebar is collapsed (px). Docked, the panes sit one pane-gap from
+# the sidebar. The footer keeps its own spacing at any gutter.
 # In-app Settings edit: applies live.
 # window-gutter = 8                   # clamped to 0…64
 
-# Gap between tiled panes, and between the canvas and a drawer (px).
+# Gap between tiled panes, and between the canvas and a drawer or the docked
+# sidebar (px).
 # In-app Settings edit: applies live.
 # pane-gap = 8                        # clamped to 0…64
 

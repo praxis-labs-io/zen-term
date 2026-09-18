@@ -23,6 +23,7 @@ final class FooterGapTests: WindowTestCase {
         controller = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
+        SidebarController.resetLastChoiceForTesting()
         try super.tearDownWithError()
     }
 
@@ -54,7 +55,7 @@ final class FooterGapTests: WindowTestCase {
         let pane = try XCTUnwrap(controller.focusedPanelForTesting, "no focused pane")
         let barRect = bar.convert(bar.bounds, to: root)
         let paneRect = pane.convert(pane.bounds, to: root)
-        return (paneRect.minY - barRect.maxY, paneRect.minX - controller.sidebarForTesting.edgeOffsetForTesting)
+        return (paneRect.minY - barRect.maxY, paneRect.minX - root.bounds.minX)
     }
 
     func test_footerSeam_holdsAtEveryGutter() throws {
@@ -63,6 +64,7 @@ final class FooterGapTests: WindowTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700), initialCWD: nil)
         self.controller = controller
         controller.mountAndStart()
+        controller.handle(.toggleSidebar)
 
         let zero = try seam(controller)
         XCTAssertEqual(
