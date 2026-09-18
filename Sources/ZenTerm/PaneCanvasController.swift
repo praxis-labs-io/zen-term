@@ -240,6 +240,7 @@ final class PaneCanvasController: NSObject {
 
     func reapplyChromeLayout() {
         for split in splitViewByID.values { split.setGutter(ChromeMetrics.panelGap) }
+        for host in hostByLeaf.values { host.reapplyChromeLayout() }
     }
 
     func zoomFocusedLeaf(resizesCanvas: Bool = false) {

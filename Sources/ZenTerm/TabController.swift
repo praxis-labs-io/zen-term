@@ -38,6 +38,8 @@ final class TabController: NSObject {
 
     private var rightDrawerSurface: TerminalSurface?
     private var rightDrawerPanel: PanelHostView?
+
+    var bottomDrawerPanelForTesting: PanelHostView? { bottomDrawerPanel }
     private var isRightOpen = false { didSet { onOverlayStateChanged?() } }
     private var rightDrawerToken: Int?
 
@@ -182,9 +184,9 @@ final class TabController: NSObject {
             content.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: ChromeMetrics.windowGutter),
             content.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -ChromeMetrics.windowGutter),
             content.topAnchor.constraint(equalTo: view.topAnchor, constant: ChromeMetrics.topInset),
-            content.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -ChromeMetrics.windowGutter),
         ]
         NSLayoutConstraint.activate(gutterConstraints)
+        content.bottomAnchor.constraint(equalTo: view.bottomAnchor).isActive = true
         content.addSubview(canvas)
         relayoutPanels()
 
@@ -731,12 +733,14 @@ final class TabController: NSObject {
         let gutter = ChromeMetrics.windowGutter
         for (index, constraint) in gutterConstraints.enumerated() {
             switch index {
-            case 1, 3: constraint.constant = -gutter
+            case 1: constraint.constant = -gutter
             case 2: constraint.constant = ChromeMetrics.topInset
             default: constraint.constant = gutter
             }
         }
         paneCanvas.reapplyChromeLayout()
+        bottomDrawerPanel?.reapplyChromeLayout()
+        rightDrawerPanel?.reapplyChromeLayout()
         relayoutPanels()
         view.layoutSubtreeIfNeeded()
     }

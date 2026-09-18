@@ -118,7 +118,8 @@
 # In-app Settings edit: applies live.
 # backdrop-alpha = 0.82               # clamped to 0…1
 
-# Inset from the window edge to the tiled panes, all four sides (px).
+# Inset from the window edge to the tiled panes, on the left, right and top (px).
+# The footer keeps its own spacing at any gutter.
 # In-app Settings edit: applies live.
 # window-gutter = 8                   # clamped to 0…64
 
