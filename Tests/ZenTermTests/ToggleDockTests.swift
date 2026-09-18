@@ -342,6 +342,32 @@ final class ToggleDockTests: XCTestCase {
             dock.visibleLayoutForTesting, Self.bottomHidden, "the handle leaves with the process")
     }
 
+    func test_hiddenDrawer_surfacesWhileItsFinishedCommandIsUnseen() {
+        let dock = makeDock([])
+        dock.setHiddenButtons([.bottomDrawer])
+
+        dock.render(
+            overlay: OverlayState(), floatID: nil, paletteOpen: false, tab: nil,
+            drawerAttention: { $0 == .bottom ? .completed : .idle })
+
+        XCTAssertEqual(
+            dock.visibleLayoutForTesting, Self.fixedDefault,
+            "the command is done so nothing is busy, but it is still asking to be seen")
+        XCTAssertTrue(dock.bottomActivityForTesting)
+    }
+
+    func test_hiddenDrawer_rehidesOnceItsAttentionIsAnswered() {
+        let dock = makeDock([])
+        dock.setHiddenButtons([.bottomDrawer])
+        dock.render(
+            overlay: OverlayState(), floatID: nil, paletteOpen: false, tab: nil,
+            drawerAttention: { $0 == .bottom ? .waiting : .idle })
+
+        render(dock)
+
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.bottomHidden)
+    }
+
     func test_hiddenDrawer_staysHiddenWhileIdleAndOpen() {
         let dock = makeDock([])
         dock.setHiddenButtons([.bottomDrawer])

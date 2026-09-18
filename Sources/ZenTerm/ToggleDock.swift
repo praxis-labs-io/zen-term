@@ -217,10 +217,11 @@ final class ToggleDock: NSView {
         bottomBtn.showsActivity = overlay.bottomBusy || bottomAttention != .idle
         rightBtn.showsActivity = overlay.rightBusy || rightAttention != .idle
 
-        surface(.bottomDrawer, busy: overlay.bottomBusy, onScreen: bottomBtn.isActive)
-        surface(.rightDrawer, busy: overlay.rightBusy, onScreen: rightBtn.isActive)
+        surface(.bottomDrawer, busy: bottomBtn.showsActivity, onScreen: bottomBtn.isActive)
+        surface(.rightDrawer, busy: rightBtn.showsActivity, onScreen: rightBtn.isActive)
         surface(
-            .scratch, busy: isFloatBusy(ToolFloat.scratch.id), onScreen: scratchBtn.isActive)
+            .scratch, busy: isFloatBusy(ToolFloat.scratch.id) || scratchAttention != .idle,
+            onScreen: scratchBtn.isActive)
         refreshVisibility()
     }
 
