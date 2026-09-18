@@ -164,18 +164,30 @@ pane's `TerminalSurfaceDelegate`. Zoom changes only what `rebuildViews()` mounts
 root. Resize swaps one constraint in place and clamps against the rendered extent
 (`minSplitExtent`). `launchByLeaf` keeps the spawn config for `retryStart`.
 
-## Tabs and windows
+## Windows, workspaces and tabs
 
-`TabList` (TabKit) holds `order` and `activeIndex` and always holds at least one tab:
-`close` returns false when it removes the last tab, and
-the caller closes the window. Tab numbers, tooltips and keycaps derive
-from `order` at render time. A label is `pinnedTitle ?? liveTitle`.
+`TabList` (TabKit) holds `order` and `activeIndex` for one workspace and always holds at
+least one tab: `close` returns false when it removes the last tab. Tab numbers, tooltips
+and keycaps derive from `order` at render time. A label is `pinnedTitle ?? liveTitle`.
 
-`WindowController` owns one window: tabs, toast presenter, tool floats, the single modal
-slot, tab bar and dock. `TabController` owns one tab: a `PaneCanvasController` and two
-drawers.
+`WindowController` owns one window: its workspaces, the toast presenter, tool floats, the
+single modal slot, tab bar and dock. `WorkspaceController` owns one workspace: a `TabList`,
+its `TabController`s and their titles. `TabController` owns one tab: a
+`PaneCanvasController` and two drawers.
 
-- **Inactive tabs are detached but retained**, so shells keep running.
+- **A window always has one workspace**, the default one in the home folder, and one of
+  them is active. Nothing opens a second yet, so only the testing seams reach one.
+- **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
+  workspace costs nothing beyond an inactive tab.
+- **Tab ids are minted by the window**, not by the workspace, so they stay unique across a
+  window's workspaces. Notification identity and the attention store's residual key on
+  `TabID` alone.
+- **A lookup by `TabID` searches every workspace; iteration for the tab bar reads the
+  active one.** A tab's callbacks keep firing while its workspace is in the background, so
+  `workspace(of:)` and `controller(_:)` span them all. Reading the active workspace where
+  a lookup belongs fails silently.
+- **Inactive tabs and workspaces are detached but retained**, so shells keep running.
+- **Closing the last tab closes its workspace, and the last workspace closes the window.**
 - **Window stack, back to front:** canvas, tool float, tab bar and dock, toast stack,
   modal card. Toasts sit above floats (the ⌘W guard toast is about the float); a card
   sits above toasts because it owns the keyboard. `closeModal()` in
@@ -186,9 +198,12 @@ drawers.
 - **Attention has one owner per window**, `AttentionStore`, keyed by `SurfaceID` across
   panes, drawers and floats. Each surface latches a `SurfaceAttention` beside a `seen`
   flag, and one ranked fold (`rollup`) is both the priority rule and the rollup at every
-  level: surface, tab, window. A new level is a call, not a new concept.
-- **`seen` means on screen, not focused.** A pane is on screen while its tab is active, a
-  drawer while its tab is active and it is open, a float while it is shown. Focus would
+  level: surface, tab, workspace, window. A new level is a call, not a new concept, and
+  the workspace level is that call: `state(tabs:)` takes the ids and the store learns
+  nothing about workspaces.
+- **`seen` means on screen, not focused.** A pane is on screen while its tab is active in
+  the active workspace, a drawer while that holds and it is open, a float while it is
+  shown. Focus would
   mark a background split in the active tab, which nothing asks for. Coming on screen
   answers a surface and takes down the card it raised. A visit answers only what it puts
   on screen: a closed drawer or float keeps its latch and its card. Releasing an unseen

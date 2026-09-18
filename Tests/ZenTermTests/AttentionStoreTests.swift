@@ -237,4 +237,36 @@ final class AttentionStoreTests: XCTestCase {
 
         XCTAssertEqual(store.waitingSince, start)
     }
+
+    func test_aWorkspaceFoldsItsTabsByMax() {
+        let store = makeStore()
+        let quiet = SurfaceIDs.mint()
+        let loud = SurfaceIDs.mint()
+        store.register(quiet, tab: tab)
+        store.register(loud, tab: other)
+        store.record(quiet, .completed, seen: false)
+        store.record(loud, .waiting, seen: false)
+
+        XCTAssertEqual(store.state(tabs: [tab, other]), .waiting)
+    }
+
+    func test_aWorkspaceWithNoTabs_isIdle() {
+        let store = makeStore()
+        let pane = SurfaceIDs.mint()
+        store.register(pane, tab: tab)
+        store.record(pane, .waiting, seen: false)
+
+        XCTAssertEqual(store.state(tabs: []), .idle)
+    }
+
+    func test_aWorkspaceCountsALatchItsClosedSurfaceLeftBehind() {
+        let store = makeStore()
+        let pane = SurfaceIDs.mint()
+        store.register(pane, tab: tab)
+        store.record(pane, .waiting, seen: false)
+
+        store.release(pane)
+
+        XCTAssertEqual(store.state(tabs: [tab]), .waiting)
+    }
 }

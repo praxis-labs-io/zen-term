@@ -84,6 +84,11 @@ final class AttentionStore {
         return SurfaceAttention.rollup(surfaces + [residual[tab]?.state ?? .idle])
     }
 
+    /// A workspace's attention: its tabs folded the same way a tab folds its surfaces.
+    func state(tabs ids: [TabID]) -> SurfaceAttention {
+        SurfaceAttention.rollup(ids.map { state(tab: $0) })
+    }
+
     var windowState: SurfaceAttention {
         SurfaceAttention.rollup(entries.values.map(effective) + residual.values.map(\.state))
     }
