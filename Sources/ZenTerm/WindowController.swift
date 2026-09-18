@@ -1795,7 +1795,7 @@ final class WindowController: NSObject {
                     windowID: self.windowID, tabID: target, title: title + (tail ?? ""), body: message)
             }
 
-            let shown = self.floats.activeID == spec.id
+            let shown = self.floats.activeID == spec.id && self.floats.surfaceID(spec.id) == surface
             let before = self.attentionSnapshot(surface, in: target)
             surface.map { self.attention.record($0, .waiting, seen: shown) }
 
