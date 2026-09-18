@@ -15,9 +15,6 @@ enum ToolbarButton: String, CaseIterable {
         [.splitHorizontal, .splitVertical, .bottomDrawer, .rightDrawer, .scratch, .focusMode],
     ]
 
-    /// In the sidebar footer rather than the toolbar.
-    static let sidebarFooter: [ToolbarButton] = [.commandPalette, .settings]
-
     var displayName: String {
         switch self {
         case .newTab: return "New tab"
