@@ -58,10 +58,13 @@ final class PanelHostView: NSView, TerminalModeHost {
 
     private let padding: CGFloat = 10
 
-    /// Concentric with the window, so the reveal stays an even width around the corner arc.
+    /// Concentric with the window only when nothing sits between them: window chrome puts the top corners 28pt clear of it.
     @MainActor static var cornerRadius: CGFloat {
-        max(minCornerRadius, WindowCorner.radius - ChromeMetrics.windowGutter)
+        guard !GeneralConfig.current.windowChrome else { return chromeCornerRadius }
+        return max(minCornerRadius, WindowCorner.radius - ChromeMetrics.windowGutter)
     }
+
+    private static let chromeCornerRadius: CGFloat = 12
 
     /// A pane far from the window corner still reads as a pane, so the concentric result has a floor.
     private static let minCornerRadius: CGFloat = 6
@@ -158,6 +161,8 @@ final class PanelHostView: NSView, TerminalModeHost {
     var paintedBackgroundForTesting: (fill: CGColor?, ring: NSColor) {
         (clip.layer?.backgroundColor, ring.color)
     }
+
+    var cornerRadiusForTesting: CGFloat { pane.layer?.cornerRadius ?? -1 }
 
     var haloGeometryForTesting: (frame: NSRect, isBelowCard: Bool) {
         let haloIndex = subviews.firstIndex(of: halo)

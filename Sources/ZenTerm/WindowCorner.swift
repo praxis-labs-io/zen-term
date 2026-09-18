@@ -1,8 +1,7 @@
 import AppKit
 
 enum WindowCorner {
-    /// The system window corner radius. AppKit exposes none, and macOS 26 raised it from 11 to 16,
-    /// so a pane flush to the window edge reads ragged against a constant.
+    /// AppKit exposes no window corner radius, and macOS 26 changed it, so a constant goes stale.
     @MainActor static let radius: CGFloat = resolve() ?? fallback
 
     /// The macOS 14 and 15 value, used when the private read stops working.

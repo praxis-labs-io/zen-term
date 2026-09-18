@@ -38,6 +38,8 @@ final class TabController: NSObject {
 
     private var rightDrawerSurface: TerminalSurface?
     private var rightDrawerPanel: PanelHostView?
+
+    var bottomDrawerPanelForTesting: PanelHostView? { bottomDrawerPanel }
     private var isRightOpen = false { didSet { onOverlayStateChanged?() } }
     private var rightDrawerToken: Int?
 
@@ -737,6 +739,8 @@ final class TabController: NSObject {
             }
         }
         paneCanvas.reapplyChromeLayout()
+        bottomDrawerPanel?.reapplyChromeLayout()
+        rightDrawerPanel?.reapplyChromeLayout()
         relayoutPanels()
         view.layoutSubtreeIfNeeded()
     }
