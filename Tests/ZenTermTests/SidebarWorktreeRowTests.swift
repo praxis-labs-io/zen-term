@@ -282,4 +282,16 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
         XCTAssertEqual(titles(of: c), ["Home", "Alpha", "Beta"])
     }
+
+    func test_collapsedLead_readsWorkspaceSlashWorktree_whileAWorktreeIsActive() throws {
+        let c = makeWindow()
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        c.handle(.toggleSidebar)
+
+        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Alpha / feature/one")
+
+        try press("1", typing: "¡", keyCode: 18, in: c)
+
+        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Home")
+    }
 }

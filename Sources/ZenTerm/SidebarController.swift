@@ -7,7 +7,7 @@ final class SidebarController {
     private static var lastChoiceIsDocked = true
 
     private struct Entry {
-        enum Kind { case workspace, worktree(fallbackName: String), ghost }
+        enum Kind { case workspace, worktree(WorktreeOrigin), ghost }
 
         let row: SidebarRowID
         let kind: Kind
@@ -150,7 +150,7 @@ final class SidebarController {
             switch entry {
             case .workspace(let id), .worktree(let id):
                 guard let workspace = byID[id] else { return nil }
-                let kind = workspace.origin.map { Entry.Kind.worktree(fallbackName: $0.name) } ?? .workspace
+                let kind = workspace.origin.map(Entry.Kind.worktree) ?? .workspace
                 return Entry(
                     row: .workspace(id), kind: kind, name: workspace.name, folder: workspace.folder,
                     number: numbers[id], isActive: workspace === active, isConfigured: !workspace.isDefault)
@@ -162,8 +162,6 @@ final class SidebarController {
         }
         let foldersChanged = next.compactMap(\.folder) != entries.compactMap(\.folder)
         entries = next
-        lead.setWorkspaceName(active.name)
-        if !isDocked { leadWidth?.constant = lead.contentWidth }
         renderRows()
         if foldersChanged { refreshBranches() }
     }
@@ -188,6 +186,18 @@ final class SidebarController {
 
     private func renderRows() {
         view.render(entries.map(Self.rowItem))
+        renderLead()
+    }
+
+    private func renderLead() {
+        guard let active = entries.first(where: \.isActive) else { return }
+        if case .worktree(let origin) = active.kind {
+            lead.setWorkspaceName(
+                origin.parent.title, worktree: active.folder.flatMap(GitRepoStatus.branch) ?? origin.name)
+        } else {
+            lead.setWorkspaceName(active.name)
+        }
+        if !isDocked { leadWidth?.constant = lead.contentWidth }
     }
 
     private static let worktreeSymbol = "arrow.triangle.branch"
@@ -200,9 +210,9 @@ final class SidebarController {
             return SidebarRowItem(
                 id: entry.row, variant: .standard, name: entry.name, branch: branch, number: entry.number,
                 isActive: entry.isActive, makesWorktrees: entry.isConfigured && isRepo)
-        case .worktree(let fallbackName):
+        case .worktree(let origin):
             return SidebarRowItem(
-                id: entry.row, variant: .nested(symbol: worktreeSymbol), name: branch ?? fallbackName,
+                id: entry.row, variant: .nested(symbol: worktreeSymbol), name: branch ?? origin.name,
                 branch: nil, number: entry.number, isActive: entry.isActive, makesWorktrees: false)
         case .ghost:
             return SidebarRowItem(

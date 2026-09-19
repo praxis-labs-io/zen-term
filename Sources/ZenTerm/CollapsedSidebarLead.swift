@@ -5,6 +5,8 @@ final class CollapsedSidebarLead: NSView {
     static let dividerGap: CGFloat = 12
 
     private let nameLabel = NSTextField(labelWithString: "")
+    private var workspaceName = ""
+    private var worktreeName: String?
     private let divider = ToggleDock.divider()
     private let content = NSStackView()
 
@@ -38,17 +40,27 @@ final class CollapsedSidebarLead: NSView {
 
     var contentWidth: CGFloat { content.fittingSize.width }
 
-    func setWorkspaceName(_ name: String) {
-        nameLabel.attributedStringValue = NSAttributedString(
-            string: name,
-            attributes: [
-                .font: TabBarView.chipFont, .kern: TabBarView.titleKern,
-                .foregroundColor: Theme.current.chrome.ink(.muted),
-            ])
+    func setWorkspaceName(_ name: String, worktree: String? = nil) {
+        workspaceName = name
+        worktreeName = worktree
+        let chrome = Theme.current.chrome
+        func run(_ text: String, _ ink: ChromeTheme.InkLevel) -> NSAttributedString {
+            NSAttributedString(
+                string: text,
+                attributes: [
+                    .font: TabBarView.chipFont, .kern: TabBarView.titleKern, .foregroundColor: chrome.ink(ink),
+                ])
+        }
+        let label = NSMutableAttributedString(attributedString: run(name, .muted))
+        if let worktree {
+            label.append(run(" / ", .faint))
+            label.append(run(worktree, .subtle))
+        }
+        nameLabel.attributedStringValue = label
     }
 
     func reapplyTheme() {
-        setWorkspaceName(nameLabel.stringValue)
+        setWorkspaceName(workspaceName, worktree: worktreeName)
         divider.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
     }
 
