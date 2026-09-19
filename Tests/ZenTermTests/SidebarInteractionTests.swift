@@ -843,6 +843,55 @@ final class SidebarInteractionTests: WindowTestCase {
             charactersIgnoringModifiers: key.text, isARepeat: false, keyCode: key.code)!
     }
 
+    private func makeCrowdedController() -> WindowController {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        for n in 2...30 { _ = controller.addWorkspaceForTesting(name: "ws \(n)", folder: root) }
+        controller.containerForTesting.layoutSubtreeIfNeeded()
+        return controller
+    }
+
+    private func isOnScreen(_ row: NSView, in scroll: NSScrollView) -> Bool {
+        scroll.contentView.documentVisibleRect.contains(row.convert(row.bounds, to: scroll.documentView))
+    }
+
+    private func fadedEdges(of view: SidebarView) -> (top: Bool, bottom: Bool) {
+        let colors = (view.edgeFadeForTesting.colors as? [CGColor]) ?? []
+        return (colors.first?.alpha == 0, colors.last?.alpha == 0)
+    }
+
+    func test_moreRowsThanFit_theLastIsReachedByDownArrow_andScrolledIntoView() throws {
+        let controller = makeCrowdedController()
+        let view = controller.sidebarForTesting.view
+        let rows = view.rowsForTesting
+        let scroll = view.scrollForTesting
+        XCTAssertFalse(isOnScreen(try XCTUnwrap(rows.last), in: scroll), "precondition: the list overflows")
+
+        view.focusRow(.workspace(controller.workspaceIDsForTesting[0]))
+        for _ in 1..<rows.count { controller.window.sendEvent(key(.down, in: controller)) }
+
+        XCTAssertTrue(controller.window.firstResponder === rows.last, "↓ walks to the last row")
+        XCTAssertTrue(isOnScreen(try XCTUnwrap(rows.last), in: scroll), "the focused row is scrolled into view")
+    }
+
+    func test_theSidebarFadesOnlyTheEdgesContentIsHiddenPast() throws {
+        let roomy = makeController()
+        roomy.containerForTesting.layoutSubtreeIfNeeded()
+        XCTAssertTrue(
+            try XCTUnwrap(roomy.sidebarForTesting.view.scrollForTesting.layer).contentsAreFlipped(),
+            "the fade's start is the top edge")
+        XCTAssertTrue(fadedEdges(of: roomy.sidebarForTesting.view) == (false, false), "nothing overflows")
+        roomy.windowWillClose(Notification(name: NSWindow.willCloseNotification))
+
+        let controller = makeCrowdedController()
+        let view = controller.sidebarForTesting.view
+        view.focusRow(.workspace(controller.workspaceIDsForTesting[0]))
+        XCTAssertTrue(fadedEdges(of: view) == (false, true), "at the top, only the bottom edge hides rows")
+
+        for _ in 1..<view.rowsForTesting.count { controller.window.sendEvent(key(.down, in: controller)) }
+        XCTAssertTrue(fadedEdges(of: view) == (true, false), "at the end, only the top edge hides rows")
+    }
+
     func test_row_showsItsWorkspaceBranch() throws {
         let repo = try GitFixture.makeRepo(at: root.appendingPathComponent("repo", isDirectory: true))
         let controller = makeController()

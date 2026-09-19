@@ -24,7 +24,8 @@ final class SidebarView: NSView {
     private static let addInset: CGFloat = 4
     private static let newWorktreeSize = NSSize(width: 20, height: 20)
     private static let sectionGap: CGFloat = 14
-    private static let agentsBottomGap: CGFloat = 8
+    private static let contentBottomGap: CGFloat = 8
+    private static let fadeDepth: CGFloat = 16
 
     private let caption = FieldCaption("Workspaces", required: false)
     private let addButton: IconButton
@@ -35,8 +36,12 @@ final class SidebarView: NSView {
     private var activeRow: SidebarRowID?
     let rowMenu = SidebarRowMenu()
     private let agentsCaption = FieldCaption("Agents", required: false)
-    private let agentScroll = NSScrollView()
     private let agentStack = NSStackView()
+    private let scroll = NSScrollView()
+    private let content = NSView()
+    private let edgeFade = EdgeFade(axis: .vertical)
+    private var contentEndsAtRows: NSLayoutConstraint?
+    private var contentEndsAtAgents: NSLayoutConstraint?
     private var agentRows: [SurfaceID: SidebarAgentRow] = [:]
     var onLeave: (() -> Void)?
     var onJump: ((SurfaceID) -> Void)?
@@ -59,19 +64,72 @@ final class SidebarView: NSView {
         rowStack.alignment = .leading
         rowStack.spacing = 0
         rowStack.translatesAutoresizingMaskIntoConstraints = false
-        for view in [caption, addButton, rowStack] { addSubview(view) }
+        installScroll()
+        for view in [caption, addButton, rowStack] { content.addSubview(view) }
         installAgents()
 
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: Self.width),
-            caption.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.padding + Self.captionInset),
-            caption.centerYAnchor.constraint(equalTo: topAnchor, constant: Self.captionHeight / 2),
-            addButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -(Self.padding + Self.addInset)),
+            caption.leadingAnchor.constraint(
+                equalTo: content.leadingAnchor, constant: Self.padding + Self.captionInset),
+            caption.centerYAnchor.constraint(equalTo: content.topAnchor, constant: Self.captionHeight / 2),
+            addButton.trailingAnchor.constraint(
+                equalTo: content.trailingAnchor, constant: -(Self.padding + Self.addInset)),
             addButton.centerYAnchor.constraint(equalTo: caption.centerYAnchor),
-            rowStack.topAnchor.constraint(equalTo: topAnchor, constant: Self.captionHeight),
-            rowStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.padding),
-            rowStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.padding),
+            rowStack.topAnchor.constraint(equalTo: content.topAnchor, constant: Self.captionHeight),
+            rowStack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: Self.padding),
+            rowStack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -Self.padding),
         ])
+    }
+
+    private func installScroll() {
+        let clip = FlippedClipView()
+        clip.drawsBackground = false
+        clip.postsBoundsChangedNotifications = true
+        scroll.contentView = clip
+        scroll.documentView = content
+        scroll.drawsBackground = false
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.scrollerStyle = .overlay
+        scroll.wantsLayer = true
+        scroll.layer?.mask = edgeFade.layer
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        content.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(scroll)
+        NSLayoutConstraint.activate([
+            scroll.topAnchor.constraint(equalTo: topAnchor),
+            scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
+            content.topAnchor.constraint(equalTo: clip.topAnchor),
+            content.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: clip.trailingAnchor),
+        ])
+        content.postsFrameChangedNotifications = true
+        clip.postsFrameChangedNotifications = true
+        let center = NotificationCenter.default
+        center.addObserver(
+            self, selector: #selector(extentChanged), name: NSView.boundsDidChangeNotification, object: clip)
+        center.addObserver(
+            self, selector: #selector(extentChanged), name: NSView.frameDidChangeNotification, object: clip)
+        center.addObserver(
+            self, selector: #selector(extentChanged), name: NSView.frameDidChangeNotification, object: content)
+    }
+
+    @objc private func extentChanged() { updateFade() }
+
+    override func layout() {
+        super.layout()
+        updateFade()
+    }
+
+    private var hiddenAbove: Bool { scroll.contentView.bounds.minY > 0.5 }
+
+    private var hiddenBelow: Bool { content.frame.height - scroll.contentView.bounds.maxY > 0.5 }
+
+    private func updateFade() {
+        edgeFade.update(
+            frame: scroll.bounds, start: hiddenAbove ? Self.fadeDepth : 0, end: hiddenBelow ? Self.fadeDepth : 0)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -81,43 +139,32 @@ final class SidebarView: NSView {
         agentStack.alignment = .leading
         agentStack.spacing = 0
         agentStack.translatesAutoresizingMaskIntoConstraints = false
-        let clip = FlippedClipView()
-        clip.drawsBackground = false
-        agentScroll.contentView = clip
-        agentScroll.documentView = agentStack
-        agentScroll.drawsBackground = false
-        agentScroll.hasVerticalScroller = true
-        agentScroll.autohidesScrollers = true
-        agentScroll.scrollerStyle = .overlay
-        agentScroll.translatesAutoresizingMaskIntoConstraints = false
         agentsCaption.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(agentsCaption)
-        addSubview(agentScroll)
-        let fitsContent = agentScroll.heightAnchor.constraint(equalTo: agentStack.heightAnchor)
-        fitsContent.priority = .defaultHigh - 1
+        content.addSubview(agentsCaption)
+        content.addSubview(agentStack)
+        contentEndsAtRows = content.bottomAnchor.constraint(equalTo: rowStack.bottomAnchor)
+        contentEndsAtAgents = content.bottomAnchor.constraint(equalTo: agentStack.bottomAnchor)
         NSLayoutConstraint.activate([
             agentsCaption.leadingAnchor.constraint(equalTo: caption.leadingAnchor),
             agentsCaption.centerYAnchor.constraint(
                 equalTo: rowStack.bottomAnchor, constant: Self.sectionGap + Self.captionHeight / 2),
-            agentScroll.topAnchor.constraint(
+            agentStack.topAnchor.constraint(
                 equalTo: rowStack.bottomAnchor, constant: Self.sectionGap + Self.captionHeight),
-            agentScroll.leadingAnchor.constraint(equalTo: rowStack.leadingAnchor),
-            agentScroll.trailingAnchor.constraint(equalTo: rowStack.trailingAnchor),
-            agentStack.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
-            agentStack.trailingAnchor.constraint(equalTo: clip.trailingAnchor),
-            agentStack.topAnchor.constraint(equalTo: clip.topAnchor),
-            fitsContent,
+            agentStack.leadingAnchor.constraint(equalTo: rowStack.leadingAnchor),
+            agentStack.trailingAnchor.constraint(equalTo: rowStack.trailingAnchor),
         ])
         setAgentsHidden(true)
     }
 
-    func limitAgents(above anchor: NSLayoutYAxisAnchor) {
-        agentScroll.bottomAnchor.constraint(lessThanOrEqualTo: anchor, constant: -Self.agentsBottomGap).isActive = true
+    func limitContent(above anchor: NSLayoutYAxisAnchor) {
+        scroll.bottomAnchor.constraint(equalTo: anchor, constant: -Self.contentBottomGap).isActive = true
     }
 
     private func setAgentsHidden(_ hidden: Bool) {
         agentsCaption.isHidden = hidden
-        agentScroll.isHidden = hidden
+        agentStack.isHidden = hidden
+        contentEndsAtAgents?.isActive = !hidden
+        contentEndsAtRows?.isActive = hidden
     }
 
     func renderAgents(_ items: [SidebarAgentItem]) {
@@ -243,6 +290,7 @@ final class SidebarView: NSView {
 
     func focusRow(_ id: SidebarRowID) {
         rows[id]?.takeKeyboardFocus()
+        rows[id]?.scrollToVisible(rows[id]?.bounds ?? .zero)
     }
 
     private func moveFocus(_ delta: Int) {
@@ -251,11 +299,10 @@ final class SidebarView: NSView {
         guard let next = KeyboardFocus.step(from: current, delta: delta, count: stops.count) else { return }
         switch stops[next] {
         case let row as SettingsNavRow: row.takeKeyboardFocus()
-        case let row as SidebarAgentRow:
-            row.takeKeyboardFocus()
-            row.scrollToVisible(row.bounds)
-        default: break
+        case let row as SidebarAgentRow: row.takeKeyboardFocus()
+        default: return
         }
+        stops[next].scrollToVisible(stops[next].bounds)
     }
 
     private var focusStops: [NSView] { orderedRows + orderedAgentRows }
@@ -293,5 +340,9 @@ final class SidebarView: NSView {
 
     var agentRowsForTesting: [SidebarAgentRow] { orderedAgentRows }
 
-    var agentsAreHiddenForTesting: Bool { agentScroll.isHidden && agentsCaption.isHidden }
+    var agentsAreHiddenForTesting: Bool { agentStack.isHidden && agentsCaption.isHidden }
+
+    var scrollForTesting: NSScrollView { scroll }
+
+    var edgeFadeForTesting: CAGradientLayer { edgeFade.layer }
 }

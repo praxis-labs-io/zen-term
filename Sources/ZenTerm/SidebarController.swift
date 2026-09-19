@@ -96,7 +96,7 @@ final class SidebarController {
             leadWidth,
             tabBarLeading,
         ])
-        view.limitAgents(above: toggleButton.topAnchor)
+        view.limitContent(above: toggleButton.topAnchor)
         settle()
     }
 
