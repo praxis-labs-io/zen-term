@@ -141,10 +141,39 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
         try click(rows(of: c)[1])
 
+        waitUntil(c.workspaceNamesForTesting.count == 3, "the workspace to open")
         XCTAssertEqual(c.workspaceNamesForTesting, ["Home", "Alpha: feature/one", "Alpha"])
         XCTAssertEqual(titles(of: c), ["Home", "Alpha", "feature/one"])
         XCTAssertEqual(rows(of: c).map(\.variant), [.standard, .standard, .nested(symbol: "arrow.triangle.branch")])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting[2])
+    }
+
+    private func rewriteWorkspaces(_ contents: String) throws {
+        try contents.write(to: tempRoot.appendingPathComponent("workspaces"), atomically: true, encoding: .utf8)
+    }
+
+    func test_clickingTheGhost_opensItsWorkspaceAsTheFileNowHasIt() throws {
+        let c = makeWindow()
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        try rewriteWorkspaces("[Alpha Renamed]\npath = ~/Dev/alpha\n")
+
+        try click(rows(of: c)[1])
+
+        waitUntil(c.workspaceNamesForTesting.count == 3, "the workspace to open")
+        XCTAssertEqual(c.workspaceNamesForTesting.last, "Alpha Renamed")
+        XCTAssertEqual(titles(of: c), ["Home", "Alpha Renamed", "feature/one"])
+    }
+
+    func test_clickingTheGhost_withItsEntryGone_opensItAsItWasWhenTheWorktreeOpened() throws {
+        let c = makeWindow()
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        try rewriteWorkspaces("[Beta]\npath = ~/Dev/beta\n")
+
+        try click(rows(of: c)[1])
+
+        waitUntil(c.workspaceNamesForTesting.count == 3, "the workspace to open")
+        XCTAssertEqual(c.workspaceNamesForTesting.last, "Alpha")
+        XCTAssertEqual(titles(of: c), ["Home", "Alpha", "feature/one"])
     }
 
     func test_closingTheLastWorktree_takesItsGhostWithIt() throws {
@@ -276,6 +305,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         try openAlphaWorktree(branch: "feature/one", in: c)
         try openWorkspace(atConfigIndex: 1, in: c)
         try click(rows(of: c)[1])
+        waitUntil(c.workspaceNamesForTesting.count == 4, "the workspace to open")
         XCTAssertEqual(titles(of: c), ["Home", "Alpha", "feature/one", "Beta"])
 
         c.activateWorkspaceForTesting(c.workspaceIDsForTesting[1])

@@ -848,7 +848,10 @@ final class WindowController: NSObject {
             guard id != activeWorkspace.id else { restoreFocusToActive(); return }
             activate(id)
         case .ghost(let path):
-            ghostParent(at: path).map { openWorkspace($0) }
+            guard let parent = ghostParent(at: path) else { return }
+            ConfigLoader.loadWorkspaces { [weak self] entries in
+                self?.openWorkspace(entries.first { $0.path.standardizedFileURL.path == path } ?? parent)
+            }
         }
     }
 
