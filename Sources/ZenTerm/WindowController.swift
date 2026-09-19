@@ -2785,7 +2785,6 @@ final class WindowController: NSObject {
                 attentionState: attention.state(tab: id).tabState)
         }
         tabBar.render(items)
-        // Hidden in the window's own chrome, but Mission Control, ⌘` and the Window menu read it.
         window.title = activeWorkspace.name
         let waiting = workspaces.filter { attention.state(tabs: $0.tabIDs) == .waiting }.map(\.id)
         sidebar.render(order: order, workspaces: workspaces, active: activeWorkspace, waiting: Set(waiting))
