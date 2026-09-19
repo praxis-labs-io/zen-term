@@ -840,6 +840,11 @@ final class WindowController: NSObject {
         select(ids[(i + delta + ids.count) % ids.count], slideFrom: delta > 0 ? .fromRight : .fromLeft)
     }
 
+    private func cycleWorkspace(_ delta: Int) {
+        guard workspaces.count > 1, let i = workspaces.firstIndex(where: { $0 === activeWorkspace }) else { return }
+        activate(workspaces[(i + delta + workspaces.count) % workspaces.count].id)
+    }
+
     private func moveActiveTab(_ delta: Int) {
         guard let id = activeWorkspace.activeID, activeWorkspace.move(id, by: delta) else { return }
         Log.info("tab moved", category: .tabs)
@@ -952,7 +957,9 @@ final class WindowController: NSObject {
         if modal?.kind == .commandPalette { closeModal(); return }
         let palette = CommandPaletteOverlay(
             commands: { [weak self] in
-                CommandCatalog.commands(tabCount: self?.activeWorkspace.tabIDs.count ?? 0)
+                CommandCatalog.commands(
+                    tabCount: self?.activeWorkspace.tabIDs.count ?? 0,
+                    workspaceCount: self?.workspaces.count ?? 0)
             },
             background: Theme.current.chrome.background.nsColor,
             onRun: { [weak self] chord in self?.runCommand(chord) },
@@ -1636,7 +1643,8 @@ final class WindowController: NSObject {
                 .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown, .scrollToSelection,
                 .jumpToPreviousPrompt, .jumpToNextPrompt, .pasteSelection, .clearScreen,
                 .writeScreenFile, .copyScreenFilePath, .openScreenFile,
-                .dismissToast, .dismissAllToasts:
+                .dismissToast, .dismissAllToasts,
+                .selectWorkspace, .prevWorkspace, .nextWorkspace:
                 break
             default:
                 return
@@ -1728,6 +1736,10 @@ final class WindowController: NSObject {
         case .openSettings: openSettings()
         case .reportIssue: openReportIssue()
         case .newTool: openToolFloatForm(editing: nil, returnTo: toolFormReturnForNewTool())
+        case .selectWorkspace(let n):
+            if workspaces.indices.contains(n - 1) { activate(workspaces[n - 1].id) }
+        case .prevWorkspace: cycleWorkspace(-1)
+        case .nextWorkspace: cycleWorkspace(1)
         }
     }
 

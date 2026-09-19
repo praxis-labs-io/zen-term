@@ -40,6 +40,7 @@ final class SettingsKeybindsSection: SettingsSection {
                 .removeWorktree, .toggleCommandPalette, .newTool, .openSettings,
             ]
         ),
+        ("Workspaces", [.prevWorkspace, .nextWorkspace] + (1...9).map { .selectWorkspace($0) }),
     ]
 
     private let capturer: KeybindCapturing?

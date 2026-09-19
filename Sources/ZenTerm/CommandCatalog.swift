@@ -16,6 +16,7 @@ enum CommandCatalog {
         static let tools = "Tools"
         static let config = "Config"
         static let help = "Help"
+        static let workspaces = "Workspaces"
     }
 
     static func spec(for chord: KeyInterceptor.ReservedChord) -> PaletteCommand {
@@ -82,6 +83,9 @@ enum CommandCatalog {
         case .createWorktree: return tool("New Worktree…", glyph, chord)
         case .removeWorktree: return tool("Remove Worktree…", glyph, chord)
         case .findPrevious: return pane("Find Previous", glyph, chord)
+        case .selectWorkspace(let n): return workspace("Select Workspace \(n)", glyph, chord)
+        case .prevWorkspace: return workspace("Previous Workspace", glyph, chord)
+        case .nextWorkspace: return workspace("Next Workspace", glyph, chord)
         }
     }
 
@@ -89,7 +93,7 @@ enum CommandCatalog {
         Chord.displayed(chord, in: GeneralConfig.current.keymap)?.displayGlyph ?? ""
     }
 
-    static func commands(tabCount: Int) -> [PaletteCommand] {
+    static func commands(tabCount: Int, workspaceCount: Int) -> [PaletteCommand] {
         var chords: [KeyInterceptor.ReservedChord] = [.toggleRepoPicker]
         chords += ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
         chords += [.newTool]
@@ -114,6 +118,10 @@ enum CommandCatalog {
         ]
         chords += [.toggleSidebar, .fillScreen, .closeWindow, .increaseFontSize, .decreaseFontSize, .resetFontSize]
         chords += [.dismissToast, .dismissAllToasts]
+        chords += [.prevWorkspace, .nextWorkspace]
+        if workspaceCount > 0 {
+            chords += (1...min(workspaceCount, 9)).map { .selectWorkspace($0) }
+        }
         return chords.map(spec(for:))
     }
 
@@ -151,5 +159,10 @@ enum CommandCatalog {
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
         .init(title: title, shortcut: shortcut, category: Category.help, chord: chord)
+    }
+    private static func workspace(
+        _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
+    ) -> PaletteCommand {
+        .init(title: title, shortcut: shortcut, category: Category.workspaces, chord: chord)
     }
 }

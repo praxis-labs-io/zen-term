@@ -266,4 +266,68 @@ final class WindowControllerWorkspaceTests: WindowTestCase {
 
         XCTAssertTrue(c.isToolFloatOpen, "a tab closing out of sight must not shut the float on screen")
     }
+
+    private func press(
+        _ key: String, typing characters: String, keyCode: UInt16, in c: WindowController
+    ) throws {
+        let keys = KeyInterceptor()
+        keys.setKeymap(KeymapDefaults.map)
+        keys.onReservedChord = { c.handle($0) }
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.command, .option], timestamp: 0,
+                windowNumber: 0, context: nil, characters: characters, charactersIgnoringModifiers: key,
+                isARepeat: false, keyCode: keyCode))
+        XCTAssertNil(keys.route(event), "the chord is claimed, not passed to the pane")
+    }
+
+    func test_cmdOptDigit_selectsBySidebarOrder_andTheWorkspaceLeftBehindKeepsRunning() throws {
+        let c = makeWindow()
+        let first = c.activeWorkspaceIDForTesting
+        let home = try XCTUnwrap(c.tabIDsForTesting(workspace: first).first)
+        let before = try surface(of: c, tab: home)
+        let second = c.addWorkspaceForTesting(name: "Other", folder: root)
+        _ = c.addWorkspaceForTesting(name: "Third", folder: root)
+
+        try press("2", typing: "™", keyCode: 19, in: c)
+
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, second)
+        XCTAssertNil(
+            try XCTUnwrap(c.controllerForTesting(tab: home)).view.superview, "the background workspace is detached")
+        XCTAssertFalse(before.terminated)
+
+        try press("1", typing: "¡", keyCode: 18, in: c)
+
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, first)
+        let after = try surface(of: c, tab: home)
+        XCTAssertTrue(before === after, "the same surface, so the same scrollback and process")
+        XCTAssertEqual(after.startCount, 1)
+        XCTAssertFalse(after.terminated)
+    }
+
+    func test_cmdOptDigit_pastTheLastWorkspace_doesNothing() throws {
+        let c = makeWindow()
+        let first = c.activeWorkspaceIDForTesting
+        _ = c.addWorkspaceForTesting(name: "Other", folder: root)
+
+        try press("9", typing: "ª", keyCode: 25, in: c)
+
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, first)
+    }
+
+    func test_cmdOptBrackets_cycleThroughWorkspaces_andWrap() throws {
+        let c = makeWindow()
+        let first = c.activeWorkspaceIDForTesting
+        let second = c.addWorkspaceForTesting(name: "Other", folder: root)
+        let third = c.addWorkspaceForTesting(name: "Third", folder: root)
+
+        try press("[", typing: "“", keyCode: 33, in: c)
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, third, "previous from the first wraps to the last")
+
+        try press("]", typing: "‘", keyCode: 30, in: c)
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, first, "next from the last wraps to the first")
+
+        try press("]", typing: "‘", keyCode: 30, in: c)
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, second)
+    }
 }
