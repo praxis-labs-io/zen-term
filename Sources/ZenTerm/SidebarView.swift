@@ -5,6 +5,12 @@ enum SidebarRowID: Hashable {
     case ghost(String)
 }
 
+/// Where keyboard focus sat in the sidebar, so an overlay can hand it back.
+enum SidebarFocusStop: Equatable {
+    case row(SidebarRowID)
+    case agent(SurfaceID)
+}
+
 struct SidebarRowItem: Equatable {
     let id: SidebarRowID
     let variant: SettingsNavRow.Variant
@@ -290,6 +296,23 @@ final class SidebarView: NSView {
     var agentRowHasFocus: Bool { orderedAgentRows.contains { KeyboardFocus.isFocused($0, in: window) } }
 
     var focusedRow: SidebarRowID? { rows.first { KeyboardFocus.isFocused($0.value, in: window) }?.key }
+
+    var focusedStop: SidebarFocusStop? {
+        if let id = focusedRow { return .row(id) }
+        return agentRows.first { KeyboardFocus.isFocused($0.value, in: window) }.map { .agent($0.key) }
+    }
+
+    @discardableResult
+    func focusStop(_ stop: SidebarFocusStop) -> Bool {
+        switch stop {
+        case .row(let id): return focusRow(id)
+        case .agent(let id):
+            guard let row = agentRows[id] else { return false }
+            row.takeKeyboardFocus()
+            reveal(row)
+            return true
+        }
+    }
 
     @discardableResult
     func focusRow(_ id: SidebarRowID) -> Bool {

@@ -191,8 +191,13 @@ final class SidebarController {
 
     var focusedRow: SidebarRowID? { view.focusedRow }
 
+    var focusedStop: SidebarFocusStop? { view.focusedStop }
+
     @discardableResult
     func focusRow(_ id: SidebarRowID) -> Bool { isDocked && view.focusRow(id) }
+
+    @discardableResult
+    func focusStop(_ stop: SidebarFocusStop) -> Bool { isDocked && view.focusStop(stop) }
 
     enum NewWorktreeRefusal: CaseIterable {
         case worktree, unconfigured, notARepo, agent

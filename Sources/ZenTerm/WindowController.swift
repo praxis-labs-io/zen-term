@@ -184,7 +184,7 @@ final class WindowController: NSObject {
     private let dock: ToggleDock
     private let sidebar: SidebarController
     private var mountedCanvas: NSView?
-    private var focusReturn: SidebarRowID?
+    private var focusReturn: SidebarFocusStop?
     private var windowIsKey = true
     private var activeCanvasSlides = 0
     private let horizontalSlideFade = EdgeFade(axis: .horizontal)
@@ -794,14 +794,14 @@ final class WindowController: NSObject {
     private func closeFloatForTabChange() { floats.close() }
 
     private func captureFocusReturn() {
-        focusReturn = sidebar.hasFocus ? sidebar.focusedRow : nil
+        focusReturn = sidebar.hasFocus ? sidebar.focusedStop : nil
     }
 
     /// A card or confirm hands focus back where it was opened from, as a palette does elsewhere.
     private func returnFocusAfterOverlay() {
-        let row = focusReturn
+        let stop = focusReturn
         focusReturn = nil
-        if let row, sidebar.focusRow(row) { return }
+        if let stop, sidebar.focusStop(stop) { return }
         restoreFocusToActive()
     }
 
@@ -1717,7 +1717,7 @@ final class WindowController: NSObject {
         cancelConfirm()
         closeModal()
         endModes()
-        if opensFromSidebar { focusReturn = sidebar.focusedRow ?? focusReturn }
+        if opensFromSidebar { focusReturn = sidebar.focusedStop ?? focusReturn }
         confirmOnCancel = onCancel
         let content = ToastContent(variant: variant, title: title, message: message)
         let actions = [

@@ -457,4 +457,18 @@ final class SidebarAgentsTests: WindowTestCase {
 
         XCTAssertEqual(row.fillForTesting, Theme.current.chrome.fill(.hover).cgColor, "hover comes back")
     }
+    func test_aCardOpenedFromAnAgentRow_handsFocusBackToIt() throws {
+        let c = makeWindow()
+        let agent = try focusedAgent(c)
+        notify(agent, "Wants to run swift test")
+        let row = try XCTUnwrap(rows(c).first)
+        row.takeKeyboardFocus()
+        XCTAssertTrue(c.window.firstResponder === row, "precondition: the agent row holds focus")
+
+        c.handle(.openSettings)
+        c.handle(.openSettings)
+
+        XCTAssertTrue(c.window.firstResponder === row, "focus goes back to the agent row it was opened from")
+    }
+
 }
