@@ -1711,11 +1711,11 @@ final class WindowController: NSObject {
         variant: ToastVariant, title: String, message: String,
         confirmLabel: String, onConfirm: @escaping () -> Void, onCancel: (() -> Void)? = nil
     ) {
-        let opensFromSidebar = sidebar.hasFocus
         cancelConfirm()
+        // After the card closes, not before: closing it is what hands focus back to the row it was opened from.
         closeModal()
         endModes()
-        if opensFromSidebar { focusReturn = sidebar.focusedStop ?? focusReturn }
+        if sidebar.hasFocus { focusReturn = sidebar.focusedStop ?? focusReturn }
         confirmOnCancel = onCancel
         let content = ToastContent(variant: variant, title: title, message: message)
         let actions = [
