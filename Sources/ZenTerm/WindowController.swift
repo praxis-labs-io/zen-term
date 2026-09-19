@@ -726,12 +726,13 @@ final class WindowController: NSObject {
     }
 
     private func slideOffset(from edge: SlideEdge) -> CGVector {
-        let size = canvasHost.bounds.size
+        let width = canvasHost.bounds.width + Self.slideFadeDepth
+        let height = canvasHost.bounds.height + Self.slideFadeDepth
         switch edge {
-        case .fromRight: return CGVector(dx: size.width, dy: 0)
-        case .fromLeft: return CGVector(dx: -size.width, dy: 0)
-        case .fromBottom: return CGVector(dx: 0, dy: -size.height)
-        case .fromTop: return CGVector(dx: 0, dy: size.height)
+        case .fromRight: return CGVector(dx: width, dy: 0)
+        case .fromLeft: return CGVector(dx: -width, dy: 0)
+        case .fromBottom: return CGVector(dx: 0, dy: -height)
+        case .fromTop: return CGVector(dx: 0, dy: height)
         }
     }
 

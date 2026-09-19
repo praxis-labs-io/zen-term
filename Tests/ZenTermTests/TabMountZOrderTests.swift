@@ -96,6 +96,10 @@ final class TabMountZOrderTests: WindowTestCase {
         XCTAssertEqual(
             clip.minX + depth, sidebar.frame.maxX, accuracy: 0.5,
             "the page is opaque up to the sidebar's edge and fades out only under the sidebar")
+        let outgoing = try XCTUnwrap(host.subviews.first?.layer, "the outgoing canvas is still mounted")
+        XCTAssertLessThanOrEqual(
+            host.subviews[0].frame.maxX + outgoing.transform.m41, mask.frame.minX + 0.5,
+            "the outgoing page travels clear of the fade, or its last strip vanishes when it detaches")
         waitUntil(host.layer?.mask == nil, "the clip to lift once the slide lands")
     }
 
@@ -136,6 +140,10 @@ final class TabMountZOrderTests: WindowTestCase {
         XCTAssertEqual(
             clip.minY + depth, tabBar.frame.maxY, accuracy: 0.5,
             "the page is opaque up to the tab bar's edge and fades out only under the tab bar")
+        let outgoing = try XCTUnwrap(host.subviews.first?.layer, "the outgoing canvas is still mounted")
+        XCTAssertLessThanOrEqual(
+            host.subviews[0].frame.maxY + outgoing.transform.m42, mask.frame.minY + 0.5,
+            "the outgoing page travels clear of the fade, or its last strip vanishes when it detaches")
         waitUntil(host.layer?.mask == nil, "the clip to lift once the slide lands")
     }
 
