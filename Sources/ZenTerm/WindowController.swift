@@ -1971,6 +1971,7 @@ final class WindowController: NSObject {
         c.onFocusChanged = { [weak self] in
             self?.cancelConfirm()
             self?.endModes()
+            self?.answerFocusedAgent()
         }
         c.focusPastLeftEdge = { [weak self, weak c] in
             guard let self, c === self.activeController else { return false }
@@ -2016,7 +2017,7 @@ final class WindowController: NSObject {
 
             let shown = self.floats.activeID == spec.id && self.floats.surfaceID(spec.id) == surface
             let before = self.attentionSnapshot(surface, in: target)
-            surface.map { self.attention.record($0, .waiting, seen: shown) }
+            surface.map { self.attention.record($0, .waiting, seen: shown, focused: self.isFocused($0)) }
 
             guard !shown else { return }
             let destination = CardDestination(
@@ -2050,7 +2051,7 @@ final class WindowController: NSObject {
 
             let seen = self.isOnScreen(surface, in: id)
             let before = self.attentionSnapshot(surface, in: id)
-            surface.map { self.attention.record($0, .waiting, seen: seen) }
+            surface.map { self.attention.record($0, .waiting, seen: seen, focused: self.isFocused($0)) }
 
             guard !seen else { return }
             self.presentWaitingToast(
@@ -2068,7 +2069,7 @@ final class WindowController: NSObject {
                 self.attention.state(tab: id) != .waiting
             else { return }
 
-            surface.map { self.attention.record($0, .completed, seen: false) }
+            surface.map { self.attention.record($0, .completed, seen: false, focused: false) }
             self.presentCompletedToast(for: id, surface: surface, result: result)
             self.renderAttention()
         }
@@ -2079,7 +2080,8 @@ final class WindowController: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             let before = self.attention.state(of: surface)
-            self.attention.setWorking(surface, progress?.state == .indeterminate)
+            self.attention.setWorking(
+                surface, progress?.state == .indeterminate, focused: self.isFocused(surface))
             if self.attention.state(of: surface) != before { self.renderDock() }
         }
     }
@@ -2194,9 +2196,28 @@ final class WindowController: NSObject {
         [attention.state(tab: id)] + (surface.map { [attention.state(of: $0)] } ?? [])
     }
 
+    // Presence, not just focus: an agent that speaks while you are in another app has not been seen.
+    static var isPresent: (NSWindow) -> Bool = { NSApp.isActive && $0.isKeyWindow }
+
+    private func isFocused(_ surface: SurfaceID) -> Bool {
+        surface == focusedSurface && Self.isPresent(window)
+    }
+
+    private var focusedSurface: SurfaceID? {
+        guard modal == nil, !sidebar.hasFocus else { return nil }
+        if let float = floats.activeID { return floats.surfaceID(float) }
+        return activeController?.focusedSurfaceID
+    }
+
+    private func answerFocusedAgent() {
+        guard let surface = focusedSurface, isFocused(surface) else { return }
+        attention.markFocused(surface)
+    }
+
     /// Answers whatever `surface` asked now that it is on screen, and takes down the card it raised.
     private func surfaceShown(_ surface: SurfaceID) {
         attention.markSeen(surface)
+        answerFocusedAgent()
         if let tab = cardSurfaces.first(where: { $0.value == surface })?.key { takeDownCard(tab) }
         renderAttention()
     }
@@ -2371,6 +2392,10 @@ final class WindowController: NSObject {
 
     func attentionStateForTesting(tab id: TabID) -> SurfaceAttention { attention.state(tab: id) }
 
+    func agentStateForTesting(_ surface: SurfaceID) -> SurfaceAttention { attention.agentState(of: surface) }
+
+    var focusedSurfaceIDForTesting: SurfaceID? { activeController?.focusedSurfaceID }
+
     func waitingToastForTesting(tab id: TabID) -> ToastView? { attentionCards[id] }
 
     func notifyCommandFinishedForTesting(tab id: TabID, result: TerminalCommandResult) {
@@ -2398,6 +2423,7 @@ final class WindowController: NSObject {
     /// Answers what the tab shows on arrival; a closed drawer or Scratch keeps its dot and card.
     private func visit(_ id: TabID) {
         attention.visit(id) { isOnScreen($0, in: id) }
+        answerFocusedAgent()
         if isOnScreen(cardSurfaces[id], in: id) { takeDownCard(id) }
     }
 
@@ -2501,7 +2527,10 @@ extension WindowController: NSWindowDelegate {
 
     func windowDidResignKey(_ notification: Notification) { endModes() }
 
-    func windowDidBecomeKey(_ notification: Notification) { sidebar.refreshBranches() }
+    func windowDidBecomeKey(_ notification: Notification) {
+        sidebar.refreshBranches()
+        answerFocusedAgent()
+    }
 
     // Quit never fires `windowWillClose`, so without this every shell is orphaned.
     func tearDownForQuit() { tearDown() }

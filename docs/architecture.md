@@ -212,12 +212,16 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   nothing about workspaces.
 - **`seen` means on screen, not focused.** A pane is on screen while its tab is active in
   the active workspace, a drawer while that holds and it is open, a float while it is
-  shown. Focus would
-  mark a background split in the active tab, which nothing asks for. Coming on screen
+  shown. Coming on screen
   answers a surface and takes down the card it raised. A visit answers only what it puts
   on screen: a closed drawer or float keeps its latch and its card. Releasing an unseen
   surface folds its latch into a per-tab residual, so a closed pane does not unmark the
   tab it left; the next visit drops it.
+- **An agent has a second latch that only focus clears** (`agentState(of:)`), so a split
+  asking in the active tab still reads waiting while its tab number stays quiet. Focus
+  counts only with the app active and the window key; dismissing a card does not clear
+  it. A turn ending out of focus (`working` falling) latches `completed` here and nowhere
+  else.
 - **A state only the chrome can act on never reaches the tab number.** `working` (OSC 9;4)
   says an agent is mid-turn, not that it wants you, so it stops at the dock's dot. The dot
   and the tab number are one signal at two altitudes; a hidden drawer or float asks
