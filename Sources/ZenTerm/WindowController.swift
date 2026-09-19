@@ -2246,7 +2246,7 @@ final class WindowController: NSObject {
     }
 
     private func agentSignalled(_ surface: SurfaceID, name: String, message: String?) {
-        agents.identify(surface, name: name.isEmpty ? AgentRoster.unnamed : name, source: .signal)
+        agents.identify(surface, name: name.isEmpty ? nil : name, source: .signal)
         agents.setMessage(surface, message)
     }
 
@@ -2290,7 +2290,7 @@ final class WindowController: NSObject {
             let state = SidebarAgentItem.State(attention.agentState(of: id), failed: agent.failed)
             let item = SidebarAgentItem(
                 id: id, state: state, summary: agent.message ?? state.summary,
-                detail: "\(agent.name) · \(place.name)", isHere: id == here)
+                detail: "\(agent.name ?? AgentRoster.unnamed) · \(place.name)", isHere: id == here)
             return (item, attention.agentSince(of: id), place.position)
         }
         return located.sorted { a, b in

@@ -216,6 +216,18 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(Set(items(c).map(\.detail)), ["agent · Home", "Claude Code · Home"])
     }
 
+    func test_anAgentThatWorksBeforeItAsks_takesTheNameItsNotificationCarries() throws {
+        let c = makeWindow()
+        let agent = try focusedAgent(c)
+        _ = try split(c)
+
+        progress(agent, working: true)
+        XCTAssertEqual(items(c).map(\.detail), ["agent · Home"], "precondition: joined unnamed")
+        notify(agent, "Needs input", title: "Claude Code")
+
+        XCTAssertEqual(items(c).map(\.detail), ["Claude Code · Home"])
+    }
+
     func test_anAgentLeaves_whenItsSurfaceFallsIdle_notBeforeItWasBusy() throws {
         let c = makeWindow()
         c.openWorkspaceForTesting(recipe("zen-review", right: "claude"))

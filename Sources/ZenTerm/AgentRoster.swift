@@ -9,7 +9,7 @@ final class AgentRoster {
     }
 
     struct Agent: Equatable {
-        var name: String
+        var name: String?
         var source: Source
         var message: String?
         var failed = false
@@ -35,12 +35,12 @@ final class AgentRoster {
 
     func contains(_ id: SurfaceID) -> Bool { agents[id] != nil }
 
-    func identify(_ id: SurfaceID, name: String, source: Source) {
+    func identify(_ id: SurfaceID, name: String?, source: Source) {
         guard var agent = agents[id] else {
             agents[id] = Agent(name: name, source: source)
             return
         }
-        guard source > agent.source else { return }
+        guard name != nil, agent.name == nil || source > agent.source else { return }
         agent.name = name
         agent.source = source
         agents[id] = agent
