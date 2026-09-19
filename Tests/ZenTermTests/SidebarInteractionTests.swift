@@ -486,26 +486,17 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(controller.window.firstResponder === pane.view)
     }
 
-    func test_ctrlCmdS_docking_focusesTheActiveRow() throws {
+    func test_ctrlCmdS_docking_leavesFocusInThePane() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
         controller.handle(.toggleSidebar)
-        try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface).focus()
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
 
         try toggleSidebar(in: controller)
 
         XCTAssertTrue(controller.sidebarForTesting.isDocked)
-        XCTAssertTrue(controller.window.firstResponder === controller.sidebarForTesting.view.rowsForTesting.first)
-    }
-
-    func test_toggleButton_docking_focusesTheActiveRowToo() throws {
-        let controller = makeController()
-        controller.window.makeKeyAndOrderFront(nil)
-        controller.handle(.toggleSidebar)
-
-        try click(controller.sidebarForTesting.toggleButtonForTesting)
-
-        XCTAssertTrue(controller.sidebarForTesting.hasFocus)
+        XCTAssertTrue(controller.window.firstResponder === pane.view, "⌃⌘S shows the sidebar, it does not focus it")
     }
 
     func test_ctrlCmdS_collapsing_withTheSidebarFocused_returnsFocusToThePane() throws {
@@ -533,21 +524,6 @@ final class SidebarInteractionTests: WindowTestCase {
 
         XCTAssertFalse(controller.sidebarForTesting.isDocked, "one press collapses from anywhere, as a drawer does")
         XCTAssertTrue(controller.window.firstResponder === pane.view)
-    }
-
-    func test_ctrlCmdS_docking_overAnOpenToolFloat_leavesFocusInTheFloat() throws {
-        let controller = makeController()
-        controller.window.makeKeyAndOrderFront(nil)
-        controller.handle(.toggleSidebar)
-        controller.handle(.toggleToolFloat(ToolFloat.scratch.id))
-        waitUntil(controller.floatsForTesting.isOpen, "the scratch float to open")
-        let float = try XCTUnwrap(controller.floatsForTesting.shownSurface as? RecordingSurface)
-        XCTAssertTrue(controller.window.firstResponder === float.view)
-
-        try toggleSidebar(in: controller)
-
-        XCTAssertTrue(controller.sidebarForTesting.isDocked)
-        XCTAssertTrue(controller.window.firstResponder === float.view, "nav is blocked over a float, so focus stays")
     }
 
     private func toggleSidebar(in controller: WindowController) throws {

@@ -1722,7 +1722,6 @@ final class WindowController: NSObject {
             let onScreen = (activeController?.allSurfaces ?? []) + [floats.shownSurface].compactMap { $0 }
             sidebar.toggle(holding: onScreen, in: container)
             if !sidebar.isDocked { window.reserveContentWidth(0) }
-            if sidebar.isDocked, !floats.isOpen { _ = focusSidebar() }
         case .toggleToolFloat(let id):
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
