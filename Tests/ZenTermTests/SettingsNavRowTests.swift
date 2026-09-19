@@ -76,7 +76,7 @@ final class SettingsNavRowTests: WindowTestCase {
         XCTAssertEqual(detail.textColor, Theme.current.chrome.ink(.muted))
     }
 
-    func test_click_takesFocus_byDefault() {
+    func test_click_takesFocus() {
         var activations = 0
         let (row, window) = mountedRow { activations += 1 }
 
@@ -86,9 +86,9 @@ final class SettingsNavRowTests: WindowTestCase {
         XCTAssertEqual(activations, 1)
     }
 
-    func test_click_onAnUnfocusableRow_activatesAndLeavesFocusAlone() {
+    func test_click_onAKeyboardOnlyRow_activatesAndLeavesFocusAlone() {
         var activations = 0
-        let (row, window) = mountedRow(isFocusable: false) { activations += 1 }
+        let (row, window) = mountedRow(focusesOnClick: false) { activations += 1 }
         let focusHolder = FocusHolder(frame: NSRect(x: 0, y: 30, width: 10, height: 10))
         window.contentView?.addSubview(focusHolder)
         window.makeFirstResponder(focusHolder)
@@ -97,11 +97,100 @@ final class SettingsNavRowTests: WindowTestCase {
 
         XCTAssertTrue(window.firstResponder === focusHolder, "the click activates the row without taking focus")
         XCTAssertEqual(activations, 1)
-        XCTAssertFalse(row.acceptsFirstResponder, "AppKit only promotes a clicked view that accepts first responder")
+        XCTAssertFalse(row.acceptsFirstResponder, "AppKit promotes a clicked view that accepts first responder")
+    }
+
+    func test_keyboardOnlyRow_takesKeyboardFocus_andKeepsIt() {
+        let (row, window) = mountedRow(focusesOnClick: false)
+
+        row.takeKeyboardFocus()
+
+        XCTAssertTrue(window.firstResponder === row)
+        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.selectionFill.cgColor)
     }
 
     private final class FocusHolder: NSView {
         override var acceptsFirstResponder: Bool { true }
+    }
+
+    func test_accessibility_announcesAButtonWithItsTitleDetailAndSelection() {
+        var activations = 0
+        let (row, _) = mountedRow { activations += 1 }
+        row.setDetail("main")
+        row.setSelected(true)
+
+        XCTAssertTrue(row.isAccessibilityElement())
+        XCTAssertEqual(row.accessibilityRole(), .button)
+        XCTAssertEqual(row.accessibilityLabel(), "Terminal")
+        XCTAssertEqual(row.accessibilityValue() as? String, "main")
+        XCTAssertTrue(row.isAccessibilitySelected())
+        row.setSelected(false)
+        XCTAssertFalse(row.isAccessibilitySelected())
+
+        XCTAssertTrue(row.accessibilityPerformPress())
+        XCTAssertEqual(activations, 1)
+    }
+
+    func test_return_andKeypadEnter_callOnReturn() {
+        let (row, window) = mountedRow()
+        var returns = 0
+        row.onReturn = { returns += 1 }
+        window.makeFirstResponder(row)
+
+        window.sendEvent(key(36, in: window))
+        window.sendEvent(key(76, [.function, .numericPad], in: window))
+
+        XCTAssertEqual(returns, 2)
+    }
+
+    func test_escape_callsOnEscape() {
+        let (row, window) = mountedRow()
+        var escapes = 0
+        row.onEscape = { escapes += 1 }
+        window.makeFirstResponder(row)
+
+        window.sendEvent(key(53, in: window))
+
+        XCTAssertEqual(escapes, 1)
+    }
+
+    func test_modifiedEscape_doesNotCallOnEscape() {
+        let (row, window) = mountedRow()
+        var escapes = 0
+        row.onEscape = { escapes += 1 }
+        window.makeFirstResponder(row)
+
+        for modifier in [NSEvent.ModifierFlags.command, .option, .control] {
+            window.sendEvent(key(53, modifier, in: window))
+        }
+
+        XCTAssertEqual(escapes, 0, "only a bare Esc leaves, as only a bare Return activates")
+    }
+
+    func test_withoutCallbacks_returnAndEscapeReachTheNextResponder() {
+        let (row, window) = mountedRow()
+        let parent = KeyRecorder(frame: NSRect(x: 0, y: 0, width: 200, height: 40))
+        window.contentView?.addSubview(parent)
+        parent.addSubview(row)
+        window.makeFirstResponder(row)
+
+        window.sendEvent(key(36, in: window))
+        window.sendEvent(key(53, in: window))
+
+        XCTAssertEqual(parent.keyCodes, [36, 53], "a row with no callbacks leaves Return and Esc to its container")
+    }
+
+    private final class KeyRecorder: NSView {
+        var keyCodes: [UInt16] = []
+        override func keyDown(with event: NSEvent) { keyCodes.append(event.keyCode) }
+    }
+
+    private func key(_ keyCode: UInt16, _ flags: NSEvent.ModifierFlags = [], in window: NSWindow) -> NSEvent {
+        let text = keyCode == 53 ? "\u{1b}" : "\r"
+        return NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, characters: text, charactersIgnoringModifiers: text,
+            isARepeat: false, keyCode: keyCode)!
     }
 
     private func crossing(_ type: NSEvent.EventType, over row: NSView) -> NSEvent {
@@ -119,9 +208,9 @@ final class SettingsNavRowTests: WindowTestCase {
     }
 
     private func mountedRow(
-        isFocusable: Bool = true, onActivate: @escaping () -> Void = {}
+        focusesOnClick: Bool = true, onActivate: @escaping () -> Void = {}
     ) -> (SettingsNavRow, NSWindow) {
-        let row = SettingsNavRow(title: "Terminal", isFocusable: isFocusable, onActivate: onActivate)
+        let row = SettingsNavRow(title: "Terminal", focusesOnClick: focusesOnClick, onActivate: onActivate)
         row.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 200, height: 40),

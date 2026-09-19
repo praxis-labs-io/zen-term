@@ -186,6 +186,8 @@ final class TabController: NSObject {
 
     var onFocusChanged: (() -> Void)?
 
+    var focusPastLeftEdge: (() -> Bool)?
+
     var onNotification: ((SurfaceID, TerminalNotification) -> Void)?
 
     var onCommandFinished: ((SurfaceID, TerminalCommandResult) -> Void)?
@@ -628,7 +630,7 @@ final class TabController: NSObject {
                 message: "Focus Mode needs a second pane or an open drawer."))
     }
 
-    private func toastNoNeighbor(_ direction: Direction) {
+    func toastNoNeighbor(_ direction: Direction) {
         let now = Date()
         if let last = lastNoNeighborToast, last.direction == direction,
             now.timeIntervalSince(last.at) < Self.zoomBlockToastThrottle
@@ -674,6 +676,7 @@ final class TabController: NSObject {
             ? remembered
             : nearestLeaf(from: origin, frames: frames, direction: direction)
         guard let target else {
+            if direction == .left, focusPastLeftEdge?() == true { return }
             toastNoNeighbor(direction)
             return
         }

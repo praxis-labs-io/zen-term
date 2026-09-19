@@ -1,4 +1,5 @@
 import AppKit
+import PaneKit
 import TerminalKit
 import XCTest
 
@@ -9,6 +10,7 @@ final class SidebarInteractionTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var controllers: [WindowController] = []
     private var surfaces: [RecordingSurface] = []
+    private var interceptors: [KeyInterceptor] = []
     private var root: URL!
     private var originalConfig: GeneralConfig!
 
@@ -316,7 +318,497 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertEqual(rows.count, 2)
         XCTAssertEqual(rows[0].layer?.backgroundColor, NSColor.clear.cgColor)
         XCTAssertEqual(rows[1].layer?.backgroundColor, Theme.current.chrome.fill(.rest).cgColor)
-        XCTAssertFalse(rows.contains { $0.acceptsFirstResponder }, "a row click leaves focus in the pane")
+    }
+
+    func test_focusedRow_showsTheSelectionFill_andArrowsMoveItWithinTheRows() throws {
+        let controller = makeController()
+        _ = controller.addWorkspaceForTesting(name: "api", folder: root)
+        _ = controller.addWorkspaceForTesting(name: "web", folder: root)
+        controller.window.makeKeyAndOrderFront(nil)
+        let rows = controller.sidebarForTesting.view.rowsForTesting
+
+        controller.sidebarForTesting.focusActiveRow()
+        XCTAssertTrue(controller.window.firstResponder === rows[0], "entry lands on the active workspace")
+        XCTAssertEqual(rows[0].layer?.backgroundColor, Theme.current.chrome.selectionFill.cgColor)
+
+        for expected in [1, 2, 2] {
+            controller.window.sendEvent(key(.down, in: controller))
+            XCTAssertTrue(controller.window.firstResponder === rows[expected], "↓ lands on row \(expected)")
+        }
+        for expected in [1, 0, 0] {
+            controller.window.sendEvent(key(.up, in: controller))
+            XCTAssertTrue(controller.window.firstResponder === rows[expected], "↑ lands on row \(expected)")
+        }
+    }
+
+    func test_clickingARow_neverGivesItTheKeyboard() throws {
+        let controller = makeController()
+        _ = controller.addWorkspaceForTesting(name: "api", folder: root)
+        let apiPane = try XCTUnwrap(surfaces.last)
+        controller.window.makeKeyAndOrderFront(nil)
+        try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface).focus()
+        let row = controller.sidebarForTesting.view.rowsForTesting[1]
+
+        let point = row.convert(NSPoint(x: row.bounds.midX, y: row.bounds.midY), to: nil)
+        row.mouseDown(
+            with: try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
+                    windowNumber: controller.window.windowNumber, context: nil, eventNumber: 0,
+                    clickCount: 1, pressure: 1)))
+
+        XCTAssertTrue(
+            controller.window.firstResponder === apiPane.view, "the click switches, and the pane has the keys")
+        XCTAssertFalse(row.acceptsFirstResponder, "AppKit would otherwise promote the clicked row itself")
+    }
+
+    func test_strayKeys_inTheSidebar_behaveLikeAList() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let recorder = KeyRecorder()
+        recorder.nextResponder = controller.window.nextResponder
+        controller.window.nextResponder = recorder
+        controller.sidebarForTesting.focusActiveRow()
+        let row = try XCTUnwrap(controller.sidebarForTesting.view.rowsForTesting.first)
+
+        for (code, text, flags) in [
+            (UInt16(48), "\t", NSEvent.ModifierFlags()), (48, "\u{19}", [.shift]),
+            (123, "\u{F702}", [.function, .numericPad]), (124, "\u{F703}", [.function, .numericPad]),
+        ] {
+            controller.window.sendEvent(typed(code, text, flags, in: controller))
+            XCTAssertTrue(controller.window.firstResponder === row, "key \(code) leaves focus on the row")
+        }
+        XCTAssertEqual(recorder.keyCodes, [], "Tab, ⇧Tab, ← and → do nothing")
+
+        controller.window.sendEvent(typed(0, "a", [], in: controller))
+        controller.window.sendEvent(typed(49, " ", [], in: controller))
+        XCTAssertEqual(recorder.keyCodes, [0, 49], "a letter and Space go unhandled, so AppKit beeps")
+    }
+
+    private final class KeyRecorder: NSResponder {
+        var keyCodes: [UInt16] = []
+        override func keyDown(with event: NSEvent) { keyCodes.append(event.keyCode) }
+    }
+
+    private func typed(
+        _ code: UInt16, _ text: String, _ flags: NSEvent.ModifierFlags, in controller: WindowController
+    ) -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
+            windowNumber: controller.window.windowNumber, context: nil, characters: text,
+            charactersIgnoringModifiers: text, isARepeat: false, keyCode: code)!
+    }
+
+    func test_cmdW_fromTheSidebar_closesThePaneItCameFrom_andFocusLandsOnAPane() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let left = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        controller.handle(.splitVertical)
+        let right = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        controller.sidebarForTesting.focusActiveRow()
+
+        try press("w", [.command], keyCode: 13, in: controller)
+
+        XCTAssertTrue(right.terminated, "⌘W closes the pane the sidebar came from")
+        XCTAssertFalse(left.terminated)
+        XCTAssertTrue(controller.window.firstResponder === left.view)
+    }
+
+    func test_cmdW_fromTheSidebar_onALastPane_landsOnTheNextTabsPane() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let first = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        controller.newTabForTesting()
+        let second = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        controller.sidebarForTesting.focusActiveRow()
+
+        try press("w", [.command], keyCode: 13, in: controller)
+
+        XCTAssertTrue(second.terminated)
+        XCTAssertTrue(controller.window.firstResponder === first.view)
+    }
+
+    func test_focusedRowsWorkspaceClosing_returnsFocusToThePane() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+        _ = controller.addWorkspaceForTesting(name: "api", folder: root)
+        let background = try XCTUnwrap(surfaces.last)
+        try nav(.left, in: controller)
+        controller.window.sendEvent(key(.down, in: controller))
+        XCTAssertTrue(controller.window.firstResponder === controller.sidebarForTesting.view.rowsForTesting[1])
+
+        background.delegate?.surfaceDidExit(background, code: 0)
+
+        XCTAssertEqual(controller.sidebarForTesting.view.rowsForTesting.count, 1, "the api workspace closed")
+        XCTAssertTrue(controller.window.firstResponder === pane.view)
+    }
+
+    func test_return_onAFocusedRow_switchesToItsWorkspace_andFocusesItsPane() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let api = controller.addWorkspaceForTesting(name: "api", folder: root)
+        let apiSurface = try XCTUnwrap(surfaces.last)
+
+        controller.sidebarForTesting.focusActiveRow()
+        controller.window.sendEvent(key(.down, in: controller))
+        controller.window.sendEvent(key(.return, in: controller))
+
+        XCTAssertEqual(controller.activeWorkspaceIDForTesting, api)
+        XCTAssertTrue(controller.window.firstResponder === apiSurface.view)
+    }
+
+    func test_return_onTheActiveRow_returnsFocusToItsPane() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let home = controller.activeWorkspaceIDForTesting
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        _ = controller.addWorkspaceForTesting(name: "api", folder: root)
+
+        controller.sidebarForTesting.focusActiveRow()
+        controller.window.sendEvent(key(.return, in: controller))
+
+        XCTAssertEqual(controller.activeWorkspaceIDForTesting, home)
+        XCTAssertTrue(controller.window.firstResponder === pane.view, "↵ on the workspace you're in goes back to it")
+    }
+
+    func test_escape_returnsFocusToThePaneItCameFrom() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+
+        controller.sidebarForTesting.focusActiveRow()
+        XCTAssertTrue(controller.sidebarForTesting.hasFocus)
+        controller.window.sendEvent(key(.escape, in: controller))
+
+        XCTAssertFalse(controller.sidebarForTesting.hasFocus)
+        XCTAssertTrue(controller.window.firstResponder === pane.view)
+    }
+
+    func test_escape_returnsFocusToTheDrawerItCameFrom() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleBottomDrawer)
+        let drawer = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        XCTAssertTrue(controller.window.firstResponder === drawer.view, "opening the drawer focuses it")
+
+        controller.sidebarForTesting.focusActiveRow()
+        controller.window.sendEvent(key(.escape, in: controller))
+
+        XCTAssertTrue(controller.window.firstResponder === drawer.view)
+    }
+
+    func test_cmdOptLeft_fromTheLeftmostPane_focusesTheSidebar_andCmdOptRightReturns() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+
+        try nav(.left, in: controller)
+        XCTAssertTrue(controller.window.firstResponder === controller.sidebarForTesting.view.rowsForTesting.first)
+
+        try nav(.right, in: controller)
+        XCTAssertTrue(controller.window.firstResponder === pane.view)
+    }
+
+    func test_cmdOptLeft_reachesTheSidebarOnlyFromTheLeftColumn_andReturnsToThatPane() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let left = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        controller.handle(.splitVertical)
+        let right = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        XCTAssertFalse(left === right, "the split focuses the new pane")
+        XCTAssertTrue(controller.window.firstResponder === right.view)
+
+        controller.containerForTesting.layoutSubtreeIfNeeded()
+        try nav(.left, in: controller)
+        XCTAssertTrue(controller.window.firstResponder === left.view, "a pane to the left wins over the sidebar")
+
+        try nav(.left, in: controller)
+        XCTAssertTrue(controller.sidebarForTesting.hasFocus)
+
+        try nav(.right, in: controller)
+        XCTAssertTrue(controller.window.firstResponder === left.view, "focus goes back to the pane it came from")
+    }
+
+    func test_cmdOptLeft_fromTheBottomDrawer_focusesTheSidebar_andCmdOptRightReturnsToIt() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleBottomDrawer)
+        let drawer = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+
+        try nav(.left, in: controller)
+        XCTAssertTrue(controller.sidebarForTesting.hasFocus)
+
+        try nav(.right, in: controller)
+        XCTAssertTrue(controller.window.firstResponder === drawer.view)
+    }
+
+    func test_nvimNavigatorFocusLeft_fromTheLeftmostPane_focusesTheSidebar() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+        let token = try XCTUnwrap(pane.lastConfig?.environment["ZEN_PANE"].flatMap { Int($0) })
+
+        NavRegistry.shared.route(focus: token, .left)
+
+        XCTAssertTrue(controller.sidebarForTesting.hasFocus)
+    }
+
+    func test_cmdOptUpDownLeft_fromTheSidebar_sayThereIsNoPane_andKeepFocus() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.sidebarForTesting.focusActiveRow()
+        let row = try XCTUnwrap(controller.sidebarForTesting.view.rowsForTesting.first)
+
+        for (direction, word) in [(Direction.up, "up"), (.down, "down"), (.left, "left")] {
+            try nav(direction, in: controller)
+            XCTAssertTrue(controller.window.firstResponder === row, "⌘⌥ \(word) keeps the row")
+            XCTAssertTrue(showsToast("No pane \(word) to focus", in: controller), word)
+        }
+    }
+
+    func test_nvimNavigatorFocusLeft_fromABackgroundTab_leavesTheSidebarAlone() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let stale = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        let token = try XCTUnwrap(stale.lastConfig?.environment["ZEN_PANE"].flatMap { Int($0) })
+        controller.newTabForTesting()
+        let current = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        XCTAssertTrue(controller.window.firstResponder === current.view)
+
+        NavRegistry.shared.route(focus: token, .left)
+
+        XCTAssertFalse(controller.sidebarForTesting.hasFocus, "a late command from a tab you left moves nothing")
+        XCTAssertTrue(controller.window.firstResponder === current.view)
+    }
+
+    func test_cmdOptLeft_withTheSidebarCollapsed_keepsFocus_andSaysThereIsNoPane() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleSidebar)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+
+        try nav(.left, in: controller)
+
+        XCTAssertTrue(controller.window.firstResponder === pane.view)
+        XCTAssertTrue(showsToast("No pane left to focus", in: controller))
+    }
+
+    func test_cmdOptLeft_endsScrollMode_soArrowsReachTheRows() throws {
+        let controller = makeController()
+        _ = controller.addWorkspaceForTesting(name: "api", folder: root)
+        controller.window.makeKeyAndOrderFront(nil)
+        let keys = interceptor(for: controller)
+        controller.handle(.toggleScrollMode)
+        XCTAssertNotNil(keys.modeHandler, "scroll mode claims plain keys")
+
+        XCTAssertNil(keys.route(navEvent(.left, [.command, .option], in: controller)))
+        let down = key(.down, in: controller)
+        XCTAssertTrue(keys.route(down) === down, "↓ passes the interceptor to the row")
+        controller.window.sendEvent(down)
+
+        XCTAssertTrue(controller.window.firstResponder === controller.sidebarForTesting.view.rowsForTesting[1])
+    }
+
+    func test_ctrlBoundNav_fromTheSidebar_returnsEvenWhenThePaneRunsVim() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+        let token = try XCTUnwrap(pane.lastConfig?.environment["ZEN_PANE"].flatMap { Int($0) })
+        NavRegistry.shared.setVim(token: token, true)
+        defer { NavRegistry.shared.setVim(token: token, false) }
+        let keys = interceptor(for: controller)
+        keys.setKeymap([Chord(control: true, key: "→"): .navRight])
+        keys.passThroughGuard = { chord, action in
+            NavGuard.shouldPassThrough(
+                chord: chord, action: action, focusedPaneIsVim: controller.focusedPaneIsVim,
+                toolFloatIsOpen: false)
+        }
+        XCTAssertTrue(controller.focusedPaneIsVim)
+
+        controller.sidebarForTesting.focusActiveRow()
+        XCTAssertNil(keys.route(navEvent(.right, [.control], in: controller)), "the sidebar has no vim to defer to")
+
+        XCTAssertTrue(controller.window.firstResponder === pane.view)
+    }
+
+    func test_focusSidebar_isUnboundByDefault_andParsesFromConfig() {
+        XCTAssertFalse(KeymapDefaults.map.values.contains(.focusSidebar))
+        XCTAssertEqual(KeyInterceptor.ReservedChord(token: "focus_sidebar"), .focusSidebar)
+    }
+
+    func test_focusSidebar_boundToAChord_focusesTheActiveRow() throws {
+        let controller = makeController()
+        _ = controller.addWorkspaceForTesting(name: "api", folder: root)
+        controller.window.makeKeyAndOrderFront(nil)
+        let keys = interceptor(for: controller)
+        keys.setKeymap([Chord(command: true, control: true, key: "e"): .focusSidebar])
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.command, .control], timestamp: 0,
+                windowNumber: controller.window.windowNumber, context: nil, characters: "\u{05}",
+                charactersIgnoringModifiers: "e", isARepeat: false, keyCode: 14))
+
+        XCTAssertNil(keys.route(event))
+
+        XCTAssertTrue(controller.window.firstResponder === controller.sidebarForTesting.view.rowsForTesting.first)
+    }
+
+    func test_focusSidebar_whileCollapsed_docksTheSidebar_andFocusesTheActiveRow() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleSidebar)
+        controller.window.setContentSize(controller.window.contentMinSize)
+        let narrow = contentWidth(controller)
+        try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface).focus()
+
+        controller.handle(.focusSidebar)
+
+        XCTAssertTrue(controller.sidebarForTesting.isDocked)
+        XCTAssertEqual(
+            controller.window.contentMinSize.width, narrow + SidebarView.width,
+            "docking reserves the sidebar's width, as ⌃⌘S does")
+        XCTAssertTrue(controller.window.firstResponder === controller.sidebarForTesting.view.rowsForTesting.first)
+    }
+
+    func test_focusSidebar_overAToolFloat_isBlockedLikePaneNav_andDoesNotDock() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleSidebar)
+        controller.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        waitUntil(controller.floatsForTesting.isOpen, "the scratch float to open")
+        let float = try XCTUnwrap(controller.floatsForTesting.shownSurface as? RecordingSurface)
+
+        controller.handle(.focusSidebar)
+
+        XCTAssertFalse(controller.sidebarForTesting.isDocked)
+        XCTAssertTrue(controller.window.firstResponder === float.view)
+        let content = try XCTUnwrap(controller.window.contentView)
+        XCTAssertTrue(
+            descendants(of: content).contains {
+                ($0 as? NSTextField)?.stringValue.hasSuffix("is open. Close it to get back to your panes.") == true
+            }, "the float explains why, as it does for pane nav")
+    }
+
+    func test_ctrlCmdS_docking_leavesFocusInThePane() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleSidebar)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+
+        try toggleSidebar(in: controller)
+
+        XCTAssertTrue(controller.sidebarForTesting.isDocked)
+        XCTAssertTrue(controller.window.firstResponder === pane.view, "⌃⌘S shows the sidebar, it does not focus it")
+    }
+
+    func test_ctrlCmdS_collapsing_withTheSidebarFocused_returnsFocusToThePane() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+        controller.sidebarForTesting.focusActiveRow()
+
+        try toggleSidebar(in: controller)
+
+        XCTAssertFalse(controller.sidebarForTesting.isDocked)
+        XCTAssertTrue(
+            controller.window.firstResponder === pane.view, "focus returns as the slide starts, not when it lands")
+    }
+
+    func test_ctrlCmdS_collapsing_fromAPane_leavesFocusInThePane() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+
+        try toggleSidebar(in: controller)
+
+        XCTAssertFalse(controller.sidebarForTesting.isDocked, "one press collapses from anywhere, as a drawer does")
+        XCTAssertTrue(controller.window.firstResponder === pane.view)
+    }
+
+    private func toggleSidebar(in controller: WindowController) throws {
+        try press("s", [.command, .control], keyCode: 1, in: controller)
+    }
+
+    private func showsToast(_ message: String, in controller: WindowController) -> Bool {
+        guard let content = controller.window.contentView else { return false }
+        return descendants(of: content).contains { ($0 as? NSTextField)?.stringValue == message }
+    }
+
+    private func interceptor(for controller: WindowController) -> KeyInterceptor {
+        let keys = KeyInterceptor()
+        keys.setKeymap(KeymapDefaults.map)
+        keys.onReservedChord = { controller.handle($0) }
+        controller.keyModeHost = keys
+        interceptors.append(keys)
+        return keys
+    }
+
+    private func nav(_ direction: Direction, in controller: WindowController) throws {
+        let keys = interceptor(for: controller)
+        XCTAssertNil(keys.route(navEvent(direction, [.command, .option], in: controller)), "⌘⌥ arrows are claimed")
+    }
+
+    private func navEvent(
+        _ direction: Direction, _ modifiers: NSEvent.ModifierFlags, in controller: WindowController
+    ) -> NSEvent {
+        let (code, text): (UInt16, String) =
+            switch direction {
+            case .left: (123, "\u{F702}")
+            case .right: (124, "\u{F703}")
+            case .up: (126, "\u{F700}")
+            case .down: (125, "\u{F701}")
+            }
+        return NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: modifiers.union([.function, .numericPad]),
+            timestamp: 0, windowNumber: controller.window.windowNumber, context: nil, characters: text,
+            charactersIgnoringModifiers: text, isARepeat: false, keyCode: code)!
+    }
+
+    private enum Key {
+        case up, down, `return`, escape
+
+        var code: UInt16 {
+            switch self {
+            case .up: return 126
+            case .down: return 125
+            case .return: return 36
+            case .escape: return 53
+            }
+        }
+
+        var text: String {
+            switch self {
+            case .up: return "\u{F700}"
+            case .down: return "\u{F701}"
+            case .return: return "\r"
+            case .escape: return "\u{1b}"
+            }
+        }
+
+        var flags: NSEvent.ModifierFlags {
+            switch self {
+            case .up, .down: return [.function, .numericPad]
+            case .return, .escape: return []
+            }
+        }
+    }
+
+    private func key(_ key: Key, in controller: WindowController) -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: key.flags, timestamp: 0,
+            windowNumber: controller.window.windowNumber, context: nil, characters: key.text,
+            charactersIgnoringModifiers: key.text, isARepeat: false, keyCode: key.code)!
     }
 
     func test_row_showsItsWorkspaceBranch() throws {

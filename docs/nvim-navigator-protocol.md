@@ -47,7 +47,8 @@ not running under ZenTerm).
 ### `focus`: hand off at an nvim edge
 
 Sent when nvim is at its edge split and can't move further, so ZenTerm should
-move pane focus in that direction, starting from the sending pane.
+move pane focus in that direction, starting from the sending pane. `left` from the
+leftmost pane lands on the workspace sidebar when it is docked.
 
 ```json
 { "cmd": "focus", "dir": "left", "pane": 7 }

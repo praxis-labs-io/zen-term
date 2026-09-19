@@ -1,5 +1,6 @@
 import AppKit
 import AppLog
+import PaneKit
 import TabKit
 import TerminalKit
 import UniformTypeIdentifiers
@@ -276,7 +277,7 @@ final class WindowController: NSObject {
     private var didTearDown = false
 
     var focusedCWD: URL? { activeController?.focusedCWD }
-    var focusedPaneIsVim: Bool { activeController?.focusedPaneIsVim ?? false }
+    var focusedPaneIsVim: Bool { !sidebar.hasFocus && activeController?.focusedPaneIsVim == true }
 
     var isToolFloatOpen: Bool { floats.isOpen }
 
@@ -376,6 +377,7 @@ final class WindowController: NSObject {
         onPalette = { [weak self] in self?.handle(.toggleCommandPalette) }
         onSettings = { [weak self] in self?.handle(.openSettings) }
         onToggleSidebar = { [weak self] in self?.handle(.toggleSidebar) }
+        sidebar.onLeave = { [weak self] in self?.restoreFocusToActive() }
         onActivateWorkspace = { [weak self] in self?.activateFromSidebar($0) }
         onOpenWorkspace = { [weak self] in self?.handle(.toggleRepoPicker) }
         onBottom = { [weak self] in self?.handle(.toggleBottomDrawer) }
@@ -1622,7 +1624,7 @@ final class WindowController: NSObject {
                         variant: .info, title: "Tool Float",
                         message: "Close \(activeFloatName ?? "the tool") first, then ⌘W."))
                 return
-            case .navLeft, .navRight, .navUp, .navDown, .prevPane, .nextPane,
+            case .navLeft, .navRight, .navUp, .navDown, .prevPane, .nextPane, .focusSidebar,
                 .splitVertical, .splitHorizontal,
                 .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
                 .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom:
@@ -1655,10 +1657,10 @@ final class WindowController: NSObject {
             active?.split(.horizontal)
         case .prevPane: active?.cyclePane(-1)
         case .nextPane: active?.cyclePane(1)
-        case .navLeft: active?.navigate(.left)
-        case .navRight: active?.navigate(.right)
-        case .navUp: active?.navigate(.up)
-        case .navDown: active?.navigate(.down)
+        case .navLeft: navigate(.left)
+        case .navRight: navigate(.right)
+        case .navUp: navigate(.up)
+        case .navDown: navigate(.down)
         case .resizeLeft: active?.resize(.left)
         case .resizeRight: active?.resize(.right)
         case .resizeUp: active?.resize(.up)
@@ -1717,12 +1719,10 @@ final class WindowController: NSObject {
         case .openScreenFile: modeTarget?.surface.writeScreenToFile(.open)
         case .pasteSelection: pasteSelection()
         case .fillScreen: toggleFillScreen()
-        case .toggleSidebar:
-            Log.info("sidebar toggled", category: .workspace)
-            if !sidebar.isDocked { window.reserveContentWidth(SidebarView.width) }
-            let onScreen = (activeController?.allSurfaces ?? []) + [floats.shownSurface].compactMap { $0 }
-            sidebar.toggle(holding: onScreen, in: container)
-            if !sidebar.isDocked { window.reserveContentWidth(0) }
+        case .toggleSidebar: toggleSidebar()
+        case .focusSidebar:
+            if !sidebar.isDocked { toggleSidebar() }
+            _ = focusSidebar()
         case .toggleToolFloat(let id):
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
@@ -1737,6 +1737,27 @@ final class WindowController: NSObject {
         case .prevWorkspace: cycleWorkspace(-1)
         case .nextWorkspace: cycleWorkspace(1)
         }
+    }
+
+    private func navigate(_ direction: Direction) {
+        guard sidebar.hasFocus else { activeController?.navigate(direction); return }
+        if direction == .right { restoreFocusToActive() } else { activeController?.toastNoNeighbor(direction) }
+    }
+
+    private func focusSidebar() -> Bool {
+        guard sidebar.isDocked else { return false }
+        endModes()
+        sidebar.focusActiveRow()
+        return true
+    }
+
+    private func toggleSidebar() {
+        Log.info("sidebar toggled", category: .workspace)
+        if sidebar.hasFocus { restoreFocusToActive() }
+        if !sidebar.isDocked { window.reserveContentWidth(SidebarView.width) }
+        let onScreen = (activeController?.allSurfaces ?? []) + [floats.shownSurface].compactMap { $0 }
+        sidebar.toggle(holding: onScreen, in: container)
+        if !sidebar.isDocked { window.reserveContentWidth(0) }
     }
 
     private var preFillFrame: NSRect?
@@ -1915,6 +1936,10 @@ final class WindowController: NSObject {
         c.onFocusChanged = { [weak self] in
             self?.cancelConfirm()
             self?.endModes()
+        }
+        c.focusPastLeftEdge = { [weak self, weak c] in
+            guard let self, c === self.activeController else { return false }
+            return self.focusSidebar()
         }
         c.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
         c.onProgress = { [weak self] surface, progress in

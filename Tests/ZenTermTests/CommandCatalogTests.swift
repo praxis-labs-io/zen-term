@@ -40,7 +40,7 @@ final class CommandCatalogTests: XCTestCase {
                 "Clear Screen", "Paste Selection", "Write Screen to File",
                 "Write Screen to File, Copy Path", "Write Screen to File and Open",
                 "Close Pane",
-                "Toggle Sidebar", "Fill Screen", "Close Window",
+                "Toggle Sidebar", "Focus Sidebar", "Fill Screen", "Close Window",
                 "Increase Font Size", "Decrease Font Size", "Reset Font Size",
                 "Dismiss Notice", "Dismiss All Notices",
             ])
@@ -132,6 +132,7 @@ final class CommandCatalogTests: XCTestCase {
             KeyInterceptor.ReservedChord.reportIssue.actionToken,
             KeyInterceptor.ReservedChord.newTool.actionToken,
             KeyInterceptor.ReservedChord.renameTab.actionToken,
+            KeyInterceptor.ReservedChord.focusSidebar.actionToken,
         ]
         for command in CommandCatalog.commands(tabCount: 9, workspaceCount: 9) {
             XCTAssertFalse(command.title.isEmpty)

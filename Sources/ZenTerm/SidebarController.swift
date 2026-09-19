@@ -31,6 +31,7 @@ final class SidebarController {
     private var sidebarTop: NSLayoutConstraint?
     private var slideID = 0
     private var entries: [Entry] = []
+    var onLeave: () -> Void = {}
 
     init(
         onPalette: @escaping () -> Void, onSettings: @escaping () -> Void, onToggle: @escaping () -> Void,
@@ -41,6 +42,7 @@ final class SidebarController {
         toggleButton = SidebarFooter.button("sidebar.left", "Toggle sidebar", .toggleSidebar, onToggle)
         lead = CollapsedSidebarLead(
             leadingInset: Self.toggleInset + SidebarFooter.buttonSize.width + Self.leadNameGap)
+        view.onLeave = { [weak self] in self?.onLeave() }
     }
 
     var canvasLeadingAnchor: NSLayoutXAxisAnchor { canvasEdge.leadingAnchor }
@@ -144,6 +146,13 @@ final class SidebarController {
         if !isDocked { leadWidth?.constant = lead.contentWidth }
         renderRows()
         if foldersChanged { refreshBranches() }
+    }
+
+    var hasFocus: Bool { view.hasFocus }
+
+    func focusActiveRow() {
+        guard let active = entries.first(where: \.isActive) else { return }
+        view.focusRow(active.id)
     }
 
     func refreshBranches() {

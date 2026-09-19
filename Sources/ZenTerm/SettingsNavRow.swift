@@ -5,12 +5,15 @@ final class SettingsNavRow: NSView {
     var onArrowDown: (() -> Void)?
     var onBacktab: (() -> Void)?
     var onEnterDetail: (() -> Void)?
+    var onReturn: (() -> Void)?
+    var onEscape: (() -> Void)?
     var tooltip: TooltipHost?
 
     private let label = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
     private let onActivate: () -> Void
-    private let isFocusable: Bool
+    private let focusesOnClick: Bool
+    private var isTakingKeyboardFocus = false
     private var trackingArea: NSTrackingArea?
     private var isSelected = false
     private var isFocusedStop = false
@@ -18,14 +21,17 @@ final class SettingsNavRow: NSView {
 
     private static let detailMaxWidth: CGFloat = 96
 
-    init(title: String, isFocusable: Bool = true, onActivate: @escaping () -> Void) {
+    init(title: String, focusesOnClick: Bool = true, onActivate: @escaping () -> Void) {
         self.onActivate = onActivate
-        self.isFocusable = isFocusable
+        self.focusesOnClick = focusesOnClick
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
         layer?.cornerRadius = 6
         label.stringValue = title
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityLabel(title)
         label.font = .systemFont(ofSize: 13)
         label.lineBreakMode = .byTruncatingTail
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -52,10 +58,14 @@ final class SettingsNavRow: NSView {
 
     func setSelected(_ selected: Bool) {
         isSelected = selected
+        setAccessibilitySelected(selected)
         refreshFill()
     }
 
-    func setDetail(_ detail: String?) { detailLabel.stringValue = detail ?? "" }
+    func setDetail(_ detail: String?) {
+        detailLabel.stringValue = detail ?? ""
+        setAccessibilityValue(detail)
+    }
 
     var detailForTesting: String { detailLabel.stringValue }
 
@@ -77,7 +87,14 @@ final class SettingsNavRow: NSView {
         }
     }
 
-    override var acceptsFirstResponder: Bool { isFocusable }
+    // AppKit promotes any clicked view that accepts, so a keyboard-only row accepts only in `takeKeyboardFocus`.
+    override var acceptsFirstResponder: Bool { focusesOnClick || isTakingKeyboardFocus }
+
+    func takeKeyboardFocus() {
+        isTakingKeyboardFocus = true
+        window?.makeFirstResponder(self)
+        isTakingKeyboardFocus = false
+    }
     override func becomeFirstResponder() -> Bool { isFocusedStop = true; refreshFill(); return true }
     override func resignFirstResponder() -> Bool { isFocusedStop = false; refreshFill(); return true }
 
@@ -114,9 +131,11 @@ final class SettingsNavRow: NSView {
         if window == nil { tooltip?.hide(from: self) }
     }
 
+    override func accessibilityPerformPress() -> Bool { onActivate(); return true }
+
     override func mouseDown(with event: NSEvent) {
         tooltip?.hide(from: self)
-        if isFocusable { window?.makeFirstResponder(self) }
+        if focusesOnClick { window?.makeFirstResponder(self) }
         onActivate()
     }
 
@@ -126,6 +145,8 @@ final class SettingsNavRow: NSView {
         case .tab(shift: true): onBacktab?()
         case .down: onArrowDown?()
         case .right, .tab(shift: false): onEnterDetail?()
+        case .activate where onReturn != nil && KeyboardFocus.isReturn(event): onReturn?()
+        case .escape where onEscape != nil && KeyboardFocus.isUnmodified(event): onEscape?()
         default: super.keyDown(with: event)
         }
     }
