@@ -210,6 +210,7 @@ final class SidebarView: NSView {
         }
         numbers = byID.compactMapValues(\.number)
         worktreeParents = Set(items.filter(\.makesWorktrees).map(\.id))
+        let previouslyActive = activeRow
         activeRow = items.first(where: \.isActive)?.id
         for (index, item) in items.enumerated() {
             let row = self.row(for: item)
@@ -225,7 +226,15 @@ final class SidebarView: NSView {
             setNewWorktreeButton(on: row, for: item)
             row.setShowsAttention(item.isWaiting)
         }
+        if activeRow != previouslyActive { revealActiveRow() }
         if removedFocusedRow { onLeave?() }
+    }
+
+    // The keyboard scrolls to the row it focuses, and that wins while the sidebar holds focus.
+    private func revealActiveRow() {
+        guard !hasFocus, let id = activeRow, let row = rows[id] else { return }
+        layoutSubtreeIfNeeded()
+        row.scrollToVisible(row.bounds)
     }
 
     private func row(for item: SidebarRowItem) -> SettingsNavRow {

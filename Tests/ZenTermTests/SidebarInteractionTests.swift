@@ -874,6 +874,20 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(isOnScreen(try XCTUnwrap(rows.last), in: scroll), "the focused row is scrolled into view")
     }
 
+    func test_aNewWorkspace_scrollsItsRowIntoView() throws {
+        let controller = makeCrowdedController()
+        let view = controller.sidebarForTesting.view
+        XCTAssertFalse(
+            isOnScreen(try XCTUnwrap(view.rowsForTesting.last), in: view.scrollForTesting),
+            "precondition: the list overflows and the end is out of sight")
+
+        controller.handle(.newWorkspace)
+        controller.containerForTesting.layoutSubtreeIfNeeded()
+
+        let row = try XCTUnwrap(view.rowsForTesting.last)
+        XCTAssertTrue(isOnScreen(row, in: view.scrollForTesting), "the new workspace's row is on screen")
+    }
+
     func test_theSidebarFadesOnlyTheEdgesContentIsHiddenPast() throws {
         let roomy = makeController()
         roomy.containerForTesting.layoutSubtreeIfNeeded()
