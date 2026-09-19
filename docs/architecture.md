@@ -176,11 +176,16 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 `PaneCanvasController` and two drawers.
 
 - **A window starts with one workspace**, the default one in the home folder, and one of
-  them is active. ⌘P opens a configured workspace at the end of the sidebar, or switches to
-  it when it is already open. A workspace is open when one other than the default is
-  open at its folder, so renaming it in Settings does not open a second copy.
-- **`activate(_:)` is the single path a switch goes through**: a row click, ⌘⌥1…9 and ⌘⌥[ ]
-  in sidebar order, ⌘P, and revealing a background tab. It swaps the canvas without
+  them is active. ⌘P opens a configured workspace, or switches to it when it is already
+  open. A workspace is open when one other than the default is open at its folder, so
+  renaming it in Settings does not open a second copy.
+- **`WorkspaceOrder` is the sidebar's order, derived from open order at every read.** A
+  worktree workspace keeps the `WorktreeOrigin` it opened from and nests under the open
+  workspace at its parent's folder, or under a ghost row built from that origin when the
+  parent is closed. A group sits where its first member opened. `navigable` skips ghosts;
+  the sidebar's numbers, ⌘⌥1…9 and ⌘⌥[ ] all read it.
+- **`activate(_:)` is the single path a switch goes through**: a row click, ⌘⌥1…9 and ⌘⌥[ ],
+  ⌘P, and revealing a background tab. It swaps the canvas without
   motion, so a newly opened workspace applies its recipe in the same turn.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
   workspace costs nothing beyond an inactive tab.

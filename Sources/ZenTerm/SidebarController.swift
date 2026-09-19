@@ -7,9 +7,13 @@ final class SidebarController {
     private static var lastChoiceIsDocked = true
 
     private struct Entry {
-        let id: WorkspaceID
+        enum Kind { case workspace, worktree(fallbackName: String), ghost }
+
+        let row: SidebarRowID
+        let kind: Kind
         let name: String
-        let folder: URL
+        let folder: URL?
+        let number: Int?
         let isActive: Bool
     }
 
@@ -35,7 +39,7 @@ final class SidebarController {
 
     init(
         onPalette: @escaping () -> Void, onSettings: @escaping () -> Void, onToggle: @escaping () -> Void,
-        onActivate: @escaping (WorkspaceID) -> Void, onAdd: @escaping () -> Void
+        onActivate: @escaping (SidebarRowID) -> Void, onAdd: @escaping () -> Void
     ) {
         view = SidebarView(onActivate: onActivate, onAdd: onAdd)
         footer = SidebarFooter(onPalette: onPalette, onSettings: onSettings)
@@ -136,11 +140,24 @@ final class SidebarController {
         lead.isHidden = isDocked
     }
 
-    func render(workspaces: [WorkspaceController], active: WorkspaceController) {
-        let next = workspaces.map {
-            Entry(id: $0.id, name: $0.name, folder: $0.folder, isActive: $0 === active)
+    func render(order: WorkspaceOrder, workspaces: [WorkspaceController], active: WorkspaceController) {
+        let byID = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
+        let numbers = Dictionary(uniqueKeysWithValues: order.navigable.enumerated().map { ($1, $0 + 1) })
+        let next = order.entries.compactMap { entry -> Entry? in
+            switch entry {
+            case .workspace(let id), .worktree(let id):
+                guard let workspace = byID[id] else { return nil }
+                let kind = workspace.origin.map { Entry.Kind.worktree(fallbackName: $0.name) } ?? .workspace
+                return Entry(
+                    row: .workspace(id), kind: kind, name: workspace.name, folder: workspace.folder,
+                    number: numbers[id], isActive: workspace === active)
+            case .ghost(let parent):
+                return Entry(
+                    row: .ghost(parent.path.standardizedFileURL.path), kind: .ghost, name: parent.title,
+                    folder: nil, number: nil, isActive: false)
+            }
         }
-        let foldersChanged = next.map(\.folder) != entries.map(\.folder)
+        let foldersChanged = next.compactMap(\.folder) != entries.compactMap(\.folder)
         entries = next
         lead.setWorkspaceName(active.name)
         if !isDocked { leadWidth?.constant = lead.contentWidth }
@@ -152,18 +169,34 @@ final class SidebarController {
 
     func focusActiveRow() {
         guard let active = entries.first(where: \.isActive) else { return }
-        view.focusRow(active.id)
+        view.focusRow(active.row)
     }
 
     func refreshBranches() {
-        GitRepoStatus.refresh(entries.map(\.folder)) { [weak self] in self?.renderRows() }
+        GitRepoStatus.refresh(entries.compactMap(\.folder)) { [weak self] in self?.renderRows() }
     }
 
     private func renderRows() {
-        view.render(
-            entries.map {
-                SidebarRowItem(id: $0.id, name: $0.name, branch: GitRepoStatus.branch($0.folder), isActive: $0.isActive)
-            })
+        view.render(entries.map(Self.rowItem))
+    }
+
+    private static let worktreeSymbol = "arrow.triangle.branch"
+
+    private static func rowItem(_ entry: Entry) -> SidebarRowItem {
+        let branch = entry.folder.flatMap(GitRepoStatus.branch)
+        switch entry.kind {
+        case .workspace:
+            return SidebarRowItem(
+                id: entry.row, variant: .standard, name: entry.name, branch: branch, number: entry.number,
+                isActive: entry.isActive)
+        case .worktree(let fallbackName):
+            return SidebarRowItem(
+                id: entry.row, variant: .nested(symbol: worktreeSymbol), name: branch ?? fallbackName,
+                branch: nil, number: entry.number, isActive: entry.isActive)
+        case .ghost:
+            return SidebarRowItem(
+                id: entry.row, variant: .faint, name: entry.name, branch: nil, number: nil, isActive: false)
+        }
     }
 
     func setOpenModal(palette: Bool, settings: Bool) { footer.setOpenModal(palette: palette, settings: settings) }

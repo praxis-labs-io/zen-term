@@ -1,6 +1,12 @@
 import AppKit
 
 final class SettingsNavRow: NSView {
+    enum Variant: Equatable {
+        case standard
+        case nested(symbol: String)
+        case faint
+    }
+
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onBacktab: (() -> Void)?
@@ -9,8 +15,10 @@ final class SettingsNavRow: NSView {
     var onEscape: (() -> Void)?
     var tooltip: TooltipHost?
 
+    let variant: Variant
     private let label = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
+    private let glyph = NSImageView()
     private let onActivate: () -> Void
     private let focusesOnClick: Bool
     private var isTakingKeyboardFocus = false
@@ -20,10 +28,17 @@ final class SettingsNavRow: NSView {
     private var isHovered = false
 
     private static let detailMaxWidth: CGFloat = 96
+    private static let nestedIndent: CGFloat = 24
+    private static let nestedGlyphGap: CGFloat = 6
+    private static let nestedGlyphSize: CGFloat = 11
 
-    init(title: String, focusesOnClick: Bool = true, onActivate: @escaping () -> Void) {
+    init(
+        title: String, variant: Variant = .standard, focusesOnClick: Bool = true,
+        onActivate: @escaping () -> Void
+    ) {
         self.onActivate = onActivate
         self.focusesOnClick = focusesOnClick
+        self.variant = variant
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -43,15 +58,35 @@ final class SettingsNavRow: NSView {
         detailLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(detailLabel)
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
             label.trailingAnchor.constraint(lessThanOrEqualTo: detailLabel.leadingAnchor, constant: -8),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
             detailLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
             detailLabel.widthAnchor.constraint(lessThanOrEqualToConstant: Self.detailMaxWidth),
             detailLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            heightAnchor.constraint(equalToConstant: 30),
         ])
+        if case .nested(let symbol) = variant {
+            installGlyph(symbol)
+        } else {
+            NSLayoutConstraint.activate([
+                label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+                heightAnchor.constraint(equalToConstant: 30),
+            ])
+        }
         reapplyTheme()
+    }
+
+    private func installGlyph(_ symbol: String) {
+        glyph.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        glyph.symbolConfiguration = .init(pointSize: Self.nestedGlyphSize, weight: .regular)
+        glyph.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(glyph)
+        label.font = .systemFont(ofSize: 12)
+        NSLayoutConstraint.activate([
+            glyph.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.nestedIndent),
+            glyph.centerYAnchor.constraint(equalTo: centerYAnchor),
+            label.leadingAnchor.constraint(equalTo: glyph.trailingAnchor, constant: Self.nestedGlyphGap),
+            heightAnchor.constraint(equalToConstant: 28),
+        ])
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -59,7 +94,13 @@ final class SettingsNavRow: NSView {
     func setSelected(_ selected: Bool) {
         isSelected = selected
         setAccessibilitySelected(selected)
+        refreshLabelInk()
         refreshFill()
+    }
+
+    func setTitle(_ title: String) {
+        label.stringValue = title
+        setAccessibilityLabel(title)
     }
 
     func setDetail(_ detail: String?) {
@@ -67,12 +108,26 @@ final class SettingsNavRow: NSView {
         setAccessibilityValue(detail)
     }
 
+    var titleForTesting: String { label.stringValue }
+
+    var titleInkForTesting: NSColor? { label.textColor }
+
     var detailForTesting: String { detailLabel.stringValue }
 
     func reapplyTheme() {
-        label.textColor = Theme.current.chrome.foreground.nsColor
+        refreshLabelInk()
         detailLabel.textColor = Theme.current.chrome.ink(.muted)
+        glyph.contentTintColor = Theme.current.chrome.ink(.faint)
         refreshFill()
+    }
+
+    private func refreshLabelInk() {
+        let chrome = Theme.current.chrome
+        switch variant {
+        case .standard: label.textColor = chrome.foreground.nsColor
+        case .nested: label.textColor = chrome.ink(isSelected ? .normal : .subtle)
+        case .faint: label.textColor = chrome.ink(.faint)
+        }
     }
 
     private func refreshFill() {

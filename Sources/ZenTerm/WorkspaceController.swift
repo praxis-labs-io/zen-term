@@ -9,16 +9,21 @@ final class WorkspaceController {
     let isDefault: Bool
     var name: String
     let folder: URL
+    let origin: WorktreeOrigin?
 
     private var tabs: TabList
     private var controllerByTab: [TabID: TabController] = [:]
     private var titleByTab: [TabID: String] = [:]
 
-    init(id: WorkspaceID, isDefault: Bool, name: String, folder: URL, firstTab: TabID) {
+    init(
+        id: WorkspaceID, isDefault: Bool, name: String, folder: URL, firstTab: TabID,
+        origin: WorktreeOrigin? = nil
+    ) {
         self.id = id
         self.isDefault = isDefault
         self.name = name
         self.folder = folder
+        self.origin = origin
         tabs = TabList(first: firstTab)
     }
 

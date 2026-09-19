@@ -154,7 +154,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let repo = path("alpha")
         var chosen: Workspace?
         let overlay = makeRepoPicker(
-            entries: [workspace("alpha", path: repo)], onChoose: { chosen = $0 })
+            entries: [workspace("alpha", path: repo)], onChoose: { ws, _ in chosen = ws })
         mount(overlay)
         let detached = Worktree(
             path: worktreeRoot.appendingPathComponent("alpha/runbook-detached", isDirectory: true),
@@ -230,7 +230,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let parent = Workspace(
             title: "alpha", path: repo, main: "nvim", right: "claude", bottom: "shell",
             focus: .right, env: ["A": "1"], carry: [".env"])
-        let overlay = makeRepoPicker(entries: [parent], onChoose: { chosen = $0 })
+        let overlay = makeRepoPicker(entries: [parent], onChoose: { ws, _ in chosen = ws })
         mount(overlay)
         overlay.setWorktrees(listing(repo, "feature"), for: repo)
 
@@ -326,7 +326,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             title: "b-x", path: owner, main: "nvim", right: nil, bottom: nil, focus: .main, env: [:])
         let overlay = makeRepoPicker(
             entries: [ownerWorkspace, workspace("a-x", path: other)],
-            onChoose: { chosen = $0 })
+            onChoose: { ws, _ in chosen = ws })
         mount(overlay)
         let trees = [worktree(owner, "shared-branch")]
         overlay.setWorktrees(WorktreeListing(commonDir: shared, worktrees: trees), for: owner)
@@ -657,7 +657,8 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
     private func makeRepoPicker(
         entries: [Workspace], removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
-        isOpen: @escaping (URL) -> Bool = { _ in false }, onChoose: @escaping (Workspace) -> Void = { _ in }
+        isOpen: @escaping (URL) -> Bool = { _ in false },
+        onChoose: @escaping (Workspace, WorktreeOrigin?) -> Void = { _, _ in }
     ) -> RepoPickerOverlay {
         RepoPickerOverlay(
             entries: entries, background: Theme.current.chrome.background.nsColor,

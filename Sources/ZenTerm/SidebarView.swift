@@ -1,9 +1,16 @@
 import AppKit
 
+enum SidebarRowID: Hashable {
+    case workspace(WorkspaceID)
+    case ghost(String)
+}
+
 struct SidebarRowItem: Equatable {
-    let id: WorkspaceID
+    let id: SidebarRowID
+    let variant: SettingsNavRow.Variant
     let name: String
     let branch: String?
+    let number: Int?
     let isActive: Bool
 }
 
@@ -17,11 +24,12 @@ final class SidebarView: NSView {
     private let caption = FieldCaption("Workspaces", required: false)
     private let addButton: IconButton
     private let rowStack = NSStackView()
-    private var rows: [WorkspaceID: SettingsNavRow] = [:]
+    private var rows: [SidebarRowID: SettingsNavRow] = [:]
+    private var numbers: [SidebarRowID: Int] = [:]
     var onLeave: (() -> Void)?
-    private let onActivate: (WorkspaceID) -> Void
+    private let onActivate: (SidebarRowID) -> Void
 
-    init(onActivate: @escaping (WorkspaceID) -> Void, onAdd: @escaping () -> Void) {
+    init(onActivate: @escaping (SidebarRowID) -> Void, onAdd: @escaping () -> Void) {
         self.onActivate = onActivate
         addButton = SidebarFooter.button("plus", "Open workspace", .toggleRepoPicker, onAdd)
         super.init(frame: .zero)
@@ -48,13 +56,14 @@ final class SidebarView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func render(_ items: [SidebarRowItem]) {
-        let ids = Set(items.map(\.id))
+        let byID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
         var removedFocusedRow = false
-        for (id, row) in rows where !ids.contains(id) {
+        for (id, row) in rows where byID[id]?.variant != row.variant {
             removedFocusedRow = removedFocusedRow || KeyboardFocus.isFocused(row, in: window)
             row.removeFromSuperview()
             rows[id] = nil
         }
+        numbers = byID.compactMapValues(\.number)
         for (index, item) in items.enumerated() {
             let row = self.row(for: item)
             if rowStack.arrangedSubviews.firstIndex(of: row) != index {
@@ -63,6 +72,7 @@ final class SidebarView: NSView {
                 rowStack.insertArrangedSubview(row, at: index)
                 if isNew { row.widthAnchor.constraint(equalTo: rowStack.widthAnchor).isActive = true }
             }
+            row.setTitle(item.name)
             row.setDetail(item.branch)
             row.setSelected(item.isActive)
         }
@@ -72,11 +82,14 @@ final class SidebarView: NSView {
     private func row(for item: SidebarRowItem) -> SettingsNavRow {
         if let row = rows[item.id] { return row }
         let id = item.id
-        let row = SettingsNavRow(title: item.name, focusesOnClick: false) { [weak self] in self?.onActivate(id) }
-        row.tooltip = TooltipHost(label: "Switch workspace") { [weak self, weak row] in
-            guard let self, let row, let index = self.rowStack.arrangedSubviews.firstIndex(of: row), index < 9
-            else { return nil }
-            return CommandCatalog.spec(for: .selectWorkspace(index + 1)).shortcut
+        let row = SettingsNavRow(title: item.name, variant: item.variant, focusesOnClick: false) {
+            [weak self] in self?.onActivate(id)
+        }
+        if case .workspace = id {
+            row.tooltip = TooltipHost(label: "Switch workspace") { [weak self] in
+                guard let number = self?.numbers[id], number <= 9 else { return nil }
+                return CommandCatalog.spec(for: .selectWorkspace(number)).shortcut
+            }
         }
         row.onArrowUp = { [weak self] in self?.moveFocus(-1) }
         row.onArrowDown = { [weak self] in self?.moveFocus(1) }
@@ -88,7 +101,7 @@ final class SidebarView: NSView {
 
     var hasFocus: Bool { rows.values.contains { KeyboardFocus.isFocused($0, in: window) } }
 
-    func focusRow(_ id: WorkspaceID) {
+    func focusRow(_ id: SidebarRowID) {
         rows[id]?.takeKeyboardFocus()
     }
 
