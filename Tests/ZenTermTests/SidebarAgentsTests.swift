@@ -302,6 +302,30 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(c.focusedSurfaceIDForTesting, drawer)
     }
 
+    func test_clickingAnAgent_inAHiddenFloat_opensAndFocusesIt() throws {
+        var config = GeneralConfig.current
+        config.floats = [
+            ToolFloat(
+                id: "btop", order: 0, title: "btop", icon: ToolFloatParser.defaultIcon,
+                command: "btop", dir: nil, widthFraction: 0.85, heightFraction: 0.85,
+                requiresGitRepo: false, persist: .window,
+                toggle: Chord(command: true, shift: true, key: "b"))
+        ]
+        GeneralConfig.setCurrentForTesting(config)
+        let c = makeWindow()
+        c.handle(.toggleToolFloat("btop"))
+        let float = try XCTUnwrap(spawned.first { $0.lastConfig?.args == ["-l", "-i", "-c", "btop"] })
+        c.handle(.toggleToolFloat("btop"))
+        XCTAssertNil(c.floatsForTesting.activeID, "precondition: the float is hidden")
+        float.delegate?.surface(float, didPostNotification: TerminalNotification(title: "", body: "Needs input"))
+        drainMainQueue()
+
+        try click(try XCTUnwrap(rows(c).first))
+
+        XCTAssertEqual(c.floatsForTesting.activeID, "btop")
+        XCTAssertTrue(c.window.firstResponder === float.view)
+    }
+
     func test_arrows_continueFromTheWorkspaceRowsIntoTheAgents_andReturnJumps() throws {
         let c = makeWindow()
         let first = try focusedAgent(c)
