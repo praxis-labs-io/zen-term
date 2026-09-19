@@ -61,6 +61,12 @@ final class AttentionStore {
         }
     }
 
+    func endAgent(_ id: SurfaceID) {
+        entries[id]?.working = false
+        entries[id]?.agentLatched = .idle
+        entries[id]?.agentSince = nil
+    }
+
     func markFocused(_ id: SurfaceID) {
         markSeen(id)
         entries[id]?.agentLatched = .idle

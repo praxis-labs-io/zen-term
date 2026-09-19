@@ -2254,14 +2254,16 @@ final class WindowController: NSObject {
         guard agents.contains(surface) else { return }
         let failed = result.exitCode.map { $0 != 0 } ?? false
         agents.markExited(surface, failed: failed, message: Self.commandResultMessage(result))
+        attention.endAgent(surface)
         if failed, !isFocused(surface) { attention.latchAgent(surface, .completed) }
         renderAgents()
     }
 
     private func trackAgentExits() {
         let before = agents.agents
-        for id in before.keys {
+        for (id, agent) in before {
             agents.trackBusy(id, terminalSurface(id)?.isBusy ?? false)
+            if !agent.hasExited, agents.agents[id]?.hasExited == true { attention.endAgent(id) }
         }
         if agents.agents != before { renderAgents() }
     }

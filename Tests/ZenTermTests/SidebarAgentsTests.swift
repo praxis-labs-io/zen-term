@@ -269,6 +269,34 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertTrue(items(c).isEmpty)
     }
 
+    func test_anAgentThatExitsMidTurn_leavesTheList() throws {
+        let c = makeWindow()
+        let agent = try focusedAgent(c)
+        progress(agent, working: true)
+        agent.surface.isBusy = true
+        c.trackAgentExitsForTesting()
+        XCTAssertEqual(items(c).map(\.state), [.working], "precondition")
+
+        agent.surface.isBusy = false
+        c.trackAgentExitsForTesting()
+
+        XCTAssertTrue(items(c).isEmpty)
+        XCTAssertEqual(c.agentStateForTesting(agent.id), .idle)
+    }
+
+    func test_anAgentThatAskedThenExitsNonZero_readsExited() throws {
+        let c = makeWindow()
+        let first = try focusedAgent(c)
+        _ = try split(c)
+        notify(first, "Wants to run swift test")
+        XCTAssertEqual(items(c).map(\.state), [.waiting], "precondition")
+
+        first.surface.delegate?.surface(first.surface, commandDidFinish: TerminalCommandResult(exitCode: 1, duration: 3))
+        drainMainQueue()
+
+        XCTAssertEqual(items(c).map(\.state), [.failed])
+    }
+
     func test_clickingAnAgent_inAnotherWorkspace_switchesAndFocusesItsPane() throws {
         let c = makeWindow()
         let home = c.activeWorkspaceIDForTesting
