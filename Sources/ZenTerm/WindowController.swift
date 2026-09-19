@@ -2456,7 +2456,7 @@ final class WindowController: NSObject {
             let state = SidebarAgentItem.State(attention.agentState(of: id), failed: agent.failed)
             let item = SidebarAgentItem(
                 id: id, state: state, summary: agent.message ?? state.summary,
-                detail: "\(agent.name ?? AgentRoster.unnamed) · \(place.name)")
+                detail: "\(place.name) · \(agent.name ?? AgentRoster.unnamed)")
             return (item, attention.agentSince(of: id), place.position)
         }
         return located.sorted { a, b in

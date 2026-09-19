@@ -201,7 +201,7 @@ final class SidebarAgentsTests: WindowTestCase {
         c.openWorkspaceForTesting(recipe("zen-review", right: "claude --resume"))
         c.openWorkspaceForTesting(recipe("notes", right: "vim"))
 
-        XCTAssertEqual(items(c).map(\.detail), ["claude · zen-review"])
+        XCTAssertEqual(items(c).map(\.detail), ["zen-review · claude"])
         XCTAssertEqual(items(c).map(\.state), [.idle])
     }
 
@@ -214,7 +214,7 @@ final class SidebarAgentsTests: WindowTestCase {
         notify(first, "Needs input")
         notify(second, "Needs input", title: "Claude Code")
 
-        XCTAssertEqual(Set(items(c).map(\.detail)), ["agent · Workspace 1", "Claude Code · Workspace 1"])
+        XCTAssertEqual(Set(items(c).map(\.detail)), ["Workspace 1 · agent", "Workspace 1 · Claude Code"])
     }
 
     func test_anAgentThatWorksBeforeItAsks_takesTheNameItsNotificationCarries() throws {
@@ -223,10 +223,10 @@ final class SidebarAgentsTests: WindowTestCase {
         _ = try split(c)
 
         progress(agent, working: true)
-        XCTAssertEqual(items(c).map(\.detail), ["agent · Workspace 1"], "precondition: joined unnamed")
+        XCTAssertEqual(items(c).map(\.detail), ["Workspace 1 · agent"], "precondition: joined unnamed")
         notify(agent, "Needs input", title: "Claude Code")
 
-        XCTAssertEqual(items(c).map(\.detail), ["Claude Code · Workspace 1"])
+        XCTAssertEqual(items(c).map(\.detail), ["Workspace 1 · Claude Code"])
     }
 
     func test_anAgentLeaves_whenItsSurfaceFallsIdle_notBeforeItWasBusy() throws {
