@@ -133,11 +133,20 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .add:
             return AddRowView()
         case .workspace(let workspace):
-            return RowView(workspace: workspace, isOpen: isOpen(workspace.path))
+            return RowView(workspace: workspace, isOpen: isOpen(row: rows[index]))
         case .worktree(let worktree, let parent):
             guard !removals.isRemoving(worktree.path) else { return RemovingRowView(worktree: worktree) }
+            return RowView(worktree: worktree, parent: parent, isOpen: isOpen(row: rows[index]))
+        }
+    }
+
+    private func isOpen(row: Row) -> Bool {
+        switch row {
+        case .add: return false
+        case .workspace(let workspace): return isOpen(workspace.path)
+        case .worktree(let worktree, let parent):
             let opens = Self.workspace(for: worktree, parent: parent, repoRoot: GitRepoStatus.repoRoot(parent.path))
-            return RowView(worktree: worktree, parent: parent, isOpen: isOpen(opens.path))
+            return isOpen(opens.path)
         }
     }
 
@@ -232,7 +241,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     }
 
     static func footerHints() -> [PaletteHint] {
-        var hints = [PaletteHint(keys: "⏎", label: "open")]
+        var hints = [PaletteHint(keys: "⏎", label: "open"), PaletteHint(keys: "⏎", label: "switch")]
         if let chord = Chord.displayed(.createWorktree, in: GeneralConfig.current.keymap) {
             hints.append(PaletteHint(keys: chord.displayGlyph, label: "new worktree"))
         }
@@ -243,6 +252,9 @@ final class RepoPickerOverlay: PaletteOverlay {
     }
 
     override func selectionChanged() {
+        let switches = rows.indices.contains(selected) && isOpen(row: rows[selected])
+        setFooterHint("open", isShown: !switches)
+        setFooterHint("switch", isShown: switches)
         setFooterHint("new worktree", isShown: createTarget != nil)
         setFooterHint("remove worktree", isShown: selectedWorktree != nil)
     }
@@ -384,7 +396,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         private static func openMarker(after name: NSView, in row: NSView) -> NSView {
             let marker = NSTextField(labelWithString: "open")
             marker.font = .systemFont(ofSize: 11)
-            marker.textColor = Theme.current.chrome.ink(.faint)
+            marker.textColor = Theme.current.chrome.ink(.muted)
             marker.setContentCompressionResistancePriority(.required, for: .horizontal)
             marker.translatesAutoresizingMaskIntoConstraints = false
             row.addSubview(marker)

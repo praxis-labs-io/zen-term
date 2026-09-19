@@ -38,7 +38,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         let hints = RepoPickerOverlay.footerHints()
         XCTAssertNil(hints.first { $0.label == "new worktree" })
-        XCTAssertEqual(hints.map(\.label), ["open"])
+        XCTAssertEqual(hints.map(\.label), ["open", "switch"])
     }
 
     func test_theCreateTarget_isNilOnTheAddRow() {
@@ -476,6 +476,20 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertTrue(hintIsShown("open", in: overlay))
     }
 
+    func test_overAnOpenWorkspace_theReturnHintSaysSwitch() {
+        let open = path("alpha")
+        let overlay = makeRepoPicker(
+            entries: [workspace("alpha", path: open), workspace("beta", path: path("beta"))],
+            isOpen: { $0 == open })
+        mount(overlay)
+
+        XCTAssertTrue(hintIsShown("switch", in: overlay), "↵ on an open workspace switches to it")
+
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
+
+        XCTAssertFalse(hintIsShown("switch", in: overlay), "a closed one opens")
+    }
+
     private func hintIsShown(_ label: String, in overlay: NSView) -> Bool {
         func walk(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(walk) }
         guard
@@ -622,11 +636,11 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
     private func makeRepoPicker(
         entries: [Workspace], removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
-        onChoose: @escaping (Workspace) -> Void = { _ in }
+        isOpen: @escaping (URL) -> Bool = { _ in false }, onChoose: @escaping (Workspace) -> Void = { _ in }
     ) -> RepoPickerOverlay {
         RepoPickerOverlay(
             entries: entries, background: Theme.current.chrome.background.nsColor,
-            removals: removals, onChoose: onChoose, onAddWorkspace: {}, onDismiss: {})
+            removals: removals, isOpen: isOpen, onChoose: onChoose, onAddWorkspace: {}, onDismiss: {})
     }
 
     private func makeWindow() -> NSWindow {
