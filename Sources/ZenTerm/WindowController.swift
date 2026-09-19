@@ -1764,10 +1764,11 @@ final class WindowController: NSObject {
         appendWorkspace(named: ws.title, at: ws.path, config: ws, origin: origin)
     }
 
+    // The home folder, not the focused pane's: a workspace is a place, and folder identity makes two on one folder collide.
     private func newWorkspace() {
         closeModal()
-        let folder = ShellLaunch.newSessionCWD(focused: activeController?.focusedCWD) ?? ShellLaunch.defaultCWD
-        appendWorkspace(named: Self.unconfiguredName(among: workspaces.map(\.name)), at: folder, config: nil)
+        appendWorkspace(
+            named: Self.unconfiguredName(among: workspaces.map(\.name)), at: ShellLaunch.defaultCWD, config: nil)
     }
 
     private func appendWorkspace(

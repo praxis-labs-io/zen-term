@@ -413,7 +413,7 @@
 # keybind = dismiss_all_toasts=cmd+shift+opt+n
 # keybind = toggle_command_palette=cmd+shift+p
 # keybind = toggle_workspace_picker=cmd+p
-# keybind = new_workspace=cmd+ctrl+t             # no config entry; starts where a new tab would
+# keybind = new_workspace=cmd+ctrl+t             # no config entry; starts in your home folder
 # keybind = create_worktree=opt+enter            # over a picker or sidebar row: cut a worktree of it
 # keybind = remove_worktree=cmd+shift+backspace  # over a worktree row: delete its folder
 # keybind = open_settings=cmd+,

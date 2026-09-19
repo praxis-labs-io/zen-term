@@ -90,28 +90,28 @@ final class NewWorkspaceTests: WindowTestCase {
         descendants(of: c.window.contentView!).compactMap { $0 as? RepoPickerOverlay }.first
     }
 
-    func test_cmdCtrlT_opensAWorkspaceInTheFocusedPanesFolder_andSwitchesToIt() throws {
-        inheritingCWD()
+    func test_cmdCtrlT_opensAWorkspaceAtHome_andSwitchesToIt() throws {
         let c = makeWindow()
         let first = c.activeWorkspaceIDForTesting
-        spawned.forEach { $0.currentDirectory = root }
 
         try pressCmdCtrlT(in: c)
 
         XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 2"])
         XCTAssertNotEqual(c.activeWorkspaceIDForTesting, first)
         XCTAssertEqual(c.tabOrderForTesting.count, 1)
-        XCTAssertEqual(try launchedFolder(of: c)?.standardizedFileURL, root.standardizedFileURL)
+        XCTAssertEqual(try launchedFolder(of: c), ShellLaunch.defaultCWD)
     }
 
-    func test_cmdCtrlT_startsInTheHomeFolder_whenNewTabsDo() throws {
+    func test_cmdCtrlT_staysAtHome_evenWhereANewTabWouldInheritTheFolder() throws {
+        inheritingCWD()
         let c = makeWindow()
         spawned.forEach { $0.currentDirectory = root }
 
         try pressCmdCtrlT(in: c)
 
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 2"])
-        XCTAssertEqual(try launchedFolder(of: c), ShellLaunch.defaultCWD)
+        XCTAssertEqual(
+            try launchedFolder(of: c), ShellLaunch.defaultCWD,
+            "a workspace is a place of its own, so it never inherits the pane's folder")
     }
 
     func test_cmdCtrlT_takesTheLowestNumberNoOpenWorkspaceHolds() throws {
@@ -160,7 +160,7 @@ final class NewWorkspaceTests: WindowTestCase {
             "a workspace without a config entry never counts as the configured one being open")
     }
 
-    func test_thePickersFirstRow_showsCmdCtrlT_andClickingItOpensAWorkspaceInTheFocusedPanesFolder() throws {
+    func test_thePickersFirstRow_showsCmdCtrlT_andClickingItOpensAWorkspaceAtHome() throws {
         inheritingCWD()
         let c = makeWindow()
         spawned.forEach { $0.currentDirectory = root }
@@ -174,7 +174,7 @@ final class NewWorkspaceTests: WindowTestCase {
 
         XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 2"])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting.last)
-        XCTAssertEqual(try launchedFolder(of: c)?.standardizedFileURL, root.standardizedFileURL)
+        XCTAssertEqual(try launchedFolder(of: c), ShellLaunch.defaultCWD)
         XCTAssertNil(pickerIn(c), "the picker closes")
     }
 

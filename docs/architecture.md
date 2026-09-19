@@ -178,7 +178,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **A window starts with one workspace, with no config entry**, and one workspace is
   always active. A workspace without a config entry is named "Workspace N", the lowest
   number no open workspace in the window holds. ⌘⌃T opens one at the end of the sidebar,
-  in the folder a new tab would start in. ⌘P opens a configured workspace, or switches to
+  in the home folder: a workspace is a place, and one opened on the focused pane's folder
+  would collide with the open workspace already identified by it. ⌘P opens a configured workspace, or switches to
   it when it is already open. A workspace is open when one with a config entry is open at
   its folder, so renaming it in Settings does not open a second copy.
 - **`WorkspaceOrder` is the sidebar's order, derived from open order at every read.** A
