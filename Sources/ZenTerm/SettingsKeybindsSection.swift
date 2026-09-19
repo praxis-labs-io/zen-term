@@ -25,7 +25,7 @@ final class SettingsKeybindsSection: SettingsSection {
         ("Resize", [.resizeLeft, .resizeDown, .resizeUp, .resizeRight]),
         (
             "Workspaces",
-            [.toggleRepoPicker, .createWorktree, .removeWorktree, .prevWorkspace, .nextWorkspace]
+            [.toggleRepoPicker, .newWorkspace, .createWorktree, .removeWorktree, .prevWorkspace, .nextWorkspace]
                 + (1...9).map { .selectWorkspace($0) } + [.closeWorkspace]
         ),
         (

@@ -1586,13 +1586,23 @@ final class WindowController: NSObject {
             activate(open.id)
             return
         }
+        appendWorkspace(named: ws.title, at: ws.path, config: ws)
+    }
+
+    private func newWorkspace() {
+        closeModal()
+        let folder = ShellLaunch.newSessionCWD(focused: activeController?.focusedCWD) ?? ShellLaunch.defaultCWD
+        appendWorkspace(named: Self.unconfiguredName(among: workspaces.map(\.name)), at: folder, config: nil)
+    }
+
+    private func appendWorkspace(named name: String, at folder: URL, config: Workspace?) {
         Log.info("workspace opened", category: .workspace)
         let tab = mintTabID()
         let workspace = WorkspaceController(
-            id: mintWorkspaceID(), isConfigured: true, name: ws.title, folder: ws.path, firstTab: tab)
+            id: mintWorkspaceID(), isConfigured: config != nil, name: name, folder: folder, firstTab: tab)
         workspaces.append(workspace)
         activate(workspace.id)
-        installController(id: tab, cwd: ws.path, config: ws, transition: .instant)
+        installController(id: tab, cwd: folder, config: config, transition: .instant)
     }
 
     func handle(_ chord: KeyInterceptor.ReservedChord) {
@@ -1612,6 +1622,10 @@ final class WindowController: NSObject {
             }
             if modal.kind == .repoPicker, chord == .removeWorktree {
                 removeSelectedWorktreeInPicker()
+                return
+            }
+            if modal.kind == .repoPicker, chord == .newWorkspace {
+                newWorkspace()
                 return
             }
             switch chord {
@@ -1649,7 +1663,7 @@ final class WindowController: NSObject {
                 .jumpToPreviousPrompt, .jumpToNextPrompt, .pasteSelection, .clearScreen,
                 .writeScreenFile, .copyScreenFilePath, .openScreenFile,
                 .dismissToast, .dismissAllToasts,
-                .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace:
+                .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace, .newWorkspace:
                 break
             default:
                 return
@@ -1746,6 +1760,7 @@ final class WindowController: NSObject {
         case .closeWorkspace:
             Log.info("close workspace", category: .workspace)
             requestCloseWorkspace(activeWorkspace)
+        case .newWorkspace: newWorkspace()
         }
     }
 

@@ -30,6 +30,7 @@ final class KeyInterceptor {
         case focusSidebar
         case toggleToolFloat(String)
         case toggleRepoPicker
+        case newWorkspace
         case createWorktree
         case removeWorktree
         case toggleCommandPalette
