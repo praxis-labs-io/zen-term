@@ -58,7 +58,7 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
         let wanted = try folder("feature-x")
         let other = try folder("feature-y")
         c.openWorkspaceForTesting(workspace("x", at: wanted))
-        c.openWorkspaceForTesting(workspace("x again", at: wanted))
+        c.openWorkspaceForTesting(workspace("x/src", at: try folder("feature-x/src")))
         c.openWorkspaceForTesting(workspace("y", at: other))
 
         XCTAssertEqual(c.tabCount(atPath: wanted), 2)
@@ -90,7 +90,7 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
         let other = try folder("feature-y")
         c.openWorkspaceForTesting(workspace("x", at: wanted))
         c.openWorkspaceForTesting(workspace("y", at: other))
-        c.openWorkspaceForTesting(workspace("x again", at: wanted))
+        c.openWorkspaceForTesting(workspace("x/src", at: try folder("feature-x/src")))
         let before = c.tabCount
 
         c.closeTabs(atPath: wanted)
