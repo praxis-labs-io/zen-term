@@ -114,6 +114,7 @@ final class KeymapAssemblyTests: XCTestCase {
         for n in 1...9 { XCTAssertEqual(map[Chord(command: true, option: true, key: "\(n)")], .selectWorkspace(n)) }
         XCTAssertEqual(map[Chord(command: true, option: true, key: "[")], .prevWorkspace)
         XCTAssertEqual(map[Chord(command: true, option: true, key: "]")], .nextWorkspace)
+        XCTAssertEqual(map[Chord(command: true, option: true, key: "w")], .closeWorkspace)
         XCTAssertEqual(map[Chord(command: true, key: "[")], .prevTab)
         XCTAssertEqual(map[Chord(command: true, option: true, key: "←")], .navLeft)
     }

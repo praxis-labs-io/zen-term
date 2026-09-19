@@ -87,6 +87,7 @@ enum CommandCatalog {
         case .selectWorkspace(let n): return workspace("Select Workspace \(n)", glyph, chord)
         case .prevWorkspace: return workspace("Previous Workspace", glyph, chord)
         case .nextWorkspace: return workspace("Next Workspace", glyph, chord)
+        case .closeWorkspace: return workspace("Close Workspace", glyph, chord)
         }
     }
 
@@ -102,6 +103,7 @@ enum CommandCatalog {
         if workspaceCount > 0 {
             chords += (1...min(workspaceCount, 9)).map { .selectWorkspace($0) }
         }
+        chords += [.closeWorkspace]
         chords += [
             .toggleBottomDrawer, .toggleRightDrawer,
             .newTab, .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab, .closeTab,

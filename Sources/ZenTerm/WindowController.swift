@@ -1644,7 +1644,7 @@ final class WindowController: NSObject {
                 .jumpToPreviousPrompt, .jumpToNextPrompt, .pasteSelection, .clearScreen,
                 .writeScreenFile, .copyScreenFilePath, .openScreenFile,
                 .dismissToast, .dismissAllToasts,
-                .selectWorkspace, .prevWorkspace, .nextWorkspace:
+                .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace:
                 break
             default:
                 return
@@ -1738,6 +1738,9 @@ final class WindowController: NSObject {
             if workspaces.indices.contains(n - 1) { activate(workspaces[n - 1].id) }
         case .prevWorkspace: cycleWorkspace(-1)
         case .nextWorkspace: cycleWorkspace(1)
+        case .closeWorkspace:
+            Log.info("close workspace", category: .workspace)
+            requestCloseWorkspace(activeWorkspace)
         }
     }
 
@@ -1856,6 +1859,32 @@ final class WindowController: NSObject {
         ) { [weak self] in self?.closeTab(id) }
     }
 
+    func requestCloseWorkspace(id: WorkspaceID) {
+        guard let workspace = workspaces.first(where: { $0.id == id }) else { return }
+        requestCloseWorkspace(workspace)
+    }
+
+    private func requestCloseWorkspace(_ workspace: WorkspaceController) {
+        let closesWindow = workspaces.count == 1
+        guard closesWindow || isRunning(workspace: workspace) else {
+            closeTabs(of: workspace)
+            return
+        }
+        let subject: CloseWarning.Subject =
+            closesWindow ? .lastWorkspace(running: windowIsRunning) : .workspace(workspace.name)
+        let names = closesWindow ? runningNamesInWindow() : runningTabNames(in: workspace)
+        presentConfirm(
+            variant: .warning, title: subject.title,
+            message: CloseWarning.message(closing: subject, naming: names),
+            confirmLabel: "Close"
+        ) { [weak self] in self?.closeTabs(of: workspace) }
+    }
+
+    private func closeTabs(of workspace: WorkspaceController) {
+        let background = workspace.tabIDs.filter { $0 != workspace.activeID }
+        for id in background + [workspace.activeID].compactMap({ $0 }) { closeTab(id) }
+    }
+
     private func requestCloseWindow() {
         guard windowIsRunning else {
             window.close()
@@ -1891,11 +1920,15 @@ final class WindowController: NSObject {
         if workspaces.count > 1 {
             named = workspaces.filter(isRunning(workspace:)).map(\.name)
         } else if activeWorkspace.tabIDs.count > 1 {
-            named = activeWorkspace.tabIDs.filter(isRunning(tab:)).map(title(of:))
+            named = runningTabNames(in: activeWorkspace)
         } else {
             named = activeWorkspace.activeID.map(hiddenRunningNames(inTab:)) ?? []
         }
         return named + floats.hiddenRunningTitles(scope: nil)
+    }
+
+    private func runningTabNames(in workspace: WorkspaceController) -> [String] {
+        workspace.tabIDs.filter(isRunning(tab:)).map(title(of:))
     }
 
     private static func drawerName(_ edge: DrawerEdge) -> String {

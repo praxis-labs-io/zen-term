@@ -501,4 +501,139 @@ final class CloseCommandTests: WindowTestCase {
             toastText(c).contains(
                 "Closing this tab will stop everything running in it, including the right drawer."))
     }
+
+    private func pressCancel(_ c: WindowController) throws {
+        let content = try XCTUnwrap(c.window.contentView)
+        let button = try XCTUnwrap(
+            descendants(of: content).compactMap { $0 as? AppButton }.first { $0.title == "Cancel" })
+        button.performClick(nil)
+        drainMainQueue()
+    }
+
+    private func openSecondWorkspace(_ c: WindowController, named name: String) -> WorkspaceID {
+        let id = c.addWorkspaceForTesting(name: name, folder: root)
+        c.activateWorkspaceForTesting(id)
+        return id
+    }
+
+    func test_closeWorkspace_withNothingRunning_closesAtOnce_andLandsOnItsNeighbour() throws {
+        let c = onScreen()
+        let home = c.activeWorkspaceIDForTesting
+        _ = openSecondWorkspace(c, named: "api")
+        let api = try activePane(c)
+
+        c.handle(.closeWorkspace)
+
+        XCTAssertFalse(c.isConfirmOpen, "nothing is running, so it does not ask")
+        XCTAssertEqual(c.workspaceIDsForTesting, [home])
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, home)
+        XCTAssertTrue(api.terminated, "its shells stop")
+    }
+
+    func test_closeWorkspace_closesEveryTabInIt() throws {
+        let c = onScreen()
+        _ = openSecondWorkspace(c, named: "api")
+        let first = try activePane(c)
+        spareTab(c)
+        let second = try activePane(c)
+
+        c.handle(.closeWorkspace)
+
+        XCTAssertTrue(first.terminated)
+        XCTAssertTrue(second.terminated)
+        XCTAssertEqual(c.workspaceIDsForTesting.count, 1)
+    }
+
+    func test_closeWorkspace_withSomethingRunning_asksFirst_namingTheRunningTab() throws {
+        let c = onScreen()
+        _ = openSecondWorkspace(c, named: "zen-review")
+        c.renameActiveTabForTesting(to: "codex")
+        try activePane(c).isBusy = true
+
+        c.handle(.closeWorkspace)
+
+        XCTAssertTrue(c.isConfirmOpen)
+        XCTAssertTrue(toastText(c).contains("Close Workspace"))
+        XCTAssertTrue(
+            toastText(c).contains("Closing zen-review will stop everything running in it, including codex."))
+
+        try pressClose(c)
+
+        XCTAssertEqual(c.workspaceIDsForTesting.count, 1)
+    }
+
+    func test_closeWorkspace_withSomethingRunning_cancelKeepsIt() throws {
+        let c = onScreen()
+        let api = openSecondWorkspace(c, named: "api")
+        let pane = try activePane(c)
+        pane.isBusy = true
+
+        c.handle(.closeWorkspace)
+        try pressCancel(c)
+
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, api)
+        XCTAssertFalse(pane.terminated)
+    }
+
+    func test_closeWorkspace_onTheLastOne_alwaysAsks_thenClosesTheWindow() throws {
+        let c = onScreen()
+
+        c.handle(.closeWorkspace)
+
+        XCTAssertTrue(c.isConfirmOpen, "the window goes with it, so it says so first")
+        XCTAssertTrue(toastText(c).contains("Close Window"))
+        XCTAssertTrue(toastText(c).contains("Closing this workspace will close the window."))
+
+        try pressClose(c)
+
+        XCTAssertFalse(c.window.isVisible)
+    }
+
+    func test_closeWorkspace_onTheLastOne_withSomethingRunning_saysBoth() throws {
+        let c = onScreen()
+        c.renameActiveTabForTesting(to: "api")
+        spareTab(c)
+        c.renameActiveTabForTesting(to: "claude")
+        try activePane(c).isBusy = true
+
+        c.handle(.closeWorkspace)
+
+        XCTAssertTrue(
+            toastText(c).contains(
+                "Closing this workspace will close the window and stop everything running in it, "
+                    + "including claude."))
+    }
+
+    func test_closingABackgroundWorkspace_byItsID_leavesTheActiveOneOnScreen() throws {
+        let c = onScreen()
+        let home = c.activeWorkspaceIDForTesting
+        let homeCanvas = try XCTUnwrap(c.activeTabIDForTesting.flatMap { c.controllerForTesting(tab: $0) }).view
+        let api = c.addWorkspaceForTesting(name: "api", folder: root)
+        let apiCanvas = try XCTUnwrap(
+            c.tabIDsForTesting(workspace: api).first.flatMap { c.controllerForTesting(tab: $0) }
+        ).view
+
+        c.requestCloseWorkspace(id: api)
+
+        XCTAssertEqual(c.workspaceIDsForTesting, [home])
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, home)
+        XCTAssertNotNil(homeCanvas.superview, "the active canvas never leaves the screen")
+        XCTAssertNil(apiCanvas.superview, "the closing workspace is never mounted")
+    }
+
+    func test_cmdOptW_throughTheInterceptor_closesTheWorkspace() throws {
+        let c = onScreen()
+        _ = openSecondWorkspace(c, named: "api")
+        let keys = KeyInterceptor()
+        keys.setKeymap(KeymapDefaults.map)
+        keys.onReservedChord = { c.handle($0) }
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.command, .option], timestamp: 0,
+                windowNumber: 0, context: nil, characters: "∑", charactersIgnoringModifiers: "w",
+                isARepeat: false, keyCode: 13))
+
+        XCTAssertNil(keys.route(event), "⌘⌥W is claimed, not passed to the pane")
+        XCTAssertEqual(c.workspaceIDsForTesting.count, 1)
+    }
 }
