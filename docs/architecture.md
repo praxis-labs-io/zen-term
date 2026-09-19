@@ -190,8 +190,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **Closing the last tab closes its workspace, and the last workspace closes the window.** A
   close that takes the window with it confirms first, so the window never goes unannounced.
   `closeWorkspace` is the single path a workspace goes through.
-- **Window stack, back to front:** canvas, tool float, tab bar and dock, toast stack,
-  modal card. Toasts sit above floats (the ⌘W guard toast is about the float); a card
+- **Window stack, back to front:** canvas, tool float, tab bar, dock and sidebar, toast
+  stack, modal card. Toasts sit above floats (the ⌘W guard toast is about the float); a card
   sits above toasts because it owns the keyboard. `closeModal()` in
   `select`/`addTab`/`closeTab` keeps a card from outliving its tab.
 - **Hidden drawers are detached, not `isHidden`**: a 0x0 view resizes its PTY to zero
@@ -229,6 +229,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 | Bottom and right drawers | `TabController` | per tab |
 | Focus Mode (internally `zoom`) | `TabController` + `PaneCanvasController` | per tab |
 | Fill Screen | `WindowController` | per window |
+| Sidebar | `SidebarController` | per window |
 | Tool floats | `ToolFloatController` | per window (Scratch per tab) |
 | Settings, palette, workspace picker | `WindowController.modal` | per window |
 | Toasts, confirms | `ToastPresenter` | per window |
@@ -237,6 +238,12 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **Drawers are tiled.** Sizes are multiplier constraints at `.defaultHigh`. A drawer
   slides in at its final size while the canvas resizes, so the terminal reflows once.
 - **Focus Mode is strict:** split, nav, resize and drawer toggles raise a toast.
+- **The sidebar owns the canvas's leading edge.** The canvas, tool floats and tab bar
+  start from `SidebarController.canvasLeadingAnchor`; modals and toasts stay window-wide.
+  Docking slides through `Motion.drawerSlide`, the drawers' path, holding the active
+  tab's grids so they reflow once. Its toggle sits on the window, outside the sliding
+  view, so it holds one spot docked and collapsed. Rows read the window's workspaces,
+  never a copy. A new window opens the way the last toggle left one, for the launch only.
 - **Fill Screen** is a maximize, not native fullscreen. `window-chrome = false` hides
   the traffic lights and `ChromeMetrics.topInset` follows.
 - **Tool floats are window-level** because a surface is one `NSView`. `ToolFloatController`
@@ -532,7 +539,7 @@ concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. It gates
 
 ## What does not exist
 
-- No left sidebar, no web panes, no built-in floats besides Scratch, no second backend
+- No web panes, no built-in floats besides Scratch, no second backend
   (DEBUG `makeOverride` is for test stubs).
 - No session restore or detach/reattach, no smooth scroll, no tab drag-to-reorder.
 - `surfaceDidRingBell` is emitted with no consumers.

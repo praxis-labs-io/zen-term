@@ -31,7 +31,7 @@ final class SettingsKeybindsSection: SettingsSection {
             ]
                 + (1...9).map { .selectTab($0) }
         ),
-        ("Window", [.fillScreen, .closeWindow, .dismissToast, .dismissAllToasts]),
+        ("Window", [.toggleSidebar, .fillScreen, .closeWindow, .dismissToast, .dismissAllToasts]),
         ("Drawers", [.toggleBottomDrawer, .toggleRightDrawer]),
         (
             "Surfaces & Tools",

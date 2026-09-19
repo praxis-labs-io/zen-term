@@ -2,7 +2,6 @@ import AppKit
 import TabKit
 
 final class ToggleDock: NSView {
-    private let paletteBtn: IconButton
     private let bottomBtn: IconButton
     private let rightBtn: IconButton
     private let scratchBtn: IconButton
@@ -25,7 +24,7 @@ final class ToggleDock: NSView {
     init(
         onNewTab: @escaping () -> Void,
         onSplitH: @escaping () -> Void, onSplitV: @escaping () -> Void,
-        onPalette: @escaping () -> Void, onBottom: @escaping () -> Void,
+        onBottom: @escaping () -> Void,
         onRight: @escaping () -> Void, onZoom: @escaping () -> Void,
         toolFloats: [ToolFloat], onToolFloat: @escaping (ToolFloat) -> Void,
         hiddenButtons: Set<ToolbarButton> = []
@@ -43,7 +42,6 @@ final class ToggleDock: NSView {
         let newTab = button("plus", "New tab", .newTab, onNewTab)
         let splitH = button("rectangle.split.1x2", "Split horizontally", .splitHorizontal, onSplitH)
         let splitV = button("rectangle.split.2x1", "Split vertically", .splitVertical, onSplitV)
-        paletteBtn = button("command", "Command palette", .toggleCommandPalette, onPalette)
         bottomBtn = button("rectangle.bottomthird.inset.filled", "Toggle bottom drawer", .toggleBottomDrawer, onBottom)
         rightBtn = button("rectangle.trailingthird.inset.filled", "Toggle right drawer", .toggleRightDrawer, onRight)
         let scratch = ToolFloat.scratch
@@ -56,7 +54,6 @@ final class ToggleDock: NSView {
             .newTab: newTab, .splitHorizontal: splitH, .splitVertical: splitV,
             .bottomDrawer: bottomBtn, .rightDrawer: rightBtn, .scratch: scratchBtn,
             .focusMode: zoomBtn,
-            .commandPalette: paletteBtn,
         ]
         allButtons = ToolbarButton.allCases.compactMap { fixedButtons[$0] }
         dividers = ToolbarButton.groups.map { _ in Self.divider() }
@@ -161,7 +158,7 @@ final class ToggleDock: NSView {
     }
 
     func render(
-        overlay: OverlayState, floatID: String?, paletteOpen: Bool, tab: TabID? = nil,
+        overlay: OverlayState, floatID: String?, tab: TabID? = nil,
         isLiveInBackground: (String) -> Bool = { _ in false },
         isFloatBusy: (String) -> Bool = { _ in false },
         drawerAttention: (DrawerEdge) -> SurfaceAttention = { _ in .idle },
@@ -172,7 +169,6 @@ final class ToggleDock: NSView {
             surfacedButtons = []
         }
 
-        paletteBtn.isActive = paletteOpen
         for (id, btn) in toolFloatBtns {
             let isLive = isLiveInBackground(id)
             let attention = floatAttention(id)
@@ -246,7 +242,7 @@ final class ToggleDock: NSView {
         for divider in dividers { divider.layer?.backgroundColor = dividerColor }
     }
 
-    private static func divider() -> NSView {
+    static func divider() -> NSView {
         let v = NSView()
         v.wantsLayer = true
         v.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor

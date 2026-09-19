@@ -39,7 +39,7 @@ final class CommandCatalogTests: XCTestCase {
                 "Clear Screen", "Paste Selection", "Write Screen to File",
                 "Write Screen to File, Copy Path", "Write Screen to File and Open",
                 "Close Pane",
-                "Fill Screen", "Close Window",
+                "Toggle Sidebar", "Fill Screen", "Close Window",
                 "Increase Font Size", "Decrease Font Size", "Reset Font Size",
                 "Dismiss Notice", "Dismiss All Notices",
             ])

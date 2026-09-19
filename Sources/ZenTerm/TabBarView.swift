@@ -29,8 +29,9 @@ final class TabBarView: NSView {
 
     static let chipFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
     // The rename editor matches it, or the text reflows on open.
-    fileprivate static let titleKern: CGFloat = 0.4
+    static let titleKern: CGFloat = 0.4
     fileprivate static let labelInset: CGFloat = 9
+    static let titleInset: CGFloat = leadingInset + labelInset
     static let maxChipWidth: CGFloat = 220
 
     fileprivate static var activeInk: NSColor { Theme.current.chrome.ink(.normal) }
@@ -107,6 +108,8 @@ final class TabBarView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     deinit { NotificationCenter.default.removeObserver(self) }
+
+    var chipBandCenterYAnchor: NSLayoutYAxisAnchor { scrollView.centerYAnchor }
 
     func render(_ items: [TabBarItem]) {
         lastItems = items

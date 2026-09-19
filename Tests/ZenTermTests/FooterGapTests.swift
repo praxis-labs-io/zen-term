@@ -23,6 +23,7 @@ final class FooterGapTests: WindowTestCase {
         controller = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
+        SidebarController.resetLastChoiceForTesting()
         try super.tearDownWithError()
     }
 
@@ -63,6 +64,7 @@ final class FooterGapTests: WindowTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700), initialCWD: nil)
         self.controller = controller
         controller.mountAndStart()
+        controller.handle(.toggleSidebar)
 
         let zero = try seam(controller)
         XCTAssertEqual(

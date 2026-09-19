@@ -13,7 +13,7 @@ final class KeybindParserTests: XCTestCase {
             .splitVertical, .splitHorizontal, .navLeft, .navRight, .navUp, .navDown,
             .closePane, .closeTab, .closeWindow, .newTab, .newWindow, .prevTab, .nextTab,
             .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
-            .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
+            .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen, .toggleSidebar,
             .toggleRepoPicker, .createWorktree, .toggleCommandPalette, .openSettings,
             .reloadConfig, .checkForUpdates,
             .reportIssue, .toggleScrollMode, .toggleSearch,
@@ -42,6 +42,11 @@ final class KeybindParserTests: XCTestCase {
         XCTAssertEqual(action(from: "search_previous"), .findPrevious)
         XCTAssertEqual(action(from: "find_next"), .findNext)
         XCTAssertEqual(action(from: "find_previous"), .findPrevious)
+    }
+
+    func test_toggleSidebar_token() {
+        XCTAssertEqual(KeyInterceptor.ReservedChord.toggleSidebar.actionToken, "toggle_sidebar")
+        XCTAssertEqual(action(from: "toggle_sidebar"), .toggleSidebar)
     }
 
     func test_fillScreen_token() {

@@ -52,6 +52,8 @@ final class RecordingSurface: NSObject, TerminalSurface {
     func terminate() { terminated = true }
     private(set) var focusRenders: [Bool] = []
     func setFocused(_ focused: Bool) { focusRenders.append(focused) }
+    private(set) var sizeSyncHolds = 0
+    func setSizeSyncSuspended(_ suspended: Bool) { sizeSyncHolds = max(0, sizeSyncHolds + (suspended ? 1 : -1)) }
     private(set) var pastes: [String] = []
     func paste(_ text: String) { pastes.append(text) }
     var selectionText: String?

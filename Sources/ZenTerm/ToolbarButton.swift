@@ -8,11 +8,11 @@ enum ToolbarButton: String, CaseIterable {
     case scratch = "scratch"
     case focusMode = "focus-mode"
     case commandPalette = "command-palette"
+    case settings = "settings"
 
     static let groups: [[ToolbarButton]] = [
         [.newTab],
         [.splitHorizontal, .splitVertical, .bottomDrawer, .rightDrawer, .scratch, .focusMode],
-        [.commandPalette],
     ]
 
     var displayName: String {
@@ -25,6 +25,7 @@ enum ToolbarButton: String, CaseIterable {
         case .scratch: return "Scratch"
         case .focusMode: return "Focus mode"
         case .commandPalette: return "Command palette"
+        case .settings: return "Settings"
         }
     }
 }

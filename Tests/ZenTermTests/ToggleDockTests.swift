@@ -14,7 +14,7 @@ final class ToggleDockTests: XCTestCase {
 
     private func makeDock(_ floats: [ToolFloat]) -> ToggleDock {
         ToggleDock(
-            onNewTab: {}, onSplitH: {}, onSplitV: {}, onPalette: {}, onBottom: {}, onRight: {},
+            onNewTab: {}, onSplitH: {}, onSplitV: {}, onBottom: {}, onRight: {},
             onZoom: {}, toolFloats: floats, onToolFloat: { _ in })
     }
 
@@ -45,13 +45,13 @@ final class ToggleDockTests: XCTestCase {
 
         var overlay = OverlayState()
         overlay.bottomBusy = true
-        dock.render(overlay: overlay, floatID: nil, paletteOpen: false)
+        dock.render(overlay: overlay, floatID: nil)
         XCTAssertTrue(dock.bottomActivityForTesting, "a busy bottom drawer must dot its toggle")
         XCTAssertFalse(dock.rightActivityForTesting)
 
         overlay.bottomBusy = false
         overlay.rightBusy = true
-        dock.render(overlay: overlay, floatID: nil, paletteOpen: false)
+        dock.render(overlay: overlay, floatID: nil)
         XCTAssertFalse(dock.bottomActivityForTesting)
         XCTAssertTrue(dock.rightActivityForTesting)
     }
@@ -60,7 +60,7 @@ final class ToggleDockTests: XCTestCase {
         let dock = makeDock([])
 
         dock.render(
-            overlay: OverlayState(), floatID: nil, paletteOpen: false, tab: nil,
+            overlay: OverlayState(), floatID: nil, tab: nil,
             drawerAttention: { $0 == .right ? .waiting : .idle })
 
         XCTAssertTrue(
@@ -74,12 +74,12 @@ final class ToggleDockTests: XCTestCase {
         let chrome = Theme.current.chrome
 
         dock.render(
-            overlay: OverlayState(), floatID: nil, paletteOpen: false, tab: nil,
+            overlay: OverlayState(), floatID: nil, tab: nil,
             drawerAttention: { _ in .waiting })
         XCTAssertEqual(dock.rightActivityColorForTesting, chrome.attention.nsColor)
 
         dock.render(
-            overlay: OverlayState(), floatID: nil, paletteOpen: false, tab: nil,
+            overlay: OverlayState(), floatID: nil, tab: nil,
             drawerAttention: { _ in .completed })
         XCTAssertEqual(dock.rightActivityColorForTesting, chrome.positive.nsColor)
     }
@@ -90,7 +90,7 @@ final class ToggleDockTests: XCTestCase {
         overlay.rightBusy = true
 
         dock.render(
-            overlay: overlay, floatID: nil, paletteOpen: false, tab: nil,
+            overlay: overlay, floatID: nil, tab: nil,
             drawerAttention: { _ in .working })
 
         XCTAssertTrue(dock.rightActivityForTesting)
@@ -103,7 +103,7 @@ final class ToggleDockTests: XCTestCase {
         let dock = makeDock([float("dev")])
 
         dock.render(
-            overlay: OverlayState(), floatID: nil, paletteOpen: false, tab: nil,
+            overlay: OverlayState(), floatID: nil, tab: nil,
             floatAttention: { $0 == "dev" ? .waiting : .idle })
 
         XCTAssertEqual(dock.dottedToolFloatIDsForTesting, ["dev"])
@@ -114,13 +114,13 @@ final class ToggleDockTests: XCTestCase {
         var overlay = OverlayState()
         overlay.isBottomOpen = true
         overlay.bottomBusy = true
-        dock.render(overlay: overlay, floatID: nil, paletteOpen: false)
+        dock.render(overlay: overlay, floatID: nil)
         XCTAssertTrue(dock.bottomActivityForTesting)
     }
 
     func test_render_noDotWhenIdle() {
         let dock = makeDock([])
-        dock.render(overlay: OverlayState(), floatID: nil, paletteOpen: false)
+        dock.render(overlay: OverlayState(), floatID: nil)
         XCTAssertFalse(dock.bottomActivityForTesting)
         XCTAssertFalse(dock.rightActivityForTesting)
     }
@@ -129,7 +129,7 @@ final class ToggleDockTests: XCTestCase {
         let dock = makeDock([float("dev"), float("top")])
 
         dock.render(
-            overlay: OverlayState(), floatID: "dev", paletteOpen: false,
+            overlay: OverlayState(), floatID: "dev",
             isLiveInBackground: { $0 == "top" })
 
         XCTAssertEqual(dock.dottedToolFloatIDsForTesting, ["top"])
@@ -137,18 +137,18 @@ final class ToggleDockTests: XCTestCase {
 
     func test_render_noLiveFloats_noDots() {
         let dock = makeDock([float("dev")])
-        dock.render(overlay: OverlayState(), floatID: nil, paletteOpen: false)
+        dock.render(overlay: OverlayState(), floatID: nil)
         XCTAssertTrue(dock.dottedToolFloatIDsForTesting.isEmpty)
     }
 
     func test_render_dotClearsWhenTheFloatIsNoLongerLive() {
         let dock = makeDock([float("top")])
         dock.render(
-            overlay: OverlayState(), floatID: nil, paletteOpen: false, isLiveInBackground: { _ in true })
+            overlay: OverlayState(), floatID: nil, isLiveInBackground: { _ in true })
         XCTAssertEqual(dock.dottedToolFloatIDsForTesting, ["top"])
 
         dock.render(
-            overlay: OverlayState(), floatID: nil, paletteOpen: false, isLiveInBackground: { _ in false })
+            overlay: OverlayState(), floatID: nil, isLiveInBackground: { _ in false })
 
         XCTAssertTrue(dock.dottedToolFloatIDsForTesting.isEmpty, "a re-render after exit clears the dot")
     }
@@ -167,7 +167,7 @@ final class ToggleDockTests: XCTestCase {
     func test_scratchButton_togglesTheBuiltInFloat() {
         var toggled: [String] = []
         let dock = ToggleDock(
-            onNewTab: {}, onSplitH: {}, onSplitV: {}, onPalette: {}, onBottom: {}, onRight: {},
+            onNewTab: {}, onSplitH: {}, onSplitV: {}, onBottom: {}, onRight: {},
             onZoom: {}, toolFloats: [], onToolFloat: { toggled.append($0.id) })
 
         press("Scratch", in: dock)
@@ -180,7 +180,7 @@ final class ToggleDockTests: XCTestCase {
         var overlay = OverlayState()
         overlay.isBottomOpen = true
 
-        dock.render(overlay: overlay, floatID: "scratch", paletteOpen: false)
+        dock.render(overlay: overlay, floatID: "scratch")
 
         XCTAssertTrue(dock.scratchActiveForTesting, "the button IS the card, so it must stay lit")
         XCTAssertFalse(dock.scratchActivityForTesting, "shown, so no background dot")
@@ -189,7 +189,7 @@ final class ToggleDockTests: XCTestCase {
     func test_render_scratchButtonIsDarkWhileAnotherFloatsCardIsUp() {
         let dock = makeDock([float("dev")])
 
-        dock.render(overlay: OverlayState(), floatID: "dev", paletteOpen: false)
+        dock.render(overlay: OverlayState(), floatID: "dev")
 
         XCTAssertFalse(dock.scratchActiveForTesting)
     }
@@ -198,11 +198,11 @@ final class ToggleDockTests: XCTestCase {
         let dock = makeDock([])
 
         dock.render(
-            overlay: OverlayState(), floatID: nil, paletteOpen: false,
+            overlay: OverlayState(), floatID: nil,
             isLiveInBackground: { $0 == "scratch" })
         XCTAssertTrue(dock.scratchActivityForTesting)
 
-        dock.render(overlay: OverlayState(), floatID: nil, paletteOpen: false)
+        dock.render(overlay: OverlayState(), floatID: nil)
         XCTAssertFalse(dock.scratchActivityForTesting, "a re-render after exit clears the dot")
     }
 
@@ -213,11 +213,10 @@ final class ToggleDockTests: XCTestCase {
     private static let fixedDefault = [
         "New tab", "│",
         "Split horizontally", "Split vertically", "Toggle bottom drawer", "Toggle right drawer",
-        "Scratch", "Focus mode", "│",
-        "Command palette",
+        "Scratch", "Focus mode",
     ]
 
-    func test_defaultLayout_groupsWithTwoDividers_noTrailingDivider() {
+    func test_defaultLayout_groupsWithOneDivider_noTrailingDivider() {
         XCTAssertEqual(makeDock([]).visibleLayoutForTesting, Self.fixedDefault)
     }
 
@@ -235,7 +234,7 @@ final class ToggleDockTests: XCTestCase {
             [
                 "New tab", "│",
                 "Split horizontally", "Toggle bottom drawer", "Toggle right drawer",
-                "Focus mode", "│", "Command palette",
+                "Focus mode",
             ])
 
         dock.setHiddenButtons([])
@@ -243,12 +242,12 @@ final class ToggleDockTests: XCTestCase {
     }
 
     func test_emptyMiddleGroup_collapsesToOneDivider() {
-        let dock = makeDock([])
+        let dock = makeDock([float("dev")])
         dock.setHiddenButtons([
             .splitHorizontal, .splitVertical, .bottomDrawer, .rightDrawer, .scratch, .focusMode,
         ])
         XCTAssertEqual(
-            dock.visibleLayoutForTesting, ["New tab", "│", "Command palette"])
+            dock.visibleLayoutForTesting, ["New tab", "│", "dev"])
     }
 
     func test_hiddenFirstGroup_leavesNoLeadingDivider() {
@@ -258,7 +257,7 @@ final class ToggleDockTests: XCTestCase {
             dock.visibleLayoutForTesting,
             [
                 "Split horizontally", "Split vertically", "Toggle bottom drawer",
-                "Toggle right drawer", "Scratch", "Focus mode", "│", "Command palette",
+                "Toggle right drawer", "Scratch", "Focus mode",
             ])
     }
 
@@ -286,7 +285,7 @@ final class ToggleDockTests: XCTestCase {
         dock.setToolFloats([hidden])
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
 
-        dock.render(overlay: OverlayState(), floatID: nil, paletteOpen: false)
+        dock.render(overlay: OverlayState(), floatID: nil)
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
     }
 
@@ -297,12 +296,12 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
 
         dock.render(
-            overlay: OverlayState(), floatID: nil, paletteOpen: false,
+            overlay: OverlayState(), floatID: nil,
             isLiveInBackground: { $0 == "dev" })
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault + ["│", "dev"])
         XCTAssertEqual(dock.dottedToolFloatIDsForTesting, ["dev"])
 
-        dock.render(overlay: OverlayState(), floatID: nil, paletteOpen: false)
+        dock.render(overlay: OverlayState(), floatID: nil)
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault, "the handle leaves with the process")
     }
 
@@ -311,7 +310,7 @@ final class ToggleDockTests: XCTestCase {
         hidden.showsInToolbar = false
         let dock = makeDock([hidden])
 
-        dock.render(overlay: OverlayState(), floatID: "dev", paletteOpen: false)
+        dock.render(overlay: OverlayState(), floatID: "dev")
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault + ["│", "dev"])
     }
 
@@ -323,7 +322,7 @@ final class ToggleDockTests: XCTestCase {
         tab: TabID? = nil, scratchBusy: Bool = false, scratchLive: Bool = false
     ) {
         dock.render(
-            overlay: overlay, floatID: floatID, paletteOpen: false, tab: tab,
+            overlay: overlay, floatID: floatID, tab: tab,
             isLiveInBackground: { scratchLive && $0 == ToolFloat.scratch.id },
             isFloatBusy: { scratchBusy && $0 == ToolFloat.scratch.id })
     }
@@ -347,7 +346,7 @@ final class ToggleDockTests: XCTestCase {
         dock.setHiddenButtons([.bottomDrawer])
 
         dock.render(
-            overlay: OverlayState(), floatID: nil, paletteOpen: false, tab: nil,
+            overlay: OverlayState(), floatID: nil, tab: nil,
             drawerAttention: { $0 == .bottom ? .completed : .idle })
 
         XCTAssertEqual(
@@ -360,7 +359,7 @@ final class ToggleDockTests: XCTestCase {
         let dock = makeDock([])
         dock.setHiddenButtons([.bottomDrawer])
         dock.render(
-            overlay: OverlayState(), floatID: nil, paletteOpen: false, tab: nil,
+            overlay: OverlayState(), floatID: nil, tab: nil,
             drawerAttention: { $0 == .bottom ? .waiting : .idle })
 
         render(dock)
@@ -479,15 +478,13 @@ final class ToggleDockTests: XCTestCase {
         dock.setHiddenButtons([
             .splitHorizontal, .splitVertical, .bottomDrawer, .rightDrawer, .scratch, .focusMode,
         ])
-        XCTAssertEqual(dock.visibleLayoutForTesting, ["New tab", "│", "Command palette"])
+        XCTAssertEqual(dock.visibleLayoutForTesting, ["New tab"])
 
         render(dock, OverlayState(rightBusy: true))
-        XCTAssertEqual(
-            dock.visibleLayoutForTesting,
-            ["New tab", "│", "Toggle right drawer", "│", "Command palette"])
+        XCTAssertEqual(dock.visibleLayoutForTesting, ["New tab", "│", "Toggle right drawer"])
     }
 
-    func test_toolbarButtonGroups_coverEveryCaseInOrder() {
-        XCTAssertEqual(ToolbarButton.groups.flatMap { $0 }, ToolbarButton.allCases)
+    func test_toolbarGroupsThenSidebarFooter_coverEveryCaseInOrder() {
+        XCTAssertEqual(ToolbarButton.groups.flatMap { $0 } + [.commandPalette, .settings], ToolbarButton.allCases)
     }
 }
