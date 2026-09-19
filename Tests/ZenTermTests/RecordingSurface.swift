@@ -4,6 +4,7 @@ import TerminalKit
 final class RecordingSurface: NSObject, TerminalSurface {
     final class ResizingView: NSView {
         var onResize: (() -> Void)?
+        override var acceptsFirstResponder: Bool { true }
         override func setFrameSize(_ newSize: NSSize) {
             super.setFrameSize(newSize)
             onResize?()
@@ -46,6 +47,7 @@ final class RecordingSurface: NSObject, TerminalSurface {
 
     private(set) var focusCount = 0
     func focus() {
+        resizingView.window?.makeFirstResponder(resizingView)
         isFocused = true
         focusCount += 1
     }
