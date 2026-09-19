@@ -12,6 +12,7 @@ struct SidebarRowItem: Equatable {
     let branch: String?
     let number: Int?
     let isActive: Bool
+    let makesWorktrees: Bool
 }
 
 final class SidebarView: NSView {
@@ -20,6 +21,7 @@ final class SidebarView: NSView {
     private static let captionHeight: CGFloat = 28
     private static let captionInset: CGFloat = 10
     private static let addInset: CGFloat = 4
+    private static let newWorktreeSize = NSSize(width: 20, height: 20)
 
     private let caption = FieldCaption("Workspaces", required: false)
     private let addButton: IconButton
@@ -28,9 +30,14 @@ final class SidebarView: NSView {
     private var numbers: [SidebarRowID: Int] = [:]
     var onLeave: (() -> Void)?
     private let onActivate: (SidebarRowID) -> Void
+    private let onNewWorktree: (WorkspaceID) -> Void
 
-    init(onActivate: @escaping (SidebarRowID) -> Void, onAdd: @escaping () -> Void) {
+    init(
+        onActivate: @escaping (SidebarRowID) -> Void, onNewWorktree: @escaping (WorkspaceID) -> Void,
+        onAdd: @escaping () -> Void
+    ) {
         self.onActivate = onActivate
+        self.onNewWorktree = onNewWorktree
         addButton = SidebarFooter.button("plus", "Open workspace", .toggleRepoPicker, onAdd)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -75,6 +82,7 @@ final class SidebarView: NSView {
             row.setTitle(item.name)
             row.setDetail(item.branch)
             row.setSelected(item.isActive)
+            setNewWorktreeButton(on: row, for: item)
         }
         if removedFocusedRow { onLeave?() }
     }
@@ -97,6 +105,16 @@ final class SidebarView: NSView {
         row.onEscape = { [weak self] in self?.onLeave?() }
         rows[item.id] = row
         return row
+    }
+
+    private func setNewWorktreeButton(on row: SettingsNavRow, for item: SidebarRowItem) {
+        guard item.makesWorktrees, case .workspace(let id) = item.id else { return row.setHoverAccessory(nil) }
+        guard row.hoverAccessory == nil else { return }
+        row.setHoverAccessory(
+            IconButton(
+                symbol: "plus", size: Self.newWorktreeSize, pointSize: 11, accessibilityLabel: "New worktree",
+                shortcut: { CommandCatalog.spec(for: .createWorktree).shortcut }
+            ) { [weak self] in self?.onNewWorktree(id) })
     }
 
     var hasFocus: Bool { rows.values.contains { KeyboardFocus.isFocused($0, in: window) } }
@@ -126,7 +144,10 @@ final class SidebarView: NSView {
     func reapplyTheme() {
         caption.reapplyTheme()
         addButton.reapplyTheme()
-        for row in rows.values { row.reapplyTheme() }
+        for row in rows.values {
+            row.reapplyTheme()
+            (row.hoverAccessory as? IconButton)?.reapplyTheme()
+        }
     }
 
     var addButtonForTesting: IconButton { addButton }

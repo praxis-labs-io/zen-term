@@ -15,6 +15,7 @@ final class SidebarController {
         let folder: URL?
         let number: Int?
         let isActive: Bool
+        let isConfigured: Bool
     }
 
     // 8 of sidebar padding plus the footer's 6 inset, so palette and Settings follow at the footer's rhythm.
@@ -39,9 +40,10 @@ final class SidebarController {
 
     init(
         onPalette: @escaping () -> Void, onSettings: @escaping () -> Void, onToggle: @escaping () -> Void,
-        onActivate: @escaping (SidebarRowID) -> Void, onAdd: @escaping () -> Void
+        onActivate: @escaping (SidebarRowID) -> Void, onNewWorktree: @escaping (WorkspaceID) -> Void,
+        onAdd: @escaping () -> Void
     ) {
-        view = SidebarView(onActivate: onActivate, onAdd: onAdd)
+        view = SidebarView(onActivate: onActivate, onNewWorktree: onNewWorktree, onAdd: onAdd)
         footer = SidebarFooter(onPalette: onPalette, onSettings: onSettings)
         toggleButton = SidebarFooter.button("sidebar.left", "Toggle sidebar", .toggleSidebar, onToggle)
         lead = CollapsedSidebarLead(
@@ -150,11 +152,11 @@ final class SidebarController {
                 let kind = workspace.origin.map { Entry.Kind.worktree(fallbackName: $0.name) } ?? .workspace
                 return Entry(
                     row: .workspace(id), kind: kind, name: workspace.name, folder: workspace.folder,
-                    number: numbers[id], isActive: workspace === active)
+                    number: numbers[id], isActive: workspace === active, isConfigured: !workspace.isDefault)
             case .ghost(let parent):
                 return Entry(
                     row: .ghost(parent.path.standardizedFileURL.path), kind: .ghost, name: parent.title,
-                    folder: nil, number: nil, isActive: false)
+                    folder: nil, number: nil, isActive: false, isConfigured: true)
             }
         }
         let foldersChanged = next.compactMap(\.folder) != entries.compactMap(\.folder)
@@ -186,16 +188,18 @@ final class SidebarController {
         let branch = entry.folder.flatMap(GitRepoStatus.branch)
         switch entry.kind {
         case .workspace:
+            let isRepo = entry.folder.flatMap(GitRepoStatus.known) == true
             return SidebarRowItem(
                 id: entry.row, variant: .standard, name: entry.name, branch: branch, number: entry.number,
-                isActive: entry.isActive)
+                isActive: entry.isActive, makesWorktrees: entry.isConfigured && isRepo)
         case .worktree(let fallbackName):
             return SidebarRowItem(
                 id: entry.row, variant: .nested(symbol: worktreeSymbol), name: branch ?? fallbackName,
-                branch: nil, number: entry.number, isActive: entry.isActive)
+                branch: nil, number: entry.number, isActive: entry.isActive, makesWorktrees: false)
         case .ghost:
             return SidebarRowItem(
-                id: entry.row, variant: .faint, name: entry.name, branch: nil, number: nil, isActive: false)
+                id: entry.row, variant: .faint, name: entry.name, branch: nil, number: nil, isActive: false,
+                makesWorktrees: false)
         }
     }
 

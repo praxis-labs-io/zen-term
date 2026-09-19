@@ -350,6 +350,7 @@ final class WindowController: NSObject {
         var onSettings: () -> Void = {}
         var onToggleSidebar: () -> Void = {}
         var onActivateRow: (SidebarRowID) -> Void = { _ in }
+        var onNewWorktree: (WorkspaceID) -> Void = { _ in }
         var onOpenWorkspace: () -> Void = {}
         var onBottom: () -> Void = {}
         var onRight: () -> Void = {}
@@ -364,7 +365,7 @@ final class WindowController: NSObject {
             hiddenButtons: GeneralConfig.current.hiddenToolbarButtons)
         sidebar = SidebarController(
             onPalette: { onPalette() }, onSettings: { onSettings() }, onToggle: { onToggleSidebar() },
-            onActivate: { onActivateRow($0) }, onAdd: { onOpenWorkspace() })
+            onActivate: { onActivateRow($0) }, onNewWorktree: { onNewWorktree($0) }, onAdd: { onOpenWorkspace() })
         super.init()
         nextTabID = 2
 
@@ -379,6 +380,7 @@ final class WindowController: NSObject {
         onToggleSidebar = { [weak self] in self?.handle(.toggleSidebar) }
         sidebar.onLeave = { [weak self] in self?.restoreFocusToActive() }
         onActivateRow = { [weak self] in self?.activateFromSidebar($0) }
+        onNewWorktree = { [weak self] in self?.createWorktreeFromSidebar($0) }
         onOpenWorkspace = { [weak self] in self?.handle(.toggleRepoPicker) }
         onBottom = { [weak self] in self?.handle(.toggleBottomDrawer) }
         onRight = { [weak self] in self?.handle(.toggleRightDrawer) }
@@ -1004,6 +1006,38 @@ final class WindowController: NSObject {
         guard let picker = modal?.overlay as? RepoPickerOverlay, let target = picker.createTarget
         else { return }
         closeModal()
+        presentNewWorktree(
+            target, onCancel: { [weak self] in self?.reopenRepoPicker() },
+            afterEdit: { [weak self] in self?.reopenRepoPicker() })
+    }
+
+    // Reads the workspace's entry fresh, so the card copies what the file says now.
+    private func createWorktreeFromSidebar(_ id: WorkspaceID) {
+        guard let workspace = workspaces.first(where: { $0.id == id }) else { return }
+        closeModal()
+        pendingModal = .worktreeForm
+        let folder = workspace.folder.standardizedFileURL.path
+        ConfigLoader.loadWorkspaces { [weak self] entries in
+            guard let self, self.pendingModal == .worktreeForm else { return }
+            guard let entry = entries.first(where: { $0.path.standardizedFileURL.path == folder }) else {
+                self.pendingModal = nil
+                self.toasts.show(
+                    ToastContent(
+                        variant: .warning, title: "Couldn't Open New Worktree",
+                        message: "\(workspace.name) is no longer in the workspaces file."))
+                return
+            }
+            self.presentNewWorktree(
+                RepoPickerOverlay.CreateTarget(workspace: entry, repo: entry.path),
+                onCancel: { [weak self] in self?.closeModal() },
+                afterEdit: { [weak self] in self?.createWorktreeFromSidebar(id) })
+        }
+    }
+
+    private func presentNewWorktree(
+        _ target: RepoPickerOverlay.CreateTarget, onCancel: @escaping () -> Void,
+        afterEdit: @escaping () -> Void
+    ) {
         pendingModal = .worktreeForm
         GitRepoStatus.createOptions(in: target.repo) { [weak self] options in
             guard let self, self.pendingModal == .worktreeForm else { return }
@@ -1014,12 +1048,10 @@ final class WindowController: NSObject {
                 onSubmit: { [weak self] request in
                     self?.createWorktree(request, from: target)
                 },
-                onCancel: { [weak self] in self?.reopenRepoPicker() },
+                onCancel: onCancel,
                 onDismiss: { [weak self] in self?.closeModal() },
                 onEditWorkspace: { [weak self] in
-                    self?.openWorkspaceForm(
-                        editing: target.workspace,
-                        returningTo: { [weak self] in self?.reopenRepoPicker() })
+                    self?.openWorkspaceForm(editing: target.workspace, returningTo: afterEdit)
                 }
             )
             self.presentModal(form, kind: .worktreeForm)

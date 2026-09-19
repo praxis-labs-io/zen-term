@@ -25,12 +25,15 @@ final class SettingsNavRow: NSView {
     private var trackingArea: NSTrackingArea?
     private var isSelected = false
     private var isFocusedStop = false
-    private var isHovered = false
+    private var isHovered = false { didSet { refreshAccessory() } }
+    private(set) var hoverAccessory: NSView?
 
     private static let detailMaxWidth: CGFloat = 96
     private static let nestedIndent: CGFloat = 24
     private static let nestedGlyphGap: CGFloat = 6
     private static let nestedGlyphSize: CGFloat = 11
+    // The frame pulls a 20pt accessory 5pt past the detail's inset, so its glyph sits where the detail ends.
+    private static let accessoryInset: CGFloat = 5
 
     init(
         title: String, variant: Variant = .standard, focusesOnClick: Bool = true,
@@ -96,6 +99,26 @@ final class SettingsNavRow: NSView {
         setAccessibilitySelected(selected)
         refreshLabelInk()
         refreshFill()
+    }
+
+    func setHoverAccessory(_ accessory: NSView?) {
+        guard accessory !== hoverAccessory else { return }
+        hoverAccessory?.removeFromSuperview()
+        hoverAccessory = accessory
+        if let accessory {
+            accessory.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(accessory)
+            NSLayoutConstraint.activate([
+                accessory.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.accessoryInset),
+                accessory.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+        }
+        refreshAccessory()
+    }
+
+    private func refreshAccessory() {
+        hoverAccessory?.isHidden = !isHovered
+        detailLabel.isHidden = isHovered && hoverAccessory != nil
     }
 
     func setTitle(_ title: String) {
