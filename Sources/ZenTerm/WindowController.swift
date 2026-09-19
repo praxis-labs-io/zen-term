@@ -2431,7 +2431,7 @@ final class WindowController: NSObject {
     }
 
     private func place(of tab: TabID, in workspace: WorkspaceController) -> [Int] {
-        [workspaces.firstIndex { $0 === workspace } ?? 0, workspace.tabIDs.firstIndex(of: tab) ?? 0]
+        [order.position(of: workspace.id) ?? 0, workspace.tabIDs.firstIndex(of: tab) ?? 0]
     }
 
     private func jumpToAgent(_ surface: SurfaceID) {

@@ -359,6 +359,23 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(keycaps, ["⌘⌥4"], "Beta sits fourth in the sidebar, and ⌘⌥4 is what reaches it")
     }
 
+    func test_agentsSharingAState_listInSidebarOrder_notOpenOrder() throws {
+        let c = makeWindow()
+        try openAlphaBetaThenAlphasWorktree(in: c)
+        XCTAssertEqual(spawned.count, 4, "precondition: one surface per workspace, in open order")
+        c.activateWorkspaceForTesting(c.workspaceIDsForTesting[0])
+
+        for agent in [spawned[2], spawned[3]] {
+            agent.delegate?.surface(agent, progressDidChange: TerminalProgress(state: .indeterminate, fraction: nil))
+        }
+        drainMainQueue()
+
+        let places = c.sidebarForTesting.view.agentRowsForTesting.compactMap(\.itemForTesting?.detail)
+        XCTAssertEqual(places.count, 2)
+        XCTAssertTrue(places[0].hasSuffix("Alpha: feature/one"), "\(places)")
+        XCTAssertTrue(places[1].hasSuffix("Beta"), "\(places)")
+    }
+
     func test_collapsedLead_readsWorkspaceSlashWorktree_whileAWorktreeIsActive() throws {
         let c = makeWindow()
         try openAlphaWorktree(branch: "feature/one", in: c)
