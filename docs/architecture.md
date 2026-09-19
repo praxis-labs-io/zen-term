@@ -261,6 +261,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   the active tab, so panes, drawers and the nvim navigator all reach it. ⌃⌘S only docks
   and collapses. ↵ activates a row as a click does. Rows take focus from the keyboard only
   (`SettingsNavRow.takeKeyboardFocus`): AppKit promotes any clicked view that accepts.
+  A right-click or ⌃-click opens `SidebarRowMenu`, a `ListPopover` that never switches
+  workspaces; a local event monitor closes it on Esc or a click outside it.
 - **Fill Screen** is a maximize, not native fullscreen. `window-chrome = false` hides
   the traffic lights and `ChromeMetrics.topInset` follows.
 - **Tool floats are window-level** because a surface is one `NSView`. `ToolFloatController`

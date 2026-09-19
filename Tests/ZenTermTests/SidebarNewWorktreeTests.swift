@@ -235,6 +235,103 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertTrue(interceptor(for: c).route(event) === event)
     }
 
+    private func mouse(
+        _ type: NSEvent.EventType, at point: NSPoint, flags: NSEvent.ModifierFlags = [], in c: WindowController
+    ) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: type, location: point, modifierFlags: flags, timestamp: 0,
+                windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+    }
+
+    private func rightClick(_ row: SettingsNavRow, in c: WindowController) throws {
+        row.rightMouseDown(with: try mouse(.rightMouseDown, at: .zero, in: c))
+    }
+
+    private var menu: SidebarRowMenu { controller!.sidebarForTesting.view.rowMenu }
+
+    func test_rightClickingAWorkspaceRow_opensItsMenu_withoutSwitching() throws {
+        let c = makeWindow()
+        let home = c.activeWorkspaceIDForTesting
+        let row = try openRepoWorkspace(in: c)
+
+        try rightClick(row, in: c)
+
+        XCTAssertTrue(menu.isOpen)
+        XCTAssertEqual(menu.itemViewsForTesting.map(\.title), ["New Worktree…"])
+        XCTAssertEqual(menu.itemViewsForTesting.map(\.shortcutForTesting), ["⌥⏎"])
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, home, "a right-click never switches")
+    }
+
+    func test_controlClickingAWorkspaceRow_opensItsMenu_withoutSwitching() throws {
+        let c = makeWindow()
+        let home = c.activeWorkspaceIDForTesting
+        let row = try openRepoWorkspace(in: c)
+
+        row.mouseDown(with: try mouse(.leftMouseDown, at: .zero, flags: .control, in: c))
+
+        XCTAssertTrue(menu.isOpen)
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, home)
+    }
+
+    func test_choosingNewWorktreeFromTheMenu_opensTheCard_andClosesTheMenu() throws {
+        let c = makeWindow()
+        let row = try openRepoWorkspace(in: c)
+        try rightClick(row, in: c)
+        let item = try XCTUnwrap(menu.itemViewsForTesting.first)
+
+        try clickThroughTheWindow(at: item, in: c)
+
+        _ = try newWorktreeCard(in: c)
+        XCTAssertFalse(menu.isOpen)
+    }
+
+    func test_escape_closesTheMenu_andGoesNoFurther() throws {
+        let c = makeWindow()
+        try rightClick(try openRepoWorkspace(in: c), in: c)
+        let escape = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: c.window.windowNumber, context: nil, characters: "\u{1b}",
+                charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53))
+
+        XCTAssertNil(menu.filter(escape))
+
+        XCTAssertFalse(menu.isOpen)
+        XCTAssertTrue(modals(SidebarRowMenuItemView.self, in: c).isEmpty)
+    }
+
+    func test_aClickElsewhere_closesTheMenu_andStillLands() throws {
+        let c = makeWindow()
+        try rightClick(try openRepoWorkspace(in: c), in: c)
+        let click = try mouse(.leftMouseDown, at: NSPoint(x: 600, y: 300), in: c)
+
+        XCTAssertTrue(menu.filter(click) === click)
+
+        XCTAssertFalse(menu.isOpen)
+    }
+
+    func test_aClickOnTheMenu_leavesItForTheItem() throws {
+        let c = makeWindow()
+        try rightClick(try openRepoWorkspace(in: c), in: c)
+        let item = try XCTUnwrap(menu.itemViewsForTesting.first)
+        let click = try mouse(
+            .leftMouseDown, at: item.convert(NSPoint(x: item.bounds.midX, y: item.bounds.midY), to: nil), in: c)
+
+        XCTAssertTrue(menu.filter(click) === click)
+
+        XCTAssertTrue(menu.isOpen)
+    }
+
+    func test_rowsWithNothingToOffer_openNoMenu() throws {
+        let c = makeWindow()
+        _ = try openRepoWorkspace(in: c)
+
+        try rightClick(rows(of: c)[0], in: c)
+
+        XCTAssertFalse(menu.isOpen, "Home has no config entry")
+    }
+
     private func drainGitStatus() {
         var landed = false
         GitRepoStatus.refresh([repo]) { landed = true }

@@ -28,6 +28,8 @@ final class SidebarView: NSView {
     private let rowStack = NSStackView()
     private var rows: [SidebarRowID: SettingsNavRow] = [:]
     private var numbers: [SidebarRowID: Int] = [:]
+    private var worktreeParents: Set<WorkspaceID> = []
+    let rowMenu = SidebarRowMenu()
     var onLeave: (() -> Void)?
     private let onActivate: (SidebarRowID) -> Void
     private let onNewWorktree: (WorkspaceID) -> Void
@@ -67,10 +69,16 @@ final class SidebarView: NSView {
         var removedFocusedRow = false
         for (id, row) in rows where byID[id]?.variant != row.variant {
             removedFocusedRow = removedFocusedRow || KeyboardFocus.isFocused(row, in: window)
+            if rowMenu.anchor === row { rowMenu.close() }
             row.removeFromSuperview()
             rows[id] = nil
         }
         numbers = byID.compactMapValues(\.number)
+        worktreeParents = Set(
+            items.compactMap {
+                guard $0.makesWorktrees, case .workspace(let id) = $0.id else { return nil }
+                return id
+            })
         for (index, item) in items.enumerated() {
             let row = self.row(for: item)
             if rowStack.arrangedSubviews.firstIndex(of: row) != index {
@@ -103,6 +111,10 @@ final class SidebarView: NSView {
         row.onArrowDown = { [weak self] in self?.moveFocus(1) }
         row.onReturn = { [weak self] in self?.onActivate(id) }
         row.onEscape = { [weak self] in self?.onLeave?() }
+        row.onSecondaryClick = { [weak self, weak row] in
+            guard let self, let row else { return }
+            self.rowMenu.open(self.menuItems(for: id), from: row)
+        }
         rows[item.id] = row
         return row
     }
@@ -115,6 +127,20 @@ final class SidebarView: NSView {
                 symbol: "plus", size: Self.newWorktreeSize, pointSize: 11, accessibilityLabel: "New worktree",
                 shortcut: { CommandCatalog.spec(for: .createWorktree).shortcut }
             ) { [weak self] in self?.onNewWorktree(id) })
+    }
+
+    private func menuItems(for row: SidebarRowID) -> [SidebarRowMenu.Item] {
+        guard case .workspace(let id) = row, worktreeParents.contains(id) else { return [] }
+        return [
+            SidebarRowMenu.Item(title: "New Worktree…", action: .createWorktree) { [weak self] in
+                self?.onNewWorktree(id)
+            }
+        ]
+    }
+
+    override func viewDidHide() {
+        super.viewDidHide()
+        rowMenu.close()
     }
 
     var hasFocus: Bool { focusedRow != nil }
@@ -144,6 +170,7 @@ final class SidebarView: NSView {
     }
 
     func reapplyTheme() {
+        rowMenu.close()
         caption.reapplyTheme()
         addButton.reapplyTheme()
         for row in rows.values {

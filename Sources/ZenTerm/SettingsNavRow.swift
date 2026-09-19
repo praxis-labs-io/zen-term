@@ -11,6 +11,7 @@ final class SettingsNavRow: NSView {
     var onArrowDown: (() -> Void)?
     var onBacktab: (() -> Void)?
     var onEnterDetail: (() -> Void)?
+    var onSecondaryClick: (() -> Void)?
     var onReturn: (() -> Void)?
     var onEscape: (() -> Void)?
     var tooltip: TooltipHost?
@@ -213,8 +214,15 @@ final class SettingsNavRow: NSView {
 
     override func mouseDown(with event: NSEvent) {
         tooltip?.hide(from: self)
+        if event.modifierFlags.contains(.control), let onSecondaryClick { return onSecondaryClick() }
         if focusesOnClick { window?.makeFirstResponder(self) }
         onActivate()
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        guard let onSecondaryClick else { return super.rightMouseDown(with: event) }
+        tooltip?.hide(from: self)
+        onSecondaryClick()
     }
 
     override func keyDown(with event: NSEvent) {
