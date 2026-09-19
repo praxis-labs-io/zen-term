@@ -178,7 +178,7 @@ final class SettingsNavRow: NSView, HoverSuppressing {
         refreshLabelInk()
         detailLabel.textColor = Theme.current.chrome.ink(.muted)
         glyph.contentTintColor = Theme.current.chrome.ink(.faint)
-        attentionDot.layer?.backgroundColor = Theme.current.chrome.attention.nsColor.cgColor
+        attentionDot.layer?.backgroundColor = AttentionTone.waiting.ink.cgColor
         refreshFill()
     }
 

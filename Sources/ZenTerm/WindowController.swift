@@ -2496,7 +2496,7 @@ final class WindowController: NSObject {
         typealias Ranked = (item: SidebarAgentItem, since: Date?, position: [Int])
         let located = agents.agents.compactMap { id, agent -> Ranked? in
             guard let place = agentPlace(id) else { return nil }
-            let state = SidebarAgentItem.State(attention.agentState(of: id), failed: agent.failed)
+            let state = AttentionTone(attention.agentState(of: id), failed: agent.failed)
             let item = SidebarAgentItem(
                 id: id, state: state, summary: agent.message ?? state.summary,
                 detail: "\(place.name) · \(agent.name ?? AgentRoster.unnamed)")

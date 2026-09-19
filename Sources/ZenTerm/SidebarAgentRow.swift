@@ -1,42 +1,32 @@
 import AppKit
 
 struct SidebarAgentItem: Equatable {
-    enum State: Equatable {
-        case waiting, working, done, failed, idle
+    let id: SurfaceID
+    let state: AttentionTone
+    let summary: String
+    let detail: String
+}
 
-        init(_ attention: SurfaceAttention, failed: Bool) {
-            switch attention {
-            case .waiting: self = .waiting
-            case .working: self = .working
-            case .completed: self = failed ? .failed : .done
-            case .idle: self = .idle
-            }
-        }
-
-        var rank: Int {
-            switch self {
-            case .waiting: return 0
-            case .working: return 1
-            case .done, .failed: return 2
-            case .idle: return 3
-            }
-        }
-
-        var summary: String {
-            switch self {
-            case .waiting: return "Waiting"
-            case .working: return "Working"
-            case .done: return "Done"
-            case .failed: return "Exited"
-            case .idle: return "Idle"
-            }
+// The Agents list's own ordering and copy for the shared states.
+extension AttentionTone {
+    var rank: Int {
+        switch self {
+        case .waiting: return 0
+        case .working: return 1
+        case .done, .failed: return 2
+        case .idle: return 3
         }
     }
 
-    let id: SurfaceID
-    let state: State
-    let summary: String
-    let detail: String
+    var summary: String {
+        switch self {
+        case .waiting: return "Waiting"
+        case .working: return "Working"
+        case .done: return "Done"
+        case .failed: return "Exited"
+        case .idle: return "Idle"
+        }
+    }
 }
 
 final class SidebarAgentRow: NSView, HoverSuppressing {
@@ -50,7 +40,6 @@ final class SidebarAgentRow: NSView, HoverSuppressing {
     private let glyphSlot = NSView()
     private let dot = NSView()
     private let spinner = Spinner()
-    private let check = NSImageView()
     private let onActivate: () -> Void
     private var item: SidebarAgentItem?
     private let tooltip = TooltipHost(label: "Jump to agent")
@@ -88,11 +77,9 @@ final class SidebarAgentRow: NSView, HoverSuppressing {
 
         dot.wantsLayer = true
         dot.layer?.cornerRadius = Self.dotDiameter / 2
-        check.image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)
-        check.symbolConfiguration = .init(pointSize: 10, weight: .semibold)
         glyphSlot.translatesAutoresizingMaskIntoConstraints = false
         addSubview(glyphSlot)
-        for glyph in [dot, spinner, check] {
+        for glyph in [dot, spinner] {
             glyph.translatesAutoresizingMaskIntoConstraints = false
             glyphSlot.addSubview(glyph)
             NSLayoutConstraint.activate([
@@ -128,10 +115,9 @@ final class SidebarAgentRow: NSView, HoverSuppressing {
         detailLabel.stringValue = item.detail
         setAccessibilityLabel(item.summary)
         setAccessibilityValue(item.detail)
-        dot.isHidden = item.state != .waiting && item.state != .failed
+        dot.isHidden = item.state == .working
         spinner.isHidden = item.state != .working
         spinner.isSpinning = item.state == .working
-        check.isHidden = item.state != .done
         reapplyTheme()
     }
 
@@ -140,13 +126,10 @@ final class SidebarAgentRow: NSView, HoverSuppressing {
     var fillForTesting: CGColor? { layer?.backgroundColor }
 
     func reapplyTheme() {
-        let chrome = Theme.current.chrome
-        let isQuiet = item?.state == .done || item?.state == .idle
-        summaryLabel.textColor = chrome.ink(isQuiet ? .subtle : .normal)
-        detailLabel.textColor = chrome.ink(.muted)
-        dot.layer?.backgroundColor =
-            (item?.state == .failed ? chrome.destructive : chrome.attention).nsColor.cgColor
-        check.contentTintColor = chrome.positive.nsColor
+        let ink = (item?.state ?? .idle).ink
+        summaryLabel.textColor = ink
+        detailLabel.textColor = Theme.current.chrome.ink(.muted)
+        dot.layer?.backgroundColor = ink.cgColor
         spinner.reapplyTheme()
         refreshFill()
     }
