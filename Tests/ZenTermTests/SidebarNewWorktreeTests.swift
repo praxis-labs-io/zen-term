@@ -33,6 +33,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
     override func tearDownWithError() throws {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
+        SidebarController.resetLastChoiceForTesting()
         ConfigLoader.defaultRootOverrideForTesting = nil
         WorktreeStore.rootOverrideForTesting = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
