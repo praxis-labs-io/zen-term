@@ -38,7 +38,7 @@ final class SidebarView: NSView {
     private let agentsCaption = FieldCaption("Agents", required: false)
     private let agentStack = NSStackView()
     private let scroll = NSScrollView()
-    private let content = NSView()
+    private let content = FlippedView()
     private let edgeFade = EdgeFade(axis: .vertical)
     private var contentEndsAtRows: NSLayoutConstraint?
     private var contentEndsAtAgents: NSLayoutConstraint?
@@ -235,7 +235,12 @@ final class SidebarView: NSView {
     private func revealActiveRow() {
         guard !hasFocus, let id = activeRow, let row = rows[id] else { return }
         layoutSubtreeIfNeeded()
-        row.scrollToVisible(row.bounds)
+        reveal(row)
+    }
+
+    // One fade depth of margin, or a row scrolled to an edge lands under the fade.
+    private func reveal(_ row: NSView) {
+        row.scrollToVisible(row.bounds.insetBy(dx: 0, dy: -Self.fadeDepth))
     }
 
     private func row(for item: SidebarRowItem) -> SettingsNavRow {
@@ -305,7 +310,7 @@ final class SidebarView: NSView {
 
     func focusRow(_ id: SidebarRowID) {
         rows[id]?.takeKeyboardFocus()
-        rows[id]?.scrollToVisible(rows[id]?.bounds ?? .zero)
+        if let row = rows[id] { reveal(row) }
     }
 
     private func moveFocus(_ delta: Int) {
@@ -317,7 +322,7 @@ final class SidebarView: NSView {
         case let row as SidebarAgentRow: row.takeKeyboardFocus()
         default: return
         }
-        stops[next].scrollToVisible(stops[next].bounds)
+        reveal(stops[next])
     }
 
     private var focusStops: [NSView] { orderedRows + orderedAgentRows }
@@ -356,6 +361,8 @@ final class SidebarView: NSView {
     var agentRowsForTesting: [SidebarAgentRow] { orderedAgentRows }
 
     var agentsAreHiddenForTesting: Bool { agentStack.isHidden && agentsCaption.isHidden }
+
+    static var fadeDepthForTesting: CGFloat { fadeDepth }
 
     var scrollForTesting: NSScrollView { scroll }
 

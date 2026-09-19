@@ -888,6 +888,37 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(isOnScreen(row, in: view.scrollForTesting), "the new workspace's row is on screen")
     }
 
+    private func margins(of row: NSView, in scroll: NSScrollView) -> (above: CGFloat, below: CGFloat) {
+        let visible = scroll.contentView.documentVisibleRect
+        let frame = row.convert(row.bounds, to: scroll.documentView)
+        return (frame.minY - visible.minY, visible.maxY - frame.maxY)
+    }
+
+    func test_aRowScrolledToAnEdge_landsClearOfTheFade() throws {
+        let controller = makeCrowdedController()
+        let view = controller.sidebarForTesting.view
+        let scroll = view.scrollForTesting
+        let rows = view.rowsForTesting
+        let (first, last) = (0, rows.count - 1)
+
+        view.focusRow(.workspace(controller.workspaceIDsForTesting[first]))
+        for _ in 0..<(last - 5) { controller.window.sendEvent(key(.down, in: controller)) }
+        let goingDown = try XCTUnwrap(controller.window.firstResponder as? NSView)
+
+        XCTAssertFalse(isOnScreen(try XCTUnwrap(rows.last), in: scroll), "precondition: rows remain below")
+        XCTAssertGreaterThanOrEqual(
+            margins(of: goingDown, in: scroll).below, SidebarView.fadeDepthForTesting - 0.5,
+            "a row reached going down clears the bottom fade")
+
+        for _ in 0..<(last - 10) { controller.window.sendEvent(key(.up, in: controller)) }
+        let goingUp = try XCTUnwrap(controller.window.firstResponder as? NSView)
+
+        XCTAssertFalse(isOnScreen(rows[first], in: scroll), "precondition: rows remain above")
+        XCTAssertGreaterThanOrEqual(
+            margins(of: goingUp, in: scroll).above, SidebarView.fadeDepthForTesting - 0.5,
+            "a row reached going up clears the top fade")
+    }
+
     func test_theSidebarFadesOnlyTheEdgesContentIsHiddenPast() throws {
         let roomy = makeController()
         roomy.containerForTesting.layoutSubtreeIfNeeded()
