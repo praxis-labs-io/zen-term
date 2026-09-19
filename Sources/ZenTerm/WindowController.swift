@@ -311,12 +311,16 @@ final class WindowController: NSObject {
                 message: "\(activeFloatName ?? "This tool") is open. Close it to get back to your panes."))
     }
 
-    private var lastNoNewWorktreeToast: Date?
+    private var lastNoNewWorktreeToast: (refusal: SidebarController.NewWorktreeRefusal, at: Date)?
 
     private func toastNoNewWorktree(_ refusal: SidebarController.NewWorktreeRefusal) {
         let now = Date()
-        if let last = lastNoNewWorktreeToast, now.timeIntervalSince(last) < Self.floatBlockToastThrottle { return }
-        lastNoNewWorktreeToast = now
+        if let last = lastNoNewWorktreeToast, last.refusal == refusal,
+            now.timeIntervalSince(last.at) < Self.floatBlockToastThrottle
+        {
+            return
+        }
+        lastNoNewWorktreeToast = (refusal, now)
         toasts.show(ToastContent(variant: .info, title: "New Worktree", message: refusal.message))
     }
 

@@ -316,13 +316,13 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertTrue(c.window.firstResponder === rows(of: c).first)
 
         XCTAssertNil(interceptor(for: c).route(try optionReturn(in: c)))
-        XCTAssertNil(interceptor(for: c).route(try optionReturn(in: c)), "a held chord repeats")
+        XCTAssertNil(interceptor(for: c).route(try optionReturn(in: c)), "a second press inside the throttle")
 
         var loaded = false
         ConfigLoader.loadWorkspaces { _ in loaded = true }
         waitUntil(loaded, "any load the chord started to land")
         XCTAssertTrue(modals(NewWorktreeOverlay.self, in: c).isEmpty)
-        XCTAssertEqual(modals(ToastView.self, in: c).count, 1, "one card, however long the chord is held")
+        XCTAssertEqual(modals(ToastView.self, in: c).count, 1, "one card for the same reason inside the throttle")
         let expected = "This workspace isn't configured.\nSet one up with Add Workspace… in ⌘P."
         XCTAssertTrue(toastMessages(in: c).contains(expected), "\(toastMessages(in: c))")
     }
@@ -340,6 +340,20 @@ final class SidebarNewWorktreeTests: WindowTestCase {
 
         let expected = "A worktree starts from its workspace.\nPress ⌥⏎ on the workspace above it."
         XCTAssertTrue(toastMessages(in: c).contains(expected), "\(toastMessages(in: c))")
+    }
+
+    func test_optReturn_onRowsWithDifferentReasons_toastsEachReason_insideTheThrottle() throws {
+        let c = makeWindow()
+        c.window.makeKeyAndOrderFront(nil)
+        try create("feature/nested", from: try openRepoWorkspace(in: c), in: c)
+        c.handle(.focusSidebar)
+        rows(of: c)[0].takeKeyboardFocus()
+        XCTAssertNil(interceptor(for: c).route(try optionReturn(in: c)))
+
+        rows(of: c)[2].takeKeyboardFocus()
+        XCTAssertNil(interceptor(for: c).route(try optionReturn(in: c)))
+
+        XCTAssertEqual(modals(ToastView.self, in: c).count, 2, "\(toastMessages(in: c))")
     }
 
     func test_everyNoNewWorktreeLine_fitsTheToastWithoutWrapping() {
