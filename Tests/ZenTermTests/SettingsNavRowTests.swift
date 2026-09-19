@@ -154,6 +154,19 @@ final class SettingsNavRowTests: WindowTestCase {
         XCTAssertEqual(escapes, 1)
     }
 
+    func test_modifiedEscape_doesNotCallOnEscape() {
+        let (row, window) = mountedRow()
+        var escapes = 0
+        row.onEscape = { escapes += 1 }
+        window.makeFirstResponder(row)
+
+        for modifier in [NSEvent.ModifierFlags.command, .option, .control] {
+            window.sendEvent(key(53, modifier, in: window))
+        }
+
+        XCTAssertEqual(escapes, 0, "only a bare Esc leaves, as only a bare Return activates")
+    }
+
     func test_withoutCallbacks_returnAndEscapeReachTheNextResponder() {
         let (row, window) = mountedRow()
         let parent = KeyRecorder(frame: NSRect(x: 0, y: 0, width: 200, height: 40))

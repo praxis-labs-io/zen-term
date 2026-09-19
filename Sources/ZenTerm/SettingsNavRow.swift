@@ -129,7 +129,7 @@ final class SettingsNavRow: NSView {
         case .down: onArrowDown?()
         case .right, .tab(shift: false): onEnterDetail?()
         case .activate where onReturn != nil && KeyboardFocus.isReturn(event): onReturn?()
-        case .escape where onEscape != nil: onEscape?()
+        case .escape where onEscape != nil && KeyboardFocus.isUnmodified(event): onEscape?()
         default: super.keyDown(with: event)
         }
     }
