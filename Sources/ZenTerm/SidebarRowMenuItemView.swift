@@ -14,7 +14,7 @@ final class SidebarRowMenuItemView: NSView {
     init(_ item: SidebarRowMenu.Item, onChoose: @escaping () -> Void) {
         title = item.title
         label = NSTextField(labelWithString: item.title)
-        shortcut = NSTextField(labelWithString: CommandCatalog.spec(for: item.action).shortcut ?? "")
+        shortcut = NSTextField(labelWithString: item.action.flatMap { CommandCatalog.spec(for: $0).shortcut } ?? "")
         self.onChoose = onChoose
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false

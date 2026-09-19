@@ -5,7 +5,7 @@ import AppKit
 final class SidebarRowMenu {
     struct Item {
         let title: String
-        let action: KeyInterceptor.ReservedChord
+        let action: KeyInterceptor.ReservedChord?
         let run: () -> Void
     }
 

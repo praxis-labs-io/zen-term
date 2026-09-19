@@ -29,6 +29,7 @@ final class SidebarView: NSView {
     private var rows: [SidebarRowID: SettingsNavRow] = [:]
     private var numbers: [SidebarRowID: Int] = [:]
     private var worktreeParents: Set<SidebarRowID> = []
+    private var activeRow: SidebarRowID?
     let rowMenu = SidebarRowMenu()
     var onLeave: (() -> Void)?
     private let onActivate: (SidebarRowID) -> Void
@@ -77,6 +78,7 @@ final class SidebarView: NSView {
         }
         numbers = byID.compactMapValues(\.number)
         worktreeParents = Set(items.filter(\.makesWorktrees).map(\.id))
+        activeRow = items.first(where: \.isActive)?.id
         for (index, item) in items.enumerated() {
             let row = self.row(for: item)
             if rowStack.arrangedSubviews.firstIndex(of: row) != index {
@@ -134,7 +136,9 @@ final class SidebarView: NSView {
         }
         let creates = worktreeParents.contains(row) ? [create] : []
         guard case .workspace(let id) = row else { return [creates] }
-        let close = SidebarRowMenu.Item(title: "Close Workspace", action: .closeWorkspace) { [weak self] in
+        let close = SidebarRowMenu.Item(
+            title: "Close Workspace", action: row == activeRow ? .closeWorkspace : nil
+        ) { [weak self] in
             self?.onCloseWorkspace(id)
         }
         return [creates, [close]]
