@@ -1715,15 +1715,10 @@ final class WindowController: NSObject {
         case .openScreenFile: modeTarget?.surface.writeScreenToFile(.open)
         case .pasteSelection: pasteSelection()
         case .fillScreen: toggleFillScreen()
-        case .toggleSidebar:
-            Log.info("sidebar toggled", category: .workspace)
-            if sidebar.hasFocus { restoreFocusToActive() }
-            if !sidebar.isDocked { window.reserveContentWidth(SidebarView.width) }
-            let onScreen = (activeController?.allSurfaces ?? []) + [floats.shownSurface].compactMap { $0 }
-            sidebar.toggle(holding: onScreen, in: container)
-            if !sidebar.isDocked { window.reserveContentWidth(0) }
+        case .toggleSidebar: toggleSidebar()
         case .focusSidebar:
-            if !focusSidebar() { toastSidebarCollapsed() }
+            if !sidebar.isDocked { toggleSidebar() }
+            _ = focusSidebar()
         case .toggleToolFloat(let id):
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
@@ -1748,11 +1743,13 @@ final class WindowController: NSObject {
         return true
     }
 
-    private func toastSidebarCollapsed() {
-        toasts.show(
-            ToastContent(
-                variant: .info, title: CommandCatalog.spec(for: .focusSidebar).title,
-                message: "The sidebar is collapsed."))
+    private func toggleSidebar() {
+        Log.info("sidebar toggled", category: .workspace)
+        if sidebar.hasFocus { restoreFocusToActive() }
+        if !sidebar.isDocked { window.reserveContentWidth(SidebarView.width) }
+        let onScreen = (activeController?.allSurfaces ?? []) + [floats.shownSurface].compactMap { $0 }
+        sidebar.toggle(holding: onScreen, in: container)
+        if !sidebar.isDocked { window.reserveContentWidth(0) }
     }
 
     private var preFillFrame: NSRect?

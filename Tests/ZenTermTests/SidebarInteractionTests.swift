@@ -604,28 +604,34 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(controller.window.firstResponder === controller.sidebarForTesting.view.rowsForTesting.first)
     }
 
-    func test_focusSidebar_whileCollapsed_keepsFocus_andSaysTheSidebarIsCollapsed() throws {
+    func test_focusSidebar_whileCollapsed_docksTheSidebar_andFocusesTheActiveRow() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
         controller.handle(.toggleSidebar)
-        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
-        pane.focus()
+        controller.window.setContentSize(controller.window.contentMinSize)
+        let narrow = contentWidth(controller)
+        try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface).focus()
 
         controller.handle(.focusSidebar)
 
-        XCTAssertTrue(controller.window.firstResponder === pane.view)
-        XCTAssertTrue(showsToast("The sidebar is collapsed.", in: controller))
+        XCTAssertTrue(controller.sidebarForTesting.isDocked)
+        XCTAssertEqual(
+            controller.window.contentMinSize.width, narrow + SidebarView.width,
+            "docking reserves the sidebar's width, as ⌃⌘S does")
+        XCTAssertTrue(controller.window.firstResponder === controller.sidebarForTesting.view.rowsForTesting.first)
     }
 
-    func test_focusSidebar_overAToolFloat_isBlockedLikePaneNav() throws {
+    func test_focusSidebar_overAToolFloat_isBlockedLikePaneNav_andDoesNotDock() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleSidebar)
         controller.handle(.toggleToolFloat(ToolFloat.scratch.id))
         waitUntil(controller.floatsForTesting.isOpen, "the scratch float to open")
         let float = try XCTUnwrap(controller.floatsForTesting.shownSurface as? RecordingSurface)
 
         controller.handle(.focusSidebar)
 
+        XCTAssertFalse(controller.sidebarForTesting.isDocked)
         XCTAssertTrue(controller.window.firstResponder === float.view)
         let content = try XCTUnwrap(controller.window.contentView)
         XCTAssertTrue(
