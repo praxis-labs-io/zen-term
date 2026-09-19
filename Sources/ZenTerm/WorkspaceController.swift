@@ -6,7 +6,7 @@ import TerminalKit
 @MainActor
 final class WorkspaceController {
     let id: WorkspaceID
-    let configTitle: String?
+    let isDefault: Bool
     var name: String
     let folder: URL
 
@@ -14,9 +14,9 @@ final class WorkspaceController {
     private var controllerByTab: [TabID: TabController] = [:]
     private var titleByTab: [TabID: String] = [:]
 
-    init(id: WorkspaceID, configTitle: String?, name: String, folder: URL, firstTab: TabID) {
+    init(id: WorkspaceID, isDefault: Bool, name: String, folder: URL, firstTab: TabID) {
         self.id = id
-        self.configTitle = configTitle
+        self.isDefault = isDefault
         self.name = name
         self.folder = folder
         tabs = TabList(first: firstTab)

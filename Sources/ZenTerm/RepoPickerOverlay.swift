@@ -9,7 +9,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     }
 
     private let onChoose: (Workspace) -> Void
-    private let isOpen: (String) -> Bool
+    private let isOpen: (URL) -> Bool
     private let onAddWorkspace: () -> Void
 
     private let entries: [Workspace]
@@ -27,7 +27,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     init(
         entries: [Workspace], background: NSColor,
         removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
-        isOpen: @escaping (String) -> Bool = { _ in false },
+        isOpen: @escaping (URL) -> Bool = { _ in false },
         onChoose: @escaping (Workspace) -> Void, onAddWorkspace: @escaping () -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -133,11 +133,11 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .add:
             return AddRowView()
         case .workspace(let workspace):
-            return RowView(workspace: workspace, isOpen: isOpen(workspace.title))
+            return RowView(workspace: workspace, isOpen: isOpen(workspace.path))
         case .worktree(let worktree, let parent):
             guard !removals.isRemoving(worktree.path) else { return RemovingRowView(worktree: worktree) }
-            return RowView(
-                worktree: worktree, parent: parent, isOpen: isOpen(Self.title(for: worktree, parent: parent)))
+            let opens = Self.workspace(for: worktree, parent: parent, repoRoot: GitRepoStatus.repoRoot(parent.path))
+            return RowView(worktree: worktree, parent: parent, isOpen: isOpen(opens.path))
         }
     }
 
@@ -282,16 +282,13 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     /// A worktree is cut at the repo root, so a parent pointing into the repo opens at its own folder inside it.
     static func workspace(for worktree: Worktree, parent: Workspace, repoRoot: URL?) -> Workspace {
-        Workspace(
-            title: title(for: worktree, parent: parent),
+        let name = worktree.branch ?? String(worktree.head.prefix(7))
+        return Workspace(
+            title: "\(parent.title): \(name)",
             path: GitRepo.mirrored(parent.path, from: repoRoot, into: worktree.path)
                 ?? worktree.path.standardizedFileURL,
             main: parent.main, right: parent.right, bottom: parent.bottom, focus: parent.focus,
             env: parent.env, carry: parent.carry)
-    }
-
-    static func title(for worktree: Worktree, parent: Workspace) -> String {
-        "\(parent.title): \(worktree.branch ?? String(worktree.head.prefix(7)))"
     }
 
     private final class AddRowView: SelectableRowView {

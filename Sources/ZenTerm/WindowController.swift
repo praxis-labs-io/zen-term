@@ -309,7 +309,7 @@ final class WindowController: NSObject {
         WindowController.nextWindowID += 1
         let firstID = TabID(1)
         let defaultWorkspace = WorkspaceController(
-            id: WorkspaceID(raw: 1), configTitle: nil, name: Self.defaultWorkspaceName,
+            id: WorkspaceID(raw: 1), isDefault: true, name: Self.defaultWorkspaceName,
             folder: FileManager.default.homeDirectoryForCurrentUser, firstTab: firstID)
         workspaces = [defaultWorkspace]
         activeWorkspace = defaultWorkspace
@@ -921,7 +921,7 @@ final class WindowController: NSObject {
                 entries: workspaces,
                 background: Theme.current.chrome.background.nsColor,
                 removals: self.worktreeRemovals,
-                isOpen: { [weak self] title in self?.openWorkspace(titled: title) != nil },
+                isOpen: { [weak self] path in self?.openWorkspace(at: path) != nil },
                 onChoose: { [weak self] ws in self?.openWorkspace(ws) },
                 onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
                 onDismiss: { [weak self] in self?.closeModal() }
@@ -1544,20 +1544,21 @@ final class WindowController: NSObject {
         renderDock()
     }
 
-    private func openWorkspace(titled title: String) -> WorkspaceController? {
-        workspaces.first { $0.configTitle == title }
+    private func openWorkspace(at path: URL) -> WorkspaceController? {
+        let target = path.standardizedFileURL.path
+        return workspaces.first { !$0.isDefault && $0.folder.standardizedFileURL.path == target }
     }
 
     private func openWorkspace(_ ws: Workspace) {
         closeModal()
-        if let open = openWorkspace(titled: ws.title) {
+        if let open = openWorkspace(at: ws.path) {
             activate(open.id)
             return
         }
         Log.info("workspace opened", category: .workspace)
         let tab = mintTabID()
         let workspace = WorkspaceController(
-            id: mintWorkspaceID(), configTitle: ws.title, name: ws.title, folder: ws.path, firstTab: tab)
+            id: mintWorkspaceID(), isDefault: false, name: ws.title, folder: ws.path, firstTab: tab)
         workspaces.append(workspace)
         activate(workspace.id)
         installController(id: tab, cwd: ws.path, config: ws, transition: .instant)
@@ -2259,7 +2260,7 @@ final class WindowController: NSObject {
     func addWorkspaceForTesting(name: String, folder: URL) -> WorkspaceID {
         let id = mintTabID()
         let workspace = WorkspaceController(
-            id: mintWorkspaceID(), configTitle: nil, name: name, folder: folder, firstTab: id)
+            id: mintWorkspaceID(), isDefault: false, name: name, folder: folder, firstTab: id)
         workspaces.append(workspace)
         let controller = makeController(cwd: folder)
         workspace.setController(controller, for: id)

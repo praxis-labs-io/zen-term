@@ -484,4 +484,50 @@ final class RepoPickerPresentationTests: WindowTestCase {
         XCTAssertEqual(c.activeWorkspaceIDForTesting, alpha)
         XCTAssertTrue(c.controllerForTesting(tab: alphaTab)?.allSurfaces.first === alphaSurface)
     }
+
+    func test_renamingAnOpenWorkspace_stillSwitchesToIt_ratherThanOpeningASecondCopy() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        pressReturn(in: try openPicker(in: c))
+        let alpha = c.activeWorkspaceIDForTesting
+        c.handle(.selectWorkspace(1))
+        try seedWorkspaces(twoWorkspaces.replacingOccurrences(of: "[Alpha]", with: "[Alpha Renamed]"))
+
+        pressReturn(in: try openPicker(in: c))
+
+        XCTAssertEqual(c.workspaceNamesForTesting, ["Home", "Alpha"], "the same folder is the same workspace")
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, alpha)
+    }
+
+    func test_aConfiguredWorkspaceInTheHomeFolder_opensItsOwnWorkspace_notHome() throws {
+        try seedWorkspaces("[Dotfiles]\npath = ~\n")
+        let c = makeWindow()
+        let home = c.activeWorkspaceIDForTesting
+
+        pressReturn(in: try openPicker(in: c))
+
+        XCTAssertEqual(c.workspaceNamesForTesting, ["Home", "Dotfiles"])
+        XCTAssertNotEqual(c.activeWorkspaceIDForTesting, home)
+    }
+
+    func test_returnOnAnOpenWorktree_switchesToIt_ratherThanOpeningItAgain() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        let alpha = URL(fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
+        var picker = try openPicker(in: c)
+        giveWorktrees(picker, under: alpha, "feature/one")
+        moveDown(in: picker)
+        pressReturn(in: picker)
+        let worktree = c.activeWorkspaceIDForTesting
+        XCTAssertEqual(c.workspaceNamesForTesting, ["Home", "Alpha: feature/one"])
+        c.handle(.selectWorkspace(1))
+
+        picker = try openPicker(in: c)
+        giveWorktrees(picker, under: alpha, "feature/one")
+        moveDown(in: picker)
+        pressReturn(in: picker)
+
+        XCTAssertEqual(c.workspaceNamesForTesting, ["Home", "Alpha: feature/one"])
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, worktree)
+    }
 }
