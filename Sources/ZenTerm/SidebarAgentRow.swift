@@ -140,7 +140,7 @@ final class SidebarAgentRow: NSView {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         let isQuiet = item?.state == .done || item?.state == .idle
-        summaryLabel.textColor = isQuiet ? chrome.ink(.subtle) : chrome.foreground.nsColor
+        summaryLabel.textColor = chrome.ink(isQuiet ? .subtle : .normal)
         detailLabel.textColor = chrome.ink(.muted)
         dot.layer?.backgroundColor =
             (item?.state == .failed ? chrome.destructive : chrome.attention).nsColor.cgColor
