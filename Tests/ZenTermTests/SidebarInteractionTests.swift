@@ -389,6 +389,35 @@ final class SidebarInteractionTests: WindowTestCase {
             charactersIgnoringModifiers: text, isARepeat: false, keyCode: code)!
     }
 
+    func test_cmdW_fromTheSidebar_closesThePaneItCameFrom_andFocusLandsOnAPane() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let left = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        controller.handle(.splitVertical)
+        let right = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        controller.sidebarForTesting.focusActiveRow()
+
+        try press("w", [.command], keyCode: 13, in: controller)
+
+        XCTAssertTrue(right.terminated, "⌘W closes the pane the sidebar came from")
+        XCTAssertFalse(left.terminated)
+        XCTAssertTrue(controller.window.firstResponder === left.view)
+    }
+
+    func test_cmdW_fromTheSidebar_onALastPane_landsOnTheNextTabsPane() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let first = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        controller.newTabForTesting()
+        let second = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        controller.sidebarForTesting.focusActiveRow()
+
+        try press("w", [.command], keyCode: 13, in: controller)
+
+        XCTAssertTrue(second.terminated)
+        XCTAssertTrue(controller.window.firstResponder === first.view)
+    }
+
     func test_return_onAFocusedRow_reportsItsWorkspace() throws {
         let controller = makeController()
         let api = controller.addWorkspaceForTesting(name: "api", folder: root)
