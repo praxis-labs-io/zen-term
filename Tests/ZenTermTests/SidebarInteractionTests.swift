@@ -547,6 +547,21 @@ final class SidebarInteractionTests: WindowTestCase {
         }
     }
 
+    func test_nvimNavigatorFocusLeft_fromABackgroundTab_leavesTheSidebarAlone() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let stale = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        let token = try XCTUnwrap(stale.lastConfig?.environment["ZEN_PANE"].flatMap { Int($0) })
+        controller.newTabForTesting()
+        let current = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        XCTAssertTrue(controller.window.firstResponder === current.view)
+
+        NavRegistry.shared.route(focus: token, .left)
+
+        XCTAssertFalse(controller.sidebarForTesting.hasFocus, "a late command from a tab you left moves nothing")
+        XCTAssertTrue(controller.window.firstResponder === current.view)
+    }
+
     func test_cmdOptLeft_withTheSidebarCollapsed_keepsFocus_andSaysThereIsNoPane() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)

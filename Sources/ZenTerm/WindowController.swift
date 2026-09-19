@@ -1929,7 +1929,10 @@ final class WindowController: NSObject {
             self?.cancelConfirm()
             self?.endModes()
         }
-        c.focusPastLeftEdge = { [weak self] in self?.focusSidebar() ?? false }
+        c.focusPastLeftEdge = { [weak self, weak c] in
+            guard let self, c === self.activeController else { return false }
+            return self.focusSidebar()
+        }
         c.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
         c.onProgress = { [weak self] surface, progress in
             self?.progressChanged(surface: surface, progress: progress)
