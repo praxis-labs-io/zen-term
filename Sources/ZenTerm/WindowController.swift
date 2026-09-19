@@ -187,7 +187,7 @@ final class WindowController: NSObject {
     private var activeCanvasSlides = 0
     private let horizontalSlideFade = EdgeFade(axis: .horizontal)
     private let verticalSlideFade = EdgeFade(axis: .vertical)
-    static let slideFadeDepth: CGFloat = 16
+    static let slideFadeDepth: CGFloat = 8
 
     private enum ModalKind {
         case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm, reportIssue
