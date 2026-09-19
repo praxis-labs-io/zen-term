@@ -244,8 +244,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   tab's grids so they reflow once. Its toggle sits on the window, outside the sliding
   view, so it holds one spot docked and collapsed. Rows read the window's workspaces,
   never a copy. A new window opens the way the last toggle left one, for the launch only.
-  Nav with no neighbor to the left asks `TabController.focusPastLeftEdge`, which focuses
-  the docked sidebar, so panes, drawers and the nvim navigator all reach it.
+  The keyboard enters only through `focus_sidebar` and through nav with no neighbor to the
+  left (`TabController.focusPastLeftEdge`), so panes, drawers and the nvim navigator all
+  reach it. ⌃⌘S only docks and collapses. Rows take focus from the keyboard only
+  (`SettingsNavRow.takeKeyboardFocus`): AppKit promotes any clicked view that accepts.
 - **Fill Screen** is a maximize, not native fullscreen. `window-chrome = false` hides
   the traffic lights and `ChromeMetrics.topInset` follows.
 - **Tool floats are window-level** because a surface is one `NSView`. `ToolFloatController`
