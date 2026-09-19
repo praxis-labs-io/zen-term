@@ -356,6 +356,23 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertEqual(modals(ToastView.self, in: c).count, 2, "\(toastMessages(in: c))")
     }
 
+    func test_optReturn_onAFocusedAgentRow_toastsThatAgentsDontStartWorktrees() throws {
+        let c = makeWindow()
+        c.window.makeKeyAndOrderFront(nil)
+        _ = try openRepoWorkspace(in: c)
+        let tab = try XCTUnwrap(c.tabIDsForTesting(workspace: c.activeWorkspaceIDForTesting).first)
+        c.notifyAgentForTesting(tab: tab, message: "needs you")
+        waitUntil(!c.sidebarForTesting.view.agentRowsForTesting.isEmpty, "the agent's row")
+        let agent = try XCTUnwrap(c.sidebarForTesting.view.agentRowsForTesting.first)
+        agent.takeKeyboardFocus()
+        XCTAssertTrue(c.window.firstResponder === agent)
+
+        XCTAssertNil(interceptor(for: c).route(try optionReturn(in: c)))
+
+        let expected = "Agents don't start worktrees.\nPress ⌥⏎ on a workspace row."
+        XCTAssertTrue(toastMessages(in: c).contains(expected), "\(toastMessages(in: c))")
+    }
+
     func test_everyNoNewWorktreeLine_fitsTheToastWithoutWrapping() {
         for refusal in SidebarController.NewWorktreeRefusal.allCases {
             for line in refusal.message.split(separator: "\n") {

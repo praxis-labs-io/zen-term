@@ -237,6 +237,8 @@ final class SidebarView: NSView {
 
     var hasFocus: Bool { focusStops.contains { KeyboardFocus.isFocused($0, in: window) } }
 
+    var agentRowHasFocus: Bool { orderedAgentRows.contains { KeyboardFocus.isFocused($0, in: window) } }
+
     var focusedRow: SidebarRowID? { rows.first { KeyboardFocus.isFocused($0.value, in: window) }?.key }
 
     func focusRow(_ id: SidebarRowID) {
