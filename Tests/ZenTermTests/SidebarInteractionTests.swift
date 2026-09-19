@@ -856,7 +856,7 @@ final class SidebarInteractionTests: WindowTestCase {
     }
 
     private func fadedEdges(of view: SidebarView) -> (top: Bool, bottom: Bool) {
-        let colors = (view.edgeFadeForTesting.colors as? [CGColor]) ?? []
+        let colors = (view.scrollForTesting.fadeForTesting.colors as? [CGColor]) ?? []
         return (colors.first?.alpha == 0, colors.last?.alpha == 0)
     }
 
@@ -935,7 +935,7 @@ final class SidebarInteractionTests: WindowTestCase {
 
         XCTAssertFalse(isOnScreen(try XCTUnwrap(rows.last), in: scroll), "precondition: rows remain below")
         XCTAssertGreaterThanOrEqual(
-            margins(of: goingDown, in: scroll).below, SidebarView.fadeDepthForTesting - 0.5,
+            margins(of: goingDown, in: scroll).below, FadingScrollView.fadeDepth - 0.5,
             "a row reached going down clears the bottom fade")
 
         for _ in 0..<(last - 10) { controller.window.sendEvent(key(.up, in: controller)) }
@@ -943,7 +943,7 @@ final class SidebarInteractionTests: WindowTestCase {
 
         XCTAssertFalse(isOnScreen(rows[first], in: scroll), "precondition: rows remain above")
         XCTAssertGreaterThanOrEqual(
-            margins(of: goingUp, in: scroll).above, SidebarView.fadeDepthForTesting - 0.5,
+            margins(of: goingUp, in: scroll).above, FadingScrollView.fadeDepth - 0.5,
             "a row reached going up clears the top fade")
     }
 

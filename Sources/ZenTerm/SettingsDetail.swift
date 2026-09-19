@@ -6,7 +6,7 @@ enum SettingsDetail {
         doc.translatesAutoresizingMaskIntoConstraints = false
         doc.addSubview(rowsStack)
 
-        let scroll = NSScrollView()
+        let scroll = FadingScrollView()
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = true
         scroll.verticalScroller = SlimScroller()

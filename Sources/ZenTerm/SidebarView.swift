@@ -25,7 +25,6 @@ final class SidebarView: NSView {
     private static let newWorktreeSize = NSSize(width: 20, height: 20)
     private static let sectionGap: CGFloat = 14
     private static let contentBottomGap: CGFloat = 8
-    private static let fadeDepth: CGFloat = 16
 
     private let caption = FieldCaption("Workspaces", required: false)
     private let addButton: IconButton
@@ -39,9 +38,8 @@ final class SidebarView: NSView {
     let rowMenu = SidebarRowMenu()
     private let agentsCaption = FieldCaption("Agents", required: false)
     private let agentStack = NSStackView()
-    private let scroll = NSScrollView()
+    private let scroll = FadingScrollView()
     private let content = FlippedView()
-    private let edgeFade = EdgeFade(axis: .vertical)
     private var contentEndsAtRows: NSLayoutConstraint?
     private var contentEndsAtAgents: NSLayoutConstraint?
     private var agentRows: [SurfaceID: SidebarAgentRow] = [:]
@@ -97,8 +95,6 @@ final class SidebarView: NSView {
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
         scroll.scrollerStyle = .overlay
-        scroll.wantsLayer = true
-        scroll.layer?.mask = edgeFade.layer
         scroll.translatesAutoresizingMaskIntoConstraints = false
         content.translatesAutoresizingMaskIntoConstraints = false
         addSubview(scroll)
@@ -110,31 +106,6 @@ final class SidebarView: NSView {
             content.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
             content.trailingAnchor.constraint(equalTo: clip.trailingAnchor),
         ])
-        content.postsFrameChangedNotifications = true
-        clip.postsFrameChangedNotifications = true
-        let center = NotificationCenter.default
-        center.addObserver(
-            self, selector: #selector(extentChanged), name: NSView.boundsDidChangeNotification, object: clip)
-        center.addObserver(
-            self, selector: #selector(extentChanged), name: NSView.frameDidChangeNotification, object: clip)
-        center.addObserver(
-            self, selector: #selector(extentChanged), name: NSView.frameDidChangeNotification, object: content)
-    }
-
-    @objc private func extentChanged() { updateFade() }
-
-    override func layout() {
-        super.layout()
-        updateFade()
-    }
-
-    private var hiddenAbove: Bool { scroll.contentView.bounds.minY > 0.5 }
-
-    private var hiddenBelow: Bool { content.frame.height - scroll.contentView.bounds.maxY > 0.5 }
-
-    private func updateFade() {
-        edgeFade.update(
-            frame: scroll.bounds, start: hiddenAbove ? Self.fadeDepth : 0, end: hiddenBelow ? Self.fadeDepth : 0)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -244,7 +215,7 @@ final class SidebarView: NSView {
 
     // One fade depth of margin, or a row scrolled to an edge lands under the fade.
     private func reveal(_ row: NSView) {
-        row.scrollToVisible(row.bounds.insetBy(dx: 0, dy: -Self.fadeDepth))
+        row.scrollToVisible(row.bounds.insetBy(dx: 0, dy: -FadingScrollView.fadeDepth))
     }
 
     private func row(for item: SidebarRowItem) -> SettingsNavRow {
@@ -371,9 +342,5 @@ final class SidebarView: NSView {
 
     var agentsAreHiddenForTesting: Bool { agentStack.isHidden && agentsCaption.isHidden }
 
-    static var fadeDepthForTesting: CGFloat { fadeDepth }
-
-    var scrollForTesting: NSScrollView { scroll }
-
-    var edgeFadeForTesting: CAGradientLayer { edgeFade.layer }
+    var scrollForTesting: FadingScrollView { scroll }
 }
