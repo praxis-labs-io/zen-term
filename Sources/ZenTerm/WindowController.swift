@@ -1717,10 +1717,12 @@ final class WindowController: NSObject {
         case .fillScreen: toggleFillScreen()
         case .toggleSidebar:
             Log.info("sidebar toggled", category: .workspace)
+            if sidebar.hasFocus { restoreFocusToActive() }
             if !sidebar.isDocked { window.reserveContentWidth(SidebarView.width) }
             let onScreen = (activeController?.allSurfaces ?? []) + [floats.shownSurface].compactMap { $0 }
             sidebar.toggle(holding: onScreen, in: container)
             if !sidebar.isDocked { window.reserveContentWidth(0) }
+            if sidebar.isDocked, !floats.isOpen { _ = focusSidebar() }
         case .toggleToolFloat(let id):
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }

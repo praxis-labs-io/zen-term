@@ -474,6 +474,74 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(controller.window.firstResponder === pane.view)
     }
 
+    func test_ctrlCmdS_docking_focusesTheActiveRow() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleSidebar)
+        try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface).focus()
+
+        try toggleSidebar(in: controller)
+
+        XCTAssertTrue(controller.sidebarForTesting.isDocked)
+        XCTAssertTrue(controller.window.firstResponder === controller.sidebarForTesting.view.rowsForTesting.first)
+    }
+
+    func test_toggleButton_docking_focusesTheActiveRowToo() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleSidebar)
+
+        try click(controller.sidebarForTesting.toggleButtonForTesting)
+
+        XCTAssertTrue(controller.sidebarForTesting.hasFocus)
+    }
+
+    func test_ctrlCmdS_collapsing_withTheSidebarFocused_returnsFocusToThePane() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+        controller.sidebarForTesting.focusActiveRow()
+
+        try toggleSidebar(in: controller)
+
+        XCTAssertFalse(controller.sidebarForTesting.isDocked)
+        XCTAssertTrue(
+            controller.window.firstResponder === pane.view, "focus returns as the slide starts, not when it lands")
+    }
+
+    func test_ctrlCmdS_collapsing_fromAPane_leavesFocusInThePane() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+
+        try toggleSidebar(in: controller)
+
+        XCTAssertFalse(controller.sidebarForTesting.isDocked, "one press collapses from anywhere, as a drawer does")
+        XCTAssertTrue(controller.window.firstResponder === pane.view)
+    }
+
+    func test_ctrlCmdS_docking_overAnOpenToolFloat_leavesFocusInTheFloat() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleSidebar)
+        controller.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        waitUntil(controller.floatsForTesting.isOpen, "the scratch float to open")
+        let float = try XCTUnwrap(controller.floatsForTesting.shownSurface as? RecordingSurface)
+        XCTAssertTrue(controller.window.firstResponder === float.view)
+
+        try toggleSidebar(in: controller)
+
+        XCTAssertTrue(controller.sidebarForTesting.isDocked)
+        XCTAssertTrue(controller.window.firstResponder === float.view, "nav is blocked over a float, so focus stays")
+    }
+
+    private func toggleSidebar(in controller: WindowController) throws {
+        try press("s", [.command, .control], keyCode: 1, in: controller)
+    }
+
     private func interceptor(for controller: WindowController) -> KeyInterceptor {
         let keys = KeyInterceptor()
         keys.setKeymap(KeymapDefaults.map)
