@@ -157,7 +157,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
     private func buildContent() -> NSStackView {
         header.font = .systemFont(ofSize: 15, weight: .semibold)
         header.textColor = Theme.current.chrome.foreground.nsColor
-        header.stringValue = editingWorkspace == nil ? "New Workspace" : "Edit Workspace"
+        header.stringValue = editingWorkspace == nil ? "Add Workspace" : "Edit Workspace"
 
         wireField(titleField)
         titleField.onChange = { [weak self] in

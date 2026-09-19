@@ -35,6 +35,7 @@ extension KeyInterceptor.ReservedChord {
         case .focusSidebar: return "focus_sidebar"
         case .toggleToolFloat(let id): return "toggle_float:\(id)"
         case .toggleRepoPicker: return "toggle_workspace_picker"
+        case .newWorkspace: return "new_workspace"
         case .createWorktree: return "create_worktree"
         case .removeWorktree: return "remove_worktree"
         case .toggleCommandPalette: return "toggle_command_palette"
@@ -85,7 +86,7 @@ extension KeyInterceptor.ReservedChord {
             .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab,
             .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen, .toggleSidebar, .focusSidebar,
             .prevPane, .nextPane,
-            .toggleToolFloat, .toggleRepoPicker, .createWorktree, .removeWorktree,
+            .toggleToolFloat, .toggleRepoPicker, .newWorkspace, .createWorktree, .removeWorktree,
             .toggleCommandPalette,
             .openSettings,
             .reloadConfig, .checkForUpdates, .reportIssue, .newTool, .resetFontSize,
@@ -117,7 +118,7 @@ extension KeyInterceptor.ReservedChord {
             .newTab, .newWindow, .prevTab, .nextTab, .selectTab,
             .moveTabLeft, .moveTabRight, .renameTab,
             .fillScreen, .toggleSidebar, .focusSidebar, .toggleBottomDrawer, .toggleRightDrawer,
-            .toggleRepoPicker, .createWorktree, .removeWorktree, .toggleCommandPalette, .newTool,
+            .toggleRepoPicker, .newWorkspace, .createWorktree, .removeWorktree, .toggleCommandPalette, .newTool,
             .openSettings,
             .dismissToast, .dismissAllToasts,
             .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace:
@@ -158,6 +159,7 @@ extension KeyInterceptor.ReservedChord {
         case "focus_sidebar": self = .focusSidebar
         case "toggle_workspace_picker": self = .toggleRepoPicker
         case "toggle_repo_picker": self = .toggleRepoPicker
+        case "new_workspace": self = .newWorkspace
         case "create_worktree": self = .createWorktree
         case "remove_worktree": self = .removeWorktree
         case "toggle_command_palette": self = .toggleCommandPalette
@@ -253,6 +255,7 @@ enum KeymapDefaults {
 
         map[Chord(command: true, shift: true, key: "p")] = .toggleCommandPalette
         map[Chord(command: true, key: "p")] = .toggleRepoPicker
+        map[Chord(command: true, option: true, key: "t")] = .newWorkspace
         map[Chord(option: true, key: "⏎")] = .createWorktree
         map[Chord(command: true, shift: true, key: "⌫")] = .removeWorktree
         map[Chord(command: true, key: "\\")] = .toggleRightDrawer

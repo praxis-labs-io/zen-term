@@ -24,6 +24,7 @@ final class KeybindParserTests: XCTestCase {
             .increaseFontSize, .decreaseFontSize, .resetFontSize,
             .selectTab(1), .selectTab(9), .toggleToolFloat("gitdash"),
             .selectWorkspace(1), .selectWorkspace(9), .prevWorkspace, .nextWorkspace, .closeWorkspace,
+            .newWorkspace,
         ]
         for chord in cases {
             XCTAssertEqual(action(from: chord.actionToken), chord)

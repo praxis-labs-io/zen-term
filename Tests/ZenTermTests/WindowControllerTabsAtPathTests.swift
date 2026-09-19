@@ -178,6 +178,6 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
 
         XCTAssertEqual(
             c.closedByRemoval(atPath: root), ClosedByRemoval(thisWindow: true),
-            "Home opened in root too, so nothing is left to hold the window")
+            "Workspace 1 opened in root too, so nothing is left to hold the window")
     }
 }

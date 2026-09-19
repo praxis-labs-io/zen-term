@@ -51,9 +51,9 @@ final class SidebarInteractionTests: WindowTestCase {
         try super.tearDownWithError()
     }
 
-    private func makeController() -> WindowController {
+    private func makeController(initialCWD: URL? = nil) -> WindowController {
         let controller = WindowController(
-            contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
+            contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: initialCWD)
         controllers.append(controller)
         controller.mountAndStart()
         return controller
@@ -199,7 +199,7 @@ final class SidebarInteractionTests: WindowTestCase {
         let controller = makeController()
         controller.handle(.toggleSidebar)
 
-        XCTAssertEqual(controller.sidebarForTesting.lead.workspaceNameForTesting, "Home")
+        XCTAssertEqual(controller.sidebarForTesting.lead.workspaceNameForTesting, "Workspace 1")
     }
 
     func test_collapsedLead_truncatesALongWorkspaceNameAtATabTitlesWidth() throws {
@@ -835,6 +835,15 @@ final class SidebarInteractionTests: WindowTestCase {
         waitUntil(
             controller.sidebarForTesting.view.rowsForTesting.last?.detailForTesting == "main",
             "the branch to land once it is read off the main thread")
+    }
+
+    func test_aWindowsFirstRow_showsTheBranchOfTheFolderItStartedIn() throws {
+        let repo = try GitFixture.makeRepo(at: root.appendingPathComponent("repo", isDirectory: true))
+        let controller = makeController(initialCWD: repo)
+
+        waitUntil(
+            controller.sidebarForTesting.view.rowsForTesting.first?.detailForTesting == "main",
+            "the first workspace's branch to come from the folder its shell started in")
     }
 
     func test_slide_holdsAnOpenFloatsGridToo() throws {

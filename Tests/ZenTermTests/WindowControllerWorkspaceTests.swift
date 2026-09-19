@@ -348,7 +348,7 @@ final class WindowControllerWorkspaceTests: WindowTestCase {
         drainMainQueue()
 
         let card = try XCTUnwrap(c.waitingToastForTesting(tab: first))
-        XCTAssertFalse(texts(in: card).contains { $0.hasPrefix("Home: ") })
+        XCTAssertFalse(texts(in: card).contains { $0.hasPrefix("Workspace 1: ") })
     }
 
     func test_aBackgroundWorkspacesCard_namesItsWorkspace_andShowsTheWorkspaceShortcut() throws {
@@ -362,7 +362,7 @@ final class WindowControllerWorkspaceTests: WindowTestCase {
         drainMainQueue()
 
         let card = try XCTUnwrap(c.waitingToastForTesting(tab: home))
-        XCTAssertTrue(texts(in: card).contains { $0.hasPrefix("Home: ") }, "the card says which workspace asked")
+        XCTAssertTrue(texts(in: card).contains { $0.hasPrefix("Workspace 1: ") }, "the card says which workspace asked")
         XCTAssertEqual(keycaps(in: card), ["⌘⌥1"], "Switch reaches it by the workspace's shortcut")
     }
 
@@ -388,17 +388,19 @@ final class WindowControllerWorkspaceTests: WindowTestCase {
         c.notifyAgentForTesting(tab: home, message: "needs you")
         drainMainQueue()
         let card = try XCTUnwrap(c.waitingToastForTesting(tab: home))
-        XCTAssertFalse(texts(in: card).contains { $0.hasPrefix("Home: ") })
+        XCTAssertFalse(texts(in: card).contains { $0.hasPrefix("Workspace 1: ") })
 
         c.openWorkspaceForTesting(
             Workspace(title: "Other", path: root, main: nil, right: nil, bottom: nil, focus: .main, env: [:]))
 
-        XCTAssertTrue(texts(in: card).contains { $0.hasPrefix("Home: ") }, "the card now says which workspace asked")
+        XCTAssertTrue(
+            texts(in: card).contains { $0.hasPrefix("Workspace 1: ") }, "the card now says which workspace asked")
 
         c.closeTabForTesting(tab: try XCTUnwrap(c.activeTabIDForTesting))
 
         XCTAssertEqual(c.workspaceIDsForTesting.count, 1)
-        XCTAssertFalse(texts(in: card).contains { $0.hasPrefix("Home: ") }, "back to one workspace, the prefix goes")
+        XCTAssertFalse(
+            texts(in: card).contains { $0.hasPrefix("Workspace 1: ") }, "back to one workspace, the prefix goes")
     }
 
     func test_closingTheActiveWorkspace_landsOnTheOneAfterIt() throws {

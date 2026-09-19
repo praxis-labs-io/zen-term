@@ -345,12 +345,13 @@ final class PaletteInteractionTests: WindowTestCase {
     func test_repoPicker_reusedRows_keepTheirViewsAndFollowTheFilterOrder() {
         let overlay = makeRepoPicker(entries: [workspace("zeta"), workspace("alpha")])
         mount(overlay)
-        let (addRow, zetaRow, alphaRow) = (rows(in: overlay)[0], rows(in: overlay)[1], rows(in: overlay)[2])
+        let (newRow, addRow) = (rows(in: overlay)[0], rows(in: overlay)[1])
+        let (zetaRow, alphaRow) = (rows(in: overlay)[2], rows(in: overlay)[3])
 
         type("a", into: overlay)
 
         XCTAssertEqual(
-            rowsStack(in: overlay).arrangedSubviews, [addRow, alphaRow, zetaRow],
+            rowsStack(in: overlay).arrangedSubviews, [newRow, addRow, alphaRow, zetaRow],
             "every row is reused, re-ordered by the filter rather than rebuilt")
     }
 
@@ -360,7 +361,7 @@ final class PaletteInteractionTests: WindowTestCase {
             entries: [workspace("alpha"), workspace("beta")], onChoose: { chosen = $0 })
         let window = mount(overlay)
         window.layoutIfNeeded()
-        let betaRow = rows(in: overlay)[2]
+        let betaRow = rows(in: overlay)[3]
 
         type("bet", into: overlay)
         window.layoutIfNeeded()
@@ -435,7 +436,7 @@ final class PaletteInteractionTests: WindowTestCase {
 
         let overlay = makeRepoPicker(entries: [workspace("repo", path: repo)])
         mount(overlay)
-        let labels = descendants(of: rows(in: overlay)[1]).compactMap { $0 as? NSTextField }
+        let labels = descendants(of: rows(in: overlay)[2]).compactMap { $0 as? NSTextField }
         let branch = labels.first { $0.stringValue != "repo" }
         XCTAssertEqual(branch?.stringValue, "", "nothing has probed the folder yet")
 
@@ -448,7 +449,7 @@ final class PaletteInteractionTests: WindowTestCase {
             entries: [workspace("alpha"), workspace("beta")], onChoose: { chosen = $0 })
         mount(overlay)
         type("bet", into: overlay)
-        XCTAssertEqual(overlay.numberOfRows(), 2)
+        XCTAssertEqual(overlay.numberOfRows(), 3)
         try sendReturn(to: overlay)
         XCTAssertEqual(chosen?.title, "beta")
     }
