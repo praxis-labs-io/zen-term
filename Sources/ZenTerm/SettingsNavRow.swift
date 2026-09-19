@@ -25,6 +25,7 @@ final class SettingsNavRow: NSView {
     private static let detailMaxWidth: CGFloat = 96
     private static let attentionDotDiameter: CGFloat = 6
     private static let attentionDotGapToDetail: CGFloat = 6
+    private static let attentionAccessibilityValue = "Agent waiting"
 
     init(title: String, focusesOnClick: Bool = true, onActivate: @escaping () -> Void) {
         self.onActivate = onActivate
@@ -82,13 +83,20 @@ final class SettingsNavRow: NSView {
 
     func setDetail(_ detail: String?) {
         detailLabel.stringValue = detail ?? ""
-        setAccessibilityValue(detail)
+        refreshAccessibilityValue()
     }
 
     func setShowsAttention(_ shows: Bool) {
         attentionDot.isHidden = !shows
         attentionDotWidth?.constant = shows ? Self.attentionDotDiameter : 0
         attentionDotGap?.constant = shows ? -Self.attentionDotGapToDetail : 0
+        refreshAccessibilityValue()
+    }
+
+    private func refreshAccessibilityValue() {
+        let parts = [detailLabel.stringValue, attentionDot.isHidden ? "" : Self.attentionAccessibilityValue]
+        let value = parts.filter { !$0.isEmpty }.joined(separator: ", ")
+        setAccessibilityValue(value.isEmpty ? nil : value)
     }
 
     var detailForTesting: String { detailLabel.stringValue }

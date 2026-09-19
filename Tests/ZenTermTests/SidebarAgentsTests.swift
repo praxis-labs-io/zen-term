@@ -372,8 +372,10 @@ final class SidebarAgentsTests: WindowTestCase {
 
         notify(agent, "Wants to run swift test")
         XCTAssertEqual(rows.map(\.showsAttentionForTesting), [false, true])
+        XCTAssertEqual(rows[1].accessibilityValue() as? String, "Agent waiting")
 
         c.activateWorkspaceForTesting(review)
         XCTAssertEqual(rows.map(\.showsAttentionForTesting), [false, false])
+        XCTAssertNil(rows[1].accessibilityValue())
     }
 }
