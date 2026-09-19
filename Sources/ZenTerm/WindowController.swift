@@ -2327,7 +2327,8 @@ final class WindowController: NSObject {
     private func jumpToAgent(_ surface: SurfaceID) {
         if let float = floats.float(of: surface) {
             float.tab.map { reveal($0) }
-            if floats.activeID == float.spec.id { floats.refocus() } else { handle(.toggleToolFloat(float.spec.id)) }
+            pendingModal = nil
+            floats.reveal(surface)
         } else if let tab = workspaces.lazy.flatMap(\.tabIDs).first(where: {
             self.controller($0)?.surfaceIDs.contains(surface) == true
         }) {

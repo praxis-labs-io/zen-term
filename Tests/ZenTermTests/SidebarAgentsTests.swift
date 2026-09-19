@@ -354,6 +354,32 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertTrue(c.window.firstResponder === float.view)
     }
 
+    func test_clickingAnAgent_inADirectoryFloatFromAnotherWorkspace_keepsThatAgent() throws {
+        var config = GeneralConfig.current
+        config.floats = [
+            ToolFloat(
+                id: "claude", order: 0, title: "claude", icon: ToolFloatParser.defaultIcon,
+                command: "claude", dir: nil, widthFraction: 0.85, heightFraction: 0.85,
+                requiresGitRepo: false, persist: .directory,
+                toggle: Chord(command: true, shift: true, key: "b"))
+        ]
+        GeneralConfig.setCurrentForTesting(config)
+        let c = makeWindow()
+        c.floatsForTesting.resolveRepoRoot = { $1($0) }
+        c.openWorkspaceForTesting(recipe("zen-review", right: nil))
+        c.handle(.toggleToolFloat("claude"))
+        let float = try XCTUnwrap(spawned.first { $0.lastConfig?.args == ["-l", "-i", "-c", "claude"] })
+        c.handle(.toggleToolFloat("claude"))
+        c.openWorkspaceForTesting(recipe("notes", right: nil))
+        XCTAssertEqual(items(c).count, 1, "precondition: the float's agent is listed")
+
+        try click(try XCTUnwrap(rows(c).first))
+
+        XCTAssertFalse(float.terminated)
+        XCTAssertEqual(c.floatsForTesting.activeID, "claude")
+        XCTAssertTrue(c.window.firstResponder === float.view)
+    }
+
     func test_arrows_continueFromTheWorkspaceRowsIntoTheAgents_andReturnJumps() throws {
         let c = makeWindow()
         let first = try focusedAgent(c)
