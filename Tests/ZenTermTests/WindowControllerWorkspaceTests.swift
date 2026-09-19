@@ -436,4 +436,17 @@ final class WindowControllerWorkspaceTests: WindowTestCase {
         XCTAssertEqual(c.activeWorkspaceIDForTesting, third)
         XCTAssertEqual(c.workspaceIDsForTesting.count, 2)
     }
+    func test_theWindowTitle_followsTheActiveWorkspace() throws {
+        let c = makeWindow()
+        let first = c.activeWorkspaceIDForTesting
+        XCTAssertEqual(c.window.title, c.workspaceNamesForTesting[0])
+        let other = c.addWorkspaceForTesting(name: "Other", folder: root)
+
+        c.activateWorkspaceForTesting(other)
+        XCTAssertEqual(c.window.title, "Other", "a switch renames the window")
+
+        c.activateWorkspaceForTesting(first)
+        XCTAssertEqual(c.window.title, c.workspaceNamesForTesting[0], "and back")
+    }
+
 }
