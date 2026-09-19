@@ -400,4 +400,14 @@ final class SidebarInteractionTests: WindowTestCase {
 
         waitUntil(!modals(RepoPickerOverlay.self, in: controller).isEmpty, "the workspace picker to open")
     }
+
+    func test_rowTooltips_nameTheShortcutForTheirPlaceInTheSidebar() throws {
+        let controller = makeController()
+        let other = controller.addWorkspaceForTesting(name: "api", folder: root)
+        controller.activateWorkspaceForTesting(other)
+
+        let tooltips = controller.sidebarForTesting.view.rowsForTesting.compactMap(\.tooltip)
+        XCTAssertEqual(tooltips.map(\.label), ["Switch workspace", "Switch workspace"])
+        XCTAssertEqual(tooltips.map(\.shortcutForTesting), ["⌘⌥1", "⌘⌥2"])
+    }
 }

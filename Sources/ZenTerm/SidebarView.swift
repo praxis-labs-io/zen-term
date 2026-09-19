@@ -69,6 +69,11 @@ final class SidebarView: NSView {
         if let row = rows[item.id] { return row }
         let id = item.id
         let row = SettingsNavRow(title: item.name, isFocusable: false) { [weak self] in self?.onActivate(id) }
+        row.tooltip = TooltipHost(label: "Switch workspace") { [weak self, weak row] in
+            guard let self, let row, let index = self.rowStack.arrangedSubviews.firstIndex(of: row), index < 9
+            else { return nil }
+            return CommandCatalog.spec(for: .selectWorkspace(index + 1)).shortcut
+        }
         rows[item.id] = row
         return row
     }

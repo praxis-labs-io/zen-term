@@ -5,6 +5,7 @@ final class SettingsNavRow: NSView {
     var onArrowDown: (() -> Void)?
     var onBacktab: (() -> Void)?
     var onEnterDetail: (() -> Void)?
+    var tooltip: TooltipHost?
 
     private let label = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
@@ -89,16 +90,32 @@ final class SettingsNavRow: NSView {
         trackingArea = area
     }
 
-    override func mouseEntered(with event: NSEvent) { isHovered = true; refreshFill() }
-    override func mouseExited(with event: NSEvent) { isHovered = false; refreshFill() }
+    override func mouseEntered(with event: NSEvent) {
+        isHovered = true
+        refreshFill()
+        tooltip?.show(from: self)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        refreshFill()
+        tooltip?.hide(from: self)
+    }
 
     override func viewDidHide() {
         super.viewDidHide()
         isHovered = false
         refreshFill()
+        tooltip?.hide(from: self)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { tooltip?.hide(from: self) }
     }
 
     override func mouseDown(with event: NSEvent) {
+        tooltip?.hide(from: self)
         if isFocusable { window?.makeFirstResponder(self) }
         onActivate()
     }
