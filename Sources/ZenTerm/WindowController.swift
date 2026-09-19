@@ -1018,23 +1018,25 @@ final class WindowController: NSObject {
             afterEdit: { [weak self] in self?.reopenRepoPicker() })
     }
 
-    // Reads the workspace's entry fresh, so the card copies what the file says now.
     private func createWorktreeFromSidebar(_ row: SidebarRowID) {
-        let name: String
-        let folder: String
         switch row {
         case .workspace(let id):
             guard let workspace = workspaces.first(where: { $0.id == id }) else { return }
-            (name, folder) = (workspace.name, workspace.folder.standardizedFileURL.path)
+            presentNewWorktree(forEntryAt: workspace.folder, named: workspace.name)
         case .ghost(let path):
             guard let parent = ghostParent(at: path) else { return }
-            (name, folder) = (parent.title, path)
+            presentNewWorktree(forEntryAt: parent.path, named: parent.title)
         }
+    }
+
+    // Reads the entry fresh, so the card copies what the file says now.
+    private func presentNewWorktree(forEntryAt folder: URL, named name: String) {
         closeModal()
         pendingModal = .worktreeForm
+        let path = folder.standardizedFileURL.path
         ConfigLoader.loadWorkspaces { [weak self] entries in
             guard let self, self.pendingModal == .worktreeForm else { return }
-            guard let entry = entries.first(where: { $0.path.standardizedFileURL.path == folder }) else {
+            guard let entry = entries.first(where: { $0.path.standardizedFileURL.path == path }) else {
                 self.pendingModal = nil
                 self.toasts.show(
                     ToastContent(
@@ -1045,13 +1047,15 @@ final class WindowController: NSObject {
             self.presentNewWorktree(
                 RepoPickerOverlay.CreateTarget(workspace: entry, repo: entry.path),
                 onCancel: { [weak self] in self?.closeModal() },
-                afterEdit: { [weak self] in self?.createWorktreeFromSidebar(row) })
+                afterEdit: { [weak self] in self?.presentNewWorktree(forEntryAt: entry.path, named: entry.title) },
+                afterSave: { [weak self] saved in self?.presentNewWorktree(forEntryAt: saved.path, named: saved.title) }
+            )
         }
     }
 
     private func presentNewWorktree(
         _ target: RepoPickerOverlay.CreateTarget, onCancel: @escaping () -> Void,
-        afterEdit: @escaping () -> Void
+        afterEdit: @escaping () -> Void, afterSave: ((Workspace) -> Void)? = nil
     ) {
         pendingModal = .worktreeForm
         GitRepoStatus.createOptions(in: target.repo) { [weak self] options in
@@ -1066,7 +1070,7 @@ final class WindowController: NSObject {
                 onCancel: onCancel,
                 onDismiss: { [weak self] in self?.closeModal() },
                 onEditWorkspace: { [weak self] in
-                    self?.openWorkspaceForm(editing: target.workspace, returningTo: afterEdit)
+                    self?.openWorkspaceForm(editing: target.workspace, returningTo: afterEdit, onSaved: afterSave)
                 }
             )
             self.presentModal(form, kind: .worktreeForm)
@@ -1488,7 +1492,8 @@ final class WindowController: NSObject {
     }
 
     private func openWorkspaceForm(
-        editing workspace: Workspace?, returningTo done: (() -> Void)? = nil
+        editing workspace: Workspace?, returningTo done: (() -> Void)? = nil,
+        onSaved: ((Workspace) -> Void)? = nil
     ) {
         let done = done ?? { [weak self] in self?.reopenSettingsOnWorkspaces() }
         closeModal()
@@ -1504,7 +1509,8 @@ final class WindowController: NSObject {
                 existingTitles: existingTitles,
                 background: Theme.current.chrome.background.nsColor,
                 onSubmit: { [weak self] built in
-                    self?.submitWorkspace(built, replacing: originalTitle, then: done)
+                    self?.submitWorkspace(
+                        built, replacing: originalTitle, then: onSaved.map { saved in { saved(built) } } ?? done)
                 },
                 onCancel: done,
                 onDelete: workspace.map { existing in

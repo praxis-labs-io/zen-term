@@ -170,6 +170,26 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertTrue(modals(RepoPickerOverlay.self, in: c).isEmpty)
     }
 
+    func test_savingAPathEditFromASidebarCard_returnsToTheCard_forTheMovedWorkspace() throws {
+        let c = makeWindow()
+        let moved = try GitFixture.makeRepo(at: tempRoot.appendingPathComponent("moved", isDirectory: true))
+        let form = try editWorkspace(from: try openCardFromThePlus(in: c), in: c)
+        let path = try XCTUnwrap(
+            descendants(of: form).compactMap { $0 as? FieldBox }.first { $0.placeholder == "Type a path, or Choose" })
+
+        path.setText(moved.path)
+        try button("Save", in: form).onTap()
+
+        let card = try newWorktreeCard(in: c)
+        XCTAssertTrue(modals(ToastView.self, in: c).isEmpty, "the card finds the entry at its new folder")
+        card.setBranchForTesting("feature/moved")
+        try button("Create Worktree", in: card).performClick(nil)
+        waitUntil(
+            rows(of: c).map(\.titleForTesting).contains("feature/moved"), "the new worktree's row", timeout: 10)
+        let branches = try WorktreeStore.list(in: moved).compactMap(\.branch)
+        XCTAssertTrue(branches.contains("feature/moved"), "the worktree is cut from the moved folder's repo")
+    }
+
     func test_creatingFromThePlus_nestsTheNewWorktreeUnderItsWorkspace_andMakesItActive() throws {
         let c = makeWindow()
         let row = try openRepoWorkspace(in: c)
