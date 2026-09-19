@@ -445,6 +445,21 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(controller.window.firstResponder === pane.view)
     }
 
+    func test_cmdOptW_onTheFocusedRow_closesItsWorkspace_andFocusLandsOnTheNeighboursPane() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let api = controller.addWorkspaceForTesting(name: "api", folder: root)
+        let apiSurface = try XCTUnwrap(surfaces.last)
+        controller.sidebarForTesting.focusActiveRow()
+        XCTAssertTrue(controller.sidebarForTesting.hasFocus)
+
+        try press("w", [.command, .option], keyCode: 13, in: controller)
+
+        XCTAssertEqual(controller.activeWorkspaceIDForTesting, api)
+        XCTAssertFalse(controller.sidebarForTesting.hasFocus)
+        XCTAssertTrue(controller.window.firstResponder === apiSurface.view)
+    }
+
     func test_return_onAFocusedRow_switchesToItsWorkspace_andFocusesItsPane() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
