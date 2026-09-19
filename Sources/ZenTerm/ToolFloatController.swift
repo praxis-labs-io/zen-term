@@ -32,6 +32,8 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     var onSurfaceRegistered: ((SurfaceID, TabID?) -> Void)?
 
+    var onProgramLaunched: ((SurfaceID, String) -> Void)?
+
     var onSurfaceReleased: ((SurfaceID) -> Void)?
 
     /// A float is seen when it is shown, not when it takes first responder: showing is the only moment it is looked at.
@@ -109,6 +111,17 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
             return nil
         }
         return idBySurface[ObjectIdentifier(surface)]
+    }
+
+    func surface(_ id: SurfaceID) -> TerminalSurface? {
+        allSurfaces.first { idBySurface[ObjectIdentifier($0)] == id }
+    }
+
+    func float(of id: SurfaceID) -> (spec: ToolFloat, tab: TabID?)? {
+        if let active = activeFloat, idBySurface[ObjectIdentifier(active.surface)] == id {
+            return (active.spec, active.tab)
+        }
+        return liveFloats.values.first { idBySurface[ObjectIdentifier($0.surface)] == id }.map { ($0.spec, $0.tab) }
     }
 
     var allSurfaces: [TerminalSurface] {
@@ -235,6 +248,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
                     workingDirectory: cwd, fontSize: SessionFontSize.points,
                     theme: Theme.current.terminal,
                     behavior: GeneralConfig.current.terminalBehavior))
+            onProgramLaunched?(surfaceID, spec.command)
         }
         return surface
     }

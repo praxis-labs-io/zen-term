@@ -17,6 +17,7 @@ final class WindowController: NSObject {
     private var cardSurfaces: [TabID: SurfaceID] = [:]
     private var cardTitles: [TabID: () -> String] = [:]
     private let attention = AttentionStore()
+    private let agents = AgentRoster()
     private static let commandCompletionThreshold: TimeInterval = 10
     private var nextTabID = 1
 
@@ -149,7 +150,11 @@ final class WindowController: NSObject {
         }
         controller.onSurfaceReleased = { [weak self] surface in
             self?.attention.release(surface)
+            self?.agents.drop(surface)
             self?.renderAttention()
+        }
+        controller.onProgramLaunched = { [weak self] surface, command in
+            self?.programLaunched(surface, command)
         }
         controller.onShown = { [weak self] surface in self?.surfaceShown(surface) }
         controller.onNotification = { [weak self] surface, n, spec, owner in
@@ -378,6 +383,7 @@ final class WindowController: NSObject {
         onSettings = { [weak self] in self?.handle(.openSettings) }
         onToggleSidebar = { [weak self] in self?.handle(.toggleSidebar) }
         sidebar.onLeave = { [weak self] in self?.restoreFocusToActive() }
+        sidebar.onJump = { [weak self] in self?.jumpToAgent($0) }
         onActivateWorkspace = { [weak self] in self?.activateFromSidebar($0) }
         onOpenWorkspace = { [weak self] in self?.handle(.toggleRepoPicker) }
         onBottom = { [weak self] in self?.handle(.toggleBottomDrawer) }
@@ -615,6 +621,7 @@ final class WindowController: NSObject {
         if changed { renderTabBar() }
 
         if busyDots() != lastBusyDots { renderDock() }
+        trackAgentExits()
     }
 
     private func busyDots() -> (Bool, Bool, Bool) {
@@ -889,6 +896,7 @@ final class WindowController: NSObject {
             tabController?.view.removeFromSuperview()
             mountedCanvas = nil
         }
+        tabController?.surfaceIDs.forEach { agents.drop($0) }
         tabController?.shutdown()
         floats.shutdownScope(id)
         clearAttention(id)
@@ -1986,9 +1994,13 @@ final class WindowController: NSObject {
             ids.forEach { self?.attention.register($0, tab: id) }
         }
         c.onSurfacesReleased = { [weak self] ids in
-            ids.forEach { self?.attention.release($0) }
+            ids.forEach {
+                self?.attention.release($0)
+                self?.agents.drop($0)
+            }
             self?.renderAttention()
         }
+        c.onProgramLaunched = { [weak self] surface, command in self?.programLaunched(surface, command) }
         c.onNotification = { [weak self] surface, n in
             self?.agentNotified(surface: surface, id: id, notification: n)
         }
@@ -2018,6 +2030,8 @@ final class WindowController: NSObject {
             let shown = self.floats.activeID == spec.id && self.floats.surfaceID(spec.id) == surface
             let before = self.attentionSnapshot(surface, in: target)
             surface.map { self.attention.record($0, .waiting, seen: shown, focused: self.isFocused($0)) }
+            surface.map { self.agentSignalled($0, name: notification.title, message: message) }
+            self.renderAgents()
 
             guard !shown else { return }
             let destination = CardDestination(
@@ -2052,6 +2066,8 @@ final class WindowController: NSObject {
             let seen = self.isOnScreen(surface, in: id)
             let before = self.attentionSnapshot(surface, in: id)
             surface.map { self.attention.record($0, .waiting, seen: seen, focused: self.isFocused($0)) }
+            surface.map { self.agentSignalled($0, name: notification.title, message: message) }
+            self.renderAgents()
 
             guard !seen else { return }
             self.presentWaitingToast(
@@ -2064,7 +2080,9 @@ final class WindowController: NSObject {
 
     private func commandFinished(surface: SurfaceID?, id: TabID, result: TerminalCommandResult) {
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.workspace(of: id) != nil, !self.isOnScreen(surface, in: id),
+            guard let self, self.workspace(of: id) != nil else { return }
+            surface.map { self.agentExited($0, result: result) }
+            guard !self.isOnScreen(surface, in: id),
                 result.duration >= Self.commandCompletionThreshold,
                 self.attention.state(tab: id) != .waiting
             else { return }
@@ -2080,9 +2098,13 @@ final class WindowController: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             let before = self.attention.state(of: surface)
-            self.attention.setWorking(
-                surface, progress?.state == .indeterminate, focused: self.isFocused(surface))
+            let isWorking = progress?.state == .indeterminate
+            if isWorking, !self.attention.isWorking(surface) {
+                self.agentSignalled(surface, name: "", message: nil)
+            }
+            self.attention.setWorking(surface, isWorking, focused: self.isFocused(surface))
             if self.attention.state(of: surface) != before { self.renderDock() }
+            self.renderAgents()
         }
     }
 
@@ -2210,8 +2232,109 @@ final class WindowController: NSObject {
     }
 
     private func answerFocusedAgent() {
-        guard let surface = focusedSurface, isFocused(surface) else { return }
-        attention.markFocused(surface)
+        if let surface = focusedSurface, isFocused(surface) {
+            if attention.agentState(of: surface) > .working { agents.setMessage(surface, nil) }
+            attention.markFocused(surface)
+        }
+        renderAgents()
+    }
+
+    private func programLaunched(_ surface: SurfaceID, _ command: String) {
+        guard let name = AgentRoster.agentName(launching: command, ai: GeneralConfig.current.ai) else { return }
+        agents.identify(surface, name: name, source: .launch)
+        renderAgents()
+    }
+
+    private func agentSignalled(_ surface: SurfaceID, name: String, message: String?) {
+        agents.identify(surface, name: name.isEmpty ? AgentRoster.unnamed : name, source: .signal)
+        agents.setMessage(surface, message)
+    }
+
+    private func agentExited(_ surface: SurfaceID, result: TerminalCommandResult) {
+        guard agents.contains(surface) else { return }
+        let failed = result.exitCode.map { $0 != 0 } ?? false
+        agents.markExited(surface, failed: failed, message: Self.commandResultMessage(result))
+        if failed, !isFocused(surface) { attention.latchAgent(surface, .completed) }
+        renderAgents()
+    }
+
+    private func trackAgentExits() {
+        let before = agents.agents
+        for id in before.keys {
+            agents.trackBusy(id, terminalSurface(id)?.isBusy ?? false)
+        }
+        if agents.agents != before { renderAgents() }
+    }
+
+    private func terminalSurface(_ id: SurfaceID) -> TerminalSurface? {
+        for workspace in workspaces {
+            for tab in workspace.tabIDs {
+                if let surface = workspace.controller(tab)?.surface(id) { return surface }
+            }
+        }
+        return floats.surface(id)
+    }
+
+    private func renderAgents() {
+        for (id, agent) in agents.agents where agent.hasExited && attention.agentState(of: id) == .idle {
+            agents.drop(id)
+        }
+        sidebar.renderAgents(agentItems())
+    }
+
+    private func agentItems() -> [SidebarAgentItem] {
+        let here = focusedSurface
+        typealias Ranked = (item: SidebarAgentItem, since: Date?, position: [Int])
+        let located = agents.agents.compactMap { id, agent -> Ranked? in
+            guard let place = agentPlace(id) else { return nil }
+            let state = SidebarAgentItem.State(attention.agentState(of: id), failed: agent.failed)
+            let item = SidebarAgentItem(
+                id: id, state: state, summary: agent.message ?? state.summary,
+                detail: "\(agent.name) · \(place.name)", isHere: id == here)
+            return (item, attention.agentSince(of: id), place.position)
+        }
+        return located.sorted { a, b in
+            if a.item.state.rank != b.item.state.rank { return a.item.state.rank < b.item.state.rank }
+            if a.item.state == .waiting, a.since != b.since {
+                return (a.since ?? .distantFuture) < (b.since ?? .distantFuture)
+            }
+            return a.position.lexicographicallyPrecedes(b.position)
+        }.map(\.item)
+    }
+
+    // Sidebar position, so rows sharing a state keep still: workspace, tab, then the surface within it.
+    private func agentPlace(_ id: SurfaceID) -> (name: String, position: [Int])? {
+        if let float = floats.float(of: id) {
+            let tab = float.tab.flatMap { tab in workspace(of: tab).map { (tab, $0) } }
+            guard let (tab, workspace) = tab else { return (float.spec.title, [Int.max]) }
+            return (workspace.name, place(of: tab, in: workspace) + [Int.max])
+        }
+        for workspace in workspaces {
+            for tab in workspace.tabIDs {
+                guard let index = workspace.controller(tab)?.surfaceIDs.firstIndex(of: id) else { continue }
+                return (workspace.name, place(of: tab, in: workspace) + [index])
+            }
+        }
+        return nil
+    }
+
+    private func place(of tab: TabID, in workspace: WorkspaceController) -> [Int] {
+        [workspaces.firstIndex { $0 === workspace } ?? 0, workspace.tabIDs.firstIndex(of: tab) ?? 0]
+    }
+
+    private func jumpToAgent(_ surface: SurfaceID) {
+        if let float = floats.float(of: surface) {
+            float.tab.map { reveal($0) }
+            if floats.activeID == float.spec.id { floats.refocus() } else { handle(.toggleToolFloat(float.spec.id)) }
+        } else if let tab = workspaces.lazy.flatMap(\.tabIDs).first(where: {
+            self.controller($0)?.surfaceIDs.contains(surface) == true
+        }) {
+            reveal(tab)
+            if floats.isOpen { closeFloatForTabChange() }
+            controller(tab)?.focus(surface: surface)
+        }
+        answerFocusedAgent()
+        renderAttention()
     }
 
     /// Answers whatever `surface` asked now that it is on screen, and takes down the card it raised.
@@ -2396,6 +2519,8 @@ final class WindowController: NSObject {
 
     var focusedSurfaceIDForTesting: SurfaceID? { activeController?.focusedSurfaceID }
 
+    func trackAgentExitsForTesting() { trackAgentExits() }
+
     func waitingToastForTesting(tab id: TabID) -> ToastView? { attentionCards[id] }
 
     func notifyCommandFinishedForTesting(tab id: TabID, result: TerminalCommandResult) {
@@ -2453,6 +2578,7 @@ final class WindowController: NSObject {
         }
         tabBar.render(items)
         sidebar.render(workspaces: workspaces, active: activeWorkspace)
+        renderAgents()
         for (id, card) in attentionCards {
             cardTitles[id].map { card.setTitle($0()) }
             card.refreshShortcuts()

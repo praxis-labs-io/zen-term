@@ -55,6 +55,10 @@ final class AttentionStore {
         guard let wasWorking = entries[id]?.working else { return }
         entries[id]?.working = on
         if wasWorking, !on, !focused { latchAgent(id, .completed) }
+        if !wasWorking, on, entries[id]?.agentLatched == .completed {
+            entries[id]?.agentLatched = .idle
+            entries[id]?.agentSince = nil
+        }
     }
 
     func markFocused(_ id: SurfaceID) {
@@ -95,6 +99,10 @@ final class AttentionStore {
         return max(entry.agentLatched, entry.working ? .working : .idle)
     }
 
+    func isWorking(_ id: SurfaceID) -> Bool {
+        entries[id]?.working == true
+    }
+
     func agentSince(of id: SurfaceID) -> Date? {
         entries[id]?.agentSince
     }
@@ -126,7 +134,7 @@ final class AttentionStore {
             + residual.values.reduce(0) { $0 + $1.waiting }
     }
 
-    private func latchAgent(_ id: SurfaceID, _ event: SurfaceAttention) {
+    func latchAgent(_ id: SurfaceID, _ event: SurfaceAttention) {
         guard var entry = entries[id], event > entry.agentLatched else { return }
         entry.agentLatched = event
         entry.agentSince = now()

@@ -169,6 +169,30 @@ final class TabController: NSObject {
         (bottomDrawerSurfaceID, rightDrawerSurfaceID)
     }
 
+    var surfaceIDs: [SurfaceID] {
+        paneCanvas.liveSurfaceIDs + [bottomDrawerSurfaceID, rightDrawerSurfaceID].compactMap { $0 }
+    }
+
+    func surface(_ id: SurfaceID) -> TerminalSurface? {
+        if id == bottomDrawerSurfaceID { return bottomDrawerSurface }
+        if id == rightDrawerSurfaceID { return rightDrawerSurface }
+        return paneCanvas.surface(id)
+    }
+
+    func focus(surface id: SurfaceID) {
+        guard id != focusedSurfaceID else { return restoreUnifiedFocus() }
+        exitZoomIfNeeded()
+        if id == bottomDrawerSurfaceID {
+            if !isBottomOpen { toggleBottomDrawer() }
+            focusDrawer(.bottom)
+        } else if id == rightDrawerSurfaceID {
+            if !isRightOpen { toggleRightDrawer() }
+            focusDrawer(.right)
+        } else {
+            paneCanvas.focus(surface: id)
+        }
+    }
+
     var focusedDrawerIsBusy: Bool { focusedDrawerSurface?.isBusy == true }
 
     var overlayState: OverlayState {
@@ -193,6 +217,8 @@ final class TabController: NSObject {
     var onCommandFinished: ((SurfaceID, TerminalCommandResult) -> Void)?
 
     var onProgress: ((SurfaceID, TerminalProgress?) -> Void)?
+
+    var onProgramLaunched: ((SurfaceID, String) -> Void)?
 
     var onSurfacesRegistered: (([SurfaceID]) -> Void)?
 
@@ -245,6 +271,7 @@ final class TabController: NSObject {
         paneCanvas.onNotification = { [weak self] id, n in self?.onNotification?(id, n) }
         paneCanvas.onCommandFinished = { [weak self] id, result in self?.onCommandFinished?(id, result) }
         paneCanvas.onProgress = { [weak self] id, p in self?.onProgress?(id, p) }
+        paneCanvas.onProgramLaunched = { [weak self] id, command in self?.onProgramLaunched?(id, command) }
         paneCanvas.onSurfacesRegistered = { [weak self] ids in self?.onSurfacesRegistered?(ids) }
         paneCanvas.onSurfacesReleased = { [weak self] ids in self?.onSurfacesReleased?(ids) }
         paneCanvas.onSurfaceEvent = { [weak self] surface, event in
@@ -357,10 +384,16 @@ final class TabController: NSObject {
         bottomDrawerSurfaceID = surfaceID
         onSurfacesRegistered?([surfaceID])
         surface.start(drawerConfig(command: bottomDrawerCommand, token: token))
+        announceLaunch(surfaceID, bottomDrawerCommand)
         bottomDrawerSurface = surface
         let panel = makeDrawerPanel(edge: .bottom, surface: surface)
         bottomDrawerPanel = panel
         return panel
+    }
+
+    private func announceLaunch(_ surface: SurfaceID, _ command: String?) {
+        guard let command, command != "shell" else { return }
+        onProgramLaunched?(surface, command)
     }
 
     private func drawerConfig(command: String?, token: Int) -> TerminalSurfaceConfig {
@@ -438,6 +471,7 @@ final class TabController: NSObject {
         rightDrawerSurfaceID = surfaceID
         onSurfacesRegistered?([surfaceID])
         surface.start(drawerConfig(command: rightDrawerCommand, token: token))
+        announceLaunch(surfaceID, rightDrawerCommand)
         rightDrawerSurface = surface
         let panel = makeDrawerPanel(edge: .right, surface: surface)
         rightDrawerPanel = panel

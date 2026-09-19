@@ -203,7 +203,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   `select`/`addTab`/`closeTab` keeps a card from outliving its tab.
 - **Hidden drawers are detached, not `isHidden`**: a 0x0 view resizes its PTY to zero
   columns and crashes TUIs.
-- **Titles update on push**, re-read every 1.5s as a backstop that also polls drawer busy.
+- **Titles update on push**, re-read every 1.5s as a backstop that also polls drawer busy
+  and agent exits.
 - **Attention has one owner per window**, `AttentionStore`, keyed by `SurfaceID` across
   panes, drawers and floats. Each surface latches a `SurfaceAttention` beside a `seen`
   flag, and one ranked fold (`rollup`) is both the priority rule and the rollup at every
@@ -221,7 +222,15 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   asking in the active tab still reads waiting while its tab number stays quiet. Focus
   counts only with the app active and the window key; dismissing a card does not clear
   it. A turn ending out of focus (`working` falling) latches `completed` here and nowhere
-  else.
+  else; a new turn replaces it, never a waiting latch.
+- **`AgentRoster` says which surfaces run an agent**, per window: its name, where the name
+  came from (`Source`, ranked so a stronger source renames and a weaker one never does),
+  and what it last said. `identify` is the one way in. A launch whose program is `ai` or a
+  known agent joins at launch, idle included; any surface that sends OSC 777 or
+  indeterminate OSC 9;4 joins on that signal. An agent leaves when its surface is released
+  or its busy reading falls (the program exited to the shell), once its latch is answered.
+  The Agents rows join it with `agentState(of:)` and sort waiting (oldest first), working,
+  done, idle, ties in sidebar order.
 - **A state only the chrome can act on never reaches the tab number.** `working` (OSC 9;4)
   says an agent is mid-turn, not that it wants you, so it stops at the dock's dot. The dot
   and the tab number are one signal at two altitudes; a hidden drawer or float asks

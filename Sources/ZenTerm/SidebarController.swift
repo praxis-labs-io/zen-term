@@ -32,6 +32,7 @@ final class SidebarController {
     private var slideID = 0
     private var entries: [Entry] = []
     var onLeave: () -> Void = {}
+    var onJump: (SurfaceID) -> Void = { _ in }
 
     init(
         onPalette: @escaping () -> Void, onSettings: @escaping () -> Void, onToggle: @escaping () -> Void,
@@ -43,6 +44,7 @@ final class SidebarController {
         lead = CollapsedSidebarLead(
             leadingInset: Self.toggleInset + SidebarFooter.buttonSize.width + Self.leadNameGap)
         view.onLeave = { [weak self] in self?.onLeave() }
+        view.onJump = { [weak self] in self?.onJump($0) }
     }
 
     var canvasLeadingAnchor: NSLayoutXAxisAnchor { canvasEdge.leadingAnchor }
@@ -85,6 +87,7 @@ final class SidebarController {
             leadWidth,
             tabBarLeading,
         ])
+        view.limitAgents(above: toggleButton.topAnchor)
         settle()
     }
 
@@ -165,6 +168,8 @@ final class SidebarController {
                 SidebarRowItem(id: $0.id, name: $0.name, branch: GitRepoStatus.branch($0.folder), isActive: $0.isActive)
             })
     }
+
+    func renderAgents(_ items: [SidebarAgentItem]) { view.renderAgents(items) }
 
     func setOpenModal(palette: Bool, settings: Bool) { footer.setOpenModal(palette: palette, settings: settings) }
 

@@ -341,6 +341,23 @@ final class AttentionStoreTests: XCTestCase {
         XCTAssertEqual(store.agentState(of: pane), .idle)
     }
 
+    func test_aNewTurn_replacesDone_butNeverWaiting() {
+        let store = makeStore()
+        let done = SurfaceIDs.mint()
+        let asking = SurfaceIDs.mint()
+        store.register(done, tab: tab)
+        store.register(asking, tab: tab)
+        store.setWorking(done, true, focused: false)
+        store.setWorking(done, false, focused: false)
+        store.record(asking, .waiting, seen: false, focused: false)
+
+        store.setWorking(done, true, focused: false)
+        store.setWorking(asking, true, focused: false)
+
+        XCTAssertEqual(store.agentState(of: done), .working)
+        XCTAssertEqual(store.agentState(of: asking), .waiting)
+    }
+
     func test_progressClearingWithoutATurn_latchesNothing() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
