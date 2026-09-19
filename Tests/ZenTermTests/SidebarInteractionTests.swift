@@ -991,6 +991,29 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(controller.window.firstResponder === row, "a cancelled confirm goes back to the row")
     }
 
+    func test_leavingFillScreen_withTheSidebarDockedSince_keepsTheWindowAtItsMinimum() throws {
+        Motion.isReduceMotionEnabled = { true }
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleSidebar)
+        XCTAssertFalse(controller.sidebarForTesting.isDocked, "precondition: collapsed, so the minimum is narrow")
+        var narrow = controller.window.frame
+        narrow.size.width = controller.window.contentMinSize.width
+        controller.window.setFrame(narrow, display: true)
+
+        controller.handle(.fillScreen)
+        controller.handle(.toggleSidebar)
+        let minimum = controller.window.contentMinSize.width
+        controller.handle(.fillScreen)
+
+        let restored = controller.window.contentRect(forFrameRect: controller.window.frame)
+        XCTAssertGreaterThanOrEqual(
+            restored.width, minimum - 0.5, "docking raised the minimum, so the restored frame follows it")
+        if let visible = (controller.window.screen ?? NSScreen.main)?.visibleFrame {
+            XCTAssertLessThanOrEqual(controller.window.frame.maxX, visible.maxX + 0.5, "and stays on screen")
+        }
+    }
+
     func test_theSidebarToggle_worksWithACardOpen_andLeavesItOpen() throws {
         let controller = makeController()
         controller.handle(.openSettings)

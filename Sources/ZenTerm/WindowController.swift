@@ -1982,7 +1982,7 @@ final class WindowController: NSObject {
         let animate = !Motion.isReduceMotionEnabled()
         if let restore = preFillFrame {
             preFillFrame = nil
-            window.setFrame(restore, display: true, animate: animate)
+            window.setFrameWithinLimits(restore, animate: animate)
             return
         }
         guard let visible = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
