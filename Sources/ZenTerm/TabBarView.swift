@@ -45,8 +45,7 @@ final class TabBarView: NSView {
     private let docView = NSView()
     // Kept per tab across renders: rebuilding blinked the hovered chip's tooltip on every title poll.
     private var chips: [Chip] = []
-    // Alpha-only mask, so it is theme-independent.
-    private let edgeFade = CAGradientLayer()
+    private let edgeFade = EdgeFade(axis: .horizontal)
     private let tracer = CALayer()
     private var activeTabID: TabID?
     // A move changes the slot but not the active tab; only this separates it from a title poll.
@@ -80,9 +79,7 @@ final class TabBarView: NSView {
         scrollView.contentInsets = .init()
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.documentView = docView
-        scrollView.layer?.mask = edgeFade
-        edgeFade.startPoint = CGPoint(x: 0, y: 0.5)
-        edgeFade.endPoint = CGPoint(x: 1, y: 0.5)
+        scrollView.layer?.mask = edgeFade.layer
         addSubview(scrollView)
 
         let clip = scrollView.contentView
@@ -192,14 +189,6 @@ final class TabBarView: NSView {
         super.layout()
         layoutChips()
         clampScrollIfContentFits()
-
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        edgeFade.frame = scrollView.bounds
-        let w = scrollView.bounds.width
-        let f = w > 2 * Self.fadeWidth ? Double(Self.fadeWidth / w) : 0
-        edgeFade.locations = [0, NSNumber(value: f), NSNumber(value: 1 - f), 1]
-        CATransaction.commit()
         updateFade()
     }
 
@@ -254,14 +243,9 @@ final class TabBarView: NSView {
     }
 
     private func updateFade() {
-        let opaque = CGColor(gray: 1, alpha: 1)
-        let clear = CGColor(gray: 1, alpha: 0)
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        edgeFade.colors = [
-            hasLeftOverflow ? clear : opaque, opaque, opaque, hasRightOverflow ? clear : opaque,
-        ]
-        CATransaction.commit()
+        let width = scrollView.bounds.width > 2 * Self.fadeWidth ? Self.fadeWidth : 0
+        edgeFade.update(
+            frame: scrollView.bounds, start: hasLeftOverflow ? width : 0, end: hasRightOverflow ? width : 0)
     }
 
     private func tracerFrame(for chip: NSView) -> CGRect {

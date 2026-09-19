@@ -124,12 +124,12 @@
 
 # Inset from the window edge to the tiled panes, on the right and top, and on the
 # left while the sidebar is collapsed (px). Docked, the panes sit one pane-gap from
-# the sidebar. The footer keeps its own spacing at any gutter.
+# the sidebar's rows. The footer keeps its own spacing at any gutter.
 # In-app Settings edit: applies live.
 # window-gutter = 8                   # clamped to 0…64
 
 # Gap between tiled panes, and between the canvas and a drawer or the docked
-# sidebar (px).
+# sidebar's rows (px).
 # In-app Settings edit: applies live.
 # pane-gap = 8                        # clamped to 0…64
 
@@ -381,12 +381,12 @@
 # keybind = resize_right=cmd+ctrl+right
 # keybind = new_tab=cmd+t
 # keybind = new_window=cmd+n
-# keybind = close_tab=cmd+ctrl+w                # the whole tab, however many panes it holds
+# keybind = close_tab=cmd+opt+w                 # the whole tab, however many panes it holds
 # keybind = close_window=cmd+shift+w            # closes the window outright, without asking twice
 # keybind = prev_tab=cmd+[
 # keybind = next_tab=cmd+]
-# keybind = move_tab_left=cmd+ctrl+[            # shift the active tab one slot along the bar
-# keybind = move_tab_right=cmd+ctrl+]
+# keybind = move_tab_left=cmd+opt+[             # shift the active tab one slot along the bar
+# keybind = move_tab_right=cmd+opt+]
 # keybind = select_tab_1=cmd+1                    # … through select_tab_9=cmd+9
 # keybind = toggle_sidebar=cmd+ctrl+s            # dock or collapse the workspace sidebar
 # keybind = toggle_bottom_drawer=cmd+b
@@ -413,7 +413,7 @@
 # keybind = dismiss_all_toasts=cmd+shift+opt+n
 # keybind = toggle_command_palette=cmd+shift+p
 # keybind = toggle_workspace_picker=cmd+p
-# keybind = new_workspace=cmd+opt+t              # no config entry; starts where a new tab would
+# keybind = new_workspace=cmd+ctrl+t             # no config entry; starts in your home folder
 # keybind = create_worktree=opt+enter            # over a picker or sidebar row: cut a worktree of it
 # keybind = remove_worktree=cmd+shift+backspace  # over a worktree row: delete its folder
 # keybind = open_settings=cmd+,
@@ -421,10 +421,10 @@
 # keybind = increase_font_size=cmd+=             # ⌘+ (cmd+shift+=) does this too
 # keybind = decrease_font_size=cmd+-
 # keybind = reset_font_size=cmd+0                # back to font-size above
-# keybind = prev_workspace=cmd+opt+[             # in sidebar order, wrapping
-# keybind = next_workspace=cmd+opt+]
-# keybind = select_workspace_1=cmd+opt+1          # … through select_workspace_9=cmd+opt+9
-# keybind = close_workspace=cmd+opt+w            # asks first if something runs, or if it is the last
+# keybind = prev_workspace=cmd+ctrl+[            # in sidebar order, wrapping
+# keybind = next_workspace=cmd+ctrl+]
+# keybind = select_workspace_1=cmd+ctrl+1         # … through select_workspace_9=cmd+ctrl+9
+# keybind = close_workspace=cmd+ctrl+w           # asks first if something runs, or if it is the last
 #
 # ─── Coming from Ghostty ─────────────────────────────────────────────────────
 #

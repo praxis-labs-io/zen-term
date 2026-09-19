@@ -5,6 +5,11 @@ enum SidebarRowID: Hashable {
     case ghost(String)
 }
 
+enum SidebarFocusStop: Equatable {
+    case row(SidebarRowID)
+    case agent(SurfaceID)
+}
+
 struct SidebarRowItem: Equatable {
     let id: SidebarRowID
     let variant: SettingsNavRow.Variant
@@ -18,13 +23,13 @@ struct SidebarRowItem: Equatable {
 
 final class SidebarView: NSView {
     static let width: CGFloat = 240
-    private static let padding: CGFloat = 8
+    static let padding: CGFloat = 8
     private static let captionHeight: CGFloat = 28
     private static let captionInset: CGFloat = 10
     private static let addInset: CGFloat = 4
     private static let newWorktreeSize = NSSize(width: 20, height: 20)
     private static let sectionGap: CGFloat = 14
-    private static let agentsBottomGap: CGFloat = 8
+    private static let contentBottomGap: CGFloat = 8
 
     private let caption = FieldCaption("Workspaces", required: false)
     private let addButton: IconButton
@@ -33,12 +38,18 @@ final class SidebarView: NSView {
     private var numbers: [SidebarRowID: Int] = [:]
     private var worktreeParents: Set<SidebarRowID> = []
     private var activeRow: SidebarRowID?
+    private var hoverCovers = 0
+    private weak var hoverExempt: NSView?
     let rowMenu = SidebarRowMenu()
     private let agentsCaption = FieldCaption("Agents", required: false)
-    private let agentScroll = NSScrollView()
     private let agentStack = NSStackView()
+    private let scroll = FadingScrollView()
+    private let content = FlippedView()
+    private var contentEndsAtRows: NSLayoutConstraint?
+    private var contentEndsAtAgents: NSLayoutConstraint?
     private var agentRows: [SurfaceID: SidebarAgentRow] = [:]
     var onLeave: (() -> Void)?
+    var onFocusChanged: (() -> Void)?
     var onJump: ((SurfaceID) -> Void)?
     private let onActivate: (SidebarRowID) -> Void
     private let onNewWorktree: (SidebarRowID) -> Void
@@ -59,18 +70,50 @@ final class SidebarView: NSView {
         rowStack.alignment = .leading
         rowStack.spacing = 0
         rowStack.translatesAutoresizingMaskIntoConstraints = false
-        for view in [caption, addButton, rowStack] { addSubview(view) }
+        rowMenu.onOpenChanged = { [weak self] isOpen in
+            self?.setHoverCovered(isOpen, exempting: isOpen ? self?.rowMenu.anchor : nil)
+        }
+        installScroll()
+        for view in [caption, addButton, rowStack] { content.addSubview(view) }
         installAgents()
 
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: Self.width),
-            caption.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.padding + Self.captionInset),
-            caption.centerYAnchor.constraint(equalTo: topAnchor, constant: Self.captionHeight / 2),
-            addButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -(Self.padding + Self.addInset)),
+            caption.leadingAnchor.constraint(
+                equalTo: content.leadingAnchor, constant: Self.padding + Self.captionInset),
+            caption.centerYAnchor.constraint(equalTo: content.topAnchor, constant: Self.captionHeight / 2),
+            addButton.trailingAnchor.constraint(
+                equalTo: content.trailingAnchor, constant: -(Self.padding + Self.addInset)),
             addButton.centerYAnchor.constraint(equalTo: caption.centerYAnchor),
-            rowStack.topAnchor.constraint(equalTo: topAnchor, constant: Self.captionHeight),
-            rowStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.padding),
-            rowStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.padding),
+            rowStack.topAnchor.constraint(equalTo: content.topAnchor, constant: Self.captionHeight),
+            rowStack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: Self.padding),
+            rowStack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -Self.padding),
+        ])
+    }
+
+    private func installScroll() {
+        let clip = FlippedClipView()
+        clip.drawsBackground = false
+        clip.postsBoundsChangedNotifications = true
+        scroll.contentView = clip
+        scroll.documentView = content
+        scroll.drawsBackground = false
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.scrollerStyle = .overlay
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        content.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(scroll)
+        clip.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(refreshRowHover), name: NSView.boundsDidChangeNotification, object: clip)
+        NSLayoutConstraint.activate([
+            scroll.topAnchor.constraint(equalTo: topAnchor),
+            scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
+            content.topAnchor.constraint(equalTo: clip.topAnchor),
+            content.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: clip.trailingAnchor),
         ])
     }
 
@@ -81,43 +124,32 @@ final class SidebarView: NSView {
         agentStack.alignment = .leading
         agentStack.spacing = 0
         agentStack.translatesAutoresizingMaskIntoConstraints = false
-        let clip = FlippedClipView()
-        clip.drawsBackground = false
-        agentScroll.contentView = clip
-        agentScroll.documentView = agentStack
-        agentScroll.drawsBackground = false
-        agentScroll.hasVerticalScroller = true
-        agentScroll.autohidesScrollers = true
-        agentScroll.scrollerStyle = .overlay
-        agentScroll.translatesAutoresizingMaskIntoConstraints = false
         agentsCaption.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(agentsCaption)
-        addSubview(agentScroll)
-        let fitsContent = agentScroll.heightAnchor.constraint(equalTo: agentStack.heightAnchor)
-        fitsContent.priority = .defaultHigh - 1
+        content.addSubview(agentsCaption)
+        content.addSubview(agentStack)
+        contentEndsAtRows = content.bottomAnchor.constraint(equalTo: rowStack.bottomAnchor)
+        contentEndsAtAgents = content.bottomAnchor.constraint(equalTo: agentStack.bottomAnchor)
         NSLayoutConstraint.activate([
             agentsCaption.leadingAnchor.constraint(equalTo: caption.leadingAnchor),
             agentsCaption.centerYAnchor.constraint(
                 equalTo: rowStack.bottomAnchor, constant: Self.sectionGap + Self.captionHeight / 2),
-            agentScroll.topAnchor.constraint(
+            agentStack.topAnchor.constraint(
                 equalTo: rowStack.bottomAnchor, constant: Self.sectionGap + Self.captionHeight),
-            agentScroll.leadingAnchor.constraint(equalTo: rowStack.leadingAnchor),
-            agentScroll.trailingAnchor.constraint(equalTo: rowStack.trailingAnchor),
-            agentStack.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
-            agentStack.trailingAnchor.constraint(equalTo: clip.trailingAnchor),
-            agentStack.topAnchor.constraint(equalTo: clip.topAnchor),
-            fitsContent,
+            agentStack.leadingAnchor.constraint(equalTo: rowStack.leadingAnchor),
+            agentStack.trailingAnchor.constraint(equalTo: rowStack.trailingAnchor),
         ])
         setAgentsHidden(true)
     }
 
-    func limitAgents(above anchor: NSLayoutYAxisAnchor) {
-        agentScroll.bottomAnchor.constraint(lessThanOrEqualTo: anchor, constant: -Self.agentsBottomGap).isActive = true
+    func limitContent(above anchor: NSLayoutYAxisAnchor) {
+        scroll.bottomAnchor.constraint(equalTo: anchor, constant: -Self.contentBottomGap).isActive = true
     }
 
     private func setAgentsHidden(_ hidden: Bool) {
         agentsCaption.isHidden = hidden
-        agentScroll.isHidden = hidden
+        agentStack.isHidden = hidden
+        contentEndsAtAgents?.isActive = !hidden
+        contentEndsAtRows?.isActive = hidden
     }
 
     func renderAgents(_ items: [SidebarAgentItem]) {
@@ -139,6 +171,7 @@ final class SidebarView: NSView {
             row.render(item)
         }
         setAgentsHidden(items.isEmpty)
+        refreshRowHover()
         if removedFocusedRow { onLeave?() }
     }
 
@@ -148,6 +181,7 @@ final class SidebarView: NSView {
         row.onArrowUp = { [weak self] in self?.moveFocus(-1) }
         row.onArrowDown = { [weak self] in self?.moveFocus(1) }
         row.onEscape = { [weak self] in self?.onLeave?() }
+        row.onFocusChanged = { [weak self] in self?.onFocusChanged?() }
         agentRows[id] = row
         return row
     }
@@ -163,6 +197,7 @@ final class SidebarView: NSView {
         }
         numbers = byID.compactMapValues(\.number)
         worktreeParents = Set(items.filter(\.makesWorktrees).map(\.id))
+        let previouslyActive = activeRow
         activeRow = items.first(where: \.isActive)?.id
         for (index, item) in items.enumerated() {
             let row = self.row(for: item)
@@ -178,7 +213,21 @@ final class SidebarView: NSView {
             setNewWorktreeButton(on: row, for: item)
             row.setShowsAttention(item.isWaiting)
         }
+        if activeRow != previouslyActive { revealActiveRow() }
+        refreshRowHover()
         if removedFocusedRow { onLeave?() }
+    }
+
+    // The keyboard scrolls to the row it focuses, and that wins while the sidebar holds focus.
+    private func revealActiveRow() {
+        guard !hasFocus, let id = activeRow, let row = rows[id] else { return }
+        layoutSubtreeIfNeeded()
+        reveal(row)
+    }
+
+    // One fade depth of margin, or a row scrolled to an edge lands under the fade.
+    private func reveal(_ row: NSView) {
+        row.scrollToVisible(row.bounds.insetBy(dx: 0, dy: -FadingScrollView.fadeDepth))
     }
 
     private func row(for item: SidebarRowItem) -> SettingsNavRow {
@@ -195,6 +244,7 @@ final class SidebarView: NSView {
         }
         row.onArrowUp = { [weak self] in self?.moveFocus(-1) }
         row.onArrowDown = { [weak self] in self?.moveFocus(1) }
+        row.onFocusChanged = { [weak self] in self?.onFocusChanged?() }
         row.onReturn = { [weak self] in self?.onActivate(id) }
         row.onEscape = { [weak self] in self?.onLeave?() }
         row.onSecondaryClick = { [weak self, weak row] in
@@ -204,6 +254,22 @@ final class SidebarView: NSView {
         rows[item.id] = row
         return row
     }
+
+    // The one place hover is settled, so a row built while a cover is up starts suppressed like the rest.
+    @objc private func refreshRowHover() {
+        for row in hoverRows {
+            row.setHoverSuppressed(hoverCovers > 0 && row !== hoverExempt)
+            row.refreshHover()
+        }
+    }
+
+    func setHoverCovered(_ covered: Bool, exempting exempt: NSView? = nil) {
+        hoverCovers = max(0, hoverCovers + (covered ? 1 : -1))
+        hoverExempt = covered ? exempt : nil
+        refreshRowHover()
+    }
+
+    private var hoverRows: [any HoverSuppressing] { Array(rows.values) + Array(agentRows.values) }
 
     private func setNewWorktreeButton(on row: SettingsNavRow, for item: SidebarRowItem) {
         guard item.makesWorktrees else { return row.setHoverAccessory(nil) }
@@ -227,7 +293,7 @@ final class SidebarView: NSView {
         ) { [weak self] in
             self?.onCloseWorkspace(id)
         }
-        return [creates, [close]]
+        return [creates + [close]]
     }
 
     override func viewDidHide() {
@@ -241,8 +307,29 @@ final class SidebarView: NSView {
 
     var focusedRow: SidebarRowID? { rows.first { KeyboardFocus.isFocused($0.value, in: window) }?.key }
 
-    func focusRow(_ id: SidebarRowID) {
-        rows[id]?.takeKeyboardFocus()
+    var focusedStop: SidebarFocusStop? {
+        if let id = focusedRow { return .row(id) }
+        return agentRows.first { KeyboardFocus.isFocused($0.value, in: window) }.map { .agent($0.key) }
+    }
+
+    @discardableResult
+    func focusStop(_ stop: SidebarFocusStop) -> Bool {
+        switch stop {
+        case .row(let id): return focusRow(id)
+        case .agent(let id):
+            guard let row = agentRows[id] else { return false }
+            row.takeKeyboardFocus()
+            reveal(row)
+            return true
+        }
+    }
+
+    @discardableResult
+    func focusRow(_ id: SidebarRowID) -> Bool {
+        guard let row = rows[id] else { return false }
+        row.takeKeyboardFocus()
+        reveal(row)
+        return true
     }
 
     private func moveFocus(_ delta: Int) {
@@ -251,11 +338,10 @@ final class SidebarView: NSView {
         guard let next = KeyboardFocus.step(from: current, delta: delta, count: stops.count) else { return }
         switch stops[next] {
         case let row as SettingsNavRow: row.takeKeyboardFocus()
-        case let row as SidebarAgentRow:
-            row.takeKeyboardFocus()
-            row.scrollToVisible(row.bounds)
-        default: break
+        case let row as SidebarAgentRow: row.takeKeyboardFocus()
+        default: return
         }
+        reveal(stops[next])
     }
 
     private var focusStops: [NSView] { orderedRows + orderedAgentRows }
@@ -293,5 +379,7 @@ final class SidebarView: NSView {
 
     var agentRowsForTesting: [SidebarAgentRow] { orderedAgentRows }
 
-    var agentsAreHiddenForTesting: Bool { agentScroll.isHidden && agentsCaption.isHidden }
+    var agentsAreHiddenForTesting: Bool { agentStack.isHidden && agentsCaption.isHidden }
+
+    var scrollForTesting: FadingScrollView { scroll }
 }

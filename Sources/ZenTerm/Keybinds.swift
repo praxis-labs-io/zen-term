@@ -235,14 +235,14 @@ enum KeymapDefaults {
         map[Chord(command: true, shift: true, key: "[")] = .prevPane
         map[Chord(command: true, shift: true, key: "]")] = .nextPane
         map[Chord(command: true, key: "w")] = .closePane
-        map[Chord(command: true, control: true, key: "w")] = .closeTab
+        map[Chord(command: true, option: true, key: "w")] = .closeTab
         map[Chord(command: true, shift: true, key: "w")] = .closeWindow
         map[Chord(command: true, shift: true, key: "s")] = .toggleScrollMode
 
         map[Chord(command: true, key: "[")] = .prevTab
         map[Chord(command: true, key: "]")] = .nextTab
-        map[Chord(command: true, control: true, key: "[")] = .moveTabLeft
-        map[Chord(command: true, control: true, key: "]")] = .moveTabRight
+        map[Chord(command: true, option: true, key: "[")] = .moveTabLeft
+        map[Chord(command: true, option: true, key: "]")] = .moveTabRight
         map[Chord(command: true, key: "t")] = .newTab
         map[Chord(command: true, key: "n")] = .newWindow
         for n in 1...9 { map[Chord(command: true, key: "\(n)")] = .selectTab(n) }
@@ -255,7 +255,7 @@ enum KeymapDefaults {
 
         map[Chord(command: true, shift: true, key: "p")] = .toggleCommandPalette
         map[Chord(command: true, key: "p")] = .toggleRepoPicker
-        map[Chord(command: true, option: true, key: "t")] = .newWorkspace
+        map[Chord(command: true, control: true, key: "t")] = .newWorkspace
         map[Chord(option: true, key: "⏎")] = .createWorktree
         map[Chord(command: true, shift: true, key: "⌫")] = .removeWorktree
         map[Chord(command: true, key: "\\")] = .toggleRightDrawer
@@ -288,10 +288,10 @@ enum KeymapDefaults {
         map[Chord(command: true, shift: true, key: "n")] = .dismissToast
         map[Chord(command: true, shift: true, option: true, key: "n")] = .dismissAllToasts
 
-        for n in 1...9 { map[Chord(command: true, option: true, key: "\(n)")] = .selectWorkspace(n) }
-        map[Chord(command: true, option: true, key: "[")] = .prevWorkspace
-        map[Chord(command: true, option: true, key: "]")] = .nextWorkspace
-        map[Chord(command: true, option: true, key: "w")] = .closeWorkspace
+        for n in 1...9 { map[Chord(command: true, control: true, key: "\(n)")] = .selectWorkspace(n) }
+        map[Chord(command: true, control: true, key: "[")] = .prevWorkspace
+        map[Chord(command: true, control: true, key: "]")] = .nextWorkspace
+        map[Chord(command: true, control: true, key: "w")] = .closeWorkspace
 
         return map
     }()

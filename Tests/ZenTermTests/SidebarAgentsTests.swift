@@ -191,7 +191,8 @@ final class SidebarAgentsTests: WindowTestCase {
 
         focus(first, in: c)
         XCTAssertEqual(items(c).map(\.state), [.idle])
-        XCTAssertEqual(rows(c).first?.fillForTesting, Theme.current.chrome.fill(.rest).cgColor, "you are here")
+        XCTAssertEqual(
+            rows(c).first?.fillForTesting, NSColor.clear.cgColor, "only the workspace row reads as active")
     }
 
     func test_aLaunchedAgent_isListedIdleFromLaunch_andOtherProgramsAreNot() throws {
@@ -200,7 +201,7 @@ final class SidebarAgentsTests: WindowTestCase {
         c.openWorkspaceForTesting(recipe("zen-review", right: "claude --resume"))
         c.openWorkspaceForTesting(recipe("notes", right: "vim"))
 
-        XCTAssertEqual(items(c).map(\.detail), ["claude · zen-review"])
+        XCTAssertEqual(items(c).map(\.detail), ["zen-review · claude"])
         XCTAssertEqual(items(c).map(\.state), [.idle])
     }
 
@@ -213,7 +214,7 @@ final class SidebarAgentsTests: WindowTestCase {
         notify(first, "Needs input")
         notify(second, "Needs input", title: "Claude Code")
 
-        XCTAssertEqual(Set(items(c).map(\.detail)), ["agent · Workspace 1", "Claude Code · Workspace 1"])
+        XCTAssertEqual(Set(items(c).map(\.detail)), ["Workspace 1 · agent", "Workspace 1 · Claude Code"])
     }
 
     func test_anAgentThatWorksBeforeItAsks_takesTheNameItsNotificationCarries() throws {
@@ -222,10 +223,10 @@ final class SidebarAgentsTests: WindowTestCase {
         _ = try split(c)
 
         progress(agent, working: true)
-        XCTAssertEqual(items(c).map(\.detail), ["agent · Workspace 1"], "precondition: joined unnamed")
+        XCTAssertEqual(items(c).map(\.detail), ["Workspace 1 · agent"], "precondition: joined unnamed")
         notify(agent, "Needs input", title: "Claude Code")
 
-        XCTAssertEqual(items(c).map(\.detail), ["Claude Code · Workspace 1"])
+        XCTAssertEqual(items(c).map(\.detail), ["Workspace 1 · Claude Code"])
     }
 
     func test_anAgentLeaves_whenItsSurfaceFallsIdle_notBeforeItWasBusy() throws {
@@ -433,4 +434,59 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(rows.map(\.showsAttentionForTesting), [false, false])
         XCTAssertNil(rows[1].accessibilityValue())
     }
+
+    func test_anAgentRowBornUnderACard_takesNoHover() throws {
+        let c = makeWindow()
+        let agent = try focusedAgent(c)
+        c.handle(.openSettings)
+        notify(agent, "Wants to run swift test")
+
+        let row = try XCTUnwrap(rows(c).first, "the agent joins the list while the card is open")
+        row.mouseEntered(
+            with: try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .mouseMoved, location: .zero, modifierFlags: [], timestamp: 0,
+                    windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
+
+        XCTAssertNotEqual(
+            row.fillForTesting, Theme.current.chrome.fill(.hover).cgColor,
+            "a row built while the sidebar is covered starts suppressed like the rows already there")
+    }
+
+    func test_whileACardCoversTheSidebar_agentRowsTakeNoHover() throws {
+        let c = makeWindow()
+        let agent = try focusedAgent(c)
+        notify(agent, "Wants to run swift test")
+        let row = try XCTUnwrap(rows(c).first)
+        let moved = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .mouseMoved, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+
+        c.handle(.openSettings)
+        row.mouseEntered(with: moved)
+
+        XCTAssertNotEqual(
+            row.fillForTesting, Theme.current.chrome.fill(.hover).cgColor,
+            "a card covers the agents without taking their tracking events")
+
+        c.handle(.openSettings)
+        row.mouseEntered(with: moved)
+
+        XCTAssertEqual(row.fillForTesting, Theme.current.chrome.fill(.hover).cgColor, "hover comes back")
+    }
+    func test_aCardOpenedFromAnAgentRow_handsFocusBackToIt() throws {
+        let c = makeWindow()
+        let agent = try focusedAgent(c)
+        notify(agent, "Wants to run swift test")
+        let row = try XCTUnwrap(rows(c).first)
+        row.takeKeyboardFocus()
+        XCTAssertTrue(c.window.firstResponder === row, "precondition: the agent row holds focus")
+
+        c.handle(.openSettings)
+        c.handle(.openSettings)
+
+        XCTAssertTrue(c.window.firstResponder === row, "focus goes back to the agent row it was opened from")
+    }
+
 }

@@ -28,6 +28,7 @@ final class WindowController: NSObject {
     private static var backdropTintAlpha: CGFloat { GeneralConfig.current.backdropAlpha }
 
     private let container = NSView()
+    private let canvasHost = NSView()
     private let tint = NSView()
     // Built on first use so the stack mounts above the canvas; not `lazy`, so re-insetting can't construct one.
     private var builtToasts: ToastPresenter?
@@ -183,6 +184,12 @@ final class WindowController: NSObject {
     private let dock: ToggleDock
     private let sidebar: SidebarController
     private var mountedCanvas: NSView?
+    private var focusReturn: SidebarFocusStop?
+    private var windowIsKey = true
+    private var activeCanvasSlides = 0
+    private let horizontalSlideFade = EdgeFade(axis: .horizontal)
+    private let verticalSlideFade = EdgeFade(axis: .vertical)
+    static let slideFadeDepth: CGFloat = 8
 
     private enum ModalKind {
         case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm, reportIssue
@@ -399,6 +406,7 @@ final class WindowController: NSObject {
         onSettings = { [weak self] in self?.handle(.openSettings) }
         onToggleSidebar = { [weak self] in self?.handle(.toggleSidebar) }
         sidebar.onLeave = { [weak self] in self?.restoreFocusToActive() }
+        sidebar.onFocusChanged = { [weak self] in self?.syncHalo() }
         onActivateRow = { [weak self] in self?.activateFromSidebar($0) }
         onNewWorktree = { [weak self] in self?.createWorktreeFromSidebar($0) }
         onCloseWorkspace = { [weak self] in self?.requestCloseWorkspace(id: $0) }
@@ -505,11 +513,18 @@ final class WindowController: NSObject {
 
         tabBar.translatesAutoresizingMaskIntoConstraints = false
         dock.translatesAutoresizingMaskIntoConstraints = false
+        canvasHost.translatesAutoresizingMaskIntoConstraints = false
+        canvasHost.wantsLayer = true
+        container.addSubview(canvasHost)
         container.addSubview(tabBar)
         container.addSubview(dock)
         sidebar.install(in: container, besideTabBar: tabBar)
         sidebar.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
         NSLayoutConstraint.activate([
+            canvasHost.leadingAnchor.constraint(equalTo: sidebar.edgeAnchor),
+            canvasHost.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            canvasHost.topAnchor.constraint(equalTo: container.topAnchor),
+            canvasHost.bottomAnchor.constraint(equalTo: tabBar.topAnchor),
             tabBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             tabBar.heightAnchor.constraint(equalToConstant: TabBarView.height),
             dock.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
@@ -678,7 +693,7 @@ final class WindowController: NSObject {
         return "Workspace \(number)"
     }
 
-    enum SlideEdge { case fromRight, fromLeft }
+    enum SlideEdge { case fromRight, fromLeft, fromBottom, fromTop }
 
     enum MountTransition {
         case instant
@@ -694,7 +709,7 @@ final class WindowController: NSObject {
         let outgoing = mountedCanvas
         pinCanvas(c.view)
         if let outgoing {
-            container.addSubview(c.view, positioned: .above, relativeTo: outgoing)
+            canvasHost.addSubview(c.view, positioned: .above, relativeTo: outgoing)
         }
         mountedCanvas = c.view
         restoreFocusToActive()
@@ -705,11 +720,51 @@ final class WindowController: NSObject {
             outgoing?.removeFromSuperview()
         case .slide(let edge):
             container.layoutSubtreeIfNeeded()
-            let dx = edge == .fromRight ? container.bounds.width : -container.bounds.width
-            Motion.slideSwap(incoming: c.view, outgoing: outgoing, dx: dx) { [weak self] in
+            beginCanvasSlide(from: edge)
+            Motion.slideSwap(incoming: c.view, outgoing: outgoing, offset: slideOffset(from: edge)) { [weak self] in
                 self?.detachIfInactive(outgoing)
+                self?.endCanvasSlide()
             }
         }
+    }
+
+    private func slideOffset(from edge: SlideEdge) -> CGVector {
+        let width = canvasHost.bounds.width + Self.slideFadeDepth
+        let height = canvasHost.bounds.height + Self.slideFadeDepth
+        switch edge {
+        case .fromRight: return CGVector(dx: width, dy: 0)
+        case .fromLeft: return CGVector(dx: -width, dy: 0)
+        case .fromBottom: return CGVector(dx: 0, dy: -height)
+        case .fromTop: return CGVector(dx: 0, dy: height)
+        }
+    }
+
+    private func beginCanvasSlide(from edge: SlideEdge) {
+        activeCanvasSlides += 1
+        canvasHost.layer?.mask = slideFade(crossing: edge).layer
+    }
+
+    private func slideFade(crossing edge: SlideEdge) -> EdgeFade {
+        let bounds = canvasHost.bounds
+        let depth = Self.slideFadeDepth
+        switch edge {
+        case .fromRight, .fromLeft:
+            let reach = sidebar.isDocked ? depth : 0
+            horizontalSlideFade.update(
+                frame: CGRect(x: -reach, y: 0, width: bounds.width + reach, height: bounds.height), start: reach,
+                end: 0)
+            return horizontalSlideFade
+        case .fromBottom, .fromTop:
+            verticalSlideFade.update(
+                frame: CGRect(x: 0, y: -depth, width: bounds.width, height: bounds.height + depth), start: depth,
+                end: 0)
+            return verticalSlideFade
+        }
+    }
+
+    private func endCanvasSlide() {
+        activeCanvasSlides = max(0, activeCanvasSlides - 1)
+        if activeCanvasSlides == 0 { canvasHost.layer?.mask = nil }
     }
 
     private func detachIfInactive(_ canvas: NSView?) {
@@ -722,24 +777,40 @@ final class WindowController: NSObject {
         canvas.layer?.removeAllAnimations()
         canvas.layer?.transform = CATransform3DIdentity
         canvas.layer?.opacity = 1
-        if canvas.superview === container {
-            container.addSubview(canvas, positioned: .below, relativeTo: nil)
+        if canvas.superview === canvasHost {
+            canvasHost.addSubview(canvas, positioned: .below, relativeTo: nil)
             return
         }
         canvas.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(canvas, positioned: .below, relativeTo: nil)
+        canvasHost.addSubview(canvas, positioned: .below, relativeTo: nil)
         NSLayoutConstraint.activate([
             canvas.leadingAnchor.constraint(equalTo: sidebar.canvasLeadingAnchor),
-            canvas.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            canvas.topAnchor.constraint(equalTo: container.topAnchor),
+            canvas.trailingAnchor.constraint(equalTo: canvasHost.trailingAnchor),
+            canvas.topAnchor.constraint(equalTo: canvasHost.topAnchor),
             canvas.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -ChromeMetrics.footerGap),
         ])
     }
 
     private func closeFloatForTabChange() { floats.close() }
 
+    private func captureFocusReturn() {
+        focusReturn = sidebar.hasFocus ? sidebar.focusedStop : nil
+    }
+
+    private func returnFocusAfterOverlay() {
+        let stop = focusReturn
+        focusReturn = nil
+        if let stop, sidebar.focusStop(stop) { return }
+        restoreFocusToActive()
+    }
+
     private func restoreFocusToActive() {
         if floats.isOpen { floats.refocus() } else { activeController?.restoreUnifiedFocus() }
+        syncHalo()
+    }
+
+    private func syncHalo() {
+        activeController?.setHaloVisible(!sidebar.hasFocus && windowIsKey)
     }
 
     // Below `tabBar`, so the ⌘W guard toast fired over an open float stays visible.
@@ -853,10 +924,17 @@ final class WindowController: NSObject {
         closeModal()
         closeFloatForTabChange()
         cancelConfirm()
+        let transition = workspaceSlide(from: activeWorkspace.id, to: id)
         activeWorkspace = workspace
-        mount(.instant)
+        mount(transition)
         if let tab = workspace.activeID { visit(tab) }
         renderAttention()
+    }
+
+    private func workspaceSlide(from old: WorkspaceID, to new: WorkspaceID) -> MountTransition {
+        let ids = order.navigable
+        guard let from = ids.firstIndex(of: old), let to = ids.firstIndex(of: new) else { return .instant }
+        return .slide(from: to > from ? .fromBottom : .fromTop)
     }
 
     private func cycleTab(_ delta: Int) {
@@ -959,18 +1037,20 @@ final class WindowController: NSObject {
         guard let next = workspaces.first(where: { $0.id == remaining[min(place, remaining.count - 1)] })
         else { return }
         activeWorkspace = next
-        mount(.instant)
+        mount(.slide(from: place < remaining.count ? .fromBottom : .fromTop))
         if let tab = next.activeID { visit(tab) }
         renderAttention()
     }
 
     private func presentModal(_ overlay: ModalOverlay, kind: ModalKind) {
         guard activeController != nil else { return }
+        captureFocusReturn()
         endModes()
         floats.cancelPendingOpen()
         pendingModal = nil
         presentWindowModal(overlay)
         modal = (overlay, kind)
+        sidebar.setHoverCovered(true)
         overlay.focusInitialResponder()
         overlay.animateIn()
         renderDock()
@@ -980,9 +1060,10 @@ final class WindowController: NSObject {
         pendingModal = nil
         guard let overlay = modal?.overlay else { return }
         modal = nil
+        sidebar.setHoverCovered(false)
         modalGutter = nil
         overlay.animateOut { overlay.removeFromSuperview() }
-        restoreFocusToActive()
+        returnFocusAfterOverlay()
         renderDock()
     }
 
@@ -1631,8 +1712,10 @@ final class WindowController: NSObject {
         confirmLabel: String, onConfirm: @escaping () -> Void, onCancel: (() -> Void)? = nil
     ) {
         cancelConfirm()
+        // After the card closes, not before: closing it is what hands focus back to the row it was opened from.
         closeModal()
         endModes()
+        if sidebar.hasFocus { focusReturn = sidebar.focusedStop ?? focusReturn }
         confirmOnCancel = onCancel
         let content = ToastContent(variant: variant, title: title, message: message)
         let actions = [
@@ -1661,7 +1744,7 @@ final class WindowController: NSObject {
         confirmToast = nil
         confirmOnCancel = nil
         toasts.dismiss(toast)
-        restoreFocusToActive()
+        returnFocusAfterOverlay()
         renderDock()
     }
 
@@ -1679,10 +1762,11 @@ final class WindowController: NSObject {
         appendWorkspace(named: ws.title, at: ws.path, config: ws, origin: origin)
     }
 
+    // The home folder, not the focused pane's: a workspace is a place, and folder identity makes two on one folder collide.
     private func newWorkspace() {
         closeModal()
-        let folder = ShellLaunch.newSessionCWD(focused: activeController?.focusedCWD) ?? ShellLaunch.defaultCWD
-        appendWorkspace(named: Self.unconfiguredName(among: workspaces.map(\.name)), at: folder, config: nil)
+        appendWorkspace(
+            named: Self.unconfiguredName(among: workspaces.map(\.name)), at: ShellLaunch.defaultCWD, config: nil)
     }
 
     private func appendWorkspace(
@@ -1724,6 +1808,9 @@ final class WindowController: NSObject {
                 return
             }
             switch chord {
+            case .toggleSidebar:
+                toggleSidebar()
+                return
             case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue,
                 .newTool:
                 closingModalKind = modal.kind
@@ -1893,7 +1980,7 @@ final class WindowController: NSObject {
         let animate = !Motion.isReduceMotionEnabled()
         if let restore = preFillFrame {
             preFillFrame = nil
-            window.setFrame(restore, display: true, animate: animate)
+            window.setFrameWithinLimits(restore, animate: animate)
             return
         }
         guard let visible = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
@@ -2098,6 +2185,11 @@ final class WindowController: NSObject {
         c.focusPastLeftEdge = { [weak self, weak c] in
             guard let self, c === self.activeController else { return false }
             return self.focusSidebar()
+        }
+        c.noNeighborHint = { [weak self] direction in
+            guard let self, direction == .left, !sidebar.isDocked else { return nil }
+            let chord = CommandCatalog.spec(for: .toggleSidebar).shortcut
+            return chord.isEmpty ? nil : "Press \(chord) to show the sidebar."
         }
         c.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
         c.onProgress = { [weak self] surface, progress in
@@ -2399,14 +2491,13 @@ final class WindowController: NSObject {
     }
 
     private func agentItems() -> [SidebarAgentItem] {
-        let here = focusedSurface
         typealias Ranked = (item: SidebarAgentItem, since: Date?, position: [Int])
         let located = agents.agents.compactMap { id, agent -> Ranked? in
             guard let place = agentPlace(id) else { return nil }
-            let state = SidebarAgentItem.State(attention.agentState(of: id), failed: agent.failed)
+            let state = AttentionTone(attention.agentState(of: id), failed: agent.failed)
             let item = SidebarAgentItem(
                 id: id, state: state, summary: agent.message ?? state.summary,
-                detail: "\(agent.name ?? AgentRoster.unnamed) · \(place.name)", isHere: id == here)
+                detail: "\(place.name) · \(agent.name ?? AgentRoster.unnamed)")
             return (item, attention.agentSince(of: id), place.position)
         }
         return located.sorted { a, b in
@@ -2694,6 +2785,7 @@ final class WindowController: NSObject {
                 attentionState: attention.state(tab: id).tabState)
         }
         tabBar.render(items)
+        window.title = activeWorkspace.name
         let waiting = workspaces.filter { attention.state(tabs: $0.tabIDs) == .waiting }.map(\.id)
         sidebar.render(order: order, workspaces: workspaces, active: activeWorkspace, waiting: Set(waiting))
         renderAgents()
@@ -2769,9 +2861,15 @@ extension WindowController: NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) { tearDown() }
 
-    func windowDidResignKey(_ notification: Notification) { endModes() }
+    func windowDidResignKey(_ notification: Notification) {
+        windowIsKey = false
+        syncHalo()
+        endModes()
+    }
 
     func windowDidBecomeKey(_ notification: Notification) {
+        windowIsKey = true
+        syncHalo()
         sidebar.refreshBranches()
         answerFocusedAgent()
     }

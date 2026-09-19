@@ -109,15 +109,22 @@ final class KeymapAssemblyTests: XCTestCase {
         XCTAssertEqual(map[Chord(command: true, key: "0")], .resetFontSize)
     }
 
-    func test_workspaceChords_areTheTabChordsPlusOption() {
+    func test_workspaceChords_areTheTabChordsPlusControl() {
         let map = assemble()
-        for n in 1...9 { XCTAssertEqual(map[Chord(command: true, option: true, key: "\(n)")], .selectWorkspace(n)) }
-        XCTAssertEqual(map[Chord(command: true, option: true, key: "[")], .prevWorkspace)
-        XCTAssertEqual(map[Chord(command: true, option: true, key: "]")], .nextWorkspace)
-        XCTAssertEqual(map[Chord(command: true, option: true, key: "w")], .closeWorkspace)
-        XCTAssertEqual(map[Chord(command: true, option: true, key: "t")], .newWorkspace)
+        for n in 1...9 { XCTAssertEqual(map[Chord(command: true, control: true, key: "\(n)")], .selectWorkspace(n)) }
+        XCTAssertEqual(map[Chord(command: true, control: true, key: "[")], .prevWorkspace)
+        XCTAssertEqual(map[Chord(command: true, control: true, key: "]")], .nextWorkspace)
+        XCTAssertEqual(map[Chord(command: true, control: true, key: "w")], .closeWorkspace)
+        XCTAssertEqual(map[Chord(command: true, control: true, key: "t")], .newWorkspace)
         XCTAssertEqual(map[Chord(command: true, key: "[")], .prevTab)
         XCTAssertEqual(map[Chord(command: true, option: true, key: "←")], .navLeft)
+    }
+
+    func test_tabMoveAndCloseChords_takeOption() {
+        let map = assemble()
+        XCTAssertEqual(map[Chord(command: true, option: true, key: "[")], .moveTabLeft)
+        XCTAssertEqual(map[Chord(command: true, option: true, key: "]")], .moveTabRight)
+        XCTAssertEqual(map[Chord(command: true, option: true, key: "w")], .closeTab)
     }
 
     func test_rebindingIncrease_freesBothDefaultChords() {

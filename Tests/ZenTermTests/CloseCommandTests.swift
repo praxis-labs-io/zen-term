@@ -621,7 +621,7 @@ final class CloseCommandTests: WindowTestCase {
         XCTAssertNil(apiCanvas.superview, "the closing workspace is never mounted")
     }
 
-    func test_cmdOptW_throughTheInterceptor_closesTheWorkspace() throws {
+    func test_cmdCtrlW_throughTheInterceptor_closesTheWorkspace() throws {
         let c = onScreen()
         _ = openSecondWorkspace(c, named: "api")
         let keys = KeyInterceptor()
@@ -629,11 +629,11 @@ final class CloseCommandTests: WindowTestCase {
         keys.onReservedChord = { c.handle($0) }
         let event = try XCTUnwrap(
             NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: [.command, .option], timestamp: 0,
-                windowNumber: 0, context: nil, characters: "∑", charactersIgnoringModifiers: "w",
+                with: .keyDown, location: .zero, modifierFlags: [.command, .control], timestamp: 0,
+                windowNumber: 0, context: nil, characters: "\u{17}", charactersIgnoringModifiers: "w",
                 isARepeat: false, keyCode: 13))
 
-        XCTAssertNil(keys.route(event), "⌘⌥W is claimed, not passed to the pane")
+        XCTAssertNil(keys.route(event), "⌘⌃W is claimed, not passed to the pane")
         XCTAssertEqual(c.workspaceIDsForTesting.count, 1)
     }
 }

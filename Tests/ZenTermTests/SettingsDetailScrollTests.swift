@@ -76,6 +76,25 @@ final class SettingsDetailScrollTests: WindowTestCase {
         return scroll.documentVisibleRect.contains(view.convert(view.bounds, to: document))
     }
 
+    private func fadedEdges(of scroll: NSScrollView) -> (top: Bool, bottom: Bool) {
+        let fade = (scroll as? FadingScrollView)?.fadeForTesting
+        let colors = (fade?.colors as? [CGColor]) ?? []
+        return (colors.first?.alpha == 0, colors.last?.alpha == 0)
+    }
+
+    func test_theShortcutsList_fadesOnlyTheEdgeItHidesRowsPast() throws {
+        let scroll = mountKeybinds()
+        scroll.layoutSubtreeIfNeeded()
+
+        XCTAssertTrue(fadedEdges(of: scroll) == (false, true), "at the top, only the bottom edge hides rows")
+
+        scroll.contentView.scroll(
+            to: NSPoint(x: 0, y: (scroll.documentView?.frame.height ?? 0) - scroll.contentView.bounds.height))
+        scroll.reflectScrolledClipView(scroll.contentView)
+
+        XCTAssertTrue(fadedEdges(of: scroll) == (true, false), "at the end, only the top edge hides rows")
+    }
+
     func test_arrowingUpToTheFirstRow_bringsBackTheFirstGroupCaption() throws {
         let scroll = mountKeybinds()
         let chips = descendants(of: scroll).compactMap { $0 as? KeybindChip }

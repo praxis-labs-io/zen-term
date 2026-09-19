@@ -1,56 +1,45 @@
 import AppKit
 
 struct SidebarAgentItem: Equatable {
-    enum State: Equatable {
-        case waiting, working, done, failed, idle
+    let id: SurfaceID
+    let state: AttentionTone
+    let summary: String
+    let detail: String
+}
 
-        init(_ attention: SurfaceAttention, failed: Bool) {
-            switch attention {
-            case .waiting: self = .waiting
-            case .working: self = .working
-            case .completed: self = failed ? .failed : .done
-            case .idle: self = .idle
-            }
-        }
-
-        var rank: Int {
-            switch self {
-            case .waiting: return 0
-            case .working: return 1
-            case .done, .failed: return 2
-            case .idle: return 3
-            }
-        }
-
-        var summary: String {
-            switch self {
-            case .waiting: return "Waiting"
-            case .working: return "Working"
-            case .done: return "Done"
-            case .failed: return "Exited"
-            case .idle: return "Idle"
-            }
+// The Agents list's own ordering and copy for the shared states.
+extension AttentionTone {
+    var rank: Int {
+        switch self {
+        case .waiting: return 0
+        case .working: return 1
+        case .done, .failed: return 2
+        case .idle: return 3
         }
     }
 
-    let id: SurfaceID
-    let state: State
-    let summary: String
-    let detail: String
-    let isHere: Bool
+    var summary: String {
+        switch self {
+        case .waiting: return "Waiting"
+        case .working: return "Working"
+        case .done: return "Done"
+        case .failed: return "Exited"
+        case .idle: return "Idle"
+        }
+    }
 }
 
-final class SidebarAgentRow: NSView {
+final class SidebarAgentRow: NSView, HoverSuppressing {
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onEscape: (() -> Void)?
+    var onFocusChanged: (() -> Void)?
 
     private let summaryLabel = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
     private let glyphSlot = NSView()
     private let dot = NSView()
     private let spinner = Spinner()
-    private let check = NSImageView()
     private let onActivate: () -> Void
     private var item: SidebarAgentItem?
     private let tooltip = TooltipHost(label: "Jump to agent")
@@ -58,6 +47,7 @@ final class SidebarAgentRow: NSView {
     private var trackingArea: NSTrackingArea?
     private var isFocusedStop = false
     private var isHovered = false
+    private var isHoverSuppressed = false
 
     static let height: CGFloat = 47
     private static let inset: CGFloat = 10
@@ -87,32 +77,31 @@ final class SidebarAgentRow: NSView {
 
         dot.wantsLayer = true
         dot.layer?.cornerRadius = Self.dotDiameter / 2
-        check.image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)
-        check.symbolConfiguration = .init(pointSize: 10, weight: .semibold)
         glyphSlot.translatesAutoresizingMaskIntoConstraints = false
         addSubview(glyphSlot)
-        for glyph in [dot, spinner, check] {
+        for glyph in [dot, spinner] {
             glyph.translatesAutoresizingMaskIntoConstraints = false
             glyphSlot.addSubview(glyph)
             NSLayoutConstraint.activate([
-                glyph.centerXAnchor.constraint(equalTo: glyphSlot.centerXAnchor),
+                glyph.trailingAnchor.constraint(equalTo: glyphSlot.trailingAnchor),
                 glyph.centerYAnchor.constraint(equalTo: glyphSlot.centerYAnchor),
             ])
         }
 
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: Self.height),
-            glyphSlot.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),
+            glyphSlot.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset),
             glyphSlot.topAnchor.constraint(equalTo: topAnchor, constant: Self.top),
             glyphSlot.widthAnchor.constraint(equalToConstant: Self.glyphSize.width),
             glyphSlot.heightAnchor.constraint(equalToConstant: Self.glyphSize.height),
             dot.widthAnchor.constraint(equalToConstant: Self.dotDiameter),
             dot.heightAnchor.constraint(equalToConstant: Self.dotDiameter),
-            summaryLabel.leadingAnchor.constraint(equalTo: glyphSlot.trailingAnchor, constant: Self.glyphGap),
-            summaryLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -Self.inset),
+            summaryLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),
+            summaryLabel.trailingAnchor.constraint(
+                lessThanOrEqualTo: glyphSlot.leadingAnchor, constant: -Self.glyphGap),
             summaryLabel.centerYAnchor.constraint(equalTo: glyphSlot.centerYAnchor),
             detailLabel.leadingAnchor.constraint(equalTo: summaryLabel.leadingAnchor),
-            detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -Self.inset),
+            detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: glyphSlot.leadingAnchor, constant: -Self.glyphGap),
             detailLabel.topAnchor.constraint(equalTo: glyphSlot.bottomAnchor, constant: Self.lineGap),
         ])
     }
@@ -126,10 +115,9 @@ final class SidebarAgentRow: NSView {
         detailLabel.stringValue = item.detail
         setAccessibilityLabel(item.summary)
         setAccessibilityValue(item.detail)
-        dot.isHidden = item.state != .waiting && item.state != .failed
+        dot.isHidden = item.state == .working
         spinner.isHidden = item.state != .working
         spinner.isSpinning = item.state == .working
-        check.isHidden = item.state != .done
         reapplyTheme()
     }
 
@@ -138,13 +126,10 @@ final class SidebarAgentRow: NSView {
     var fillForTesting: CGColor? { layer?.backgroundColor }
 
     func reapplyTheme() {
-        let chrome = Theme.current.chrome
-        let isQuiet = item?.state == .done || item?.state == .idle
-        summaryLabel.textColor = chrome.ink(isQuiet ? .subtle : .normal)
-        detailLabel.textColor = chrome.ink(.muted)
-        dot.layer?.backgroundColor =
-            (item?.state == .failed ? chrome.destructive : chrome.attention).nsColor.cgColor
-        check.contentTintColor = chrome.positive.nsColor
+        let ink = (item?.state ?? .idle).ink
+        summaryLabel.textColor = ink
+        detailLabel.textColor = Theme.current.chrome.ink(.muted)
+        dot.layer?.backgroundColor = ink.cgColor
         spinner.reapplyTheme()
         refreshFill()
     }
@@ -153,10 +138,8 @@ final class SidebarAgentRow: NSView {
         let chrome = Theme.current.chrome
         if isFocusedStop {
             layer?.backgroundColor = chrome.selectionFill.cgColor
-        } else if isHovered {
+        } else if isHovered, !isHoverSuppressed {
             layer?.backgroundColor = chrome.fill(.hover).cgColor
-        } else if item?.isHere == true {
-            layer?.backgroundColor = chrome.fill(.rest).cgColor
         } else {
             layer?.backgroundColor = NSColor.clear.cgColor
         }
@@ -170,8 +153,19 @@ final class SidebarAgentRow: NSView {
         window?.makeFirstResponder(self)
         isTakingKeyboardFocus = false
     }
-    override func becomeFirstResponder() -> Bool { isFocusedStop = true; refreshFill(); return true }
-    override func resignFirstResponder() -> Bool { isFocusedStop = false; refreshFill(); return true }
+    override func becomeFirstResponder() -> Bool {
+        isFocusedStop = true
+        refreshFill()
+        onFocusChanged?()
+        return true
+    }
+
+    override func resignFirstResponder() -> Bool {
+        isFocusedStop = false
+        refreshFill()
+        onFocusChanged?()
+        return true
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -185,7 +179,23 @@ final class SidebarAgentRow: NSView {
     override func mouseEntered(with event: NSEvent) {
         isHovered = true
         refreshFill()
+        guard !isHoverSuppressed else { return }
         tooltip.show(from: self)
+    }
+
+    func refreshHover() {
+        let inside = pointerIsInside
+        guard inside != isHovered else { return }
+        isHovered = inside
+        if !inside { tooltip.hide(from: self) }
+        refreshFill()
+    }
+
+    func setHoverSuppressed(_ suppressed: Bool) {
+        guard suppressed != isHoverSuppressed else { return }
+        isHoverSuppressed = suppressed
+        if suppressed { tooltip.hide(from: self) } else { isHovered = pointerIsInside }
+        refreshFill()
     }
 
     override func mouseExited(with event: NSEvent) {

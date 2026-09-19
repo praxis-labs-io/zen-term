@@ -9,7 +9,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
     private var dismiss = DismissGate()
 
     private let navStack = NSStackView()
-    private let navScroll = NSScrollView()
+    private let navScroll = FadingScrollView()
     private var navRows: [SettingsNavRow] = []
     private let detailContainer = NSView()
     private var selectedIndex = 0

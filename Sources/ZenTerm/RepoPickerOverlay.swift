@@ -111,7 +111,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         for workspaces: [Workspace], listings: [URL: WorktreeListing], configured: Set<URL>,
         owners: [URL: URL]
     ) -> [Row] {
-        var rows: [Row] = [.newWorkspace, .add]
+        var rows: [Row] = [.newWorkspace]
         for workspace in workspaces {
             rows.append(.workspace(workspace))
             let path = workspace.path.standardizedFileURL
@@ -122,7 +122,7 @@ final class RepoPickerOverlay: PaletteOverlay {
                 rows.append(.worktree(worktree, parent: workspace))
             }
         }
-        return rows
+        return rows + [.add]
     }
 
     override func numberOfRows() -> Int { rows.count }

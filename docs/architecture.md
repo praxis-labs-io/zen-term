@@ -177,8 +177,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 
 - **A window starts with one workspace, with no config entry**, and one workspace is
   always active. A workspace without a config entry is named "Workspace N", the lowest
-  number no open workspace in the window holds. ⌘⌥T opens one at the end of the sidebar,
-  in the folder a new tab would start in. ⌘P opens a configured workspace, or switches to
+  number no open workspace in the window holds. ⌘⌃T opens one at the end of the sidebar,
+  in the home folder: a workspace is a place, and one opened on the focused pane's folder
+  would collide with the open workspace already identified by it. ⌘P opens a configured workspace, or switches to
   it when it is already open. A workspace is open when one with a config entry is open at
   its folder, so renaming it in Settings does not open a second copy.
 - **`WorkspaceOrder` is the sidebar's order, derived from open order at every read.** A
@@ -186,11 +187,12 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   workspace at its parent's folder, or under a ghost row built from that origin when the
   parent is closed. A group's first member mints its `seat` and later members inherit it,
   so the group holds its place as members close and reopen. A workspace with no config
-  entry is never in a group. `navigable` skips ghosts; the sidebar's numbers, ⌘⌥1…9,
-  ⌘⌥[ ] and a close's landing all read it.
-- **`activate(_:)` is the single path a switch goes through**: a row click, ⌘⌥1…9 and ⌘⌥[ ],
-  ⌘P, ⌘⌥T, and revealing a background tab. It swaps the canvas without
-  motion, so a newly opened workspace applies its recipe in the same turn.
+  entry is never in a group. `navigable` skips ghosts; the sidebar's numbers, ⌘⌃1…9,
+  ⌘⌃[ ] and a close's landing all read it.
+- **`activate(_:)` is the single path a switch goes through**: a row click, ⌘⌃1…9 and ⌘⌃[ ],
+  ⌘P, ⌘⌃T, and revealing a background tab. An open workspace slides in on the y axis, from
+  below when it sits lower in `navigable`; a new one has no canvas yet, so it mounts
+  without motion and applies its recipe in the same turn. A close's landing slides the same way.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
   workspace costs nothing beyond an inactive tab.
 - **Tab ids are minted by the window**, not by the workspace, so they stay unique across a
@@ -203,7 +205,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **Inactive tabs and workspaces are detached but retained**, so shells keep running.
 - **Closing the last tab closes its workspace, and the last workspace closes the window.** A
   close that takes the window with it confirms first, so the window never goes unannounced.
-  `closeWorkspace` is the single path a workspace goes through: ⌘⌥W closes each of its tabs,
+  `closeWorkspace` is the single path a workspace goes through: ⌘⌃W closes each of its tabs,
   background ones first so nothing it closes is mounted, and the last tab's close lands on the
   row that takes its place in `navigable`.
 - **Window stack, back to front:** canvas, tool float, tab bar, dock and sidebar, toast
@@ -269,7 +271,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **Focus Mode is strict:** split, nav, resize and drawer toggles raise a toast.
 - **The sidebar owns the canvas's leading edge.** The canvas and tool floats start from
   `SidebarController.canvasLeadingAnchor`, and the tab bar starts from the collapsed
-  lead's trailing edge; modals and toasts stay window-wide.
+  lead's trailing edge; modals and toasts stay window-wide. Canvases mount in a host that
+  runs from the sidebar's edge to the tab bar's. While a canvas slides, the host's mask
+  (`EdgeFade`) keeps it opaque to that edge and fades it out just past it, under the chrome;
+  resting content is never faded, so nothing jumps when the mask lifts.
   Docking slides through `Motion.drawerSlide`, the drawers' path, holding the active
   tab's grids so they reflow once. Its toggle sits on the window, outside the sliding
   view, so it holds one spot docked and collapsed. Rows read the window's workspaces,
@@ -348,7 +353,8 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   loses it gets Revert only. Settings rows show the conflict but do not resolve it.
 - **The modal gate** in `WindowController.handle(_:)` runs confirm, modal card, tool
   float, then dispatch. App-global chords bypass it in `AppDelegate.route`; a palette pick
-  of one returns there through `onAppGlobalCommand`. A card swallows other chords; a float
+  of one returns there through `onAppGlobalCommand`. The sidebar toggle passes through an
+  open card, which stays open. A card swallows other chords; a float
   raises a notice for pane commands and passes reading chords to its own buffer
   (`modeTarget`).
 - **Picker chords go through `PickerChordGuard`** (⌥⏎, ⌘⇧⌫), because a bound chord is

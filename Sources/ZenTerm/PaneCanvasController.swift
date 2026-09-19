@@ -238,7 +238,7 @@ final class PaneCanvasController: NSObject {
     private func updateHalo() {
         for (id, host) in hostByLeaf {
             let focused = panesHoldFocus && (id == tree.focusedLeaf)
-            host.isFocused = focused
+            host.isFocused = focused && haloIsVisible
             host.isZoomed = (id == zoomedLeaf)
             registry.surface(for: id)?.setFocused(focused && focusedSurfaceRendersFocused)
         }
@@ -246,6 +246,13 @@ final class PaneCanvasController: NSObject {
 
     /// Stored, because `updateHalo` rewrites the same state on every restructure.
     private var focusedSurfaceRendersFocused = true
+    // Separate from `panesHoldFocus`, which the drawers own: the window hides the halo without moving focus.
+    private var haloIsVisible = true
+
+    func setHaloVisible(_ visible: Bool) {
+        haloIsVisible = visible
+        updateHalo()
+    }
 
     func setFocusedSurfaceRendersFocused(_ focused: Bool) {
         focusedSurfaceRendersFocused = focused

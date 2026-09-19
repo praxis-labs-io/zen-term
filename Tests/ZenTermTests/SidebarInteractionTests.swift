@@ -94,6 +94,11 @@ final class SidebarInteractionTests: WindowTestCase {
         row.mouseDown(with: event)
     }
 
+    private func rowFillEdge(in controller: WindowController) throws -> CGFloat {
+        let row = try XCTUnwrap(modals(SettingsNavRow.self, in: controller).first, "a workspace row")
+        return frame(of: row, in: controller).maxX
+    }
+
     private func modals<T: NSView>(_ type: T.Type, in controller: WindowController) -> [T] {
         descendants(of: controller.containerForTesting).compactMap { $0 as? T }
     }
@@ -105,10 +110,13 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(sidebar.isDocked)
         XCTAssertFalse(sidebar.view.isHidden)
         XCTAssertTrue(sidebar.lead.isHidden)
-        XCTAssertEqual(frame(of: try tabBar(in: controller), in: controller).minX, SidebarView.width)
+        XCTAssertEqual(
+            frame(of: try tabBar(in: controller), in: controller).minX, SidebarView.width - SidebarView.padding,
+            "the bar moves in with the canvas, so the first title keeps its place against the pane")
         XCTAssertEqual(
             frame(of: try pane(in: controller), in: controller).minX,
-            SidebarView.width + Self.paneGap, "docked, the panes sit one pane-gap from the sidebar, as from a drawer")
+            try rowFillEdge(in: controller) + Self.paneGap,
+            "docked, the panes sit one pane-gap from the sidebar's rows, as from a drawer")
     }
 
     func test_toggle_collapses_andDocksAgain() throws {
@@ -135,7 +143,11 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(sidebar.lead.isHidden)
         XCTAssertEqual(
             frame(of: try pane(in: controller), in: controller).minX,
-            SidebarView.width + Self.paneGap, "docked, the panes sit one pane-gap from the sidebar, as from a drawer")
+            try rowFillEdge(in: controller) + Self.paneGap,
+            "docked, the panes sit one pane-gap from the sidebar's rows, as from a drawer")
+        XCTAssertEqual(
+            frame(of: try tabBar(in: controller), in: controller).minX, SidebarView.width - SidebarView.padding,
+            "docking again lands the bar back beside the canvas")
     }
 
     func test_toggle_holdsItsWindowPosition_dockedAndCollapsed() throws {
@@ -190,7 +202,8 @@ final class SidebarInteractionTests: WindowTestCase {
         let bar = frame(of: try tabBar(in: controller), in: controller)
         let dock = frame(of: controller.dockForTesting, in: controller)
 
-        XCTAssertGreaterThanOrEqual(bar.minX, SidebarView.width, "the tab bar starts after the docked sidebar")
+        let footer = frame(of: controller.sidebarForTesting.footer, in: controller)
+        XCTAssertGreaterThanOrEqual(bar.minX, footer.maxX, "the tab bar starts after the docked sidebar's footer")
         XCTAssertGreaterThan(bar.width, 0, "the tab bar keeps room between the sidebar and the toolbar")
         XCTAssertLessThanOrEqual(bar.maxX, dock.minX)
     }
@@ -449,7 +462,7 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(controller.window.firstResponder === pane.view)
     }
 
-    func test_cmdOptW_onTheFocusedRow_closesItsWorkspace_andFocusLandsOnTheNeighboursPane() throws {
+    func test_cmdCtrlW_onTheFocusedRow_closesItsWorkspace_andFocusLandsOnTheNeighboursPane() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
         let api = controller.addWorkspaceForTesting(name: "api", folder: root)
@@ -457,7 +470,7 @@ final class SidebarInteractionTests: WindowTestCase {
         controller.sidebarForTesting.focusActiveRow()
         XCTAssertTrue(controller.sidebarForTesting.hasFocus)
 
-        try press("w", [.command, .option], keyCode: 13, in: controller)
+        try press("w", [.command, .control], keyCode: 13, in: controller)
 
         XCTAssertEqual(controller.activeWorkspaceIDForTesting, api)
         XCTAssertFalse(controller.sidebarForTesting.hasFocus)
@@ -615,7 +628,26 @@ final class SidebarInteractionTests: WindowTestCase {
         try nav(.left, in: controller)
 
         XCTAssertTrue(controller.window.firstResponder === pane.view)
-        XCTAssertTrue(showsToast("No pane left to focus", in: controller))
+        XCTAssertTrue(showsToast("No pane left to focus\nPress ⌘⌃S to show the sidebar.", in: controller))
+    }
+
+    func test_theEdgeToast_namesTheBoundSidebarChord_andOnlyWhileCollapsed() throws {
+        rebindSidebarToggle(to: Chord(command: true, shift: true, key: "e"))
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleSidebar)
+        try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface).focus()
+
+        try nav(.left, in: controller)
+
+        let collapsed = "No pane left to focus\nPress ⌘⇧E to show the sidebar."
+        XCTAssertTrue(showsToast(collapsed, in: controller), "the hint follows a rebinding")
+        for line in collapsed.split(separator: "\n") {
+            let width = (String(line) as NSString).size(withAttributes: [.font: ToastView.messageFont]).width
+            XCTAssertLessThanOrEqual(
+                width, ToastView.messageMaxWidth,
+                "wraps at \(Int(width))pt > \(Int(ToastView.messageMaxWidth))pt: \(line)")
+        }
     }
 
     func test_cmdOptLeft_endsScrollMode_soArrowsReachTheRows() throws {
@@ -759,6 +791,16 @@ final class SidebarInteractionTests: WindowTestCase {
         try press("s", [.command, .control], keyCode: 1, in: controller)
     }
 
+    private func rebindSidebarToggle(to chord: Chord) {
+        let original = GeneralConfig.current
+        var overridden = original
+        var map = KeymapDefaults.map.filter { $0.value != .toggleSidebar }
+        map[chord] = .toggleSidebar
+        overridden.keymap = map
+        GeneralConfig.setCurrentForTesting(overridden)
+        addTeardownBlock { GeneralConfig.setCurrentForTesting(original) }
+    }
+
     private func showsToast(_ message: String, in controller: WindowController) -> Bool {
         guard let content = controller.window.contentView else { return false }
         return descendants(of: content).contains { ($0 as? NSTextField)?.stringValue == message }
@@ -828,6 +870,276 @@ final class SidebarInteractionTests: WindowTestCase {
             with: .keyDown, location: .zero, modifierFlags: key.flags, timestamp: 0,
             windowNumber: controller.window.windowNumber, context: nil, characters: key.text,
             charactersIgnoringModifiers: key.text, isARepeat: false, keyCode: key.code)!
+    }
+
+    private func makeCrowdedController() -> WindowController {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        for n in 2...30 { _ = controller.addWorkspaceForTesting(name: "ws \(n)", folder: root) }
+        controller.containerForTesting.layoutSubtreeIfNeeded()
+        return controller
+    }
+
+    private func isOnScreen(_ row: NSView, in scroll: NSScrollView) -> Bool {
+        scroll.contentView.documentVisibleRect.contains(row.convert(row.bounds, to: scroll.documentView))
+    }
+
+    private func fadedEdges(of view: SidebarView) -> (top: Bool, bottom: Bool) {
+        let colors = (view.scrollForTesting.fadeForTesting.colors as? [CGColor]) ?? []
+        return (colors.first?.alpha == 0, colors.last?.alpha == 0)
+    }
+
+    func test_moreRowsThanFit_theLastIsReachedByDownArrow_andScrolledIntoView() throws {
+        let controller = makeCrowdedController()
+        let view = controller.sidebarForTesting.view
+        let rows = view.rowsForTesting
+        let scroll = view.scrollForTesting
+        XCTAssertFalse(isOnScreen(try XCTUnwrap(rows.last), in: scroll), "precondition: the list overflows")
+
+        view.focusRow(.workspace(controller.workspaceIDsForTesting[0]))
+        for _ in 1..<rows.count { controller.window.sendEvent(key(.down, in: controller)) }
+
+        XCTAssertTrue(controller.window.firstResponder === rows.last, "↓ walks to the last row")
+        XCTAssertTrue(isOnScreen(try XCTUnwrap(rows.last), in: scroll), "the focused row is scrolled into view")
+    }
+
+    func test_aNewWorkspace_scrollsItsRowIntoView() throws {
+        let controller = makeCrowdedController()
+        let view = controller.sidebarForTesting.view
+        XCTAssertFalse(
+            isOnScreen(try XCTUnwrap(view.rowsForTesting.last), in: view.scrollForTesting),
+            "precondition: the list overflows and the end is out of sight")
+
+        controller.handle(.newWorkspace)
+        controller.containerForTesting.layoutSubtreeIfNeeded()
+
+        let row = try XCTUnwrap(view.rowsForTesting.last)
+        XCTAssertTrue(isOnScreen(row, in: view.scrollForTesting), "the new workspace's row is on screen")
+    }
+
+    private func margins(of row: NSView, in scroll: NSScrollView) -> (above: CGFloat, below: CGFloat) {
+        let visible = scroll.contentView.documentVisibleRect
+        let frame = row.convert(row.bounds, to: scroll.documentView)
+        return (frame.minY - visible.minY, visible.maxY - frame.maxY)
+    }
+
+    func test_whileTheSidebarHoldsFocus_noPaneShowsTheHalo() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedPanelForTesting)
+        XCTAssertTrue(pane.isFocused, "precondition: the focused pane wears the halo")
+
+        controller.sidebarForTesting.focusActiveRow()
+        XCTAssertFalse(pane.isFocused, "the halo answers where the keyboard is")
+
+        controller.window.sendEvent(key(.escape, in: controller))
+        XCTAssertTrue(pane.isFocused, "and comes back with focus")
+    }
+
+    func test_whileTheWindowIsNotKey_noPaneShowsTheHalo() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedPanelForTesting)
+        XCTAssertTrue(pane.isFocused)
+
+        controller.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification))
+        XCTAssertFalse(pane.isFocused, "an unfocused window shows no halo")
+
+        controller.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
+        XCTAssertTrue(pane.isFocused, "and it comes back when the window does")
+    }
+
+    func test_theWindowBecomingKeyAgain_leavesTheSidebarsFocusAlone() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedPanelForTesting)
+        controller.sidebarForTesting.focusActiveRow()
+
+        controller.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification))
+        controller.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
+
+        XCTAssertFalse(pane.isFocused, "the sidebar still holds focus, so the halo stays out")
+    }
+
+    func test_aPickerOpenedFromTheSidebar_handsFocusBackToItsRow() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.sidebarForTesting.focusActiveRow()
+        let row = try XCTUnwrap(controller.sidebarForTesting.view.rowsForTesting.first)
+        XCTAssertTrue(controller.window.firstResponder === row, "precondition: the sidebar holds focus")
+
+        controller.handle(.toggleRepoPicker)
+        waitUntil(controller.isModalOverlayOpen, "the picker to open")
+        controller.handle(.toggleRepoPicker)
+
+        XCTAssertTrue(controller.window.firstResponder === row, "focus goes back where the picker was opened from")
+    }
+
+    func test_aConfirmRaisedFromACardOpenedInTheSidebar_handsFocusBackToItsRow() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.sidebarForTesting.focusActiveRow()
+        let row = try XCTUnwrap(controller.sidebarForTesting.view.rowsForTesting.first)
+
+        controller.handle(.toggleRepoPicker)
+        waitUntil(controller.isModalOverlayOpen, "the picker to open")
+        controller.presentConfirm(
+            variant: .warning, title: "Close Workspace", message: "This stops everything running in it.",
+            confirmLabel: "Close", onConfirm: {})
+        controller.window.sendEvent(key(.escape, in: controller))
+
+        XCTAssertFalse(controller.isConfirmOpen)
+        XCTAssertTrue(
+            controller.window.firstResponder === row,
+            "the card closing is what returns focus, so the confirm has to read it after that")
+    }
+
+    func test_aConfirmCancelledFromTheSidebar_handsFocusBackToItsRow() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.sidebarForTesting.focusActiveRow()
+        let row = try XCTUnwrap(controller.sidebarForTesting.view.rowsForTesting.first)
+
+        controller.presentConfirm(
+            variant: .warning, title: "Close Workspace", message: "This stops everything running in it.",
+            confirmLabel: "Close", onConfirm: {})
+        XCTAssertTrue(controller.isConfirmOpen)
+        controller.window.sendEvent(key(.escape, in: controller))
+
+        XCTAssertFalse(controller.isConfirmOpen)
+        XCTAssertTrue(controller.window.firstResponder === row, "a cancelled confirm goes back to the row")
+    }
+
+    func test_leavingFillScreen_withTheSidebarDockedSince_keepsTheWindowAtItsMinimum() throws {
+        Motion.isReduceMotionEnabled = { true }
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleSidebar)
+        XCTAssertFalse(controller.sidebarForTesting.isDocked, "precondition: collapsed, so the minimum is narrow")
+        var narrow = controller.window.frame
+        narrow.size.width = controller.window.contentMinSize.width
+        controller.window.setFrame(narrow, display: true)
+
+        controller.handle(.fillScreen)
+        controller.handle(.toggleSidebar)
+        let minimum = controller.window.contentMinSize.width
+        controller.handle(.fillScreen)
+
+        let restored = controller.window.contentRect(forFrameRect: controller.window.frame)
+        XCTAssertGreaterThanOrEqual(
+            restored.width, minimum - 0.5, "docking raised the minimum, so the restored frame follows it")
+        if let visible = (controller.window.screen ?? NSScreen.main)?.visibleFrame {
+            XCTAssertLessThanOrEqual(controller.window.frame.maxX, visible.maxX + 0.5, "and stays on screen")
+        }
+    }
+
+    func test_theSidebarToggle_worksWithACardOpen_andLeavesItOpen() throws {
+        let controller = makeController()
+        controller.handle(.openSettings)
+        let docked = controller.sidebarForTesting.isDocked
+
+        controller.handle(.toggleSidebar)
+
+        XCTAssertEqual(controller.sidebarForTesting.isDocked, !docked, "nothing blocks the sidebar toggle")
+        XCTAssertTrue(controller.isModalOverlayOpen, "the card it was pressed over stays open")
+    }
+
+    func test_rowsMovingUnderTheCursor_leaveHoverOnOneRowAtMost() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        _ = controller.addWorkspaceForTesting(name: "api", folder: root)
+        let rows = controller.sidebarForTesting.view.rowsForTesting
+        for row in rows { row.mouseEntered(with: try mouseMoved(in: controller)) }
+        XCTAssertEqual(
+            rows.filter { $0.layer?.backgroundColor == Theme.current.chrome.fill(.hover).cgColor }.count, rows.count,
+            "precondition: every row is left hovered, as rows sliding under a still cursor leave them")
+
+        controller.handle(.newWorkspace)
+
+        let hovered = controller.sidebarForTesting.view.rowsForTesting
+            .filter { $0.layer?.backgroundColor == Theme.current.chrome.fill(.hover).cgColor }
+        XCTAssertLessThanOrEqual(hovered.count, 1, "a render re-reads the pointer, so stale hovers clear")
+    }
+
+    func test_whileACardCoversTheSidebar_rowsTakeNoHover() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let row = try XCTUnwrap(controller.sidebarForTesting.view.rowsForTesting.first)
+
+        controller.handle(.openSettings)
+        row.mouseEntered(with: try mouseMoved(in: controller))
+
+        XCTAssertNotEqual(
+            row.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor,
+            "a card covers the sidebar without taking the rows' tracking events")
+
+        controller.handle(.openSettings)
+        row.mouseEntered(with: try mouseMoved(in: controller))
+
+        XCTAssertEqual(
+            row.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor,
+            "hover comes back when the card closes")
+    }
+
+    private func mouseMoved(in controller: WindowController) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .mouseMoved, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: controller.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
+                pressure: 1))
+    }
+
+    func test_theSidebarScroll_takesNoTitlebarInset() throws {
+        let controller = makeCrowdedController()
+        let scroll = controller.sidebarForTesting.view.scrollForTesting
+
+        XCTAssertFalse(
+            scroll.automaticallyAdjustsContentInsets,
+            "a full-size-content window otherwise pads the top by the titlebar height")
+        XCTAssertEqual(scroll.contentInsets.top, 0)
+    }
+
+    func test_aRowScrolledToAnEdge_landsClearOfTheFade() throws {
+        let controller = makeCrowdedController()
+        let view = controller.sidebarForTesting.view
+        let scroll = view.scrollForTesting
+        let rows = view.rowsForTesting
+        let (first, last) = (0, rows.count - 1)
+
+        view.focusRow(.workspace(controller.workspaceIDsForTesting[first]))
+        for _ in 0..<(last - 5) { controller.window.sendEvent(key(.down, in: controller)) }
+        let goingDown = try XCTUnwrap(controller.window.firstResponder as? NSView)
+
+        XCTAssertFalse(isOnScreen(try XCTUnwrap(rows.last), in: scroll), "precondition: rows remain below")
+        XCTAssertGreaterThanOrEqual(
+            margins(of: goingDown, in: scroll).below, FadingScrollView.fadeDepth - 0.5,
+            "a row reached going down clears the bottom fade")
+
+        for _ in 0..<(last - 10) { controller.window.sendEvent(key(.up, in: controller)) }
+        let goingUp = try XCTUnwrap(controller.window.firstResponder as? NSView)
+
+        XCTAssertFalse(isOnScreen(rows[first], in: scroll), "precondition: rows remain above")
+        XCTAssertGreaterThanOrEqual(
+            margins(of: goingUp, in: scroll).above, FadingScrollView.fadeDepth - 0.5,
+            "a row reached going up clears the top fade")
+    }
+
+    func test_theSidebarFadesOnlyTheEdgesContentIsHiddenPast() throws {
+        let roomy = makeController()
+        roomy.containerForTesting.layoutSubtreeIfNeeded()
+        XCTAssertTrue(
+            try XCTUnwrap(roomy.sidebarForTesting.view.scrollForTesting.layer).contentsAreFlipped(),
+            "the fade's start is the top edge")
+        XCTAssertTrue(fadedEdges(of: roomy.sidebarForTesting.view) == (false, false), "nothing overflows")
+        roomy.windowWillClose(Notification(name: NSWindow.willCloseNotification))
+
+        let controller = makeCrowdedController()
+        let view = controller.sidebarForTesting.view
+        view.focusRow(.workspace(controller.workspaceIDsForTesting[0]))
+        XCTAssertTrue(fadedEdges(of: view) == (false, true), "at the top, only the bottom edge hides rows")
+
+        for _ in 1..<view.rowsForTesting.count { controller.window.sendEvent(key(.down, in: controller)) }
+        XCTAssertTrue(fadedEdges(of: view) == (true, false), "at the end, only the top edge hides rows")
     }
 
     func test_row_showsItsWorkspaceBranch() throws {
@@ -928,6 +1240,6 @@ final class SidebarInteractionTests: WindowTestCase {
 
         let tooltips = controller.sidebarForTesting.view.rowsForTesting.compactMap(\.tooltip)
         XCTAssertEqual(tooltips.map(\.label), ["Switch workspace", "Switch workspace"])
-        XCTAssertEqual(tooltips.map(\.shortcutForTesting), ["⌘⌥1", "⌘⌥2"])
+        XCTAssertEqual(tooltips.map(\.shortcutForTesting), ["⌘⌃1", "⌘⌃2"])
     }
 }

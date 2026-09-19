@@ -36,8 +36,10 @@ final class SidebarController {
     private var tabBarLeading: NSLayoutConstraint?
     private var sidebarTop: NSLayoutConstraint?
     private var slideID = 0
+    private var isSliding = false
     private var entries: [Entry] = []
     var onLeave: () -> Void = {}
+    var onFocusChanged: () -> Void = {}
     var onJump: (SurfaceID) -> Void = { _ in }
 
     init(
@@ -52,9 +54,11 @@ final class SidebarController {
         lead = CollapsedSidebarLead(
             leadingInset: Self.toggleInset + SidebarFooter.buttonSize.width + Self.leadNameGap)
         view.onLeave = { [weak self] in self?.onLeave() }
+        view.onFocusChanged = { [weak self] in self?.onFocusChanged() }
         view.onJump = { [weak self] in self?.onJump($0) }
     }
 
+    var edgeAnchor: NSLayoutXAxisAnchor { edge.leadingAnchor }
     var canvasLeadingAnchor: NSLayoutXAxisAnchor { canvasEdge.leadingAnchor }
 
     func install(in container: NSView, besideTabBar tabBar: TabBarView) {
@@ -95,16 +99,20 @@ final class SidebarController {
             leadWidth,
             tabBarLeading,
         ])
-        view.limitAgents(above: toggleButton.topAnchor)
+        view.limitContent(above: toggleButton.topAnchor)
         settle()
     }
 
     private var edgeOffset: CGFloat { isDocked ? SidebarView.width : 0 }
     private var leadOffset: CGFloat { isDocked ? 0 : lead.contentWidth }
-    // Collapsed, the bar tucks under the lead so the divider sits as far from the first title as from the name.
-    private var tabBarPull: CGFloat { isDocked ? 0 : CollapsedSidebarLead.dividerGap - TabBarView.titleInset }
-    // The canvas insets itself by window-gutter; docked, it sits one pane-gap from the sidebar, as from a drawer.
-    private var canvasGap: CGFloat { isDocked ? ChromeMetrics.panelGap - ChromeMetrics.windowGutter : 0 }
+    // Docked, it moves in with the canvas; collapsed, the divider sits as far from the first title as from the name.
+    private var tabBarPull: CGFloat {
+        isDocked ? -SidebarView.padding : CollapsedSidebarLead.dividerGap - TabBarView.titleInset
+    }
+    // The canvas insets itself by window-gutter; docked, it sits one pane-gap from the rows' fill, as from a drawer.
+    private var canvasGap: CGFloat {
+        isDocked ? ChromeMetrics.panelGap - ChromeMetrics.windowGutter - SidebarView.padding : 0
+    }
 
     func toggle(holding surfaces: [TerminalSurface], in root: NSView) {
         guard let edgeLeading, let canvasOffset, let leadWidth, let tabBarLeading else { return }
@@ -125,6 +133,7 @@ final class SidebarController {
             return
         }
         let id = slideID
+        isSliding = true
         Motion.drawerSlide(
             panel: view, opening: isDocked, parkOffset: CGVector(dx: -SidebarView.width, dy: 0),
             animate: [
@@ -135,7 +144,9 @@ final class SidebarController {
         ) { [weak self] in
             surfaces.forEach { $0.setSizeSyncSuspended(false) }
             guard let self, self.slideID == id else { return }
+            self.isSliding = false
             self.view.layer?.transform = CATransform3DIdentity
+            self.applyLeadWidth()
             self.settle()
         }
     }
@@ -176,12 +187,24 @@ final class SidebarController {
 
     var hasFocus: Bool { view.hasFocus }
 
+    func setHoverCovered(_ covered: Bool) { view.setHoverCovered(covered) }
+
+    var focusedRow: SidebarRowID? { view.focusedRow }
+
+    var focusedStop: SidebarFocusStop? { view.focusedStop }
+
+    @discardableResult
+    func focusRow(_ id: SidebarRowID) -> Bool { isDocked && view.focusRow(id) }
+
+    @discardableResult
+    func focusStop(_ stop: SidebarFocusStop) -> Bool { isDocked && view.focusStop(stop) }
+
     enum NewWorktreeRefusal: CaseIterable {
         case worktree, unconfigured, notARepo, agent
 
         var message: String {
-            let chord = CommandCatalog.spec(for: .createWorktree).shortcut ?? ""
-            let picker = CommandCatalog.spec(for: .toggleRepoPicker).shortcut ?? ""
+            let chord = CommandCatalog.spec(for: .createWorktree).shortcut
+            let picker = CommandCatalog.spec(for: .toggleRepoPicker).shortcut
             switch self {
             case .worktree: return "A worktree starts from its workspace.\nPress \(chord) on the workspace above it."
             case .unconfigured: return "This workspace isn't configured.\nSet one up with Add Workspace… in \(picker)."
@@ -232,7 +255,13 @@ final class SidebarController {
         } else {
             lead.setWorkspaceName(active.name)
         }
-        if !isDocked { leadWidth?.constant = lead.contentWidth }
+        applyLeadWidth()
+    }
+
+    // The slide animates this constant, so writing it mid-flight would snap the lead and the tab bar to the end.
+    private func applyLeadWidth() {
+        guard !isSliding, !isDocked else { return }
+        leadWidth?.constant = lead.contentWidth
     }
 
     private static let worktreeSymbol = "arrow.triangle.branch"

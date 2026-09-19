@@ -408,6 +408,42 @@ final class SidebarNewWorktreeTests: WindowTestCase {
 
     private var menu: SidebarRowMenu { controller!.sidebarForTesting.view.rowMenu }
 
+    func test_aResizeClosingTheMenu_givesTheRowsTheirHoverBack() throws {
+        let c = makeWindow()
+        let anchor = try openRepoWorkspace(in: c)
+        let other = try XCTUnwrap(c.sidebarForTesting.view.rowsForTesting.first { $0 !== anchor })
+        try rightClick(anchor, in: c)
+        XCTAssertTrue(menu.isOpen)
+
+        NotificationCenter.default.post(name: NSWindow.didResizeNotification, object: c.window)
+
+        XCTAssertFalse(menu.isOpen, "precondition: a resize takes the menu down on its own")
+        other.mouseEntered(with: try mouse(.mouseMoved, at: .zero, in: c))
+        XCTAssertEqual(
+            other.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor,
+            "the menu released its cover, so the rows hover again")
+    }
+
+    func test_whileTheMenuIsOpen_anotherRowTakesNoHover() throws {
+        let c = makeWindow()
+        let anchor = try openRepoWorkspace(in: c)
+        let other = try XCTUnwrap(c.sidebarForTesting.view.rowsForTesting.first { $0 !== anchor })
+
+        try rightClick(anchor, in: c)
+        other.mouseEntered(with: try mouse(.mouseMoved, at: .zero, in: c))
+
+        XCTAssertNotEqual(
+            other.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor,
+            "the menu covers the rows without taking their tracking events, so hover has to be held off")
+
+        menu.close()
+        other.mouseEntered(with: try mouse(.mouseMoved, at: .zero, in: c))
+
+        XCTAssertEqual(
+            other.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor,
+            "hover comes back once the menu closes")
+    }
+
     func test_rightClickingAWorkspaceRow_opensItsMenu_withoutSwitching() throws {
         let c = makeWindow()
         let home = c.activeWorkspaceIDForTesting
@@ -419,7 +455,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertEqual(menu.itemViewsForTesting.map(\.title), ["New Worktree…", "Close Workspace"])
         XCTAssertEqual(
             menu.itemViewsForTesting.map(\.shortcutForTesting), ["⌥⏎", ""],
-            "⌘⌥W closes the active workspace, not this background one")
+            "⌘⌃W closes the active workspace, not this background one")
         XCTAssertEqual(c.activeWorkspaceIDForTesting, home, "a right-click never switches")
     }
 
@@ -430,7 +466,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
 
         try rightClick(row, in: c)
 
-        XCTAssertEqual(menu.itemViewsForTesting.map(\.shortcutForTesting), ["⌥⏎", "⌘⌥W"])
+        XCTAssertEqual(menu.itemViewsForTesting.map(\.shortcutForTesting), ["⌥⏎", "⌘⌃W"])
     }
 
     func test_controlClickingAWorkspaceRow_opensItsMenu_withoutSwitching() throws {

@@ -211,6 +211,7 @@ final class TabController: NSObject {
     var onFocusChanged: (() -> Void)?
 
     var focusPastLeftEdge: (() -> Bool)?
+    var noNeighborHint: ((Direction) -> String?)?
 
     var onNotification: ((SurfaceID, TerminalNotification) -> Void)?
 
@@ -523,6 +524,8 @@ final class TabController: NSObject {
         onFocusChanged?()
     }
 
+    func setHaloVisible(_ visible: Bool) { paneCanvas.setHaloVisible(visible) }
+
     func setFocusedSurfaceRendersFocused(_ focused: Bool) {
         switch focusedPanel {
         case .pane: paneCanvas.setFocusedSurfaceRendersFocused(focused)
@@ -680,11 +683,12 @@ final class TabController: NSObject {
         case .up: action = .navUp; word = "up"
         case .down: action = .navDown; word = "down"
         }
+        let hint = noNeighborHint?(direction).map { "\n\($0)" } ?? ""
         onRequestToast?(
             ToastContent(
                 variant: .info,
                 title: CommandCatalog.spec(for: action).title,
-                message: "No pane \(word) to focus"))
+                message: "No pane \(word) to focus\(hint)"))
     }
 
     // Pane leaf ids are non-negative, so drawer sentinels cannot collide with them.

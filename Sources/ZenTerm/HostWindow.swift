@@ -36,6 +36,21 @@ final class HostWindow: NSWindow {
         setFrame(target, display: true)
     }
 
+    // A frame saved while the sidebar was collapsed can be narrower than the minimum docking then raised.
+    func setFrameWithinLimits(_ frame: NSRect, animate: Bool) {
+        var target = frame
+        let floor = frameRect(forContentRect: NSRect(origin: .zero, size: contentMinSize)).size
+        target.size.width = max(target.width, floor.width)
+        target.size.height = max(target.height, floor.height)
+        if let visible = (screen ?? NSScreen.main)?.visibleFrame {
+            target.size.width = min(target.width, visible.width)
+            target.size.height = min(target.height, visible.height)
+            target.origin.x = min(max(target.minX, visible.minX), visible.maxX - target.width)
+            target.origin.y = min(max(target.minY, visible.minY), visible.maxY - target.height)
+        }
+        setFrame(target, display: true, animate: animate)
+    }
+
     func setWindowChromeVisible(_ shown: Bool) {
         standardWindowButton(.closeButton)?.isHidden = !shown
         standardWindowButton(.miniaturizeButton)?.isHidden = !shown

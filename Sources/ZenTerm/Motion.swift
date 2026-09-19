@@ -103,7 +103,7 @@ enum Motion {
     }
 
     static func slideSwap(
-        incoming: NSView, outgoing: NSView?, dx: CGFloat,
+        incoming: NSView, outgoing: NSView?, offset: CGVector,
         duration: CFTimeInterval = pageSlideDuration, completion: @escaping () -> Void
     ) {
         incoming.wantsLayer = true
@@ -118,17 +118,17 @@ enum Motion {
             return
         }
         inLayer.transform = CATransform3DIdentity
-        let slideIn = CABasicAnimation(keyPath: "transform.translation.x")
-        slideIn.fromValue = dx
-        slideIn.toValue = 0
+        let slideIn = CABasicAnimation(keyPath: "transform.translation")
+        slideIn.fromValue = NSValue(size: NSSize(width: offset.dx, height: offset.dy))
+        slideIn.toValue = NSValue(size: .zero)
         slideIn.duration = duration
         slideIn.timingFunction = landingTiming
 
         let outLayer = outgoing?.layer
-        outLayer?.transform = CATransform3DMakeTranslation(-dx, 0, 0)
-        let slideOut = CABasicAnimation(keyPath: "transform.translation.x")
-        slideOut.fromValue = 0
-        slideOut.toValue = -dx
+        outLayer?.transform = CATransform3DMakeTranslation(-offset.dx, -offset.dy, 0)
+        let slideOut = CABasicAnimation(keyPath: "transform.translation")
+        slideOut.fromValue = NSValue(size: .zero)
+        slideOut.toValue = NSValue(size: NSSize(width: -offset.dx, height: -offset.dy))
         slideOut.duration = duration
         slideOut.timingFunction = landingTiming
 

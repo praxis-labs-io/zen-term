@@ -1,6 +1,6 @@
 import AppKit
 
-final class SettingsNavRow: NSView {
+final class SettingsNavRow: NSView, HoverSuppressing {
     enum Variant: Equatable {
         case standard
         case nested(symbol: String)
@@ -29,6 +29,8 @@ final class SettingsNavRow: NSView {
     private var trackingArea: NSTrackingArea?
     private var isSelected = false
     private var isFocusedStop = false
+    private var isHoverSuppressed = false
+    var onFocusChanged: (() -> Void)?
     private var isHovered = false { didSet { refreshAccessory() } }
     private(set) var hoverAccessory: NSView?
 
@@ -137,8 +139,8 @@ final class SettingsNavRow: NSView {
     }
 
     private func refreshAccessory() {
-        hoverAccessory?.isHidden = !isHovered
-        detailLabel.isHidden = isHovered && hoverAccessory != nil
+        hoverAccessory?.isHidden = !showsHover
+        detailLabel.isHidden = showsHover && hoverAccessory != nil
     }
 
     func setTitle(_ title: String) {
@@ -176,7 +178,7 @@ final class SettingsNavRow: NSView {
         refreshLabelInk()
         detailLabel.textColor = Theme.current.chrome.ink(.muted)
         glyph.contentTintColor = Theme.current.chrome.ink(.faint)
-        attentionDot.layer?.backgroundColor = Theme.current.chrome.attention.nsColor.cgColor
+        attentionDot.layer?.backgroundColor = AttentionTone.waiting.ink.cgColor
         refreshFill()
     }
 
@@ -189,10 +191,12 @@ final class SettingsNavRow: NSView {
         }
     }
 
+    private var showsHover: Bool { isHovered && !isHoverSuppressed }
+
     private func refreshFill() {
         if isFocusedStop {
             layer?.backgroundColor = Theme.current.chrome.selectionFill.cgColor
-        } else if isHovered {
+        } else if showsHover {
             layer?.backgroundColor = Theme.current.chrome.fill(.hover).cgColor
         } else if isSelected {
             layer?.backgroundColor = Theme.current.chrome.fill(.rest).cgColor
@@ -209,8 +213,19 @@ final class SettingsNavRow: NSView {
         window?.makeFirstResponder(self)
         isTakingKeyboardFocus = false
     }
-    override func becomeFirstResponder() -> Bool { isFocusedStop = true; refreshFill(); return true }
-    override func resignFirstResponder() -> Bool { isFocusedStop = false; refreshFill(); return true }
+    override func becomeFirstResponder() -> Bool {
+        isFocusedStop = true
+        refreshFill()
+        onFocusChanged?()
+        return true
+    }
+
+    override func resignFirstResponder() -> Bool {
+        isFocusedStop = false
+        refreshFill()
+        onFocusChanged?()
+        return true
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -224,7 +239,25 @@ final class SettingsNavRow: NSView {
     override func mouseEntered(with event: NSEvent) {
         isHovered = true
         refreshFill()
+        guard !isHoverSuppressed else { return }
         tooltip?.show(from: self)
+    }
+
+    func refreshHover() {
+        let inside = pointerIsInside
+        guard inside != isHovered else { return }
+        isHovered = inside
+        if !inside { tooltip?.hide(from: self) }
+        refreshAccessory()
+        refreshFill()
+    }
+
+    func setHoverSuppressed(_ suppressed: Bool) {
+        guard suppressed != isHoverSuppressed else { return }
+        isHoverSuppressed = suppressed
+        if suppressed { tooltip?.hide(from: self) } else { isHovered = pointerIsInside }
+        refreshAccessory()
+        refreshFill()
     }
 
     override func mouseExited(with event: NSEvent) {

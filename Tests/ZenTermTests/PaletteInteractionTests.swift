@@ -329,14 +329,14 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertEqual(chosen.map(\.title), ["alpha"], "⇧↵ no longer replaces a tab")
     }
 
-    func test_repoPicker_upArrowReachesAddRowAndActivatesIt() throws {
+    func test_repoPicker_downArrowReachesAddRowAndActivatesIt() throws {
         var chosen: Workspace?
         var addOpened = false
         let overlay = makeRepoPicker(
             entries: [workspace("alpha")],
             onChoose: { ws, _ in chosen = ws }, onAddWorkspace: { addOpened = true })
         mount(overlay)
-        send(Self.moveUp, to: overlay)
+        send(Self.moveDown, to: overlay)
         try sendReturn(to: overlay)
         XCTAssertTrue(addOpened)
         XCTAssertNil(chosen)
@@ -345,13 +345,13 @@ final class PaletteInteractionTests: WindowTestCase {
     func test_repoPicker_reusedRows_keepTheirViewsAndFollowTheFilterOrder() {
         let overlay = makeRepoPicker(entries: [workspace("zeta"), workspace("alpha")])
         mount(overlay)
-        let (newRow, addRow) = (rows(in: overlay)[0], rows(in: overlay)[1])
-        let (zetaRow, alphaRow) = (rows(in: overlay)[2], rows(in: overlay)[3])
+        let (newRow, addRow) = (rows(in: overlay)[0], rows(in: overlay)[3])
+        let (zetaRow, alphaRow) = (rows(in: overlay)[1], rows(in: overlay)[2])
 
         type("a", into: overlay)
 
         XCTAssertEqual(
-            rowsStack(in: overlay).arrangedSubviews, [newRow, addRow, alphaRow, zetaRow],
+            rowsStack(in: overlay).arrangedSubviews, [newRow, alphaRow, zetaRow, addRow],
             "every row is reused, re-ordered by the filter rather than rebuilt")
     }
 
@@ -361,7 +361,7 @@ final class PaletteInteractionTests: WindowTestCase {
             entries: [workspace("alpha"), workspace("beta")], onChoose: { ws, _ in chosen = ws })
         let window = mount(overlay)
         window.layoutIfNeeded()
-        let betaRow = rows(in: overlay)[3]
+        let betaRow = rows(in: overlay)[2]
 
         type("bet", into: overlay)
         window.layoutIfNeeded()
@@ -436,7 +436,7 @@ final class PaletteInteractionTests: WindowTestCase {
 
         let overlay = makeRepoPicker(entries: [workspace("repo", path: repo)])
         mount(overlay)
-        let labels = descendants(of: rows(in: overlay)[2]).compactMap { $0 as? NSTextField }
+        let labels = descendants(of: rows(in: overlay)[1]).compactMap { $0 as? NSTextField }
         let branch = labels.first { $0.stringValue != "repo" }
         XCTAssertEqual(branch?.stringValue, "", "nothing has probed the folder yet")
 
