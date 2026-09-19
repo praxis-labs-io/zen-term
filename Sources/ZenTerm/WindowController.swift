@@ -185,6 +185,8 @@ final class WindowController: NSObject {
     private let sidebar: SidebarController
     private var mountedCanvas: NSView?
     private var activeCanvasSlides = 0
+    private let horizontalSlideFade = EdgeFade(axis: .horizontal)
+    private let verticalSlideFade = EdgeFade(axis: .vertical)
 
     private enum ModalKind {
         case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm, reportIssue
@@ -714,7 +716,7 @@ final class WindowController: NSObject {
             outgoing?.removeFromSuperview()
         case .slide(let edge):
             container.layoutSubtreeIfNeeded()
-            beginCanvasSlide()
+            beginCanvasSlide(from: edge)
             Motion.slideSwap(incoming: c.view, outgoing: outgoing, offset: slideOffset(from: edge)) { [weak self] in
                 self?.detachIfInactive(outgoing)
                 self?.endCanvasSlide()
@@ -732,14 +734,26 @@ final class WindowController: NSObject {
         }
     }
 
-    private func beginCanvasSlide() {
+    private func beginCanvasSlide(from edge: SlideEdge) {
         activeCanvasSlides += 1
-        SlideClip.apply(to: canvasHost, margin: 0)
+        canvasHost.layer?.mask = slideFade(crossing: edge).layer
+    }
+
+    private func slideFade(crossing edge: SlideEdge) -> EdgeFade {
+        let bounds = canvasHost.bounds
+        switch edge {
+        case .fromRight, .fromLeft:
+            horizontalSlideFade.update(frame: bounds, start: sidebar.isDocked ? ChromeMetrics.panelGap : 0, end: 0)
+            return horizontalSlideFade
+        case .fromBottom, .fromTop:
+            verticalSlideFade.update(frame: bounds, start: ChromeMetrics.footerGap, end: 0)
+            return verticalSlideFade
+        }
     }
 
     private func endCanvasSlide() {
         activeCanvasSlides = max(0, activeCanvasSlides - 1)
-        if activeCanvasSlides == 0 { SlideClip.remove(from: canvasHost) }
+        if activeCanvasSlides == 0 { canvasHost.layer?.mask = nil }
     }
 
     private func detachIfInactive(_ canvas: NSView?) {

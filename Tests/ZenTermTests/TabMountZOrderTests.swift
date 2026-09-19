@@ -94,7 +94,18 @@ final class TabMountZOrderTests: WindowTestCase {
         XCTAssertEqual(
             clip.minX, sidebar.frame.maxX, accuracy: 0.5,
             "a sliding canvas stops at the sidebar's edge instead of crossing it")
+        XCTAssertEqual(
+            try fadeDepth(of: mask, across: clip.width), ChromeMetrics.panelGap, accuracy: 0.5,
+            "the edge softens across the gap to the pane, never over the pane itself")
         waitUntil(host.layer?.mask == nil, "the clip to lift once the slide lands")
+    }
+
+    private func fadeDepth(of mask: CALayer, across length: CGFloat) throws -> CGFloat {
+        let fade = try XCTUnwrap(mask as? CAGradientLayer, "the clip is a fade")
+        let start = try XCTUnwrap((fade.colors as? [CGColor])?.first, "the fade has colors")
+        XCTAssertEqual(start.alpha, 0, "the crossed edge is transparent")
+        let stop = try XCTUnwrap(fade.locations?[1], "the fade has stops")
+        return CGFloat(stop.doubleValue) * length
     }
 
     private func arrivingSlide(in host: NSView) throws -> CGSize {
@@ -123,6 +134,10 @@ final class TabMountZOrderTests: WindowTestCase {
         XCTAssertEqual(
             clip.minY, tabBar.frame.maxY, accuracy: 0.5,
             "a sliding canvas stops at the tab bar's edge instead of crossing it")
+        XCTAssertFalse(try XCTUnwrap(host.layer).contentsAreFlipped(), "the fade's start is the bottom edge")
+        XCTAssertEqual(
+            try fadeDepth(of: mask, across: clip.height), ChromeMetrics.footerGap, accuracy: 0.5,
+            "the edge softens across the gap to the pane, never over the pane itself")
         waitUntil(host.layer?.mask == nil, "the clip to lift once the slide lands")
     }
 
