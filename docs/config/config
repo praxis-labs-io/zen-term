@@ -361,6 +361,7 @@
 #                        the exception is the built-in `toggle_float:scratch`,
 #                        which has no `key:` field: it rebinds and unbinds like
 #                        any other action)
+#   prev_workspace  next_workspace  select_workspace_1 … select_workspace_9
 #
 # Defaults (uncomment to change; these are what ships):
 # keybind = split_vertical=cmd+d                 # a new pane to the right
@@ -417,6 +418,9 @@
 # keybind = increase_font_size=cmd+=             # ⌘+ (cmd+shift+=) does this too
 # keybind = decrease_font_size=cmd+-
 # keybind = reset_font_size=cmd+0                # back to font-size above
+# keybind = prev_workspace=cmd+opt+[             # in sidebar order, wrapping
+# keybind = next_workspace=cmd+opt+]
+# keybind = select_workspace_1=cmd+opt+1          # … through select_workspace_9=cmd+opt+9
 #
 # ─── Coming from Ghostty ─────────────────────────────────────────────────────
 #

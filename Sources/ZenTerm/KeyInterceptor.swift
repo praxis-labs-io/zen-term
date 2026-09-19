@@ -50,6 +50,8 @@ final class KeyInterceptor {
         case selectAll, pasteSelection
         case jumpToPreviousPrompt, jumpToNextPrompt
         case dismissToast, dismissAllToasts
+        case selectWorkspace(Int)
+        case prevWorkspace, nextWorkspace
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?

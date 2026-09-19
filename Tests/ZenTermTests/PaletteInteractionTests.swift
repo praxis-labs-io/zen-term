@@ -300,7 +300,7 @@ final class PaletteInteractionTests: WindowTestCase {
 
     private func makeRepoPicker(
         entries: [Workspace],
-        onChoose: @escaping (Workspace, Bool) -> Void = { _, _ in },
+        onChoose: @escaping (Workspace) -> Void = { _ in },
         onAddWorkspace: @escaping () -> Void = {},
         onDismiss: @escaping () -> Void = {}
     ) -> RepoPickerOverlay {
@@ -310,33 +310,31 @@ final class PaletteInteractionTests: WindowTestCase {
     }
 
     func test_repoPicker_returnOpensFirstWorkspaceNotTheAddRow() throws {
-        var chosen: (Workspace, Bool)?
+        var chosen: Workspace?
         var addOpened = false
         let overlay = makeRepoPicker(
             entries: [workspace("alpha"), workspace("beta")],
-            onChoose: { chosen = ($0, $1) }, onAddWorkspace: { addOpened = true })
+            onChoose: { chosen = $0 }, onAddWorkspace: { addOpened = true })
         mount(overlay)
         try sendReturn(to: overlay)
-        XCTAssertEqual(chosen?.0.title, "alpha")
-        XCTAssertEqual(chosen?.1, false)
+        XCTAssertEqual(chosen?.title, "alpha")
         XCTAssertFalse(addOpened)
     }
 
-    func test_repoPicker_shiftEnterReplacesCurrentTab() throws {
-        var chosen: (Workspace, Bool)?
-        let overlay = makeRepoPicker(entries: [workspace("alpha")], onChoose: { chosen = ($0, $1) })
+    func test_repoPicker_shiftEnterOpensLikeEnter() throws {
+        var chosen: [Workspace] = []
+        let overlay = makeRepoPicker(entries: [workspace("alpha")], onChoose: { chosen.append($0) })
         mount(overlay)
         try sendReturn(to: overlay, modifiers: .shift)
-        XCTAssertEqual(chosen?.0.title, "alpha")
-        XCTAssertEqual(chosen?.1, true)
+        XCTAssertEqual(chosen.map(\.title), ["alpha"], "⇧↵ no longer replaces a tab")
     }
 
     func test_repoPicker_upArrowReachesAddRowAndActivatesIt() throws {
-        var chosen: (Workspace, Bool)?
+        var chosen: Workspace?
         var addOpened = false
         let overlay = makeRepoPicker(
             entries: [workspace("alpha")],
-            onChoose: { chosen = ($0, $1) }, onAddWorkspace: { addOpened = true })
+            onChoose: { chosen = $0 }, onAddWorkspace: { addOpened = true })
         mount(overlay)
         send(Self.moveUp, to: overlay)
         try sendReturn(to: overlay)
@@ -357,9 +355,9 @@ final class PaletteInteractionTests: WindowTestCase {
     }
 
     func test_repoPicker_clickingAReusedRow_runsWhereItNowSits() {
-        var chosen: (Workspace, Bool)?
+        var chosen: Workspace?
         let overlay = makeRepoPicker(
-            entries: [workspace("alpha"), workspace("beta")], onChoose: { chosen = ($0, $1) })
+            entries: [workspace("alpha"), workspace("beta")], onChoose: { chosen = $0 })
         let window = mount(overlay)
         window.layoutIfNeeded()
         let betaRow = rows(in: overlay)[2]
@@ -369,7 +367,7 @@ final class PaletteInteractionTests: WindowTestCase {
 
         XCTAssertTrue(rows(in: overlay).contains { $0 === betaRow }, "beta's row must be the reused one")
         click(betaRow)
-        XCTAssertEqual(chosen?.0.title, "beta", "a reused row runs its current index, not the one it was built at")
+        XCTAssertEqual(chosen?.title, "beta", "a reused row runs its current index, not the one it was built at")
     }
 
     func test_commandPalette_commandsSharingATitle_keepTheirOwnShortcut() {
@@ -445,14 +443,13 @@ final class PaletteInteractionTests: WindowTestCase {
     }
 
     func test_repoPicker_filterNarrowsWorkspacesKeepingAddRowPinned() throws {
-        var chosen: (Workspace, Bool)?
+        var chosen: Workspace?
         let overlay = makeRepoPicker(
-            entries: [workspace("alpha"), workspace("beta")], onChoose: { chosen = ($0, $1) })
+            entries: [workspace("alpha"), workspace("beta")], onChoose: { chosen = $0 })
         mount(overlay)
         type("bet", into: overlay)
         XCTAssertEqual(overlay.numberOfRows(), 2)
         try sendReturn(to: overlay)
-        XCTAssertEqual(chosen?.0.title, "beta")
-        XCTAssertEqual(chosen?.1, false)
+        XCTAssertEqual(chosen?.title, "beta")
     }
 }

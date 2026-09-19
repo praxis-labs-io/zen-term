@@ -16,6 +16,7 @@ enum CommandCatalog {
         static let tools = "Tools"
         static let config = "Config"
         static let help = "Help"
+        static let workspaces = "Workspaces"
     }
 
     static func spec(for chord: KeyInterceptor.ReservedChord) -> PaletteCommand {
@@ -50,7 +51,7 @@ enum CommandCatalog {
         case .toggleBottomDrawer: return drawer("Toggle Bottom Drawer", glyph, chord)
         case .toggleRightDrawer: return drawer("Toggle Right Drawer", glyph, chord)
         case .toggleToolFloat(let id): return tool(ToolFloatCatalog.byID(id)?.title ?? id, glyph, chord)
-        case .toggleRepoPicker: return tool("Open Workspace Picker", glyph, chord)
+        case .toggleRepoPicker: return workspace("Open Workspace Picker", glyph, chord)
         case .openSettings: return config("Settings…", glyph, chord)
         case .reloadConfig: return config("Reload Config", glyph, chord)
         case .checkForUpdates: return config("Check for Updates", glyph, chord)
@@ -80,9 +81,12 @@ enum CommandCatalog {
         case .selectAll: return pane("Select All", glyph, chord)
         case .toggleCommandPalette: return tool("Command Palette", glyph, chord)
         case .findNext: return pane("Find Next", glyph, chord)
-        case .createWorktree: return tool("New Worktree…", glyph, chord)
-        case .removeWorktree: return tool("Remove Worktree…", glyph, chord)
+        case .createWorktree: return workspace("New Worktree…", glyph, chord)
+        case .removeWorktree: return workspace("Remove Worktree…", glyph, chord)
         case .findPrevious: return pane("Find Previous", glyph, chord)
+        case .selectWorkspace(let n): return workspace("Select Workspace \(n)", glyph, chord)
+        case .prevWorkspace: return workspace("Previous Workspace", glyph, chord)
+        case .nextWorkspace: return workspace("Next Workspace", glyph, chord)
         }
     }
 
@@ -90,11 +94,14 @@ enum CommandCatalog {
         Chord.displayed(chord, in: GeneralConfig.current.keymap)?.displayGlyph ?? ""
     }
 
-    static func commands(tabCount: Int) -> [PaletteCommand] {
-        var chords: [KeyInterceptor.ReservedChord] = [.toggleRepoPicker]
-        chords += ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
+    static func commands(tabCount: Int, workspaceCount: Int) -> [PaletteCommand] {
+        var chords: [KeyInterceptor.ReservedChord] = ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
         chords += [.newTool]
         chords += [.openSettings, .reloadConfig, .checkForUpdates, .reportIssue]
+        chords += [.toggleRepoPicker, .prevWorkspace, .nextWorkspace]
+        if workspaceCount > 0 {
+            chords += (1...min(workspaceCount, 9)).map { .selectWorkspace($0) }
+        }
         chords += [
             .toggleBottomDrawer, .toggleRightDrawer,
             .newTab, .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab, .closeTab,
@@ -155,5 +162,10 @@ enum CommandCatalog {
         _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
     ) -> PaletteCommand {
         .init(title: title, shortcut: shortcut, category: Category.help, chord: chord)
+    }
+    private static func workspace(
+        _ title: String, _ shortcut: String, _ chord: KeyInterceptor.ReservedChord
+    ) -> PaletteCommand {
+        .init(title: title, shortcut: shortcut, category: Category.workspaces, chord: chord)
     }
 }

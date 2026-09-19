@@ -268,6 +268,11 @@ final class ToastView: ShadowCardView {
     var badgeFillForTesting: CGColor? { badgeFill.layer?.backgroundColor }
     var badgeIconTintForTesting: NSColor? { badgeIcon.contentTintColor }
 
+    func setTitle(_ title: String) {
+        guard titleLabel.stringValue != title else { return }
+        titleLabel.stringValue = title
+    }
+
     func refreshShortcuts() {
         shortcutSlots.forEach { $0.refresh() }
     }

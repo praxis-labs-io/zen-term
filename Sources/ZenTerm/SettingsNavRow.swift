@@ -7,6 +7,7 @@ final class SettingsNavRow: NSView {
     var onEnterDetail: (() -> Void)?
     var onReturn: (() -> Void)?
     var onEscape: (() -> Void)?
+    var tooltip: TooltipHost?
 
     private let label = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
@@ -106,18 +107,34 @@ final class SettingsNavRow: NSView {
         trackingArea = area
     }
 
-    override func mouseEntered(with event: NSEvent) { isHovered = true; refreshFill() }
-    override func mouseExited(with event: NSEvent) { isHovered = false; refreshFill() }
+    override func mouseEntered(with event: NSEvent) {
+        isHovered = true
+        refreshFill()
+        tooltip?.show(from: self)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        refreshFill()
+        tooltip?.hide(from: self)
+    }
 
     override func viewDidHide() {
         super.viewDidHide()
         isHovered = false
         refreshFill()
+        tooltip?.hide(from: self)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { tooltip?.hide(from: self) }
     }
 
     override func accessibilityPerformPress() -> Bool { onActivate(); return true }
 
     override func mouseDown(with event: NSEvent) {
+        tooltip?.hide(from: self)
         if focusesOnClick { window?.makeFirstResponder(self) }
         onActivate()
     }

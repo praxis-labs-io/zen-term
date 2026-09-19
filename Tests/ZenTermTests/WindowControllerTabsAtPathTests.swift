@@ -57,9 +57,9 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
         let c = makeWindow()
         let wanted = try folder("feature-x")
         let other = try folder("feature-y")
-        c.openWorkspaceForTesting(workspace("x", at: wanted), replaceCurrentTab: false)
-        c.openWorkspaceForTesting(workspace("x again", at: wanted), replaceCurrentTab: false)
-        c.openWorkspaceForTesting(workspace("y", at: other), replaceCurrentTab: false)
+        c.openWorkspaceForTesting(workspace("x", at: wanted))
+        c.openWorkspaceForTesting(workspace("x/src", at: try folder("feature-x/src")))
+        c.openWorkspaceForTesting(workspace("y", at: other))
 
         XCTAssertEqual(c.tabCount(atPath: wanted), 2)
         XCTAssertEqual(c.tabCount(atPath: other), 1)
@@ -68,7 +68,7 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
     func test_aTabWhoseShellHasMovedStillCounts() throws {
         let c = makeWindow()
         let wanted = try folder("feature-x")
-        c.openWorkspaceForTesting(workspace("x", at: wanted), replaceCurrentTab: false)
+        c.openWorkspaceForTesting(workspace("x", at: wanted))
         spawned.forEach { $0.currentDirectory = URL(fileURLWithPath: "/somewhere/else") }
 
         XCTAssertEqual(c.tabCount(atPath: wanted), 1)
@@ -77,7 +77,7 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
     func test_anUnstandardizedPathMatchesTheTabItOpened() throws {
         let c = makeWindow()
         let wanted = try folder("feature-x")
-        c.openWorkspaceForTesting(workspace("x", at: wanted), replaceCurrentTab: false)
+        c.openWorkspaceForTesting(workspace("x", at: wanted))
 
         let noisy = wanted.deletingLastPathComponent()
             .appendingPathComponent(".").appendingPathComponent("feature-x")
@@ -88,22 +88,22 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
         let c = makeWindow()
         let wanted = try folder("feature-x")
         let other = try folder("feature-y")
-        c.openWorkspaceForTesting(workspace("x", at: wanted), replaceCurrentTab: false)
-        c.openWorkspaceForTesting(workspace("y", at: other), replaceCurrentTab: false)
-        c.openWorkspaceForTesting(workspace("x again", at: wanted), replaceCurrentTab: false)
-        let before = c.tabOrderForTesting.count
+        c.openWorkspaceForTesting(workspace("x", at: wanted))
+        c.openWorkspaceForTesting(workspace("y", at: other))
+        c.openWorkspaceForTesting(workspace("x/src", at: try folder("feature-x/src")))
+        let before = c.tabCount
 
         c.closeTabs(atPath: wanted)
 
         XCTAssertEqual(c.tabCount(atPath: wanted), 0)
         XCTAssertEqual(c.tabCount(atPath: other), 1)
-        XCTAssertEqual(c.tabOrderForTesting.count, before - 2)
+        XCTAssertEqual(c.tabCount, before - 2)
     }
 
     func test_aRemovalThatHasOnlyStarted_leavesTheTabOpen() throws {
         let c = makeWindow()
         let wanted = try folder("feature-x")
-        c.openWorkspaceForTesting(workspace("x", at: wanted), replaceCurrentTab: false)
+        c.openWorkspaceForTesting(workspace("x", at: wanted))
 
         c.worktreeRemovalsChanged(.began(wanted))
 
@@ -113,7 +113,7 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
     func test_aRemovalThatLanded_closesTheTab() throws {
         let c = makeWindow()
         let wanted = try folder("feature-x")
-        c.openWorkspaceForTesting(workspace("x", at: wanted), replaceCurrentTab: false)
+        c.openWorkspaceForTesting(workspace("x", at: wanted))
 
         c.worktreeRemovalsChanged(.removed(wanted))
 
@@ -123,7 +123,7 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
     func test_aRemovalThatFailed_leavesTheTabOpen() throws {
         let c = makeWindow()
         let wanted = try folder("feature-x")
-        c.openWorkspaceForTesting(workspace("x", at: wanted), replaceCurrentTab: false)
+        c.openWorkspaceForTesting(workspace("x", at: wanted))
 
         c.worktreeRemovalsChanged(.failed(wanted))
 
@@ -134,8 +134,8 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
         let c = makeWindow()
         let wanted = try folder("feature-x")
         let inside = try folder("feature-x/src")
-        c.openWorkspaceForTesting(workspace("x", at: wanted), replaceCurrentTab: false)
-        c.openWorkspaceForTesting(workspace("x/src", at: inside), replaceCurrentTab: false)
+        c.openWorkspaceForTesting(workspace("x", at: wanted))
+        c.openWorkspaceForTesting(workspace("x/src", at: inside))
 
         XCTAssertEqual(c.tabCount(atPath: wanted), 2)
 
@@ -148,8 +148,7 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
         let wanted = try folder("feature-x")
         _ = try folder("feature-x-old")
         c.openWorkspaceForTesting(
-            workspace("old", at: root.appendingPathComponent("feature-x-old", isDirectory: true)),
-            replaceCurrentTab: false)
+            workspace("old", at: root.appendingPathComponent("feature-x-old", isDirectory: true)))
 
         XCTAssertEqual(c.tabCount(atPath: wanted), 0)
     }
@@ -157,11 +156,28 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
     func test_aPathNothingWasOpenedAtClosesNothing() throws {
         let c = makeWindow()
         let wanted = try folder("feature-x")
-        c.openWorkspaceForTesting(workspace("x", at: wanted), replaceCurrentTab: false)
-        let before = c.tabOrderForTesting.count
+        c.openWorkspaceForTesting(workspace("x", at: wanted))
+        let before = c.tabCount
 
         c.closeTabs(atPath: try folder("never-opened"))
 
-        XCTAssertEqual(c.tabOrderForTesting.count, before)
+        XCTAssertEqual(c.tabCount, before)
+    }
+
+    func test_removal_namesTheWorkspaceItEmpties() throws {
+        let c = makeWindow()
+        let wanted = try folder("feature-x")
+        c.openWorkspaceForTesting(workspace("x", at: wanted))
+
+        XCTAssertEqual(c.closedByRemoval(atPath: wanted), ClosedByRemoval(workspaces: ["x"]))
+    }
+
+    func test_removal_thatEmptiesEveryWorkspace_closesTheWindow() throws {
+        let c = makeWindow()
+        c.openWorkspaceForTesting(workspace("x", at: try folder("feature-x")))
+
+        XCTAssertEqual(
+            c.closedByRemoval(atPath: root), ClosedByRemoval(thisWindow: true),
+            "Home opened in root too, so nothing is left to hold the window")
     }
 }

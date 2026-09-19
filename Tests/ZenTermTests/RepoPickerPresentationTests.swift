@@ -282,8 +282,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
         c.openWorkspaceForTesting(
             Workspace(
                 title: "feature/one", path: removed, main: nil, right: nil, bottom: nil,
-                focus: .main, env: [:]),
-            replaceCurrentTab: false)
+                focus: .main, env: [:]))
         c.handle(.toggleRepoPicker)
         waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
         let picker = try XCTUnwrap(pickers(in: c).first)
@@ -435,5 +434,102 @@ final class RepoPickerPresentationTests: WindowTestCase {
                 persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "y"))
         ]
         return config
+    }
+
+    private func pressReturn(in picker: RepoPickerOverlay) {
+        guard
+            let field = descendants(of: picker).compactMap({ $0 as? NSTextField })
+                .first(where: { ($0.delegate as? PaletteOverlay) === picker })
+        else { return XCTFail("the picker has no search field to press Return in") }
+        _ = picker.control(
+            field, textView: NSTextView(), doCommandBy: #selector(NSResponder.insertNewline(_:)))
+    }
+
+    private func openPicker(in c: WindowController) throws -> RepoPickerOverlay {
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        return try XCTUnwrap(pickers(in: c).first)
+    }
+
+    func test_returnOnAClosedWorkspace_opensItIntoTheSidebar_andSwitchesToIt() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        let home = c.activeWorkspaceIDForTesting
+        let homeTab = try XCTUnwrap(c.tabIDsForTesting(workspace: home).first)
+        let homeSurface = try XCTUnwrap(c.controllerForTesting(tab: homeTab)?.allSurfaces.first)
+
+        pressReturn(in: try openPicker(in: c))
+
+        XCTAssertEqual(c.workspaceNamesForTesting, ["Home", "Alpha"], "a new workspace goes at the end")
+        XCTAssertNotEqual(c.activeWorkspaceIDForTesting, home)
+        XCTAssertEqual(c.tabOrderForTesting.count, 1, "it starts with its own tab, not one added to Home")
+        XCTAssertEqual(
+            c.controllerForTesting(tab: homeTab)?.allSurfaces.first.map { $0 === homeSurface }, true,
+            "Home keeps running behind it")
+        XCTAssertTrue(pickers(in: c).isEmpty, "the picker closes")
+    }
+
+    func test_returnOnAnOpenWorkspace_switchesToIt_ratherThanOpeningItAgain() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        let home = c.activeWorkspaceIDForTesting
+        pressReturn(in: try openPicker(in: c))
+        let alpha = c.activeWorkspaceIDForTesting
+        let alphaTab = try XCTUnwrap(c.tabIDsForTesting(workspace: alpha).first)
+        let alphaSurface = try XCTUnwrap(c.controllerForTesting(tab: alphaTab)?.allSurfaces.first)
+        c.handle(.selectWorkspace(1))
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, home)
+
+        pressReturn(in: try openPicker(in: c))
+
+        XCTAssertEqual(c.workspaceNamesForTesting, ["Home", "Alpha"])
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, alpha)
+        XCTAssertTrue(c.controllerForTesting(tab: alphaTab)?.allSurfaces.first === alphaSurface)
+    }
+
+    func test_renamingAnOpenWorkspace_stillSwitchesToIt_ratherThanOpeningASecondCopy() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        pressReturn(in: try openPicker(in: c))
+        let alpha = c.activeWorkspaceIDForTesting
+        c.handle(.selectWorkspace(1))
+        try seedWorkspaces(twoWorkspaces.replacingOccurrences(of: "[Alpha]", with: "[Alpha Renamed]"))
+
+        pressReturn(in: try openPicker(in: c))
+
+        XCTAssertEqual(c.workspaceNamesForTesting, ["Home", "Alpha"], "the same folder is the same workspace")
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, alpha)
+    }
+
+    func test_aConfiguredWorkspaceInTheHomeFolder_opensItsOwnWorkspace_notHome() throws {
+        try seedWorkspaces("[Dotfiles]\npath = ~\n")
+        let c = makeWindow()
+        let home = c.activeWorkspaceIDForTesting
+
+        pressReturn(in: try openPicker(in: c))
+
+        XCTAssertEqual(c.workspaceNamesForTesting, ["Home", "Dotfiles"])
+        XCTAssertNotEqual(c.activeWorkspaceIDForTesting, home)
+    }
+
+    func test_returnOnAnOpenWorktree_switchesToIt_ratherThanOpeningItAgain() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        let alpha = URL(fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
+        var picker = try openPicker(in: c)
+        giveWorktrees(picker, under: alpha, "feature/one")
+        moveDown(in: picker)
+        pressReturn(in: picker)
+        let worktree = c.activeWorkspaceIDForTesting
+        XCTAssertEqual(c.workspaceNamesForTesting, ["Home", "Alpha: feature/one"])
+        c.handle(.selectWorkspace(1))
+
+        picker = try openPicker(in: c)
+        giveWorktrees(picker, under: alpha, "feature/one")
+        moveDown(in: picker)
+        pressReturn(in: picker)
+
+        XCTAssertEqual(c.workspaceNamesForTesting, ["Home", "Alpha: feature/one"])
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, worktree)
     }
 }

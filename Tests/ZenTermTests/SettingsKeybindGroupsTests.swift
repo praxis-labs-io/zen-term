@@ -26,7 +26,8 @@ final class SettingsKeybindGroupsTests: XCTestCase {
             .reloadConfig, .checkForUpdates, .reportIssue, .newTool,
             .dismissToast, .dismissAllToasts,
             .toggleToolFloat(ToolFloat.scratch.id), .toggleToolFloat("btop"),
-        ] + (1...9).map { .selectTab($0) }
+            .prevWorkspace, .nextWorkspace,
+        ] + (1...9).map { .selectTab($0) } + (1...9).map { .selectWorkspace($0) }
 
     func test_everyEditableActionHasARow() {
         let editable = Set(

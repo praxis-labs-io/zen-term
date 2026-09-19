@@ -38,7 +38,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         let hints = RepoPickerOverlay.footerHints()
         XCTAssertNil(hints.first { $0.label == "new worktree" })
-        XCTAssertEqual(hints.map(\.label), ["open", "replace tab"])
+        XCTAssertEqual(hints.map(\.label), ["open", "switch"])
     }
 
     func test_theCreateTarget_isNilOnTheAddRow() {
@@ -152,9 +152,9 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
     func test_detachedWorktree_opensATabNamedByItsHeadNotItsFolder() {
         let repo = path("alpha")
-        var chosen: (Workspace, Bool)?
+        var chosen: Workspace?
         let overlay = makeRepoPicker(
-            entries: [workspace("alpha", path: repo)], onChoose: { chosen = ($0, $1) })
+            entries: [workspace("alpha", path: repo)], onChoose: { chosen = $0 })
         mount(overlay)
         let detached = Worktree(
             path: worktreeRoot.appendingPathComponent("alpha/runbook-detached", isDirectory: true),
@@ -163,7 +163,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         overlay.activate(index: 2, modifiers: [])
 
-        XCTAssertEqual(chosen?.0.title, "alpha: abc1234")
+        XCTAssertEqual(chosen?.title, "alpha: abc1234")
     }
 
     private func label(in row: NSView, saying text: String) -> NSTextField? {
@@ -226,38 +226,24 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
     func test_return_onAWorktreeOpensTheParentRecipeAtItsPath() {
         let repo = path("alpha")
-        var chosen: (Workspace, Bool)?
+        var chosen: Workspace?
         let parent = Workspace(
             title: "alpha", path: repo, main: "nvim", right: "claude", bottom: "shell",
             focus: .right, env: ["A": "1"], carry: [".env"])
-        let overlay = makeRepoPicker(entries: [parent], onChoose: { chosen = ($0, $1) })
+        let overlay = makeRepoPicker(entries: [parent], onChoose: { chosen = $0 })
         mount(overlay)
         overlay.setWorktrees(listing(repo, "feature"), for: repo)
 
         overlay.activate(index: 2, modifiers: [])
 
-        XCTAssertEqual(chosen?.0.title, "alpha: feature")
-        XCTAssertEqual(chosen?.0.path.lastPathComponent, "feature")
-        XCTAssertEqual(chosen?.0.main, "nvim")
-        XCTAssertEqual(chosen?.0.right, "claude")
-        XCTAssertEqual(chosen?.0.bottom, "shell")
-        XCTAssertEqual(chosen?.0.focus, .right)
-        XCTAssertEqual(chosen?.0.env, ["A": "1"])
-        XCTAssertEqual(chosen?.0.carry, [".env"])
-        XCTAssertEqual(chosen?.1, false)
-    }
-
-    func test_shiftReturn_onAWorktreeReplacesTheCurrentTab() {
-        let repo = path("alpha")
-        var chosen: (Workspace, Bool)?
-        let overlay = makeRepoPicker(
-            entries: [workspace("alpha", path: repo)], onChoose: { chosen = ($0, $1) })
-        mount(overlay)
-        overlay.setWorktrees(listing(repo, "feature"), for: repo)
-
-        overlay.activate(index: 2, modifiers: [.shift])
-
-        XCTAssertEqual(chosen?.1, true)
+        XCTAssertEqual(chosen?.title, "alpha: feature")
+        XCTAssertEqual(chosen?.path.lastPathComponent, "feature")
+        XCTAssertEqual(chosen?.main, "nvim")
+        XCTAssertEqual(chosen?.right, "claude")
+        XCTAssertEqual(chosen?.bottom, "shell")
+        XCTAssertEqual(chosen?.focus, .right)
+        XCTAssertEqual(chosen?.env, ["A": "1"])
+        XCTAssertEqual(chosen?.carry, [".env"])
     }
 
     func test_twoWorkspacesOfOneRepo_showTheWorktreesOnce() {
@@ -335,12 +321,12 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let owner = path("owner")
         let other = path("other")
         let shared = owner.appendingPathComponent(".git")
-        var chosen: (Workspace, Bool)?
+        var chosen: Workspace?
         let ownerWorkspace = Workspace(
             title: "b-x", path: owner, main: "nvim", right: nil, bottom: nil, focus: .main, env: [:])
         let overlay = makeRepoPicker(
             entries: [ownerWorkspace, workspace("a-x", path: other)],
-            onChoose: { chosen = ($0, $1) })
+            onChoose: { chosen = $0 })
         mount(overlay)
         let trees = [worktree(owner, "shared-branch")]
         overlay.setWorktrees(WorktreeListing(commonDir: shared, worktrees: trees), for: owner)
@@ -355,7 +341,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             "the filter reorders the workspaces, and the worktree stays with b-x")
         let index = try XCTUnwrap(shape(of: overlay).firstIndex(of: "worktree:shared-branch"))
         overlay.activate(index: index, modifiers: [])
-        XCTAssertEqual(chosen?.0.main, "nvim", "b-x's recipe, not a-x's")
+        XCTAssertEqual(chosen?.main, "nvim", "b-x's recipe, not a-x's")
     }
 
     func test_filter_findsADetachedWorktreeByItsShortHead() {
@@ -477,19 +463,52 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertFalse(hintIsShown("new worktree", in: overlay))
     }
 
-    func test_theOpenHints_stayUpOnEveryRow() {
+    func test_theOpenHint_staysUpOnEveryRow() {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
         mount(overlay)
         overlay.setWorktrees(listing(repo, "one"), for: repo)
 
         XCTAssertTrue(hintIsShown("open", in: overlay))
-        XCTAssertTrue(hintIsShown("replace tab", in: overlay))
 
         send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
         XCTAssertTrue(hintIsShown("open", in: overlay))
-        XCTAssertTrue(hintIsShown("replace tab", in: overlay))
+    }
+
+    func test_overAnOpenWorkspace_theReturnHintSaysSwitch() {
+        let open = path("alpha")
+        let overlay = makeRepoPicker(
+            entries: [workspace("alpha", path: open), workspace("beta", path: path("beta"))],
+            isOpen: { $0 == open })
+        mount(overlay)
+
+        XCTAssertTrue(hintIsShown("switch", in: overlay), "↵ on an open workspace switches to it")
+
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
+
+        XCTAssertFalse(hintIsShown("switch", in: overlay), "a closed one opens")
+    }
+
+    func test_aWorktreeOpenInItsMirroredSubfolder_isMarkedOpen_withoutThatFolderOnDisk() throws {
+        let repo = try GitFixture.makeRepo(at: path("mirror-repo").resolvingSymlinksInPath())
+        defer { try? FileManager.default.removeItem(at: repo) }
+        let package = repo.appendingPathComponent("pkg", isDirectory: true)
+        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+        let tree = worktree(repo, "feat")
+        let opened = tree.path.appendingPathComponent("pkg").standardizedFileURL.path
+        let overlay = makeRepoPicker(
+            entries: [workspace("mono", path: package)], isOpen: { $0.standardizedFileURL.path == opened })
+        mount(overlay)
+        waitUntil(GitRepoStatus.repoRoot(package) != nil, "the repo root to be read off the main thread")
+
+        overlay.setWorktrees(WorktreeListing(commonDir: repo, worktrees: [tree]), for: package)
+
+        let row = try XCTUnwrap(rowViews(in: overlay).compactMap { $0 as? RepoPickerOverlay.RowView }.last)
+        XCTAssertNotNil(row.worktree)
+        XCTAssertTrue(
+            descendants(of: row).contains { ($0 as? NSTextField)?.stringValue == "open" },
+            "the open workspace sits at the worktree's copy of pkg, which the picker never reads off disk")
     }
 
     private func hintIsShown(_ label: String, in overlay: NSView) -> Bool {
@@ -638,11 +657,11 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
     private func makeRepoPicker(
         entries: [Workspace], removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
-        onChoose: @escaping (Workspace, Bool) -> Void = { _, _ in }
+        isOpen: @escaping (URL) -> Bool = { _ in false }, onChoose: @escaping (Workspace) -> Void = { _ in }
     ) -> RepoPickerOverlay {
         RepoPickerOverlay(
             entries: entries, background: Theme.current.chrome.background.nsColor,
-            removals: removals, onChoose: onChoose, onAddWorkspace: {}, onDismiss: {})
+            removals: removals, isOpen: isOpen, onChoose: onChoose, onAddWorkspace: {}, onDismiss: {})
     }
 
     private func makeWindow() -> NSWindow {

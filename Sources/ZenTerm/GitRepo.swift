@@ -65,16 +65,20 @@ enum GitRepo {
     /// Where `path` sits inside `checkout`: the same spot under `repoRoot`, or `checkout` for the root itself.
     /// Nil when `path` is below `repoRoot` and that folder is not in `checkout`.
     static func mirrored(_ path: URL, from repoRoot: URL?, into checkout: URL) -> URL? {
-        let checkout = checkout.standardizedFileURL
-        guard let base = repoRoot?.standardizedFileURL.path else { return checkout }
-        let inside = path.standardizedFileURL.path
-        guard inside.hasPrefix(base + "/") else { return checkout }
-        let mirrored = checkout.appendingPathComponent(String(inside.dropFirst(base.count + 1)))
-            .standardizedFileURL
+        let mirrored = mirrorPath(path, from: repoRoot, into: checkout)
+        guard mirrored.path != checkout.standardizedFileURL.path else { return mirrored }
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: mirrored.path, isDirectory: &isDirectory),
             isDirectory.boolValue
         else { return nil }
         return mirrored
+    }
+
+    static func mirrorPath(_ path: URL, from repoRoot: URL?, into checkout: URL) -> URL {
+        let checkout = checkout.standardizedFileURL
+        guard let base = repoRoot?.standardizedFileURL.path else { return checkout }
+        let inside = path.standardizedFileURL.path
+        guard inside.hasPrefix(base + "/") else { return checkout }
+        return checkout.appendingPathComponent(String(inside.dropFirst(base.count + 1))).standardizedFileURL
     }
 }

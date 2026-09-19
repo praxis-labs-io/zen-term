@@ -24,6 +24,11 @@ final class SettingsKeybindsSection: SettingsSection {
         ("Navigation", [.navLeft, .navDown, .navUp, .navRight, .prevPane, .nextPane]),
         ("Resize", [.resizeLeft, .resizeDown, .resizeUp, .resizeRight]),
         (
+            "Workspaces",
+            [.toggleRepoPicker, .createWorktree, .removeWorktree, .prevWorkspace, .nextWorkspace]
+                + (1...9).map { .selectWorkspace($0) }
+        ),
+        (
             "Tabs",
             [
                 .newTab, .newWindow, .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab,
@@ -36,8 +41,7 @@ final class SettingsKeybindsSection: SettingsSection {
         (
             "Surfaces & Tools",
             [
-                .toggleToolFloat(ToolFloat.scratch.id), .toggleRepoPicker, .createWorktree,
-                .removeWorktree, .toggleCommandPalette, .newTool, .openSettings,
+                .toggleToolFloat(ToolFloat.scratch.id), .toggleCommandPalette, .newTool, .openSettings,
             ]
         ),
     ]

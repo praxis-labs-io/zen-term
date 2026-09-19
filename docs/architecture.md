@@ -175,8 +175,13 @@ single modal slot, tab bar and dock. `WorkspaceController` owns one workspace: a
 its `TabController`s and their titles. `TabController` owns one tab: a
 `PaneCanvasController` and two drawers.
 
-- **A window always has one workspace**, the default one in the home folder, and one of
-  them is active. Nothing opens a second yet, so only the testing seams reach one.
+- **A window starts with one workspace**, the default one in the home folder, and one of
+  them is active. ⌘P opens a configured workspace at the end of the sidebar, or switches to
+  it when it is already open. A workspace is open when one other than the default is
+  open at its folder, so renaming it in Settings does not open a second copy.
+- **`activate(_:)` is the single path a switch goes through**: a row click, ⌘⌥1…9 and ⌘⌥[ ]
+  in sidebar order, ⌘P, and revealing a background tab. It swaps the canvas without
+  motion, so a newly opened workspace applies its recipe in the same turn.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
   workspace costs nothing beyond an inactive tab.
 - **Tab ids are minted by the window**, not by the workspace, so they stay unique across a
@@ -245,8 +250,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   view, so it holds one spot docked and collapsed. Rows read the window's workspaces,
   never a copy. A new window opens the way the last toggle left one, for the launch only.
   The keyboard enters only through `focus_sidebar`, which docks a collapsed sidebar first,
-  and through nav with no neighbor to the left (`TabController.focusPastLeftEdge`), so
-  panes, drawers and the nvim navigator all reach it. ⌃⌘S only docks and collapses. Rows take focus from the keyboard only
+  and through nav with no neighbor to the left (`TabController.focusPastLeftEdge`) from
+  the active tab, so panes, drawers and the nvim navigator all reach it. ⌃⌘S only docks
+  and collapses. ↵ activates a row as a click does. Rows take focus from the keyboard only
   (`SettingsNavRow.takeKeyboardFocus`): AppKit promotes any clicked view that accepts.
 - **Fill Screen** is a maximize, not native fullscreen. `window-chrome = false` hides
   the traffic lights and `ChromeMetrics.topInset` follows.

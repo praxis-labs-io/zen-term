@@ -23,6 +23,7 @@ final class KeybindParserTests: XCTestCase {
             .jumpToPreviousPrompt, .jumpToNextPrompt, .pasteSelection,
             .increaseFontSize, .decreaseFontSize, .resetFontSize,
             .selectTab(1), .selectTab(9), .toggleToolFloat("gitdash"),
+            .selectWorkspace(1), .selectWorkspace(9), .prevWorkspace, .nextWorkspace,
         ]
         for chord in cases {
             XCTAssertEqual(action(from: chord.actionToken), chord)
@@ -118,6 +119,12 @@ final class KeybindParserTests: XCTestCase {
         XCTAssertNil(action(from: "select_tab_0"))
         XCTAssertNil(action(from: "select_tab_10"))
         XCTAssertEqual(action(from: "select_tab_5"), .selectTab(5))
+    }
+
+    func test_selectWorkspace_bounds() {
+        XCTAssertNil(action(from: "select_workspace_0"))
+        XCTAssertNil(action(from: "select_workspace_10"))
+        XCTAssertEqual(action(from: "select_workspace_9"), .selectWorkspace(9))
     }
 
     func test_toggleFloat_action() {

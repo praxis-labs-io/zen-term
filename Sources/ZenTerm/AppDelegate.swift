@@ -186,8 +186,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wc.keyModeHost = keys
         wc.onAppGlobalCommand = { [weak self] chord in self?.route(chord) }
         wc.worktreeRemovals = worktreeRemovals
-        wc.onCountTabsAtPath = { [weak self] path in
-            self?.windows.reduce(0) { $0 + $1.tabCount(atPath: path) } ?? 0
+        wc.onClosedByRemovalAtPath = { [weak self, weak wc] path in
+            self?.windows.reduce(ClosedByRemoval()) {
+                $0.adding($1.closedByRemoval(atPath: path), isThisWindow: $1 === wc)
+            } ?? ClosedByRemoval()
         }
         if centered { wc.window.center() }
         wc.onClosed = { [weak self, weak wc] in
