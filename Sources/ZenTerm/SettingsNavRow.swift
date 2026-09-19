@@ -30,6 +30,7 @@ final class SettingsNavRow: NSView, HoverSuppressing {
     private var isSelected = false
     private var isFocusedStop = false
     private var isHoverSuppressed = false
+    var onFocusChanged: (() -> Void)?
     private var isHovered = false { didSet { refreshAccessory() } }
     private(set) var hoverAccessory: NSView?
 
@@ -212,8 +213,19 @@ final class SettingsNavRow: NSView, HoverSuppressing {
         window?.makeFirstResponder(self)
         isTakingKeyboardFocus = false
     }
-    override func becomeFirstResponder() -> Bool { isFocusedStop = true; refreshFill(); return true }
-    override func resignFirstResponder() -> Bool { isFocusedStop = false; refreshFill(); return true }
+    override func becomeFirstResponder() -> Bool {
+        isFocusedStop = true
+        refreshFill()
+        onFocusChanged?()
+        return true
+    }
+
+    override func resignFirstResponder() -> Bool {
+        isFocusedStop = false
+        refreshFill()
+        onFocusChanged?()
+        return true
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()

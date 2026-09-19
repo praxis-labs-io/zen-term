@@ -43,6 +43,7 @@ final class SidebarAgentRow: NSView, HoverSuppressing {
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onEscape: (() -> Void)?
+    var onFocusChanged: (() -> Void)?
 
     private let summaryLabel = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
@@ -169,8 +170,19 @@ final class SidebarAgentRow: NSView, HoverSuppressing {
         window?.makeFirstResponder(self)
         isTakingKeyboardFocus = false
     }
-    override func becomeFirstResponder() -> Bool { isFocusedStop = true; refreshFill(); return true }
-    override func resignFirstResponder() -> Bool { isFocusedStop = false; refreshFill(); return true }
+    override func becomeFirstResponder() -> Bool {
+        isFocusedStop = true
+        refreshFill()
+        onFocusChanged?()
+        return true
+    }
+
+    override func resignFirstResponder() -> Bool {
+        isFocusedStop = false
+        refreshFill()
+        onFocusChanged?()
+        return true
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()

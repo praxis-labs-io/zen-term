@@ -38,6 +38,7 @@ final class SidebarController {
     private var slideID = 0
     private var entries: [Entry] = []
     var onLeave: () -> Void = {}
+    var onFocusChanged: () -> Void = {}
     var onJump: (SurfaceID) -> Void = { _ in }
 
     init(
@@ -52,6 +53,7 @@ final class SidebarController {
         lead = CollapsedSidebarLead(
             leadingInset: Self.toggleInset + SidebarFooter.buttonSize.width + Self.leadNameGap)
         view.onLeave = { [weak self] in self?.onLeave() }
+        view.onFocusChanged = { [weak self] in self?.onFocusChanged() }
         view.onJump = { [weak self] in self?.onJump($0) }
     }
 

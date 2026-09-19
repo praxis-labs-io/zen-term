@@ -44,6 +44,7 @@ final class SidebarView: NSView {
     private var contentEndsAtAgents: NSLayoutConstraint?
     private var agentRows: [SurfaceID: SidebarAgentRow] = [:]
     var onLeave: (() -> Void)?
+    var onFocusChanged: (() -> Void)?
     var onJump: ((SurfaceID) -> Void)?
     private let onActivate: (SidebarRowID) -> Void
     private let onNewWorktree: (SidebarRowID) -> Void
@@ -171,6 +172,7 @@ final class SidebarView: NSView {
         row.onArrowUp = { [weak self] in self?.moveFocus(-1) }
         row.onArrowDown = { [weak self] in self?.moveFocus(1) }
         row.onEscape = { [weak self] in self?.onLeave?() }
+        row.onFocusChanged = { [weak self] in self?.onFocusChanged?() }
         agentRows[id] = row
         return row
     }
@@ -232,6 +234,7 @@ final class SidebarView: NSView {
         }
         row.onArrowUp = { [weak self] in self?.moveFocus(-1) }
         row.onArrowDown = { [weak self] in self?.moveFocus(1) }
+        row.onFocusChanged = { [weak self] in self?.onFocusChanged?() }
         row.onReturn = { [weak self] in self?.onActivate(id) }
         row.onEscape = { [weak self] in self?.onLeave?() }
         row.onSecondaryClick = { [weak self, weak row] in

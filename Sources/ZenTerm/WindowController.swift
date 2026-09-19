@@ -405,6 +405,7 @@ final class WindowController: NSObject {
         onSettings = { [weak self] in self?.handle(.openSettings) }
         onToggleSidebar = { [weak self] in self?.handle(.toggleSidebar) }
         sidebar.onLeave = { [weak self] in self?.restoreFocusToActive() }
+        sidebar.onFocusChanged = { [weak self] in self?.syncHalo() }
         onActivateRow = { [weak self] in self?.activateFromSidebar($0) }
         onNewWorktree = { [weak self] in self?.createWorktreeFromSidebar($0) }
         onCloseWorkspace = { [weak self] in self?.requestCloseWorkspace(id: $0) }
@@ -805,6 +806,12 @@ final class WindowController: NSObject {
 
     private func restoreFocusToActive() {
         if floats.isOpen { floats.refocus() } else { activeController?.restoreUnifiedFocus() }
+        syncHalo()
+    }
+
+    /// The halo answers where the keyboard is, so it goes out while the sidebar holds focus.
+    private func syncHalo() {
+        activeController?.setHaloVisible(!sidebar.hasFocus)
     }
 
     // Below `tabBar`, so the ⌘W guard toast fired over an open float stays visible.

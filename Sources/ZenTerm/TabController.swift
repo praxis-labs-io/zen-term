@@ -525,6 +525,8 @@ final class TabController: NSObject {
         onFocusChanged?()
     }
 
+    func setHaloVisible(_ visible: Bool) { paneCanvas.setHaloVisible(visible) }
+
     func setFocusedSurfaceRendersFocused(_ focused: Bool) {
         switch focusedPanel {
         case .pane: paneCanvas.setFocusedSurfaceRendersFocused(focused)

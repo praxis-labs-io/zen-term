@@ -923,6 +923,19 @@ final class SidebarInteractionTests: WindowTestCase {
         return (frame.minY - visible.minY, visible.maxY - frame.maxY)
     }
 
+    func test_whileTheSidebarHoldsFocus_noPaneShowsTheHalo() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedPanelForTesting)
+        XCTAssertTrue(pane.isFocused, "precondition: the focused pane wears the halo")
+
+        controller.sidebarForTesting.focusActiveRow()
+        XCTAssertFalse(pane.isFocused, "the halo answers where the keyboard is")
+
+        controller.window.sendEvent(key(.escape, in: controller))
+        XCTAssertTrue(pane.isFocused, "and comes back with focus")
+    }
+
     func test_aPickerOpenedFromTheSidebar_handsFocusBackToItsRow() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
