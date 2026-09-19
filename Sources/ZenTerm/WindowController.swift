@@ -1785,6 +1785,9 @@ final class WindowController: NSObject {
                 return
             }
             switch chord {
+            case .toggleSidebar:
+                toggleSidebar()
+                return
             case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue,
                 .newTool:
                 closingModalKind = modal.kind

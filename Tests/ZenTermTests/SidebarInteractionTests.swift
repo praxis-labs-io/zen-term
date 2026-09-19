@@ -894,6 +894,17 @@ final class SidebarInteractionTests: WindowTestCase {
         return (frame.minY - visible.minY, visible.maxY - frame.maxY)
     }
 
+    func test_theSidebarToggle_worksWithACardOpen_andLeavesItOpen() throws {
+        let controller = makeController()
+        controller.handle(.openSettings)
+        let docked = controller.sidebarForTesting.isDocked
+
+        controller.handle(.toggleSidebar)
+
+        XCTAssertEqual(controller.sidebarForTesting.isDocked, !docked, "nothing blocks the sidebar toggle")
+        XCTAssertTrue(controller.isModalOverlayOpen, "the card it was pressed over stays open")
+    }
+
     func test_whileACardCoversTheSidebar_rowsTakeNoHover() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)

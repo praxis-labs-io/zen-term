@@ -352,7 +352,8 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   loses it gets Revert only. Settings rows show the conflict but do not resolve it.
 - **The modal gate** in `WindowController.handle(_:)` runs confirm, modal card, tool
   float, then dispatch. App-global chords bypass it in `AppDelegate.route`; a palette pick
-  of one returns there through `onAppGlobalCommand`. A card swallows other chords; a float
+  of one returns there through `onAppGlobalCommand`. The sidebar toggle passes through an
+  open card, which stays open. A card swallows other chords; a float
   raises a notice for pane commands and passes reading chords to its own buffer
   (`modeTarget`).
 - **Picker chords go through `PickerChordGuard`** (⌥⏎, ⌘⇧⌫), because a bound chord is
