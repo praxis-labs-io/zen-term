@@ -28,6 +28,7 @@ final class WindowController: NSObject {
     private static var backdropTintAlpha: CGFloat { GeneralConfig.current.backdropAlpha }
 
     private let container = NSView()
+    private let canvasHost = NSView()
     private let tint = NSView()
     // Built on first use so the stack mounts above the canvas; not `lazy`, so re-insetting can't construct one.
     private var builtToasts: ToastPresenter?
@@ -183,6 +184,7 @@ final class WindowController: NSObject {
     private let dock: ToggleDock
     private let sidebar: SidebarController
     private var mountedCanvas: NSView?
+    private var activeCanvasSlides = 0
 
     private enum ModalKind {
         case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm, reportIssue
@@ -505,11 +507,18 @@ final class WindowController: NSObject {
 
         tabBar.translatesAutoresizingMaskIntoConstraints = false
         dock.translatesAutoresizingMaskIntoConstraints = false
+        canvasHost.translatesAutoresizingMaskIntoConstraints = false
+        canvasHost.wantsLayer = true
+        container.addSubview(canvasHost)
         container.addSubview(tabBar)
         container.addSubview(dock)
         sidebar.install(in: container, besideTabBar: tabBar)
         sidebar.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
         NSLayoutConstraint.activate([
+            canvasHost.leadingAnchor.constraint(equalTo: sidebar.edgeAnchor),
+            canvasHost.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            canvasHost.topAnchor.constraint(equalTo: container.topAnchor),
+            canvasHost.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             tabBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             tabBar.heightAnchor.constraint(equalToConstant: TabBarView.height),
             dock.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
@@ -694,7 +703,7 @@ final class WindowController: NSObject {
         let outgoing = mountedCanvas
         pinCanvas(c.view)
         if let outgoing {
-            container.addSubview(c.view, positioned: .above, relativeTo: outgoing)
+            canvasHost.addSubview(c.view, positioned: .above, relativeTo: outgoing)
         }
         mountedCanvas = c.view
         restoreFocusToActive()
@@ -705,11 +714,23 @@ final class WindowController: NSObject {
             outgoing?.removeFromSuperview()
         case .slide(let edge):
             container.layoutSubtreeIfNeeded()
-            let dx = edge == .fromRight ? container.bounds.width : -container.bounds.width
+            let dx = edge == .fromRight ? canvasHost.bounds.width : -canvasHost.bounds.width
+            beginCanvasSlide()
             Motion.slideSwap(incoming: c.view, outgoing: outgoing, dx: dx) { [weak self] in
                 self?.detachIfInactive(outgoing)
+                self?.endCanvasSlide()
             }
         }
+    }
+
+    private func beginCanvasSlide() {
+        activeCanvasSlides += 1
+        SlideClip.apply(to: canvasHost, margin: 0)
+    }
+
+    private func endCanvasSlide() {
+        activeCanvasSlides = max(0, activeCanvasSlides - 1)
+        if activeCanvasSlides == 0 { SlideClip.remove(from: canvasHost) }
     }
 
     private func detachIfInactive(_ canvas: NSView?) {
@@ -722,16 +743,16 @@ final class WindowController: NSObject {
         canvas.layer?.removeAllAnimations()
         canvas.layer?.transform = CATransform3DIdentity
         canvas.layer?.opacity = 1
-        if canvas.superview === container {
-            container.addSubview(canvas, positioned: .below, relativeTo: nil)
+        if canvas.superview === canvasHost {
+            canvasHost.addSubview(canvas, positioned: .below, relativeTo: nil)
             return
         }
         canvas.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(canvas, positioned: .below, relativeTo: nil)
+        canvasHost.addSubview(canvas, positioned: .below, relativeTo: nil)
         NSLayoutConstraint.activate([
             canvas.leadingAnchor.constraint(equalTo: sidebar.canvasLeadingAnchor),
-            canvas.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            canvas.topAnchor.constraint(equalTo: container.topAnchor),
+            canvas.trailingAnchor.constraint(equalTo: canvasHost.trailingAnchor),
+            canvas.topAnchor.constraint(equalTo: canvasHost.topAnchor),
             canvas.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -ChromeMetrics.footerGap),
         ])
     }

@@ -55,6 +55,7 @@ final class SidebarController {
         view.onJump = { [weak self] in self?.onJump($0) }
     }
 
+    var edgeAnchor: NSLayoutXAxisAnchor { edge.leadingAnchor }
     var canvasLeadingAnchor: NSLayoutXAxisAnchor { canvasEdge.leadingAnchor }
 
     func install(in container: NSView, besideTabBar tabBar: TabBarView) {

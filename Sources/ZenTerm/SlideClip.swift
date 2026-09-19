@@ -5,7 +5,7 @@ enum SlideClip {
     // Covers the focus glow (shadow radius 6 plus the pane border), far short of any slide travel.
     static let margin: CGFloat = 10
 
-    static func apply(to view: NSView) {
+    static func apply(to view: NSView, margin: CGFloat = SlideClip.margin) {
         view.wantsLayer = true
         let mask = CALayer()
         mask.backgroundColor = CGColor(gray: 1, alpha: 1)
