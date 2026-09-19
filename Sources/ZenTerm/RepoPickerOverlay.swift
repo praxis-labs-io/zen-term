@@ -3,6 +3,7 @@ import TerminalKit
 
 final class RepoPickerOverlay: PaletteOverlay {
     private enum Row {
+        case newWorkspace
         case add
         case workspace(Workspace)
         case worktree(Worktree, parent: Workspace)
@@ -11,6 +12,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     private let onChoose: (Workspace, WorktreeOrigin?) -> Void
     private let isOpen: (URL) -> Bool
     private let onAddWorkspace: () -> Void
+    private let onNewWorkspace: () -> Void
 
     private let entries: [Workspace]
     private var listings: [URL: WorktreeListing] = [:]
@@ -29,7 +31,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
         isOpen: @escaping (URL) -> Bool = { _ in false },
         onChoose: @escaping (Workspace, WorktreeOrigin?) -> Void, onAddWorkspace: @escaping () -> Void,
-        onDismiss: @escaping () -> Void
+        onNewWorkspace: @escaping () -> Void = {}, onDismiss: @escaping () -> Void
     ) {
         self.entries = entries
         self.removals = removals
@@ -39,6 +41,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         self.onChoose = onChoose
         self.isOpen = isOpen
         self.onAddWorkspace = onAddWorkspace
+        self.onNewWorkspace = onNewWorkspace
         super.init(
             background: background,
             placeholder: "Search workspaces…",
@@ -108,7 +111,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         for workspaces: [Workspace], listings: [URL: WorktreeListing], configured: Set<URL>,
         owners: [URL: URL]
     ) -> [Row] {
-        var rows: [Row] = [.add]
+        var rows: [Row] = [.newWorkspace, .add]
         for workspace in workspaces {
             rows.append(.workspace(workspace))
             let path = workspace.path.standardizedFileURL
@@ -130,8 +133,12 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     override func makeRow(at index: Int) -> PaletteRowView {
         switch rows[index] {
+        case .newWorkspace:
+            return ActionRowView(
+                symbol: "plus", title: "New Workspace",
+                shortcut: Chord.displayed(.newWorkspace, in: GeneralConfig.current.keymap)?.displayGlyph)
         case .add:
-            return AddRowView()
+            return ActionRowView(symbol: "folder.badge.plus", title: "Add Workspace…", shortcut: nil)
         case .workspace(let workspace):
             return RowView(workspace: workspace, isOpen: isOpen(row: rows[index]))
         case .worktree(let worktree, let parent):
@@ -142,7 +149,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     private func isOpen(row: Row) -> Bool {
         switch row {
-        case .add: return false
+        case .newWorkspace, .add: return false
         case .workspace(let workspace): return isOpen(workspace.path)
         case .worktree(let worktree, let parent):
             let mirror = GitRepo.mirrorPath(parent.path, from: GitRepoStatus.repoRoot(parent.path), into: worktree.path)
@@ -198,6 +205,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     override func rowIdentity(at index: Int) -> AnyHashable? {
         switch rows[index] {
+        case .newWorkspace: return ["new"]
         case .add: return ["add"]
         case .workspace(let workspace): return ["workspace", workspace.title]
         case .worktree(let worktree, _):
@@ -267,7 +275,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     var createTarget: CreateTarget? {
         guard rows.indices.contains(selected) else { return nil }
         switch rows[selected] {
-        case .add: return nil
+        case .newWorkspace, .add: return nil
         case .workspace(let workspace):
             return CreateTarget(workspace: workspace, repo: workspace.path)
         case .worktree(let worktree, let parent):
@@ -284,6 +292,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     override func activate(index: Int, modifiers: NSEvent.ModifierFlags) {
         guard rows.indices.contains(index) else { return }
         switch rows[index] {
+        case .newWorkspace: onNewWorkspace()
         case .add: onAddWorkspace()
         case .workspace(let workspace): onChoose(workspace, nil)
         case .worktree(let worktree, let parent):
@@ -304,19 +313,22 @@ final class RepoPickerOverlay: PaletteOverlay {
             env: parent.env, carry: parent.carry)
     }
 
-    private final class AddRowView: SelectableRowView {
-        override init() {
+    final class ActionRowView: SelectableRowView {
+        let title: String
+
+        init(symbol: String, title: String, shortcut: String?) {
+            self.title = title
             super.init()
 
             let icon = NSImageView()
             let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
-            icon.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "add workspace")?
+            icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)?
                 .withSymbolConfiguration(config)
             icon.contentTintColor = Theme.current.chrome.ink(.muted)
             icon.translatesAutoresizingMaskIntoConstraints = false
             addSubview(icon)
 
-            let label = NSTextField(labelWithString: "New Workspace…")
+            let label = NSTextField(labelWithString: title)
             label.font = .systemFont(ofSize: 13, weight: .medium)
             label.textColor = Theme.current.chrome.ink(.muted)
             label.translatesAutoresizingMaskIntoConstraints = false
@@ -324,9 +336,19 @@ final class RepoPickerOverlay: PaletteOverlay {
 
             NSLayoutConstraint.activate([
                 icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 11),
+                icon.widthAnchor.constraint(equalToConstant: 17),
                 icon.centerYAnchor.constraint(equalTo: centerYAnchor),
                 label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
                 label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+
+            guard let shortcut else { return }
+            let keycap = KeycapView(shortcut: shortcut)
+            addSubview(keycap)
+            NSLayoutConstraint.activate([
+                keycap.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+                keycap.centerYAnchor.constraint(equalTo: centerYAnchor),
+                label.trailingAnchor.constraint(lessThanOrEqualTo: keycap.leadingAnchor, constant: -8),
             ])
         }
 

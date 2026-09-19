@@ -10,6 +10,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
     private var originalConfig: GeneralConfig!
     private var controller: WindowController?
     private var tempRoot: URL!
+    private var spawned: [RecordingSurface] = []
 
     private let alpha = URL(fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
 
@@ -18,7 +19,11 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         originalOverride = TerminalSurfaceFactory.makeOverride
         originalConfig = GeneralConfig.current
         Motion.isReduceMotionEnabled = { true }
-        TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
+        TerminalSurfaceFactory.makeOverride = { [weak self] in
+            let surface = RecordingSurface()
+            self?.spawned.append(surface)
+            return surface
+        }
         GeneralConfig.setCurrentForTesting(.builtIn)
         tempRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-sidebar-worktrees-\(UUID().uuidString)", isDirectory: true)
@@ -36,6 +41,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
     override func tearDownWithError() throws {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
+        spawned = []
         SidebarController.resetLastChoiceForTesting()
         ConfigLoader.defaultRootOverrideForTesting = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
@@ -125,7 +131,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
         try openAlphaWorktree(branch: "feature/one", in: c)
 
-        XCTAssertEqual(titles(of: c), ["Home", "Alpha", "feature/one"])
+        XCTAssertEqual(titles(of: c), ["Workspace 1", "Alpha", "feature/one"])
         let ghost = rows(of: c)[1]
         XCTAssertEqual(ghost.variant, .faint)
         XCTAssertEqual(ghost.titleInkForTesting, Theme.current.chrome.ink(.faint))
@@ -142,8 +148,8 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         try click(rows(of: c)[1])
 
         waitUntil(c.workspaceNamesForTesting.count == 3, "the workspace to open")
-        XCTAssertEqual(c.workspaceNamesForTesting, ["Home", "Alpha: feature/one", "Alpha"])
-        XCTAssertEqual(titles(of: c), ["Home", "Alpha", "feature/one"])
+        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Alpha: feature/one", "Alpha"])
+        XCTAssertEqual(titles(of: c), ["Workspace 1", "Alpha", "feature/one"])
         XCTAssertEqual(rows(of: c).map(\.variant), [.standard, .standard, .nested(symbol: "arrow.triangle.branch")])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting[2])
     }
@@ -161,7 +167,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
         waitUntil(c.workspaceNamesForTesting.count == 3, "the workspace to open")
         XCTAssertEqual(c.workspaceNamesForTesting.last, "Alpha Renamed")
-        XCTAssertEqual(titles(of: c), ["Home", "Alpha Renamed", "feature/one"])
+        XCTAssertEqual(titles(of: c), ["Workspace 1", "Alpha Renamed", "feature/one"])
     }
 
     func test_clickingTheGhost_withItsEntryGone_opensItAsItWasWhenTheWorktreeOpened() throws {
@@ -173,17 +179,17 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
         waitUntil(c.workspaceNamesForTesting.count == 3, "the workspace to open")
         XCTAssertEqual(c.workspaceNamesForTesting.last, "Alpha")
-        XCTAssertEqual(titles(of: c), ["Home", "Alpha", "feature/one"])
+        XCTAssertEqual(titles(of: c), ["Workspace 1", "Alpha", "feature/one"])
     }
 
     func test_closingTheLastWorktree_takesItsGhostWithIt() throws {
         let c = makeWindow()
         try openAlphaWorktree(branch: "feature/one", in: c)
-        XCTAssertEqual(titles(of: c), ["Home", "Alpha", "feature/one"])
+        XCTAssertEqual(titles(of: c), ["Workspace 1", "Alpha", "feature/one"])
 
         c.handle(.closeTab)
 
-        XCTAssertEqual(titles(of: c), ["Home"])
+        XCTAssertEqual(titles(of: c), ["Workspace 1"])
     }
 
     func test_aWorktreeOpenedLast_nestsUnderItsOpenWorkspace() throws {
@@ -193,7 +199,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
         try openAlphaWorktree(branch: "feature/one", in: c)
 
-        XCTAssertEqual(titles(of: c), ["Home", "Alpha", "feature/one", "Beta"])
+        XCTAssertEqual(titles(of: c), ["Workspace 1", "Alpha", "feature/one", "Beta"])
     }
 
     func test_aDetachedWorktree_isNamedByItsShortHash() throws {
@@ -210,7 +216,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         try openWorkspace(atConfigIndex: 1, in: c)
         try openAlphaWorktree(branch: "feature/one", in: c)
         let worktree = c.activeWorkspaceIDForTesting
-        XCTAssertEqual(titles(of: c), ["Home", "Alpha", "feature/one", "Beta"])
+        XCTAssertEqual(titles(of: c), ["Workspace 1", "Alpha", "feature/one", "Beta"])
 
         try press("1", typing: "¡", keyCode: 18, in: c)
         try press("3", typing: "£", keyCode: 20, in: c)
@@ -222,7 +228,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         let c = makeWindow()
         try openWorkspace(atConfigIndex: 1, in: c)
         try openAlphaWorktree(branch: "feature/one", in: c)
-        XCTAssertEqual(titles(of: c), ["Home", "Beta", "Alpha", "feature/one"])
+        XCTAssertEqual(titles(of: c), ["Workspace 1", "Beta", "Alpha", "feature/one"])
 
         let shortcuts = rows(of: c).map { $0.tooltip?.shortcutForTesting }
 
@@ -279,7 +285,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
                     with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
                     windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
 
-        XCTAssertEqual(titles(of: c), ["Home", "Beta"])
+        XCTAssertEqual(titles(of: c), ["Workspace 1", "Beta"])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, beta, "closing a background workspace leaves the screen alone")
         XCTAssertFalse(menu.isOpen)
     }
@@ -291,11 +297,11 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         try openAlphaWorktree(branch: "feature/one", in: c)
         let worktree = c.activeWorkspaceIDForTesting
         c.activateWorkspaceForTesting(c.workspaceIDsForTesting[1])
-        XCTAssertEqual(titles(of: c), ["Home", "Alpha", "feature/one", "Beta"])
+        XCTAssertEqual(titles(of: c), ["Workspace 1", "Alpha", "feature/one", "Beta"])
 
         c.handle(.closeWorkspace)
 
-        XCTAssertEqual(titles(of: c), ["Home", "Alpha", "feature/one", "Beta"])
+        XCTAssertEqual(titles(of: c), ["Workspace 1", "Alpha", "feature/one", "Beta"])
         XCTAssertEqual(rows(of: c)[1].variant, .faint, "Alpha's row turns ghost")
         XCTAssertEqual(c.activeWorkspaceIDForTesting, worktree, "the next row down, not the next one opened")
     }
@@ -306,12 +312,25 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         try openWorkspace(atConfigIndex: 1, in: c)
         try click(rows(of: c)[1])
         waitUntil(c.workspaceNamesForTesting.count == 4, "the workspace to open")
-        XCTAssertEqual(titles(of: c), ["Home", "Alpha", "feature/one", "Beta"])
+        XCTAssertEqual(titles(of: c), ["Workspace 1", "Alpha", "feature/one", "Beta"])
 
         c.activateWorkspaceForTesting(c.workspaceIDsForTesting[1])
         c.handle(.closeTab)
 
-        XCTAssertEqual(titles(of: c), ["Home", "Alpha", "Beta"])
+        XCTAssertEqual(titles(of: c), ["Workspace 1", "Alpha", "Beta"])
+    }
+
+    func test_aBackgroundWorktreeWithAnAgentWaiting_showsTheDotOnItsRow_notTheGhosts() throws {
+        let c = makeWindow()
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        let agent = try XCTUnwrap(spawned.last)
+        c.activateWorkspaceForTesting(c.workspaceIDsForTesting[0])
+        XCTAssertEqual(rows(of: c).map(\.showsAttentionForTesting), [false, false, false])
+
+        agent.delegate?.surface(agent, didPostNotification: TerminalNotification(title: "", body: "Wants to run"))
+        waitUntil(rows(of: c)[2].showsAttentionForTesting, "the worktree row's dot")
+
+        XCTAssertEqual(rows(of: c).map(\.showsAttentionForTesting), [false, false, true])
     }
 
     func test_collapsedLead_readsWorkspaceSlashWorktree_whileAWorktreeIsActive() throws {
@@ -323,7 +342,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
         try press("1", typing: "¡", keyCode: 18, in: c)
 
-        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Home")
+        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Workspace 1")
     }
 
     func test_collapsedLead_cutsALongWorktreeAtAWholeCharacter_soTheDividerKeepsItsGap() throws {

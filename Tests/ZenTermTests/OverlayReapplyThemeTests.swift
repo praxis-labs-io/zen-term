@@ -104,7 +104,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
         guard
             let header = descendants(of: overlay).compactMap({ $0 as? NSTextField })
-                .first(where: { $0.stringValue == "New Workspace" })
+                .first(where: { $0.stringValue == "Add Workspace" })
         else {
             return XCTFail("expected the header label")
         }

@@ -20,6 +20,9 @@ final class SettingsNavRow: NSView {
     private let label = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
     private let glyph = NSImageView()
+    private let attentionDot = NSView()
+    private var attentionDotWidth: NSLayoutConstraint?
+    private var attentionDotGap: NSLayoutConstraint?
     private let onActivate: () -> Void
     private let focusesOnClick: Bool
     private var isTakingKeyboardFocus = false
@@ -35,6 +38,9 @@ final class SettingsNavRow: NSView {
     private static let nestedGlyphSize: CGFloat = 11
     // The frame pulls a 20pt accessory 5pt past the detail's inset, so its glyph sits where the detail ends.
     private static let accessoryInset: CGFloat = 5
+    private static let attentionDotDiameter: CGFloat = 6
+    private static let attentionDotGapToDetail: CGFloat = 6
+    private static let attentionAccessibilityValue = "Agent waiting"
 
     init(
         title: String, variant: Variant = .standard, focusesOnClick: Bool = true,
@@ -61,8 +67,21 @@ final class SettingsNavRow: NSView {
         detailLabel.alignment = .right
         detailLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(detailLabel)
+        attentionDot.wantsLayer = true
+        attentionDot.layer?.cornerRadius = Self.attentionDotDiameter / 2
+        attentionDot.isHidden = true
+        attentionDot.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(attentionDot)
+        let dotWidth = attentionDot.widthAnchor.constraint(equalToConstant: 0)
+        let dotGap = attentionDot.trailingAnchor.constraint(equalTo: detailLabel.leadingAnchor)
+        attentionDotWidth = dotWidth
+        attentionDotGap = dotGap
         NSLayoutConstraint.activate([
-            label.trailingAnchor.constraint(lessThanOrEqualTo: detailLabel.leadingAnchor, constant: -8),
+            dotWidth,
+            dotGap,
+            attentionDot.heightAnchor.constraint(equalToConstant: Self.attentionDotDiameter),
+            attentionDot.centerYAnchor.constraint(equalTo: centerYAnchor),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: attentionDot.leadingAnchor, constant: -8),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
             detailLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
             detailLabel.widthAnchor.constraint(lessThanOrEqualToConstant: Self.detailMaxWidth),
@@ -129,7 +148,20 @@ final class SettingsNavRow: NSView {
 
     func setDetail(_ detail: String?) {
         detailLabel.stringValue = detail ?? ""
-        setAccessibilityValue(detail)
+        refreshAccessibilityValue()
+    }
+
+    func setShowsAttention(_ shows: Bool) {
+        attentionDot.isHidden = !shows
+        attentionDotWidth?.constant = shows ? Self.attentionDotDiameter : 0
+        attentionDotGap?.constant = shows ? -Self.attentionDotGapToDetail : 0
+        refreshAccessibilityValue()
+    }
+
+    private func refreshAccessibilityValue() {
+        let parts = [detailLabel.stringValue, attentionDot.isHidden ? "" : Self.attentionAccessibilityValue]
+        let value = parts.filter { !$0.isEmpty }.joined(separator: ", ")
+        setAccessibilityValue(value.isEmpty ? nil : value)
     }
 
     var titleForTesting: String { label.stringValue }
@@ -138,10 +170,13 @@ final class SettingsNavRow: NSView {
 
     var detailForTesting: String { detailLabel.stringValue }
 
+    var showsAttentionForTesting: Bool { !attentionDot.isHidden }
+
     func reapplyTheme() {
         refreshLabelInk()
         detailLabel.textColor = Theme.current.chrome.ink(.muted)
         glyph.contentTintColor = Theme.current.chrome.ink(.faint)
+        attentionDot.layer?.backgroundColor = Theme.current.chrome.attention.nsColor.cgColor
         refreshFill()
     }
 

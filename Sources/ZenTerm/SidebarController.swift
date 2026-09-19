@@ -16,6 +16,7 @@ final class SidebarController {
         let number: Int?
         let isActive: Bool
         let isConfigured: Bool
+        let isWaiting: Bool
     }
 
     // 8 of sidebar padding plus the footer's 6 inset, so palette and Settings follow at the footer's rhythm.
@@ -37,6 +38,7 @@ final class SidebarController {
     private var slideID = 0
     private var entries: [Entry] = []
     var onLeave: () -> Void = {}
+    var onJump: (SurfaceID) -> Void = { _ in }
 
     init(
         onPalette: @escaping () -> Void, onSettings: @escaping () -> Void, onToggle: @escaping () -> Void,
@@ -50,6 +52,7 @@ final class SidebarController {
         lead = CollapsedSidebarLead(
             leadingInset: Self.toggleInset + SidebarFooter.buttonSize.width + Self.leadNameGap)
         view.onLeave = { [weak self] in self?.onLeave() }
+        view.onJump = { [weak self] in self?.onJump($0) }
     }
 
     var canvasLeadingAnchor: NSLayoutXAxisAnchor { canvasEdge.leadingAnchor }
@@ -92,6 +95,7 @@ final class SidebarController {
             leadWidth,
             tabBarLeading,
         ])
+        view.limitAgents(above: toggleButton.topAnchor)
         settle()
     }
 
@@ -143,7 +147,10 @@ final class SidebarController {
         lead.isHidden = isDocked
     }
 
-    func render(order: WorkspaceOrder, workspaces: [WorkspaceController], active: WorkspaceController) {
+    func render(
+        order: WorkspaceOrder, workspaces: [WorkspaceController], active: WorkspaceController,
+        waiting: Set<WorkspaceID>
+    ) {
         let byID = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
         let numbers = Dictionary(uniqueKeysWithValues: order.navigable.enumerated().map { ($1, $0 + 1) })
         let next = order.entries.compactMap { entry -> Entry? in
@@ -153,11 +160,12 @@ final class SidebarController {
                 let kind = workspace.origin.map(Entry.Kind.worktree) ?? .workspace
                 return Entry(
                     row: .workspace(id), kind: kind, name: workspace.name, folder: workspace.folder,
-                    number: numbers[id], isActive: workspace === active, isConfigured: !workspace.isDefault)
+                    number: numbers[id], isActive: workspace === active, isConfigured: workspace.isConfigured,
+                    isWaiting: waiting.contains(id))
             case .ghost(let parent):
                 return Entry(
                     row: .ghost(parent.path.standardizedFileURL.path), kind: .ghost, name: parent.title,
-                    folder: nil, number: nil, isActive: false, isConfigured: true)
+                    folder: nil, number: nil, isActive: false, isConfigured: true, isWaiting: false)
             }
         }
         let foldersChanged = next.compactMap(\.folder) != entries.compactMap(\.folder)
@@ -234,17 +242,20 @@ final class SidebarController {
             let isRepo = entry.folder.flatMap(GitRepoStatus.known) == true
             return SidebarRowItem(
                 id: entry.row, variant: .standard, name: entry.name, branch: branch, number: entry.number,
-                isActive: entry.isActive, makesWorktrees: entry.isConfigured && isRepo)
+                isActive: entry.isActive, makesWorktrees: entry.isConfigured && isRepo, isWaiting: entry.isWaiting)
         case .worktree(let origin):
             return SidebarRowItem(
                 id: entry.row, variant: .nested(symbol: worktreeSymbol), name: branch ?? origin.name,
-                branch: nil, number: entry.number, isActive: entry.isActive, makesWorktrees: false)
+                branch: nil, number: entry.number, isActive: entry.isActive, makesWorktrees: false,
+                isWaiting: entry.isWaiting)
         case .ghost:
             return SidebarRowItem(
                 id: entry.row, variant: .faint, name: entry.name, branch: nil, number: nil, isActive: false,
-                makesWorktrees: true)
+                makesWorktrees: true, isWaiting: false)
         }
     }
+
+    func renderAgents(_ items: [SidebarAgentItem]) { view.renderAgents(items) }
 
     func setOpenModal(palette: Bool, settings: Bool) { footer.setOpenModal(palette: palette, settings: settings) }
 

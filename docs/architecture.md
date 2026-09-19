@@ -175,18 +175,21 @@ single modal slot, tab bar and dock. `WorkspaceController` owns one workspace: a
 its `TabController`s and their titles. `TabController` owns one tab: a
 `PaneCanvasController` and two drawers.
 
-- **A window starts with one workspace**, the default one in the home folder, and one of
-  them is active. ⌘P opens a configured workspace, or switches to it when it is already
-  open. A workspace is open when one other than the default is open at its folder, so
-  renaming it in Settings does not open a second copy.
+- **A window starts with one workspace, with no config entry**, and one workspace is
+  always active. A workspace without a config entry is named "Workspace N", the lowest
+  number no open workspace in the window holds. ⌘⌥T opens one at the end of the sidebar,
+  in the folder a new tab would start in. ⌘P opens a configured workspace, or switches to
+  it when it is already open. A workspace is open when one with a config entry is open at
+  its folder, so renaming it in Settings does not open a second copy.
 - **`WorkspaceOrder` is the sidebar's order, derived from open order at every read.** A
   worktree workspace keeps the `WorktreeOrigin` it opened from and nests under the open
   workspace at its parent's folder, or under a ghost row built from that origin when the
   parent is closed. A group's first member mints its `seat` and later members inherit it,
-  so the group holds its place as members close and reopen. `navigable` skips ghosts; the
-  sidebar's numbers, ⌘⌥1…9, ⌘⌥[ ] and a close's landing all read it.
+  so the group holds its place as members close and reopen. A workspace with no config
+  entry is never in a group. `navigable` skips ghosts; the sidebar's numbers, ⌘⌥1…9,
+  ⌘⌥[ ] and a close's landing all read it.
 - **`activate(_:)` is the single path a switch goes through**: a row click, ⌘⌥1…9 and ⌘⌥[ ],
-  ⌘P, and revealing a background tab. It swaps the canvas without
+  ⌘P, ⌘⌥T, and revealing a background tab. It swaps the canvas without
   motion, so a newly opened workspace applies its recipe in the same turn.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
   workspace costs nothing beyond an inactive tab.
@@ -209,7 +212,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   `select`/`addTab`/`closeTab` keeps a card from outliving its tab.
 - **Hidden drawers are detached, not `isHidden`**: a 0x0 view resizes its PTY to zero
   columns and crashes TUIs.
-- **Titles update on push**, re-read every 1.5s as a backstop that also polls drawer busy.
+- **Titles update on push**, re-read every 1.5s as a backstop that also polls drawer busy
+  and agent exits.
 - **Attention has one owner per window**, `AttentionStore`, keyed by `SurfaceID` across
   panes, drawers and floats. Each surface latches a `SurfaceAttention` beside a `seen`
   flag, and one ranked fold (`rollup`) is both the priority rule and the rollup at every
@@ -218,12 +222,24 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   nothing about workspaces.
 - **`seen` means on screen, not focused.** A pane is on screen while its tab is active in
   the active workspace, a drawer while that holds and it is open, a float while it is
-  shown. Focus would
-  mark a background split in the active tab, which nothing asks for. Coming on screen
+  shown. Coming on screen
   answers a surface and takes down the card it raised. A visit answers only what it puts
   on screen: a closed drawer or float keeps its latch and its card. Releasing an unseen
   surface folds its latch into a per-tab residual, so a closed pane does not unmark the
   tab it left; the next visit drops it.
+- **An agent has a second latch that only focus clears** (`agentState(of:)`), so a split
+  asking in the active tab still reads waiting while its tab number stays quiet. Focus
+  counts only with the app active and the window key; dismissing a card does not clear
+  it. A turn ending out of focus (`working` falling) latches `completed` here and nowhere
+  else; a new turn replaces it, never a waiting latch.
+- **`AgentRoster` says which surfaces run an agent**, per window: its name, where the name
+  came from (`Source`, ranked so a stronger source renames, a weaker one never does, and a
+  missing name yields to any real name), and what it last said. `identify` is the one way in. A launch whose program is `ai` or a
+  known agent joins at launch, idle included; any surface that sends OSC 777 or
+  indeterminate OSC 9;4 joins on that signal. An agent leaves when its surface is released
+  or its busy reading falls (the program exited to the shell), once its latch is answered.
+  The Agents rows join it with `agentState(of:)` and sort waiting (oldest first), working,
+  done, idle, ties in sidebar order.
 - **A state only the chrome can act on never reaches the tab number.** `working` (OSC 9;4)
   says an agent is mid-turn, not that it wants you, so it stops at the dock's dot. The dot
   and the tab number are one signal at two altitudes; a hidden drawer or float asks

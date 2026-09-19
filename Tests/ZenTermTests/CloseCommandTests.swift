@@ -434,7 +434,7 @@ final class CloseCommandTests: WindowTestCase {
 
         XCTAssertTrue(
             toastText(c).contains(
-                "Closing this window will stop everything running in it, including Home."))
+                "Closing this window will stop everything running in it, including Workspace 1."))
     }
 
     func test_closeTab_withOnlyAVisiblePaneRunning_namesNothing() throws {

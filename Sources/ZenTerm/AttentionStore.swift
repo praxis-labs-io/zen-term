@@ -9,6 +9,8 @@ final class AttentionStore {
         var seen = true
         var working = false
         var since: Date?
+        var agentLatched: SurfaceAttention = .idle
+        var agentSince: Date?
     }
 
     private var entries: [SurfaceID: Entry] = [:]
@@ -38,7 +40,8 @@ final class AttentionStore {
         )
     }
 
-    func record(_ id: SurfaceID, _ event: SurfaceAttention, seen: Bool) {
+    func record(_ id: SurfaceID, _ event: SurfaceAttention, seen: Bool, focused: Bool) {
+        if !focused { latchAgent(id, event) }
         guard !seen else { return markSeen(id) }
         guard var entry = entries[id] else { return }
         entry.latched = max(entry.latched, event)
@@ -48,8 +51,26 @@ final class AttentionStore {
     }
 
     /// A level, not an event: progress clearing has to be able to lower it again.
-    func setWorking(_ id: SurfaceID, _ on: Bool) {
+    func setWorking(_ id: SurfaceID, _ on: Bool, focused: Bool) {
+        guard let wasWorking = entries[id]?.working else { return }
         entries[id]?.working = on
+        if wasWorking, !on, !focused { latchAgent(id, .completed) }
+        if !wasWorking, on, entries[id]?.agentLatched == .completed {
+            entries[id]?.agentLatched = .idle
+            entries[id]?.agentSince = nil
+        }
+    }
+
+    func endAgent(_ id: SurfaceID) {
+        entries[id]?.working = false
+        entries[id]?.agentLatched = .idle
+        entries[id]?.agentSince = nil
+    }
+
+    func markFocused(_ id: SurfaceID) {
+        markSeen(id)
+        entries[id]?.agentLatched = .idle
+        entries[id]?.agentSince = nil
     }
 
     /// Answers the whole tab: every surface in it is seen and its latches drop.
@@ -79,6 +100,19 @@ final class AttentionStore {
         entries[id].map(effective) ?? .idle
     }
 
+    func agentState(of id: SurfaceID) -> SurfaceAttention {
+        guard let entry = entries[id] else { return .idle }
+        return max(entry.agentLatched, entry.working ? .working : .idle)
+    }
+
+    func isWorking(_ id: SurfaceID) -> Bool {
+        entries[id]?.working == true
+    }
+
+    func agentSince(of id: SurfaceID) -> Date? {
+        entries[id]?.agentSince
+    }
+
     func state(tab: TabID) -> SurfaceAttention {
         let surfaces = entries.values.filter { $0.tab == tab }.map(effective)
         return SurfaceAttention.rollup(surfaces + [residual[tab]?.state ?? .idle])
@@ -104,6 +138,13 @@ final class AttentionStore {
     var waitingCount: Int {
         entries.values.filter { !$0.seen && $0.latched == .waiting }.count
             + residual.values.reduce(0) { $0 + $1.waiting }
+    }
+
+    func latchAgent(_ id: SurfaceID, _ event: SurfaceAttention) {
+        guard var entry = entries[id], event > entry.agentLatched else { return }
+        entry.agentLatched = event
+        entry.agentSince = now()
+        entries[id] = entry
     }
 
     private func ids(in tab: TabID) -> [SurfaceID] {

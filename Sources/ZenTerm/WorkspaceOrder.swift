@@ -18,7 +18,7 @@ struct WorkspaceOrder {
 
     static func groupFolder(of workspace: WorkspaceController) -> String? {
         if let origin = workspace.origin { return origin.parent.path.standardizedFileURL.path }
-        return workspace.isDefault ? nil : workspace.folder.standardizedFileURL.path
+        return workspace.isConfigured ? workspace.folder.standardizedFileURL.path : nil
     }
 
     init(_ workspaces: [WorkspaceController]) {

@@ -204,7 +204,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         create.performClick(nil)
 
         waitUntil(rows(of: c).count == 3, "the new worktree's row", timeout: 10)
-        XCTAssertEqual(rows(of: c).map(\.titleForTesting), ["Home", "Repo", "feature/nested"])
+        XCTAssertEqual(rows(of: c).map(\.titleForTesting), ["Workspace 1", "Repo", "feature/nested"])
         XCTAssertEqual(rows(of: c)[2].variant, .nested(symbol: "arrow.triangle.branch"))
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting.last)
     }
@@ -221,7 +221,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         waitUntil(rows(of: c).count == 3, "the new worktree's row", timeout: 10)
         drainGitStatus()
 
-        XCTAssertNil(rows(of: c)[0].hoverAccessory, "Home has no config entry")
+        XCTAssertNil(rows(of: c)[0].hoverAccessory, "Workspace 1 has no config entry")
         XCTAssertNotNil(rows(of: c)[1].hoverAccessory)
         XCTAssertNil(rows(of: c)[2].hoverAccessory, "a worktree is made from its workspace")
     }
@@ -253,7 +253,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
 
         try create("feature/second", from: ghost, in: c)
 
-        XCTAssertEqual(rows(of: c).map(\.titleForTesting), ["Home", "Repo", "feature/first", "feature/second"])
+        XCTAssertEqual(rows(of: c).map(\.titleForTesting), ["Workspace 1", "Repo", "feature/first", "feature/second"])
         XCTAssertEqual(rows(of: c)[1].variant, .faint, "the workspace stays closed")
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting.last)
     }
@@ -468,7 +468,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
 
         try rightClick(rows(of: c)[0], in: c)
 
-        XCTAssertEqual(menu.itemViewsForTesting.map(\.title), ["Close Workspace"], "Home has no config entry")
+        XCTAssertEqual(menu.itemViewsForTesting.map(\.title), ["Close Workspace"], "Workspace 1 has no config entry")
     }
 
     func test_collapsingTheSidebar_closesTheMenu() throws {

@@ -6,7 +6,7 @@ import TerminalKit
 @MainActor
 final class WorkspaceController {
     let id: WorkspaceID
-    let isDefault: Bool
+    let isConfigured: Bool
     var name: String
     let folder: URL
     let origin: WorktreeOrigin?
@@ -18,11 +18,11 @@ final class WorkspaceController {
     private var titleByTab: [TabID: String] = [:]
 
     init(
-        id: WorkspaceID, isDefault: Bool, name: String, folder: URL, firstTab: TabID,
+        id: WorkspaceID, isConfigured: Bool, name: String, folder: URL, firstTab: TabID,
         origin: WorktreeOrigin? = nil, seat: Int? = nil
     ) {
         self.id = id
-        self.isDefault = isDefault
+        self.isConfigured = isConfigured
         self.name = name
         self.folder = folder
         self.origin = origin
