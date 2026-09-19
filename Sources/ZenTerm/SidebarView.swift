@@ -274,7 +274,7 @@ final class SidebarView: NSView {
         ) { [weak self] in
             self?.onCloseWorkspace(id)
         }
-        return [creates, [close]]
+        return [creates + [close]]
     }
 
     override func viewDidHide() {

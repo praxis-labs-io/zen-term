@@ -3,7 +3,7 @@ import AppKit
 final class SidebarRowMenuItemView: NSView {
     let title: String
     private let label: NSTextField
-    private let shortcut: NSTextField
+    private let keycap: KeycapView?
     private let onChoose: () -> Void
     private var trackingArea: NSTrackingArea?
     private var isHovered = false
@@ -14,7 +14,8 @@ final class SidebarRowMenuItemView: NSView {
     init(_ item: SidebarRowMenu.Item, onChoose: @escaping () -> Void) {
         title = item.title
         label = NSTextField(labelWithString: item.title)
-        shortcut = NSTextField(labelWithString: item.action.flatMap { CommandCatalog.spec(for: $0).shortcut } ?? "")
+        let shortcut = item.action.map { CommandCatalog.spec(for: $0).shortcut } ?? ""
+        keycap = shortcut.isEmpty ? nil : KeycapView(shortcut: shortcut)
         self.onChoose = onChoose
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -26,30 +27,33 @@ final class SidebarRowMenuItemView: NSView {
         label.font = .systemFont(ofSize: 13)
         label.lineBreakMode = .byTruncatingTail
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        shortcut.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
-        shortcut.setContentHuggingPriority(.required, for: .horizontal)
-        for field in [label, shortcut] {
-            field.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(field)
-        }
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: shortcut.leadingAnchor, constant: -Self.gap),
-            shortcut.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset),
-            shortcut.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
+        if let keycap {
+            addSubview(keycap)
+            NSLayoutConstraint.activate([
+                label.trailingAnchor.constraint(lessThanOrEqualTo: keycap.leadingAnchor, constant: -Self.gap),
+                keycap.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset),
+                keycap.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+        } else {
+            label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -Self.inset).isActive = true
+        }
         reapplyTheme()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    var shortcutForTesting: String { shortcut.stringValue }
+    var shortcutForTesting: String { keycap?.shortcut ?? "" }
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         label.textColor = chrome.foreground.nsColor
-        shortcut.textColor = chrome.ink(.muted)
+        keycap?.reapplyTheme()
         layer?.backgroundColor = isHovered ? chrome.selectionFill.cgColor : NSColor.clear.cgColor
     }
 
