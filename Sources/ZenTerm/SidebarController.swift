@@ -102,8 +102,10 @@ final class SidebarController {
 
     private var edgeOffset: CGFloat { isDocked ? SidebarView.width : 0 }
     private var leadOffset: CGFloat { isDocked ? 0 : lead.contentWidth }
-    // Collapsed, the bar tucks under the lead so the divider sits as far from the first title as from the name.
-    private var tabBarPull: CGFloat { isDocked ? 0 : CollapsedSidebarLead.dividerGap - TabBarView.titleInset }
+    // Docked, it moves in with the canvas; collapsed, the divider sits as far from the first title as from the name.
+    private var tabBarPull: CGFloat {
+        isDocked ? -SidebarView.padding : CollapsedSidebarLead.dividerGap - TabBarView.titleInset
+    }
     // The canvas insets itself by window-gutter; docked, it sits one pane-gap from the rows' fill, as from a drawer.
     private var canvasGap: CGFloat {
         isDocked ? ChromeMetrics.panelGap - ChromeMetrics.windowGutter - SidebarView.padding : 0

@@ -110,7 +110,9 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(sidebar.isDocked)
         XCTAssertFalse(sidebar.view.isHidden)
         XCTAssertTrue(sidebar.lead.isHidden)
-        XCTAssertEqual(frame(of: try tabBar(in: controller), in: controller).minX, SidebarView.width)
+        XCTAssertEqual(
+            frame(of: try tabBar(in: controller), in: controller).minX, SidebarView.width - SidebarView.padding,
+            "the bar moves in with the canvas, so the first title keeps its place against the pane")
         XCTAssertEqual(
             frame(of: try pane(in: controller), in: controller).minX,
             try rowFillEdge(in: controller) + Self.paneGap,
@@ -143,6 +145,9 @@ final class SidebarInteractionTests: WindowTestCase {
             frame(of: try pane(in: controller), in: controller).minX,
             try rowFillEdge(in: controller) + Self.paneGap,
             "docked, the panes sit one pane-gap from the sidebar's rows, as from a drawer")
+        XCTAssertEqual(
+            frame(of: try tabBar(in: controller), in: controller).minX, SidebarView.width - SidebarView.padding,
+            "docking again lands the bar back beside the canvas")
     }
 
     func test_toggle_holdsItsWindowPosition_dockedAndCollapsed() throws {
@@ -197,7 +202,8 @@ final class SidebarInteractionTests: WindowTestCase {
         let bar = frame(of: try tabBar(in: controller), in: controller)
         let dock = frame(of: controller.dockForTesting, in: controller)
 
-        XCTAssertGreaterThanOrEqual(bar.minX, SidebarView.width, "the tab bar starts after the docked sidebar")
+        let footer = frame(of: controller.sidebarForTesting.footer, in: controller)
+        XCTAssertGreaterThanOrEqual(bar.minX, footer.maxX, "the tab bar starts after the docked sidebar's footer")
         XCTAssertGreaterThan(bar.width, 0, "the tab bar keeps room between the sidebar and the toolbar")
         XCTAssertLessThanOrEqual(bar.maxX, dock.minX)
     }
