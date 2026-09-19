@@ -224,8 +224,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   it. A turn ending out of focus (`working` falling) latches `completed` here and nowhere
   else; a new turn replaces it, never a waiting latch.
 - **`AgentRoster` says which surfaces run an agent**, per window: its name, where the name
-  came from (`Source`, ranked so a stronger source renames and a weaker one never does),
-  and what it last said. `identify` is the one way in. A launch whose program is `ai` or a
+  came from (`Source`, ranked so a stronger source renames, a weaker one never does, and a
+  missing name yields to any real name), and what it last said. `identify` is the one way in. A launch whose program is `ai` or a
   known agent joins at launch, idle included; any surface that sends OSC 777 or
   indeterminate OSC 9;4 joins on that signal. An agent leaves when its surface is released
   or its busy reading falls (the program exited to the shell), once its latch is answered.
