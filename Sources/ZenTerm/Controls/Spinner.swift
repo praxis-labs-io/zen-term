@@ -6,7 +6,8 @@ final class Spinner: NSView {
     private static let size: CGFloat = 13
     private static let pixelSize: CGFloat = 3
     private static let pixelGap: CGFloat = 2
-    private static let frameDuration: CFTimeInterval = 0.1
+    private static let frameDuration: CFTimeInterval = 1.0 / 6
+    private static let trail: [Float] = [1, 0.7, 0.45, 0.25, 0.1, 0]
     private static let stepKey = "zenterm.spin"
     private static let clockwiseCells: [(column: Int, rowFromTop: Int)] = [
         (0, 0), (1, 0), (1, 1), (1, 2), (0, 2), (0, 1),
@@ -24,7 +25,7 @@ final class Spinner: NSView {
         wantsLayer = true
         translatesAutoresizingMaskIntoConstraints = false
         pixels.forEach { layer?.addSublayer($0) }
-        pixels.first?.opacity = 0
+        for (index, pixel) in pixels.enumerated() { pixel.opacity = Self.opacity(of: index, leadAt: 0) }
         reapplyTheme()
     }
 
@@ -64,10 +65,14 @@ final class Spinner: NSView {
             let step = CAKeyframeAnimation(keyPath: "opacity")
             step.calculationMode = .discrete
             step.keyTimes = keyTimes
-            step.values = (0..<frames).map { $0 == index ? 0 : 1 }
+            step.values = (0..<frames).map { Self.opacity(of: index, leadAt: $0) }
             step.duration = Self.frameDuration * Double(frames)
             step.repeatCount = .infinity
             pixel.add(step, forKey: Self.stepKey)
         }
+    }
+
+    private static func opacity(of cell: Int, leadAt lead: Int) -> Float {
+        trail[(lead - cell + trail.count) % trail.count]
     }
 }
