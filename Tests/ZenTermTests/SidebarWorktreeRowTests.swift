@@ -372,8 +372,8 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
         let places = c.sidebarForTesting.view.agentRowsForTesting.compactMap(\.itemForTesting?.detail)
         XCTAssertEqual(places.count, 2)
-        XCTAssertTrue(places[0].hasSuffix("Alpha: feature/one"), "\(places)")
-        XCTAssertTrue(places[1].hasSuffix("Beta"), "\(places)")
+        XCTAssertTrue(places[0].hasPrefix("Alpha: feature/one"), "\(places)")
+        XCTAssertTrue(places[1].hasPrefix("Beta"), "\(places)")
     }
 
     func test_collapsedLead_readsWorkspaceSlashWorktree_whileAWorktreeIsActive() throws {
