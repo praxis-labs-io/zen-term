@@ -330,4 +330,54 @@ final class WindowControllerWorkspaceTests: WindowTestCase {
         try press("]", typing: "‘", keyCode: 30, in: c)
         XCTAssertEqual(c.activeWorkspaceIDForTesting, second)
     }
+
+    private func texts(in card: ToastView) -> [String] {
+        descendants(of: card).compactMap { ($0 as? NSTextField)?.stringValue }
+    }
+
+    private func keycaps(in card: ToastView) -> [String] {
+        descendants(of: card).compactMap { ($0 as? KeycapView)?.shortcut }
+    }
+
+    func test_withOneWorkspace_aCardIsTitledByItsTabAlone() throws {
+        let c = makeWindow()
+        c.newTabForTesting()
+        let first = try XCTUnwrap(c.tabOrderForTesting.first)
+
+        c.notifyAgentForTesting(tab: first, message: "needs you")
+        drainMainQueue()
+
+        let card = try XCTUnwrap(c.waitingToastForTesting(tab: first))
+        XCTAssertFalse(texts(in: card).contains { $0.hasPrefix("Home: ") })
+    }
+
+    func test_aBackgroundWorkspacesCard_namesItsWorkspace_andShowsTheWorkspaceShortcut() throws {
+        let c = makeWindow()
+        let first = c.activeWorkspaceIDForTesting
+        let home = try XCTUnwrap(c.tabIDsForTesting(workspace: first).first)
+        let second = c.addWorkspaceForTesting(name: "Other", folder: root)
+        c.activateWorkspaceForTesting(second)
+
+        c.notifyAgentForTesting(tab: home, message: "needs you")
+        drainMainQueue()
+
+        let card = try XCTUnwrap(c.waitingToastForTesting(tab: home))
+        XCTAssertTrue(texts(in: card).contains { $0.hasPrefix("Home: ") }, "the card says which workspace asked")
+        XCTAssertEqual(keycaps(in: card), ["⌘⌥1"], "Switch reaches it by the workspace's shortcut")
+    }
+
+    func test_aBackgroundTabThatIsNotItsWorkspacesActiveOne_showsNoKeycap() throws {
+        let c = makeWindow()
+        let first = c.activeWorkspaceIDForTesting
+        let home = try XCTUnwrap(c.tabIDsForTesting(workspace: first).first)
+        c.newTabForTesting()
+        let second = c.addWorkspaceForTesting(name: "Other", folder: root)
+        c.activateWorkspaceForTesting(second)
+
+        c.notifyAgentForTesting(tab: home, message: "needs you")
+        drainMainQueue()
+
+        let card = try XCTUnwrap(c.waitingToastForTesting(tab: home))
+        XCTAssertEqual(keycaps(in: card), [], "⌘⌥1 would land on the other tab, so it isn't offered")
+    }
 }

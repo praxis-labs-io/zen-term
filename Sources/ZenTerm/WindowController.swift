@@ -303,6 +303,11 @@ final class WindowController: NSObject {
 
     private func title(of id: TabID) -> String { workspace(of: id)?.title(id) ?? "shell" }
 
+    private func attentionTitle(of id: TabID) -> String {
+        guard workspaces.count > 1, let workspace = workspace(of: id) else { return title(of: id) }
+        return "\(workspace.name): \(title(of: id))"
+    }
+
     init(contentRect: NSRect, initialCWD: URL?) {
         window = HostWindow(contentRect: contentRect)
         windowID = WindowController.nextWindowID
@@ -1922,7 +1927,7 @@ final class WindowController: NSObject {
             guard let self, let activeID = self.activeWorkspace.activeID else { return }
             let message = notification.body.isEmpty ? notification.title : notification.body
             let target = owner.flatMap { self.workspace(of: $0) == nil ? nil : $0 } ?? activeID
-            let title = owner == nil ? spec.title : self.title(of: target)
+            let title = owner == nil ? spec.title : self.attentionTitle(of: target)
             let tail = owner == nil ? nil : ": \(spec.title)"
 
             if AgentNotifier.shouldPushNotification(
@@ -1962,7 +1967,7 @@ final class WindowController: NSObject {
             {
                 AgentNotifier.shared.notify(
                     windowID: self.windowID, tabID: id,
-                    title: self.title(of: id) + (self.drawerTail(edge) ?? ""), body: message)
+                    title: self.attentionTitle(of: id) + (self.drawerTail(edge) ?? ""), body: message)
             }
 
             let seen = self.isOnScreen(surface, in: id)
@@ -1971,7 +1976,7 @@ final class WindowController: NSObject {
 
             guard !seen else { return }
             self.presentWaitingToast(
-                for: id, title: self.title(of: id), titleTail: self.drawerTail(edge),
+                for: id, title: self.attentionTitle(of: id), titleTail: self.drawerTail(edge),
                 message: message, surface: surface,
                 destination: edge.map { self.drawerDestination($0, in: id) })
             if self.attentionSnapshot(surface, in: id) != before { self.renderAttention() }
@@ -2006,12 +2011,12 @@ final class WindowController: NSObject {
         let edge = drawerEdge(of: surface, in: id)
         let content = ToastContent(
             variant: result.exitCode.map { $0 == 0 ? .positive : .warning } ?? .positive,
-            title: title(of: id), titleTail: drawerTail(edge),
+            title: attentionTitle(of: id), titleTail: drawerTail(edge),
             message: Self.commandResultMessage(result))
         let destination =
             edge.map { drawerDestination($0, in: id) }
             ?? CardDestination(
-                shortcut: { [weak self] in self?.selectTabShortcut(for: id) ?? "" },
+                shortcut: { [weak self] in self?.switchShortcut(for: id) ?? "" },
                 open: { [weak self] in self?.reveal(id) })
         let actions = [
             ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
@@ -2058,7 +2063,7 @@ final class WindowController: NSObject {
         let destination =
             destination
             ?? CardDestination(
-                shortcut: { [weak self] in self?.selectTabShortcut(for: id) ?? "" },
+                shortcut: { [weak self] in self?.switchShortcut(for: id) ?? "" },
                 open: { [weak self] in self?.reveal(id) })
         let actions = [
             ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
@@ -2343,9 +2348,15 @@ final class WindowController: NSObject {
         attentionCards.values.forEach { $0.refreshShortcuts() }
     }
 
-    private func selectTabShortcut(for id: TabID) -> String {
-        guard let index = activeWorkspace.tabIDs.firstIndex(of: id).map({ $0 + 1 }), index <= 9
-        else { return "" }
+    private func switchShortcut(for id: TabID) -> String {
+        guard let workspace = workspace(of: id) else { return "" }
+        guard workspace === activeWorkspace else {
+            guard workspace.activeID == id,
+                let number = workspaces.firstIndex(where: { $0 === workspace }).map({ $0 + 1 }), number <= 9
+            else { return "" }
+            return CommandCatalog.spec(for: .selectWorkspace(number)).shortcut
+        }
+        guard let index = workspace.tabIDs.firstIndex(of: id).map({ $0 + 1 }), index <= 9 else { return "" }
         return CommandCatalog.spec(for: .selectTab(index)).shortcut
     }
 
