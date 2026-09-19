@@ -441,10 +441,7 @@ final class SidebarInteractionTests: WindowTestCase {
         try nav(.left, in: controller)
 
         XCTAssertTrue(controller.window.firstResponder === pane.view)
-        XCTAssertTrue(
-            descendants(of: try XCTUnwrap(controller.window.contentView)).contains {
-                ($0 as? NSTextField)?.stringValue == "No pane left to focus"
-            })
+        XCTAssertTrue(showsToast("No pane left to focus", in: controller))
     }
 
     func test_cmdOptLeft_endsScrollMode_soArrowsReachTheRows() throws {
@@ -484,6 +481,58 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertNil(keys.route(navEvent(.right, [.control], in: controller)), "the sidebar has no vim to defer to")
 
         XCTAssertTrue(controller.window.firstResponder === pane.view)
+    }
+
+    func test_focusSidebar_isUnboundByDefault_andParsesFromConfig() {
+        XCTAssertFalse(KeymapDefaults.map.values.contains(.focusSidebar))
+        XCTAssertEqual(KeyInterceptor.ReservedChord(token: "focus_sidebar"), .focusSidebar)
+    }
+
+    func test_focusSidebar_boundToAChord_focusesTheActiveRow() throws {
+        let controller = makeController()
+        _ = controller.addWorkspaceForTesting(name: "api", folder: root)
+        controller.window.makeKeyAndOrderFront(nil)
+        let keys = interceptor(for: controller)
+        keys.setKeymap([Chord(command: true, control: true, key: "e"): .focusSidebar])
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.command, .control], timestamp: 0,
+                windowNumber: controller.window.windowNumber, context: nil, characters: "\u{05}",
+                charactersIgnoringModifiers: "e", isARepeat: false, keyCode: 14))
+
+        XCTAssertNil(keys.route(event))
+
+        XCTAssertTrue(controller.window.firstResponder === controller.sidebarForTesting.view.rowsForTesting.first)
+    }
+
+    func test_focusSidebar_whileCollapsed_keepsFocus_andSaysTheSidebarIsCollapsed() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleSidebar)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+
+        controller.handle(.focusSidebar)
+
+        XCTAssertTrue(controller.window.firstResponder === pane.view)
+        XCTAssertTrue(showsToast("The sidebar is collapsed.", in: controller))
+    }
+
+    func test_focusSidebar_overAToolFloat_isBlockedLikePaneNav() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        waitUntil(controller.floatsForTesting.isOpen, "the scratch float to open")
+        let float = try XCTUnwrap(controller.floatsForTesting.shownSurface as? RecordingSurface)
+
+        controller.handle(.focusSidebar)
+
+        XCTAssertTrue(controller.window.firstResponder === float.view)
+        let content = try XCTUnwrap(controller.window.contentView)
+        XCTAssertTrue(
+            descendants(of: content).contains {
+                ($0 as? NSTextField)?.stringValue.hasSuffix("is open. Close it to get back to your panes.") == true
+            }, "the float explains why, as it does for pane nav")
     }
 
     func test_ctrlCmdS_docking_leavesFocusInThePane() throws {
@@ -528,6 +577,11 @@ final class SidebarInteractionTests: WindowTestCase {
 
     private func toggleSidebar(in controller: WindowController) throws {
         try press("s", [.command, .control], keyCode: 1, in: controller)
+    }
+
+    private func showsToast(_ message: String, in controller: WindowController) -> Bool {
+        guard let content = controller.window.contentView else { return false }
+        return descendants(of: content).contains { ($0 as? NSTextField)?.stringValue == message }
     }
 
     private func interceptor(for controller: WindowController) -> KeyInterceptor {

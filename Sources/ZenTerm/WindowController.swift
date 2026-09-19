@@ -1621,7 +1621,7 @@ final class WindowController: NSObject {
                         variant: .info, title: "Tool Float",
                         message: "Close \(activeFloatName ?? "the tool") first, then ⌘W."))
                 return
-            case .navLeft, .navRight, .navUp, .navDown, .prevPane, .nextPane,
+            case .navLeft, .navRight, .navUp, .navDown, .prevPane, .nextPane, .focusSidebar,
                 .splitVertical, .splitHorizontal,
                 .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
                 .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom:
@@ -1722,6 +1722,8 @@ final class WindowController: NSObject {
             let onScreen = (activeController?.allSurfaces ?? []) + [floats.shownSurface].compactMap { $0 }
             sidebar.toggle(holding: onScreen, in: container)
             if !sidebar.isDocked { window.reserveContentWidth(0) }
+        case .focusSidebar:
+            if !focusSidebar() { toastSidebarCollapsed() }
         case .toggleToolFloat(let id):
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
@@ -1744,6 +1746,13 @@ final class WindowController: NSObject {
         endModes()
         sidebar.focusActiveRow()
         return true
+    }
+
+    private func toastSidebarCollapsed() {
+        toasts.show(
+            ToastContent(
+                variant: .info, title: CommandCatalog.spec(for: .focusSidebar).title,
+                message: "The sidebar is collapsed."))
     }
 
     private var preFillFrame: NSRect?

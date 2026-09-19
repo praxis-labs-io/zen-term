@@ -19,7 +19,7 @@ final class SettingsKeybindGroupsTests: XCTestCase {
             .prevPane, .nextPane,
             .resizeLeft, .resizeDown, .resizeUp, .resizeRight,
             .newTab, .newWindow, .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab,
-            .fillScreen, .toggleSidebar, .toggleBottomDrawer, .toggleRightDrawer,
+            .fillScreen, .toggleSidebar, .focusSidebar, .toggleBottomDrawer, .toggleRightDrawer,
             .toggleRepoPicker, .createWorktree, .removeWorktree, .toggleCommandPalette,
             .openSettings,
             .increaseFontSize, .decreaseFontSize, .resetFontSize,

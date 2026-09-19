@@ -27,6 +27,7 @@ final class KeyInterceptor {
         case toggleZoom
         case fillScreen
         case toggleSidebar
+        case focusSidebar
         case toggleToolFloat(String)
         case toggleRepoPicker
         case createWorktree

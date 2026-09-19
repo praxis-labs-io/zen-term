@@ -32,6 +32,7 @@ extension KeyInterceptor.ReservedChord {
         case .toggleZoom: return "toggle_focus_mode"
         case .fillScreen: return "fill_screen"
         case .toggleSidebar: return "toggle_sidebar"
+        case .focusSidebar: return "focus_sidebar"
         case .toggleToolFloat(let id): return "toggle_float:\(id)"
         case .toggleRepoPicker: return "toggle_workspace_picker"
         case .createWorktree: return "create_worktree"
@@ -78,7 +79,7 @@ extension KeyInterceptor.ReservedChord {
         case .splitVertical, .splitHorizontal, .closePane, .closeTab, .closeWindow,
             .newTab, .newWindow, .selectTab,
             .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab,
-            .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen, .toggleSidebar,
+            .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen, .toggleSidebar, .focusSidebar,
             .prevPane, .nextPane,
             .toggleToolFloat, .toggleRepoPicker, .createWorktree, .removeWorktree,
             .toggleCommandPalette,
@@ -110,7 +111,7 @@ extension KeyInterceptor.ReservedChord {
             .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
             .newTab, .newWindow, .prevTab, .nextTab, .selectTab,
             .moveTabLeft, .moveTabRight, .renameTab,
-            .fillScreen, .toggleSidebar, .toggleBottomDrawer, .toggleRightDrawer,
+            .fillScreen, .toggleSidebar, .focusSidebar, .toggleBottomDrawer, .toggleRightDrawer,
             .toggleRepoPicker, .createWorktree, .removeWorktree, .toggleCommandPalette, .newTool,
             .openSettings,
             .dismissToast, .dismissAllToasts:
@@ -148,6 +149,7 @@ extension KeyInterceptor.ReservedChord {
         case "toggle_zoom": self = .toggleZoom
         case "fill_screen": self = .fillScreen
         case "toggle_sidebar": self = .toggleSidebar
+        case "focus_sidebar": self = .focusSidebar
         case "toggle_workspace_picker": self = .toggleRepoPicker
         case "toggle_repo_picker": self = .toggleRepoPicker
         case "create_worktree": self = .createWorktree
