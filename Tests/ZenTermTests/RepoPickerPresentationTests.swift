@@ -437,8 +437,10 @@ final class RepoPickerPresentationTests: WindowTestCase {
     }
 
     private func pressReturn(in picker: RepoPickerOverlay) {
-        let field = descendants(of: picker).compactMap { $0 as? NSTextField }
-            .first { ($0.delegate as? PaletteOverlay) === picker }!
+        guard
+            let field = descendants(of: picker).compactMap({ $0 as? NSTextField })
+                .first(where: { ($0.delegate as? PaletteOverlay) === picker })
+        else { return XCTFail("the picker has no search field to press Return in") }
         _ = picker.control(
             field, textView: NSTextView(), doCommandBy: #selector(NSResponder.insertNewline(_:)))
     }
