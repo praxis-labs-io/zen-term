@@ -186,6 +186,8 @@ final class TabController: NSObject {
 
     var onFocusChanged: (() -> Void)?
 
+    var focusPastLeftEdge: (() -> Bool)?
+
     var onNotification: ((SurfaceID, TerminalNotification) -> Void)?
 
     var onCommandFinished: ((SurfaceID, TerminalCommandResult) -> Void)?
@@ -674,6 +676,7 @@ final class TabController: NSObject {
             ? remembered
             : nearestLeaf(from: origin, frames: frames, direction: direction)
         guard let target else {
+            if direction == .left, focusPastLeftEdge?() == true { return }
             toastNoNeighbor(direction)
             return
         }

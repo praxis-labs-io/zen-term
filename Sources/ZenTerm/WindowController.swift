@@ -1,5 +1,6 @@
 import AppKit
 import AppLog
+import PaneKit
 import TabKit
 import TerminalKit
 import UniformTypeIdentifiers
@@ -259,7 +260,7 @@ final class WindowController: NSObject {
     private var didTearDown = false
 
     var focusedCWD: URL? { activeController?.focusedCWD }
-    var focusedPaneIsVim: Bool { activeController?.focusedPaneIsVim ?? false }
+    var focusedPaneIsVim: Bool { !sidebar.hasFocus && activeController?.focusedPaneIsVim == true }
 
     var isToolFloatOpen: Bool { floats.isOpen }
 
@@ -1652,10 +1653,10 @@ final class WindowController: NSObject {
             active?.split(.horizontal)
         case .prevPane: active?.cyclePane(-1)
         case .nextPane: active?.cyclePane(1)
-        case .navLeft: active?.navigate(.left)
-        case .navRight: active?.navigate(.right)
-        case .navUp: active?.navigate(.up)
-        case .navDown: active?.navigate(.down)
+        case .navLeft: navigate(.left)
+        case .navRight: navigate(.right)
+        case .navUp: navigate(.up)
+        case .navDown: navigate(.down)
         case .resizeLeft: active?.resize(.left)
         case .resizeRight: active?.resize(.right)
         case .resizeUp: active?.resize(.up)
@@ -1730,6 +1731,18 @@ final class WindowController: NSObject {
         case .reportIssue: openReportIssue()
         case .newTool: openToolFloatForm(editing: nil, returnTo: toolFormReturnForNewTool())
         }
+    }
+
+    private func navigate(_ direction: Direction) {
+        guard sidebar.hasFocus else { activeController?.navigate(direction); return }
+        if direction == .right { restoreFocusToActive() }
+    }
+
+    private func focusSidebar() -> Bool {
+        guard sidebar.isDocked else { return false }
+        endModes()
+        sidebar.focusActiveRow()
+        return true
     }
 
     private var preFillFrame: NSRect?
@@ -1909,6 +1922,7 @@ final class WindowController: NSObject {
             self?.cancelConfirm()
             self?.endModes()
         }
+        c.focusPastLeftEdge = { [weak self] in self?.focusSidebar() ?? false }
         c.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
         c.onProgress = { [weak self] surface, progress in
             self?.progressChanged(surface: surface, progress: progress)

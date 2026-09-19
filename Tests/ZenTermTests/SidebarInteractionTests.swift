@@ -1,4 +1,5 @@
 import AppKit
+import PaneKit
 import TerminalKit
 import XCTest
 
@@ -9,6 +10,7 @@ final class SidebarInteractionTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var controllers: [WindowController] = []
     private var surfaces: [RecordingSurface] = []
+    private var interceptors: [KeyInterceptor] = []
     private var root: URL!
     private var originalConfig: GeneralConfig!
 
@@ -369,6 +371,137 @@ final class SidebarInteractionTests: WindowTestCase {
         controller.window.sendEvent(key(.escape, in: controller))
 
         XCTAssertTrue(controller.window.firstResponder === drawer.view)
+    }
+
+    func test_cmdOptLeft_fromTheLeftmostPane_focusesTheSidebar_andCmdOptRightReturns() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+
+        try nav(.left, in: controller)
+        XCTAssertTrue(controller.window.firstResponder === controller.sidebarForTesting.view.rowsForTesting.first)
+
+        try nav(.right, in: controller)
+        XCTAssertTrue(controller.window.firstResponder === pane.view)
+    }
+
+    func test_cmdOptLeft_reachesTheSidebarOnlyFromTheLeftColumn_andReturnsToThatPane() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let left = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        controller.handle(.splitVertical)
+        let right = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        XCTAssertFalse(left === right, "the split focuses the new pane")
+        XCTAssertTrue(controller.window.firstResponder === right.view)
+
+        controller.containerForTesting.layoutSubtreeIfNeeded()
+        try nav(.left, in: controller)
+        XCTAssertTrue(controller.window.firstResponder === left.view, "a pane to the left wins over the sidebar")
+
+        try nav(.left, in: controller)
+        XCTAssertTrue(controller.sidebarForTesting.hasFocus)
+
+        try nav(.right, in: controller)
+        XCTAssertTrue(controller.window.firstResponder === left.view, "focus goes back to the pane it came from")
+    }
+
+    func test_cmdOptLeft_fromTheBottomDrawer_focusesTheSidebar_andCmdOptRightReturnsToIt() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleBottomDrawer)
+        let drawer = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+
+        try nav(.left, in: controller)
+        XCTAssertTrue(controller.sidebarForTesting.hasFocus)
+
+        try nav(.right, in: controller)
+        XCTAssertTrue(controller.window.firstResponder === drawer.view)
+    }
+
+    func test_cmdOptLeft_withTheSidebarCollapsed_keepsFocus_andSaysThereIsNoPane() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleSidebar)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+
+        try nav(.left, in: controller)
+
+        XCTAssertTrue(controller.window.firstResponder === pane.view)
+        XCTAssertTrue(
+            descendants(of: try XCTUnwrap(controller.window.contentView)).contains {
+                ($0 as? NSTextField)?.stringValue == "No pane left to focus"
+            })
+    }
+
+    func test_cmdOptLeft_endsScrollMode_soArrowsReachTheRows() throws {
+        let controller = makeController()
+        _ = controller.addWorkspaceForTesting(name: "api", folder: root)
+        controller.window.makeKeyAndOrderFront(nil)
+        let keys = interceptor(for: controller)
+        controller.handle(.toggleScrollMode)
+        XCTAssertNotNil(keys.modeHandler, "scroll mode claims plain keys")
+
+        XCTAssertNil(keys.route(navEvent(.left, [.command, .option], in: controller)))
+        let down = key(.down, in: controller)
+        XCTAssertTrue(keys.route(down) === down, "↓ passes the interceptor to the row")
+        controller.window.sendEvent(down)
+
+        XCTAssertTrue(controller.window.firstResponder === controller.sidebarForTesting.view.rowsForTesting[1])
+    }
+
+    func test_ctrlBoundNav_fromTheSidebar_returnsEvenWhenThePaneRunsVim() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+        let token = try XCTUnwrap(pane.lastConfig?.environment["ZEN_PANE"].flatMap { Int($0) })
+        NavRegistry.shared.setVim(token: token, true)
+        defer { NavRegistry.shared.setVim(token: token, false) }
+        let keys = interceptor(for: controller)
+        keys.setKeymap([Chord(control: true, key: "→"): .navRight])
+        keys.passThroughGuard = { chord, action in
+            NavGuard.shouldPassThrough(
+                chord: chord, action: action, focusedPaneIsVim: controller.focusedPaneIsVim,
+                toolFloatIsOpen: false)
+        }
+        XCTAssertTrue(controller.focusedPaneIsVim)
+
+        controller.sidebarForTesting.focusActiveRow()
+        XCTAssertNil(keys.route(navEvent(.right, [.control], in: controller)), "the sidebar has no vim to defer to")
+
+        XCTAssertTrue(controller.window.firstResponder === pane.view)
+    }
+
+    private func interceptor(for controller: WindowController) -> KeyInterceptor {
+        let keys = KeyInterceptor()
+        keys.setKeymap(KeymapDefaults.map)
+        keys.onReservedChord = { controller.handle($0) }
+        controller.keyModeHost = keys
+        interceptors.append(keys)
+        return keys
+    }
+
+    private func nav(_ direction: Direction, in controller: WindowController) throws {
+        let keys = interceptor(for: controller)
+        XCTAssertNil(keys.route(navEvent(direction, [.command, .option], in: controller)), "⌘⌥ arrows are claimed")
+    }
+
+    private func navEvent(
+        _ direction: Direction, _ modifiers: NSEvent.ModifierFlags, in controller: WindowController
+    ) -> NSEvent {
+        let (code, text): (UInt16, String) =
+            switch direction {
+            case .left: (123, "\u{F702}")
+            case .right: (124, "\u{F703}")
+            case .up: (126, "\u{F700}")
+            case .down: (125, "\u{F701}")
+            }
+        return NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: modifiers.union([.function, .numericPad]),
+            timestamp: 0, windowNumber: controller.window.windowNumber, context: nil, characters: text,
+            charactersIgnoringModifiers: text, isARepeat: false, keyCode: code)!
     }
 
     private enum Key {
