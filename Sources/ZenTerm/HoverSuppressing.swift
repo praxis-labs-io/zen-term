@@ -4,6 +4,8 @@ import AppKit
 @MainActor
 protocol HoverSuppressing: NSView {
     func setHoverSuppressed(_ suppressed: Bool)
+    /// Re-reads the pointer. Rows that move under a still cursor never get `mouseExited`, so hover sticks on several.
+    func refreshHover()
 }
 
 extension NSView {

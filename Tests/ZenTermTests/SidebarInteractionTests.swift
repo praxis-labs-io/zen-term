@@ -1025,6 +1025,23 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(controller.isModalOverlayOpen, "the card it was pressed over stays open")
     }
 
+    func test_rowsMovingUnderTheCursor_leaveHoverOnOneRowAtMost() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        _ = controller.addWorkspaceForTesting(name: "api", folder: root)
+        let rows = controller.sidebarForTesting.view.rowsForTesting
+        for row in rows { row.mouseEntered(with: try mouseMoved(in: controller)) }
+        XCTAssertEqual(
+            rows.filter { $0.layer?.backgroundColor == Theme.current.chrome.fill(.hover).cgColor }.count, rows.count,
+            "precondition: every row is left hovered, as rows sliding under a still cursor leave them")
+
+        controller.handle(.newWorkspace)
+
+        let hovered = controller.sidebarForTesting.view.rowsForTesting
+            .filter { $0.layer?.backgroundColor == Theme.current.chrome.fill(.hover).cgColor }
+        XCTAssertLessThanOrEqual(hovered.count, 1, "a render re-reads the pointer, so stale hovers clear")
+    }
+
     func test_whileACardCoversTheSidebar_rowsTakeNoHover() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)

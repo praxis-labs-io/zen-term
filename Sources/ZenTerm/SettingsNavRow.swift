@@ -243,6 +243,15 @@ final class SettingsNavRow: NSView, HoverSuppressing {
         tooltip?.show(from: self)
     }
 
+    func refreshHover() {
+        let inside = pointerIsInside
+        guard inside != isHovered else { return }
+        isHovered = inside
+        if !inside { tooltip?.hide(from: self) }
+        refreshAccessory()
+        refreshFill()
+    }
+
     func setHoverSuppressed(_ suppressed: Bool) {
         guard suppressed != isHoverSuppressed else { return }
         isHoverSuppressed = suppressed

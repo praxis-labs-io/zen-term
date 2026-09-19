@@ -105,6 +105,9 @@ final class SidebarView: NSView {
         scroll.translatesAutoresizingMaskIntoConstraints = false
         content.translatesAutoresizingMaskIntoConstraints = false
         addSubview(scroll)
+        clip.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(refreshRowHover), name: NSView.boundsDidChangeNotification, object: clip)
         NSLayoutConstraint.activate([
             scroll.topAnchor.constraint(equalTo: topAnchor),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -169,6 +172,7 @@ final class SidebarView: NSView {
             row.render(item)
         }
         setAgentsHidden(items.isEmpty)
+        refreshRowHover()
         if removedFocusedRow { onLeave?() }
     }
 
@@ -211,6 +215,7 @@ final class SidebarView: NSView {
             row.setShowsAttention(item.isWaiting)
         }
         if activeRow != previouslyActive { revealActiveRow() }
+        refreshRowHover()
         if removedFocusedRow { onLeave?() }
     }
 
@@ -249,6 +254,10 @@ final class SidebarView: NSView {
         }
         rows[item.id] = row
         return row
+    }
+
+    @objc private func refreshRowHover() {
+        hoverRows.forEach { $0.refreshHover() }
     }
 
     /// Call with an overlay that covers the sidebar: menus and cards are sibling views, so the rows still hover under them.
