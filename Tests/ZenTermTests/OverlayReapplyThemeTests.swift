@@ -49,7 +49,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
     func test_reapplyTheme_recolorsPaletteOverlayAndPreservesSearchQuery() throws {
         let overlay = RepoPickerOverlay(
             entries: [], background: Theme.current.chrome.background.nsColor,
-            onChoose: { _, _ in }, onAddWorkspace: {}, onDismiss: {})
+            onChoose: { _ in }, onAddWorkspace: {}, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(overlay)

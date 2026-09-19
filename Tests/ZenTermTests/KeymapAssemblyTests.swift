@@ -109,6 +109,15 @@ final class KeymapAssemblyTests: XCTestCase {
         XCTAssertEqual(map[Chord(command: true, key: "0")], .resetFontSize)
     }
 
+    func test_workspaceChords_areTheTabChordsPlusOption() {
+        let map = assemble()
+        for n in 1...9 { XCTAssertEqual(map[Chord(command: true, option: true, key: "\(n)")], .selectWorkspace(n)) }
+        XCTAssertEqual(map[Chord(command: true, option: true, key: "[")], .prevWorkspace)
+        XCTAssertEqual(map[Chord(command: true, option: true, key: "]")], .nextWorkspace)
+        XCTAssertEqual(map[Chord(command: true, key: "[")], .prevTab)
+        XCTAssertEqual(map[Chord(command: true, option: true, key: "←")], .navLeft)
+    }
+
     func test_rebindingIncrease_freesBothDefaultChords() {
         let map = assemble(keybinds: [.bind(Chord(command: true, option: true, key: "="), .increaseFontSize)])
         XCTAssertEqual(map[Chord(command: true, option: true, key: "=")], .increaseFontSize)

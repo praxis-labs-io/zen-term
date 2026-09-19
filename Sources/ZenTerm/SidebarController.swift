@@ -32,8 +32,11 @@ final class SidebarController {
     private var slideID = 0
     private var entries: [Entry] = []
 
-    init(onPalette: @escaping () -> Void, onSettings: @escaping () -> Void, onToggle: @escaping () -> Void) {
-        view = SidebarView()
+    init(
+        onPalette: @escaping () -> Void, onSettings: @escaping () -> Void, onToggle: @escaping () -> Void,
+        onActivate: @escaping (WorkspaceID) -> Void, onAdd: @escaping () -> Void
+    ) {
+        view = SidebarView(onActivate: onActivate, onAdd: onAdd)
         footer = SidebarFooter(onPalette: onPalette, onSettings: onSettings)
         toggleButton = SidebarFooter.button("sidebar.left", "Toggle sidebar", .toggleSidebar, onToggle)
         lead = CollapsedSidebarLead(

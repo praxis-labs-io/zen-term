@@ -266,4 +266,138 @@ final class WindowControllerWorkspaceTests: WindowTestCase {
 
         XCTAssertTrue(c.isToolFloatOpen, "a tab closing out of sight must not shut the float on screen")
     }
+
+    private func press(
+        _ key: String, typing characters: String, keyCode: UInt16, in c: WindowController
+    ) throws {
+        let keys = KeyInterceptor()
+        keys.setKeymap(KeymapDefaults.map)
+        keys.onReservedChord = { c.handle($0) }
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.command, .option], timestamp: 0,
+                windowNumber: 0, context: nil, characters: characters, charactersIgnoringModifiers: key,
+                isARepeat: false, keyCode: keyCode))
+        XCTAssertNil(keys.route(event), "the chord is claimed, not passed to the pane")
+    }
+
+    func test_cmdOptDigit_selectsBySidebarOrder_andTheWorkspaceLeftBehindKeepsRunning() throws {
+        let c = makeWindow()
+        let first = c.activeWorkspaceIDForTesting
+        let home = try XCTUnwrap(c.tabIDsForTesting(workspace: first).first)
+        let before = try surface(of: c, tab: home)
+        let second = c.addWorkspaceForTesting(name: "Other", folder: root)
+        _ = c.addWorkspaceForTesting(name: "Third", folder: root)
+
+        try press("2", typing: "™", keyCode: 19, in: c)
+
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, second)
+        XCTAssertNil(
+            try XCTUnwrap(c.controllerForTesting(tab: home)).view.superview, "the background workspace is detached")
+        XCTAssertFalse(before.terminated)
+
+        try press("1", typing: "¡", keyCode: 18, in: c)
+
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, first)
+        let after = try surface(of: c, tab: home)
+        XCTAssertTrue(before === after, "the same surface, so the same scrollback and process")
+        XCTAssertEqual(after.startCount, 1)
+        XCTAssertFalse(after.terminated)
+    }
+
+    func test_cmdOptDigit_pastTheLastWorkspace_doesNothing() throws {
+        let c = makeWindow()
+        let first = c.activeWorkspaceIDForTesting
+        _ = c.addWorkspaceForTesting(name: "Other", folder: root)
+
+        try press("9", typing: "ª", keyCode: 25, in: c)
+
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, first)
+    }
+
+    func test_cmdOptBrackets_cycleThroughWorkspaces_andWrap() throws {
+        let c = makeWindow()
+        let first = c.activeWorkspaceIDForTesting
+        let second = c.addWorkspaceForTesting(name: "Other", folder: root)
+        let third = c.addWorkspaceForTesting(name: "Third", folder: root)
+
+        try press("[", typing: "“", keyCode: 33, in: c)
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, third, "previous from the first wraps to the last")
+
+        try press("]", typing: "‘", keyCode: 30, in: c)
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, first, "next from the last wraps to the first")
+
+        try press("]", typing: "‘", keyCode: 30, in: c)
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, second)
+    }
+
+    private func texts(in card: ToastView) -> [String] {
+        descendants(of: card).compactMap { ($0 as? NSTextField)?.stringValue }
+    }
+
+    private func keycaps(in card: ToastView) -> [String] {
+        descendants(of: card).compactMap { ($0 as? KeycapView)?.shortcut }
+    }
+
+    func test_withOneWorkspace_aCardIsTitledByItsTabAlone() throws {
+        let c = makeWindow()
+        c.newTabForTesting()
+        let first = try XCTUnwrap(c.tabOrderForTesting.first)
+
+        c.notifyAgentForTesting(tab: first, message: "needs you")
+        drainMainQueue()
+
+        let card = try XCTUnwrap(c.waitingToastForTesting(tab: first))
+        XCTAssertFalse(texts(in: card).contains { $0.hasPrefix("Home: ") })
+    }
+
+    func test_aBackgroundWorkspacesCard_namesItsWorkspace_andShowsTheWorkspaceShortcut() throws {
+        let c = makeWindow()
+        let first = c.activeWorkspaceIDForTesting
+        let home = try XCTUnwrap(c.tabIDsForTesting(workspace: first).first)
+        let second = c.addWorkspaceForTesting(name: "Other", folder: root)
+        c.activateWorkspaceForTesting(second)
+
+        c.notifyAgentForTesting(tab: home, message: "needs you")
+        drainMainQueue()
+
+        let card = try XCTUnwrap(c.waitingToastForTesting(tab: home))
+        XCTAssertTrue(texts(in: card).contains { $0.hasPrefix("Home: ") }, "the card says which workspace asked")
+        XCTAssertEqual(keycaps(in: card), ["⌘⌥1"], "Switch reaches it by the workspace's shortcut")
+    }
+
+    func test_aBackgroundTabThatIsNotItsWorkspacesActiveOne_showsNoKeycap() throws {
+        let c = makeWindow()
+        let first = c.activeWorkspaceIDForTesting
+        let home = try XCTUnwrap(c.tabIDsForTesting(workspace: first).first)
+        c.newTabForTesting()
+        let second = c.addWorkspaceForTesting(name: "Other", folder: root)
+        c.activateWorkspaceForTesting(second)
+
+        c.notifyAgentForTesting(tab: home, message: "needs you")
+        drainMainQueue()
+
+        let card = try XCTUnwrap(c.waitingToastForTesting(tab: home))
+        XCTAssertEqual(keycaps(in: card), [], "⌘⌥1 would land on the other tab, so it isn't offered")
+    }
+
+    func test_aCardRaisedWithOneWorkspace_gainsItsWorkspaceName_whenASecondOpens() throws {
+        let c = makeWindow()
+        let home = try XCTUnwrap(c.activeTabIDForTesting)
+        c.newTabForTesting()
+        c.notifyAgentForTesting(tab: home, message: "needs you")
+        drainMainQueue()
+        let card = try XCTUnwrap(c.waitingToastForTesting(tab: home))
+        XCTAssertFalse(texts(in: card).contains { $0.hasPrefix("Home: ") })
+
+        c.openWorkspaceForTesting(
+            Workspace(title: "Other", path: root, main: nil, right: nil, bottom: nil, focus: .main, env: [:]))
+
+        XCTAssertTrue(texts(in: card).contains { $0.hasPrefix("Home: ") }, "the card now says which workspace asked")
+
+        c.closeTabForTesting(tab: try XCTUnwrap(c.activeTabIDForTesting))
+
+        XCTAssertEqual(c.workspaceIDsForTesting.count, 1)
+        XCTAssertFalse(texts(in: card).contains { $0.hasPrefix("Home: ") }, "back to one workspace, the prefix goes")
+    }
 }

@@ -65,6 +65,9 @@ extension KeyInterceptor.ReservedChord {
         case .pasteSelection: return "paste_selection"
         case .dismissToast: return "dismiss_toast"
         case .dismissAllToasts: return "dismiss_all_toasts"
+        case .selectWorkspace(let n): return "select_workspace_\(n)"
+        case .prevWorkspace: return "prev_workspace"
+        case .nextWorkspace: return "next_workspace"
         }
     }
 
@@ -88,7 +91,8 @@ extension KeyInterceptor.ReservedChord {
             .findNext, .findPrevious, .searchSelection,
             .clearScreen, .selectAll, .scrollToSelection, .pasteSelection, .writeScreenFile,
             .copyScreenFilePath, .openScreenFile,
-            .dismissToast, .dismissAllToasts:
+            .dismissToast, .dismissAllToasts,
+            .selectWorkspace, .prevWorkspace, .nextWorkspace:
             return false
         }
     }
@@ -113,7 +117,8 @@ extension KeyInterceptor.ReservedChord {
             .fillScreen, .toggleSidebar, .toggleBottomDrawer, .toggleRightDrawer,
             .toggleRepoPicker, .createWorktree, .removeWorktree, .toggleCommandPalette, .newTool,
             .openSettings,
-            .dismissToast, .dismissAllToasts:
+            .dismissToast, .dismissAllToasts,
+            .selectWorkspace, .prevWorkspace, .nextWorkspace:
             return true
         }
     }
@@ -184,9 +189,14 @@ extension KeyInterceptor.ReservedChord {
         case "dismiss_toast": self = .dismissToast
         case "dismiss_all_toasts": self = .dismissAllToasts
         case "start_search": self = .toggleSearch
+        case "prev_workspace": self = .prevWorkspace
+        case "next_workspace": self = .nextWorkspace
         default:
             if let rest = token.dropPrefixIfPresent("select_tab_"), let n = Int(rest), (1...9).contains(n) {
                 self = .selectTab(n)
+            } else if let rest = token.dropPrefixIfPresent("select_workspace_"), let n = Int(rest), (1...9).contains(n)
+            {
+                self = .selectWorkspace(n)
             } else if let id = token.dropPrefixIfPresent("toggle_float:"), !id.isEmpty {
                 self = .toggleToolFloat(id)
             } else {
@@ -270,6 +280,10 @@ enum KeymapDefaults {
 
         map[Chord(command: true, shift: true, key: "n")] = .dismissToast
         map[Chord(command: true, shift: true, option: true, key: "n")] = .dismissAllToasts
+
+        for n in 1...9 { map[Chord(command: true, option: true, key: "\(n)")] = .selectWorkspace(n) }
+        map[Chord(command: true, option: true, key: "[")] = .prevWorkspace
+        map[Chord(command: true, option: true, key: "]")] = .nextWorkspace
 
         return map
     }()
