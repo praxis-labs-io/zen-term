@@ -103,10 +103,16 @@ view-level test covers that.
   for the UI update.
 - Per global rules: no `TODO`/`FIXME`/`HACK` markers. Fix it now, or file a Linear
   ticket for genuinely out-of-scope work.
-- **Comments follow the global comment rules exactly.** Only three kinds: a one-line
-  file purpose, contract docs on public names (3 lines max), and a one-line why on a
-  declaration. Nothing inside a function or method body. The tree was brought in line
-  in one pass; keep it there.
+- **Comments follow the global comment rules exactly.** Only three kinds:
+  - a one-line file purpose, only when the file name doesn't already say it;
+  - contract docs, only on names visible outside their module: `public` API in
+    `TerminalKit`, `PaneKit`, `TabKit` and `AppLog`, never `ZenTerm` (an app target) and
+    never tests. One sentence by default, 3 lines at most, none when the signature
+    already says it, and never how it works, why it exists, or its history;
+  - a one-line why on a declaration, only when the reason can't be read from the code.
+
+  Nothing inside a function or method body. If code needs more than these allow, fix
+  the naming or structure instead.
 - **Read `docs/swift-conventions.md` before touching window sizing, event routing,
   layers, config live-apply, or interaction tests.** Add to it when a new trap bites.
 

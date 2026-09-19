@@ -125,8 +125,11 @@ For a pull request:
   you are done, so CI runs once rather than on every push.
 - Tests belong in the same commit as the behavior they verify.
 - Keep implementation, cleanup, and unrelated refactors in separate commits.
-- Comments come in three kinds only: a one-line file purpose, a short contract doc on a
-  public name, and a one-line why on a declaration. None inside a function body.
+- Comments come in three kinds only: a one-line file purpose when the file name doesn't
+  say it, a contract doc on a `public` name in a library target (one sentence by
+  default, 3 lines at most), and a one-line why on a declaration when the code can't
+  show the reason. None inside a function body, and none in `ZenTerm` or tests beyond
+  the file purpose and the why.
 - No `TODO` / `FIXME` / `HACK` markers. Fix it, or say in the pull request what
   you left and why.
 
