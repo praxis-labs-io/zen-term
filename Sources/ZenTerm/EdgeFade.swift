@@ -22,6 +22,9 @@ final class EdgeFade {
 
     func update(frame: CGRect, start: CGFloat, end: CGFloat) {
         let length = axis == .horizontal ? frame.width : frame.height
+        // Two fades deeper than what they fade would put the stops out of order, which renders as a torn mask.
+        let room = min(1, length / max(start + end, 1))
+        let (start, end) = (start * room, end * room)
         let opaque = CGColor(gray: 1, alpha: 1)
         let clear = CGColor(gray: 1, alpha: 0)
         CATransaction.begin()
