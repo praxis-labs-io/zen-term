@@ -255,15 +255,18 @@ final class SidebarView: NSView {
         return row
     }
 
+    // The one place hover is settled, so a row built while a cover is up starts suppressed like the rest.
     @objc private func refreshRowHover() {
-        hoverRows.forEach { $0.refreshHover() }
+        for row in hoverRows {
+            row.setHoverSuppressed(hoverCovers > 0 && row !== hoverExempt)
+            row.refreshHover()
+        }
     }
 
     func setHoverCovered(_ covered: Bool, exempting exempt: NSView? = nil) {
         hoverCovers = max(0, hoverCovers + (covered ? 1 : -1))
         hoverExempt = covered ? exempt : nil
-        let suppressed = hoverCovers > 0
-        for row in hoverRows { row.setHoverSuppressed(suppressed && row !== hoverExempt) }
+        refreshRowHover()
     }
 
     private var hoverRows: [any HoverSuppressing] { Array(rows.values) + Array(agentRows.values) }

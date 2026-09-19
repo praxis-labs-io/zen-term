@@ -435,6 +435,24 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertNil(rows[1].accessibilityValue())
     }
 
+    func test_anAgentRowBornUnderACard_takesNoHover() throws {
+        let c = makeWindow()
+        let agent = try focusedAgent(c)
+        c.handle(.openSettings)
+        notify(agent, "Wants to run swift test")
+
+        let row = try XCTUnwrap(rows(c).first, "the agent joins the list while the card is open")
+        row.mouseEntered(
+            with: try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .mouseMoved, location: .zero, modifierFlags: [], timestamp: 0,
+                    windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
+
+        XCTAssertNotEqual(
+            row.fillForTesting, Theme.current.chrome.fill(.hover).cgColor,
+            "a row built while the sidebar is covered starts suppressed like the rows already there")
+    }
+
     func test_whileACardCoversTheSidebar_agentRowsTakeNoHover() throws {
         let c = makeWindow()
         let agent = try focusedAgent(c)
