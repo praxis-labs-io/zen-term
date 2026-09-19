@@ -63,12 +63,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
             .flatMap { descendants(of: $0).compactMap { ($0 as? NSTextField)?.stringValue } }
     }
 
-    private func elsewhere() -> Workspace {
-        Workspace(
-            title: "Elsewhere", path: root, main: nil, right: nil, bottom: nil, focus: .main,
-            env: [:])
-    }
-
     private func toggleScratch(_ c: WindowController) {
         c.handle(.toggleToolFloat(ToolFloat.scratch.id))
     }
@@ -293,29 +287,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
 
         XCTAssertEqual(relayed.count, 1, "a hidden float's notification must not be dropped")
         XCTAssertEqual(relayed.first?.1, owner, "the banner routes to the tab the shell is in")
-    }
-
-    func test_replacingATab_doesNotHandTheNewSessionTheOldScratch() {
-        let c = makeWindow()
-        let surface = openScratch(c)
-        toggleScratch(c)
-
-        c.openWorkspaceForTesting(elsewhere(), replaceCurrentTab: true)
-
-        XCTAssertTrue(surface.terminated, "the replaced session's scratch goes with it")
-        XCTAssertFalse(openScratch(c) === surface, "and the new session gets a cold one")
-    }
-
-    func test_replacingABusyTab_confirmsBeforeItStopsTheScratch() {
-        let c = makeWindow()
-        let surface = openScratch(c)
-        toggleScratch(c)
-        surface.isBusy = true
-
-        c.openWorkspaceForTesting(elsewhere(), replaceCurrentTab: true)
-
-        XCTAssertTrue(c.isConfirmOpen)
-        XCTAssertFalse(surface.terminated, "nothing dies before the answer")
     }
 
     func test_closePaneWhileScratchIsOpen_saysSoRatherThanClosing() {

@@ -187,22 +187,6 @@ final class DrawerAttentionTests: WindowTestCase {
         XCTAssertEqual(toastViews(c).count, 1, "the drawer is still closed, so its card still has somewhere to go")
     }
 
-    func test_replacingTheTab_dropsWhatItsOldDrawerAsked() throws {
-        let c = makeWindow()
-        let drawer = try closedRightDrawer(c)
-        notify(drawer)
-
-        c.openWorkspaceForTesting(
-            Workspace(
-                title: "probe", path: URL(fileURLWithPath: NSTemporaryDirectory()), main: nil,
-                right: nil, bottom: nil, focus: .main, env: [:]),
-            replaceCurrentTab: true)
-        drainMainQueue()
-
-        XCTAssertEqual(c.windowAttentionForTesting, .idle)
-        XCTAssertTrue(toastViews(c).isEmpty, "the drawer that asked is gone, so its card has nowhere to go")
-    }
-
     func test_aPaneInTheActiveTab_isStillSeen() throws {
         let c = makeWindow()
 

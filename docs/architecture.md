@@ -175,8 +175,13 @@ single modal slot, tab bar and dock. `WorkspaceController` owns one workspace: a
 its `TabController`s and their titles. `TabController` owns one tab: a
 `PaneCanvasController` and two drawers.
 
-- **A window always has one workspace**, the default one in the home folder, and one of
-  them is active. Nothing opens a second yet, so only the testing seams reach one.
+- **A window starts with one workspace**, the default one in the home folder, and one of
+  them is active. ⌘P opens a configured workspace at the end of the sidebar, or switches to
+  it when it is already open: `configTitle` ties an open workspace to its `workspaces`
+  entry, and is nil for the default one.
+- **`activate(_:)` is the single path a switch goes through**: a row click, ⌘⌥1…9 and ⌘⌥[ ]
+  in sidebar order, ⌘P, and revealing a background tab. It swaps the canvas without
+  motion, so a newly opened workspace applies its recipe in the same turn.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
   workspace costs nothing beyond an inactive tab.
 - **Tab ids are minted by the window**, not by the workspace, so they stay unique across a

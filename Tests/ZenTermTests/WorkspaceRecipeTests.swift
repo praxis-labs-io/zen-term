@@ -5,7 +5,7 @@ import XCTest
 @testable import ZenTerm
 
 @MainActor
-final class WorkspaceRecipeStagingTests: WindowTestCase {
+final class WorkspaceRecipeTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var controller: WindowController?
 
@@ -56,25 +56,22 @@ final class WorkspaceRecipeStagingTests: WindowTestCase {
             right: "shell", bottom: "shell", focus: .right, env: [:])
     }
 
-    func test_enterOpen_revealsTheDrawersOnceTheCanvasLands() {
+    func test_opening_revealsTheWorkspacesDrawersInTheSameTurn() {
         let controller = makeController()
         XCTAssertEqual(revealedDrawerCount(in: controller), 0, "the launch tab has no drawers open")
 
-        controller.openWorkspaceForTesting(bothDrawers(), replaceCurrentTab: false)
+        controller.openWorkspaceForTesting(bothDrawers())
 
         XCTAssertEqual(
-            revealedDrawerCount(in: controller), 0,
-            "the recipe is staged: no drawer is revealed while the canvas is still travelling")
-        waitUntil(
-            revealedDrawerCount(in: controller) == 2,
-            "both of the workspace's drawers to open once the canvas slide lands")
+            revealedDrawerCount(in: controller), 2,
+            "a workspace swaps in without canvas motion, so there is nothing to stage its drawers behind")
     }
 
     func test_reduceMotion_appliesTheRecipeAfterStart_soItsFocusSticks() {
         Motion.isReduceMotionEnabled = { true }
         let controller = makeController()
 
-        controller.openWorkspaceForTesting(focusedOnTheRightDrawer(), replaceCurrentTab: false)
+        controller.openWorkspaceForTesting(focusedOnTheRightDrawer())
 
         XCTAssertEqual(
             revealedDrawerCount(in: controller), 2, "the recipe opens both drawers it names")
@@ -84,15 +81,5 @@ final class WorkspaceRecipeStagingTests: WindowTestCase {
             focused.first?.isHeaderVisibleForTesting == true,
             "the recipe's focus landed on a drawer and stayed there, rather than being taken back "
                 + "by the main pane because the recipe ran before the tab started")
-    }
-
-    func test_shiftEnterReplace_appliesTheRecipeInline() {
-        let controller = makeController()
-
-        controller.openWorkspaceForTesting(bothDrawers(), replaceCurrentTab: true)
-
-        XCTAssertEqual(
-            revealedDrawerCount(in: controller), 2,
-            "a replace has no canvas motion to stage behind, so its drawers open in the same turn")
     }
 }

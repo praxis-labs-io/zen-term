@@ -14,8 +14,8 @@
 # Hand-edits to this file are picked up the next time you open the ⌘P picker (or on
 # restart).
 #
-# The section header is the title: it's shown in the picker and pinned as the tab name,
-# so it's independent of the folder name (`[ZenTerm]` can point at ~/Dev/zen-term).
+# The section header is the title: it's shown in the picker and names the workspace in the
+# sidebar, so it's independent of the folder name (`[ZenTerm]` can point at ~/Dev/zen-term).
 #
 # Order: the picker lists workspaces in the order their sections appear here, so to put
 # one first, move its whole `[Title]` block up. ⌥↑/⌥↓ on a row in Settings → Workspaces
@@ -29,7 +29,7 @@
 # default: one shell pane, both drawers collapsed, cwd = the workspace dir.
 #
 # Fields:
-#   [Title]  (required)  section header → picker label + pinned tab name
+#   [Title]  (required)  section header → picker label + sidebar name
 #   path     (required)  working directory (`~` is expanded)
 #   main     (optional)  first-pane program; absent or `shell` → a plain shell
 #   right    (optional)  right-drawer command; absent → closed; `shell` → a plain shell

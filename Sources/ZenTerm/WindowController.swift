@@ -309,7 +309,7 @@ final class WindowController: NSObject {
         WindowController.nextWindowID += 1
         let firstID = TabID(1)
         let defaultWorkspace = WorkspaceController(
-            id: WorkspaceID(raw: 1), name: Self.defaultWorkspaceName,
+            id: WorkspaceID(raw: 1), configTitle: nil, name: Self.defaultWorkspaceName,
             folder: FileManager.default.homeDirectoryForCurrentUser, firstTab: firstID)
         workspaces = [defaultWorkspace]
         activeWorkspace = defaultWorkspace
@@ -629,12 +629,11 @@ final class WindowController: NSObject {
         case slide(from: SlideEdge)
     }
 
-    @discardableResult
-    private func mount(_ transition: MountTransition, onLanded: (() -> Void)? = nil) -> Bool {
+    private func mount(_ transition: MountTransition) {
         guard let c = activeController, mountedCanvas !== c.view else {
             restoreFocusToActive()
             renderDock()
-            return true
+            return
         }
         let outgoing = mountedCanvas
         pinCanvas(c.view)
@@ -648,18 +647,12 @@ final class WindowController: NSObject {
         switch transition {
         case .instant:
             outgoing?.removeFromSuperview()
-            return true
         case .slide(let edge):
             container.layoutSubtreeIfNeeded()
             let dx = edge == .fromRight ? container.bounds.width : -container.bounds.width
-            var isStillMounting = true
-            var landedInline = false
             Motion.slideSwap(incoming: c.view, outgoing: outgoing, dx: dx) { [weak self] in
                 self?.detachIfInactive(outgoing)
-                if isStillMounting { landedInline = true } else { onLanded?() }
             }
-            isStillMounting = false
-            return landedInline
         }
     }
 
@@ -748,52 +741,25 @@ final class WindowController: NSObject {
 
     private func newTab() {
         cancelConfirm()
-        addTab(cwd: ShellLaunch.newSessionCWD(focused: activeController?.focusedCWD), pinnedTitle: nil)
+        addTab(cwd: ShellLaunch.newSessionCWD(focused: activeController?.focusedCWD))
     }
 
-    private func addTab(cwd: URL?, pinnedTitle: String?, config: Workspace? = nil) {
+    private func addTab(cwd: URL?) {
         Log.info("tab opened", category: .tabs)
         closeModal()
         closeFloatForTabChange()
         let id = mintTabID()
         activeWorkspace.add(id)
-        installController(
-            id: id, cwd: cwd, pinnedTitle: pinnedTitle, config: config,
-            transition: .slide(from: .fromRight))
+        installController(id: id, cwd: cwd, config: nil, transition: .slide(from: .fromRight))
     }
 
-    private func replaceActiveTab(cwd: URL, pinnedTitle: String?, config: Workspace?) {
-        closeFloatForTabChange()
-        guard let id = activeWorkspace.activeID else { return }
-        let old = activeWorkspace.controller(id)
-        if mountedCanvas === old?.view {
-            old?.view.removeFromSuperview()
-            mountedCanvas = nil
-        }
-        old?.shutdown()
-        floats.shutdownScope(id)
-        clearAttention(id)
-        attention.dropTab(id)
-        installController(
-            id: id, cwd: cwd, pinnedTitle: pinnedTitle, config: config, transition: .instant)
-        renderAttention()
-    }
-
-    // The recipe waits for the canvas motion: a drawer sliding the same way as its canvas has no readable motion.
-    private func installController(
-        id: TabID, cwd: URL?, pinnedTitle: String?, config: Workspace?, transition: MountTransition
-    ) {
+    private func installController(id: TabID, cwd: URL?, config: Workspace?, transition: MountTransition) {
         let c = makeController(cwd: cwd, config: config)
-        c.pinnedTitle = pinnedTitle
         activeWorkspace.setController(c, for: id)
         wire(c, id: id)
-        let landed = mount(transition) { [weak self, weak c] in
-            guard let self, let c, let config, self.controller(id) === c else { return }
-            c.applyRecipe(config)
-            if self.activeWorkspace.activeID != id { self.restoreFocusToActive() }
-        }
+        mount(transition)
         c.start()
-        if landed, let config { c.applyRecipe(config) }
+        if let config { c.applyRecipe(config) }
         renderTabBar()
     }
 
@@ -955,7 +921,8 @@ final class WindowController: NSObject {
                 entries: workspaces,
                 background: Theme.current.chrome.background.nsColor,
                 removals: self.worktreeRemovals,
-                onChoose: { [weak self] ws, replace in self?.openWorkspace(ws, replaceCurrentTab: replace) },
+                isOpen: { [weak self] title in self?.openWorkspace(titled: title) != nil },
+                onChoose: { [weak self] ws in self?.openWorkspace(ws) },
                 onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
                 onDismiss: { [weak self] in self?.closeModal() }
             )
@@ -1059,7 +1026,7 @@ final class WindowController: NSObject {
                 switch result {
                 case .success(let (opened, report)):
                     if stillUp { self.closeModal() }
-                    self.openWorkspace(opened, replaceCurrentTab: false)
+                    self.openWorkspace(opened)
                     self.reportCarry(report)
                 case .failure(let error):
                     if stillUp {
@@ -1529,7 +1496,7 @@ final class WindowController: NSObject {
             return
         }
         closeModal()
-        openWorkspace(ws, replaceCurrentTab: false)
+        openWorkspace(ws)
     }
 
     private func runCommand(_ chord: KeyInterceptor.ReservedChord) {
@@ -1577,27 +1544,23 @@ final class WindowController: NSObject {
         renderDock()
     }
 
-    private func openWorkspace(_ ws: Workspace, replaceCurrentTab: Bool) {
+    private func openWorkspace(titled title: String) -> WorkspaceController? {
+        workspaces.first { $0.configTitle == title }
+    }
+
+    private func openWorkspace(_ ws: Workspace) {
         closeModal()
-        guard replaceCurrentTab else {
-            addTab(cwd: ws.path, pinnedTitle: ws.title, config: ws)
+        if let open = openWorkspace(titled: ws.title) {
+            activate(open.id)
             return
         }
-        let replace = { [weak self] in
-            self?.replaceActiveTab(cwd: ws.path, pinnedTitle: ws.title, config: ws)
-        }
-        let tabIsBusy =
-            activeController?.allSurfaces.contains(where: { $0.isBusy }) == true
-            || activeWorkspace.activeID.map(floats.hasBusyInScope) ?? false
-        guard tabIsBusy else {
-            replace()
-            return
-        }
-        presentConfirm(
-            variant: .warning, title: "Replace Tab",
-            message: "Replacing this tab will stop everything running in it.",
-            confirmLabel: "Replace"
-        ) { replace() }
+        Log.info("workspace opened", category: .workspace)
+        let tab = mintTabID()
+        let workspace = WorkspaceController(
+            id: mintWorkspaceID(), configTitle: ws.title, name: ws.title, folder: ws.path, firstTab: tab)
+        workspaces.append(workspace)
+        activate(workspace.id)
+        installController(id: tab, cwd: ws.path, config: ws, transition: .instant)
     }
 
     func handle(_ chord: KeyInterceptor.ReservedChord) {
@@ -2193,8 +2156,8 @@ final class WindowController: NSObject {
         toast = toasts.showSticky(content, actions: actions)
     }
 
-    func openWorkspaceForTesting(_ ws: Workspace, replaceCurrentTab: Bool) {
-        openWorkspace(ws, replaceCurrentTab: replaceCurrentTab)
+    func openWorkspaceForTesting(_ ws: Workspace) {
+        openWorkspace(ws)
     }
 
     var focusedPanelForTesting: PanelHostView? { activeController?.focusedScrollTarget?.panel }
@@ -2285,6 +2248,8 @@ final class WindowController: NSObject {
 
     var workspaceIDsForTesting: [WorkspaceID] { workspaces.map(\.id) }
 
+    var workspaceNamesForTesting: [String] { workspaces.map(\.name) }
+
     var sidebarForTesting: SidebarController { sidebar }
 
     var containerForTesting: NSView { container }
@@ -2294,7 +2259,7 @@ final class WindowController: NSObject {
     func addWorkspaceForTesting(name: String, folder: URL) -> WorkspaceID {
         let id = mintTabID()
         let workspace = WorkspaceController(
-            id: mintWorkspaceID(), name: name, folder: folder, firstTab: id)
+            id: mintWorkspaceID(), configTitle: nil, name: name, folder: folder, firstTab: id)
         workspaces.append(workspace)
         let controller = makeController(cwd: folder)
         workspace.setController(controller, for: id)
