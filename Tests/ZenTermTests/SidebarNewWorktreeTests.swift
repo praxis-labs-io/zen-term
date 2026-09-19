@@ -408,6 +408,22 @@ final class SidebarNewWorktreeTests: WindowTestCase {
 
     private var menu: SidebarRowMenu { controller!.sidebarForTesting.view.rowMenu }
 
+    func test_aResizeClosingTheMenu_givesTheRowsTheirHoverBack() throws {
+        let c = makeWindow()
+        let anchor = try openRepoWorkspace(in: c)
+        let other = try XCTUnwrap(c.sidebarForTesting.view.rowsForTesting.first { $0 !== anchor })
+        try rightClick(anchor, in: c)
+        XCTAssertTrue(menu.isOpen)
+
+        NotificationCenter.default.post(name: NSWindow.didResizeNotification, object: c.window)
+
+        XCTAssertFalse(menu.isOpen, "precondition: a resize takes the menu down on its own")
+        other.mouseEntered(with: try mouse(.mouseMoved, at: .zero, in: c))
+        XCTAssertEqual(
+            other.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor,
+            "the menu released its cover, so the rows hover again")
+    }
+
     func test_whileTheMenuIsOpen_anotherRowTakesNoHover() throws {
         let c = makeWindow()
         let anchor = try openRepoWorkspace(in: c)

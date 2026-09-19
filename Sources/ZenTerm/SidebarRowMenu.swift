@@ -51,6 +51,8 @@ final class SidebarRowMenu {
     var isOpen: Bool { popover?.isOpen == true }
 
     var onOpenChanged: ((Bool) -> Void)?
+    // Not `isOpen`: ListPopover's own close clears the card before calling back, so by then the menu reads shut.
+    private var hasIssuedCover = false
 
     func open(_ groups: [[Item]], from row: NSView) {
         close()
@@ -79,12 +81,14 @@ final class SidebarRowMenu {
             return MainActor.assumeIsolated { self?.swallows(press) ?? false } ? nil : event
         }
         dismissObservers = HoverCardView.windowDismissObservers(in: window) { [weak self] in self?.close() }
+        hasIssuedCover = true
         onOpenChanged?(true)
     }
 
     func close() {
-        let wasOpen = isOpen
-        defer { if wasOpen { onOpenChanged?(false) } }
+        let hadCover = hasIssuedCover
+        hasIssuedCover = false
+        defer { if hadCover { onOpenChanged?(false) } }
         popover?.close()
         popover = nil
         anchor = nil
