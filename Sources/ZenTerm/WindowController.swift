@@ -24,8 +24,6 @@ final class WindowController: NSObject {
     let windowID: Int
     private static var nextWindowID = 1
 
-    private static let defaultWorkspaceName = "Home"
-
     private static var backdropTintAlpha: CGFloat { GeneralConfig.current.backdropAlpha }
 
     private let container = NSView()
@@ -331,11 +329,11 @@ final class WindowController: NSObject {
         windowID = WindowController.nextWindowID
         WindowController.nextWindowID += 1
         let firstID = TabID(1)
-        let defaultWorkspace = WorkspaceController(
-            id: WorkspaceID(raw: 1), isConfigured: false, name: Self.defaultWorkspaceName,
+        let firstWorkspace = WorkspaceController(
+            id: WorkspaceID(raw: 1), isConfigured: false, name: Self.unconfiguredName(among: []),
             folder: FileManager.default.homeDirectoryForCurrentUser, firstTab: firstID)
-        workspaces = [defaultWorkspace]
-        activeWorkspace = defaultWorkspace
+        workspaces = [firstWorkspace]
+        activeWorkspace = firstWorkspace
         var onSelect: (TabID) -> Void = { _ in }
         var onClose: (TabID) -> Void = { _ in }
         var onRename: (TabID) -> Void = { _ in }
@@ -644,6 +642,13 @@ final class WindowController: NSObject {
     private func mintWorkspaceID() -> WorkspaceID {
         defer { nextWorkspaceID += 1 }
         return WorkspaceID(raw: nextWorkspaceID)
+    }
+
+    private static func unconfiguredName(among names: [String]) -> String {
+        let taken = Set(names)
+        var number = 1
+        while taken.contains("Workspace \(number)") { number += 1 }
+        return "Workspace \(number)"
     }
 
     enum SlideEdge { case fromRight, fromLeft }

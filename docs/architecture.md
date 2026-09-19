@@ -175,8 +175,9 @@ single modal slot, tab bar and dock. `WorkspaceController` owns one workspace: a
 its `TabController`s and their titles. `TabController` owns one tab: a
 `PaneCanvasController` and two drawers.
 
-- **A window starts with one workspace**, the default one in the home folder, and one of
-  them is active. ⌘P opens a configured workspace at the end of the sidebar, or switches to
+- **A window starts with one workspace, with no config entry**, and one workspace is
+  always active. A workspace without a config entry is named "Workspace N", the lowest
+  number no open workspace in the window holds. ⌘P opens a configured workspace at the end of the sidebar, or switches to
   it when it is already open. A workspace is open when one with a config entry is open at
   its folder, so renaming it in Settings does not open a second copy.
 - **`activate(_:)` is the single path a switch goes through**: a row click, ⌘⌥1…9 and ⌘⌥[ ]
