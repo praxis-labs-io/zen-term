@@ -423,6 +423,28 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertEqual(menu.itemViewsForTesting.map(\.title), ["Close Workspace"], "Home has no config entry")
     }
 
+    func test_collapsingTheSidebar_closesTheMenu() throws {
+        let c = makeWindow()
+        try rightClick(try openRepoWorkspace(in: c), in: c)
+        XCTAssertTrue(menu.isOpen)
+
+        c.handle(.toggleSidebar)
+
+        waitUntil(!menu.isOpen, "the menu to close with the sidebar")
+        XCTAssertTrue(modals(SidebarRowMenuItemView.self, in: c).isEmpty)
+    }
+
+    func test_theWindowResigningKey_closesTheMenu() throws {
+        let c = makeWindow()
+        try rightClick(try openRepoWorkspace(in: c), in: c)
+        XCTAssertTrue(menu.isOpen)
+
+        NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: c.window)
+
+        waitUntil(!menu.isOpen, "the menu to close with the window's focus")
+        XCTAssertTrue(modals(SidebarRowMenuItemView.self, in: c).isEmpty)
+    }
+
     private func drainGitStatus() {
         var landed = false
         GitRepoStatus.refresh([repo]) { landed = true }
