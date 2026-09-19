@@ -9,7 +9,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         case worktree(Worktree, parent: Workspace)
     }
 
-    private let onChoose: (Workspace) -> Void
+    private let onChoose: (Workspace, WorktreeOrigin?) -> Void
     private let isOpen: (URL) -> Bool
     private let onAddWorkspace: () -> Void
     private let onNewWorkspace: () -> Void
@@ -30,7 +30,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         entries: [Workspace], background: NSColor,
         removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
         isOpen: @escaping (URL) -> Bool = { _ in false },
-        onChoose: @escaping (Workspace) -> Void, onAddWorkspace: @escaping () -> Void,
+        onChoose: @escaping (Workspace, WorktreeOrigin?) -> Void, onAddWorkspace: @escaping () -> Void,
         onNewWorkspace: @escaping () -> Void = {}, onDismiss: @escaping () -> Void
     ) {
         self.entries = entries
@@ -294,10 +294,11 @@ final class RepoPickerOverlay: PaletteOverlay {
         switch rows[index] {
         case .newWorkspace: onNewWorkspace()
         case .add: onAddWorkspace()
-        case .workspace(let workspace): onChoose(workspace)
+        case .workspace(let workspace): onChoose(workspace, nil)
         case .worktree(let worktree, let parent):
             onChoose(
-                Self.workspace(for: worktree, parent: parent, repoRoot: GitRepoStatus.repoRoot(parent.path)))
+                Self.workspace(for: worktree, parent: parent, repoRoot: GitRepoStatus.repoRoot(parent.path)),
+                WorktreeOrigin(parent: parent, worktree: worktree))
         }
     }
 

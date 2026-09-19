@@ -36,7 +36,7 @@ final class RepoPickerWorktreeChurnTests: WindowTestCase {
                     env: [:])
             ],
             background: Theme.current.chrome.background.nsColor,
-            onChoose: { _ in }, onAddWorkspace: {}, onDismiss: {})
+            onChoose: { _, _ in }, onAddWorkspace: {}, onDismiss: {})
         mount(overlay)
 
         waitUntil(

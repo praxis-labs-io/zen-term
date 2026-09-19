@@ -9,16 +9,24 @@ final class WorkspaceController {
     let isConfigured: Bool
     var name: String
     let folder: URL
+    let origin: WorktreeOrigin?
+    // Shared by a folder's workspace and its worktrees, so the group keeps its place as members close.
+    let seat: Int
 
     private var tabs: TabList
     private var controllerByTab: [TabID: TabController] = [:]
     private var titleByTab: [TabID: String] = [:]
 
-    init(id: WorkspaceID, isConfigured: Bool, name: String, folder: URL, firstTab: TabID) {
+    init(
+        id: WorkspaceID, isConfigured: Bool, name: String, folder: URL, firstTab: TabID,
+        origin: WorktreeOrigin? = nil, seat: Int? = nil
+    ) {
         self.id = id
         self.isConfigured = isConfigured
         self.name = name
         self.folder = folder
+        self.origin = origin
+        self.seat = seat ?? id.raw
         tabs = TabList(first: firstTab)
     }
 

@@ -300,7 +300,7 @@ final class PaletteInteractionTests: WindowTestCase {
 
     private func makeRepoPicker(
         entries: [Workspace],
-        onChoose: @escaping (Workspace) -> Void = { _ in },
+        onChoose: @escaping (Workspace, WorktreeOrigin?) -> Void = { _, _ in },
         onAddWorkspace: @escaping () -> Void = {},
         onDismiss: @escaping () -> Void = {}
     ) -> RepoPickerOverlay {
@@ -314,7 +314,7 @@ final class PaletteInteractionTests: WindowTestCase {
         var addOpened = false
         let overlay = makeRepoPicker(
             entries: [workspace("alpha"), workspace("beta")],
-            onChoose: { chosen = $0 }, onAddWorkspace: { addOpened = true })
+            onChoose: { ws, _ in chosen = ws }, onAddWorkspace: { addOpened = true })
         mount(overlay)
         try sendReturn(to: overlay)
         XCTAssertEqual(chosen?.title, "alpha")
@@ -323,7 +323,7 @@ final class PaletteInteractionTests: WindowTestCase {
 
     func test_repoPicker_shiftEnterOpensLikeEnter() throws {
         var chosen: [Workspace] = []
-        let overlay = makeRepoPicker(entries: [workspace("alpha")], onChoose: { chosen.append($0) })
+        let overlay = makeRepoPicker(entries: [workspace("alpha")], onChoose: { ws, _ in chosen.append(ws) })
         mount(overlay)
         try sendReturn(to: overlay, modifiers: .shift)
         XCTAssertEqual(chosen.map(\.title), ["alpha"], "⇧↵ no longer replaces a tab")
@@ -334,7 +334,7 @@ final class PaletteInteractionTests: WindowTestCase {
         var addOpened = false
         let overlay = makeRepoPicker(
             entries: [workspace("alpha")],
-            onChoose: { chosen = $0 }, onAddWorkspace: { addOpened = true })
+            onChoose: { ws, _ in chosen = ws }, onAddWorkspace: { addOpened = true })
         mount(overlay)
         send(Self.moveUp, to: overlay)
         try sendReturn(to: overlay)
@@ -358,7 +358,7 @@ final class PaletteInteractionTests: WindowTestCase {
     func test_repoPicker_clickingAReusedRow_runsWhereItNowSits() {
         var chosen: Workspace?
         let overlay = makeRepoPicker(
-            entries: [workspace("alpha"), workspace("beta")], onChoose: { chosen = $0 })
+            entries: [workspace("alpha"), workspace("beta")], onChoose: { ws, _ in chosen = ws })
         let window = mount(overlay)
         window.layoutIfNeeded()
         let betaRow = rows(in: overlay)[3]
@@ -446,7 +446,7 @@ final class PaletteInteractionTests: WindowTestCase {
     func test_repoPicker_filterNarrowsWorkspacesKeepingAddRowPinned() throws {
         var chosen: Workspace?
         let overlay = makeRepoPicker(
-            entries: [workspace("alpha"), workspace("beta")], onChoose: { chosen = $0 })
+            entries: [workspace("alpha"), workspace("beta")], onChoose: { ws, _ in chosen = ws })
         mount(overlay)
         type("bet", into: overlay)
         XCTAssertEqual(overlay.numberOfRows(), 3)

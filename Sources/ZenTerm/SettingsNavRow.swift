@@ -1,16 +1,25 @@
 import AppKit
 
 final class SettingsNavRow: NSView {
+    enum Variant: Equatable {
+        case standard
+        case nested(symbol: String)
+        case faint
+    }
+
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onBacktab: (() -> Void)?
     var onEnterDetail: (() -> Void)?
+    var onSecondaryClick: (() -> Void)?
     var onReturn: (() -> Void)?
     var onEscape: (() -> Void)?
     var tooltip: TooltipHost?
 
+    let variant: Variant
     private let label = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
+    private let glyph = NSImageView()
     private let attentionDot = NSView()
     private var attentionDotWidth: NSLayoutConstraint?
     private var attentionDotGap: NSLayoutConstraint?
@@ -20,16 +29,26 @@ final class SettingsNavRow: NSView {
     private var trackingArea: NSTrackingArea?
     private var isSelected = false
     private var isFocusedStop = false
-    private var isHovered = false
+    private var isHovered = false { didSet { refreshAccessory() } }
+    private(set) var hoverAccessory: NSView?
 
     private static let detailMaxWidth: CGFloat = 96
+    private static let nestedIndent: CGFloat = 24
+    private static let nestedGlyphGap: CGFloat = 6
+    private static let nestedGlyphSize: CGFloat = 11
+    // The frame pulls a 20pt accessory 5pt past the detail's inset, so its glyph sits where the detail ends.
+    private static let accessoryInset: CGFloat = 5
     private static let attentionDotDiameter: CGFloat = 6
     private static let attentionDotGapToDetail: CGFloat = 6
     private static let attentionAccessibilityValue = "Agent waiting"
 
-    init(title: String, focusesOnClick: Bool = true, onActivate: @escaping () -> Void) {
+    init(
+        title: String, variant: Variant = .standard, focusesOnClick: Bool = true,
+        onActivate: @escaping () -> Void
+    ) {
         self.onActivate = onActivate
         self.focusesOnClick = focusesOnClick
+        self.variant = variant
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -62,15 +81,35 @@ final class SettingsNavRow: NSView {
             dotGap,
             attentionDot.heightAnchor.constraint(equalToConstant: Self.attentionDotDiameter),
             attentionDot.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
             label.trailingAnchor.constraint(lessThanOrEqualTo: attentionDot.leadingAnchor, constant: -8),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
             detailLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
             detailLabel.widthAnchor.constraint(lessThanOrEqualToConstant: Self.detailMaxWidth),
             detailLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            heightAnchor.constraint(equalToConstant: 30),
         ])
+        if case .nested(let symbol) = variant {
+            installGlyph(symbol)
+        } else {
+            NSLayoutConstraint.activate([
+                label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+                heightAnchor.constraint(equalToConstant: 30),
+            ])
+        }
         reapplyTheme()
+    }
+
+    private func installGlyph(_ symbol: String) {
+        glyph.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        glyph.symbolConfiguration = .init(pointSize: Self.nestedGlyphSize, weight: .regular)
+        glyph.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(glyph)
+        label.font = .systemFont(ofSize: 12)
+        NSLayoutConstraint.activate([
+            glyph.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.nestedIndent),
+            glyph.centerYAnchor.constraint(equalTo: centerYAnchor),
+            label.leadingAnchor.constraint(equalTo: glyph.trailingAnchor, constant: Self.nestedGlyphGap),
+            heightAnchor.constraint(equalToConstant: 28),
+        ])
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -78,7 +117,33 @@ final class SettingsNavRow: NSView {
     func setSelected(_ selected: Bool) {
         isSelected = selected
         setAccessibilitySelected(selected)
+        refreshLabelInk()
         refreshFill()
+    }
+
+    func setHoverAccessory(_ accessory: NSView?) {
+        guard accessory !== hoverAccessory else { return }
+        hoverAccessory?.removeFromSuperview()
+        hoverAccessory = accessory
+        if let accessory {
+            accessory.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(accessory)
+            NSLayoutConstraint.activate([
+                accessory.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.accessoryInset),
+                accessory.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+        }
+        refreshAccessory()
+    }
+
+    private func refreshAccessory() {
+        hoverAccessory?.isHidden = !isHovered
+        detailLabel.isHidden = isHovered && hoverAccessory != nil
+    }
+
+    func setTitle(_ title: String) {
+        label.stringValue = title
+        setAccessibilityLabel(title)
     }
 
     func setDetail(_ detail: String?) {
@@ -99,15 +164,29 @@ final class SettingsNavRow: NSView {
         setAccessibilityValue(value.isEmpty ? nil : value)
     }
 
+    var titleForTesting: String { label.stringValue }
+
+    var titleInkForTesting: NSColor? { label.textColor }
+
     var detailForTesting: String { detailLabel.stringValue }
 
     var showsAttentionForTesting: Bool { !attentionDot.isHidden }
 
     func reapplyTheme() {
-        label.textColor = Theme.current.chrome.foreground.nsColor
+        refreshLabelInk()
         detailLabel.textColor = Theme.current.chrome.ink(.muted)
+        glyph.contentTintColor = Theme.current.chrome.ink(.faint)
         attentionDot.layer?.backgroundColor = Theme.current.chrome.attention.nsColor.cgColor
         refreshFill()
+    }
+
+    private func refreshLabelInk() {
+        let chrome = Theme.current.chrome
+        switch variant {
+        case .standard: label.textColor = chrome.foreground.nsColor
+        case .nested: label.textColor = chrome.ink(isSelected ? .normal : .subtle)
+        case .faint: label.textColor = chrome.ink(.faint)
+        }
     }
 
     private func refreshFill() {
@@ -170,8 +249,15 @@ final class SettingsNavRow: NSView {
 
     override func mouseDown(with event: NSEvent) {
         tooltip?.hide(from: self)
+        if event.modifierFlags.contains(.control), let onSecondaryClick { return onSecondaryClick() }
         if focusesOnClick { window?.makeFirstResponder(self) }
         onActivate()
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        guard let onSecondaryClick else { return super.rightMouseDown(with: event) }
+        tooltip?.hide(from: self)
+        onSecondaryClick()
     }
 
     override func keyDown(with event: NSEvent) {

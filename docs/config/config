@@ -347,8 +347,9 @@
 #   select_all  (no default; Edit > Select All holds ⌘A)
 #   write_screen_file  write_screen_file_copy  write_screen_file_open
 #   toggle_workspace_picker  toggle_command_palette
-#   create_worktree     (only over the workspace picker; anywhere else the key goes to
-#                        the terminal, so ⌥⏎ still inserts a newline in a TUI)
+#   create_worktree     (only over the workspace picker or a focused sidebar row; anywhere
+#                        else the key goes to the terminal, so ⌥⏎ still inserts a newline
+#                        in a TUI)
 #   remove_worktree     (same: anywhere but the picker, the key goes to the terminal.
 #                        Not ⌥⌫, which deletes a word in the picker's search field)
 #   open_settings  reload_config
@@ -413,7 +414,7 @@
 # keybind = toggle_command_palette=cmd+shift+p
 # keybind = toggle_workspace_picker=cmd+p
 # keybind = new_workspace=cmd+opt+t              # no config entry; starts where a new tab would
-# keybind = create_worktree=opt+enter            # over a picker row: cut a worktree of it
+# keybind = create_worktree=opt+enter            # over a picker or sidebar row: cut a worktree of it
 # keybind = remove_worktree=cmd+shift+backspace  # over a worktree row: delete its folder
 # keybind = open_settings=cmd+,
 # keybind = reload_config=cmd+shift+,

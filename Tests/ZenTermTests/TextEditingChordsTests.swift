@@ -121,7 +121,7 @@ final class TextEditingChordsTests: WindowTestCase {
         let keys = KeyInterceptor()
         keys.passThroughGuard = { [weak self] chord, action in
             TextEditingChords.owns(chord, firstResponder: self?.window.firstResponder)
-                || PickerChordGuard.shouldPassThrough(action: action, repoPickerIsOpen: true)
+                || PickerChordGuard.shouldPassThrough(action: action, repoPickerIsOpen: true, sidebarHasFocus: false)
         }
         return keys
     }

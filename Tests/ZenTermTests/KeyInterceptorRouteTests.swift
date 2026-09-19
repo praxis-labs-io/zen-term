@@ -174,7 +174,7 @@ final class KeyInterceptorRouteTests: XCTestCase {
         keys.setKeymap(KeymapDefaults.map)
         var pickerIsOpen = true
         keys.passThroughGuard = { _, action in
-            PickerChordGuard.shouldPassThrough(action: action, repoPickerIsOpen: pickerIsOpen)
+            PickerChordGuard.shouldPassThrough(action: action, repoPickerIsOpen: pickerIsOpen, sidebarHasFocus: false)
         }
         var fired: [KeyInterceptor.ReservedChord] = []
         keys.onReservedChord = { fired.append($0) }

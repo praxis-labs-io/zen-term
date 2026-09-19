@@ -7,10 +7,15 @@ final class SidebarController {
     private static var lastChoiceIsDocked = true
 
     private struct Entry {
-        let id: WorkspaceID
+        enum Kind { case workspace, worktree(WorktreeOrigin), ghost }
+
+        let row: SidebarRowID
+        let kind: Kind
         let name: String
-        let folder: URL
+        let folder: URL?
+        let number: Int?
         let isActive: Bool
+        let isConfigured: Bool
         let isWaiting: Bool
     }
 
@@ -37,9 +42,11 @@ final class SidebarController {
 
     init(
         onPalette: @escaping () -> Void, onSettings: @escaping () -> Void, onToggle: @escaping () -> Void,
-        onActivate: @escaping (WorkspaceID) -> Void, onAdd: @escaping () -> Void
+        onActivate: @escaping (SidebarRowID) -> Void, onNewWorktree: @escaping (SidebarRowID) -> Void,
+        onCloseWorkspace: @escaping (WorkspaceID) -> Void, onAdd: @escaping () -> Void
     ) {
-        view = SidebarView(onActivate: onActivate, onAdd: onAdd)
+        view = SidebarView(
+            onActivate: onActivate, onNewWorktree: onNewWorktree, onCloseWorkspace: onCloseWorkspace, onAdd: onAdd)
         footer = SidebarFooter(onPalette: onPalette, onSettings: onSettings)
         toggleButton = SidebarFooter.button("sidebar.left", "Toggle sidebar", .toggleSidebar, onToggle)
         lead = CollapsedSidebarLead(
@@ -140,38 +147,114 @@ final class SidebarController {
         lead.isHidden = isDocked
     }
 
-    func render(workspaces: [WorkspaceController], active: WorkspaceController, waiting: Set<WorkspaceID>) {
-        let next = workspaces.map {
-            Entry(
-                id: $0.id, name: $0.name, folder: $0.folder, isActive: $0 === active,
-                isWaiting: waiting.contains($0.id))
+    func render(
+        order: WorkspaceOrder, workspaces: [WorkspaceController], active: WorkspaceController,
+        waiting: Set<WorkspaceID>
+    ) {
+        let byID = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
+        let numbers = Dictionary(uniqueKeysWithValues: order.navigable.enumerated().map { ($1, $0 + 1) })
+        let next = order.entries.compactMap { entry -> Entry? in
+            switch entry {
+            case .workspace(let id), .worktree(let id):
+                guard let workspace = byID[id] else { return nil }
+                let kind = workspace.origin.map(Entry.Kind.worktree) ?? .workspace
+                return Entry(
+                    row: .workspace(id), kind: kind, name: workspace.name, folder: workspace.folder,
+                    number: numbers[id], isActive: workspace === active, isConfigured: workspace.isConfigured,
+                    isWaiting: waiting.contains(id))
+            case .ghost(let parent):
+                return Entry(
+                    row: .ghost(parent.path.standardizedFileURL.path), kind: .ghost, name: parent.title,
+                    folder: nil, number: nil, isActive: false, isConfigured: true, isWaiting: false)
+            }
         }
-        let foldersChanged = next.map(\.folder) != entries.map(\.folder)
+        let foldersChanged = next.compactMap(\.folder) != entries.compactMap(\.folder)
         entries = next
-        lead.setWorkspaceName(active.name)
-        if !isDocked { leadWidth?.constant = lead.contentWidth }
         renderRows()
         if foldersChanged { refreshBranches() }
     }
 
     var hasFocus: Bool { view.hasFocus }
 
+    enum NewWorktreeRefusal: CaseIterable {
+        case worktree, unconfigured, notARepo, agent
+
+        var message: String {
+            let chord = CommandCatalog.spec(for: .createWorktree).shortcut ?? ""
+            let picker = CommandCatalog.spec(for: .toggleRepoPicker).shortcut ?? ""
+            switch self {
+            case .worktree: return "A worktree starts from its workspace.\nPress \(chord) on the workspace above it."
+            case .unconfigured: return "This workspace isn't configured.\nSet one up with Add Workspace… in \(picker)."
+            case .notARepo: return "This workspace isn't a git repository.\nWorktrees need a git repository."
+            case .agent: return "Agents don't start worktrees.\nPress \(chord) on a workspace row."
+            }
+        }
+    }
+
+    var focusedWorktreeParent: SidebarRowID? {
+        guard let row = view.focusedRow, let entry = entries.first(where: { $0.row == row }),
+            Self.rowItem(entry).makesWorktrees
+        else { return nil }
+        return row
+    }
+
+    var focusedWorktreeRefusal: NewWorktreeRefusal? {
+        if view.agentRowHasFocus { return .agent }
+        guard let row = view.focusedRow, let entry = entries.first(where: { $0.row == row }),
+            !Self.rowItem(entry).makesWorktrees
+        else { return nil }
+        switch entry.kind {
+        case .worktree: return .worktree
+        case .workspace where !entry.isConfigured: return .unconfigured
+        case .workspace, .ghost: return .notARepo
+        }
+    }
+
     func focusActiveRow() {
         guard let active = entries.first(where: \.isActive) else { return }
-        view.focusRow(active.id)
+        view.focusRow(active.row)
     }
 
     func refreshBranches() {
-        GitRepoStatus.refresh(entries.map(\.folder)) { [weak self] in self?.renderRows() }
+        GitRepoStatus.refresh(entries.compactMap(\.folder)) { [weak self] in self?.renderRows() }
     }
 
     private func renderRows() {
-        view.render(
-            entries.map {
-                SidebarRowItem(
-                    id: $0.id, name: $0.name, branch: GitRepoStatus.branch($0.folder), isActive: $0.isActive,
-                    isWaiting: $0.isWaiting)
-            })
+        view.render(entries.map(Self.rowItem))
+        renderLead()
+    }
+
+    private func renderLead() {
+        guard let active = entries.first(where: \.isActive) else { return }
+        if case .worktree(let origin) = active.kind {
+            lead.setWorkspaceName(
+                origin.parent.title, worktree: active.folder.flatMap(GitRepoStatus.branch) ?? origin.name)
+        } else {
+            lead.setWorkspaceName(active.name)
+        }
+        if !isDocked { leadWidth?.constant = lead.contentWidth }
+    }
+
+    private static let worktreeSymbol = "arrow.triangle.branch"
+
+    private static func rowItem(_ entry: Entry) -> SidebarRowItem {
+        let branch = entry.folder.flatMap(GitRepoStatus.branch)
+        switch entry.kind {
+        case .workspace:
+            let isRepo = entry.folder.flatMap(GitRepoStatus.known) == true
+            return SidebarRowItem(
+                id: entry.row, variant: .standard, name: entry.name, branch: branch, number: entry.number,
+                isActive: entry.isActive, makesWorktrees: entry.isConfigured && isRepo, isWaiting: entry.isWaiting)
+        case .worktree(let origin):
+            return SidebarRowItem(
+                id: entry.row, variant: .nested(symbol: worktreeSymbol), name: branch ?? origin.name,
+                branch: nil, number: entry.number, isActive: entry.isActive, makesWorktrees: false,
+                isWaiting: entry.isWaiting)
+        case .ghost:
+            return SidebarRowItem(
+                id: entry.row, variant: .faint, name: entry.name, branch: nil, number: nil, isActive: false,
+                makesWorktrees: true, isWaiting: false)
+        }
     }
 
     func renderAgents(_ items: [SidebarAgentItem]) { view.renderAgents(items) }

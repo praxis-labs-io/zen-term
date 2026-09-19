@@ -178,12 +178,18 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **A window starts with one workspace, with no config entry**, and one workspace is
   always active. A workspace without a config entry is named "Workspace N", the lowest
   number no open workspace in the window holds. ⌘⌥T opens one at the end of the sidebar,
-  in the folder a new tab would start in. ⌘P opens a configured workspace at the end of
-  the sidebar, or switches to it when it is already open. A workspace is open when one
-  with a config entry is open at its folder, so renaming it in Settings does not open a
-  second copy.
-- **`activate(_:)` is the single path a switch goes through**: a row click, ⌘⌥1…9 and ⌘⌥[ ]
-  in sidebar order, ⌘P, ⌘⌥T, and revealing a background tab. It swaps the canvas without
+  in the folder a new tab would start in. ⌘P opens a configured workspace, or switches to
+  it when it is already open. A workspace is open when one with a config entry is open at
+  its folder, so renaming it in Settings does not open a second copy.
+- **`WorkspaceOrder` is the sidebar's order, derived from open order at every read.** A
+  worktree workspace keeps the `WorktreeOrigin` it opened from and nests under the open
+  workspace at its parent's folder, or under a ghost row built from that origin when the
+  parent is closed. A group's first member mints its `seat` and later members inherit it,
+  so the group holds its place as members close and reopen. A workspace with no config
+  entry is never in a group. `navigable` skips ghosts; the sidebar's numbers, ⌘⌥1…9,
+  ⌘⌥[ ] and a close's landing all read it.
+- **`activate(_:)` is the single path a switch goes through**: a row click, ⌘⌥1…9 and ⌘⌥[ ],
+  ⌘P, ⌘⌥T, and revealing a background tab. It swaps the canvas without
   motion, so a newly opened workspace applies its recipe in the same turn.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
   workspace costs nothing beyond an inactive tab.
@@ -199,7 +205,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   close that takes the window with it confirms first, so the window never goes unannounced.
   `closeWorkspace` is the single path a workspace goes through: ⌘⌥W closes each of its tabs,
   background ones first so nothing it closes is mounted, and the last tab's close lands on the
-  neighbouring workspace in sidebar order.
+  row that takes its place in `navigable`.
 - **Window stack, back to front:** canvas, tool float, tab bar, dock and sidebar, toast
   stack, modal card. Toasts sit above floats (the ⌘W guard toast is about the float); a card
   sits above toasts because it owns the keyboard. `closeModal()` in
@@ -273,6 +279,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   the active tab, so panes, drawers and the nvim navigator all reach it. ⌃⌘S only docks
   and collapses. ↵ activates a row as a click does. Rows take focus from the keyboard only
   (`SettingsNavRow.takeKeyboardFocus`): AppKit promotes any clicked view that accepts.
+  A right-click or ⌃-click opens `SidebarRowMenu`, a `ListPopover` that never switches
+  workspaces; a local event monitor closes it on Esc or a click outside it.
 - **Fill Screen** is a maximize, not native fullscreen. `window-chrome = false` hides
   the traffic lights and `ChromeMetrics.topInset` follows.
 - **Tool floats are window-level** because a surface is one `NSView`. `ToolFloatController`
@@ -344,7 +352,8 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   raises a notice for pane commands and passes reading chords to its own buffer
   (`modeTarget`).
 - **Picker chords go through `PickerChordGuard`** (⌥⏎, ⌘⇧⌫), because a bound chord is
-  otherwise consumed app-wide and those keys belong to shells and TUIs.
+  otherwise consumed app-wide and those keys belong to shells and TUIs. A focused sidebar
+  row claims ⌥⏎ too.
 
 **The nav socket** backs zen-navigator.nvim (`docs/nvim-navigator-protocol.md`).
 `NavSocketServer` listens on `~/Library/Application Support/ZenTerm/nav.<pid>.sock`,
@@ -468,7 +477,8 @@ blend). Sixty-five themes ship; a user file shadows a bundled one. `accent-color
 
 `WorktreeStore` lists, creates and removes a repo's worktrees. Headless and blocking; callers
 hop off-main. The ⌘P picker lists them under each workspace, creates with ⌥⏎ and removes with
-⌘⇧⌫. Settings does not list them.
+⌘⇧⌫. A workspace's sidebar row creates them too, with its hover ＋ or ⌥⏎, and reads the
+workspace's entry fresh for the card. Settings does not list them.
 
 - **Git is the whole registry** (`worktree list --porcelain -z`): record one is the main
   checkout, `prunable` records drop, and only a create rollback prunes.

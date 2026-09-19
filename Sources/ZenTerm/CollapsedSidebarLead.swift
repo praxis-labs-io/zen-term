@@ -5,6 +5,8 @@ final class CollapsedSidebarLead: NSView {
     static let dividerGap: CGFloat = 12
 
     private let nameLabel = NSTextField(labelWithString: "")
+    private var workspaceName = ""
+    private var worktreeName: String?
     private let divider = ToggleDock.divider()
     private let content = NSStackView()
 
@@ -38,17 +40,48 @@ final class CollapsedSidebarLead: NSView {
 
     var contentWidth: CGFloat { content.fittingSize.width }
 
-    func setWorkspaceName(_ name: String) {
-        nameLabel.attributedStringValue = NSAttributedString(
-            string: name,
-            attributes: [
-                .font: TabBarView.chipFont, .kern: TabBarView.titleKern,
-                .foregroundColor: Theme.current.chrome.ink(.muted),
-            ])
+    func setWorkspaceName(_ name: String, worktree: String? = nil) {
+        workspaceName = name
+        worktreeName = worktree
+        let chrome = Theme.current.chrome
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingTail
+        func run(_ text: String, _ ink: ChromeTheme.InkLevel) -> NSAttributedString {
+            NSAttributedString(
+                string: text,
+                attributes: [
+                    .font: TabBarView.chipFont, .kern: TabBarView.titleKern, .foregroundColor: chrome.ink(ink),
+                    .paragraphStyle: paragraph,
+                ])
+        }
+        let label = NSMutableAttributedString(attributedString: run(name, .muted))
+        if let worktree {
+            label.append(run(" / ", .faint))
+            label.append(run(worktree, .subtle))
+        }
+        nameLabel.attributedStringValue = Self.fitted(label)
+    }
+
+    // Cut by count: AppKit's tail truncation stops short of the width and widens the divider's gap.
+    private static let maxCharacters: Int = {
+        let cell = NSAttributedString(
+            string: "0", attributes: [.font: TabBarView.chipFont, .kern: TabBarView.titleKern]
+        ).size().width
+        return Int(TabBarView.maxChipWidth / cell)
+    }()
+
+    private static func fitted(_ label: NSAttributedString) -> NSAttributedString {
+        let text = label.string
+        guard text.count > maxCharacters else { return label }
+        let kept = NSRange(text.startIndex..<text.index(text.startIndex, offsetBy: maxCharacters - 1), in: text)
+        let fitted = NSMutableAttributedString(attributedString: label.attributedSubstring(from: kept))
+        fitted.append(
+            NSAttributedString(string: "…", attributes: label.attributes(at: kept.length - 1, effectiveRange: nil)))
+        return fitted
     }
 
     func reapplyTheme() {
-        setWorkspaceName(nameLabel.stringValue)
+        setWorkspaceName(workspaceName, worktree: worktreeName)
         divider.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
     }
 

@@ -286,6 +286,8 @@ final class WindowController: NSObject {
 
     var isRepoPickerOpen: Bool { modal?.kind == .repoPicker }
 
+    var isSidebarFocused: Bool { sidebar.hasFocus }
+
     private var activeFloatName: String? {
         floats.activeID.flatMap(ToolFloatCatalog.byID)
             .map { $0.title.replacingOccurrences(of: "Open ", with: "") }
@@ -307,6 +309,19 @@ final class WindowController: NSObject {
             ToastContent(
                 variant: .info, title: "Tool Float",
                 message: "\(activeFloatName ?? "This tool") is open. Close it to get back to your panes."))
+    }
+
+    private var lastNoNewWorktreeToast: (refusal: SidebarController.NewWorktreeRefusal, at: Date)?
+
+    private func toastNoNewWorktree(_ refusal: SidebarController.NewWorktreeRefusal) {
+        let now = Date()
+        if let last = lastNoNewWorktreeToast, last.refusal == refusal,
+            now.timeIntervalSince(last.at) < Self.floatBlockToastThrottle
+        {
+            return
+        }
+        lastNoNewWorktreeToast = (refusal, now)
+        toasts.show(ToastContent(variant: .info, title: "New Worktree", message: refusal.message))
     }
 
     private var activeController: TabController? { activeWorkspace.activeController }
@@ -352,7 +367,9 @@ final class WindowController: NSObject {
         var onPalette: () -> Void = {}
         var onSettings: () -> Void = {}
         var onToggleSidebar: () -> Void = {}
-        var onActivateWorkspace: (WorkspaceID) -> Void = { _ in }
+        var onActivateRow: (SidebarRowID) -> Void = { _ in }
+        var onNewWorktree: (SidebarRowID) -> Void = { _ in }
+        var onCloseWorkspace: (WorkspaceID) -> Void = { _ in }
         var onOpenWorkspace: () -> Void = {}
         var onBottom: () -> Void = {}
         var onRight: () -> Void = {}
@@ -367,7 +384,8 @@ final class WindowController: NSObject {
             hiddenButtons: GeneralConfig.current.hiddenToolbarButtons)
         sidebar = SidebarController(
             onPalette: { onPalette() }, onSettings: { onSettings() }, onToggle: { onToggleSidebar() },
-            onActivate: { onActivateWorkspace($0) }, onAdd: { onOpenWorkspace() })
+            onActivate: { onActivateRow($0) }, onNewWorktree: { onNewWorktree($0) },
+            onCloseWorkspace: { onCloseWorkspace($0) }, onAdd: { onOpenWorkspace() })
         super.init()
         nextTabID = 2
 
@@ -381,8 +399,10 @@ final class WindowController: NSObject {
         onSettings = { [weak self] in self?.handle(.openSettings) }
         onToggleSidebar = { [weak self] in self?.handle(.toggleSidebar) }
         sidebar.onLeave = { [weak self] in self?.restoreFocusToActive() }
+        onActivateRow = { [weak self] in self?.activateFromSidebar($0) }
+        onNewWorktree = { [weak self] in self?.createWorktreeFromSidebar($0) }
+        onCloseWorkspace = { [weak self] in self?.requestCloseWorkspace(id: $0) }
         sidebar.onJump = { [weak self] in self?.jumpToAgent($0) }
-        onActivateWorkspace = { [weak self] in self?.activateFromSidebar($0) }
         onOpenWorkspace = { [weak self] in self?.handle(.toggleRepoPicker) }
         onBottom = { [weak self] in self?.handle(.toggleBottomDrawer) }
         onRight = { [weak self] in self?.handle(.toggleRightDrawer) }
@@ -847,14 +867,29 @@ final class WindowController: NSObject {
         select(ids[(i + delta + ids.count) % ids.count], slideFrom: delta > 0 ? .fromRight : .fromLeft)
     }
 
-    private func activateFromSidebar(_ id: WorkspaceID) {
-        guard id != activeWorkspace.id else { restoreFocusToActive(); return }
-        activate(id)
+    private func activateFromSidebar(_ row: SidebarRowID) {
+        switch row {
+        case .workspace(let id):
+            guard id != activeWorkspace.id else { restoreFocusToActive(); return }
+            activate(id)
+        case .ghost(let path):
+            guard let parent = ghostParent(at: path) else { return }
+            ConfigLoader.loadWorkspaces { [weak self] entries in
+                self?.openWorkspace(entries.first { $0.path.standardizedFileURL.path == path } ?? parent)
+            }
+        }
     }
 
+    private func ghostParent(at path: String) -> Workspace? {
+        workspaces.lazy.compactMap(\.origin?.parent).first { $0.path.standardizedFileURL.path == path }
+    }
+
+    private var order: WorkspaceOrder { WorkspaceOrder(workspaces) }
+
     private func cycleWorkspace(_ delta: Int) {
-        guard workspaces.count > 1, let i = workspaces.firstIndex(where: { $0 === activeWorkspace }) else { return }
-        activate(workspaces[(i + delta + workspaces.count) % workspaces.count].id)
+        let ids = order.navigable
+        guard ids.count > 1, let i = ids.firstIndex(of: activeWorkspace.id) else { return }
+        activate(ids[(i + delta + ids.count) % ids.count])
     }
 
     private func moveActiveTab(_ delta: Int) {
@@ -916,11 +951,13 @@ final class WindowController: NSObject {
 
     private func closeWorkspace(_ workspace: WorkspaceController) {
         Log.info("workspace closed", category: .workspace)
-        guard let index = workspaces.firstIndex(where: { $0 === workspace }) else { return }
-        workspaces.remove(at: index)
+        guard let place = order.navigable.firstIndex(of: workspace.id) else { return }
+        workspaces.removeAll { $0 === workspace }
         guard !workspaces.isEmpty else { window.close(); return }
         guard workspace === activeWorkspace else { renderAttention(); return }
-        let next = workspaces[min(index, workspaces.count - 1)]
+        let remaining = order.navigable
+        guard let next = workspaces.first(where: { $0.id == remaining[min(place, remaining.count - 1)] })
+        else { return }
         activeWorkspace = next
         mount(.instant)
         if let tab = next.activeID { visit(tab) }
@@ -961,7 +998,7 @@ final class WindowController: NSObject {
                 background: Theme.current.chrome.background.nsColor,
                 removals: self.worktreeRemovals,
                 isOpen: { [weak self] path in self?.openWorkspace(at: path) != nil },
-                onChoose: { [weak self] ws in self?.openWorkspace(ws) },
+                onChoose: { [weak self] ws, origin in self?.openWorkspace(ws, origin: origin) },
                 onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
                 onNewWorkspace: { [weak self] in self?.newWorkspace() },
                 onDismiss: { [weak self] in self?.closeModal() }
@@ -1006,6 +1043,50 @@ final class WindowController: NSObject {
         guard let picker = modal?.overlay as? RepoPickerOverlay, let target = picker.createTarget
         else { return }
         closeModal()
+        presentNewWorktree(
+            target, onCancel: { [weak self] in self?.reopenRepoPicker() },
+            afterEdit: { [weak self] in self?.reopenRepoPicker() })
+    }
+
+    private func createWorktreeFromSidebar(_ row: SidebarRowID) {
+        switch row {
+        case .workspace(let id):
+            guard let workspace = workspaces.first(where: { $0.id == id }) else { return }
+            presentNewWorktree(forEntryAt: workspace.folder, named: workspace.name)
+        case .ghost(let path):
+            guard let parent = ghostParent(at: path) else { return }
+            presentNewWorktree(forEntryAt: parent.path, named: parent.title)
+        }
+    }
+
+    // Reads the entry fresh, so the card copies what the file says now.
+    private func presentNewWorktree(forEntryAt folder: URL, named name: String) {
+        closeModal()
+        pendingModal = .worktreeForm
+        let path = folder.standardizedFileURL.path
+        ConfigLoader.loadWorkspaces { [weak self] entries in
+            guard let self, self.pendingModal == .worktreeForm else { return }
+            guard let entry = entries.first(where: { $0.path.standardizedFileURL.path == path }) else {
+                self.pendingModal = nil
+                self.toasts.show(
+                    ToastContent(
+                        variant: .warning, title: "Couldn't Open New Worktree",
+                        message: "\(name) is no longer in the workspaces file."))
+                return
+            }
+            self.presentNewWorktree(
+                RepoPickerOverlay.CreateTarget(workspace: entry, repo: entry.path),
+                onCancel: { [weak self] in self?.closeModal() },
+                afterEdit: { [weak self] in self?.presentNewWorktree(forEntryAt: entry.path, named: entry.title) },
+                afterSave: { [weak self] saved in self?.presentNewWorktree(forEntryAt: saved.path, named: saved.title) }
+            )
+        }
+    }
+
+    private func presentNewWorktree(
+        _ target: RepoPickerOverlay.CreateTarget, onCancel: @escaping () -> Void,
+        afterEdit: @escaping () -> Void, afterSave: ((Workspace) -> Void)? = nil
+    ) {
         pendingModal = .worktreeForm
         GitRepoStatus.createOptions(in: target.repo) { [weak self] options in
             guard let self, self.pendingModal == .worktreeForm else { return }
@@ -1016,12 +1097,10 @@ final class WindowController: NSObject {
                 onSubmit: { [weak self] request in
                     self?.createWorktree(request, from: target)
                 },
-                onCancel: { [weak self] in self?.reopenRepoPicker() },
+                onCancel: onCancel,
                 onDismiss: { [weak self] in self?.closeModal() },
                 onEditWorkspace: { [weak self] in
-                    self?.openWorkspaceForm(
-                        editing: target.workspace,
-                        returningTo: { [weak self] in self?.reopenRepoPicker() })
+                    self?.openWorkspaceForm(editing: target.workspace, returningTo: afterEdit, onSaved: afterSave)
                 }
             )
             self.presentModal(form, kind: .worktreeForm)
@@ -1035,7 +1114,7 @@ final class WindowController: NSObject {
         let card = modal?.overlay as? NewWorktreeOverlay
         card?.beginWork("Creating \(Self.branchName(of: request))")
         DispatchQueue.global(qos: .userInitiated).async {
-            let result: Result<(Workspace, CarryReport), Error>
+            let result: Result<(Workspace, WorktreeOrigin, CarryReport), Error>
             do {
                 let worktree: Worktree
                 switch request {
@@ -1056,7 +1135,7 @@ final class WindowController: NSObject {
                             card.setPhase("Copying \(name)")
                         }
                     })
-                result = .success((opened, report))
+                result = .success((opened, WorktreeOrigin(parent: workspace, worktree: worktree), report))
             } catch {
                 result = .failure(error)
             }
@@ -1064,9 +1143,9 @@ final class WindowController: NSObject {
                 guard let self else { return }
                 let stillUp = card.map(self.isPresenting) ?? false
                 switch result {
-                case .success(let (opened, report)):
+                case .success(let (opened, origin, report)):
                     if stillUp { self.closeModal() }
-                    self.openWorkspace(opened)
+                    self.openWorkspace(opened, origin: origin)
                     self.reportCarry(report)
                 case .failure(let error):
                     if stillUp {
@@ -1443,7 +1522,8 @@ final class WindowController: NSObject {
     }
 
     private func openWorkspaceForm(
-        editing workspace: Workspace?, returningTo done: (() -> Void)? = nil
+        editing workspace: Workspace?, returningTo done: (() -> Void)? = nil,
+        onSaved: ((Workspace) -> Void)? = nil
     ) {
         let done = done ?? { [weak self] in self?.reopenSettingsOnWorkspaces() }
         closeModal()
@@ -1459,7 +1539,8 @@ final class WindowController: NSObject {
                 existingTitles: existingTitles,
                 background: Theme.current.chrome.background.nsColor,
                 onSubmit: { [weak self] built in
-                    self?.submitWorkspace(built, replacing: originalTitle, then: done)
+                    self?.submitWorkspace(
+                        built, replacing: originalTitle, then: onSaved.map { saved in { saved(built) } } ?? done)
                 },
                 onCancel: done,
                 onDelete: workspace.map { existing in
@@ -1589,13 +1670,13 @@ final class WindowController: NSObject {
         return workspaces.first { $0.isConfigured && $0.folder.standardizedFileURL.path == target }
     }
 
-    private func openWorkspace(_ ws: Workspace) {
+    private func openWorkspace(_ ws: Workspace, origin: WorktreeOrigin? = nil) {
         closeModal()
         if let open = openWorkspace(at: ws.path) {
             activate(open.id)
             return
         }
-        appendWorkspace(named: ws.title, at: ws.path, config: ws)
+        appendWorkspace(named: ws.title, at: ws.path, config: ws, origin: origin)
     }
 
     private func newWorkspace() {
@@ -1604,11 +1685,16 @@ final class WindowController: NSObject {
         appendWorkspace(named: Self.unconfiguredName(among: workspaces.map(\.name)), at: folder, config: nil)
     }
 
-    private func appendWorkspace(named name: String, at folder: URL, config: Workspace?) {
+    private func appendWorkspace(
+        named name: String, at folder: URL, config: Workspace?, origin: WorktreeOrigin? = nil
+    ) {
         Log.info("workspace opened", category: .workspace)
         let tab = mintTabID()
+        let group = config.map { _ in (origin?.parent.path ?? folder).standardizedFileURL.path }
+        let seat = group.flatMap { group in workspaces.first { WorkspaceOrder.groupFolder(of: $0) == group }?.seat }
         let workspace = WorkspaceController(
-            id: mintWorkspaceID(), isConfigured: config != nil, name: name, folder: folder, firstTab: tab)
+            id: mintWorkspaceID(), isConfigured: config != nil, name: name, folder: folder, firstTab: tab,
+            origin: origin, seat: seat)
         workspaces.append(workspace)
         activate(workspace.id)
         installController(id: tab, cwd: folder, config: config, transition: .instant)
@@ -1757,13 +1843,20 @@ final class WindowController: NSObject {
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
-        case .createWorktree, .removeWorktree: break
+        case .createWorktree:
+            if let row = sidebar.focusedWorktreeParent {
+                createWorktreeFromSidebar(row)
+            } else if let refusal = sidebar.focusedWorktreeRefusal {
+                toastNoNewWorktree(refusal)
+            }
+        case .removeWorktree: break
         case .toggleCommandPalette: toggleCommandPalette()
         case .openSettings: openSettings()
         case .reportIssue: openReportIssue()
         case .newTool: openToolFloatForm(editing: nil, returnTo: toolFormReturnForNewTool())
         case .selectWorkspace(let n):
-            if workspaces.indices.contains(n - 1) { activate(workspaces[n - 1].id) }
+            let ids = order.navigable
+            if ids.indices.contains(n - 1) { activate(ids[n - 1]) }
         case .prevWorkspace: cycleWorkspace(-1)
         case .nextWorkspace: cycleWorkspace(1)
         case .closeWorkspace:
@@ -2342,7 +2435,7 @@ final class WindowController: NSObject {
     }
 
     private func place(of tab: TabID, in workspace: WorkspaceController) -> [Int] {
-        [workspaces.firstIndex { $0 === workspace } ?? 0, workspace.tabIDs.firstIndex(of: tab) ?? 0]
+        [order.position(of: workspace.id) ?? 0, workspace.tabIDs.firstIndex(of: tab) ?? 0]
     }
 
     private func jumpToAgent(_ surface: SurfaceID) {
@@ -2602,7 +2695,7 @@ final class WindowController: NSObject {
         }
         tabBar.render(items)
         let waiting = workspaces.filter { attention.state(tabs: $0.tabIDs) == .waiting }.map(\.id)
-        sidebar.render(workspaces: workspaces, active: activeWorkspace, waiting: Set(waiting))
+        sidebar.render(order: order, workspaces: workspaces, active: activeWorkspace, waiting: Set(waiting))
         renderAgents()
         for (id, card) in attentionCards {
             cardTitles[id].map { card.setTitle($0()) }
@@ -2614,7 +2707,7 @@ final class WindowController: NSObject {
         guard let workspace = workspace(of: id) else { return "" }
         guard workspace === activeWorkspace else {
             guard workspace.activeID == id,
-                let number = workspaces.firstIndex(where: { $0 === workspace }).map({ $0 + 1 }), number <= 9
+                let number = order.position(of: workspace.id).map({ $0 + 1 }), number <= 9
             else { return "" }
             return CommandCatalog.spec(for: .selectWorkspace(number)).shortcut
         }
