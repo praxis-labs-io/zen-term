@@ -36,6 +36,7 @@ final class SidebarController {
     private var tabBarLeading: NSLayoutConstraint?
     private var sidebarTop: NSLayoutConstraint?
     private var slideID = 0
+    private var isSliding = false
     private var entries: [Entry] = []
     var onLeave: () -> Void = {}
     var onFocusChanged: () -> Void = {}
@@ -132,6 +133,7 @@ final class SidebarController {
             return
         }
         let id = slideID
+        isSliding = true
         Motion.drawerSlide(
             panel: view, opening: isDocked, parkOffset: CGVector(dx: -SidebarView.width, dy: 0),
             animate: [
@@ -142,7 +144,9 @@ final class SidebarController {
         ) { [weak self] in
             surfaces.forEach { $0.setSizeSyncSuspended(false) }
             guard let self, self.slideID == id else { return }
+            self.isSliding = false
             self.view.layer?.transform = CATransform3DIdentity
+            self.applyLeadWidth()
             self.settle()
         }
     }
@@ -246,7 +250,13 @@ final class SidebarController {
         } else {
             lead.setWorkspaceName(active.name)
         }
-        if !isDocked { leadWidth?.constant = lead.contentWidth }
+        applyLeadWidth()
+    }
+
+    // The slide animates this constant, so writing it mid-flight would snap the lead and the tab bar to the end.
+    private func applyLeadWidth() {
+        guard !isSliding, !isDocked else { return }
+        leadWidth?.constant = lead.contentWidth
     }
 
     private static let worktreeSymbol = "arrow.triangle.branch"
