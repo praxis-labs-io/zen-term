@@ -518,7 +518,7 @@ final class WindowController: NSObject {
             canvasHost.leadingAnchor.constraint(equalTo: sidebar.edgeAnchor),
             canvasHost.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             canvasHost.topAnchor.constraint(equalTo: container.topAnchor),
-            canvasHost.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            canvasHost.bottomAnchor.constraint(equalTo: tabBar.topAnchor),
             tabBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             tabBar.heightAnchor.constraint(equalToConstant: TabBarView.height),
             dock.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
@@ -687,7 +687,7 @@ final class WindowController: NSObject {
         return "Workspace \(number)"
     }
 
-    enum SlideEdge { case fromRight, fromLeft }
+    enum SlideEdge { case fromRight, fromLeft, fromBottom, fromTop }
 
     enum MountTransition {
         case instant
@@ -714,12 +714,21 @@ final class WindowController: NSObject {
             outgoing?.removeFromSuperview()
         case .slide(let edge):
             container.layoutSubtreeIfNeeded()
-            let dx = edge == .fromRight ? canvasHost.bounds.width : -canvasHost.bounds.width
             beginCanvasSlide()
-            Motion.slideSwap(incoming: c.view, outgoing: outgoing, dx: dx) { [weak self] in
+            Motion.slideSwap(incoming: c.view, outgoing: outgoing, offset: slideOffset(from: edge)) { [weak self] in
                 self?.detachIfInactive(outgoing)
                 self?.endCanvasSlide()
             }
+        }
+    }
+
+    private func slideOffset(from edge: SlideEdge) -> CGVector {
+        let size = canvasHost.bounds.size
+        switch edge {
+        case .fromRight: return CGVector(dx: size.width, dy: 0)
+        case .fromLeft: return CGVector(dx: -size.width, dy: 0)
+        case .fromBottom: return CGVector(dx: 0, dy: -size.height)
+        case .fromTop: return CGVector(dx: 0, dy: size.height)
         }
     }
 
@@ -874,10 +883,17 @@ final class WindowController: NSObject {
         closeModal()
         closeFloatForTabChange()
         cancelConfirm()
+        let transition = workspaceSlide(from: activeWorkspace.id, to: id)
         activeWorkspace = workspace
-        mount(.instant)
+        mount(transition)
         if let tab = workspace.activeID { visit(tab) }
         renderAttention()
+    }
+
+    private func workspaceSlide(from old: WorkspaceID, to new: WorkspaceID) -> MountTransition {
+        let ids = order.navigable
+        guard let from = ids.firstIndex(of: old), let to = ids.firstIndex(of: new) else { return .instant }
+        return .slide(from: to > from ? .fromBottom : .fromTop)
     }
 
     private func cycleTab(_ delta: Int) {
@@ -980,7 +996,7 @@ final class WindowController: NSObject {
         guard let next = workspaces.first(where: { $0.id == remaining[min(place, remaining.count - 1)] })
         else { return }
         activeWorkspace = next
-        mount(.instant)
+        mount(.slide(from: place < remaining.count ? .fromBottom : .fromTop))
         if let tab = next.activeID { visit(tab) }
         renderAttention()
     }

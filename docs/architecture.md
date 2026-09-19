@@ -189,8 +189,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   entry is never in a group. `navigable` skips ghosts; the sidebar's numbers, ⌘⌥1…9,
   ⌘⌥[ ] and a close's landing all read it.
 - **`activate(_:)` is the single path a switch goes through**: a row click, ⌘⌥1…9 and ⌘⌥[ ],
-  ⌘P, ⌘⌥T, and revealing a background tab. It swaps the canvas without
-  motion, so a newly opened workspace applies its recipe in the same turn.
+  ⌘P, ⌘⌥T, and revealing a background tab. An open workspace slides in on the y axis, from
+  below when it sits lower in `navigable`; a new one has no canvas yet, so it mounts
+  without motion and applies its recipe in the same turn. A close's landing slides the same way.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
   workspace costs nothing beyond an inactive tab.
 - **Tab ids are minted by the window**, not by the workspace, so they stay unique across a
@@ -270,7 +271,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **The sidebar owns the canvas's leading edge.** The canvas and tool floats start from
   `SidebarController.canvasLeadingAnchor`, and the tab bar starts from the collapsed
   lead's trailing edge; modals and toasts stay window-wide. Canvases mount in a host that
-  starts at the sidebar's edge and clips while a tab slides, so a slide never crosses it.
+  runs from the sidebar's edge to the tab bar's and clips while a canvas slides, so a slide
+  never crosses either.
   Docking slides through `Motion.drawerSlide`, the drawers' path, holding the active
   tab's grids so they reflow once. Its toggle sits on the window, outside the sliding
   view, so it holds one spot docked and collapsed. Rows read the window's workspaces,

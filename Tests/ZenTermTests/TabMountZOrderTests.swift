@@ -96,4 +96,49 @@ final class TabMountZOrderTests: WindowTestCase {
             "a sliding canvas stops at the sidebar's edge instead of crossing it")
         waitUntil(host.layer?.mask == nil, "the clip to lift once the slide lands")
     }
+
+    private func arrivingSlide(in host: NSView) throws -> CGSize {
+        let incoming = try XCTUnwrap(host.subviews.last, "a canvas must be mounted")
+        let slide = try XCTUnwrap(
+            incoming.layer?.animation(forKey: "motion.slide") as? CABasicAnimation, "the arriving canvas slides")
+        return try XCTUnwrap((slide.fromValue as? NSValue)?.sizeValue)
+    }
+
+    func test_switchingToAWorkspaceAbove_slidesItDownClippedAtTheTabBarsEdge_untilItLands() throws {
+        let controller = makeController()
+        let first = try XCTUnwrap(controller.workspaceIDsForTesting.first)
+        controller.handle(.newWorkspace)
+        let host = try XCTUnwrap(canvasHost(of: controller), "the window must hold a canvas host")
+        let tabBar = try XCTUnwrap(descendants(of: controller.containerForTesting).first { $0 is TabBarView })
+        waitUntil(host.layer?.mask == nil, "the new workspace to settle")
+
+        controller.activateWorkspaceForTesting(first)
+
+        let from = try arrivingSlide(in: host)
+        XCTAssertFalse(host.isFlipped)
+        XCTAssertEqual(from.width, 0, "a workspace switch moves on the y axis only")
+        XCTAssertGreaterThan(from.height, 0, "a workspace higher in the list arrives from the top")
+        let mask = try XCTUnwrap(host.layer?.mask, "the host clips while the slide runs")
+        let clip = host.convert(mask.frame, to: controller.containerForTesting)
+        XCTAssertEqual(
+            clip.minY, tabBar.frame.maxY, accuracy: 0.5,
+            "a sliding canvas stops at the tab bar's edge instead of crossing it")
+        waitUntil(host.layer?.mask == nil, "the clip to lift once the slide lands")
+    }
+
+    func test_closingAWorkspace_slidesUpTheOneBelowIt() throws {
+        let controller = makeController()
+        controller.handle(.newWorkspace)
+        let (first, second) = (controller.workspaceIDsForTesting[0], controller.workspaceIDsForTesting[1])
+        controller.activateWorkspaceForTesting(first)
+        let host = try XCTUnwrap(canvasHost(of: controller), "the window must hold a canvas host")
+        waitUntil(host.layer?.mask == nil, "the switch to settle")
+
+        controller.requestCloseWorkspace(id: first)
+
+        XCTAssertEqual(controller.activeWorkspaceIDForTesting, second)
+        let from = try arrivingSlide(in: host)
+        XCTAssertEqual(from.width, 0)
+        XCTAssertLessThan(from.height, 0, "the workspace below takes the closed one's place from the bottom")
+    }
 }
