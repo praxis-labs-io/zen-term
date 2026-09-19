@@ -246,7 +246,7 @@ final class PaneCanvasController: NSObject {
 
     /// Stored, because `updateHalo` rewrites the same state on every restructure.
     private var focusedSurfaceRendersFocused = true
-    /// Separate from `panesHoldFocus`, which the drawers own: the window hides the halo without moving focus.
+    // Separate from `panesHoldFocus`, which the drawers own: the window hides the halo without moving focus.
     private var haloIsVisible = true
 
     func setHaloVisible(_ visible: Bool) {

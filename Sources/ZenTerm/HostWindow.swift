@@ -36,7 +36,7 @@ final class HostWindow: NSWindow {
         setFrame(target, display: true)
     }
 
-    /// Restores a saved frame that the minimum may have outgrown since, clamped to it and kept on screen.
+    // A frame saved while the sidebar was collapsed can be narrower than the minimum docking then raised.
     func setFrameWithinLimits(_ frame: NSRect, animate: Bool) {
         var target = frame
         let floor = frameRect(forContentRect: NSRect(origin: .zero, size: contentMinSize)).size

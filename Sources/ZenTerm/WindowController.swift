@@ -797,7 +797,6 @@ final class WindowController: NSObject {
         focusReturn = sidebar.hasFocus ? sidebar.focusedStop : nil
     }
 
-    /// A card or confirm hands focus back where it was opened from, as a palette does elsewhere.
     private func returnFocusAfterOverlay() {
         let stop = focusReturn
         focusReturn = nil
@@ -810,7 +809,6 @@ final class WindowController: NSObject {
         syncHalo()
     }
 
-    /// The halo answers where the keyboard is: out while the sidebar holds focus, or the window isn't key.
     private func syncHalo() {
         activeController?.setHaloVisible(!sidebar.hasFocus && windowIsKey)
     }

@@ -5,7 +5,6 @@ enum SidebarRowID: Hashable {
     case ghost(String)
 }
 
-/// Where keyboard focus sat in the sidebar, so an overlay can hand it back.
 enum SidebarFocusStop: Equatable {
     case row(SidebarRowID)
     case agent(SurfaceID)
@@ -260,7 +259,6 @@ final class SidebarView: NSView {
         hoverRows.forEach { $0.refreshHover() }
     }
 
-    /// Call with an overlay that covers the sidebar: menus and cards are sibling views, so the rows still hover under them.
     func setHoverCovered(_ covered: Bool, exempting exempt: NSView? = nil) {
         hoverCovers = max(0, hoverCovers + (covered ? 1 : -1))
         hoverExempt = covered ? exempt : nil

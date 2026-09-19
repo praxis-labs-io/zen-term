@@ -1,6 +1,5 @@
 import AppKit
 
-/// A scroll view that fades whichever edge hides content, as the tab bar fades its ends.
 final class FadingScrollView: NSScrollView {
     static let fadeDepth: CGFloat = 16
 

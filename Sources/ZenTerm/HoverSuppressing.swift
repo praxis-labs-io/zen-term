@@ -1,10 +1,10 @@
 import AppKit
 
-/// A view under an overlay that covers it without taking its tracking area's events, so it must be told to stop hovering.
+// Cards and menus are sibling views, not windows, so the views they cover keep getting their tracking area's events.
 @MainActor
 protocol HoverSuppressing: NSView {
     func setHoverSuppressed(_ suppressed: Bool)
-    /// Re-reads the pointer. Rows that move under a still cursor never get `mouseExited`, so hover sticks on several.
+    // A row that moves under a still cursor never gets `mouseExited`, so hover sticks on every row that passed under it.
     func refreshHover()
 }
 

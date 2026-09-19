@@ -1,6 +1,6 @@
 import AppKit
 
-/// The chrome's one state-to-color mapping. Surfaces differ in which states they show, never in the hue they use.
+// One mapping for the whole chrome: surfaces differ in which states they show, never in the hue.
 enum AttentionTone {
     case waiting, working, done, failed, idle
 

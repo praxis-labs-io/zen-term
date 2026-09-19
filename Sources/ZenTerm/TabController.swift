@@ -211,7 +211,6 @@ final class TabController: NSObject {
     var onFocusChanged: (() -> Void)?
 
     var focusPastLeftEdge: (() -> Bool)?
-    /// A second line for the no-neighbour toast, when the window can offer a way past that edge.
     var noNeighborHint: ((Direction) -> String?)?
 
     var onNotification: ((SurfaceID, TerminalNotification) -> Void)?
