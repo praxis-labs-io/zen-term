@@ -418,6 +418,23 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(controller.window.firstResponder === first.view)
     }
 
+    func test_focusedRowsWorkspaceClosing_returnsFocusToThePane() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+        _ = controller.addWorkspaceForTesting(name: "api", folder: root)
+        let background = try XCTUnwrap(surfaces.last)
+        try nav(.left, in: controller)
+        controller.window.sendEvent(key(.down, in: controller))
+        XCTAssertTrue(controller.window.firstResponder === controller.sidebarForTesting.view.rowsForTesting[1])
+
+        background.delegate?.surfaceDidExit(background, code: 0)
+
+        XCTAssertEqual(controller.sidebarForTesting.view.rowsForTesting.count, 1, "the api workspace closed")
+        XCTAssertTrue(controller.window.firstResponder === pane.view)
+    }
+
     func test_return_onAFocusedRow_reportsItsWorkspace() throws {
         let controller = makeController()
         let api = controller.addWorkspaceForTesting(name: "api", folder: root)

@@ -43,7 +43,9 @@ final class SidebarView: NSView {
 
     func render(_ items: [SidebarRowItem]) {
         let ids = Set(items.map(\.id))
+        var removedFocusedRow = false
         for (id, row) in rows where !ids.contains(id) {
+            removedFocusedRow = removedFocusedRow || KeyboardFocus.isFocused(row, in: window)
             row.removeFromSuperview()
             rows[id] = nil
         }
@@ -58,6 +60,7 @@ final class SidebarView: NSView {
             row.setDetail(item.branch)
             row.setSelected(item.isActive)
         }
+        if removedFocusedRow { onLeave?() }
     }
 
     private func row(for item: SidebarRowItem) -> SettingsNavRow {
