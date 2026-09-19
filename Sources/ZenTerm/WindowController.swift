@@ -14,6 +14,7 @@ final class WindowController: NSObject {
     private var attentionCards: [TabID: ToastView] = [:]
     // A card is keyed by the tab it sits on but answers one surface, which may be a drawer or a float.
     private var cardSurfaces: [TabID: SurfaceID] = [:]
+    private var cardTitles: [TabID: () -> String] = [:]
     private let attention = AttentionStore()
     private static let commandCompletionThreshold: TimeInterval = 10
     private var nextTabID = 1
@@ -1966,8 +1967,9 @@ final class WindowController: NSObject {
                     if self.floats.activeID != spec.id { self.handle(.toggleToolFloat(spec.id)) }
                 })
             self.presentWaitingToast(
-                for: target, title: title, titleTail: tail, message: message, surface: surface,
-                destination: destination)
+                for: target,
+                title: { [weak self] in owner == nil ? spec.title : self?.attentionTitle(of: target) ?? spec.title },
+                titleTail: tail, message: message, surface: surface, destination: destination)
             if self.attentionSnapshot(surface, in: target) != before { self.renderAttention() }
         }
     }
@@ -1992,7 +1994,7 @@ final class WindowController: NSObject {
 
             guard !seen else { return }
             self.presentWaitingToast(
-                for: id, title: self.attentionTitle(of: id), titleTail: self.drawerTail(edge),
+                for: id, title: { [weak self] in self?.attentionTitle(of: id) ?? "" }, titleTail: self.drawerTail(edge),
                 message: message, surface: surface,
                 destination: edge.map { self.drawerDestination($0, in: id) })
             if self.attentionSnapshot(surface, in: id) != before { self.renderAttention() }
@@ -2029,6 +2031,7 @@ final class WindowController: NSObject {
             variant: result.exitCode.map { $0 == 0 ? .positive : .warning } ?? .positive,
             title: attentionTitle(of: id), titleTail: drawerTail(edge),
             message: Self.commandResultMessage(result))
+        let title = { [weak self] in self?.attentionTitle(of: id) ?? "" }
         let destination =
             edge.map { drawerDestination($0, in: id) }
             ?? CardDestination(
@@ -2043,7 +2046,7 @@ final class WindowController: NSObject {
             },
         ]
         attentionCards[id] = mountAttentionToast(
-            for: id, surface: surface, content: content, actions: actions,
+            for: id, surface: surface, content: content, title: title, actions: actions,
             autoDismiss: GeneralConfig.current.completionToast == .auto)
     }
 
@@ -2070,12 +2073,12 @@ final class WindowController: NSObject {
     }
 
     private func presentWaitingToast(
-        for id: TabID, title: String, titleTail: String? = nil, message: String, surface: SurfaceID?,
+        for id: TabID, title: @escaping () -> String, titleTail: String? = nil, message: String, surface: SurfaceID?,
         destination: CardDestination? = nil
     ) {
         if let old = attentionCards[id] { toasts.dismiss(old) }
         let content = ToastContent(
-            variant: .info, title: title, titleTail: titleTail, message: message, icon: "bell.fill")
+            variant: .info, title: title(), titleTail: titleTail, message: message, icon: "bell.fill")
         let destination =
             destination
             ?? CardDestination(
@@ -2090,7 +2093,7 @@ final class WindowController: NSObject {
             },
         ]
         attentionCards[id] = mountAttentionToast(
-            for: id, surface: surface, content: content, actions: actions,
+            for: id, surface: surface, content: content, title: title, actions: actions,
             autoDismiss: GeneralConfig.current.attentionToast == .auto)
     }
 
@@ -2146,16 +2149,18 @@ final class WindowController: NSObject {
     }
 
     private func mountAttentionToast(
-        for id: TabID, surface: SurfaceID? = nil, content: ToastContent, actions: [ToastAction],
-        autoDismiss: Bool
+        for id: TabID, surface: SurfaceID? = nil, content: ToastContent, title: @escaping () -> String,
+        actions: [ToastAction], autoDismiss: Bool
     ) -> ToastView {
         let toast = toasts.showSticky(content, actions: actions, autoDismiss: autoDismiss)
         cardSurfaces[id] = surface
+        cardTitles[id] = title
         toast.onClose = { [weak self] in self?.answer(id, surface: surface) }
         toast.onDismissed = { [weak self, weak toast] in
             guard let self, let toast, self.attentionCards[id] === toast else { return }
             self.attentionCards[id] = nil
             self.cardSurfaces[id] = nil
+            self.cardTitles[id] = nil
         }
         return toast
     }
@@ -2338,6 +2343,7 @@ final class WindowController: NSObject {
 
     private func takeDownCard(_ id: TabID) {
         cardSurfaces[id] = nil
+        cardTitles[id] = nil
         if let toast = attentionCards.removeValue(forKey: id) { toasts.dismiss(toast) }
         AgentNotifier.shared.clear(windowID: windowID, tabID: id)
     }
@@ -2361,7 +2367,10 @@ final class WindowController: NSObject {
         }
         tabBar.render(items)
         sidebar.render(workspaces: workspaces, active: activeWorkspace)
-        attentionCards.values.forEach { $0.refreshShortcuts() }
+        for (id, card) in attentionCards {
+            cardTitles[id].map { card.setTitle($0()) }
+            card.refreshShortcuts()
+        }
     }
 
     private func switchShortcut(for id: TabID) -> String {

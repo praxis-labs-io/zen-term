@@ -380,4 +380,24 @@ final class WindowControllerWorkspaceTests: WindowTestCase {
         let card = try XCTUnwrap(c.waitingToastForTesting(tab: home))
         XCTAssertEqual(keycaps(in: card), [], "⌘⌥1 would land on the other tab, so it isn't offered")
     }
+
+    func test_aCardRaisedWithOneWorkspace_gainsItsWorkspaceName_whenASecondOpens() throws {
+        let c = makeWindow()
+        let home = try XCTUnwrap(c.activeTabIDForTesting)
+        c.newTabForTesting()
+        c.notifyAgentForTesting(tab: home, message: "needs you")
+        drainMainQueue()
+        let card = try XCTUnwrap(c.waitingToastForTesting(tab: home))
+        XCTAssertFalse(texts(in: card).contains { $0.hasPrefix("Home: ") })
+
+        c.openWorkspaceForTesting(
+            Workspace(title: "Other", path: root, main: nil, right: nil, bottom: nil, focus: .main, env: [:]))
+
+        XCTAssertTrue(texts(in: card).contains { $0.hasPrefix("Home: ") }, "the card now says which workspace asked")
+
+        c.closeTabForTesting(tab: try XCTUnwrap(c.activeTabIDForTesting))
+
+        XCTAssertEqual(c.workspaceIDsForTesting.count, 1)
+        XCTAssertFalse(texts(in: card).contains { $0.hasPrefix("Home: ") }, "back to one workspace, the prefix goes")
+    }
 }
