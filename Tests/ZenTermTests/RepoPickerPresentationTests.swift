@@ -379,8 +379,8 @@ final class RepoPickerPresentationTests: WindowTestCase {
         waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
         let picker = try XCTUnwrap(pickers(in: c).first)
         XCTAssertEqual(
-            workspaceRows(in: picker).count, 3,
-            "the ＋ row and a row per workspace, all present when the card first appears")
+            workspaceRows(in: picker).count, 4,
+            "the two action rows and a row per workspace, all present when the card first appears")
     }
 
     func test_secondPressBeforeTheCardArrives_leavesNoPicker() throws {

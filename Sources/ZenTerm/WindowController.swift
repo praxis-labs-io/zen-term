@@ -955,6 +955,7 @@ final class WindowController: NSObject {
                 isOpen: { [weak self] path in self?.openWorkspace(at: path) != nil },
                 onChoose: { [weak self] ws in self?.openWorkspace(ws) },
                 onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
+                onNewWorkspace: { [weak self] in self?.newWorkspace() },
                 onDismiss: { [weak self] in self?.closeModal() }
             )
             self.presentModal(picker, kind: .repoPicker)

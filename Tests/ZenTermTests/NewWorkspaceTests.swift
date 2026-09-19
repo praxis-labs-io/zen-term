@@ -160,6 +160,36 @@ final class NewWorkspaceTests: WindowTestCase {
             "a workspace without a config entry never counts as the configured one being open")
     }
 
+    func test_thePickersFirstRow_showsCmdOptT_andClickingItOpensAWorkspaceInTheFocusedPanesFolder() throws {
+        inheritingCWD()
+        let c = makeWindow()
+        spawned.forEach { $0.currentDirectory = root }
+        let picker = try openPicker(in: c)
+        c.window.layoutIfNeeded()
+        let row = try XCTUnwrap(picker.rowViews.first as? RepoPickerOverlay.ActionRowView)
+        XCTAssertEqual(row.title, "New Workspace")
+        XCTAssertEqual(descendants(of: row).compactMap { ($0 as? KeycapView)?.shortcut }, ["⌘⌥T"])
+
+        click(row)
+
+        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 2"])
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting.last)
+        XCTAssertEqual(try launchedFolder(of: c)?.standardizedFileURL, root.standardizedFileURL)
+        XCTAssertNil(pickerIn(c), "the picker closes")
+    }
+
+    private func click(_ row: SelectableRowView) {
+        let inside = CGPoint(x: row.bounds.midX, y: row.bounds.midY)
+        func event(_ type: NSEvent.EventType) -> NSEvent {
+            NSEvent.mouseEvent(
+                with: type, location: row.convert(inside, to: nil), modifierFlags: [], timestamp: 0,
+                windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0, clickCount: 1,
+                pressure: 1)!
+        }
+        row.mouseDown(with: event(.leftMouseDown))
+        row.mouseUp(with: event(.leftMouseUp))
+    }
+
     func test_cmdOptT_withThePickerOpen_opensAWorkspace_andClosesThePicker() throws {
         let c = makeWindow()
         _ = try openPicker(in: c)
