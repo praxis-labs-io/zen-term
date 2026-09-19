@@ -168,11 +168,36 @@ final class SidebarController {
 
     var hasFocus: Bool { view.hasFocus }
 
+    enum NewWorktreeRefusal: CaseIterable {
+        case worktree, unconfigured, notARepo
+
+        var message: String {
+            let chord = CommandCatalog.spec(for: .createWorktree).shortcut ?? ""
+            let picker = CommandCatalog.spec(for: .toggleRepoPicker).shortcut ?? ""
+            switch self {
+            case .worktree: return "A worktree starts from its workspace.\nPress \(chord) on the workspace above it."
+            case .unconfigured: return "This workspace isn't configured.\nSet one up with Add Workspace… in \(picker)."
+            case .notARepo: return "This workspace isn't a git repository.\nWorktrees need a git repository."
+            }
+        }
+    }
+
     var focusedWorktreeParent: SidebarRowID? {
         guard let row = view.focusedRow, let entry = entries.first(where: { $0.row == row }),
             Self.rowItem(entry).makesWorktrees
         else { return nil }
         return row
+    }
+
+    var focusedWorktreeRefusal: NewWorktreeRefusal? {
+        guard let row = view.focusedRow, let entry = entries.first(where: { $0.row == row }),
+            !Self.rowItem(entry).makesWorktrees
+        else { return nil }
+        switch entry.kind {
+        case .worktree: return .worktree
+        case .workspace where !entry.isConfigured: return .unconfigured
+        case .workspace, .ghost: return .notARepo
+        }
     }
 
     func focusActiveRow() {

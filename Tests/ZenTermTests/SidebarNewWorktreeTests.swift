@@ -302,7 +302,13 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         _ = try newWorktreeCard(in: c)
     }
 
-    func test_optReturn_onARowThatMakesNoWorktrees_opensNothing_andNeverReachesThePane() throws {
+    private func toastMessages(in c: WindowController) -> [String] {
+        modals(ToastView.self, in: c).flatMap { toast in
+            descendants(of: toast).compactMap { $0 as? NSTextField }.map(\.stringValue)
+        }
+    }
+
+    func test_optReturn_onARowWithNoConfigEntry_opensNothing_toastsWhy_andNeverReachesThePane() throws {
         let c = makeWindow()
         c.window.makeKeyAndOrderFront(nil)
         _ = try openRepoWorkspace(in: c)
@@ -310,12 +316,41 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertTrue(c.window.firstResponder === rows(of: c).first)
 
         XCTAssertNil(interceptor(for: c).route(try optionReturn(in: c)))
+        XCTAssertNil(interceptor(for: c).route(try optionReturn(in: c)), "a held chord repeats")
 
         var loaded = false
         ConfigLoader.loadWorkspaces { _ in loaded = true }
         waitUntil(loaded, "any load the chord started to land")
         XCTAssertTrue(modals(NewWorktreeOverlay.self, in: c).isEmpty)
-        XCTAssertTrue(modals(ToastView.self, in: c).isEmpty, "a row with no ＋ does nothing at all")
+        XCTAssertEqual(modals(ToastView.self, in: c).count, 1, "one card, however long the chord is held")
+        let expected = "This workspace isn't configured.\nSet one up with Add Workspace… in ⌘P."
+        XCTAssertTrue(toastMessages(in: c).contains(expected), "\(toastMessages(in: c))")
+    }
+
+    func test_optReturn_onAFocusedWorktreeRow_toastsWhichRowMakesIt() throws {
+        let c = makeWindow()
+        c.window.makeKeyAndOrderFront(nil)
+        try create("feature/nested", from: try openRepoWorkspace(in: c), in: c)
+        c.handle(.focusSidebar)
+        let worktree = rows(of: c)[2]
+        worktree.takeKeyboardFocus()
+        XCTAssertTrue(c.window.firstResponder === worktree)
+
+        XCTAssertNil(interceptor(for: c).route(try optionReturn(in: c)))
+
+        let expected = "A worktree starts from its workspace.\nPress ⌥⏎ on the workspace above it."
+        XCTAssertTrue(toastMessages(in: c).contains(expected), "\(toastMessages(in: c))")
+    }
+
+    func test_everyNoNewWorktreeLine_fitsTheToastWithoutWrapping() {
+        for refusal in SidebarController.NewWorktreeRefusal.allCases {
+            for line in refusal.message.split(separator: "\n") {
+                let width = (String(line) as NSString).size(withAttributes: [.font: ToastView.messageFont]).width
+                XCTAssertLessThanOrEqual(
+                    width, ToastView.messageMaxWidth,
+                    "wraps at \(Int(width))pt > \(Int(ToastView.messageMaxWidth))pt: \(line)")
+            }
+        }
     }
 
     func test_optReturn_withThePaneFocused_stillReachesThePane() throws {

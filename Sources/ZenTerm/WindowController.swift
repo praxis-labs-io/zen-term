@@ -308,6 +308,15 @@ final class WindowController: NSObject {
                 message: "\(activeFloatName ?? "This tool") is open. Close it to get back to your panes."))
     }
 
+    private var lastNoNewWorktreeToast: Date?
+
+    private func toastNoNewWorktree(_ refusal: SidebarController.NewWorktreeRefusal) {
+        let now = Date()
+        if let last = lastNoNewWorktreeToast, now.timeIntervalSince(last) < Self.floatBlockToastThrottle { return }
+        lastNoNewWorktreeToast = now
+        toasts.show(ToastContent(variant: .info, title: "New Worktree", message: refusal.message))
+    }
+
     private var activeController: TabController? { activeWorkspace.activeController }
 
     private var allTabIDs: [TabID] { workspaces.flatMap(\.tabIDs) }
@@ -1799,7 +1808,12 @@ final class WindowController: NSObject {
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
-        case .createWorktree: sidebar.focusedWorktreeParent.map(createWorktreeFromSidebar)
+        case .createWorktree:
+            if let row = sidebar.focusedWorktreeParent {
+                createWorktreeFromSidebar(row)
+            } else if let refusal = sidebar.focusedWorktreeRefusal {
+                toastNoNewWorktree(refusal)
+            }
         case .removeWorktree: break
         case .toggleCommandPalette: toggleCommandPalette()
         case .openSettings: openSettings()
