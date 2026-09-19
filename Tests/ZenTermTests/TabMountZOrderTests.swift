@@ -80,7 +80,7 @@ final class TabMountZOrderTests: WindowTestCase {
             "the canvas host sits at the back of the window, below a float card dismissing above it")
     }
 
-    func test_aTabSlide_isClippedAtTheDockedSidebarsEdge_untilItLands() throws {
+    func test_aTabSlide_fadesOutUnderTheDockedSidebar_untilItLands() throws {
         let controller = makeController()
         if !controller.sidebarForTesting.isDocked { controller.handle(.toggleSidebar) }
         let sidebar = controller.sidebarForTesting.view
@@ -91,12 +91,11 @@ final class TabMountZOrderTests: WindowTestCase {
 
         let mask = try XCTUnwrap(host.layer?.mask, "the host clips while the slide runs")
         let clip = host.convert(mask.frame, to: controller.containerForTesting)
+        let depth = try fadeDepth(of: mask, across: clip.width)
+        XCTAssertEqual(depth, WindowController.slideFadeDepth, accuracy: 0.5)
         XCTAssertEqual(
-            clip.minX, sidebar.frame.maxX, accuracy: 0.5,
-            "a sliding canvas stops at the sidebar's edge instead of crossing it")
-        XCTAssertEqual(
-            try fadeDepth(of: mask, across: clip.width), ChromeMetrics.panelGap, accuracy: 0.5,
-            "the edge softens across the gap to the pane, never over the pane itself")
+            clip.minX + depth, sidebar.frame.maxX, accuracy: 0.5,
+            "the page is opaque up to the sidebar's edge and fades out only under the sidebar")
         waitUntil(host.layer?.mask == nil, "the clip to lift once the slide lands")
     }
 
@@ -115,7 +114,7 @@ final class TabMountZOrderTests: WindowTestCase {
         return try XCTUnwrap((slide.fromValue as? NSValue)?.sizeValue)
     }
 
-    func test_switchingToAWorkspaceAbove_slidesItDownClippedAtTheTabBarsEdge_untilItLands() throws {
+    func test_switchingToAWorkspaceAbove_slidesItDown_fadingOutUnderTheTabBar_untilItLands() throws {
         let controller = makeController()
         let first = try XCTUnwrap(controller.workspaceIDsForTesting.first)
         controller.handle(.newWorkspace)
@@ -131,13 +130,12 @@ final class TabMountZOrderTests: WindowTestCase {
         XCTAssertGreaterThan(from.height, 0, "a workspace higher in the list arrives from the top")
         let mask = try XCTUnwrap(host.layer?.mask, "the host clips while the slide runs")
         let clip = host.convert(mask.frame, to: controller.containerForTesting)
-        XCTAssertEqual(
-            clip.minY, tabBar.frame.maxY, accuracy: 0.5,
-            "a sliding canvas stops at the tab bar's edge instead of crossing it")
         XCTAssertFalse(try XCTUnwrap(host.layer).contentsAreFlipped(), "the fade's start is the bottom edge")
+        let depth = try fadeDepth(of: mask, across: clip.height)
+        XCTAssertEqual(depth, WindowController.slideFadeDepth, accuracy: 0.5)
         XCTAssertEqual(
-            try fadeDepth(of: mask, across: clip.height), ChromeMetrics.footerGap, accuracy: 0.5,
-            "the edge softens across the gap to the pane, never over the pane itself")
+            clip.minY + depth, tabBar.frame.maxY, accuracy: 0.5,
+            "the page is opaque up to the tab bar's edge and fades out only under the tab bar")
         waitUntil(host.layer?.mask == nil, "the clip to lift once the slide lands")
     }
 

@@ -187,6 +187,7 @@ final class WindowController: NSObject {
     private var activeCanvasSlides = 0
     private let horizontalSlideFade = EdgeFade(axis: .horizontal)
     private let verticalSlideFade = EdgeFade(axis: .vertical)
+    static let slideFadeDepth: CGFloat = 20
 
     private enum ModalKind {
         case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm, reportIssue
@@ -741,12 +742,18 @@ final class WindowController: NSObject {
 
     private func slideFade(crossing edge: SlideEdge) -> EdgeFade {
         let bounds = canvasHost.bounds
+        let depth = Self.slideFadeDepth
         switch edge {
         case .fromRight, .fromLeft:
-            horizontalSlideFade.update(frame: bounds, start: sidebar.isDocked ? ChromeMetrics.panelGap : 0, end: 0)
+            let reach = sidebar.isDocked ? depth : 0
+            horizontalSlideFade.update(
+                frame: CGRect(x: -reach, y: 0, width: bounds.width + reach, height: bounds.height), start: reach,
+                end: 0)
             return horizontalSlideFade
         case .fromBottom, .fromTop:
-            verticalSlideFade.update(frame: bounds, start: ChromeMetrics.footerGap, end: 0)
+            verticalSlideFade.update(
+                frame: CGRect(x: 0, y: -depth, width: bounds.width, height: bounds.height + depth), start: depth,
+                end: 0)
             return verticalSlideFade
         }
     }

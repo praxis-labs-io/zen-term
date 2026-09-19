@@ -271,8 +271,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **The sidebar owns the canvas's leading edge.** The canvas and tool floats start from
   `SidebarController.canvasLeadingAnchor`, and the tab bar starts from the collapsed
   lead's trailing edge; modals and toasts stay window-wide. Canvases mount in a host that
-  runs from the sidebar's edge to the tab bar's and, while a canvas slides, fades out across
-  the gap before that edge (`EdgeFade`), so a slide never crosses either.
+  runs from the sidebar's edge to the tab bar's. While a canvas slides, the host's mask
+  (`EdgeFade`) keeps it opaque to that edge and fades it out just past it, under the chrome;
+  resting content is never faded, so nothing jumps when the mask lifts.
   Docking slides through `Motion.drawerSlide`, the drawers' path, holding the active
   tab's grids so they reflow once. Its toggle sits on the window, outside the sliding
   view, so it holds one spot docked and collapsed. Rows read the window's workspaces,
