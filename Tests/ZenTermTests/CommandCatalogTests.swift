@@ -23,9 +23,10 @@ final class CommandCatalogTests: XCTestCase {
         XCTAssertEqual(
             names,
             [
-                "Open Workspace Picker", "New Tool Float…", "Settings…", "Reload Config",
+                "New Tool Float…", "Settings…", "Reload Config",
                 "Check for Updates",
                 "Report an Issue…",
+                "Open Workspace Picker", "Previous Workspace", "Next Workspace",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "New Tab", "Previous Tab", "Next Tab", "Move Tab Left", "Move Tab Right",
                 "Rename Tab…", "Close Tab",
@@ -42,7 +43,6 @@ final class CommandCatalogTests: XCTestCase {
                 "Toggle Sidebar", "Fill Screen", "Close Window",
                 "Increase Font Size", "Decrease Font Size", "Reset Font Size",
                 "Dismiss Notice", "Dismiss All Notices",
-                "Previous Workspace", "Next Workspace",
             ])
     }
 
@@ -70,7 +70,7 @@ final class CommandCatalogTests: XCTestCase {
             XCTAssertFalse(seen.contains(category), "category \(category) is not contiguous")
             seen.append(category)
         }
-        XCTAssertEqual(seen, ["Tools", "Config", "Help", "Drawers", "Tabs", "Panes", "Window", "Workspaces"])
+        XCTAssertEqual(seen, ["Tools", "Config", "Help", "Workspaces", "Drawers", "Tabs", "Panes", "Window"])
     }
 
     func test_selectTab_expandsPerTab() {
