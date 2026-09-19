@@ -169,6 +169,13 @@ final class SidebarController {
 
     var hasFocus: Bool { view.hasFocus }
 
+    var focusedWorktreeParent: WorkspaceID? {
+        guard let row = view.focusedRow, let entry = entries.first(where: { $0.row == row }),
+            Self.rowItem(entry).makesWorktrees, case .workspace(let id) = row
+        else { return nil }
+        return id
+    }
+
     func focusActiveRow() {
         guard let active = entries.first(where: \.isActive) else { return }
         view.focusRow(active.row)

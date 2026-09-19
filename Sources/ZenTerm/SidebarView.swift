@@ -117,7 +117,9 @@ final class SidebarView: NSView {
             ) { [weak self] in self?.onNewWorktree(id) })
     }
 
-    var hasFocus: Bool { rows.values.contains { KeyboardFocus.isFocused($0, in: window) } }
+    var hasFocus: Bool { focusedRow != nil }
+
+    var focusedRow: SidebarRowID? { rows.first { KeyboardFocus.isFocused($0.value, in: window) }?.key }
 
     func focusRow(_ id: SidebarRowID) {
         rows[id]?.takeKeyboardFocus()

@@ -178,6 +178,63 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertNil(rows(of: c)[2].hoverAccessory, "a worktree is made from its workspace")
     }
 
+    private func interceptor(for c: WindowController) -> KeyInterceptor {
+        let keys = KeyInterceptor()
+        keys.setKeymap(KeymapDefaults.map)
+        keys.onReservedChord = { c.handle($0) }
+        keys.passThroughGuard = { _, action in
+            PickerChordGuard.shouldPassThrough(
+                action: action, repoPickerIsOpen: c.isRepoPickerOpen, sidebarHasFocus: c.isSidebarFocused)
+        }
+        return keys
+    }
+
+    private func optionReturn(in c: WindowController) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.option], timestamp: 0,
+                windowNumber: c.window.windowNumber, context: nil, characters: "\r",
+                charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36))
+    }
+
+    func test_optReturn_onAFocusedWorkspaceRow_opensNewWorktree() throws {
+        let c = makeWindow()
+        c.window.makeKeyAndOrderFront(nil)
+        _ = try openRepoWorkspace(in: c)
+        c.activateWorkspaceForTesting(try XCTUnwrap(c.workspaceIDsForTesting.last))
+        c.handle(.focusSidebar)
+        XCTAssertTrue(c.window.firstResponder === rows(of: c).last)
+
+        XCTAssertNil(interceptor(for: c).route(try optionReturn(in: c)), "the sidebar claims the chord")
+
+        _ = try newWorktreeCard(in: c)
+    }
+
+    func test_optReturn_onARowThatMakesNoWorktrees_opensNothing_andNeverReachesThePane() throws {
+        let c = makeWindow()
+        c.window.makeKeyAndOrderFront(nil)
+        _ = try openRepoWorkspace(in: c)
+        c.handle(.focusSidebar)
+        XCTAssertTrue(c.window.firstResponder === rows(of: c).first)
+
+        XCTAssertNil(interceptor(for: c).route(try optionReturn(in: c)))
+
+        var loaded = false
+        ConfigLoader.loadWorkspaces { _ in loaded = true }
+        waitUntil(loaded, "any load the chord started to land")
+        XCTAssertTrue(modals(NewWorktreeOverlay.self, in: c).isEmpty)
+        XCTAssertTrue(modals(ToastView.self, in: c).isEmpty, "a row with no ＋ does nothing at all")
+    }
+
+    func test_optReturn_withThePaneFocused_stillReachesThePane() throws {
+        let c = makeWindow()
+        c.window.makeKeyAndOrderFront(nil)
+        _ = try openRepoWorkspace(in: c)
+        let event = try optionReturn(in: c)
+
+        XCTAssertTrue(interceptor(for: c).route(event) === event)
+    }
+
     private func drainGitStatus() {
         var landed = false
         GitRepoStatus.refresh([repo]) { landed = true }

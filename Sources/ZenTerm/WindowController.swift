@@ -283,6 +283,8 @@ final class WindowController: NSObject {
 
     var isRepoPickerOpen: Bool { modal?.kind == .repoPicker }
 
+    var isSidebarFocused: Bool { sidebar.hasFocus }
+
     private var activeFloatName: String? {
         floats.activeID.flatMap(ToolFloatCatalog.byID)
             .map { $0.title.replacingOccurrences(of: "Open ", with: "") }
@@ -1774,7 +1776,8 @@ final class WindowController: NSObject {
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
-        case .createWorktree, .removeWorktree: break
+        case .createWorktree: sidebar.focusedWorktreeParent.map(createWorktreeFromSidebar)
+        case .removeWorktree: break
         case .toggleCommandPalette: toggleCommandPalette()
         case .openSettings: openSettings()
         case .reportIssue: openReportIssue()
