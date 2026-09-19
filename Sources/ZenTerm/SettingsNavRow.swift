@@ -28,6 +28,9 @@ final class SettingsNavRow: NSView {
         wantsLayer = true
         layer?.cornerRadius = 6
         label.stringValue = title
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityLabel(title)
         label.font = .systemFont(ofSize: 13)
         label.lineBreakMode = .byTruncatingTail
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -54,10 +57,14 @@ final class SettingsNavRow: NSView {
 
     func setSelected(_ selected: Bool) {
         isSelected = selected
+        setAccessibilitySelected(selected)
         refreshFill()
     }
 
-    func setDetail(_ detail: String?) { detailLabel.stringValue = detail ?? "" }
+    func setDetail(_ detail: String?) {
+        detailLabel.stringValue = detail ?? ""
+        setAccessibilityValue(detail)
+    }
 
     var detailForTesting: String { detailLabel.stringValue }
 
@@ -107,6 +114,8 @@ final class SettingsNavRow: NSView {
         isHovered = false
         refreshFill()
     }
+
+    override func accessibilityPerformPress() -> Bool { onActivate(); return true }
 
     override func mouseDown(with event: NSEvent) {
         if focusesOnClick { window?.makeFirstResponder(self) }

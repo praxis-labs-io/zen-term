@@ -113,6 +113,24 @@ final class SettingsNavRowTests: WindowTestCase {
         override var acceptsFirstResponder: Bool { true }
     }
 
+    func test_accessibility_announcesAButtonWithItsTitleDetailAndSelection() {
+        var activations = 0
+        let (row, _) = mountedRow { activations += 1 }
+        row.setDetail("main")
+        row.setSelected(true)
+
+        XCTAssertTrue(row.isAccessibilityElement())
+        XCTAssertEqual(row.accessibilityRole(), .button)
+        XCTAssertEqual(row.accessibilityLabel(), "Terminal")
+        XCTAssertEqual(row.accessibilityValue() as? String, "main")
+        XCTAssertTrue(row.isAccessibilitySelected())
+        row.setSelected(false)
+        XCTAssertFalse(row.isAccessibilitySelected())
+
+        XCTAssertTrue(row.accessibilityPerformPress())
+        XCTAssertEqual(activations, 1)
+    }
+
     func test_return_andKeypadEnter_callOnReturn() {
         let (row, window) = mountedRow()
         var returns = 0
