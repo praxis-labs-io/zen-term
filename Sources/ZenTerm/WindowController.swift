@@ -903,9 +903,11 @@ final class WindowController: NSObject {
 
     private func closeWorkspace(_ workspace: WorkspaceController) {
         Log.info("workspace closed", category: .workspace)
-        workspaces.removeAll { $0 === workspace }
-        guard let next = workspaces.first else { window.close(); return }
+        guard let index = workspaces.firstIndex(where: { $0 === workspace }) else { return }
+        workspaces.remove(at: index)
+        guard !workspaces.isEmpty else { window.close(); return }
         guard workspace === activeWorkspace else { renderAttention(); return }
+        let next = workspaces[min(index, workspaces.count - 1)]
         activeWorkspace = next
         mount(.instant)
         if let tab = next.activeID { visit(tab) }
