@@ -267,8 +267,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **Drawers are tiled.** Sizes are multiplier constraints at `.defaultHigh`. A drawer
   slides in at its final size while the canvas resizes, so the terminal reflows once.
 - **Focus Mode is strict:** split, nav, resize and drawer toggles raise a toast.
-- **The sidebar owns the canvas's leading edge.** The canvas, tool floats and tab bar
-  start from `SidebarController.canvasLeadingAnchor`; modals and toasts stay window-wide.
+- **The sidebar owns the canvas's leading edge.** The canvas and tool floats start from
+  `SidebarController.canvasLeadingAnchor`, and the tab bar starts from the collapsed
+  lead's trailing edge; modals and toasts stay window-wide.
   Docking slides through `Motion.drawerSlide`, the drawers' path, holding the active
   tab's grids so they reflow once. Its toggle sits on the window, outside the sliding
   view, so it holds one spot docked and collapsed. Rows read the window's workspaces,
