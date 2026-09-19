@@ -180,8 +180,8 @@ final class SidebarController {
         case worktree, unconfigured, notARepo, agent
 
         var message: String {
-            let chord = CommandCatalog.spec(for: .createWorktree).shortcut ?? ""
-            let picker = CommandCatalog.spec(for: .toggleRepoPicker).shortcut ?? ""
+            let chord = CommandCatalog.spec(for: .createWorktree).shortcut
+            let picker = CommandCatalog.spec(for: .toggleRepoPicker).shortcut
             switch self {
             case .worktree: return "A worktree starts from its workspace.\nPress \(chord) on the workspace above it."
             case .unconfigured: return "This workspace isn't configured.\nSet one up with Add Workspace… in \(picker)."
