@@ -244,6 +244,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   tab's grids so they reflow once. Its toggle sits on the window, outside the sliding
   view, so it holds one spot docked and collapsed. Rows read the window's workspaces,
   never a copy. A new window opens the way the last toggle left one, for the launch only.
+  Nav with no neighbor to the left asks `TabController.focusPastLeftEdge`, which focuses
+  the docked sidebar, so panes, drawers and the nvim navigator all reach it.
 - **Fill Screen** is a maximize, not native fullscreen. `window-chrome = false` hides
   the traffic lights and `ChromeMetrics.topInset` follows.
 - **Tool floats are window-level** because a surface is one `NSView`. `ToolFloatController`
@@ -519,6 +521,8 @@ concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. It gates
 
 - **Closures capture by id, never by object.**
 - **Unified focus is chrome-owned.** `TabController.focusedPanel` is the source of truth.
+  The sidebar holds focus as the first responder on a row and leaves `focusedPanel` alone,
+  so Esc, ⌘⌥→ and collapsing return to that panel through `restoreFocusToActive()`.
 - **`HostWindow.isReleasedWhenClosed = false`**, or close underflows the retain count.
 - **`ShellLaunch.program` re-arms zsh's `ZDOTDIR`**, or an `exec`'d shell loses shell
   integration (no OSC 7, no prompt marks, broken `isBusy`).
