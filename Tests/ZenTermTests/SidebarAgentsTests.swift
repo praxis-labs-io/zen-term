@@ -291,7 +291,8 @@ final class SidebarAgentsTests: WindowTestCase {
         notify(first, "Wants to run swift test")
         XCTAssertEqual(items(c).map(\.state), [.waiting], "precondition")
 
-        first.surface.delegate?.surface(first.surface, commandDidFinish: TerminalCommandResult(exitCode: 1, duration: 3))
+        let result = TerminalCommandResult(exitCode: 1, duration: 3)
+        first.surface.delegate?.surface(first.surface, commandDidFinish: result)
         drainMainQueue()
 
         XCTAssertEqual(items(c).map(\.state), [.failed])
