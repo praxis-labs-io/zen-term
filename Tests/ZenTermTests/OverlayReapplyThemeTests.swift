@@ -187,7 +187,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertEqual(branchField.text, "feature/zen-473", "the typed branch survives the recolor")
     }
 
-    func test_reapplyTheme_recolorsTheSpinnerArc() throws {
+    func test_reapplyTheme_recolorsTheSpinnerPixels() throws {
         let overlay = makeWorktreeCard()
         let window = makeWindow()
         window.contentView?.addSubview(overlay)
@@ -196,13 +196,13 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         guard let spinner = descendants(of: overlay).compactMap({ $0 as? Spinner }).first else {
             return XCTFail("expected the spinner")
         }
-        let colorsBefore = (spinner.layer?.sublayers ?? []).compactMap { ($0 as? CAShapeLayer)?.strokeColor }
-        XCTAssertEqual(colorsBefore.count, 2, "a track and an arc")
+        let colorsBefore = (spinner.layer?.sublayers ?? []).compactMap(\.backgroundColor)
+        XCTAssertEqual(colorsBefore.count, 6, "a 2 by 3 grid of pixels")
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
         overlay.reapplyTheme()
 
-        let colorsAfter = (spinner.layer?.sublayers ?? []).compactMap { ($0 as? CAShapeLayer)?.strokeColor }
+        let colorsAfter = (spinner.layer?.sublayers ?? []).compactMap(\.backgroundColor)
         XCTAssertNotEqual(colorsBefore, colorsAfter)
     }
 
