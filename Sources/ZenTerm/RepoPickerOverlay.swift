@@ -138,7 +138,7 @@ final class RepoPickerOverlay: PaletteOverlay {
                 symbol: "plus", title: "New Workspace",
                 shortcut: Chord.displayed(.newWorkspace, in: GeneralConfig.current.keymap)?.displayGlyph)
         case .add:
-            return ActionRowView(symbol: "folder.badge.plus", title: "New Workspace…", shortcut: nil)
+            return ActionRowView(symbol: "folder.badge.plus", title: "Add Workspace…", shortcut: nil)
         case .workspace(let workspace):
             return RowView(workspace: workspace, isOpen: isOpen(row: rows[index]))
         case .worktree(let worktree, let parent):
