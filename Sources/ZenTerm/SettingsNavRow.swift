@@ -29,6 +29,7 @@ final class SettingsNavRow: NSView {
     private var trackingArea: NSTrackingArea?
     private var isSelected = false
     private var isFocusedStop = false
+    private var isHoverSuppressed = false
     private var isHovered = false { didSet { refreshAccessory() } }
     private(set) var hoverAccessory: NSView?
 
@@ -137,8 +138,8 @@ final class SettingsNavRow: NSView {
     }
 
     private func refreshAccessory() {
-        hoverAccessory?.isHidden = !isHovered
-        detailLabel.isHidden = isHovered && hoverAccessory != nil
+        hoverAccessory?.isHidden = !showsHover
+        detailLabel.isHidden = showsHover && hoverAccessory != nil
     }
 
     func setTitle(_ title: String) {
@@ -189,10 +190,12 @@ final class SettingsNavRow: NSView {
         }
     }
 
+    private var showsHover: Bool { isHovered && !isHoverSuppressed }
+
     private func refreshFill() {
         if isFocusedStop {
             layer?.backgroundColor = Theme.current.chrome.selectionFill.cgColor
-        } else if isHovered {
+        } else if showsHover {
             layer?.backgroundColor = Theme.current.chrome.fill(.hover).cgColor
         } else if isSelected {
             layer?.backgroundColor = Theme.current.chrome.fill(.rest).cgColor
@@ -224,7 +227,22 @@ final class SettingsNavRow: NSView {
     override func mouseEntered(with event: NSEvent) {
         isHovered = true
         refreshFill()
+        guard !isHoverSuppressed else { return }
         tooltip?.show(from: self)
+    }
+
+    /// Holds the row's hover state off, for an overlay that covers it without taking its tracking area's events.
+    func setHoverSuppressed(_ suppressed: Bool) {
+        guard suppressed != isHoverSuppressed else { return }
+        isHoverSuppressed = suppressed
+        if suppressed { tooltip?.hide(from: self) } else { isHovered = pointerIsInside }
+        refreshAccessory()
+        refreshFill()
+    }
+
+    private var pointerIsInside: Bool {
+        guard let window, window.isKeyWindow else { return false }
+        return convert(bounds, to: nil).contains(window.mouseLocationOutsideOfEventStream)
     }
 
     override func mouseExited(with event: NSEvent) {

@@ -64,6 +64,7 @@ final class SidebarView: NSView {
         rowStack.alignment = .leading
         rowStack.spacing = 0
         rowStack.translatesAutoresizingMaskIntoConstraints = false
+        rowMenu.onOpenChanged = { [weak self] isOpen in self?.suppressRowHover(isOpen) }
         installScroll()
         for view in [caption, addButton, rowStack] { content.addSubview(view) }
         installAgents()
@@ -259,6 +260,11 @@ final class SidebarView: NSView {
         }
         rows[item.id] = row
         return row
+    }
+
+    // The menu is a sibling view, not a window, so the rows under it keep getting their tracking area's events.
+    private func suppressRowHover(_ suppressed: Bool) {
+        for row in rows.values where row !== rowMenu.anchor { row.setHoverSuppressed(suppressed) }
     }
 
     private func setNewWorktreeButton(on row: SettingsNavRow, for item: SidebarRowItem) {

@@ -50,6 +50,8 @@ final class SidebarRowMenu {
 
     var isOpen: Bool { popover?.isOpen == true }
 
+    var onOpenChanged: ((Bool) -> Void)?
+
     func open(_ groups: [[Item]], from row: NSView) {
         close()
         let groups = groups.filter { !$0.isEmpty }
@@ -77,9 +79,12 @@ final class SidebarRowMenu {
             return MainActor.assumeIsolated { self?.swallows(press) ?? false } ? nil : event
         }
         dismissObservers = HoverCardView.windowDismissObservers(in: window) { [weak self] in self?.close() }
+        onOpenChanged?(true)
     }
 
     func close() {
+        let wasOpen = isOpen
+        defer { if wasOpen { onOpenChanged?(false) } }
         popover?.close()
         popover = nil
         anchor = nil

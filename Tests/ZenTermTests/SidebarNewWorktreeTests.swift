@@ -408,6 +408,26 @@ final class SidebarNewWorktreeTests: WindowTestCase {
 
     private var menu: SidebarRowMenu { controller!.sidebarForTesting.view.rowMenu }
 
+    func test_whileTheMenuIsOpen_anotherRowTakesNoHover() throws {
+        let c = makeWindow()
+        let anchor = try openRepoWorkspace(in: c)
+        let other = try XCTUnwrap(c.sidebarForTesting.view.rowsForTesting.first { $0 !== anchor })
+
+        try rightClick(anchor, in: c)
+        other.mouseEntered(with: try mouse(.mouseMoved, at: .zero, in: c))
+
+        XCTAssertNotEqual(
+            other.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor,
+            "the menu covers the rows without taking their tracking events, so hover has to be held off")
+
+        menu.close()
+        other.mouseEntered(with: try mouse(.mouseMoved, at: .zero, in: c))
+
+        XCTAssertEqual(
+            other.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor,
+            "hover comes back once the menu closes")
+    }
+
     func test_rightClickingAWorkspaceRow_opensItsMenu_withoutSwitching() throws {
         let c = makeWindow()
         let home = c.activeWorkspaceIDForTesting
