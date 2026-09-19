@@ -2420,14 +2420,13 @@ final class WindowController: NSObject {
     }
 
     private func agentItems() -> [SidebarAgentItem] {
-        let here = focusedSurface
         typealias Ranked = (item: SidebarAgentItem, since: Date?, position: [Int])
         let located = agents.agents.compactMap { id, agent -> Ranked? in
             guard let place = agentPlace(id) else { return nil }
             let state = SidebarAgentItem.State(attention.agentState(of: id), failed: agent.failed)
             let item = SidebarAgentItem(
                 id: id, state: state, summary: agent.message ?? state.summary,
-                detail: "\(agent.name ?? AgentRoster.unnamed) · \(place.name)", isHere: id == here)
+                detail: "\(agent.name ?? AgentRoster.unnamed) · \(place.name)")
             return (item, attention.agentSince(of: id), place.position)
         }
         return located.sorted { a, b in

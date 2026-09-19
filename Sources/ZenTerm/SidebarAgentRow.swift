@@ -37,7 +37,6 @@ struct SidebarAgentItem: Equatable {
     let state: State
     let summary: String
     let detail: String
-    let isHere: Bool
 }
 
 final class SidebarAgentRow: NSView {
@@ -155,8 +154,6 @@ final class SidebarAgentRow: NSView {
             layer?.backgroundColor = chrome.selectionFill.cgColor
         } else if isHovered {
             layer?.backgroundColor = chrome.fill(.hover).cgColor
-        } else if item?.isHere == true {
-            layer?.backgroundColor = chrome.fill(.rest).cgColor
         } else {
             layer?.backgroundColor = NSColor.clear.cgColor
         }

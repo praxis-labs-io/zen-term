@@ -191,7 +191,8 @@ final class SidebarAgentsTests: WindowTestCase {
 
         focus(first, in: c)
         XCTAssertEqual(items(c).map(\.state), [.idle])
-        XCTAssertEqual(rows(c).first?.fillForTesting, Theme.current.chrome.fill(.rest).cgColor, "you are here")
+        XCTAssertEqual(
+            rows(c).first?.fillForTesting, NSColor.clear.cgColor, "only the workspace row reads as active")
     }
 
     func test_aLaunchedAgent_isListedIdleFromLaunch_andOtherProgramsAreNot() throws {
