@@ -94,24 +94,25 @@ final class SidebarAgentRow: NSView {
             glyph.translatesAutoresizingMaskIntoConstraints = false
             glyphSlot.addSubview(glyph)
             NSLayoutConstraint.activate([
-                glyph.centerXAnchor.constraint(equalTo: glyphSlot.centerXAnchor),
+                glyph.trailingAnchor.constraint(equalTo: glyphSlot.trailingAnchor),
                 glyph.centerYAnchor.constraint(equalTo: glyphSlot.centerYAnchor),
             ])
         }
 
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: Self.height),
-            glyphSlot.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),
+            glyphSlot.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset),
             glyphSlot.topAnchor.constraint(equalTo: topAnchor, constant: Self.top),
             glyphSlot.widthAnchor.constraint(equalToConstant: Self.glyphSize.width),
             glyphSlot.heightAnchor.constraint(equalToConstant: Self.glyphSize.height),
             dot.widthAnchor.constraint(equalToConstant: Self.dotDiameter),
             dot.heightAnchor.constraint(equalToConstant: Self.dotDiameter),
-            summaryLabel.leadingAnchor.constraint(equalTo: glyphSlot.trailingAnchor, constant: Self.glyphGap),
-            summaryLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -Self.inset),
+            summaryLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),
+            summaryLabel.trailingAnchor.constraint(
+                lessThanOrEqualTo: glyphSlot.leadingAnchor, constant: -Self.glyphGap),
             summaryLabel.centerYAnchor.constraint(equalTo: glyphSlot.centerYAnchor),
             detailLabel.leadingAnchor.constraint(equalTo: summaryLabel.leadingAnchor),
-            detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -Self.inset),
+            detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: glyphSlot.leadingAnchor, constant: -Self.glyphGap),
             detailLabel.topAnchor.constraint(equalTo: glyphSlot.bottomAnchor, constant: Self.lineGap),
         ])
     }
