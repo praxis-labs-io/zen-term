@@ -1030,6 +1030,7 @@ final class WindowController: NSObject {
         pendingModal = nil
         presentWindowModal(overlay)
         modal = (overlay, kind)
+        sidebar.setHoverCovered(true)
         overlay.focusInitialResponder()
         overlay.animateIn()
         renderDock()
@@ -1039,6 +1040,7 @@ final class WindowController: NSObject {
         pendingModal = nil
         guard let overlay = modal?.overlay else { return }
         modal = nil
+        sidebar.setHoverCovered(false)
         modalGutter = nil
         overlay.animateOut { overlay.removeFromSuperview() }
         restoreFocusToActive()

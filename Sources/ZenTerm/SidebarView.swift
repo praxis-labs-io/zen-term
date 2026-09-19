@@ -34,6 +34,8 @@ final class SidebarView: NSView {
     private var numbers: [SidebarRowID: Int] = [:]
     private var worktreeParents: Set<SidebarRowID> = []
     private var activeRow: SidebarRowID?
+    private var hoverCovers = 0
+    private weak var hoverExempt: NSView?
     let rowMenu = SidebarRowMenu()
     private let agentsCaption = FieldCaption("Agents", required: false)
     private let agentStack = NSStackView()
@@ -64,7 +66,9 @@ final class SidebarView: NSView {
         rowStack.alignment = .leading
         rowStack.spacing = 0
         rowStack.translatesAutoresizingMaskIntoConstraints = false
-        rowMenu.onOpenChanged = { [weak self] isOpen in self?.suppressRowHover(isOpen) }
+        rowMenu.onOpenChanged = { [weak self] isOpen in
+            self?.setHoverCovered(isOpen, exempting: isOpen ? self?.rowMenu.anchor : nil)
+        }
         installScroll()
         for view in [caption, addButton, rowStack] { content.addSubview(view) }
         installAgents()
@@ -267,10 +271,15 @@ final class SidebarView: NSView {
         return row
     }
 
-    // The menu is a sibling view, not a window, so the rows under it keep getting their tracking area's events.
-    private func suppressRowHover(_ suppressed: Bool) {
-        for row in rows.values where row !== rowMenu.anchor { row.setHoverSuppressed(suppressed) }
+    /// Call with an overlay that covers the sidebar: menus and cards are sibling views, so the rows still hover under them.
+    func setHoverCovered(_ covered: Bool, exempting exempt: NSView? = nil) {
+        hoverCovers = max(0, hoverCovers + (covered ? 1 : -1))
+        hoverExempt = covered ? exempt : nil
+        let suppressed = hoverCovers > 0
+        for row in hoverRows { row.setHoverSuppressed(suppressed && row !== hoverExempt) }
     }
+
+    private var hoverRows: [any HoverSuppressing] { Array(rows.values) + Array(agentRows.values) }
 
     private func setNewWorktreeButton(on row: SettingsNavRow, for item: SidebarRowItem) {
         guard item.makesWorktrees else { return row.setHoverAccessory(nil) }

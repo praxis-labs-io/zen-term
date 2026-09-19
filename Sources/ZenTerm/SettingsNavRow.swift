@@ -1,6 +1,6 @@
 import AppKit
 
-final class SettingsNavRow: NSView {
+final class SettingsNavRow: NSView, HoverSuppressing {
     enum Variant: Equatable {
         case standard
         case nested(symbol: String)
@@ -231,18 +231,12 @@ final class SettingsNavRow: NSView {
         tooltip?.show(from: self)
     }
 
-    /// Holds the row's hover state off, for an overlay that covers it without taking its tracking area's events.
     func setHoverSuppressed(_ suppressed: Bool) {
         guard suppressed != isHoverSuppressed else { return }
         isHoverSuppressed = suppressed
         if suppressed { tooltip?.hide(from: self) } else { isHovered = pointerIsInside }
         refreshAccessory()
         refreshFill()
-    }
-
-    private var pointerIsInside: Bool {
-        guard let window, window.isKeyWindow else { return false }
-        return convert(bounds, to: nil).contains(window.mouseLocationOutsideOfEventStream)
     }
 
     override func mouseExited(with event: NSEvent) {

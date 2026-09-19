@@ -39,7 +39,7 @@ struct SidebarAgentItem: Equatable {
     let detail: String
 }
 
-final class SidebarAgentRow: NSView {
+final class SidebarAgentRow: NSView, HoverSuppressing {
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onEscape: (() -> Void)?
@@ -57,6 +57,7 @@ final class SidebarAgentRow: NSView {
     private var trackingArea: NSTrackingArea?
     private var isFocusedStop = false
     private var isHovered = false
+    private var isHoverSuppressed = false
 
     static let height: CGFloat = 47
     private static let inset: CGFloat = 10
@@ -153,7 +154,7 @@ final class SidebarAgentRow: NSView {
         let chrome = Theme.current.chrome
         if isFocusedStop {
             layer?.backgroundColor = chrome.selectionFill.cgColor
-        } else if isHovered {
+        } else if isHovered, !isHoverSuppressed {
             layer?.backgroundColor = chrome.fill(.hover).cgColor
         } else {
             layer?.backgroundColor = NSColor.clear.cgColor
@@ -183,7 +184,15 @@ final class SidebarAgentRow: NSView {
     override func mouseEntered(with event: NSEvent) {
         isHovered = true
         refreshFill()
+        guard !isHoverSuppressed else { return }
         tooltip.show(from: self)
+    }
+
+    func setHoverSuppressed(_ suppressed: Bool) {
+        guard suppressed != isHoverSuppressed else { return }
+        isHoverSuppressed = suppressed
+        if suppressed { tooltip.hide(from: self) } else { isHovered = pointerIsInside }
+        refreshFill()
     }
 
     override func mouseExited(with event: NSEvent) {

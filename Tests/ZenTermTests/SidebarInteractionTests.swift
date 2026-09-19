@@ -894,6 +894,34 @@ final class SidebarInteractionTests: WindowTestCase {
         return (frame.minY - visible.minY, visible.maxY - frame.maxY)
     }
 
+    func test_whileACardCoversTheSidebar_rowsTakeNoHover() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let row = try XCTUnwrap(controller.sidebarForTesting.view.rowsForTesting.first)
+
+        controller.handle(.openSettings)
+        row.mouseEntered(with: try mouseMoved(in: controller))
+
+        XCTAssertNotEqual(
+            row.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor,
+            "a card covers the sidebar without taking the rows' tracking events")
+
+        controller.handle(.openSettings)
+        row.mouseEntered(with: try mouseMoved(in: controller))
+
+        XCTAssertEqual(
+            row.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor,
+            "hover comes back when the card closes")
+    }
+
+    private func mouseMoved(in controller: WindowController) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .mouseMoved, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: controller.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
+                pressure: 1))
+    }
+
     func test_aRowScrolledToAnEdge_landsClearOfTheFade() throws {
         let controller = makeCrowdedController()
         let view = controller.sidebarForTesting.view

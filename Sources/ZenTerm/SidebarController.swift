@@ -181,6 +181,8 @@ final class SidebarController {
 
     var hasFocus: Bool { view.hasFocus }
 
+    func setHoverCovered(_ covered: Bool) { view.setHoverCovered(covered) }
+
     enum NewWorktreeRefusal: CaseIterable {
         case worktree, unconfigured, notARepo, agent
 
