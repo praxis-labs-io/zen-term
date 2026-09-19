@@ -1,6 +1,6 @@
 import Foundation
 
-// The sidebar's order: each group sits where its first member opened, a workspace leads its worktrees.
+// The sidebar's order: groups by seat, a workspace leading its worktrees, each group in open order.
 @MainActor
 struct WorkspaceOrder {
     enum Entry: Equatable {
@@ -16,8 +16,13 @@ struct WorkspaceOrder {
 
     let entries: [Entry]
 
+    static func groupFolder(of workspace: WorkspaceController) -> String? {
+        if let origin = workspace.origin { return origin.parent.path.standardizedFileURL.path }
+        return workspace.isDefault ? nil : workspace.folder.standardizedFileURL.path
+    }
+
     init(_ workspaces: [WorkspaceController]) {
-        var keys: [GroupKey] = []
+        var seats: [(key: GroupKey, seat: Int)] = []
         var leads: [GroupKey: WorkspaceID] = [:]
         var ghosts: [GroupKey: Workspace] = [:]
         var worktrees: [GroupKey: [WorkspaceID]] = [:]
@@ -26,15 +31,15 @@ struct WorkspaceOrder {
             if let origin = workspace.origin {
                 key = .folder(origin.parent.path.standardizedFileURL.path)
                 worktrees[key, default: []].append(workspace.id)
-                if leads[key] == nil, ghosts[key] == nil { ghosts[key] = origin.parent }
+                if ghosts[key] == nil { ghosts[key] = origin.parent }
             } else {
-                let folder = GroupKey.folder(workspace.folder.standardizedFileURL.path)
-                key = workspace.isDefault || leads[folder] != nil ? .alone(workspace.id) : folder
+                let folder = Self.groupFolder(of: workspace).map(GroupKey.folder)
+                key = folder.flatMap { leads[$0] == nil ? $0 : nil } ?? .alone(workspace.id)
                 leads[key] = workspace.id
             }
-            if !keys.contains(key) { keys.append(key) }
+            if !seats.contains(where: { $0.key == key }) { seats.append((key, workspace.seat)) }
         }
-        entries = keys.flatMap { key -> [Entry] in
+        entries = seats.sorted { $0.seat < $1.seat }.flatMap { key, _ -> [Entry] in
             let lead = leads[key].map(Entry.workspace) ?? ghosts[key].map(Entry.ghost)
             return (lead.map { [$0] } ?? []) + (worktrees[key] ?? []).map(Entry.worktree)
         }

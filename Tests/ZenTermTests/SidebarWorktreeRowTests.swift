@@ -213,4 +213,73 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         try press("]", typing: "‘", keyCode: 30, in: c)
         XCTAssertEqual(c.activeWorkspaceIDForTesting, ids[2], "Beta follows the worktree")
     }
+
+    private var menu: SidebarRowMenu { controller!.sidebarForTesting.view.rowMenu }
+
+    private func rightClick(_ row: SettingsNavRow) throws {
+        row.rightMouseDown(
+            with: try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .rightMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+                    windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0, clickCount: 1,
+                    pressure: 1)))
+    }
+
+    func test_aWorktreeRowsMenu_offersOnlyClose_andAGhostHasNone() throws {
+        let c = makeWindow()
+        try openAlphaWorktree(branch: "feature/one", in: c)
+
+        try rightClick(rows(of: c)[2])
+        XCTAssertEqual(menu.itemViewsForTesting.map(\.title), ["Close Workspace"])
+
+        try rightClick(rows(of: c)[1])
+        XCTAssertFalse(menu.isOpen)
+    }
+
+    func test_closeFromTheMenu_closesThatWorkspace_evenInTheBackground() throws {
+        let c = makeWindow()
+        try openWorkspace(atConfigIndex: 0, in: c)
+        try openWorkspace(atConfigIndex: 1, in: c)
+        let beta = c.activeWorkspaceIDForTesting
+
+        try rightClick(rows(of: c)[1])
+        try XCTUnwrap(menu.itemViewsForTesting.last).mouseDown(
+            with: try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+                    windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
+
+        XCTAssertEqual(titles(of: c), ["Home", "Beta"])
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, beta, "closing a background workspace leaves the screen alone")
+        XCTAssertFalse(menu.isOpen)
+    }
+
+    func test_closingAWorkspace_landsOnItsNeighbourInTheSidebar_andLeavesItsWorktreeUnderAGhost() throws {
+        let c = makeWindow()
+        try openWorkspace(atConfigIndex: 0, in: c)
+        try openWorkspace(atConfigIndex: 1, in: c)
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        let worktree = c.activeWorkspaceIDForTesting
+        c.activateWorkspaceForTesting(c.workspaceIDsForTesting[1])
+        XCTAssertEqual(titles(of: c), ["Home", "Alpha", "feature/one", "Beta"])
+
+        c.handle(.closeWorkspace)
+
+        XCTAssertEqual(titles(of: c), ["Home", "Alpha", "feature/one", "Beta"])
+        XCTAssertEqual(rows(of: c)[1].variant, .faint, "Alpha's row turns ghost")
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, worktree, "the next row down, not the next one opened")
+    }
+
+    func test_aParentOpenedIntoItsGhostsPlace_staysThere_afterItsWorktreeCloses() throws {
+        let c = makeWindow()
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        try openWorkspace(atConfigIndex: 1, in: c)
+        try click(rows(of: c)[1])
+        XCTAssertEqual(titles(of: c), ["Home", "Alpha", "feature/one", "Beta"])
+
+        c.activateWorkspaceForTesting(c.workspaceIDsForTesting[1])
+        c.handle(.closeTab)
+
+        XCTAssertEqual(titles(of: c), ["Home", "Alpha", "Beta"])
+    }
 }

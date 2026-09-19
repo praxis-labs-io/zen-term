@@ -24,6 +24,23 @@ final class SidebarRowMenu {
     }
 
     private static let rowHeight: CGFloat = 28
+    private static let separatorHeight: CGFloat = 7
+
+    private static func separator() -> NSView {
+        let row = NSView()
+        let line = NSView()
+        line.wantsLayer = true
+        line.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor
+        line.translatesAutoresizingMaskIntoConstraints = false
+        row.addSubview(line)
+        NSLayoutConstraint.activate([
+            line.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+            line.trailingAnchor.constraint(equalTo: row.trailingAnchor),
+            line.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+            line.heightAnchor.constraint(equalToConstant: 1),
+        ])
+        return row
+    }
 
     private var popover: ListPopover?
     private(set) weak var anchor: NSView?
@@ -33,18 +50,25 @@ final class SidebarRowMenu {
 
     var isOpen: Bool { popover?.isOpen == true }
 
-    func open(_ items: [Item], from row: NSView) {
+    func open(_ groups: [[Item]], from row: NSView) {
         close()
-        guard !items.isEmpty, let window = row.window else { return }
+        let groups = groups.filter { !$0.isEmpty }
+        guard !groups.isEmpty, let window = row.window else { return }
         let popover = ListPopover(anchor: row)
         popover.onSelfClose = { [weak self] in self?.close() }
-        itemViews = items.map { item in
-            SidebarRowMenuItemView(item) { [weak self] in
-                self?.close()
-                item.run()
+        var rows: [ListPopover.Row] = []
+        for (index, group) in groups.enumerated() {
+            if index > 0 { rows.append(ListPopover.Row(view: Self.separator(), height: Self.separatorHeight)) }
+            let views = group.map { item in
+                SidebarRowMenuItemView(item) { [weak self] in
+                    self?.close()
+                    item.run()
+                }
             }
+            itemViews += views
+            rows += views.map { ListPopover.Row(view: $0, height: Self.rowHeight) }
         }
-        popover.open(rows: itemViews.map { ListPopover.Row(view: $0, height: Self.rowHeight) })
+        popover.open(rows: rows)
         self.popover = popover
         anchor = row
         let dismissingEvents: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown, .keyDown]

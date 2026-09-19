@@ -33,13 +33,15 @@ final class SidebarView: NSView {
     var onLeave: (() -> Void)?
     private let onActivate: (SidebarRowID) -> Void
     private let onNewWorktree: (WorkspaceID) -> Void
+    private let onCloseWorkspace: (WorkspaceID) -> Void
 
     init(
         onActivate: @escaping (SidebarRowID) -> Void, onNewWorktree: @escaping (WorkspaceID) -> Void,
-        onAdd: @escaping () -> Void
+        onCloseWorkspace: @escaping (WorkspaceID) -> Void, onAdd: @escaping () -> Void
     ) {
         self.onActivate = onActivate
         self.onNewWorktree = onNewWorktree
+        self.onCloseWorkspace = onCloseWorkspace
         addButton = SidebarFooter.button("plus", "Open workspace", .toggleRepoPicker, onAdd)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -129,13 +131,15 @@ final class SidebarView: NSView {
             ) { [weak self] in self?.onNewWorktree(id) })
     }
 
-    private func menuItems(for row: SidebarRowID) -> [SidebarRowMenu.Item] {
-        guard case .workspace(let id) = row, worktreeParents.contains(id) else { return [] }
-        return [
-            SidebarRowMenu.Item(title: "New Worktree…", action: .createWorktree) { [weak self] in
-                self?.onNewWorktree(id)
-            }
-        ]
+    private func menuItems(for row: SidebarRowID) -> [[SidebarRowMenu.Item]] {
+        guard case .workspace(let id) = row else { return [] }
+        let create = SidebarRowMenu.Item(title: "New Worktree…", action: .createWorktree) { [weak self] in
+            self?.onNewWorktree(id)
+        }
+        let close = SidebarRowMenu.Item(title: "Close Workspace", action: .closeWorkspace) { [weak self] in
+            self?.onCloseWorkspace(id)
+        }
+        return [worktreeParents.contains(id) ? [create] : [], [close]]
     }
 
     override func viewDidHide() {

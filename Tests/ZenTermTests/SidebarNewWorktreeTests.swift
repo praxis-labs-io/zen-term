@@ -258,8 +258,8 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         try rightClick(row, in: c)
 
         XCTAssertTrue(menu.isOpen)
-        XCTAssertEqual(menu.itemViewsForTesting.map(\.title), ["New Worktree…"])
-        XCTAssertEqual(menu.itemViewsForTesting.map(\.shortcutForTesting), ["⌥⏎"])
+        XCTAssertEqual(menu.itemViewsForTesting.map(\.title), ["New Worktree…", "Close Workspace"])
+        XCTAssertEqual(menu.itemViewsForTesting.map(\.shortcutForTesting), ["⌥⏎", "⌘⌥W"])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, home, "a right-click never switches")
     }
 
@@ -323,13 +323,13 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertTrue(menu.isOpen)
     }
 
-    func test_rowsWithNothingToOffer_openNoMenu() throws {
+    func test_aRowWithNoConfigEntry_offersOnlyClose() throws {
         let c = makeWindow()
         _ = try openRepoWorkspace(in: c)
 
         try rightClick(rows(of: c)[0], in: c)
 
-        XCTAssertFalse(menu.isOpen, "Home has no config entry")
+        XCTAssertEqual(menu.itemViewsForTesting.map(\.title), ["Close Workspace"], "Home has no config entry")
     }
 
     private func drainGitStatus() {

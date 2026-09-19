@@ -41,9 +41,10 @@ final class SidebarController {
     init(
         onPalette: @escaping () -> Void, onSettings: @escaping () -> Void, onToggle: @escaping () -> Void,
         onActivate: @escaping (SidebarRowID) -> Void, onNewWorktree: @escaping (WorkspaceID) -> Void,
-        onAdd: @escaping () -> Void
+        onCloseWorkspace: @escaping (WorkspaceID) -> Void, onAdd: @escaping () -> Void
     ) {
-        view = SidebarView(onActivate: onActivate, onNewWorktree: onNewWorktree, onAdd: onAdd)
+        view = SidebarView(
+            onActivate: onActivate, onNewWorktree: onNewWorktree, onCloseWorkspace: onCloseWorkspace, onAdd: onAdd)
         footer = SidebarFooter(onPalette: onPalette, onSettings: onSettings)
         toggleButton = SidebarFooter.button("sidebar.left", "Toggle sidebar", .toggleSidebar, onToggle)
         lead = CollapsedSidebarLead(

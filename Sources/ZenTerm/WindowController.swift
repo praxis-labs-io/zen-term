@@ -353,6 +353,7 @@ final class WindowController: NSObject {
         var onToggleSidebar: () -> Void = {}
         var onActivateRow: (SidebarRowID) -> Void = { _ in }
         var onNewWorktree: (WorkspaceID) -> Void = { _ in }
+        var onCloseWorkspace: (WorkspaceID) -> Void = { _ in }
         var onOpenWorkspace: () -> Void = {}
         var onBottom: () -> Void = {}
         var onRight: () -> Void = {}
@@ -367,7 +368,8 @@ final class WindowController: NSObject {
             hiddenButtons: GeneralConfig.current.hiddenToolbarButtons)
         sidebar = SidebarController(
             onPalette: { onPalette() }, onSettings: { onSettings() }, onToggle: { onToggleSidebar() },
-            onActivate: { onActivateRow($0) }, onNewWorktree: { onNewWorktree($0) }, onAdd: { onOpenWorkspace() })
+            onActivate: { onActivateRow($0) }, onNewWorktree: { onNewWorktree($0) },
+            onCloseWorkspace: { onCloseWorkspace($0) }, onAdd: { onOpenWorkspace() })
         super.init()
         nextTabID = 2
 
@@ -383,6 +385,7 @@ final class WindowController: NSObject {
         sidebar.onLeave = { [weak self] in self?.restoreFocusToActive() }
         onActivateRow = { [weak self] in self?.activateFromSidebar($0) }
         onNewWorktree = { [weak self] in self?.createWorktreeFromSidebar($0) }
+        onCloseWorkspace = { [weak self] in self?.requestCloseWorkspace(id: $0) }
         onOpenWorkspace = { [weak self] in self?.handle(.toggleRepoPicker) }
         onBottom = { [weak self] in self?.handle(.toggleBottomDrawer) }
         onRight = { [weak self] in self?.handle(.toggleRightDrawer) }
@@ -919,11 +922,13 @@ final class WindowController: NSObject {
 
     private func closeWorkspace(_ workspace: WorkspaceController) {
         Log.info("workspace closed", category: .workspace)
-        guard let index = workspaces.firstIndex(where: { $0 === workspace }) else { return }
-        workspaces.remove(at: index)
+        guard let place = order.navigable.firstIndex(of: workspace.id) else { return }
+        workspaces.removeAll { $0 === workspace }
         guard !workspaces.isEmpty else { window.close(); return }
         guard workspace === activeWorkspace else { renderAttention(); return }
-        let next = workspaces[min(index, workspaces.count - 1)]
+        let remaining = order.navigable
+        guard let next = workspaces.first(where: { $0.id == remaining[min(place, remaining.count - 1)] })
+        else { return }
         activeWorkspace = next
         mount(.instant)
         if let tab = next.activeID { visit(tab) }
@@ -1629,9 +1634,10 @@ final class WindowController: NSObject {
         }
         Log.info("workspace opened", category: .workspace)
         let tab = mintTabID()
+        let group = (origin?.parent.path ?? ws.path).standardizedFileURL.path
         let workspace = WorkspaceController(
             id: mintWorkspaceID(), isDefault: false, name: ws.title, folder: ws.path, firstTab: tab,
-            origin: origin)
+            origin: origin, seat: workspaces.first { WorkspaceOrder.groupFolder(of: $0) == group }?.seat)
         workspaces.append(workspace)
         activate(workspace.id)
         installController(id: tab, cwd: ws.path, config: ws, transition: .instant)

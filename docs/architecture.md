@@ -182,8 +182,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **`WorkspaceOrder` is the sidebar's order, derived from open order at every read.** A
   worktree workspace keeps the `WorktreeOrigin` it opened from and nests under the open
   workspace at its parent's folder, or under a ghost row built from that origin when the
-  parent is closed. A group sits where its first member opened. `navigable` skips ghosts;
-  the sidebar's numbers, ⌘⌥1…9 and ⌘⌥[ ] all read it.
+  parent is closed. A group's first member mints its `seat` and later members inherit it,
+  so the group holds its place as members close and reopen. `navigable` skips ghosts; the
+  sidebar's numbers, ⌘⌥1…9, ⌘⌥[ ] and a close's landing all read it.
 - **`activate(_:)` is the single path a switch goes through**: a row click, ⌘⌥1…9 and ⌘⌥[ ],
   ⌘P, and revealing a background tab. It swaps the canvas without
   motion, so a newly opened workspace applies its recipe in the same turn.
@@ -201,7 +202,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   close that takes the window with it confirms first, so the window never goes unannounced.
   `closeWorkspace` is the single path a workspace goes through: ⌘⌥W closes each of its tabs,
   background ones first so nothing it closes is mounted, and the last tab's close lands on the
-  neighbouring workspace in sidebar order.
+  row that takes its place in `navigable`.
 - **Window stack, back to front:** canvas, tool float, tab bar, dock and sidebar, toast
   stack, modal card. Toasts sit above floats (the ⌘W guard toast is about the float); a card
   sits above toasts because it owns the keyboard. `closeModal()` in
