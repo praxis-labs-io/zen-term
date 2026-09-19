@@ -11,6 +11,8 @@ final class SettingsNavRow: NSView {
     private let label = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
     private let onActivate: () -> Void
+    private let focusesOnClick: Bool
+    private var isTakingKeyboardFocus = false
     private var trackingArea: NSTrackingArea?
     private var isSelected = false
     private var isFocusedStop = false
@@ -18,8 +20,9 @@ final class SettingsNavRow: NSView {
 
     private static let detailMaxWidth: CGFloat = 96
 
-    init(title: String, onActivate: @escaping () -> Void) {
+    init(title: String, focusesOnClick: Bool = true, onActivate: @escaping () -> Void) {
         self.onActivate = onActivate
+        self.focusesOnClick = focusesOnClick
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -76,7 +79,14 @@ final class SettingsNavRow: NSView {
         }
     }
 
-    override var acceptsFirstResponder: Bool { true }
+    // AppKit promotes any clicked view that accepts, so a keyboard-only row accepts only in `takeKeyboardFocus`.
+    override var acceptsFirstResponder: Bool { focusesOnClick || isTakingKeyboardFocus }
+
+    func takeKeyboardFocus() {
+        isTakingKeyboardFocus = true
+        window?.makeFirstResponder(self)
+        isTakingKeyboardFocus = false
+    }
     override func becomeFirstResponder() -> Bool { isFocusedStop = true; refreshFill(); return true }
     override func resignFirstResponder() -> Bool { isFocusedStop = false; refreshFill(); return true }
 
@@ -99,7 +109,7 @@ final class SettingsNavRow: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        window?.makeFirstResponder(self)
+        if focusesOnClick { window?.makeFirstResponder(self) }
         onActivate()
     }
 

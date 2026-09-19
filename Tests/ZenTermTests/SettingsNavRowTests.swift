@@ -86,6 +86,33 @@ final class SettingsNavRowTests: WindowTestCase {
         XCTAssertEqual(activations, 1)
     }
 
+    func test_click_onAKeyboardOnlyRow_activatesAndLeavesFocusAlone() {
+        var activations = 0
+        let (row, window) = mountedRow(focusesOnClick: false) { activations += 1 }
+        let focusHolder = FocusHolder(frame: NSRect(x: 0, y: 30, width: 10, height: 10))
+        window.contentView?.addSubview(focusHolder)
+        window.makeFirstResponder(focusHolder)
+
+        row.mouseDown(with: click(on: row, in: window))
+
+        XCTAssertTrue(window.firstResponder === focusHolder, "the click activates the row without taking focus")
+        XCTAssertEqual(activations, 1)
+        XCTAssertFalse(row.acceptsFirstResponder, "AppKit promotes a clicked view that accepts first responder")
+    }
+
+    func test_keyboardOnlyRow_takesKeyboardFocus_andKeepsIt() {
+        let (row, window) = mountedRow(focusesOnClick: false)
+
+        row.takeKeyboardFocus()
+
+        XCTAssertTrue(window.firstResponder === row)
+        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.selectionFill.cgColor)
+    }
+
+    private final class FocusHolder: NSView {
+        override var acceptsFirstResponder: Bool { true }
+    }
+
     func test_return_andKeypadEnter_callOnReturn() {
         let (row, window) = mountedRow()
         var returns = 0
@@ -150,9 +177,9 @@ final class SettingsNavRowTests: WindowTestCase {
     }
 
     private func mountedRow(
-        onActivate: @escaping () -> Void = {}
+        focusesOnClick: Bool = true, onActivate: @escaping () -> Void = {}
     ) -> (SettingsNavRow, NSWindow) {
-        let row = SettingsNavRow(title: "Terminal", onActivate: onActivate)
+        let row = SettingsNavRow(title: "Terminal", focusesOnClick: focusesOnClick, onActivate: onActivate)
         row.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 200, height: 40),

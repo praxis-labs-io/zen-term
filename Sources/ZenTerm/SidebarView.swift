@@ -63,7 +63,7 @@ final class SidebarView: NSView {
     private func row(for item: SidebarRowItem) -> SettingsNavRow {
         if let row = rows[item.id] { return row }
         let id = item.id
-        let row = SettingsNavRow(title: item.name) {}
+        let row = SettingsNavRow(title: item.name, focusesOnClick: false) {}
         row.onArrowUp = { [weak self] in self?.moveFocus(-1) }
         row.onArrowDown = { [weak self] in self?.moveFocus(1) }
         row.onReturn = { [weak self] in self?.onRowReturn?(id) }
@@ -75,15 +75,14 @@ final class SidebarView: NSView {
     var hasFocus: Bool { rows.values.contains { KeyboardFocus.isFocused($0, in: window) } }
 
     func focusRow(_ id: WorkspaceID) {
-        guard let row = rows[id] else { return }
-        window?.makeFirstResponder(row)
+        rows[id]?.takeKeyboardFocus()
     }
 
     private func moveFocus(_ delta: Int) {
         let ordered = orderedRows
         let current = ordered.firstIndex { KeyboardFocus.isFocused($0, in: window) }
         guard let next = KeyboardFocus.step(from: current, delta: delta, count: ordered.count) else { return }
-        window?.makeFirstResponder(ordered[next])
+        ordered[next].takeKeyboardFocus()
     }
 
     private var orderedRows: [SettingsNavRow] {

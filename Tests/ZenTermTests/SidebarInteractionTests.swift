@@ -332,6 +332,26 @@ final class SidebarInteractionTests: WindowTestCase {
         }
     }
 
+    func test_clickingARow_leavesFocusInThePane() throws {
+        let controller = makeController()
+        _ = controller.addWorkspaceForTesting(name: "api", folder: root)
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+        let row = controller.sidebarForTesting.view.rowsForTesting[1]
+
+        let point = row.convert(NSPoint(x: row.bounds.midX, y: row.bounds.midY), to: nil)
+        row.mouseDown(
+            with: try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
+                    windowNumber: controller.window.windowNumber, context: nil, eventNumber: 0,
+                    clickCount: 1, pressure: 1)))
+
+        XCTAssertTrue(controller.window.firstResponder === pane.view)
+        XCTAssertFalse(row.acceptsFirstResponder, "AppKit would otherwise promote the clicked row itself")
+    }
+
     func test_return_onAFocusedRow_reportsItsWorkspace() throws {
         let controller = makeController()
         let api = controller.addWorkspaceForTesting(name: "api", folder: root)
