@@ -214,6 +214,10 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertLessThanOrEqual(
             name.alignmentRect(forFrame: name.frame).width, TabBarView.maxChipWidth,
             "a long name truncates instead of pushing the tabs off the bar")
+        let oneLine = NSTextField(labelWithString: "Home")
+        oneLine.font = TabBarView.chipFont
+        XCTAssertEqual(
+            name.frame.height, oneLine.fittingSize.height, accuracy: 0.5, "a long name truncates instead of wrapping")
     }
 
     func test_ctrlCmdS_throughTheInterceptor_togglesTheSidebar() throws {

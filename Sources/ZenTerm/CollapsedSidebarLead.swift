@@ -44,11 +44,14 @@ final class CollapsedSidebarLead: NSView {
         workspaceName = name
         worktreeName = worktree
         let chrome = Theme.current.chrome
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingTail
         func run(_ text: String, _ ink: ChromeTheme.InkLevel) -> NSAttributedString {
             NSAttributedString(
                 string: text,
                 attributes: [
                     .font: TabBarView.chipFont, .kern: TabBarView.titleKern, .foregroundColor: chrome.ink(ink),
+                    .paragraphStyle: paragraph,
                 ])
         }
         let label = NSMutableAttributedString(attributedString: run(name, .muted))
