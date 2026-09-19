@@ -50,8 +50,10 @@ Terminal-native. Xcode must be installed for the toolchain, but you never open i
   `swift format lint --strict`, `swiftlint --strict`. `bin/check --fix`
   auto-applies formatter and linter fixes. Requires `swiftlint`.
 
-**Verify before claiming done:** `bin/check` fully green. Not just build and test:
-format-lint and swiftlint are part of the gate and CI enforces them.
+**Run the full gate once, before pushing.** `bin/check` fully green before a push or a
+PR, not after each commit. Not just build and test: format-lint and swiftlint are part
+of the gate and CI enforces them. While iterating, run the tests that cover the change
+(`swift test --filter`) and lint the files you touched.
 
 ### What to test, and what to show
 
