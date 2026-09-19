@@ -923,6 +923,36 @@ final class SidebarInteractionTests: WindowTestCase {
         return (frame.minY - visible.minY, visible.maxY - frame.maxY)
     }
 
+    func test_aPickerOpenedFromTheSidebar_handsFocusBackToItsRow() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.sidebarForTesting.focusActiveRow()
+        let row = try XCTUnwrap(controller.sidebarForTesting.view.rowsForTesting.first)
+        XCTAssertTrue(controller.window.firstResponder === row, "precondition: the sidebar holds focus")
+
+        controller.handle(.toggleRepoPicker)
+        waitUntil(controller.isModalOverlayOpen, "the picker to open")
+        controller.handle(.toggleRepoPicker)
+
+        XCTAssertTrue(controller.window.firstResponder === row, "focus goes back where the picker was opened from")
+    }
+
+    func test_aConfirmCancelledFromTheSidebar_handsFocusBackToItsRow() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.sidebarForTesting.focusActiveRow()
+        let row = try XCTUnwrap(controller.sidebarForTesting.view.rowsForTesting.first)
+
+        controller.presentConfirm(
+            variant: .warning, title: "Close Workspace", message: "This stops everything running in it.",
+            confirmLabel: "Close", onConfirm: {})
+        XCTAssertTrue(controller.isConfirmOpen)
+        controller.window.sendEvent(key(.escape, in: controller))
+
+        XCTAssertFalse(controller.isConfirmOpen)
+        XCTAssertTrue(controller.window.firstResponder === row, "a cancelled confirm goes back to the row")
+    }
+
     func test_theSidebarToggle_worksWithACardOpen_andLeavesItOpen() throws {
         let controller = makeController()
         controller.handle(.openSettings)

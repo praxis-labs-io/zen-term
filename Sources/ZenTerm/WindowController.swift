@@ -184,6 +184,7 @@ final class WindowController: NSObject {
     private let dock: ToggleDock
     private let sidebar: SidebarController
     private var mountedCanvas: NSView?
+    private var focusReturn: SidebarRowID?
     private var activeCanvasSlides = 0
     private let horizontalSlideFade = EdgeFade(axis: .horizontal)
     private let verticalSlideFade = EdgeFade(axis: .vertical)
@@ -790,6 +791,18 @@ final class WindowController: NSObject {
 
     private func closeFloatForTabChange() { floats.close() }
 
+    private func captureFocusReturn() {
+        focusReturn = sidebar.hasFocus ? sidebar.focusedRow : nil
+    }
+
+    /// A card or confirm hands focus back where it was opened from, as a palette does elsewhere.
+    private func returnFocusAfterOverlay() {
+        let row = focusReturn
+        focusReturn = nil
+        if let row, sidebar.focusRow(row) { return }
+        restoreFocusToActive()
+    }
+
     private func restoreFocusToActive() {
         if floats.isOpen { floats.refocus() } else { activeController?.restoreUnifiedFocus() }
     }
@@ -1025,6 +1038,7 @@ final class WindowController: NSObject {
 
     private func presentModal(_ overlay: ModalOverlay, kind: ModalKind) {
         guard activeController != nil else { return }
+        captureFocusReturn()
         endModes()
         floats.cancelPendingOpen()
         pendingModal = nil
@@ -1043,7 +1057,7 @@ final class WindowController: NSObject {
         sidebar.setHoverCovered(false)
         modalGutter = nil
         overlay.animateOut { overlay.removeFromSuperview() }
-        restoreFocusToActive()
+        returnFocusAfterOverlay()
         renderDock()
     }
 
@@ -1691,9 +1705,11 @@ final class WindowController: NSObject {
         variant: ToastVariant, title: String, message: String,
         confirmLabel: String, onConfirm: @escaping () -> Void, onCancel: (() -> Void)? = nil
     ) {
+        let opensFromSidebar = sidebar.hasFocus
         cancelConfirm()
         closeModal()
         endModes()
+        if opensFromSidebar { focusReturn = sidebar.focusedRow ?? focusReturn }
         confirmOnCancel = onCancel
         let content = ToastContent(variant: variant, title: title, message: message)
         let actions = [
@@ -1722,7 +1738,7 @@ final class WindowController: NSObject {
         confirmToast = nil
         confirmOnCancel = nil
         toasts.dismiss(toast)
-        restoreFocusToActive()
+        returnFocusAfterOverlay()
         renderDock()
     }
 

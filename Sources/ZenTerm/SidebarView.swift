@@ -288,9 +288,12 @@ final class SidebarView: NSView {
 
     var focusedRow: SidebarRowID? { rows.first { KeyboardFocus.isFocused($0.value, in: window) }?.key }
 
-    func focusRow(_ id: SidebarRowID) {
-        rows[id]?.takeKeyboardFocus()
-        if let row = rows[id] { reveal(row) }
+    @discardableResult
+    func focusRow(_ id: SidebarRowID) -> Bool {
+        guard let row = rows[id] else { return false }
+        row.takeKeyboardFocus()
+        reveal(row)
+        return true
     }
 
     private func moveFocus(_ delta: Int) {

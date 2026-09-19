@@ -183,6 +183,11 @@ final class SidebarController {
 
     func setHoverCovered(_ covered: Bool) { view.setHoverCovered(covered) }
 
+    var focusedRow: SidebarRowID? { view.focusedRow }
+
+    @discardableResult
+    func focusRow(_ id: SidebarRowID) -> Bool { isDocked && view.focusRow(id) }
+
     enum NewWorktreeRefusal: CaseIterable {
         case worktree, unconfigured, notARepo, agent
 
