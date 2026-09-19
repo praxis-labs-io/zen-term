@@ -332,7 +332,7 @@ final class WindowController: NSObject {
         WindowController.nextWindowID += 1
         let firstID = TabID(1)
         let defaultWorkspace = WorkspaceController(
-            id: WorkspaceID(raw: 1), isDefault: true, name: Self.defaultWorkspaceName,
+            id: WorkspaceID(raw: 1), isConfigured: false, name: Self.defaultWorkspaceName,
             folder: FileManager.default.homeDirectoryForCurrentUser, firstTab: firstID)
         workspaces = [defaultWorkspace]
         activeWorkspace = defaultWorkspace
@@ -1572,7 +1572,7 @@ final class WindowController: NSObject {
 
     private func openWorkspace(at path: URL) -> WorkspaceController? {
         let target = path.standardizedFileURL.path
-        return workspaces.first { !$0.isDefault && $0.folder.standardizedFileURL.path == target }
+        return workspaces.first { $0.isConfigured && $0.folder.standardizedFileURL.path == target }
     }
 
     private func openWorkspace(_ ws: Workspace) {
@@ -1584,7 +1584,7 @@ final class WindowController: NSObject {
         Log.info("workspace opened", category: .workspace)
         let tab = mintTabID()
         let workspace = WorkspaceController(
-            id: mintWorkspaceID(), isDefault: false, name: ws.title, folder: ws.path, firstTab: tab)
+            id: mintWorkspaceID(), isConfigured: true, name: ws.title, folder: ws.path, firstTab: tab)
         workspaces.append(workspace)
         activate(workspace.id)
         installController(id: tab, cwd: ws.path, config: ws, transition: .instant)
@@ -2346,7 +2346,7 @@ final class WindowController: NSObject {
     func addWorkspaceForTesting(name: String, folder: URL) -> WorkspaceID {
         let id = mintTabID()
         let workspace = WorkspaceController(
-            id: mintWorkspaceID(), isDefault: false, name: name, folder: folder, firstTab: id)
+            id: mintWorkspaceID(), isConfigured: true, name: name, folder: folder, firstTab: id)
         workspaces.append(workspace)
         let controller = makeController(cwd: folder)
         workspace.setController(controller, for: id)
