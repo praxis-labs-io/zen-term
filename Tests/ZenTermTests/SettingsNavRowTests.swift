@@ -100,6 +100,55 @@ final class SettingsNavRowTests: WindowTestCase {
         XCTAssertFalse(row.acceptsFirstResponder, "AppKit only promotes a clicked view that accepts first responder")
     }
 
+    func test_return_andKeypadEnter_callOnReturn() {
+        let (row, window) = mountedRow()
+        var returns = 0
+        row.onReturn = { returns += 1 }
+        window.makeFirstResponder(row)
+
+        window.sendEvent(key(36, in: window))
+        window.sendEvent(key(76, [.function, .numericPad], in: window))
+
+        XCTAssertEqual(returns, 2)
+    }
+
+    func test_escape_callsOnEscape() {
+        let (row, window) = mountedRow()
+        var escapes = 0
+        row.onEscape = { escapes += 1 }
+        window.makeFirstResponder(row)
+
+        window.sendEvent(key(53, in: window))
+
+        XCTAssertEqual(escapes, 1)
+    }
+
+    func test_withoutCallbacks_returnAndEscapeReachTheNextResponder() {
+        let (row, window) = mountedRow()
+        let parent = KeyRecorder(frame: NSRect(x: 0, y: 0, width: 200, height: 40))
+        window.contentView?.addSubview(parent)
+        parent.addSubview(row)
+        window.makeFirstResponder(row)
+
+        window.sendEvent(key(36, in: window))
+        window.sendEvent(key(53, in: window))
+
+        XCTAssertEqual(parent.keyCodes, [36, 53], "a row with no callbacks leaves Return and Esc to its container")
+    }
+
+    private final class KeyRecorder: NSView {
+        var keyCodes: [UInt16] = []
+        override func keyDown(with event: NSEvent) { keyCodes.append(event.keyCode) }
+    }
+
+    private func key(_ keyCode: UInt16, _ flags: NSEvent.ModifierFlags = [], in window: NSWindow) -> NSEvent {
+        let text = keyCode == 53 ? "\u{1b}" : "\r"
+        return NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, characters: text, charactersIgnoringModifiers: text,
+            isARepeat: false, keyCode: keyCode)!
+    }
+
     private final class FocusHolder: NSView {
         override var acceptsFirstResponder: Bool { true }
     }

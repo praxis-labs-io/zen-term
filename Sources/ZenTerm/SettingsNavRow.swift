@@ -5,6 +5,8 @@ final class SettingsNavRow: NSView {
     var onArrowDown: (() -> Void)?
     var onBacktab: (() -> Void)?
     var onEnterDetail: (() -> Void)?
+    var onReturn: (() -> Void)?
+    var onEscape: (() -> Void)?
 
     private let label = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
@@ -109,6 +111,8 @@ final class SettingsNavRow: NSView {
         case .tab(shift: true): onBacktab?()
         case .down: onArrowDown?()
         case .right, .tab(shift: false): onEnterDetail?()
+        case .activate where onReturn != nil && KeyboardFocus.isReturn(event): onReturn?()
+        case .escape where onEscape != nil: onEscape?()
         default: super.keyDown(with: event)
         }
     }
