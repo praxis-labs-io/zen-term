@@ -419,6 +419,18 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(controller.window.firstResponder === drawer.view)
     }
 
+    func test_nvimNavigatorFocusLeft_fromTheLeftmostPane_focusesTheSidebar() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+        let token = try XCTUnwrap(pane.lastConfig?.environment["ZEN_PANE"].flatMap { Int($0) })
+
+        NavRegistry.shared.route(focus: token, .left)
+
+        XCTAssertTrue(controller.sidebarForTesting.hasFocus)
+    }
+
     func test_cmdOptLeft_withTheSidebarCollapsed_keepsFocus_andSaysThereIsNoPane() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
