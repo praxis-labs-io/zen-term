@@ -85,6 +85,13 @@ final class SidebarView: NSView {
         ordered[next].takeKeyboardFocus()
     }
 
+    override func keyDown(with event: NSEvent) {
+        switch KeyboardFocus.key(for: event) {
+        case .left, .right, .tab: return
+        default: super.keyDown(with: event)
+        }
+    }
+
     private var orderedRows: [SettingsNavRow] {
         rowStack.arrangedSubviews.compactMap { $0 as? SettingsNavRow }
     }

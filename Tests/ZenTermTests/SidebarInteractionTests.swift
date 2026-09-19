@@ -352,6 +352,43 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertFalse(row.acceptsFirstResponder, "AppKit would otherwise promote the clicked row itself")
     }
 
+    func test_strayKeys_inTheSidebar_behaveLikeAList() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let recorder = KeyRecorder()
+        recorder.nextResponder = controller.window.nextResponder
+        controller.window.nextResponder = recorder
+        controller.sidebarForTesting.focusActiveRow()
+        let row = try XCTUnwrap(controller.sidebarForTesting.view.rowsForTesting.first)
+
+        for (code, text, flags) in [
+            (UInt16(48), "\t", NSEvent.ModifierFlags()), (48, "\u{19}", [.shift]),
+            (123, "\u{F702}", [.function, .numericPad]), (124, "\u{F703}", [.function, .numericPad]),
+        ] {
+            controller.window.sendEvent(typed(code, text, flags, in: controller))
+            XCTAssertTrue(controller.window.firstResponder === row, "key \(code) leaves focus on the row")
+        }
+        XCTAssertEqual(recorder.keyCodes, [], "Tab, ⇧Tab, ← and → do nothing")
+
+        controller.window.sendEvent(typed(0, "a", [], in: controller))
+        controller.window.sendEvent(typed(49, " ", [], in: controller))
+        XCTAssertEqual(recorder.keyCodes, [0, 49], "a letter and Space go unhandled, so AppKit beeps")
+    }
+
+    private final class KeyRecorder: NSResponder {
+        var keyCodes: [UInt16] = []
+        override func keyDown(with event: NSEvent) { keyCodes.append(event.keyCode) }
+    }
+
+    private func typed(
+        _ code: UInt16, _ text: String, _ flags: NSEvent.ModifierFlags, in controller: WindowController
+    ) -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
+            windowNumber: controller.window.windowNumber, context: nil, characters: text,
+            charactersIgnoringModifiers: text, isARepeat: false, keyCode: code)!
+    }
+
     func test_return_onAFocusedRow_reportsItsWorkspace() throws {
         let controller = makeController()
         let api = controller.addWorkspaceForTesting(name: "api", folder: root)
