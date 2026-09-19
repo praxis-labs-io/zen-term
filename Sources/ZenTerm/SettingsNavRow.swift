@@ -17,7 +17,6 @@ final class SettingsNavRow: NSView {
 
     private static let detailMaxWidth: CGFloat = 96
 
-    /// `isFocusable: false` refuses first responder, so a click activates the row and leaves focus where it was.
     init(title: String, isFocusable: Bool = true, onActivate: @escaping () -> Void) {
         self.onActivate = onActivate
         self.isFocusable = isFocusable

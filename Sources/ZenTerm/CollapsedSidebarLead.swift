@@ -1,8 +1,7 @@
 import AppKit
 
-/// Leads the tab bar while the sidebar is collapsed with the active workspace's name, clear of the sidebar toggle.
+// Leads the tab bar with the active workspace's name while the sidebar is collapsed.
 final class CollapsedSidebarLead: NSView {
-    /// Either side of the divider: from the name, and on to the first tab's title.
     static let dividerGap: CGFloat = 12
 
     private let nameLabel = NSTextField(labelWithString: "")

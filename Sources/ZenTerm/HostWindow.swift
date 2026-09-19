@@ -22,8 +22,6 @@ final class HostWindow: NSWindow {
         setWindowChromeVisible(GeneralConfig.current.windowChrome)
     }
 
-    /// Raises the minimum content width by `width`, growing the window to fit from its leading edge. Stays on screen
-    /// and never wider than it: past the right edge the window shifts left.
     func reserveContentWidth(_ width: CGFloat) {
         contentMinSize = NSSize(
             width: Self.minimumContentSize.width + width, height: Self.minimumContentSize.height)

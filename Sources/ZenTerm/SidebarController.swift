@@ -1,10 +1,9 @@
 import AppKit
 import TerminalKit
 
-/// Docks and collapses one window's sidebar, and owns the edges the canvas, tool floats and tab bar start from.
+// Docks and collapses one window's sidebar, and owns the edges the canvas, tool floats and tab bar start from.
 @MainActor
 final class SidebarController {
-    // Per launch, not persisted: a new window opens the way the last toggle left one.
     private static var lastChoiceIsDocked = true
 
     private struct Entry {
@@ -91,7 +90,6 @@ final class SidebarController {
     // The canvas insets itself by window-gutter; docked, it sits one pane-gap from the sidebar, as from a drawer.
     private var canvasGap: CGFloat { isDocked ? ChromeMetrics.panelGap - ChromeMetrics.windowGutter : 0 }
 
-    /// Holds `surfaces`' grids for the slide, so they reflow once. Snaps under reduced motion, as a drawer does.
     func toggle(holding surfaces: [TerminalSurface], in root: NSView) {
         guard let edgeLeading, let canvasOffset, let leadWidth, let tabBarLeading else { return }
         isDocked.toggle()
@@ -145,7 +143,6 @@ final class SidebarController {
         if foldersChanged { refreshBranches() }
     }
 
-    /// Re-reads each workspace's branch off the main thread; the rows update when the answers land.
     func refreshBranches() {
         GitRepoStatus.refresh(entries.map(\.folder)) { [weak self] in self?.renderRows() }
     }

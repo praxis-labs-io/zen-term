@@ -1,6 +1,6 @@
 import AppKit
 
-/// The docked sidebar's palette and Settings buttons, placed on the window beside the toggle so they fade, not slide.
+// On the window beside the toggle, not in the sidebar, so these fade instead of sliding with it.
 final class SidebarFooter: NSStackView {
     static let spacing: CGFloat = 2
     static let buttonSize = NSSize(width: 22, height: 22)

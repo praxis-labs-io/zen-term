@@ -138,8 +138,6 @@ enum Motion {
         }
     }
 
-    /// Moves `animate` to their targets while `panel` slides in from, or out to, `parkOffset`. Lays `root` out at
-    /// the final size before `beforeSlide`, so a caller that suspends terminal size sync there reflows once.
     static func drawerSlide(
         panel: NSView, opening: Bool, parkOffset: CGVector,
         animate: [(constraint: NSLayoutConstraint, to: CGFloat)], in root: NSView,
