@@ -54,16 +54,16 @@ final class NewWorkspaceTests: WindowTestCase {
         GeneralConfig.setCurrentForTesting(config)
     }
 
-    private func pressCmdOptT(in c: WindowController) throws {
+    private func pressCmdCtrlT(in c: WindowController) throws {
         let keys = KeyInterceptor()
         keys.setKeymap(KeymapDefaults.map)
         keys.onReservedChord = { c.handle($0) }
         let event = try XCTUnwrap(
             NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: [.command, .option], timestamp: 0,
-                windowNumber: 0, context: nil, characters: "†", charactersIgnoringModifiers: "t",
+                with: .keyDown, location: .zero, modifierFlags: [.command, .control], timestamp: 0,
+                windowNumber: 0, context: nil, characters: "\u{14}", charactersIgnoringModifiers: "t",
                 isARepeat: false, keyCode: 17))
-        XCTAssertNil(keys.route(event), "⌘⌥T is claimed, not passed to the pane")
+        XCTAssertNil(keys.route(event), "⌘⌃T is claimed, not passed to the pane")
     }
 
     private func launchedFolder(of c: WindowController) throws -> URL? {
@@ -90,13 +90,13 @@ final class NewWorkspaceTests: WindowTestCase {
         descendants(of: c.window.contentView!).compactMap { $0 as? RepoPickerOverlay }.first
     }
 
-    func test_cmdOptT_opensAWorkspaceInTheFocusedPanesFolder_andSwitchesToIt() throws {
+    func test_cmdCtrlT_opensAWorkspaceInTheFocusedPanesFolder_andSwitchesToIt() throws {
         inheritingCWD()
         let c = makeWindow()
         let first = c.activeWorkspaceIDForTesting
         spawned.forEach { $0.currentDirectory = root }
 
-        try pressCmdOptT(in: c)
+        try pressCmdCtrlT(in: c)
 
         XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 2"])
         XCTAssertNotEqual(c.activeWorkspaceIDForTesting, first)
@@ -104,31 +104,31 @@ final class NewWorkspaceTests: WindowTestCase {
         XCTAssertEqual(try launchedFolder(of: c)?.standardizedFileURL, root.standardizedFileURL)
     }
 
-    func test_cmdOptT_startsInTheHomeFolder_whenNewTabsDo() throws {
+    func test_cmdCtrlT_startsInTheHomeFolder_whenNewTabsDo() throws {
         let c = makeWindow()
         spawned.forEach { $0.currentDirectory = root }
 
-        try pressCmdOptT(in: c)
+        try pressCmdCtrlT(in: c)
 
         XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 2"])
         XCTAssertEqual(try launchedFolder(of: c), ShellLaunch.defaultCWD)
     }
 
-    func test_cmdOptT_takesTheLowestNumberNoOpenWorkspaceHolds() throws {
+    func test_cmdCtrlT_takesTheLowestNumberNoOpenWorkspaceHolds() throws {
         let c = makeWindow()
-        try pressCmdOptT(in: c)
-        try pressCmdOptT(in: c)
+        try pressCmdCtrlT(in: c)
+        try pressCmdCtrlT(in: c)
         XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 2", "Workspace 3"])
 
         c.requestCloseWorkspace(id: c.workspaceIDsForTesting[1])
         XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 3"])
 
-        try pressCmdOptT(in: c)
+        try pressCmdCtrlT(in: c)
 
         XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 3", "Workspace 2"])
     }
 
-    func test_closingTheFirstWorkspace_thenCmdOptT_givesAWorkspaceBack() throws {
+    func test_closingTheFirstWorkspace_thenCmdCtrlT_givesAWorkspaceBack() throws {
         let c = makeWindow()
         c.openWorkspaceForTesting(
             Workspace(title: "Alpha", path: root, main: nil, right: nil, bottom: nil, focus: .main, env: [:]))
@@ -136,7 +136,7 @@ final class NewWorkspaceTests: WindowTestCase {
         c.handle(.closeWorkspace)
         XCTAssertEqual(c.workspaceNamesForTesting, ["Alpha"])
 
-        try pressCmdOptT(in: c)
+        try pressCmdCtrlT(in: c)
 
         XCTAssertEqual(c.workspaceNamesForTesting, ["Alpha", "Workspace 1"])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting.last)
@@ -147,9 +147,9 @@ final class NewWorkspaceTests: WindowTestCase {
         try seedWorkspaces("[Alpha]\npath = \(root.path)\n")
         let c = makeWindow()
         spawned.forEach { $0.currentDirectory = root }
-        try pressCmdOptT(in: c)
+        try pressCmdCtrlT(in: c)
         spawned.forEach { $0.currentDirectory = root }
-        try pressCmdOptT(in: c)
+        try pressCmdCtrlT(in: c)
         XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 2", "Workspace 3"])
 
         let picker = try openPicker(in: c)
@@ -160,7 +160,7 @@ final class NewWorkspaceTests: WindowTestCase {
             "a workspace without a config entry never counts as the configured one being open")
     }
 
-    func test_thePickersFirstRow_showsCmdOptT_andClickingItOpensAWorkspaceInTheFocusedPanesFolder() throws {
+    func test_thePickersFirstRow_showsCmdCtrlT_andClickingItOpensAWorkspaceInTheFocusedPanesFolder() throws {
         inheritingCWD()
         let c = makeWindow()
         spawned.forEach { $0.currentDirectory = root }
@@ -168,7 +168,7 @@ final class NewWorkspaceTests: WindowTestCase {
         c.window.layoutIfNeeded()
         let row = try XCTUnwrap(picker.rowViews.first as? RepoPickerOverlay.ActionRowView)
         XCTAssertEqual(row.title, "New Workspace")
-        XCTAssertEqual(descendants(of: row).compactMap { ($0 as? KeycapView)?.shortcut }, ["⌘⌥T"])
+        XCTAssertEqual(descendants(of: row).compactMap { ($0 as? KeycapView)?.shortcut }, ["⌘⌃T"])
 
         click(row)
 
@@ -190,11 +190,11 @@ final class NewWorkspaceTests: WindowTestCase {
         row.mouseUp(with: event(.leftMouseUp))
     }
 
-    func test_cmdOptT_withThePickerOpen_opensAWorkspace_andClosesThePicker() throws {
+    func test_cmdCtrlT_withThePickerOpen_opensAWorkspace_andClosesThePicker() throws {
         let c = makeWindow()
         _ = try openPicker(in: c)
 
-        try pressCmdOptT(in: c)
+        try pressCmdCtrlT(in: c)
 
         XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 2"])
         XCTAssertNil(pickerIn(c), "the picker closes")

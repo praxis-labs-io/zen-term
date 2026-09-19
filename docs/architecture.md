@@ -177,7 +177,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 
 - **A window starts with one workspace, with no config entry**, and one workspace is
   always active. A workspace without a config entry is named "Workspace N", the lowest
-  number no open workspace in the window holds. ⌘⌥T opens one at the end of the sidebar,
+  number no open workspace in the window holds. ⌘⌃T opens one at the end of the sidebar,
   in the folder a new tab would start in. ⌘P opens a configured workspace, or switches to
   it when it is already open. A workspace is open when one with a config entry is open at
   its folder, so renaming it in Settings does not open a second copy.
@@ -186,10 +186,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   workspace at its parent's folder, or under a ghost row built from that origin when the
   parent is closed. A group's first member mints its `seat` and later members inherit it,
   so the group holds its place as members close and reopen. A workspace with no config
-  entry is never in a group. `navigable` skips ghosts; the sidebar's numbers, ⌘⌥1…9,
-  ⌘⌥[ ] and a close's landing all read it.
-- **`activate(_:)` is the single path a switch goes through**: a row click, ⌘⌥1…9 and ⌘⌥[ ],
-  ⌘P, ⌘⌥T, and revealing a background tab. An open workspace slides in on the y axis, from
+  entry is never in a group. `navigable` skips ghosts; the sidebar's numbers, ⌘⌃1…9,
+  ⌘⌃[ ] and a close's landing all read it.
+- **`activate(_:)` is the single path a switch goes through**: a row click, ⌘⌃1…9 and ⌘⌃[ ],
+  ⌘P, ⌘⌃T, and revealing a background tab. An open workspace slides in on the y axis, from
   below when it sits lower in `navigable`; a new one has no canvas yet, so it mounts
   without motion and applies its recipe in the same turn. A close's landing slides the same way.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
@@ -204,7 +204,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **Inactive tabs and workspaces are detached but retained**, so shells keep running.
 - **Closing the last tab closes its workspace, and the last workspace closes the window.** A
   close that takes the window with it confirms first, so the window never goes unannounced.
-  `closeWorkspace` is the single path a workspace goes through: ⌘⌥W closes each of its tabs,
+  `closeWorkspace` is the single path a workspace goes through: ⌘⌃W closes each of its tabs,
   background ones first so nothing it closes is mounted, and the last tab's close lands on the
   row that takes its place in `navigable`.
 - **Window stack, back to front:** canvas, tool float, tab bar, dock and sidebar, toast

@@ -120,7 +120,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         keys.onReservedChord = { c.handle($0) }
         let event = try XCTUnwrap(
             NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: [.command, .option], timestamp: 0,
+                with: .keyDown, location: .zero, modifierFlags: [.command, .control], timestamp: 0,
                 windowNumber: 0, context: nil, characters: characters, charactersIgnoringModifiers: key,
                 isARepeat: false, keyCode: keyCode))
         XCTAssertNil(keys.route(event), "the chord is claimed, not passed to the pane")
@@ -136,7 +136,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(ghost.variant, .faint)
         XCTAssertEqual(ghost.titleInkForTesting, Theme.current.chrome.ink(.faint))
         XCTAssertEqual(ghost.detailForTesting, "")
-        XCTAssertNil(ghost.tooltip, "a ghost takes no ⌘⌥ number")
+        XCTAssertNil(ghost.tooltip, "a ghost takes no ⌘⌃ number")
         XCTAssertEqual(rows(of: c)[2].variant, .nested(symbol: "arrow.triangle.branch"))
         XCTAssertEqual(rows(of: c)[2].layer?.backgroundColor, Theme.current.chrome.fill(.rest).cgColor)
     }
@@ -210,7 +210,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(titles(of: c).last, "a41c9e2")
     }
 
-    func test_cmdOptDigits_followTheSidebar_nestedWorktreesIncluded() throws {
+    func test_cmdCtrlDigits_followTheSidebar_nestedWorktreesIncluded() throws {
         let c = makeWindow()
         try openWorkspace(atConfigIndex: 0, in: c)
         try openWorkspace(atConfigIndex: 1, in: c)
@@ -218,8 +218,8 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         let worktree = c.activeWorkspaceIDForTesting
         XCTAssertEqual(titles(of: c), ["Workspace 1", "Alpha", "feature/one", "Beta"])
 
-        try press("1", typing: "¡", keyCode: 18, in: c)
-        try press("3", typing: "£", keyCode: 20, in: c)
+        try press("1", typing: "1", keyCode: 18, in: c)
+        try press("3", typing: "3", keyCode: 20, in: c)
 
         XCTAssertEqual(c.activeWorkspaceIDForTesting, worktree)
     }
@@ -232,10 +232,10 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
         let shortcuts = rows(of: c).map { $0.tooltip?.shortcutForTesting }
 
-        XCTAssertEqual(shortcuts, ["⌘⌥1", "⌘⌥2", nil, "⌘⌥3"])
+        XCTAssertEqual(shortcuts, ["⌘⌃1", "⌘⌃2", nil, "⌘⌃3"])
     }
 
-    func test_cmdOptBrackets_stepThroughTheSidebar_nestedWorktreesIncluded() throws {
+    func test_cmdCtrlBrackets_stepThroughTheSidebar_nestedWorktreesIncluded() throws {
         let c = makeWindow()
         try openWorkspace(atConfigIndex: 0, in: c)
         try openWorkspace(atConfigIndex: 1, in: c)
@@ -243,10 +243,10 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         let ids = c.workspaceIDsForTesting
         c.activateWorkspaceForTesting(ids[1])
 
-        try press("]", typing: "‘", keyCode: 30, in: c)
+        try press("]", typing: "\u{1d}", keyCode: 30, in: c)
         XCTAssertEqual(c.activeWorkspaceIDForTesting, ids[3], "Alpha's worktree follows Alpha")
 
-        try press("]", typing: "‘", keyCode: 30, in: c)
+        try press("]", typing: "\u{1d}", keyCode: 30, in: c)
         XCTAssertEqual(c.activeWorkspaceIDForTesting, ids[2], "Beta follows the worktree")
     }
 
@@ -356,7 +356,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
         let card = try XCTUnwrap(c.waitingToastForTesting(tab: beta))
         let keycaps = descendants(of: card).compactMap { ($0 as? KeycapView)?.shortcut }
-        XCTAssertEqual(keycaps, ["⌘⌥4"], "Beta sits fourth in the sidebar, and ⌘⌥4 is what reaches it")
+        XCTAssertEqual(keycaps, ["⌘⌃4"], "Beta sits fourth in the sidebar, and ⌘⌃4 is what reaches it")
     }
 
     func test_agentsSharingAState_listInSidebarOrder_notOpenOrder() throws {
@@ -383,7 +383,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
         XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Alpha / feature/one")
 
-        try press("1", typing: "¡", keyCode: 18, in: c)
+        try press("1", typing: "1", keyCode: 18, in: c)
 
         XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Workspace 1")
     }

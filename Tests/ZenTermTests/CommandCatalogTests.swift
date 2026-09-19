@@ -168,7 +168,7 @@ final class CommandCatalogTests: XCTestCase {
         let two = CommandCatalog.commands(tabCount: 1, workspaceCount: 2)
             .filter { $0.title.hasPrefix("Select Workspace") }
         XCTAssertEqual(two.map(\.title), ["Select Workspace 1", "Select Workspace 2"])
-        XCTAssertEqual(two.map(\.shortcut), ["⌘⌥1", "⌘⌥2"])
+        XCTAssertEqual(two.map(\.shortcut), ["⌘⌃1", "⌘⌃2"])
 
         let selects = CommandCatalog.commands(tabCount: 1, workspaceCount: 12)
             .filter { $0.title.hasPrefix("Select Workspace") }

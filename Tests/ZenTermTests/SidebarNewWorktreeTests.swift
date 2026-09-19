@@ -419,7 +419,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertEqual(menu.itemViewsForTesting.map(\.title), ["New Worktree…", "Close Workspace"])
         XCTAssertEqual(
             menu.itemViewsForTesting.map(\.shortcutForTesting), ["⌥⏎", ""],
-            "⌘⌥W closes the active workspace, not this background one")
+            "⌘⌃W closes the active workspace, not this background one")
         XCTAssertEqual(c.activeWorkspaceIDForTesting, home, "a right-click never switches")
     }
 
@@ -430,7 +430,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
 
         try rightClick(row, in: c)
 
-        XCTAssertEqual(menu.itemViewsForTesting.map(\.shortcutForTesting), ["⌥⏎", "⌘⌥W"])
+        XCTAssertEqual(menu.itemViewsForTesting.map(\.shortcutForTesting), ["⌥⏎", "⌘⌃W"])
     }
 
     func test_controlClickingAWorkspaceRow_opensItsMenu_withoutSwitching() throws {

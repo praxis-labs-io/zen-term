@@ -449,7 +449,7 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(controller.window.firstResponder === pane.view)
     }
 
-    func test_cmdOptW_onTheFocusedRow_closesItsWorkspace_andFocusLandsOnTheNeighboursPane() throws {
+    func test_cmdCtrlW_onTheFocusedRow_closesItsWorkspace_andFocusLandsOnTheNeighboursPane() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
         let api = controller.addWorkspaceForTesting(name: "api", folder: root)
@@ -457,7 +457,7 @@ final class SidebarInteractionTests: WindowTestCase {
         controller.sidebarForTesting.focusActiveRow()
         XCTAssertTrue(controller.sidebarForTesting.hasFocus)
 
-        try press("w", [.command, .option], keyCode: 13, in: controller)
+        try press("w", [.command, .control], keyCode: 13, in: controller)
 
         XCTAssertEqual(controller.activeWorkspaceIDForTesting, api)
         XCTAssertFalse(controller.sidebarForTesting.hasFocus)
@@ -928,6 +928,6 @@ final class SidebarInteractionTests: WindowTestCase {
 
         let tooltips = controller.sidebarForTesting.view.rowsForTesting.compactMap(\.tooltip)
         XCTAssertEqual(tooltips.map(\.label), ["Switch workspace", "Switch workspace"])
-        XCTAssertEqual(tooltips.map(\.shortcutForTesting), ["⌘⌥1", "⌘⌥2"])
+        XCTAssertEqual(tooltips.map(\.shortcutForTesting), ["⌘⌃1", "⌘⌃2"])
     }
 }
