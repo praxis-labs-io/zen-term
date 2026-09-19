@@ -326,6 +326,8 @@ final class WindowController: NSObject {
         var onPalette: () -> Void = {}
         var onSettings: () -> Void = {}
         var onToggleSidebar: () -> Void = {}
+        var onActivateWorkspace: (WorkspaceID) -> Void = { _ in }
+        var onOpenWorkspace: () -> Void = {}
         var onBottom: () -> Void = {}
         var onRight: () -> Void = {}
         var onZoom: () -> Void = {}
@@ -338,7 +340,8 @@ final class WindowController: NSObject {
             toolFloats: ToolFloatCatalog.userDefined, onToolFloat: { onToolFloat($0) },
             hiddenButtons: GeneralConfig.current.hiddenToolbarButtons)
         sidebar = SidebarController(
-            onPalette: { onPalette() }, onSettings: { onSettings() }, onToggle: { onToggleSidebar() })
+            onPalette: { onPalette() }, onSettings: { onSettings() }, onToggle: { onToggleSidebar() },
+            onActivate: { onActivateWorkspace($0) }, onAdd: { onOpenWorkspace() })
         super.init()
         nextTabID = 2
 
@@ -351,6 +354,8 @@ final class WindowController: NSObject {
         onPalette = { [weak self] in self?.handle(.toggleCommandPalette) }
         onSettings = { [weak self] in self?.handle(.openSettings) }
         onToggleSidebar = { [weak self] in self?.handle(.toggleSidebar) }
+        onActivateWorkspace = { [weak self] in self?.activateFromSidebar($0) }
+        onOpenWorkspace = { [weak self] in self?.handle(.toggleRepoPicker) }
         onBottom = { [weak self] in self?.handle(.toggleBottomDrawer) }
         onRight = { [weak self] in self?.handle(.toggleRightDrawer) }
         onZoom = { [weak self] in self?.handle(.toggleZoom) }
@@ -838,6 +843,11 @@ final class WindowController: NSObject {
             let i = ids.firstIndex(of: active)
         else { return }
         select(ids[(i + delta + ids.count) % ids.count], slideFrom: delta > 0 ? .fromRight : .fromLeft)
+    }
+
+    private func activateFromSidebar(_ id: WorkspaceID) {
+        guard id != activeWorkspace.id else { restoreFocusToActive(); return }
+        activate(id)
     }
 
     private func cycleWorkspace(_ delta: Int) {

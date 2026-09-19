@@ -83,6 +83,15 @@ final class SidebarInteractionTests: WindowTestCase {
         button.mouseDown(with: event)
     }
 
+    private func click(_ row: SettingsNavRow) throws {
+        let event = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
+                clickCount: 1, pressure: 1))
+        row.mouseDown(with: event)
+    }
+
     private func modals<T: NSView>(_ type: T.Type, in controller: WindowController) -> [T] {
         descendants(of: controller.containerForTesting).compactMap { $0 as? T }
     }
@@ -344,5 +353,51 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertEqual(paneSurface.sizeSyncHolds, 1, "the pane's grid is held while the sidebar slides")
         waitUntil(paneSurface.sizeSyncHolds == 0, "the hold to release once the slide lands")
         waitUntil(controller.sidebarForTesting.view.isHidden, "the collapsed sidebar to leave once it lands")
+    }
+
+    func test_clickingARow_switchesToItsWorkspace_andFocusesItsPane() throws {
+        let controller = makeController()
+        let home = controller.activeWorkspaceIDForTesting
+        let homeSurface = try XCTUnwrap(surfaces.first)
+        let other = controller.addWorkspaceForTesting(name: "api", folder: root)
+        let otherSurface = try XCTUnwrap(surfaces.last)
+        controller.activateWorkspaceForTesting(home)
+        let focusesBefore = otherSurface.focusCount
+
+        try click(controller.sidebarForTesting.view.rowsForTesting[1])
+
+        XCTAssertEqual(controller.activeWorkspaceIDForTesting, other)
+        XCTAssertGreaterThan(otherSurface.focusCount, focusesBefore, "focus lands in the new workspace's pane")
+        XCTAssertFalse(homeSurface.terminated, "the workspace left behind keeps running")
+
+        try click(controller.sidebarForTesting.view.rowsForTesting[0])
+
+        XCTAssertEqual(controller.activeWorkspaceIDForTesting, home)
+        XCTAssertTrue(try XCTUnwrap(surfaces.first) === homeSurface)
+        XCTAssertEqual(homeSurface.startCount, 1, "the same process, not a restart")
+    }
+
+    func test_clickingTheActiveRow_keepsTheWorkspace_andReturnsFocusToItsPane() throws {
+        let controller = makeController()
+        let home = controller.activeWorkspaceIDForTesting
+        let homeSurface = try XCTUnwrap(surfaces.first)
+        _ = controller.addWorkspaceForTesting(name: "api", folder: root)
+        controller.activateWorkspaceForTesting(home)
+        let focusesBefore = homeSurface.focusCount
+
+        try click(controller.sidebarForTesting.view.rowsForTesting[0])
+
+        XCTAssertEqual(controller.activeWorkspaceIDForTesting, home)
+        XCTAssertGreaterThan(homeSurface.focusCount, focusesBefore, "a clicked row never keeps the keyboard")
+    }
+
+    func test_addButton_opensTheWorkspacePicker() throws {
+        ConfigLoader.defaultRootOverrideForTesting = root
+        defer { ConfigLoader.defaultRootOverrideForTesting = nil }
+        let controller = makeController()
+
+        try click(controller.sidebarForTesting.view.addButtonForTesting)
+
+        waitUntil(!modals(RepoPickerOverlay.self, in: controller).isEmpty, "the workspace picker to open")
     }
 }
