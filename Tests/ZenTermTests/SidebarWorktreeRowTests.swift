@@ -294,4 +294,20 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
         XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Home")
     }
+
+    func test_collapsedLead_cutsALongWorktreeAtAWholeCharacter_soTheDividerKeepsItsGap() throws {
+        let c = makeWindow()
+        try openAlphaWorktree(branch: "feature/zen-532-make-a-new-workspace-without-a-config-entry", in: c)
+        c.handle(.toggleSidebar)
+        c.containerForTesting.layoutSubtreeIfNeeded()
+
+        let lead = c.sidebarForTesting.lead
+        let name = lead.workspaceNameLabelForTesting
+        XCTAssertTrue(lead.workspaceNameForTesting.hasPrefix("Alpha / feature/zen-532"))
+        XCTAssertTrue(lead.workspaceNameForTesting.hasSuffix("…"))
+        XCTAssertLessThanOrEqual(name.alignmentRect(forFrame: name.frame).width, TabBarView.maxChipWidth)
+        XCTAssertEqual(
+            name.alignmentRect(forFrame: name.frame).width, name.intrinsicContentSize.width, accuracy: 0.5,
+            "the label draws all it holds, so no truncation slack sits before the divider")
+    }
 }

@@ -59,7 +59,25 @@ final class CollapsedSidebarLead: NSView {
             label.append(run(" / ", .faint))
             label.append(run(worktree, .subtle))
         }
-        nameLabel.attributedStringValue = label
+        nameLabel.attributedStringValue = Self.fitted(label)
+    }
+
+    // Cut by count: AppKit's tail truncation stops short of the width and widens the divider's gap.
+    private static let maxCharacters: Int = {
+        let cell = NSAttributedString(
+            string: "0", attributes: [.font: TabBarView.chipFont, .kern: TabBarView.titleKern]
+        ).size().width
+        return Int(TabBarView.maxChipWidth / cell)
+    }()
+
+    private static func fitted(_ label: NSAttributedString) -> NSAttributedString {
+        let text = label.string
+        guard text.count > maxCharacters else { return label }
+        let kept = NSRange(text.startIndex..<text.index(text.startIndex, offsetBy: maxCharacters - 1), in: text)
+        let fitted = NSMutableAttributedString(attributedString: label.attributedSubstring(from: kept))
+        fitted.append(
+            NSAttributedString(string: "…", attributes: label.attributes(at: kept.length - 1, effectiveRange: nil)))
+        return fitted
     }
 
     func reapplyTheme() {
