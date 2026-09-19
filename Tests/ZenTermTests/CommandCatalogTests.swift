@@ -26,7 +26,7 @@ final class CommandCatalogTests: XCTestCase {
                 "New Tool Float…", "Settings…", "Reload Config",
                 "Check for Updates",
                 "Report an Issue…",
-                "Open Workspace Picker", "Previous Workspace", "Next Workspace",
+                "Open Workspace Picker", "Previous Workspace", "Next Workspace", "Close Workspace",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "New Tab", "Previous Tab", "Next Tab", "Move Tab Left", "Move Tab Right",
                 "Rename Tab…", "Close Tab",

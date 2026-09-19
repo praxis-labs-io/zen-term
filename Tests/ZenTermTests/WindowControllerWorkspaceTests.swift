@@ -400,4 +400,38 @@ final class WindowControllerWorkspaceTests: WindowTestCase {
         XCTAssertEqual(c.workspaceIDsForTesting.count, 1)
         XCTAssertFalse(texts(in: card).contains { $0.hasPrefix("Home: ") }, "back to one workspace, the prefix goes")
     }
+
+    func test_closingTheActiveWorkspace_landsOnTheOneAfterIt() throws {
+        let c = makeWindow()
+        let second = c.addWorkspaceForTesting(name: "Second", folder: root)
+        let third = c.addWorkspaceForTesting(name: "Third", folder: root)
+        c.activateWorkspaceForTesting(second)
+
+        c.closeTabForTesting(tab: try XCTUnwrap(c.tabIDsForTesting(workspace: second).first))
+
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, third, "the neighbour, the way closing a tab lands")
+    }
+
+    func test_closingTheLastWorkspaceInOrder_landsOnTheOneBeforeIt() throws {
+        let c = makeWindow()
+        let second = c.addWorkspaceForTesting(name: "Second", folder: root)
+        let third = c.addWorkspaceForTesting(name: "Third", folder: root)
+        c.activateWorkspaceForTesting(third)
+
+        c.closeTabForTesting(tab: try XCTUnwrap(c.tabIDsForTesting(workspace: third).first))
+
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, second)
+    }
+
+    func test_closingABackgroundWorkspace_leavesTheActiveOne() throws {
+        let c = makeWindow()
+        let second = c.addWorkspaceForTesting(name: "Second", folder: root)
+        let third = c.addWorkspaceForTesting(name: "Third", folder: root)
+        c.activateWorkspaceForTesting(third)
+
+        c.closeTabForTesting(tab: try XCTUnwrap(c.tabIDsForTesting(workspace: second).first))
+
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, third)
+        XCTAssertEqual(c.workspaceIDsForTesting.count, 2)
+    }
 }

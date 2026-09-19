@@ -69,6 +69,7 @@ extension KeyInterceptor.ReservedChord {
         case .selectWorkspace(let n): return "select_workspace_\(n)"
         case .prevWorkspace: return "prev_workspace"
         case .nextWorkspace: return "next_workspace"
+        case .closeWorkspace: return "close_workspace"
         }
     }
 
@@ -93,7 +94,7 @@ extension KeyInterceptor.ReservedChord {
             .clearScreen, .selectAll, .scrollToSelection, .pasteSelection, .writeScreenFile,
             .copyScreenFilePath, .openScreenFile,
             .dismissToast, .dismissAllToasts,
-            .selectWorkspace, .prevWorkspace, .nextWorkspace:
+            .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace:
             return false
         }
     }
@@ -119,7 +120,7 @@ extension KeyInterceptor.ReservedChord {
             .toggleRepoPicker, .createWorktree, .removeWorktree, .toggleCommandPalette, .newTool,
             .openSettings,
             .dismissToast, .dismissAllToasts,
-            .selectWorkspace, .prevWorkspace, .nextWorkspace:
+            .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace:
             return true
         }
     }
@@ -193,6 +194,7 @@ extension KeyInterceptor.ReservedChord {
         case "start_search": self = .toggleSearch
         case "prev_workspace": self = .prevWorkspace
         case "next_workspace": self = .nextWorkspace
+        case "close_workspace": self = .closeWorkspace
         default:
             if let rest = token.dropPrefixIfPresent("select_tab_"), let n = Int(rest), (1...9).contains(n) {
                 self = .selectTab(n)
@@ -286,6 +288,7 @@ enum KeymapDefaults {
         for n in 1...9 { map[Chord(command: true, option: true, key: "\(n)")] = .selectWorkspace(n) }
         map[Chord(command: true, option: true, key: "[")] = .prevWorkspace
         map[Chord(command: true, option: true, key: "]")] = .nextWorkspace
+        map[Chord(command: true, option: true, key: "w")] = .closeWorkspace
 
         return map
     }()

@@ -361,7 +361,7 @@
 #                        the exception is the built-in `toggle_float:scratch`,
 #                        which has no `key:` field: it rebinds and unbinds like
 #                        any other action)
-#   prev_workspace  next_workspace  select_workspace_1 … select_workspace_9
+#   prev_workspace  next_workspace  select_workspace_1 … select_workspace_9  close_workspace
 #
 # Defaults (uncomment to change; these are what ships):
 # keybind = split_vertical=cmd+d                 # a new pane to the right
@@ -421,6 +421,7 @@
 # keybind = prev_workspace=cmd+opt+[             # in sidebar order, wrapping
 # keybind = next_workspace=cmd+opt+]
 # keybind = select_workspace_1=cmd+opt+1          # … through select_workspace_9=cmd+opt+9
+# keybind = close_workspace=cmd+opt+w            # asks first if something runs, or if it is the last
 #
 # ─── Coming from Ghostty ─────────────────────────────────────────────────────
 #
