@@ -12,7 +12,7 @@ struct ClosedByRemoval: Equatable {
         if window.thisWindow {
             if isThisWindow { sum.thisWindow = true } else { sum.otherWindows += 1 }
         } else {
-            sum.workspaces += window.workspaces
+            sum.workspaces += window.workspaces.filter { !sum.workspaces.contains($0) }
             sum.tabs += window.tabs
         }
         return sum

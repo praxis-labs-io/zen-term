@@ -215,4 +215,17 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
 
         XCTAssertEqual(sum, ClosedByRemoval(thisWindow: true, otherWindows: 1, workspaces: ["b"], tabs: 2))
     }
+
+    func test_theSameWorkspaceOpenInTwoWindows_isNamedOnce() {
+        let closes = ClosedByRemoval()
+            .adding(ClosedByRemoval(workspaces: ["zen-term: feat"]), isThisWindow: true)
+            .adding(ClosedByRemoval(workspaces: ["zen-term: feat"]), isThisWindow: false)
+
+        XCTAssertEqual(
+            lines(state: state(), closes: closes),
+            [
+                "kept feature/zen-483 has nothing uncommitted", "info Closes the zen-term: feat workspace",
+                "kept Branch and commits preserved",
+            ])
+    }
 }
