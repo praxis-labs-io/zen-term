@@ -15,7 +15,7 @@ final class WorkspaceControllerTests: WindowTestCase {
 
     private func makeWorkspace(firstTab: TabID = TabID(1)) -> WorkspaceController {
         WorkspaceController(
-            id: WorkspaceID(raw: 1), isDefault: true, name: "Home", folder: URL(fileURLWithPath: "/tmp"),
+            id: WorkspaceID(raw: 1), isConfigured: false, name: "Workspace 1", folder: URL(fileURLWithPath: "/tmp"),
             firstTab: firstTab)
     }
 

@@ -361,7 +361,8 @@
 #                        the exception is the built-in `toggle_float:scratch`,
 #                        which has no `key:` field: it rebinds and unbinds like
 #                        any other action)
-#   prev_workspace  next_workspace  select_workspace_1 … select_workspace_9  close_workspace
+#   new_workspace  prev_workspace  next_workspace
+#   select_workspace_1 … select_workspace_9  close_workspace
 #
 # Defaults (uncomment to change; these are what ships):
 # keybind = split_vertical=cmd+d                 # a new pane to the right
@@ -411,6 +412,7 @@
 # keybind = dismiss_all_toasts=cmd+shift+opt+n
 # keybind = toggle_command_palette=cmd+shift+p
 # keybind = toggle_workspace_picker=cmd+p
+# keybind = new_workspace=cmd+opt+t              # no config entry; starts where a new tab would
 # keybind = create_worktree=opt+enter            # over a picker row: cut a worktree of it
 # keybind = remove_worktree=cmd+shift+backspace  # over a worktree row: delete its folder
 # keybind = open_settings=cmd+,

@@ -24,8 +24,6 @@ final class WindowController: NSObject {
     let windowID: Int
     private static var nextWindowID = 1
 
-    private static let defaultWorkspaceName = "Home"
-
     private static var backdropTintAlpha: CGFloat { GeneralConfig.current.backdropAlpha }
 
     private let container = NSView()
@@ -331,11 +329,11 @@ final class WindowController: NSObject {
         windowID = WindowController.nextWindowID
         WindowController.nextWindowID += 1
         let firstID = TabID(1)
-        let defaultWorkspace = WorkspaceController(
-            id: WorkspaceID(raw: 1), isDefault: true, name: Self.defaultWorkspaceName,
-            folder: FileManager.default.homeDirectoryForCurrentUser, firstTab: firstID)
-        workspaces = [defaultWorkspace]
-        activeWorkspace = defaultWorkspace
+        let firstWorkspace = WorkspaceController(
+            id: WorkspaceID(raw: 1), isConfigured: false, name: Self.unconfiguredName(among: []),
+            folder: initialCWD ?? ShellLaunch.defaultCWD, firstTab: firstID)
+        workspaces = [firstWorkspace]
+        activeWorkspace = firstWorkspace
         var onSelect: (TabID) -> Void = { _ in }
         var onClose: (TabID) -> Void = { _ in }
         var onRename: (TabID) -> Void = { _ in }
@@ -646,6 +644,13 @@ final class WindowController: NSObject {
         return WorkspaceID(raw: nextWorkspaceID)
     }
 
+    private static func unconfiguredName(among names: [String]) -> String {
+        let taken = Set(names)
+        var number = 1
+        while taken.contains("Workspace \(number)") { number += 1 }
+        return "Workspace \(number)"
+    }
+
     enum SlideEdge { case fromRight, fromLeft }
 
     enum MountTransition {
@@ -950,6 +955,7 @@ final class WindowController: NSObject {
                 isOpen: { [weak self] path in self?.openWorkspace(at: path) != nil },
                 onChoose: { [weak self] ws in self?.openWorkspace(ws) },
                 onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
+                onNewWorkspace: { [weak self] in self?.newWorkspace() },
                 onDismiss: { [weak self] in self?.closeModal() }
             )
             self.presentModal(picker, kind: .repoPicker)
@@ -1572,7 +1578,7 @@ final class WindowController: NSObject {
 
     private func openWorkspace(at path: URL) -> WorkspaceController? {
         let target = path.standardizedFileURL.path
-        return workspaces.first { !$0.isDefault && $0.folder.standardizedFileURL.path == target }
+        return workspaces.first { $0.isConfigured && $0.folder.standardizedFileURL.path == target }
     }
 
     private func openWorkspace(_ ws: Workspace) {
@@ -1581,13 +1587,23 @@ final class WindowController: NSObject {
             activate(open.id)
             return
         }
+        appendWorkspace(named: ws.title, at: ws.path, config: ws)
+    }
+
+    private func newWorkspace() {
+        closeModal()
+        let folder = ShellLaunch.newSessionCWD(focused: activeController?.focusedCWD) ?? ShellLaunch.defaultCWD
+        appendWorkspace(named: Self.unconfiguredName(among: workspaces.map(\.name)), at: folder, config: nil)
+    }
+
+    private func appendWorkspace(named name: String, at folder: URL, config: Workspace?) {
         Log.info("workspace opened", category: .workspace)
         let tab = mintTabID()
         let workspace = WorkspaceController(
-            id: mintWorkspaceID(), isDefault: false, name: ws.title, folder: ws.path, firstTab: tab)
+            id: mintWorkspaceID(), isConfigured: config != nil, name: name, folder: folder, firstTab: tab)
         workspaces.append(workspace)
         activate(workspace.id)
-        installController(id: tab, cwd: ws.path, config: ws, transition: .instant)
+        installController(id: tab, cwd: folder, config: config, transition: .instant)
     }
 
     func handle(_ chord: KeyInterceptor.ReservedChord) {
@@ -1607,6 +1623,10 @@ final class WindowController: NSObject {
             }
             if modal.kind == .repoPicker, chord == .removeWorktree {
                 removeSelectedWorktreeInPicker()
+                return
+            }
+            if modal.kind == .repoPicker, chord == .newWorkspace {
+                newWorkspace()
                 return
             }
             switch chord {
@@ -1644,7 +1664,7 @@ final class WindowController: NSObject {
                 .jumpToPreviousPrompt, .jumpToNextPrompt, .pasteSelection, .clearScreen,
                 .writeScreenFile, .copyScreenFilePath, .openScreenFile,
                 .dismissToast, .dismissAllToasts,
-                .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace:
+                .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace, .newWorkspace:
                 break
             default:
                 return
@@ -1741,6 +1761,7 @@ final class WindowController: NSObject {
         case .closeWorkspace:
             Log.info("close workspace", category: .workspace)
             requestCloseWorkspace(activeWorkspace)
+        case .newWorkspace: newWorkspace()
         }
     }
 
@@ -2346,7 +2367,7 @@ final class WindowController: NSObject {
     func addWorkspaceForTesting(name: String, folder: URL) -> WorkspaceID {
         let id = mintTabID()
         let workspace = WorkspaceController(
-            id: mintWorkspaceID(), isDefault: false, name: name, folder: folder, firstTab: id)
+            id: mintWorkspaceID(), isConfigured: true, name: name, folder: folder, firstTab: id)
         workspaces.append(workspace)
         let controller = makeController(cwd: folder)
         workspace.setController(controller, for: id)

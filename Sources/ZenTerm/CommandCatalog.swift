@@ -52,6 +52,7 @@ enum CommandCatalog {
         case .toggleRightDrawer: return drawer("Toggle Right Drawer", glyph, chord)
         case .toggleToolFloat(let id): return tool(ToolFloatCatalog.byID(id)?.title ?? id, glyph, chord)
         case .toggleRepoPicker: return workspace("Open Workspace Picker", glyph, chord)
+        case .newWorkspace: return workspace("New Workspace", glyph, chord)
         case .openSettings: return config("Settings…", glyph, chord)
         case .reloadConfig: return config("Reload Config", glyph, chord)
         case .checkForUpdates: return config("Check for Updates", glyph, chord)
@@ -99,7 +100,7 @@ enum CommandCatalog {
         var chords: [KeyInterceptor.ReservedChord] = ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
         chords += [.newTool]
         chords += [.openSettings, .reloadConfig, .checkForUpdates, .reportIssue]
-        chords += [.toggleRepoPicker, .prevWorkspace, .nextWorkspace]
+        chords += [.toggleRepoPicker, .newWorkspace, .prevWorkspace, .nextWorkspace]
         if workspaceCount > 0 {
             chords += (1...min(workspaceCount, 9)).map { .selectWorkspace($0) }
         }
