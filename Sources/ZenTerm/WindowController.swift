@@ -331,7 +331,7 @@ final class WindowController: NSObject {
         let firstID = TabID(1)
         let firstWorkspace = WorkspaceController(
             id: WorkspaceID(raw: 1), isConfigured: false, name: Self.unconfiguredName(among: []),
-            folder: FileManager.default.homeDirectoryForCurrentUser, firstTab: firstID)
+            folder: initialCWD ?? ShellLaunch.defaultCWD, firstTab: firstID)
         workspaces = [firstWorkspace]
         activeWorkspace = firstWorkspace
         var onSelect: (TabID) -> Void = { _ in }
