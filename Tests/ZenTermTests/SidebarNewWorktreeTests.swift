@@ -178,6 +178,50 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertNil(rows(of: c)[2].hoverAccessory, "a worktree is made from its workspace")
     }
 
+    private func create(_ branch: String, from row: SettingsNavRow, in c: WindowController) throws {
+        let before = rows(of: c).count
+        row.mouseEntered(with: crossing(.mouseEntered, over: row))
+        try clickThroughTheWindow(at: try XCTUnwrap(row.hoverAccessory), in: c)
+        let card = try newWorktreeCard(in: c)
+        card.setBranchForTesting(branch)
+        try XCTUnwrap(descendants(of: card).compactMap { $0 as? AppButton }.first { $0.title.hasPrefix("Create") })
+            .performClick(nil)
+        waitUntil(rows(of: c).count == before + 1, "the new worktree's row", timeout: 10)
+    }
+
+    private func ghostWithAWorktree(in c: WindowController) throws -> SettingsNavRow {
+        try create("feature/first", from: try openRepoWorkspace(in: c), in: c)
+        c.activateWorkspaceForTesting(c.workspaceIDsForTesting[1])
+        c.handle(.closeWorkspace)
+        let ghost = rows(of: c)[1]
+        XCTAssertEqual(ghost.variant, .faint)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        return ghost
+    }
+
+    func test_creatingFromAGhostsPlus_nestsTheNewWorktreeUnderTheGhost_withoutOpeningItsWorkspace() throws {
+        let c = makeWindow()
+        let ghost = try ghostWithAWorktree(in: c)
+
+        try create("feature/second", from: ghost, in: c)
+
+        XCTAssertEqual(rows(of: c).map(\.titleForTesting), ["Home", "Repo", "feature/first", "feature/second"])
+        XCTAssertEqual(rows(of: c)[1].variant, .faint, "the workspace stays closed")
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting.last)
+    }
+
+    func test_optReturn_onAFocusedGhost_opensNewWorktree() throws {
+        let c = makeWindow()
+        c.window.makeKeyAndOrderFront(nil)
+        let ghost = try ghostWithAWorktree(in: c)
+        ghost.takeKeyboardFocus()
+        XCTAssertTrue(c.window.firstResponder === ghost)
+
+        XCTAssertNil(interceptor(for: c).route(try optionReturn(in: c)))
+
+        _ = try newWorktreeCard(in: c)
+    }
+
     private func interceptor(for c: WindowController) -> KeyInterceptor {
         let keys = KeyInterceptor()
         keys.setKeymap(KeymapDefaults.map)

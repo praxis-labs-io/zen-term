@@ -225,7 +225,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
                     pressure: 1)))
     }
 
-    func test_aWorktreeRowsMenu_offersOnlyClose_andAGhostHasNone() throws {
+    func test_aWorktreeRowsMenu_offersOnlyClose_andAGhostsOnlyNewWorktree() throws {
         let c = makeWindow()
         try openAlphaWorktree(branch: "feature/one", in: c)
 
@@ -233,7 +233,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(menu.itemViewsForTesting.map(\.title), ["Close Workspace"])
 
         try rightClick(rows(of: c)[1])
-        XCTAssertFalse(menu.isOpen)
+        XCTAssertEqual(menu.itemViewsForTesting.map(\.title), ["New Worktree…"], "a ghost is not open to close")
     }
 
     func test_closeFromTheMenu_closesThatWorkspace_evenInTheBackground() throws {

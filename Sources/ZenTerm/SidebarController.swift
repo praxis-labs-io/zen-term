@@ -40,7 +40,7 @@ final class SidebarController {
 
     init(
         onPalette: @escaping () -> Void, onSettings: @escaping () -> Void, onToggle: @escaping () -> Void,
-        onActivate: @escaping (SidebarRowID) -> Void, onNewWorktree: @escaping (WorkspaceID) -> Void,
+        onActivate: @escaping (SidebarRowID) -> Void, onNewWorktree: @escaping (SidebarRowID) -> Void,
         onCloseWorkspace: @escaping (WorkspaceID) -> Void, onAdd: @escaping () -> Void
     ) {
         view = SidebarView(
@@ -168,11 +168,11 @@ final class SidebarController {
 
     var hasFocus: Bool { view.hasFocus }
 
-    var focusedWorktreeParent: WorkspaceID? {
+    var focusedWorktreeParent: SidebarRowID? {
         guard let row = view.focusedRow, let entry = entries.first(where: { $0.row == row }),
-            Self.rowItem(entry).makesWorktrees, case .workspace(let id) = row
+            Self.rowItem(entry).makesWorktrees
         else { return nil }
-        return id
+        return row
     }
 
     func focusActiveRow() {
@@ -217,7 +217,7 @@ final class SidebarController {
         case .ghost:
             return SidebarRowItem(
                 id: entry.row, variant: .faint, name: entry.name, branch: nil, number: nil, isActive: false,
-                makesWorktrees: false)
+                makesWorktrees: true)
         }
     }
 

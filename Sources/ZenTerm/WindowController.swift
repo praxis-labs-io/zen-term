@@ -352,7 +352,7 @@ final class WindowController: NSObject {
         var onSettings: () -> Void = {}
         var onToggleSidebar: () -> Void = {}
         var onActivateRow: (SidebarRowID) -> Void = { _ in }
-        var onNewWorktree: (WorkspaceID) -> Void = { _ in }
+        var onNewWorktree: (SidebarRowID) -> Void = { _ in }
         var onCloseWorkspace: (WorkspaceID) -> Void = { _ in }
         var onOpenWorkspace: () -> Void = {}
         var onBottom: () -> Void = {}
@@ -848,12 +848,12 @@ final class WindowController: NSObject {
             guard id != activeWorkspace.id else { restoreFocusToActive(); return }
             activate(id)
         case .ghost(let path):
-            guard
-                let parent = workspaces.lazy.compactMap(\.origin?.parent)
-                    .first(where: { $0.path.standardizedFileURL.path == path })
-            else { return }
-            openWorkspace(parent)
+            ghostParent(at: path).map { openWorkspace($0) }
         }
+    }
+
+    private func ghostParent(at path: String) -> Workspace? {
+        workspaces.lazy.compactMap(\.origin?.parent).first { $0.path.standardizedFileURL.path == path }
     }
 
     private var order: WorkspaceOrder { WorkspaceOrder(workspaces) }
@@ -1019,11 +1019,19 @@ final class WindowController: NSObject {
     }
 
     // Reads the workspace's entry fresh, so the card copies what the file says now.
-    private func createWorktreeFromSidebar(_ id: WorkspaceID) {
-        guard let workspace = workspaces.first(where: { $0.id == id }) else { return }
+    private func createWorktreeFromSidebar(_ row: SidebarRowID) {
+        let name: String
+        let folder: String
+        switch row {
+        case .workspace(let id):
+            guard let workspace = workspaces.first(where: { $0.id == id }) else { return }
+            (name, folder) = (workspace.name, workspace.folder.standardizedFileURL.path)
+        case .ghost(let path):
+            guard let parent = ghostParent(at: path) else { return }
+            (name, folder) = (parent.title, path)
+        }
         closeModal()
         pendingModal = .worktreeForm
-        let folder = workspace.folder.standardizedFileURL.path
         ConfigLoader.loadWorkspaces { [weak self] entries in
             guard let self, self.pendingModal == .worktreeForm else { return }
             guard let entry = entries.first(where: { $0.path.standardizedFileURL.path == folder }) else {
@@ -1031,13 +1039,13 @@ final class WindowController: NSObject {
                 self.toasts.show(
                     ToastContent(
                         variant: .warning, title: "Couldn't Open New Worktree",
-                        message: "\(workspace.name) is no longer in the workspaces file."))
+                        message: "\(name) is no longer in the workspaces file."))
                 return
             }
             self.presentNewWorktree(
                 RepoPickerOverlay.CreateTarget(workspace: entry, repo: entry.path),
                 onCancel: { [weak self] in self?.closeModal() },
-                afterEdit: { [weak self] in self?.createWorktreeFromSidebar(id) })
+                afterEdit: { [weak self] in self?.createWorktreeFromSidebar(row) })
         }
     }
 

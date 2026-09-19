@@ -28,15 +28,15 @@ final class SidebarView: NSView {
     private let rowStack = NSStackView()
     private var rows: [SidebarRowID: SettingsNavRow] = [:]
     private var numbers: [SidebarRowID: Int] = [:]
-    private var worktreeParents: Set<WorkspaceID> = []
+    private var worktreeParents: Set<SidebarRowID> = []
     let rowMenu = SidebarRowMenu()
     var onLeave: (() -> Void)?
     private let onActivate: (SidebarRowID) -> Void
-    private let onNewWorktree: (WorkspaceID) -> Void
+    private let onNewWorktree: (SidebarRowID) -> Void
     private let onCloseWorkspace: (WorkspaceID) -> Void
 
     init(
-        onActivate: @escaping (SidebarRowID) -> Void, onNewWorktree: @escaping (WorkspaceID) -> Void,
+        onActivate: @escaping (SidebarRowID) -> Void, onNewWorktree: @escaping (SidebarRowID) -> Void,
         onCloseWorkspace: @escaping (WorkspaceID) -> Void, onAdd: @escaping () -> Void
     ) {
         self.onActivate = onActivate
@@ -76,11 +76,7 @@ final class SidebarView: NSView {
             rows[id] = nil
         }
         numbers = byID.compactMapValues(\.number)
-        worktreeParents = Set(
-            items.compactMap {
-                guard $0.makesWorktrees, case .workspace(let id) = $0.id else { return nil }
-                return id
-            })
+        worktreeParents = Set(items.filter(\.makesWorktrees).map(\.id))
         for (index, item) in items.enumerated() {
             let row = self.row(for: item)
             if rowStack.arrangedSubviews.firstIndex(of: row) != index {
@@ -122,7 +118,8 @@ final class SidebarView: NSView {
     }
 
     private func setNewWorktreeButton(on row: SettingsNavRow, for item: SidebarRowItem) {
-        guard item.makesWorktrees, case .workspace(let id) = item.id else { return row.setHoverAccessory(nil) }
+        guard item.makesWorktrees else { return row.setHoverAccessory(nil) }
+        let id = item.id
         guard row.hoverAccessory == nil else { return }
         row.setHoverAccessory(
             IconButton(
@@ -132,14 +129,15 @@ final class SidebarView: NSView {
     }
 
     private func menuItems(for row: SidebarRowID) -> [[SidebarRowMenu.Item]] {
-        guard case .workspace(let id) = row else { return [] }
         let create = SidebarRowMenu.Item(title: "New Worktree…", action: .createWorktree) { [weak self] in
-            self?.onNewWorktree(id)
+            self?.onNewWorktree(row)
         }
+        let creates = worktreeParents.contains(row) ? [create] : []
+        guard case .workspace(let id) = row else { return [creates] }
         let close = SidebarRowMenu.Item(title: "Close Workspace", action: .closeWorkspace) { [weak self] in
             self?.onCloseWorkspace(id)
         }
-        return [worktreeParents.contains(id) ? [create] : [], [close]]
+        return [creates, [close]]
     }
 
     override func viewDidHide() {
