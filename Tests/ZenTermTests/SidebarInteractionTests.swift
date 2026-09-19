@@ -628,7 +628,26 @@ final class SidebarInteractionTests: WindowTestCase {
         try nav(.left, in: controller)
 
         XCTAssertTrue(controller.window.firstResponder === pane.view)
-        XCTAssertTrue(showsToast("No pane left to focus", in: controller))
+        XCTAssertTrue(showsToast("No pane left to focus\nPress ⌘⌃S to show the sidebar.", in: controller))
+    }
+
+    func test_theEdgeToast_namesTheBoundSidebarChord_andOnlyWhileCollapsed() throws {
+        rebindSidebarToggle(to: Chord(command: true, shift: true, key: "e"))
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleSidebar)
+        try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface).focus()
+
+        try nav(.left, in: controller)
+
+        let collapsed = "No pane left to focus\nPress ⌘⇧E to show the sidebar."
+        XCTAssertTrue(showsToast(collapsed, in: controller), "the hint follows a rebinding")
+        for line in collapsed.split(separator: "\n") {
+            let width = (String(line) as NSString).size(withAttributes: [.font: ToastView.messageFont]).width
+            XCTAssertLessThanOrEqual(
+                width, ToastView.messageMaxWidth,
+                "wraps at \(Int(width))pt > \(Int(ToastView.messageMaxWidth))pt: \(line)")
+        }
     }
 
     func test_cmdOptLeft_endsScrollMode_soArrowsReachTheRows() throws {
@@ -770,6 +789,16 @@ final class SidebarInteractionTests: WindowTestCase {
 
     private func toggleSidebar(in controller: WindowController) throws {
         try press("s", [.command, .control], keyCode: 1, in: controller)
+    }
+
+    private func rebindSidebarToggle(to chord: Chord) {
+        let original = GeneralConfig.current
+        var overridden = original
+        var map = KeymapDefaults.map.filter { $0.value != .toggleSidebar }
+        map[chord] = .toggleSidebar
+        overridden.keymap = map
+        GeneralConfig.setCurrentForTesting(overridden)
+        addTeardownBlock { GeneralConfig.setCurrentForTesting(original) }
     }
 
     private func showsToast(_ message: String, in controller: WindowController) -> Bool {

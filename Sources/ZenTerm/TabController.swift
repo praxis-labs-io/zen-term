@@ -211,6 +211,8 @@ final class TabController: NSObject {
     var onFocusChanged: (() -> Void)?
 
     var focusPastLeftEdge: (() -> Bool)?
+    /// A second line for the no-neighbour toast, when the window can offer a way past that edge.
+    var noNeighborHint: ((Direction) -> String?)?
 
     var onNotification: ((SurfaceID, TerminalNotification) -> Void)?
 
@@ -680,11 +682,12 @@ final class TabController: NSObject {
         case .up: action = .navUp; word = "up"
         case .down: action = .navDown; word = "down"
         }
+        let hint = noNeighborHint?(direction).map { "\n\($0)" } ?? ""
         onRequestToast?(
             ToastContent(
                 variant: .info,
                 title: CommandCatalog.spec(for: action).title,
-                message: "No pane \(word) to focus"))
+                message: "No pane \(word) to focus\(hint)"))
     }
 
     // Pane leaf ids are non-negative, so drawer sentinels cannot collide with them.

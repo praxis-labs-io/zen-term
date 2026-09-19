@@ -2163,6 +2163,11 @@ final class WindowController: NSObject {
             guard let self, c === self.activeController else { return false }
             return self.focusSidebar()
         }
+        c.noNeighborHint = { [weak self] direction in
+            guard let self, direction == .left, !sidebar.isDocked else { return nil }
+            let chord = CommandCatalog.spec(for: .toggleSidebar).shortcut
+            return chord.isEmpty ? nil : "Press \(chord) to show the sidebar."
+        }
         c.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
         c.onProgress = { [weak self] surface, progress in
             self?.progressChanged(surface: surface, progress: progress)
