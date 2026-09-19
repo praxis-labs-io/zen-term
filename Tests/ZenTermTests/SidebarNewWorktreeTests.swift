@@ -143,6 +143,33 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertTrue(modals(RepoPickerOverlay.self, in: c).isEmpty)
     }
 
+    private func button(_ title: String, in view: NSView) throws -> AppButton {
+        try XCTUnwrap(descendants(of: view).compactMap { $0 as? AppButton }.first { $0.title == title })
+    }
+
+    private func editWorkspace(from card: NewWorktreeOverlay, in c: WindowController) throws -> AddWorkspaceOverlay {
+        try button("Choose what to copy", in: card).onTap()
+        waitUntil(!modals(AddWorkspaceOverlay.self, in: c).isEmpty, "the workspace form to be presented")
+        return try XCTUnwrap(modals(AddWorkspaceOverlay.self, in: c).first)
+    }
+
+    private func openCardFromThePlus(in c: WindowController) throws -> NewWorktreeOverlay {
+        let row = try openRepoWorkspace(in: c)
+        row.mouseEntered(with: crossing(.mouseEntered, over: row))
+        try clickThroughTheWindow(at: try XCTUnwrap(row.hoverAccessory), in: c)
+        return try newWorktreeCard(in: c)
+    }
+
+    func test_savingAnEditFromASidebarCard_returnsToTheCard_ratherThanThePicker() throws {
+        let c = makeWindow()
+        let form = try editWorkspace(from: try openCardFromThePlus(in: c), in: c)
+
+        try button("Save", in: form).onTap()
+
+        _ = try newWorktreeCard(in: c)
+        XCTAssertTrue(modals(RepoPickerOverlay.self, in: c).isEmpty)
+    }
+
     func test_creatingFromThePlus_nestsTheNewWorktreeUnderItsWorkspace_andMakesItActive() throws {
         let c = makeWindow()
         let row = try openRepoWorkspace(in: c)
