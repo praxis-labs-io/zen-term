@@ -7,6 +7,15 @@ final class FadingScrollView: NSScrollView {
     private let fade = EdgeFade(axis: .vertical)
     private var isObserving = false
 
+    // A full-size-content window pads a scrollable view by the titlebar height, which reads as a gap above the content.
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        automaticallyAdjustsContentInsets = false
+        contentInsets = .init()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
     override func layout() {
         super.layout()
         startObserving()

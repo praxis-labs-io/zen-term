@@ -1053,6 +1053,16 @@ final class SidebarInteractionTests: WindowTestCase {
                 pressure: 1))
     }
 
+    func test_theSidebarScroll_takesNoTitlebarInset() throws {
+        let controller = makeCrowdedController()
+        let scroll = controller.sidebarForTesting.view.scrollForTesting
+
+        XCTAssertFalse(
+            scroll.automaticallyAdjustsContentInsets,
+            "a full-size-content window otherwise pads the top by the titlebar height")
+        XCTAssertEqual(scroll.contentInsets.top, 0)
+    }
+
     func test_aRowScrolledToAnEdge_landsClearOfTheFade() throws {
         let controller = makeCrowdedController()
         let view = controller.sidebarForTesting.view
