@@ -45,6 +45,8 @@ struct WorkspaceOrder {
         }
     }
 
+    func position(of id: WorkspaceID) -> Int? { navigable.firstIndex(of: id) }
+
     var navigable: [WorkspaceID] {
         entries.compactMap {
             switch $0 {

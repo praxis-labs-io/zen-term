@@ -2703,7 +2703,7 @@ final class WindowController: NSObject {
         guard let workspace = workspace(of: id) else { return "" }
         guard workspace === activeWorkspace else {
             guard workspace.activeID == id,
-                let number = workspaces.firstIndex(where: { $0 === workspace }).map({ $0 + 1 }), number <= 9
+                let number = order.position(of: workspace.id).map({ $0 + 1 }), number <= 9
             else { return "" }
             return CommandCatalog.spec(for: .selectWorkspace(number)).shortcut
         }

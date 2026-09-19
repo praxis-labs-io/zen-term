@@ -333,6 +333,32 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(rows(of: c).map(\.showsAttentionForTesting), [false, false, true])
     }
 
+    private func drainMainQueue() {
+        let drained = expectation(description: "main queue")
+        DispatchQueue.main.async { drained.fulfill() }
+        wait(for: [drained], timeout: 2)
+    }
+
+    private func openAlphaBetaThenAlphasWorktree(in c: WindowController) throws {
+        try openWorkspace(atConfigIndex: 0, in: c)
+        try openWorkspace(atConfigIndex: 1, in: c)
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        XCTAssertEqual(titles(of: c), ["Workspace 1", "Alpha", "feature/one", "Beta"])
+    }
+
+    func test_aBackgroundWorkspacesCard_showsItsSidebarNumber_notItsOpenOrder() throws {
+        let c = makeWindow()
+        try openAlphaBetaThenAlphasWorktree(in: c)
+        let beta = try XCTUnwrap(c.tabIDsForTesting(workspace: c.workspaceIDsForTesting[2]).first)
+
+        c.notifyAgentForTesting(tab: beta, message: "needs you")
+        drainMainQueue()
+
+        let card = try XCTUnwrap(c.waitingToastForTesting(tab: beta))
+        let keycaps = descendants(of: card).compactMap { ($0 as? KeycapView)?.shortcut }
+        XCTAssertEqual(keycaps, ["⌘⌥4"], "Beta sits fourth in the sidebar, and ⌘⌥4 is what reaches it")
+    }
+
     func test_collapsedLead_readsWorkspaceSlashWorktree_whileAWorktreeIsActive() throws {
         let c = makeWindow()
         try openAlphaWorktree(branch: "feature/one", in: c)
