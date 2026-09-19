@@ -490,6 +490,27 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertFalse(hintIsShown("switch", in: overlay), "a closed one opens")
     }
 
+    func test_aWorktreeOpenInItsMirroredSubfolder_isMarkedOpen_withoutThatFolderOnDisk() throws {
+        let repo = try GitFixture.makeRepo(at: path("mirror-repo").resolvingSymlinksInPath())
+        defer { try? FileManager.default.removeItem(at: repo) }
+        let package = repo.appendingPathComponent("pkg", isDirectory: true)
+        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+        let tree = worktree(repo, "feat")
+        let opened = tree.path.appendingPathComponent("pkg").standardizedFileURL.path
+        let overlay = makeRepoPicker(
+            entries: [workspace("mono", path: package)], isOpen: { $0.standardizedFileURL.path == opened })
+        mount(overlay)
+        waitUntil(GitRepoStatus.repoRoot(package) != nil, "the repo root to be read off the main thread")
+
+        overlay.setWorktrees(WorktreeListing(commonDir: repo, worktrees: [tree]), for: package)
+
+        let row = try XCTUnwrap(rowViews(in: overlay).compactMap { $0 as? RepoPickerOverlay.RowView }.last)
+        XCTAssertNotNil(row.worktree)
+        XCTAssertTrue(
+            descendants(of: row).contains { ($0 as? NSTextField)?.stringValue == "open" },
+            "the open workspace sits at the worktree's copy of pkg, which the picker never reads off disk")
+    }
+
     private func hintIsShown(_ label: String, in overlay: NSView) -> Bool {
         func walk(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(walk) }
         guard

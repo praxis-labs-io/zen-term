@@ -145,8 +145,8 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .add: return false
         case .workspace(let workspace): return isOpen(workspace.path)
         case .worktree(let worktree, let parent):
-            let opens = Self.workspace(for: worktree, parent: parent, repoRoot: GitRepoStatus.repoRoot(parent.path))
-            return isOpen(opens.path)
+            let mirror = GitRepo.mirrorPath(parent.path, from: GitRepoStatus.repoRoot(parent.path), into: worktree.path)
+            return isOpen(mirror) || isOpen(worktree.path)
         }
     }
 
