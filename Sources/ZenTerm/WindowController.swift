@@ -209,12 +209,28 @@ final class WindowController: NSObject {
     // A palette pick reaches `handle` directly, past `AppDelegate.route`, so app-global chords come back through here.
     var onAppGlobalCommand: ((KeyInterceptor.ReservedChord) -> Void)?
 
-    var onCountTabsAtPath: ((URL) -> Int)?
+    var onClosedByRemovalAtPath: ((URL) -> ClosedByRemoval)?
 
     var worktreeRemovals = WorktreeRemovalTracker()
 
     func tabCount(atPath path: URL) -> Int {
         allTabIDs.filter { Self.isInside(controller($0)?.openedCWD, path) }.count
+    }
+
+    func closedByRemoval(atPath path: URL) -> ClosedByRemoval {
+        var closed = ClosedByRemoval()
+        var emptied = 0
+        for workspace in workspaces {
+            let inside = workspace.tabIDs.filter { Self.isInside(controller($0)?.openedCWD, path) }.count
+            guard inside > 0 else { continue }
+            if inside == workspace.tabIDs.count {
+                closed.workspaces.append(workspace.name)
+                emptied += 1
+            } else {
+                closed.tabs += inside
+            }
+        }
+        return emptied == workspaces.count ? ClosedByRemoval(thisWindow: true) : closed
     }
 
     private static func isInside(_ cwd: URL?, _ root: URL) -> Bool {
@@ -1076,7 +1092,7 @@ final class WindowController: NSObject {
             let selection = picker.selectedWorktree
         else { return }
         let (worktree, parent) = selection
-        let openTabs = onCountTabsAtPath?(worktree.path) ?? tabCount(atPath: worktree.path)
+        let closes = onClosedByRemovalAtPath?(worktree.path) ?? closedByRemoval(atPath: worktree.path)
         DispatchQueue.global(qos: .userInitiated).async {
             let carried = parent.carry.compactMap { entry -> String? in
                 let url = worktree.path.appendingPathComponent(entry)
@@ -1084,7 +1100,7 @@ final class WindowController: NSObject {
                 return PathDisplay.isDirectory(url) ? entry + "/" : entry
             }
             let items = WorktreeRemovalMessage.items(
-                for: worktree, state: WorktreeStore.state(worktree), carried: carried, openTabs: openTabs)
+                for: worktree, state: WorktreeStore.state(worktree), carried: carried, closes: closes)
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.modal?.overlay === picker,
                     !self.worktreeRemovals.isRemoving(worktree.path)

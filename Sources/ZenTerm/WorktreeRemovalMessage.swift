@@ -8,7 +8,7 @@ enum WorktreeRemovalMessage {
     }
 
     static func items(
-        for worktree: Worktree, state: WorktreeState?, carried: [String], openTabs: Int
+        for worktree: Worktree, state: WorktreeState?, carried: [String], closes: ClosedByRemoval
     ) -> [Item] {
         let name = name(worktree)
         let detached = worktree.branch == nil
@@ -16,9 +16,7 @@ enum WorktreeRemovalMessage {
         if !carried.isEmpty {
             items.append(Item(mark: .info, text: plain("Deletes the copied files"), rows: copiedRows(carried)))
         }
-        if openTabs > 0 {
-            items.append(Item(mark: .info, text: plain("Closes \(counted(openTabs, "tab"))"), rows: []))
-        }
+        items += closing(closes).map { Item(mark: .info, text: $0, rows: []) }
         if !detached, (state?.lostCommits ?? 0) == 0 {
             items.append(Item(mark: .kept, text: plain("Branch and commits preserved"), rows: []))
         }
@@ -42,6 +40,25 @@ enum WorktreeRemovalMessage {
             return Item(mark: .lost, text: naming(name, "Removing ", " loses \(files)"), rows: rows)
         case (false, true):
             return Item(mark: .kept, text: naming(name, "", " has nothing uncommitted"), rows: [])
+        }
+    }
+
+    private static func closing(_ closes: ClosedByRemoval) -> [[ConfirmCardList.Run]] {
+        var lines: [[ConfirmCardList.Run]] = []
+        if closes.thisWindow { lines.append(plain("Closes this window")) }
+        if closes.otherWindows > 0 { lines.append(plain("Closes \(counted(closes.otherWindows, "other window"))")) }
+        if !closes.workspaces.isEmpty {
+            let noun = closes.workspaces.count == 1 ? " workspace" : " workspaces"
+            lines.append(plain("Closes the ") + listing(closes.workspaces) + plain(noun))
+        }
+        if closes.tabs > 0 { lines.append(plain("Closes \(counted(closes.tabs, "tab"))")) }
+        return lines
+    }
+
+    private static func listing(_ names: [String]) -> [ConfirmCardList.Run] {
+        names.enumerated().flatMap { index, name -> [ConfirmCardList.Run] in
+            let separator = index == 0 ? "" : (index == names.count - 1 ? " and " : ", ")
+            return (separator.isEmpty ? [] : plain(separator)) + [.init(text: name, tone: .ink(.subtle))]
         }
     }
 

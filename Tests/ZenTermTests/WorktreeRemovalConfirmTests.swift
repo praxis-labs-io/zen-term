@@ -16,23 +16,25 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
     }
 
     private func items(
-        state: WorktreeState?, branch: String? = "feature/zen-483", carried: [String] = [], openTabs: Int = 0
+        state: WorktreeState?, branch: String? = "feature/zen-483", carried: [String] = [],
+        closes: ClosedByRemoval = ClosedByRemoval()
     ) -> [WorktreeRemovalMessage.Item] {
         WorktreeRemovalMessage.items(
-            for: worktree(branch: branch), state: state, carried: carried, openTabs: openTabs)
+            for: worktree(branch: branch), state: state, carried: carried, closes: closes)
     }
 
     private func lines(
-        state: WorktreeState?, branch: String? = "feature/zen-483", carried: [String] = [], openTabs: Int = 0
+        state: WorktreeState?, branch: String? = "feature/zen-483", carried: [String] = [],
+        closes: ClosedByRemoval = ClosedByRemoval()
     ) -> [String] {
-        items(state: state, branch: branch, carried: carried, openTabs: openTabs).map { item in
+        items(state: state, branch: branch, carried: carried, closes: closes).map { item in
             "\(item.mark) \(item.text.map(\.text).joined())"
         }
     }
 
     func test_branchWithEverything_ordersLossThenCopiesThenTabsThenWhatStays() {
         XCTAssertEqual(
-            lines(state: state(files: 6), carried: [".env", "node_modules/"], openTabs: 2),
+            lines(state: state(files: 6), carried: [".env", "node_modules/"], closes: ClosedByRemoval(tabs: 2)),
             [
                 "lost Removing feature/zen-483 loses 6 uncommitted files",
                 "info Deletes the copied files",
@@ -65,7 +67,7 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
 
     func test_counts_areSingularAtOne() {
         XCTAssertEqual(
-            lines(state: state(files: 1), openTabs: 1),
+            lines(state: state(files: 1), closes: ClosedByRemoval(tabs: 1)),
             [
                 "lost Removing feature/zen-483 loses 1 uncommitted file", "info Closes 1 tab",
                 "kept Branch and commits preserved",
@@ -88,7 +90,7 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
     }
 
     func test_detachedWithCommitsAndFiles_losesBoth_andKeepsNothing() {
-        let out = items(state: state(files: 3, commits: 2), branch: nil, openTabs: 1)
+        let out = items(state: state(files: 3, commits: 2), branch: nil, closes: ClosedByRemoval(tabs: 1))
 
         XCTAssertEqual(
             out.map { "\($0.mark) \($0.text.map(\.text).joined())" },
@@ -167,11 +169,50 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
 
     func test_noEmDashAnywhere() {
         let cases = [
-            lines(state: nil), lines(state: state(files: 3, commits: 2), branch: nil, carried: [".env"], openTabs: 2),
-            lines(state: state(), carried: [".env", "node_modules/"], openTabs: 1),
+            lines(state: nil),
+            lines(state: state(files: 3, commits: 2), branch: nil, carried: [".env"], closes: ClosedByRemoval(tabs: 2)),
+            lines(state: state(), carried: [".env", "node_modules/"], closes: ClosedByRemoval(tabs: 1)),
         ]
         for text in cases.flatMap({ $0 }) {
             XCTAssertFalse(text.contains("—"), text)
         }
+    }
+
+    func test_aWorkspaceThatEmpties_isNamed() {
+        let out = items(state: state(), closes: ClosedByRemoval(workspaces: ["alpha: feature"]))
+
+        XCTAssertEqual(
+            out[1].text,
+            [
+                .init(text: "Closes the ", tone: .ink(.muted)), .init(text: "alpha: feature", tone: .ink(.subtle)),
+                .init(text: " workspace", tone: .ink(.muted)),
+            ])
+    }
+
+    func test_severalWorkspaces_areListedInOneLine() {
+        XCTAssertEqual(
+            lines(state: state(), closes: ClosedByRemoval(workspaces: ["a", "b", "c"], tabs: 1)),
+            [
+                "kept feature/zen-483 has nothing uncommitted", "info Closes the a, b and c workspaces",
+                "info Closes 1 tab", "kept Branch and commits preserved",
+            ])
+    }
+
+    func test_closingThisWindow_saysSo() {
+        XCTAssertEqual(
+            lines(state: state(), closes: ClosedByRemoval(thisWindow: true, otherWindows: 1)),
+            [
+                "kept feature/zen-483 has nothing uncommitted", "info Closes this window",
+                "info Closes 1 other window", "kept Branch and commits preserved",
+            ])
+    }
+
+    func test_aWindowThatCloses_countsAsAWindow_notItsWorkspaces() {
+        let sum = ClosedByRemoval()
+            .adding(ClosedByRemoval(thisWindow: true), isThisWindow: true)
+            .adding(ClosedByRemoval(thisWindow: true), isThisWindow: false)
+            .adding(ClosedByRemoval(workspaces: ["b"], tabs: 2), isThisWindow: false)
+
+        XCTAssertEqual(sum, ClosedByRemoval(thisWindow: true, otherWindows: 1, workspaces: ["b"], tabs: 2))
     }
 }

@@ -163,4 +163,21 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
 
         XCTAssertEqual(c.tabCount, before)
     }
+
+    func test_removal_namesTheWorkspaceItEmpties() throws {
+        let c = makeWindow()
+        let wanted = try folder("feature-x")
+        c.openWorkspaceForTesting(workspace("x", at: wanted))
+
+        XCTAssertEqual(c.closedByRemoval(atPath: wanted), ClosedByRemoval(workspaces: ["x"]))
+    }
+
+    func test_removal_thatEmptiesEveryWorkspace_closesTheWindow() throws {
+        let c = makeWindow()
+        c.openWorkspaceForTesting(workspace("x", at: try folder("feature-x")))
+
+        XCTAssertEqual(
+            c.closedByRemoval(atPath: root), ClosedByRemoval(thisWindow: true),
+            "Home opened in root too, so nothing is left to hold the window")
+    }
 }
