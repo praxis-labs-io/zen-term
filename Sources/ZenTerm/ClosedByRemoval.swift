@@ -1,6 +1,5 @@
 import Foundation
 
-// What removing a worktree's folder closes with it, gathered across every window.
 struct ClosedByRemoval: Equatable {
     var thisWindow = false
     var otherWindows = 0
