@@ -94,6 +94,11 @@ final class SidebarInteractionTests: WindowTestCase {
         row.mouseDown(with: event)
     }
 
+    private func rowFillEdge(in controller: WindowController) throws -> CGFloat {
+        let row = try XCTUnwrap(modals(SettingsNavRow.self, in: controller).first, "a workspace row")
+        return frame(of: row, in: controller).maxX
+    }
+
     private func modals<T: NSView>(_ type: T.Type, in controller: WindowController) -> [T] {
         descendants(of: controller.containerForTesting).compactMap { $0 as? T }
     }
@@ -108,7 +113,8 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertEqual(frame(of: try tabBar(in: controller), in: controller).minX, SidebarView.width)
         XCTAssertEqual(
             frame(of: try pane(in: controller), in: controller).minX,
-            SidebarView.width + Self.paneGap, "docked, the panes sit one pane-gap from the sidebar, as from a drawer")
+            try rowFillEdge(in: controller) + Self.paneGap,
+            "docked, the panes sit one pane-gap from the sidebar's rows, as from a drawer")
     }
 
     func test_toggle_collapses_andDocksAgain() throws {
@@ -135,7 +141,8 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(sidebar.lead.isHidden)
         XCTAssertEqual(
             frame(of: try pane(in: controller), in: controller).minX,
-            SidebarView.width + Self.paneGap, "docked, the panes sit one pane-gap from the sidebar, as from a drawer")
+            try rowFillEdge(in: controller) + Self.paneGap,
+            "docked, the panes sit one pane-gap from the sidebar's rows, as from a drawer")
     }
 
     func test_toggle_holdsItsWindowPosition_dockedAndCollapsed() throws {

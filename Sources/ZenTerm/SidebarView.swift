@@ -18,7 +18,7 @@ struct SidebarRowItem: Equatable {
 
 final class SidebarView: NSView {
     static let width: CGFloat = 240
-    private static let padding: CGFloat = 8
+    static let padding: CGFloat = 8
     private static let captionHeight: CGFloat = 28
     private static let captionInset: CGFloat = 10
     private static let addInset: CGFloat = 4

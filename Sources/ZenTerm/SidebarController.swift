@@ -104,8 +104,10 @@ final class SidebarController {
     private var leadOffset: CGFloat { isDocked ? 0 : lead.contentWidth }
     // Collapsed, the bar tucks under the lead so the divider sits as far from the first title as from the name.
     private var tabBarPull: CGFloat { isDocked ? 0 : CollapsedSidebarLead.dividerGap - TabBarView.titleInset }
-    // The canvas insets itself by window-gutter; docked, it sits one pane-gap from the sidebar, as from a drawer.
-    private var canvasGap: CGFloat { isDocked ? ChromeMetrics.panelGap - ChromeMetrics.windowGutter : 0 }
+    // The canvas insets itself by window-gutter; docked, it sits one pane-gap from the rows' fill, as from a drawer.
+    private var canvasGap: CGFloat {
+        isDocked ? ChromeMetrics.panelGap - ChromeMetrics.windowGutter - SidebarView.padding : 0
+    }
 
     func toggle(holding surfaces: [TerminalSurface], in root: NSView) {
         guard let edgeLeading, let canvasOffset, let leadWidth, let tabBarLeading else { return }
