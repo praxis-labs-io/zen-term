@@ -76,7 +76,7 @@ final class SettingsNavRowTests: WindowTestCase {
         XCTAssertEqual(detail.textColor, Theme.current.chrome.ink(.muted))
     }
 
-    func test_click_takesFocus_byDefault() {
+    func test_click_takesFocus() {
         var activations = 0
         let (row, window) = mountedRow { activations += 1 }
 
@@ -84,20 +84,6 @@ final class SettingsNavRowTests: WindowTestCase {
 
         XCTAssertTrue(window.firstResponder === row)
         XCTAssertEqual(activations, 1)
-    }
-
-    func test_click_onAnUnfocusableRow_activatesAndLeavesFocusAlone() {
-        var activations = 0
-        let (row, window) = mountedRow(isFocusable: false) { activations += 1 }
-        let focusHolder = FocusHolder(frame: NSRect(x: 0, y: 30, width: 10, height: 10))
-        window.contentView?.addSubview(focusHolder)
-        window.makeFirstResponder(focusHolder)
-
-        row.mouseDown(with: click(on: row, in: window))
-
-        XCTAssertTrue(window.firstResponder === focusHolder, "the click activates the row without taking focus")
-        XCTAssertEqual(activations, 1)
-        XCTAssertFalse(row.acceptsFirstResponder, "AppKit only promotes a clicked view that accepts first responder")
     }
 
     func test_return_andKeypadEnter_callOnReturn() {
@@ -149,10 +135,6 @@ final class SettingsNavRowTests: WindowTestCase {
             isARepeat: false, keyCode: keyCode)!
     }
 
-    private final class FocusHolder: NSView {
-        override var acceptsFirstResponder: Bool { true }
-    }
-
     private func crossing(_ type: NSEvent.EventType, over row: NSView) -> NSEvent {
         NSEvent.enterExitEvent(
             with: type, location: .zero, modifierFlags: [], timestamp: 0,
@@ -168,9 +150,9 @@ final class SettingsNavRowTests: WindowTestCase {
     }
 
     private func mountedRow(
-        isFocusable: Bool = true, onActivate: @escaping () -> Void = {}
+        onActivate: @escaping () -> Void = {}
     ) -> (SettingsNavRow, NSWindow) {
-        let row = SettingsNavRow(title: "Terminal", isFocusable: isFocusable, onActivate: onActivate)
+        let row = SettingsNavRow(title: "Terminal", onActivate: onActivate)
         row.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 200, height: 40),

@@ -351,6 +351,7 @@ final class WindowController: NSObject {
         onPalette = { [weak self] in self?.handle(.toggleCommandPalette) }
         onSettings = { [weak self] in self?.handle(.openSettings) }
         onToggleSidebar = { [weak self] in self?.handle(.toggleSidebar) }
+        sidebar.onLeave = { [weak self] in self?.restoreFocusToActive() }
         onBottom = { [weak self] in self?.handle(.toggleBottomDrawer) }
         onRight = { [weak self] in self?.handle(.toggleRightDrawer) }
         onZoom = { [weak self] in self?.handle(.toggleZoom) }

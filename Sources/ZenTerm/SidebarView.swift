@@ -16,6 +16,8 @@ final class SidebarView: NSView {
     private let caption = FieldCaption("Workspaces", required: false)
     private let rowStack = NSStackView()
     private var rows: [WorkspaceID: SettingsNavRow] = [:]
+    var onRowReturn: ((WorkspaceID) -> Void)?
+    var onLeave: (() -> Void)?
 
     init() {
         super.init(frame: .zero)
@@ -60,9 +62,32 @@ final class SidebarView: NSView {
 
     private func row(for item: SidebarRowItem) -> SettingsNavRow {
         if let row = rows[item.id] { return row }
-        let row = SettingsNavRow(title: item.name, isFocusable: false) {}
+        let id = item.id
+        let row = SettingsNavRow(title: item.name) {}
+        row.onArrowUp = { [weak self] in self?.moveFocus(-1) }
+        row.onArrowDown = { [weak self] in self?.moveFocus(1) }
+        row.onReturn = { [weak self] in self?.onRowReturn?(id) }
+        row.onEscape = { [weak self] in self?.onLeave?() }
         rows[item.id] = row
         return row
+    }
+
+    var hasFocus: Bool { rows.values.contains { KeyboardFocus.isFocused($0, in: window) } }
+
+    func focusRow(_ id: WorkspaceID) {
+        guard let row = rows[id] else { return }
+        window?.makeFirstResponder(row)
+    }
+
+    private func moveFocus(_ delta: Int) {
+        let ordered = orderedRows
+        let current = ordered.firstIndex { KeyboardFocus.isFocused($0, in: window) }
+        guard let next = KeyboardFocus.step(from: current, delta: delta, count: ordered.count) else { return }
+        window?.makeFirstResponder(ordered[next])
+    }
+
+    private var orderedRows: [SettingsNavRow] {
+        rowStack.arrangedSubviews.compactMap { $0 as? SettingsNavRow }
     }
 
     func reapplyTheme() {
@@ -70,5 +95,5 @@ final class SidebarView: NSView {
         for row in rows.values { row.reapplyTheme() }
     }
 
-    var rowsForTesting: [SettingsNavRow] { rowStack.arrangedSubviews.compactMap { $0 as? SettingsNavRow } }
+    var rowsForTesting: [SettingsNavRow] { orderedRows }
 }

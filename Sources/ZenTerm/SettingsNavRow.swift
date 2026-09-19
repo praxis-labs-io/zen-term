@@ -11,7 +11,6 @@ final class SettingsNavRow: NSView {
     private let label = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
     private let onActivate: () -> Void
-    private let isFocusable: Bool
     private var trackingArea: NSTrackingArea?
     private var isSelected = false
     private var isFocusedStop = false
@@ -19,9 +18,8 @@ final class SettingsNavRow: NSView {
 
     private static let detailMaxWidth: CGFloat = 96
 
-    init(title: String, isFocusable: Bool = true, onActivate: @escaping () -> Void) {
+    init(title: String, onActivate: @escaping () -> Void) {
         self.onActivate = onActivate
-        self.isFocusable = isFocusable
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -78,7 +76,7 @@ final class SettingsNavRow: NSView {
         }
     }
 
-    override var acceptsFirstResponder: Bool { isFocusable }
+    override var acceptsFirstResponder: Bool { true }
     override func becomeFirstResponder() -> Bool { isFocusedStop = true; refreshFill(); return true }
     override func resignFirstResponder() -> Bool { isFocusedStop = false; refreshFill(); return true }
 
@@ -101,7 +99,7 @@ final class SettingsNavRow: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        if isFocusable { window?.makeFirstResponder(self) }
+        window?.makeFirstResponder(self)
         onActivate()
     }
 

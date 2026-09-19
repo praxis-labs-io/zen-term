@@ -307,7 +307,104 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertEqual(rows.count, 2)
         XCTAssertEqual(rows[0].layer?.backgroundColor, NSColor.clear.cgColor)
         XCTAssertEqual(rows[1].layer?.backgroundColor, Theme.current.chrome.fill(.rest).cgColor)
-        XCTAssertFalse(rows.contains { $0.acceptsFirstResponder }, "a row click leaves focus in the pane")
+    }
+
+    func test_focusedRow_showsTheSelectionFill_andArrowsMoveItWithinTheRows() throws {
+        let controller = makeController()
+        _ = controller.addWorkspaceForTesting(name: "api", folder: root)
+        _ = controller.addWorkspaceForTesting(name: "web", folder: root)
+        controller.window.makeKeyAndOrderFront(nil)
+        let rows = controller.sidebarForTesting.view.rowsForTesting
+
+        controller.sidebarForTesting.focusActiveRow()
+        XCTAssertTrue(controller.window.firstResponder === rows[0], "entry lands on the active workspace")
+        XCTAssertEqual(rows[0].layer?.backgroundColor, Theme.current.chrome.selectionFill.cgColor)
+
+        for expected in [1, 2, 2] {
+            controller.window.sendEvent(key(.down, in: controller))
+            XCTAssertTrue(controller.window.firstResponder === rows[expected], "↓ lands on row \(expected)")
+        }
+        for expected in [1, 0, 0] {
+            controller.window.sendEvent(key(.up, in: controller))
+            XCTAssertTrue(controller.window.firstResponder === rows[expected], "↑ lands on row \(expected)")
+        }
+    }
+
+    func test_return_onAFocusedRow_reportsItsWorkspace() throws {
+        let controller = makeController()
+        let api = controller.addWorkspaceForTesting(name: "api", folder: root)
+        controller.window.makeKeyAndOrderFront(nil)
+        var returned: [WorkspaceID] = []
+        controller.sidebarForTesting.view.onRowReturn = { returned.append($0) }
+
+        controller.sidebarForTesting.focusActiveRow()
+        controller.window.sendEvent(key(.down, in: controller))
+        controller.window.sendEvent(key(.return, in: controller))
+
+        XCTAssertEqual(returned, [api])
+    }
+
+    func test_escape_returnsFocusToThePaneItCameFrom() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+
+        controller.sidebarForTesting.focusActiveRow()
+        XCTAssertTrue(controller.sidebarForTesting.hasFocus)
+        controller.window.sendEvent(key(.escape, in: controller))
+
+        XCTAssertFalse(controller.sidebarForTesting.hasFocus)
+        XCTAssertTrue(controller.window.firstResponder === pane.view)
+    }
+
+    func test_escape_returnsFocusToTheDrawerItCameFrom() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleBottomDrawer)
+        let drawer = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        XCTAssertTrue(controller.window.firstResponder === drawer.view, "opening the drawer focuses it")
+
+        controller.sidebarForTesting.focusActiveRow()
+        controller.window.sendEvent(key(.escape, in: controller))
+
+        XCTAssertTrue(controller.window.firstResponder === drawer.view)
+    }
+
+    private enum Key {
+        case up, down, `return`, escape
+
+        var code: UInt16 {
+            switch self {
+            case .up: return 126
+            case .down: return 125
+            case .return: return 36
+            case .escape: return 53
+            }
+        }
+
+        var text: String {
+            switch self {
+            case .up: return "\u{F700}"
+            case .down: return "\u{F701}"
+            case .return: return "\r"
+            case .escape: return "\u{1b}"
+            }
+        }
+
+        var flags: NSEvent.ModifierFlags {
+            switch self {
+            case .up, .down: return [.function, .numericPad]
+            case .return, .escape: return []
+            }
+        }
+    }
+
+    private func key(_ key: Key, in controller: WindowController) -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: key.flags, timestamp: 0,
+            windowNumber: controller.window.windowNumber, context: nil, characters: key.text,
+            charactersIgnoringModifiers: key.text, isARepeat: false, keyCode: key.code)!
     }
 
     func test_row_showsItsWorkspaceBranch() throws {
