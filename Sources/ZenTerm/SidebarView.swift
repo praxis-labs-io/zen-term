@@ -5,6 +5,7 @@ struct SidebarRowItem: Equatable {
     let name: String
     let branch: String?
     let isActive: Bool
+    let isWaiting: Bool
 }
 
 final class SidebarView: NSView {
@@ -149,6 +150,7 @@ final class SidebarView: NSView {
             }
             row.setDetail(item.branch)
             row.setSelected(item.isActive)
+            row.setShowsAttention(item.isWaiting)
         }
         if removedFocusedRow { onLeave?() }
     }

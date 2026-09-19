@@ -2577,7 +2577,8 @@ final class WindowController: NSObject {
                 attentionState: attention.state(tab: id).tabState)
         }
         tabBar.render(items)
-        sidebar.render(workspaces: workspaces, active: activeWorkspace)
+        let waiting = workspaces.filter { attention.state(tabs: $0.tabIDs) == .waiting }.map(\.id)
+        sidebar.render(workspaces: workspaces, active: activeWorkspace, waiting: Set(waiting))
         renderAgents()
         for (id, card) in attentionCards {
             cardTitles[id].map { card.setTitle($0()) }

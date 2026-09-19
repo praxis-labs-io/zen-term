@@ -321,4 +321,23 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(c.focusedSurfaceIDForTesting, first.id)
         XCTAssertFalse(c.sidebarForTesting.hasFocus)
     }
+
+    func test_aWorkspaceWithAnAgentWaiting_showsTheDot_untilItsTabIsVisited() throws {
+        let c = makeWindow()
+        let home = c.activeWorkspaceIDForTesting
+        c.openWorkspaceForTesting(recipe("zen-review", right: nil))
+        let review = c.activeWorkspaceIDForTesting
+        let agent = try focusedAgent(c)
+        c.activateWorkspaceForTesting(home)
+        let rows = c.sidebarForTesting.view.rowsForTesting
+
+        progress(agent, working: true)
+        XCTAssertEqual(rows.map(\.showsAttentionForTesting), [false, false], "working is not waiting")
+
+        notify(agent, "Wants to run swift test")
+        XCTAssertEqual(rows.map(\.showsAttentionForTesting), [false, true])
+
+        c.activateWorkspaceForTesting(review)
+        XCTAssertEqual(rows.map(\.showsAttentionForTesting), [false, false])
+    }
 }
