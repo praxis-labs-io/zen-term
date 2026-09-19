@@ -630,7 +630,7 @@ final class TabController: NSObject {
                 message: "Focus Mode needs a second pane or an open drawer."))
     }
 
-    private func toastNoNeighbor(_ direction: Direction) {
+    func toastNoNeighbor(_ direction: Direction) {
         let now = Date()
         if let last = lastNoNeighborToast, last.direction == direction,
             now.timeIntervalSince(last.at) < Self.zoomBlockToastThrottle

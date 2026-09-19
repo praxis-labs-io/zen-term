@@ -451,6 +451,19 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(controller.sidebarForTesting.hasFocus)
     }
 
+    func test_cmdOptUpDownLeft_fromTheSidebar_sayThereIsNoPane_andKeepFocus() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.sidebarForTesting.focusActiveRow()
+        let row = try XCTUnwrap(controller.sidebarForTesting.view.rowsForTesting.first)
+
+        for (direction, word) in [(Direction.up, "up"), (.down, "down"), (.left, "left")] {
+            try nav(direction, in: controller)
+            XCTAssertTrue(controller.window.firstResponder === row, "⌘⌥ \(word) keeps the row")
+            XCTAssertTrue(showsToast("No pane \(word) to focus", in: controller), word)
+        }
+    }
+
     func test_cmdOptLeft_withTheSidebarCollapsed_keepsFocus_andSaysThereIsNoPane() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)

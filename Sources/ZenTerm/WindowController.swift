@@ -1738,7 +1738,7 @@ final class WindowController: NSObject {
 
     private func navigate(_ direction: Direction) {
         guard sidebar.hasFocus else { activeController?.navigate(direction); return }
-        if direction == .right { restoreFocusToActive() }
+        if direction == .right { restoreFocusToActive() } else { activeController?.toastNoNeighbor(direction) }
     }
 
     private func focusSidebar() -> Bool {
