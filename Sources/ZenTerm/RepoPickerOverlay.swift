@@ -335,6 +335,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
             NSLayoutConstraint.activate([
                 icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 11),
+                icon.widthAnchor.constraint(equalToConstant: 17),
                 icon.centerYAnchor.constraint(equalTo: centerYAnchor),
                 label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
                 label.centerYAnchor.constraint(equalTo: centerYAnchor),
