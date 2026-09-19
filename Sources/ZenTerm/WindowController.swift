@@ -185,6 +185,7 @@ final class WindowController: NSObject {
     private let sidebar: SidebarController
     private var mountedCanvas: NSView?
     private var focusReturn: SidebarRowID?
+    private var windowIsKey = true
     private var activeCanvasSlides = 0
     private let horizontalSlideFade = EdgeFade(axis: .horizontal)
     private let verticalSlideFade = EdgeFade(axis: .vertical)
@@ -809,9 +810,9 @@ final class WindowController: NSObject {
         syncHalo()
     }
 
-    /// The halo answers where the keyboard is, so it goes out while the sidebar holds focus.
+    /// The halo answers where the keyboard is: out while the sidebar holds focus, or the window isn't key.
     private func syncHalo() {
-        activeController?.setHaloVisible(!sidebar.hasFocus)
+        activeController?.setHaloVisible(!sidebar.hasFocus && windowIsKey)
     }
 
     // Below `tabBar`, so the ⌘W guard toast fired over an open float stays visible.
@@ -2862,9 +2863,15 @@ extension WindowController: NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) { tearDown() }
 
-    func windowDidResignKey(_ notification: Notification) { endModes() }
+    func windowDidResignKey(_ notification: Notification) {
+        windowIsKey = false
+        syncHalo()
+        endModes()
+    }
 
     func windowDidBecomeKey(_ notification: Notification) {
+        windowIsKey = true
+        syncHalo()
         sidebar.refreshBranches()
         answerFocusedAgent()
     }

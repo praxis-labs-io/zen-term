@@ -936,6 +936,31 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(pane.isFocused, "and comes back with focus")
     }
 
+    func test_whileTheWindowIsNotKey_noPaneShowsTheHalo() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedPanelForTesting)
+        XCTAssertTrue(pane.isFocused)
+
+        controller.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification))
+        XCTAssertFalse(pane.isFocused, "an unfocused window shows no halo")
+
+        controller.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
+        XCTAssertTrue(pane.isFocused, "and it comes back when the window does")
+    }
+
+    func test_theWindowBecomingKeyAgain_leavesTheSidebarsFocusAlone() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedPanelForTesting)
+        controller.sidebarForTesting.focusActiveRow()
+
+        controller.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification))
+        controller.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
+
+        XCTAssertFalse(pane.isFocused, "the sidebar still holds focus, so the halo stays out")
+    }
+
     func test_aPickerOpenedFromTheSidebar_handsFocusBackToItsRow() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
