@@ -50,6 +50,7 @@ final class PaneCanvasController: NSObject {
     var onCommandFinished: ((SurfaceID, TerminalCommandResult) -> Void)?
 
     var onProgress: ((SurfaceID, TerminalProgress?) -> Void)?
+    var onProgramLaunched: ((SurfaceID, String) -> Void)?
 
     var onSurfacesRegistered: (([SurfaceID]) -> Void)?
 
@@ -162,13 +163,15 @@ final class PaneCanvasController: NSObject {
             registered.append((surfaceID, id))
             let token = registerNavToken(for: id)
             let launch: TerminalSurfaceConfig
-            if let cmd = startupCommandByLeaf.removeValue(forKey: id) {
+            let launchedCommand = startupCommandByLeaf.removeValue(forKey: id)
+            if let cmd = launchedCommand {
                 launch = ShellLaunch.program(cmd, cwd: cwdByLeaf[id], env: navEnv(token: token))
             } else {
                 launch = ShellLaunch.shell(cwd: cwdByLeaf[id], env: navEnv(token: token))
             }
             launchByLeaf[id] = launch
             surface.start(launch)
+            if let cmd = launchedCommand { onProgramLaunched?(surfaceID, cmd) }
             Log.info("surface started (pane \(id))", category: .surface)
         }
         var released: [SurfaceID] = []
@@ -515,4 +518,16 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     var focusedSurfaceID: SurfaceID? { surfaceIDByLeaf[tree.focusedLeaf] }
 
     var liveSurfaceIDs: [SurfaceID] { tree.leafIDs.compactMap { surfaceIDByLeaf[$0] } }
+
+    private func leafID(of surface: SurfaceID) -> PaneID? {
+        surfaceIDByLeaf.first { $0.value == surface }?.key
+    }
+
+    func surface(_ id: SurfaceID) -> TerminalSurface? {
+        leafID(of: id).flatMap { registry.surface(for: $0) }
+    }
+
+    func focus(surface id: SurfaceID) {
+        leafID(of: id).map { focus($0) }
+    }
 }

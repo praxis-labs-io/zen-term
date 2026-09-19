@@ -32,6 +32,8 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     var onSurfaceRegistered: ((SurfaceID, TabID?) -> Void)?
 
+    var onProgramLaunched: ((SurfaceID, String) -> Void)?
+
     var onSurfaceReleased: ((SurfaceID) -> Void)?
 
     /// A float is seen when it is shown, not when it takes first responder: showing is the only moment it is looked at.
@@ -111,6 +113,17 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         return idBySurface[ObjectIdentifier(surface)]
     }
 
+    func surface(_ id: SurfaceID) -> TerminalSurface? {
+        allSurfaces.first { idBySurface[ObjectIdentifier($0)] == id }
+    }
+
+    func float(of id: SurfaceID) -> (spec: ToolFloat, tab: TabID?)? {
+        if let active = activeFloat, idBySurface[ObjectIdentifier(active.surface)] == id {
+            return (active.spec, active.tab)
+        }
+        return liveFloats.values.first { idBySurface[ObjectIdentifier($0.surface)] == id }.map { ($0.spec, $0.tab) }
+    }
+
     var allSurfaces: [TerminalSurface] {
         var result = liveFloats.values.map(\.surface)
         if let active = activeFloat, !result.contains(where: { $0 === active.surface }) {
@@ -171,8 +184,23 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         return ToastContent(variant: .info, title: spec.title, message: message)
     }
 
+    func reveal(_ id: SurfaceID) {
+        if let active = activeFloat, idBySurface[ObjectIdentifier(active.surface)] == id {
+            return active.surface.focus()
+        }
+        guard let live = liveFloats.values.first(where: { idBySurface[ObjectIdentifier($0.surface)] == id }) else {
+            return
+        }
+        cancelPendingOpen()
+        if activeFloat != nil { close() }
+        present(live.spec, live.surface, tab: live.tab)
+    }
+
     private func show(_ spec: ToolFloat, cwd: URL?, anchor: URL?) {
-        let surface = surfaceForFloat(spec, cwd: cwd, anchor: anchor)
+        present(spec, surfaceForFloat(spec, cwd: cwd, anchor: anchor), tab: scopedTab(for: spec))
+    }
+
+    private func present(_ spec: ToolFloat, _ surface: TerminalSurface, tab: TabID?) {
         if let dismissing = dismissingOverlay, surface.view.isDescendant(of: dismissing) {
             dismissing.removeFromSuperview()
             dismissingOverlay = nil
@@ -186,7 +214,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
             onDismiss: { [weak self] in self?.close() })
         overlay.backgroundOverride = surface.backgroundOverride
         presentOverlay(overlay)
-        activeFloat = (spec, surface, overlay, scopedTab(for: spec))
+        activeFloat = (spec, surface, overlay, tab)
         yieldFocus()
         surface.focus()
         overlay.animateIn()
@@ -235,6 +263,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
                     workingDirectory: cwd, fontSize: SessionFontSize.points,
                     theme: Theme.current.terminal,
                     behavior: GeneralConfig.current.terminalBehavior))
+            onProgramLaunched?(surfaceID, spec.command)
         }
         return surface
     }

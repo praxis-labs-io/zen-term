@@ -11,6 +11,9 @@ final class SettingsNavRow: NSView {
 
     private let label = NSTextField(labelWithString: "")
     private let detailLabel = NSTextField(labelWithString: "")
+    private let attentionDot = NSView()
+    private var attentionDotWidth: NSLayoutConstraint?
+    private var attentionDotGap: NSLayoutConstraint?
     private let onActivate: () -> Void
     private let focusesOnClick: Bool
     private var isTakingKeyboardFocus = false
@@ -20,6 +23,9 @@ final class SettingsNavRow: NSView {
     private var isHovered = false
 
     private static let detailMaxWidth: CGFloat = 96
+    private static let attentionDotDiameter: CGFloat = 6
+    private static let attentionDotGapToDetail: CGFloat = 6
+    private static let attentionAccessibilityValue = "Agent waiting"
 
     init(title: String, focusesOnClick: Bool = true, onActivate: @escaping () -> Void) {
         self.onActivate = onActivate
@@ -42,9 +48,22 @@ final class SettingsNavRow: NSView {
         detailLabel.alignment = .right
         detailLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(detailLabel)
+        attentionDot.wantsLayer = true
+        attentionDot.layer?.cornerRadius = Self.attentionDotDiameter / 2
+        attentionDot.isHidden = true
+        attentionDot.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(attentionDot)
+        let dotWidth = attentionDot.widthAnchor.constraint(equalToConstant: 0)
+        let dotGap = attentionDot.trailingAnchor.constraint(equalTo: detailLabel.leadingAnchor)
+        attentionDotWidth = dotWidth
+        attentionDotGap = dotGap
         NSLayoutConstraint.activate([
+            dotWidth,
+            dotGap,
+            attentionDot.heightAnchor.constraint(equalToConstant: Self.attentionDotDiameter),
+            attentionDot.centerYAnchor.constraint(equalTo: centerYAnchor),
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: detailLabel.leadingAnchor, constant: -8),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: attentionDot.leadingAnchor, constant: -8),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
             detailLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
             detailLabel.widthAnchor.constraint(lessThanOrEqualToConstant: Self.detailMaxWidth),
@@ -64,14 +83,30 @@ final class SettingsNavRow: NSView {
 
     func setDetail(_ detail: String?) {
         detailLabel.stringValue = detail ?? ""
-        setAccessibilityValue(detail)
+        refreshAccessibilityValue()
+    }
+
+    func setShowsAttention(_ shows: Bool) {
+        attentionDot.isHidden = !shows
+        attentionDotWidth?.constant = shows ? Self.attentionDotDiameter : 0
+        attentionDotGap?.constant = shows ? -Self.attentionDotGapToDetail : 0
+        refreshAccessibilityValue()
+    }
+
+    private func refreshAccessibilityValue() {
+        let parts = [detailLabel.stringValue, attentionDot.isHidden ? "" : Self.attentionAccessibilityValue]
+        let value = parts.filter { !$0.isEmpty }.joined(separator: ", ")
+        setAccessibilityValue(value.isEmpty ? nil : value)
     }
 
     var detailForTesting: String { detailLabel.stringValue }
 
+    var showsAttentionForTesting: Bool { !attentionDot.isHidden }
+
     func reapplyTheme() {
         label.textColor = Theme.current.chrome.foreground.nsColor
         detailLabel.textColor = Theme.current.chrome.ink(.muted)
+        attentionDot.layer?.backgroundColor = Theme.current.chrome.attention.nsColor.cgColor
         refreshFill()
     }
 

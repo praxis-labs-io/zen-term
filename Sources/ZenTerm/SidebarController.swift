@@ -11,6 +11,7 @@ final class SidebarController {
         let name: String
         let folder: URL
         let isActive: Bool
+        let isWaiting: Bool
     }
 
     // 8 of sidebar padding plus the footer's 6 inset, so palette and Settings follow at the footer's rhythm.
@@ -32,6 +33,7 @@ final class SidebarController {
     private var slideID = 0
     private var entries: [Entry] = []
     var onLeave: () -> Void = {}
+    var onJump: (SurfaceID) -> Void = { _ in }
 
     init(
         onPalette: @escaping () -> Void, onSettings: @escaping () -> Void, onToggle: @escaping () -> Void,
@@ -43,6 +45,7 @@ final class SidebarController {
         lead = CollapsedSidebarLead(
             leadingInset: Self.toggleInset + SidebarFooter.buttonSize.width + Self.leadNameGap)
         view.onLeave = { [weak self] in self?.onLeave() }
+        view.onJump = { [weak self] in self?.onJump($0) }
     }
 
     var canvasLeadingAnchor: NSLayoutXAxisAnchor { canvasEdge.leadingAnchor }
@@ -85,6 +88,7 @@ final class SidebarController {
             leadWidth,
             tabBarLeading,
         ])
+        view.limitAgents(above: toggleButton.topAnchor)
         settle()
     }
 
@@ -136,9 +140,11 @@ final class SidebarController {
         lead.isHidden = isDocked
     }
 
-    func render(workspaces: [WorkspaceController], active: WorkspaceController) {
+    func render(workspaces: [WorkspaceController], active: WorkspaceController, waiting: Set<WorkspaceID>) {
         let next = workspaces.map {
-            Entry(id: $0.id, name: $0.name, folder: $0.folder, isActive: $0 === active)
+            Entry(
+                id: $0.id, name: $0.name, folder: $0.folder, isActive: $0 === active,
+                isWaiting: waiting.contains($0.id))
         }
         let foldersChanged = next.map(\.folder) != entries.map(\.folder)
         entries = next
@@ -162,9 +168,13 @@ final class SidebarController {
     private func renderRows() {
         view.render(
             entries.map {
-                SidebarRowItem(id: $0.id, name: $0.name, branch: GitRepoStatus.branch($0.folder), isActive: $0.isActive)
+                SidebarRowItem(
+                    id: $0.id, name: $0.name, branch: GitRepoStatus.branch($0.folder), isActive: $0.isActive,
+                    isWaiting: $0.isWaiting)
             })
     }
+
+    func renderAgents(_ items: [SidebarAgentItem]) { view.renderAgents(items) }
 
     func setOpenModal(palette: Bool, settings: Bool) { footer.setOpenModal(palette: palette, settings: settings) }
 
