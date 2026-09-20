@@ -48,6 +48,7 @@ final class SidebarView: NSView {
     private var contentEndsAtRows: NSLayoutConstraint?
     private var contentEndsAtAgents: NSLayoutConstraint?
     private var agentRows: [SurfaceID: SidebarAgentRow] = [:]
+    var onHoverCoverChanged: ((Bool) -> Void)?
     var onLeave: (() -> Void)?
     var onFocusChanged: (() -> Void)?
     var onJump: ((SurfaceID) -> Void)?
@@ -264,10 +265,14 @@ final class SidebarView: NSView {
     }
 
     func setHoverCovered(_ covered: Bool, exempting exempt: NSView? = nil) {
+        let wasCovered = hoverCovers > 0
         hoverCovers = max(0, hoverCovers + (covered ? 1 : -1))
         hoverExempt = covered ? exempt : nil
         refreshRowHover()
+        if wasCovered != (hoverCovers > 0) { onHoverCoverChanged?(hoverCovers > 0) }
     }
+
+    var isHoverCovered: Bool { hoverCovers > 0 }
 
     private var hoverRows: [any HoverSuppressing] { Array(rows.values) + Array(agentRows.values) }
 

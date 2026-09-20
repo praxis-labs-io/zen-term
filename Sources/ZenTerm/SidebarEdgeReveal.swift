@@ -1,0 +1,155 @@
+import AppKit
+
+// Watches the window's left edge, so resting there floats the collapsed sidebar and leaving puts it away.
+@MainActor
+final class SidebarEdgeReveal {
+    static var holdDelay: TimeInterval = 0.28
+    static var exitGrace: TimeInterval = 0.12
+    private static let restingWidth: CGFloat = 4
+    // The pointer crosses the gutter on its way to the card, and an exit there would put it away mid-journey.
+    private static var liveRegionWidth: CGFloat { ChromeMetrics.windowGutter + SidebarView.width }
+
+    private let strip = EdgeStrip()
+    private var stripWidth: NSLayoutConstraint?
+    private var hold: DispatchWorkItem?
+    private var grace: DispatchWorkItem?
+    private var clickMonitor: Any?
+    private(set) var isRevealed = false
+    var isSuppressed: () -> Bool = { true }
+    var isPinned: () -> Bool = { false }
+    var onReveal: () -> Void = {}
+    var onHide: () -> Void = {}
+    var pointerIsInside: () -> Bool = { false }
+
+    init() {
+        strip.onEnter = { [weak self] in self?.pointerEntered() }
+        strip.onExit = { [weak self] in self?.pointerLeft() }
+        pointerIsInside = { [weak strip] in strip?.pointerIsInside ?? false }
+    }
+
+    deinit { MainActor.assumeIsolated { removeClickMonitor() } }
+
+    // Paint order is irrelevant to a view that draws nothing and refuses hits, and the canvas host owns the back.
+    func install(in container: NSView) {
+        container.addSubview(strip)
+        let width = strip.widthAnchor.constraint(equalToConstant: Self.restingWidth)
+        stripWidth = width
+        NSLayoutConstraint.activate([
+            strip.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            strip.topAnchor.constraint(equalTo: container.topAnchor),
+            strip.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            width,
+        ])
+    }
+
+    func setRevealed(_ revealed: Bool) {
+        isRevealed = revealed
+        cancelTimers()
+        stripWidth?.constant = revealed ? Self.liveRegionWidth : Self.restingWidth
+        strip.superview?.layoutSubtreeIfNeeded()
+        strip.updateTrackingAreas()
+        if revealed { addClickMonitor() } else { removeClickMonitor() }
+    }
+
+    // A pointer already inside when the window takes focus gets no `mouseEntered`, and a closing menu no event.
+    func recheck() {
+        guard isRevealed else { return }
+        guard !isPinned() else {
+            grace?.cancel()
+            grace = nil
+            return
+        }
+        if !pointerIsInside() { scheduleHide() }
+    }
+
+    private func pointerEntered() {
+        grace?.cancel()
+        grace = nil
+        guard !isRevealed, !isSuppressed() else { return }
+        hold?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, !self.isRevealed, !self.isSuppressed(), self.pointerIsInside() else { return }
+            self.onReveal()
+        }
+        hold = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.holdDelay, execute: work)
+    }
+
+    private func pointerLeft() {
+        hold?.cancel()
+        hold = nil
+        guard isRevealed else { return }
+        scheduleHide()
+    }
+
+    private func scheduleHide() {
+        grace?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.isRevealed, !self.isPinned(), !self.pointerIsInside() else { return }
+            self.onHide()
+        }
+        grace = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.exitGrace, execute: work)
+    }
+
+    private func addClickMonitor() {
+        removeClickMonitor()
+        clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            self?.dismissIfClickMissedTheCard(event)
+            return event
+        }
+    }
+
+    private func removeClickMonitor() {
+        guard let clickMonitor else { return }
+        NSEvent.removeMonitor(clickMonitor)
+        self.clickMonitor = nil
+    }
+
+    // Returns the event untouched, so the same click still lands in the pane it was aimed at.
+    private func dismissIfClickMissedTheCard(_ event: NSEvent) {
+        guard isRevealed, event.window === strip.window else { return }
+        guard !strip.convert(strip.bounds, to: nil).contains(event.locationInWindow) else { return }
+        cancelTimers()
+        onHide()
+    }
+
+    private func cancelTimers() {
+        hold?.cancel()
+        hold = nil
+        grace?.cancel()
+        grace = nil
+    }
+
+    var stripForTesting: NSView { strip }
+}
+
+// Reports the pointer without taking it: tracking is geometric, so the panes underneath still get their clicks.
+private final class EdgeStrip: NSView {
+    var onEnter: () -> Void = {}
+    var onExit: () -> Void = {}
+    private var tracking: NSTrackingArea?
+
+    init() {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    // `.activeInActiveApp`, matching the terminal's own area: tracking stops while the app is in back.
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(
+            rect: bounds, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self)
+        addTrackingArea(area)
+        tracking = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { onEnter() }
+
+    override func mouseExited(with event: NSEvent) { onExit() }
+}

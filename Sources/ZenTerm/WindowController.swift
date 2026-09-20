@@ -414,7 +414,16 @@ final class WindowController: NSObject {
         onSettings = { [weak self] in self?.handle(.openSettings) }
         onToggleSidebar = { [weak self] in self?.handle(.toggleSidebar) }
         sidebar.onLeave = { [weak self] in self?.restoreFocusToActive() }
-        sidebar.onFocusChanged = { [weak self] in self?.syncHalo() }
+        sidebar.onFocusChanged = { [weak self] in
+            self?.syncHalo()
+            self?.sidebar.edgeReveal.recheck()
+        }
+        sidebar.isPinnedExternally = { [weak self] in self?.isConfirmOpen ?? false }
+        sidebar.edgeReveal.isSuppressed = { [weak self] in
+            guard let self else { return true }
+            return sidebar.isDocked || isModalOverlayOpen || isToolFloatOpen || !windowIsKey
+                || NSEvent.pressedMouseButtons != 0
+        }
         onActivateRow = { [weak self] in self?.activateFromSidebar($0) }
         onNewWorktree = { [weak self] in self?.createWorktreeFromSidebar($0) }
         onCloseWorkspace = { [weak self] in self?.requestCloseWorkspace(id: $0) }
@@ -954,6 +963,7 @@ final class WindowController: NSObject {
     }
 
     private func activateFromSidebar(_ row: SidebarRowID) {
+        sidebar.hideReveal()
         switch row {
         case .workspace(let id):
             guard id != activeWorkspace.id else { restoreFocusToActive(); return }
@@ -2923,11 +2933,13 @@ extension WindowController: NSWindowDelegate {
         windowIsKey = false
         syncHalo()
         endModes()
+        sidebar.edgeReveal.recheck()
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
         windowIsKey = true
         syncHalo()
+        sidebar.edgeReveal.recheck()
         sidebar.refreshBranches()
         answerFocusedAgent()
     }

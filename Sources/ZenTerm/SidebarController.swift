@@ -26,6 +26,7 @@ final class SidebarController {
 
     let column: SidebarColumn
     let lead: CollapsedSidebarLead
+    let edgeReveal = SidebarEdgeReveal()
     private let toggleButton: IconButton
     private let edge = NSLayoutGuide()
     private let canvasEdge = NSLayoutGuide()
@@ -59,6 +60,10 @@ final class SidebarController {
         toggleButton = SidebarFooter.button("sidebar.left", "Toggle sidebar", .toggleSidebar, onToggle)
         lead = CollapsedSidebarLead(
             leadingInset: Self.toggleInset + SidebarFooter.buttonSize.width + Self.leadNameGap)
+        edgeReveal.onReveal = { [weak self] in self?.reveal() }
+        edgeReveal.onHide = { [weak self] in self?.hideReveal() }
+        edgeReveal.isPinned = { [weak self] in self?.isRevealPinned() ?? false }
+        view.onHoverCoverChanged = { [weak self] _ in self?.edgeReveal.recheck() }
         view.onLeave = { [weak self] in self?.onLeave() }
         view.onFocusChanged = { [weak self] in self?.onFocusChanged() }
         view.onJump = { [weak self] in self?.onJump($0) }
@@ -117,6 +122,7 @@ final class SidebarController {
             tabBarLeading,
         ])
         view.limitContent(above: toggleButton.topAnchor)
+        edgeReveal.install(in: container)
         settle()
     }
 
@@ -138,6 +144,7 @@ final class SidebarController {
         let wasRevealed = isRevealed
         isRevealed = false
         revealID &+= 1
+        edgeReveal.setRevealed(false)
         setToggleOnCard(false)
         isDocked.toggle()
         Self.lastChoiceIsDocked = isDocked
@@ -210,6 +217,7 @@ final class SidebarController {
         columnLeading.constant = ChromeMetrics.windowGutter
         columnBottom.constant = -ChromeMetrics.windowGutter
         column.setFloating(true)
+        edgeReveal.setRevealed(true)
         settle()
         column.superview?.layoutSubtreeIfNeeded()
         Motion.slideFade(column, appearing: true, from: revealPark)
@@ -220,6 +228,7 @@ final class SidebarController {
         isRevealed = false
         revealID &+= 1
         let id = revealID
+        edgeReveal.setRevealed(false)
         setToggleOnCard(false)
         Motion.slideFade(column, appearing: false, from: revealPark) { [weak self] in
             guard let self, self.revealID == id else { return }
@@ -231,6 +240,14 @@ final class SidebarController {
             self.settle()
         }
     }
+
+    var isHoverCovered: Bool { view.isHoverCovered }
+
+    private func isRevealPinned() -> Bool {
+        view.hasFocus || view.isHoverCovered || isPinnedExternally()
+    }
+
+    var isPinnedExternally: () -> Bool = { false }
 
     private func setToggleOnCard(_ onCard: Bool) {
         toggleAtChipBand?.isActive = !onCard
