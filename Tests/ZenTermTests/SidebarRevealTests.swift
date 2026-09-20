@@ -266,18 +266,29 @@ final class SidebarRevealTests: WindowTestCase {
         XCTAssertFalse(sidebar.isRevealed)
     }
 
-    func test_focusInsideTheCard_pinsItAgainstAnExit() throws {
+    func test_reveal_handsTheCardTheKeyboard() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+
+        sidebar.reveal()
+
+        XCTAssertTrue(sidebar.hasFocus, "the pane yields so the card is what the keyboard drives")
+        XCTAssertNotNil(sidebar.focusedRow, "the keyboard lands on a row, not the card at large")
+    }
+
+    func test_leavingTheCard_hidesIt_evenWithTheKeyboardInIt() throws {
         let controller = try makeCollapsedController()
         let sidebar = controller.sidebarForTesting
         sidebar.edgeReveal.pointerIsInside = { false }
         sidebar.reveal()
-        let row = try XCTUnwrap(sidebar.view.rowsForTesting.first)
-        row.takeKeyboardFocus()
+        XCTAssertTrue(sidebar.hasFocus)
 
         try leaveStripRight(sidebar.edgeReveal)
         afterTimers()
 
-        XCTAssertTrue(sidebar.isRevealed, "the card keeps the keyboard it was given")
+        XCTAssertFalse(
+            sidebar.isRevealed,
+            "a reveal always holds the keyboard, so pinning on it would strand the card open")
     }
 
     func test_anOpenRowMenu_pinsTheCard_andClosingItRechecks() throws {

@@ -21,6 +21,7 @@ final class SidebarEdgeReveal {
     var isPinned: () -> Bool = { false }
     var onReveal: () -> Void = {}
     var onHide: () -> Void = {}
+    var onClickAway: () -> Void = {}
     var pointerIsInside: () -> Bool = { false }
 
     init() {
@@ -134,7 +135,7 @@ final class SidebarEdgeReveal {
         guard isRevealed, event.window === strip.window else { return }
         guard !strip.convert(strip.bounds, to: nil).contains(event.locationInWindow) else { return }
         cancelTimers()
-        onHide()
+        onClickAway()
     }
 
     private func cancelTimers() {

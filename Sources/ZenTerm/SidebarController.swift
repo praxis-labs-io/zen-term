@@ -62,9 +62,13 @@ final class SidebarController {
             leadingInset: Self.toggleInset + SidebarFooter.buttonSize.width + Self.leadNameGap)
         edgeReveal.onReveal = { [weak self] in self?.reveal() }
         edgeReveal.onHide = { [weak self] in self?.hideReveal() }
+        edgeReveal.onClickAway = { [weak self] in self?.hideReveal(restoringFocus: false) }
         edgeReveal.isPinned = { [weak self] in self?.isRevealPinned() ?? false }
         view.onHoverCoverChanged = { [weak self] _ in self?.edgeReveal.recheck() }
-        view.onLeave = { [weak self] in self?.onLeave() }
+        view.onLeave = { [weak self] in
+            self?.hideReveal(restoringFocus: false)
+            self?.onLeave()
+        }
         view.onFocusChanged = { [weak self] in self?.onFocusChanged() }
         view.onJump = { [weak self] in self?.onJump($0) }
     }
@@ -221,15 +225,22 @@ final class SidebarController {
         settle()
         column.superview?.layoutSubtreeIfNeeded()
         Motion.slideFade(column, appearing: true, from: revealPark)
+        onFocusYield()
+        focusActiveRow()
     }
 
-    func hideReveal() {
+    var onFocusYield: () -> Void = {}
+    var onFocusRestore: () -> Void = {}
+
+    func hideReveal(restoringFocus: Bool = true) {
         guard isRevealed, let columnLeading, let columnBottom else { return }
+        let handBackFocus = restoringFocus && view.hasFocus
         isRevealed = false
         revealID &+= 1
         let id = revealID
         edgeReveal.setRevealed(false)
         setToggleOnCard(false)
+        if handBackFocus { onFocusRestore() }
         Motion.slideFade(column, appearing: false, from: revealPark) { [weak self] in
             guard let self, self.revealID == id else { return }
             columnLeading.constant = 0
@@ -243,8 +254,9 @@ final class SidebarController {
 
     var isHoverCovered: Bool { view.isHoverCovered }
 
+    // Not keyboard focus: a reveal hands the card the keyboard, so pinning on it would never let the pointer leave.
     private func isRevealPinned() -> Bool {
-        view.hasFocus || view.isHoverCovered || isPinnedExternally()
+        view.isHoverCovered || isPinnedExternally()
     }
 
     var isPinnedExternally: () -> Bool = { false }
@@ -290,10 +302,10 @@ final class SidebarController {
     var focusedStop: SidebarFocusStop? { view.focusedStop }
 
     @discardableResult
-    func focusRow(_ id: SidebarRowID) -> Bool { isDocked && view.focusRow(id) }
+    func focusRow(_ id: SidebarRowID) -> Bool { isShown && view.focusRow(id) }
 
     @discardableResult
-    func focusStop(_ stop: SidebarFocusStop) -> Bool { isDocked && view.focusStop(stop) }
+    func focusStop(_ stop: SidebarFocusStop) -> Bool { isShown && view.focusStop(stop) }
 
     enum NewWorktreeRefusal: CaseIterable {
         case worktree, unconfigured, notARepo, agent
