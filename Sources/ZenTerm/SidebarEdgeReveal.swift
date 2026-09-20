@@ -27,8 +27,6 @@ final class SidebarEdgeReveal {
         pointerIsInside = { [weak strip] in strip?.pointerIsInside ?? false }
     }
 
-    deinit { MainActor.assumeIsolated { removeClickMonitor() } }
-
     // Paint order is irrelevant to a view that draws nothing and refuses hits, and the canvas host owns the back.
     func install(in container: NSView) {
         container.addSubview(strip)
@@ -49,6 +47,11 @@ final class SidebarEdgeReveal {
         strip.superview?.layoutSubtreeIfNeeded()
         strip.updateTrackingAreas()
         if revealed { addClickMonitor() } else { removeClickMonitor() }
+    }
+
+    func shutdown() {
+        cancelTimers()
+        removeClickMonitor()
     }
 
     // A pointer already inside when the window takes focus gets no `mouseEntered`, and a closing menu no event.

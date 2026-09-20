@@ -388,6 +388,8 @@ final class SidebarController {
 
     func setHiddenButtons(_ hidden: Set<ToolbarButton>) { footer.setHiddenButtons(hidden) }
 
+    func shutdown() { edgeReveal.shutdown() }
+
     func reapplyTheme() {
         column.reapplyTheme()
         lead.reapplyTheme()

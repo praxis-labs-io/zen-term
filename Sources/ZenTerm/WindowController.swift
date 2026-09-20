@@ -2915,6 +2915,7 @@ final class WindowController: NSObject {
         if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
         configObserver = nil
         floats.shutdown()
+        sidebar.shutdown()
         for workspace in workspaces { workspace.shutdown() }
         onClosed?()
     }
