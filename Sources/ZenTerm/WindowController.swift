@@ -225,7 +225,6 @@ final class WindowController: NSObject {
 
     var isWorkspaceOpenInAnotherWindow: ((URL) -> Bool)?
 
-    // Reports whether it found one, so a miss falls through to opening the workspace here.
     var revealWorkspaceInAnotherWindow: ((URL) -> Bool)?
 
     var worktreeRemovals = WorktreeRemovalTracker()
