@@ -51,7 +51,7 @@ final class SidebarRevealTests: WindowTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
         controllers.append(controller)
         controller.mountAndStart()
-        try click(controller.sidebarForTesting.toggleButtonForTesting)
+        try click(controller.sidebarForTesting.liveToggleForTesting)
         XCTAssertFalse(controller.sidebarForTesting.isDocked)
         return controller
     }
@@ -160,21 +160,69 @@ final class SidebarRevealTests: WindowTestCase {
         XCTAssertEqual(sidebar.column.layer?.opacity, 1, "or the toggle's column stays faded out")
     }
 
-    func test_hidingTheCard_putsTheToggleBackAtOnce_notWhenTheCardFinishesLeaving() throws {
+    private struct Insets: Equatable {
+        let leading: CGFloat
+        let trailing: CGFloat
+        let top: CGFloat
+        let bottom: CGFloat
+    }
+
+    private func insets(of sidebar: SidebarController, in controller: WindowController) throws -> Insets {
+        let column = frame(of: sidebar.column, in: controller)
+        let firstRow = frame(of: try XCTUnwrap(sidebar.view.rowsForTesting.first), in: controller)
+        let toggle = frame(of: sidebar.cardToggleForTesting, in: controller)
+        return Insets(
+            leading: firstRow.minX - column.minX, trailing: column.maxX - firstRow.maxX,
+            top: column.maxY - firstRow.maxY, bottom: toggle.minY - column.minY)
+    }
+
+    func test_theCard_keepsTheDockedInsetsOnAllFourSides() throws {
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
+        controllers.append(controller)
+        controller.mountAndStart()
+        let sidebar = controller.sidebarForTesting
+        let docked = try insets(of: sidebar, in: controller)
+
+        try click(sidebar.liveToggleForTesting)
+        sidebar.reveal()
+
+        XCTAssertEqual(
+            try insets(of: sidebar, in: controller), docked,
+            "the card is the docked sidebar lifted off the window, so nothing inside it tightens")
+    }
+
+    func test_theCardsToggle_sitsExactlyOnTheWindowsOnce_docked() throws {
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
+        controllers.append(controller)
+        controller.mountAndStart()
+        let sidebar = controller.sidebarForTesting
+
+        XCTAssertEqual(
+            frame(of: sidebar.cardToggleForTesting, in: controller),
+            frame(of: sidebar.windowToggleForTesting, in: controller),
+            "docked, the two swap places without either one being seen to move")
+        XCTAssertTrue(sidebar.windowToggleForTesting.isHidden, "and only one of them is on screen")
+    }
+
+    func test_theWindowsToggle_holdsTheCorner_andNeverMoves() throws {
         let controller = try makeCollapsedController()
         let sidebar = controller.sidebarForTesting
-        let collapsed = frame(of: sidebar.toggleButtonForTesting, in: controller)
+        let home = frame(of: sidebar.windowToggleForTesting, in: controller)
+
         sidebar.reveal()
-        XCTAssertEqual(
-            frame(of: sidebar.toggleButtonForTesting, in: controller).minX,
-            frame(of: sidebar.column, in: controller).minX + collapsed.minX,
-            "revealed, the toggle keeps its inset against the card it now sits on")
+
+        XCTAssertFalse(
+            sidebar.windowToggleForTesting.isHidden, "it holds the corner while the card is still arriving")
+        XCTAssertEqual(frame(of: sidebar.windowToggleForTesting, in: controller), home)
+        settle()
+        XCTAssertTrue(sidebar.windowToggleForTesting.isHidden, "the card's own toggle has landed over it")
 
         sidebar.hideReveal()
 
-        XCTAssertEqual(
-            frame(of: sidebar.toggleButtonForTesting, in: controller), collapsed,
-            "the toggle is home before the card has left, so it never shifts afterwards")
+        XCTAssertFalse(sidebar.windowToggleForTesting.isHidden, "back before the card uncovers it")
+        XCTAssertEqual(frame(of: sidebar.windowToggleForTesting, in: controller), home)
     }
 
     func test_dockingARevealedCard_landsDockedWithNoCardChrome() throws {
@@ -182,7 +230,7 @@ final class SidebarRevealTests: WindowTestCase {
         let sidebar = controller.sidebarForTesting
         sidebar.reveal()
 
-        try click(sidebar.toggleButtonForTesting)
+        try click(sidebar.liveToggleForTesting)
 
         XCTAssertTrue(sidebar.isDocked)
         XCTAssertFalse(sidebar.isRevealed)

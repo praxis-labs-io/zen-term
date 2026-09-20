@@ -25,6 +25,8 @@ final class TabBarView: NSView {
     private static let chipSpacing: CGFloat = 4
     private static let chipHeight: CGFloat = 22
     private static let bandNudge: CGFloat = 6
+    // The floating sidebar keeps its own toggle this far above the card's bottom, matching the docked one's band.
+    static let chipBandInset: CGFloat = height / 2 + bandNudge
     private static let fadeWidth: CGFloat = 28
 
     static let chipFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
@@ -98,7 +100,7 @@ final class TabBarView: NSView {
             scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
             scrollView.heightAnchor.constraint(equalToConstant: Self.chipHeight),
-            scrollView.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -Self.bandNudge),
+            scrollView.centerYAnchor.constraint(equalTo: bottomAnchor, constant: -Self.chipBandInset),
         ])
     }
 

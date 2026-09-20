@@ -123,11 +123,11 @@ final class SidebarInteractionTests: WindowTestCase {
         let controller = makeController()
         let sidebar = controller.sidebarForTesting
 
-        try click(sidebar.toggleButtonForTesting)
+        try click(sidebar.liveToggleForTesting)
 
         XCTAssertFalse(sidebar.isDocked)
         XCTAssertTrue(sidebar.view.isHidden, "collapsed, the palette and Settings buttons go with the sidebar")
-        XCTAssertFalse(sidebar.toggleButtonForTesting.isHidden, "the toggle stays")
+        XCTAssertFalse(sidebar.windowToggleForTesting.isHidden, "the toggle stays")
         XCTAssertFalse(sidebar.lead.isHidden)
         XCTAssertEqual(frame(of: try pane(in: controller), in: controller).minX, Self.gutter)
         XCTAssertEqual(
@@ -136,7 +136,7 @@ final class SidebarInteractionTests: WindowTestCase {
             "the toggle and workspace name lead the tab bar, the divider one gap from the first title")
         XCTAssertGreaterThan(frame(of: sidebar.lead, in: controller).width, 0)
 
-        try click(sidebar.toggleButtonForTesting)
+        try click(sidebar.liveToggleForTesting)
 
         XCTAssertTrue(sidebar.isDocked)
         XCTAssertFalse(sidebar.view.isHidden)
@@ -153,13 +153,13 @@ final class SidebarInteractionTests: WindowTestCase {
     func test_toggle_holdsItsWindowPosition_dockedAndCollapsed() throws {
         let controller = makeController()
         let sidebar = controller.sidebarForTesting
-        let docked = frame(of: sidebar.toggleButtonForTesting, in: controller)
+        let docked = frame(of: sidebar.liveToggleForTesting, in: controller)
 
-        try click(sidebar.toggleButtonForTesting)
-        let collapsed = frame(of: sidebar.toggleButtonForTesting, in: controller)
+        try click(sidebar.liveToggleForTesting)
+        let collapsed = frame(of: sidebar.liveToggleForTesting, in: controller)
 
         XCTAssertEqual(docked, collapsed, "the toggle never moves between docked and collapsed")
-        XCTAssertFalse(sidebar.toggleButtonForTesting.isHidden)
+        XCTAssertFalse(sidebar.windowToggleForTesting.isHidden)
     }
 
     private func contentWidth(_ controller: WindowController) -> CGFloat {
