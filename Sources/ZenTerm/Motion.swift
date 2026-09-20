@@ -170,6 +170,47 @@ enum Motion {
         }
     }
 
+    // Reduce Motion asks for a fade in place of movement, so this one keeps fading where the others snap.
+    // A reveal can be reversed inside its own duration, so a run already in flight is picked up where it is.
+    static func slideFade(
+        _ view: NSView, appearing: Bool, from offset: CGVector,
+        duration: CFTimeInterval = pageSlideDuration, completion: (() -> Void)? = nil
+    ) {
+        view.wantsLayer = true
+        guard let layer = view.layer else {
+            completion?()
+            return
+        }
+        let targetOpacity: Float = appearing ? 1 : 0
+        let parked = NSSize(width: offset.dx, height: offset.dy)
+        let interrupted = layer.animation(forKey: "motion.opacity") != nil ? layer.presentation() : nil
+        layer.transform = CATransform3DIdentity
+        layer.opacity = targetOpacity
+
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = interrupted?.opacity ?? (appearing ? 0 : 1)
+        fade.toValue = targetOpacity
+        fade.duration = duration
+        fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+
+        guard !isReduceMotionEnabled() else {
+            run(completion: completion) { layer.add(fade, forKey: "motion.opacity") }
+            return
+        }
+
+        let held = interrupted.map { NSSize(width: $0.transform.m41, height: $0.transform.m42) }
+        let slide = CABasicAnimation(keyPath: "transform.translation")
+        slide.fromValue = NSValue(size: held ?? (appearing ? parked : .zero))
+        slide.toValue = NSValue(size: appearing ? .zero : parked)
+        slide.duration = duration
+        slide.timingFunction = landingTiming
+
+        run(completion: completion) {
+            layer.add(slide, forKey: "motion.slide")
+            layer.add(fade, forKey: "motion.opacity")
+        }
+    }
+
     static func fade(
         _ view: NSView, to opacity: Float,
         duration: CFTimeInterval = fadeDuration, completion: (() -> Void)? = nil

@@ -123,11 +123,11 @@ final class SidebarInteractionTests: WindowTestCase {
         let controller = makeController()
         let sidebar = controller.sidebarForTesting
 
-        try click(sidebar.toggleButtonForTesting)
+        try click(sidebar.liveToggleForTesting)
 
         XCTAssertFalse(sidebar.isDocked)
         XCTAssertTrue(sidebar.view.isHidden, "collapsed, the palette and Settings buttons go with the sidebar")
-        XCTAssertFalse(sidebar.toggleButtonForTesting.isHidden, "the toggle stays")
+        XCTAssertFalse(sidebar.windowToggleForTesting.isHidden, "the toggle stays")
         XCTAssertFalse(sidebar.lead.isHidden)
         XCTAssertEqual(frame(of: try pane(in: controller), in: controller).minX, Self.gutter)
         XCTAssertEqual(
@@ -136,7 +136,7 @@ final class SidebarInteractionTests: WindowTestCase {
             "the toggle and workspace name lead the tab bar, the divider one gap from the first title")
         XCTAssertGreaterThan(frame(of: sidebar.lead, in: controller).width, 0)
 
-        try click(sidebar.toggleButtonForTesting)
+        try click(sidebar.liveToggleForTesting)
 
         XCTAssertTrue(sidebar.isDocked)
         XCTAssertFalse(sidebar.view.isHidden)
@@ -153,20 +153,20 @@ final class SidebarInteractionTests: WindowTestCase {
     func test_toggle_holdsItsWindowPosition_dockedAndCollapsed() throws {
         let controller = makeController()
         let sidebar = controller.sidebarForTesting
-        let docked = frame(of: sidebar.toggleButtonForTesting, in: controller)
+        let docked = frame(of: sidebar.liveToggleForTesting, in: controller)
 
-        try click(sidebar.toggleButtonForTesting)
-        let collapsed = frame(of: sidebar.toggleButtonForTesting, in: controller)
+        try click(sidebar.liveToggleForTesting)
+        let collapsed = frame(of: sidebar.liveToggleForTesting, in: controller)
 
         XCTAssertEqual(docked, collapsed, "the toggle never moves between docked and collapsed")
-        XCTAssertFalse(sidebar.toggleButtonForTesting.isHidden)
+        XCTAssertFalse(sidebar.windowToggleForTesting.isHidden)
     }
 
     private func contentWidth(_ controller: WindowController) -> CGFloat {
         controller.window.contentRect(forFrameRect: controller.window.frame).width
     }
 
-    func test_docking_growsAWindowNarrowerThanTheDockedMinimum() throws {
+    func test_togglingAWindowTooNarrowToDock_floatsInsteadOfShovingItWider() throws {
         let controller = makeController()
         controller.handle(.toggleSidebar)
         controller.window.setContentSize(controller.window.contentMinSize)
@@ -174,17 +174,30 @@ final class SidebarInteractionTests: WindowTestCase {
 
         controller.handle(.toggleSidebar)
 
-        XCTAssertGreaterThanOrEqual(contentWidth(controller), narrow + SidebarView.width)
-        XCTAssertEqual(controller.window.contentMinSize.width, narrow + SidebarView.width)
+        XCTAssertFalse(controller.sidebarForTesting.isDocked)
+        XCTAssertTrue(controller.sidebarForTesting.isRevealed, "too narrow to dock, so the toggle floats it")
+        XCTAssertEqual(contentWidth(controller), narrow, "and the window is left the size the user chose")
     }
 
-    func test_collapsing_lowersTheMinimumAgain() throws {
+    func test_theWindowMinimum_neverGrowsToFitTheSidebar() throws {
         let controller = makeController()
-        let docked = controller.window.contentMinSize.width
+        let minimum = controller.window.contentMinSize.width
 
         controller.handle(.toggleSidebar)
 
-        XCTAssertEqual(controller.window.contentMinSize.width, docked - SidebarView.width)
+        XCTAssertEqual(controller.window.contentMinSize.width, minimum)
+    }
+
+    func test_shrinkingBelowTheDockableWidth_yieldsTheDockedSidebar() throws {
+        let controller = makeController()
+        XCTAssertTrue(controller.sidebarForTesting.isDocked)
+
+        controller.window.setContentSize(
+            NSSize(width: SidebarController.minimumDockableWidth - 1, height: 800))
+        controller.windowDidResize(Notification(name: NSWindow.didResizeNotification))
+
+        XCTAssertFalse(controller.sidebarForTesting.isDocked, "the sidebar yields rather than the window refusing")
+        XCTAssertFalse(controller.sidebarForTesting.isRevealed, "yielding gives the panes the room, it does not float")
     }
 
     func test_dockedAtTheMinimumWidth_withAUserFloat_theTabBarKeepsRoom() throws {
@@ -715,16 +728,58 @@ final class SidebarInteractionTests: WindowTestCase {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
         controller.handle(.toggleSidebar)
-        controller.window.setContentSize(controller.window.contentMinSize)
-        let narrow = contentWidth(controller)
         try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface).focus()
 
         controller.handle(.focusSidebar)
 
         XCTAssertTrue(controller.sidebarForTesting.isDocked)
-        XCTAssertEqual(
-            controller.window.contentMinSize.width, narrow + SidebarView.width,
-            "docking reserves the sidebar's width, as ⌃⌘S does")
+        XCTAssertTrue(controller.window.firstResponder === controller.sidebarForTesting.view.rowsForTesting.first)
+    }
+
+    func test_yieldingANarrowWindow_handsTheKeyboardBackToThePane() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        controller.handle(.focusSidebar)
+        let sidebar = controller.sidebarForTesting
+        XCTAssertTrue(sidebar.hasFocus, "premise: the keyboard is in the rows")
+
+        controller.window.setContentSize(controller.window.contentMinSize)
+
+        XCTAssertFalse(sidebar.isDocked)
+        XCTAssertTrue(
+            controller.window.firstResponder === pane.view,
+            "the rows it was in are gone, so the keyboard goes back to the pane rather than nowhere")
+    }
+
+    func test_narrowingTheWindowMidDock_leavesNoCardStandingOverThePanes() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let sidebar = controller.sidebarForTesting
+        try click(sidebar.liveToggleForTesting)
+        waitUntil(sidebar.view.isHidden, "the collapse to land before the pointer reaches the edge")
+        sidebar.reveal()
+        try click(sidebar.liveToggleForTesting)
+        XCTAssertTrue(sidebar.column.isFloating, "premise: the card is still dressed while it slides home")
+
+        controller.window.setContentSize(controller.window.contentMinSize)
+
+        XCTAssertFalse(sidebar.isDocked)
+        XCTAssertFalse(sidebar.column.isFloating, "a yield that cancels the slide has to undress the card itself")
+    }
+
+    func test_focusSidebar_onAWindowTooNarrowToDock_floatsItAndTakesTheKeyboard() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleSidebar)
+        controller.window.setContentSize(controller.window.contentMinSize)
+        try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface).focus()
+
+        controller.handle(.focusSidebar)
+
+        XCTAssertFalse(controller.sidebarForTesting.isDocked)
+        XCTAssertTrue(controller.sidebarForTesting.isRevealed)
         XCTAssertTrue(controller.window.firstResponder === controller.sidebarForTesting.view.rowsForTesting.first)
     }
 

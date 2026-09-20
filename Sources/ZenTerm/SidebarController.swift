@@ -19,60 +19,90 @@ final class SidebarController {
         let isWaiting: Bool
     }
 
-    // 8 of sidebar padding plus the footer's 6 inset, so palette and Settings follow at the footer's rhythm.
-    private static let toggleInset: CGFloat = 14
     private static let leadNameGap: CGFloat = 6
+    // Docking below this would leave the panes less than the window's own minimum, so the sidebar floats instead.
+    static let minimumDockableWidth = HostWindow.minimumContentSize.width + SidebarView.width
 
-    let view: SidebarView
-    let footer: SidebarFooter
+    let column: SidebarColumn
     let lead: CollapsedSidebarLead
-    private let toggleButton: IconButton
+    let edgeReveal = SidebarEdgeReveal()
+    private let collapsedToggle: IconButton
     private let edge = NSLayoutGuide()
     private let canvasEdge = NSLayoutGuide()
     private(set) var isDocked = SidebarController.lastChoiceIsDocked
+    private(set) var isRevealed = false
+    private var revealHoldsFocus = false
     private var edgeLeading: NSLayoutConstraint?
     private var canvasOffset: NSLayoutConstraint?
     private var leadWidth: NSLayoutConstraint?
     private var tabBarLeading: NSLayoutConstraint?
     private var sidebarTop: NSLayoutConstraint?
+    private var columnLeading: NSLayoutConstraint?
+    private var columnBottom: NSLayoutConstraint?
     private var slideID = 0
+    private var revealID = 0
     private var isSliding = false
     private var entries: [Entry] = []
     var onLeave: () -> Void = {}
     var onFocusChanged: () -> Void = {}
     var onJump: (SurfaceID) -> Void = { _ in }
+    var onRevealChanged: () -> Void = {}
+    var onFocusYield: () -> Void = {}
+    var onFocusRestore: () -> Void = {}
 
     init(
         onPalette: @escaping () -> Void, onSettings: @escaping () -> Void, onToggle: @escaping () -> Void,
         onActivate: @escaping (SidebarRowID) -> Void, onNewWorktree: @escaping (SidebarRowID) -> Void,
         onCloseWorkspace: @escaping (WorkspaceID) -> Void, onAdd: @escaping () -> Void
     ) {
-        view = SidebarView(
-            onActivate: onActivate, onNewWorktree: onNewWorktree, onCloseWorkspace: onCloseWorkspace, onAdd: onAdd)
-        footer = SidebarFooter(onPalette: onPalette, onSettings: onSettings)
-        toggleButton = SidebarFooter.button("sidebar.left", "Toggle sidebar", .toggleSidebar, onToggle)
+        column = SidebarColumn(
+            onPalette: onPalette, onSettings: onSettings, onToggle: onToggle, onActivate: onActivate,
+            onNewWorktree: onNewWorktree, onCloseWorkspace: onCloseWorkspace, onAdd: onAdd)
+        collapsedToggle = SidebarFooter.button("sidebar.left", "Toggle sidebar", .toggleSidebar, onToggle)
         lead = CollapsedSidebarLead(
-            leadingInset: Self.toggleInset + SidebarFooter.buttonSize.width + Self.leadNameGap)
-        view.onLeave = { [weak self] in self?.onLeave() }
+            leadingInset: SidebarColumn.toggleInset + SidebarFooter.buttonSize.width + Self.leadNameGap)
+        edgeReveal.onReveal = { [weak self] in self?.reveal() }
+        edgeReveal.onHide = { [weak self] in self?.hideReveal() }
+        edgeReveal.isPinned = { [weak self] in self?.isRevealPinned() ?? false }
+        edgeReveal.clickOutsideBelongsToTheCard = { [weak self] in
+            guard let self else { return false }
+            return view.isHoverCovered || isPinnedExternally()
+        }
+        edgeReveal.cardFrameInWindow = { [weak self] in
+            guard let column = self?.column else { return nil }
+            return column.convert(column.bounds, to: nil)
+        }
+        view.onHoverCoverChanged = { [weak self] _ in self?.edgeReveal.recheck() }
+        view.onLeave = { [weak self] in
+            self?.hideReveal(restoringFocus: false)
+            self?.onLeave()
+        }
         view.onFocusChanged = { [weak self] in self?.onFocusChanged() }
         view.onJump = { [weak self] in self?.onJump($0) }
     }
+
+    var view: SidebarView { column.rows }
+
+    var footer: SidebarFooter { column.footer }
 
     var edgeAnchor: NSLayoutXAxisAnchor { edge.leadingAnchor }
     var canvasLeadingAnchor: NSLayoutXAxisAnchor { canvasEdge.leadingAnchor }
 
     func install(in container: NSView, besideTabBar tabBar: TabBarView) {
-        container.addSubview(view)
+        container.addSubview(collapsedToggle)
         container.addSubview(lead)
-        container.addSubview(footer)
-        container.addSubview(toggleButton)
+        container.addSubview(column)
         container.addLayoutGuide(edge)
         container.addLayoutGuide(canvasEdge)
         let edgeLeading = edge.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: edgeOffset)
         let canvasOffset = canvasEdge.leadingAnchor.constraint(equalTo: edge.leadingAnchor, constant: canvasGap)
         let leadWidth = lead.widthAnchor.constraint(equalToConstant: leadOffset)
         let tabBarLeading = tabBar.leadingAnchor.constraint(equalTo: lead.trailingAnchor, constant: tabBarPull)
-        let sidebarTop = view.topAnchor.constraint(equalTo: container.topAnchor, constant: ChromeMetrics.topInset)
+        let sidebarTop = column.topAnchor.constraint(equalTo: container.topAnchor, constant: ChromeMetrics.topInset)
+        let columnLeading = column.leadingAnchor.constraint(equalTo: container.leadingAnchor)
+        let columnBottom = column.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+        self.columnLeading = columnLeading
+        self.columnBottom = columnBottom
         self.edgeLeading = edgeLeading
         self.canvasOffset = canvasOffset
         self.leadWidth = leadWidth
@@ -87,19 +117,18 @@ final class SidebarController {
             canvasEdge.widthAnchor.constraint(equalToConstant: 0),
             canvasEdge.topAnchor.constraint(equalTo: container.topAnchor),
             canvasEdge.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            columnLeading,
             sidebarTop,
-            view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            toggleButton.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: Self.toggleInset),
-            toggleButton.centerYAnchor.constraint(equalTo: tabBar.chipBandCenterYAnchor),
-            footer.leadingAnchor.constraint(equalTo: toggleButton.trailingAnchor, constant: SidebarFooter.spacing),
-            footer.centerYAnchor.constraint(equalTo: toggleButton.centerYAnchor),
+            columnBottom,
+            collapsedToggle.leadingAnchor.constraint(
+                equalTo: container.leadingAnchor, constant: SidebarColumn.toggleInset),
+            collapsedToggle.centerYAnchor.constraint(equalTo: tabBar.chipBandCenterYAnchor),
             lead.leadingAnchor.constraint(equalTo: edge.leadingAnchor),
             lead.centerYAnchor.constraint(equalTo: tabBar.chipBandCenterYAnchor),
             leadWidth,
             tabBarLeading,
         ])
-        view.limitContent(above: toggleButton.topAnchor)
+        edgeReveal.install(in: container)
         settle()
     }
 
@@ -115,48 +144,177 @@ final class SidebarController {
     }
 
     func toggle(holding surfaces: [TerminalSurface], in root: NSView) {
-        guard let edgeLeading, let canvasOffset, let leadWidth, let tabBarLeading else { return }
+        guard let edgeLeading, let canvasOffset, let leadWidth, let tabBarLeading, let columnLeading,
+            let columnBottom, let contentTop = column.contentTop
+        else { return }
+        let wasRevealed = isRevealed
+        isRevealed = false
+        revealID &+= 1
+        edgeReveal.setRevealed(false)
+        if wasRevealed { onRevealChanged() } else { handTheToggleToTheWindow() }
         isDocked.toggle()
         Self.lastChoiceIsDocked = isDocked
-        view.isHidden = false
+        column.setContentHidden(false)
         lead.isHidden = false
-        footer.isHidden = false
         Motion.fade(footer, to: isDocked ? 1 : 0, duration: Motion.pageSlideDuration)
         slideID &+= 1
+        let animate = [
+            (edgeLeading, edgeOffset), (canvasOffset, canvasGap), (leadWidth, leadOffset),
+            (tabBarLeading, tabBarPull), (columnLeading, 0), (columnBottom, 0), (contentTop, 0),
+        ]
         guard !Motion.isReduceMotionEnabled() else {
-            edgeLeading.constant = edgeOffset
-            canvasOffset.constant = canvasGap
-            leadWidth.constant = leadOffset
-            tabBarLeading.constant = tabBarPull
+            for (constraint, target) in animate { constraint.constant = target }
+            stopFloating()
             settle()
             root.layoutSubtreeIfNeeded()
             return
         }
         let id = slideID
         isSliding = true
+        if wasRevealed { fadeCardChrome() }
         Motion.drawerSlide(
-            panel: view, opening: isDocked, parkOffset: CGVector(dx: -SidebarView.width, dy: 0),
-            animate: [
-                (edgeLeading, edgeOffset), (canvasOffset, canvasGap), (leadWidth, leadOffset),
-                (tabBarLeading, tabBarPull),
-            ], in: root,
+            panel: view, opening: isDocked,
+            parkOffset: wasRevealed ? .zero : CGVector(dx: -SidebarView.width, dy: 0),
+            animate: animate, in: root,
             beforeSlide: { surfaces.forEach { $0.setSizeSyncSuspended(true) } }
         ) { [weak self] in
             surfaces.forEach { $0.setSizeSyncSuspended(false) }
             guard let self, self.slideID == id else { return }
             self.isSliding = false
             self.view.layer?.transform = CATransform3DIdentity
+            self.stopFloating()
             self.applyLeadWidth()
+            self.settle()
+            self.edgeReveal.rearmIfPointerRests()
+        }
+    }
+
+    // The radius, edge and shadow would otherwise pop flat in one frame as the card lands against the window.
+    private func fadeCardChrome() {
+        guard let layer = column.layer else { return }
+        for (keyPath, value) in [("cornerRadius", CGFloat(0)), ("borderWidth", 0)] {
+            Motion.ease(layer, keyPath: keyPath, to: value, duration: Motion.pageSlideDuration)
+        }
+        Motion.ease(layer, keyPath: "shadowOpacity", to: Float(0), duration: Motion.pageSlideDuration)
+    }
+
+    private func stopFloating() {
+        column.setFloating(false)
+        column.layer?.opacity = 1
+        column.layer?.transform = CATransform3DIdentity
+    }
+
+    // Not the user's choice to collapse, so the remembered one is left alone for the next window.
+    func yieldToNarrowWindow(in root: NSView) {
+        guard isDocked, let edgeLeading, let canvasOffset, let leadWidth, let tabBarLeading else { return }
+        if view.hasFocus { onFocusRestore() }
+        isRevealed = false
+        revealHoldsFocus = false
+        revealID &+= 1
+        edgeReveal.setRevealed(false)
+        isDocked = false
+        slideID &+= 1
+        isSliding = false
+        columnLeading?.constant = 0
+        columnBottom?.constant = 0
+        stopFloating()
+        edgeLeading.constant = edgeOffset
+        canvasOffset.constant = canvasGap
+        leadWidth.constant = leadOffset
+        tabBarLeading.constant = tabBarPull
+        view.layer?.transform = CATransform3DIdentity
+        settle()
+        applyLeadWidth()
+        root.layoutSubtreeIfNeeded()
+    }
+
+    private func settle() {
+        column.setContentHidden(!isShown)
+        column.setToggleHidden(!isShown)
+        footer.layer?.opacity = isShown ? 1 : 0
+        lead.isHidden = isDocked
+        collapsedToggle.isHidden = isDocked
+    }
+
+    // Only ever swapped while the card covers the window's toggle, so neither one is seen arriving or leaving.
+    private func handTheToggleToTheWindow() {
+        column.setToggleHidden(true)
+        collapsedToggle.isHidden = false
+    }
+
+    var isShown: Bool { isDocked || isRevealed }
+
+    private func applyRevealInsets() {
+        columnLeading?.constant = ChromeMetrics.windowGutter
+        columnBottom?.constant = -ChromeMetrics.windowGutter
+    }
+
+    private var revealPark: CGVector {
+        CGVector(dx: -(SidebarView.width + ChromeMetrics.windowGutter), dy: 0)
+    }
+
+    func reveal(takingFocus: Bool = false) {
+        guard !isDocked, !isRevealed, !isSliding, columnLeading != nil, columnBottom != nil else { return }
+        isRevealed = true
+        revealHoldsFocus = takingFocus
+        revealID &+= 1
+        let id = revealID
+        applyRevealInsets()
+        column.setFloating(true)
+        edgeReveal.setRevealed(true)
+        settle()
+        column.superview?.layoutSubtreeIfNeeded()
+        Motion.slideFade(column, appearing: true, from: revealPark) { [weak self] in
+            guard let self, self.revealID == id else { return }
+            self.collapsedToggle.isHidden = true
+        }
+        onRevealChanged()
+        guard takingFocus else { return }
+        onFocusYield()
+        focusActiveRow()
+    }
+
+    // Taking the keyboard also takes the card off the pointer, which no longer dismisses it.
+    func focusRevealedCard() {
+        guard isRevealed, !revealHoldsFocus else { return }
+        revealHoldsFocus = true
+        onFocusYield()
+        focusActiveRow()
+    }
+
+    func toggleFloat() {
+        if isRevealed { hideReveal() } else { reveal(takingFocus: true) }
+    }
+
+    func hideReveal(restoringFocus: Bool = true) {
+        guard isRevealed, let columnLeading, let columnBottom else { return }
+        let handBackFocus = restoringFocus && view.hasFocus
+        isRevealed = false
+        revealHoldsFocus = false
+        revealID &+= 1
+        let id = revealID
+        edgeReveal.setRevealed(false)
+        collapsedToggle.isHidden = false
+        onRevealChanged()
+        if handBackFocus { onFocusRestore() }
+        Motion.slideFade(column, appearing: false, from: revealPark) { [weak self] in
+            guard let self, self.revealID == id else { return }
+            columnLeading.constant = 0
+            columnBottom.constant = 0
+            self.column.setFloating(false)
+            self.column.layer?.opacity = 1
+            self.column.layer?.transform = CATransform3DIdentity
             self.settle()
         }
     }
 
-    private func settle() {
-        view.isHidden = !isDocked
-        footer.isHidden = !isDocked
-        footer.layer?.opacity = isDocked ? 1 : 0
-        lead.isHidden = isDocked
+    var isHoverCovered: Bool { view.isHoverCovered }
+
+    private func isRevealPinned() -> Bool {
+        view.hasFocus || view.isHoverCovered || isPinnedExternally()
     }
+
+    var isPinnedExternally: () -> Bool = { false }
 
     func render(
         order: WorkspaceOrder, workspaces: [WorkspaceController], active: WorkspaceController,
@@ -194,10 +352,10 @@ final class SidebarController {
     var focusedStop: SidebarFocusStop? { view.focusedStop }
 
     @discardableResult
-    func focusRow(_ id: SidebarRowID) -> Bool { isDocked && view.focusRow(id) }
+    func focusRow(_ id: SidebarRowID) -> Bool { isShown && view.focusRow(id) }
 
     @discardableResult
-    func focusStop(_ stop: SidebarFocusStop) -> Bool { isDocked && view.focusStop(stop) }
+    func focusStop(_ stop: SidebarFocusStop) -> Bool { isShown && view.focusStop(stop) }
 
     enum NewWorktreeRefusal: CaseIterable {
         case worktree, unconfigured, notARepo, agent
@@ -292,19 +450,27 @@ final class SidebarController {
 
     func setHiddenButtons(_ hidden: Set<ToolbarButton>) { footer.setHiddenButtons(hidden) }
 
+    func shutdown() { edgeReveal.shutdown() }
+
     func reapplyTheme() {
-        view.reapplyTheme()
-        footer.reapplyTheme()
+        column.reapplyTheme()
         lead.reapplyTheme()
-        toggleButton.reapplyTheme()
+        collapsedToggle.reapplyTheme()
     }
 
     func reapplyChromeLayout() {
         sidebarTop?.constant = ChromeMetrics.topInset
         canvasOffset?.constant = canvasGap
+        if isRevealed { applyRevealInsets() }
+        edgeReveal.reapplyLiveRegion()
+        column.reapplyCornerRadius()
     }
 
-    var toggleButtonForTesting: IconButton { toggleButton }
+    var windowToggleForTesting: IconButton { collapsedToggle }
+
+    var cardToggleForTesting: IconButton { column.toggle }
+
+    var liveToggleForTesting: IconButton { column.toggle.isHidden ? collapsedToggle : column.toggle }
 
     static func resetLastChoiceForTesting() { lastChoiceIsDocked = true }
 }

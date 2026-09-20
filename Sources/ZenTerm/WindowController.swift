@@ -414,7 +414,19 @@ final class WindowController: NSObject {
         onSettings = { [weak self] in self?.handle(.openSettings) }
         onToggleSidebar = { [weak self] in self?.handle(.toggleSidebar) }
         sidebar.onLeave = { [weak self] in self?.restoreFocusToActive() }
-        sidebar.onFocusChanged = { [weak self] in self?.syncHalo() }
+        sidebar.onFocusChanged = { [weak self] in
+            self?.syncHalo()
+            self?.sidebar.edgeReveal.recheck()
+        }
+        sidebar.isPinnedExternally = { [weak self] in self?.isConfirmOpen ?? false }
+        sidebar.onRevealChanged = { [weak self] in self?.syncHalo() }
+        sidebar.onFocusYield = { [weak self] in self?.captureFocusReturn() }
+        sidebar.onFocusRestore = { [weak self] in self?.restoreFocusToActive() }
+        sidebar.edgeReveal.isSuppressed = { [weak self] in
+            guard let self else { return true }
+            return sidebar.isDocked || isModalOverlayOpen || isToolFloatOpen || !windowIsKey
+                || NSEvent.pressedMouseButtons != 0
+        }
         onActivateRow = { [weak self] in self?.activateFromSidebar($0) }
         onNewWorktree = { [weak self] in self?.createWorktreeFromSidebar($0) }
         onCloseWorkspace = { [weak self] in self?.requestCloseWorkspace(id: $0) }
@@ -428,7 +440,7 @@ final class WindowController: NSObject {
         activeWorkspace.setController(makeController(cwd: initialCWD), for: firstID)
 
         layoutContainer()
-        window.reserveContentWidth(sidebar.isDocked ? SidebarView.width : 0)
+        yieldSidebarIfNarrow()
         window.delegate = self
         wireModes()
 
@@ -818,7 +830,7 @@ final class WindowController: NSObject {
     }
 
     private func syncHalo() {
-        activeController?.setHaloVisible(!sidebar.hasFocus && windowIsKey)
+        activeController?.setHaloVisible(!sidebar.hasFocus && windowIsKey && !sidebar.isRevealed)
     }
 
     // Below `tabBar`, so the ⌘W guard toast fired over an open float stays visible.
@@ -954,6 +966,7 @@ final class WindowController: NSObject {
     }
 
     private func activateFromSidebar(_ row: SidebarRowID) {
+        sidebar.hideReveal()
         switch row {
         case .workspace(let id):
             guard id != activeWorkspace.id else { restoreFocusToActive(); return }
@@ -1764,6 +1777,7 @@ final class WindowController: NSObject {
         confirmOnCancel = nil
         toasts.dismiss(toast)
         returnFocusAfterOverlay()
+        sidebar.edgeReveal.recheck()
         renderDock()
     }
 
@@ -1982,8 +1996,13 @@ final class WindowController: NSObject {
         case .fillScreen: toggleFillScreen()
         case .toggleSidebar: toggleSidebar()
         case .focusSidebar:
-            if !sidebar.isDocked { toggleSidebar() }
-            _ = focusSidebar()
+            if !sidebar.isShown { toggleSidebar() }
+            if sidebar.isRevealed {
+                endModes()
+                sidebar.focusRevealedCard()
+            } else {
+                _ = focusSidebar()
+            }
         case .toggleToolFloat(let id):
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
@@ -2026,10 +2045,21 @@ final class WindowController: NSObject {
     private func toggleSidebar() {
         Log.info("sidebar toggled", category: .workspace)
         if sidebar.hasFocus { restoreFocusToActive() }
-        if !sidebar.isDocked { window.reserveContentWidth(SidebarView.width) }
+        guard canDockSidebar else {
+            sidebar.toggleFloat()
+            return
+        }
         let onScreen = (activeController?.allSurfaces ?? []) + [floats.shownSurface].compactMap { $0 }
         sidebar.toggle(holding: onScreen, in: container)
-        if !sidebar.isDocked { window.reserveContentWidth(0) }
+    }
+
+    private var canDockSidebar: Bool {
+        window.contentWidth >= SidebarController.minimumDockableWidth
+    }
+
+    private func yieldSidebarIfNarrow() {
+        guard !canDockSidebar else { return }
+        sidebar.yieldToNarrowWindow(in: container)
     }
 
     private var preFillFrame: NSRect?
@@ -2905,6 +2935,7 @@ final class WindowController: NSObject {
         if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
         configObserver = nil
         floats.shutdown()
+        sidebar.shutdown()
         for workspace in workspaces { workspace.shutdown() }
         onClosed?()
     }
@@ -2919,15 +2950,19 @@ extension WindowController: NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) { tearDown() }
 
+    func windowDidResize(_ notification: Notification) { yieldSidebarIfNarrow() }
+
     func windowDidResignKey(_ notification: Notification) {
         windowIsKey = false
         syncHalo()
         endModes()
+        sidebar.edgeReveal.recheck()
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
         windowIsKey = true
         syncHalo()
+        sidebar.edgeReveal.recheck()
         sidebar.refreshBranches()
         answerFocusedAgent()
     }

@@ -295,16 +295,34 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   (`EdgeFade`) keeps it opaque to that edge and fades it out just past it, under the chrome;
   resting content is never faded, so nothing jumps when the mask lifts.
   Docking slides through `Motion.drawerSlide`, the drawers' path, holding the active
-  tab's grids so they reflow once. Its toggle sits on the window, outside the sliding
-  view, so it holds one spot docked and collapsed. Rows read the window's workspaces,
+  tab's grids so they reflow once. Rows read the window's workspaces,
   never a copy. A new window opens the way the last toggle left one, for the launch only.
-  The keyboard enters only through `focus_sidebar`, which docks a collapsed sidebar first,
-  and through nav with no neighbor to the left (`TabController.focusPastLeftEdge`) from
-  the active tab, so panes, drawers and the nvim navigator all reach it. ⌃⌘S only docks
-  and collapses. ↵ activates a row as a click does. Rows take focus from the keyboard only
+  The keyboard enters only through `focus_sidebar`, which brings a collapsed sidebar up
+  first, and through nav with no neighbor to the left (`TabController.focusPastLeftEdge`)
+  from the active tab, so panes, drawers and the nvim navigator all reach it.
+  ↵ activates a row as a click does. Rows take focus from the keyboard only
   (`SettingsNavRow.takeKeyboardFocus`): AppKit promotes any clicked view that accepts.
   A right-click or ⌃-click opens `SidebarRowMenu`, a `ListPopover` that never switches
   workspaces; a local event monitor closes it on Esc or a click outside it.
+- **Collapsed, the sidebar still reveals from the window's leading edge.**
+  `SidebarEdgeReveal` watches an 8pt strip there, measured from where a hand aiming at the
+  edge comes to rest, and floats `SidebarColumn` as a card over the panes after a hold.
+  Leaving puts it away after a grace; both are static and test-overridable. Nothing resizes,
+  and `isDocked` never moves, so the reveal is not a dock. Exit direction decides: running
+  off the window's own edge is reaching for the card and keeps it, while leaving past it or
+  through the top or bottom hides it. It is pinned by focus in the card, an open row menu or
+  confirm, and suppressed by a modal, a tool float, a window that is not key, or a held
+  mouse button. Suppression has to be explicit because tracking is geometric, not
+  hit-tested.
+  **Two toggles exist.** The card carries one and the window keeps one for the collapsed
+  sidebar, because the card's rides in and out with it while the window's holds its spot
+  through a dock slide. They are only ever swapped while the card covers that corner, and
+  docked they resolve to the same frame.
+  **A window under `SidebarController.minimumDockableWidth` cannot dock**, that floor being
+  the window's own minimum plus the sidebar's. There the toggle floats the card instead,
+  and taking the window below it while docked makes the sidebar yield to collapsed without
+  changing the remembered choice. ⌃⌘S docks and collapses above that width and floats
+  below it.
 - **Fill Screen** is a maximize, not native fullscreen. `window-chrome = false` hides
   the traffic lights and `ChromeMetrics.topInset` follows.
 - **Tool floats are window-level** because a surface is one `NSView`. `ToolFloatController`

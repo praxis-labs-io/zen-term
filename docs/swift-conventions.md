@@ -51,6 +51,15 @@ modifiers. A clear above `GhosttySurface.syncFocus`'s dedupe, or a clear of ever
 over-clears releases. A surface already unfocused retires nothing on resign, so it sends its own
 (`releaseHeldModifiers`).
 
+**A tracking area is geometric: z-order and hit-testing do not gate it.** A view under an opaque
+sibling still gets `mouseEntered`, so a hover feature suppressed by "something covers it" has to test
+that state explicitly, and a covered `IconButton` still pops its tooltip. Hiding it is the only way to
+silence it (`SidebarEdgeReveal`, `HoverSuppressing`).
+
+**AppKit drops `mouseEntered` when the pointer arrives inside the window's own resize band.** A view
+tracking the window edge therefore never arms for a pointer that came in from outside the window, which
+is exactly how a person reaches an edge. Arm on `mouseMoved` as well as on enter.
+
 **Synthesized `NSEvent`s must match what AppKit delivers.** Every arrow `keyDown` carries `.function`
 and `.numericPad`, so compare against `flags.intersection([.command, .shift, .option, .control])`,
 never `.deviceIndependentFlagsMask`. A synthesized `modifierFlags: .option` arrow is a keystroke macOS
