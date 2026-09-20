@@ -48,6 +48,7 @@ final class SidebarController {
     var onLeave: () -> Void = {}
     var onFocusChanged: () -> Void = {}
     var onJump: (SurfaceID) -> Void = { _ in }
+    var onRevealChanged: () -> Void = {}
 
     init(
         onPalette: @escaping () -> Void, onSettings: @escaping () -> Void, onToggle: @escaping () -> Void,
@@ -221,6 +222,7 @@ final class SidebarController {
         settle()
         column.superview?.layoutSubtreeIfNeeded()
         Motion.slideFade(column, appearing: true, from: revealPark)
+        onRevealChanged()
     }
 
     func hideReveal() {
@@ -230,6 +232,7 @@ final class SidebarController {
         let id = revealID
         edgeReveal.setRevealed(false)
         setToggleOnCard(false)
+        onRevealChanged()
         Motion.slideFade(column, appearing: false, from: revealPark) { [weak self] in
             guard let self, self.revealID == id else { return }
             columnLeading.constant = 0

@@ -419,6 +419,7 @@ final class WindowController: NSObject {
             self?.sidebar.edgeReveal.recheck()
         }
         sidebar.isPinnedExternally = { [weak self] in self?.isConfirmOpen ?? false }
+        sidebar.onRevealChanged = { [weak self] in self?.syncHalo() }
         sidebar.edgeReveal.isSuppressed = { [weak self] in
             guard let self else { return true }
             return sidebar.isDocked || isModalOverlayOpen || isToolFloatOpen || !windowIsKey
@@ -827,7 +828,7 @@ final class WindowController: NSObject {
     }
 
     private func syncHalo() {
-        activeController?.setHaloVisible(!sidebar.hasFocus && windowIsKey)
+        activeController?.setHaloVisible(!sidebar.hasFocus && windowIsKey && !sidebar.isRevealed)
     }
 
     // Below `tabBar`, so the ⌘W guard toast fired over an open float stays visible.

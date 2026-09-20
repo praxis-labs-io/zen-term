@@ -387,4 +387,20 @@ final class SidebarRevealTests: WindowTestCase {
 
         XCTAssertFalse(sidebar.isRevealed)
     }
+
+    func test_revealing_dimsThePanesHalo_withoutTakingItsKeyboard() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        let panel = try pane(in: controller)
+        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0, "the focused pane glows before the card is up")
+
+        sidebar.reveal()
+
+        XCTAssertEqual(panel.haloOpacityForTesting, 0, "the card is what reads as active")
+        XCTAssertFalse(sidebar.hasFocus, "hover is a mouse gesture, so Esc still reaches the pane")
+
+        sidebar.hideReveal()
+
+        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0, "and the pane takes it back")
+    }
 }
