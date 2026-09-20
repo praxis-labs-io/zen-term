@@ -4,6 +4,7 @@ import AppKit
 final class SidebarColumn: ShadowCardView {
     let rows: SidebarView
     let footer: SidebarFooter
+    private let blur = NSVisualEffectView()
     private(set) var isFloating = false
 
     init(
@@ -16,9 +17,20 @@ final class SidebarColumn: ShadowCardView {
         footer = SidebarFooter(onPalette: onPalette, onSettings: onSettings)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        for child in [rows, footer] as [NSView] { addSubview(child) }
+        blur.material = .hudWindow
+        // Within-window, unlike the window's own backdrop: what sits behind this card is a pane, not the desktop.
+        blur.blendingMode = .withinWindow
+        blur.state = .active
+        blur.wantsLayer = true
+        blur.isHidden = true
+        blur.translatesAutoresizingMaskIntoConstraints = false
+        for child in [blur, rows, footer] as [NSView] { addSubview(child) }
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: SidebarView.width),
+            blur.leadingAnchor.constraint(equalTo: leadingAnchor),
+            blur.trailingAnchor.constraint(equalTo: trailingAnchor),
+            blur.topAnchor.constraint(equalTo: topAnchor),
+            blur.bottomAnchor.constraint(equalTo: bottomAnchor),
             rows.leadingAnchor.constraint(equalTo: leadingAnchor),
             rows.topAnchor.constraint(equalTo: topAnchor),
             rows.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -35,13 +47,25 @@ final class SidebarColumn: ShadowCardView {
 
     func setFloating(_ floating: Bool) {
         isFloating = floating
+        // The shadow needs an unclipped layer, so the radius has to be clipped on the content instead.
+        rows.wantsLayer = true
+        rows.layer?.cornerRadius = floating ? CardChrome.cornerRadius : 0
+        rows.layer?.masksToBounds = floating
+        blur.isHidden = !floating
+        blur.layer?.cornerRadius = floating ? CardChrome.cornerRadius : 0
+        blur.layer?.masksToBounds = floating
         guard floating else {
             layer?.backgroundColor = nil
             layer?.borderWidth = 0
             shadow = nil
             return
         }
-        CardChrome.apply(to: self, background: Theme.current.chrome.background.nsColor)
+        CardChrome.apply(to: self, background: Self.cardFill)
+    }
+
+    // Docked, the rows sit on the window's own backdrop, so floating they carry the same tint rather than a slab.
+    private static var cardFill: NSColor {
+        Theme.current.chrome.background.nsColor.withAlphaComponent(GeneralConfig.current.backdropAlpha)
     }
 
     func setContentHidden(_ hidden: Bool) {
@@ -52,6 +76,6 @@ final class SidebarColumn: ShadowCardView {
     func reapplyTheme() {
         rows.reapplyTheme()
         footer.reapplyTheme()
-        if isFloating { CardChrome.reapplyTheme(to: self) }
+        if isFloating { CardChrome.apply(to: self, background: Self.cardFill) }
     }
 }

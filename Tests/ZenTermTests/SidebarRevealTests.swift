@@ -359,4 +359,32 @@ final class SidebarRevealTests: WindowTestCase {
 
         XCTAssertFalse(sidebar.isRevealed, "a corner exit is still an exit")
     }
+
+    func test_sweepingOffTheWindowEdge_stillReveals() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        sidebar.edgeReveal.pointerIsInside = { false }
+        let strip = sidebar.edgeReveal.stripForTesting
+
+        try enterStrip(sidebar.edgeReveal)
+        try leaveStrip(sidebar.edgeReveal, at: NSPoint(x: -6, y: strip.bounds.midY))
+        afterTimers()
+
+        XCTAssertTrue(
+            sidebar.isRevealed,
+            "carrying on past the edge mid-hold is still a reach for the card")
+    }
+
+    func test_sweepingOffTheTop_cancelsTheHold() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        sidebar.edgeReveal.pointerIsInside = { false }
+        let strip = sidebar.edgeReveal.stripForTesting
+
+        try enterStrip(sidebar.edgeReveal)
+        try leaveStrip(sidebar.edgeReveal, at: NSPoint(x: -6, y: strip.bounds.maxY + 4))
+        afterTimers()
+
+        XCTAssertFalse(sidebar.isRevealed)
+    }
 }

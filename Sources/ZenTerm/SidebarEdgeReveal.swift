@@ -15,6 +15,7 @@ final class SidebarEdgeReveal {
     private var hold: DispatchWorkItem?
     private var grace: DispatchWorkItem?
     private var clickMonitor: Any?
+    private var isPastTheWindowEdge = false
     private(set) var isRevealed = false
     var isSuppressed: () -> Bool = { true }
     var isPinned: () -> Bool = { false }
@@ -24,6 +25,7 @@ final class SidebarEdgeReveal {
 
     init() {
         strip.onEnter = { [weak self] in self?.pointerEntered() }
+        strip.onMove = { [weak self] in self?.pointerMoved() }
         strip.onExit = { [weak self] offTheEdge in self?.pointerLeft(offTheEdge: offTheEdge) }
         pointerIsInside = { [weak strip] in strip?.pointerIsInside ?? false }
     }
@@ -43,6 +45,7 @@ final class SidebarEdgeReveal {
 
     func setRevealed(_ revealed: Bool) {
         isRevealed = revealed
+        if !revealed { isPastTheWindowEdge = false }
         cancelTimers()
         stripWidth?.constant = revealed ? Self.liveRegionWidth : Self.restingWidth
         strip.superview?.layoutSubtreeIfNeeded()
@@ -63,35 +66,49 @@ final class SidebarEdgeReveal {
             grace = nil
             return
         }
-        if !pointerIsInside() { scheduleHide() }
+        if !pointerIsWithinReach { scheduleHide() }
     }
 
     private func pointerEntered() {
+        isPastTheWindowEdge = false
         grace?.cancel()
         grace = nil
         guard !isRevealed, !isSuppressed() else { return }
         hold?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            guard !self.isRevealed, !self.isSuppressed(), self.pointerIsInside() else { return }
+            self.hold = nil
+            guard !self.isRevealed, !self.isSuppressed(), self.pointerIsWithinReach else { return }
             self.onReveal()
         }
         hold = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.holdDelay, execute: work)
     }
 
-    // Overshooting the window's own edge is reaching for the card, not leaving it: only the other three put it away.
+    // Overshooting the window's own edge is reaching for the card, not leaving it: the hold and the card both stand.
+    // AppKit drops an enter when the pointer arrives inside the window's own resize band, so a move arms it too.
+    private func pointerMoved() {
+        guard !isRevealed, hold == nil else { return }
+        pointerEntered()
+    }
+
     private func pointerLeft(offTheEdge: Bool) {
+        isPastTheWindowEdge = offTheEdge
+        guard !offTheEdge else { return }
         hold?.cancel()
         hold = nil
-        guard isRevealed, !offTheEdge else { return }
+        guard isRevealed else { return }
         scheduleHide()
+    }
+
+    private var pointerIsWithinReach: Bool {
+        pointerIsInside() || (isPastTheWindowEdge && !isSuppressed())
     }
 
     private func scheduleHide() {
         grace?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            guard let self, self.isRevealed, !self.isPinned(), !self.pointerIsInside() else { return }
+            guard let self, self.isRevealed, !self.isPinned(), !self.pointerIsWithinReach else { return }
             self.onHide()
         }
         grace = work
@@ -133,6 +150,7 @@ final class SidebarEdgeReveal {
 // Reports the pointer without taking it: tracking is geometric, so the panes underneath still get their clicks.
 private final class EdgeStrip: NSView {
     var onEnter: () -> Void = {}
+    var onMove: () -> Void = {}
     var onExit: (Bool) -> Void = { _ in }
     private var tracking: NSTrackingArea?
 
@@ -150,12 +168,15 @@ private final class EdgeStrip: NSView {
         super.updateTrackingAreas()
         if let tracking { removeTrackingArea(tracking) }
         let area = NSTrackingArea(
-            rect: bounds, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self)
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .mouseMoved, .activeInActiveApp, .inVisibleRect], owner: self)
         addTrackingArea(area)
         tracking = area
     }
 
     override func mouseEntered(with event: NSEvent) { onEnter() }
+
+    override func mouseMoved(with event: NSEvent) { onMove() }
 
     override func mouseExited(with event: NSEvent) {
         onExit(leftPastTheWindowEdge(convert(event.locationInWindow, from: nil)))
