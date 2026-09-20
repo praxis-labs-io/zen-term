@@ -86,8 +86,8 @@ final class SidebarController {
     var canvasLeadingAnchor: NSLayoutXAxisAnchor { canvasEdge.leadingAnchor }
 
     func install(in container: NSView, besideTabBar tabBar: TabBarView) {
-        container.addSubview(column)
         container.addSubview(lead)
+        container.addSubview(column)
         container.addSubview(toggleButton)
         container.addLayoutGuide(edge)
         container.addLayoutGuide(canvasEdge)
@@ -225,7 +225,7 @@ final class SidebarController {
     private func settle() {
         column.setContentHidden(!isShown)
         footer.layer?.opacity = isShown ? 1 : 0
-        lead.isHidden = isShown
+        lead.isHidden = isDocked
     }
 
     var isShown: Bool { isDocked || isRevealed }
@@ -445,6 +445,7 @@ final class SidebarController {
     func reapplyChromeLayout() {
         sidebarTop?.constant = ChromeMetrics.topInset
         canvasOffset?.constant = canvasGap
+        column.reapplyCornerRadius()
     }
 
     var toggleButtonForTesting: IconButton { toggleButton }

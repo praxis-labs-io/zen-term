@@ -103,19 +103,32 @@ final class SidebarRevealTests: WindowTestCase {
             "the card floats over the panes, so nothing reflows and no surface resizes")
     }
 
-    func test_reveal_dressesTheColumnAsACard_andCoversTheCollapsedLead() throws {
+    func test_reveal_dressesTheColumnAsACard() throws {
         let controller = try makeCollapsedController()
         let sidebar = controller.sidebarForTesting
-
-        XCTAssertFalse(sidebar.lead.isHidden, "collapsed, the workspace name leads the tab bar")
 
         sidebar.reveal()
 
         XCTAssertTrue(sidebar.column.isFloating)
-        XCTAssertEqual(sidebar.column.layer?.cornerRadius, CardChrome.cornerRadius)
+        XCTAssertEqual(sidebar.column.layer?.cornerRadius, PanelHostView.cornerRadius, "the panes' corner")
         XCTAssertNotNil(sidebar.column.shadow)
         XCTAssertFalse(sidebar.view.isHidden)
-        XCTAssertTrue(sidebar.lead.isHidden, "the name would otherwise render on top of the card")
+    }
+
+    func test_reveal_coversTheWorkspaceName_ratherThanHidingIt() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        let container = controller.containerForTesting
+        XCTAssertFalse(sidebar.lead.isHidden, "collapsed, the workspace name leads the tab bar")
+
+        sidebar.reveal()
+
+        XCTAssertFalse(
+            sidebar.lead.isHidden,
+            "hiding it makes the name blink on every reveal, so the card paints over it instead")
+        let lead = try XCTUnwrap(container.subviews.firstIndex(of: sidebar.lead))
+        let card = try XCTUnwrap(container.subviews.firstIndex(of: sidebar.column))
+        XCTAssertGreaterThan(card, lead, "and painting over it only works if the card is in front")
     }
 
     func test_reveal_neverChangesTheDockedChoice() throws {
