@@ -49,7 +49,7 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
         try text.write(to: tempRoot.appendingPathComponent("workspaces"), atomically: true, encoding: .utf8)
     }
 
-    /// Both windows, wired the way `AppDelegate.newWindow` wires them, minus the ordering a test must not do.
+    // Wired the way `AppDelegate.newWindow` wires them, minus the ordering a test must not do.
     private func makeWindows() -> (WindowController, WindowController) {
         func make() -> WindowController {
             let c = WindowController(
