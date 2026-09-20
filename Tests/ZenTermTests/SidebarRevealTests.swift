@@ -403,4 +403,72 @@ final class SidebarRevealTests: WindowTestCase {
 
         XCTAssertGreaterThan(panel.haloOpacityForTesting, 0, "and the pane takes it back")
     }
+
+    func test_aModalOnScreen_stopsTheEdgeArming() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        sidebar.edgeReveal.pointerIsInside = { true }
+
+        controller.handle(.openSettings)
+        XCTAssertTrue(controller.isModalOverlayOpen)
+
+        try enterStrip(sidebar.edgeReveal)
+        afterTimers()
+
+        XCTAssertFalse(
+            sidebar.isRevealed,
+            "tracking is geometric, so a modal covering the strip does not stop it on its own")
+    }
+
+    func test_aToolFloatOnScreen_stopsTheEdgeArming() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        sidebar.edgeReveal.pointerIsInside = { true }
+        XCTAssertFalse(sidebar.edgeReveal.isSuppressed(), "nothing is covering the panes yet")
+
+        controller.handle(.openSettings)
+
+        XCTAssertTrue(sidebar.edgeReveal.isSuppressed(), "the gate is wired to the window's own modal state")
+    }
+
+    func test_clickingOutsideTheCard_hidesIt_withoutEatingTheClick() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        sidebar.edgeReveal.pointerIsInside = { false }
+        sidebar.reveal()
+        controller.containerForTesting.layoutSubtreeIfNeeded()
+
+        let strip = sidebar.edgeReveal.stripForTesting
+        let outside = strip.convert(NSPoint(x: strip.bounds.maxX + 200, y: strip.bounds.midY), to: nil)
+        let click = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: outside, modifierFlags: [], timestamp: 0,
+                windowNumber: controller.window.windowNumber, context: nil, eventNumber: 0,
+                clickCount: 1, pressure: 1))
+
+        let passedThrough = sidebar.edgeReveal.clickForTesting(click)
+
+        XCTAssertFalse(sidebar.isRevealed, "a click in a pane puts the card away")
+        XCTAssertTrue(passedThrough === click, "and the monitor hands the click on to the pane it was aimed at")
+    }
+
+    func test_clickingInsideTheCard_keepsIt() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        sidebar.edgeReveal.pointerIsInside = { false }
+        sidebar.reveal()
+        controller.containerForTesting.layoutSubtreeIfNeeded()
+
+        let strip = sidebar.edgeReveal.stripForTesting
+        let inside = strip.convert(NSPoint(x: strip.bounds.midX, y: strip.bounds.midY), to: nil)
+        let click = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: inside, modifierFlags: [], timestamp: 0,
+                windowNumber: controller.window.windowNumber, context: nil, eventNumber: 0,
+                clickCount: 1, pressure: 1))
+
+        _ = sidebar.edgeReveal.clickForTesting(click)
+
+        XCTAssertTrue(sidebar.isRevealed, "clicking a row must not dismiss the card under the pointer")
+    }
 }

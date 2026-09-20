@@ -118,8 +118,7 @@ final class SidebarEdgeReveal {
     private func addClickMonitor() {
         removeClickMonitor()
         clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
-            self?.dismissIfClickMissedTheCard(event)
-            return event
+            self?.clickPassingThrough(event) ?? event
         }
     }
 
@@ -130,6 +129,11 @@ final class SidebarEdgeReveal {
     }
 
     // Returns the event untouched, so the same click still lands in the pane it was aimed at.
+    private func clickPassingThrough(_ event: NSEvent) -> NSEvent? {
+        dismissIfClickMissedTheCard(event)
+        return event
+    }
+
     private func dismissIfClickMissedTheCard(_ event: NSEvent) {
         guard isRevealed, event.window === strip.window else { return }
         guard !strip.convert(strip.bounds, to: nil).contains(event.locationInWindow) else { return }
@@ -145,6 +149,8 @@ final class SidebarEdgeReveal {
     }
 
     var stripForTesting: NSView { strip }
+
+    func clickForTesting(_ event: NSEvent) -> NSEvent? { clickPassingThrough(event) }
 }
 
 // Reports the pointer without taking it: tracking is geometric, so the panes underneath still get their clicks.
