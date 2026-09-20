@@ -23,6 +23,8 @@ final class SidebarController {
     private static let toggleInset: CGFloat = 14
     private static let toggleCardInset = SidebarView.padding + SidebarFooter.buttonSize.height / 2
     private static let leadNameGap: CGFloat = 6
+    // Docking below this would leave the panes less than the window's own minimum, so the sidebar floats instead.
+    static let minimumDockableWidth = HostWindow.minimumContentSize.width + SidebarView.width
 
     let column: SidebarColumn
     let lead: CollapsedSidebarLead
@@ -32,6 +34,7 @@ final class SidebarController {
     private let canvasEdge = NSLayoutGuide()
     private(set) var isDocked = SidebarController.lastChoiceIsDocked
     private(set) var isRevealed = false
+    private var revealHoldsFocus = false
     private var edgeLeading: NSLayoutConstraint?
     private var canvasOffset: NSLayoutConstraint?
     private var leadWidth: NSLayoutConstraint?
@@ -49,6 +52,8 @@ final class SidebarController {
     var onFocusChanged: () -> Void = {}
     var onJump: (SurfaceID) -> Void = { _ in }
     var onRevealChanged: () -> Void = {}
+    var onFocusYield: () -> Void = {}
+    var onFocusRestore: () -> Void = {}
 
     init(
         onPalette: @escaping () -> Void, onSettings: @escaping () -> Void, onToggle: @escaping () -> Void,
@@ -65,7 +70,10 @@ final class SidebarController {
         edgeReveal.onHide = { [weak self] in self?.hideReveal() }
         edgeReveal.isPinned = { [weak self] in self?.isRevealPinned() ?? false }
         view.onHoverCoverChanged = { [weak self] _ in self?.edgeReveal.recheck() }
-        view.onLeave = { [weak self] in self?.onLeave() }
+        view.onLeave = { [weak self] in
+            self?.hideReveal(restoringFocus: false)
+            self?.onLeave()
+        }
         view.onFocusChanged = { [weak self] in self?.onFocusChanged() }
         view.onJump = { [weak self] in self?.onJump($0) }
     }
@@ -198,6 +206,22 @@ final class SidebarController {
         column.layer?.transform = CATransform3DIdentity
     }
 
+    // Not the user's choice to collapse, so the remembered one is left alone for the next window.
+    func yieldToNarrowWindow(in root: NSView) {
+        guard isDocked, let edgeLeading, let canvasOffset, let leadWidth, let tabBarLeading else { return }
+        isDocked = false
+        slideID &+= 1
+        isSliding = false
+        edgeLeading.constant = edgeOffset
+        canvasOffset.constant = canvasGap
+        leadWidth.constant = leadOffset
+        tabBarLeading.constant = tabBarPull
+        view.layer?.transform = CATransform3DIdentity
+        settle()
+        applyLeadWidth()
+        root.layoutSubtreeIfNeeded()
+    }
+
     private func settle() {
         column.setContentHidden(!isShown)
         footer.layer?.opacity = isShown ? 1 : 0
@@ -210,9 +234,10 @@ final class SidebarController {
         CGVector(dx: -(SidebarView.width + ChromeMetrics.windowGutter), dy: 0)
     }
 
-    func reveal() {
+    func reveal(takingFocus: Bool = false) {
         guard !isDocked, !isRevealed, let columnLeading, let columnBottom else { return }
         isRevealed = true
+        revealHoldsFocus = takingFocus
         revealID &+= 1
         setToggleOnCard(true)
         columnLeading.constant = ChromeMetrics.windowGutter
@@ -223,16 +248,34 @@ final class SidebarController {
         column.superview?.layoutSubtreeIfNeeded()
         Motion.slideFade(column, appearing: true, from: revealPark)
         onRevealChanged()
+        guard takingFocus else { return }
+        onFocusYield()
+        focusActiveRow()
     }
 
-    func hideReveal() {
+    // Taking the keyboard also takes the card off the pointer, which no longer dismisses it.
+    func focusRevealedCard() {
+        guard isRevealed, !revealHoldsFocus else { return }
+        revealHoldsFocus = true
+        onFocusYield()
+        focusActiveRow()
+    }
+
+    func toggleFloat() {
+        if isRevealed { hideReveal() } else { reveal(takingFocus: true) }
+    }
+
+    func hideReveal(restoringFocus: Bool = true) {
         guard isRevealed, let columnLeading, let columnBottom else { return }
+        let handBackFocus = restoringFocus && view.hasFocus
         isRevealed = false
+        revealHoldsFocus = false
         revealID &+= 1
         let id = revealID
         edgeReveal.setRevealed(false)
         setToggleOnCard(false)
         onRevealChanged()
+        if handBackFocus { onFocusRestore() }
         Motion.slideFade(column, appearing: false, from: revealPark) { [weak self] in
             guard let self, self.revealID == id else { return }
             columnLeading.constant = 0
@@ -293,10 +336,10 @@ final class SidebarController {
     var focusedStop: SidebarFocusStop? { view.focusedStop }
 
     @discardableResult
-    func focusRow(_ id: SidebarRowID) -> Bool { isDocked && view.focusRow(id) }
+    func focusRow(_ id: SidebarRowID) -> Bool { isShown && view.focusRow(id) }
 
     @discardableResult
-    func focusStop(_ stop: SidebarFocusStop) -> Bool { isDocked && view.focusStop(stop) }
+    func focusStop(_ stop: SidebarFocusStop) -> Bool { isShown && view.focusStop(stop) }
 
     enum NewWorktreeRefusal: CaseIterable {
         case worktree, unconfigured, notARepo, agent

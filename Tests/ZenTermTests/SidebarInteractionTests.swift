@@ -166,7 +166,7 @@ final class SidebarInteractionTests: WindowTestCase {
         controller.window.contentRect(forFrameRect: controller.window.frame).width
     }
 
-    func test_docking_growsAWindowNarrowerThanTheDockedMinimum() throws {
+    func test_togglingAWindowTooNarrowToDock_floatsInsteadOfShovingItWider() throws {
         let controller = makeController()
         controller.handle(.toggleSidebar)
         controller.window.setContentSize(controller.window.contentMinSize)
@@ -174,17 +174,30 @@ final class SidebarInteractionTests: WindowTestCase {
 
         controller.handle(.toggleSidebar)
 
-        XCTAssertGreaterThanOrEqual(contentWidth(controller), narrow + SidebarView.width)
-        XCTAssertEqual(controller.window.contentMinSize.width, narrow + SidebarView.width)
+        XCTAssertFalse(controller.sidebarForTesting.isDocked)
+        XCTAssertTrue(controller.sidebarForTesting.isRevealed, "too narrow to dock, so the toggle floats it")
+        XCTAssertEqual(contentWidth(controller), narrow, "and the window is left the size the user chose")
     }
 
-    func test_collapsing_lowersTheMinimumAgain() throws {
+    func test_theWindowMinimum_neverGrowsToFitTheSidebar() throws {
         let controller = makeController()
-        let docked = controller.window.contentMinSize.width
+        let minimum = controller.window.contentMinSize.width
 
         controller.handle(.toggleSidebar)
 
-        XCTAssertEqual(controller.window.contentMinSize.width, docked - SidebarView.width)
+        XCTAssertEqual(controller.window.contentMinSize.width, minimum)
+    }
+
+    func test_shrinkingBelowTheDockableWidth_yieldsTheDockedSidebar() throws {
+        let controller = makeController()
+        XCTAssertTrue(controller.sidebarForTesting.isDocked)
+
+        controller.window.setContentSize(
+            NSSize(width: SidebarController.minimumDockableWidth - 1, height: 800))
+        controller.windowDidResize(Notification(name: NSWindow.didResizeNotification))
+
+        XCTAssertFalse(controller.sidebarForTesting.isDocked, "the sidebar yields rather than the window refusing")
+        XCTAssertFalse(controller.sidebarForTesting.isRevealed, "yielding gives the panes the room, it does not float")
     }
 
     func test_dockedAtTheMinimumWidth_withAUserFloat_theTabBarKeepsRoom() throws {
@@ -715,16 +728,25 @@ final class SidebarInteractionTests: WindowTestCase {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
         controller.handle(.toggleSidebar)
-        controller.window.setContentSize(controller.window.contentMinSize)
-        let narrow = contentWidth(controller)
         try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface).focus()
 
         controller.handle(.focusSidebar)
 
         XCTAssertTrue(controller.sidebarForTesting.isDocked)
-        XCTAssertEqual(
-            controller.window.contentMinSize.width, narrow + SidebarView.width,
-            "docking reserves the sidebar's width, as ⌃⌘S does")
+        XCTAssertTrue(controller.window.firstResponder === controller.sidebarForTesting.view.rowsForTesting.first)
+    }
+
+    func test_focusSidebar_onAWindowTooNarrowToDock_floatsItAndTakesTheKeyboard() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleSidebar)
+        controller.window.setContentSize(controller.window.contentMinSize)
+        try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface).focus()
+
+        controller.handle(.focusSidebar)
+
+        XCTAssertFalse(controller.sidebarForTesting.isDocked)
+        XCTAssertTrue(controller.sidebarForTesting.isRevealed)
         XCTAssertTrue(controller.window.firstResponder === controller.sidebarForTesting.view.rowsForTesting.first)
     }
 

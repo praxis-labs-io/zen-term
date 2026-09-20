@@ -420,6 +420,8 @@ final class WindowController: NSObject {
         }
         sidebar.isPinnedExternally = { [weak self] in self?.isConfirmOpen ?? false }
         sidebar.onRevealChanged = { [weak self] in self?.syncHalo() }
+        sidebar.onFocusYield = { [weak self] in self?.captureFocusReturn() }
+        sidebar.onFocusRestore = { [weak self] in self?.restoreFocusToActive() }
         sidebar.edgeReveal.isSuppressed = { [weak self] in
             guard let self else { return true }
             return sidebar.isDocked || isModalOverlayOpen || isToolFloatOpen || !windowIsKey
@@ -438,7 +440,7 @@ final class WindowController: NSObject {
         activeWorkspace.setController(makeController(cwd: initialCWD), for: firstID)
 
         layoutContainer()
-        window.reserveContentWidth(sidebar.isDocked ? SidebarView.width : 0)
+        yieldSidebarIfNarrow()
         window.delegate = self
         wireModes()
 
@@ -1993,8 +1995,8 @@ final class WindowController: NSObject {
         case .fillScreen: toggleFillScreen()
         case .toggleSidebar: toggleSidebar()
         case .focusSidebar:
-            if !sidebar.isDocked { toggleSidebar() }
-            _ = focusSidebar()
+            if !sidebar.isShown { toggleSidebar() }
+            if sidebar.isRevealed { sidebar.focusRevealedCard() } else { _ = focusSidebar() }
         case .toggleToolFloat(let id):
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
@@ -2037,10 +2039,21 @@ final class WindowController: NSObject {
     private func toggleSidebar() {
         Log.info("sidebar toggled", category: .workspace)
         if sidebar.hasFocus { restoreFocusToActive() }
-        if !sidebar.isDocked { window.reserveContentWidth(SidebarView.width) }
+        guard canDockSidebar else {
+            sidebar.toggleFloat()
+            return
+        }
         let onScreen = (activeController?.allSurfaces ?? []) + [floats.shownSurface].compactMap { $0 }
         sidebar.toggle(holding: onScreen, in: container)
-        if !sidebar.isDocked { window.reserveContentWidth(0) }
+    }
+
+    private var canDockSidebar: Bool {
+        window.contentWidth >= SidebarController.minimumDockableWidth
+    }
+
+    private func yieldSidebarIfNarrow() {
+        guard !canDockSidebar else { return }
+        sidebar.yieldToNarrowWindow(in: container)
     }
 
     private var preFillFrame: NSRect?
@@ -2930,6 +2943,8 @@ extension WindowController: NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) { tearDown() }
+
+    func windowDidResize(_ notification: Notification) { yieldSidebarIfNarrow() }
 
     func windowDidResignKey(_ notification: Notification) {
         windowIsKey = false
