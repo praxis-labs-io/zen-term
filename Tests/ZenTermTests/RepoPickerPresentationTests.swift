@@ -102,6 +102,30 @@ final class RepoPickerPresentationTests: WindowTestCase {
             for: path)
     }
 
+    private func rowIndex(_ name: String, in picker: RepoPickerOverlay) -> Int? {
+        picker.rowViews.firstIndex { view in
+            guard let row = view as? RepoPickerOverlay.RowView else { return false }
+            if let running = row.running { return running.id != nil && running.name == name }
+            if let worktree = row.worktree { return (worktree.branch ?? worktree.head) == name }
+            return row.label == name
+        }
+    }
+
+    // Arrows onto the named row, so a test says which workspace it means rather than counting keystrokes.
+    private func selectRow(_ name: String, in picker: RepoPickerOverlay) {
+        guard let index = rowIndex(name, in: picker) else {
+            return XCTFail("the picker has no row for \(name)")
+        }
+        for _ in 0..<picker.rowViews.count where picker.selected != index { moveDown(in: picker) }
+        XCTAssertEqual(picker.selected, index, "the arrows never reached \(name)")
+    }
+
+    private func openPicker(in c: WindowController, on name: String) throws -> RepoPickerOverlay {
+        let picker = try openPicker(in: c)
+        selectRow(name, in: picker)
+        return picker
+    }
+
     private func moveDown(in picker: RepoPickerOverlay) {
         let field = descendants(of: picker).compactMap { $0 as? NSTextField }
             .first { ($0.delegate as? PaletteOverlay) === picker }!
@@ -128,7 +152,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
         let alpha = URL(
             fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
         giveWorktrees(picker, under: alpha, "feature/one")
-        moveDown(in: picker)
+        selectRow("feature/one", in: picker)
 
         c.handle(.removeWorktree)
 
@@ -146,7 +170,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
         let alpha = URL(
             fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
         giveWorktrees(picker, under: alpha, "feature/one")
-        moveDown(in: picker)
+        selectRow("feature/one", in: picker)
         c.handle(.removeWorktree)
         waitUntil(picker.presentedConfirmForTesting != nil, "the remove confirm to be presented")
         c.window.contentView?.layoutSubtreeIfNeeded()
@@ -212,7 +236,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
         let alpha = URL(
             fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
         giveWorktrees(picker, under: alpha, "feature/one")
-        moveDown(in: picker)
+        selectRow("feature/one", in: picker)
         c.handle(.removeWorktree)
         waitUntil(picker.presentedConfirmForTesting != nil, "the remove confirm to be presented")
 
@@ -232,7 +256,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
         let alpha = URL(
             fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
         giveWorktrees(picker, under: alpha, "feature/one")
-        moveDown(in: picker)
+        selectRow("feature/one", in: picker)
         c.handle(.removeWorktree)
         waitUntil(picker.presentedConfirmForTesting != nil, "the remove confirm to be presented")
         let card = try XCTUnwrap(picker.presentedConfirmForTesting)
@@ -257,7 +281,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
         let alpha = URL(
             fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
         giveWorktrees(picker, under: alpha, "feature/one")
-        moveDown(in: picker)
+        selectRow("feature/one", in: picker)
         c.handle(.removeWorktree)
         waitUntil(picker.presentedConfirmForTesting != nil, "the remove confirm to be presented")
         let card = try XCTUnwrap(picker.presentedConfirmForTesting)
@@ -304,12 +328,12 @@ final class RepoPickerPresentationTests: WindowTestCase {
     func test_createWorktree_overThePicker_swapsItForTheCreateCard() throws {
         try seedWorkspaces(twoWorkspaces)
         let c = makeWindow()
-        c.handle(.toggleRepoPicker)
-        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        let picker = try openPicker(in: c, on: "Alpha")
 
         c.handle(.createWorktree)
 
         waitUntil(!createCards(in: c).isEmpty, "the create card to be presented")
+        _ = picker
         XCTAssertTrue(pickers(in: c).isEmpty, "one modal slot, so the card replaces the picker")
     }
 
@@ -342,8 +366,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
     func test_cancellingTheCreateCard_reopensThePicker() throws {
         try seedWorkspaces(twoWorkspaces)
         let c = makeWindow()
-        c.handle(.toggleRepoPicker)
-        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        _ = try openPicker(in: c, on: "Alpha")
         c.handle(.createWorktree)
         waitUntil(!createCards(in: c).isEmpty, "the create card to be presented")
 
@@ -356,8 +379,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
     func test_aCardClosedMidCreate_isNotTheOneTheAnswerLandsOn() throws {
         try seedWorkspaces(twoWorkspaces)
         let c = makeWindow()
-        c.handle(.toggleRepoPicker)
-        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        _ = try openPicker(in: c, on: "Alpha")
         c.handle(.createWorktree)
         waitUntil(!createCards(in: c).isEmpty, "the create card to be presented")
         let card = try XCTUnwrap(createCards(in: c).first)
@@ -379,8 +401,9 @@ final class RepoPickerPresentationTests: WindowTestCase {
         waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
         let picker = try XCTUnwrap(pickers(in: c).first)
         XCTAssertEqual(
-            workspaceRows(in: picker).count, 4,
-            "the two action rows and a row per workspace, all present when the card first appears")
+            workspaceRows(in: picker).count, 5,
+            "the two action rows, the open workspace and a row per configured one, all present when the card first appears"
+        )
     }
 
     func test_secondPressBeforeTheCardArrives_leavesNoPicker() throws {
@@ -458,7 +481,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
         let firstTab = try XCTUnwrap(c.tabIDsForTesting(workspace: first).first)
         let firstSurface = try XCTUnwrap(c.controllerForTesting(tab: firstTab)?.allSurfaces.first)
 
-        pressReturn(in: try openPicker(in: c))
+        pressReturn(in: try openPicker(in: c, on: "Alpha"))
 
         XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Alpha"], "a new workspace goes at the end")
         XCTAssertNotEqual(c.activeWorkspaceIDForTesting, first)
@@ -473,14 +496,14 @@ final class RepoPickerPresentationTests: WindowTestCase {
         try seedWorkspaces(twoWorkspaces)
         let c = makeWindow()
         let first = c.activeWorkspaceIDForTesting
-        pressReturn(in: try openPicker(in: c))
+        pressReturn(in: try openPicker(in: c, on: "Alpha"))
         let alpha = c.activeWorkspaceIDForTesting
         let alphaTab = try XCTUnwrap(c.tabIDsForTesting(workspace: alpha).first)
         let alphaSurface = try XCTUnwrap(c.controllerForTesting(tab: alphaTab)?.allSurfaces.first)
         c.handle(.selectWorkspace(1))
         XCTAssertEqual(c.activeWorkspaceIDForTesting, first)
 
-        pressReturn(in: try openPicker(in: c))
+        pressReturn(in: try openPicker(in: c, on: "Alpha"))
 
         XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Alpha"])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, alpha)
@@ -490,12 +513,12 @@ final class RepoPickerPresentationTests: WindowTestCase {
     func test_renamingAnOpenWorkspace_stillSwitchesToIt_ratherThanOpeningASecondCopy() throws {
         try seedWorkspaces(twoWorkspaces)
         let c = makeWindow()
-        pressReturn(in: try openPicker(in: c))
+        pressReturn(in: try openPicker(in: c, on: "Alpha"))
         let alpha = c.activeWorkspaceIDForTesting
         c.handle(.selectWorkspace(1))
         try seedWorkspaces(twoWorkspaces.replacingOccurrences(of: "[Alpha]", with: "[Alpha Renamed]"))
 
-        pressReturn(in: try openPicker(in: c))
+        pressReturn(in: try openPicker(in: c, on: "Alpha"))
 
         XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Alpha"], "the same folder is the same workspace")
         XCTAssertEqual(c.activeWorkspaceIDForTesting, alpha)
@@ -506,7 +529,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
         let c = makeWindow()
         let first = c.activeWorkspaceIDForTesting
 
-        pressReturn(in: try openPicker(in: c))
+        pressReturn(in: try openPicker(in: c, on: "Dotfiles"))
 
         XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Dotfiles"])
         XCTAssertNotEqual(c.activeWorkspaceIDForTesting, first)
@@ -518,7 +541,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
         let alpha = URL(fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
         var picker = try openPicker(in: c)
         giveWorktrees(picker, under: alpha, "feature/one")
-        moveDown(in: picker)
+        selectRow("feature/one", in: picker)
         pressReturn(in: picker)
         let worktree = c.activeWorkspaceIDForTesting
         XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Alpha: feature/one"])
@@ -526,7 +549,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
 
         picker = try openPicker(in: c)
         giveWorktrees(picker, under: alpha, "feature/one")
-        moveDown(in: picker)
+        selectRow("Alpha: feature/one", in: picker)
         pressReturn(in: picker)
 
         XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Alpha: feature/one"])

@@ -79,26 +79,40 @@ final class SidebarWorktreeRowTests: WindowTestCase {
                 .first { ($0.delegate as? PaletteOverlay) === picker })
     }
 
-    private func choose(row index: Int, in picker: RepoPickerOverlay) throws {
+    // Arrows onto the named row and opens it, so a test says which workspace it means.
+    private func choose(_ name: String, in picker: RepoPickerOverlay) throws {
         let field = try searchField(of: picker)
-        for _ in 0..<index {
+        guard
+            let index = picker.rowViews.firstIndex(where: { view in
+                guard let row = view as? RepoPickerOverlay.RowView else { return false }
+                if let running = row.running { return running.id != nil && running.name == name }
+                if let worktree = row.worktree { return (worktree.branch ?? worktree.head) == name }
+                return row.label == name
+            })
+        else { return XCTFail("the picker has no row for \(name)") }
+        for _ in 0..<picker.rowViews.count where picker.selected != index {
             _ = picker.control(field, textView: NSTextView(), doCommandBy: #selector(NSResponder.moveDown(_:)))
         }
+        XCTAssertEqual(picker.selected, index, "the arrows never reached \(name)")
         _ = picker.control(field, textView: NSTextView(), doCommandBy: #selector(NSResponder.insertNewline(_:)))
     }
 
-    private func openWorkspace(atConfigIndex row: Int, in c: WindowController) throws {
-        try choose(row: row, in: try openPicker(in: c))
+    private func openWorkspace(named name: String, in c: WindowController) throws {
+        try choose(name, in: try openPicker(in: c))
     }
 
+    // ⌘P lists a worktree only under a Configured parent, and these tests open one under a live parent.
     private func openAlphaWorktree(branch: String?, head: String = "a41c9e2d0f", in c: WindowController) throws {
-        let picker = try openPicker(in: c)
         let worktree = Worktree(
             path: alpha.appendingPathComponent(branch ?? head, isDirectory: true), branch: branch, head: head,
             isLocked: false)
-        picker.setWorktrees(
-            WorktreeListing(commonDir: alpha.appendingPathComponent(".git"), worktrees: [worktree]), for: alpha)
-        try choose(row: 1, in: picker)
+        let parent = try XCTUnwrap(
+            ConfigLoader.loadWorkspacesBlocking().first { $0.path.standardizedFileURL == alpha.standardizedFileURL },
+            "Alpha is not in the seeded workspaces file")
+        c.openWorkspaceForTesting(
+            RepoPickerOverlay.workspace(
+                for: worktree, parent: parent, repoRoot: GitRepoStatus.repoRoot(parent.path)),
+            origin: WorktreeOrigin(parent: parent, worktree: worktree))
     }
 
     private func rows(of c: WindowController) -> [SettingsNavRow] { c.sidebarForTesting.view.rowsForTesting }
@@ -194,8 +208,8 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
     func test_aWorktreeOpenedLast_nestsUnderItsOpenWorkspace() throws {
         let c = makeWindow()
-        try openWorkspace(atConfigIndex: 0, in: c)
-        try openWorkspace(atConfigIndex: 1, in: c)
+        try openWorkspace(named: "Alpha", in: c)
+        try openWorkspace(named: "Beta", in: c)
 
         try openAlphaWorktree(branch: "feature/one", in: c)
 
@@ -212,8 +226,8 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
     func test_cmdCtrlDigits_followTheSidebar_nestedWorktreesIncluded() throws {
         let c = makeWindow()
-        try openWorkspace(atConfigIndex: 0, in: c)
-        try openWorkspace(atConfigIndex: 1, in: c)
+        try openWorkspace(named: "Alpha", in: c)
+        try openWorkspace(named: "Beta", in: c)
         try openAlphaWorktree(branch: "feature/one", in: c)
         let worktree = c.activeWorkspaceIDForTesting
         XCTAssertEqual(titles(of: c), ["Workspace 1", "Alpha", "feature/one", "Beta"])
@@ -226,7 +240,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
     func test_rowTooltips_numberTheSidebar_skippingTheGhost() throws {
         let c = makeWindow()
-        try openWorkspace(atConfigIndex: 1, in: c)
+        try openWorkspace(named: "Beta", in: c)
         try openAlphaWorktree(branch: "feature/one", in: c)
         XCTAssertEqual(titles(of: c), ["Workspace 1", "Beta", "Alpha", "feature/one"])
 
@@ -237,8 +251,8 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
     func test_cmdCtrlBrackets_stepThroughTheSidebar_nestedWorktreesIncluded() throws {
         let c = makeWindow()
-        try openWorkspace(atConfigIndex: 0, in: c)
-        try openWorkspace(atConfigIndex: 1, in: c)
+        try openWorkspace(named: "Alpha", in: c)
+        try openWorkspace(named: "Beta", in: c)
         try openAlphaWorktree(branch: "feature/one", in: c)
         let ids = c.workspaceIDsForTesting
         c.activateWorkspaceForTesting(ids[1])
@@ -274,8 +288,8 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
     func test_closeFromTheMenu_closesThatWorkspace_evenInTheBackground() throws {
         let c = makeWindow()
-        try openWorkspace(atConfigIndex: 0, in: c)
-        try openWorkspace(atConfigIndex: 1, in: c)
+        try openWorkspace(named: "Alpha", in: c)
+        try openWorkspace(named: "Beta", in: c)
         let beta = c.activeWorkspaceIDForTesting
 
         try rightClick(rows(of: c)[1])
@@ -292,8 +306,8 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
     func test_closingAWorkspace_landsOnItsNeighbourInTheSidebar_andLeavesItsWorktreeUnderAGhost() throws {
         let c = makeWindow()
-        try openWorkspace(atConfigIndex: 0, in: c)
-        try openWorkspace(atConfigIndex: 1, in: c)
+        try openWorkspace(named: "Alpha", in: c)
+        try openWorkspace(named: "Beta", in: c)
         try openAlphaWorktree(branch: "feature/one", in: c)
         let worktree = c.activeWorkspaceIDForTesting
         c.activateWorkspaceForTesting(c.workspaceIDsForTesting[1])
@@ -309,7 +323,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
     func test_aParentOpenedIntoItsGhostsPlace_staysThere_afterItsWorktreeCloses() throws {
         let c = makeWindow()
         try openAlphaWorktree(branch: "feature/one", in: c)
-        try openWorkspace(atConfigIndex: 1, in: c)
+        try openWorkspace(named: "Beta", in: c)
         try click(rows(of: c)[1])
         waitUntil(c.workspaceNamesForTesting.count == 4, "the workspace to open")
         XCTAssertEqual(titles(of: c), ["Workspace 1", "Alpha", "feature/one", "Beta"])
@@ -340,8 +354,8 @@ final class SidebarWorktreeRowTests: WindowTestCase {
     }
 
     private func openAlphaBetaThenAlphasWorktree(in c: WindowController) throws {
-        try openWorkspace(atConfigIndex: 0, in: c)
-        try openWorkspace(atConfigIndex: 1, in: c)
+        try openWorkspace(named: "Alpha", in: c)
+        try openWorkspace(named: "Beta", in: c)
         try openAlphaWorktree(branch: "feature/one", in: c)
         XCTAssertEqual(titles(of: c), ["Workspace 1", "Alpha", "feature/one", "Beta"])
     }

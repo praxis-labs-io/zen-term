@@ -302,29 +302,48 @@ final class PaletteInteractionTests: WindowTestCase {
         entries: [Workspace],
         onChoose: @escaping (Workspace, WorktreeOrigin?) -> Void = { _, _ in },
         onAddWorkspace: @escaping () -> Void = {},
+        onNewWorkspace: @escaping () -> Void = {},
         onDismiss: @escaping () -> Void = {}
     ) -> RepoPickerOverlay {
         RepoPickerOverlay(
             entries: entries, background: Theme.current.chrome.background.nsColor,
-            onChoose: onChoose, onAddWorkspace: onAddWorkspace, onDismiss: onDismiss)
+            onChoose: onChoose, onAddWorkspace: onAddWorkspace, onNewWorkspace: onNewWorkspace,
+            onDismiss: onDismiss)
     }
 
-    func test_repoPicker_returnOpensFirstWorkspaceNotTheAddRow() throws {
+    func test_repoPicker_returnOnAnEmptyQuery_makesAWorkspaceRatherThanOpeningOne() throws {
         var chosen: Workspace?
         var addOpened = false
+        var made = false
         let overlay = makeRepoPicker(
             entries: [workspace("alpha"), workspace("beta")],
-            onChoose: { ws, _ in chosen = ws }, onAddWorkspace: { addOpened = true })
+            onChoose: { ws, _ in chosen = ws }, onAddWorkspace: { addOpened = true },
+            onNewWorkspace: { made = true })
         mount(overlay)
         try sendReturn(to: overlay)
-        XCTAssertEqual(chosen?.title, "alpha")
+        XCTAssertTrue(made, "New Workspace holds the selection until a query matches something")
+        XCTAssertNil(chosen)
         XCTAssertFalse(addOpened)
+    }
+
+    func test_repoPicker_returnOnAQueryThatMatchesNothing_stillMakesAWorkspace() throws {
+        var chosen: Workspace?
+        var made = false
+        let overlay = makeRepoPicker(
+            entries: [workspace("alpha"), workspace("beta")],
+            onChoose: { ws, _ in chosen = ws }, onNewWorkspace: { made = true })
+        mount(overlay)
+        type("zzzz", into: overlay)
+        try sendReturn(to: overlay)
+        XCTAssertTrue(made)
+        XCTAssertNil(chosen)
     }
 
     func test_repoPicker_shiftEnterOpensLikeEnter() throws {
         var chosen: [Workspace] = []
         let overlay = makeRepoPicker(entries: [workspace("alpha")], onChoose: { ws, _ in chosen.append(ws) })
         mount(overlay)
+        send(Self.moveDown, to: overlay)
         try sendReturn(to: overlay, modifiers: .shift)
         XCTAssertEqual(chosen.map(\.title), ["alpha"], "⇧↵ no longer replaces a tab")
     }
@@ -337,6 +356,7 @@ final class PaletteInteractionTests: WindowTestCase {
             onChoose: { ws, _ in chosen = ws }, onAddWorkspace: { addOpened = true })
         mount(overlay)
         send(Self.moveDown, to: overlay)
+        send(Self.moveDown, to: overlay)
         try sendReturn(to: overlay)
         XCTAssertTrue(addOpened)
         XCTAssertNil(chosen)
@@ -346,12 +366,13 @@ final class PaletteInteractionTests: WindowTestCase {
         let overlay = makeRepoPicker(entries: [workspace("zeta"), workspace("alpha")])
         mount(overlay)
         let (newRow, addRow) = (rows(in: overlay)[0], rows(in: overlay)[3])
+        let header = rowsStack(in: overlay).arrangedSubviews[1]
         let (zetaRow, alphaRow) = (rows(in: overlay)[1], rows(in: overlay)[2])
 
         type("a", into: overlay)
 
         XCTAssertEqual(
-            rowsStack(in: overlay).arrangedSubviews, [newRow, alphaRow, zetaRow, addRow],
+            rowsStack(in: overlay).arrangedSubviews, [newRow, header, alphaRow, zetaRow, addRow],
             "every row is reused, re-ordered by the filter rather than rebuilt")
     }
 
@@ -449,8 +470,8 @@ final class PaletteInteractionTests: WindowTestCase {
             entries: [workspace("alpha"), workspace("beta")], onChoose: { ws, _ in chosen = ws })
         mount(overlay)
         type("bet", into: overlay)
-        XCTAssertEqual(overlay.numberOfRows(), 3)
+        XCTAssertEqual(overlay.numberOfRows(), 4, "New Workspace, the header, the one match and Add")
         try sendReturn(to: overlay)
-        XCTAssertEqual(chosen?.title, "beta")
+        XCTAssertEqual(chosen?.title, "beta", "a query that matches takes the selection off New Workspace")
     }
 }

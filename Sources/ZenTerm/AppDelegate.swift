@@ -202,6 +202,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 $0.adding($1.closedByRemoval(atPath: path), isThisWindow: $1 === wc)
             } ?? ClosedByRemoval()
         }
+        wc.openWorkspacesElsewhere = { [weak self, weak wc] in
+            self?.windows.filter { $0 !== wc }.flatMap { $0.runningWorkspaces() } ?? []
+        }
+        wc.revealWorkspaceElsewhere = { [weak self, weak wc] window, id in
+            guard
+                let other = self?.windows.first(where: { $0 !== wc && $0.windowID == window }),
+                other.holdsWorkspace(id)
+            else { return false }
+            NSApp.activate(ignoringOtherApps: true)
+            if other.window.isMiniaturized { other.window.deminiaturize(nil) }
+            other.window.makeKeyAndOrderFront(nil)
+            other.activateWorkspace(id)
+            return true
+        }
         wc.isWorkspaceOpenInAnotherWindow = { [weak self, weak wc] path in
             self?.otherWindow(holding: path, asking: wc) != nil
         }
