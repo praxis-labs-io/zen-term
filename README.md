@@ -87,6 +87,8 @@ your current shortcut for each action.
 | Toggle right drawer | ⌘\ |
 | Select tab 1 through 9 | ⌘1 – ⌘9 |
 | Workspaces | ⌘P |
+| Workspace sidebar | ⌘⌃S |
+| Select workspace 1 through 9 | ⌘⌃1 – ⌘⌃9 |
 | Command palette | ⌘⇧P |
 | Scroll mode | ⌘⇧S |
 | Settings | ⌘, |
@@ -118,7 +120,9 @@ away.
 ![The workspace picker open, listing named workspaces with a search field above them](docs/images/workspaces.png)
 
 The workspaces you named, each one a folder plus a layout. ZenTerm does not scan
-directories to fill this list, so it holds only what you put there.
+directories to fill this list, so it holds only what you put there. Several open at
+once in a window, each holding its own tabs, and the sidebar on ⌘⌃S lists them with
+their worktrees and the agents running in them.
 
 ![lazygit open as a tool float over the panes, with its own numbered panes, and the work still visible around it](docs/images/tool-float.png)
 
