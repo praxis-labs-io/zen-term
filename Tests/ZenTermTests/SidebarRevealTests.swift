@@ -184,8 +184,20 @@ final class SidebarRevealTests: WindowTestCase {
         reveal.stripForTesting.mouseEntered(with: try enterExitEvent(.mouseEntered, on: reveal))
     }
 
-    private func leaveStrip(_ reveal: SidebarEdgeReveal) throws {
-        reveal.stripForTesting.mouseExited(with: try enterExitEvent(.mouseExited, on: reveal))
+    private func leaveStrip(_ reveal: SidebarEdgeReveal, at point: NSPoint) throws {
+        let strip = reveal.stripForTesting
+        let inWindow = strip.convert(point, to: nil)
+        let event = try XCTUnwrap(
+            NSEvent.enterExitEvent(
+                with: .mouseExited, location: inWindow, modifierFlags: [], timestamp: 0,
+                windowNumber: strip.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
+                trackingNumber: 0, userData: nil))
+        strip.mouseExited(with: event)
+    }
+
+    private func leaveStripRight(_ reveal: SidebarEdgeReveal) throws {
+        let strip = reveal.stripForTesting
+        try leaveStrip(reveal, at: NSPoint(x: strip.bounds.maxX + 4, y: strip.bounds.midY))
     }
 
     private func enterExitEvent(_ type: NSEvent.EventType, on reveal: SidebarEdgeReveal) throws -> NSEvent {
@@ -221,7 +233,7 @@ final class SidebarRevealTests: WindowTestCase {
         sidebar.edgeReveal.pointerIsInside = { true }
 
         try enterStrip(sidebar.edgeReveal)
-        try leaveStrip(sidebar.edgeReveal)
+        try leaveStripRight(sidebar.edgeReveal)
         afterTimers()
 
         XCTAssertFalse(sidebar.isRevealed)
@@ -248,7 +260,7 @@ final class SidebarRevealTests: WindowTestCase {
         sidebar.edgeReveal.pointerIsInside = { false }
         sidebar.reveal()
 
-        try leaveStrip(sidebar.edgeReveal)
+        try leaveStripRight(sidebar.edgeReveal)
         afterTimers()
 
         XCTAssertFalse(sidebar.isRevealed)
@@ -262,7 +274,7 @@ final class SidebarRevealTests: WindowTestCase {
         let row = try XCTUnwrap(sidebar.view.rowsForTesting.first)
         row.takeKeyboardFocus()
 
-        try leaveStrip(sidebar.edgeReveal)
+        try leaveStripRight(sidebar.edgeReveal)
         afterTimers()
 
         XCTAssertTrue(sidebar.isRevealed, "the card keeps the keyboard it was given")
@@ -275,7 +287,7 @@ final class SidebarRevealTests: WindowTestCase {
         sidebar.reveal()
         sidebar.setHoverCovered(true)
 
-        try leaveStrip(sidebar.edgeReveal)
+        try leaveStripRight(sidebar.edgeReveal)
         afterTimers()
         XCTAssertTrue(sidebar.isRevealed, "a menu takes the pointer off the card without ending the reveal")
 
@@ -306,5 +318,45 @@ final class SidebarRevealTests: WindowTestCase {
         XCTAssertEqual(
             strip.trackingAreas.first?.rect, strip.bounds,
             "the area has to follow the resize, or the grown region is tracked at its old width")
+    }
+
+    func test_overshootingTheWindowEdge_keepsTheCard() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        sidebar.edgeReveal.pointerIsInside = { false }
+        sidebar.reveal()
+        let strip = sidebar.edgeReveal.stripForTesting
+
+        try leaveStrip(sidebar.edgeReveal, at: NSPoint(x: -6, y: strip.bounds.midY))
+        afterTimers()
+
+        XCTAssertTrue(
+            sidebar.isRevealed,
+            "running off the window's own edge is reaching for the card, not leaving it")
+    }
+
+    func test_leavingPastTheCard_putsItAway() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        sidebar.edgeReveal.pointerIsInside = { false }
+        sidebar.reveal()
+
+        try leaveStripRight(sidebar.edgeReveal)
+        afterTimers()
+
+        XCTAssertFalse(sidebar.isRevealed)
+    }
+
+    func test_leavingThroughTheTop_putsItAway() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        sidebar.edgeReveal.pointerIsInside = { false }
+        sidebar.reveal()
+        let strip = sidebar.edgeReveal.stripForTesting
+
+        try leaveStrip(sidebar.edgeReveal, at: NSPoint(x: -6, y: strip.bounds.maxY + 4))
+        afterTimers()
+
+        XCTAssertFalse(sidebar.isRevealed, "a corner exit is still an exit")
     }
 }

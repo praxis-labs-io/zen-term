@@ -24,7 +24,7 @@ final class SidebarEdgeReveal {
 
     init() {
         strip.onEnter = { [weak self] in self?.pointerEntered() }
-        strip.onExit = { [weak self] in self?.pointerLeft() }
+        strip.onExit = { [weak self] offTheEdge in self?.pointerLeft(offTheEdge: offTheEdge) }
         pointerIsInside = { [weak strip] in strip?.pointerIsInside ?? false }
     }
 
@@ -80,10 +80,11 @@ final class SidebarEdgeReveal {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.holdDelay, execute: work)
     }
 
-    private func pointerLeft() {
+    // Overshooting the window's own edge is reaching for the card, not leaving it: only the other three put it away.
+    private func pointerLeft(offTheEdge: Bool) {
         hold?.cancel()
         hold = nil
-        guard isRevealed else { return }
+        guard isRevealed, !offTheEdge else { return }
         scheduleHide()
     }
 
@@ -132,7 +133,7 @@ final class SidebarEdgeReveal {
 // Reports the pointer without taking it: tracking is geometric, so the panes underneath still get their clicks.
 private final class EdgeStrip: NSView {
     var onEnter: () -> Void = {}
-    var onExit: () -> Void = {}
+    var onExit: (Bool) -> Void = { _ in }
     private var tracking: NSTrackingArea?
 
     init() {
@@ -156,5 +157,11 @@ private final class EdgeStrip: NSView {
 
     override func mouseEntered(with event: NSEvent) { onEnter() }
 
-    override func mouseExited(with event: NSEvent) { onExit() }
+    override func mouseExited(with event: NSEvent) {
+        onExit(leftPastTheWindowEdge(convert(event.locationInWindow, from: nil)))
+    }
+
+    private func leftPastTheWindowEdge(_ point: NSPoint) -> Bool {
+        point.x <= bounds.minX && point.y > bounds.minY && point.y < bounds.maxY
+    }
 }
