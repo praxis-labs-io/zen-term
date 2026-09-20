@@ -1777,6 +1777,7 @@ final class WindowController: NSObject {
         confirmOnCancel = nil
         toasts.dismiss(toast)
         returnFocusAfterOverlay()
+        sidebar.edgeReveal.recheck()
         renderDock()
     }
 
@@ -1996,7 +1997,12 @@ final class WindowController: NSObject {
         case .toggleSidebar: toggleSidebar()
         case .focusSidebar:
             if !sidebar.isShown { toggleSidebar() }
-            if sidebar.isRevealed { sidebar.focusRevealedCard() } else { _ = focusSidebar() }
+            if sidebar.isRevealed {
+                endModes()
+                sidebar.focusRevealedCard()
+            } else {
+                _ = focusSidebar()
+            }
         case .toggleToolFloat(let id):
             pendingModal = nil
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }

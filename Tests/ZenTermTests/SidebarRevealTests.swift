@@ -369,6 +369,89 @@ final class SidebarRevealTests: WindowTestCase {
             sidebar.column.hitTest(point), "a card fading out must not swallow the click meant for the pane")
     }
 
+    func test_activatingTheWindowWithThePointerAtTheEdge_armsTheReveal() throws {
+        let controller = try makeCollapsedController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let sidebar = controller.sidebarForTesting
+        sidebar.edgeReveal.pointerIsInside = { true }
+
+        sidebar.edgeReveal.recheck()
+
+        waitUntil(sidebar.isRevealed, "an activated window sends no enter for a pointer that never left")
+    }
+
+    func test_aLiveGutterChange_movesTheHotZoneWithTheCard() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        sidebar.reveal()
+
+        var config = GeneralConfig.builtIn
+        config.windowGutter = Self.gutter * 2
+        GeneralConfig.setCurrentForTesting(config)
+        sidebar.reapplyChromeLayout()
+
+        XCTAssertEqual(
+            frame(of: sidebar.edgeReveal.stripForTesting, in: controller).width,
+            Self.gutter * 2 + SidebarView.width,
+            "the live region is the card grown to the window, so it moves when the gutter does")
+    }
+
+    func test_aClickOnTheCardsOwnMenu_neverDismissesIt() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        sidebar.edgeReveal.pointerIsInside = { false }
+        sidebar.reveal()
+        sidebar.setHoverCovered(true)
+        let card = frame(of: sidebar.column, in: controller)
+
+        let beyond = controller.containerForTesting.convert(
+            NSPoint(x: card.maxX + 60, y: card.midY), to: nil)
+        let click = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: beyond, modifierFlags: [], timestamp: 0,
+                windowNumber: controller.window.windowNumber, context: nil, eventNumber: 0,
+                clickCount: 1, pressure: 1))
+
+        _ = sidebar.edgeReveal.clickForTesting(click)
+
+        XCTAssertTrue(sidebar.isRevealed, "a menu the card opened draws outside it, and its clicks are its own")
+    }
+
+    func test_focusSidebar_overARevealedCard_endsAnActiveMode() throws {
+        let controller = try makeCollapsedController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let sidebar = controller.sidebarForTesting
+        controller.handle(.toggleScrollMode)
+        XCTAssertTrue(controller.scrollMode.isActive, "premise: the pane is in a mode")
+        sidebar.reveal()
+
+        controller.handle(.focusSidebar)
+
+        XCTAssertFalse(
+            controller.scrollMode.isActive, "the card has the keyboard, so the pane's mode points at nothing")
+    }
+
+    func test_clearingAConfirm_lettingTheQueuedExitFinish() throws {
+        let controller = try makeCollapsedController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let sidebar = controller.sidebarForTesting
+        sidebar.edgeReveal.pointerIsInside = { false }
+        sidebar.reveal()
+        controller.handle(.closeTab)
+        XCTAssertTrue(controller.isConfirmOpen, "premise: the confirm pins the card")
+        sidebar.edgeReveal.recheck()
+        settle()
+        XCTAssertTrue(sidebar.isRevealed, "the pin holds it while the pointer is away")
+
+        let content = try XCTUnwrap(controller.window.contentView)
+        let cancel = try XCTUnwrap(
+            descendants(of: content).compactMap { $0 as? AppButton }.first { $0.title == "Cancel" })
+        cancel.performClick(nil)
+        settle()
+
+        XCTAssertFalse(sidebar.isRevealed, "and clearing the pin lets the exit it swallowed finish")
+    }
+
     func test_collapsedColumn_passesClicksThroughToThePanes() throws {
         let controller = try makeCollapsedController()
         let sidebar = controller.sidebarForTesting
@@ -632,9 +715,10 @@ final class SidebarRevealTests: WindowTestCase {
         sidebar.edgeReveal.pointerIsInside = { true }
         XCTAssertFalse(sidebar.edgeReveal.isSuppressed(), "nothing is covering the panes yet")
 
-        controller.handle(.openSettings)
+        controller.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        waitUntil(controller.floatsForTesting.isOpen, "the scratch float to open")
 
-        XCTAssertTrue(sidebar.edgeReveal.isSuppressed(), "the gate is wired to the window's own modal state")
+        XCTAssertTrue(sidebar.edgeReveal.isSuppressed(), "a float over the panes owns the pointer")
     }
 
     func test_clickingOutsideTheCard_hidesIt_withoutEatingTheClick() throws {

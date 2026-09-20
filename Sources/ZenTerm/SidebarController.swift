@@ -64,6 +64,10 @@ final class SidebarController {
         edgeReveal.onReveal = { [weak self] in self?.reveal() }
         edgeReveal.onHide = { [weak self] in self?.hideReveal() }
         edgeReveal.isPinned = { [weak self] in self?.isRevealPinned() ?? false }
+        edgeReveal.clickOutsideBelongsToTheCard = { [weak self] in
+            guard let self else { return false }
+            return view.isHoverCovered || isPinnedExternally()
+        }
         edgeReveal.cardFrameInWindow = { [weak self] in
             guard let column = self?.column else { return nil }
             return column.convert(column.bounds, to: nil)
@@ -160,7 +164,7 @@ final class SidebarController {
         ]
         guard !Motion.isReduceMotionEnabled() else {
             for (constraint, target) in animate { constraint.constant = target }
-            dockCard()
+            stopFloating()
             settle()
             root.layoutSubtreeIfNeeded()
             return
@@ -178,7 +182,7 @@ final class SidebarController {
             guard let self, self.slideID == id else { return }
             self.isSliding = false
             self.view.layer?.transform = CATransform3DIdentity
-            self.dockCard()
+            self.stopFloating()
             self.applyLeadWidth()
             self.settle()
             self.edgeReveal.rearmIfPointerRests()
@@ -194,7 +198,7 @@ final class SidebarController {
         Motion.ease(layer, keyPath: "shadowOpacity", to: Float(0), duration: Motion.pageSlideDuration)
     }
 
-    private func dockCard() {
+    private func stopFloating() {
         column.setFloating(false)
         column.layer?.opacity = 1
         column.layer?.transform = CATransform3DIdentity
@@ -203,9 +207,17 @@ final class SidebarController {
     // Not the user's choice to collapse, so the remembered one is left alone for the next window.
     func yieldToNarrowWindow(in root: NSView) {
         guard isDocked, let edgeLeading, let canvasOffset, let leadWidth, let tabBarLeading else { return }
+        if view.hasFocus { onFocusRestore() }
+        isRevealed = false
+        revealHoldsFocus = false
+        revealID &+= 1
+        edgeReveal.setRevealed(false)
         isDocked = false
         slideID &+= 1
         isSliding = false
+        columnLeading?.constant = 0
+        columnBottom?.constant = 0
+        stopFloating()
         edgeLeading.constant = edgeOffset
         canvasOffset.constant = canvasGap
         leadWidth.constant = leadOffset
@@ -450,6 +462,7 @@ final class SidebarController {
         sidebarTop?.constant = ChromeMetrics.topInset
         canvasOffset?.constant = canvasGap
         if isRevealed { applyRevealInsets() }
+        edgeReveal.reapplyLiveRegion()
         column.reapplyCornerRadius()
     }
 

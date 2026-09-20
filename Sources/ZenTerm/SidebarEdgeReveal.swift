@@ -23,6 +23,7 @@ final class SidebarEdgeReveal {
     var onHide: () -> Void = {}
     var pointerIsInside: () -> Bool = { false }
     var cardFrameInWindow: () -> NSRect? = { nil }
+    var clickOutsideBelongsToTheCard: () -> Bool = { false }
 
     init() {
         strip.onEnter = { [weak self] in self?.pointerEntered() }
@@ -54,6 +55,13 @@ final class SidebarEdgeReveal {
         if revealed { addClickMonitor() } else { removeClickMonitor() }
     }
 
+    func reapplyLiveRegion() {
+        guard isRevealed else { return }
+        stripWidth?.constant = Self.liveRegionWidth
+        strip.superview?.layoutSubtreeIfNeeded()
+        strip.updateTrackingAreas()
+    }
+
     func shutdown() {
         cancelTimers()
         removeClickMonitor()
@@ -67,7 +75,10 @@ final class SidebarEdgeReveal {
 
     // A pointer already inside when the window takes focus gets no `mouseEntered`, and a closing menu no event.
     func recheck() {
-        guard isRevealed else { return }
+        guard isRevealed else {
+            rearmIfPointerRests()
+            return
+        }
         guard !isPinned() else {
             grace?.cancel()
             grace = nil
@@ -142,7 +153,7 @@ final class SidebarEdgeReveal {
     }
 
     private func dismissIfClickMissedTheCard(_ event: NSEvent) {
-        guard isRevealed, event.window === strip.window else { return }
+        guard isRevealed, !clickOutsideBelongsToTheCard(), event.window === strip.window else { return }
         guard let card = cardFrameInWindow(), !card.contains(event.locationInWindow) else { return }
         cancelTimers()
         onHide()

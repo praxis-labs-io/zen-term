@@ -83,6 +83,28 @@ final class MotionTests: XCTestCase {
         XCTAssertEqual(view.layer?.opacity, 0)
     }
 
+    func test_slideFade_reversedMidFlight_neverFlashesToFullyVisible() {
+        Motion.isReduceMotionEnabled = { false }
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 400), styleMask: [.titled],
+            backing: .buffered, defer: false)
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 100, height: 100))
+        window.contentView?.addSubview(view)
+        view.wantsLayer = true
+        window.orderFront(nil)
+        CATransaction.flush()
+
+        Motion.slideFade(view, appearing: true, from: CGVector(dx: -240, dy: 0))
+        Motion.slideFade(view, appearing: false, from: CGVector(dx: -240, dy: 0))
+
+        let fade = view.layer?.animation(forKey: "motion.opacity") as? CABasicAnimation
+        XCTAssertEqual(fade?.toValue as? Float, 0)
+        XCTAssertNotNil(view.layer?.presentation(), "premise: the layer is rendered, so it has a presentation")
+        XCTAssertNotEqual(
+            fade?.fromValue as? Float, 1,
+            "reversing inside the duration must pick the card up where it is, not flash it to full")
+    }
+
     func test_motionConfig_forcesOnAndOff() {
         MotionConfig.apply(.on)
         XCTAssertTrue(Motion.isReduceMotionEnabled())

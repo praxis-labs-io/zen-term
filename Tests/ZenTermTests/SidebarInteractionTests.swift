@@ -736,6 +736,39 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(controller.window.firstResponder === controller.sidebarForTesting.view.rowsForTesting.first)
     }
 
+    func test_yieldingANarrowWindow_handsTheKeyboardBackToThePane() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        controller.handle(.focusSidebar)
+        let sidebar = controller.sidebarForTesting
+        XCTAssertTrue(sidebar.hasFocus, "premise: the keyboard is in the rows")
+
+        controller.window.setContentSize(controller.window.contentMinSize)
+
+        XCTAssertFalse(sidebar.isDocked)
+        XCTAssertTrue(
+            controller.window.firstResponder === pane.view,
+            "the rows it was in are gone, so the keyboard goes back to the pane rather than nowhere")
+    }
+
+    func test_narrowingTheWindowMidDock_leavesNoCardStandingOverThePanes() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let sidebar = controller.sidebarForTesting
+        try click(sidebar.liveToggleForTesting)
+        waitUntil(sidebar.view.isHidden, "the collapse to land before the pointer reaches the edge")
+        sidebar.reveal()
+        try click(sidebar.liveToggleForTesting)
+        XCTAssertTrue(sidebar.column.isFloating, "premise: the card is still dressed while it slides home")
+
+        controller.window.setContentSize(controller.window.contentMinSize)
+
+        XCTAssertFalse(sidebar.isDocked)
+        XCTAssertFalse(sidebar.column.isFloating, "a yield that cancels the slide has to undress the card itself")
+    }
+
     func test_focusSidebar_onAWindowTooNarrowToDock_floatsItAndTakesTheKeyboard() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)

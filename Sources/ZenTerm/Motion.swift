@@ -171,6 +171,7 @@ enum Motion {
     }
 
     // Reduce Motion asks for a fade in place of movement, so this one keeps fading where the others snap.
+    // A reveal can be reversed inside its own duration, so a run already in flight is picked up where it is.
     static func slideFade(
         _ view: NSView, appearing: Bool, from offset: CGVector,
         duration: CFTimeInterval = pageSlideDuration, completion: (() -> Void)? = nil
@@ -181,11 +182,13 @@ enum Motion {
             return
         }
         let targetOpacity: Float = appearing ? 1 : 0
+        let parked = NSSize(width: offset.dx, height: offset.dy)
+        let interrupted = layer.animation(forKey: "motion.opacity") != nil ? layer.presentation() : nil
         layer.transform = CATransform3DIdentity
         layer.opacity = targetOpacity
 
         let fade = CABasicAnimation(keyPath: "opacity")
-        fade.fromValue = appearing ? 0 : 1
+        fade.fromValue = interrupted?.opacity ?? (appearing ? 0 : 1)
         fade.toValue = targetOpacity
         fade.duration = duration
         fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
@@ -195,11 +198,10 @@ enum Motion {
             return
         }
 
-        let parked = NSValue(size: NSSize(width: offset.dx, height: offset.dy))
-        let rest = NSValue(size: .zero)
+        let held = interrupted.map { NSSize(width: $0.transform.m41, height: $0.transform.m42) }
         let slide = CABasicAnimation(keyPath: "transform.translation")
-        slide.fromValue = appearing ? parked : rest
-        slide.toValue = appearing ? rest : parked
+        slide.fromValue = NSValue(size: held ?? (appearing ? parked : .zero))
+        slide.toValue = NSValue(size: appearing ? .zero : parked)
         slide.duration = duration
         slide.timingFunction = landingTiming
 
