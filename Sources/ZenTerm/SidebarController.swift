@@ -64,6 +64,10 @@ final class SidebarController {
         edgeReveal.onReveal = { [weak self] in self?.reveal() }
         edgeReveal.onHide = { [weak self] in self?.hideReveal() }
         edgeReveal.isPinned = { [weak self] in self?.isRevealPinned() ?? false }
+        edgeReveal.cardFrameInWindow = { [weak self] in
+            guard let column = self?.column else { return nil }
+            return column.convert(column.bounds, to: nil)
+        }
         view.onHoverCoverChanged = { [weak self] _ in self?.edgeReveal.recheck() }
         view.onLeave = { [weak self] in
             self?.hideReveal(restoringFocus: false)
@@ -143,7 +147,7 @@ final class SidebarController {
         isRevealed = false
         revealID &+= 1
         edgeReveal.setRevealed(false)
-        if !wasRevealed { handTheToggleToTheWindow() }
+        if wasRevealed { onRevealChanged() } else { handTheToggleToTheWindow() }
         isDocked.toggle()
         Self.lastChoiceIsDocked = isDocked
         column.setContentHidden(false)
@@ -177,6 +181,7 @@ final class SidebarController {
             self.dockCard()
             self.applyLeadWidth()
             self.settle()
+            self.edgeReveal.rearmIfPointerRests()
         }
     }
 
@@ -227,18 +232,22 @@ final class SidebarController {
 
     var isShown: Bool { isDocked || isRevealed }
 
+    private func applyRevealInsets() {
+        columnLeading?.constant = ChromeMetrics.windowGutter
+        columnBottom?.constant = -ChromeMetrics.windowGutter
+    }
+
     private var revealPark: CGVector {
         CGVector(dx: -(SidebarView.width + ChromeMetrics.windowGutter), dy: 0)
     }
 
     func reveal(takingFocus: Bool = false) {
-        guard !isDocked, !isRevealed, let columnLeading, let columnBottom else { return }
+        guard !isDocked, !isRevealed, !isSliding, columnLeading != nil, columnBottom != nil else { return }
         isRevealed = true
         revealHoldsFocus = takingFocus
         revealID &+= 1
         let id = revealID
-        columnLeading.constant = ChromeMetrics.windowGutter
-        columnBottom.constant = -ChromeMetrics.windowGutter
+        applyRevealInsets()
         column.setFloating(true)
         edgeReveal.setRevealed(true)
         settle()
@@ -440,6 +449,7 @@ final class SidebarController {
     func reapplyChromeLayout() {
         sidebarTop?.constant = ChromeMetrics.topInset
         canvasOffset?.constant = canvasGap
+        if isRevealed { applyRevealInsets() }
         column.reapplyCornerRadius()
     }
 

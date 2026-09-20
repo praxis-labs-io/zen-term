@@ -22,6 +22,7 @@ final class SidebarEdgeReveal {
     var onReveal: () -> Void = {}
     var onHide: () -> Void = {}
     var pointerIsInside: () -> Bool = { false }
+    var cardFrameInWindow: () -> NSRect? = { nil }
 
     init() {
         strip.onEnter = { [weak self] in self?.pointerEntered() }
@@ -56,6 +57,12 @@ final class SidebarEdgeReveal {
     func shutdown() {
         cancelTimers()
         removeClickMonitor()
+    }
+
+    // A drawer slide refuses the hold it swallowed, and a pointer that never left sends no new event.
+    func rearmIfPointerRests() {
+        guard !isRevealed, pointerIsInside() else { return }
+        pointerEntered()
     }
 
     // A pointer already inside when the window takes focus gets no `mouseEntered`, and a closing menu no event.
@@ -136,7 +143,7 @@ final class SidebarEdgeReveal {
 
     private func dismissIfClickMissedTheCard(_ event: NSEvent) {
         guard isRevealed, event.window === strip.window else { return }
-        guard !strip.convert(strip.bounds, to: nil).contains(event.locationInWindow) else { return }
+        guard let card = cardFrameInWindow(), !card.contains(event.locationInWindow) else { return }
         cancelTimers()
         onHide()
     }

@@ -283,6 +283,92 @@ final class SidebarRevealTests: WindowTestCase {
             "docking pushes the canvas, which revealing never does")
     }
 
+    func test_dockingARevealedCard_handsThePaneItsHaloBack() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        let panel = try pane(in: controller)
+        sidebar.reveal()
+        XCTAssertEqual(panel.haloOpacityForTesting, 0)
+
+        try click(sidebar.liveToggleForTesting)
+
+        XCTAssertTrue(sidebar.isDocked)
+        XCTAssertGreaterThan(
+            panel.haloOpacityForTesting, 0, "hover never took the keyboard, so nothing else hands the halo back")
+    }
+
+    func test_aLiveGutterChange_movesAllFourOfTheCardsEdges() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        sidebar.reveal()
+
+        var config = GeneralConfig.builtIn
+        config.windowGutter = Self.gutter * 2
+        GeneralConfig.setCurrentForTesting(config)
+        sidebar.reapplyChromeLayout()
+
+        let card = frame(of: sidebar.column, in: controller)
+        let container = controller.containerForTesting.bounds
+        XCTAssertEqual(card.minX, Self.gutter * 2, "leading")
+        XCTAssertEqual(card.minY, Self.gutter * 2, "bottom")
+        XCTAssertEqual(container.maxY - card.maxY, ChromeMetrics.topInset, "top")
+    }
+
+    func test_aHoldThatFiresMidCollapse_isRefused_soTheSlideKeepsTheColumn() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
+        controllers.append(controller)
+        controller.mountAndStart()
+        let sidebar = controller.sidebarForTesting
+
+        try click(sidebar.liveToggleForTesting)
+        sidebar.reveal()
+
+        XCTAssertFalse(sidebar.isRevealed, "the slide owns the column until it lands")
+        settle()
+        XCTAssertFalse(sidebar.column.isFloating, "so the slide's completion never strips a card's chrome")
+    }
+
+    func test_clickingAboveTheCard_putsItAway() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        sidebar.edgeReveal.pointerIsInside = { false }
+        sidebar.reveal()
+        let card = frame(of: sidebar.column, in: controller)
+        let strip = sidebar.edgeReveal.stripForTesting
+        XCTAssertGreaterThan(
+            frame(of: strip, in: controller).maxY, card.maxY, "the grown strip stands taller than the card")
+
+        let above = controller.containerForTesting.convert(
+            NSPoint(x: card.midX, y: card.maxY + 4), to: nil)
+        let click = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: above, modifierFlags: [], timestamp: 0,
+                windowNumber: controller.window.windowNumber, context: nil, eventNumber: 0,
+                clickCount: 1, pressure: 1))
+
+        _ = sidebar.edgeReveal.clickForTesting(click)
+
+        XCTAssertFalse(sidebar.isRevealed, "the title bar is not the card, however far the hot zone reaches")
+    }
+
+    func test_theCardStopsTakingClicks_theMomentItStartsLeaving() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        sidebar.reveal()
+        controller.containerForTesting.layoutSubtreeIfNeeded()
+        let onTheCard = frame(of: sidebar.column, in: controller)
+        let point = controller.containerForTesting.convert(
+            NSPoint(x: onTheCard.midX, y: onTheCard.midY), to: sidebar.column.superview)
+        XCTAssertNotNil(sidebar.column.hitTest(point), "the card takes its own clicks while it is up")
+
+        sidebar.hideReveal()
+
+        XCTAssertNil(
+            sidebar.column.hitTest(point), "a card fading out must not swallow the click meant for the pane")
+    }
+
     func test_collapsedColumn_passesClicksThroughToThePanes() throws {
         let controller = try makeCollapsedController()
         let sidebar = controller.sidebarForTesting

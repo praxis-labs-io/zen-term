@@ -42,7 +42,9 @@ final class SidebarColumn: ShadowCardView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     // Collapsed the column is an empty frame over the canvas, and a plain NSView would still eat the clicks.
+    // Faded out it is the same thing: the rows only hide when the fade lands, a whole slide later.
     override func hitTest(_ point: NSPoint) -> NSView? {
+        guard layer?.opacity ?? 1 > 0 else { return nil }
         let hit = super.hitTest(point)
         return hit === self && rows.isHidden ? nil : hit
     }
