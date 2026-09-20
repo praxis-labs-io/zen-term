@@ -131,9 +131,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         return owners
     }
 
-    // A selectable row appears once, and placement reads the rows above rather than `openState`, so
-    // nothing falls out of every section. A parent already listed above is redrawn muted where its
-    // worktrees sit, because a worktree mirrors its parent's configuration and needs it as a label.
+    // A worktree mirrors its parent's configuration, so a parent listed above is redrawn muted as its label.
     private static func sections(
         open: [RunningWorkspace], elsewhere: [RunningWorkspace], entries: [Workspace],
         listings: [URL: WorktreeListing], configured: Set<URL>, owners: [URL: URL],
