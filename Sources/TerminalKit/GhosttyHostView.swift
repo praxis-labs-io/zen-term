@@ -17,6 +17,16 @@ final class GhosttyHostView: NSView {
     // `.iBeam` at rest because libghostty emits `MOUSE_SHAPE` only on a change.
     private var desiredCursor: NSCursor = .iBeam
 
+    // A cover arriving under a still pointer fires no event, so the first covered move is what retires the position.
+    private var holdsReportedPointer = false
+
+    // Indirected because the real button state is global hardware state a test cannot set.
+    var pressedMouseButtons: () -> Int = { NSEvent.pressedMouseButtons }
+
+    private(set) var mousePosPushesForTesting = 0
+
+    private(set) var lastPushedMousePosForTesting: CGPoint?
+
     var markedText = NSMutableAttributedString()
 
     var keyTextAccumulator: [String]?
@@ -146,15 +156,17 @@ final class GhosttyHostView: NSView {
     }
 
     private func reportPointerIfOverThisPane() {
-        guard let surfacePtr, let window else { return }
+        guard let window else { return }
         guard
             NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0)
                 == window.windowNumber
         else { return }
-        let pos = convert(window.mouseLocationOutsideOfEventStream, from: nil)
-        guard bounds.contains(pos) else { return }
-        ghostty_surface_mouse_pos(
-            surfacePtr, pos.x, frame.height - pos.y, NSEvent.ghosttyMods(NSEvent.modifierFlags))
+        reportParkedPointer(at: window.mouseLocationOutsideOfEventStream)
+    }
+
+    func reportParkedPointer(at locationInWindow: NSPoint) {
+        guard pointerIsOverThisPane(at: locationInWindow) else { return }
+        reportPointer(at: locationInWindow, mods: NSEvent.ghosttyMods(NSEvent.modifierFlags))
     }
 
     override func viewDidChangeBackingProperties() {
@@ -462,8 +474,8 @@ final class GhosttyHostView: NSView {
 
     // Our tracking stands down with the app, so a drag ending after deactivation never gets its exit.
     private func settleSkippedExit(_ event: NSEvent) {
-        guard let surfacePtr, NSEvent.pressedMouseButtons == 0, !NSApp.isActive else { return }
-        ghostty_surface_mouse_pos(surfacePtr, -1, -1, event.ghosttyMods)
+        guard pressedMouseButtons() == 0, !NSApp.isActive else { return }
+        retirePointer(event.ghosttyMods)
     }
 
     // AppKit numbers buttons in hardware order; libghostty uses X11 numbering, which diverges past middle.
@@ -493,14 +505,42 @@ final class GhosttyHostView: NSView {
     override func mouseEntered(with event: NSEvent) { reportMousePos(event) }
 
     override func mouseExited(with event: NSEvent) {
-        guard let surfacePtr, NSEvent.pressedMouseButtons == 0 else { return }
-        ghostty_surface_mouse_pos(surfacePtr, -1, -1, event.ghosttyMods)
+        guard pressedMouseButtons() == 0 else { return }
+        retirePointer(event.ghosttyMods)
     }
 
     private func reportMousePos(_ event: NSEvent) {
+        guard pointerIsOverThisPane(at: event.locationInWindow) else {
+            return retirePointer(event.ghosttyMods)
+        }
+        reportPointer(at: event.locationInWindow, mods: event.ghosttyMods)
+    }
+
+    // AppKit routes a drag to the view its press landed on wherever the pointer goes, so a drag outruns the gate.
+    private var pointerIsDragging: Bool { pressedMouseButtons() != 0 }
+
+    // A sibling painted on top does not occlude a tracking area, so the hit test is what says a cover took the pointer.
+    private func pointerIsOverThisPane(at locationInWindow: NSPoint) -> Bool {
+        pointerIsDragging || window?.contentView?.hitTest(locationInWindow) === self
+    }
+
+    private func reportPointer(at locationInWindow: NSPoint, mods: ghostty_input_mods_e) {
+        let pos = convert(locationInWindow, from: nil)
+        holdsReportedPointer = true
+        pushMousePos(x: pos.x, y: frame.height - pos.y, mods: mods)
+    }
+
+    private func retirePointer(_ mods: ghostty_input_mods_e) {
+        guard holdsReportedPointer else { return }
+        holdsReportedPointer = false
+        pushMousePos(x: -1, y: -1, mods: mods)
+    }
+
+    private func pushMousePos(x: CGFloat, y: CGFloat, mods: ghostty_input_mods_e) {
+        mousePosPushesForTesting += 1
+        lastPushedMousePosForTesting = CGPoint(x: x, y: y)
         guard let surfacePtr else { return }
-        let pos = convert(event.locationInWindow, from: nil)
-        ghostty_surface_mouse_pos(surfacePtr, pos.x, frame.height - pos.y, event.ghosttyMods)
+        ghostty_surface_mouse_pos(surfacePtr, x, y, mods)
     }
 
     override func resetCursorRects() { addCursorRect(bounds, cursor: desiredCursor) }
