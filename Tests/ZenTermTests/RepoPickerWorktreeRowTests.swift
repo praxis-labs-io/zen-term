@@ -486,7 +486,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let open = path("alpha")
         let overlay = makeRepoPicker(
             entries: [workspace("alpha", path: open), workspace("beta", path: path("beta"))],
-            isOpen: { $0 == open })
+            openState: { $0 == open ? .here : .closed })
         mount(overlay)
 
         XCTAssertTrue(hintIsShown("switch", in: overlay), "↵ on an open workspace switches to it")
@@ -504,7 +504,8 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let tree = worktree(repo, "feat")
         let opened = tree.path.appendingPathComponent("pkg").standardizedFileURL.path
         let overlay = makeRepoPicker(
-            entries: [workspace("mono", path: package)], isOpen: { $0.standardizedFileURL.path == opened })
+            entries: [workspace("mono", path: package)],
+            openState: { $0.standardizedFileURL.path == opened ? .here : .closed })
         mount(overlay)
         waitUntil(GitRepoStatus.repoRoot(package) != nil, "the repo root to be read off the main thread")
 
@@ -666,12 +667,12 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
     private func makeRepoPicker(
         entries: [Workspace], removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
-        isOpen: @escaping (URL) -> Bool = { _ in false },
+        openState: @escaping (URL) -> WorkspaceOpenState = { _ in .closed },
         onChoose: @escaping (Workspace, WorktreeOrigin?) -> Void = { _, _ in }
     ) -> RepoPickerOverlay {
         RepoPickerOverlay(
             entries: entries, background: Theme.current.chrome.background.nsColor,
-            removals: removals, isOpen: isOpen, onChoose: onChoose, onAddWorkspace: {}, onDismiss: {})
+            removals: removals, openState: openState, onChoose: onChoose, onAddWorkspace: {}, onDismiss: {})
     }
 
     private func makeWindow() -> NSWindow {

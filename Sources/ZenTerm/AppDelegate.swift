@@ -169,6 +169,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wc.selectTab(tabID)
     }
 
+    static func window(
+        holding path: URL, among windows: [WindowController], asking: WindowController?
+    ) -> WindowController? {
+        windows.first { $0 !== asking && $0.holdsWorkspace(at: path) }
+    }
+
+    private func otherWindow(holding path: URL, asking: WindowController?) -> WindowController? {
+        Self.window(holding: path, among: windows, asking: asking)
+    }
+
     private func keyController() -> WindowController? {
         guard let key = NSApp.keyWindow else { return windows.first }
         return windows.first { $0.window === key }
@@ -191,6 +201,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.windows.reduce(ClosedByRemoval()) {
                 $0.adding($1.closedByRemoval(atPath: path), isThisWindow: $1 === wc)
             } ?? ClosedByRemoval()
+        }
+        wc.isWorkspaceOpenInAnotherWindow = { [weak self, weak wc] path in
+            self?.otherWindow(holding: path, asking: wc) != nil
+        }
+        wc.revealWorkspaceInAnotherWindow = { [weak self, weak wc] path in
+            guard let other = self?.otherWindow(holding: path, asking: wc) else { return false }
+            NSApp.activate(ignoringOtherApps: true)
+            if other.window.isMiniaturized { other.window.deminiaturize(nil) }
+            other.window.makeKeyAndOrderFront(nil)
+            other.activateWorkspace(at: path)
+            return true
         }
         if centered { wc.window.center() }
         wc.onClosed = { [weak self, weak wc] in

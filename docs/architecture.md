@@ -179,9 +179,16 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   always active. A workspace without a config entry is named "Workspace N", the lowest
   number no open workspace in the window holds. ⌘⌃T opens one at the end of the sidebar,
   in the home folder: a workspace is a place, and one opened on the focused pane's folder
-  would collide with the open workspace already identified by it. ⌘P opens a configured workspace, or switches to
-  it when it is already open. A workspace is open when one with a config entry is open at
-  its folder, so renaming it in Settings does not open a second copy.
+  would collide with the open workspace already identified by it. A workspace is open when
+  one with a config entry is open at its folder, so renaming it in Settings does not open a
+  second copy.
+- **Folder identity spans windows, so ⌘P never opens a second copy of a running
+  workspace.** ⌘P opens a configured workspace, switches to it when this window holds it,
+  and brings the window that holds it forward when another one does, marking the row "open
+  in another window". A window cannot reach another, so it asks through
+  `isWorkspaceOpenInAnotherWindow` and `revealWorkspaceInAnotherWindow`, which `AppDelegate`
+  folds over its windows, skipping the asking one. A `WindowController` never raises its own
+  window, so the ordering stays in `AppDelegate`.
 - **`WorkspaceOrder` is the sidebar's order, derived from open order at every read.** A
   worktree workspace keeps the `WorktreeOrigin` it opened from and nests under the open
   workspace at its parent's folder, or under a ghost row built from that origin when the
@@ -189,8 +196,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   so the group holds its place as members close and reopen. A workspace with no config
   entry is never in a group. `navigable` skips ghosts; the sidebar's numbers, ⌘⌃1…9,
   ⌘⌃[ ] and a close's landing all read it.
-- **`activate(_:)` is the single path a switch goes through**: a row click, ⌘⌃1…9 and ⌘⌃[ ],
-  ⌘P, ⌘⌃T, and revealing a background tab. An open workspace slides in on the y axis, from
+- **`activate(_:)` is the single path a switch goes through**: a row click, the workspace
+  chords, ⌘P, ⌘⌃T, and revealing a background tab. An open workspace slides in on the y axis, from
   below when it sits lower in `navigable`; a new one has no canvas yet, so it mounts
   without motion and applies its recipe in the same turn. A close's landing slides the same way.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
