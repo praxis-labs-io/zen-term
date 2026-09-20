@@ -227,6 +227,10 @@ final class WindowController: NSObject {
 
     var revealWorkspaceInAnotherWindow: ((URL) -> Bool)?
 
+    var openWorkspacesElsewhere: (() -> [RunningWorkspace])?
+
+    var revealWorkspaceElsewhere: ((Int, WorkspaceID) -> Bool)?
+
     var worktreeRemovals = WorktreeRemovalTracker()
 
     func tabCount(atPath path: URL) -> Int {
@@ -1080,10 +1084,20 @@ final class WindowController: NSObject {
             self.pendingModal = nil
             let picker = RepoPickerOverlay(
                 entries: workspaces,
+                open: self.runningWorkspaces(),
+                elsewhere: self.openWorkspacesElsewhere?() ?? [],
                 background: Theme.current.chrome.background.nsColor,
                 removals: self.worktreeRemovals,
                 openState: { [weak self] path in self?.workspaceOpenState(at: path) ?? .closed },
                 onChoose: { [weak self] ws, origin in self?.openWorkspace(ws, origin: origin) },
+                onSwitch: { [weak self] id in
+                    self?.closeModal()
+                    self?.activate(id)
+                },
+                onReveal: { [weak self] window, id in
+                    self?.closeModal()
+                    _ = self?.revealWorkspaceElsewhere?(window, id)
+                },
                 onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
                 onNewWorkspace: { [weak self] in self?.newWorkspace() },
                 onDismiss: { [weak self] in self?.closeModal() }
@@ -1763,6 +1777,32 @@ final class WindowController: NSObject {
         guard let workspace = openWorkspace(at: path) else { return }
         activate(workspace.id)
     }
+
+    // In the sidebar's order, so the picker's Open section reads the way the rows beside it do.
+    func runningWorkspaces() -> [RunningWorkspace] {
+        let byID = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
+        return order.entries.compactMap { entry in
+            switch entry {
+            case .workspace(let id):
+                guard let workspace = byID[id] else { return nil }
+                return RunningWorkspace(
+                    window: windowID, id: id, name: workspace.name, folder: workspace.folder,
+                    isWorktree: false)
+            case .worktree(let id):
+                guard let workspace = byID[id] else { return nil }
+                return RunningWorkspace(
+                    window: windowID, id: id, name: workspace.name, folder: workspace.folder,
+                    isWorktree: true)
+            case .ghost(let parent):
+                return RunningWorkspace(
+                    window: windowID, id: nil, name: parent.title, folder: parent.path, isWorktree: false)
+            }
+        }
+    }
+
+    func holdsWorkspace(_ id: WorkspaceID) -> Bool { workspaces.contains { $0.id == id } }
+
+    func activateWorkspace(_ id: WorkspaceID) { activate(id) }
 
     private func workspaceOpenState(at path: URL) -> WorkspaceOpenState {
         if holdsWorkspace(at: path) { return .here }
@@ -2612,8 +2652,8 @@ final class WindowController: NSObject {
         toast = toasts.showSticky(content, actions: actions)
     }
 
-    func openWorkspaceForTesting(_ ws: Workspace) {
-        openWorkspace(ws)
+    func openWorkspaceForTesting(_ ws: Workspace, origin: WorktreeOrigin? = nil) {
+        openWorkspace(ws, origin: origin)
     }
 
     var focusedPanelForTesting: PanelHostView? { activeController?.focusedScrollTarget?.panel }

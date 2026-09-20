@@ -45,16 +45,16 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let overlay = makeRepoPicker(entries: [workspace("alpha")])
         mount(overlay)
 
+        XCTAssertEqual(shape(of: overlay)[overlay.selected], "new")
+        XCTAssertNil(overlay.createTarget)
+
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
+
         XCTAssertEqual(shape(of: overlay)[overlay.selected], "workspace:alpha", "not on ＋ yet")
+
         send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
         XCTAssertEqual(shape(of: overlay)[overlay.selected], "add")
-        XCTAssertNil(overlay.createTarget)
-
-        send(#selector(NSResponder.moveUp(_:)), to: overlay)
-        send(#selector(NSResponder.moveUp(_:)), to: overlay)
-
-        XCTAssertEqual(shape(of: overlay)[overlay.selected], "new")
         XCTAssertNil(overlay.createTarget)
     }
 
@@ -62,6 +62,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
         mount(overlay)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
         let target = try XCTUnwrap(overlay.createTarget)
 
@@ -75,6 +76,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let overlay = makeRepoPicker(entries: [parent])
         mount(overlay)
         overlay.setWorktrees(listing(repo, "feature/zen-455"), for: repo)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
         send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
         XCTAssertEqual(shape(of: overlay)[overlay.selected], "worktree:feature/zen-455")
@@ -92,7 +94,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         XCTAssertEqual(
             shape(of: overlay),
-            ["new", "workspace:alpha", "worktree:one", "worktree:two", "workspace:beta", "add"])
+            ["new", "header:Configured", "workspace:alpha", "worktree:one", "worktree:two", "workspace:beta", "add"])
     }
 
     func test_worktreeRow_readsAsAWorktreeOnTheLeftAndItsBranchOnTheRight() throws {
@@ -102,7 +104,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         overlay.setWorktrees(listing(repo, "feature/zen-455"), for: repo)
 
-        let row = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
+        let row = try XCTUnwrap(rowViews(in: overlay)[3] as? RepoPickerOverlay.RowView)
         XCTAssertNotNil(label(in: row, saying: RepoPickerOverlay.RowView.typeRail))
         XCTAssertEqual(rightColumn(of: row), "feature/zen-455")
     }
@@ -114,8 +116,8 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         mount(overlay)
         overlay.setWorktrees(listing(repo, "one"), for: repo)
 
-        let parent = try XCTUnwrap(rowViews(in: overlay)[1] as? RepoPickerOverlay.RowView)
-        let child = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
+        let parent = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
+        let child = try XCTUnwrap(rowViews(in: overlay)[3] as? RepoPickerOverlay.RowView)
         overlay.layoutSubtreeIfNeeded()
         let parentBranch = try XCTUnwrap(branchLabel(in: parent))
         let childBranch = try XCTUnwrap(branchLabel(in: child))
@@ -132,8 +134,8 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         overlay.setWorktrees(listing(repo, "one"), for: repo)
 
-        let parent = try XCTUnwrap(rowViews(in: overlay)[1] as? RepoPickerOverlay.RowView)
-        let child = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
+        let parent = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
+        let child = try XCTUnwrap(rowViews(in: overlay)[3] as? RepoPickerOverlay.RowView)
         let name = try XCTUnwrap(label(in: parent, saying: "alpha"))
         let rail = try XCTUnwrap(label(in: child, saying: RepoPickerOverlay.RowView.typeRail))
         XCTAssertEqual(name.textColor, Theme.current.chrome.foreground.nsColor)
@@ -152,7 +154,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             head: "abc1234def5678901234567890abcdef12345678", isLocked: false)
         overlay.setWorktrees(WorktreeListing(commonDir: repo, worktrees: [detached]), for: repo)
 
-        let row = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
+        let row = try XCTUnwrap(rowViews(in: overlay)[3] as? RepoPickerOverlay.RowView)
         XCTAssertEqual(rightColumn(of: row), "abc1234", "the same slot a branch would use")
     }
 
@@ -167,7 +169,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             branch: nil, head: "abc1234def5678901234567890abcdef12345678", isLocked: false)
         overlay.setWorktrees(WorktreeListing(commonDir: repo, worktrees: [detached]), for: repo)
 
-        overlay.activate(index: 2, modifiers: [])
+        overlay.activate(index: 3, modifiers: [])
 
         XCTAssertEqual(chosen?.title, "alpha: abc1234")
     }
@@ -197,12 +199,12 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo), workspace("beta")])
         mount(overlay)
         overlay.setWorktrees(listing(repo, "one"), for: repo)
-        let before = rowViews(in: overlay)[2]
+        let before = rowViews(in: overlay)[3]
 
         type("alpha", into: overlay)
 
-        XCTAssertEqual(shape(of: overlay), ["new", "workspace:alpha", "worktree:one", "add"])
-        XCTAssertTrue(rowViews(in: overlay)[2] === before, "the same worktree row, not a rebuild")
+        XCTAssertEqual(shape(of: overlay), ["new", "header:Configured", "workspace:alpha", "worktree:one", "add"])
+        XCTAssertTrue(rowViews(in: overlay)[3] === before, "the same worktree row, not a rebuild")
     }
 
     func test_filter_matchingAWorktreeKeepsItsWorkspaceRow() {
@@ -214,7 +216,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         type("hotfix", into: overlay)
 
         XCTAssertEqual(
-            shape(of: overlay), ["new", "workspace:alpha", "worktree:hotfix", "add"],
+            shape(of: overlay), ["new", "header:Configured", "workspace:alpha", "worktree:hotfix", "add"],
             "a worktree row must never render orphaned")
     }
 
@@ -227,7 +229,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         type("alph", into: overlay)
 
         XCTAssertEqual(
-            shape(of: overlay), ["new", "workspace:alpha", "worktree:one", "worktree:two", "add"])
+            shape(of: overlay), ["new", "header:Configured", "workspace:alpha", "worktree:one", "worktree:two", "add"])
     }
 
     func test_return_onAWorktreeOpensTheParentRecipeAtItsPath() {
@@ -240,7 +242,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         mount(overlay)
         overlay.setWorktrees(listing(repo, "feature"), for: repo)
 
-        overlay.activate(index: 2, modifiers: [])
+        overlay.activate(index: 3, modifiers: [])
 
         XCTAssertEqual(chosen?.title, "alpha: feature")
         XCTAssertEqual(chosen?.path.lastPathComponent, "feature")
@@ -265,7 +267,8 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         overlay.setWorktrees(WorktreeListing(commonDir: shared, worktrees: trees), for: inside)
 
         XCTAssertEqual(
-            shape(of: overlay), ["new", "workspace:alpha", "worktree:one", "workspace:alpha wt", "add"])
+            shape(of: overlay),
+            ["new", "header:Configured", "workspace:alpha", "worktree:one", "workspace:alpha wt", "add"])
     }
 
     func test_twoRepos_eachKeepTheirOwnWorktrees() {
@@ -280,7 +283,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         XCTAssertEqual(
             shape(of: overlay),
-            ["new", "workspace:alpha", "worktree:one", "workspace:beta", "worktree:two", "add"])
+            ["new", "header:Configured", "workspace:alpha", "worktree:one", "workspace:beta", "worktree:two", "add"])
     }
 
     func test_aWorktreeThatIsAlreadyAWorkspace_isNotRepeated() {
@@ -292,7 +295,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         overlay.setWorktrees(WorktreeListing(commonDir: repo, worktrees: [tree]), for: repo)
 
-        XCTAssertEqual(shape(of: overlay), ["new", "workspace:alpha", "workspace:one", "add"])
+        XCTAssertEqual(shape(of: overlay), ["new", "header:Configured", "workspace:alpha", "workspace:one", "add"])
     }
 
     func test_churnLabel_isCappedToOneLine() throws {
@@ -300,7 +303,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
         mount(overlay)
 
-        let row = try XCTUnwrap(rowViews(in: overlay)[1] as? RepoPickerOverlay.RowView)
+        let row = try XCTUnwrap(rowViews(in: overlay)[2] as? RepoPickerOverlay.RowView)
         let clipping = descendants(of: row).compactMap { $0 as? NSTextField }
             .filter { $0.lineBreakMode == .byClipping }
         XCTAssertEqual(clipping.count, 1, "the churn label")
@@ -320,7 +323,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             WorktreeListing(commonDir: shared, worktrees: [worktree(repo, "one")]), for: repo)
 
         XCTAssertEqual(
-            shape(of: overlay), ["new", "workspace:Docs", "workspace:Repo", "worktree:one", "add"])
+            shape(of: overlay), ["new", "header:Configured", "workspace:Docs", "workspace:Repo", "worktree:one", "add"])
     }
 
     func test_ownership_doesNotMoveWhenAFilterReordersTheList() throws {
@@ -338,12 +341,14 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         overlay.setWorktrees(WorktreeListing(commonDir: shared, worktrees: trees), for: owner)
         overlay.setWorktrees(WorktreeListing(commonDir: shared, worktrees: trees), for: other)
         XCTAssertEqual(
-            shape(of: overlay), ["new", "workspace:b-x", "worktree:shared-branch", "workspace:a-x", "add"])
+            shape(of: overlay),
+            ["new", "header:Configured", "workspace:b-x", "worktree:shared-branch", "workspace:a-x", "add"])
 
         type("x", into: overlay)
 
         XCTAssertEqual(
-            shape(of: overlay), ["new", "workspace:a-x", "workspace:b-x", "worktree:shared-branch", "add"],
+            shape(of: overlay),
+            ["new", "header:Configured", "workspace:a-x", "workspace:b-x", "worktree:shared-branch", "add"],
             "the filter reorders the workspaces, and the worktree stays with b-x")
         let index = try XCTUnwrap(shape(of: overlay).firstIndex(of: "worktree:shared-branch"))
         overlay.activate(index: index, modifiers: [])
@@ -362,7 +367,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         type("abc1234", into: overlay)
 
-        XCTAssertEqual(shape(of: overlay), ["new", "workspace:alpha", "worktree:abc1234", "add"])
+        XCTAssertEqual(shape(of: overlay), ["new", "header:Configured", "workspace:alpha", "worktree:abc1234", "add"])
     }
 
     func test_accessibility_doesNotCallADetachedHeadABranch() {
@@ -385,7 +390,8 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             entries: [workspace("alpha", path: repo), workspace("beta")])
         mount(overlay)
         send(#selector(NSResponder.moveDown(_:)), to: overlay)
-        XCTAssertEqual(overlay.selected, 2, "standing on beta")
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
+        XCTAssertEqual(overlay.selected, 3, "standing on beta")
 
         overlay.setWorktrees(listing(repo, "one", "two"), for: repo)
 
@@ -395,6 +401,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
     func test_theSelectedWorktree_isNilOnTheAddRow() {
         let overlay = makeRepoPicker(entries: [workspace("alpha")])
         mount(overlay)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
         send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
         XCTAssertEqual(shape(of: overlay)[overlay.selected], "add")
@@ -406,6 +413,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
         mount(overlay)
         overlay.setWorktrees(listing(repo, "one"), for: repo)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
         XCTAssertEqual(shape(of: overlay)[overlay.selected], "workspace:alpha")
         XCTAssertNil(overlay.selectedWorktree)
@@ -416,6 +424,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
         mount(overlay)
         overlay.setWorktrees(listing(repo, "one", "two"), for: repo)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
         send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
         let selection = try XCTUnwrap(overlay.selectedWorktree)
@@ -442,6 +451,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
         mount(overlay)
         overlay.setWorktrees(listing(repo, "one"), for: repo)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
         XCTAssertEqual(shape(of: overlay)[overlay.selected], "workspace:alpha")
         XCTAssertFalse(hintIsShown("remove worktree", in: overlay), "hidden over a workspace")
@@ -460,6 +470,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         setKeymap([Chord(option: true, key: "⏎"): .createWorktree])
         let overlay = makeRepoPicker(entries: [workspace("alpha")])
         mount(overlay)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
         XCTAssertTrue(hintIsShown("new worktree", in: overlay), "shown over a workspace")
 
@@ -488,6 +499,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             entries: [workspace("alpha", path: open), workspace("beta", path: path("beta"))],
             openState: { $0 == open ? .here : .closed })
         mount(overlay)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
         XCTAssertTrue(hintIsShown("switch", in: overlay), "↵ on an open workspace switches to it")
 
@@ -496,54 +508,53 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertFalse(hintIsShown("switch", in: overlay), "a closed one opens")
     }
 
-    func test_aWorktreeOpenInItsMirroredSubfolder_isMarkedOpen_withoutThatFolderOnDisk() throws {
+    func test_aWorktreeOpenInItsMirroredSubfolder_leavesConfigured_withoutThatFolderOnDisk() throws {
         let repo = try GitFixture.makeRepo(at: path("mirror-repo").resolvingSymlinksInPath())
         defer { try? FileManager.default.removeItem(at: repo) }
         let package = repo.appendingPathComponent("pkg", isDirectory: true)
         try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
         let tree = worktree(repo, "feat")
-        let opened = tree.path.appendingPathComponent("pkg").standardizedFileURL.path
+        let opened = tree.path.appendingPathComponent("pkg").standardizedFileURL
         let overlay = makeRepoPicker(
             entries: [workspace("mono", path: package)],
-            openState: { $0.standardizedFileURL.path == opened ? .here : .closed })
+            open: [running(window: 1, name: "mono: feat", folder: opened)])
         mount(overlay)
         waitUntil(GitRepoStatus.repoRoot(package) != nil, "the repo root to be read off the main thread")
 
         overlay.setWorktrees(WorktreeListing(commonDir: repo, worktrees: [tree]), for: package)
 
-        let row = try XCTUnwrap(rowViews(in: overlay).compactMap { $0 as? RepoPickerOverlay.RowView }.last)
-        XCTAssertNotNil(row.worktree)
-        XCTAssertTrue(
-            descendants(of: row).contains { ($0 as? NSTextField)?.stringValue == "open" },
+        XCTAssertFalse(
+            shape(of: overlay).contains("worktree:feat"),
             "the open workspace sits at the worktree's copy of pkg, which the picker never reads off disk")
+        XCTAssertTrue(shape(of: overlay).contains("open:mono: feat"), "it is listed as open instead")
     }
 
-    func test_aWorktreeOpenHere_andInAnotherWindowAtItsRoot_readsAsOpenHere() throws {
+    func test_aWorktreeOpenHere_andInAnotherWindowAtItsRoot_isListedUnderOpen() throws {
         let repo = try GitFixture.makeRepo(at: path("both-repo").resolvingSymlinksInPath())
         defer { try? FileManager.default.removeItem(at: repo) }
         let package = repo.appendingPathComponent("pkg", isDirectory: true)
         try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
         let tree = worktree(repo, "feat")
-        let mirror = tree.path.appendingPathComponent("pkg").standardizedFileURL.path
-        let root = tree.path.standardizedFileURL.path
+        let mirror = tree.path.appendingPathComponent("pkg").standardizedFileURL
+        let root = tree.path.standardizedFileURL
         let overlay = makeRepoPicker(
             entries: [workspace("mono", path: package)],
-            openState: { path in
-                switch path.standardizedFileURL.path {
-                case mirror: return .here
-                case root: return .elsewhere
-                default: return .closed
-                }
-            })
+            open: [running(window: 1, name: "mono: feat", folder: mirror)],
+            elsewhere: [running(window: 2, name: "mono: feat", folder: root)])
         mount(overlay)
         waitUntil(GitRepoStatus.repoRoot(package) != nil, "the repo root to be read off the main thread")
 
         overlay.setWorktrees(WorktreeListing(commonDir: repo, worktrees: [tree]), for: package)
 
-        let row = try XCTUnwrap(rowViews(in: overlay).compactMap { $0 as? RepoPickerOverlay.RowView }.last)
-        let markers = descendants(of: row).compactMap { ($0 as? NSTextField)?.stringValue }
-        XCTAssertTrue(markers.contains("open"), "this window holds it, so it is switched to")
-        XCTAssertFalse(markers.contains("open in another window"), "never sent to the window holding its root")
+        // Both windows call it the same thing, so the row is found by the window holding it.
+        let here = try XCTUnwrap(
+            rowViews(in: overlay).firstIndex {
+                ($0 as? RepoPickerOverlay.RowView)?.running?.window == 1
+            })
+        XCTAssertEqual(section(at: here, in: overlay), "Open", "this window holds it, so it is switched to")
+        XCTAssertFalse(
+            shape(of: overlay).contains("worktree:feat"),
+            "and it never doubles as a configured row under its parent")
     }
 
     private func hintIsShown(_ label: String, in overlay: NSView) -> Bool {
@@ -565,7 +576,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         overlay.setWorktrees(listing(repo, "one", "two"), for: repo)
 
         XCTAssertEqual(
-            shape(of: overlay), ["new", "workspace:alpha", "removing:one", "worktree:two", "add"])
+            shape(of: overlay), ["new", "header:Configured", "workspace:alpha", "removing:one", "worktree:two", "add"])
     }
 
     func test_aWorktreeBeingRemoved_isSkippedByTheArrows() {
@@ -575,6 +586,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         mount(overlay)
         removals.begin(worktree(repo, "one").path)
         overlay.setWorktrees(listing(repo, "one", "two"), for: repo)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
 
         XCTAssertEqual(shape(of: overlay)[overlay.selected], "workspace:alpha")
         send(#selector(NSResponder.moveDown(_:)), to: overlay)
@@ -588,13 +600,14 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)], removals: removals)
         mount(overlay)
         overlay.setWorktrees(listing(repo, "one", "two"), for: repo)
-        XCTAssertEqual(shape(of: overlay), ["new", "workspace:alpha", "worktree:one", "worktree:two", "add"])
+        XCTAssertEqual(
+            shape(of: overlay), ["new", "header:Configured", "workspace:alpha", "worktree:one", "worktree:two", "add"])
 
         removals.begin(worktree(repo, "one").path)
         overlay.refreshRemovalState()
 
         XCTAssertEqual(
-            shape(of: overlay), ["new", "workspace:alpha", "removing:one", "worktree:two", "add"])
+            shape(of: overlay), ["new", "header:Configured", "workspace:alpha", "removing:one", "worktree:two", "add"])
     }
 
     func test_relisting_dropsAWorktreeGitNoLongerReports() {
@@ -605,7 +618,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         overlay.setWorktrees(listing(repo, "two"), for: repo)
 
-        XCTAssertEqual(shape(of: overlay), ["new", "workspace:alpha", "worktree:two", "add"])
+        XCTAssertEqual(shape(of: overlay), ["new", "header:Configured", "workspace:alpha", "worktree:two", "add"])
     }
 
     func test_aRemovalFailing_putsTheOrdinaryRowBack() {
@@ -619,7 +632,8 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         removals.finish(worktree(repo, "one").path)
         overlay.refreshRemovalState()
 
-        XCTAssertEqual(shape(of: overlay), ["new", "workspace:alpha", "worktree:one", "worktree:two", "add"])
+        XCTAssertEqual(
+            shape(of: overlay), ["new", "header:Configured", "workspace:alpha", "worktree:one", "worktree:two", "add"])
     }
 
     func test_aRemovalThatLanded_takesTheRowOutBeforeTheRelist() {
@@ -633,7 +647,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         removals.finish(worktree(repo, "one").path)
         overlay.dropWorktree(at: worktree(repo, "one").path)
 
-        XCTAssertEqual(shape(of: overlay), ["new", "workspace:alpha", "worktree:two", "add"])
+        XCTAssertEqual(shape(of: overlay), ["new", "header:Configured", "workspace:alpha", "worktree:two", "add"])
     }
 
     private func shape(of overlay: RepoPickerOverlay) -> [String] {
@@ -644,13 +658,31 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             if let action = view as? RepoPickerOverlay.ActionRowView {
                 return action.title == "New Workspace" ? "new" : "add"
             }
+            if let header = view as? PaletteSectionHeader { return "header:\(header.title)" }
             guard let row = view as? RepoPickerOverlay.RowView else { return "?" }
-            guard let worktree = row.worktree else { return "workspace:\(row.workspace.title)" }
-            return "worktree:\(worktree.branch ?? String(worktree.head.prefix(7)))"
+            if let worktree = row.worktree {
+                return "worktree:\(worktree.branch ?? String(worktree.head.prefix(7)))"
+            }
+            if let workspace = row.workspace { return "workspace:\(workspace.title)" }
+            if let running = row.running {
+                return (running.id == nil ? "ghost:" : "open:") + running.name
+            }
+            return "?"
         }
     }
 
     private func rowViews(in overlay: RepoPickerOverlay) -> [PaletteRowView] { overlay.rowViews }
+
+    // The section a row is listed under, which is what the "open" and "open elsewhere" markers used to say.
+    private func section(at index: Int, in overlay: RepoPickerOverlay) -> String? {
+        overlay.rowViews[..<index].reversed()
+            .compactMap { ($0 as? PaletteSectionHeader)?.title }.first
+    }
+
+    private func running(window: Int, name: String, folder: URL) -> RunningWorkspace {
+        RunningWorkspace(
+            window: window, id: WorkspaceID(raw: 1), name: name, folder: folder, isWorktree: true)
+    }
 
     private func path(_ name: String) -> URL {
         FileManager.default.temporaryDirectory
@@ -694,12 +726,14 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
     }
 
     private func makeRepoPicker(
-        entries: [Workspace], removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
+        entries: [Workspace], open: [RunningWorkspace] = [], elsewhere: [RunningWorkspace] = [],
+        removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
         openState: @escaping (URL) -> WorkspaceOpenState = { _ in .closed },
         onChoose: @escaping (Workspace, WorktreeOrigin?) -> Void = { _, _ in }
     ) -> RepoPickerOverlay {
         RepoPickerOverlay(
-            entries: entries, background: Theme.current.chrome.background.nsColor,
+            entries: entries, open: open, elsewhere: elsewhere,
+            background: Theme.current.chrome.background.nsColor,
             removals: removals, openState: openState, onChoose: onChoose, onAddWorkspace: {}, onDismiss: {})
     }
 

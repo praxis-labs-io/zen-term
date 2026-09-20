@@ -6,7 +6,6 @@ final class CommandPaletteOverlay: PaletteOverlay {
         case command(PaletteCommand)
     }
 
-    private static let headerHeight: CGFloat = 26
     private static let commandHeight: CGFloat = 34
 
     private let onRun: (KeyInterceptor.ReservedChord) -> Void
@@ -58,7 +57,7 @@ final class CommandPaletteOverlay: PaletteOverlay {
     override func makeRow(at index: Int) -> PaletteRowView {
         switch rows[index] {
         case .header(let title):
-            return HeaderRowView(title: title)
+            return PaletteSectionHeader(title: title)
         case .command(let command):
             return RowView(command: command)
         }
@@ -73,7 +72,7 @@ final class CommandPaletteOverlay: PaletteOverlay {
     }
 
     override func rowHeight(at index: Int) -> CGFloat {
-        if case .header = rows[index] { return Self.headerHeight }
+        if case .header = rows[index] { return PaletteSectionHeader.height }
         return Self.commandHeight
     }
 
@@ -124,31 +123,6 @@ final class CommandPaletteOverlay: PaletteOverlay {
             rows.append(.command(command))
         }
         return rows
-    }
-
-    private final class HeaderRowView: NSView, PaletteRowView {
-        var isSelected = false
-        var onActivate: (() -> Void)?
-
-        init(title: String) {
-            super.init(frame: .zero)
-            let label = NSTextField(
-                labelWithAttributedString: NSAttributedString(
-                    string: title.uppercased(),
-                    attributes: [
-                        .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
-                        .foregroundColor: Theme.current.chrome.ink(.muted),
-                        .kern: 0.6,
-                    ]))
-            label.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(label)
-            NSLayoutConstraint.activate([
-                label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-                label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
-            ])
-        }
-
-        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
     }
 
     private final class RowView: SelectableRowView {

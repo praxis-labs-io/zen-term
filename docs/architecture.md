@@ -184,11 +184,21 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   second copy.
 - **Folder identity spans windows, so ⌘P never opens a second copy of a running
   workspace.** ⌘P opens a configured workspace, switches to it when this window holds it,
-  and brings the window that holds it forward when another one does, marking the row "open
-  in another window". A window cannot reach another, so it asks through
+  and brings the window that holds it forward when another one does. A window cannot reach
+  another, so it asks through
   `isWorkspaceOpenInAnotherWindow` and `revealWorkspaceInAnotherWindow`, which `AppDelegate`
   folds over its windows, skipping the asking one. A `WindowController` never raises its own
   window, so the ordering stays in `AppDelegate`.
+- **The ⌘P picker groups into Open, Open Elsewhere and Configured**, and a workspace is
+  listed once: the sections say what the row markers used to. Open is this window's
+  `WorkspaceOrder`, ghosts included and unselectable; Open Elsewhere is what the other
+  windows report through `openWorkspacesElsewhere`, so an unconfigured workspace running
+  elsewhere is listed too; Configured is what the workspaces file holds that no window has
+  open. Placement reads those lists, never `openState`, so nothing falls out of every
+  section. `revealWorkspaceElsewhere` takes `(window, WorkspaceID)` because ids are minted
+  per window and two windows can hold a workspace at one folder. That is a second pair of
+  closures beside the folder-identity two above, not a replacement: folder identity
+  deliberately ignores unconfigured workspaces and the enumeration does not.
 - **`WorkspaceOrder` is the sidebar's order, derived from open order at every read.** A
   worktree workspace keeps the `WorktreeOrigin` it opened from and nests under the open
   workspace at its parent's folder, or under a ghost row built from that origin when the

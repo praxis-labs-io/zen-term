@@ -66,7 +66,15 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         c.handle(.toggleRepoPicker)
         waitUntil(!modals(RepoPickerOverlay.self, in: c).isEmpty, "the picker to be presented")
         let picker = try XCTUnwrap(modals(RepoPickerOverlay.self, in: c).first)
-        picker.activate(index: picker.defaultSelectionIndex(), modifiers: [])
+        guard
+            let index = picker.rowViews.firstIndex(where: {
+                ($0 as? RepoPickerOverlay.RowView)?.label == "Repo"
+            })
+        else {
+            XCTFail("the picker has no row for Repo")
+            throw CocoaError(.featureUnsupported)
+        }
+        picker.activateRow(at: index)
         c.activateWorkspaceForTesting(home)
         let row = try XCTUnwrap(rows(of: c).last)
         waitUntil(row.hoverAccessory != nil, "the row to learn its folder is a repo")
