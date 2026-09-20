@@ -419,8 +419,6 @@ final class WindowController: NSObject {
             self?.sidebar.edgeReveal.recheck()
         }
         sidebar.isPinnedExternally = { [weak self] in self?.isConfirmOpen ?? false }
-        sidebar.onFocusYield = { [weak self] in self?.captureFocusReturn() }
-        sidebar.onFocusRestore = { [weak self] in self?.restoreFocusToActive() }
         sidebar.edgeReveal.isSuppressed = { [weak self] in
             guard let self else { return true }
             return sidebar.isDocked || isModalOverlayOpen || isToolFloatOpen || !windowIsKey
@@ -965,7 +963,7 @@ final class WindowController: NSObject {
     }
 
     private func activateFromSidebar(_ row: SidebarRowID) {
-        sidebar.hideReveal(restoringFocus: false)
+        sidebar.hideReveal()
         switch row {
         case .workspace(let id):
             guard id != activeWorkspace.id else { restoreFocusToActive(); return }
