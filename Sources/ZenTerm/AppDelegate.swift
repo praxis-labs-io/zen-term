@@ -205,7 +205,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wc.openWorkspacesElsewhere = { [weak self, weak wc] in
             self?.windows.filter { $0 !== wc }.flatMap { $0.runningWorkspaces() } ?? []
         }
-        // A `WindowController` never raises its own window, so the ordering stays here.
         wc.revealWorkspaceElsewhere = { [weak self, weak wc] window, id in
             guard
                 let other = self?.windows.first(where: { $0 !== wc && $0.windowID == window }),

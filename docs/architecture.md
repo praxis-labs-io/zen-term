@@ -194,7 +194,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   `WorkspaceOrder`, ghosts included and unselectable; Open Elsewhere is what the other
   windows report through `openWorkspacesElsewhere`, so an unconfigured workspace running
   elsewhere is listed too; Configured is what the workspaces file holds that no window has
-  open. Placement reads those lists, never `openState`, so nothing falls out of every
+  open. A worktree sits below its parent in whichever section the worktree itself belongs
+  to, so a parent listed above is redrawn muted in Configured to hold the worktrees that
+  are not open. Placement reads those lists, never `openState`, so nothing falls out of every
   section. `revealWorkspaceElsewhere` takes `(window, WorkspaceID)` because ids are minted
   per window and two windows can hold a workspace at one folder. That is a second pair of
   closures beside the folder-identity two above, not a replacement: folder identity

@@ -1,6 +1,5 @@
 import AppKit
 
-/// Names a group of palette rows. Never selectable: the arrows step past it.
 final class PaletteSectionHeader: NSView, PaletteRowView {
     static let height: CGFloat = 26
 

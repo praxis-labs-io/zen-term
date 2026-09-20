@@ -663,12 +663,66 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             if let worktree = row.worktree {
                 return "worktree:\(worktree.branch ?? String(worktree.head.prefix(7)))"
             }
-            if let workspace = row.workspace { return "workspace:\(workspace.title)" }
+            if let workspace = row.workspace {
+                return (row.style == .ghost ? "muted:" : "workspace:") + workspace.title
+            }
             if let running = row.running {
                 return (running.id == nil ? "ghost:" : "open:") + running.name
             }
             return "?"
         }
+    }
+
+    func test_anOpenWorkspacesUnopenedWorktree_staysInConfiguredUnderAMutedParent() {
+        let repo = path("alpha")
+        let overlay = makeRepoPicker(
+            entries: [workspace("alpha", path: repo)],
+            open: [running(window: 1, name: "alpha", folder: repo, isWorktree: false)])
+        mount(overlay)
+
+        overlay.setWorktrees(listing(repo, "one"), for: repo)
+
+        XCTAssertEqual(
+            shape(of: overlay),
+            [
+                "new", "header:Open", "open:alpha", "header:Configured", "muted:alpha", "worktree:one",
+                "add",
+            ],
+            "a worktree mirrors its parent, so the parent is redrawn muted to hold it")
+    }
+
+    func test_theMutedParentOfAnOpenWorkspace_isSteppedPastByTheArrows() {
+        let repo = path("alpha")
+        let overlay = makeRepoPicker(
+            entries: [workspace("alpha", path: repo)],
+            open: [running(window: 1, name: "alpha", folder: repo, isWorktree: false)])
+        mount(overlay)
+        overlay.setWorktrees(listing(repo, "one"), for: repo)
+
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
+        XCTAssertEqual(shape(of: overlay)[overlay.selected], "open:alpha")
+
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
+
+        XCTAssertEqual(
+            shape(of: overlay)[overlay.selected], "worktree:one", "the muted parent is not a stop")
+    }
+
+    func test_returnOnAnOpenWorkspacesUnopenedWorktree_opensIt() {
+        let repo = path("alpha")
+        var chosen: Workspace?
+        let overlay = makeRepoPicker(
+            entries: [workspace("alpha", path: repo)],
+            open: [running(window: 1, name: "alpha", folder: repo, isWorktree: false)],
+            onChoose: { ws, _ in chosen = ws })
+        mount(overlay)
+        overlay.setWorktrees(listing(repo, "one"), for: repo)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
+
+        send(#selector(NSResponder.insertNewline(_:)), to: overlay)
+
+        XCTAssertEqual(chosen?.title, "alpha: one", "reachable from ⌘P while its parent is open")
     }
 
     private func rowViews(in overlay: RepoPickerOverlay) -> [PaletteRowView] { overlay.rowViews }
@@ -679,9 +733,11 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             .compactMap { ($0 as? PaletteSectionHeader)?.title }.first
     }
 
-    private func running(window: Int, name: String, folder: URL) -> RunningWorkspace {
+    private func running(
+        window: Int, name: String, folder: URL, isWorktree: Bool = true
+    ) -> RunningWorkspace {
         RunningWorkspace(
-            window: window, id: WorkspaceID(raw: 1), name: name, folder: folder, isWorktree: true)
+            window: window, id: WorkspaceID(raw: 1), name: name, folder: folder, isWorktree: isWorktree)
     }
 
     private func path(_ name: String) -> URL {
