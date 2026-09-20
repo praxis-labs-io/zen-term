@@ -71,8 +71,12 @@ moves. State pushed on exit needs its own `didBecomeActiveNotification` restore.
 **A tracking area is geometric and ignores whatever is painted over it.** A sibling view covering a
 pane generates no `mouseExited`, so the view underneath keeps taking `mouseMoved` and keeps reporting
 while the person points at something else. Occlusion is a hit test, not an event: gate on
-`window?.contentView?.hitTest(_:) === self`, the routing `mouseDown` already gets. Exempt a drag,
-which AppKit sends to the view its press landed on wherever the pointer travels.
+`window?.contentView?.hitTest(_:) === self`, the routing `mouseDown` already gets. A drag has to be
+exempt, since AppKit sends it to the view its press landed on wherever the pointer travels, but the
+exemption is per-view ownership paired with live button state, never `NSEvent.pressedMouseButtons`
+alone. Tracking delivers `mouseEntered` while a button is down, so a drag inside one view unlocks a
+global exemption for every covered view in the window, and ownership without the button state
+survives a release the view never saw.
 
 **To prove an `NSView` override exists, let the responder chain answer.** Default `flagsChanged` and
 `otherMouse*` forward to `nextResponder`, so a recording superview counts exactly the events the view
