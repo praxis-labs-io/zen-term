@@ -673,6 +673,15 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         }
     }
 
+    func test_withNothingConfigured_theConfiguredHeaderStillNamesTheAddRow() {
+        let overlay = makeRepoPicker(entries: [])
+        mount(overlay)
+
+        XCTAssertEqual(
+            shape(of: overlay), ["new", "header:Configured", "add"],
+            "the first run a new user sees: Configured renders even with nothing under it but Add")
+    }
+
     func test_newWorkspace_readsAsARow_whileAddWorkspaceStaysQuiet() throws {
         let overlay = makeRepoPicker(entries: [workspace("alpha")])
         mount(overlay)
