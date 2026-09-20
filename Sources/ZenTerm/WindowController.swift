@@ -223,6 +223,10 @@ final class WindowController: NSObject {
 
     var onClosedByRemovalAtPath: ((URL) -> ClosedByRemoval)?
 
+    var isWorkspaceOpenInAnotherWindow: ((URL) -> Bool)?
+
+    var revealWorkspaceInAnotherWindow: ((URL) -> Bool)?
+
     var worktreeRemovals = WorktreeRemovalTracker()
 
     func tabCount(atPath path: URL) -> Int {
@@ -1078,7 +1082,7 @@ final class WindowController: NSObject {
                 entries: workspaces,
                 background: Theme.current.chrome.background.nsColor,
                 removals: self.worktreeRemovals,
-                isOpen: { [weak self] path in self?.openWorkspace(at: path) != nil },
+                openState: { [weak self] path in self?.workspaceOpenState(at: path) ?? .closed },
                 onChoose: { [weak self] ws, origin in self?.openWorkspace(ws, origin: origin) },
                 onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
                 onNewWorkspace: { [weak self] in self?.newWorkspace() },
@@ -1753,12 +1757,25 @@ final class WindowController: NSObject {
         return workspaces.first { $0.isConfigured && $0.folder.standardizedFileURL.path == target }
     }
 
+    func holdsWorkspace(at path: URL) -> Bool { openWorkspace(at: path) != nil }
+
+    func activateWorkspace(at path: URL) {
+        guard let workspace = openWorkspace(at: path) else { return }
+        activate(workspace.id)
+    }
+
+    private func workspaceOpenState(at path: URL) -> WorkspaceOpenState {
+        if holdsWorkspace(at: path) { return .here }
+        return isWorkspaceOpenInAnotherWindow?(path) == true ? .elsewhere : .closed
+    }
+
     private func openWorkspace(_ ws: Workspace, origin: WorktreeOrigin? = nil) {
         closeModal()
         if let open = openWorkspace(at: ws.path) {
             activate(open.id)
             return
         }
+        if revealWorkspaceInAnotherWindow?(ws.path) == true { return }
         appendWorkspace(named: ws.title, at: ws.path, config: ws, origin: origin)
     }
 

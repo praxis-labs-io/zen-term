@@ -10,7 +10,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     }
 
     private let onChoose: (Workspace, WorktreeOrigin?) -> Void
-    private let isOpen: (URL) -> Bool
+    private let openState: (URL) -> WorkspaceOpenState
     private let onAddWorkspace: () -> Void
     private let onNewWorkspace: () -> Void
 
@@ -29,7 +29,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     init(
         entries: [Workspace], background: NSColor,
         removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
-        isOpen: @escaping (URL) -> Bool = { _ in false },
+        openState: @escaping (URL) -> WorkspaceOpenState = { _ in .closed },
         onChoose: @escaping (Workspace, WorktreeOrigin?) -> Void, onAddWorkspace: @escaping () -> Void,
         onNewWorkspace: @escaping () -> Void = {}, onDismiss: @escaping () -> Void
     ) {
@@ -39,7 +39,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         self.churnProbed = configuredPaths
         self.rows = Self.rows(for: entries, listings: [:], configured: [], owners: [:])
         self.onChoose = onChoose
-        self.isOpen = isOpen
+        self.openState = openState
         self.onAddWorkspace = onAddWorkspace
         self.onNewWorkspace = onNewWorkspace
         super.init(
@@ -140,20 +140,20 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .add:
             return ActionRowView(symbol: "folder.badge.plus", title: "Add Workspace…", shortcut: nil)
         case .workspace(let workspace):
-            return RowView(workspace: workspace, isOpen: isOpen(row: rows[index]))
+            return RowView(workspace: workspace, openState: openState(row: rows[index]))
         case .worktree(let worktree, let parent):
             guard !removals.isRemoving(worktree.path) else { return RemovingRowView(worktree: worktree) }
-            return RowView(worktree: worktree, parent: parent, isOpen: isOpen(row: rows[index]))
+            return RowView(worktree: worktree, parent: parent, openState: openState(row: rows[index]))
         }
     }
 
-    private func isOpen(row: Row) -> Bool {
+    private func openState(row: Row) -> WorkspaceOpenState {
         switch row {
-        case .newWorkspace, .add: return false
-        case .workspace(let workspace): return isOpen(workspace.path)
+        case .newWorkspace, .add: return .closed
+        case .workspace(let workspace): return openState(workspace.path)
         case .worktree(let worktree, let parent):
             let mirror = GitRepo.mirrorPath(parent.path, from: GitRepoStatus.repoRoot(parent.path), into: worktree.path)
-            return isOpen(mirror) || isOpen(worktree.path)
+            return .strongest([openState(mirror), openState(worktree.path)])
         }
     }
 
@@ -260,7 +260,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     }
 
     override func selectionChanged() {
-        let switches = rows.indices.contains(selected) && isOpen(row: rows[selected])
+        let switches = rows.indices.contains(selected) && openState(row: rows[selected]) != .closed
         setFooterHint("open", isShown: !switches)
         setFooterHint("switch", isShown: switches)
         setFooterHint("new worktree", isShown: createTarget != nil)
@@ -416,8 +416,16 @@ final class RepoPickerOverlay: PaletteOverlay {
 
         static let typeRail = "Worktree"
 
-        private static func openMarker(after name: NSView, in row: NSView) -> NSView {
-            let marker = NSTextField(labelWithString: "open")
+        static func markerText(_ state: WorkspaceOpenState) -> String? {
+            switch state {
+            case .here: return "open"
+            case .elsewhere: return "open in another window"
+            case .closed: return nil
+            }
+        }
+
+        private static func openMarker(_ text: String, after name: NSView, in row: NSView) -> NSView {
+            let marker = NSTextField(labelWithString: text)
             marker.font = .systemFont(ofSize: 11)
             marker.textColor = Theme.current.chrome.ink(.muted)
             marker.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -430,21 +438,21 @@ final class RepoPickerOverlay: PaletteOverlay {
             return marker
         }
 
-        convenience init(workspace: Workspace, isOpen: Bool) {
+        convenience init(workspace: Workspace, openState: WorkspaceOpenState) {
             self.init(
                 workspace: workspace, worktree: nil, label: workspace.title,
-                statusPath: workspace.path, indent: 0, isOpen: isOpen)
+                statusPath: workspace.path, indent: 0, openState: openState)
         }
 
-        convenience init(worktree: Worktree, parent: Workspace, isOpen: Bool) {
+        convenience init(worktree: Worktree, parent: Workspace, openState: WorkspaceOpenState) {
             self.init(
                 workspace: parent, worktree: worktree, label: Self.typeRail,
-                statusPath: worktree.path, indent: Self.childIndent, isOpen: isOpen)
+                statusPath: worktree.path, indent: Self.childIndent, openState: openState)
         }
 
         private init(
             workspace: Workspace, worktree: Worktree?, label: String, statusPath: URL,
-            indent: CGFloat, isOpen: Bool
+            indent: CGFloat, openState: WorkspaceOpenState
         ) {
             self.workspace = workspace
             self.worktree = worktree
@@ -477,7 +485,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             churnLabel.translatesAutoresizingMaskIntoConstraints = false
             addSubview(churnLabel)
 
-            let nameEnd = isOpen ? Self.openMarker(after: name, in: self) : name
+            let nameEnd = Self.markerText(openState).map { Self.openMarker($0, after: name, in: self) } ?? name
 
             branchFloor = branchLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 0)
             branchFloor.priority = .defaultHigh

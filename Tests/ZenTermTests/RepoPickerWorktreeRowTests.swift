@@ -486,7 +486,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let open = path("alpha")
         let overlay = makeRepoPicker(
             entries: [workspace("alpha", path: open), workspace("beta", path: path("beta"))],
-            isOpen: { $0 == open })
+            openState: { $0 == open ? .here : .closed })
         mount(overlay)
 
         XCTAssertTrue(hintIsShown("switch", in: overlay), "↵ on an open workspace switches to it")
@@ -504,7 +504,8 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let tree = worktree(repo, "feat")
         let opened = tree.path.appendingPathComponent("pkg").standardizedFileURL.path
         let overlay = makeRepoPicker(
-            entries: [workspace("mono", path: package)], isOpen: { $0.standardizedFileURL.path == opened })
+            entries: [workspace("mono", path: package)],
+            openState: { $0.standardizedFileURL.path == opened ? .here : .closed })
         mount(overlay)
         waitUntil(GitRepoStatus.repoRoot(package) != nil, "the repo root to be read off the main thread")
 
@@ -515,6 +516,34 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertTrue(
             descendants(of: row).contains { ($0 as? NSTextField)?.stringValue == "open" },
             "the open workspace sits at the worktree's copy of pkg, which the picker never reads off disk")
+    }
+
+    func test_aWorktreeOpenHere_andInAnotherWindowAtItsRoot_readsAsOpenHere() throws {
+        let repo = try GitFixture.makeRepo(at: path("both-repo").resolvingSymlinksInPath())
+        defer { try? FileManager.default.removeItem(at: repo) }
+        let package = repo.appendingPathComponent("pkg", isDirectory: true)
+        try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+        let tree = worktree(repo, "feat")
+        let mirror = tree.path.appendingPathComponent("pkg").standardizedFileURL.path
+        let root = tree.path.standardizedFileURL.path
+        let overlay = makeRepoPicker(
+            entries: [workspace("mono", path: package)],
+            openState: { path in
+                switch path.standardizedFileURL.path {
+                case mirror: return .here
+                case root: return .elsewhere
+                default: return .closed
+                }
+            })
+        mount(overlay)
+        waitUntil(GitRepoStatus.repoRoot(package) != nil, "the repo root to be read off the main thread")
+
+        overlay.setWorktrees(WorktreeListing(commonDir: repo, worktrees: [tree]), for: package)
+
+        let row = try XCTUnwrap(rowViews(in: overlay).compactMap { $0 as? RepoPickerOverlay.RowView }.last)
+        let markers = descendants(of: row).compactMap { ($0 as? NSTextField)?.stringValue }
+        XCTAssertTrue(markers.contains("open"), "this window holds it, so it is switched to")
+        XCTAssertFalse(markers.contains("open in another window"), "never sent to the window holding its root")
     }
 
     private func hintIsShown(_ label: String, in overlay: NSView) -> Bool {
@@ -666,12 +695,12 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
     private func makeRepoPicker(
         entries: [Workspace], removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
-        isOpen: @escaping (URL) -> Bool = { _ in false },
+        openState: @escaping (URL) -> WorkspaceOpenState = { _ in .closed },
         onChoose: @escaping (Workspace, WorktreeOrigin?) -> Void = { _, _ in }
     ) -> RepoPickerOverlay {
         RepoPickerOverlay(
             entries: entries, background: Theme.current.chrome.background.nsColor,
-            removals: removals, isOpen: isOpen, onChoose: onChoose, onAddWorkspace: {}, onDismiss: {})
+            removals: removals, openState: openState, onChoose: onChoose, onAddWorkspace: {}, onDismiss: {})
     }
 
     private func makeWindow() -> NSWindow {
