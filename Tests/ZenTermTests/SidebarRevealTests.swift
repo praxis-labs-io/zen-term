@@ -78,6 +78,15 @@ final class SidebarRevealTests: WindowTestCase {
         button.mouseDown(with: event)
     }
 
+    private func click(_ row: SettingsNavRow) throws {
+        let event = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
+                clickCount: 1, pressure: 1))
+        row.mouseDown(with: event)
+    }
+
     private func settle() {
         let done = expectation(description: "the fade finishes")
         DispatchQueue.main.asyncAfter(deadline: .now() + Motion.pageSlideDuration + 0.15) { done.fulfill() }
@@ -227,6 +236,35 @@ final class SidebarRevealTests: WindowTestCase {
 
         XCTAssertFalse(sidebar.windowToggleForTesting.isHidden, "back before the card uncovers it")
         XCTAssertEqual(frame(of: sidebar.windowToggleForTesting, in: controller), home)
+    }
+
+    func test_pickingAWorkspaceFromTheCard_switchesToIt_andPutsTheCardAway() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        let other = controller.addWorkspaceForTesting(name: "api", folder: FileManager.default.temporaryDirectory)
+        sidebar.reveal()
+
+        try click(sidebar.view.rowsForTesting[1])
+
+        XCTAssertEqual(controller.activeWorkspaceIDForTesting, other)
+        XCTAssertFalse(sidebar.isRevealed, "the card has done its job, so it does not sit over the pane it opened")
+    }
+
+    func test_focusSidebar_overARevealedCard_takesTheKeyboard_andPinsIt() throws {
+        let controller = try makeCollapsedController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let sidebar = controller.sidebarForTesting
+        sidebar.reveal()
+        XCTAssertFalse(sidebar.hasFocus, "hover alone never touches the keyboard")
+
+        controller.handle(.focusSidebar)
+
+        XCTAssertTrue(sidebar.isRevealed, "the card it was already showing, not a second one")
+        XCTAssertTrue(controller.window.firstResponder === sidebar.view.rowsForTesting.first)
+        sidebar.edgeReveal.pointerIsInside = { false }
+        sidebar.edgeReveal.recheck()
+        settle()
+        XCTAssertTrue(sidebar.isRevealed, "a card the keyboard opened is not the pointer's to dismiss")
     }
 
     func test_dockingARevealedCard_landsDockedWithNoCardChrome() throws {
