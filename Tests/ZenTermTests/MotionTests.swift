@@ -47,6 +47,42 @@ final class MotionTests: XCTestCase {
         XCTAssertEqual(layer.opacity, 1)
     }
 
+    func test_reduceMotion_slideFade_keepsFadingInsteadOfSnapping() {
+        Motion.isReduceMotionEnabled = { true }
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 100, height: 100))
+
+        Motion.slideFade(view, appearing: true, from: CGVector(dx: -240, dy: 0))
+
+        XCTAssertNotNil(view.layer?.animation(forKey: "motion.opacity"), "Reduce Motion still fades")
+        XCTAssertNil(view.layer?.animation(forKey: "motion.slide"), "Reduce Motion drops the movement")
+        XCTAssertEqual(view.layer?.opacity, 1)
+    }
+
+    func test_slideFade_appearing_slidesAndFades() {
+        Motion.isReduceMotionEnabled = { false }
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 100, height: 100))
+
+        Motion.slideFade(view, appearing: true, from: CGVector(dx: -240, dy: 0))
+
+        let slide = view.layer?.animation(forKey: "motion.slide") as? CABasicAnimation
+        XCTAssertEqual((slide?.fromValue as? NSValue)?.sizeValue.width, -240)
+        XCTAssertEqual((slide?.toValue as? NSValue)?.sizeValue.width, 0)
+        XCTAssertNotNil(view.layer?.animation(forKey: "motion.opacity"))
+        XCTAssertEqual(view.layer?.opacity, 1)
+    }
+
+    func test_slideFade_disappearing_parksAndEndsHidden() {
+        Motion.isReduceMotionEnabled = { false }
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 100, height: 100))
+
+        Motion.slideFade(view, appearing: false, from: CGVector(dx: -240, dy: 0))
+
+        let slide = view.layer?.animation(forKey: "motion.slide") as? CABasicAnimation
+        XCTAssertEqual((slide?.fromValue as? NSValue)?.sizeValue.width, 0)
+        XCTAssertEqual((slide?.toValue as? NSValue)?.sizeValue.width, -240)
+        XCTAssertEqual(view.layer?.opacity, 0)
+    }
+
     func test_motionConfig_forcesOnAndOff() {
         MotionConfig.apply(.on)
         XCTAssertTrue(Motion.isReduceMotionEnabled())
