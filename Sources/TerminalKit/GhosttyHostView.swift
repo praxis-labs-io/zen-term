@@ -17,6 +17,16 @@ final class GhosttyHostView: NSView {
     // `.iBeam` at rest because libghostty emits `MOUSE_SHAPE` only on a change.
     private var desiredCursor: NSCursor = .iBeam
 
+    // A cover arriving under a still pointer fires no event, so the first covered move is what retires the position.
+    private var holdsReportedPointer = false
+
+    // Indirected because the real button state is global hardware state a test cannot set.
+    var pressedMouseButtons: () -> Int = { NSEvent.pressedMouseButtons }
+
+    private(set) var mousePosPushesForTesting = 0
+
+    private(set) var lastPushedMousePosForTesting: CGPoint?
+
     var markedText = NSMutableAttributedString()
 
     var keyTextAccumulator: [String]?
@@ -146,15 +156,25 @@ final class GhosttyHostView: NSView {
     }
 
     private func reportPointerIfOverThisPane() {
-        guard let surfacePtr, let window else { return }
+        guard let window else { return }
         guard
             NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0)
                 == window.windowNumber
         else { return }
-        let pos = convert(window.mouseLocationOutsideOfEventStream, from: nil)
-        guard bounds.contains(pos) else { return }
-        ghostty_surface_mouse_pos(
-            surfacePtr, pos.x, frame.height - pos.y, NSEvent.ghosttyMods(NSEvent.modifierFlags))
+        reportParkedPointer(at: window.mouseLocationOutsideOfEventStream)
+    }
+
+    // No drag exemption here: a parked pointer is a resting position, not a drag that has to outrun a cover.
+    func reportParkedPointer(at locationInWindow: NSPoint) {
+        let mods = NSEvent.ghosttyMods(NSEvent.modifierFlags)
+        guard pointerIsOverThisPane(at: locationInWindow) else { return retireParkedPointer(mods) }
+        reportPointer(at: locationInWindow, mods: mods)
+    }
+
+    // A live drag keeps the position it drags from, the same reason `mouseExited` refuses to retire during one.
+    private func retireParkedPointer(_ mods: ghostty_input_mods_e) {
+        guard pressedMouseButtons() == 0 else { return }
+        retirePointer(mods)
     }
 
     override func viewDidChangeBackingProperties() {
@@ -423,23 +443,29 @@ final class GhosttyHostView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        recoverRetiredPointer(event)
+        heldButtons.insert(0)
         owner?.reportFocusWanted()
         guard let surfacePtr else { return }
         _ = ghostty_surface_mouse_button(surfacePtr, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT, event.ghosttyMods)
     }
 
     override func mouseUp(with event: NSEvent) {
+        heldButtons.remove(0)
         guard let surfacePtr else { return }
         _ = ghostty_surface_mouse_button(surfacePtr, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT, event.ghosttyMods)
         settleSkippedExit(event)
     }
 
     override func rightMouseDown(with event: NSEvent) {
+        recoverRetiredPointer(event)
+        heldButtons.insert(1)
         guard let surfacePtr else { return super.rightMouseDown(with: event) }
         _ = ghostty_surface_mouse_button(surfacePtr, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_RIGHT, event.ghosttyMods)
     }
 
     override func rightMouseUp(with event: NSEvent) {
+        heldButtons.remove(1)
         guard let surfacePtr else { return super.rightMouseUp(with: event) }
         _ = ghostty_surface_mouse_button(surfacePtr, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_RIGHT, event.ghosttyMods)
         settleSkippedExit(event)
@@ -447,6 +473,8 @@ final class GhosttyHostView: NSView {
 
     // Middle-click paste is not wired: `supports_selection_clipboard` is false on macOS.
     override func otherMouseDown(with event: NSEvent) {
+        recoverRetiredPointer(event)
+        heldButtons.insert(event.buttonNumber)
         owner?.reportFocusWanted()
         guard let surfacePtr else { return }
         _ = ghostty_surface_mouse_button(
@@ -454,6 +482,7 @@ final class GhosttyHostView: NSView {
     }
 
     override func otherMouseUp(with event: NSEvent) {
+        heldButtons.remove(event.buttonNumber)
         guard let surfacePtr else { return }
         _ = ghostty_surface_mouse_button(
             surfacePtr, GHOSTTY_MOUSE_RELEASE, Self.mouseButton(for: event.buttonNumber), event.ghosttyMods)
@@ -462,8 +491,8 @@ final class GhosttyHostView: NSView {
 
     // Our tracking stands down with the app, so a drag ending after deactivation never gets its exit.
     private func settleSkippedExit(_ event: NSEvent) {
-        guard let surfacePtr, NSEvent.pressedMouseButtons == 0, !NSApp.isActive else { return }
-        ghostty_surface_mouse_pos(surfacePtr, -1, -1, event.ghosttyMods)
+        guard pressedMouseButtons() == 0, !NSApp.isActive else { return }
+        retirePointer(event.ghosttyMods)
     }
 
     // AppKit numbers buttons in hardware order; libghostty uses X11 numbering, which diverges past middle.
@@ -493,14 +522,56 @@ final class GhosttyHostView: NSView {
     override func mouseEntered(with event: NSEvent) { reportMousePos(event) }
 
     override func mouseExited(with event: NSEvent) {
-        guard let surfacePtr, NSEvent.pressedMouseButtons == 0 else { return }
-        ghostty_surface_mouse_pos(surfacePtr, -1, -1, event.ghosttyMods)
+        guard pressedMouseButtons() == 0 else { return }
+        retirePointer(event.ghosttyMods)
     }
 
     private func reportMousePos(_ event: NSEvent) {
+        guard shouldReportPointer(at: event.locationInWindow) else {
+            return retirePointer(event.ghosttyMods)
+        }
+        reportPointer(at: event.locationInWindow, mods: event.ghosttyMods)
+    }
+
+    // Presses and releases are per button, so one release must not clear the ownership another press took.
+    private var heldButtons: Set<Int> = []
+
+    // Ownership alone would strand the gate open on a release this view never saw, so live button state pairs with it.
+    private var pointerIsDragging: Bool { !heldButtons.isEmpty && pressedMouseButtons() != 0 }
+
+    // A cover leaving under a still pointer fires no event either, so a press is where a retired position is recovered.
+    private func recoverRetiredPointer(_ event: NSEvent) {
+        guard !holdsReportedPointer else { return }
+        reportMousePos(event)
+    }
+
+    // AppKit sends a drag to the view its press landed on wherever the pointer goes, so a drag outruns a cover.
+    private func shouldReportPointer(at locationInWindow: NSPoint) -> Bool {
+        pointerIsDragging || pointerIsOverThisPane(at: locationInWindow)
+    }
+
+    // A sibling painted on top does not occlude a tracking area, so the hit test is what says a cover took the pointer.
+    private func pointerIsOverThisPane(at locationInWindow: NSPoint) -> Bool {
+        window?.contentView?.hitTest(locationInWindow) === self
+    }
+
+    private func reportPointer(at locationInWindow: NSPoint, mods: ghostty_input_mods_e) {
+        let pos = convert(locationInWindow, from: nil)
+        holdsReportedPointer = true
+        pushMousePos(x: pos.x, y: frame.height - pos.y, mods: mods)
+    }
+
+    private func retirePointer(_ mods: ghostty_input_mods_e) {
+        guard holdsReportedPointer else { return }
+        holdsReportedPointer = false
+        pushMousePos(x: -1, y: -1, mods: mods)
+    }
+
+    private func pushMousePos(x: CGFloat, y: CGFloat, mods: ghostty_input_mods_e) {
+        mousePosPushesForTesting += 1
+        lastPushedMousePosForTesting = CGPoint(x: x, y: y)
         guard let surfacePtr else { return }
-        let pos = convert(event.locationInWindow, from: nil)
-        ghostty_surface_mouse_pos(surfacePtr, pos.x, frame.height - pos.y, event.ghosttyMods)
+        ghostty_surface_mouse_pos(surfacePtr, x, y, mods)
     }
 
     override func resetCursorRects() { addCursorRect(bounds, cursor: desiredCursor) }
