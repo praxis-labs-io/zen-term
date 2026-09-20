@@ -283,6 +283,32 @@ final class SidebarRevealTests: WindowTestCase {
             "docking pushes the canvas, which revealing never does")
     }
 
+    func test_dockingARevealedCard_fadesItsFillOut() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        Motion.isReduceMotionEnabled = { false }
+        sidebar.reveal()
+        let layer = try XCTUnwrap(sidebar.column.layer)
+        let revealedFill = try XCTUnwrap(layer.backgroundColor)
+
+        try click(sidebar.liveToggleForTesting)
+
+        let fade = try XCTUnwrap(
+            layer.animation(forKey: "motion.backgroundColor") as? CABasicAnimation,
+            "without it the card's fill drops to the window's tint in one frame")
+        XCTAssertTrue(
+            CFEqual(try XCTUnwrap(fade.fromValue) as CFTypeRef, revealedFill),
+            "the fade starts from the fill the card is wearing")
+        XCTAssertTrue(
+            CFEqual(try XCTUnwrap(fade.toValue) as CFTypeRef, try XCTUnwrap(revealedFill.copy(alpha: 0))),
+            "and ends on the same fill at zero alpha, so it never crosses another color")
+        XCTAssertEqual(fade.duration, Motion.pageSlideDuration, "and it lands with the slide")
+
+        settle()
+
+        XCTAssertNil(layer.backgroundColor, "docked, the column carries no fill of its own")
+    }
+
     func test_dockingARevealedCard_handsThePaneItsHaloBack() throws {
         let controller = try makeCollapsedController()
         let sidebar = controller.sidebarForTesting

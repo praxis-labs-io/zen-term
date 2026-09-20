@@ -189,13 +189,16 @@ final class SidebarController {
         }
     }
 
-    // The radius, edge and shadow would otherwise pop flat in one frame as the card lands against the window.
+    // The fill, radius, edge and shadow would otherwise pop in one frame as the card lands against the window.
     private func fadeCardChrome() {
         guard let layer = column.layer else { return }
         for (keyPath, value) in [("cornerRadius", CGFloat(0)), ("borderWidth", 0)] {
             Motion.ease(layer, keyPath: keyPath, to: value, duration: Motion.pageSlideDuration)
         }
         Motion.ease(layer, keyPath: "shadowOpacity", to: Float(0), duration: Motion.pageSlideDuration)
+        Motion.ease(
+            layer, keyPath: "backgroundColor", to: SidebarColumn.fadedFill,
+            duration: Motion.pageSlideDuration)
     }
 
     private func stopFloating() {
