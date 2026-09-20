@@ -24,7 +24,7 @@ final class HostWindow: NSWindow {
         setWindowChromeVisible(GeneralConfig.current.windowChrome)
     }
 
-    // A frame saved while the sidebar was collapsed can be narrower than the minimum docking then raised.
+    // A frame saved by an older build, or on a wider screen, can sit under the minimum or off the display.
     func setFrameWithinLimits(_ frame: NSRect, animate: Bool) {
         var target = frame
         let floor = frameRect(forContentRect: NSRect(origin: .zero, size: contentMinSize)).size
