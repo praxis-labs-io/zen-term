@@ -4,6 +4,7 @@ import AppKit
 final class SidebarColumn: ShadowCardView {
     let rows: SidebarView
     let footer: SidebarFooter
+    private(set) var isFloating = false
 
     init(
         onPalette: @escaping () -> Void, onSettings: @escaping () -> Void,
@@ -32,6 +33,17 @@ final class SidebarColumn: ShadowCardView {
         return hit === self && rows.isHidden ? nil : hit
     }
 
+    func setFloating(_ floating: Bool) {
+        isFloating = floating
+        guard floating else {
+            layer?.backgroundColor = nil
+            layer?.borderWidth = 0
+            shadow = nil
+            return
+        }
+        CardChrome.apply(to: self, background: Theme.current.chrome.background.nsColor)
+    }
+
     func setContentHidden(_ hidden: Bool) {
         rows.isHidden = hidden
         footer.isHidden = hidden
@@ -40,5 +52,6 @@ final class SidebarColumn: ShadowCardView {
     func reapplyTheme() {
         rows.reapplyTheme()
         footer.reapplyTheme()
+        if isFloating { CardChrome.reapplyTheme(to: self) }
     }
 }
