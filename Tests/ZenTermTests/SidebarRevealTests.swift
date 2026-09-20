@@ -284,4 +284,27 @@ final class SidebarRevealTests: WindowTestCase {
 
         XCTAssertFalse(sidebar.isRevealed, "closing it sends no mouse event, so the close has to recheck")
     }
+
+    func test_theHotZone_tracksItsOwnBounds_restingAndGrown() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        let strip = sidebar.edgeReveal.stripForTesting
+        controller.containerForTesting.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(strip.trackingAreas.count, 1)
+        XCTAssertEqual(strip.trackingAreas.first?.rect, strip.bounds, "resting, the band is what it tracks")
+        let resting = frame(of: strip, in: controller)
+        XCTAssertEqual(resting.minX, 0)
+
+        sidebar.reveal()
+        controller.containerForTesting.layoutSubtreeIfNeeded()
+
+        let grown = frame(of: strip, in: controller)
+        XCTAssertEqual(
+            grown.width, Self.gutter + SidebarView.width,
+            "revealed, the live region has to span the gutter and the card")
+        XCTAssertEqual(
+            strip.trackingAreas.first?.rect, strip.bounds,
+            "the area has to follow the resize, or the grown region is tracked at its old width")
+    }
 }

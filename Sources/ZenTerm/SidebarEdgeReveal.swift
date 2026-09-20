@@ -5,7 +5,8 @@ import AppKit
 final class SidebarEdgeReveal {
     static var holdDelay: TimeInterval = 0.28
     static var exitGrace: TimeInterval = 0.12
-    private static let restingWidth: CGFloat = 4
+    // A pointer aimed at the window edge comes to rest about 5pt in, so a thinner band never gets held.
+    private static let restingWidth: CGFloat = 8
     // The pointer crosses the gutter on its way to the card, and an exit there would put it away mid-journey.
     private static var liveRegionWidth: CGFloat { ChromeMetrics.windowGutter + SidebarView.width }
 
@@ -71,7 +72,8 @@ final class SidebarEdgeReveal {
         guard !isRevealed, !isSuppressed() else { return }
         hold?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            guard let self, !self.isRevealed, !self.isSuppressed(), self.pointerIsInside() else { return }
+            guard let self else { return }
+            guard !self.isRevealed, !self.isSuppressed(), self.pointerIsInside() else { return }
             self.onReveal()
         }
         hold = work
