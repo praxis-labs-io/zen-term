@@ -187,9 +187,13 @@ final class SidebarRevealTests: WindowTestCase {
         try click(sidebar.liveToggleForTesting)
         sidebar.reveal()
 
+        let floating = try insets(of: sidebar, in: controller)
+        XCTAssertEqual(floating.leading, docked.leading)
+        XCTAssertEqual(floating.trailing, docked.trailing)
+        XCTAssertEqual(floating.bottom, docked.bottom)
         XCTAssertEqual(
-            try insets(of: sidebar, in: controller), docked,
-            "the card is the docked sidebar lifted off the window, so nothing inside it tightens")
+            floating.top, docked.top + Self.gutter,
+            "the card's top edge ate the window gutter the heading used to sit under, so it owes it back")
     }
 
     func test_theCardsToggle_sitsExactlyOnTheWindowsOnce_docked() throws {

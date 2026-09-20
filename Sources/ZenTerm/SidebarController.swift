@@ -137,7 +137,7 @@ final class SidebarController {
 
     func toggle(holding surfaces: [TerminalSurface], in root: NSView) {
         guard let edgeLeading, let canvasOffset, let leadWidth, let tabBarLeading, let columnLeading,
-            let columnBottom
+            let columnBottom, let contentTop = column.contentTop
         else { return }
         let wasRevealed = isRevealed
         isRevealed = false
@@ -152,7 +152,7 @@ final class SidebarController {
         slideID &+= 1
         let animate = [
             (edgeLeading, edgeOffset), (canvasOffset, canvasGap), (leadWidth, leadOffset),
-            (tabBarLeading, tabBarPull), (columnLeading, 0), (columnBottom, 0),
+            (tabBarLeading, tabBarPull), (columnLeading, 0), (columnBottom, 0), (contentTop, 0),
         ]
         guard !Motion.isReduceMotionEnabled() else {
             for (constraint, target) in animate { constraint.constant = target }

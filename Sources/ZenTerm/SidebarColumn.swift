@@ -8,6 +8,8 @@ final class SidebarColumn: ShadowCardView {
     let rows: SidebarView
     let footer: SidebarFooter
     let toggle: IconButton
+    // Every other side moved inward with the card and took the window's gutter along; the top edge stays put.
+    private(set) var contentTop: NSLayoutConstraint?
     private(set) var isFloating = false
 
     init(
@@ -22,10 +24,12 @@ final class SidebarColumn: ShadowCardView {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         for child in [rows, footer, toggle] as [NSView] { addSubview(child) }
+        let contentTop = rows.topAnchor.constraint(equalTo: topAnchor)
+        self.contentTop = contentTop
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: SidebarView.width),
             rows.leadingAnchor.constraint(equalTo: leadingAnchor),
-            rows.topAnchor.constraint(equalTo: topAnchor),
+            contentTop,
             rows.bottomAnchor.constraint(equalTo: bottomAnchor),
             toggle.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.toggleInset),
             toggle.centerYAnchor.constraint(equalTo: bottomAnchor, constant: -TabBarView.chipBandInset),
@@ -48,6 +52,7 @@ final class SidebarColumn: ShadowCardView {
 
     func setFloating(_ floating: Bool) {
         isFloating = floating
+        contentTop?.constant = floatingContentTop
         // The shadow needs an unclipped layer, so the radius has to be clipped on the content instead.
         rows.wantsLayer = true
         rows.layer?.cornerRadius = floating ? Self.cornerRadius : 0
@@ -62,8 +67,11 @@ final class SidebarColumn: ShadowCardView {
             to: self, background: Theme.current.chrome.background.nsColor, cornerRadius: Self.cornerRadius)
     }
 
+    var floatingContentTop: CGFloat { isFloating ? ChromeMetrics.windowGutter : 0 }
+
     func reapplyCornerRadius() {
         guard isFloating else { return }
+        contentTop?.constant = floatingContentTop
         layer?.cornerRadius = Self.cornerRadius
         rows.layer?.cornerRadius = Self.cornerRadius
         needsLayout = true
