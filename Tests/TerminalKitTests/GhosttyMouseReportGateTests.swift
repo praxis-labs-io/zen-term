@@ -77,10 +77,11 @@ final class GhosttyMouseReportGateTests: XCTestCase {
     }
 
     // A drag routes to the view its press landed on, so it outruns the gate wherever the pointer goes.
-    func test_aDragKeepsReportingOverACover() throws {
+    func test_aDragThisPaneOwnsKeepsReportingOverACover() throws {
         view.mouseMoved(with: try move(to: Self.overPane))
-        cover()
         buttonsDown = 1
+        view.mouseDown(with: try move(to: Self.overPane, type: .leftMouseDown))
+        cover()
 
         view.mouseDragged(with: try move(to: NSPoint(x: 210, y: 150), type: .leftMouseDragged))
 
@@ -88,15 +89,40 @@ final class GhosttyMouseReportGateTests: XCTestCase {
         XCTAssertEqual(view.lastPushedMousePosForTesting, CGPoint(x: 210, y: 150))
     }
 
+    // Tracking still delivers enter and exit mid-drag, so a drag in the cover must not ride the exemption.
+    func test_aDragAnotherViewOwnsDoesNotReportOverACover() throws {
+        view.mouseMoved(with: try move(to: Self.overPane))
+        cover()
+        buttonsDown = 1
+
+        view.mouseEntered(with: try enterExit(.mouseEntered, at: NSPoint(x: 210, y: 150)))
+
+        XCTAssertEqual(view.mousePosPushesForTesting, 2)
+        XCTAssertEqual(view.lastPushedMousePosForTesting, Self.retired)
+    }
+
+    func test_aReleaseThisPaneNeverSawCannotStrandTheGateOpen() throws {
+        view.mouseMoved(with: try move(to: Self.overPane))
+        buttonsDown = 1
+        view.mouseDown(with: try move(to: Self.overPane, type: .leftMouseDown))
+        cover()
+
+        buttonsDown = 0
+        view.mouseMoved(with: try move(to: NSPoint(x: 210, y: 150)))
+
+        XCTAssertEqual(view.mousePosPushesForTesting, 2)
+        XCTAssertEqual(view.lastPushedMousePosForTesting, Self.retired)
+    }
+
     func test_exitRetiresThePointerOnlyWhenNoButtonIsDown() throws {
         view.mouseMoved(with: try move(to: Self.overPane))
         buttonsDown = 1
 
-        view.mouseExited(with: try exit(at: NSPoint(x: 500, y: 150)))
+        view.mouseExited(with: try enterExit(.mouseExited, at: NSPoint(x: 500, y: 150)))
         XCTAssertEqual(view.mousePosPushesForTesting, 1)
 
         buttonsDown = 0
-        view.mouseExited(with: try exit(at: NSPoint(x: 500, y: 150)))
+        view.mouseExited(with: try enterExit(.mouseExited, at: NSPoint(x: 500, y: 150)))
         XCTAssertEqual(view.mousePosPushesForTesting, 2)
         XCTAssertEqual(view.lastPushedMousePosForTesting, Self.retired)
     }
@@ -111,6 +137,28 @@ final class GhosttyMouseReportGateTests: XCTestCase {
 
     func test_theParkedPointerIsNotReportedUnderACover() {
         cover()
+
+        view.reportParkedPointer(at: Self.overPane)
+
+        XCTAssertEqual(view.mousePosPushesForTesting, 0)
+    }
+
+    // The parked pointer takes no drag exemption: a pane owning a drag must not report from outside its own bounds.
+    func test_theParkedPointerIsNotReportedWhileThisPaneOwnsADrag() throws {
+        view.mouseMoved(with: try move(to: Self.overPane))
+        buttonsDown = 1
+        view.mouseDown(with: try move(to: Self.overPane, type: .leftMouseDown))
+        cover()
+
+        view.reportParkedPointer(at: Self.overPane)
+
+        XCTAssertEqual(view.mousePosPushesForTesting, 1)
+    }
+
+    // The window check is per window, so a held button must not let every pane in it report.
+    func test_theParkedPointerIsNotReportedUnderACoverWhileAButtonIsHeld() {
+        cover()
+        buttonsDown = 1
 
         view.reportParkedPointer(at: Self.overPane)
 
@@ -133,10 +181,10 @@ final class GhosttyMouseReportGateTests: XCTestCase {
                 pressure: 0))
     }
 
-    private func exit(at point: NSPoint) throws -> NSEvent {
+    private func enterExit(_ type: NSEvent.EventType, at point: NSPoint) throws -> NSEvent {
         try XCTUnwrap(
             NSEvent.enterExitEvent(
-                with: .mouseExited, location: point, modifierFlags: [], timestamp: 0,
+                with: type, location: point, modifierFlags: [], timestamp: 0,
                 windowNumber: window.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0,
                 userData: nil))
     }

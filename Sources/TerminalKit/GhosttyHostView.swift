@@ -164,6 +164,7 @@ final class GhosttyHostView: NSView {
         reportParkedPointer(at: window.mouseLocationOutsideOfEventStream)
     }
 
+    // No drag exemption here: a parked pointer is a resting position, not a drag that has to outrun a cover.
     func reportParkedPointer(at locationInWindow: NSPoint) {
         guard pointerIsOverThisPane(at: locationInWindow) else { return }
         reportPointer(at: locationInWindow, mods: NSEvent.ghosttyMods(NSEvent.modifierFlags))
@@ -435,23 +436,27 @@ final class GhosttyHostView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        ownsDrag = true
         owner?.reportFocusWanted()
         guard let surfacePtr else { return }
         _ = ghostty_surface_mouse_button(surfacePtr, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT, event.ghosttyMods)
     }
 
     override func mouseUp(with event: NSEvent) {
+        ownsDrag = false
         guard let surfacePtr else { return }
         _ = ghostty_surface_mouse_button(surfacePtr, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT, event.ghosttyMods)
         settleSkippedExit(event)
     }
 
     override func rightMouseDown(with event: NSEvent) {
+        ownsDrag = true
         guard let surfacePtr else { return super.rightMouseDown(with: event) }
         _ = ghostty_surface_mouse_button(surfacePtr, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_RIGHT, event.ghosttyMods)
     }
 
     override func rightMouseUp(with event: NSEvent) {
+        ownsDrag = false
         guard let surfacePtr else { return super.rightMouseUp(with: event) }
         _ = ghostty_surface_mouse_button(surfacePtr, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_RIGHT, event.ghosttyMods)
         settleSkippedExit(event)
@@ -459,6 +464,7 @@ final class GhosttyHostView: NSView {
 
     // Middle-click paste is not wired: `supports_selection_clipboard` is false on macOS.
     override func otherMouseDown(with event: NSEvent) {
+        ownsDrag = true
         owner?.reportFocusWanted()
         guard let surfacePtr else { return }
         _ = ghostty_surface_mouse_button(
@@ -466,6 +472,7 @@ final class GhosttyHostView: NSView {
     }
 
     override func otherMouseUp(with event: NSEvent) {
+        ownsDrag = false
         guard let surfacePtr else { return }
         _ = ghostty_surface_mouse_button(
             surfacePtr, GHOSTTY_MOUSE_RELEASE, Self.mouseButton(for: event.buttonNumber), event.ghosttyMods)
@@ -510,18 +517,25 @@ final class GhosttyHostView: NSView {
     }
 
     private func reportMousePos(_ event: NSEvent) {
-        guard pointerIsOverThisPane(at: event.locationInWindow) else {
+        guard shouldReportPointer(at: event.locationInWindow) else {
             return retirePointer(event.ghosttyMods)
         }
         reportPointer(at: event.locationInWindow, mods: event.ghosttyMods)
     }
 
-    // AppKit routes a drag to the view its press landed on wherever the pointer goes, so a drag outruns the gate.
-    private var pointerIsDragging: Bool { pressedMouseButtons() != 0 }
+    private var ownsDrag = false
+
+    // Ownership alone would strand the gate open on a release this view never saw, so live button state pairs with it.
+    private var pointerIsDragging: Bool { ownsDrag && pressedMouseButtons() != 0 }
+
+    // AppKit sends a drag to the view its press landed on wherever the pointer goes, so a drag outruns a cover.
+    private func shouldReportPointer(at locationInWindow: NSPoint) -> Bool {
+        pointerIsDragging || pointerIsOverThisPane(at: locationInWindow)
+    }
 
     // A sibling painted on top does not occlude a tracking area, so the hit test is what says a cover took the pointer.
     private func pointerIsOverThisPane(at locationInWindow: NSPoint) -> Bool {
-        pointerIsDragging || window?.contentView?.hitTest(locationInWindow) === self
+        window?.contentView?.hitTest(locationInWindow) === self
     }
 
     private func reportPointer(at locationInWindow: NSPoint, mods: ghostty_input_mods_e) {
