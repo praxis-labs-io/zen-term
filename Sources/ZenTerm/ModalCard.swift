@@ -90,6 +90,9 @@ final class BackdropView: NSView {
     init(onClick: @escaping () -> Void) { self.onClick = onClick; super.init(frame: .zero) }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
     override func mouseDown(with event: NSEvent) { onClick() }
+
+    // The pane underneath claims the whole canvas for its I-beam, and a cursor rect is not occluded by being covered.
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .arrow) }
 }
 
 /// Flipped so a scroll view opens at the top rather than the bottom.

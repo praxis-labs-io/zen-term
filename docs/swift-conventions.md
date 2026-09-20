@@ -78,6 +78,11 @@ alone. Tracking delivers `mouseEntered` while a button is down, so a drag inside
 global exemption for every covered view in the window, and ownership without the button state
 survives a release the view never saw.
 
+**A cursor rect is not blind the same way.** A sibling's rect does win over the view beneath it, so a
+view that covers another only has to claim its own, as `BackdropView` does. Nothing has to tell it a
+cover went up. The seven `resetCursorRects` overrides in the chrome are all a child over its own
+parent, so they do not answer this on their own.
+
 **To prove an `NSView` override exists, let the responder chain answer.** Default `flagsChanged` and
 `otherMouse*` forward to `nextResponder`, so a recording superview counts exactly the events the view
 failed to handle. That catches a missing override, which no behavior assertion can.
