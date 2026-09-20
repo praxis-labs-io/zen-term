@@ -211,7 +211,8 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .newWorkspace:
             return ActionRowView(
                 symbol: "plus", title: "New Workspace",
-                shortcut: Chord.displayed(.newWorkspace, in: GeneralConfig.current.keymap)?.displayGlyph)
+                shortcut: Chord.displayed(.newWorkspace, in: GeneralConfig.current.keymap)?.displayGlyph,
+                emphasis: .listed)
         case .add:
             return ActionRowView(symbol: "folder.badge.plus", title: "Add Workspace…", shortcut: nil)
         case .header(let title):
@@ -455,9 +456,22 @@ final class RepoPickerOverlay: PaletteOverlay {
     }
 
     final class ActionRowView: SelectableRowView {
+        enum Emphasis {
+            // New Workspace holds the default selection, so it reads as a row rather than a footnote.
+            case listed
+            case quiet
+
+            var ink: NSColor {
+                self == .listed
+                    ? Theme.current.chrome.foreground.nsColor : Theme.current.chrome.ink(.muted)
+            }
+
+            var weight: NSFont.Weight { self == .listed ? .regular : .medium }
+        }
+
         let title: String
 
-        init(symbol: String, title: String, shortcut: String?) {
+        init(symbol: String, title: String, shortcut: String?, emphasis: Emphasis = .quiet) {
             self.title = title
             super.init()
 
@@ -465,13 +479,13 @@ final class RepoPickerOverlay: PaletteOverlay {
             let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
             icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)?
                 .withSymbolConfiguration(config)
-            icon.contentTintColor = Theme.current.chrome.ink(.muted)
+            icon.contentTintColor = emphasis.ink
             icon.translatesAutoresizingMaskIntoConstraints = false
             addSubview(icon)
 
             let label = NSTextField(labelWithString: title)
-            label.font = .systemFont(ofSize: 13, weight: .medium)
-            label.textColor = Theme.current.chrome.ink(.muted)
+            label.font = .systemFont(ofSize: 13, weight: emphasis.weight)
+            label.textColor = emphasis.ink
             label.translatesAutoresizingMaskIntoConstraints = false
             addSubview(label)
 

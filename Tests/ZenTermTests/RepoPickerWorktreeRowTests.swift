@@ -673,6 +673,26 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         }
     }
 
+    func test_newWorkspace_readsAsARow_whileAddWorkspaceStaysQuiet() throws {
+        let overlay = makeRepoPicker(entries: [workspace("alpha")])
+        mount(overlay)
+
+        let actions = rowViews(in: overlay).compactMap { $0 as? RepoPickerOverlay.ActionRowView }
+        let new = try XCTUnwrap(actions.first { $0.title == "New Workspace" })
+        let add = try XCTUnwrap(actions.first { $0.title == "Add Workspace…" })
+        let workspaceRow = try XCTUnwrap(
+            rowViews(in: overlay).compactMap { $0 as? RepoPickerOverlay.RowView }.first)
+
+        let newLabel = try XCTUnwrap(label(in: new, saying: "New Workspace"))
+        let addLabel = try XCTUnwrap(label(in: add, saying: "Add Workspace…"))
+        let name = try XCTUnwrap(label(in: workspaceRow, saying: "alpha"))
+
+        XCTAssertEqual(newLabel.textColor, name.textColor, "it holds the default selection")
+        XCTAssertEqual(newLabel.font, name.font)
+        XCTAssertEqual(
+            addLabel.textColor, Theme.current.chrome.ink(.muted), "the trailing action stays quiet")
+    }
+
     func test_anOpenWorkspacesUnopenedWorktree_staysInConfiguredUnderAMutedParent() {
         let repo = path("alpha")
         let overlay = makeRepoPicker(
