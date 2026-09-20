@@ -436,27 +436,29 @@ final class GhosttyHostView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        ownsDrag = true
+        recoverRetiredPointer(event)
+        heldButtons.insert(0)
         owner?.reportFocusWanted()
         guard let surfacePtr else { return }
         _ = ghostty_surface_mouse_button(surfacePtr, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT, event.ghosttyMods)
     }
 
     override func mouseUp(with event: NSEvent) {
-        ownsDrag = false
+        heldButtons.remove(0)
         guard let surfacePtr else { return }
         _ = ghostty_surface_mouse_button(surfacePtr, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT, event.ghosttyMods)
         settleSkippedExit(event)
     }
 
     override func rightMouseDown(with event: NSEvent) {
-        ownsDrag = true
+        recoverRetiredPointer(event)
+        heldButtons.insert(1)
         guard let surfacePtr else { return super.rightMouseDown(with: event) }
         _ = ghostty_surface_mouse_button(surfacePtr, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_RIGHT, event.ghosttyMods)
     }
 
     override func rightMouseUp(with event: NSEvent) {
-        ownsDrag = false
+        heldButtons.remove(1)
         guard let surfacePtr else { return super.rightMouseUp(with: event) }
         _ = ghostty_surface_mouse_button(surfacePtr, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_RIGHT, event.ghosttyMods)
         settleSkippedExit(event)
@@ -464,7 +466,8 @@ final class GhosttyHostView: NSView {
 
     // Middle-click paste is not wired: `supports_selection_clipboard` is false on macOS.
     override func otherMouseDown(with event: NSEvent) {
-        ownsDrag = true
+        recoverRetiredPointer(event)
+        heldButtons.insert(event.buttonNumber)
         owner?.reportFocusWanted()
         guard let surfacePtr else { return }
         _ = ghostty_surface_mouse_button(
@@ -472,7 +475,7 @@ final class GhosttyHostView: NSView {
     }
 
     override func otherMouseUp(with event: NSEvent) {
-        ownsDrag = false
+        heldButtons.remove(event.buttonNumber)
         guard let surfacePtr else { return }
         _ = ghostty_surface_mouse_button(
             surfacePtr, GHOSTTY_MOUSE_RELEASE, Self.mouseButton(for: event.buttonNumber), event.ghosttyMods)
@@ -523,10 +526,17 @@ final class GhosttyHostView: NSView {
         reportPointer(at: event.locationInWindow, mods: event.ghosttyMods)
     }
 
-    private var ownsDrag = false
+    // Presses and releases are per button, so one release must not clear the ownership another press took.
+    private var heldButtons: Set<Int> = []
 
     // Ownership alone would strand the gate open on a release this view never saw, so live button state pairs with it.
-    private var pointerIsDragging: Bool { ownsDrag && pressedMouseButtons() != 0 }
+    private var pointerIsDragging: Bool { !heldButtons.isEmpty && pressedMouseButtons() != 0 }
+
+    // A cover leaving under a still pointer fires no event either, so a press is where a retired position is recovered.
+    private func recoverRetiredPointer(_ event: NSEvent) {
+        guard !holdsReportedPointer else { return }
+        reportMousePos(event)
+    }
 
     // AppKit sends a drag to the view its press landed on wherever the pointer goes, so a drag outruns a cover.
     private func shouldReportPointer(at locationInWindow: NSPoint) -> Bool {

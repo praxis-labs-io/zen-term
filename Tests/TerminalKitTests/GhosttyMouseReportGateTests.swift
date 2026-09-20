@@ -165,6 +165,50 @@ final class GhosttyMouseReportGateTests: XCTestCase {
         XCTAssertEqual(view.mousePosPushesForTesting, 0)
     }
 
+    // A cover leaving under a still pointer fires no event, so the press is the only chance to recover.
+    func test_aPressRecoversThePointerAfterACoverLeaves() throws {
+        view.mouseMoved(with: try move(to: Self.overPane))
+        let cover = cover()
+        view.mouseMoved(with: try move(to: NSPoint(x: 210, y: 150)))
+        cover.removeFromSuperview()
+
+        buttonsDown = 1
+        view.mouseDown(with: try move(to: NSPoint(x: 210, y: 150), type: .leftMouseDown))
+
+        XCTAssertEqual(view.mousePosPushesForTesting, 3)
+        XCTAssertEqual(view.lastPushedMousePosForTesting, CGPoint(x: 210, y: 150))
+    }
+
+    // The press must decide on geometry, not on the drag ownership it is about to take itself.
+    func test_aPressOnACoveredPaneRecoversNothing() throws {
+        view.mouseMoved(with: try move(to: Self.overPane))
+        cover()
+        view.mouseMoved(with: try move(to: NSPoint(x: 210, y: 150)))
+
+        buttonsDown = 1
+        view.mouseDown(with: try move(to: NSPoint(x: 210, y: 150), type: .leftMouseDown))
+
+        XCTAssertEqual(view.mousePosPushesForTesting, 2)
+        XCTAssertEqual(view.lastPushedMousePosForTesting, Self.retired)
+    }
+
+    // Presses and releases are per button, so the right release must not end the left drag.
+    func test_aReleaseOfOneButtonKeepsTheDragAnotherButtonHolds() throws {
+        view.mouseMoved(with: try move(to: Self.overPane))
+        buttonsDown = 1
+        view.mouseDown(with: try move(to: Self.overPane, type: .leftMouseDown))
+        buttonsDown = 3
+        view.rightMouseDown(with: try move(to: Self.overPane, type: .rightMouseDown))
+        buttonsDown = 1
+        view.rightMouseUp(with: try move(to: Self.overPane, type: .rightMouseUp))
+        cover()
+
+        view.mouseDragged(with: try move(to: NSPoint(x: 210, y: 150), type: .leftMouseDragged))
+
+        XCTAssertEqual(view.mousePosPushesForTesting, 2)
+        XCTAssertEqual(view.lastPushedMousePosForTesting, CGPoint(x: 210, y: 150))
+    }
+
     // A backdrop pinned over the whole canvas, as every overlay kind builds one.
     @discardableResult
     private func cover() -> NSView {
