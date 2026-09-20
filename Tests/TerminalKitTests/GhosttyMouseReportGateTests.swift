@@ -143,8 +143,33 @@ final class GhosttyMouseReportGateTests: XCTestCase {
         XCTAssertEqual(view.mousePosPushesForTesting, 0)
     }
 
-    // The parked pointer takes no drag exemption: a pane owning a drag must not report from outside its own bounds.
-    func test_theParkedPointerIsNotReportedWhileThisPaneOwnsADrag() throws {
+    // A drag that outlived app deactivation leaves a held position, and reactivation under a cover must retire it.
+    func test_theParkedPointerRetiresAHeldPositionUnderACover() throws {
+        view.mouseMoved(with: try move(to: Self.overPane))
+        cover()
+
+        view.reportParkedPointer(at: Self.overPane)
+
+        XCTAssertEqual(view.mousePosPushesForTesting, 2)
+        XCTAssertEqual(view.lastPushedMousePosForTesting, Self.retired)
+    }
+
+    // A drag whose release this view never saw still holds a position, and a cover means it is no longer true.
+    func test_theParkedPointerRetiresAPositionHeldFromADragThatEnded() throws {
+        view.mouseMoved(with: try move(to: Self.overPane))
+        buttonsDown = 1
+        view.mouseDown(with: try move(to: Self.overPane, type: .leftMouseDown))
+        cover()
+        buttonsDown = 0
+
+        view.reportParkedPointer(at: Self.overPane)
+
+        XCTAssertEqual(view.mousePosPushesForTesting, 2)
+        XCTAssertEqual(view.lastPushedMousePosForTesting, Self.retired)
+    }
+
+    // No drag exemption, and no retire either: a live drag neither reports from outside nor gives up its position.
+    func test_theParkedPointerLeavesALiveDragAlone() throws {
         view.mouseMoved(with: try move(to: Self.overPane))
         buttonsDown = 1
         view.mouseDown(with: try move(to: Self.overPane, type: .leftMouseDown))

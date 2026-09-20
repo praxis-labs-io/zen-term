@@ -166,8 +166,15 @@ final class GhosttyHostView: NSView {
 
     // No drag exemption here: a parked pointer is a resting position, not a drag that has to outrun a cover.
     func reportParkedPointer(at locationInWindow: NSPoint) {
-        guard pointerIsOverThisPane(at: locationInWindow) else { return }
-        reportPointer(at: locationInWindow, mods: NSEvent.ghosttyMods(NSEvent.modifierFlags))
+        let mods = NSEvent.ghosttyMods(NSEvent.modifierFlags)
+        guard pointerIsOverThisPane(at: locationInWindow) else { return retireParkedPointer(mods) }
+        reportPointer(at: locationInWindow, mods: mods)
+    }
+
+    // A live drag keeps the position it drags from, the same reason `mouseExited` refuses to retire during one.
+    private func retireParkedPointer(_ mods: ghostty_input_mods_e) {
+        guard pressedMouseButtons() == 0 else { return }
+        retirePointer(mods)
     }
 
     override func viewDidChangeBackingProperties() {
