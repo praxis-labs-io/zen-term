@@ -22,6 +22,9 @@ final class SidebarController {
     // 8 of sidebar padding plus the footer's 6 inset, so palette and Settings follow at the footer's rhythm.
     private static let toggleInset: CGFloat = 14
     private static let toggleCardInset = SidebarView.padding + SidebarFooter.buttonSize.height / 2
+    // The toggle keeps its own place in the window, so the rest of the footer starts where its slot ends.
+    private static let footerInset = toggleInset + SidebarFooter.buttonSize.width + SidebarFooter.spacing
+    private static var toggleCardLeading: CGFloat { ChromeMetrics.windowGutter + toggleInset }
     private static let leadNameGap: CGFloat = 6
     // Docking below this would leave the panes less than the window's own minimum, so the sidebar floats instead.
     static let minimumDockableWidth = HostWindow.minimumContentSize.width + SidebarView.width
@@ -42,6 +45,7 @@ final class SidebarController {
     private var sidebarTop: NSLayoutConstraint?
     private var columnLeading: NSLayoutConstraint?
     private var columnBottom: NSLayoutConstraint?
+    private var toggleLeading: NSLayoutConstraint?
     private var toggleAtChipBand: NSLayoutConstraint?
     private var toggleAboveCard: NSLayoutConstraint?
     private var slideID = 0
@@ -99,6 +103,9 @@ final class SidebarController {
         let columnLeading = column.leadingAnchor.constraint(equalTo: container.leadingAnchor)
         let columnBottom = column.bottomAnchor.constraint(equalTo: container.bottomAnchor)
         let toggleAtChipBand = toggleButton.centerYAnchor.constraint(equalTo: tabBar.chipBandCenterYAnchor)
+        let toggleLeading = toggleButton.leadingAnchor.constraint(
+            equalTo: container.leadingAnchor, constant: Self.toggleInset)
+        self.toggleLeading = toggleLeading
         self.columnLeading = columnLeading
         self.columnBottom = columnBottom
         self.toggleAtChipBand = toggleAtChipBand
@@ -121,9 +128,9 @@ final class SidebarController {
             columnLeading,
             sidebarTop,
             columnBottom,
-            toggleButton.leadingAnchor.constraint(equalTo: column.leadingAnchor, constant: Self.toggleInset),
+            toggleLeading,
             toggleAtChipBand,
-            footer.leadingAnchor.constraint(equalTo: toggleButton.trailingAnchor, constant: SidebarFooter.spacing),
+            footer.leadingAnchor.constraint(equalTo: column.leadingAnchor, constant: Self.footerInset),
             footer.centerYAnchor.constraint(equalTo: toggleButton.centerYAnchor),
             lead.leadingAnchor.constraint(equalTo: edge.leadingAnchor),
             lead.centerYAnchor.constraint(equalTo: tabBar.chipBandCenterYAnchor),
@@ -298,6 +305,11 @@ final class SidebarController {
     private func setToggleOnCard(_ onCard: Bool) {
         toggleAtChipBand?.isActive = !onCard
         toggleAboveCard?.isActive = onCard
+        applyToggleLeading()
+    }
+
+    private func applyToggleLeading() {
+        toggleLeading?.constant = toggleAboveCard?.isActive == true ? Self.toggleCardLeading : Self.toggleInset
     }
 
     func render(
@@ -445,6 +457,7 @@ final class SidebarController {
     func reapplyChromeLayout() {
         sidebarTop?.constant = ChromeMetrics.topInset
         canvasOffset?.constant = canvasGap
+        applyToggleLeading()
         column.reapplyCornerRadius()
     }
 

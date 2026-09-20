@@ -160,6 +160,23 @@ final class SidebarRevealTests: WindowTestCase {
         XCTAssertEqual(sidebar.column.layer?.opacity, 1, "or the toggle's column stays faded out")
     }
 
+    func test_hidingTheCard_putsTheToggleBackAtOnce_notWhenTheCardFinishesLeaving() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        let collapsed = frame(of: sidebar.toggleButtonForTesting, in: controller)
+        sidebar.reveal()
+        XCTAssertEqual(
+            frame(of: sidebar.toggleButtonForTesting, in: controller).minX,
+            frame(of: sidebar.column, in: controller).minX + collapsed.minX,
+            "revealed, the toggle keeps its inset against the card it now sits on")
+
+        sidebar.hideReveal()
+
+        XCTAssertEqual(
+            frame(of: sidebar.toggleButtonForTesting, in: controller), collapsed,
+            "the toggle is home before the card has left, so it never shifts afterwards")
+    }
+
     func test_dockingARevealedCard_landsDockedWithNoCardChrome() throws {
         let controller = try makeCollapsedController()
         let sidebar = controller.sidebarForTesting
