@@ -101,8 +101,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         try choose(name, in: try openPicker(in: c))
     }
 
-    // Opened directly: ⌘P lists a worktree only under a Configured parent, and these tests need one
-    // opened while its workspace already is.
+    // ⌘P lists a worktree only under a Configured parent, and these tests open one under a live parent.
     private func openAlphaWorktree(branch: String?, head: String = "a41c9e2d0f", in c: WindowController) throws {
         let worktree = Worktree(
             path: alpha.appendingPathComponent(branch ?? head, isDirectory: true), branch: branch, head: head,

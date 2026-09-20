@@ -214,12 +214,13 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
         let held = two.activeWorkspaceIDForTesting
 
         let picker = try openPicker(in: one)
-        // Both windows call their first workspace "Workspace 1", so the row is found by the window holding it.
         guard
             let index = picker.rowViews.firstIndex(where: {
                 ($0 as? RepoPickerOverlay.RowView)?.running?.window == two.windowID
             })
-        else { return XCTFail("the other window's workspace is not listed at all") }
+        else {
+            return XCTFail("no row is held by the other window, and both call their first Workspace 1")
+        }
 
         XCTAssertEqual(
             section(at: index, in: picker), "Open Elsewhere",

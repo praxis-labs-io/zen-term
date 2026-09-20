@@ -190,7 +190,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   folds over its windows, skipping the asking one. A `WindowController` never raises its own
   window, so the ordering stays in `AppDelegate`.
 - **The ⌘P picker groups into Open, Open Elsewhere and Configured**, and a workspace is
-  listed once: the sections say what the row markers used to. Open is this window's
+  listed once, in the strongest section that claims it. Open is this window's
   `WorkspaceOrder`, ghosts included and unselectable; Open Elsewhere is what the other
   windows report through `openWorkspacesElsewhere`, so an unconfigured workspace running
   elsewhere is listed too; Configured is what the workspaces file holds that no window has

@@ -1095,8 +1095,9 @@ final class WindowController: NSObject {
                     self?.activate(id)
                 },
                 onReveal: { [weak self] window, id in
+                    guard self?.revealWorkspaceElsewhere?(window, id) == true else { return false }
                     self?.closeModal()
-                    _ = self?.revealWorkspaceElsewhere?(window, id)
+                    return true
                 },
                 onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
                 onNewWorkspace: { [weak self] in self?.newWorkspace() },

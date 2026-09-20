@@ -1,4 +1,5 @@
 import AppKit
+import AppLog
 import TerminalKit
 
 final class RepoPickerOverlay: PaletteOverlay {
@@ -21,14 +22,14 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     private let onChoose: (Workspace, WorktreeOrigin?) -> Void
     private let onSwitch: (WorkspaceID) -> Void
-    private let onReveal: (Int, WorkspaceID) -> Void
+    private let onReveal: (Int, WorkspaceID) -> Bool
     private let openState: (URL) -> WorkspaceOpenState
     private let onAddWorkspace: () -> Void
     private let onNewWorkspace: () -> Void
 
     private let entries: [Workspace]
     private let open: [RunningWorkspace]
-    private let elsewhere: [RunningWorkspace]
+    private var elsewhere: [RunningWorkspace]
     private var listings: [URL: WorktreeListing] = [:]
 
     /// Cancelled per picker, not queue-wide: another window's picker shares the queue.
@@ -47,7 +48,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         openState: @escaping (URL) -> WorkspaceOpenState = { _ in .closed },
         onChoose: @escaping (Workspace, WorktreeOrigin?) -> Void,
         onSwitch: @escaping (WorkspaceID) -> Void = { _ in },
-        onReveal: @escaping (Int, WorkspaceID) -> Void = { _, _ in },
+        onReveal: @escaping (Int, WorkspaceID) -> Bool = { _, _ in false },
         onAddWorkspace: @escaping () -> Void,
         onNewWorkspace: @escaping () -> Void = {}, onDismiss: @escaping () -> Void
     ) {
@@ -56,10 +57,10 @@ final class RepoPickerOverlay: PaletteOverlay {
         self.elsewhere = elsewhere
         self.removals = removals
         self.configuredPaths = Set(entries.map { $0.path.standardizedFileURL })
-        self.churnProbed = configuredPaths
+        self.churnProbed = []
         self.rows = Self.sections(
-            open: open, elsewhere: elsewhere, entries: entries, listings: [:], configured: [],
-            owners: [:], openState: openState)
+            open: open, elsewhere: elsewhere, listed: Self.listed(open, elsewhere), entries: entries,
+            listings: [:], configured: [], owners: [:])
         self.onChoose = onChoose
         self.onSwitch = onSwitch
         self.onReveal = onReveal
@@ -74,8 +75,10 @@ final class RepoPickerOverlay: PaletteOverlay {
             rowHeight: 32,
             onDismiss: onDismiss)
 
-        GitRepoStatus.refresh(entries.map(\.path)) { [weak self] in self?.applyGitStatus() }
-        refreshChurn(Array(configuredPaths))
+        let probes = configuredPaths.union((open + elsewhere).map { $0.folder.standardizedFileURL })
+        churnProbed = probes
+        GitRepoStatus.refresh(Array(probes)) { [weak self] in self?.rebuild() }
+        refreshChurn(Array(probes))
         relistWorktrees()
     }
 
@@ -104,6 +107,15 @@ final class RepoPickerOverlay: PaletteOverlay {
         for row in rowViews { (row as? RowView)?.applyGitStatus() }
     }
 
+    // Placement reads `GitRepoStatus.repoRoot`, which arrives off-main, so a late probe re-places rows.
+    private func rebuild(animated: Bool = true) {
+        let held = rows.indices.contains(selected) ? rowIdentity(at: selected) : nil
+        applyFilter(query: currentQuery)
+        refreshRows(animated: animated)
+        reselect(byIdentity: held)
+        applyGitStatus()
+    }
+
     func setWorktrees(_ listing: WorktreeListing, for workspacePath: URL) {
         listings[workspacePath.standardizedFileURL] = listing
         let unprobed = listing.worktrees.map(\.path.standardizedFileURL).filter {
@@ -111,10 +123,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         }
         refreshChurn(unprobed)
         worktreeOwners = Self.owners(among: entries, listings: listings)
-        let held = rows.indices.contains(selected) ? rowIdentity(at: selected) : nil
-        applyFilter(query: currentQuery)
-        refreshRows(animated: true)
-        reselect(byIdentity: held)
+        rebuild()
     }
 
     /// Decided from config order, never the filtered list, so a query can't move a worktree to another parent.
@@ -133,9 +142,9 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     // A worktree mirrors its parent's configuration, so a parent listed above is redrawn muted as its label.
     private static func sections(
-        open: [RunningWorkspace], elsewhere: [RunningWorkspace], entries: [Workspace],
-        listings: [URL: WorktreeListing], configured: Set<URL>, owners: [URL: URL],
-        openState: (URL) -> WorkspaceOpenState
+        open: [RunningWorkspace], elsewhere: [RunningWorkspace], listed: Set<URL>,
+        entries: [Workspace], listings: [URL: WorktreeListing], configured: Set<URL>,
+        owners: [URL: URL]
     ) -> [Row] {
         var rows: [Row] = [.newWorkspace]
 
@@ -148,9 +157,6 @@ final class RepoPickerOverlay: PaletteOverlay {
             rows.append(.header(Section.elsewhere))
             rows += elsewhere.map(Row.elsewhere)
         }
-
-        let listed = Set(
-            (open + elsewhere).filter { $0.id != nil }.map { $0.folder.standardizedFileURL })
 
         rows.append(.header(Section.configured))
         for workspace in entries {
@@ -172,6 +178,28 @@ final class RepoPickerOverlay: PaletteOverlay {
             rows += children.map { .worktree($0, parent: workspace) }
         }
         return rows + [.add]
+    }
+
+    // An open worktree keeps no `Worktree` of its own, so its row resolves back through the listings.
+    private func listedWorktree(at folder: URL) -> (worktree: Worktree, parent: Workspace)? {
+        let target = folder.standardizedFileURL
+        for workspace in entries {
+            guard let listing = listings[workspace.path.standardizedFileURL] else { continue }
+            for worktree in listing.worktrees {
+                if worktree.path.standardizedFileURL == target { return (worktree, workspace) }
+                let mirror = GitRepo.mirrorPath(
+                    workspace.path, from: GitRepoStatus.repoRoot(workspace.path), into: worktree.path)
+                if mirror.standardizedFileURL == target { return (worktree, workspace) }
+            }
+        }
+        return nil
+    }
+
+    // Built from every running row, never the filtered ones: a query must not make a workspace look closed.
+    private static func listed(
+        _ open: [RunningWorkspace], _ elsewhere: [RunningWorkspace]
+    ) -> Set<URL> {
+        Set((open + elsewhere).filter { $0.id != nil }.map { $0.folder.standardizedFileURL })
     }
 
     // A worktree is cut at the repo root, so the open row sits at the parent's mirrored subfolder inside it.
@@ -198,12 +226,18 @@ final class RepoPickerOverlay: PaletteOverlay {
     // New Workspace holds the selection until a query matches something, so a search that finds nothing makes one.
     override func defaultSelectionIndex() -> Int {
         guard !currentQuery.trimmingCharacters(in: .whitespaces).isEmpty else { return 0 }
-        return rows.indices.first { index in
-            switch rows[index] {
-            case .newWorkspace, .add, .header, .mutedParent: return false
-            case .open, .elsewhere, .workspace, .worktree: return isSelectable(at: index)
-            }
-        } ?? 0
+        let query = currentQuery.trimmingCharacters(in: .whitespaces)
+        return rows.indices.first { isSelectable(at: $0) && Self.matches(rows[$0], query) } ?? 0
+    }
+
+    private static func matches(_ row: Row, _ query: String) -> Bool {
+        switch row {
+        case .newWorkspace, .add, .header, .mutedParent: return false
+        case .open(let running), .elsewhere(let running):
+            return FuzzyMatch.score(query, running.name) != nil
+        case .workspace(let workspace): return FuzzyMatch.score(query, workspace.title) != nil
+        case .worktree(let worktree, _): return score(worktree, query) != nil
+        }
     }
 
     override func makeRow(at index: Int) -> PaletteRowView {
@@ -288,12 +322,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         refreshRemovalState()
     }
 
-    func refreshRemovalState() {
-        let held = rows.indices.contains(selected) ? rowIdentity(at: selected) : nil
-        applyFilter(query: currentQuery)
-        refreshRows(animated: true)
-        reselect(byIdentity: held)
-    }
+    func refreshRemovalState() { rebuild() }
 
     override func rowIdentity(at index: Int) -> AnyHashable? {
         switch rows[index] {
@@ -317,8 +346,8 @@ final class RepoPickerOverlay: PaletteOverlay {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else {
             rows = Self.sections(
-                open: open, elsewhere: elsewhere, entries: entries, listings: listings,
-                configured: configuredPaths, owners: worktreeOwners, openState: openState)
+                open: open, elsewhere: elsewhere, listed: Self.listed(open, elsewhere), entries: entries,
+                listings: listings, configured: configuredPaths, owners: worktreeOwners)
             return
         }
 
@@ -340,8 +369,8 @@ final class RepoPickerOverlay: PaletteOverlay {
 
         rows = Self.sections(
             open: Self.ranked(open, matching: q), elsewhere: Self.ranked(elsewhere, matching: q),
-            entries: scored.map(\.workspace), listings: narrowed, configured: configuredPaths,
-            owners: worktreeOwners, openState: openState)
+            listed: Self.listed(open, elsewhere), entries: scored.map(\.workspace), listings: narrowed,
+            configured: configuredPaths, owners: worktreeOwners)
     }
 
     // Ranks the Open section by group, so a worktree never leaves the parent it opened from.
@@ -380,7 +409,10 @@ final class RepoPickerOverlay: PaletteOverlay {
     }
 
     static func footerHints() -> [PaletteHint] {
-        var hints = [PaletteHint(keys: "⏎", label: "open"), PaletteHint(keys: "⏎", label: "switch")]
+        var hints = [
+            PaletteHint(keys: "⏎", label: "new workspace"), PaletteHint(keys: "⏎", label: "open"),
+            PaletteHint(keys: "⏎", label: "switch"),
+        ]
         if let chord = Chord.displayed(.createWorktree, in: GeneralConfig.current.keymap) {
             hints.append(PaletteHint(keys: chord.displayGlyph, label: "new worktree"))
         }
@@ -391,8 +423,11 @@ final class RepoPickerOverlay: PaletteOverlay {
     }
 
     override func selectionChanged() {
+        var makes = false
+        if rows.indices.contains(selected), case .newWorkspace = rows[selected] { makes = true }
         let switches = rows.indices.contains(selected) && openState(row: rows[selected]) != .closed
-        setFooterHint("open", isShown: !switches)
+        setFooterHint("new workspace", isShown: makes)
+        setFooterHint("open", isShown: !makes && !switches)
         setFooterHint("switch", isShown: switches)
         setFooterHint("new worktree", isShown: createTarget != nil)
         setFooterHint("remove worktree", isShown: selectedWorktree != nil)
@@ -408,6 +443,10 @@ final class RepoPickerOverlay: PaletteOverlay {
         switch rows[selected] {
         case .newWorkspace, .add, .header, .mutedParent: return nil
         case .open(let row), .elsewhere(let row):
+            if row.isWorktree {
+                guard let found = listedWorktree(at: row.folder) else { return nil }
+                return CreateTarget(workspace: found.parent, repo: found.worktree.path)
+            }
             guard let entry = entries.first(where: { $0.path.standardizedFileURL == row.folder.standardizedFileURL })
             else { return nil }
             return CreateTarget(workspace: entry, repo: entry.path)
@@ -419,9 +458,14 @@ final class RepoPickerOverlay: PaletteOverlay {
     }
 
     var selectedWorktree: (worktree: Worktree, parent: Workspace)? {
-        guard rows.indices.contains(selected), case .worktree(let worktree, let parent) = rows[selected]
-        else { return nil }
-        return (worktree, parent)
+        guard rows.indices.contains(selected) else { return nil }
+        switch rows[selected] {
+        case .worktree(let worktree, let parent): return (worktree, parent)
+        case .open(let row), .elsewhere(let row):
+            guard row.isWorktree else { return nil }
+            return listedWorktree(at: row.folder)
+        default: return nil
+        }
     }
 
     override func activate(index: Int, modifiers: NSEvent.ModifierFlags) {
@@ -435,7 +479,16 @@ final class RepoPickerOverlay: PaletteOverlay {
             onSwitch(id)
         case .elsewhere(let row):
             guard let id = row.id else { return }
-            onReveal(row.window, id)
+            if onReveal(row.window, id) { return }
+            if let entry = entries.first(where: {
+                $0.path.standardizedFileURL == row.folder.standardizedFileURL
+            }) {
+                onChoose(entry, nil)
+                return
+            }
+            Log.info("workspace reveal found no window holding it", category: .workspace)
+            elsewhere.removeAll { $0.window == row.window && $0.id == row.id }
+            rebuild()
         case .workspace(let workspace): onChoose(workspace, nil)
         case .worktree(let worktree, let parent):
             onChoose(
