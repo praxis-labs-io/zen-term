@@ -46,6 +46,7 @@ final class SidebarController {
     var onLeave: () -> Void = {}
     var onFocusChanged: () -> Void = {}
     var onJump: (SurfaceID) -> Void = { _ in }
+    var onJumpElsewhere: () -> Void = {}
     var onRevealChanged: () -> Void = {}
     var onFocusYield: () -> Void = {}
     var onFocusRestore: () -> Void = {}
@@ -79,6 +80,7 @@ final class SidebarController {
         }
         view.onFocusChanged = { [weak self] in self?.onFocusChanged() }
         view.onJump = { [weak self] in self?.onJump($0) }
+        view.onJumpElsewhere = { [weak self] in self?.onJumpElsewhere() }
     }
 
     var view: SidebarView { column.rows }
@@ -383,7 +385,7 @@ final class SidebarController {
     }
 
     var focusedWorktreeRefusal: NewWorktreeRefusal? {
-        if view.agentRowHasFocus { return .agent }
+        if view.agentsSectionHasFocus { return .agent }
         guard let row = view.focusedRow, let entry = entries.first(where: { $0.row == row }),
             !Self.rowItem(entry).makesWorktrees
         else { return nil }
@@ -448,6 +450,10 @@ final class SidebarController {
     }
 
     func renderAgents(_ items: [SidebarAgentItem]) { view.renderAgents(items) }
+
+    func renderWaitingElsewhere(agents: Int, windows: Int, index: Int) {
+        view.renderWaitingElsewhere(agents: agents, windows: windows, index: index)
+    }
 
     func setOpenModal(palette: Bool, settings: Bool) { footer.setOpenModal(palette: palette, settings: settings) }
 

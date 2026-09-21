@@ -98,10 +98,6 @@ failed to handle. That catches a missing override, which no behavior assertion c
 
 ## Scroll views
 
-**`NSTableView` left at `.automatic` style reserves a source-list row inset.** Rows and full-row
-selection sit off the container edges. Set `style = .plain`, then add the margin you want explicitly
-so a selection pill does not nest a second gap.
-
 **`NSScrollView.contentInsets` is scrollable range, not padding.** A nonzero left/right inset makes
 the clip pan sideways by that amount even when the document exactly fits. Use insets only on an axis
 meant to scroll; get edge padding from the row content's own insets.
@@ -325,3 +321,19 @@ and `SettingsKeybindGroupsTests`): ordering belongs in the array, membership in 
 **When a test's premise expires, invert it rather than deleting it.** `BackendShadowTests` and
 `BackendShadowSweepTests` assert an empty freed set against a live backend, with a liveness canary so
 empty cannot mean a dead probe.
+
+## Exercising agents in a running build
+
+**libghostty sends no desktop notification for a pane that is focused in the frontmost window.**
+Typing `printf '\033]777;notify;claude;needs you\a'` into the pane you are watching produces nothing:
+no agent row, no toast, no attention anywhere. It reads as the feature being dead. Arm it and leave
+before it fires, `(sleep 20; printf '\033]777;notify;claude;needs you\a') &`, with a delay long enough
+to survive the rest of the setup.
+
+**Entering a window answers whatever pane is focused there.** `windowDidBecomeKey` runs
+`answerFocusedAgent`, so returning to arm a second agent clears the first. A setup with more than one
+waiting agent is armed in a single visit, and the window left alone until every timer has fired.
+
+**A one-shot OSC 9;4 report does not leave an agent working.** `trackAgentExits` polls `isBusy` and
+drops the row on the next poll. Keep the shell busy for as long as the row is needed:
+`printf '\033]9;4;3;0\a'; sleep 120`.
