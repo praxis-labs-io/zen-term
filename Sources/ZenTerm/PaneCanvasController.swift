@@ -514,7 +514,7 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
         clearZoomIfLeafGone()
         reconcileAndRender()
         dissolveClosedPane(closing)
-        focus(tree.focusedLeaf, announces: false)
+        registry.surface(for: tree.focusedLeaf)?.focus()
     }
 
     private func retryStart(_ id: PaneID) {

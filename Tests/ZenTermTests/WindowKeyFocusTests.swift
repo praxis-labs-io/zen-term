@@ -130,6 +130,23 @@ final class WindowKeyFocusTests: WindowTestCase {
             "the mode ended while the drawer held focus, and the pane's render flag has to come back with it")
     }
 
+    func test_aPaneSurvivingAnExitWhileADrawerHoldsFocus_takesTheKeyboardAndReportsFocused() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
+        c.handle(.splitVertical)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let dying = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
+        c.handle(.toggleRightDrawer)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+
+        dying.delegate?.surfaceDidExit(dying, code: 0)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(
+            pane.focusRenders.last, true,
+            "the surviving pane took first responder, so it cannot be left reporting unfocused")
+    }
+
     func test_aDrawerOpenedInANonKeyWindow_doesNotReportFocused() throws {
         let c = makeWindow()
         resignKey(c)

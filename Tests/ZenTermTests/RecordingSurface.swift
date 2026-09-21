@@ -46,12 +46,13 @@ final class RecordingSurface: NSObject, TerminalSurface {
     func setFontSize(_ points: CGFloat) { fontSizes.append(points) }
 
     private(set) var focusCount = 0
-    // Mirrors the backend: taking first responder tells libghostty focused, and an unmounted view takes nothing.
+    // Mirrors the backend: only a real responder move reports focused, so an unmounted or already focused view reports nothing.
     func focus() {
-        let took = resizingView.window?.makeFirstResponder(resizingView) ?? false
+        let window = resizingView.window
+        let moved = window?.firstResponder !== resizingView && window?.makeFirstResponder(resizingView) == true
         isFocused = true
         focusCount += 1
-        if took { focusRenders.append(true) }
+        if moved { focusRenders.append(true) }
     }
     func terminate() { terminated = true }
     private(set) var focusRenders: [Bool] = []
