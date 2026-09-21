@@ -308,12 +308,13 @@ final class PaneCanvasController: NSObject {
 
     func focus(_ id: PaneID) { focus(id, announces: true) }
 
+    // `focus()` makes the view first responder, which tells libghostty focused on its own, so the gate runs after it.
     private func focus(_ id: PaneID, announces: Bool) {
         guard tree.contains(id) else { return }
         tree.focusedLeaf = id
-        updateHalo()
         onTitleChanged?()
         registry.surface(for: id)?.focus()
+        updateHalo()
         if announces { onFocusChanged?() }
     }
 
@@ -513,7 +514,7 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
         clearZoomIfLeafGone()
         reconcileAndRender()
         dissolveClosedPane(closing)
-        registry.surface(for: tree.focusedLeaf)?.focus()
+        focus(tree.focusedLeaf, announces: false)
     }
 
     private func retryStart(_ id: PaneID) {

@@ -46,10 +46,12 @@ final class RecordingSurface: NSObject, TerminalSurface {
     func setFontSize(_ points: CGFloat) { fontSizes.append(points) }
 
     private(set) var focusCount = 0
+    // Mirrors the backend: making the view first responder tells libghostty focused, with no chrome call.
     func focus() {
         resizingView.window?.makeFirstResponder(resizingView)
         isFocused = true
         focusCount += 1
+        focusRenders.append(true)
     }
     func terminate() { terminated = true }
     private(set) var focusRenders: [Bool] = []

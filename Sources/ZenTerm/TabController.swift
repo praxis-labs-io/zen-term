@@ -519,8 +519,8 @@ final class TabController: NSObject {
             surface = rightDrawerSurface
         }
         paneCanvas.setPanesFocused(false)
-        syncDrawerFocus()
         surface?.focus()
+        syncDrawerFocus()
         onFocusChanged?()
     }
 

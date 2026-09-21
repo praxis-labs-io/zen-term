@@ -50,7 +50,7 @@ final class WindowKeyFocusTests: WindowTestCase {
     func test_anotherWindowTakingKey_blursTheFocusedPaneBelowTheSeam() throws {
         let c = makeWindow()
         let pane = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
-        XCTAssertNotEqual(pane.focusRenders.last, false, "precondition: the pane starts focused")
+        XCTAssertEqual(pane.focusRenders.last, true, "precondition: the pane starts focused")
 
         resignKey(c)
 
@@ -112,6 +112,19 @@ final class WindowKeyFocusTests: WindowTestCase {
 
         XCTAssertEqual(
             drawer.focusRenders.last, false, "the sidebar taking focus does not hand the drawer back its cursor")
+    }
+
+    func test_aDrawerOpenedInANonKeyWindow_doesNotReportFocused() throws {
+        let c = makeWindow()
+        resignKey(c)
+
+        c.handle(.toggleRightDrawer)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+
+        let drawer = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
+        XCTAssertEqual(
+            drawer.focusRenders.last, false,
+            "taking first responder tells libghostty focused, so the gate has to run after it")
     }
 
     func test_aModeEndingWhileTheWindowIsNotKey_doesNotHandTheCursorBack() throws {
