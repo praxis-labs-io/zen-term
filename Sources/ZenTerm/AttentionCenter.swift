@@ -35,7 +35,7 @@ final class AttentionCenter {
     private func set(_ windowID: Int, _ entry: WindowAttention?) {
         guard byWindow[windowID] != entry else { return }
         byWindow[windowID] = entry
-        NotificationCenter.default.post(name: .attentionCenterDidChange, object: nil)
+        NotificationCenter.default.post(name: .attentionCenterDidChange, object: windowID)
     }
 
     /// Every agent waiting outside this window.
@@ -48,8 +48,12 @@ final class AttentionCenter {
         byWindow.values.filter { $0.windowID != windowID }.count
     }
 
-    /// Oldest first, so the one that has waited longest reads first.
+    /// Oldest first, so the one that has waited longest reads first. Ties resolve by window, never by luck.
     var waiting: [WindowAttention] {
-        byWindow.values.sorted { ($0.since ?? .distantFuture) < ($1.since ?? .distantFuture) }
+        byWindow.values.sorted {
+            let a = $0.since ?? .distantFuture
+            let b = $1.since ?? .distantFuture
+            return a == b ? $0.windowID < $1.windowID : a < b
+        }
     }
 }

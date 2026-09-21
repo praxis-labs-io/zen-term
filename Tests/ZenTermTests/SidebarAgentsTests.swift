@@ -591,6 +591,28 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(waitingRow(a)?.textForTesting, "2 waiting in another window")
     }
 
+    func test_aStaleRow_raisesNothing() throws {
+        let b = makeWindow()
+        var raised = false
+
+        XCTAssertFalse(b.revealLongestWaitingAgent { raised = true })
+        XCTAssertFalse(raised, "nothing waits there, so nothing is disturbed")
+    }
+
+    func test_theRowRefusesAWorktree_theWayAnAgentRowDoes() throws {
+        let a = makeWindow()
+        let b = makeWindow()
+        let agent = try focusedAgent(b)
+        b.newTabForTesting()
+        notify(agent, "Wants to run swift test")
+        let row = try XCTUnwrap(waitingRow(a))
+
+        a.sidebarForTesting.view.focusStop(.waitingElsewhere)
+        XCTAssertTrue(a.window.firstResponder === row, "precondition")
+
+        XCTAssertEqual(a.sidebarForTesting.focusedWorktreeRefusal, .agent, "a silent no-op is not an answer")
+    }
+
     func test_theCountIsAgents_andBothHalvesOfTheCopyFollowIt() throws {
         let a = makeWindow()
         let b = makeWindow()

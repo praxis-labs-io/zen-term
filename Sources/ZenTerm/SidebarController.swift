@@ -385,7 +385,7 @@ final class SidebarController {
     }
 
     var focusedWorktreeRefusal: NewWorktreeRefusal? {
-        if view.agentRowHasFocus { return .agent }
+        if view.agentsSectionHasFocus { return .agent }
         guard let row = view.focusedRow, let entry = entries.first(where: { $0.row == row }),
             !Self.rowItem(entry).makesWorktrees
         else { return nil }

@@ -450,8 +450,11 @@ final class WindowController: NSObject {
 
         attentionObserver = NotificationCenter.default.addObserver(
             forName: .attentionCenterDidChange, object: nil, queue: nil
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.renderAgents() }
+        ) { [weak self] note in
+            MainActor.assumeIsolated {
+                guard let self, note.object as? Int != self.windowID else { return }
+                self.renderAgents()
+            }
         }
 
         configObserver = NotificationCenter.default.addObserver(
@@ -2513,12 +2516,12 @@ final class WindowController: NSObject {
             })
     }
 
-    /// A surface is seen while it is on screen: its tab is active and, for a drawer, the drawer is open.
     // Layout is not enough: a pane you can see in a window you are not in has not been seen.
     private func isSeen(_ surface: SurfaceID?, in id: TabID) -> Bool {
         isOnScreen(surface, in: id) && Self.isPresent(window)
     }
 
+    /// A surface is on screen while its tab is active and, for a drawer, the drawer is open.
     private func isOnScreen(_ surface: SurfaceID?, in id: TabID) -> Bool {
         guard id == activeWorkspace.activeID else { return false }
         guard let surface else { return true }
@@ -2613,21 +2616,21 @@ final class WindowController: NSObject {
     private func jumpToWaitingElsewhere() {
         guard let target = AttentionCenter.shared.waiting.first(where: { $0.windowID != windowID })
         else { return }
-        _ = revealWaitingAgentElsewhere?(target.windowID)
+        if revealWaitingAgentElsewhere?(target.windowID) != true { renderAgents() }
     }
 
-    /// Lands on whatever has waited longest here: the agent's pane, or its tab when the pane has exited.
+    /// Lands on whatever has waited longest here, calling `raise` first. False, and nothing raised, when nothing waits.
     @discardableResult
-    func revealLongestWaitingAgent() -> Bool {
-        switch attention.waitingInOrder.first {
+    func revealLongestWaitingAgent(raising raise: () -> Void = {}) -> Bool {
+        guard let target = attention.waitingInOrder.first else { return false }
+        raise()
+        switch target {
         case .surface(let id):
             jumpToAgent(id)
         case .tab(let id):
             reveal(id)
             visit(id)
             renderAttention()
-        case nil:
-            return false
         }
         return true
     }
@@ -2984,6 +2987,8 @@ final class WindowController: NSObject {
     private func tearDown() {
         guard !didTearDown else { return }
         didTearDown = true
+        if let attentionObserver { NotificationCenter.default.removeObserver(attentionObserver) }
+        attentionObserver = nil
         AttentionCenter.shared.forget(windowID: windowID)
         pendingModal = nil
         cancelConfirm()
@@ -2993,8 +2998,6 @@ final class WindowController: NSObject {
         titlePoll = nil
         if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
         configObserver = nil
-        if let attentionObserver { NotificationCenter.default.removeObserver(attentionObserver) }
-        attentionObserver = nil
         floats.shutdown()
         sidebar.shutdown()
         for workspace in workspaces { workspace.shutdown() }

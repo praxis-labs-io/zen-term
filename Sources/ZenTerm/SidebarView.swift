@@ -153,13 +153,14 @@ final class SidebarView: NSView {
 
     // The section outlives this window's own agents: the row alone keeps it up.
     private func refreshAgentsSection() {
-        refreshWaitingRow()
+        let lostFocusedRow = refreshWaitingRow()
         arrangeAgents()
         let hidden = agentViews.isEmpty && waitingRow == nil
         agentsCaption.isHidden = hidden
         agentStack.isHidden = hidden
         (hidden ? contentEndsAtAgents : contentEndsAtRows)?.isActive = false
         (hidden ? contentEndsAtRows : contentEndsAtAgents)?.isActive = true
+        if lostFocusedRow { onLeave?() }
     }
 
     func renderWaitingElsewhere(agents: Int, windows: Int, index: Int) {
@@ -182,17 +183,18 @@ final class SidebarView: NSView {
         }
     }
 
-    private func refreshWaitingRow() {
+    // Answers whether the row holding keyboard focus went away, for the caller to act on once the section has settled.
+    private func refreshWaitingRow() -> Bool {
         guard waitingElsewhere.agents > 0 else {
-            guard let row = waitingRow else { return }
+            guard let row = waitingRow else { return false }
             let hadFocus = KeyboardFocus.isFocused(row, in: window)
             row.removeFromSuperview()
             waitingRow = nil
-            if hadFocus { onLeave?() }
-            return
+            return hadFocus
         }
         let row = waitingRow ?? makeWaitingRow()
         row.render(agents: waitingElsewhere.agents, windows: waitingElsewhere.windows)
+        return false
     }
 
     private func makeWaitingRow() -> SidebarWaitingElsewhereRow {
@@ -357,7 +359,9 @@ final class SidebarView: NSView {
 
     var hasFocus: Bool { focusStops.contains { KeyboardFocus.isFocused($0, in: window) } }
 
-    var agentRowHasFocus: Bool { orderedAgentRows.contains { KeyboardFocus.isFocused($0, in: window) } }
+    var agentsSectionHasFocus: Bool {
+        agentStack.arrangedSubviews.contains { KeyboardFocus.isFocused($0, in: window) }
+    }
 
     var focusedRow: SidebarRowID? { rows.first { KeyboardFocus.isFocused($0.value, in: window) }?.key }
 
