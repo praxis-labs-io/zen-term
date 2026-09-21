@@ -96,6 +96,29 @@ final class ToastPresenterTests: WindowTestCase {
         waitUntil(arrangedToasts(in: host).isEmpty, "the toast to auto-dismiss and be removed")
     }
 
+    func test_aToastRaisedWhereNobodyIsLooking_waitsRatherThanExpiring() {
+        let host = makeHost()
+        var isPresent = false
+        let presenter = ToastPresenter(
+            host: host, topInset: 12, trailingInset: 12, dismissAfter: 0.05,
+            isPresent: { isPresent })
+
+        presenter.show(content())
+        XCTAssertEqual(arrangedToasts(in: host).count, 1, "precondition: it was raised at all")
+
+        let pastTheDuration = Date().addingTimeInterval(0.4)
+        while Date() < pastTheDuration {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+        }
+        XCTAssertEqual(
+            arrangedToasts(in: host).count, 1, "well past its duration, and nobody has been there yet")
+
+        isPresent = true
+        NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+
+        waitUntil(arrangedToasts(in: host).isEmpty, "the countdown to start once you arrive")
+    }
+
     func test_dismiss_isIdempotent_removesExactlyOnce() {
         let host = makeHost()
         let presenter = ToastPresenter(host: host, topInset: 12, trailingInset: 12)
