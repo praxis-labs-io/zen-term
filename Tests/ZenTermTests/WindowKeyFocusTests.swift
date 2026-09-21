@@ -77,6 +77,29 @@ final class WindowKeyFocusTests: WindowTestCase {
         XCTAssertEqual(drawer.focusRenders.last, true)
     }
 
+    func test_aTabLeftBehind_readsUnfocused_andComesBackWhenItIsActiveAgain() throws {
+        let c = makeWindow()
+        let first = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
+
+        c.handle(.newTab)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(first.focusRenders.last, false, "only the active tab's pane reports focused")
+        let second = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
+        XCTAssertEqual(second.focusRenders.last, true)
+
+        resignKey(c)
+        becomeKey(c)
+
+        XCTAssertEqual(first.focusRenders.last, false, "a background tab stays unfocused across a key cycle")
+
+        c.selectTabForTesting(index: 0)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(first.focusRenders.last, true, "and gets its cursor back when you return to it")
+        XCTAssertEqual(second.focusRenders.last, false)
+    }
+
     func test_revealingTheSidebar_leavesAModeHoldingTheDrawerUnfocused() throws {
         let c = makeWindow()
         c.handle(.toggleRightDrawer)

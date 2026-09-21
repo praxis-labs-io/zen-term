@@ -829,9 +829,12 @@ final class WindowController: NSObject {
         syncWindowFocus()
     }
 
+    // One surface reports focused: the focused one in the key window's active tab, as libghostty's own apprt does.
     private func syncWindowFocus() {
         activeController?.setHaloVisible(!sidebar.hasFocus && windowIsKey && !sidebar.isRevealed)
-        activeController?.setWindowIsKey(windowIsKey)
+        for controller in allTabControllers {
+            controller.setWindowIsKey(windowIsKey && controller === activeController)
+        }
     }
 
     // Below `tabBar`, so the ⌘W guard toast fired over an open float stays visible.
