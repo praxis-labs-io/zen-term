@@ -15,7 +15,7 @@ find somewhere to run it.
 Release notes, documentation, and guides live at
 [zenterm.io](https://zenterm.io).
 
-![Neovim in the main pane, a dev server in the bottom drawer, and an agent in the right drawer, in one tab](docs/images/drawers.png)
+![An editor in the main pane, a dev server in the labeled bottom drawer, and an agent in the right drawer, with the workspace name leading the tab bar](docs/images/drawers.png)
 
 One tab, three shells. ⌘B opens the drawer along the bottom, ⌘\ opens the one
 down the right side, and each runs its own shell with its chord printed in the
@@ -108,21 +108,27 @@ the padding around them are both yours to set.
 
 The same window on Catppuccin Latte. A theme colors the terminal, the tab bar,
 the toolbar, the focus halo, and Settings itself, so a light theme stays light
-through the whole app. 17 ship, each marked Dark or Light in the picker, and a
+through the whole app. 64 ship, each marked Dark or Light in the picker, and a
 `theme = ` line pointed at any Ghostty theme file works the same way.
 
-![The command palette open over an empty pane, its Tools group listing each command with the shortcut that runs it](docs/images/palette.png)
+![The command palette open over the panes, its rows grouped by Workspaces, Tabs, Window and Panes, each carrying the shortcut that runs it](docs/images/palette.png)
 
 The palette filters as you type and runs the selection on Enter. Each row carries
 the shortcut that runs it, read from your config, so a rebind shows up here right
 away.
 
-![The workspace picker open, listing named workspaces with a search field above them](docs/images/workspaces.png)
+![The workspace picker open over the sidebar, its rows grouped into Open, Open Elsewhere and Configured, with New Workspace at the top and Add Workspace at the foot](docs/images/workspaces.png)
 
 The workspaces you named, each one a folder plus a layout. ZenTerm does not scan
 directories to fill this list, so it holds only what you put there. Several open at
 once in a window, each holding its own tabs, and the sidebar on ⌘⌃S lists them with
 their worktrees and the agents running in them.
+
+![The docked sidebar listing open workspaces with their branch, worktrees nested under their workspace, and an Agents section marking the one waiting](docs/images/sidebar.png)
+
+The sidebar is the window's list of what is open: a workspace with its branch, its
+worktrees nested under it, and the agents running in the window. A row carries a
+dot while an agent inside it waits on you.
 
 ![lazygit open as a tool float over the panes, with its own numbered panes, and the work still visible around it](docs/images/tool-float.png)
 
@@ -131,6 +137,10 @@ that toggles it. It opens over the work instead of taking a pane, so the panes
 and drawers underneath keep their places. `persist:dir` keeps one warm per
 repository. The first open is cold and every reopen is instant.
 
+The images above are rendered from ZenTerm's design boards rather than captured
+from a running window, so they show the layout and the chrome at the current
+release.
+
 ## Configure it
 
 One file, `~/.config/zen-term/config`, in Ghostty's config syntax. Settings
@@ -138,7 +148,7 @@ writes the same file, so the two never disagree.
 [`docs/config/config`](docs/config/config) is the annotated reference: every key,
 its default, and what a bad line does.
 
-![The Appearance pane of Settings: theme, accent color, window buttons, toolbar buttons, backdrop alpha, window gutter, and pane gap](docs/images/settings.png)
+![The Appearance pane of Settings with the theme menu open: theme, accent color, window buttons, toolbar buttons, backdrop alpha, window gutter and pane gap](docs/images/settings.png)
 
 Picking a theme here writes the `theme =` line you would have typed. The row says
 it applies instantly, and it recolors the terminal, the tabs, and the chrome
