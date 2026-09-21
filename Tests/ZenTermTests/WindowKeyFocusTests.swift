@@ -114,6 +114,22 @@ final class WindowKeyFocusTests: WindowTestCase {
             drawer.focusRenders.last, false, "the sidebar taking focus does not hand the drawer back its cursor")
     }
 
+    func test_aModeEndingWhenFocusMovesToADrawer_givesThePaneItsCursorBack() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
+        c.handle(.toggleScrollMode)
+        XCTAssertEqual(pane.focusRenders.last, false, "precondition: the mode blurs the pane")
+
+        c.handle(.toggleRightDrawer)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        c.handle(.toggleRightDrawer)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(
+            pane.focusRenders.last, true,
+            "the mode ended while the drawer held focus, and the pane's render flag has to come back with it")
+    }
+
     func test_aDrawerOpenedInANonKeyWindow_doesNotReportFocused() throws {
         let c = makeWindow()
         resignKey(c)

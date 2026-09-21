@@ -536,7 +536,7 @@ final class TabController: NSObject {
 
     func setFocusedSurfaceRendersFocused(_ focused: Bool) {
         focusedSurfaceRendersFocused = focused
-        if focusedPanel == .pane { paneCanvas.setFocusedSurfaceRendersFocused(focused) }
+        paneCanvas.setFocusedSurfaceRendersFocused(focused)
         syncDrawerFocus()
     }
 
