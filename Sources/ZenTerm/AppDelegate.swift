@@ -216,6 +216,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             other.activateWorkspace(id)
             return true
         }
+        wc.revealWaitingAgentElsewhere = { [weak self, weak wc] window in
+            guard let other = self?.windows.first(where: { $0 !== wc && $0.windowID == window })
+            else { return false }
+            NSApp.activate(ignoringOtherApps: true)
+            if other.window.isMiniaturized { other.window.deminiaturize(nil) }
+            other.window.makeKeyAndOrderFront(nil)
+            return other.revealLongestWaitingAgent()
+        }
         wc.isWorkspaceOpenInAnotherWindow = { [weak self, weak wc] path in
             self?.otherWindow(holding: path, asking: wc) != nil
         }

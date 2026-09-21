@@ -11,9 +11,11 @@ final class DrawerAttentionTests: WindowTestCase {
     private var originalConfig: GeneralConfig!
     private var controller: WindowController?
     private var spawned: [RecordingSurface] = []
+    private let originalPresence = WindowController.isPresent
 
     override func setUpWithError() throws {
         try super.setUpWithError()
+        WindowController.isPresent = { _ in true }
         originalOverride = TerminalSurfaceFactory.makeOverride
         originalConfig = GeneralConfig.current
         Motion.isReduceMotionEnabled = { true }
@@ -33,6 +35,7 @@ final class DrawerAttentionTests: WindowTestCase {
         spawned = []
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
+        WindowController.isPresent = originalPresence
         try super.tearDownWithError()
     }
 
@@ -195,5 +198,17 @@ final class DrawerAttentionTests: WindowTestCase {
 
         XCTAssertNil(c.attentionStateForTesting(tabIndex: 0), "a pane in the tab you are in is on screen")
         XCTAssertTrue(toastViews(c).isEmpty)
+    }
+
+    func test_aPaneInTheActiveTabOfAWindowYouAreNotIn_isNotSeen() throws {
+        let c = makeWindow()
+        WindowController.isPresent = { _ in false }
+
+        c.notifyAgentForTesting(tabIndex: 0, message: "needs you")
+        drainMainQueue()
+
+        XCTAssertEqual(
+            c.attentionStateForTesting(tabIndex: 0), .waiting, "on screen is not seen from another window")
+        XCTAssertEqual(toastViews(c).count, 1, "the card is there when you arrive")
     }
 }

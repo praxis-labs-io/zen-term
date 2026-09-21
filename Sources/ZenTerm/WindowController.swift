@@ -289,6 +289,9 @@ final class WindowController: NSObject {
     private var titlePoll: Timer?
 
     private var configObserver: NSObjectProtocol?
+    private var attentionObserver: NSObjectProtocol?
+    /// Raises the window holding the agent that has waited longest and lands on it. False when it has gone.
+    var revealWaitingAgentElsewhere: ((Int) -> Bool)?
 
     var onClosed: (() -> Void)?
 
@@ -431,6 +434,7 @@ final class WindowController: NSObject {
         onNewWorktree = { [weak self] in self?.createWorktreeFromSidebar($0) }
         onCloseWorkspace = { [weak self] in self?.requestCloseWorkspace(id: $0) }
         sidebar.onJump = { [weak self] in self?.jumpToAgent($0) }
+        sidebar.onJumpElsewhere = { [weak self] in self?.jumpToWaitingElsewhere() }
         onOpenWorkspace = { [weak self] in self?.handle(.toggleRepoPicker) }
         onBottom = { [weak self] in self?.handle(.toggleBottomDrawer) }
         onRight = { [weak self] in self?.handle(.toggleRightDrawer) }
@@ -443,6 +447,12 @@ final class WindowController: NSObject {
         yieldSidebarIfNarrow()
         window.delegate = self
         wireModes()
+
+        attentionObserver = NotificationCenter.default.addObserver(
+            forName: .attentionCenterDidChange, object: nil, queue: nil
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.renderAgents() }
+        }
 
         configObserver = NotificationCenter.default.addObserver(
             forName: .configDidChange, object: nil, queue: .main
@@ -2321,7 +2331,9 @@ final class WindowController: NSObject {
                     windowID: self.windowID, tabID: target, title: title + (tail ?? ""), body: message)
             }
 
-            let shown = self.floats.activeID == spec.id && self.floats.surfaceID(spec.id) == surface
+            let shown =
+                self.floats.activeID == spec.id && self.floats.surfaceID(spec.id) == surface
+                && Self.isPresent(self.window)
             let before = self.attentionSnapshot(surface, in: target)
             surface.map { self.attention.record($0, .waiting, seen: shown, focused: self.isFocused($0)) }
             surface.map { self.agentSignalled($0, name: notification.title, message: message) }
@@ -2357,7 +2369,7 @@ final class WindowController: NSObject {
                     title: self.attentionTitle(of: id) + (self.drawerTail(edge) ?? ""), body: message)
             }
 
-            let seen = self.isOnScreen(surface, in: id)
+            let seen = self.isSeen(surface, in: id)
             let before = self.attentionSnapshot(surface, in: id)
             surface.map { self.attention.record($0, .waiting, seen: seen, focused: self.isFocused($0)) }
             surface.map { self.agentSignalled($0, name: notification.title, message: message) }
@@ -2502,6 +2514,11 @@ final class WindowController: NSObject {
     }
 
     /// A surface is seen while it is on screen: its tab is active and, for a drawer, the drawer is open.
+    // Layout is not enough: a pane you can see in a window you are not in has not been seen.
+    private func isSeen(_ surface: SurfaceID?, in id: TabID) -> Bool {
+        isOnScreen(surface, in: id) && Self.isPresent(window)
+    }
+
     private func isOnScreen(_ surface: SurfaceID?, in id: TabID) -> Bool {
         guard id == activeWorkspace.activeID else { return false }
         guard let surface else { return true }
@@ -2575,7 +2592,44 @@ final class WindowController: NSObject {
         for (id, agent) in agents.agents where agent.hasExited && attention.agentState(of: id) == .idle {
             agents.drop(id)
         }
-        sidebar.renderAgents(agentItems())
+        let items = agentItems()
+        sidebar.renderAgents(items)
+        let center = AttentionCenter.shared
+        sidebar.renderWaitingElsewhere(
+            agents: center.waitingCount(excluding: windowID),
+            windows: center.waitingWindows(excluding: windowID),
+            index: waitingElsewherePlace(among: items))
+    }
+
+    // The row queues on the same rule the rows use: waiting first, and among those the oldest reads first.
+    private func waitingElsewherePlace(among items: [SidebarAgentItem]) -> Int {
+        guard let since = AttentionCenter.shared.waiting.first(where: { $0.windowID != windowID })?.since
+        else { return items.count }
+        return items.prefix {
+            $0.state == .waiting && (attention.agentSince(of: $0.id) ?? .distantFuture) <= since
+        }.count
+    }
+
+    private func jumpToWaitingElsewhere() {
+        guard let target = AttentionCenter.shared.waiting.first(where: { $0.windowID != windowID })
+        else { return }
+        _ = revealWaitingAgentElsewhere?(target.windowID)
+    }
+
+    /// Lands on whatever has waited longest here: the agent's pane, or its tab when the pane has exited.
+    @discardableResult
+    func revealLongestWaitingAgent() -> Bool {
+        switch attention.waitingInOrder.first {
+        case .surface(let id):
+            jumpToAgent(id)
+        case .tab(let id):
+            reveal(id)
+            visit(id)
+            renderAttention()
+        case nil:
+            return false
+        }
+        return true
     }
 
     private func agentItems() -> [SidebarAgentItem] {
@@ -2934,6 +2988,8 @@ final class WindowController: NSObject {
         titlePoll = nil
         if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
         configObserver = nil
+        if let attentionObserver { NotificationCenter.default.removeObserver(attentionObserver) }
+        attentionObserver = nil
         floats.shutdown()
         sidebar.shutdown()
         for workspace in workspaces { workspace.shutdown() }
