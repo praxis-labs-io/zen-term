@@ -209,6 +209,13 @@ final class DrawerAttentionTests: WindowTestCase {
 
         XCTAssertEqual(
             toastViews(c).count, 1, "auto means five seconds of your attention, not five of nobody's")
+
+        WindowController.isPresent = { _ in true }
+        NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+
+        waitUntil(
+            toastViews(c).isEmpty,
+            "the countdown to run once you arrive, which proves auto took and there was one to hold")
     }
 
     func test_aPaneInTheActiveTab_isStillSeen() throws {

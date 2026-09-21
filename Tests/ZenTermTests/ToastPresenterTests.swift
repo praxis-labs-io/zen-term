@@ -119,6 +119,32 @@ final class ToastPresenterTests: WindowTestCase {
         waitUntil(arrangedToasts(in: host).isEmpty, "the countdown to start once you arrive")
     }
 
+    func test_leavingPartWayThroughTheCountdown_handsTheToastBack() {
+        let host = makeHost()
+        var isPresent = true
+        let presenter = ToastPresenter(
+            host: host, topInset: 12, trailingInset: 12, dismissAfter: 0.05,
+            isPresent: { isPresent })
+
+        presenter.show(content())
+        XCTAssertEqual(arrangedToasts(in: host).count, 1, "precondition: it was raised, and counting")
+
+        isPresent = false
+        NotificationCenter.default.post(name: NSApplication.didResignActiveNotification, object: nil)
+
+        let pastTheDuration = Date().addingTimeInterval(0.4)
+        while Date() < pastTheDuration {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+        }
+        XCTAssertEqual(
+            arrangedToasts(in: host).count, 1, "you walked away, so it stopped counting where it was")
+
+        isPresent = true
+        NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+
+        waitUntil(arrangedToasts(in: host).isEmpty, "the countdown to resume once you are back")
+    }
+
     func test_dismiss_isIdempotent_removesExactlyOnce() {
         let host = makeHost()
         let presenter = ToastPresenter(host: host, topInset: 12, trailingInset: 12)

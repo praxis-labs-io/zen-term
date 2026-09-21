@@ -9,6 +9,7 @@ final class ToastPresenter {
     /// Whether the user is in the window this draws into. Defaults to yes, so a caller that cannot tell keeps today's behavior.
     private let isPresent: () -> Bool
     private let waitingForYou = NSHashTable<ToastView>.weakObjects()
+    private let countdowns = NSMapTable<ToastView, DispatchWorkItem>.weakToStrongObjects()
     private var presenceObservers: [NSObjectProtocol] = []
 
     init(
@@ -28,8 +29,14 @@ final class ToastPresenter {
         NSLayoutConstraint.activate([topConstraint, trailingConstraint])
         for name in [NSWindow.didBecomeKeyNotification, NSApplication.didBecomeActiveNotification] {
             presenceObservers.append(
-                NotificationCenter.default.addObserver(forName: name, object: nil, queue: nil) {
+                NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) {
                     [weak self] _ in self?.startCountdownsNowSomeoneIsHere()
+                })
+        }
+        for name in [NSWindow.didResignKeyNotification, NSApplication.didResignActiveNotification] {
+            presenceObservers.append(
+                NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) {
+                    [weak self] _ in self?.pauseCountdownsNowNobodyIsHere()
                 })
         }
     }
@@ -60,13 +67,18 @@ final class ToastPresenter {
         armAutoDismiss(toast)
     }
 
-    // A toast raised in a window nobody is in would otherwise expire before anyone arrived.
+    // A toast counts down only while you are in the window it is in, whether you were there when it
+    // arrived or walked away halfway through. Coming back restarts it, so `auto` is always a whole
+    // duration of your attention rather than whatever was left of it.
     private func armAutoDismiss(_ toast: ToastView) {
         guard isPresent() else { return waitingForYou.add(toast) }
-        DispatchQueue.main.asyncAfter(deadline: .now() + dismissAfter) { [weak self, weak toast] in
-            guard let toast else { return }
-            self?.dismiss(toast)
+        let countdown = DispatchWorkItem { [weak self, weak toast] in
+            guard let self, let toast else { return }
+            self.countdowns.removeObject(forKey: toast)
+            self.dismiss(toast)
         }
+        countdowns.setObject(countdown, forKey: toast)
+        DispatchQueue.main.asyncAfter(deadline: .now() + dismissAfter, execute: countdown)
     }
 
     private func startCountdownsNowSomeoneIsHere() {
@@ -74,6 +86,15 @@ final class ToastPresenter {
         let held = waitingForYou.allObjects
         waitingForYou.removeAllObjects()
         held.forEach(armAutoDismiss)
+    }
+
+    private func pauseCountdownsNowNobodyIsHere() {
+        guard !isPresent() else { return }
+        for toast in countdowns.keyEnumerator().allObjects.compactMap({ $0 as? ToastView }) {
+            countdowns.object(forKey: toast)?.cancel()
+            countdowns.removeObject(forKey: toast)
+            waitingForYou.add(toast)
+        }
     }
 
     @discardableResult
@@ -135,6 +156,9 @@ final class ToastPresenter {
     }
 
     func dismiss(_ toast: ToastView) {
+        countdowns.object(forKey: toast)?.cancel()
+        countdowns.removeObject(forKey: toast)
+        waitingForYou.remove(toast)
         toast.animateOut { [weak self, weak toast] in
             guard let self, let toast else { return }
             self.removeCollapsing(toast)
