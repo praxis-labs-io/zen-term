@@ -535,16 +535,18 @@ final class TabController: NSObject {
     private var windowIsKey = true
 
     func setFocusedSurfaceRendersFocused(_ focused: Bool) {
-        switch focusedPanel {
-        case .pane: paneCanvas.setFocusedSurfaceRendersFocused(focused)
-        case .bottomDrawer: bottomDrawerSurface?.setFocused(focused && windowIsKey)
-        case .rightDrawer: rightDrawerSurface?.setFocused(focused && windowIsKey)
-        }
+        focusedSurfaceRendersFocused = focused
+        if focusedPanel == .pane { paneCanvas.setFocusedSurfaceRendersFocused(focused) }
+        syncDrawerFocus()
     }
 
+    // Stored for the drawers, which have no canvas to hold it: `syncDrawerFocus` runs on more than focus moves.
+    private var focusedSurfaceRendersFocused = true
+
     private func syncDrawerFocus() {
-        bottomDrawerSurface?.setFocused(windowIsKey && focusedPanel == .bottomDrawer)
-        rightDrawerSurface?.setFocused(windowIsKey && focusedPanel == .rightDrawer)
+        let renders = focusedSurfaceRendersFocused && windowIsKey
+        bottomDrawerSurface?.setFocused(renders && focusedPanel == .bottomDrawer)
+        rightDrawerSurface?.setFocused(renders && focusedPanel == .rightDrawer)
     }
 
     private func restoreFocusAfterClosingDrawer(otherOpen: Bool, other: DrawerEdge) {

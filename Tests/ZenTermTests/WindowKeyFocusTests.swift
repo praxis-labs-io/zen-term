@@ -9,18 +9,13 @@ final class WindowKeyFocusTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var originalConfig: GeneralConfig!
     private var controllers: [WindowController] = []
-    private var spawned: [RecordingSurface] = []
 
     override func setUpWithError() throws {
         try super.setUpWithError()
         originalOverride = TerminalSurfaceFactory.makeOverride
         originalConfig = GeneralConfig.current
         Motion.isReduceMotionEnabled = { true }
-        TerminalSurfaceFactory.makeOverride = { [weak self] in
-            let surface = RecordingSurface()
-            self?.spawned.append(surface)
-            return surface
-        }
+        TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
         GeneralConfig.setCurrentForTesting(.builtIn)
     }
 
@@ -30,7 +25,6 @@ final class WindowKeyFocusTests: WindowTestCase {
             AttentionCenter.shared.forget(windowID: controller.windowID)
         }
         controllers = []
-        spawned = []
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
         try super.tearDownWithError()
@@ -81,6 +75,20 @@ final class WindowKeyFocusTests: WindowTestCase {
         becomeKey(c)
 
         XCTAssertEqual(drawer.focusRenders.last, true)
+    }
+
+    func test_revealingTheSidebar_leavesAModeHoldingTheDrawerUnfocused() throws {
+        let c = makeWindow()
+        c.handle(.toggleRightDrawer)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let drawer = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
+        c.handle(.toggleScrollMode)
+        XCTAssertEqual(drawer.focusRenders.last, false, "precondition: the mode renders the drawer unfocused")
+
+        c.sidebarForTesting.focusActiveRow()
+
+        XCTAssertEqual(
+            drawer.focusRenders.last, false, "the sidebar taking focus does not hand the drawer back its cursor")
     }
 
     func test_aModeEndingWhileTheWindowIsNotKey_doesNotHandTheCursorBack() throws {
