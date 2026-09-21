@@ -49,8 +49,9 @@ final class AttentionStore {
         )
     }
 
-    func record(_ id: SurfaceID, _ event: SurfaceAttention, seen: Bool, focused: Bool) {
-        if !focused { latchAgent(id, event) }
+    // Focus gates the toast, never the agent latch: the notification is one-shot, so blocked outlives a glance.
+    func record(_ id: SurfaceID, _ event: SurfaceAttention, seen: Bool) {
+        latchAgent(id, event)
         guard !seen else { return markSeen(id) }
         guard var entry = entries[id] else { return }
         entry.latched = max(entry.latched, event)
@@ -60,10 +61,10 @@ final class AttentionStore {
     }
 
     /// A level, not an event: progress clearing has to be able to lower it again.
-    func setWorking(_ id: SurfaceID, _ on: Bool, focused: Bool) {
+    func setWorking(_ id: SurfaceID, _ on: Bool) {
         guard let wasWorking = entries[id]?.working else { return }
         entries[id]?.working = on
-        if wasWorking, !on, !focused { latchAgent(id, .completed) }
+        if wasWorking, !on { latchAgent(id, .completed) }
         if !wasWorking, on, entries[id]?.agentLatched == .completed {
             entries[id]?.agentLatched = .idle
             entries[id]?.agentSince = nil

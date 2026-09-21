@@ -2338,7 +2338,7 @@ final class WindowController: NSObject {
                 self.floats.activeID == spec.id && self.floats.surfaceID(spec.id) == surface
                 && Self.isPresent(self.window)
             let before = self.attentionSnapshot(surface, in: target)
-            surface.map { self.attention.record($0, .waiting, seen: shown, focused: self.isFocused($0)) }
+            surface.map { self.attention.record($0, .waiting, seen: shown) }
             surface.map { self.agentSignalled($0, name: notification.title, message: message) }
             self.renderAgents()
             if self.attentionSnapshot(surface, in: target) != before { self.renderAttention() }
@@ -2374,7 +2374,7 @@ final class WindowController: NSObject {
 
             let seen = self.isSeen(surface, in: id)
             let before = self.attentionSnapshot(surface, in: id)
-            surface.map { self.attention.record($0, .waiting, seen: seen, focused: self.isFocused($0)) }
+            surface.map { self.attention.record($0, .waiting, seen: seen) }
             surface.map { self.agentSignalled($0, name: notification.title, message: message) }
             self.renderAgents()
             if self.attentionSnapshot(surface, in: id) != before { self.renderAttention() }
@@ -2396,7 +2396,7 @@ final class WindowController: NSObject {
                 self.attention.state(tab: id) != .waiting
             else { return }
 
-            surface.map { self.attention.record($0, .completed, seen: false, focused: false) }
+            surface.map { self.attention.record($0, .completed, seen: false) }
             self.presentCompletedToast(for: id, surface: surface, result: result)
             self.renderAttention()
         }
@@ -2411,7 +2411,7 @@ final class WindowController: NSObject {
             if isWorking, !self.attention.isWorking(surface) {
                 self.agentSignalled(surface, name: "", message: nil)
             }
-            self.attention.setWorking(surface, isWorking, focused: self.isFocused(surface))
+            self.attention.setWorking(surface, isWorking)
             if self.attention.state(of: surface) != before { self.renderDock() }
             self.renderAgents()
         }
@@ -2569,7 +2569,7 @@ final class WindowController: NSObject {
         let failed = result.exitCode.map { $0 != 0 } ?? false
         agents.markExited(surface, failed: failed, message: Self.commandResultMessage(result))
         attention.endAgent(surface)
-        if failed, !isFocused(surface) { attention.latchAgent(surface, .completed) }
+        if failed { attention.latchAgent(surface, .completed) }
         renderAgents()
     }
 

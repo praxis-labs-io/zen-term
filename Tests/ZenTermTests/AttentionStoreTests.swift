@@ -19,10 +19,10 @@ final class AttentionStoreTests: XCTestCase {
         store.register(finished, tab: tab)
         store.register(asked, tab: tab)
 
-        store.record(finished, .completed, seen: false, focused: false)
+        store.record(finished, .completed, seen: false)
         store.release(finished)
         clock = Date(timeIntervalSince1970: 200)
-        store.record(asked, .waiting, seen: false, focused: false)
+        store.record(asked, .waiting, seen: false)
         store.release(asked)
 
         XCTAssertEqual(store.state(tab: tab), .waiting, "precondition: the tab still asks")
@@ -36,7 +36,7 @@ final class AttentionStoreTests: XCTestCase {
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
 
-        store.record(pane, .waiting, seen: false, focused: false)
+        store.record(pane, .waiting, seen: false)
 
         XCTAssertEqual(store.state(tab: tab), .waiting)
     }
@@ -46,7 +46,7 @@ final class AttentionStoreTests: XCTestCase {
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
 
-        store.record(pane, .waiting, seen: true, focused: false)
+        store.record(pane, .waiting, seen: true)
 
         XCTAssertEqual(store.state(tab: tab), .idle)
     }
@@ -56,8 +56,8 @@ final class AttentionStoreTests: XCTestCase {
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
 
-        store.record(pane, .waiting, seen: false, focused: false)
-        store.record(pane, .completed, seen: false, focused: false)
+        store.record(pane, .waiting, seen: false)
+        store.record(pane, .completed, seen: false)
 
         XCTAssertEqual(store.state(tab: tab), .waiting)
     }
@@ -67,8 +67,8 @@ final class AttentionStoreTests: XCTestCase {
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
 
-        store.record(pane, .completed, seen: false, focused: false)
-        store.record(pane, .waiting, seen: false, focused: false)
+        store.record(pane, .completed, seen: false)
+        store.record(pane, .waiting, seen: false)
 
         XCTAssertEqual(store.state(tab: tab), .waiting)
     }
@@ -80,8 +80,8 @@ final class AttentionStoreTests: XCTestCase {
         store.register(pane, tab: tab)
         store.register(drawer, tab: tab)
 
-        store.record(pane, .completed, seen: false, focused: false)
-        store.record(drawer, .waiting, seen: false, focused: false)
+        store.record(pane, .completed, seen: false)
+        store.record(drawer, .waiting, seen: false)
 
         XCTAssertEqual(store.state(tab: tab), .waiting)
         XCTAssertEqual(store.state(of: pane), .completed)
@@ -92,9 +92,9 @@ final class AttentionStoreTests: XCTestCase {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.record(pane, .waiting, seen: true, focused: false)
+        store.record(pane, .waiting, seen: true)
 
-        store.record(pane, .completed, seen: false, focused: false)
+        store.record(pane, .completed, seen: false)
 
         XCTAssertEqual(store.state(tab: tab), .completed)
     }
@@ -105,8 +105,8 @@ final class AttentionStoreTests: XCTestCase {
         let drawer = SurfaceIDs.mint()
         store.register(pane, tab: tab)
         store.register(drawer, tab: tab)
-        store.record(pane, .waiting, seen: false, focused: false)
-        store.record(drawer, .completed, seen: false, focused: false)
+        store.record(pane, .waiting, seen: false)
+        store.record(drawer, .completed, seen: false)
 
         store.markSeen(tab: tab)
 
@@ -117,10 +117,10 @@ final class AttentionStoreTests: XCTestCase {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.record(pane, .waiting, seen: false, focused: false)
+        store.record(pane, .waiting, seen: false)
         store.markSeen(tab: tab)
 
-        store.record(pane, .waiting, seen: false, focused: false)
+        store.record(pane, .waiting, seen: false)
 
         XCTAssertEqual(store.state(tab: tab), .waiting)
     }
@@ -129,7 +129,7 @@ final class AttentionStoreTests: XCTestCase {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.record(pane, .waiting, seen: false, focused: false)
+        store.record(pane, .waiting, seen: false)
 
         store.release(pane)
 
@@ -140,7 +140,7 @@ final class AttentionStoreTests: XCTestCase {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.record(pane, .waiting, seen: true, focused: false)
+        store.record(pane, .waiting, seen: true)
 
         store.release(pane)
 
@@ -151,7 +151,7 @@ final class AttentionStoreTests: XCTestCase {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.record(pane, .waiting, seen: false, focused: false)
+        store.record(pane, .waiting, seen: false)
         store.release(pane)
 
         store.visit(tab) { _ in true }
@@ -165,8 +165,8 @@ final class AttentionStoreTests: XCTestCase {
         let drawer = SurfaceIDs.mint()
         store.register(pane, tab: tab)
         store.register(drawer, tab: tab)
-        store.record(pane, .completed, seen: false, focused: false)
-        store.record(drawer, .waiting, seen: false, focused: false)
+        store.record(pane, .completed, seen: false)
+        store.record(drawer, .waiting, seen: false)
 
         store.visit(tab) { $0 == pane }
 
@@ -179,10 +179,10 @@ final class AttentionStoreTests: XCTestCase {
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
 
-        store.setWorking(pane, true, focused: false)
+        store.setWorking(pane, true)
         XCTAssertEqual(store.state(tab: tab), .working)
 
-        store.setWorking(pane, false, focused: false)
+        store.setWorking(pane, false)
         XCTAssertEqual(store.state(tab: tab), .idle)
     }
 
@@ -190,9 +190,9 @@ final class AttentionStoreTests: XCTestCase {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.record(pane, .waiting, seen: false, focused: false)
+        store.record(pane, .waiting, seen: false)
 
-        store.setWorking(pane, true, focused: false)
+        store.setWorking(pane, true)
 
         XCTAssertEqual(store.state(tab: tab), .waiting)
     }
@@ -202,7 +202,7 @@ final class AttentionStoreTests: XCTestCase {
         let float = SurfaceIDs.mint()
         store.register(float, tab: nil)
 
-        store.record(float, .waiting, seen: false, focused: false)
+        store.record(float, .waiting, seen: false)
 
         XCTAssertEqual(store.state(tab: tab), .idle)
         XCTAssertEqual(store.windowState, .waiting)
@@ -215,8 +215,8 @@ final class AttentionStoreTests: XCTestCase {
         store.register(a, tab: tab)
         store.register(b, tab: other)
 
-        store.record(a, .completed, seen: false, focused: false)
-        store.record(b, .waiting, seen: false, focused: false)
+        store.record(a, .completed, seen: false)
+        store.record(b, .waiting, seen: false)
 
         XCTAssertEqual(store.windowState, .waiting)
     }
@@ -225,7 +225,7 @@ final class AttentionStoreTests: XCTestCase {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.record(pane, .waiting, seen: false, focused: false)
+        store.record(pane, .waiting, seen: false)
 
         store.dropTab(tab)
 
@@ -239,7 +239,7 @@ final class AttentionStoreTests: XCTestCase {
         store.register(pane, tab: tab)
 
         XCTAssertNil(store.waitingSince)
-        store.record(pane, .waiting, seen: false, focused: false)
+        store.record(pane, .waiting, seen: false)
         XCTAssertEqual(store.waitingSince, start)
 
         store.markSeen(tab: tab)
@@ -251,7 +251,7 @@ final class AttentionStoreTests: XCTestCase {
         let store = AttentionStore(now: { start })
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.record(pane, .waiting, seen: false, focused: false)
+        store.record(pane, .waiting, seen: false)
 
         store.release(pane)
 
@@ -264,8 +264,8 @@ final class AttentionStoreTests: XCTestCase {
         let loud = SurfaceIDs.mint()
         store.register(quiet, tab: tab)
         store.register(loud, tab: other)
-        store.record(quiet, .completed, seen: false, focused: false)
-        store.record(loud, .waiting, seen: false, focused: false)
+        store.record(quiet, .completed, seen: false)
+        store.record(loud, .waiting, seen: false)
 
         XCTAssertEqual(store.state(tabs: [tab, other]), .waiting)
     }
@@ -274,7 +274,7 @@ final class AttentionStoreTests: XCTestCase {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.record(pane, .waiting, seen: false, focused: false)
+        store.record(pane, .waiting, seen: false)
 
         XCTAssertEqual(store.state(tabs: []), .idle)
     }
@@ -283,7 +283,7 @@ final class AttentionStoreTests: XCTestCase {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.record(pane, .waiting, seen: false, focused: false)
+        store.record(pane, .waiting, seen: false)
 
         store.release(pane)
 
@@ -295,27 +295,40 @@ final class AttentionStoreTests: XCTestCase {
         let split = SurfaceIDs.mint()
         store.register(split, tab: tab)
 
-        store.record(split, .waiting, seen: true, focused: false)
+        store.record(split, .waiting, seen: true)
 
         XCTAssertEqual(store.state(tab: tab), .idle)
         XCTAssertEqual(store.agentState(of: split), .waiting)
     }
 
-    func test_anAgentThatAsksWhileFocused_latchesNothing() {
+    func test_anAgentThatAsksWhileWatched_stillReadsWaiting_andLeavesItsTabAlone() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
 
-        store.record(pane, .waiting, seen: true, focused: true)
+        store.record(pane, .waiting, seen: true)
 
-        XCTAssertEqual(store.agentState(of: pane), .idle)
+        XCTAssertEqual(store.agentState(of: pane), .waiting)
+        XCTAssertEqual(store.state(tab: tab), .idle)
+        XCTAssertEqual(store.waitingCount, 0)
+    }
+
+    func test_anAgentThatAsksWhileWatched_keepsWaiting_onceTheTabIsLeft() {
+        let store = makeStore()
+        let pane = SurfaceIDs.mint()
+        store.register(pane, tab: tab)
+        store.record(pane, .waiting, seen: true)
+
+        store.visit(tab) { _ in false }
+
+        XCTAssertEqual(store.agentState(of: pane), .waiting)
     }
 
     func test_answeringOrVisitingTheTab_leavesTheAgentWaiting() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.record(pane, .waiting, seen: false, focused: false)
+        store.record(pane, .waiting, seen: false)
 
         store.markSeen(tab: tab)
         store.visit(tab) { _ in true }
@@ -328,7 +341,7 @@ final class AttentionStoreTests: XCTestCase {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.record(pane, .waiting, seen: false, focused: false)
+        store.record(pane, .waiting, seen: false)
 
         store.markFocused(pane)
 
@@ -337,28 +350,17 @@ final class AttentionStoreTests: XCTestCase {
         XCTAssertNil(store.agentSince(of: pane))
     }
 
-    func test_aTurnEndingOutOfFocus_latchesDoneForTheAgentOnly() {
+    func test_aTurnEnding_latchesDoneForTheAgentOnly() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.setWorking(pane, true, focused: false)
+        store.setWorking(pane, true)
         XCTAssertEqual(store.agentState(of: pane), .working)
 
-        store.setWorking(pane, false, focused: false)
+        store.setWorking(pane, false)
 
         XCTAssertEqual(store.agentState(of: pane), .completed)
         XCTAssertEqual(store.state(tab: tab), .idle)
-    }
-
-    func test_aTurnEndingInFocus_leavesTheAgentIdle() {
-        let store = makeStore()
-        let pane = SurfaceIDs.mint()
-        store.register(pane, tab: tab)
-        store.setWorking(pane, true, focused: true)
-
-        store.setWorking(pane, false, focused: true)
-
-        XCTAssertEqual(store.agentState(of: pane), .idle)
     }
 
     func test_aNewTurn_replacesDone_butNeverWaiting() {
@@ -367,12 +369,12 @@ final class AttentionStoreTests: XCTestCase {
         let asking = SurfaceIDs.mint()
         store.register(done, tab: tab)
         store.register(asking, tab: tab)
-        store.setWorking(done, true, focused: false)
-        store.setWorking(done, false, focused: false)
-        store.record(asking, .waiting, seen: false, focused: false)
+        store.setWorking(done, true)
+        store.setWorking(done, false)
+        store.record(asking, .waiting, seen: false)
 
-        store.setWorking(done, true, focused: false)
-        store.setWorking(asking, true, focused: false)
+        store.setWorking(done, true)
+        store.setWorking(asking, true)
 
         XCTAssertEqual(store.agentState(of: done), .working)
         XCTAssertEqual(store.agentState(of: asking), .waiting)
@@ -383,7 +385,7 @@ final class AttentionStoreTests: XCTestCase {
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
 
-        store.setWorking(pane, false, focused: false)
+        store.setWorking(pane, false)
 
         XCTAssertEqual(store.agentState(of: pane), .idle)
     }
@@ -393,11 +395,11 @@ final class AttentionStoreTests: XCTestCase {
         let store = AttentionStore(now: { clock })
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.setWorking(pane, true, focused: false)
-        store.setWorking(pane, false, focused: false)
+        store.setWorking(pane, true)
+        store.setWorking(pane, false)
 
         clock = Date(timeIntervalSince1970: 200)
-        store.record(pane, .waiting, seen: false, focused: false)
+        store.record(pane, .waiting, seen: false)
 
         XCTAssertEqual(store.agentState(of: pane), .waiting)
         XCTAssertEqual(store.agentSince(of: pane), clock)
