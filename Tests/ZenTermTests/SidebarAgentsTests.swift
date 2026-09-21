@@ -540,6 +540,23 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(b.attentionStateForTesting(tab: try XCTUnwrap(b.activeTabIDForTesting)), .waiting)
     }
 
+    func test_answeringByFocusingThePane_clearsTheRowInTheOtherWindow() throws {
+        let a = makeWindow()
+        let b = makeWindow()
+        let agent = try focusedAgent(b)
+        _ = try split(b)
+        WindowController.isPresent = { [weak b] window in window !== b?.window }
+
+        notify(agent, "Wants to run swift test")
+        XCTAssertEqual(waitingRow(a)?.textForTesting, "1 waiting in another window", "precondition")
+
+        WindowController.isPresent = { _ in true }
+        focus(agent, in: b)
+
+        XCTAssertNil(
+            waitingRow(a), "focusing the pane answers it, and the count other windows read has to follow")
+    }
+
     func test_theCountIsAgents_andBothHalvesOfTheCopyFollowIt() throws {
         let a = makeWindow()
         let b = makeWindow()

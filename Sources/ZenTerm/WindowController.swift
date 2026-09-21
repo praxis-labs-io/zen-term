@@ -2548,6 +2548,7 @@ final class WindowController: NSObject {
             attention.markFocused(surface)
         }
         renderAgents()
+        publishAttention()
     }
 
     private func programLaunched(_ surface: SurfaceID, _ command: String) {
@@ -2913,6 +2914,11 @@ final class WindowController: NSObject {
     private func renderAttention() {
         renderTabBar()
         renderDock()
+        publishAttention()
+    }
+
+    /// What other windows read. Every path that changes what this window is waiting on has to end here.
+    private func publishAttention() {
         guard !didTearDown else { return }
         AttentionCenter.shared.update(
             windowID: windowID, waitingCount: attention.waitingCount, since: attention.waitingSince)
