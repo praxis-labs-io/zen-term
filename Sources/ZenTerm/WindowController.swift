@@ -2545,9 +2545,9 @@ final class WindowController: NSObject {
         return activeController?.focusedSurfaceID
     }
 
+    // Coming on screen answers the toast and the tab, never the agent: looking at a prompt is not answering it.
     private func answerFocusedAgent() {
         if let surface = focusedSurface, isFocused(surface) {
-            answerAgent(surface)
             attention.markSeen(surface)
         }
         renderAttention()

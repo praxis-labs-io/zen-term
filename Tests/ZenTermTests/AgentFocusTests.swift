@@ -54,7 +54,7 @@ final class AgentFocusTests: WindowTestCase {
         wait(for: [expectation], timeout: 2)
     }
 
-    func test_anAgentWaitingInAnUnfocusedSplit_staysWaitingUntilThatPaneIsFocused() throws {
+    func test_anAgentWaitingInAnUnfocusedSplit_staysWaitingUntilItIsAnswered() throws {
         let c = makeWindow()
         let first = try XCTUnwrap(c.focusedSurfaceIDForTesting)
         let firstSurface = try XCTUnwrap(spawned.first)
@@ -74,6 +74,9 @@ final class AgentFocusTests: WindowTestCase {
         XCTAssertEqual(c.agentStateForTesting(first), .waiting, "focusing another pane does not answer it")
 
         while c.focusedSurfaceIDForTesting != first { c.handle(.nextPane) }
+        XCTAssertEqual(c.agentStateForTesting(first), .waiting, "focusing it back is not answering it either")
+
+        c.answerTypedAgent()
 
         XCTAssertEqual(c.agentStateForTesting(first), .idle)
     }
@@ -109,6 +112,12 @@ final class AgentFocusTests: WindowTestCase {
 
         WindowController.isPresent = { _ in true }
         c.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
+
+        XCTAssertEqual(
+            c.agentStateForTesting(pane), .waiting,
+            "coming back to the window is looking at the prompt, not answering it")
+
+        c.answerTypedAgent()
 
         XCTAssertEqual(c.agentStateForTesting(pane), .idle)
     }
