@@ -2396,7 +2396,7 @@ final class WindowController: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.workspace(of: id) != nil else { return }
             surface.map { self.agentExited($0, result: result) }
-            guard !self.isOnScreen(surface, in: id),
+            guard !self.isSeen(surface, in: id),
                 result.duration >= Self.commandCompletionThreshold,
                 self.attention.state(tab: id) != .waiting
             else { return }
