@@ -526,17 +526,25 @@ final class TabController: NSObject {
 
     func setHaloVisible(_ visible: Bool) { paneCanvas.setHaloVisible(visible) }
 
+    func setWindowIsKey(_ isKey: Bool) {
+        windowIsKey = isKey
+        paneCanvas.setWindowIsKey(isKey)
+        syncDrawerFocus()
+    }
+
+    private var windowIsKey = true
+
     func setFocusedSurfaceRendersFocused(_ focused: Bool) {
         switch focusedPanel {
         case .pane: paneCanvas.setFocusedSurfaceRendersFocused(focused)
-        case .bottomDrawer: bottomDrawerSurface?.setFocused(focused)
-        case .rightDrawer: rightDrawerSurface?.setFocused(focused)
+        case .bottomDrawer: bottomDrawerSurface?.setFocused(focused && windowIsKey)
+        case .rightDrawer: rightDrawerSurface?.setFocused(focused && windowIsKey)
         }
     }
 
     private func syncDrawerFocus() {
-        bottomDrawerSurface?.setFocused(focusedPanel == .bottomDrawer)
-        rightDrawerSurface?.setFocused(focusedPanel == .rightDrawer)
+        bottomDrawerSurface?.setFocused(windowIsKey && focusedPanel == .bottomDrawer)
+        rightDrawerSurface?.setFocused(windowIsKey && focusedPanel == .rightDrawer)
     }
 
     private func restoreFocusAfterClosingDrawer(otherOpen: Bool, other: DrawerEdge) {

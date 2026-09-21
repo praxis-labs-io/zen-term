@@ -240,7 +240,7 @@ final class PaneCanvasController: NSObject {
             let focused = panesHoldFocus && (id == tree.focusedLeaf)
             host.isFocused = focused && haloIsVisible
             host.isZoomed = (id == zoomedLeaf)
-            registry.surface(for: id)?.setFocused(focused && focusedSurfaceRendersFocused)
+            registry.surface(for: id)?.setFocused(focused && focusedSurfaceRendersFocused && windowIsKey)
         }
     }
 
@@ -248,6 +248,13 @@ final class PaneCanvasController: NSObject {
     private var focusedSurfaceRendersFocused = true
     // Separate from `panesHoldFocus`, which the drawers own: the window hides the halo without moving focus.
     private var haloIsVisible = true
+    // A sibling window taking key leaves `NSApp` active, so libghostty holds the pane focused unless this says otherwise.
+    private var windowIsKey = true
+
+    func setWindowIsKey(_ isKey: Bool) {
+        windowIsKey = isKey
+        updateHalo()
+    }
 
     func setHaloVisible(_ visible: Bool) {
         haloIsVisible = visible

@@ -415,11 +415,11 @@ final class WindowController: NSObject {
         onToggleSidebar = { [weak self] in self?.handle(.toggleSidebar) }
         sidebar.onLeave = { [weak self] in self?.restoreFocusToActive() }
         sidebar.onFocusChanged = { [weak self] in
-            self?.syncHalo()
+            self?.syncWindowFocus()
             self?.sidebar.edgeReveal.recheck()
         }
         sidebar.isPinnedExternally = { [weak self] in self?.isConfirmOpen ?? false }
-        sidebar.onRevealChanged = { [weak self] in self?.syncHalo() }
+        sidebar.onRevealChanged = { [weak self] in self?.syncWindowFocus() }
         sidebar.onFocusYield = { [weak self] in self?.captureFocusReturn() }
         sidebar.onFocusRestore = { [weak self] in self?.restoreFocusToActive() }
         sidebar.edgeReveal.isSuppressed = { [weak self] in
@@ -826,11 +826,12 @@ final class WindowController: NSObject {
 
     private func restoreFocusToActive() {
         if floats.isOpen { floats.refocus() } else { activeController?.restoreUnifiedFocus() }
-        syncHalo()
+        syncWindowFocus()
     }
 
-    private func syncHalo() {
+    private func syncWindowFocus() {
         activeController?.setHaloVisible(!sidebar.hasFocus && windowIsKey && !sidebar.isRevealed)
+        activeController?.setWindowIsKey(windowIsKey)
     }
 
     // Below `tabBar`, so the ⌘W guard toast fired over an open float stays visible.
@@ -2954,14 +2955,14 @@ extension WindowController: NSWindowDelegate {
 
     func windowDidResignKey(_ notification: Notification) {
         windowIsKey = false
-        syncHalo()
+        syncWindowFocus()
         endModes()
         sidebar.edgeReveal.recheck()
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
         windowIsKey = true
-        syncHalo()
+        syncWindowFocus()
         sidebar.edgeReveal.recheck()
         sidebar.refreshBranches()
         answerFocusedAgent()
