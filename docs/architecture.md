@@ -608,10 +608,12 @@ concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. It gates
 - **`HostWindow.isReleasedWhenClosed = false`**, or close underflows the retain count.
 - **`ShellLaunch.program` re-arms zsh's `ZDOTDIR`**, or an `exec`'d shell loses shell
   integration (no OSC 7, no prompt marks, broken `isBusy`).
-- **`ShellLaunch.program` brackets the program in its own OSC 133 `C`/`D` marks.** The
-  wrapping `-c` shell runs no prompt hook, so without them the program's exit reports
+- **`ShellLaunch.program` brackets an *agent* program in its own OSC 133 `C`/`D` marks.**
+  The wrapping `-c` shell runs no prompt hook, so without them the agent's exit reports
   nothing and an agent that exits before the first busy poll sits in the Agents list
-  forever. The `D` mark carries `$?` (`$status` under fish).
+  forever. Both marks are needed: libghostty drops a `D` that no `C` preceded. The `D`
+  mark carries `$?`, or `$status` under fish. Non-agent programs stay unmarked, or every
+  workspace program would reach `commandFinished` and toast on exit.
 - **`ApplePressAndHoldEnabled` is registered false at launch**, or the accent popup leaks
   keys into the shell.
 - **`GitRepo.repoRoot` stops when the path stops shrinking**, not on `parent == dir`, and
