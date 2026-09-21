@@ -137,10 +137,6 @@ that toggles it. It opens over the work instead of taking a pane, so the panes
 and drawers underneath keep their places. `persist:dir` keeps one warm per
 repository. The first open is cold and every reopen is instant.
 
-The images above are rendered from ZenTerm's design boards rather than captured
-from a running window, so they show the layout and the chrome at the current
-release.
-
 ## Configure it
 
 One file, `~/.config/zen-term/config`, in Ghostty's config syntax. Settings
