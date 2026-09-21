@@ -62,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ThemePublisher.publish()
 
         keys.onReservedChord = { [weak self] chord in self?.route(chord) }
+        keys.onKeyToFocus = { [weak self] in self?.keyController()?.answerTypedAgent() }
         keys.passThroughGuard = { [weak self] chord, action in
             if TextEditingChords.owns(chord, firstResponder: NSApp.keyWindow?.firstResponder) {
                 return true

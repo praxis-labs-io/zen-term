@@ -2547,10 +2547,25 @@ final class WindowController: NSObject {
 
     private func answerFocusedAgent() {
         if let surface = focusedSurface, isFocused(surface) {
-            if attention.agentState(of: surface) > .working { agents.setMessage(surface, nil) }
-            attention.markFocused(surface)
+            answerAgent(surface)
+            attention.markSeen(surface)
         }
         renderAttention()
+    }
+
+    // Runs on every keystroke that reaches a pane, so it does nothing unless there is a latch to clear.
+    func answerTypedAgent() {
+        guard let surface = focusedSurface, isFocused(surface),
+            attention.agentState(of: surface) > .working
+        else { return }
+        answerAgent(surface)
+        renderAgents()
+    }
+
+    // The row takes its tone from the store and its words from the roster, so both clear here or the row lies.
+    private func answerAgent(_ surface: SurfaceID) {
+        if attention.agentState(of: surface) > .working { agents.setMessage(surface, nil) }
+        attention.answerAgent(surface)
     }
 
     private func programLaunched(_ surface: SurfaceID, _ command: String) {
@@ -2869,6 +2884,10 @@ final class WindowController: NSObject {
     func attentionStateForTesting(tab id: TabID) -> SurfaceAttention { attention.state(tab: id) }
 
     func agentStateForTesting(_ surface: SurfaceID) -> SurfaceAttention { attention.agentState(of: surface) }
+
+    func agentRowForTesting(_ surface: SurfaceID) -> SidebarAgentItem? {
+        agentItems().first { $0.id == surface }
+    }
 
     var focusedSurfaceIDForTesting: SurfaceID? { activeController?.focusedSurfaceID }
 

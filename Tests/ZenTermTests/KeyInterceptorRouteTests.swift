@@ -30,6 +30,27 @@ final class KeyInterceptorRouteTests: XCTestCase {
                 isARepeat: false, keyCode: 0x37))
     }
 
+    func test_aKeyThatReachesThePane_countsAsTypingToTheAgent() throws {
+        let keys = interceptor()
+        var typed = 0
+        keys.onKeyToFocus = { typed += 1 }
+
+        XCTAssertNotNil(keys.route(try keyDown("1")))
+
+        XCTAssertEqual(typed, 1)
+    }
+
+    func test_aChordTheChromeClaims_isNotTypingToTheAgent() throws {
+        let keys = interceptor()
+        var typed = 0
+        keys.onKeyToFocus = { typed += 1 }
+        keys.onReservedChord = { _ in }
+
+        XCTAssertNil(keys.route(try keyDown("t", flags: .command)))
+
+        XCTAssertEqual(typed, 0, "a chord is aimed at the chrome, so it answers nothing")
+    }
+
     func test_aBareKeyReachesTheModeHandler() throws {
         let keys = interceptor()
         var seen: [String] = []

@@ -112,4 +112,26 @@ final class AgentFocusTests: WindowTestCase {
 
         XCTAssertEqual(c.agentStateForTesting(pane), .idle)
     }
+
+    func test_typingIntoAWatchedPane_answersIt_andTheRowStopsSayingBlocked() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        let surface = try XCTUnwrap(spawned.first)
+
+        surface.delegate?.surface(
+            surface, didPostNotification: TerminalNotification(title: "", body: "Claude needs your permission"))
+        drainMainQueue()
+        let asking = try XCTUnwrap(c.agentRowForTesting(pane))
+        XCTAssertEqual(c.agentStateForTesting(pane), .waiting, "a prompt you watched arrive is still blocked")
+        XCTAssertEqual(asking.summary, "Claude needs your permission")
+
+        c.answerTypedAgent()
+        drainMainQueue()
+
+        XCTAssertEqual(c.agentStateForTesting(pane), .idle)
+        let answered = try XCTUnwrap(c.agentRowForTesting(pane))
+        XCTAssertEqual(
+            answered.summary, answered.state.summary,
+            "the row's words have to agree with its tone, or it reads blocked while it looks idle")
+    }
 }
