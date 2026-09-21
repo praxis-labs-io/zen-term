@@ -5,6 +5,21 @@ struct SidebarAgentItem: Equatable {
     let state: AttentionTone
     let summary: String
     let detail: String
+    let message: String?
+
+    static func summaryLine(of message: String) -> String {
+        let firstLine = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            .prefix { !$0.isNewline }
+            .trimmingCharacters(in: .whitespaces)
+        var index = firstLine.startIndex
+        while let stop = firstLine[index...].firstIndex(where: { ".!?".contains($0) }) {
+            let after = firstLine.index(after: stop)
+            guard after < firstLine.endIndex else { return firstLine }
+            if firstLine[after].isWhitespace { return String(firstLine[...stop]) }
+            index = after
+        }
+        return firstLine
+    }
 }
 
 // The Agents list's own ordering and copy for the shared states.
@@ -42,7 +57,7 @@ final class SidebarAgentRow: NSView, HoverSuppressing {
     private let spinner = Spinner()
     private let onActivate: () -> Void
     private var item: SidebarAgentItem?
-    private let tooltip = TooltipHost(label: "Jump to agent")
+    private let tooltip = TooltipHost(label: SidebarAgentRow.jumpHint)
     private var isTakingKeyboardFocus = false
     private var trackingArea: NSTrackingArea?
     private var isFocusedStop = false
@@ -50,6 +65,7 @@ final class SidebarAgentRow: NSView, HoverSuppressing {
     private var isHoverSuppressed = false
 
     static let height: CGFloat = 47
+    private static let jumpHint = "Jump to agent"
     private static let inset: CGFloat = 10
     private static let top: CGFloat = 7
     private static let glyphSize = NSSize(width: 14, height: 16)
@@ -112,8 +128,10 @@ final class SidebarAgentRow: NSView, HoverSuppressing {
         guard item != self.item else { return }
         self.item = item
         summaryLabel.stringValue = item.summary
+        tooltip.label = item.message ?? Self.jumpHint
+        tooltip.style = item.message == nil ? .line : .paragraph
         detailLabel.stringValue = item.detail
-        setAccessibilityLabel(item.summary)
+        setAccessibilityLabel(item.message ?? item.summary)
         setAccessibilityValue(item.detail)
         dot.isHidden = item.state == .working
         spinner.isHidden = item.state != .working
@@ -122,6 +140,8 @@ final class SidebarAgentRow: NSView, HoverSuppressing {
     }
 
     var itemForTesting: SidebarAgentItem? { item }
+
+    var summaryTextForTesting: String { summaryLabel.stringValue }
 
     var fillForTesting: CGColor? { layer?.backgroundColor }
 

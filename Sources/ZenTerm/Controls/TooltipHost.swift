@@ -1,16 +1,18 @@
 import AppKit
 
 final class TooltipHost {
-    let label: String
+    var label: String
+    var style: ChromeTooltip.Style
     private let shortcut: (() -> String?)?
 
-    init(label: String, shortcut: (() -> String?)? = nil) {
+    init(label: String, shortcut: (() -> String?)? = nil, style: ChromeTooltip.Style = .line) {
         self.label = label
+        self.style = style
         self.shortcut = shortcut
     }
 
     func show(from source: NSView) {
-        TooltipPresenter.shared.scheduleShow(for: source, label: label, shortcut: shortcut?())
+        TooltipPresenter.shared.scheduleShow(for: source, label: label, shortcut: shortcut?(), style: style)
     }
 
     func hide(from source: NSView) {
