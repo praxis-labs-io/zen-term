@@ -806,6 +806,28 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(row.accessibilityLabel(), body, "a screen reader hears the whole message too")
     }
 
+    // Drives the row's own render: a window-level render would settle hover first, which a non-key test window reads as a pointer that left.
+    func test_aNewMessageWhileHovering_replacesTheTooltipUnderThePointer() throws {
+        let c = makeWindow()
+        let agent = try focusedAgent(c)
+        _ = try split(c)
+        notify(agent, "Wants to run swift test.")
+        let row = try XCTUnwrap(rows(c).first)
+        let first = try XCTUnwrap(row.itemForTesting)
+        try hover(row, in: c)
+        XCTAssertEqual(try presentedTooltip().labelForTesting, "Wants to run swift test.", "precondition")
+
+        let body = "Wants to run bin/check, which rebuilds GhosttyKit first."
+        row.render(
+            SidebarAgentItem(
+                id: first.id, state: first.state, summary: SidebarAgentItem.summaryLine(of: body),
+                detail: first.detail, message: body))
+
+        XCTAssertEqual(
+            TooltipPresenter.shared.tooltipForTesting?.labelForTesting, body,
+            "the tooltip under the pointer follows the row it belongs to")
+    }
+
     func test_hoveringAnAgentWithNoMessage_stillSaysWhatClickingDoes() throws {
         let c = makeWindow()
         let agent = try focusedAgent(c)

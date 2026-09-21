@@ -28,6 +28,14 @@ final class TooltipPresenter {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.delay, execute: work)
     }
 
+    // A row whose copy changes under a live tooltip: replace it in place, since re-scheduling would blank it for the delay.
+    func relabel(for source: NSView, label: String, shortcut: String?, style: ChromeTooltip.Style) {
+        guard owner === source, tooltip != nil else { return }
+        tooltip?.removeFromSuperview()
+        tooltip = nil
+        present(for: source, label: label, shortcut: shortcut, style: style)
+    }
+
     func hide(for source: NSView) {
         guard owner === source else { return }
         teardown()

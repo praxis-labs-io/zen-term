@@ -15,6 +15,10 @@ final class TooltipHost {
         TooltipPresenter.shared.scheduleShow(for: source, label: label, shortcut: shortcut?(), style: style)
     }
 
+    func relabel(from source: NSView) {
+        TooltipPresenter.shared.relabel(for: source, label: label, shortcut: shortcut?(), style: style)
+    }
+
     func hide(from source: NSView) {
         TooltipPresenter.shared.hide(for: source)
     }

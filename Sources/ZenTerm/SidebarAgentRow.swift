@@ -130,6 +130,7 @@ final class SidebarAgentRow: NSView, HoverSuppressing {
         summaryLabel.stringValue = item.summary
         tooltip.label = item.message ?? Self.jumpHint
         tooltip.style = item.message == nil ? .line : .paragraph
+        tooltip.relabel(from: self)
         detailLabel.stringValue = item.detail
         setAccessibilityLabel(item.message ?? item.summary)
         setAccessibilityValue(item.detail)
