@@ -557,6 +557,26 @@ final class SidebarAgentsTests: WindowTestCase {
             waitingRow(a), "focusing the pane answers it, and the count other windows read has to follow")
     }
 
+    func test_answeringByFocusingThePane_clearsTheWorkspaceDotToo() throws {
+        let a = makeWindow()
+        let b = makeWindow()
+        let agent = try focusedAgent(b)
+        _ = try split(b)
+        WindowController.isPresent = { [weak b] window in window !== b?.window }
+
+        notify(agent, "Wants to run swift test")
+        let row = try XCTUnwrap(b.sidebarForTesting.view.rowsForTesting.first)
+        XCTAssertTrue(row.showsAttentionForTesting, "precondition: its own workspace says something waits")
+        XCTAssertNotNil(waitingRow(a), "precondition")
+
+        WindowController.isPresent = { _ in true }
+        focus(agent, in: b)
+
+        XCTAssertFalse(
+            row.showsAttentionForTesting, "answering by focus has to repaint the row that carried the dot")
+        XCTAssertNil(waitingRow(a))
+    }
+
     func test_theCountIsAgents_andBothHalvesOfTheCopyFollowIt() throws {
         let a = makeWindow()
         let b = makeWindow()

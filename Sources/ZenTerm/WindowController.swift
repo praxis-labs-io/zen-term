@@ -2547,8 +2547,7 @@ final class WindowController: NSObject {
             if attention.agentState(of: surface) > .working { agents.setMessage(surface, nil) }
             attention.markFocused(surface)
         }
-        renderAgents()
-        publishAttention()
+        renderAttention()
     }
 
     private func programLaunched(_ surface: SurfaceID, _ command: String) {
