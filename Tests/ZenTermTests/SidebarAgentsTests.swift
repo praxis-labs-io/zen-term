@@ -246,6 +246,18 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertTrue(c.sidebarForTesting.view.agentsAreHiddenForTesting)
     }
 
+    func test_anAgentThatExitsBeforeTheFirstBusyPoll_leavesTheList() throws {
+        let c = makeWindow()
+        c.openWorkspaceForTesting(recipe("zen-review", right: "claude --resume"))
+        let drawer = try XCTUnwrap(spawned.last)
+        XCTAssertEqual(items(c).count, 1, "precondition: listed at launch, never polled busy")
+
+        drawer.delegate?.surface(drawer, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 0.2))
+        drainMainQueue()
+
+        XCTAssertTrue(items(c).isEmpty)
+    }
+
     func test_anAgentExitingNonZero_staysUntilItsPaneIsFocused() throws {
         let c = makeWindow()
         let first = try focusedAgent(c)

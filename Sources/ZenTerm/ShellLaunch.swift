@@ -31,13 +31,25 @@ enum ShellLaunch {
         let sh = userShell
         return TerminalSurfaceConfig(
             command: sh,
-            args: ["-l", "-i", "-c", "\(command); \(zshIntegrationRearm(for: sh))exec \(sh) -l -i"],
+            args: [
+                "-l", "-i", "-c",
+                "\(commandStart)\(command); \(commandFinish(for: sh))"
+                    + "\(zshIntegrationRearm(for: sh))exec \(sh) -l -i",
+            ],
             workingDirectory: cwd ?? defaultCWD,
             environment: env,
             fontSize: SessionFontSize.points,
             theme: Theme.current.terminal,
             behavior: GeneralConfig.current.terminalBehavior
         )
+    }
+
+    // A `-c` shell runs no prompt hook, so the program's own exit reports no OSC 133 mark of its own.
+    private static let commandStart = "printf '\\033]133;C\\007'; "
+
+    private static func commandFinish(for shell: String) -> String {
+        let status = URL(fileURLWithPath: shell).lastPathComponent == "fish" ? "$status" : "$?"
+        return "printf '\\033]133;D;%d\\007' \(status); "
     }
 
     /// libghostty's `.zshenv` restores `ZDOTDIR`, so the `exec`'d zsh needs the redirect restaged.
