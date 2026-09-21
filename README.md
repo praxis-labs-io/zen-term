@@ -108,7 +108,7 @@ the padding around them are both yours to set.
 
 The same window on Catppuccin Latte. A theme colors the terminal, the tab bar,
 the toolbar, the focus halo, and Settings itself, so a light theme stays light
-through the whole app. 64 ship, each marked Dark or Light in the picker, and a
+through the whole app. 65 ship, each marked Dark or Light in the picker, and a
 `theme = ` line pointed at any Ghostty theme file works the same way.
 
 ![The command palette open over the panes, its rows grouped by Workspaces, Tabs, Window and Panes, each carrying the shortcut that runs it](docs/images/palette.png)
