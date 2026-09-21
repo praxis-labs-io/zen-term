@@ -2341,6 +2341,7 @@ final class WindowController: NSObject {
             surface.map { self.attention.record($0, .waiting, seen: shown, focused: self.isFocused($0)) }
             surface.map { self.agentSignalled($0, name: notification.title, message: message) }
             self.renderAgents()
+            if self.attentionSnapshot(surface, in: target) != before { self.renderAttention() }
 
             guard !shown else { return }
             let destination = CardDestination(
@@ -2354,7 +2355,6 @@ final class WindowController: NSObject {
                 for: target,
                 title: { [weak self] in owner == nil ? spec.title : self?.attentionTitle(of: target) ?? spec.title },
                 titleTail: tail, message: message, surface: surface, destination: destination)
-            if self.attentionSnapshot(surface, in: target) != before { self.renderAttention() }
         }
     }
 
@@ -2377,13 +2377,13 @@ final class WindowController: NSObject {
             surface.map { self.attention.record($0, .waiting, seen: seen, focused: self.isFocused($0)) }
             surface.map { self.agentSignalled($0, name: notification.title, message: message) }
             self.renderAgents()
+            if self.attentionSnapshot(surface, in: id) != before { self.renderAttention() }
 
             guard !seen else { return }
             self.presentWaitingToast(
                 for: id, title: { [weak self] in self?.attentionTitle(of: id) ?? "" }, titleTail: self.drawerTail(edge),
                 message: message, surface: surface,
                 destination: edge.map { self.drawerDestination($0, in: id) })
-            if self.attentionSnapshot(surface, in: id) != before { self.renderAttention() }
         }
     }
 

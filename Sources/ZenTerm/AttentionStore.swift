@@ -22,7 +22,8 @@ final class AttentionStore {
     private var entries: [SurfaceID: Entry] = [:]
 
     // `waiting` is a count, not a flag: two agents that each asked and exited are still two.
-    private var residual: [TabID: (state: SurfaceAttention, since: Date?, waiting: Int)] = [:]
+    // `waitingSince` is its own clock, because a completion folded earlier would otherwise date the question.
+    private var residual: [TabID: (state: SurfaceAttention, since: Date?, waiting: Int, waitingSince: Date?)] = [:]
 
     private let now: () -> Date
 
@@ -42,7 +43,9 @@ final class AttentionStore {
         residual[tab] = (
             max(existing?.state ?? .idle, entry.latched),
             earliest(existing?.since, entry.since),
-            (existing?.waiting ?? 0) + (entry.latched == .waiting ? 1 : 0)
+            (existing?.waiting ?? 0) + (entry.latched == .waiting ? 1 : 0),
+            entry.latched == .waiting
+                ? earliest(existing?.waitingSince, entry.since) : existing?.waitingSince
         )
     }
 
@@ -150,7 +153,7 @@ final class AttentionStore {
         }
         let folded = residual.compactMap { tab, value -> (WaitingTarget, Date?, Int)? in
             guard value.state == .waiting else { return nil }
-            return (.tab(tab), value.since, tab.raw)
+            return (.tab(tab), value.waitingSince, tab.raw)
         }
         return (latched + folded)
             .sorted {

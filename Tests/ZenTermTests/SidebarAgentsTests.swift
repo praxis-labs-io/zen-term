@@ -613,6 +613,21 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(a.sidebarForTesting.focusedWorktreeRefusal, .agent, "a silent no-op is not an answer")
     }
 
+    func test_askingAgainOnceYouAreLooking_clearsTheRowElsewhere() throws {
+        let a = makeWindow()
+        let b = makeWindow()
+        let agent = try focusedAgent(b)
+        WindowController.isPresent = { [weak b] window in window !== b?.window }
+
+        notify(agent, "Wants to run swift test")
+        XCTAssertEqual(waitingRow(a)?.textForTesting, "1 waiting in another window", "precondition")
+
+        WindowController.isPresent = { _ in true }
+        notify(agent, "Asks before the backfill")
+
+        XCTAssertNil(waitingRow(a), "a notification you are looking at clears the wait, and that has to be published")
+    }
+
     func test_theCountIsAgents_andBothHalvesOfTheCopyFollowIt() throws {
         let a = makeWindow()
         let b = makeWindow()
