@@ -577,6 +577,20 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertNil(waitingRow(a))
     }
 
+    func test_twoAgentsInDifferentTabsOfAnotherWindow_countAsTwo() throws {
+        let a = makeWindow()
+        let b = makeWindow()
+        let first = try focusedAgent(b)
+        b.newTabForTesting()
+        let second = try focusedAgent(b)
+        WindowController.isPresent = { [weak b] window in window !== b?.window }
+
+        notify(first, "Wants to run swift test")
+        notify(second, "Asks before the backfill")
+
+        XCTAssertEqual(waitingRow(a)?.textForTesting, "2 waiting in another window")
+    }
+
     func test_theCountIsAgents_andBothHalvesOfTheCopyFollowIt() throws {
         let a = makeWindow()
         let b = makeWindow()
