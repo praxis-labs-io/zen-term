@@ -826,6 +826,15 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(
             TooltipPresenter.shared.tooltipForTesting?.labelForTesting, body,
             "the tooltip under the pointer follows the row it belongs to")
+
+        row.render(
+            SidebarAgentItem(
+                id: first.id, state: .working, summary: AttentionTone.working.summary, detail: first.detail,
+                message: nil))
+
+        XCTAssertEqual(
+            TooltipPresenter.shared.tooltipForTesting?.labelForTesting, "Jump to agent",
+            "a progress tick clearing the message takes the tooltip back with it")
     }
 
     func test_hoveringAnAgentWithNoMessage_stillSaysWhatClickingDoes() throws {
