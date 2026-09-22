@@ -6,7 +6,7 @@ final class ToastPresenter {
     private var dismissAfter: TimeInterval
     private let topConstraint: NSLayoutConstraint
     private let trailingConstraint: NSLayoutConstraint
-    /// Whether the user is in the window this draws into. Defaults to yes, so a caller that cannot tell keeps today's behavior.
+    // Defaults to yes, so a caller that cannot tell whether you are here keeps today's behavior.
     private let isPresent: () -> Bool
     private let waitingForYou = NSHashTable<ToastView>.weakObjects()
     private let countdowns = NSMapTable<ToastView, DispatchWorkItem>.weakToStrongObjects()
