@@ -31,6 +31,22 @@ final class AttentionStoreTests: XCTestCase {
             "the wait dates from the question, not from something else finishing earlier")
     }
 
+    func test_aPaneThatCompletedBeforeItAsked_datesTheWaitFromTheQuestion() {
+        var clock = Date(timeIntervalSince1970: 100)
+        let store = AttentionStore(now: { clock })
+        let pane = SurfaceIDs.mint()
+        store.register(pane, tab: tab)
+
+        store.record(pane, .completed, seen: false)
+        clock = Date(timeIntervalSince1970: 200)
+        store.record(pane, .waiting, seen: false)
+
+        XCTAssertEqual(store.state(tab: tab), .waiting, "precondition: the pane still asks")
+        XCTAssertEqual(
+            store.waitingSince, Date(timeIntervalSince1970: 200),
+            "the wait dates from the question, not from its own earlier completion")
+    }
+
     func test_anUnseenLatch_colorsItsTab() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
