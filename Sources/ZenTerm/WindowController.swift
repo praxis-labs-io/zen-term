@@ -2411,6 +2411,7 @@ final class WindowController: NSObject {
             if isWorking, !self.attention.isWorking(surface) {
                 self.agentSignalled(surface, name: "", message: nil)
             }
+            if !isWorking, self.attention.isWorking(surface) { self.answerAgent(surface) }
             self.attention.setWorking(surface, isWorking)
             if self.attention.state(of: surface) != before { self.renderDock() }
             self.renderAgents()
@@ -2553,9 +2554,9 @@ final class WindowController: NSObject {
         renderAttention()
     }
 
-    // Runs on every keystroke that reaches a pane, so it does nothing unless there is a latch to clear.
+    // Runs on every keystroke the chrome passed on, which includes ones the find field takes before the pane.
     func answerTypedAgent() {
-        guard let surface = focusedSurface, isFocused(surface),
+        guard !search.isEditing, let surface = focusedSurface, isFocused(surface),
             attention.agentState(of: surface) > .working
         else { return }
         answerAgent(surface)

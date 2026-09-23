@@ -67,10 +67,7 @@ final class AttentionStore {
     func setWorking(_ id: SurfaceID, _ on: Bool) {
         guard let wasWorking = entries[id]?.working else { return }
         entries[id]?.working = on
-        if wasWorking, !on {
-            answerAgent(id)
-            latchAgent(id, .completed)
-        }
+        if wasWorking, !on { latchAgent(id, .completed) }
         if !wasWorking, on, entries[id]?.agentLatched == .completed {
             entries[id]?.agentLatched = .idle
             entries[id]?.agentSince = nil

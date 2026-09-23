@@ -366,19 +366,6 @@ final class AttentionStoreTests: XCTestCase {
         XCTAssertEqual(store.state(tab: tab), .waiting)
     }
 
-    func test_aTurnEndingOnAWaitingAgent_stopsItReadingWaiting() {
-        let store = makeStore()
-        let pane = SurfaceIDs.mint()
-        store.register(pane, tab: tab)
-        store.setWorking(pane, true)
-        store.record(pane, .waiting, seen: true)
-        XCTAssertEqual(store.agentState(of: pane), .waiting)
-
-        store.setWorking(pane, false)
-
-        XCTAssertEqual(store.agentState(of: pane), .completed)
-    }
-
     func test_aTurnEnding_latchesDoneForTheAgentOnly() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
