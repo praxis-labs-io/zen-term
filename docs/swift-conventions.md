@@ -257,6 +257,15 @@ The rules are in `CLAUDE.md`. These are the AppKit mechanics behind them.
 **Synthetic mouse events are not hit-tested in an off-screen window.** Drive the control's
 `mouseDown` / `mouseUp` with real `NSEvent`s and leave click routing to the runbook.
 
+**The close command never reaches `closePane`.** ⌘W runs `closeFocused()` with a pane focused and
+`closeFocusedDrawer()` with a drawer focused; `closePane(_:)` belongs to `surfaceDidExit`. A test driving
+the command proves nothing about a shell exiting on its own, and reads as though it does.
+
+**A double standing in for a responder path has to model the path not running.** `RecordingSurface.focus()`
+calls `makeFirstResponder`, which reaches `becomeFirstResponder`, and so the surface's own focus report,
+only when the view is in a window, is not already first responder, and the call succeeds. Recording that
+report unconditionally invents a push production never makes; recording nothing hides the one it does.
+
 **A synthesized `keyDown` commits text from the keyCode and layout, not `characters`, and only when
 `NSApp.currentEvent` is set.** `currentEvent` cannot be cleared and leaks between cases, so a key test
 must hold on either branch: use a key that types nothing (Escape, or an arrow with its real flags).
