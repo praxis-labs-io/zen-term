@@ -293,6 +293,14 @@ fails in a different suite, often only on one machine. When a change makes a typ
 `GeneralConfig.current`, grep every suite that constructs it. Check an intermittent failure against
 the base branch before blaming the change.
 
+**A test that means "the user is here" has to pin `isPresent`.** `isOnScreen` asks about layout;
+`isSeen` asks about layout and `WindowController.isPresent`, which is `NSApp.isActive && isKeyWindow`
+and so is false in a test process. A suite that never pins it is describing a window nobody is in, so a
+test named for the active tab is testing something else and passes whatever the window does. Pin
+`WindowController.isPresent = { _ in true }` in the suite's setUp,
+restore it in its tearDown, and override it inside the test for the window you are meant to be away
+from.
+
 **`needsDisplay` cannot tell you a redraw was requested.** It reads true on a never-drawn view. Route
 the request through a counting method (`ScrollCursorView.redraw()`) and assert the count.
 
