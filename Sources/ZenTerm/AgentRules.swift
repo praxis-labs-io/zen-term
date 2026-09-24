@@ -4,11 +4,7 @@ import TerminalKit
 /// The rules ZenTerm ships, per agent. Data, not configuration: an agent we have no rules for reads idle.
 enum AgentRules {
     static func rules(for agentName: String?) -> [AgentStateRule] {
-        switch key(for: agentName) {
-        case "claude": return claude
-        case "codex": return codex
-        default: return []
-        }
+        key(for: agentName) == "codex" ? codex : progressOnly
     }
 
     /// A launch names an agent by its program (`claude`), a notification by its own words (`Claude Code`).
@@ -17,9 +13,12 @@ enum AgentRules {
         return AgentRoster.knownAgents.first { name.contains($0) }
     }
 
+    /// What the progress region reads before a program has reported anything.
+    static let clearedProgress = "4;0"
+
     /// The OSC 9;4 payload the rules read, in the shape the sequence itself carries.
     static func progressRegion(_ progress: TerminalProgress?) -> String {
-        guard let progress else { return "4;0" }
+        guard let progress else { return clearedProgress }
         switch progress.state {
         case .running: return "4;1;\(Int(((progress.fraction ?? 0) * 100).rounded()))"
         case .error: return "4;2"
@@ -39,14 +38,15 @@ enum AgentRules {
             match: .regex("(?:^| )[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏](?: |$)")),
     ]
 
-    // Claude's title flickers to idle mid-turn for as long as 20s while progress holds working, so it is
-    // read for the row's message and never for state.
-    private static let claude: [AgentStateRule] = [
+    // What Claude runs on, and the reasonable floor for an agent we ship no rules for: any program that
+    // reports OSC 9;4 gets working and idle for free. Claude's title flickers to idle mid-turn for as long
+    // as 20s while progress holds working, so it is read for the row's message and never for state.
+    private static let progressOnly: [AgentStateRule] = [
         AgentStateRule(
-            id: "claude_progress_working", state: .working, priority: 1_100, region: .oscProgress,
+            id: "progress_working", state: .working, priority: 1_100, region: .oscProgress,
             match: .regex("^4;3")),
         AgentStateRule(
-            id: "claude_progress_idle", state: .idle, priority: 250, region: .oscProgress,
+            id: "progress_idle", state: .idle, priority: 250, region: .oscProgress,
             match: .regex("^4;0")),
     ]
 

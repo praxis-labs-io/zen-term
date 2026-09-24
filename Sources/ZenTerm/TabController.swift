@@ -219,6 +219,8 @@ final class TabController: NSObject {
 
     var onProgress: ((SurfaceID, TerminalProgress?) -> Void)?
 
+    var onTitle: ((SurfaceID, String) -> Void)?
+
     var onProgramLaunched: ((SurfaceID, String) -> Void)?
 
     var onSurfacesRegistered: (([SurfaceID]) -> Void)?
@@ -272,6 +274,7 @@ final class TabController: NSObject {
         paneCanvas.onNotification = { [weak self] id, n in self?.onNotification?(id, n) }
         paneCanvas.onCommandFinished = { [weak self] id, result in self?.onCommandFinished?(id, result) }
         paneCanvas.onProgress = { [weak self] id, p in self?.onProgress?(id, p) }
+        paneCanvas.onTitle = { [weak self] id, title in self?.onTitle?(id, title) }
         paneCanvas.onProgramLaunched = { [weak self] id, command in self?.onProgramLaunched?(id, command) }
         paneCanvas.onSurfacesRegistered = { [weak self] ids in self?.onSurfacesRegistered?(ids) }
         paneCanvas.onSurfacesReleased = { [weak self] ids in self?.onSurfacesReleased?(ids) }
@@ -1121,6 +1124,10 @@ extension TabController: TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, progressDidChange p: TerminalProgress?) {
         guard let id = drawerSurfaceID(of: s) else { return }
         onProgress?(id, p)
+    }
+    func surface(_ s: TerminalSurface, titleDidChange title: String) {
+        guard let id = drawerSurfaceID(of: s) else { return }
+        onTitle?(id, title)
     }
 
     private func drawerSurfaceID(of s: TerminalSurface) -> SurfaceID? {

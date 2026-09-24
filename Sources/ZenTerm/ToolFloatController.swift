@@ -30,6 +30,8 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     var onProgress: ((SurfaceID, TerminalProgress?) -> Void)?
 
+    var onTitle: ((SurfaceID, String) -> Void)?
+
     var onSurfaceRegistered: ((SurfaceID, TabID?) -> Void)?
 
     var onProgramLaunched: ((SurfaceID, String) -> Void)?
@@ -384,6 +386,11 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, progressDidChange p: TerminalProgress?) {
         guard let id = idBySurface[ObjectIdentifier(s)] else { return }
         onProgress?(id, p)
+    }
+
+    func surface(_ s: TerminalSurface, titleDidChange title: String) {
+        guard let id = idBySurface[ObjectIdentifier(s)] else { return }
+        onTitle?(id, title)
     }
 
     func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor) {

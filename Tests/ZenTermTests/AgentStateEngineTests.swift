@@ -73,12 +73,23 @@ final class AgentStateEngineTests: XCTestCase {
         XCTAssertEqual(outcome.state, .idle)
     }
 
-    func test_anAgentWeShipNoRulesFor_readsIdle_neverBlocked() {
+    func test_anAgentWeShipNoRulesFor_isNeverBlockedByAnotherAgentsTitle() {
         let outcome = AgentStateEngine.evaluate(
-            AgentRules.rules(for: "some-new-agent"), title: AgentTitleFixtures.codexBlockedOn, progress: "4;3")
+            AgentRules.rules(for: "some-new-agent"), title: AgentTitleFixtures.codexBlockedOn,
+            progress: AgentRules.clearedProgress)
 
-        XCTAssertEqual(outcome, .fallback)
-        XCTAssertEqual(outcome.state, .idle)
+        XCTAssertEqual(outcome.state, .idle, "Codex's prompt means nothing on an agent that is not Codex")
+    }
+
+    func test_anAgentWeShipNoRulesFor_stillGetsProgress() {
+        let rules = AgentRules.rules(for: "some-new-agent")
+        let cases: [(progress: String, expected: AgentSignalState)] = [("4;3", .working), ("4;0", .idle)]
+
+        for item in cases {
+            XCTAssertEqual(
+                AgentStateEngine.evaluate(rules, title: "", progress: item.progress).state, item.expected,
+                "any program that reports OSC 9;4 gets this for free")
+        }
     }
 
     func test_anUnrecognizedCodexTitle_fallsBack_ratherThanMatchingIdle() {

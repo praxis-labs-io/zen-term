@@ -51,7 +51,7 @@ final class AgentStateTrackerTests: XCTestCase {
         _ = tracker.publish(id, working())
 
         XCTAssertEqual(
-            tracker.publish(id, .matched(.idle, ruleID: "claude_progress_idle")), .idle,
+            tracker.publish(id, .matched(.idle, ruleID: "progress_idle")), .idle,
             "positive evidence of idle is not a flicker")
     }
 

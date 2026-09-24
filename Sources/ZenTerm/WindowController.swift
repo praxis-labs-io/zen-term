@@ -18,6 +18,9 @@ final class WindowController: NSObject {
     private var cardTitles: [TabID: () -> String] = [:]
     private let attention = AttentionStore()
     private let agents = AgentRoster()
+    private let agentStates = AgentStateTracker()
+    private var agentTitles: [SurfaceID: String] = [:]
+    private var agentProgress: [SurfaceID: String] = [:]
     private static let commandCompletionThreshold: TimeInterval = 10
     private var nextTabID = 1
 
@@ -145,12 +148,16 @@ final class WindowController: NSObject {
         controller.onProgress = { [weak self] surface, progress in
             self?.progressChanged(surface: surface, progress: progress)
         }
+        controller.onTitle = { [weak self] surface, title in
+            self?.titleChanged(surface: surface, title: title)
+        }
         controller.onSurfaceRegistered = { [weak self] surface, tab in
             self?.attention.register(surface, tab: tab)
         }
         controller.onSurfaceReleased = { [weak self] surface in
             self?.attention.release(surface)
             self?.agents.drop(surface)
+            self?.agentStates.drop(surface)
             self?.renderAttention()
         }
         controller.onProgramLaunched = { [weak self] surface, command in
@@ -2303,6 +2310,9 @@ final class WindowController: NSObject {
         c.onProgress = { [weak self] surface, progress in
             self?.progressChanged(surface: surface, progress: progress)
         }
+        c.onTitle = { [weak self] surface, title in
+            self?.titleChanged(surface: surface, title: title)
+        }
         c.onSurfaceShown = { [weak self] surface in self?.surfaceShown(surface) }
         c.onSurfacesRegistered = { [weak self] ids in
             ids.forEach { self?.attention.register($0, tab: id) }
@@ -2311,6 +2321,7 @@ final class WindowController: NSObject {
             ids.forEach {
                 self?.attention.release($0)
                 self?.agents.drop($0)
+                self?.agentStates.drop($0)
             }
             self?.renderAttention()
         }
@@ -2413,15 +2424,71 @@ final class WindowController: NSObject {
     private func progressChanged(surface: SurfaceID, progress: TerminalProgress?) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            let before = self.attention.state(of: surface)
-            let isWorking = progress?.state == .indeterminate
-            if isWorking, !self.attention.isWorking(surface) {
+            self.agentProgress[surface] = AgentRules.progressRegion(progress)
+            if progress?.state == .indeterminate, !self.attention.isWorking(surface) {
                 self.agentSignalled(surface, name: "", message: nil)
             }
-            if !isWorking, self.attention.isWorking(surface) { self.answerAgent(surface) }
-            self.attention.setWorking(surface, isWorking)
-            if self.attention.state(of: surface) != before { self.renderDock() }
-            self.renderAgents()
+            self.deriveAgentState(surface)
+        }
+    }
+
+    private func titleChanged(surface: SurfaceID, title: String) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.agents.contains(surface) else { return }
+            self.agentTitles[surface] = title
+            self.deriveAgentState(surface)
+            // The tail is the live tool name, so it moves many times inside one turn the state never leaves.
+            if self.agentStates.state(of: surface) == .working { self.noteTitleMessage(surface) }
+        }
+    }
+
+    private func noteTitleMessage(_ surface: SurfaceID) {
+        guard attention.agentState(of: surface) <= .working,
+            let message = AgentRules.message(
+                fromTitle: agentTitles[surface] ?? "", agentName: agents.agents[surface]?.name),
+            agents.agents[surface]?.message != message
+        else { return }
+        agents.setMessage(surface, message)
+        renderAgents()
+    }
+
+    /// The one place a pushed signal becomes a state. Both signals feed it, so a rule set can read either.
+    private func deriveAgentState(_ surface: SurfaceID) {
+        guard let agent = agents.agents[surface] else { return }
+        let outcome = AgentStateEngine.evaluate(
+            AgentRules.rules(for: agent.name), title: agentTitles[surface] ?? "",
+            progress: agentProgress[surface] ?? AgentRules.clearedProgress)
+        guard let next = agentStates.publish(surface, outcome) else { return }
+        Log.info("agent \(agent.name ?? AgentRoster.unnamed): \(outcome.label)", category: .workspace)
+        applyDerived(next, to: surface)
+    }
+
+    private func applyDerived(_ state: AgentSignalState?, to surface: SurfaceID) {
+        let before = attention.state(of: surface)
+        switch state {
+        case .working:
+            attention.setWorking(surface, true)
+            noteTitleMessage(surface)
+        case .idle:
+            // Nothing latched above working, so any message here is the turn's own and goes with it.
+            let wasAsking = attention.agentState(of: surface) > .working
+            if attention.isWorking(surface) { answerAgent(surface) }
+            attention.setWorking(surface, false)
+            if !wasAsking { agents.setMessage(surface, nil) }
+        case .blocked:
+            guard let tab = tab(of: surface) else { return }
+            attention.record(surface, .waiting, seen: isSeen(surface, in: tab))
+        case nil:
+            break
+        }
+        if attention.state(of: surface) != before { renderAttention() }
+        renderAgents()
+    }
+
+    private func tab(of surface: SurfaceID) -> TabID? {
+        if let float = floats.float(of: surface) { return float.tab ?? activeWorkspace.activeID }
+        return workspaces.lazy.flatMap(\.tabIDs).first {
+            self.controller($0)?.surfaceIDs.contains(surface) == true
         }
     }
 
@@ -2605,6 +2672,8 @@ final class WindowController: NSObject {
         for (id, agent) in before {
             agents.trackBusy(id, terminalSurface(id)?.isBusy ?? false)
             if !agent.hasExited, agents.agents[id]?.hasExited == true { attention.endAgent(id) }
+            // A turn that ended on its last title event has nothing left to push, so the hold lands here.
+            if agentStates.isHoldingIdle(id) { deriveAgentState(id) }
         }
         if agents.agents != before { renderAgents() }
     }
@@ -2927,6 +2996,26 @@ final class WindowController: NSObject {
     var focusedSurfaceIDForTesting: SurfaceID? { activeController?.focusedSurfaceID }
 
     func trackAgentExitsForTesting() { trackAgentExits() }
+
+    func terminalSurfaceForTesting(_ surface: SurfaceID) -> TerminalSurface? { terminalSurface(surface) }
+
+    func identifyAgentForTesting(_ surface: SurfaceID, name: String) {
+        agents.identify(surface, name: name, source: .launch)
+    }
+
+    func agentMessageForTesting(_ surface: SurfaceID) -> String? { agents.agents[surface]?.message }
+
+    func surfaceIDsForTesting(tabIndex: Int) -> [SurfaceID] {
+        guard activeWorkspace.tabIDs.indices.contains(tabIndex) else { return [] }
+        return controller(activeWorkspace.tabIDs[tabIndex])?.surfaceIDs ?? []
+    }
+
+    func drawerSurfaceIDsForTesting(tabIndex: Int) -> (bottom: SurfaceID?, right: SurfaceID?) {
+        guard activeWorkspace.tabIDs.indices.contains(tabIndex),
+            let drawers = controller(activeWorkspace.tabIDs[tabIndex])?.drawerSurfaceIDs
+        else { return (nil, nil) }
+        return drawers
+    }
 
     func waitingToastForTesting(tab id: TabID) -> ToastView? { attentionCards[id] }
 
