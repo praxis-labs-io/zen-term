@@ -2369,11 +2369,22 @@ final class WindowController: NSObject {
                     owner.map { self.reveal($0) }
                     if self.floats.activeID != spec.id { self.handle(.toggleToolFloat(spec.id)) }
                 })
-            self.presentWaitingToast(
+            self.presentAgentToast(
                 for: target,
                 title: { [weak self] in owner == nil ? spec.title : self?.attentionTitle(of: target) ?? spec.title },
                 titleTail: tail, message: message, surface: surface, destination: destination)
         }
+    }
+
+    /// Codex sends the same notification when it finishes as when it needs you, so its title is the tiebreak.
+    /// Every other agent is taken at its word.
+    private func notificationAsks(_ surface: SurfaceID) -> Bool {
+        let name = agents.agents[surface]?.name
+        guard AgentRules.key(for: name) == "codex" else { return true }
+        return AgentStateEngine.evaluate(
+            AgentRules.rules(for: name), title: agentTitles[surface] ?? "",
+            progress: agentProgress[surface] ?? AgentRules.clearedProgress
+        ).state == .blocked
     }
 
     private func agentNotified(surface: SurfaceID?, id: TabID, notification: TerminalNotification) {
@@ -2391,17 +2402,18 @@ final class WindowController: NSObject {
             }
 
             let seen = self.isSeen(surface, in: id)
+            let asking = surface.map { self.notificationAsks($0) } ?? true
             let before = self.attentionSnapshot(surface, in: id)
-            surface.map { self.attention.record($0, .waiting, seen: seen) }
+            surface.map { self.attention.record($0, asking ? .waiting : .completed, seen: seen) }
             surface.map { self.agentSignalled($0, name: notification.title, message: message) }
             self.renderAgents()
             if self.attentionSnapshot(surface, in: id) != before { self.renderAttention() }
 
             guard !seen else { return }
-            self.presentWaitingToast(
+            self.presentAgentToast(
                 for: id, title: { [weak self] in self?.attentionTitle(of: id) ?? "" }, titleTail: self.drawerTail(edge),
                 message: message, surface: surface,
-                destination: edge.map { self.drawerDestination($0, in: id) })
+                destination: edge.map { self.drawerDestination($0, in: id) }, asking: asking)
         }
     }
 
@@ -2544,13 +2556,14 @@ final class WindowController: NSObject {
         let open: () -> Void
     }
 
-    private func presentWaitingToast(
+    private func presentAgentToast(
         for id: TabID, title: @escaping () -> String, titleTail: String? = nil, message: String, surface: SurfaceID?,
-        destination: CardDestination? = nil
+        destination: CardDestination? = nil, asking: Bool = true
     ) {
         if let old = attentionCards[id] { toasts.dismiss(old) }
         let content = ToastContent(
-            variant: .info, title: title(), titleTail: titleTail, message: message, icon: "bell.fill")
+            variant: asking ? .info : .positive, title: title(), titleTail: titleTail, message: message,
+            icon: asking ? "bell.fill" : nil)
         let destination =
             destination
             ?? CardDestination(
@@ -2566,7 +2579,8 @@ final class WindowController: NSObject {
         ]
         attentionCards[id] = mountAttentionToast(
             for: id, surface: surface, content: content, title: title, actions: actions,
-            autoDismiss: GeneralConfig.current.attentionToast == .auto)
+            autoDismiss: (asking ? GeneralConfig.current.attentionToast : GeneralConfig.current.completionToast)
+                == .auto)
     }
 
     private func drawerEdge(of surface: SurfaceID?, in id: TabID) -> DrawerEdge? {

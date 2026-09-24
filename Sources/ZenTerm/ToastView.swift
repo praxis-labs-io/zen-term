@@ -265,6 +265,8 @@ final class ToastView: ShadowCardView {
         }
     }
 
+    var variantForTesting: ToastVariant { variant }
+
     var badgeFillForTesting: CGColor? { badgeFill.layer?.backgroundColor }
     var badgeIconTintForTesting: NSColor? { badgeIcon.contentTintColor }
 
