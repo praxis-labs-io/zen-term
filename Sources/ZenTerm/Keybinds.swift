@@ -71,6 +71,7 @@ extension KeyInterceptor.ReservedChord {
         case .prevWorkspace: return "prev_workspace"
         case .nextWorkspace: return "next_workspace"
         case .closeWorkspace: return "close_workspace"
+        case .nextWaitingAgent: return "next_waiting_agent"
         }
     }
 
@@ -95,7 +96,8 @@ extension KeyInterceptor.ReservedChord {
             .clearScreen, .selectAll, .scrollToSelection, .pasteSelection, .writeScreenFile,
             .copyScreenFilePath, .openScreenFile,
             .dismissToast, .dismissAllToasts,
-            .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace:
+            .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace,
+            .nextWaitingAgent:
             return false
         }
     }
@@ -121,7 +123,8 @@ extension KeyInterceptor.ReservedChord {
             .toggleRepoPicker, .newWorkspace, .createWorktree, .removeWorktree, .toggleCommandPalette, .newTool,
             .openSettings,
             .dismissToast, .dismissAllToasts,
-            .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace:
+            .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace,
+            .nextWaitingAgent:
             return true
         }
     }
@@ -197,6 +200,7 @@ extension KeyInterceptor.ReservedChord {
         case "prev_workspace": self = .prevWorkspace
         case "next_workspace": self = .nextWorkspace
         case "close_workspace": self = .closeWorkspace
+        case "next_waiting_agent": self = .nextWaitingAgent
         default:
             if let rest = token.dropPrefixIfPresent("select_tab_"), let n = Int(rest), (1...9).contains(n) {
                 self = .selectTab(n)
@@ -292,6 +296,7 @@ enum KeymapDefaults {
         map[Chord(command: true, control: true, key: "[")] = .prevWorkspace
         map[Chord(command: true, control: true, key: "]")] = .nextWorkspace
         map[Chord(command: true, control: true, key: "w")] = .closeWorkspace
+        map[Chord(command: true, shift: true, key: "a")] = .nextWaitingAgent
 
         return map
     }()

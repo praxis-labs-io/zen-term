@@ -376,6 +376,89 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(c.agentStateForTesting(first.id), .idle, "and it raises nothing at you")
     }
 
+    private func descendants(of view: NSView) -> [NSView] {
+        view.subviews.flatMap { [$0] + descendants(of: $0) }
+    }
+
+    private func showsToast(_ message: String, in c: WindowController) -> Bool {
+        guard let content = c.window.contentView else { return false }
+        return descendants(of: content).contains { ($0 as? NSTextField)?.stringValue == message }
+    }
+
+    private static let nothingWaitingMessage =
+        "No agent in this window is asking for you.\nThe sidebar lists the ones that are."
+    private static let waitingElsewhereMessage =
+        "Nothing in this window is asking for you.\nThe sidebar row takes you there."
+
+    func test_theChord_goesToTheAgentThatHasWaitedLongest() throws {
+        let c = makeWindow()
+        let first = try focusedAgent(c)
+        let second = try split(c)
+        notify(first, "Wants to run swift test")
+        notify(second, "Wants to edit a file")
+        XCTAssertEqual(c.focusedSurfaceIDForTesting, second.id, "precondition: the split holds focus")
+
+        c.handle(.nextWaitingAgent)
+
+        XCTAssertEqual(c.focusedSurfaceIDForTesting, first.id, "the longest wait comes first")
+    }
+
+    func test_theChord_skipsTheAgentYouAreAlreadyOn() throws {
+        let c = makeWindow()
+        let first = try focusedAgent(c)
+        let second = try split(c)
+        WindowController.isPresent = { _ in false }
+        notify(first, "Wants to run swift test")
+        notify(second, "Wants to edit a file")
+        focus(first, in: c)
+        XCTAssertEqual(
+            c.focusedSurfaceIDForTesting, first.id, "precondition: you are on the head of the queue")
+        XCTAssertEqual(
+            items(c).filter { $0.state == .waiting }.map(\.id), [first.id, second.id],
+            "precondition: both are still waiting, and the one you are on reads first")
+
+        c.handle(.nextWaitingAgent)
+
+        XCTAssertEqual(
+            c.focusedSurfaceIDForTesting, second.id,
+            "landing where you already are would read as the chord doing nothing")
+    }
+
+    func test_withNothingWaiting_theChordSaysSoRatherThanMovingYou() throws {
+        let c = makeWindow()
+        let only = try focusedAgent(c)
+
+        c.handle(.nextWaitingAgent)
+
+        XCTAssertEqual(c.focusedSurfaceIDForTesting, only.id, "nothing to jump to, so nothing moves")
+        XCTAssertTrue(showsToast(Self.nothingWaitingMessage, in: c))
+    }
+
+    func test_withNothingHereButSomethingElsewhere_theChordDoesNotClaimNothingIsWaiting() throws {
+        let c = makeWindow()
+        _ = try focusedAgent(c)
+        let other = c.windowID + 1_000
+        AttentionCenter.shared.update(windowID: other, waitingCount: 1, since: Date())
+        addTeardownBlock { AttentionCenter.shared.forget(windowID: other) }
+
+        c.handle(.nextWaitingAgent)
+
+        XCTAssertTrue(showsToast(Self.waitingElsewhereMessage, in: c))
+        XCTAssertFalse(showsToast(Self.nothingWaitingMessage, in: c), "it would be lying")
+    }
+
+    func test_theRefusalCopy_fitsTheToastWrapColumn() {
+        for message in [Self.nothingWaitingMessage, Self.waitingElsewhereMessage] {
+            for line in message.split(separator: "\n") {
+                let width = (String(line) as NSString)
+                    .size(withAttributes: [.font: ToastView.messageFont]).width
+                XCTAssertLessThanOrEqual(
+                    width, ToastView.messageMaxWidth,
+                    "wraps at \(Int(width))pt > \(Int(ToastView.messageMaxWidth))pt: \(line)")
+            }
+        }
+    }
+
     func test_clickingAnAgent_inAnotherWorkspace_switchesAndFocusesItsPane() throws {
         let c = makeWindow()
         let home = c.activeWorkspaceIDForTesting

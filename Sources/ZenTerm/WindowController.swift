@@ -2041,6 +2041,7 @@ final class WindowController: NSObject {
             if ids.indices.contains(n - 1) { activate(ids[n - 1]) }
         case .prevWorkspace: cycleWorkspace(-1)
         case .nextWorkspace: cycleWorkspace(1)
+        case .nextWaitingAgent: jumpToNextWaitingAgent()
         case .closeWorkspace:
             Log.info("close workspace", category: .workspace)
             requestCloseWorkspace(activeWorkspace)
@@ -2699,6 +2700,27 @@ final class WindowController: NSObject {
 
     private func place(of tab: TabID, in workspace: WorkspaceController) -> [Int] {
         [order.position(of: workspace.id) ?? 0, workspace.tabIDs.firstIndex(of: tab) ?? 0]
+    }
+
+    // Answering is what advances the cycle: the agent you land on leaves the list, so the next press finds the next one.
+    private func jumpToNextWaitingAgent() {
+        let waiting = agentItems().filter { $0.state == .waiting }
+        guard let next = waiting.first(where: { $0.id != focusedSurface }) ?? waiting.first else {
+            return toastNothingWaiting()
+        }
+        Log.info("jump to waiting agent", category: .nav)
+        jumpToAgent(next.id)
+    }
+
+    private func toastNothingWaiting() {
+        let elsewhere = AttentionCenter.shared.waitingCount(excluding: windowID) > 0
+        toasts.show(
+            ToastContent(
+                variant: .info,
+                title: elsewhere ? "Waiting in another window" : "Nothing is waiting",
+                message: elsewhere
+                    ? "Nothing in this window is asking for you.\nThe sidebar row takes you there."
+                    : "No agent in this window is asking for you.\nThe sidebar lists the ones that are."))
     }
 
     private func jumpToAgent(_ surface: SurfaceID) {
