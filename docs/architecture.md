@@ -275,7 +275,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   came from (`Source`, ranked so a stronger source renames, a weaker one never does, and a
   missing name yields to any real name), and what it last said. `identify` is the one way in. A launch whose program is `ai` or a
   known agent joins at launch, idle included; any surface that sends OSC 777 or
-  indeterminate OSC 9;4 joins on that signal. An agent leaves when its surface is released,
+  indeterminate OSC 9;4 joins on that signal, and a title an agent's identification pattern
+  recognises joins on that. The last is what a hand-launched Codex has: it emits no progress
+  and its notification fires on only some stops, so without it every title it sent was dropped. An agent leaves when its surface is released,
   when its command finishes, or when its busy reading falls (the program exited to the
   shell), once its latch is answered. Only a *fall* from busy counts: a surface polled
   before its program starts has not been busy yet.
