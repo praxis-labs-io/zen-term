@@ -115,6 +115,30 @@ final class AgentTitleRoutingTests: WindowTestCase {
         XCTAssertEqual(c.agentMessageForTesting(id), "Multiple choice question tool")
     }
 
+    func test_aCodexNobodyLaunched_joinsOnItsOwnTitle() throws {
+        let c = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        let id = try XCTUnwrap(c.surfaceIDsForTesting(tabIndex: 0).first)
+
+        push(AgentTitleFixtures.codexWorking[0], from: surface)
+
+        XCTAssertEqual(
+            c.agentRowForTesting(id)?.detail.contains("codex"), true,
+            "codex emits no progress and its notification is unreliable, so the title is its only way in")
+        XCTAssertEqual(c.agentStateForTesting(id), .working)
+    }
+
+    func test_aHandLaunchedCodex_thenAsking_readsWaiting() throws {
+        let c = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        let id = try XCTUnwrap(c.surfaceIDsForTesting(tabIndex: 0).first)
+        push(AgentTitleFixtures.codexWorking[0], from: surface)
+
+        push(AgentTitleFixtures.codexBlockedOn, from: surface)
+
+        XCTAssertEqual(c.agentStateForTesting(id), .waiting)
+    }
+
     func test_aTitleFromASurfaceThatIsNoAgent_changesNothing() throws {
         let c = makeWindow()
         let surface = try XCTUnwrap(spawned.first)

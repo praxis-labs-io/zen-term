@@ -13,6 +13,23 @@ enum AgentRules {
         return AgentRoster.knownAgents.first { name.contains($0) }
     }
 
+    /// The agent a title alone identifies, for a pane ZenTerm did not launch. Nil unless a pattern is sure.
+    static func agentName(matching title: String) -> String? {
+        identifiers.first { $0.match.matches(title) }?.name
+    }
+
+    // A leading braille frame is far narrower in a title than on screen, where any build tool draws one.
+    private static let identifiers: [(name: String, match: RuleMatcher)] = [
+        (
+            "codex",
+            .any([
+                .regex("^codex$"),
+                .contains("Action Required"),
+                .regex("^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] "),
+            ])
+        )
+    ]
+
     /// What the progress region reads before a program has reported anything.
     static let clearedProgress = "4;0"
 

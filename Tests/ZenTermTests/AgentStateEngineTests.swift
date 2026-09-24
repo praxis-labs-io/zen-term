@@ -3,15 +3,24 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Fixture titles from the ZEN-468 probe, measured 2026-09-17 against Claude Code and Codex.
+/// Titles captured from real turns: Claude on 2026-09-17, Codex on 2026-09-24. Never hand-written.
 enum AgentTitleFixtures {
-    static let codexWorking = ["⠋ Working", "⠙ Working", "⠹ Working", "⠸ Working", "⠼ Working"]
-    static let codexBlockedOn = "[ ! ] Action Required | zen-term"
-    static let codexBlockedOff = "[ . ] Action Required | zen-term"
-    static let codexIdle = "zen-term"
+    static let codexWorking = [
+        "⠋ Create test.txt | drucial", "⠙ Create test.txt | drucial", "⠹ Create test.txt | drucial",
+        "⠸ Create test.txt | drucial", "⠼ Create test.txt | drucial", "⠴ Create test.txt | drucial",
+        "⠦ Create test.txt | drucial", "⠧ Create test.txt | drucial", "⠇ Create test.txt | drucial",
+        "⠏ Create test.txt | drucial",
+    ]
+    static let codexBlockedOn = "[ ! ] Action Required | Create test.txt | drucial"
+    static let codexBlockedOff = "[ . ] Action Required | Create test.txt | drucial"
+    static let codexIdle = "Create test.txt | drucial"
+    static let codexBareIdle = "drucial"
+    static let codexLaunch = "codex"
+    /// Codex mid-task, with a spinner at the head and another inside the label.
+    static let codexRenaming = "⠴ renaming... ⠴ | drucial"
     static let claudeWorking = "◐ Multiple choice question tool"
-    static let claudeWorkingAlternate = "◑ Bash tool"
-    static let claudeIdle = "✳ zen-term"
+    static let claudeWorkingAlternate = "◑ Multiple choice question tool"
+    static let claudeIdle = "✳ Claude Code"
 }
 
 final class AgentStateEngineTests: XCTestCase {
@@ -20,8 +29,15 @@ final class AgentStateEngineTests: XCTestCase {
     }
 
     func test_everyCodexSpinnerFrame_readsWorking() {
+        XCTAssertEqual(AgentTitleFixtures.codexWorking.count, 10, "the capture showed ten frames")
         for title in AgentTitleFixtures.codexWorking {
             XCTAssertEqual(codexState(title), .working, "\(title) is a spinner frame")
+        }
+    }
+
+    func test_codexIdleTitles_readIdle() {
+        for title in [AgentTitleFixtures.codexIdle, AgentTitleFixtures.codexBareIdle] {
+            XCTAssertEqual(codexState(title), .idle, "\(title) is a finished turn")
         }
     }
 
@@ -199,11 +215,39 @@ final class AgentRulesKeyTests: XCTestCase {
             AgentRules.message(fromTitle: AgentTitleFixtures.claudeWorking, agentName: "claude"),
             "Multiple choice question tool")
         XCTAssertEqual(
-            AgentRules.message(fromTitle: AgentTitleFixtures.claudeWorkingAlternate, agentName: "claude"), "Bash tool")
-        XCTAssertEqual(AgentRules.message(fromTitle: AgentTitleFixtures.claudeIdle, agentName: "claude"), "zen-term")
+            AgentRules.message(fromTitle: AgentTitleFixtures.claudeWorkingAlternate, agentName: "claude"),
+            "Multiple choice question tool")
+        XCTAssertEqual(
+            AgentRules.message(fromTitle: AgentTitleFixtures.claudeIdle, agentName: "claude"), "Claude Code")
     }
 
     func test_onlyClaudeTakesItsMessageFromTheTitle() {
         XCTAssertNil(AgentRules.message(fromTitle: AgentTitleFixtures.codexIdle, agentName: "codex"))
+    }
+}
+
+final class AgentIdentificationTests: XCTestCase {
+    func test_aTitleIdentifiesCodex() {
+        let cases = [
+            AgentTitleFixtures.codexLaunch, AgentTitleFixtures.codexBlockedOn,
+            AgentTitleFixtures.codexBlockedOff, AgentTitleFixtures.codexWorking[0],
+            AgentTitleFixtures.codexWorking[9], AgentTitleFixtures.codexRenaming,
+        ]
+
+        for title in cases {
+            XCTAssertEqual(AgentRules.agentName(matching: title), "codex", "\(title)")
+        }
+    }
+
+    func test_aTitleThatProvesNothing_identifiesNobody() {
+        let cases = [
+            AgentTitleFixtures.codexIdle, AgentTitleFixtures.codexBareIdle,
+            AgentTitleFixtures.claudeWorking, AgentTitleFixtures.claudeIdle,
+            "~", "/Users/drucial", "npm run build", "",
+        ]
+
+        for title in cases {
+            XCTAssertNil(AgentRules.agentName(matching: title), "\(title) is not proof of an agent")
+        }
     }
 }

@@ -2446,7 +2446,12 @@ final class WindowController: NSObject {
 
     private func titleChanged(surface: SurfaceID, title: String) {
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.agents.contains(surface) else { return }
+            guard let self else { return }
+            // Codex emits no progress and its notification is unreliable, so the title is its only way in.
+            if !self.agents.contains(surface), let name = AgentRules.agentName(matching: title) {
+                self.agents.identify(surface, name: name, source: .signal)
+            }
+            guard self.agents.contains(surface) else { return }
             self.agentTitles[surface] = title
             self.deriveAgentState(surface)
             // The tail is the live tool name, so it moves many times inside one turn the state never leaves.
