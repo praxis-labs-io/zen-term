@@ -139,6 +139,20 @@ final class AgentTitleRoutingTests: WindowTestCase {
         XCTAssertEqual(c.agentStateForTesting(id), .waiting)
     }
 
+    func test_answeringABlockedCodex_doesNotLeaveItWorking() throws {
+        let c = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        let id = try XCTUnwrap(c.surfaceIDsForTesting(tabIndex: 0).first)
+        push(AgentTitleFixtures.codexWorking[0], from: surface)
+        push(AgentTitleFixtures.codexBlockedOn, from: surface)
+
+        c.answerAgentForTesting(id)
+
+        XCTAssertNotEqual(
+            c.agentRowForTesting(id)?.state, .working,
+            "an agent that stopped to ask is not mid-turn, so answering must not fall back to working")
+    }
+
     func test_aTitleFromASurfaceThatIsNoAgent_changesNothing() throws {
         let c = makeWindow()
         let surface = try XCTUnwrap(spawned.first)

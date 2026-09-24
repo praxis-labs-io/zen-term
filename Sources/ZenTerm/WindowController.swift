@@ -2494,6 +2494,8 @@ final class WindowController: NSObject {
             if !wasAsking { agents.setMessage(surface, nil) }
         case .blocked:
             guard let tab = tab(of: surface) else { return }
+            // An agent that stopped to ask is not mid-turn, and leaving working up outlives the answer.
+            attention.setWorking(surface, false)
             attention.record(surface, .waiting, seen: isSeen(surface, in: tab))
         case nil:
             break
@@ -3015,6 +3017,8 @@ final class WindowController: NSObject {
     var focusedSurfaceIDForTesting: SurfaceID? { activeController?.focusedSurfaceID }
 
     func trackAgentExitsForTesting() { trackAgentExits() }
+
+    func answerAgentForTesting(_ surface: SurfaceID) { answerAgent(surface) }
 
     func terminalSurfaceForTesting(_ surface: SurfaceID) -> TerminalSurface? { terminalSurface(surface) }
 
