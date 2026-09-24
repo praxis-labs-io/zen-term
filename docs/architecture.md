@@ -248,11 +248,14 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   on screen: a closed drawer or float keeps its latch and its card. Releasing an unseen
   surface folds its latch into a per-tab residual, so a closed pane does not unmark the
   tab it left; the next visit drops it.
-- **An agent has a second latch that only focus clears** (`agentState(of:)`), so a split
-  asking in the active tab still reads waiting while its tab number stays quiet. Focus
-  counts only with the app active and the window key; dismissing a card does not clear
-  it. A turn ending out of focus (`working` falling) latches `completed` here and nowhere
-  else; a new turn replaces it, never a waiting latch.
+- **An agent has a second latch that answering clears** (`agentState(of:)`), so a split
+  asking in the active tab still reads waiting while its tab number stays quiet. It
+  latches whatever the pane's focus, since the notification behind it comes only once,
+  and focus does not clear it: looking at a prompt is not answering it. Answering is
+  typing into the pane, where a key the chrome did not claim is aimed at the agent and a
+  reserved chord is not. A turn ending (`working` falling)
+  clears a waiting latch and leaves `completed`, here and nowhere else; a new turn
+  replaces that, never a waiting latch.
 - **`AgentRoster` says which surfaces run an agent**, per window: its name, where the name
   came from (`Source`, ranked so a stronger source renames, a weaker one never does, and a
   missing name yields to any real name), and what it last said. `identify` is the one way in. A launch whose program is `ai` or a

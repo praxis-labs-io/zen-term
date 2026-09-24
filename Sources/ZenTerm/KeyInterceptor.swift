@@ -76,6 +76,9 @@ final class KeyInterceptor {
     // The responder chain hands `flagsChanged` to one pane, and every other pane needs it too.
     var onModifierChange: ((NSEvent) -> Void)?
 
+    // Only keys the chrome did not claim: answering an agent means typing to it, and a chord is not that.
+    var onKeyToFocus: (() -> Void)?
+
     func start() {
         stop()
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { [weak self] event in
@@ -98,12 +101,14 @@ final class KeyInterceptor {
                 if !event.isARepeat || action.shouldRepeat { onReservedChord?(action) }
                 return nil
             case .deferToTerminal:
+                onKeyToFocus?()
                 return event
             case .passThrough:
                 break
             }
         }
         if modeHandler?(event) == true { return nil }
+        onKeyToFocus?()
         return event
     }
 

@@ -54,7 +54,7 @@ final class AgentFocusTests: WindowTestCase {
         wait(for: [expectation], timeout: 2)
     }
 
-    func test_anAgentWaitingInAnUnfocusedSplit_staysWaitingUntilThatPaneIsFocused() throws {
+    func test_anAgentWaitingInAnUnfocusedSplit_staysWaitingUntilItIsAnswered() throws {
         let c = makeWindow()
         let first = try XCTUnwrap(c.focusedSurfaceIDForTesting)
         let firstSurface = try XCTUnwrap(spawned.first)
@@ -74,6 +74,9 @@ final class AgentFocusTests: WindowTestCase {
         XCTAssertEqual(c.agentStateForTesting(first), .waiting, "focusing another pane does not answer it")
 
         while c.focusedSurfaceIDForTesting != first { c.handle(.nextPane) }
+        XCTAssertEqual(c.agentStateForTesting(first), .waiting, "focusing it back is not answering it either")
+
+        c.answerTypedAgent()
 
         XCTAssertEqual(c.agentStateForTesting(first), .idle)
     }
@@ -110,6 +113,74 @@ final class AgentFocusTests: WindowTestCase {
         WindowController.isPresent = { _ in true }
         c.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
 
+        XCTAssertEqual(
+            c.agentStateForTesting(pane), .waiting,
+            "coming back to the window is looking at the prompt, not answering it")
+
+        c.answerTypedAgent()
+
         XCTAssertEqual(c.agentStateForTesting(pane), .idle)
+    }
+
+    func test_aTurnEndingOnAWaitingAgent_takesTheWordsWithTheTone() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        let surface = try XCTUnwrap(spawned.first)
+        c.notifyProgressForTesting(tabIndex: 0, progress: TerminalProgress(state: .indeterminate, fraction: nil))
+        drainMainQueue()
+
+        surface.delegate?.surface(
+            surface, didPostNotification: TerminalNotification(title: "", body: "Claude needs your permission"))
+        drainMainQueue()
+        XCTAssertEqual(c.agentStateForTesting(pane), .waiting)
+
+        c.notifyProgressForTesting(tabIndex: 0, progress: nil)
+        drainMainQueue()
+
+        XCTAssertEqual(c.agentStateForTesting(pane), .completed, "a latch cannot outlive its turn")
+        let row = try XCTUnwrap(c.agentRowForTesting(pane))
+        XCTAssertEqual(
+            row.summary, row.state.summary,
+            "a turn ending clears the words with the tone, or the row reads blocked under a done dot")
+    }
+
+    func test_typingIntoTheFindField_doesNotAnswerTheAgent() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        let surface = try XCTUnwrap(spawned.first)
+
+        surface.delegate?.surface(
+            surface, didPostNotification: TerminalNotification(title: "", body: "Claude needs your permission"))
+        drainMainQueue()
+        XCTAssertEqual(c.agentStateForTesting(pane), .waiting)
+
+        c.handle(.toggleSearch)
+        XCTAssertTrue(c.search.isEditing, "precondition: the find field holds the keys")
+        c.answerTypedAgent()
+
+        XCTAssertEqual(
+            c.agentStateForTesting(pane), .waiting, "the keys went to the find field, not to the agent")
+    }
+
+    func test_typingIntoAWatchedPane_answersIt_andTheRowStopsSayingBlocked() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        let surface = try XCTUnwrap(spawned.first)
+
+        surface.delegate?.surface(
+            surface, didPostNotification: TerminalNotification(title: "", body: "Claude needs your permission"))
+        drainMainQueue()
+        let asking = try XCTUnwrap(c.agentRowForTesting(pane))
+        XCTAssertEqual(c.agentStateForTesting(pane), .waiting, "a prompt you watched arrive is still blocked")
+        XCTAssertEqual(asking.summary, "Claude needs your permission")
+
+        c.answerTypedAgent()
+        drainMainQueue()
+
+        XCTAssertEqual(c.agentStateForTesting(pane), .idle)
+        let answered = try XCTUnwrap(c.agentRowForTesting(pane))
+        XCTAssertEqual(
+            answered.summary, answered.state.summary,
+            "the row's words have to agree with its tone, or it reads blocked while it looks idle")
     }
 }

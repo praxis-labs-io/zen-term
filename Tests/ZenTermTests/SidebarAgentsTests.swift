@@ -211,6 +211,7 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(items(c).map(\.id), [first.id, second.id, third.id], "the longest waiting reads first")
 
         focus(first, in: c)
+        c.answerTypedAgent()
         XCTAssertEqual(items(c).map(\.id), [second.id, third.id, first.id])
         XCTAssertEqual(items(c).map(\.state), [.waiting, .done, .idle])
         XCTAssertEqual(items(c).last?.summary, "Idle", "an answered question does not linger")
@@ -220,7 +221,7 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(items(c).map(\.state), [.waiting, .working, .idle])
     }
 
-    func test_anAgentWaitingInAnUnfocusedSplit_staysWaitingUntilThatPaneIsFocused() throws {
+    func test_anAgentWaitingInAnUnfocusedSplit_staysWaitingUntilItIsAnswered() throws {
         let c = makeWindow()
         let first = try focusedAgent(c)
         _ = try split(c)
@@ -234,6 +235,9 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(items(c).map(\.state), [.waiting], "focusing another pane does not answer it")
 
         focus(first, in: c)
+        XCTAssertEqual(items(c).map(\.state), [.waiting], "focusing it back is not answering it")
+
+        c.answerTypedAgent()
         XCTAssertEqual(items(c).map(\.state), [.idle])
         XCTAssertEqual(
             rows(c).first?.fillForTesting, NSColor.clear.cgColor, "only the workspace row reads as active")
@@ -302,12 +306,13 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertTrue(items(c).isEmpty)
     }
 
-    func test_anAgentExitingNonZero_staysUntilItsPaneIsFocused() throws {
+    func test_anAgentExitingNonZero_staysUntilItIsAnswered() throws {
         let c = makeWindow()
         let first = try focusedAgent(c)
         let second = try split(c)
         notify(first, "Wants to run swift test")
         focus(first, in: c)
+        c.answerTypedAgent()
         focus(second, in: c)
         XCTAssertEqual(items(c).map(\.state), [.idle], "precondition: nothing latched")
         first.surface.isBusy = true
@@ -323,6 +328,7 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(items(c).first?.summary, WindowController.commandResultMessage(result))
 
         focus(first, in: c)
+        c.answerTypedAgent()
         XCTAssertTrue(items(c).isEmpty)
     }
 
@@ -384,7 +390,8 @@ final class SidebarAgentsTests: WindowTestCase {
 
         XCTAssertEqual(c.activeWorkspaceIDForTesting, target)
         XCTAssertEqual(c.focusedSurfaceIDForTesting, agent.id)
-        XCTAssertEqual(items(c).map(\.state), [.idle])
+        XCTAssertEqual(
+            items(c).map(\.state), [.waiting], "the jump takes you to the prompt, it does not answer it")
     }
 
     func test_clickingAnAgent_inAClosedDrawer_opensAndFocusesIt() throws {
@@ -870,6 +877,7 @@ final class SidebarAgentsTests: WindowTestCase {
         _ = try split(c)
         notify(agent, "Wants to run swift test. It rebuilds GhosttyKit first.")
         focus(agent, in: c)
+        c.answerTypedAgent()
         let row = try XCTUnwrap(rows(c).first)
         XCTAssertEqual(row.summaryTextForTesting, "Idle", "precondition: an answered agent shows a state word")
 

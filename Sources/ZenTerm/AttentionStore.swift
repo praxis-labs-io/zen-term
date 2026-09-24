@@ -15,6 +15,8 @@ final class AttentionStore {
         var seen = true
         var working = false
         var since: Date?
+        // Its own clock, because `since` dates from the first latch of any kind, a completion included.
+        var waitingSince: Date?
         var agentLatched: SurfaceAttention = .idle
         var agentSince: Date?
     }
@@ -45,25 +47,27 @@ final class AttentionStore {
             earliest(existing?.since, entry.since),
             (existing?.waiting ?? 0) + (entry.latched == .waiting ? 1 : 0),
             entry.latched == .waiting
-                ? earliest(existing?.waitingSince, entry.since) : existing?.waitingSince
+                ? earliest(existing?.waitingSince, entry.waitingSince) : existing?.waitingSince
         )
     }
 
-    func record(_ id: SurfaceID, _ event: SurfaceAttention, seen: Bool, focused: Bool) {
-        if !focused { latchAgent(id, event) }
+    // Focus gates the toast, never the agent latch: the notification is one-shot, so blocked outlives a glance.
+    func record(_ id: SurfaceID, _ event: SurfaceAttention, seen: Bool) {
+        latchAgent(id, event)
         guard !seen else { return markSeen(id) }
         guard var entry = entries[id] else { return }
         entry.latched = max(entry.latched, event)
         entry.seen = false
         entry.since = entry.latched == .idle ? nil : (entry.since ?? now())
+        if entry.latched == .waiting { entry.waitingSince = entry.waitingSince ?? now() }
         entries[id] = entry
     }
 
     /// A level, not an event: progress clearing has to be able to lower it again.
-    func setWorking(_ id: SurfaceID, _ on: Bool, focused: Bool) {
+    func setWorking(_ id: SurfaceID, _ on: Bool) {
         guard let wasWorking = entries[id]?.working else { return }
         entries[id]?.working = on
-        if wasWorking, !on, !focused { latchAgent(id, .completed) }
+        if wasWorking, !on { latchAgent(id, .completed) }
         if !wasWorking, on, entries[id]?.agentLatched == .completed {
             entries[id]?.agentLatched = .idle
             entries[id]?.agentSince = nil
@@ -76,8 +80,7 @@ final class AttentionStore {
         entries[id]?.agentSince = nil
     }
 
-    func markFocused(_ id: SurfaceID) {
-        markSeen(id)
+    func answerAgent(_ id: SurfaceID) {
         entries[id]?.agentLatched = .idle
         entries[id]?.agentSince = nil
     }
@@ -98,6 +101,7 @@ final class AttentionStore {
         entries[id]?.seen = true
         entries[id]?.latched = .idle
         entries[id]?.since = nil
+        entries[id]?.waitingSince = nil
     }
 
     func dropTab(_ tab: TabID) {
@@ -149,7 +153,7 @@ final class AttentionStore {
     private var waitingByAge: [(target: WaitingTarget, since: Date?, rank: Int)] {
         let latched = entries.compactMap { id, entry -> (WaitingTarget, Date?, Int)? in
             guard !entry.seen, entry.latched == .waiting else { return nil }
-            return (.surface(id), entry.since, id.raw)
+            return (.surface(id), entry.waitingSince, id.raw)
         }
         let folded = residual.compactMap { tab, value -> (WaitingTarget, Date?, Int)? in
             guard value.state == .waiting else { return nil }
