@@ -234,7 +234,22 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **Hidden drawers are detached, not `isHidden`**: a 0x0 view resizes its PTY to zero
   columns and crashes TUIs.
 - **Titles update on push**, re-read every 1.5s as a backstop that also polls drawer busy
-  and agent exits.
+  and agent exits, and lands a held idle that has no event left to push.
+- **An agent's state is derived from the signals it already pushes**, by rules that are
+  typed data in the repo, never configuration: `AgentStateRule` (a state, a priority, a
+  region, a `contains`/`regex`/`line_regex` matcher nesting through `all`/`any`/`not`),
+  `AgentRules` (what ships), `AgentStateEngine` (pure; highest matching priority wins, a
+  tie keeps the first, `skipStateUpdate` proves nothing). The regions are the two pushed
+  signals, `osc_title` and `osc_progress`. **No match falls back to `idle`, never
+  `blocked`**: a false alarm costs more than a quiet row, so an agent we ship no rules for
+  reads idle and still gets working from OSC 9;4. Codex emits no progress at all and its
+  title carries all three states; Claude's title flickers to idle mid-turn while progress
+  holds working, so Claude's title is read for the row's message and never for its state.
+- **`AgentStateTracker` publishes transitions, not events.** Codex pushes about ten title
+  changes a second, and its blocked title alternates at 1 Hz, so rules match the phrase and
+  the tracker drops anything that does not move the derived state. A working-to-idle fall
+  that no rule explains is held briefly, because that is the shape a dropped spinner frame
+  takes; a rule that positively says idle is published at once.
 - **Attention has one owner per window**, `AttentionStore`, keyed by `SurfaceID` across
   panes, drawers and floats. Each surface latches a `SurfaceAttention` beside a `seen`
   flag, and one ranked fold (`rollup`) is both the priority rule and the rollup at every
@@ -254,8 +269,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   and focus does not clear it: looking at a prompt is not answering it. Answering is
   typing into the pane, where a key the chrome did not claim is aimed at the agent and a
   reserved chord is not. A turn ending (`working` falling)
-  clears a waiting latch and leaves `completed`, here and nowhere else; a new turn
-  replaces that, never a waiting latch.
+  clears a waiting latch and leaves `completed`, as does a notification an agent's rules
+  read as finished; a new turn replaces that, never a waiting latch.
 - **`AgentRoster` says which surfaces run an agent**, per window: its name, where the name
   came from (`Source`, ranked so a stronger source renames, a weaker one never does, and a
   missing name yields to any real name), and what it last said. `identify` is the one way in. A launch whose program is `ai` or a
@@ -266,12 +281,16 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   before its program starts has not been busy yet.
   The Agents rows join it with `agentState(of:)` and sort waiting (oldest first), working,
   done, idle, ties in sidebar order.
-- **A state only the chrome can act on never reaches the tab number.** `working` (OSC 9;4)
+- **A state only the chrome can act on never reaches the tab number.** `working`
   says an agent is mid-turn, not that it wants you, so it stops at the dock's dot. The dot
   and the tab number are one signal at two altitudes; a hidden drawer or float asks
   through its dot because it has no number.
 - **Background command completion:** OSC 133 `COMMAND_FINISHED` over a threshold in a
   background tab raises one sticky toast; the rank keeps it under a waiting agent.
+- **An OSC 777 is a question unless its agent's rules say otherwise.** Codex posts the same
+  notification when it finishes as when it needs approval, so its title decides: without
+  the prompt phrase it lands as `completed` with a positive card. Every other agent is
+  taken at its word.
 - Notification identity is `(windowID, tabID)`; `TabID` is per window. `AttentionCenter`
   records which windows are asking and since when, and answers nothing else.
 - `tearDown()` is idempotent, the single close path, and cancels pending confirms and
