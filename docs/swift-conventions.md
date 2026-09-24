@@ -56,6 +56,10 @@ sibling still gets `mouseEntered`, so a hover feature suppressed by "something c
 that state explicitly, and a covered `IconButton` still pops its tooltip. Hiding it is the only way to
 silence it (`SidebarEdgeReveal`, `HoverSuppressing`).
 
+**`SidebarView.setHoverCovered` clamps at zero going down, not going up.** A stray decrement is
+harmless, a stray increment suppresses sidebar hover for the rest of the session with nothing to clear
+it. Both call sites are balanced today, and a third has to be.
+
 **AppKit drops `mouseEntered` when the pointer arrives inside the window's own resize band.** A view
 tracking the window edge therefore never arms for a pointer that came in from outside the window, which
 is exactly how a person reaches an edge. Arm on `mouseMoved` as well as on enter.
@@ -265,6 +269,13 @@ the command proves nothing about a shell exiting on its own, and reads as though
 calls `makeFirstResponder`, which reaches `becomeFirstResponder`, and so the surface's own focus report,
 only when the view is in a window, is not already first responder, and the call succeeds. Recording that
 report unconditionally invents a push production never makes; recording nothing hides the one it does.
+
+**A render tears down a tooltip that has not appeared yet.** `SidebarView.refreshRowHover` suppresses
+and then calls `row.refreshHover()`, which reads `pointerIsInside`; that is false whenever the window
+is not key, and a test window is not key. So the first render after a synthesized `mouseEntered`
+clears `isHovered`, hides the tooltip, and cancels `TooltipPresenter`'s 0.45s work item. It follows
+hover order, not row kind, and a workspace open renders several times while it settles. Hover once the
+window is quiet, or assert the row's own hover state rather than a presented tooltip.
 
 **A synthesized `keyDown` commits text from the keyCode and layout, not `characters`, and only when
 `NSApp.currentEvent` is set.** `currentEvent` cannot be cleared and leaks between cases, so a key test

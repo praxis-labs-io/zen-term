@@ -2646,8 +2646,10 @@ final class WindowController: NSObject {
             guard let place = agentPlace(id) else { return nil }
             let state = AttentionTone(attention.agentState(of: id), failed: agent.failed)
             let item = SidebarAgentItem(
-                id: id, state: state, summary: agent.message ?? state.summary,
-                detail: "\(place.name) · \(agent.name ?? AgentRoster.unnamed)")
+                id: id, state: state,
+                summary: agent.message.map(SidebarAgentItem.summaryLine) ?? state.summary,
+                detail: "\(place.name) · \(agent.name ?? AgentRoster.unnamed)",
+                message: agent.message)
             return (item, attention.agentSince(of: id), place.position)
         }
         return located.sorted { a, b in

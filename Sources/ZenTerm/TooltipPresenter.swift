@@ -15,15 +15,25 @@ final class TooltipPresenter {
     private var keyMonitor: Any?
     private var dismissObservers: [NSObjectProtocol] = []
 
-    func scheduleShow(for source: NSView, label: String, shortcut: String?) {
+    func scheduleShow(
+        for source: NSView, label: String, shortcut: String?, style: ChromeTooltip.Style = .line
+    ) {
         teardown()
         owner = source
         let work = DispatchWorkItem { [weak self, weak source] in
             guard let self, let source, self.owner === source else { return }
-            self.present(for: source, label: label, shortcut: shortcut)
+            self.present(for: source, label: label, shortcut: shortcut, style: style)
         }
         pending = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.delay, execute: work)
+    }
+
+    // A row whose copy changes under a live tooltip: replace it in place, since re-scheduling would blank it for the delay.
+    func relabel(for source: NSView, label: String, shortcut: String?, style: ChromeTooltip.Style) {
+        guard owner === source, tooltip != nil else { return }
+        tooltip?.removeFromSuperview()
+        tooltip = nil
+        present(for: source, label: label, shortcut: shortcut, style: style)
     }
 
     func hide(for source: NSView) {
@@ -31,9 +41,9 @@ final class TooltipPresenter {
         teardown()
     }
 
-    private func present(for source: NSView, label: String, shortcut: String?) {
+    private func present(for source: NSView, label: String, shortcut: String?, style: ChromeTooltip.Style) {
         guard let window = source.window, let content = window.contentView else { return }
-        let tip = ChromeTooltip(label: label, shortcut: shortcut)
+        let tip = ChromeTooltip(label: label, shortcut: shortcut, style: style)
         content.addSubview(tip)
         tip.layoutSubtreeIfNeeded()
 
@@ -57,6 +67,10 @@ final class TooltipPresenter {
         dismissObservers.forEach { NotificationCenter.default.removeObserver($0) }
         dismissObservers = []
     }
+
+    var tooltipForTesting: ChromeTooltip? { tooltip }
+
+    func dismissForTesting() { teardown() }
 
     private func installDismissTriggers(in window: NSWindow) {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in

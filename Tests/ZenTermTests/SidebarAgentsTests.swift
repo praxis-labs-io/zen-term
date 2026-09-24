@@ -48,6 +48,7 @@ final class SidebarAgentsTests: WindowTestCase {
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
         WindowController.isPresent = originalPresence
+        TooltipPresenter.shared.dismissForTesting()
         SidebarController.resetLastChoiceForTesting()
         try? FileManager.default.removeItem(at: root)
         try super.tearDownWithError()
@@ -138,6 +139,33 @@ final class SidebarAgentsTests: WindowTestCase {
                 windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
                 clickCount: 1, pressure: 1))
         row.mouseDown(with: event)
+    }
+
+    private func hover(_ row: SidebarAgentRow, in c: WindowController) throws {
+        TooltipPresenter.shared.dismissForTesting()
+        row.mouseEntered(
+            with: try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .mouseMoved, location: .zero, modifierFlags: [], timestamp: 0,
+                    windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
+                    pressure: 1)))
+    }
+
+    private func unhover(_ row: SidebarAgentRow, in c: WindowController) throws {
+        row.mouseExited(
+            with: try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .mouseMoved, location: .zero, modifierFlags: [], timestamp: 0,
+                    windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
+                    pressure: 1)))
+    }
+
+    private func presentedTooltip() throws -> ChromeTooltip {
+        let deadline = Date().addingTimeInterval(2)
+        while TooltipPresenter.shared.tooltipForTesting == nil, Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        }
+        return try XCTUnwrap(TooltipPresenter.shared.tooltipForTesting, "no tooltip appeared on hover")
     }
 
     private func arrow(_ code: UInt16, in c: WindowController) -> NSEvent {
@@ -758,5 +786,93 @@ final class SidebarAgentsTests: WindowTestCase {
         a.window.sendEvent(returnKey(in: a))
 
         XCTAssertEqual(b.focusedSurfaceIDForTesting, theirs.id)
+    }
+
+    func test_hoveringAnAgent_showsTheWholeMessage_whileTheRowReadsItsFirstSentence() throws {
+        let c = makeWindow()
+        let agent = try focusedAgent(c)
+        _ = try split(c)
+        let body =
+            "Wants to run swift test. It rebuilds GhosttyKit first, which takes a few minutes on a cold cache."
+        notify(agent, body)
+        let row = try XCTUnwrap(rows(c).first)
+
+        XCTAssertEqual(row.summaryTextForTesting, "Wants to run swift test.", "the row stops at the sentence")
+        XCTAssertEqual(row.frame.height, SidebarAgentRow.height, "the message does not grow the row")
+
+        try hover(row, in: c)
+
+        XCTAssertEqual(try presentedTooltip().labelForTesting, body)
+        XCTAssertEqual(row.accessibilityLabel(), body, "a screen reader hears the whole message too")
+    }
+
+    // Drives the row's own render: a window-level render would settle hover first, which a non-key test window reads as a pointer that left.
+    func test_aNewMessageWhileHovering_replacesTheTooltipUnderThePointer() throws {
+        let c = makeWindow()
+        let agent = try focusedAgent(c)
+        _ = try split(c)
+        notify(agent, "Wants to run swift test.")
+        let row = try XCTUnwrap(rows(c).first)
+        let first = try XCTUnwrap(row.itemForTesting)
+        try hover(row, in: c)
+        XCTAssertEqual(try presentedTooltip().labelForTesting, "Wants to run swift test.", "precondition")
+
+        let body = "Wants to run bin/check, which rebuilds GhosttyKit first."
+        row.render(
+            SidebarAgentItem(
+                id: first.id, state: first.state, summary: SidebarAgentItem.summaryLine(of: body),
+                detail: first.detail, message: body))
+
+        XCTAssertEqual(
+            TooltipPresenter.shared.tooltipForTesting?.labelForTesting, body,
+            "the tooltip under the pointer follows the row it belongs to")
+
+        row.render(
+            SidebarAgentItem(
+                id: first.id, state: .working, summary: AttentionTone.working.summary, detail: first.detail,
+                message: nil))
+
+        XCTAssertEqual(
+            TooltipPresenter.shared.tooltipForTesting?.labelForTesting, "Jump to agent",
+            "a progress tick clearing the message takes the tooltip back with it")
+    }
+
+    func test_hoveringAnAgentWithNoMessage_stillSaysWhatClickingDoes() throws {
+        let c = makeWindow()
+        let agent = try focusedAgent(c)
+        _ = try split(c)
+        notify(agent, "Wants to run swift test. It rebuilds GhosttyKit first.")
+        focus(agent, in: c)
+        let row = try XCTUnwrap(rows(c).first)
+        XCTAssertEqual(row.summaryTextForTesting, "Idle", "precondition: an answered agent shows a state word")
+
+        try hover(row, in: c)
+
+        XCTAssertEqual(try presentedTooltip().labelForTesting, "Jump to agent")
+    }
+
+    func test_aHoveredMessage_wrapsInsideTheTooltipColumn() throws {
+        let c = makeWindow()
+        let agent = try focusedAgent(c)
+        _ = try split(c)
+        let line = ChromeTooltip(label: "One line", shortcut: nil).fittingSize.height
+        let bodies = [
+            String(repeating: "supercalifragilistic", count: 6),
+            "Wants to run swift test. It rebuilds GhosttyKit first, which takes a few minutes on a cold cache.",
+        ]
+
+        for body in bodies {
+            notify(agent, body)
+            let row = try XCTUnwrap(rows(c).first)
+            try hover(row, in: c)
+            let tooltip = try presentedTooltip()
+            let size = tooltip.fittingSize
+
+            XCTAssertLessThanOrEqual(
+                size.width, ChromeTooltip.paragraphMaxWidth + 18,
+                "runs \(Int(size.width))pt past the \(Int(ChromeTooltip.paragraphMaxWidth))pt column: \(body)")
+            XCTAssertGreaterThan(size.height, line, "the whole message needs more than one line: \(body)")
+            try unhover(row, in: c)
+        }
     }
 }
