@@ -2448,9 +2448,13 @@ final class WindowController: NSObject {
             autoDismiss: GeneralConfig.current.completionToast == .auto)
     }
 
+    // A shell reports a signal death as 128+n. SIGINT and SIGTERM are someone stopping the agent, not it failing.
+    private static let deliberateStopCodes: Set<Int> = [130, 143]
+
     static func commandResultMessage(_ result: TerminalCommandResult) -> String {
         let elapsed = elapsedDescription(result.duration)
         guard let code = result.exitCode, code != 0 else { return "Finished in \(elapsed)." }
+        if deliberateStopCodes.contains(code) { return "Stopped after \(elapsed)." }
         return "Exited \(code) after \(elapsed)."
     }
 
@@ -2571,7 +2575,7 @@ final class WindowController: NSObject {
 
     private func agentExited(_ surface: SurfaceID, result: TerminalCommandResult) {
         guard agents.contains(surface) else { return }
-        let failed = result.exitCode.map { $0 != 0 } ?? false
+        let failed = result.exitCode.map { $0 != 0 && !Self.deliberateStopCodes.contains($0) } ?? false
         agents.markExited(surface, failed: failed, message: Self.commandResultMessage(result))
         attention.endAgent(surface)
         if failed, !isFocused(surface) { attention.latchAgent(surface, .completed) }

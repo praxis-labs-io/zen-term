@@ -290,6 +290,18 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertTrue(c.sidebarForTesting.view.agentsAreHiddenForTesting)
     }
 
+    func test_anAgentThatExitsBeforeTheFirstBusyPoll_leavesTheList() throws {
+        let c = makeWindow()
+        c.openWorkspaceForTesting(recipe("zen-review", right: "claude --resume"))
+        let drawer = try XCTUnwrap(spawned.last)
+        XCTAssertEqual(items(c).count, 1, "precondition: listed at launch, never polled busy")
+
+        drawer.delegate?.surface(drawer, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 0.2))
+        drainMainQueue()
+
+        XCTAssertTrue(items(c).isEmpty)
+    }
+
     func test_anAgentExitingNonZero_staysUntilItsPaneIsFocused() throws {
         let c = makeWindow()
         let first = try focusedAgent(c)
@@ -341,6 +353,21 @@ final class SidebarAgentsTests: WindowTestCase {
         drainMainQueue()
 
         XCTAssertEqual(items(c).map(\.state), [.failed])
+    }
+
+    func test_anAgentStoppedWithCtrlC_doesNotReadAsFailed() throws {
+        let c = makeWindow()
+        let first = try focusedAgent(c)
+        _ = try split(c)
+        notify(first, "Wants to run swift test")
+        XCTAssertEqual(items(c).map(\.state), [.waiting], "precondition")
+
+        let result = TerminalCommandResult(exitCode: 130, duration: 3)
+        first.surface.delegate?.surface(first.surface, commandDidFinish: result)
+        drainMainQueue()
+
+        XCTAssertNotEqual(items(c).map(\.state), [.failed], "Ctrl-C is a deliberate stop, not a failure")
+        XCTAssertEqual(c.agentStateForTesting(first.id), .idle, "and it raises nothing at you")
     }
 
     func test_clickingAnAgent_inAnotherWorkspace_switchesAndFocusesItsPane() throws {

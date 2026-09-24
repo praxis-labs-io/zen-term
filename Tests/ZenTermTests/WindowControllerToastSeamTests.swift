@@ -311,6 +311,13 @@ final class WindowControllerToastSeamTests: WindowTestCase {
             "Exited 1 after 1h 1m 1s.")
     }
 
+    func test_stoppedCommandMessageSaysStopped() {
+        XCTAssertEqual(
+            WindowController.commandResultMessage(
+                TerminalCommandResult(exitCode: 130, duration: 3_661)),
+            "Stopped after 1h 1m 1s.")
+    }
+
     func test_configDiagnosticsToast_mountsWithOpenSettingsAndDismiss() throws {
         let controller = makeController()
         let content = try XCTUnwrap(
