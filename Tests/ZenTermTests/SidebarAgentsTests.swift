@@ -311,6 +311,21 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(items(c).map(\.state), [.failed])
     }
 
+    func test_anAgentStoppedWithCtrlC_doesNotReadAsFailed() throws {
+        let c = makeWindow()
+        let first = try focusedAgent(c)
+        _ = try split(c)
+        notify(first, "Wants to run swift test")
+        XCTAssertEqual(items(c).map(\.state), [.waiting], "precondition")
+
+        let result = TerminalCommandResult(exitCode: 130, duration: 3)
+        first.surface.delegate?.surface(first.surface, commandDidFinish: result)
+        drainMainQueue()
+
+        XCTAssertNotEqual(items(c).map(\.state), [.failed], "Ctrl-C is a deliberate stop, not a failure")
+        XCTAssertEqual(c.agentStateForTesting(first.id), .idle, "and it raises nothing at you")
+    }
+
     func test_clickingAnAgent_inAnotherWorkspace_switchesAndFocusesItsPane() throws {
         let c = makeWindow()
         let home = c.activeWorkspaceIDForTesting
