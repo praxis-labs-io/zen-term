@@ -877,6 +877,7 @@ final class SidebarAgentsTests: WindowTestCase {
         _ = try split(c)
         notify(agent, "Wants to run swift test. It rebuilds GhosttyKit first.")
         focus(agent, in: c)
+        c.answerTypedAgent()
         let row = try XCTUnwrap(rows(c).first)
         XCTAssertEqual(row.summaryTextForTesting, "Idle", "precondition: an answered agent shows a state word")
 
