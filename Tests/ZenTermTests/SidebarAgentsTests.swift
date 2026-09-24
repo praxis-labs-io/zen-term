@@ -424,6 +424,29 @@ final class SidebarAgentsTests: WindowTestCase {
             "landing where you already are would read as the chord doing nothing")
     }
 
+    func test_theChord_reachesEveryWaitingAgent_notJustTwo() throws {
+        let c = makeWindow()
+        let first = try focusedAgent(c)
+        let second = try split(c)
+        let third = try split(c)
+        WindowController.isPresent = { _ in false }
+        notify(first, "Wants to run swift test")
+        notify(second, "Wants to edit a file")
+        notify(third, "Wants to push")
+        let queue = items(c).filter { $0.state == .waiting }.map(\.id)
+        XCTAssertEqual(queue.count, 3, "precondition: three agents are waiting")
+
+        var visited: [SurfaceID] = []
+        for _ in 0..<3 {
+            c.handle(.nextWaitingAgent)
+            visited.append(try XCTUnwrap(c.focusedSurfaceIDForTesting))
+        }
+
+        XCTAssertEqual(
+            Set(visited), Set(queue),
+            "stepping from the focused agent reaches all three; picking the first unfocused one ping-pongs between two")
+    }
+
     func test_withNothingWaiting_theChordSaysSoRatherThanMovingYou() throws {
         let c = makeWindow()
         let only = try focusedAgent(c)

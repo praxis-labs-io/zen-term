@@ -1935,7 +1935,8 @@ final class WindowController: NSObject {
                 .jumpToPreviousPrompt, .jumpToNextPrompt, .pasteSelection, .clearScreen,
                 .writeScreenFile, .copyScreenFilePath, .openScreenFile,
                 .dismissToast, .dismissAllToasts,
-                .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace, .newWorkspace:
+                .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace, .newWorkspace,
+                .nextWaitingAgent:
                 break
             default:
                 return
@@ -2702,13 +2703,13 @@ final class WindowController: NSObject {
         [order.position(of: workspace.id) ?? 0, workspace.tabIDs.firstIndex(of: tab) ?? 0]
     }
 
-    // Answering is what advances the cycle: the agent you land on leaves the list, so the next press finds the next one.
+    // Steps from where you are rather than tracking a cursor, so answering or a new wait cannot strand the cycle.
     private func jumpToNextWaitingAgent() {
         let waiting = agentItems().filter { $0.state == .waiting }
-        guard let next = waiting.first(where: { $0.id != focusedSurface }) ?? waiting.first else {
-            return toastNothingWaiting()
-        }
-        Log.info("jump to waiting agent", category: .nav)
+        guard !waiting.isEmpty else { return toastNothingWaiting() }
+        let current = waiting.firstIndex { $0.id == focusedSurface }
+        let next = waiting[((current ?? -1) + 1) % waiting.count]
+        Log.info("jump to waiting agent", category: .workspace)
         jumpToAgent(next.id)
     }
 

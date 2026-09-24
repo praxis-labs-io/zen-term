@@ -28,6 +28,7 @@ final class CommandCatalogTests: XCTestCase {
                 "Report an Issue…",
                 "Open Workspace Picker", "New Workspace", "Previous Workspace", "Next Workspace",
                 "Close Workspace",
+                "Jump to Waiting Agent",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "New Tab", "Previous Tab", "Next Tab", "Move Tab Left", "Move Tab Right",
                 "Rename Tab…", "Close Tab",

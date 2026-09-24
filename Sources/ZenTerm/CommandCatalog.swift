@@ -105,7 +105,7 @@ enum CommandCatalog {
         if workspaceCount > 0 {
             chords += (1...min(workspaceCount, 9)).map { .selectWorkspace($0) }
         }
-        chords += [.closeWorkspace]
+        chords += [.closeWorkspace, .nextWaitingAgent]
         chords += [
             .toggleBottomDrawer, .toggleRightDrawer,
             .newTab, .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab, .closeTab,
