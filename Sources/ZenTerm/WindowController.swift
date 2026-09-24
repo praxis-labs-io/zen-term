@@ -36,7 +36,8 @@ final class WindowController: NSObject {
         if let builtToasts { return builtToasts }
         let presenter = ToastPresenter(
             host: container, below: modal?.overlay, topInset: Self.toastTopInset,
-            trailingInset: Self.toastTrailingInset, dismissAfter: GeneralConfig.current.toastDuration)
+            trailingInset: Self.toastTrailingInset, dismissAfter: GeneralConfig.current.toastDuration,
+            isPresent: { [weak self] in self.map { Self.isPresent($0.window) } ?? true })
         builtToasts = presenter
         return presenter
     }
@@ -418,11 +419,11 @@ final class WindowController: NSObject {
         onToggleSidebar = { [weak self] in self?.handle(.toggleSidebar) }
         sidebar.onLeave = { [weak self] in self?.restoreFocusToActive() }
         sidebar.onFocusChanged = { [weak self] in
-            self?.syncHalo()
+            self?.syncWindowFocus()
             self?.sidebar.edgeReveal.recheck()
         }
         sidebar.isPinnedExternally = { [weak self] in self?.isConfirmOpen ?? false }
-        sidebar.onRevealChanged = { [weak self] in self?.syncHalo() }
+        sidebar.onRevealChanged = { [weak self] in self?.syncWindowFocus() }
         sidebar.onFocusYield = { [weak self] in self?.captureFocusReturn() }
         sidebar.onFocusRestore = { [weak self] in self?.restoreFocusToActive() }
         sidebar.edgeReveal.isSuppressed = { [weak self] in
@@ -839,11 +840,15 @@ final class WindowController: NSObject {
 
     private func restoreFocusToActive() {
         if floats.isOpen { floats.refocus() } else { activeController?.restoreUnifiedFocus() }
-        syncHalo()
+        syncWindowFocus()
     }
 
-    private func syncHalo() {
+    // One surface reports focused: the focused one in the key window's active tab, as libghostty's own apprt does.
+    private func syncWindowFocus() {
         activeController?.setHaloVisible(!sidebar.hasFocus && windowIsKey && !sidebar.isRevealed)
+        for controller in allTabControllers {
+            controller.setWindowIsKey(windowIsKey && controller === activeController)
+        }
     }
 
     // Below `tabBar`, so the ⌘W guard toast fired over an open float stays visible.
@@ -2444,9 +2449,13 @@ final class WindowController: NSObject {
             autoDismiss: GeneralConfig.current.completionToast == .auto)
     }
 
+    // A shell reports a signal death as 128+n. SIGINT and SIGTERM are someone stopping the agent, not it failing.
+    private static let deliberateStopCodes: Set<Int> = [130, 143]
+
     static func commandResultMessage(_ result: TerminalCommandResult) -> String {
         let elapsed = elapsedDescription(result.duration)
         guard let code = result.exitCode, code != 0 else { return "Finished in \(elapsed)." }
+        if deliberateStopCodes.contains(code) { return "Stopped after \(elapsed)." }
         return "Exited \(code) after \(elapsed)."
     }
 
@@ -2582,7 +2591,7 @@ final class WindowController: NSObject {
 
     private func agentExited(_ surface: SurfaceID, result: TerminalCommandResult) {
         guard agents.contains(surface) else { return }
-        let failed = result.exitCode.map { $0 != 0 } ?? false
+        let failed = result.exitCode.map { $0 != 0 && !Self.deliberateStopCodes.contains($0) } ?? false
         agents.markExited(surface, failed: failed, message: Self.commandResultMessage(result))
         attention.endAgent(surface)
         if failed { attention.latchAgent(surface, .completed) }
@@ -2657,8 +2666,10 @@ final class WindowController: NSObject {
             guard let place = agentPlace(id) else { return nil }
             let state = AttentionTone(attention.agentState(of: id), failed: agent.failed)
             let item = SidebarAgentItem(
-                id: id, state: state, summary: agent.message ?? state.summary,
-                detail: "\(place.name) · \(agent.name ?? AgentRoster.unnamed)")
+                id: id, state: state,
+                summary: agent.message.map(SidebarAgentItem.summaryLine) ?? state.summary,
+                detail: "\(place.name) · \(agent.name ?? AgentRoster.unnamed)",
+                message: agent.message)
             return (item, attention.agentSince(of: id), place.position)
         }
         return located.sorted { a, b in
@@ -3038,14 +3049,14 @@ extension WindowController: NSWindowDelegate {
 
     func windowDidResignKey(_ notification: Notification) {
         windowIsKey = false
-        syncHalo()
+        syncWindowFocus()
         endModes()
         sidebar.edgeReveal.recheck()
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
         windowIsKey = true
-        syncHalo()
+        syncWindowFocus()
         sidebar.edgeReveal.recheck()
         sidebar.refreshBranches()
         answerFocusedAgent()

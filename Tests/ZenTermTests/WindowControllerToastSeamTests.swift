@@ -9,9 +9,11 @@ final class WindowControllerToastSeamTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var controller: WindowController?
     private var tempRoot: URL!
+    private let originalPresence = WindowController.isPresent
 
     override func setUp() {
         super.setUp()
+        WindowController.isPresent = { _ in true }
         originalOverride = TerminalSurfaceFactory.makeOverride
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
         tempRoot = FileManager.default.temporaryDirectory
@@ -25,6 +27,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
+        WindowController.isPresent = originalPresence
         ConfigReset.toBuiltIn()
         try? FileManager.default.removeItem(at: tempRoot)
         super.tearDown()
@@ -306,6 +309,13 @@ final class WindowControllerToastSeamTests: WindowTestCase {
             WindowController.commandResultMessage(
                 TerminalCommandResult(exitCode: 1, duration: 3_661)),
             "Exited 1 after 1h 1m 1s.")
+    }
+
+    func test_stoppedCommandMessageSaysStopped() {
+        XCTAssertEqual(
+            WindowController.commandResultMessage(
+                TerminalCommandResult(exitCode: 130, duration: 3_661)),
+            "Stopped after 1h 1m 1s.")
     }
 
     func test_configDiagnosticsToast_mountsWithOpenSettingsAndDismiss() throws {

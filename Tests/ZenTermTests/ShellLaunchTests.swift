@@ -80,6 +80,30 @@ final class ShellLaunchTests: XCTestCase {
         XCTAssertEqual(config.args, ["-l", "-i", "-c", "nvim .; exec /usr/local/bin/fish -l -i"])
     }
 
+    func test_program_marksAnAgentsExit_soAnEarlyExitNeedsNoBusyPoll() {
+        withConfig(shell: "/bin/zsh")
+        let script = ShellLaunch.program("claude --resume", cwd: nil).args.last
+        XCTAssertEqual(
+            script?.hasPrefix(
+                "printf '\\033]133;C\\007'; claude --resume; printf '\\033]133;D;%d\\007' $?; "),
+            true, "the exit mark carries the agent's own status, right where it exits")
+    }
+
+    func test_program_marksAnAgentsExit_withFishStatusUnderFish() {
+        withConfig(shell: "/usr/local/bin/fish")
+        XCTAssertEqual(
+            ShellLaunch.program("claude", cwd: nil).args.last,
+            "printf '\\033]133;C\\007'; claude; printf '\\033]133;D;%d\\007' $status; "
+                + "exec /usr/local/bin/fish -l -i",
+            "$? is a syntax error in fish")
+    }
+
+    func test_program_leavesANonAgentProgramUnmarked() {
+        withConfig(shell: "/bin/zsh")
+        let script = try? XCTUnwrap(ShellLaunch.program("nvim .", cwd: nil).args.last)
+        XCTAssertEqual(script?.contains("133;"), false, "only an agent's exit is reported")
+    }
+
     func test_program_injectsEnvAndDefaultsCwdToHome() {
         withConfig(shell: nil)
         let config = ShellLaunch.program("claude", cwd: nil, env: ["FOO": "bar"])

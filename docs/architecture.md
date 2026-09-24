@@ -260,8 +260,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   came from (`Source`, ranked so a stronger source renames, a weaker one never does, and a
   missing name yields to any real name), and what it last said. `identify` is the one way in. A launch whose program is `ai` or a
   known agent joins at launch, idle included; any surface that sends OSC 777 or
-  indeterminate OSC 9;4 joins on that signal. An agent leaves when its surface is released
-  or its busy reading falls (the program exited to the shell), once its latch is answered.
+  indeterminate OSC 9;4 joins on that signal. An agent leaves when its surface is released,
+  when its command finishes, or when its busy reading falls (the program exited to the
+  shell), once its latch is answered. Only a *fall* from busy counts: a surface polled
+  before its program starts has not been busy yet.
   The Agents rows join it with `agentState(of:)` and sort waiting (oldest first), working,
   done, idle, ties in sidebar order.
 - **A state only the chrome can act on never reaches the tab number.** `working` (OSC 9;4)
@@ -609,6 +611,12 @@ concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. It gates
 - **`HostWindow.isReleasedWhenClosed = false`**, or close underflows the retain count.
 - **`ShellLaunch.program` re-arms zsh's `ZDOTDIR`**, or an `exec`'d shell loses shell
   integration (no OSC 7, no prompt marks, broken `isBusy`).
+- **`ShellLaunch.program` brackets an *agent* program in its own OSC 133 `C`/`D` marks.**
+  The wrapping `-c` shell runs no prompt hook, so without them the agent's exit reports
+  nothing and an agent that exits before the first busy poll sits in the Agents list
+  forever. Both marks are needed: libghostty drops a `D` that no `C` preceded. The `D`
+  mark carries `$?`, or `$status` under fish. Non-agent programs stay unmarked, or every
+  workspace program would reach `commandFinished` and toast on exit.
 - **`ApplePressAndHoldEnabled` is registered false at launch**, or the accent popup leaks
   keys into the shell.
 - **`GitRepo.repoRoot` stops when the path stops shrinking**, not on `parent == dir`, and

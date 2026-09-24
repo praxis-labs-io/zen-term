@@ -29,15 +29,33 @@ enum ShellLaunch {
 
     static func program(_ command: String, cwd: URL?, env: [String: String] = [:]) -> TerminalSurfaceConfig {
         let sh = userShell
+        let tail = "\(zshIntegrationRearm(for: sh))exec \(sh) -l -i"
+        let script =
+            isAgent(command)
+            ? "\(commandStart)\(command); \(commandFinish(for: sh))\(tail)"
+            : "\(command); \(tail)"
         return TerminalSurfaceConfig(
             command: sh,
-            args: ["-l", "-i", "-c", "\(command); \(zshIntegrationRearm(for: sh))exec \(sh) -l -i"],
+            args: ["-l", "-i", "-c", script],
             workingDirectory: cwd ?? defaultCWD,
             environment: env,
             fontSize: SessionFontSize.points,
             theme: Theme.current.terminal,
             behavior: GeneralConfig.current.terminalBehavior
         )
+    }
+
+    // Only an agent's exit is tracked, and marking every program would toast when nvim quits.
+    private static func isAgent(_ command: String) -> Bool {
+        AgentRoster.agentName(launching: command, ai: GeneralConfig.current.ai) != nil
+    }
+
+    // A `-c` shell runs no prompt hook, so the program's own exit reports no OSC 133 mark of its own.
+    private static let commandStart = "printf '\\033]133;C\\007'; "
+
+    private static func commandFinish(for shell: String) -> String {
+        let status = URL(fileURLWithPath: shell).lastPathComponent == "fish" ? "$status" : "$?"
+        return "printf '\\033]133;D;%d\\007' \(status); "
     }
 
     /// libghostty's `.zshenv` restores `ZDOTDIR`, so the `exec`'d zsh needs the redirect restaged.

@@ -56,6 +56,10 @@ sibling still gets `mouseEntered`, so a hover feature suppressed by "something c
 that state explicitly, and a covered `IconButton` still pops its tooltip. Hiding it is the only way to
 silence it (`SidebarEdgeReveal`, `HoverSuppressing`).
 
+**`SidebarView.setHoverCovered` clamps at zero going down, not going up.** A stray decrement is
+harmless, a stray increment suppresses sidebar hover for the rest of the session with nothing to clear
+it. Both call sites are balanced today, and a third has to be.
+
 **AppKit drops `mouseEntered` when the pointer arrives inside the window's own resize band.** A view
 tracking the window edge therefore never arms for a pointer that came in from outside the window, which
 is exactly how a person reaches an edge. Arm on `mouseMoved` as well as on enter.
@@ -257,6 +261,22 @@ The rules are in `CLAUDE.md`. These are the AppKit mechanics behind them.
 **Synthetic mouse events are not hit-tested in an off-screen window.** Drive the control's
 `mouseDown` / `mouseUp` with real `NSEvent`s and leave click routing to the runbook.
 
+**The close command never reaches `closePane`.** ⌘W runs `closeFocused()` with a pane focused and
+`closeFocusedDrawer()` with a drawer focused; `closePane(_:)` belongs to `surfaceDidExit`. A test driving
+the command proves nothing about a shell exiting on its own, and reads as though it does.
+
+**A double standing in for a responder path has to model the path not running.** `RecordingSurface.focus()`
+calls `makeFirstResponder`, which reaches `becomeFirstResponder`, and so the surface's own focus report,
+only when the view is in a window, is not already first responder, and the call succeeds. Recording that
+report unconditionally invents a push production never makes; recording nothing hides the one it does.
+
+**A render tears down a tooltip that has not appeared yet.** `SidebarView.refreshRowHover` suppresses
+and then calls `row.refreshHover()`, which reads `pointerIsInside`; that is false whenever the window
+is not key, and a test window is not key. So the first render after a synthesized `mouseEntered`
+clears `isHovered`, hides the tooltip, and cancels `TooltipPresenter`'s 0.45s work item. It follows
+hover order, not row kind, and a workspace open renders several times while it settles. Hover once the
+window is quiet, or assert the row's own hover state rather than a presented tooltip.
+
 **A synthesized `keyDown` commits text from the keyCode and layout, not `characters`, and only when
 `NSApp.currentEvent` is set.** `currentEvent` cannot be cleared and leaks between cases, so a key test
 must hold on either branch: use a key that types nothing (Escape, or an arrow with its real flags).
@@ -283,6 +303,14 @@ inject pasteboards (`ScrollModeController.yankPasteboard`) and panel presenters,
 fails in a different suite, often only on one machine. When a change makes a type newly read
 `GeneralConfig.current`, grep every suite that constructs it. Check an intermittent failure against
 the base branch before blaming the change.
+
+**A test that means "the user is here" has to pin `isPresent`.** `isOnScreen` asks about layout;
+`isSeen` asks about layout and `WindowController.isPresent`, which is `NSApp.isActive && isKeyWindow`
+and so is false in a test process. A suite that never pins it is describing a window nobody is in, so a
+test named for the active tab is testing something else and passes whatever the window does. Pin
+`WindowController.isPresent = { _ in true }` in the suite's setUp,
+restore it in its tearDown, and override it inside the test for the window you are meant to be away
+from.
 
 **`needsDisplay` cannot tell you a redraw was requested.** It reads true on a never-drawn view. Route
 the request through a counting method (`ScrollCursorView.redraw()`) and assert the count.
