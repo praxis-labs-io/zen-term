@@ -1935,7 +1935,8 @@ final class WindowController: NSObject {
                 .jumpToPreviousPrompt, .jumpToNextPrompt, .pasteSelection, .clearScreen,
                 .writeScreenFile, .copyScreenFilePath, .openScreenFile,
                 .dismissToast, .dismissAllToasts,
-                .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace, .newWorkspace:
+                .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace, .newWorkspace,
+                .nextWaitingAgent:
                 break
             default:
                 return
@@ -2041,6 +2042,7 @@ final class WindowController: NSObject {
             if ids.indices.contains(n - 1) { activate(ids[n - 1]) }
         case .prevWorkspace: cycleWorkspace(-1)
         case .nextWorkspace: cycleWorkspace(1)
+        case .nextWaitingAgent: jumpToNextWaitingAgent()
         case .closeWorkspace:
             Log.info("close workspace", category: .workspace)
             requestCloseWorkspace(activeWorkspace)
@@ -2396,7 +2398,7 @@ final class WindowController: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.workspace(of: id) != nil else { return }
             surface.map { self.agentExited($0, result: result) }
-            guard !self.isOnScreen(surface, in: id),
+            guard !self.isSeen(surface, in: id),
                 result.duration >= Self.commandCompletionThreshold,
                 self.attention.state(tab: id) != .waiting
             else { return }
@@ -2699,6 +2701,27 @@ final class WindowController: NSObject {
 
     private func place(of tab: TabID, in workspace: WorkspaceController) -> [Int] {
         [order.position(of: workspace.id) ?? 0, workspace.tabIDs.firstIndex(of: tab) ?? 0]
+    }
+
+    // Steps from where you are rather than tracking a cursor, so answering or a new wait cannot strand the cycle.
+    private func jumpToNextWaitingAgent() {
+        let waiting = agentItems().filter { $0.state == .waiting }
+        guard !waiting.isEmpty else { return toastNothingWaiting() }
+        let current = waiting.firstIndex { $0.id == focusedSurface }
+        let next = waiting[((current ?? -1) + 1) % waiting.count]
+        Log.info("jump to waiting agent", category: .workspace)
+        jumpToAgent(next.id)
+    }
+
+    private func toastNothingWaiting() {
+        let elsewhere = AttentionCenter.shared.waitingCount(excluding: windowID) > 0
+        toasts.show(
+            ToastContent(
+                variant: .info,
+                title: elsewhere ? "Waiting in another window" : "Nothing is waiting",
+                message: elsewhere
+                    ? "Nothing in this window is asking for you.\nThe sidebar row takes you there."
+                    : "No agent in this window is asking for you.\nThe sidebar lists the ones that are."))
     }
 
     private func jumpToAgent(_ surface: SurfaceID) {

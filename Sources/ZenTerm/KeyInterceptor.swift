@@ -54,6 +54,7 @@ final class KeyInterceptor {
         case selectWorkspace(Int)
         case prevWorkspace, nextWorkspace
         case closeWorkspace
+        case nextWaitingAgent
     }
 
     var onReservedChord: ((ReservedChord) -> Void)?

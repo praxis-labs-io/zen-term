@@ -151,6 +151,20 @@ final class DrawerAttentionTests: WindowTestCase {
         XCTAssertTrue(toastViews(c).isEmpty)
     }
 
+    func test_aLongCommandFinishingInAWindowYouAreNotIn_stillSaysSo() throws {
+        let c = makeWindow()
+        WindowController.isPresent = { _ in false }
+
+        c.notifyCommandFinishedForTesting(
+            tabIndex: 0, result: TerminalCommandResult(exitCode: 0, duration: 30))
+        drainMainQueue()
+
+        XCTAssertEqual(
+            c.attentionStateForTesting(tabIndex: 0), .completed,
+            "a command finishing where you cannot see it is not a command you saw finish")
+        XCTAssertEqual(toastViews(c).count, 1)
+    }
+
     func test_aLongCommandFinishingInAClosedDrawer_dotsItPositive() throws {
         let c = makeWindow()
         let drawer = try closedRightDrawer(c)
