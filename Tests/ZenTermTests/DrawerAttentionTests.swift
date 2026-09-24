@@ -11,9 +11,11 @@ final class DrawerAttentionTests: WindowTestCase {
     private var originalConfig: GeneralConfig!
     private var controller: WindowController?
     private var spawned: [RecordingSurface] = []
+    private let originalPresence = WindowController.isPresent
 
     override func setUpWithError() throws {
         try super.setUpWithError()
+        WindowController.isPresent = { _ in true }
         originalOverride = TerminalSurfaceFactory.makeOverride
         originalConfig = GeneralConfig.current
         Motion.isReduceMotionEnabled = { true }
@@ -33,6 +35,7 @@ final class DrawerAttentionTests: WindowTestCase {
         spawned = []
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
+        WindowController.isPresent = originalPresence
         try super.tearDownWithError()
     }
 
@@ -187,6 +190,34 @@ final class DrawerAttentionTests: WindowTestCase {
         XCTAssertEqual(toastViews(c).count, 1, "the drawer is still closed, so its card still has somewhere to go")
     }
 
+    func test_aWaitingToastInAWindowYouAreNotIn_waitsForYouToArrive() throws {
+        var config = GeneralConfig.current
+        config.attentionToast = .auto
+        config.toastDuration = 0.05
+        GeneralConfig.setCurrentForTesting(config)
+        let c = makeWindow()
+        WindowController.isPresent = { _ in false }
+
+        c.notifyAgentForTesting(tabIndex: 0, message: "needs you")
+        drainMainQueue()
+        XCTAssertEqual(toastViews(c).count, 1, "precondition: it was raised at all")
+
+        let pastTheDuration = Date().addingTimeInterval(0.4)
+        while Date() < pastTheDuration {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+        }
+
+        XCTAssertEqual(
+            toastViews(c).count, 1, "auto means five seconds of your attention, not five of nobody's")
+
+        WindowController.isPresent = { _ in true }
+        NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+
+        waitUntil(
+            toastViews(c).isEmpty,
+            "the countdown to run once you arrive, which proves auto took and there was one to hold")
+    }
+
     func test_aPaneInTheActiveTab_isStillSeen() throws {
         let c = makeWindow()
 
@@ -195,5 +226,17 @@ final class DrawerAttentionTests: WindowTestCase {
 
         XCTAssertNil(c.attentionStateForTesting(tabIndex: 0), "a pane in the tab you are in is on screen")
         XCTAssertTrue(toastViews(c).isEmpty)
+    }
+
+    func test_aPaneInTheActiveTabOfAWindowYouAreNotIn_isNotSeen() throws {
+        let c = makeWindow()
+        WindowController.isPresent = { _ in false }
+
+        c.notifyAgentForTesting(tabIndex: 0, message: "needs you")
+        drainMainQueue()
+
+        XCTAssertEqual(
+            c.attentionStateForTesting(tabIndex: 0), .waiting, "on screen is not seen from another window")
+        XCTAssertEqual(toastViews(c).count, 1, "the card is there when you arrive")
     }
 }

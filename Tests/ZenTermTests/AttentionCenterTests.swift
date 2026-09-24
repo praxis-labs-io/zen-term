@@ -55,6 +55,18 @@ final class AttentionCenterTests: XCTestCase {
         XCTAssertEqual(center.waitingCount(excluding: 1), 3)
     }
 
+    func test_windowsWaitingAtTheSameInstant_orderTheSameWayEveryTime() {
+        let center = AttentionCenter()
+        let since = Date(timeIntervalSince1970: 100)
+        center.update(windowID: 7, waitingCount: 1, since: since)
+        center.update(windowID: 3, waitingCount: 1, since: since)
+        center.update(windowID: 5, waitingCount: 1, since: since)
+
+        XCTAssertEqual(
+            center.waiting.map(\.windowID), [3, 5, 7],
+            "a tie resolves by window, so placing the row and jumping from it agree")
+    }
+
     func test_aClosedWindow_isForgotten() {
         let center = AttentionCenter()
         center.update(windowID: 1, waitingCount: 1, since: since)

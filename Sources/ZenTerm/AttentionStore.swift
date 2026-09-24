@@ -1,6 +1,12 @@
 import Foundation
 import TabKit
 
+/// Where a waiting agent is answered: its own pane, or the tab holding what it left behind when the pane exited.
+enum WaitingTarget: Equatable {
+    case surface(SurfaceID)
+    case tab(TabID)
+}
+
 /// One window's attention: every surface latches its own, tabs and the window roll up by `max`. Main-thread only.
 final class AttentionStore {
     private struct Entry {
@@ -16,7 +22,8 @@ final class AttentionStore {
     private var entries: [SurfaceID: Entry] = [:]
 
     // `waiting` is a count, not a flag: two agents that each asked and exited are still two.
-    private var residual: [TabID: (state: SurfaceAttention, since: Date?, waiting: Int)] = [:]
+    // `waitingSince` is its own clock, because a completion folded earlier would otherwise date the question.
+    private var residual: [TabID: (state: SurfaceAttention, since: Date?, waiting: Int, waitingSince: Date?)] = [:]
 
     private let now: () -> Date
 
@@ -36,7 +43,9 @@ final class AttentionStore {
         residual[tab] = (
             max(existing?.state ?? .idle, entry.latched),
             earliest(existing?.since, entry.since),
-            (existing?.waiting ?? 0) + (entry.latched == .waiting ? 1 : 0)
+            (existing?.waiting ?? 0) + (entry.latched == .waiting ? 1 : 0),
+            entry.latched == .waiting
+                ? earliest(existing?.waitingSince, entry.since) : existing?.waitingSince
         )
     }
 
@@ -129,9 +138,30 @@ final class AttentionStore {
 
     /// When the oldest agent still waiting on you started waiting. A completion is not waiting.
     var waitingSince: Date? {
-        let latched = entries.values.filter { !$0.seen && $0.latched == .waiting }.compactMap(\.since)
-        let folded = residual.values.filter { $0.state == .waiting }.compactMap(\.since)
-        return (latched + folded).min()
+        waitingByAge.compactMap(\.since).min()
+    }
+
+    /// Everything still waiting on you, longest first. A pane that exited leaves the tab it spoke from.
+    var waitingInOrder: [WaitingTarget] {
+        waitingByAge.map(\.target)
+    }
+
+    private var waitingByAge: [(target: WaitingTarget, since: Date?, rank: Int)] {
+        let latched = entries.compactMap { id, entry -> (WaitingTarget, Date?, Int)? in
+            guard !entry.seen, entry.latched == .waiting else { return nil }
+            return (.surface(id), entry.since, id.raw)
+        }
+        let folded = residual.compactMap { tab, value -> (WaitingTarget, Date?, Int)? in
+            guard value.state == .waiting else { return nil }
+            return (.tab(tab), value.waitingSince, tab.raw)
+        }
+        return (latched + folded)
+            .sorted {
+                let a = $0.1 ?? .distantFuture
+                let b = $1.1 ?? .distantFuture
+                return a == b ? $0.2 < $1.2 : a < b
+            }
+            .map { (target: $0.0, since: $0.1, rank: $0.2) }
     }
 
     /// How many agents are waiting on you. A residual counts: something asked, and you have not looked.

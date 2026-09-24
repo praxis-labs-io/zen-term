@@ -12,9 +12,11 @@ final class FloatAttentionTests: WindowTestCase {
     private var controller: WindowController?
     private var spawned: [RecordingSurface] = []
     private var root = FileManager.default.temporaryDirectory
+    private let originalPresence = WindowController.isPresent
 
     override func setUpWithError() throws {
         try super.setUpWithError()
+        WindowController.isPresent = { _ in true }
         originalOverride = TerminalSurfaceFactory.makeOverride
         originalConfig = GeneralConfig.current
         Motion.isReduceMotionEnabled = { true }
@@ -37,6 +39,7 @@ final class FloatAttentionTests: WindowTestCase {
         spawned = []
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
+        WindowController.isPresent = originalPresence
         try? FileManager.default.removeItem(at: root)
         try super.tearDownWithError()
     }
@@ -117,6 +120,20 @@ final class FloatAttentionTests: WindowTestCase {
             c.windowAttentionForTesting, .idle,
             "the float is open in front of you, so it is not asking")
         XCTAssertTrue(toastViews(c).isEmpty)
+    }
+
+    func test_aFloatOpenInAWindowYouAreNotIn_stillAsks() throws {
+        let c = makeWindow()
+        c.handle(.toggleToolFloat("btop"))
+        let surface = try floatSurface()
+        WindowController.isPresent = { _ in false }
+
+        notify(surface, "needs input")
+
+        XCTAssertEqual(
+            c.windowAttentionForTesting, .waiting,
+            "open in front of another window is not open in front of you")
+        XCTAssertEqual(toastViews(c).count, 1)
     }
 
     func test_showingTheFloatAgain_answersIt() throws {

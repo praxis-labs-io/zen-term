@@ -9,9 +9,11 @@ final class WindowControllerToastSeamTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var controller: WindowController?
     private var tempRoot: URL!
+    private let originalPresence = WindowController.isPresent
 
     override func setUp() {
         super.setUp()
+        WindowController.isPresent = { _ in true }
         originalOverride = TerminalSurfaceFactory.makeOverride
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
         tempRoot = FileManager.default.temporaryDirectory
@@ -25,6 +27,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
+        WindowController.isPresent = originalPresence
         ConfigReset.toBuiltIn()
         try? FileManager.default.removeItem(at: tempRoot)
         super.tearDown()
