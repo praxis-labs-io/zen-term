@@ -267,8 +267,12 @@ final class AgentIdentificationTests: XCTestCase {
             .completed)
     }
 
+    func test_aCodexNotification_carriesNoState() {
+        XCTAssertNil(AgentRules.notificationAttention(body: "Approve writing test2.txt", agentName: "codex"))
+    }
+
     func test_anAgentWithNoBodyRules_isTakenAtItsWord() {
-        for name in ["codex", "pi", nil] as [String?] {
+        for name in ["pi", nil] as [String?] {
             XCTAssertEqual(
                 AgentRules.notificationAttention(body: "Refactor finished", agentName: name), .waiting,
                 "\(name ?? "an unnamed agent") has no rules to read its body by")

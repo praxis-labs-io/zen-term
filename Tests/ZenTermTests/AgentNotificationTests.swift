@@ -165,4 +165,54 @@ final class AgentNotificationTests: WindowTestCase {
             c.attentionStateForTesting(tabIndex: 0), .waiting, "an agent with no body rules is taken at its word")
         XCTAssertEqual(c.agentRowForTesting(pi.id)?.state, .waiting)
     }
+
+    private func pushTitle(_ title: String, from surface: RecordingSurface) {
+        surface.delegate?.surface(surface, titleDidChange: title)
+        drainMainQueue()
+    }
+
+    private func cardCount(_ c: WindowController) -> Int {
+        guard let content = c.window.contentView else { return 0 }
+        return descendants(of: content).compactMap { $0 as? ToastView }.count
+    }
+
+    func test_aBlockedCodexInABackgroundTab_raisesOneCard_andWaits() throws {
+        let c = makeWindow()
+        let codex = try backgroundPane(c)
+        pushTitle(AgentTitleFixtures.codexWorking[0], from: codex.surface)
+
+        pushTitle(AgentTitleFixtures.codexBlockedOn, from: codex.surface)
+
+        XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .waiting)
+        XCTAssertEqual(c.agentRowForTesting(codex.id)?.state, .waiting)
+        XCTAssertEqual(cardCount(c), 1, "Codex asks through its title, so its title raises the card")
+    }
+
+    func test_aBlockedCodexBlinking_raisesNoSecondCard() throws {
+        let c = makeWindow()
+        let codex = try backgroundPane(c)
+        pushTitle(AgentTitleFixtures.codexWorking[0], from: codex.surface)
+        pushTitle(AgentTitleFixtures.codexBlockedOn, from: codex.surface)
+        let first = try XCTUnwrap(c.waitingToastForTesting(tabIndex: 0))
+
+        pushTitle(AgentTitleFixtures.codexBlockedOff, from: codex.surface)
+        pushTitle(AgentTitleFixtures.codexBlockedOn, from: codex.surface)
+
+        XCTAssertTrue(c.waitingToastForTesting(tabIndex: 0) === first, "one ask is one card, however its title blinks")
+        XCTAssertEqual(cardCount(c), 1)
+    }
+
+    func test_aCodexNotification_changesNoState() throws {
+        let c = makeWindow()
+        let codex = try backgroundPane(c)
+        pushTitle(AgentTitleFixtures.codexIdle, from: codex.surface)
+        pushTitle(AgentTitleFixtures.codexLaunch, from: codex.surface)
+
+        post(codex.surface, title: "codex", body: "Approve writing test2.txt")
+
+        XCTAssertNil(c.attentionStateForTesting(tabIndex: 0), "its title, not its notification, says what it wants")
+        XCTAssertEqual(c.agentRowForTesting(codex.id)?.state, .idle)
+        XCTAssertEqual(cardCount(c), 0)
+        XCTAssertEqual(c.agentMessageForTesting(codex.id), "Approve writing test2.txt")
+    }
 }

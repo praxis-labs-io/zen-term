@@ -2407,32 +2407,19 @@ final class WindowController: NSObject {
             guard let self, let activeID = self.activeWorkspace.activeID else { return }
             let message = notification.body.isEmpty ? notification.title : notification.body
             let target = owner.flatMap { self.workspace(of: $0) == nil ? nil : $0 } ?? activeID
-            let title = owner == nil ? spec.title : self.attentionTitle(of: target)
-            let tail = owner == nil ? nil : ": \(spec.title)"
-            let cardTitle = { [weak self] in owner == nil ? spec.title : self?.attentionTitle(of: target) ?? spec.title
-            }
+            let address = self.floatCardAddress(spec, owner: owner, target: target)
             let shown =
                 self.floats.activeID == spec.id && self.floats.surfaceID(spec.id) == surface
                 && Self.isPresent(self.window)
-            let destination = CardDestination(
-                shortcut: { CommandCatalog.spec(for: .toggleToolFloat(spec.id)).shortcut },
-                open: { [weak self] in
-                    guard let self else { return }
-                    owner.map { self.reveal($0) }
-                    if self.floats.activeID != spec.id { self.handle(.toggleToolFloat(spec.id)) }
-                })
-            guard let landing = self.notificationAttention(surface, notification) else {
+            guard self.isFromAgent(surface, notification) else {
                 return self.landNonAgentNotification(
-                    on: target, surface: surface, seen: shown, title: cardTitle, titleTail: tail, message: message,
-                    destination: destination)
+                    on: target, surface: surface, seen: shown, address: address, message: message)
+            }
+            guard let landing = self.notificationAttention(surface, notification) else {
+                return self.noteStatelessNotification(surface, notification)
             }
 
-            if AgentNotifier.shouldPushNotification(
-                appActive: NSApp.isActive, enabled: GeneralConfig.current.agentNotifications)
-            {
-                AgentNotifier.shared.notify(
-                    windowID: self.windowID, tabID: target, title: title + (tail ?? ""), body: message)
-            }
+            self.pushBanner(for: target, address: address, message: message)
 
             let tabWasWaiting = self.attention.state(tab: target) == .waiting
             surface.map { self.attention.record($0, landing, seen: shown) }
@@ -2441,8 +2428,8 @@ final class WindowController: NSObject {
 
             guard !shown else { return }
             self.presentAgentCard(
-                landing, tabWasWaiting: tabWasWaiting, for: target, title: cardTitle, titleTail: tail,
-                message: message, surface: surface, destination: destination)
+                landing, tabWasWaiting: tabWasWaiting, for: target, address: address, message: message,
+                surface: surface)
         }
     }
 
@@ -2450,23 +2437,17 @@ final class WindowController: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.workspace(of: id) != nil else { return }
             let message = notification.body.isEmpty ? notification.title : notification.body
-            let edge = self.drawerEdge(of: surface, in: id)
+            let address = self.paneCardAddress(surface, in: id)
             let seen = self.isSeen(surface, in: id)
-            let title = { [weak self] in self?.attentionTitle(of: id) ?? "" }
-            let destination = edge.map { self.drawerDestination($0, in: id) }
-            guard let landing = self.notificationAttention(surface, notification) else {
+            guard self.isFromAgent(surface, notification) else {
                 return self.landNonAgentNotification(
-                    on: id, surface: surface, seen: seen, title: title, titleTail: self.drawerTail(edge),
-                    message: message, destination: destination)
+                    on: id, surface: surface, seen: seen, address: address, message: message)
+            }
+            guard let landing = self.notificationAttention(surface, notification) else {
+                return self.noteStatelessNotification(surface, notification)
             }
 
-            if AgentNotifier.shouldPushNotification(
-                appActive: NSApp.isActive, enabled: GeneralConfig.current.agentNotifications)
-            {
-                AgentNotifier.shared.notify(
-                    windowID: self.windowID, tabID: id,
-                    title: self.attentionTitle(of: id) + (self.drawerTail(edge) ?? ""), body: message)
-            }
+            self.pushBanner(for: id, address: address, message: message)
 
             let tabWasWaiting = self.attention.state(tab: id) == .waiting
             surface.map { self.attention.record($0, landing, seen: seen) }
@@ -2475,47 +2456,97 @@ final class WindowController: NSObject {
 
             guard !seen else { return }
             self.presentAgentCard(
-                landing, tabWasWaiting: tabWasWaiting, for: id, title: title, titleTail: self.drawerTail(edge),
-                message: message, surface: surface, destination: destination)
+                landing, tabWasWaiting: tabWasWaiting, for: id, address: address, message: message, surface: surface)
         }
+    }
+
+    private struct CardAddress {
+        let title: () -> String
+        let titleTail: String?
+        let destination: CardDestination?
+    }
+
+    private func floatCardAddress(_ spec: ToolFloat, owner: TabID?, target: TabID) -> CardAddress {
+        CardAddress(
+            title: { [weak self] in owner == nil ? spec.title : self?.attentionTitle(of: target) ?? spec.title },
+            titleTail: owner == nil ? nil : ": \(spec.title)",
+            destination: CardDestination(
+                shortcut: { CommandCatalog.spec(for: .toggleToolFloat(spec.id)).shortcut },
+                open: { [weak self] in
+                    guard let self else { return }
+                    owner.map { self.reveal($0) }
+                    if self.floats.activeID != spec.id { self.handle(.toggleToolFloat(spec.id)) }
+                }))
+    }
+
+    private func paneCardAddress(_ surface: SurfaceID?, in id: TabID) -> CardAddress {
+        let edge = drawerEdge(of: surface, in: id)
+        return CardAddress(
+            title: { [weak self] in self?.attentionTitle(of: id) ?? "" }, titleTail: drawerTail(edge),
+            destination: edge.map { drawerDestination($0, in: id) })
+    }
+
+    private func cardAddress(of surface: SurfaceID, in id: TabID) -> CardAddress {
+        guard let float = floats.float(of: surface) else { return paneCardAddress(surface, in: id) }
+        return floatCardAddress(float.spec, owner: float.tab, target: id)
+    }
+
+    private func pushBanner(for id: TabID, address: CardAddress, message: String) {
+        guard
+            AgentNotifier.shouldPushNotification(
+                appActive: NSApp.isActive, enabled: GeneralConfig.current.agentNotifications)
+        else { return }
+        AgentNotifier.shared.notify(
+            windowID: windowID, tabID: id, title: address.title() + (address.titleTail ?? ""), body: message)
+    }
+
+    private func isFromAgent(_ surface: SurfaceID?, _ notification: TerminalNotification) -> Bool {
+        guard let surface, !agents.contains(surface) else { return true }
+        return AgentRoster.agentName(notifying: notification.title, ai: GeneralConfig.current.ai) != nil
     }
 
     private func notificationAttention(_ surface: SurfaceID?, _ notification: TerminalNotification) -> SurfaceAttention?
     {
-        guard let surface else { return .waiting }
-        let listed = agents.agents[surface]
-        guard listed != nil || AgentRoster.agentName(notifying: notification.title, ai: GeneralConfig.current.ai) != nil
-        else { return nil }
-        let name = listed?.name ?? (notification.title.isEmpty ? nil : notification.title)
+        let listed = surface.flatMap { agents.agents[$0]?.name }
+        let name = listed ?? (notification.title.isEmpty ? nil : notification.title)
         return AgentRules.notificationAttention(body: notification.body, agentName: name)
     }
 
+    private func noteStatelessNotification(_ surface: SurfaceID?, _ notification: TerminalNotification) {
+        guard let surface else { return }
+        agents.identify(surface, name: notification.title.isEmpty ? nil : notification.title, source: .signal)
+        if !notification.body.isEmpty { agents.setMessage(surface, notification.body) }
+        renderAgents()
+    }
+
     private func landNonAgentNotification(
-        on id: TabID, surface: SurfaceID?, seen: Bool, title: @escaping () -> String, titleTail: String?,
-        message: String, destination: CardDestination?
+        on id: TabID, surface: SurfaceID?, seen: Bool, address: CardAddress, message: String
     ) {
         guard !seen, attention.state(tab: id) != .waiting else { return }
         surface.map { attention.record($0, .completed, seen: false) }
-        presentAttentionCard(
-            .completed(.positive), for: id, title: title, titleTail: titleTail, message: message, surface: surface,
-            destination: destination)
+        presentAttentionCard(.completed(.positive), for: id, address: address, message: message, surface: surface)
         renderAttention()
     }
 
     private func presentAgentCard(
-        _ landing: SurfaceAttention, tabWasWaiting: Bool, for id: TabID, title: @escaping () -> String,
-        titleTail: String?, message: String, surface: SurfaceID?, destination: CardDestination?
+        _ landing: SurfaceAttention, tabWasWaiting: Bool, for id: TabID, address: CardAddress, message: String,
+        surface: SurfaceID?
     ) {
         if landing == .waiting {
-            presentAttentionCard(
-                .waiting, for: id, title: title, titleTail: titleTail, message: message, surface: surface,
-                destination: destination)
+            presentAttentionCard(.waiting, for: id, address: address, message: message, surface: surface)
         } else if !tabWasWaiting {
-            presentAttentionCard(
-                .completed(.positive), for: id, title: title, titleTail: titleTail, message: message, surface: surface,
-                destination: destination)
+            presentAttentionCard(.completed(.positive), for: id, address: address, message: message, surface: surface)
         }
     }
+
+    private func raiseBlockedCard(_ surface: SurfaceID, in id: TabID) {
+        let address = cardAddress(of: surface, in: id)
+        let message = agents.agents[surface]?.message ?? Self.blockedMessage
+        pushBanner(for: id, address: address, message: message)
+        presentAttentionCard(.waiting, for: id, address: address, message: message, surface: surface)
+    }
+
+    private static let blockedMessage = "Waiting for your approval."
 
     private func commandFinished(surface: SurfaceID?, id: TabID, result: TerminalCommandResult) {
         DispatchQueue.main.async { [weak self] in
@@ -2527,12 +2558,10 @@ final class WindowController: NSObject {
             else { return }
 
             surface.map { self.attention.record($0, .completed, seen: false) }
-            let edge = self.drawerEdge(of: surface, in: id)
             self.presentAttentionCard(
-                .completed(result.exitCode.map { $0 == 0 ? .positive : .warning } ?? .positive),
-                for: id, title: { [weak self] in self?.attentionTitle(of: id) ?? "" }, titleTail: self.drawerTail(edge),
-                message: Self.commandResultMessage(result), surface: surface,
-                destination: edge.map { self.drawerDestination($0, in: id) })
+                .completed(result.exitCode.map { $0 == 0 ? .positive : .warning } ?? .positive), for: id,
+                address: self.paneCardAddress(surface, in: id), message: Self.commandResultMessage(result),
+                surface: surface)
             self.renderAttention()
         }
     }
@@ -2624,8 +2653,10 @@ final class WindowController: NSObject {
             if surface == presentFocusedSurface { armDoneDecay() }
         case .blocked:
             guard let tab = tab(of: surface) else { return }
+            let seen = isSeen(surface, in: tab)
             attention.setWorking(surface, false)
-            attention.record(surface, .waiting, seen: isSeen(surface, in: tab))
+            attention.record(surface, .waiting, seen: seen)
+            if !seen { raiseBlockedCard(surface, in: tab) }
         }
         renderAgents()
     }
@@ -2667,9 +2698,10 @@ final class WindowController: NSObject {
     }
 
     private func presentAttentionCard(
-        _ card: AttentionCard, for id: TabID, title: @escaping () -> String, titleTail: String? = nil,
-        message: String, surface: SurfaceID?, destination: CardDestination? = nil
+        _ card: AttentionCard, for id: TabID, address: CardAddress, message: String, surface: SurfaceID?
     ) {
+        let title = address.title
+        let titleTail = address.titleTail
         if let old = attentionCards[id] { toasts.dismiss(old) }
         let content: ToastContent
         let dismissal: GeneralConfig.ToastDismissal
@@ -2683,7 +2715,7 @@ final class WindowController: NSObject {
             dismissal = GeneralConfig.current.completionToast
         }
         let destination =
-            destination
+            address.destination
             ?? CardDestination(
                 shortcut: { [weak self] in self?.switchShortcut(for: id) ?? "" },
                 open: { [weak self] in self?.reveal(id) })
