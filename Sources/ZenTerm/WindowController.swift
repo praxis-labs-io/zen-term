@@ -2496,8 +2496,9 @@ final class WindowController: NSObject {
     ) {
         guard !seen, attention.state(tab: id) != .waiting else { return }
         surface.map { attention.record($0, .completed, seen: false) }
-        presentCompletedToast(
-            for: id, title: title, titleTail: titleTail, message: message, surface: surface, destination: destination)
+        presentAttentionCard(
+            .completed(.positive), for: id, title: title, titleTail: titleTail, message: message, surface: surface,
+            destination: destination)
         renderAttention()
     }
 
@@ -2506,12 +2507,12 @@ final class WindowController: NSObject {
         titleTail: String?, message: String, surface: SurfaceID?, destination: CardDestination?
     ) {
         if landing == .waiting {
-            presentWaitingToast(
-                for: id, title: title, titleTail: titleTail, message: message, surface: surface,
+            presentAttentionCard(
+                .waiting, for: id, title: title, titleTail: titleTail, message: message, surface: surface,
                 destination: destination)
         } else if !tabWasWaiting {
-            presentCompletedToast(
-                for: id, title: title, titleTail: titleTail, message: message, surface: surface,
+            presentAttentionCard(
+                .completed(.positive), for: id, title: title, titleTail: titleTail, message: message, surface: surface,
                 destination: destination)
         }
     }
@@ -2527,11 +2528,11 @@ final class WindowController: NSObject {
 
             surface.map { self.attention.record($0, .completed, seen: false) }
             let edge = self.drawerEdge(of: surface, in: id)
-            self.presentCompletedToast(
+            self.presentAttentionCard(
+                .completed(result.exitCode.map { $0 == 0 ? .positive : .warning } ?? .positive),
                 for: id, title: { [weak self] in self?.attentionTitle(of: id) ?? "" }, titleTail: self.drawerTail(edge),
-                message: Self.commandResultMessage(result),
-                variant: result.exitCode.map { $0 == 0 ? .positive : .warning } ?? .positive,
-                surface: surface, destination: edge.map { self.drawerDestination($0, in: id) })
+                message: Self.commandResultMessage(result), surface: surface,
+                destination: edge.map { self.drawerDestination($0, in: id) })
             self.renderAttention()
         }
     }
@@ -2634,30 +2635,6 @@ final class WindowController: NSObject {
         attention.tab(of: surface) ?? (floats.float(of: surface) != nil ? activeWorkspace.activeID : nil)
     }
 
-    private func presentCompletedToast(
-        for id: TabID, title: @escaping () -> String, titleTail: String? = nil, message: String,
-        variant: ToastVariant = .positive, surface: SurfaceID?, destination: CardDestination? = nil
-    ) {
-        if let old = attentionCards[id] { toasts.dismiss(old) }
-        let content = ToastContent(variant: variant, title: title(), titleTail: titleTail, message: message)
-        let destination =
-            destination
-            ?? CardDestination(
-                shortcut: { [weak self] in self?.switchShortcut(for: id) ?? "" },
-                open: { [weak self] in self?.reveal(id) })
-        let actions = [
-            ToastAction(title: "Dismiss", kind: .cancel) { [weak self] in
-                self?.answer(id, surface: surface)
-            },
-            ToastAction(title: "Switch", kind: .primary, shortcut: destination.shortcut) {
-                destination.open()
-            },
-        ]
-        attentionCards[id] = mountAttentionToast(
-            for: id, surface: surface, content: content, title: title, actions: actions,
-            autoDismiss: GeneralConfig.current.completionToast == .auto)
-    }
-
     // A shell reports a signal death as 128+n. SIGINT and SIGTERM are someone stopping the agent, not it failing.
     private static let deliberateStopCodes: Set<Int> = [130, 143]
 
@@ -2684,13 +2661,27 @@ final class WindowController: NSObject {
         let open: () -> Void
     }
 
-    private func presentWaitingToast(
-        for id: TabID, title: @escaping () -> String, titleTail: String? = nil, message: String, surface: SurfaceID?,
-        destination: CardDestination? = nil
+    private enum AttentionCard {
+        case waiting
+        case completed(ToastVariant)
+    }
+
+    private func presentAttentionCard(
+        _ card: AttentionCard, for id: TabID, title: @escaping () -> String, titleTail: String? = nil,
+        message: String, surface: SurfaceID?, destination: CardDestination? = nil
     ) {
         if let old = attentionCards[id] { toasts.dismiss(old) }
-        let content = ToastContent(
-            variant: .info, title: title(), titleTail: titleTail, message: message, icon: "bell.fill")
+        let content: ToastContent
+        let dismissal: GeneralConfig.ToastDismissal
+        switch card {
+        case .waiting:
+            content = ToastContent(
+                variant: .info, title: title(), titleTail: titleTail, message: message, icon: "bell.fill")
+            dismissal = GeneralConfig.current.attentionToast
+        case .completed(let variant):
+            content = ToastContent(variant: variant, title: title(), titleTail: titleTail, message: message)
+            dismissal = GeneralConfig.current.completionToast
+        }
         let destination =
             destination
             ?? CardDestination(
@@ -2706,7 +2697,7 @@ final class WindowController: NSObject {
         ]
         attentionCards[id] = mountAttentionToast(
             for: id, surface: surface, content: content, title: title, actions: actions,
-            autoDismiss: GeneralConfig.current.attentionToast == .auto)
+            autoDismiss: dismissal == .auto)
     }
 
     private func drawerEdge(of surface: SurfaceID?, in id: TabID) -> DrawerEdge? {
