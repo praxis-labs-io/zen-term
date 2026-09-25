@@ -215,4 +215,26 @@ final class AgentNotificationTests: WindowTestCase {
         XCTAssertEqual(cardCount(c), 0)
         XCTAssertEqual(c.agentMessageForTesting(codex.id), "Approve writing test2.txt")
     }
+
+    func test_aShellsNotification_leavesNoAgentLatch() throws {
+        let c = makeWindow()
+        let shell = try backgroundPane(c)
+
+        post(shell.surface, title: "", body: "Build finished")
+
+        XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .completed, "precondition: the tab reads finished")
+        XCTAssertEqual(c.agentStateForTesting(shell.id), .idle, "a shell has no Agents row to latch")
+    }
+
+    func test_aShellsLongCommand_leavesNoAgentLatch() throws {
+        let c = makeWindow()
+        let shell = try backgroundPane(c)
+        let tab = try XCTUnwrap(c.tabIDsForTesting(workspace: c.workspaceIDsForTesting[0]).first)
+
+        c.notifyCommandFinishedForTesting(tab: tab, result: TerminalCommandResult(exitCode: 0, duration: 60))
+        drainMainQueue()
+
+        XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .completed, "precondition: the tab reads finished")
+        XCTAssertEqual(c.agentStateForTesting(shell.id), .idle, "a shell has no Agents row to latch")
+    }
 }

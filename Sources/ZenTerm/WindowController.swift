@@ -2523,7 +2523,7 @@ final class WindowController: NSObject {
         on id: TabID, surface: SurfaceID?, seen: Bool, address: CardAddress, message: String
     ) {
         guard !seen, attention.state(tab: id) != .waiting else { return }
-        surface.map { attention.record($0, .completed, seen: false) }
+        surface.map { attention.record($0, .completed, seen: false, fromAgent: false) }
         presentAttentionCard(.completed(.positive), for: id, address: address, message: message, surface: surface)
         renderAttention()
     }
@@ -2557,7 +2557,7 @@ final class WindowController: NSObject {
                 self.attention.state(tab: id) != .waiting
             else { return }
 
-            surface.map { self.attention.record($0, .completed, seen: false) }
+            surface.map { self.attention.record($0, .completed, seen: false, fromAgent: self.agents.contains($0)) }
             self.presentAttentionCard(
                 .completed(result.exitCode.map { $0 == 0 ? .positive : .warning } ?? .positive), for: id,
                 address: self.paneCardAddress(surface, in: id), message: Self.commandResultMessage(result),

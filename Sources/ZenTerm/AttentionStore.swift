@@ -66,9 +66,9 @@ final class AttentionStore {
     }
 
     // Focus gates the toast, never the agent latch: the notification is one-shot, so blocked outlives a glance.
-    func record(_ id: SurfaceID, _ event: SurfaceAttention, seen: Bool) {
+    func record(_ id: SurfaceID, _ event: SurfaceAttention, seen: Bool, fromAgent: Bool = true) {
         changing {
-            latchAgent(id, event)
+            if fromAgent { latchAgent(id, event) }
             guard !seen else { return markSeen(id) }
             guard var entry = entries[id] else { return }
             entry.latched = max(entry.latched, event)
