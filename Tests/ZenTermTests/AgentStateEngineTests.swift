@@ -23,6 +23,12 @@ enum AgentTitleFixtures {
     static let claudeAnswered = "◐ Create test.txt"
 }
 
+enum AgentNotificationFixtures {
+    static let claudeTitle = "Claude Code"
+    static let claudePermission = "Claude needs your permission"
+    static let claudeIdlePrompt = "Claude is waiting for your input"
+}
+
 final class AgentStateEngineTests: XCTestCase {
     private func codexState(_ title: String) -> AgentSignalState? {
         AgentStateEngine.evaluate(AgentRules.rules(for: "codex"), title: title, progress: "4;0").state
@@ -241,6 +247,31 @@ final class AgentIdentificationTests: XCTestCase {
 
         for title in cases {
             XCTAssertNil(AgentRules.agentName(matching: title), "\(title) is not proof of an agent")
+        }
+    }
+
+    func test_bothOfClaudesCapturedBodies_askForYou() {
+        for body in [AgentNotificationFixtures.claudePermission, AgentNotificationFixtures.claudeIdlePrompt] {
+            XCTAssertEqual(
+                AgentRules.notificationAttention(body: body, agentName: AgentNotificationFixtures.claudeTitle),
+                .waiting,
+                "\(body) is a question")
+            XCTAssertEqual(AgentRules.notificationAttention(body: body, agentName: "claude"), .waiting)
+        }
+    }
+
+    func test_anythingElseClaudePosts_closesATurn() {
+        XCTAssertEqual(
+            AgentRules.notificationAttention(
+                body: "Refactor finished", agentName: AgentNotificationFixtures.claudeTitle),
+            .completed)
+    }
+
+    func test_anAgentWithNoBodyRules_isTakenAtItsWord() {
+        for name in ["codex", "pi", nil] as [String?] {
+            XCTAssertEqual(
+                AgentRules.notificationAttention(body: "Refactor finished", agentName: name), .waiting,
+                "\(name ?? "an unnamed agent") has no rules to read its body by")
         }
     }
 }

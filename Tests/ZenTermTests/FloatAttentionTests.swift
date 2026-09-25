@@ -29,7 +29,8 @@ final class FloatAttentionTests: WindowTestCase {
             .appendingPathComponent("zenterm-float-attention-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         var config = GeneralConfig.builtIn
-        config.floats = [Self.spec("btop")]
+        config.floats = [Self.spec("pi")]
+        config.ai = "pi"
         GeneralConfig.setCurrentForTesting(config)
     }
 
@@ -60,12 +61,12 @@ final class FloatAttentionTests: WindowTestCase {
     }
 
     private func floatSurface() throws -> RecordingSurface {
-        try XCTUnwrap(spawned.first { $0.lastConfig?.args == ["-l", "-i", "-c", "btop"] })
+        try XCTUnwrap(spawned.first { $0.lastConfig?.args == ["-l", "-i", "-c", "pi"] })
     }
 
     private func notify(_ surface: RecordingSurface, _ body: String) {
         surface.delegate?.surface(
-            surface, didPostNotification: TerminalNotification(title: "btop", body: body))
+            surface, didPostNotification: TerminalNotification(title: "pi", body: body))
         drainMainQueue()
     }
 
@@ -86,9 +87,9 @@ final class FloatAttentionTests: WindowTestCase {
 
     func test_aHiddenFloatAsking_marksTheWindow() throws {
         let c = makeWindow()
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
         let surface = try floatSurface()
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
 
         notify(surface, "needs input")
 
@@ -97,21 +98,21 @@ final class FloatAttentionTests: WindowTestCase {
 
     func test_aHiddenFloatAsking_raisesACardNamedAfterTheFloat() throws {
         let c = makeWindow()
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
         let surface = try floatSurface()
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
 
         notify(surface, "needs input")
 
         let copy = toastViews(c).flatMap { descendants(of: $0) }
             .compactMap { ($0 as? NSTextField)?.stringValue }
-        XCTAssertTrue(copy.contains("btop"), "the card names the float, not its host tab")
+        XCTAssertTrue(copy.contains("pi"), "the card names the float, not its host tab")
         XCTAssertTrue(copy.contains("needs input"))
     }
 
     func test_aFloatYouAreLookingAt_asksForNothing() throws {
         let c = makeWindow()
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
         let surface = try floatSurface()
 
         notify(surface, "needs input")
@@ -124,7 +125,7 @@ final class FloatAttentionTests: WindowTestCase {
 
     func test_aFloatOpenInAWindowYouAreNotIn_stillAsks() throws {
         let c = makeWindow()
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
         let surface = try floatSurface()
         WindowController.isPresent = { _ in false }
 
@@ -138,13 +139,13 @@ final class FloatAttentionTests: WindowTestCase {
 
     func test_showingTheFloatAgain_answersIt() throws {
         let c = makeWindow()
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
         let surface = try floatSurface()
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
         notify(surface, "needs input")
         XCTAssertEqual(c.windowAttentionForTesting, .waiting)
 
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
         drainMainQueue()
 
         XCTAssertEqual(c.windowAttentionForTesting, .idle)
@@ -152,9 +153,9 @@ final class FloatAttentionTests: WindowTestCase {
 
     func test_dismissingAFloatsCard_answersTheFloat() throws {
         let c = makeWindow()
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
         let surface = try floatSurface()
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
         notify(surface, "needs input")
         XCTAssertEqual(c.windowAttentionForTesting, .waiting)
 
@@ -168,9 +169,9 @@ final class FloatAttentionTests: WindowTestCase {
 
     func test_aFloatsCard_switchesToTheFloat() throws {
         let c = makeWindow()
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
         let surface = try floatSurface()
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
         notify(surface, "needs input")
         let card = try XCTUnwrap(toastViews(c).first)
         let switchButton = try XCTUnwrap(
@@ -179,20 +180,20 @@ final class FloatAttentionTests: WindowTestCase {
         switchButton.performClick(nil)
         drainMainQueue()
 
-        XCTAssertEqual(c.floatsForTesting.activeID, "btop", "Switch on a float's card opens the float")
+        XCTAssertEqual(c.floatsForTesting.activeID, "pi", "Switch on a float's card opens the float")
         XCTAssertEqual(c.windowAttentionForTesting, .idle)
         XCTAssertTrue(toastViews(c).isEmpty, "the card goes once you are looking at the float")
     }
 
     func test_openingAFloatByItsOwnChord_takesItsCardDown() throws {
         let c = makeWindow()
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
         let surface = try floatSurface()
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
         notify(surface, "needs input")
         XCTAssertEqual(toastViews(c).count, 1)
 
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
         drainMainQueue()
 
         XCTAssertTrue(toastViews(c).isEmpty, "the float answered is the card answered, whichever way you got there")
@@ -200,13 +201,13 @@ final class FloatAttentionTests: WindowTestCase {
 
     func test_aHiddenFloatAsking_dotsItsButton() throws {
         let c = makeWindow()
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
         let surface = try floatSurface()
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
 
         notify(surface, "needs input")
 
-        XCTAssertEqual(c.dockForTesting.dottedToolFloatIDsForTesting, ["btop"])
+        XCTAssertEqual(c.dockForTesting.dottedToolFloatIDsForTesting, ["pi"])
     }
 
     func test_aScratchCard_namesItsTabAndScratch() throws {
@@ -257,14 +258,40 @@ final class FloatAttentionTests: WindowTestCase {
 
     func test_aWindowScopedFloat_marksNoSingleTab() throws {
         let c = makeWindow()
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
         let surface = try floatSurface()
-        c.handle(.toggleToolFloat("btop"))
+        c.handle(.toggleToolFloat("pi"))
 
         notify(surface, "needs input")
 
         XCTAssertNil(
             c.attentionStateForTesting(tabIndex: 0),
             "a window float belongs to no tab, so no tab number claims it")
+    }
+
+    func test_aFloatRunningNoAgent_readsFinished_andItsCardOpensTheFloat() throws {
+        var config = GeneralConfig.current
+        config.floats = [Self.spec("btop")]
+        config.completionToast = .sticky
+        GeneralConfig.setCurrentForTesting(config)
+        let c = makeWindow()
+        c.handle(.toggleToolFloat("btop"))
+        let surface = try XCTUnwrap(spawned.first { $0.lastConfig?.args == ["-l", "-i", "-c", "btop"] })
+        c.handle(.toggleToolFloat("btop"))
+
+        surface.delegate?.surface(
+            surface, didPostNotification: TerminalNotification(title: "btop", body: "Refresh finished"))
+        drainMainQueue()
+
+        XCTAssertEqual(c.windowAttentionForTesting, .completed, "btop is not an agent, so it never asks")
+        XCTAssertEqual(c.dockForTesting.dottedToolFloatIDsForTesting, ["btop"])
+        let card = try XCTUnwrap(toastViews(c).first)
+        let copy = descendants(of: card).compactMap { ($0 as? NSTextField)?.stringValue }
+        XCTAssertTrue(copy.contains("Refresh finished"), "got \(copy)")
+        let switchButton = try XCTUnwrap(
+            descendants(of: card).compactMap { $0 as? AppButton }.first { $0.title == "Switch" })
+        switchButton.performClick(nil)
+        drainMainQueue()
+        XCTAssertEqual(c.floatsForTesting.activeID, "btop", "Switch on the card opens the float")
     }
 }

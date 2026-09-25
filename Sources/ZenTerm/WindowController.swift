@@ -2409,6 +2409,23 @@ final class WindowController: NSObject {
             let target = owner.flatMap { self.workspace(of: $0) == nil ? nil : $0 } ?? activeID
             let title = owner == nil ? spec.title : self.attentionTitle(of: target)
             let tail = owner == nil ? nil : ": \(spec.title)"
+            let cardTitle = { [weak self] in owner == nil ? spec.title : self?.attentionTitle(of: target) ?? spec.title
+            }
+            let shown =
+                self.floats.activeID == spec.id && self.floats.surfaceID(spec.id) == surface
+                && Self.isPresent(self.window)
+            let destination = CardDestination(
+                shortcut: { CommandCatalog.spec(for: .toggleToolFloat(spec.id)).shortcut },
+                open: { [weak self] in
+                    guard let self else { return }
+                    owner.map { self.reveal($0) }
+                    if self.floats.activeID != spec.id { self.handle(.toggleToolFloat(spec.id)) }
+                })
+            guard let landing = self.notificationAttention(surface, notification) else {
+                return self.landNonAgentNotification(
+                    on: target, surface: surface, seen: shown, title: cardTitle, titleTail: tail, message: message,
+                    destination: destination)
+            }
 
             if AgentNotifier.shouldPushNotification(
                 appActive: NSApp.isActive, enabled: GeneralConfig.current.agentNotifications)
@@ -2417,25 +2434,15 @@ final class WindowController: NSObject {
                     windowID: self.windowID, tabID: target, title: title + (tail ?? ""), body: message)
             }
 
-            let shown =
-                self.floats.activeID == spec.id && self.floats.surfaceID(spec.id) == surface
-                && Self.isPresent(self.window)
-            surface.map { self.attention.record($0, .waiting, seen: shown) }
+            let tabWasWaiting = self.attention.state(tab: target) == .waiting
+            surface.map { self.attention.record($0, landing, seen: shown) }
             surface.map { self.agentSignalled($0, name: notification.title, message: message) }
             self.renderAgents()
 
             guard !shown else { return }
-            let destination = CardDestination(
-                shortcut: { CommandCatalog.spec(for: .toggleToolFloat(spec.id)).shortcut },
-                open: { [weak self] in
-                    guard let self else { return }
-                    owner.map { self.reveal($0) }
-                    if self.floats.activeID != spec.id { self.handle(.toggleToolFloat(spec.id)) }
-                })
-            self.presentWaitingToast(
-                for: target,
-                title: { [weak self] in owner == nil ? spec.title : self?.attentionTitle(of: target) ?? spec.title },
-                titleTail: tail, message: message, surface: surface, destination: destination)
+            self.presentAgentCard(
+                landing, tabWasWaiting: tabWasWaiting, for: target, title: cardTitle, titleTail: tail,
+                message: message, surface: surface, destination: destination)
         }
     }
 
@@ -2444,6 +2451,14 @@ final class WindowController: NSObject {
             guard let self, self.workspace(of: id) != nil else { return }
             let message = notification.body.isEmpty ? notification.title : notification.body
             let edge = self.drawerEdge(of: surface, in: id)
+            let seen = self.isSeen(surface, in: id)
+            let title = { [weak self] in self?.attentionTitle(of: id) ?? "" }
+            let destination = edge.map { self.drawerDestination($0, in: id) }
+            guard let landing = self.notificationAttention(surface, notification) else {
+                return self.landNonAgentNotification(
+                    on: id, surface: surface, seen: seen, title: title, titleTail: self.drawerTail(edge),
+                    message: message, destination: destination)
+            }
 
             if AgentNotifier.shouldPushNotification(
                 appActive: NSApp.isActive, enabled: GeneralConfig.current.agentNotifications)
@@ -2453,16 +2468,51 @@ final class WindowController: NSObject {
                     title: self.attentionTitle(of: id) + (self.drawerTail(edge) ?? ""), body: message)
             }
 
-            let seen = self.isSeen(surface, in: id)
-            surface.map { self.attention.record($0, .waiting, seen: seen) }
+            let tabWasWaiting = self.attention.state(tab: id) == .waiting
+            surface.map { self.attention.record($0, landing, seen: seen) }
             surface.map { self.agentSignalled($0, name: notification.title, message: message) }
             self.renderAgents()
 
             guard !seen else { return }
-            self.presentWaitingToast(
-                for: id, title: { [weak self] in self?.attentionTitle(of: id) ?? "" }, titleTail: self.drawerTail(edge),
-                message: message, surface: surface,
-                destination: edge.map { self.drawerDestination($0, in: id) })
+            self.presentAgentCard(
+                landing, tabWasWaiting: tabWasWaiting, for: id, title: title, titleTail: self.drawerTail(edge),
+                message: message, surface: surface, destination: destination)
+        }
+    }
+
+    private func notificationAttention(_ surface: SurfaceID?, _ notification: TerminalNotification) -> SurfaceAttention?
+    {
+        guard let surface else { return .waiting }
+        let listed = agents.agents[surface]
+        guard listed != nil || AgentRoster.agentName(notifying: notification.title, ai: GeneralConfig.current.ai) != nil
+        else { return nil }
+        let name = listed?.name ?? (notification.title.isEmpty ? nil : notification.title)
+        return AgentRules.notificationAttention(body: notification.body, agentName: name)
+    }
+
+    private func landNonAgentNotification(
+        on id: TabID, surface: SurfaceID?, seen: Bool, title: @escaping () -> String, titleTail: String?,
+        message: String, destination: CardDestination?
+    ) {
+        guard !seen, attention.state(tab: id) != .waiting else { return }
+        surface.map { attention.record($0, .completed, seen: false) }
+        presentCompletedToast(
+            for: id, title: title, titleTail: titleTail, message: message, surface: surface, destination: destination)
+        renderAttention()
+    }
+
+    private func presentAgentCard(
+        _ landing: SurfaceAttention, tabWasWaiting: Bool, for id: TabID, title: @escaping () -> String,
+        titleTail: String?, message: String, surface: SurfaceID?, destination: CardDestination?
+    ) {
+        if landing == .waiting {
+            presentWaitingToast(
+                for: id, title: title, titleTail: titleTail, message: message, surface: surface,
+                destination: destination)
+        } else if !tabWasWaiting {
+            presentCompletedToast(
+                for: id, title: title, titleTail: titleTail, message: message, surface: surface,
+                destination: destination)
         }
     }
 
@@ -2994,10 +3044,7 @@ final class WindowController: NSObject {
 
     func notifyAgentForTesting(tabIndex: Int, message: String) {
         guard activeWorkspace.tabIDs.indices.contains(tabIndex) else { return }
-        let id = activeWorkspace.tabIDs[tabIndex]
-        agentNotified(
-            surface: controller(id)?.focusedSurfaceID, id: id,
-            notification: TerminalNotification(title: "claude", body: message))
+        notifyAgentForTesting(tab: activeWorkspace.tabIDs[tabIndex], message: message)
     }
 
     func waitingToastForTesting(tabIndex: Int) -> ToastView? {
@@ -3096,9 +3143,9 @@ final class WindowController: NSObject {
     func controllerForTesting(tab id: TabID) -> TabController? { controller(id) }
 
     func notifyAgentForTesting(tab id: TabID, message: String) {
-        agentNotified(
-            surface: controller(id)?.focusedSurfaceID, id: id,
-            notification: TerminalNotification(title: "claude", body: message))
+        let surface = controller(id)?.focusedSurfaceID
+        surface.map { agents.identify($0, name: nil, source: .signal) }
+        agentNotified(surface: surface, id: id, notification: TerminalNotification(title: "", body: message))
     }
 
     func attentionStateForTesting(tab id: TabID) -> SurfaceAttention { attention.state(tab: id) }

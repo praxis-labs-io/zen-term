@@ -93,7 +93,8 @@ final class AttentionCenterWindowTests: WindowTestCase {
         let drawer = try XCTUnwrap(spawned.dropFirst(before).first)
         c.handle(.toggleRightDrawer)
         drawer.delegate?.surface(
-            drawer, didPostNotification: TerminalNotification(title: "claude", body: "needs you"))
+            drawer,
+            didPostNotification: TerminalNotification(title: "Claude Code", body: "Claude needs your permission"))
         drainMainQueue()
         XCTAssertTrue(isListed(c))
 

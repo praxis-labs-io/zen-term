@@ -31,6 +31,7 @@ final class SidebarAgentsTests: WindowTestCase {
         }
         var config = GeneralConfig.builtIn
         config.attentionToast = .sticky
+        config.ai = "pi"
         GeneralConfig.setCurrentForTesting(config)
         WindowController.isPresent = { _ in true }
         root = FileManager.default.temporaryDirectory
@@ -91,7 +92,7 @@ final class SidebarAgentsTests: WindowTestCase {
         wait(for: [expectation], timeout: 2)
     }
 
-    private func notify(_ agent: Agent, _ body: String, title: String = "") {
+    private func notify(_ agent: Agent, _ body: String, title: String = "pi") {
         agent.surface.delegate?.surface(
             agent.surface, didPostNotification: TerminalNotification(title: title, body: body))
         drainMainQueue()
@@ -253,16 +254,16 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(items(c).map(\.state), [.idle])
     }
 
-    func test_aSignallingShell_joinsAsAnAgent_namedBySignalWhenItCarriesOne() throws {
+    func test_aShellsNotification_joinsNothing_whileOneNamingAnAgent_joinsUnderThatName() throws {
         let c = makeWindow()
-        let first = try focusedAgent(c)
+        let shell = try focusedAgent(c)
         let second = try split(c)
         _ = try split(c)
 
-        notify(first, "Needs input")
-        notify(second, "Needs input", title: "Claude Code")
+        notify(shell, "Build finished", title: "")
+        notify(second, "Claude needs your permission", title: "Claude Code")
 
-        XCTAssertEqual(Set(items(c).map(\.detail)), ["Workspace 1 · agent", "Workspace 1 · Claude Code"])
+        XCTAssertEqual(items(c).map(\.detail), ["Workspace 1 · Claude Code"])
     }
 
     func test_anAgentThatWorksBeforeItAsks_takesTheNameItsNotificationCarries() throws {
@@ -272,7 +273,7 @@ final class SidebarAgentsTests: WindowTestCase {
 
         progress(agent, working: true)
         XCTAssertEqual(items(c).map(\.detail), ["Workspace 1 · agent"], "precondition: joined unnamed")
-        notify(agent, "Needs input", title: "Claude Code")
+        notify(agent, "Claude needs your permission", title: "Claude Code")
 
         XCTAssertEqual(items(c).map(\.detail), ["Workspace 1 · Claude Code"])
     }
@@ -531,7 +532,7 @@ final class SidebarAgentsTests: WindowTestCase {
         let float = try XCTUnwrap(spawned.first { $0.lastConfig?.args == ["-l", "-i", "-c", "btop"] })
         c.handle(.toggleToolFloat("btop"))
         XCTAssertNil(c.floatsForTesting.activeID, "precondition: the float is hidden")
-        float.delegate?.surface(float, didPostNotification: TerminalNotification(title: "", body: "Needs input"))
+        float.delegate?.surface(float, didPostNotification: TerminalNotification(title: "pi", body: "Needs input"))
         drainMainQueue()
 
         try click(try XCTUnwrap(rows(c).first))

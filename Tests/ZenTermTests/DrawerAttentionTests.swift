@@ -73,7 +73,8 @@ final class DrawerAttentionTests: WindowTestCase {
 
     private func notify(_ surface: RecordingSurface) {
         surface.delegate?.surface(
-            surface, didPostNotification: TerminalNotification(title: "claude", body: "needs you"))
+            surface,
+            didPostNotification: TerminalNotification(title: "Claude Code", body: "Claude needs your permission"))
         drainMainQueue()
     }
 

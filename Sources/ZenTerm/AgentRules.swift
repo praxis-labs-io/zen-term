@@ -37,6 +37,23 @@ enum AgentRules {
     // The prompt blinks between `[ ! ]` and `[ . ]`, and a task's own words can say "Action Required".
     private static let codexPrompt = #"^\[ [!.] \] Action Required"#
 
+    static func notificationAttention(body: String, agentName: String?) -> SurfaceAttention {
+        let rules = notificationRules.filter { $0.agent == key(for: agentName) }
+        guard !rules.isEmpty else { return .waiting }
+        return rules.first { $0.match.matches(body) }?.state ?? .completed
+    }
+
+    // Claude's two captured bodies both ask for you, so anything else it posts closes a turn.
+    private static let notificationRules: [(agent: String, state: SurfaceAttention, match: RuleMatcher)] = [
+        (
+            "claude", .waiting,
+            .any([
+                .contains("needs your permission"),
+                .contains("is waiting for your input"),
+            ])
+        )
+    ]
+
     static let clearedProgress = "4;0"
 
     static func progressRegion(_ progress: TerminalProgress?) -> String {

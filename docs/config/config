@@ -187,7 +187,7 @@
 # attention-toast = sticky            # sticky | auto
 
 # The same, for the card a long command posts when it finishes in a background
-# tab.
+# tab, or a program that is not an agent posts a notification.
 # In-app Settings edit: applies to the next notification.
 # completion-toast = sticky           # sticky | auto
 
