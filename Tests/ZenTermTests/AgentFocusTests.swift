@@ -154,6 +154,37 @@ final class AgentFocusTests: WindowTestCase {
         XCTAssertEqual(c.agentStateForTesting(pane), .idle)
     }
 
+    private func openFloat(_ c: WindowController) throws -> (surface: RecordingSurface, id: SurfaceID) {
+        var config = GeneralConfig.current
+        config.floats = [
+            ToolFloat(
+                id: "agent", order: 0, title: "agent", icon: ToolFloatParser.defaultIcon, command: "agent",
+                dir: nil, widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false, persist: .window,
+                toggle: Chord(command: true, shift: true, key: "b"))
+        ]
+        GeneralConfig.setCurrentForTesting(config)
+        c.handle(.toggleToolFloat("agent"))
+        drainMainQueue()
+        let surface = try XCTUnwrap(spawned.first { $0.lastConfig?.args == ["-l", "-i", "-c", "agent"] })
+        let id = try XCTUnwrap(c.floatsForTesting.surfaceID("agent"))
+        XCTAssertEqual(c.floatsForTesting.activeID, "agent", "precondition: the float is shown")
+        return (surface, id)
+    }
+
+    func test_leavingTheSidebarForAFloat_startsTheClock() throws {
+        let c = makeWindow()
+        let float = try openFloat(c)
+        let row = try XCTUnwrap(c.sidebarForTesting.view.rowsForTesting.first)
+        c.window.makeFirstResponder(row)
+        XCTAssertTrue(c.sidebarForTesting.hasFocus, "precondition: a click put the keyboard in the rows")
+        finishATurn(on: float.surface)
+
+        c.sidebarForTesting.onLeave()
+        wait(seconds: WindowController.doneDecay + 0.2)
+
+        XCTAssertEqual(c.agentStateForTesting(float.id), .idle)
+    }
+
     func test_anAgentThatExitedFailing_staysUntilItIsAnswered() throws {
         let c = makeWindow()
         let pane = try XCTUnwrap(c.focusedSurfaceIDForTesting)

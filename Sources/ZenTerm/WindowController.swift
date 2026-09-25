@@ -891,6 +891,7 @@ final class WindowController: NSObject {
     private func restoreFocusToActive() {
         if floats.isOpen { floats.refocus() } else { activeController?.restoreUnifiedFocus() }
         syncWindowFocus()
+        if floats.isOpen { answerFocusedAgent() }
     }
 
     // One surface reports focused: the focused one in the key window's active tab, as libghostty's own apprt does.
