@@ -70,16 +70,12 @@ final class AttentionStore {
         guard let wasWorking = entries[id]?.working else { return }
         entries[id]?.working = on
         if wasWorking, !on { latchAgent(id, .completed) }
-        if !wasWorking, on, entries[id]?.agentLatched == .completed {
-            entries[id]?.agentLatched = .idle
-            entries[id]?.agentSince = nil
-        }
+        if !wasWorking, on, entries[id]?.agentLatched == .completed { answerAgent(id) }
     }
 
     func endAgent(_ id: SurfaceID) {
         entries[id]?.working = false
-        entries[id]?.agentLatched = .idle
-        entries[id]?.agentSince = nil
+        answerAgent(id)
     }
 
     func answerAgent(_ id: SurfaceID) {
