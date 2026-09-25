@@ -229,14 +229,16 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         let toast = try XCTUnwrap(
             descendants(of: c.window.contentView!).compactMap { $0 as? ToastView }
                 .first { descendants(of: $0).contains { ($0 as? NSTextField)?.stringValue == "Worktree Removed" } })
+        let dismiss = try XCTUnwrap(
+            descendants(of: toast).compactMap { $0 as? IconButton }.first { $0.accessibilityLabel() == "Dismiss" })
 
-        try XCTUnwrap(toast.onClose, "its ✕ and the dismiss shortcuts reach it")()
+        try click(dismiss)
 
         XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"))
         XCTAssertTrue(titles(of: c).contains("feature/one"), "dismissing it keeps the workspace")
     }
 
-    func test_theRemovedToastsCloseButton_closesThatWorkspace() throws {
+    func test_theRemovedToastsCloseWorkspaceAction_closesThatWorkspace() throws {
         let c = makeWindow()
         try openWorkspace(named: "Alpha", in: c)
         try openAlphaWorktree(branch: "feature/one", in: c)
@@ -314,13 +316,13 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
     private func titles(of c: WindowController) -> [String] { rows(of: c).map(\.titleForTesting) }
 
-    private func click(_ row: SettingsNavRow) throws {
+    private func click(_ view: NSView) throws {
         let event = try XCTUnwrap(
             NSEvent.mouseEvent(
                 with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
+                windowNumber: view.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
                 clickCount: 1, pressure: 1))
-        row.mouseDown(with: event)
+        view.mouseDown(with: event)
     }
 
     private func press(_ key: String, typing characters: String, keyCode: UInt16, in c: WindowController) throws {
