@@ -453,6 +453,7 @@ final class WindowController: NSObject {
         yieldSidebarIfNarrow()
         window.delegate = self
         wireModes()
+        attention.onChange = { [weak self] in self?.renderAttention() }
 
         attentionObserver = NotificationCenter.default.addObserver(
             forName: .attentionCenterDidChange, object: nil, queue: nil
@@ -2679,9 +2680,8 @@ final class WindowController: NSObject {
         guard agents.contains(surface) else { return }
         let failed = result.exitCode.map { $0 != 0 && !Self.deliberateStopCodes.contains($0) } ?? false
         agents.markExited(surface, failed: failed, message: Self.commandResultMessage(result))
-        attention.endAgent(surface)
+        attention.endAgent(surface, failed: failed)
         agentStates.drop(surface)
-        if failed { attention.latchAgent(surface, .completed) }
         renderAgents()
     }
 
