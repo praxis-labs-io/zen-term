@@ -67,6 +67,22 @@ final class AgentTitleRoutingTests: WindowTestCase {
         (try XCTUnwrap(spawned.first), try XCTUnwrap(try activeTab(c).surfaceIDs.first))
     }
 
+    private func notify(_ notification: TerminalNotification, from surface: RecordingSurface) {
+        surface.delegate?.surface(surface, didPostNotification: notification)
+        drainMainQueue()
+    }
+
+    private func firstClaudeAsking(_ c: WindowController) throws -> (surface: RecordingSurface, id: SurfaceID) {
+        let (surface, id) = try firstPane(c)
+        c.identifyAgentForTesting(id, name: "claude")
+        surface.delegate?.surface(surface, progressDidChange: TerminalProgress(state: .indeterminate))
+        drainMainQueue()
+        push(AgentTitleFixtures.claudeAsking, from: surface)
+        notify(TerminalNotification(title: "Claude Code", body: "Claude needs your permission"), from: surface)
+        XCTAssertEqual(c.agentStateForTesting(id), .waiting, "precondition: Claude is asking")
+        return (surface, id)
+    }
+
     func test_aDrawersTitle_reachesTheAgent() throws {
         let c = makeWindow()
         let before = spawned.count
@@ -152,7 +168,7 @@ final class AgentTitleRoutingTests: WindowTestCase {
         XCTAssertEqual(c.agentStateForTesting(id), .waiting)
     }
 
-    func test_answeringABlockedCodex_doesNotLeaveItWorking() throws {
+    func test_typingAtABlockedCodex_leavesItWaiting() throws {
         let c = makeWindow()
         let (surface, id) = try firstPane(c)
         push(AgentTitleFixtures.codexWorking[0], from: surface)
@@ -160,9 +176,75 @@ final class AgentTitleRoutingTests: WindowTestCase {
 
         c.answerTypedAgent()
 
-        XCTAssertNotEqual(
-            c.agentRowForTesting(id)?.state, .working,
-            "an agent that stopped to ask is not mid-turn, so answering must not fall back to working")
+        XCTAssertEqual(c.agentStateForTesting(id), .waiting, "an arrow key at the prompt answers nothing")
+    }
+
+    func test_aBlockedCodexBackAtWork_isAnswered() throws {
+        let c = makeWindow()
+        let (surface, id) = try firstPane(c)
+        push(AgentTitleFixtures.codexWorking[0], from: surface)
+        push(AgentTitleFixtures.codexBlockedOn, from: surface)
+
+        push(AgentTitleFixtures.codexWorking[1], from: surface)
+
+        XCTAssertEqual(c.agentStateForTesting(id), .working, "its spinner coming back is the answer")
+    }
+
+    func test_aBlockedCodexGoingQuiet_isAnswered() throws {
+        let c = makeWindow()
+        let (surface, id) = try firstPane(c)
+        push(AgentTitleFixtures.codexWorking[0], from: surface)
+        push(AgentTitleFixtures.codexBlockedOn, from: surface)
+
+        push(AgentTitleFixtures.codexIdle, from: surface)
+
+        XCTAssertEqual(c.agentStateForTesting(id), .idle, "a denied prompt leaves the title without a spinner")
+    }
+
+    func test_aCodexThatAskedByNotification_isAnsweredByItsNextTurn() throws {
+        let c = makeWindow()
+        let (surface, id) = try firstPane(c)
+        push(AgentTitleFixtures.codexIdle, from: surface)
+        c.identifyAgentForTesting(id, name: "codex")
+        notify(TerminalNotification(title: "", body: "Approve writing test2.txt"), from: surface)
+        XCTAssertEqual(c.agentStateForTesting(id), .waiting, "precondition: it asked without its prompt title")
+
+        push(AgentTitleFixtures.codexWorking[0], from: surface)
+
+        XCTAssertEqual(
+            c.agentStateForTesting(id), .working, "a wait that never passed through the prompt title still ends")
+    }
+
+    func test_typingAtAClaudePrompt_leavesItWaiting() throws {
+        let c = makeWindow()
+        let id = try firstClaudeAsking(c).id
+
+        c.answerTypedAgent()
+
+        XCTAssertEqual(c.agentStateForTesting(id), .waiting, "an arrow key at the prompt answers nothing")
+    }
+
+    func test_aClaudePrompt_isAnsweredWhenItsSpinnerComesBack() throws {
+        let c = makeWindow()
+        let (surface, id) = try firstClaudeAsking(c)
+
+        push(AgentTitleFixtures.claudeAnswered, from: surface)
+
+        XCTAssertEqual(c.agentStateForTesting(id), .working)
+        XCTAssertEqual(c.agentMessageForTesting(id), "Create test.txt", "the row reads the tool it went back to")
+    }
+
+    func test_aCustomAgent_isStillAnsweredByTyping() throws {
+        let c = makeWindow()
+        let (surface, id) = try firstPane(c)
+        c.identifyAgentForTesting(id, name: "aider")
+        notify(TerminalNotification(title: "", body: "Apply these edits?"), from: surface)
+        XCTAssertEqual(c.agentStateForTesting(id), .waiting)
+
+        c.answerTypedAgent()
+
+        XCTAssertEqual(
+            c.agentStateForTesting(id), .idle, "an agent with no answer signal of its own is answered by a key")
     }
 
     func test_aTitleFromASurfaceThatIsNoAgent_changesNothing() throws {

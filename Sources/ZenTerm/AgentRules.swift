@@ -77,6 +77,12 @@ enum AgentRules {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    // Claude asks under a `✳` title and puts its spinner back the moment it is answered.
+    static func isClaudeResuming(from previous: String, to title: String, agentName: String?) -> Bool {
+        guard key(for: agentName) == "claude", let glyph = title.first else { return false }
+        return previous.first == "✳" && claudeWorkingGlyphs.contains(glyph)
+    }
+
     // `✳` is left out: it heads the idle title Claude flickers to mid-turn, whose tail is only "Claude Code".
     private static let claudeWorkingGlyphs: Set<Character> = ["◐", "◑", "◒", "◓"]
 }

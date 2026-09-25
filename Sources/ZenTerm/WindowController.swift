@@ -2501,7 +2501,14 @@ final class WindowController: NSObject {
                 joined = true
             }
             guard self.agents.contains(surface) else { return }
+            let previous = self.agentStates.title(of: surface)
             self.agentStates.noteTitle(title, of: surface)
+            if self.attention.agentState(of: surface) == .waiting,
+                AgentRules.isClaudeResuming(from: previous, to: title, agentName: self.agents.agents[surface]?.name)
+            {
+                self.answerAgent(surface)
+                self.renderAgents()
+            }
             if self.deriveAgentState(surface) { return }
             if self.agentStates.state(of: surface) == .working { self.noteTitleMessage(surface) }
             if joined { self.renderAgents() }
@@ -2526,11 +2533,15 @@ final class WindowController: NSObject {
             AgentRules.rules(for: agent.name), title: agentStates.title(of: surface),
             progress: agentStates.progress(of: surface))
         let wasHolding = agentStates.isHoldingIdle(surface)
+        let wasBlocked = agentStates.state(of: surface) == .blocked
         guard let next = agentStates.publish(surface, outcome) else {
             if !wasHolding, agentStates.isHoldingIdle(surface) { settleIdleHold(surface) }
             return false
         }
         Log.info("agent \(agent.name ?? AgentRoster.unnamed): \(outcome.label)", category: .workspace)
+        if attention.agentState(of: surface) == .waiting, wasBlocked || resumesAfterAsking(next, agent: agent) {
+            answerAgent(surface)
+        }
         applyDerived(next, to: surface)
         return true
     }
@@ -2705,9 +2716,19 @@ final class WindowController: NSObject {
     // Runs on every keystroke the chrome passed on, which includes ones the find field takes before the pane.
     func answerTypedAgent() {
         guard !search.isEditing, let surface = focusedSurface, isFocused(surface),
-            attention.agentState(of: surface) > .working
+            attention.agentState(of: surface) > .working, !awaitsSignalAnswer(surface)
         else { return }
         answerAgent(surface)
+    }
+
+    // An arrow key at a prompt sends nothing, so an agent that signals its own answer is never answered by a key.
+    private func awaitsSignalAnswer(_ surface: SurfaceID) -> Bool {
+        guard let agent = agents.agents[surface], !agent.hasExited else { return false }
+        return AgentRules.key(for: agent.name) != nil && attention.agentState(of: surface) == .waiting
+    }
+
+    private func resumesAfterAsking(_ next: AgentSignalState, agent: AgentRoster.Agent) -> Bool {
+        next == .working && AgentRules.key(for: agent.name) != nil
     }
 
     // The row takes its tone from the store and its words from the roster, so both clear here or the row lies.

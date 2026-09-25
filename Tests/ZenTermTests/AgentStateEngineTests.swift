@@ -19,6 +19,8 @@ enum AgentTitleFixtures {
     static let claudeWorking = "◐ Multiple choice question tool"
     static let claudeWorkingAlternate = "◑ Multiple choice question tool"
     static let claudeIdle = "✳ Claude Code"
+    static let claudeAsking = "✳ Create test.txt"
+    static let claudeAnswered = "◐ Create test.txt"
 }
 
 final class AgentStateEngineTests: XCTestCase {
