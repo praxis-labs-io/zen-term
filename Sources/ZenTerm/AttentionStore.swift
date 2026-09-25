@@ -37,6 +37,8 @@ final class AttentionStore {
         entries[id] = Entry(tab: tab)
     }
 
+    func tab(of id: SurfaceID) -> TabID? { entries[id]?.tab }
+
     /// Folds an unseen latch into its tab, so closing the pane that spoke does not un-color the tab.
     func release(_ id: SurfaceID) {
         guard let entry = entries.removeValue(forKey: id) else { return }
