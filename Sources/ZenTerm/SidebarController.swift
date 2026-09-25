@@ -435,16 +435,16 @@ final class SidebarController {
         case .workspace:
             let isRepo = entry.folder.flatMap(GitRepoStatus.known) == true
             return SidebarRowItem(
-                id: entry.row, variant: .standard, name: entry.name, branch: branch, number: entry.number,
+                id: entry.row, variant: .standard, name: entry.name, detail: branch, number: entry.number,
                 isActive: entry.isActive, makesWorktrees: entry.isConfigured && isRepo, isWaiting: entry.isWaiting)
         case .worktree(let origin):
             return SidebarRowItem(
                 id: entry.row, variant: .nested(symbol: worktreeSymbol), name: branch ?? origin.name,
-                branch: nil, number: entry.number, isActive: entry.isActive, makesWorktrees: false,
+                detail: nil, number: entry.number, isActive: entry.isActive, makesWorktrees: false,
                 isWaiting: entry.isWaiting)
         case .ghost:
             return SidebarRowItem(
-                id: entry.row, variant: .faint, name: entry.name, branch: nil, number: nil, isActive: false,
+                id: entry.row, variant: .faint, name: entry.name, detail: nil, number: nil, isActive: false,
                 makesWorktrees: true, isWaiting: false)
         }
     }
