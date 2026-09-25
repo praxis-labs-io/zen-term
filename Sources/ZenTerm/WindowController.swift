@@ -312,34 +312,20 @@ final class WindowController: NSObject {
             .map { $0.title.replacingOccurrences(of: "Open ", with: "") }
     }
 
-    // Held chords auto-repeat; without this a leaned-on chord stacks a card per keystroke.
-    private static let floatBlockToastThrottle: TimeInterval = 3
-    private var lastFloatBlockToast: Date?
+    private var floatBlockToasts = ToastThrottle<Bool>()
 
     private func toastFloatBlocked() {
-        let now = Date()
-        if let last = lastFloatBlockToast,
-            now.timeIntervalSince(last) < Self.floatBlockToastThrottle
-        {
-            return
-        }
-        lastFloatBlockToast = now
+        guard floatBlockToasts.allows() else { return }
         toasts.show(
             ToastContent(
                 variant: .info, title: "Tool Float",
                 message: "\(activeFloatName ?? "This tool") is open. Close it to get back to your panes."))
     }
 
-    private var lastNoNewWorktreeToast: (refusal: SidebarController.NewWorktreeRefusal, at: Date)?
+    private var noNewWorktreeToasts = ToastThrottle<SidebarController.NewWorktreeRefusal>()
 
     private func toastNoNewWorktree(_ refusal: SidebarController.NewWorktreeRefusal) {
-        let now = Date()
-        if let last = lastNoNewWorktreeToast, last.refusal == refusal,
-            now.timeIntervalSince(last.at) < Self.floatBlockToastThrottle
-        {
-            return
-        }
-        lastNoNewWorktreeToast = (refusal, now)
+        guard noNewWorktreeToasts.allows(refusal) else { return }
         toasts.show(ToastContent(variant: .info, title: "New Worktree", message: refusal.message))
     }
 
@@ -1397,15 +1383,11 @@ final class WindowController: NSObject {
         }
     }
 
-    private var lastOtherWindowCloseToast: Date?
+    private var otherWindowCloseToasts = ToastThrottle<Bool>()
 
     private func closeRemovedWorkspace(_ running: RunningWorkspace) {
         guard running.window == windowID, let id = running.id else {
-            let now = Date()
-            if let last = lastOtherWindowCloseToast, now.timeIntervalSince(last) < Self.floatBlockToastThrottle {
-                return
-            }
-            lastOtherWindowCloseToast = now
+            guard otherWindowCloseToasts.allows() else { return }
             toasts.show(
                 ToastContent(
                     variant: .info, title: "Open in Another Window",
