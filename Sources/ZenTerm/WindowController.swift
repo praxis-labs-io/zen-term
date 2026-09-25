@@ -142,6 +142,7 @@ final class WindowController: NSObject {
             restoreFocus: { [weak self] in self?.activeController?.restoreUnifiedFocus() },
             currentTabID: { [weak self] in self?.activeWorkspace.activeID })
         controller.onStateChanged = { [weak self] in self?.renderDock() }
+        controller.onFocusChanged = { [weak self] in self?.syncWindowFocus() }
         controller.onRequestToast = { [weak self] content in self?.toasts.show(content) }
         controller.onProgress = { [weak self] surface, progress in
             self?.progressChanged(surface: surface, progress: progress)

@@ -40,6 +40,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     /// A float is seen when it is shown, not when it takes first responder: showing is the only moment it is looked at.
     var onShown: ((SurfaceID) -> Void)?
+    var onFocusChanged: (() -> Void)?
 
     // Keyed by the surface object: `surfaceForFloat` reuses a live surface, and a rebuilt registry key can disagree.
     private var idBySurface: [ObjectIdentifier: SurfaceID] = [:]
@@ -137,9 +138,13 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     var shownSurface: TerminalSurface? { activeFloat?.surface }
     var shownOverlayForTesting: SurfaceFloatOverlay? { activeFloat?.overlay }
 
-    func refocus() {
-        activeFloat?.surface.focus()
+    func refocus() { focusShown() }
+
+    private func focusShown() {
+        guard let active = activeFloat else { return }
+        active.surface.focus()
         syncFocus()
+        onFocusChanged?()
     }
 
     func setHoldsKeyFocus(_ holds: Bool) {
@@ -205,8 +210,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     func reveal(_ id: SurfaceID) {
         if let active = activeFloat, idBySurface[ObjectIdentifier(active.surface)] == id {
-            active.surface.focus()
-            return syncFocus()
+            return focusShown()
         }
         guard let live = liveFloats.values.first(where: { idBySurface[ObjectIdentifier($0.surface)] == id }) else {
             return
@@ -236,8 +240,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         presentOverlay(overlay)
         activeFloat = (spec, surface, overlay, tab)
         yieldFocus()
-        surface.focus()
-        syncFocus()
+        focusShown()
         overlay.animateIn()
         idBySurface[ObjectIdentifier(surface)].map { onShown?($0) }
         onStateChanged?()
@@ -383,6 +386,9 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     }
     func surfaceGridDidReflow(_ s: TerminalSurface) {
         relay(s, .gridReflow)
+    }
+    func surfaceWantsFocus(_ s: TerminalSurface) {
+        if s === activeFloat?.surface { focusShown() }
     }
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {
         relay(s, .search(.total(total)))

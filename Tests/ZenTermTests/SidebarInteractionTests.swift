@@ -644,6 +644,37 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertEqual(pane.focusRenders.last, true)
     }
 
+    func test_openingScratch_fromTheSidebar_showsTheFloatFocused() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.sidebarForTesting.focusActiveRow()
+        XCTAssertTrue(controller.sidebarForTesting.hasFocus)
+
+        controller.handle(.toggleToolFloat(ToolFloat.scratch.id))
+
+        let float = try XCTUnwrap(controller.floatsForTesting.shownSurface as? RecordingSurface)
+        XCTAssertTrue(controller.window.firstResponder === float.view)
+        XCTAssertEqual(float.focusRenders.last, true)
+        XCTAssertEqual(controller.floatsForTesting.shownOverlayForTesting?.isHaloVisible, true)
+    }
+
+    func test_clickingAnOpenFloat_fromTheSidebar_givesItBackItsEdgeAndCursor() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        let float = try XCTUnwrap(controller.floatsForTesting.shownSurface as? RecordingSurface)
+        let overlay = try XCTUnwrap(controller.floatsForTesting.shownOverlayForTesting)
+        controller.sidebarForTesting.focusActiveRow()
+        XCTAssertFalse(overlay.isHaloVisible, "precondition: the sidebar took the float's edge")
+
+        controller.window.makeFirstResponder(float.view)
+        float.delegate?.surfaceWantsFocus(float)
+
+        XCTAssertFalse(controller.sidebarForTesting.hasFocus)
+        XCTAssertTrue(overlay.isHaloVisible)
+        XCTAssertEqual(float.focusRenders.last, true)
+    }
+
     func test_nvimNavigatorFocusLeft_fromTheLeftmostPane_focusesTheSidebar() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
