@@ -145,6 +145,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         WorktreeStore.isRemovedOverrideForTesting = { _ in false }
         c.checkForRemovedWorktreesForTesting()
         waitUntil(!rows(of: c).contains { $0.detailForTesting == "removed" }, "the mark to clear when .git is back")
+        XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"), "and its toast goes with it")
     }
 
     func test_removeWorktreeOnARemovedRow_closesItsWorkspace() throws {
@@ -167,6 +168,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertTrue(pickers(in: c).isEmpty, "the picker steps aside for the close")
         XCTAssertFalse(titles(of: c).contains("feature/one"), "the workspace closes")
         XCTAssertTrue(titles(of: c).contains("Alpha"), "and only that one")
+        XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"), "no toast left offering to close it")
     }
 
     func test_removeWorktreeOnARemovedRowInAnotherWindow_pointsThereOnce() throws {
@@ -193,6 +195,23 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(
             toastTexts(in: c).filter { $0 == "Close feature/one from the window it is open in." }.count, 1)
         XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "nothing here closes")
+    }
+
+    func test_theRemovedToast_dismissesLikeAnyOther() throws {
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(toastTexts(in: c).contains("Worktree Removed"), "the toast to arrive")
+        let toast = try XCTUnwrap(
+            descendants(of: c.window.contentView!).compactMap { $0 as? ToastView }
+                .first { descendants(of: $0).contains { ($0 as? NSTextField)?.stringValue == "Worktree Removed" } })
+
+        try XCTUnwrap(toast.onClose, "its ✕ and the dismiss shortcuts reach it")()
+
+        XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"))
+        XCTAssertTrue(titles(of: c).contains("feature/one"), "dismissing it keeps the workspace")
     }
 
     func test_theRemovedToastsCloseButton_closesThatWorkspace() throws {

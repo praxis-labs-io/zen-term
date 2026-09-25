@@ -709,7 +709,7 @@ final class WindowController: NSObject {
             changed = true
             if isRemoved {
                 presentWorktreeRemovedToast(for: workspace.id, named: origin.name)
-            } else if let toast = worktreeRemovedToasts.removeValue(forKey: workspace.id) {
+            } else if let toast = worktreeRemovedToasts[workspace.id] {
                 toasts.dismiss(toast)
             }
         }
@@ -722,13 +722,19 @@ final class WindowController: NSObject {
 
     private func presentWorktreeRemovedToast(for id: WorkspaceID, named name: String) {
         let close = ToastAction(title: "Close Workspace", kind: .primary) { [weak self] in
-            guard let self, let toast = self.worktreeRemovedToasts.removeValue(forKey: id) else { return }
+            guard let self, let toast = self.worktreeRemovedToasts[id] else { return }
             self.toasts.dismiss(toast)
             self.requestCloseWorkspace(id: id)
         }
-        worktreeRemovedToasts[id] = toasts.showSticky(
+        let toast = toasts.showSticky(
             ToastContent(variant: .warning, title: "Worktree Removed", message: "\(name) is no longer on disk."),
             actions: [close], showsClose: true, autoDismiss: true)
+        toast.onClose = { [weak self, weak toast] in toast.map { self?.toasts.dismiss($0) } }
+        toast.onDismissed = { [weak self, weak toast] in
+            guard let self, let toast, self.worktreeRemovedToasts[id] === toast else { return }
+            self.worktreeRemovedToasts[id] = nil
+        }
+        worktreeRemovedToasts[id] = toast
     }
 
     private func busyDots() -> (Bool, Bool, Bool) {
@@ -1110,6 +1116,7 @@ final class WindowController: NSObject {
         Log.info("workspace closed", category: .workspace)
         guard let place = order.navigable.firstIndex(of: workspace.id) else { return }
         workspaces.removeAll { $0 === workspace }
+        worktreeRemovedToasts[workspace.id].map(toasts.dismiss)
         guard !workspaces.isEmpty else { window.close(); return }
         guard workspace === activeWorkspace else { renderAttention(); return }
         let remaining = order.navigable
