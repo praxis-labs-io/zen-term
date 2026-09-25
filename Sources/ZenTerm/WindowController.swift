@@ -235,14 +235,14 @@ final class WindowController: NSObject {
     var worktreeRemovals = WorktreeRemovalTracker()
 
     func tabCount(atPath path: URL) -> Int {
-        allTabIDs.filter { GitRepo.isInside(controller($0)?.openedCWD, path) }.count
+        allTabIDs.filter { isClosedByRemoval($0, atPath: path) }.count
     }
 
     func closedByRemoval(atPath path: URL) -> ClosedByRemoval {
         var closed = ClosedByRemoval()
         var emptied = 0
         for workspace in workspaces {
-            let inside = workspace.tabIDs.filter { GitRepo.isInside(controller($0)?.openedCWD, path) }.count
+            let inside = workspace.tabIDs.filter { isClosedByRemoval($0, atPath: path) }.count
             guard inside > 0 else { continue }
             if inside == workspace.tabIDs.count {
                 closed.workspaces.append(workspace.name)
@@ -254,10 +254,14 @@ final class WindowController: NSObject {
         return emptied == workspaces.count ? ClosedByRemoval(thisWindow: true) : closed
     }
 
+    private func isClosedByRemoval(_ id: TabID, atPath path: URL) -> Bool {
+        GitRepo.isInside(controller(id)?.openedCWD, path) || GitRepo.isInside(workspace(of: id)?.origin?.path, path)
+    }
+
     // An open card keeps the keyboard: the picker is where the user watches the removal.
     func closeTabs(atPath path: URL) {
         let card = modal?.overlay
-        for id in allTabIDs where GitRepo.isInside(controller(id)?.openedCWD, path) {
+        for id in allTabIDs where isClosedByRemoval(id, atPath: path) {
             closeTab(id, dismissingModal: false)
         }
         if let card, modal?.overlay === card { card.focusInitialResponder() }

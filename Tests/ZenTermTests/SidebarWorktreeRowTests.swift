@@ -294,6 +294,24 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"))
     }
 
+    func test_removingAWorktree_closesItsWorkspace_evenWithATabOpenedElsewhere() throws {
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        c.handle(.newTab)
+        let path = alpha.appendingPathComponent("feature/one", isDirectory: true)
+
+        XCTAssertEqual(c.closedByRemoval(atPath: path), ClosedByRemoval(workspaces: ["Alpha: feature/one"]))
+        c.worktreeRemovalsChanged(.removed(path))
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+        c.checkForRemovedWorktreesForTesting()
+        drainMainQueue()
+
+        XCTAssertFalse(titles(of: c).contains("feature/one"), "the workspace goes with its worktree")
+        XCTAssertTrue(titles(of: c).contains("Alpha"))
+        XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"), "a removal you confirmed is not news")
+    }
+
     private func titles(of c: WindowController) -> [String] { rows(of: c).map(\.titleForTesting) }
 
     private func click(_ row: SettingsNavRow) throws {

@@ -593,8 +593,8 @@ The workspace `carry` key names ignored files to copy into a new worktree.
   runs off-main and presents only if the same picker is still up.
 - **`WorktreeRemovalTracker` is app-wide and runs the delete**, because closing tabs can
   close the window first. A removing row reads `Removing <name>…`. Tabs close on
-  `Change.removed`, never on confirm or `failed`, matched by `TabController.openedCWD`,
-  and closing them leaves the card up. The finish re-lists.
+  `Change.removed`, never on confirm or `failed`, matched by `TabController.openedCWD` or
+  by the workspace's `WorktreeOrigin`, and closing them leaves the card up. The finish re-lists.
 - **An open worktree row removes like a Configured one.** It reads `Removing <name>…` while
   the tracker holds it, and the finish rebuilds Open from `runningWorkspaces()` and drops
   Open Elsewhere rows inside the path, with a closed parent's ghost once it has none.
