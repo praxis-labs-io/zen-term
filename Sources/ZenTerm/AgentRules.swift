@@ -92,14 +92,6 @@ enum AgentRules {
     ]
 
     // Claude's title tail is the live tool name, which is the nearest it has to the prose Codex sends.
-    // The ask sits between the prompt head and the trailing `| cwd`, and may itself contain a bar.
-    static func codexAsk(fromTitle title: String) -> String? {
-        guard RulePatterns.matches(codexPrompt, title) else { return nil }
-        let parts = title.components(separatedBy: " | ")
-        let ask = parts.dropFirst().dropLast().joined(separator: " | ").trimmingCharacters(in: .whitespaces)
-        return ask.isEmpty ? nil : ask
-    }
-
     static func message(fromTitle title: String, agentName: String?) -> String? {
         guard key(for: agentName) == "claude", let glyph = title.first, claudeWorkingGlyphs.contains(glyph)
         else { return nil }
@@ -111,6 +103,13 @@ enum AgentRules {
     static func isClaudeResuming(from previous: String, to title: String, agentName: String?) -> Bool {
         guard key(for: agentName) == "claude", let glyph = title.first else { return false }
         return previous.first == "✳" && claudeWorkingGlyphs.contains(glyph)
+    }
+
+    static func codexAsk(fromTitle title: String) -> String? {
+        guard RulePatterns.matches(codexPrompt, title) else { return nil }
+        let parts = title.components(separatedBy: " | ")
+        let ask = parts.dropFirst().dropLast().joined(separator: " | ").trimmingCharacters(in: .whitespaces)
+        return ask.isEmpty ? nil : ask
     }
 
     // `✳` is left out: it heads the idle title Claude flickers to mid-turn, whose tail is only "Claude Code".
