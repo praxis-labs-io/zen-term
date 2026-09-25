@@ -299,7 +299,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   roster, and whose title names no known agent or `ai` program, lands like a finished
   command: `completed`, no banner, no row, and never over a tab that is already waiting.
   An agent's notification goes through `AgentRules.notificationAttention`. Claude has body
-  rules: a body that matches waits, any other completes. Codex's notification carries no
+  rules: its permission prompt waits, its idle prompt carries no state (its progress
+  already closed the turn), and any other body completes. Codex's notification carries no
   state, because it arrives before its title says what Codex wants; the move into its
   Action Required title raises the waiting card and banner instead, once per ask. Any
   other agent's notification waits.

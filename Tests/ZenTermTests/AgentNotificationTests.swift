@@ -129,7 +129,7 @@ final class AgentNotificationTests: WindowTestCase {
         XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .waiting)
     }
 
-    func test_claudeSittingAtItsPrompt_waits() throws {
+    func test_claudeSittingAtItsPrompt_changesNoState() throws {
         let c = makeWindow()
         let claude = try backgroundPane(c)
 
@@ -137,8 +137,9 @@ final class AgentNotificationTests: WindowTestCase {
             claude.surface, title: AgentNotificationFixtures.claudeTitle,
             body: AgentNotificationFixtures.claudeIdlePrompt)
 
-        XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .waiting)
-        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .waiting)
+        XCTAssertNil(c.attentionStateForTesting(tabIndex: 0), "its turn already ended, and nothing is being asked")
+        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .idle)
+        XCTAssertEqual(cardCount(c), 0)
     }
 
     func test_anyOtherClaudeNotification_readsDone() throws {

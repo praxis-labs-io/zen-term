@@ -42,21 +42,17 @@ enum AgentRules {
         guard !statelessNotifiers.contains(agent ?? "") else { return nil }
         let rules = notificationRules.filter { $0.agent == agent }
         guard !rules.isEmpty else { return .waiting }
-        return rules.first { $0.match.matches(body) }?.state ?? .completed
+        guard let rule = rules.first(where: { $0.match.matches(body) }) else { return .completed }
+        return rule.state
     }
 
     // Codex posts before its title says what it wants, so its title rules own its state.
     private static let statelessNotifiers: Set<String> = ["codex"]
 
-    // Claude's two captured bodies both ask for you, so anything else it posts closes a turn.
-    private static let notificationRules: [(agent: String, state: SurfaceAttention, match: RuleMatcher)] = [
-        (
-            "claude", .waiting,
-            .any([
-                .contains("needs your permission"),
-                .contains("is waiting for your input"),
-            ])
-        )
+    // Claude's idle prompt lands a minute after its progress already closed the turn, so it carries no state.
+    private static let notificationRules: [(agent: String, state: SurfaceAttention?, match: RuleMatcher)] = [
+        ("claude", .waiting, .contains("needs your permission")),
+        ("claude", nil, .contains("is waiting for your input")),
     ]
 
     static let clearedProgress = "4;0"

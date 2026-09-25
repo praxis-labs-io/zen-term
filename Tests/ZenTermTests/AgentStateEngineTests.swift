@@ -250,14 +250,17 @@ final class AgentIdentificationTests: XCTestCase {
         }
     }
 
-    func test_bothOfClaudesCapturedBodies_askForYou() {
-        for body in [AgentNotificationFixtures.claudePermission, AgentNotificationFixtures.claudeIdlePrompt] {
-            XCTAssertEqual(
-                AgentRules.notificationAttention(body: body, agentName: AgentNotificationFixtures.claudeTitle),
-                .waiting,
-                "\(body) is a question")
-            XCTAssertEqual(AgentRules.notificationAttention(body: body, agentName: "claude"), .waiting)
-        }
+    func test_claudesPermissionPrompt_asksForYou() {
+        let body = AgentNotificationFixtures.claudePermission
+        XCTAssertEqual(
+            AgentRules.notificationAttention(body: body, agentName: AgentNotificationFixtures.claudeTitle), .waiting)
+        XCTAssertEqual(AgentRules.notificationAttention(body: body, agentName: "claude"), .waiting)
+    }
+
+    func test_claudesIdlePrompt_carriesNoState() {
+        XCTAssertNil(
+            AgentRules.notificationAttention(
+                body: AgentNotificationFixtures.claudeIdlePrompt, agentName: AgentNotificationFixtures.claudeTitle))
     }
 
     func test_anythingElseClaudePosts_closesATurn() {
