@@ -107,7 +107,7 @@ enum GitRepoStatus {
         return GitChurn.parse(output)
     }
 
-    static func removedCheckouts(among roots: [URL], completion: @escaping (Set<URL>) -> Void) {
+    static func removedWorktrees(among roots: [URL], completion: @escaping (Set<URL>) -> Void) {
         churnQueue.addOperation {
             let removed = Set(roots.filter(WorktreeStore.isRemoved(at:)))
             DispatchQueue.main.async { completion(removed) }

@@ -693,7 +693,7 @@ final class WindowController: NSObject {
         let roots = workspaces.compactMap(\.origin?.path)
         guard !isCheckingForRemovedWorktrees, !roots.isEmpty else { return }
         isCheckingForRemovedWorktrees = true
-        GitRepoStatus.removedCheckouts(among: roots) { [weak self] removed in
+        GitRepoStatus.removedWorktrees(among: roots) { [weak self] removed in
             self?.isCheckingForRemovedWorktrees = false
             self?.markRemovedWorktrees(removed)
         }
@@ -2338,7 +2338,7 @@ final class WindowController: NSObject {
             self.renderAttention()
         }
         c.onLastPaneClosed = { [weak self] in self?.closeTab(id) }
-        c.removedCheckout = { [weak self] in self?.workspace(of: id)?.removedCheckout }
+        c.removedWorktree = { [weak self] in self?.workspace(of: id)?.removedWorktree }
         c.onOverlayStateChanged = { [weak self] in self?.renderDock() }
         c.onRequestToast = { [weak self] content in self?.toasts.show(content) }
         c.onPaneStartFailed = { [weak self] retry, close in

@@ -119,12 +119,12 @@ final class TabController: NSObject {
     // Falls back to the pane, because nil reads downstream as "no repository".
     var focusedCWD: URL? { focusedDrawerSurface?.currentDirectory ?? paneCanvas.focusedCWD }
 
-    var removedCheckout: () -> RemovedCheckout? {
-        get { paneCanvas.removedCheckout }
-        set { paneCanvas.removedCheckout = newValue }
+    var removedWorktree: () -> WorktreeOrigin? {
+        get { paneCanvas.removedWorktree }
+        set { paneCanvas.removedWorktree = newValue }
     }
 
-    var sessionCWD: URL? { removedCheckout()?.relocating(focusedCWD) ?? focusedCWD }
+    var sessionCWD: URL? { removedWorktree()?.relocating(focusedCWD) ?? focusedCWD }
 
     // Not `focusedCWD`: removing a worktree matches the folder the tab was opened for.
     let openedCWD: URL?

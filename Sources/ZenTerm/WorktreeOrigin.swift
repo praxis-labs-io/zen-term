@@ -12,4 +12,6 @@ struct WorktreeOrigin: Equatable {
         name = worktree.branch ?? String(worktree.head.prefix(7))
         path = worktree.path.standardizedFileURL
     }
+
+    func relocating(_ cwd: URL?) -> URL? { GitRepo.isInside(cwd, path) ? parent.path : cwd }
 }

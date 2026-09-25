@@ -67,7 +67,7 @@ final class PaneCanvasController: NSObject {
         }
     }
 
-    var removedCheckout: () -> RemovedCheckout? = { nil }
+    var removedWorktree: () -> WorktreeOrigin? = { nil }
 
     /// Prefers the live process cwd, so inheritance works without OSC 7.
     var focusedCWD: URL? {
@@ -348,7 +348,7 @@ final class PaneCanvasController: NSObject {
         let newLeaf = mintPaneID()
         let newSplit = mintSplitID()
         let inherited = registry.surface(for: source)?.currentDirectory ?? cwdByLeaf[source]
-        cwdByLeaf[newLeaf] = removedCheckout()?.relocating(inherited) ?? inherited
+        cwdByLeaf[newLeaf] = removedWorktree()?.relocating(inherited) ?? inherited
         tree = tree.splitting(source, axis: axis, newLeaf: newLeaf, newSplit: newSplit)
         reconcileAndRender()
         focusActivePane()
