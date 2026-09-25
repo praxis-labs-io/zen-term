@@ -469,23 +469,28 @@ final class AttentionStoreTests: XCTestCase {
         var reports = 0
         store.onChange = { reports += 1 }
 
-        store.register(pane, tab: tab)
-        store.setWorking(pane, true)
-        store.setWorking(pane, false)
-        store.answerAgent(pane)
-        store.record(pane, .waiting, seen: false)
-        store.markSeen(pane)
-        store.endAgent(pane)
-        store.latchAgent(pane, .waiting)
-        store.record(pane, .waiting, seen: false)
-        store.markSeen(tab: tab)
-        store.record(pane, .waiting, seen: false)
-        store.visit(tab) { _ in true }
-        store.record(pane, .completed, seen: false)
-        store.release(pane)
-        store.register(pane, tab: tab)
-        store.dropTab(tab)
-
-        XCTAssertEqual(reports, 16)
+        let mutations: [(String, () -> Void)] = [
+            ("register", { store.register(pane, tab: self.tab) }),
+            ("setWorking on", { store.setWorking(pane, true) }),
+            ("setWorking off", { store.setWorking(pane, false) }),
+            ("answerAgent", { store.answerAgent(pane) }),
+            ("record", { store.record(pane, .waiting, seen: false) }),
+            ("markSeen", { store.markSeen(pane) }),
+            ("endAgent", { store.endAgent(pane) }),
+            ("latchAgent", { store.latchAgent(pane, .waiting) }),
+            ("record again", { store.record(pane, .waiting, seen: false) }),
+            ("markSeen(tab:)", { store.markSeen(tab: self.tab) }),
+            ("record before visit", { store.record(pane, .waiting, seen: false) }),
+            ("visit", { store.visit(self.tab) { _ in true } }),
+            ("record completed", { store.record(pane, .completed, seen: false) }),
+            ("release", { store.release(pane) }),
+            ("register again", { store.register(pane, tab: self.tab) }),
+            ("dropTab", { store.dropTab(self.tab) }),
+        ]
+        for (name, mutate) in mutations {
+            reports = 0
+            mutate()
+            XCTAssertEqual(reports, 1, name)
+        }
     }
 }
