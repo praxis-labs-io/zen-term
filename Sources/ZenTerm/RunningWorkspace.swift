@@ -7,5 +7,5 @@ struct RunningWorkspace: Equatable {
     let name: String
     let folder: URL
     let isWorktree: Bool
-    let removedWorktree: String?
+    let removedWorktreeName: String?
 }

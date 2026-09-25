@@ -270,7 +270,7 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
             origin: WorktreeOrigin(parent: parent, worktree: worktree))
         let picker = try openPicker(in: one)
         func removedRows() -> Int {
-            picker.rowViews.filter { ($0 as? RepoPickerOverlay.RowView)?.running?.removedWorktree != nil }.count
+            picker.rowViews.filter { ($0 as? RepoPickerOverlay.RowView)?.running?.removedWorktreeName != nil }.count
         }
         XCTAssertEqual(removedRows(), 0)
         WorktreeStore.isRemovedOverrideForTesting = { _ in true }

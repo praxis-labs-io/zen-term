@@ -86,7 +86,7 @@ final class NewTabCWDTests: WindowTestCase {
         try XCTUnwrap(spawned.last).currentDirectory = root
         WorktreeStore.isRemovedOverrideForTesting = { _ in true }
         c.checkForRemovedWorktreesForTesting()
-        waitUntil(c.runningWorkspaces().contains { $0.removedWorktree != nil }, "the worktree to read removed")
+        waitUntil(c.runningWorkspaces().contains { $0.removedWorktreeName != nil }, "the worktree to read removed")
 
         c.handle(.toggleBottomDrawer)
         let drawer = try XCTUnwrap(spawned.last)
@@ -112,7 +112,7 @@ final class NewTabCWDTests: WindowTestCase {
         try XCTUnwrap(spawned.last).currentDirectory = root
         WorktreeStore.isRemovedOverrideForTesting = { _ in true }
         c.checkForRemovedWorktreesForTesting()
-        waitUntil(c.runningWorkspaces().contains { $0.removedWorktree != nil }, "the worktree to read removed")
+        waitUntil(c.runningWorkspaces().contains { $0.removedWorktreeName != nil }, "the worktree to read removed")
 
         c.handle(.splitVertical)
         let pane = try XCTUnwrap(spawned.last)

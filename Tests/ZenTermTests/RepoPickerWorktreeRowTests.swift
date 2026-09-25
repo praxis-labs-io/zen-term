@@ -697,7 +697,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             entries: [workspace("alpha", path: repo)],
             open: [
                 running(window: 1, name: "alpha", folder: repo, isWorktree: false),
-                running(window: 1, name: "alpha: one", folder: tree.path, removedWorktree: "one"),
+                running(window: 1, name: "alpha: one", folder: tree.path, removedWorktreeName: "one"),
             ],
             onSwitch: { switched = $0 })
         mount(overlay)
@@ -770,7 +770,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             entries: [workspace("alpha", path: repo)],
             elsewhere: [
                 RunningWorkspace(
-                    window: 2, id: nil, name: "alpha", folder: repo, isWorktree: false, removedWorktree: nil),
+                    window: 2, id: nil, name: "alpha", folder: repo, isWorktree: false, removedWorktreeName: nil),
                 running(window: 2, name: "alpha: one", folder: tree.path),
             ],
             removals: removals)
@@ -988,11 +988,11 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
     }
 
     private func running(
-        window: Int, name: String, folder: URL, isWorktree: Bool = true, removedWorktree: String? = nil
+        window: Int, name: String, folder: URL, isWorktree: Bool = true, removedWorktreeName: String? = nil
     ) -> RunningWorkspace {
         RunningWorkspace(
             window: window, id: WorkspaceID(raw: 1), name: name, folder: folder, isWorktree: isWorktree,
-            removedWorktree: removedWorktree)
+            removedWorktreeName: removedWorktreeName)
     }
 
     private func path(_ name: String) -> URL {

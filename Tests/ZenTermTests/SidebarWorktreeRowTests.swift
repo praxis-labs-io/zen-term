@@ -158,7 +158,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         let picker = try openPicker(in: c)
         let field = try searchField(of: picker)
         let index = try XCTUnwrap(
-            picker.rowViews.firstIndex { ($0 as? RepoPickerOverlay.RowView)?.running?.removedWorktree != nil })
+            picker.rowViews.firstIndex { ($0 as? RepoPickerOverlay.RowView)?.running?.removedWorktreeName != nil })
         for _ in 0..<picker.rowViews.count where picker.selected != index {
             _ = picker.control(field, textView: NSTextView(), doCommandBy: #selector(NSResponder.moveDown(_:)))
         }
@@ -178,13 +178,13 @@ final class SidebarWorktreeRowTests: WindowTestCase {
             [
                 RunningWorkspace(
                     window: 99, id: WorkspaceID(raw: 7), name: "Alpha: feature/one", folder: folder,
-                    isWorktree: true, removedWorktree: "feature/one")
+                    isWorktree: true, removedWorktreeName: "feature/one")
             ]
         }
         let picker = try openPicker(in: c)
         let field = try searchField(of: picker)
         let index = try XCTUnwrap(
-            picker.rowViews.firstIndex { ($0 as? RepoPickerOverlay.RowView)?.running?.removedWorktree != nil })
+            picker.rowViews.firstIndex { ($0 as? RepoPickerOverlay.RowView)?.running?.removedWorktreeName != nil })
         for _ in 0..<picker.rowViews.count where picker.selected != index {
             _ = picker.control(field, textView: NSTextView(), doCommandBy: #selector(NSResponder.moveDown(_:)))
         }
@@ -261,7 +261,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         try openAlphaWorktree(branch: "feature/one", in: c)
         let picker = try openPicker(in: c)
         func removedRows() -> Int {
-            picker.rowViews.filter { ($0 as? RepoPickerOverlay.RowView)?.running?.removedWorktree != nil }.count
+            picker.rowViews.filter { ($0 as? RepoPickerOverlay.RowView)?.running?.removedWorktreeName != nil }.count
         }
         XCTAssertEqual(removedRows(), 0)
         WorktreeStore.isRemovedOverrideForTesting = { _ in true }

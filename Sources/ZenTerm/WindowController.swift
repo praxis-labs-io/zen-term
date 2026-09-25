@@ -1391,7 +1391,7 @@ final class WindowController: NSObject {
             toasts.show(
                 ToastContent(
                     variant: .info, title: "Open in Another Window",
-                    message: "Close \(running.removedWorktree ?? running.name) from the window it is open in."))
+                    message: "Close \(running.removedWorktreeName ?? running.name) from the window it is open in."))
             return
         }
         closeModal()
@@ -1879,16 +1879,16 @@ final class WindowController: NSObject {
                 guard let workspace = byID[id] else { return nil }
                 return RunningWorkspace(
                     window: windowID, id: id, name: workspace.name, folder: workspace.folder,
-                    isWorktree: false, removedWorktree: nil)
+                    isWorktree: false, removedWorktreeName: nil)
             case .worktree(let id):
                 guard let workspace = byID[id] else { return nil }
                 return RunningWorkspace(
                     window: windowID, id: id, name: workspace.name, folder: workspace.folder,
-                    isWorktree: true, removedWorktree: workspace.isWorktreeRemoved ? workspace.origin?.name : nil)
+                    isWorktree: true, removedWorktreeName: workspace.isWorktreeRemoved ? workspace.origin?.name : nil)
             case .ghost(let parent):
                 return RunningWorkspace(
                     window: windowID, id: nil, name: parent.title, folder: parent.path, isWorktree: false,
-                    removedWorktree: nil)
+                    removedWorktreeName: nil)
             }
         }
     }

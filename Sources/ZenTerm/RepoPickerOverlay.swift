@@ -360,12 +360,12 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .open(let workspace):
             return [
                 "open", "\(workspace.window)", "\(workspace.id?.raw ?? -1)", workspace.folder.path,
-                removingWorktree(workspace) == nil ? "" : "removing", workspace.removedWorktree ?? "",
+                removingWorktree(workspace) == nil ? "" : "removing", workspace.removedWorktreeName ?? "",
             ]
         case .elsewhere(let workspace):
             return [
                 "elsewhere", "\(workspace.window)", "\(workspace.id?.raw ?? -1)", workspace.folder.path,
-                removingWorktree(workspace) == nil ? "" : "removing", workspace.removedWorktree ?? "",
+                removingWorktree(workspace) == nil ? "" : "removing", workspace.removedWorktreeName ?? "",
             ]
         case .workspace(let workspace): return ["workspace", workspace.title]
         case .worktree(let worktree, _):
@@ -495,7 +495,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         switch rows[selected] {
         case .worktree(let worktree, let parent): return (worktree, parent)
         case .open(let row), .elsewhere(let row):
-            guard row.isWorktree, row.removedWorktree == nil else { return nil }
+            guard row.isWorktree, row.removedWorktreeName == nil else { return nil }
             return listedWorktree(at: row.folder)
         default: return nil
         }
@@ -504,7 +504,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     var selectedRemovedWorkspace: RunningWorkspace? {
         guard rows.indices.contains(selected) else { return nil }
         switch rows[selected] {
-        case .open(let row), .elsewhere(let row): return row.removedWorktree == nil ? nil : row
+        case .open(let row), .elsewhere(let row): return row.removedWorktreeName == nil ? nil : row
         default: return nil
         }
     }
@@ -779,7 +779,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
         func applyGitStatus() {
             guard let statusPath else { return }
-            if let removed = running?.removedWorktree {
+            if let removed = running?.removedWorktreeName {
                 return applyRemoved(removed)
             }
             let head =
