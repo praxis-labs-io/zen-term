@@ -234,6 +234,21 @@ final class AgentTitleRoutingTests: WindowTestCase {
         XCTAssertEqual(c.agentMessageForTesting(id), "Create test.txt", "the row reads the tool it went back to")
     }
 
+    func test_typingAtADoneCodex_clearsIt() throws {
+        let c = makeWindow()
+        let (surface, id) = try firstPane(c)
+        push(AgentTitleFixtures.codexWorking[0], from: surface)
+        push(AgentTitleFixtures.codexIdle, from: surface)
+        let settled = expectation(description: "hold elapsed")
+        DispatchQueue.main.asyncAfter(deadline: .now() + AgentStateTracker.idleHold + 0.2) { settled.fulfill() }
+        wait(for: [settled], timeout: 2)
+        XCTAssertEqual(c.agentStateForTesting(id), .completed, "precondition: its turn ended")
+
+        c.answerTypedAgent()
+
+        XCTAssertEqual(c.agentStateForTesting(id), .idle, "only a wait moved to the agent's own signal")
+    }
+
     func test_aCustomAgent_isStillAnsweredByTyping() throws {
         let c = makeWindow()
         let (surface, id) = try firstPane(c)
