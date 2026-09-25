@@ -197,6 +197,28 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "nothing here closes")
     }
 
+    func test_theRemovedToast_waitsForYouToActOnIt() throws {
+        var config = GeneralConfig.current
+        config.toastDuration = 0.05
+        GeneralConfig.setCurrentForTesting(config)
+        let originalPresence = WindowController.isPresent
+        WindowController.isPresent = { _ in true }
+        addTeardownBlock { WindowController.isPresent = originalPresence }
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(toastTexts(in: c).contains("Worktree Removed"), "the toast to arrive")
+
+        let pastTheDuration = Date().addingTimeInterval(0.4)
+        while Date() < pastTheDuration {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+        }
+
+        XCTAssertTrue(toastTexts(in: c).contains("Worktree Removed"), "it offers an action, so it stays until answered")
+    }
+
     func test_theRemovedToast_dismissesLikeAnyOther() throws {
         let c = makeWindow()
         try openWorkspace(named: "Alpha", in: c)

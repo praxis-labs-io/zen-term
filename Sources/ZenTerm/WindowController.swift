@@ -727,7 +727,7 @@ final class WindowController: NSObject {
         }
         let toast = toasts.showSticky(
             ToastContent(variant: .warning, title: "Worktree Removed", message: "\(name) is no longer on disk."),
-            actions: [close], showsClose: true, autoDismiss: true)
+            actions: [close], showsClose: true)
         toast.onClose = { [weak self, weak toast] in toast.map { self?.toasts.dismiss($0) } }
         toast.onDismissed = { [weak self, weak toast] in
             guard let self, let toast, self.worktreeRemovedToasts[id] === toast else { return }
