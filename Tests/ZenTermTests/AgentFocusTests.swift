@@ -113,17 +113,18 @@ final class AgentFocusTests: WindowTestCase {
     func test_leavingADonePaneAndComingBack_restartsTheClock() throws {
         let c = makeWindow()
         let first = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        WindowController.doneDecay = 1
         finishATurn(on: try XCTUnwrap(spawned.first))
-        wait(seconds: WindowController.doneDecay / 2)
+        wait(seconds: 0.4)
 
         c.handle(.splitVertical)
         c.window.contentView?.layoutSubtreeIfNeeded()
         while c.focusedSurfaceIDForTesting != first { c.handle(.nextPane) }
-        wait(seconds: WindowController.doneDecay * 0.75)
+        wait(seconds: 0.8)
 
         XCTAssertEqual(
             c.agentStateForTesting(first), .completed, "coming back owes a whole interval, not what was left of one")
-        wait(seconds: WindowController.doneDecay / 2)
+        wait(seconds: 0.6)
         XCTAssertEqual(c.agentStateForTesting(first), .idle)
     }
 
