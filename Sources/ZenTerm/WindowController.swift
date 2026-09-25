@@ -855,6 +855,7 @@ final class WindowController: NSObject {
         for controller in allTabControllers {
             controller.setHoldsKeyFocus(holdsKeyFocus && controller === activeController)
         }
+        floats.setHoldsKeyFocus(holdsKeyFocus)
     }
 
     // Below `tabBar`, so the ⌘W guard toast fired over an open float stays visible.

@@ -93,6 +93,37 @@ final class WindowKeyFocusTests: WindowTestCase {
         XCTAssertGreaterThan(panel.haloOpacityForTesting, 0)
     }
 
+    func test_anOpenScratchFloat_losesFocusWithItsWindow() throws {
+        let c = makeWindow()
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let float = try XCTUnwrap(c.floatsForTesting.shownSurface as? RecordingSurface)
+        let overlay = try XCTUnwrap(c.floatsForTesting.shownOverlayForTesting)
+        XCTAssertTrue(overlay.isHaloVisible, "precondition: the float shows its accent edge")
+
+        resignKey(c)
+
+        XCTAssertEqual(float.focusRenders.last, false)
+        XCTAssertFalse(overlay.isHaloVisible)
+
+        becomeKey(c)
+
+        XCTAssertEqual(float.focusRenders.last, true)
+        XCTAssertTrue(overlay.isHaloVisible)
+    }
+
+    func test_aScratchFloatOpenedInANonKeyWindow_doesNotReportFocused() throws {
+        let c = makeWindow()
+        resignKey(c)
+
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        c.window.contentView?.layoutSubtreeIfNeeded()
+
+        let float = try XCTUnwrap(c.floatsForTesting.shownSurface as? RecordingSurface)
+        XCTAssertEqual(float.focusRenders.last, false)
+        XCTAssertEqual(c.floatsForTesting.shownOverlayForTesting?.isHaloVisible, false)
+    }
+
     func test_aTabLeftBehind_readsUnfocused_andComesBackWhenItIsActiveAgain() throws {
         let c = makeWindow()
         let first = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)

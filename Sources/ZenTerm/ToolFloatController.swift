@@ -135,8 +135,25 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     }
 
     var shownSurface: TerminalSurface? { activeFloat?.surface }
+    var shownOverlayForTesting: SurfaceFloatOverlay? { activeFloat?.overlay }
 
-    func refocus() { activeFloat?.surface.focus() }
+    func refocus() {
+        activeFloat?.surface.focus()
+        syncFocus()
+    }
+
+    func setHoldsKeyFocus(_ holds: Bool) {
+        holdsKeyFocus = holds
+        syncFocus()
+    }
+
+    private var holdsKeyFocus = true
+
+    private func syncFocus() {
+        guard let active = activeFloat else { return }
+        active.surface.setFocused(holdsKeyFocus)
+        active.overlay.isHaloVisible = holdsKeyFocus
+    }
 
     func reapplyTheme() { activeFloat?.overlay.reapplyTheme() }
 
@@ -188,7 +205,8 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     func reveal(_ id: SurfaceID) {
         if let active = activeFloat, idBySurface[ObjectIdentifier(active.surface)] == id {
-            return active.surface.focus()
+            active.surface.focus()
+            return syncFocus()
         }
         guard let live = liveFloats.values.first(where: { idBySurface[ObjectIdentifier($0.surface)] == id }) else {
             return
@@ -219,6 +237,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         activeFloat = (spec, surface, overlay, tab)
         yieldFocus()
         surface.focus()
+        syncFocus()
         overlay.animateIn()
         idBySurface[ObjectIdentifier(surface)].map { onShown?($0) }
         onStateChanged?()
