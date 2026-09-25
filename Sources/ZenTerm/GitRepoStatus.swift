@@ -107,8 +107,16 @@ enum GitRepoStatus {
         return GitChurn.parse(output)
     }
 
+    /// Serial so a hung mount holds one thread across every window, and never a churn probe's slot.
+    private static let removedWorktreeQueue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        queue.qualityOfService = .utility
+        return queue
+    }()
+
     static func removedWorktrees(among roots: [URL], completion: @escaping (Set<URL>) -> Void) {
-        churnQueue.addOperation {
+        removedWorktreeQueue.addOperation {
             let removed = Set(roots.filter(WorktreeStore.isRemoved(at:)))
             DispatchQueue.main.async { completion(removed) }
         }
