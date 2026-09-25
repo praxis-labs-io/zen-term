@@ -706,12 +706,26 @@ final class WindowController: NSObject {
             guard workspace.isWorktreeRemoved != isRemoved else { continue }
             workspace.isWorktreeRemoved = isRemoved
             changed = true
-            guard isRemoved else { continue }
-            toasts.show(
-                ToastContent(
-                    variant: .warning, title: "Worktree Removed", message: "\(origin.name) is no longer on disk."))
+            if isRemoved {
+                presentWorktreeRemovedToast(for: workspace.id, named: origin.name)
+            } else if let toast = worktreeRemovedToasts.removeValue(forKey: workspace.id) {
+                toasts.dismiss(toast)
+            }
         }
         if changed { renderTabBar() }
+    }
+
+    private var worktreeRemovedToasts: [WorkspaceID: ToastView] = [:]
+
+    private func presentWorktreeRemovedToast(for id: WorkspaceID, named name: String) {
+        let close = ToastAction(title: "Close Workspace", kind: .primary) { [weak self] in
+            guard let self, let toast = self.worktreeRemovedToasts.removeValue(forKey: id) else { return }
+            self.toasts.dismiss(toast)
+            self.requestCloseWorkspace(id: id)
+        }
+        worktreeRemovedToasts[id] = toasts.showSticky(
+            ToastContent(variant: .warning, title: "Worktree Removed", message: "\(name) is no longer on disk."),
+            actions: [close], showsClose: true, autoDismiss: true)
     }
 
     private func busyDots() -> (Bool, Bool, Bool) {

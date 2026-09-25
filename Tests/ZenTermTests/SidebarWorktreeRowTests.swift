@@ -195,6 +195,25 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "nothing here closes")
     }
 
+    func test_theRemovedToastsCloseButton_closesThatWorkspace() throws {
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(toastTexts(in: c).contains("Worktree Removed"), "the toast to arrive")
+        XCTAssertFalse(c.window.firstResponder is AppButton, "the toast leaves the keyboard where it was")
+        let button = try XCTUnwrap(
+            descendants(of: c.window.contentView!).compactMap { $0 as? AppButton }
+                .first { $0.title == "Close Workspace" })
+
+        button.onTap()
+
+        XCTAssertFalse(titles(of: c).contains("feature/one"), "the workspace closes")
+        XCTAssertTrue(titles(of: c).contains("Alpha"))
+        XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"), "and the toast goes with it")
+    }
+
     func test_aWorktreeZenTermIsRemoving_isNotMarkedRemoved() throws {
         let c = makeWindow()
         try openWorkspace(named: "Alpha", in: c)
