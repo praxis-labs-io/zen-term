@@ -117,11 +117,6 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
     private func rows(of c: WindowController) -> [SettingsNavRow] { c.sidebarForTesting.view.rowsForTesting }
 
-    private func toastTexts(in c: WindowController) -> [String] {
-        descendants(of: c.window.contentView!).compactMap { $0 as? ToastView }
-            .flatMap { descendants(of: $0).compactMap { ($0 as? NSTextField)?.stringValue } }
-    }
-
     func test_aWorktreeRemovedOutsideZenTerm_staysOpenAndSaysSo() throws {
         let c = makeWindow()
         try openWorkspace(named: "Alpha", in: c)

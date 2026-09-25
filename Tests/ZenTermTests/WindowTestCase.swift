@@ -21,6 +21,17 @@ class WindowTestCase: XCTestCase {
         WorktreeStore.isRemovedOverrideForTesting = nil
     }
 
+    @MainActor
+    func toastTexts(in c: WindowController) -> [String] {
+        guard let content = c.window.contentView else { return [] }
+        return Self.descendants(of: content).compactMap { $0 as? ToastView }
+            .flatMap { Self.descendants(of: $0).compactMap { ($0 as? NSTextField)?.stringValue } }
+    }
+
+    private static func descendants(of view: NSView) -> [NSView] {
+        view.subviews.flatMap { [$0] + descendants(of: $0) }
+    }
+
     /// Clears `isReleasedWhenClosed`, or `close()` over-releases a window `WindowController` still owns.
     static func closeAllWindows() {
         for window in NSApplication.shared.windows {
