@@ -2476,7 +2476,12 @@ final class WindowController: NSObject {
             else { return }
 
             surface.map { self.attention.record($0, .completed, seen: false) }
-            self.presentCompletedToast(for: id, surface: surface, result: result)
+            let edge = self.drawerEdge(of: surface, in: id)
+            self.presentCompletedToast(
+                for: id, title: { [weak self] in self?.attentionTitle(of: id) ?? "" }, titleTail: self.drawerTail(edge),
+                message: Self.commandResultMessage(result),
+                variant: result.exitCode.map { $0 == 0 ? .positive : .warning } ?? .positive,
+                surface: surface, destination: edge.map { self.drawerDestination($0, in: id) })
             self.renderAttention()
         }
     }
@@ -2579,16 +2584,14 @@ final class WindowController: NSObject {
         attention.tab(of: surface) ?? (floats.float(of: surface) != nil ? activeWorkspace.activeID : nil)
     }
 
-    private func presentCompletedToast(for id: TabID, surface: SurfaceID?, result: TerminalCommandResult) {
+    private func presentCompletedToast(
+        for id: TabID, title: @escaping () -> String, titleTail: String? = nil, message: String,
+        variant: ToastVariant = .positive, surface: SurfaceID?, destination: CardDestination? = nil
+    ) {
         if let old = attentionCards[id] { toasts.dismiss(old) }
-        let edge = drawerEdge(of: surface, in: id)
-        let content = ToastContent(
-            variant: result.exitCode.map { $0 == 0 ? .positive : .warning } ?? .positive,
-            title: attentionTitle(of: id), titleTail: drawerTail(edge),
-            message: Self.commandResultMessage(result))
-        let title = { [weak self] in self?.attentionTitle(of: id) ?? "" }
+        let content = ToastContent(variant: variant, title: title(), titleTail: titleTail, message: message)
         let destination =
-            edge.map { drawerDestination($0, in: id) }
+            destination
             ?? CardDestination(
                 shortcut: { [weak self] in self?.switchShortcut(for: id) ?? "" },
                 open: { [weak self] in self?.reveal(id) })
