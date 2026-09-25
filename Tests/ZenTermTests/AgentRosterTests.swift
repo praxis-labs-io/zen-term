@@ -61,4 +61,11 @@ final class AgentRosterTests: XCTestCase {
             XCTAssertNil(AgentRoster.agentName(notifying: title, ai: "pi"), "\(title) names no agent")
         }
     }
+
+    func test_aConfiguredProgramWithPunctuation_matchesAsAWholeToken() {
+        XCTAssertEqual(AgentRoster.agentName(notifying: "gemini-cli", ai: "gemini-cli"), "gemini-cli")
+        XCTAssertEqual(AgentRoster.agentName(notifying: "Done: gemini-cli.", ai: "gemini-cli"), "gemini-cli")
+        XCTAssertEqual(AgentRoster.agentName(notifying: "aider.chat", ai: "aider.chat"), "aider.chat")
+        XCTAssertNil(AgentRoster.agentName(notifying: "gemini", ai: "gemini-cli"))
+    }
 }
