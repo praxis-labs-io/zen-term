@@ -3,7 +3,6 @@ import XCTest
 
 @testable import ZenTerm
 
-/// Titles captured from real turns: Claude on 2026-09-17, Codex on 2026-09-24. Never hand-written.
 enum AgentTitleFixtures {
     static let codexWorking = [
         "⠋ Create test.txt | drucial", "⠙ Create test.txt | drucial", "⠹ Create test.txt | drucial",
@@ -16,7 +15,6 @@ enum AgentTitleFixtures {
     static let codexIdle = "Create test.txt | drucial"
     static let codexBareIdle = "drucial"
     static let codexLaunch = "codex"
-    /// Codex mid-task, with a spinner at the head and another inside the label.
     static let codexRenaming = "⠴ renaming... ⠴ | drucial"
     static let claudeWorking = "◐ Multiple choice question tool"
     static let claudeWorkingAlternate = "◑ Multiple choice question tool"
@@ -49,11 +47,15 @@ final class AgentStateEngineTests: XCTestCase {
     }
 
     func test_codexBareCWD_readsIdle() {
-        XCTAssertEqual(codexState(AgentTitleFixtures.codexIdle), .idle)
+        XCTAssertEqual(codexState(AgentTitleFixtures.codexBareIdle), .idle)
     }
 
     func test_blocked_outranksWorking_whenBothMatch() {
-        XCTAssertEqual(codexState("⠹ [ ! ] Action Required | zen-term"), .blocked)
+        XCTAssertEqual(codexState("[ ! ] Action Required | ⠴ renaming... ⠴ | drucial"), .blocked)
+    }
+
+    func test_aTaskThatSaysActionRequired_isNotThePrompt() {
+        XCTAssertEqual(codexState("⠹ Fix the Action Required banner | drucial"), .working)
     }
 
     func test_claudeTitle_neverMovesState() {
@@ -134,20 +136,6 @@ final class AgentStateEngineTests: XCTestCase {
         XCTAssertEqual(AgentStateEngine.evaluate(rules, title: "x", progress: ""), .matched(.working, ruleID: "first"))
     }
 
-    func test_skipStateUpdate_provesNothing() {
-        let rules = [
-            AgentStateRule(
-                id: "viewer", state: .idle, priority: 9, region: .oscTitle, skipStateUpdate: true,
-                match: .contains("transcript")),
-            AgentStateRule(id: "working", state: .working, priority: 1, region: .oscTitle, match: .contains("x")),
-        ]
-
-        let outcome = AgentStateEngine.evaluate(rules, title: "x transcript", progress: "")
-
-        XCTAssertEqual(outcome, .skip(ruleID: "viewer"))
-        XCTAssertNil(outcome.state, "a skip holds whatever was published, it does not lower it")
-    }
-
     func test_theRegionPicksWhichSignalARuleReads() {
         let rules = [
             AgentStateRule(id: "title", state: .blocked, priority: 1, region: .oscTitle, match: .contains("needle")),
@@ -169,18 +157,9 @@ final class RuleMatcherTests: XCTestCase {
             ("contains misses", .contains("Action Required"), "zen-term", false),
             ("regex hits", .regex("^⠋"), "⠋ Working", true),
             ("regex misses", .regex("^⠋"), " ⠋ Working", false),
-            ("lineRegex finds a later line", .lineRegex("^❯"), "header\n❯ yes", true),
-            ("lineRegex is anchored per line", .lineRegex("^❯"), "header ❯ yes", false),
-            ("all needs every branch", .all([.contains("a"), .contains("b")]), "a b", true),
-            ("all fails on one miss", .all([.contains("a"), .contains("z")]), "a b", false),
             ("any needs one branch", .any([.contains("z"), .contains("b")]), "a b", true),
             ("any fails on all misses", .any([.contains("y"), .contains("z")]), "a b", false),
-            ("not inverts", .not([.contains("z")]), "a b", true),
-            ("not fails when a branch hits", .not([.contains("a")]), "a b", false),
-            (
-                "nesting composes", .all([.contains("a"), .any([.contains("z"), .not([.contains("q")])])]), "a b",
-                true
-            ),
+            ("any nests", .any([.contains("z"), .any([.contains("b")])]), "a b", true),
         ]
 
         for item in cases {
@@ -217,8 +196,12 @@ final class AgentRulesKeyTests: XCTestCase {
         XCTAssertEqual(
             AgentRules.message(fromTitle: AgentTitleFixtures.claudeWorkingAlternate, agentName: "claude"),
             "Multiple choice question tool")
-        XCTAssertEqual(
-            AgentRules.message(fromTitle: AgentTitleFixtures.claudeIdle, agentName: "claude"), "Claude Code")
+    }
+
+    func test_claudesIdleTitle_isNoMessage() {
+        XCTAssertNil(
+            AgentRules.message(fromTitle: AgentTitleFixtures.claudeIdle, agentName: "claude"),
+            "it flickers in mid-turn, and \"Claude Code\" would replace the tool name")
     }
 
     func test_onlyClaudeTakesItsMessageFromTheTitle() {
@@ -244,6 +227,7 @@ final class AgentIdentificationTests: XCTestCase {
             AgentTitleFixtures.codexIdle, AgentTitleFixtures.codexBareIdle,
             AgentTitleFixtures.claudeWorking, AgentTitleFixtures.claudeIdle,
             "~", "/Users/drucial", "npm run build", "",
+            "Action Required: review the deploy", "vim Action Required.md",
         ]
 
         for title in cases {

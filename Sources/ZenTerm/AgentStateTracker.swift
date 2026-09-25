@@ -1,11 +1,13 @@
 import Foundation
 
-/// Turns a stream of pushed signals into the few transitions worth acting on. Main-thread only.
+// Main-thread only.
 final class AgentStateTracker {
-    /// Long enough to outlast a dropped spinner frame, short enough that a real turn end still feels immediate.
+    // Long enough to outlast a dropped spinner frame, short enough that a real turn end still feels immediate.
     static let idleHold: TimeInterval = 0.7
 
     private struct Entry {
+        var title = ""
+        var progress = AgentRules.clearedProgress
         var published: AgentSignalState = .idle
         var pendingIdleSince: Date?
     }
@@ -17,9 +19,20 @@ final class AgentStateTracker {
         self.now = now
     }
 
-    /// The state to publish, or nil when nothing changed and nothing is worth doing.
+    func noteTitle(_ title: String, of id: SurfaceID) {
+        entries[id, default: Entry()].title = title
+    }
+
+    func noteProgress(_ progress: String, of id: SurfaceID) {
+        entries[id, default: Entry()].progress = progress
+    }
+
+    func title(of id: SurfaceID) -> String { entries[id]?.title ?? "" }
+
+    func progress(of id: SurfaceID) -> String { entries[id]?.progress ?? AgentRules.clearedProgress }
+
     func publish(_ id: SurfaceID, _ outcome: AgentStateEngine.Outcome) -> AgentSignalState? {
-        guard let next = outcome.state else { return nil }
+        let next = outcome.state
         var entry = entries[id] ?? Entry()
         defer { entries[id] = entry }
 

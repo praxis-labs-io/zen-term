@@ -18,7 +18,6 @@ final class AgentStateTrackerTests: XCTestCase {
         let tracker = makeTracker()
         XCTAssertEqual(tracker.publish(id, working()), .working)
 
-        // Codex pushes ~10 of these a second, and none of them is a transition.
         for _ in 0..<50 {
             XCTAssertNil(tracker.publish(id, working()))
         }
@@ -62,21 +61,17 @@ final class AgentStateTrackerTests: XCTestCase {
         XCTAssertEqual(tracker.publish(id, .matched(.blocked, ruleID: "codex_title_blocked")), .blocked)
     }
 
-    func test_aSkip_holdsWhateverWasPublished() {
-        let tracker = makeTracker()
-        _ = tracker.publish(id, working())
-
-        XCTAssertNil(tracker.publish(id, .skip(ruleID: "viewer")))
-        XCTAssertEqual(tracker.state(of: id), .working)
-    }
-
     func test_aDroppedSurface_startsOver() {
         let tracker = makeTracker()
         _ = tracker.publish(id, working())
+        tracker.noteTitle(AgentTitleFixtures.codexWorking[0], of: id)
+        tracker.noteProgress("4;3", of: id)
 
         tracker.drop(id)
 
         XCTAssertEqual(tracker.state(of: id), .idle)
+        XCTAssertEqual(tracker.title(of: id), "")
+        XCTAssertEqual(tracker.progress(of: id), AgentRules.clearedProgress)
         XCTAssertEqual(tracker.publish(id, working()), .working)
     }
 }

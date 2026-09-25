@@ -237,19 +237,21 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   and agent exits, and lands a held idle that has no event left to push.
 - **An agent's state is derived from the signals it already pushes**, by rules that are
   typed data in the repo, never configuration: `AgentStateRule` (a state, a priority, a
-  region, a `contains`/`regex`/`line_regex` matcher nesting through `all`/`any`/`not`),
-  `AgentRules` (what ships), `AgentStateEngine` (pure; highest matching priority wins, a
-  tie keeps the first, `skipStateUpdate` proves nothing). The regions are the two pushed
-  signals, `osc_title` and `osc_progress`. **No match falls back to `idle`, never
-  `blocked`**: a false alarm costs more than a quiet row, so an agent we ship no rules for
-  reads idle and still gets working from OSC 9;4. Codex emits no progress at all and its
-  title carries all three states; Claude's title flickers to idle mid-turn while progress
-  holds working, so Claude's title is read for the row's message and never for its state.
-- **`AgentStateTracker` publishes transitions, not events.** Codex pushes about ten title
-  changes a second, and its blocked title alternates at 1 Hz, so rules match the phrase and
-  the tracker drops anything that does not move the derived state. A working-to-idle fall
-  that no rule explains is held briefly, because that is the shape a dropped spinner frame
-  takes; a rule that positively says idle is published at once.
+  region, a `contains`/`regex` matcher nesting through `any`), `AgentRules` (what ships),
+  `AgentStateEngine` (pure; highest matching priority wins, a tie keeps the first). The
+  regions are the two pushed signals, `oscTitle` and `oscProgress`. **No match falls back
+  to `idle`, never `blocked`**: a false alarm costs more than a quiet row, so an agent we
+  ship no rules for reads idle and still gets working from OSC 9;4. Codex emits no
+  progress at all and its title carries all three states; Claude's title flickers to idle
+  mid-turn while progress holds working, so Claude's title is read for the row's message
+  and never for its state.
+- **`AgentStateTracker` publishes transitions, not events.** It holds each agent's latest
+  title and progress, and drops anything that does not move the derived state, because
+  Codex's title changes on every spinner frame and its blocked title blinks. A
+  working-to-idle fall that no rule explains is held briefly, because that is the shape a
+  dropped spinner frame takes, and settles on its own timer since the agent then goes
+  quiet; a rule that positively says idle is published at once. An agent's tracked state
+  goes when it exits, so the next program in that pane starts clean.
 - **Attention has one owner per window**, `AttentionStore`, keyed by `SurfaceID` across
   panes, drawers and floats. Each surface latches a `SurfaceAttention` beside a `seen`
   flag, and one ranked fold (`rollup`) is both the priority rule and the rollup at every
@@ -273,12 +275,12 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   replaces that, never a waiting latch.
 - **`AgentRoster` says which surfaces run an agent**, per window: its name, where the name
   came from (`Source`, ranked so a stronger source renames, a weaker one never does, and a
-  missing name yields to any real name), and what it last said. `identify` is the one way in. A launch whose program is `ai` or a
-  known agent joins at launch, idle included; any surface that sends OSC 777 or
-  indeterminate OSC 9;4 joins on that signal, and a title an agent's identification pattern
-  recognises joins on that. The last is what a hand-launched Codex has: it emits no progress
-  and its notification fires on only some stops, so without it every title it sent was dropped. An agent leaves when its surface is released,
-  when its command finishes, or when its busy reading falls (the program exited to the
+  missing name yields to any real name), and what it last said. `identify` is the one way
+  in. A launch whose program is `ai` or a known agent joins at launch, idle included; any
+  surface that sends OSC 777 or indeterminate OSC 9;4 joins on that signal, and a title an
+  agent's identification pattern recognises joins on that. The last is the only way in for
+  a hand-launched Codex, which emits no progress and notifies on only some stops. An agent
+  leaves when its surface is released, when its command finishes, or when its busy reading falls (the program exited to the
   shell), once its latch is answered. Only a *fall* from busy counts: a surface polled
   before its program starts has not been busy yet.
   The Agents rows join it with `agentState(of:)` and sort waiting (oldest first), working,

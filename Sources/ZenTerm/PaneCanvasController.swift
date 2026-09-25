@@ -50,7 +50,7 @@ final class PaneCanvasController: NSObject {
     var onCommandFinished: ((SurfaceID, TerminalCommandResult) -> Void)?
 
     var onProgress: ((SurfaceID, TerminalProgress?) -> Void)?
-    /// Every surface, focused or not: an agent working in a background split still reports.
+    // Every surface, focused or not: an agent working in a background split still reports.
     var onTitle: ((SurfaceID, String) -> Void)?
     var onProgramLaunched: ((SurfaceID, String) -> Void)?
 
