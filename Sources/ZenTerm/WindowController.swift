@@ -1253,7 +1253,7 @@ final class WindowController: NSObject {
         let workspace = target.workspace
         let card = modal?.overlay as? NewWorktreeOverlay
         card?.beginWork("Creating \(Self.branchName(of: request))")
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self, weak card] in
             let result: Result<(Workspace, WorktreeOrigin, CarryReport), Error>
             do {
                 let worktree: Worktree
@@ -1331,7 +1331,7 @@ final class WindowController: NSObject {
         else { return }
         let (worktree, parent) = selection
         let closes = onClosedByRemovalAtPath?(worktree.path) ?? closedByRemoval(atPath: worktree.path)
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let carried = parent.carry.compactMap { entry -> String? in
                 let url = worktree.path.appendingPathComponent(entry)
                 guard FileManager.default.fileExists(atPath: url.path) else { return nil }
