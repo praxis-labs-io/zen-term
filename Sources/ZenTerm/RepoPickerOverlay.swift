@@ -109,10 +109,11 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     // Placement reads `GitRepoStatus.repoRoot`, which arrives off-main, so a late probe re-places rows.
     private func rebuild(animated: Bool = true) {
-        let held = rows.indices.contains(selected) ? rowIdentity(at: selected) : nil
+        let heldIndex = selected
+        let held = rows.indices.contains(heldIndex) ? rowIdentity(at: heldIndex) : nil
         applyFilter(query: currentQuery)
         refreshRows(animated: animated)
-        reselect(byIdentity: held)
+        reselect(byIdentity: held, near: heldIndex)
         applyGitStatus()
     }
 

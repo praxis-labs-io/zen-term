@@ -357,13 +357,19 @@ class PaletteOverlay: NSView, ModalOverlay {
         animatesNextReload = false
     }
 
-    func reselect(byIdentity identity: AnyHashable?) {
-        guard let identity, let index = laidOutRows.firstIndex(where: { $0.id == identity }),
-            isSelectable(at: index)
-        else { return }
+    func reselect(byIdentity identity: AnyHashable?, near heldIndex: Int) {
+        guard let identity else { return }
+        let anchor = laidOutRows.firstIndex { $0.id == identity } ?? heldIndex
+        guard let index = nearestSelectableIndex(to: anchor) else { return }
         selected = index
         updateHighlight()
         scrollSelectedToVisible()
+    }
+
+    private func nearestSelectableIndex(to anchor: Int) -> Int? {
+        let start = min(max(anchor, 0), laidOutRows.count)
+        return (start..<laidOutRows.count).first { isSelectable(at: $0) }
+            ?? (0..<start).reversed().first { isSelectable(at: $0) }
     }
 
     func defaultSelectionIndex() -> Int { firstSelectableIndex() }
