@@ -702,6 +702,9 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             removals: removals)
         mount(overlay)
         overlay.setWorktrees(listing(repo, "one"), for: repo)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
+        XCTAssertEqual(shape(of: overlay)[overlay.selected], "open:alpha: one")
 
         removals.begin(tree.path)
         overlay.refreshRemovalState()
@@ -710,6 +713,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             shape(of: overlay),
             ["new", "header:Open", "open:alpha", "removing:one", "header:Configured", "add"])
         XCTAssertFalse(overlay.isSelectable(at: 3), "a row being removed takes no chord")
+        XCTAssertEqual(shape(of: overlay)[overlay.selected], "add", "the next row down, not the top")
     }
 
     func test_anOpenWorktreeRemoved_leavesTheOpenSectionWithThePickerUp() {

@@ -29,7 +29,7 @@ final class ConfirmSlot {
         card.animateIn()
     }
 
-    /// Keeps the slot showing until the exit completes: releasing it early hands Esc back to the host, which closes the host.
+    // Keeps the slot showing until the exit completes: releasing it early hands Esc back to the host, which closes the host.
     func dismiss(then: @escaping () -> Void) {
         guard let card else { return }
         self.card = nil

@@ -341,7 +341,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             let row = rows[index]
             guard row.id == nil else { return row }
             let next = rows.indices.contains(index + 1) ? rows[index + 1] : nil
-            return next?.isWorktree == true ? row : nil
+            return next?.isWorktree == true && next?.window == row.window ? row : nil
         }
     }
 
