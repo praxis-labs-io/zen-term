@@ -59,7 +59,7 @@ final class FocusedCWDTests: WindowTestCase {
         drawer.currentDirectory = elsewhere
 
         XCTAssertEqual(
-            c.focusedCWD, elsewhere,
+            c.sessionCWD, elsewhere,
             "a focused drawer's cwd is the tab's cwd — this is what ⌘D walks for a repo root")
     }
 
@@ -72,10 +72,10 @@ final class FocusedCWDTests: WindowTestCase {
 
         c.handle(.toggleBottomDrawer)
         try XCTUnwrap(spawned.last).currentDirectory = elsewhere
-        XCTAssertEqual(c.focusedCWD, elsewhere)
+        XCTAssertEqual(c.sessionCWD, elsewhere)
 
         c.handle(.toggleBottomDrawer)
-        XCTAssertEqual(c.focusedCWD, root, "with the drawer shut the pane answers again")
+        XCTAssertEqual(c.sessionCWD, root, "with the drawer shut the pane answers again")
     }
 
     func test_focusedCWD_unresolvableDrawer_fallsBackToThePane() throws {
@@ -86,6 +86,6 @@ final class FocusedCWDTests: WindowTestCase {
         c.handle(.toggleBottomDrawer)
         try XCTUnwrap(spawned.last).currentDirectory = nil
 
-        XCTAssertEqual(c.focusedCWD, root, "an unknown drawer cwd must not read as no-repository")
+        XCTAssertEqual(c.sessionCWD, root, "an unknown drawer cwd must not read as no-repository")
     }
 }

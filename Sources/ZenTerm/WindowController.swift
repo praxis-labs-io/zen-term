@@ -292,7 +292,6 @@ final class WindowController: NSObject {
 
     private var didTearDown = false
 
-    var focusedCWD: URL? { activeController?.focusedCWD }
     var sessionCWD: URL? { activeController?.sessionCWD }
     var focusedPaneIsVim: Bool { !sidebar.hasFocus && activeController?.focusedPaneIsVim == true }
 
