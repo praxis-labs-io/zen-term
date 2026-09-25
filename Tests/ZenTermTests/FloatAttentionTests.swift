@@ -294,4 +294,39 @@ final class FloatAttentionTests: WindowTestCase {
         drainMainQueue()
         XCTAssertEqual(c.floatsForTesting.activeID, "btop", "Switch on the card opens the float")
     }
+
+    private func pushTitle(_ title: String, from surface: RecordingSurface) {
+        surface.delegate?.surface(surface, titleDidChange: title)
+        drainMainQueue()
+    }
+
+    private func codexFloat() throws -> (WindowController, RecordingSurface) {
+        var config = GeneralConfig.current
+        config.floats = [Self.spec("codex")]
+        GeneralConfig.setCurrentForTesting(config)
+        let c = makeWindow()
+        c.handle(.toggleToolFloat("codex"))
+        let surface = try XCTUnwrap(spawned.first { $0.lastConfig?.args == ["-l", "-i", "-c", "codex"] })
+        pushTitle(AgentTitleFixtures.codexWorking[0], from: surface)
+        return (c, surface)
+    }
+
+    func test_aBlockedCodexInAFloatYouAreLookingAt_raisesNoCard() throws {
+        let (c, surface) = try codexFloat()
+
+        pushTitle(AgentTitleFixtures.codexBlockedOn, from: surface)
+
+        XCTAssertEqual(c.windowAttentionForTesting, .idle, "precondition: seen, so nothing marks the window")
+        XCTAssertTrue(toastViews(c).isEmpty, "the prompt is in front of you")
+    }
+
+    func test_aBlockedCodexInAHiddenFloat_raisesItsCard() throws {
+        let (c, surface) = try codexFloat()
+        c.handle(.toggleToolFloat("codex"))
+        drainMainQueue()
+
+        pushTitle(AgentTitleFixtures.codexBlockedOn, from: surface)
+
+        XCTAssertEqual(toastViews(c).count, 1)
+    }
 }

@@ -2408,9 +2408,7 @@ final class WindowController: NSObject {
             let message = notification.body.isEmpty ? notification.title : notification.body
             let target = owner.flatMap { self.workspace(of: $0) == nil ? nil : $0 } ?? activeID
             let address = self.floatCardAddress(spec, owner: owner, target: target)
-            let shown =
-                self.floats.activeID == spec.id && self.floats.surfaceID(spec.id) == surface
-                && Self.isPresent(self.window)
+            let shown = self.isFloatShown(spec, surface)
             guard self.isFromAgent(surface, notification) else {
                 return self.landNonAgentNotification(
                     on: target, surface: surface, seen: shown, address: address, message: message)
@@ -2498,6 +2496,10 @@ final class WindowController: NSObject {
         else { return }
         AgentNotifier.shared.notify(
             windowID: windowID, tabID: id, title: address.title() + (address.titleTail ?? ""), body: message)
+    }
+
+    private func isFloatShown(_ spec: ToolFloat, _ surface: SurfaceID?) -> Bool {
+        floats.activeID == spec.id && floats.surfaceID(spec.id) == surface && Self.isPresent(window)
     }
 
     private func isFromAgent(_ surface: SurfaceID?, _ notification: TerminalNotification) -> Bool {
@@ -2653,7 +2655,7 @@ final class WindowController: NSObject {
             if surface == presentFocusedSurface { armDoneDecay() }
         case .blocked:
             guard let tab = tab(of: surface) else { return }
-            let seen = isSeen(surface, in: tab)
+            let seen = floats.float(of: surface).map { isFloatShown($0.spec, surface) } ?? isSeen(surface, in: tab)
             attention.setWorking(surface, false)
             attention.record(surface, .waiting, seen: seen)
             if !seen { raiseBlockedCard(surface, in: tab) }
