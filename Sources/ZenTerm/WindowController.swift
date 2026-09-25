@@ -2509,7 +2509,6 @@ final class WindowController: NSObject {
                 AgentRules.isClaudeResuming(from: previous, to: title, agentName: self.agents.agents[surface]?.name)
             {
                 self.answerAgent(surface)
-                self.renderAgents()
             }
             if self.deriveAgentState(surface) { return }
             if self.agentStates.state(of: surface) == .working { self.noteTitleMessage(surface) }
@@ -2735,7 +2734,6 @@ final class WindowController: NSObject {
             agents.agents[surface]?.hasExited == false
         else { return }
         answerAgent(surface)
-        renderAgents()
     }
 
     // Runs on every keystroke the chrome passed on, which includes ones the find field takes before the pane.
