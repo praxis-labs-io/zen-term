@@ -230,6 +230,8 @@ final class WindowController: NSObject {
 
     var openWorkspacesElsewhere: (() -> [RunningWorkspace])?
 
+    var onWorktreeMarkChanged: (() -> Void)?
+
     var revealWorkspaceElsewhere: ((Int, WorkspaceID) -> Bool)?
 
     var worktreeRemovals = WorktreeRemovalTracker()
@@ -718,7 +720,13 @@ final class WindowController: NSObject {
         }
         guard changed else { return }
         renderTabBar()
-        (modal?.overlay as? RepoPickerOverlay)?.refreshOpen(runningWorkspaces())
+        refreshOpenPicker()
+        onWorktreeMarkChanged?()
+    }
+
+    func refreshOpenPicker() {
+        (modal?.overlay as? RepoPickerOverlay)?.refreshOpen(
+            runningWorkspaces(), elsewhere: openWorkspacesElsewhere?() ?? [])
     }
 
     private var worktreeRemovedToasts: [WorkspaceID: ToastView] = [:]

@@ -314,8 +314,9 @@ final class RepoPickerOverlay: PaletteOverlay {
         var presentedConfirmForTesting: ConfirmCard? { confirm.card }
     #endif
 
-    func refreshOpen(_ running: [RunningWorkspace]) {
+    func refreshOpen(_ running: [RunningWorkspace], elsewhere others: [RunningWorkspace]) {
         open = running
+        elsewhere = others
         rebuild()
     }
 
