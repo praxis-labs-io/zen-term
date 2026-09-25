@@ -119,6 +119,13 @@ final class TabController: NSObject {
     // Falls back to the pane, because nil reads downstream as "no repository".
     var focusedCWD: URL? { focusedDrawerSurface?.currentDirectory ?? paneCanvas.focusedCWD }
 
+    var removedCheckout: () -> RemovedCheckout? {
+        get { paneCanvas.removedCheckout }
+        set { paneCanvas.removedCheckout = newValue }
+    }
+
+    var sessionCWD: URL? { removedCheckout()?.relocating(focusedCWD) ?? focusedCWD }
+
     // Not `focusedCWD`: removing a worktree matches the folder the tab was opened for.
     let openedCWD: URL?
 
@@ -400,9 +407,9 @@ final class TabController: NSObject {
     private func drawerConfig(command: String?, token: Int) -> TerminalSurfaceConfig {
         let env = NavSocketServer.env(base: workspaceEnv, token: token)
         if let command, command != "shell" {
-            return ShellLaunch.program(command, cwd: focusedCWD, env: env)
+            return ShellLaunch.program(command, cwd: sessionCWD, env: env)
         }
-        return ShellLaunch.shell(cwd: focusedCWD, env: env)
+        return ShellLaunch.shell(cwd: sessionCWD, env: env)
     }
 
     private func drawerToken(_ panel: PanelRef) -> Int? {

@@ -133,7 +133,7 @@ final class WindowController: NSObject {
     private lazy var floats: ToolFloatController = {
         let controller = ToolFloatController(
             presentOverlay: { [weak self] overlay in self?.presentWindowFloat(overlay) },
-            focusedCWD: { [weak self] in self?.activeController?.focusedCWD },
+            focusedCWD: { [weak self] in self?.activeController?.sessionCWD },
             yieldFocus: { [weak self] in
                 self?.endModes()
                 self?.activeController?.yieldFocusToFloat()
@@ -293,6 +293,7 @@ final class WindowController: NSObject {
     private var didTearDown = false
 
     var focusedCWD: URL? { activeController?.focusedCWD }
+    var sessionCWD: URL? { activeController?.sessionCWD }
     var focusedPaneIsVim: Bool { !sidebar.hasFocus && activeController?.focusedPaneIsVim == true }
 
     var isToolFloatOpen: Bool { floats.isOpen }
@@ -943,15 +944,7 @@ final class WindowController: NSObject {
 
     private func newTab() {
         cancelConfirm()
-        addTab(cwd: ShellLaunch.newSessionCWD(focused: inheritableCWD))
-    }
-
-    private var inheritableCWD: URL? {
-        let cwd = activeController?.focusedCWD
-        guard activeWorkspace.isWorktreeRemoved, let root = activeWorkspace.origin?.path,
-            GitRepo.isInside(cwd, root)
-        else { return cwd }
-        return nil
+        addTab(cwd: ShellLaunch.newSessionCWD(focused: activeController?.sessionCWD))
     }
 
     private func addTab(cwd: URL?) {
@@ -2343,6 +2336,7 @@ final class WindowController: NSObject {
             self.renderAttention()
         }
         c.onLastPaneClosed = { [weak self] in self?.closeTab(id) }
+        c.removedCheckout = { [weak self] in self?.workspace(of: id)?.removedCheckout }
         c.onOverlayStateChanged = { [weak self] in self?.renderDock() }
         c.onRequestToast = { [weak self] content in self?.toasts.show(content) }
         c.onPaneStartFailed = { [weak self] retry, close in

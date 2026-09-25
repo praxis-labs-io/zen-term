@@ -11,6 +11,11 @@ final class WorkspaceController {
     let folder: URL
     let origin: WorktreeOrigin?
     var isWorktreeRemoved = false
+
+    var removedCheckout: RemovedCheckout? {
+        guard isWorktreeRemoved, let origin else { return nil }
+        return RemovedCheckout(root: origin.path, standIn: origin.parent.path)
+    }
     // Shared by a folder's workspace and its worktrees, so the group keeps its place as members close.
     let seat: Int
 

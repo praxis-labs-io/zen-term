@@ -125,7 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if case .newWindow = chord {
             if let key = keyController(), key.isModalOverlayOpen || key.isConfirmOpen { return }
             newWindow(
-                initialCWD: ShellLaunch.newSessionCWD(focused: keyController()?.focusedCWD),
+                initialCWD: ShellLaunch.newSessionCWD(focused: keyController()?.sessionCWD),
                 centered: false)
             return
         }
