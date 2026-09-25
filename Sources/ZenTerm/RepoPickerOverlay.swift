@@ -443,6 +443,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         }
         if let chord = Chord.displayed(.removeWorktree, in: GeneralConfig.current.keymap) {
             hints.append(PaletteHint(keys: chord.displayGlyph, label: "remove worktree"))
+            hints.append(PaletteHint(keys: chord.displayGlyph, label: "close workspace"))
         }
         return hints
     }
@@ -456,6 +457,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         setFooterHint("switch", isShown: switches)
         setFooterHint("new worktree", isShown: createTarget != nil)
         setFooterHint("remove worktree", isShown: selectedWorktree != nil)
+        setFooterHint("close workspace", isShown: selectedRemovedWorkspace != nil)
     }
 
     struct CreateTarget: Equatable {
@@ -487,8 +489,16 @@ final class RepoPickerOverlay: PaletteOverlay {
         switch rows[selected] {
         case .worktree(let worktree, let parent): return (worktree, parent)
         case .open(let row), .elsewhere(let row):
-            guard row.isWorktree else { return nil }
+            guard row.isWorktree, row.removedWorktree == nil else { return nil }
             return listedWorktree(at: row.folder)
+        default: return nil
+        }
+    }
+
+    var selectedRemovedWorkspace: RunningWorkspace? {
+        guard rows.indices.contains(selected) else { return nil }
+        switch rows[selected] {
+        case .open(let row), .elsewhere(let row): return row.removedWorktree == nil ? nil : row
         default: return nil
         }
     }
@@ -763,6 +773,9 @@ final class RepoPickerOverlay: PaletteOverlay {
 
         func applyGitStatus() {
             guard let statusPath else { return }
+            if let removed = running?.removedWorktree {
+                return applyRemoved(removed)
+            }
             let head =
                 worktree.map { $0.branch ?? String($0.head.prefix(7)) }
                 ?? GitRepoStatus.branch(statusPath)
@@ -773,6 +786,13 @@ final class RepoPickerOverlay: PaletteOverlay {
 
             let churn = GitRepoStatus.churn(statusPath) ?? GitChurn()
             churnLabel.attributedStringValue = Self.churnText(churn)
+        }
+
+        private func applyRemoved(_ name: String) {
+            branchLabel.stringValue = "\(name) \(WorktreeOrigin.removedDetail)"
+            branchLabel.setAccessibilityLabel("worktree \(name), \(WorktreeOrigin.removedDetail)")
+            branchFloor.constant = min(branchLabel.intrinsicContentSize.width, Self.branchMinWidth)
+            churnLabel.attributedStringValue = NSAttributedString()
         }
     }
 }

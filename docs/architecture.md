@@ -595,6 +595,14 @@ The workspace `carry` key names ignored files to copy into a new worktree.
   close the window first. A removing row reads `Removing <name>…`. Tabs close on
   `Change.removed`, never on confirm or `failed`, matched by `TabController.openedCWD`,
   and closing them leaves the card up. The finish re-lists.
+- **An open worktree row removes like a Configured one.** It reads `Removing <name>…` while
+  the tracker holds it, and the finish rebuilds Open from `runningWorkspaces()` and drops
+  Open Elsewhere rows inside the path, with a closed parent's ghost once it has none.
+- **A worktree removed outside ZenTerm stays open, marked `removed`.** The title poll checks
+  `<worktree>/.git` off-main, skipping a path the tracker is removing and an unmounted volume.
+  The sidebar and picker read `WorkspaceController.isWorktreeRemoved`, a toast says so once,
+  ⌘⇧⌫ on its picker row closes the workspace, and the mark clears if `.git` comes back.
+  It never auto-closes, because an agent in its panes may still be running.
 
 ### GitCommand
 

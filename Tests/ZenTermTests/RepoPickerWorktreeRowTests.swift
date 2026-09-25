@@ -689,6 +689,32 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(shape(of: overlay)[overlay.selected], "worktree:two")
     }
 
+    func test_anOpenWorktreeRemovedOutsideZenTerm_saysSoAndStillSwitches() throws {
+        let repo = path("alpha")
+        let tree = worktree(repo, "one")
+        var switched: WorkspaceID?
+        let overlay = makeRepoPicker(
+            entries: [workspace("alpha", path: repo)],
+            open: [
+                running(window: 1, name: "alpha", folder: repo, isWorktree: false),
+                running(window: 1, name: "alpha: one", folder: tree.path, removedWorktree: "one"),
+            ],
+            onSwitch: { switched = $0 })
+        mount(overlay)
+        overlay.setWorktrees(listing(repo, "one"), for: repo)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
+        send(#selector(NSResponder.moveDown(_:)), to: overlay)
+
+        XCTAssertEqual(shape(of: overlay)[overlay.selected], "open:alpha: one")
+        XCTAssertEqual(rightColumn(of: overlay.rowViews[overlay.selected]), "one removed")
+        XCTAssertNil(overlay.selectedWorktree, "a listing that still has it does not make ⌘⇧⌫ remove it again")
+        XCTAssertEqual(overlay.selectedRemovedWorkspace?.name, "alpha: one", "⌘⇧⌫ closes it instead")
+
+        send(#selector(NSResponder.insertNewline(_:)), to: overlay)
+
+        XCTAssertEqual(switched, WorkspaceID(raw: 1))
+    }
+
     func test_anOpenWorktreeBeingRemoved_rendersAsRemoving() {
         let repo = path("alpha")
         let tree = worktree(repo, "one")
@@ -743,7 +769,8 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let overlay = makeRepoPicker(
             entries: [workspace("alpha", path: repo)],
             elsewhere: [
-                RunningWorkspace(window: 2, id: nil, name: "alpha", folder: repo, isWorktree: false),
+                RunningWorkspace(
+                    window: 2, id: nil, name: "alpha", folder: repo, isWorktree: false, removedWorktree: nil),
                 running(window: 2, name: "alpha: one", folder: tree.path),
             ],
             removals: removals)
@@ -961,10 +988,11 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
     }
 
     private func running(
-        window: Int, name: String, folder: URL, isWorktree: Bool = true
+        window: Int, name: String, folder: URL, isWorktree: Bool = true, removedWorktree: String? = nil
     ) -> RunningWorkspace {
         RunningWorkspace(
-            window: window, id: WorkspaceID(raw: 1), name: name, folder: folder, isWorktree: isWorktree)
+            window: window, id: WorkspaceID(raw: 1), name: name, folder: folder, isWorktree: isWorktree,
+            removedWorktree: removedWorktree)
     }
 
     private func path(_ name: String) -> URL {
@@ -1013,12 +1041,13 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
         openState: @escaping (URL) -> WorkspaceOpenState = { _ in .closed },
         onChoose: @escaping (Workspace, WorktreeOrigin?) -> Void = { _, _ in },
+        onSwitch: @escaping (WorkspaceID) -> Void = { _ in },
         onReveal: @escaping (Int, WorkspaceID) -> Bool = { _, _ in true }
     ) -> RepoPickerOverlay {
         RepoPickerOverlay(
             entries: entries, open: open, elsewhere: elsewhere,
             background: Theme.current.chrome.background.nsColor,
-            removals: removals, openState: openState, onChoose: onChoose, onReveal: onReveal,
+            removals: removals, openState: openState, onChoose: onChoose, onSwitch: onSwitch, onReveal: onReveal,
             onAddWorkspace: {}, onDismiss: {})
     }
 

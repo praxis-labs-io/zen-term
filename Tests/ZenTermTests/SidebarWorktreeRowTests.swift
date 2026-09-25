@@ -143,6 +143,28 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         waitUntil(!rows(of: c).contains { $0.detailForTesting == "removed" }, "the mark to clear when .git is back")
     }
 
+    func test_removeWorktreeOnARemovedRow_closesItsWorkspace() throws {
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(rows(of: c).contains { $0.detailForTesting == "removed" }, "the row to say it was removed")
+        let picker = try openPicker(in: c)
+        let field = try searchField(of: picker)
+        let index = try XCTUnwrap(
+            picker.rowViews.firstIndex { ($0 as? RepoPickerOverlay.RowView)?.running?.removedWorktree != nil })
+        for _ in 0..<picker.rowViews.count where picker.selected != index {
+            _ = picker.control(field, textView: NSTextView(), doCommandBy: #selector(NSResponder.moveDown(_:)))
+        }
+
+        c.handle(.removeWorktree)
+
+        XCTAssertTrue(pickers(in: c).isEmpty, "the picker steps aside for the close")
+        XCTAssertFalse(titles(of: c).contains("feature/one"), "the workspace closes")
+        XCTAssertTrue(titles(of: c).contains("Alpha"), "and only that one")
+    }
+
     func test_aWorktreeZenTermIsRemoving_isNotMarkedRemoved() throws {
         let c = makeWindow()
         try openWorkspace(named: "Alpha", in: c)

@@ -1340,9 +1340,9 @@ final class WindowController: NSObject {
     }
 
     private func removeSelectedWorktreeInPicker() {
-        guard let picker = modal?.overlay as? RepoPickerOverlay,
-            let selection = picker.selectedWorktree
-        else { return }
+        guard let picker = modal?.overlay as? RepoPickerOverlay else { return }
+        if let removed = picker.selectedRemovedWorkspace { return closeRemovedWorkspace(removed) }
+        guard let selection = picker.selectedWorktree else { return }
         let (worktree, parent) = selection
         let closes = onClosedByRemovalAtPath?(worktree.path) ?? closedByRemoval(atPath: worktree.path)
         DispatchQueue.global(qos: .userInitiated).async {
@@ -1360,6 +1360,18 @@ final class WindowController: NSObject {
                 self.confirmRemoveWorktree(picker, worktree, from: parent, items: items)
             }
         }
+    }
+
+    private func closeRemovedWorkspace(_ running: RunningWorkspace) {
+        guard running.window == windowID, let id = running.id else {
+            toasts.show(
+                ToastContent(
+                    variant: .info, title: "Open in Another Window",
+                    message: "Close \(running.name) from the window it is open in."))
+            return
+        }
+        closeModal()
+        requestCloseWorkspace(id: id)
     }
 
     // A card, not the toast confirm, because this deletes a folder and cannot be undone.
@@ -1843,15 +1855,16 @@ final class WindowController: NSObject {
                 guard let workspace = byID[id] else { return nil }
                 return RunningWorkspace(
                     window: windowID, id: id, name: workspace.name, folder: workspace.folder,
-                    isWorktree: false)
+                    isWorktree: false, removedWorktree: nil)
             case .worktree(let id):
                 guard let workspace = byID[id] else { return nil }
                 return RunningWorkspace(
                     window: windowID, id: id, name: workspace.name, folder: workspace.folder,
-                    isWorktree: true)
+                    isWorktree: true, removedWorktree: workspace.isWorktreeRemoved ? workspace.origin?.name : nil)
             case .ghost(let parent):
                 return RunningWorkspace(
-                    window: windowID, id: nil, name: parent.title, folder: parent.path, isWorktree: false)
+                    window: windowID, id: nil, name: parent.title, folder: parent.path, isWorktree: false,
+                    removedWorktree: nil)
             }
         }
     }
