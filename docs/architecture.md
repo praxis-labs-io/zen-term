@@ -286,7 +286,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   missing name yields to any real name), and what it last said. `identify` is the one way
   in. A launch whose program is `ai` or a known agent joins at launch, idle included; any
   surface that sends indeterminate OSC 9;4 joins on that signal, an OSC 777 whose title
-  names a known agent or the `ai` program as a word joins on that, and a title an agent's
+  names a known agent or the `ai` program as a whole token joins on that, and a title an agent's
   identification pattern recognises joins on that. The last is the only way in for
   a hand-launched Codex, which emits no progress and notifies on only some stops, and the
   only way a hand-launched Claude is listed, and named, before its first turn. An agent
@@ -295,11 +295,14 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   before its program starts has not been busy yet.
   The Agents rows join it with `agentState(of:)` and sort waiting (oldest first), working,
   done, idle, ties in sidebar order.
-- **A notification is classified, never assumed to ask.** A listed agent's OSC 777 is read
-  by `AgentRules.notificationAttention`: an agent with body rules (Claude) waits on a body
-  that matches and completes on any other, and an agent without them is taken at its
-  word. Anything else sent it, so it lands like a finished command: `completed`, no
-  banner, no row, and never over a tab that is already waiting.
+- **Only an agent's OSC 777 can ask.** A notification from a surface that is not in the
+  roster, and whose title names no known agent or `ai` program, lands like a finished
+  command: `completed`, no banner, no row, and never over a tab that is already waiting.
+  An agent's notification goes through `AgentRules.notificationAttention`. Claude has body
+  rules: a body that matches waits, any other completes. Codex's notification carries no
+  state, because it arrives before its title says what Codex wants; the move into its
+  Action Required title raises the waiting card and banner instead, once per ask. Any
+  other agent's notification waits.
 - **A state only the chrome can act on never reaches the tab number.** `working`
   says an agent is mid-turn, not that it wants you, so it stops at the dock's dot. The dot
   and the tab number are one signal at two altitudes; a hidden drawer or float asks

@@ -216,6 +216,22 @@ final class AgentNotificationTests: WindowTestCase {
         XCTAssertEqual(c.agentMessageForTesting(codex.id), "Approve writing test2.txt")
     }
 
+    func test_aDoneClaude_raisesNoCardOverATabStillAsking() throws {
+        let c = makeWindow()
+        let asking = try XCTUnwrap(spawned.last)
+        c.handle(.splitHorizontal)
+        let finishing = try XCTUnwrap(spawned.last)
+        c.newTabForTesting()
+        drainMainQueue()
+        post(asking, title: AgentNotificationFixtures.claudeTitle, body: AgentNotificationFixtures.claudePermission)
+
+        post(finishing, title: AgentNotificationFixtures.claudeTitle, body: "Refactor finished")
+
+        XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .waiting)
+        XCTAssertTrue(cardCopy(c).contains(AgentNotificationFixtures.claudePermission))
+        XCTAssertFalse(cardCopy(c).contains("Refactor finished"), "news never covers a question")
+    }
+
     func test_aShellsNotification_leavesNoAgentLatch() throws {
         let c = makeWindow()
         let shell = try backgroundPane(c)

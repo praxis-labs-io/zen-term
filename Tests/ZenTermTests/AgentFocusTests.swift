@@ -277,7 +277,9 @@ final class AgentFocusTests: WindowTestCase {
         drainMainQueue()
 
         surface.delegate?.surface(
-            surface, didPostNotification: TerminalNotification(title: "pi", body: "Claude needs your permission"))
+            surface,
+            didPostNotification: TerminalNotification(
+                title: AgentNotificationFixtures.claudeTitle, body: AgentNotificationFixtures.claudePermission))
         drainMainQueue()
         XCTAssertEqual(c.agentStateForTesting(pane), .waiting)
 
@@ -297,7 +299,9 @@ final class AgentFocusTests: WindowTestCase {
         let surface = try XCTUnwrap(spawned.first)
 
         surface.delegate?.surface(
-            surface, didPostNotification: TerminalNotification(title: "pi", body: "Claude needs your permission"))
+            surface,
+            didPostNotification: TerminalNotification(
+                title: AgentNotificationFixtures.claudeTitle, body: AgentNotificationFixtures.claudePermission))
         drainMainQueue()
         XCTAssertEqual(c.agentStateForTesting(pane), .waiting)
 
@@ -315,7 +319,9 @@ final class AgentFocusTests: WindowTestCase {
         let surface = try XCTUnwrap(spawned.first)
 
         surface.delegate?.surface(
-            surface, didPostNotification: TerminalNotification(title: "pi", body: "Claude needs your permission"))
+            surface,
+            didPostNotification: TerminalNotification(
+                title: AgentNotificationFixtures.claudeTitle, body: AgentNotificationFixtures.claudePermission))
         drainMainQueue()
         let asking = try XCTUnwrap(c.agentRowForTesting(pane))
         XCTAssertEqual(c.agentStateForTesting(pane), .waiting, "a prompt you watched arrive is still blocked")
