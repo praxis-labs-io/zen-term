@@ -156,7 +156,7 @@ final class WindowController: NSObject {
             self?.attention.release(surface)
             self?.agents.drop(surface)
             self?.agentStates.drop(surface)
-            self?.renderAttention()
+            self?.renderAgents()
         }
         controller.onProgramLaunched = { [weak self] surface, command in
             self?.programLaunched(surface, command)
@@ -439,6 +439,7 @@ final class WindowController: NSObject {
         yieldSidebarIfNarrow()
         window.delegate = self
         wireModes()
+        attention.onChange = { [weak self] in self?.renderAttention() }
 
         attentionObserver = NotificationCenter.default.addObserver(
             forName: .attentionCenterDidChange, object: nil, queue: nil
@@ -1296,7 +1297,7 @@ final class WindowController: NSObject {
         let workspace = target.workspace
         let card = modal?.overlay as? NewWorktreeOverlay
         card?.beginWork("Creating \(Self.branchName(of: request))")
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self, weak card] in
             let result: Result<(Workspace, WorktreeOrigin, CarryReport), Error>
             do {
                 let worktree: Worktree
@@ -1374,7 +1375,7 @@ final class WindowController: NSObject {
         guard let selection = picker.selectedWorktree else { return }
         let (worktree, parent) = selection
         let closes = onClosedByRemovalAtPath?(worktree.path) ?? closedByRemoval(atPath: worktree.path)
-        DispatchQueue.global(qos: .userInitiated).async {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let carried = parent.carry.compactMap { entry -> String? in
                 let url = worktree.path.appendingPathComponent(entry)
                 guard FileManager.default.fileExists(atPath: url.path) else { return nil }
@@ -2385,7 +2386,7 @@ final class WindowController: NSObject {
                 self?.agents.drop($0)
                 self?.agentStates.drop($0)
             }
-            self?.renderAttention()
+            self?.renderAgents()
         }
         c.onProgramLaunched = { [weak self] surface, command in self?.programLaunched(surface, command) }
         c.onNotification = { [weak self] surface, n in
@@ -2417,11 +2418,9 @@ final class WindowController: NSObject {
             let shown =
                 self.floats.activeID == spec.id && self.floats.surfaceID(spec.id) == surface
                 && Self.isPresent(self.window)
-            let before = self.attentionSnapshot(surface, in: target)
             surface.map { self.attention.record($0, .waiting, seen: shown) }
             surface.map { self.agentSignalled($0, name: notification.title, message: message) }
             self.renderAgents()
-            if self.attentionSnapshot(surface, in: target) != before { self.renderAttention() }
 
             guard !shown else { return }
             let destination = CardDestination(
@@ -2453,11 +2452,9 @@ final class WindowController: NSObject {
             }
 
             let seen = self.isSeen(surface, in: id)
-            let before = self.attentionSnapshot(surface, in: id)
             surface.map { self.attention.record($0, .waiting, seen: seen) }
             surface.map { self.agentSignalled($0, name: notification.title, message: message) }
             self.renderAgents()
-            if self.attentionSnapshot(surface, in: id) != before { self.renderAttention() }
 
             guard !seen else { return }
             self.presentWaitingToast(
@@ -2547,7 +2544,6 @@ final class WindowController: NSObject {
     }
 
     private func applyDerived(_ state: AgentSignalState, to surface: SurfaceID) {
-        let before = attention.state(of: surface)
         switch state {
         case .working:
             attention.setWorking(surface, true)
@@ -2562,7 +2558,7 @@ final class WindowController: NSObject {
             attention.setWorking(surface, false)
             attention.record(surface, .waiting, seen: isSeen(surface, in: tab))
         }
-        if attention.state(of: surface) != before { renderAttention() } else { renderAgents() }
+        renderAgents()
     }
 
     // A window float belongs to no tab, so it asks from whichever tab is showing it.
@@ -2685,10 +2681,6 @@ final class WindowController: NSObject {
         return controller(id)?.isOnScreen(surface) ?? true
     }
 
-    private func attentionSnapshot(_ surface: SurfaceID?, in id: TabID) -> [SurfaceAttention] {
-        [attention.state(tab: id)] + (surface.map { [attention.state(of: $0)] } ?? [])
-    }
-
     // Presence, not just focus: an agent that speaks while you are in another app has not been seen.
     static var isPresent: (NSWindow) -> Bool = { NSApp.isActive && $0.isKeyWindow }
 
@@ -2716,7 +2708,6 @@ final class WindowController: NSObject {
             attention.agentState(of: surface) > .working
         else { return }
         answerAgent(surface)
-        renderAgents()
     }
 
     // The row takes its tone from the store and its words from the roster, so both clear here or the row lies.
@@ -2740,9 +2731,8 @@ final class WindowController: NSObject {
         guard agents.contains(surface) else { return }
         let failed = result.exitCode.map { $0 != 0 && !Self.deliberateStopCodes.contains($0) } ?? false
         agents.markExited(surface, failed: failed, message: Self.commandResultMessage(result))
-        attention.endAgent(surface)
+        attention.endAgent(surface, failed: failed)
         agentStates.drop(surface)
-        if failed { attention.latchAgent(surface, .completed) }
         renderAgents()
     }
 
@@ -2886,7 +2876,6 @@ final class WindowController: NSObject {
             controller(tab)?.focus(surface: surface)
         }
         answerFocusedAgent()
-        renderAttention()
     }
 
     /// Answers whatever `surface` asked now that it is on screen, and takes down the card it raised.
@@ -2894,14 +2883,12 @@ final class WindowController: NSObject {
         attention.markSeen(surface)
         answerFocusedAgent()
         if let tab = cardSurfaces.first(where: { $0.value == surface })?.key { takeDownCard(tab) }
-        renderAttention()
     }
 
     /// Clears the tab and the surface that asked. A window float belongs to no tab, so the tab alone would miss it.
     private func answer(_ id: TabID, surface: SurfaceID?) {
         surface.map { attention.markSeen($0) }
         clearAttention(id)
-        renderAttention()
     }
 
     private func mountAttentionToast(

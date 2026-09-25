@@ -420,4 +420,77 @@ final class AttentionStoreTests: XCTestCase {
         XCTAssertEqual(store.agentState(of: pane), .waiting)
         XCTAssertEqual(store.agentSince(of: pane), clock)
     }
+
+    func test_aChange_reportsOnce_evenWhenItTouchesBothLatches() {
+        let store = makeStore()
+        let pane = SurfaceIDs.mint()
+        store.register(pane, tab: tab)
+        var reports = 0
+        store.onChange = { reports += 1 }
+
+        store.record(pane, .waiting, seen: false)
+
+        XCTAssertEqual(reports, 1, "a notification latches the tab and the agent in one change")
+    }
+
+    func test_aFailedExit_reportsOnce_withTheLatchAlreadyInPlace() {
+        let store = makeStore()
+        let pane = SurfaceIDs.mint()
+        store.register(pane, tab: tab)
+        store.setWorking(pane, true)
+        var seenAtReport: [SurfaceAttention] = []
+        store.onChange = { seenAtReport.append(store.agentState(of: pane)) }
+
+        store.endAgent(pane, failed: true)
+
+        XCTAssertEqual(
+            seenAtReport, [.completed],
+            "a render between ending the agent and latching its failure would read an idle agent")
+    }
+
+    func test_nothingMoving_reportsNothing() {
+        let store = makeStore()
+        let pane = SurfaceIDs.mint()
+        store.register(pane, tab: tab)
+        var reports = 0
+        store.onChange = { reports += 1 }
+
+        store.markSeen(pane)
+        store.setWorking(pane, false)
+        store.answerAgent(pane)
+        store.markSeen(tab: other)
+
+        XCTAssertEqual(reports, 0, "a call that changes nothing must not cost a render")
+    }
+
+    func test_everyMutation_reports() {
+        let store = makeStore()
+        let pane = SurfaceIDs.mint()
+        var reports = 0
+        store.onChange = { reports += 1 }
+
+        let mutations: [(String, () -> Void)] = [
+            ("register", { store.register(pane, tab: self.tab) }),
+            ("setWorking on", { store.setWorking(pane, true) }),
+            ("setWorking off", { store.setWorking(pane, false) }),
+            ("answerAgent", { store.answerAgent(pane) }),
+            ("record", { store.record(pane, .waiting, seen: false) }),
+            ("markSeen", { store.markSeen(pane) }),
+            ("endAgent", { store.endAgent(pane) }),
+            ("latchAgent", { store.latchAgent(pane, .waiting) }),
+            ("record again", { store.record(pane, .waiting, seen: false) }),
+            ("markSeen(tab:)", { store.markSeen(tab: self.tab) }),
+            ("record before visit", { store.record(pane, .waiting, seen: false) }),
+            ("visit", { store.visit(self.tab) { _ in true } }),
+            ("record completed", { store.record(pane, .completed, seen: false) }),
+            ("release", { store.release(pane) }),
+            ("register again", { store.register(pane, tab: self.tab) }),
+            ("dropTab", { store.dropTab(self.tab) }),
+        ]
+        for (name, mutate) in mutations {
+            reports = 0
+            mutate()
+            XCTAssertEqual(reports, 1, name)
+        }
+    }
 }

@@ -191,6 +191,21 @@ final class DrawerAttentionTests: WindowTestCase {
         XCTAssertEqual(c.dockForTesting.rightActivityStateForTesting, .idle)
     }
 
+    func test_aWorkingAgentExitingInAClosedDrawer_lowersItsDot() throws {
+        let c = makeWindow()
+        let drawer = try closedRightDrawer(c)
+        drawer.delegate?.surface(drawer, progressDidChange: TerminalProgress(state: .indeterminate))
+        drainMainQueue()
+        XCTAssertEqual(c.dockForTesting.rightActivityStateForTesting, .working, "precondition: the agent is mid-turn")
+
+        drawer.delegate?.surface(drawer, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
+        drainMainQueue()
+
+        XCTAssertEqual(
+            c.dockForTesting.rightActivityStateForTesting, .idle,
+            "an agent that exited is not working, whichever path noticed it")
+    }
+
     func test_visitingTheTab_leavesAClosedDrawerAsking() throws {
         let c = makeWindow()
         let drawer = try closedRightDrawer(c)

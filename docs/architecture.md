@@ -258,6 +258,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   level: surface, tab, workspace, window. A new level is a call, not a new concept, and
   the workspace level is that call: `state(tabs:)` takes the ids and the store learns
   nothing about workspaces.
+  It reports each real change once, from the outermost call, and the window renders from
+  that report, so no mutating path chooses its own render.
 - **`seen` means on screen, not focused.** A pane is on screen while its tab is active in
   the active workspace, a drawer while that holds and it is open, a float while it is
   shown. Coming on screen
