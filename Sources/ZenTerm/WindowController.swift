@@ -269,7 +269,7 @@ final class WindowController: NSObject {
         guard let picker = modal?.overlay as? RepoPickerOverlay else { return }
         switch change {
         case .began: picker.refreshRemovalState()
-        case .removed(let path): picker.dropWorktree(at: path); picker.relistWorktrees()
+        case .removed(let path): picker.dropWorktree(at: path, open: runningWorkspaces()); picker.relistWorktrees()
         case .failed: picker.refreshRemovalState(); picker.relistWorktrees()
         }
     }

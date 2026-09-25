@@ -316,6 +316,9 @@ final class RepoPickerPresentationTests: WindowTestCase {
 
         XCTAssertEqual(c.tabCount(atPath: removed), 0, "the tab goes with the folder")
         XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "the picker does not")
+        XCTAssertFalse(
+            picker.rowViews.contains { ($0 as? RepoPickerOverlay.RowView)?.running?.folder == removed },
+            "and its Open row goes with the workspace")
     }
 
     private func button(in card: NSView, title: String) -> AppButton? {

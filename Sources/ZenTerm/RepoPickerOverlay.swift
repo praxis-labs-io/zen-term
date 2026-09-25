@@ -28,7 +28,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     private let onNewWorkspace: () -> Void
 
     private let entries: [Workspace]
-    private let open: [RunningWorkspace]
+    private var open: [RunningWorkspace]
     private var elsewhere: [RunningWorkspace]
     private var listings: [URL: WorktreeListing] = [:]
 
@@ -252,6 +252,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .header(let title):
             return PaletteSectionHeader(title: title)
         case .open(let workspace), .elsewhere(let workspace):
+            if let removing = removingWorktree(workspace) { return RemovingRowView(worktree: removing) }
             return workspace.id == nil ? RowView(ghost: workspace) : RowView(open: workspace)
         case .mutedParent(let workspace):
             return RowView(mutedParent: workspace)
@@ -282,7 +283,8 @@ final class RepoPickerOverlay: PaletteOverlay {
     override func isSelectable(at index: Int) -> Bool {
         switch rows[index] {
         case .header, .mutedParent: return false
-        case .open(let workspace), .elsewhere(let workspace): return workspace.id != nil
+        case .open(let workspace), .elsewhere(let workspace):
+            return workspace.id != nil && removingWorktree(workspace) == nil
         case .worktree(let worktree, _): return !removals.isRemoving(worktree.path)
         case .newWorkspace, .add, .workspace: return true
         }
@@ -311,7 +313,9 @@ final class RepoPickerOverlay: PaletteOverlay {
         var presentedConfirmForTesting: ConfirmCard? { confirm.card }
     #endif
 
-    func dropWorktree(at path: URL) {
+    func dropWorktree(at path: URL, open running: [RunningWorkspace]) {
+        open = running
+        elsewhere = Self.droppingOrphanedGhosts(elsewhere.filter { !GitRepo.isInside($0.folder, path) })
         let target = path.standardizedFileURL
         for (workspace, listing) in listings {
             listings[workspace] = WorktreeListing(
@@ -324,6 +328,22 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     func refreshRemovalState() { rebuild() }
 
+    private func removingWorktree(_ running: RunningWorkspace) -> Worktree? {
+        guard running.isWorktree, let found = listedWorktree(at: running.folder),
+            removals.isRemoving(found.worktree.path)
+        else { return nil }
+        return found.worktree
+    }
+
+    private static func droppingOrphanedGhosts(_ rows: [RunningWorkspace]) -> [RunningWorkspace] {
+        rows.indices.compactMap { index in
+            let row = rows[index]
+            guard row.id == nil else { return row }
+            let next = rows.indices.contains(index + 1) ? rows[index + 1] : nil
+            return next?.isWorktree == true ? row : nil
+        }
+    }
+
     override func rowIdentity(at index: Int) -> AnyHashable? {
         switch rows[index] {
         case .newWorkspace: return ["new"]
@@ -331,10 +351,14 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .header(let title): return ["header", title]
         case .mutedParent(let workspace): return ["muted", workspace.title]
         case .open(let workspace):
-            return ["open", "\(workspace.window)", "\(workspace.id?.raw ?? -1)", workspace.folder.path]
+            return [
+                "open", "\(workspace.window)", "\(workspace.id?.raw ?? -1)", workspace.folder.path,
+                removingWorktree(workspace) == nil ? "" : "removing",
+            ]
         case .elsewhere(let workspace):
             return [
                 "elsewhere", "\(workspace.window)", "\(workspace.id?.raw ?? -1)", workspace.folder.path,
+                removingWorktree(workspace) == nil ? "" : "removing",
             ]
         case .workspace(let workspace): return ["workspace", workspace.title]
         case .worktree(let worktree, _):
