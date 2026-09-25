@@ -28,7 +28,6 @@ final class AgentStateTracker {
             return nil
         }
 
-        // A turn ending with no rule to say so is the shape a dropped spinner frame takes, so make it wait.
         if entry.published == .working, next == .idle, outcome == .fallback {
             let started = entry.pendingIdleSince ?? now()
             entry.pendingIdleSince = started

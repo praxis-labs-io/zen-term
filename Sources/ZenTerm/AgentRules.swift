@@ -55,9 +55,7 @@ enum AgentRules {
             match: .regex("(?:^| )[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏](?: |$)")),
     ]
 
-    // What Claude runs on, and the reasonable floor for an agent we ship no rules for: any program that
-    // reports OSC 9;4 gets working and idle for free. Claude's title flickers to idle mid-turn for as long
-    // as 20s while progress holds working, so it is read for the row's message and never for state.
+    // Claude's title flickers to idle mid-turn while progress holds working, so progress is the only state it gives.
     private static let progressOnly: [AgentStateRule] = [
         AgentStateRule(
             id: "progress_working", state: .working, priority: 1_100, region: .oscProgress,

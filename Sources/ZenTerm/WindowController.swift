@@ -2435,18 +2435,17 @@ final class WindowController: NSObject {
     private func titleChanged(surface: SurfaceID, title: String) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            // Codex emits no progress and its notification is unreliable, so the title is its only way in.
             if !self.agents.contains(surface), let name = AgentRules.agentName(matching: title) {
                 self.agents.identify(surface, name: name, source: .signal)
             }
             guard self.agents.contains(surface) else { return }
             self.agentTitles[surface] = title
             self.deriveAgentState(surface)
-            // The tail is the live tool name, so it moves many times inside one turn the state never leaves.
             if self.agentStates.state(of: surface) == .working { self.noteTitleMessage(surface) }
         }
     }
 
+    // The tail is the live tool name, so it moves many times inside one turn the state never leaves.
     private func noteTitleMessage(_ surface: SurfaceID) {
         guard attention.agentState(of: surface) <= .working,
             let message = AgentRules.message(
@@ -2475,14 +2474,12 @@ final class WindowController: NSObject {
             attention.setWorking(surface, true)
             noteTitleMessage(surface)
         case .idle:
-            // Nothing latched above working, so any message here is the turn's own and goes with it.
             let wasAsking = attention.agentState(of: surface) > .working
             if attention.isWorking(surface) { answerAgent(surface) }
             attention.setWorking(surface, false)
             if !wasAsking { agents.setMessage(surface, nil) }
         case .blocked:
             guard let tab = tab(of: surface) else { return }
-            // An agent that stopped to ask is not mid-turn, and leaving working up outlives the answer.
             attention.setWorking(surface, false)
             attention.record(surface, .waiting, seen: isSeen(surface, in: tab))
         case nil:
@@ -2679,7 +2676,6 @@ final class WindowController: NSObject {
         for (id, agent) in before {
             agents.trackBusy(id, terminalSurface(id)?.isBusy ?? false)
             if !agent.hasExited, agents.agents[id]?.hasExited == true { attention.endAgent(id) }
-            // A turn that ended on its last title event has nothing left to push, so the hold lands here.
             if agentStates.isHoldingIdle(id) { deriveAgentState(id) }
         }
         if agents.agents != before { renderAgents() }
