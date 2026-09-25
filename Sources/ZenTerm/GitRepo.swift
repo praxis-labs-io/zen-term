@@ -74,6 +74,12 @@ enum GitRepo {
         return mirrored
     }
 
+    static func isInside(_ path: URL?, _ root: URL) -> Bool {
+        guard let path = path?.standardizedFileURL.path else { return false }
+        let target = root.standardizedFileURL.path
+        return path == target || path.hasPrefix(target.hasSuffix("/") ? target : target + "/")
+    }
+
     static func mirrorPath(_ path: URL, from repoRoot: URL?, into checkout: URL) -> URL {
         let checkout = checkout.standardizedFileURL
         guard let base = repoRoot?.standardizedFileURL.path else { return checkout }
