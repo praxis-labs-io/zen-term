@@ -269,8 +269,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   and focus does not clear it: looking at a prompt is not answering it. Answering is
   typing into the pane, where a key the chrome did not claim is aimed at the agent and a
   reserved chord is not. A turn ending (`working` falling)
-  clears a waiting latch and leaves `completed`, as does a notification an agent's rules
-  read as finished; a new turn replaces that, never a waiting latch.
+  clears a waiting latch and leaves `completed`, here and nowhere else; a new turn
+  replaces that, never a waiting latch.
 - **`AgentRoster` says which surfaces run an agent**, per window: its name, where the name
   came from (`Source`, ranked so a stronger source renames, a weaker one never does, and a
   missing name yields to any real name), and what it last said. `identify` is the one way in. A launch whose program is `ai` or a
@@ -289,10 +289,6 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   through its dot because it has no number.
 - **Background command completion:** OSC 133 `COMMAND_FINISHED` over a threshold in a
   background tab raises one sticky toast; the rank keeps it under a waiting agent.
-- **An OSC 777 is a question unless its agent's rules say otherwise.** Codex posts the same
-  notification when it finishes as when it needs approval, so its title decides: without
-  the prompt phrase it lands as `completed` with a positive card. Every other agent is
-  taken at its word.
 - Notification identity is `(windowID, tabID)`; `TabID` is per window. `AttentionCenter`
   records which windows are asking and since when, and answers nothing else.
 - `tearDown()` is idempotent, the single close path, and cancels pending confirms and
