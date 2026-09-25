@@ -929,7 +929,15 @@ final class WindowController: NSObject {
 
     private func newTab() {
         cancelConfirm()
-        addTab(cwd: ShellLaunch.newSessionCWD(focused: activeController?.focusedCWD))
+        addTab(cwd: ShellLaunch.newSessionCWD(focused: inheritableCWD))
+    }
+
+    private var inheritableCWD: URL? {
+        let cwd = activeController?.focusedCWD
+        guard activeWorkspace.isWorktreeRemoved, let root = activeWorkspace.origin?.path,
+            GitRepo.isInside(cwd, root)
+        else { return cwd }
+        return nil
     }
 
     private func addTab(cwd: URL?) {

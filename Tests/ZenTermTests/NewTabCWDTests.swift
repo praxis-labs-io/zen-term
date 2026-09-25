@@ -73,6 +73,27 @@ final class NewTabCWDTests: WindowTestCase {
         XCTAssertEqual(tab.lastConfig?.workingDirectory, root)
     }
 
+    func test_newTab_inARemovedWorktree_startsAtHomeNotItsDeletedFolder() throws {
+        let c = try makeWindowInRoot()
+        inheritCWD(true)
+        let parent = Workspace(
+            title: "alpha", path: FileManager.default.temporaryDirectory, main: nil, right: nil, bottom: nil,
+            focus: .main, env: [:])
+        let worktree = Worktree(path: root, branch: "one", head: "0000000", isLocked: false)
+        c.openWorkspaceForTesting(
+            Workspace(title: "alpha: one", path: root, main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
+            origin: WorktreeOrigin(parent: parent, worktree: worktree))
+        try XCTUnwrap(spawned.last).currentDirectory = root
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(c.runningWorkspaces().contains { $0.removedWorktree != nil }, "the worktree to read removed")
+
+        c.newTabForTesting()
+
+        let tab = try XCTUnwrap(spawned.last)
+        XCTAssertEqual(tab.lastConfig?.workingDirectory, ShellLaunch.defaultCWD)
+    }
+
     func test_split_inheritsTheCWDRegardlessOfTheKey() throws {
         let c = try makeWindowInRoot()
 
