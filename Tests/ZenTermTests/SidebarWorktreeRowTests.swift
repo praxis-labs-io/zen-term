@@ -214,6 +214,26 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"), "and the toast goes with it")
     }
 
+    func test_anOpenPicker_marksTheRowWhenTheWorktreeGoes() throws {
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        let picker = try openPicker(in: c)
+        func removedRows() -> Int {
+            picker.rowViews.filter { ($0 as? RepoPickerOverlay.RowView)?.running?.removedWorktree != nil }.count
+        }
+        XCTAssertEqual(removedRows(), 0)
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(removedRows() == 1, "the open picker to mark the row without a reopen")
+
+        WorktreeStore.isRemovedOverrideForTesting = { _ in false }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(removedRows() == 0, "and to clear it again")
+        XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "the same picker throughout")
+    }
+
     func test_aWorktreeZenTermIsRemoving_isNotMarkedRemoved() throws {
         let c = makeWindow()
         try openWorkspace(named: "Alpha", in: c)

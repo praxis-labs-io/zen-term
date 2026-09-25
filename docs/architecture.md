@@ -600,9 +600,11 @@ The workspace `carry` key names ignored files to copy into a new worktree.
   Open Elsewhere rows inside the path, with a closed parent's ghost once it has none.
 - **A worktree removed outside ZenTerm stays open, marked `removed`.** The title poll checks
   `<worktree>/.git` off-main, skipping a path the tracker is removing and an unmounted volume.
-  The sidebar and picker read `WorkspaceController.isWorktreeRemoved`, a toast says so once,
-  ⌘⇧⌫ on its picker row closes the workspace, and the mark clears if `.git` comes back.
-  It never auto-closes, because an agent in its panes may still be running.
+  The sidebar and picker read `WorkspaceController.isWorktreeRemoved`, and an open picker
+  refreshes when it flips. A toast says so once and offers Close Workspace, ⌘⇧⌫ on its picker
+  row does the same, and the mark clears if `.git` comes back. It never auto-closes, because
+  an agent in its panes may still be running. New tabs, splits, drawers and floats started
+  inside it open at the parent workspace's folder (`RemovedCheckout`).
 
 ### GitCommand
 

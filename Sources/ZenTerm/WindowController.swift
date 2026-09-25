@@ -713,7 +713,9 @@ final class WindowController: NSObject {
                 toasts.dismiss(toast)
             }
         }
-        if changed { renderTabBar() }
+        guard changed else { return }
+        renderTabBar()
+        (modal?.overlay as? RepoPickerOverlay)?.refreshOpen(runningWorkspaces())
     }
 
     private var worktreeRemovedToasts: [WorkspaceID: ToastView] = [:]

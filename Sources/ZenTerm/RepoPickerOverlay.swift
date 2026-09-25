@@ -314,6 +314,11 @@ final class RepoPickerOverlay: PaletteOverlay {
         var presentedConfirmForTesting: ConfirmCard? { confirm.card }
     #endif
 
+    func refreshOpen(_ running: [RunningWorkspace]) {
+        open = running
+        rebuild()
+    }
+
     func dropWorktree(at path: URL, open running: [RunningWorkspace]) {
         open = running
         elsewhere = Self.droppingOrphanedGhosts(elsewhere.filter { !GitRepo.isInside($0.folder, path) })
@@ -354,12 +359,12 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .open(let workspace):
             return [
                 "open", "\(workspace.window)", "\(workspace.id?.raw ?? -1)", workspace.folder.path,
-                removingWorktree(workspace) == nil ? "" : "removing",
+                removingWorktree(workspace) == nil ? "" : "removing", workspace.removedWorktree ?? "",
             ]
         case .elsewhere(let workspace):
             return [
                 "elsewhere", "\(workspace.window)", "\(workspace.id?.raw ?? -1)", workspace.folder.path,
-                removingWorktree(workspace) == nil ? "" : "removing",
+                removingWorktree(workspace) == nil ? "" : "removing", workspace.removedWorktree ?? "",
             ]
         case .workspace(let workspace): return ["workspace", workspace.title]
         case .worktree(let worktree, _):
