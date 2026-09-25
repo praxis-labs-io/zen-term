@@ -16,17 +16,19 @@ enum AgentRules {
         identifiers.first { $0.match.matches(title) }?.name
     }
 
-    // A leading braille frame is far narrower in a title than on screen, where any build tool draws one.
     private static let identifiers: [(name: String, match: RuleMatcher)] = [
         (
             "codex",
             .any([
                 .regex("^codex$"),
                 .regex(codexPrompt),
-                .regex("^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] "),
+                .regex(codexWorkingTitle),
             ])
         )
     ]
+
+    // Older Claude and pi's spinner extension also lead with a braille frame; only Codex follows it with `task | cwd`.
+    private static let codexWorkingTitle = "^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] .* \\| "
 
     // The prompt blinks between `[ ! ]` and `[ . ]`, and a task's own words can say "Action Required".
     private static let codexPrompt = #"^\[ [!.] \] Action Required"#

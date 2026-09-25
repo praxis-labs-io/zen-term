@@ -228,6 +228,7 @@ final class AgentIdentificationTests: XCTestCase {
             AgentTitleFixtures.claudeWorking, AgentTitleFixtures.claudeIdle,
             "~", "/Users/drucial", "npm run build", "",
             "Action Required: review the deploy", "vim Action Required.md",
+            "⠋ π - drucial", "⠋ Claude Code",
         ]
 
         for title in cases {
