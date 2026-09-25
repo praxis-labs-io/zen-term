@@ -2541,7 +2541,7 @@ final class WindowController: NSObject {
 
     private func raiseBlockedCard(_ surface: SurfaceID, in id: TabID) {
         let address = cardAddress(of: surface, in: id)
-        let message = agents.agents[surface]?.message ?? Self.blockedMessage
+        let message = AgentRules.codexAsk(fromTitle: agentStates.title(of: surface)) ?? Self.blockedMessage
         pushBanner(for: id, address: address, message: message)
         presentAttentionCard(.waiting, for: id, address: address, message: message, surface: surface)
     }

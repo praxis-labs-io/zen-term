@@ -181,11 +181,12 @@ final class AgentNotificationTests: WindowTestCase {
         let codex = try backgroundPane(c)
         pushTitle(AgentTitleFixtures.codexWorking[0], from: codex.surface)
 
-        pushTitle(AgentTitleFixtures.codexBlockedOn, from: codex.surface)
+        pushTitle("[ . ] Action Required | Approve writing test2.txt | zen-term", from: codex.surface)
 
         XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .waiting)
         XCTAssertEqual(c.agentRowForTesting(codex.id)?.state, .waiting)
         XCTAssertEqual(cardCount(c), 1, "Codex asks through its title, so its title raises the card")
+        XCTAssertTrue(cardCopy(c).contains("Approve writing test2.txt"), "the card says what Codex asks")
     }
 
     func test_aBlockedCodexBlinking_raisesNoSecondCard() throws {

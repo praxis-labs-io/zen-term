@@ -267,6 +267,24 @@ final class AgentIdentificationTests: XCTestCase {
             .completed)
     }
 
+    func test_aBlockedCodexTitle_carriesItsAsk_inBothBlinkStates() {
+        let captured = [
+            "[ . ] Action Required | Approve writing test2.txt | zen-term",
+            "[ ! ] Action Required | Approve writing test2.txt | zen-term",
+        ]
+        for title in captured {
+            XCTAssertEqual(AgentRules.codexAsk(fromTitle: title), "Approve writing test2.txt", title)
+        }
+        XCTAssertEqual(
+            AgentRules.codexAsk(fromTitle: "[ ! ] Action Required | Run cat a | wc | zen-term"), "Run cat a | wc")
+    }
+
+    func test_aTitleWithNoAsk_carriesNone() {
+        for title in ["[ ! ] Action Required | zen-term", "[ . ] Action Required", "⠋ Approve writing | zen-term"] {
+            XCTAssertNil(AgentRules.codexAsk(fromTitle: title), title)
+        }
+    }
+
     func test_aCodexNotification_carriesNoState() {
         XCTAssertNil(AgentRules.notificationAttention(body: "Approve writing test2.txt", agentName: "codex"))
     }
