@@ -277,7 +277,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   into the pane, where a key the chrome did not claim is aimed at the agent and a reserved
   chord is not; typing also clears any agent's done or exited latch. A turn ending
   (`working` falling) clears a waiting latch and leaves `completed`, here and nowhere
-  else; a new turn replaces that, and a waiting latch only for Claude and Codex.
+  else; a new turn replaces that, and a waiting latch only for Claude and Codex. A
+  `completed` latch on the pane you are focused on clears after `doneDecay` of unbroken
+  focus, and leaving restarts the clock; a failed exit never decays. Tab numbers and cards
+  keep their own latch and do not decay.
 - **`AgentRoster` says which surfaces run an agent**, per window: its name, where the name
   came from (`Source`, ranked so a stronger source renames, a weaker one never does, and a
   missing name yields to any real name), and what it last said. `identify` is the one way

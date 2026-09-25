@@ -11,6 +11,7 @@ final class AgentFocusTests: WindowTestCase {
     private var controller: WindowController?
     private var spawned: [RecordingSurface] = []
     private let originalPresence = WindowController.isPresent
+    private let originalDoneDecay = WindowController.doneDecay
 
     override func setUpWithError() throws {
         try super.setUpWithError()
@@ -26,6 +27,7 @@ final class AgentFocusTests: WindowTestCase {
         config.attentionToast = .sticky
         GeneralConfig.setCurrentForTesting(config)
         WindowController.isPresent = { _ in true }
+        WindowController.doneDecay = 0.3
     }
 
     override func tearDownWithError() throws {
@@ -36,6 +38,7 @@ final class AgentFocusTests: WindowTestCase {
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
         WindowController.isPresent = originalPresence
+        WindowController.doneDecay = originalDoneDecay
         try super.tearDownWithError()
     }
 
@@ -52,6 +55,117 @@ final class AgentFocusTests: WindowTestCase {
         let expectation = expectation(description: "main queue")
         DispatchQueue.main.async { expectation.fulfill() }
         wait(for: [expectation], timeout: 2)
+    }
+
+    private func wait(seconds: TimeInterval) {
+        let elapsed = expectation(description: "elapsed")
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { elapsed.fulfill() }
+        wait(for: [elapsed], timeout: seconds + 2)
+    }
+
+    private func finishATurn(on surface: RecordingSurface) {
+        surface.delegate?.surface(surface, progressDidChange: TerminalProgress(state: .indeterminate, fraction: nil))
+        drainMainQueue()
+        surface.delegate?.surface(surface, progressDidChange: nil)
+        drainMainQueue()
+    }
+
+    func test_aTurnEndingInTheFocusedPane_readsIdleOnceYouHaveSeenIt() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        finishATurn(on: try XCTUnwrap(spawned.first))
+        XCTAssertEqual(c.agentStateForTesting(pane), .completed, "precondition: the turn ended")
+
+        wait(seconds: WindowController.doneDecay + 0.2)
+
+        XCTAssertEqual(c.agentStateForTesting(pane), .idle)
+        XCTAssertNil(c.attentionStateForTesting(tabIndex: 0), "the tab number was never the list's to clear")
+    }
+
+    func test_aTurnEndingInAnUnfocusedSplit_staysDone() throws {
+        let c = makeWindow()
+        let first = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        let firstSurface = try XCTUnwrap(spawned.first)
+        c.handle(.splitVertical)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        finishATurn(on: firstSurface)
+
+        wait(seconds: WindowController.doneDecay + 0.2)
+
+        XCTAssertEqual(c.agentStateForTesting(first), .completed, "a pane you are not looking at keeps its news")
+    }
+
+    func test_focusingADonePane_startsTheClock() throws {
+        let c = makeWindow()
+        let first = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        let firstSurface = try XCTUnwrap(spawned.first)
+        c.handle(.splitVertical)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        finishATurn(on: firstSurface)
+
+        while c.focusedSurfaceIDForTesting != first { c.handle(.nextPane) }
+        XCTAssertEqual(c.agentStateForTesting(first), .completed, "arriving is not reading it yet")
+        wait(seconds: WindowController.doneDecay + 0.2)
+
+        XCTAssertEqual(c.agentStateForTesting(first), .idle)
+    }
+
+    func test_leavingADonePaneAndComingBack_restartsTheClock() throws {
+        let c = makeWindow()
+        let first = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        finishATurn(on: try XCTUnwrap(spawned.first))
+        wait(seconds: WindowController.doneDecay / 2)
+
+        c.handle(.splitVertical)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        while c.focusedSurfaceIDForTesting != first { c.handle(.nextPane) }
+        wait(seconds: WindowController.doneDecay * 0.75)
+
+        XCTAssertEqual(
+            c.agentStateForTesting(first), .completed, "coming back owes a whole interval, not what was left of one")
+        wait(seconds: WindowController.doneDecay / 2)
+        XCTAssertEqual(c.agentStateForTesting(first), .idle)
+    }
+
+    func test_leavingTheSidebar_startsTheClock() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        c.handle(.focusSidebar)
+        XCTAssertTrue(c.sidebarForTesting.hasFocus, "precondition: the keyboard is in the rows")
+        finishATurn(on: try XCTUnwrap(spawned.first))
+
+        c.sidebarForTesting.onLeave()
+        wait(seconds: WindowController.doneDecay + 0.2)
+
+        XCTAssertEqual(c.agentStateForTesting(pane), .idle)
+    }
+
+    func test_closingThePalette_startsTheClock() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        c.handle(.toggleCommandPalette)
+        finishATurn(on: try XCTUnwrap(spawned.first))
+        wait(seconds: WindowController.doneDecay + 0.2)
+        XCTAssertEqual(c.agentStateForTesting(pane), .completed, "precondition: the palette covers the pane")
+
+        c.handle(.toggleCommandPalette)
+        wait(seconds: WindowController.doneDecay + 0.2)
+
+        XCTAssertEqual(c.agentStateForTesting(pane), .idle)
+    }
+
+    func test_anAgentThatExitedFailing_staysUntilItIsAnswered() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        c.identifyAgentForTesting(pane, name: "claude")
+        c.notifyCommandFinishedForTesting(tabIndex: 0, result: TerminalCommandResult(exitCode: 1, duration: 1))
+        drainMainQueue()
+        XCTAssertEqual(c.agentStateForTesting(pane), .completed, "precondition: it exited failing")
+
+        c.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
+        wait(seconds: WindowController.doneDecay + 0.2)
+
+        XCTAssertEqual(c.agentStateForTesting(pane), .completed, "a failure waits for you to act on it")
     }
 
     func test_anAgentWaitingInAnUnfocusedSplit_staysWaitingUntilItIsAnswered() throws {
