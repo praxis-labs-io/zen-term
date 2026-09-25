@@ -297,6 +297,33 @@ final class RepoPickerPresentationTests: WindowTestCase {
             "the row says what is happening to it")
     }
 
+    func test_aRemovalLandingWhileTheConfirmLeaves_keepsTheKeyboardInThePicker() throws {
+        Motion.isReduceMotionEnabled = { false }
+        try seedWorkspaces(twoWorkspaces)
+        let c = makeWindow()
+        c.handle(.toggleRepoPicker)
+        waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
+        let picker = try XCTUnwrap(pickers(in: c).first)
+        waitForPendingLoads()
+        let alpha = URL(
+            fileURLWithPath: NSString("~/Dev/alpha").expandingTildeInPath, isDirectory: true)
+        giveWorktrees(picker, under: alpha, "feature/one")
+        selectRow("feature/one", in: picker)
+        c.handle(.removeWorktree)
+        waitUntil(picker.presentedConfirmForTesting != nil, "the remove confirm to be presented")
+        let card = try XCTUnwrap(picker.presentedConfirmForTesting)
+
+        try XCTUnwrap(button(in: card, title: "Remove")).onTap()
+        c.worktreeRemovalsChanged(.removed(alpha.appendingPathComponent("feature/one", isDirectory: true)))
+        waitUntil(card.superview == nil, "the confirm to finish leaving")
+
+        let editor = c.window.firstResponder as? NSTextView
+        let query = descendants(of: picker).compactMap { $0 as? NSTextField }
+            .first { ($0.delegate as? PaletteOverlay) === picker }
+        XCTAssertNotNil(query)
+        XCTAssertTrue(editor?.delegate === query, "typing and the arrows still reach the picker")
+    }
+
     func test_theTabClosingOnARemoval_leavesThePickerUp() throws {
         try seedWorkspaces(twoWorkspaces)
         let c = makeWindow()

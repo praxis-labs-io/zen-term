@@ -4,8 +4,9 @@ import AppKit
 final class ConfirmSlot {
     private unowned let host: NSView
     private(set) var card: ConfirmCard?
+    private var leaving: ConfirmCard?
 
-    var isShowing: Bool { card != nil }
+    var isShowing: Bool { card != nil || leaving != nil }
 
     init(over host: NSView) {
         self.host = host
@@ -13,6 +14,8 @@ final class ConfirmSlot {
 
     func present(_ card: ConfirmCard) {
         self.card?.removeFromSuperview()
+        leaving?.removeFromSuperview()
+        leaving = nil
         card.translatesAutoresizingMaskIntoConstraints = false
         host.addSubview(card)
         NSLayoutConstraint.activate([
@@ -26,13 +29,15 @@ final class ConfirmSlot {
         card.animateIn()
     }
 
-    /// Clears the slot in the exit completion: releasing it early hands Esc back to the host, which closes the host.
+    /// Keeps the slot showing until the exit completes: releasing it early hands Esc back to the host, which closes the host.
     func dismiss(then: @escaping () -> Void) {
         guard let card else { return }
+        self.card = nil
+        leaving = card
         card.animateOut { [weak self, weak card] in
             card?.removeFromSuperview()
-            guard let self, self.card === card else { return }
-            self.card = nil
+            guard let self, self.leaving === card else { return }
+            self.leaving = nil
         }
         then()
     }
