@@ -347,7 +347,6 @@ enum WorktreeStore {
         return leftBehind
     }
 
-    /// `--force` always: carried files are untracked and git refuses them without it.
     static func isRemoved(at root: URL) -> Bool {
         #if DEBUG
             if let isRemovedOverrideForTesting { return isRemovedOverrideForTesting(root) }
@@ -356,6 +355,7 @@ enum WorktreeStore {
             && !FileManager.default.fileExists(atPath: root.appendingPathComponent(".git").path)
     }
 
+    /// `--force` always: carried files are untracked and git refuses them without it.
     static func remove(_ worktree: Worktree, in repo: URL) throws {
         guard !worktree.isLocked else { throw WorktreeError.isLocked(worktree.path) }
         try git(["worktree", "remove", "--force", worktree.path.path], in: repo)

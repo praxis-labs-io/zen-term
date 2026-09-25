@@ -1362,12 +1362,19 @@ final class WindowController: NSObject {
         }
     }
 
+    private var lastOtherWindowCloseToast: Date?
+
     private func closeRemovedWorkspace(_ running: RunningWorkspace) {
         guard running.window == windowID, let id = running.id else {
+            let now = Date()
+            if let last = lastOtherWindowCloseToast, now.timeIntervalSince(last) < Self.floatBlockToastThrottle {
+                return
+            }
+            lastOtherWindowCloseToast = now
             toasts.show(
                 ToastContent(
                     variant: .info, title: "Open in Another Window",
-                    message: "Close \(running.name) from the window it is open in."))
+                    message: "Close \(running.removedWorktree ?? running.name) from the window it is open in."))
             return
         }
         closeModal()

@@ -7,6 +7,5 @@ struct RunningWorkspace: Equatable {
     let name: String
     let folder: URL
     let isWorktree: Bool
-    // The worktree's name once it was removed outside ZenTerm while this stays open.
     let removedWorktree: String?
 }

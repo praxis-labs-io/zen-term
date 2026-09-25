@@ -137,6 +137,15 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(c.tabOrderForTesting.count, tabs, "its panes keep running")
         XCTAssertTrue(toastTexts(in: c).contains("Worktree Removed"))
         XCTAssertTrue(toastTexts(in: c).contains("feature/one is no longer on disk."))
+        var checks = 0
+        WorktreeStore.isRemovedOverrideForTesting = { _ in
+            checks += 1
+            return true
+        }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(checks > 0, "a second check to run")
+        drainMainQueue()
+        XCTAssertEqual(toastTexts(in: c).filter { $0 == "Worktree Removed" }.count, 1, "said once, not every tick")
 
         WorktreeStore.isRemovedOverrideForTesting = { _ in false }
         c.checkForRemovedWorktreesForTesting()
@@ -163,6 +172,32 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertTrue(pickers(in: c).isEmpty, "the picker steps aside for the close")
         XCTAssertFalse(titles(of: c).contains("feature/one"), "the workspace closes")
         XCTAssertTrue(titles(of: c).contains("Alpha"), "and only that one")
+    }
+
+    func test_removeWorktreeOnARemovedRowInAnotherWindow_pointsThereOnce() throws {
+        let c = makeWindow()
+        let folder = alpha.appendingPathComponent("feature/one", isDirectory: true)
+        c.openWorkspacesElsewhere = {
+            [
+                RunningWorkspace(
+                    window: 99, id: WorkspaceID(raw: 7), name: "Alpha: feature/one", folder: folder,
+                    isWorktree: true, removedWorktree: "feature/one")
+            ]
+        }
+        let picker = try openPicker(in: c)
+        let field = try searchField(of: picker)
+        let index = try XCTUnwrap(
+            picker.rowViews.firstIndex { ($0 as? RepoPickerOverlay.RowView)?.running?.removedWorktree != nil })
+        for _ in 0..<picker.rowViews.count where picker.selected != index {
+            _ = picker.control(field, textView: NSTextView(), doCommandBy: #selector(NSResponder.moveDown(_:)))
+        }
+
+        c.handle(.removeWorktree)
+        c.handle(.removeWorktree)
+
+        XCTAssertEqual(
+            toastTexts(in: c).filter { $0 == "Close feature/one from the window it is open in." }.count, 1)
+        XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "nothing here closes")
     }
 
     func test_aWorktreeZenTermIsRemoving_isNotMarkedRemoved() throws {
