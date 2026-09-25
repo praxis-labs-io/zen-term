@@ -850,9 +850,10 @@ final class WindowController: NSObject {
 
     // One surface reports focused: the focused one in the key window's active tab, as libghostty's own apprt does.
     private func syncWindowFocus() {
-        activeController?.setHaloVisible(!sidebar.hasFocus && windowIsKey && !sidebar.isRevealed)
+        let holdsKeyFocus = windowIsKey && !sidebar.hasFocus
+        activeController?.setHaloVisible(holdsKeyFocus && !sidebar.isRevealed)
         for controller in allTabControllers {
-            controller.setWindowIsKey(windowIsKey && controller === activeController)
+            controller.setHoldsKeyFocus(holdsKeyFocus && controller === activeController)
         }
     }
 
@@ -2297,6 +2298,7 @@ final class WindowController: NSObject {
             self?.cancelConfirm()
             self?.endModes()
             self?.answerFocusedAgent()
+            self?.syncWindowFocus()
         }
         c.focusPastLeftEdge = { [weak self, weak c] in
             guard let self, c === self.activeController else { return false }

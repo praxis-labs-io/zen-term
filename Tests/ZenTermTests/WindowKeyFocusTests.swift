@@ -77,6 +77,22 @@ final class WindowKeyFocusTests: WindowTestCase {
         XCTAssertEqual(drawer.focusRenders.last, true)
     }
 
+    func test_aFocusedDrawer_dropsItsHaloWithItsWindow() throws {
+        let c = makeWindow()
+        c.handle(.toggleBottomDrawer)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let panel = try XCTUnwrap(c.focusedPanelForTesting)
+        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0, "precondition: the drawer shows its halo")
+
+        resignKey(c)
+
+        XCTAssertEqual(panel.haloOpacityForTesting, 0)
+
+        becomeKey(c)
+
+        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0)
+    }
+
     func test_aTabLeftBehind_readsUnfocused_andComesBackWhenItIsActiveAgain() throws {
         let c = makeWindow()
         let first = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
