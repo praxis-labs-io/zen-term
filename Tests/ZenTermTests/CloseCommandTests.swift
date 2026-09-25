@@ -65,12 +65,6 @@ final class CloseCommandTests: WindowTestCase {
         view.subviews + view.subviews.flatMap { descendants(of: $0) }
     }
 
-    private func toastText(_ c: WindowController) -> [String] {
-        guard let content = c.window.contentView else { return [] }
-        return descendants(of: content).compactMap { $0 as? ToastView }
-            .flatMap { descendants(of: $0).compactMap { ($0 as? NSTextField)?.stringValue } }
-    }
-
     private func pressClose(_ c: WindowController) throws {
         let content = try XCTUnwrap(c.window.contentView)
         let button = try XCTUnwrap(
@@ -202,9 +196,9 @@ final class CloseCommandTests: WindowTestCase {
 
         XCTAssertTrue(c.isConfirmOpen, "the window goes with it, so it says so first")
         XCTAssertTrue(c.window.isVisible, "the window waits on the answer")
-        XCTAssertTrue(toastText(c).contains("Close Window"))
+        XCTAssertTrue(toastTexts(in: c).contains("Close Window"))
         XCTAssertTrue(
-            toastText(c).contains("Closing this pane will close the window."),
+            toastTexts(in: c).contains("Closing this pane will close the window."),
             "nothing is running, so the sentence is only the consequence")
 
         try pressClose(c)
@@ -232,7 +226,7 @@ final class CloseCommandTests: WindowTestCase {
         c.handle(.closePane)
 
         XCTAssertTrue(
-            toastText(c).contains(
+            toastTexts(in: c).contains(
                 "Closing this pane will close the window and stop everything running in it, "
                     + "including the bottom drawer."))
     }
@@ -255,7 +249,7 @@ final class CloseCommandTests: WindowTestCase {
 
         XCTAssertTrue(c.isConfirmOpen)
         XCTAssertTrue(
-            toastText(c).contains("Closing this tab will close the window."))
+            toastTexts(in: c).contains("Closing this tab will close the window."))
 
         try pressClose(c)
 
@@ -290,7 +284,7 @@ final class CloseCommandTests: WindowTestCase {
         c.handle(.closeWindow)
 
         XCTAssertTrue(
-            toastText(c).contains("Closing this window will stop everything running in it."),
+            toastTexts(in: c).contains("Closing this window will stop everything running in it."),
             "one workspace is the only place it could be, so naming it says nothing")
     }
 
@@ -307,7 +301,7 @@ final class CloseCommandTests: WindowTestCase {
         c.handle(.closeWindow)
 
         XCTAssertTrue(
-            toastText(c).contains(
+            toastTexts(in: c).contains(
                 "Closing this window will stop everything running in it, including btop."),
             "a tool running out of sight is the one thing the window close has to say")
     }
@@ -322,7 +316,7 @@ final class CloseCommandTests: WindowTestCase {
         c.handle(.closeWindow)
 
         XCTAssertTrue(
-            toastText(c).contains(
+            toastTexts(in: c).contains(
                 "Closing this window will stop everything running in it, including web."),
             "one workspace with several tabs names the tabs, not nothing")
     }
@@ -334,7 +328,7 @@ final class CloseCommandTests: WindowTestCase {
         c.handle(.closeWindow)
 
         XCTAssertTrue(
-            toastText(c).contains(
+            toastTexts(in: c).contains(
                 "Closing this window will stop everything running in it, including the bottom drawer."),
             "the same drawer ⌘W names, named the same way")
     }
@@ -358,7 +352,7 @@ final class CloseCommandTests: WindowTestCase {
         c.handle(.closeTab)
 
         XCTAssertTrue(
-            toastText(c).contains(
+            toastTexts(in: c).contains(
                 "Closing this tab will close the window and stop everything running in it."))
     }
 
@@ -381,7 +375,7 @@ final class CloseCommandTests: WindowTestCase {
 
         XCTAssertTrue(c.isConfirmOpen)
         XCTAssertEqual(c.tabOrderForTesting.count, 2, "the tab waits on the answer")
-        XCTAssertTrue(toastText(c).contains("Closing this tab will stop everything running in it."))
+        XCTAssertTrue(toastTexts(in: c).contains("Closing this tab will stop everything running in it."))
     }
 
     func test_middleClickingTheLastTab_asksBeforeTakingTheWindow() throws {
@@ -391,7 +385,7 @@ final class CloseCommandTests: WindowTestCase {
 
         XCTAssertTrue(c.isConfirmOpen)
         XCTAssertTrue(c.window.isVisible)
-        XCTAssertTrue(toastText(c).contains("Closing this tab will close the window."))
+        XCTAssertTrue(toastTexts(in: c).contains("Closing this tab will close the window."))
     }
 
     func test_theWindowCloseButton_withSomethingRunning_asksFirst() throws {
@@ -433,7 +427,7 @@ final class CloseCommandTests: WindowTestCase {
         c.handle(.closeWindow)
 
         XCTAssertTrue(
-            toastText(c).contains(
+            toastTexts(in: c).contains(
                 "Closing this window will stop everything running in it, including Workspace 1."))
     }
 
@@ -445,7 +439,7 @@ final class CloseCommandTests: WindowTestCase {
         c.handle(.closeTab)
 
         XCTAssertTrue(
-            toastText(c).contains("Closing this tab will stop everything running in it."),
+            toastTexts(in: c).contains("Closing this tab will stop everything running in it."),
             "a pane is on screen to look at, so naming it says nothing new")
     }
 
@@ -457,7 +451,7 @@ final class CloseCommandTests: WindowTestCase {
         c.handle(.closeTab)
 
         XCTAssertTrue(
-            toastText(c).contains(
+            toastTexts(in: c).contains(
                 "Closing this tab will stop everything running in it, including the bottom drawer."))
     }
 
@@ -469,7 +463,7 @@ final class CloseCommandTests: WindowTestCase {
         c.handle(.closeTab)
 
         XCTAssertTrue(
-            toastText(c).contains(
+            toastTexts(in: c).contains(
                 "Closing this tab will stop everything running in it, including Scratch."))
     }
 
@@ -483,7 +477,7 @@ final class CloseCommandTests: WindowTestCase {
         c.handle(.closeTab)
 
         XCTAssertTrue(
-            toastText(c).contains(
+            toastTexts(in: c).contains(
                 "Closing this tab will stop everything running in it, including the bottom drawer, "
                     + "the right drawer and Scratch."))
     }
@@ -496,9 +490,9 @@ final class CloseCommandTests: WindowTestCase {
         c.handle(.closePane)
 
         XCTAssertTrue(c.isConfirmOpen)
-        XCTAssertTrue(toastText(c).contains("Close Tab"))
+        XCTAssertTrue(toastTexts(in: c).contains("Close Tab"))
         XCTAssertTrue(
-            toastText(c).contains(
+            toastTexts(in: c).contains(
                 "Closing this tab will stop everything running in it, including the right drawer."))
     }
 
@@ -553,9 +547,9 @@ final class CloseCommandTests: WindowTestCase {
         c.handle(.closeWorkspace)
 
         XCTAssertTrue(c.isConfirmOpen)
-        XCTAssertTrue(toastText(c).contains("Close Workspace"))
+        XCTAssertTrue(toastTexts(in: c).contains("Close Workspace"))
         XCTAssertTrue(
-            toastText(c).contains("Closing zen-review will stop everything running in it, including codex."))
+            toastTexts(in: c).contains("Closing zen-review will stop everything running in it, including codex."))
 
         try pressClose(c)
 
@@ -581,8 +575,8 @@ final class CloseCommandTests: WindowTestCase {
         c.handle(.closeWorkspace)
 
         XCTAssertTrue(c.isConfirmOpen, "the window goes with it, so it says so first")
-        XCTAssertTrue(toastText(c).contains("Close Window"))
-        XCTAssertTrue(toastText(c).contains("Closing this workspace will close the window."))
+        XCTAssertTrue(toastTexts(in: c).contains("Close Window"))
+        XCTAssertTrue(toastTexts(in: c).contains("Closing this workspace will close the window."))
 
         try pressClose(c)
 
@@ -599,7 +593,7 @@ final class CloseCommandTests: WindowTestCase {
         c.handle(.closeWorkspace)
 
         XCTAssertTrue(
-            toastText(c).contains(
+            toastTexts(in: c).contains(
                 "Closing this workspace will close the window and stop everything running in it, "
                     + "including claude."))
     }

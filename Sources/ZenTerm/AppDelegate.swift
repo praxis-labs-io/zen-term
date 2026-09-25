@@ -125,7 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if case .newWindow = chord {
             if let key = keyController(), key.isModalOverlayOpen || key.isConfirmOpen { return }
             newWindow(
-                initialCWD: ShellLaunch.newSessionCWD(focused: keyController()?.focusedCWD),
+                initialCWD: ShellLaunch.newSessionCWD(focused: keyController()?.sessionCWD),
                 centered: false)
             return
         }
@@ -205,6 +205,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         wc.openWorkspacesElsewhere = { [weak self, weak wc] in
             self?.windows.filter { $0 !== wc }.flatMap { $0.runningWorkspaces() } ?? []
+        }
+        wc.onWorktreeMarkChanged = { [weak self, weak wc] in
+            self?.windows.filter { $0 !== wc }.forEach { $0.refreshOpenPicker() }
         }
         wc.revealWorkspaceElsewhere = { [weak self, weak wc] window, id in
             guard

@@ -416,7 +416,7 @@
 # keybind = toggle_workspace_picker=cmd+p
 # keybind = new_workspace=cmd+ctrl+t             # no config entry; starts in your home folder
 # keybind = create_worktree=opt+enter            # over a picker or sidebar row: cut a worktree of it
-# keybind = remove_worktree=cmd+shift+backspace  # over a worktree row: delete its folder
+# keybind = remove_worktree=cmd+shift+backspace  # over a worktree row: delete its folder, or close one already gone
 # keybind = open_settings=cmd+,
 # keybind = reload_config=cmd+shift+,
 # keybind = increase_font_size=cmd+=             # ⌘+ (cmd+shift+=) does this too

@@ -117,15 +117,212 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
     private func rows(of c: WindowController) -> [SettingsNavRow] { c.sidebarForTesting.view.rowsForTesting }
 
+    func test_aWorktreeRemovedOutsideZenTerm_staysOpenAndSaysSo() throws {
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        let tabs = c.tabOrderForTesting.count
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(rows(of: c).contains { $0.detailForTesting == "removed" }, "the row to say it was removed")
+
+        let row = try XCTUnwrap(rows(of: c).first { $0.titleForTesting == "feature/one" })
+        XCTAssertEqual(row.detailForTesting, "removed")
+        XCTAssertEqual(c.tabOrderForTesting.count, tabs, "its panes keep running")
+        XCTAssertTrue(toastTexts(in: c).contains("Worktree Removed"))
+        XCTAssertTrue(toastTexts(in: c).contains("feature/one is no longer on disk."))
+        var checks = 0
+        WorktreeStore.isRemovedOverrideForTesting = { _ in
+            checks += 1
+            return true
+        }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(checks > 0, "a second check to run")
+        drainMainQueue()
+        XCTAssertEqual(toastTexts(in: c).filter { $0 == "Worktree Removed" }.count, 1, "said once, not every tick")
+
+        WorktreeStore.isRemovedOverrideForTesting = { _ in false }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(!rows(of: c).contains { $0.detailForTesting == "removed" }, "the mark to clear when .git is back")
+        XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"), "and its toast goes with it")
+    }
+
+    func test_removeWorktreeOnARemovedRow_closesItsWorkspace() throws {
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(rows(of: c).contains { $0.detailForTesting == "removed" }, "the row to say it was removed")
+        let picker = try openPicker(in: c)
+        let field = try searchField(of: picker)
+        let index = try XCTUnwrap(
+            picker.rowViews.firstIndex { ($0 as? RepoPickerOverlay.RowView)?.running?.removedWorktreeName != nil })
+        for _ in 0..<picker.rowViews.count where picker.selected != index {
+            _ = picker.control(field, textView: NSTextView(), doCommandBy: #selector(NSResponder.moveDown(_:)))
+        }
+
+        c.handle(.removeWorktree)
+
+        XCTAssertTrue(pickers(in: c).isEmpty, "the picker steps aside for the close")
+        XCTAssertFalse(titles(of: c).contains("feature/one"), "the workspace closes")
+        XCTAssertTrue(titles(of: c).contains("Alpha"), "and only that one")
+        XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"), "no toast left offering to close it")
+    }
+
+    func test_removeWorktreeOnARemovedRowInAnotherWindow_pointsThereOnce() throws {
+        let c = makeWindow()
+        let folder = alpha.appendingPathComponent("feature/one", isDirectory: true)
+        c.openWorkspacesElsewhere = {
+            [
+                RunningWorkspace(
+                    window: 99, id: WorkspaceID(raw: 7), name: "Alpha: feature/one", folder: folder,
+                    isWorktree: true, removedWorktreeName: "feature/one")
+            ]
+        }
+        let picker = try openPicker(in: c)
+        let field = try searchField(of: picker)
+        let index = try XCTUnwrap(
+            picker.rowViews.firstIndex { ($0 as? RepoPickerOverlay.RowView)?.running?.removedWorktreeName != nil })
+        for _ in 0..<picker.rowViews.count where picker.selected != index {
+            _ = picker.control(field, textView: NSTextView(), doCommandBy: #selector(NSResponder.moveDown(_:)))
+        }
+
+        c.handle(.removeWorktree)
+        c.handle(.removeWorktree)
+
+        XCTAssertEqual(
+            toastTexts(in: c).filter { $0 == "Close feature/one from the window it is open in." }.count, 1)
+        XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "nothing here closes")
+    }
+
+    func test_theRemovedToast_waitsForYouToActOnIt() throws {
+        var config = GeneralConfig.current
+        config.toastDuration = 0.05
+        GeneralConfig.setCurrentForTesting(config)
+        let originalPresence = WindowController.isPresent
+        WindowController.isPresent = { _ in true }
+        addTeardownBlock { WindowController.isPresent = originalPresence }
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(toastTexts(in: c).contains("Worktree Removed"), "the toast to arrive")
+
+        let pastTheDuration = Date().addingTimeInterval(0.4)
+        while Date() < pastTheDuration {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+        }
+
+        XCTAssertTrue(toastTexts(in: c).contains("Worktree Removed"), "it offers an action, so it stays until answered")
+    }
+
+    func test_theRemovedToast_dismissesLikeAnyOther() throws {
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(toastTexts(in: c).contains("Worktree Removed"), "the toast to arrive")
+        let toast = try XCTUnwrap(
+            descendants(of: c.window.contentView!).compactMap { $0 as? ToastView }
+                .first { descendants(of: $0).contains { ($0 as? NSTextField)?.stringValue == "Worktree Removed" } })
+        let dismiss = try XCTUnwrap(
+            descendants(of: toast).compactMap { $0 as? IconButton }.first { $0.accessibilityLabel() == "Dismiss" })
+
+        try click(dismiss)
+
+        XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"))
+        XCTAssertTrue(titles(of: c).contains("feature/one"), "dismissing it keeps the workspace")
+    }
+
+    func test_theRemovedToastsCloseWorkspaceAction_closesThatWorkspace() throws {
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(toastTexts(in: c).contains("Worktree Removed"), "the toast to arrive")
+        XCTAssertFalse(c.window.firstResponder is AppButton, "the toast leaves the keyboard where it was")
+        let button = try XCTUnwrap(
+            descendants(of: c.window.contentView!).compactMap { $0 as? AppButton }
+                .first { $0.title == "Close Workspace" })
+
+        button.onTap()
+
+        XCTAssertFalse(titles(of: c).contains("feature/one"), "the workspace closes")
+        XCTAssertTrue(titles(of: c).contains("Alpha"))
+        XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"), "and the toast goes with it")
+    }
+
+    func test_anOpenPicker_marksTheRowWhenTheWorktreeGoes() throws {
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        let picker = try openPicker(in: c)
+        func removedRows() -> Int {
+            picker.rowViews.filter { ($0 as? RepoPickerOverlay.RowView)?.running?.removedWorktreeName != nil }.count
+        }
+        XCTAssertEqual(removedRows(), 0)
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(removedRows() == 1, "the open picker to mark the row without a reopen")
+
+        WorktreeStore.isRemovedOverrideForTesting = { _ in false }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(removedRows() == 0, "and to clear it again")
+        XCTAssertTrue(pickers(in: c).contains { $0 === picker }, "the same picker throughout")
+    }
+
+    func test_aWorktreeZenTermIsRemoving_isNotMarkedRemoved() throws {
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        c.worktreeRemovals.begin(alpha.appendingPathComponent("feature/one", isDirectory: true))
+        var checked = false
+        WorktreeStore.isRemovedOverrideForTesting = { _ in
+            checked = true
+            return true
+        }
+
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(checked, "the check to run")
+        drainMainQueue()
+
+        XCTAssertFalse(rows(of: c).contains { $0.detailForTesting == "removed" })
+        XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"))
+    }
+
+    func test_removingAWorktree_closesItsWorkspace_evenWithATabOpenedElsewhere() throws {
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        c.handle(.newTab)
+        let path = alpha.appendingPathComponent("feature/one", isDirectory: true)
+
+        XCTAssertEqual(c.closedByRemoval(atPath: path), ClosedByRemoval(workspaces: ["Alpha: feature/one"]))
+        c.worktreeRemovalsChanged(.removed(path))
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+        c.checkForRemovedWorktreesForTesting()
+        drainMainQueue()
+
+        XCTAssertFalse(titles(of: c).contains("feature/one"), "the workspace goes with its worktree")
+        XCTAssertTrue(titles(of: c).contains("Alpha"))
+        XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"), "a removal you confirmed is not news")
+    }
+
     private func titles(of c: WindowController) -> [String] { rows(of: c).map(\.titleForTesting) }
 
-    private func click(_ row: SettingsNavRow) throws {
+    private func click(_ view: NSView) throws {
         let event = try XCTUnwrap(
             NSEvent.mouseEvent(
                 with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
+                windowNumber: view.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
                 clickCount: 1, pressure: 1))
-        row.mouseDown(with: event)
+        view.mouseDown(with: event)
     }
 
     private func press(_ key: String, typing characters: String, keyCode: UInt16, in c: WindowController) throws {

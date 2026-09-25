@@ -102,6 +102,8 @@ enum WorktreeStore {
         static var rootOverrideForTesting: URL?
 
         static var beforeClaimingForTesting: ((URL) -> Void)?
+
+        static var isRemovedOverrideForTesting: ((URL) -> Bool)?
     #endif
 
     static var root: URL {
@@ -343,6 +345,14 @@ enum WorktreeStore {
         if unmoved, (try? git(["branch", "-D", "--", claim.name], in: repo)) != nil { return leftBehind }
         leftBehind.append("the branch \(claim.name)")
         return leftBehind
+    }
+
+    static func isRemoved(at root: URL) -> Bool {
+        #if DEBUG
+            if let isRemovedOverrideForTesting { return isRemovedOverrideForTesting(root) }
+        #endif
+        return isOnAPresentVolume(root)
+            && !FileManager.default.fileExists(atPath: root.appendingPathComponent(".git").path)
     }
 
     /// `--force` always: carried files are untracked and git refuses them without it.

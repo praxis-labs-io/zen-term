@@ -134,7 +134,7 @@ final class WindowController: NSObject {
     private lazy var floats: ToolFloatController = {
         let controller = ToolFloatController(
             presentOverlay: { [weak self] overlay in self?.presentWindowFloat(overlay) },
-            focusedCWD: { [weak self] in self?.activeController?.focusedCWD },
+            focusedCWD: { [weak self] in self?.activeController?.sessionCWD },
             yieldFocus: { [weak self] in
                 self?.endModes()
                 self?.activeController?.yieldFocusToFloat()
@@ -235,19 +235,21 @@ final class WindowController: NSObject {
 
     var openWorkspacesElsewhere: (() -> [RunningWorkspace])?
 
+    var onWorktreeMarkChanged: (() -> Void)?
+
     var revealWorkspaceElsewhere: ((Int, WorkspaceID) -> Bool)?
 
     var worktreeRemovals = WorktreeRemovalTracker()
 
     func tabCount(atPath path: URL) -> Int {
-        allTabIDs.filter { Self.isInside(controller($0)?.openedCWD, path) }.count
+        allTabIDs.filter { isClosedByRemoval($0, atPath: path) }.count
     }
 
     func closedByRemoval(atPath path: URL) -> ClosedByRemoval {
         var closed = ClosedByRemoval()
         var emptied = 0
         for workspace in workspaces {
-            let inside = workspace.tabIDs.filter { Self.isInside(controller($0)?.openedCWD, path) }.count
+            let inside = workspace.tabIDs.filter { isClosedByRemoval($0, atPath: path) }.count
             guard inside > 0 else { continue }
             if inside == workspace.tabIDs.count {
                 closed.workspaces.append(workspace.name)
@@ -259,16 +261,14 @@ final class WindowController: NSObject {
         return emptied == workspaces.count ? ClosedByRemoval(thisWindow: true) : closed
     }
 
-    private static func isInside(_ cwd: URL?, _ root: URL) -> Bool {
-        guard let cwd = cwd?.standardizedFileURL.path else { return false }
-        let target = root.standardizedFileURL.path
-        return cwd == target || cwd.hasPrefix(target.hasSuffix("/") ? target : target + "/")
+    private func isClosedByRemoval(_ id: TabID, atPath path: URL) -> Bool {
+        GitRepo.isInside(controller(id)?.openedCWD, path) || GitRepo.isInside(workspace(of: id)?.origin?.path, path)
     }
 
     // An open card keeps the keyboard: the picker is where the user watches the removal.
     func closeTabs(atPath path: URL) {
         let card = modal?.overlay
-        for id in allTabIDs where Self.isInside(controller(id)?.openedCWD, path) {
+        for id in allTabIDs where isClosedByRemoval(id, atPath: path) {
             closeTab(id, dismissingModal: false)
         }
         if let card, modal?.overlay === card { card.focusInitialResponder() }
@@ -280,7 +280,7 @@ final class WindowController: NSObject {
         guard let picker = modal?.overlay as? RepoPickerOverlay else { return }
         switch change {
         case .began: picker.refreshRemovalState()
-        case .removed(let path): picker.dropWorktree(at: path); picker.relistWorktrees()
+        case .removed(let path): picker.dropWorktree(at: path, open: runningWorkspaces()); picker.relistWorktrees()
         case .failed: picker.refreshRemovalState(); picker.relistWorktrees()
         }
     }
@@ -303,7 +303,7 @@ final class WindowController: NSObject {
 
     private var didTearDown = false
 
-    var focusedCWD: URL? { activeController?.focusedCWD }
+    var sessionCWD: URL? { activeController?.sessionCWD }
     var focusedPaneIsVim: Bool { !sidebar.hasFocus && activeController?.focusedPaneIsVim == true }
 
     var isToolFloatOpen: Bool { floats.isOpen }
@@ -317,34 +317,20 @@ final class WindowController: NSObject {
             .map { $0.title.replacingOccurrences(of: "Open ", with: "") }
     }
 
-    // Held chords auto-repeat; without this a leaned-on chord stacks a card per keystroke.
-    private static let floatBlockToastThrottle: TimeInterval = 3
-    private var lastFloatBlockToast: Date?
+    private var floatBlockToasts = ToastThrottle<Bool>()
 
     private func toastFloatBlocked() {
-        let now = Date()
-        if let last = lastFloatBlockToast,
-            now.timeIntervalSince(last) < Self.floatBlockToastThrottle
-        {
-            return
-        }
-        lastFloatBlockToast = now
+        guard floatBlockToasts.allows() else { return }
         toasts.show(
             ToastContent(
                 variant: .info, title: "Tool Float",
                 message: "\(activeFloatName ?? "This tool") is open. Close it to get back to your panes."))
     }
 
-    private var lastNoNewWorktreeToast: (refusal: SidebarController.NewWorktreeRefusal, at: Date)?
+    private var noNewWorktreeToasts = ToastThrottle<SidebarController.NewWorktreeRefusal>()
 
     private func toastNoNewWorktree(_ refusal: SidebarController.NewWorktreeRefusal) {
-        let now = Date()
-        if let last = lastNoNewWorktreeToast, last.refusal == refusal,
-            now.timeIntervalSince(last.at) < Self.floatBlockToastThrottle
-        {
-            return
-        }
-        lastNoNewWorktreeToast = (refusal, now)
+        guard noNewWorktreeToasts.allows(refusal) else { return }
         toasts.show(ToastContent(variant: .info, title: "New Worktree", message: refusal.message))
     }
 
@@ -694,6 +680,63 @@ final class WindowController: NSObject {
 
         if busyDots() != lastBusyDots { renderDock() }
         trackAgentExits()
+        checkForRemovedWorktrees()
+    }
+
+    private var isCheckingForRemovedWorktrees = false
+
+    private func checkForRemovedWorktrees() {
+        let roots = workspaces.compactMap(\.origin?.path)
+        guard !isCheckingForRemovedWorktrees, !roots.isEmpty else { return }
+        isCheckingForRemovedWorktrees = true
+        GitRepoStatus.removedWorktrees(among: roots) { [weak self] removed in
+            self?.isCheckingForRemovedWorktrees = false
+            self?.markRemovedWorktrees(removed)
+        }
+    }
+
+    private func markRemovedWorktrees(_ removed: Set<URL>) {
+        var changed = false
+        for workspace in workspaces {
+            guard let origin = workspace.origin, !worktreeRemovals.isRemoving(origin.path) else { continue }
+            let isRemoved = removed.contains(origin.path)
+            guard workspace.isWorktreeRemoved != isRemoved else { continue }
+            workspace.isWorktreeRemoved = isRemoved
+            changed = true
+            if isRemoved {
+                presentWorktreeRemovedToast(for: workspace.id, named: origin.name)
+            } else if let toast = worktreeRemovedToasts[workspace.id] {
+                toasts.dismiss(toast)
+            }
+        }
+        guard changed else { return }
+        renderTabBar()
+        refreshOpenPicker()
+        onWorktreeMarkChanged?()
+    }
+
+    func refreshOpenPicker() {
+        (modal?.overlay as? RepoPickerOverlay)?.refreshOpen(
+            runningWorkspaces(), elsewhere: openWorkspacesElsewhere?() ?? [])
+    }
+
+    private var worktreeRemovedToasts: [WorkspaceID: ToastView] = [:]
+
+    private func presentWorktreeRemovedToast(for id: WorkspaceID, named name: String) {
+        let close = ToastAction(title: "Close Workspace", kind: .primary) { [weak self] in
+            guard let self, let toast = self.worktreeRemovedToasts[id] else { return }
+            self.toasts.dismiss(toast)
+            self.requestCloseWorkspace(id: id)
+        }
+        let toast = toasts.showSticky(
+            ToastContent(variant: .warning, title: "Worktree Removed", message: "\(name) is no longer on disk."),
+            actions: [close], showsClose: true)
+        toast.onClose = { [weak self, weak toast] in toast.map { self?.toasts.dismiss($0) } }
+        toast.onDismissed = { [weak self, weak toast] in
+            guard let self, let toast, self.worktreeRemovedToasts[id] === toast else { return }
+            self.worktreeRemovedToasts[id] = nil
+        }
+        worktreeRemovedToasts[id] = toast
     }
 
     private func busyDots() -> (Bool, Bool, Bool) {
@@ -911,7 +954,7 @@ final class WindowController: NSObject {
 
     private func newTab() {
         cancelConfirm()
-        addTab(cwd: ShellLaunch.newSessionCWD(focused: activeController?.focusedCWD))
+        addTab(cwd: ShellLaunch.newSessionCWD(focused: activeController?.sessionCWD))
     }
 
     private func addTab(cwd: URL?) {
@@ -1078,6 +1121,7 @@ final class WindowController: NSObject {
         Log.info("workspace closed", category: .workspace)
         guard let place = order.navigable.firstIndex(of: workspace.id) else { return }
         workspaces.removeAll { $0 === workspace }
+        worktreeRemovedToasts[workspace.id].map(toasts.dismiss)
         guard !workspaces.isEmpty else { window.close(); return }
         guard workspace === activeWorkspace else { renderAttention(); return }
         let remaining = order.navigable
@@ -1325,9 +1369,9 @@ final class WindowController: NSObject {
     }
 
     private func removeSelectedWorktreeInPicker() {
-        guard let picker = modal?.overlay as? RepoPickerOverlay,
-            let selection = picker.selectedWorktree
-        else { return }
+        guard let picker = modal?.overlay as? RepoPickerOverlay else { return }
+        if let removed = picker.selectedRemovedWorkspace { return closeRemovedWorkspace(removed) }
+        guard let selection = picker.selectedWorktree else { return }
         let (worktree, parent) = selection
         let closes = onClosedByRemovalAtPath?(worktree.path) ?? closedByRemoval(atPath: worktree.path)
         DispatchQueue.global(qos: .userInitiated).async {
@@ -1345,6 +1389,21 @@ final class WindowController: NSObject {
                 self.confirmRemoveWorktree(picker, worktree, from: parent, items: items)
             }
         }
+    }
+
+    private var otherWindowCloseToasts = ToastThrottle<Bool>()
+
+    private func closeRemovedWorkspace(_ running: RunningWorkspace) {
+        guard running.window == windowID, let id = running.id else {
+            guard otherWindowCloseToasts.allows() else { return }
+            toasts.show(
+                ToastContent(
+                    variant: .info, title: "Open in Another Window",
+                    message: "Close \(running.removedWorktreeName ?? running.name) from the window it is open in."))
+            return
+        }
+        closeModal()
+        requestCloseWorkspace(id: id)
     }
 
     // A card, not the toast confirm, because this deletes a folder and cannot be undone.
@@ -1828,15 +1887,16 @@ final class WindowController: NSObject {
                 guard let workspace = byID[id] else { return nil }
                 return RunningWorkspace(
                     window: windowID, id: id, name: workspace.name, folder: workspace.folder,
-                    isWorktree: false)
+                    isWorktree: false, removedWorktreeName: nil)
             case .worktree(let id):
                 guard let workspace = byID[id] else { return nil }
                 return RunningWorkspace(
                     window: windowID, id: id, name: workspace.name, folder: workspace.folder,
-                    isWorktree: true)
+                    isWorktree: true, removedWorktreeName: workspace.isWorktreeRemoved ? workspace.origin?.name : nil)
             case .ghost(let parent):
                 return RunningWorkspace(
-                    window: windowID, id: nil, name: parent.title, folder: parent.path, isWorktree: false)
+                    window: windowID, id: nil, name: parent.title, folder: parent.path, isWorktree: false,
+                    removedWorktreeName: nil)
             }
         }
     }
@@ -2288,6 +2348,7 @@ final class WindowController: NSObject {
             self.renderAttention()
         }
         c.onLastPaneClosed = { [weak self] in self?.closeTab(id) }
+        c.removedWorktree = { [weak self] in self?.workspace(of: id)?.removedWorktree }
         c.onOverlayStateChanged = { [weak self] in self?.renderDock() }
         c.onRequestToast = { [weak self] content in self?.toasts.show(content) }
         c.onPaneStartFailed = { [weak self] retry, close in
@@ -2877,6 +2938,8 @@ final class WindowController: NSObject {
         ]
         toast = toasts.showSticky(content, actions: actions)
     }
+
+    func checkForRemovedWorktreesForTesting() { checkForRemovedWorktrees() }
 
     func openWorkspaceForTesting(_ ws: Workspace, origin: WorktreeOrigin? = nil) {
         openWorkspace(ws, origin: origin)

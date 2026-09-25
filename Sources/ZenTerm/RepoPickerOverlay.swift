@@ -28,7 +28,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     private let onNewWorkspace: () -> Void
 
     private let entries: [Workspace]
-    private let open: [RunningWorkspace]
+    private var open: [RunningWorkspace]
     private var elsewhere: [RunningWorkspace]
     private var listings: [URL: WorktreeListing] = [:]
 
@@ -109,10 +109,11 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     // Placement reads `GitRepoStatus.repoRoot`, which arrives off-main, so a late probe re-places rows.
     private func rebuild(animated: Bool = true) {
-        let held = rows.indices.contains(selected) ? rowIdentity(at: selected) : nil
+        let heldIndex = selected
+        let held = rows.indices.contains(heldIndex) ? rowIdentity(at: heldIndex) : nil
         applyFilter(query: currentQuery)
         refreshRows(animated: animated)
-        reselect(byIdentity: held)
+        reselect(byIdentity: held, near: heldIndex)
         applyGitStatus()
     }
 
@@ -252,6 +253,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .header(let title):
             return PaletteSectionHeader(title: title)
         case .open(let workspace), .elsewhere(let workspace):
+            if let removing = removingWorktree(workspace) { return RemovingRowView(worktree: removing) }
             return workspace.id == nil ? RowView(ghost: workspace) : RowView(open: workspace)
         case .mutedParent(let workspace):
             return RowView(mutedParent: workspace)
@@ -282,7 +284,8 @@ final class RepoPickerOverlay: PaletteOverlay {
     override func isSelectable(at index: Int) -> Bool {
         switch rows[index] {
         case .header, .mutedParent: return false
-        case .open(let workspace), .elsewhere(let workspace): return workspace.id != nil
+        case .open(let workspace), .elsewhere(let workspace):
+            return workspace.id != nil && removingWorktree(workspace) == nil
         case .worktree(let worktree, _): return !removals.isRemoving(worktree.path)
         case .newWorkspace, .add, .workspace: return true
         }
@@ -311,7 +314,15 @@ final class RepoPickerOverlay: PaletteOverlay {
         var presentedConfirmForTesting: ConfirmCard? { confirm.card }
     #endif
 
-    func dropWorktree(at path: URL) {
+    func refreshOpen(_ running: [RunningWorkspace], elsewhere others: [RunningWorkspace]) {
+        open = running
+        elsewhere = others
+        rebuild()
+    }
+
+    func dropWorktree(at path: URL, open running: [RunningWorkspace]) {
+        open = running
+        elsewhere = Self.droppingOrphanedGhosts(elsewhere.filter { !GitRepo.isInside($0.folder, path) })
         let target = path.standardizedFileURL
         for (workspace, listing) in listings {
             listings[workspace] = WorktreeListing(
@@ -324,6 +335,22 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     func refreshRemovalState() { rebuild() }
 
+    private func removingWorktree(_ running: RunningWorkspace) -> Worktree? {
+        guard running.isWorktree, let found = listedWorktree(at: running.folder),
+            removals.isRemoving(found.worktree.path)
+        else { return nil }
+        return found.worktree
+    }
+
+    private static func droppingOrphanedGhosts(_ rows: [RunningWorkspace]) -> [RunningWorkspace] {
+        rows.indices.compactMap { index in
+            let row = rows[index]
+            guard row.id == nil else { return row }
+            let next = rows.indices.contains(index + 1) ? rows[index + 1] : nil
+            return next?.isWorktree == true && next?.window == row.window ? row : nil
+        }
+    }
+
     override func rowIdentity(at index: Int) -> AnyHashable? {
         switch rows[index] {
         case .newWorkspace: return ["new"]
@@ -331,10 +358,14 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .header(let title): return ["header", title]
         case .mutedParent(let workspace): return ["muted", workspace.title]
         case .open(let workspace):
-            return ["open", "\(workspace.window)", "\(workspace.id?.raw ?? -1)", workspace.folder.path]
+            return [
+                "open", "\(workspace.window)", "\(workspace.id?.raw ?? -1)", workspace.folder.path,
+                removingWorktree(workspace) == nil ? "" : "removing", workspace.removedWorktreeName ?? "",
+            ]
         case .elsewhere(let workspace):
             return [
                 "elsewhere", "\(workspace.window)", "\(workspace.id?.raw ?? -1)", workspace.folder.path,
+                removingWorktree(workspace) == nil ? "" : "removing", workspace.removedWorktreeName ?? "",
             ]
         case .workspace(let workspace): return ["workspace", workspace.title]
         case .worktree(let worktree, _):
@@ -418,6 +449,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         }
         if let chord = Chord.displayed(.removeWorktree, in: GeneralConfig.current.keymap) {
             hints.append(PaletteHint(keys: chord.displayGlyph, label: "remove worktree"))
+            hints.append(PaletteHint(keys: chord.displayGlyph, label: "close workspace"))
         }
         return hints
     }
@@ -431,6 +463,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         setFooterHint("switch", isShown: switches)
         setFooterHint("new worktree", isShown: createTarget != nil)
         setFooterHint("remove worktree", isShown: selectedWorktree != nil)
+        setFooterHint("close workspace", isShown: selectedRemovedWorkspace != nil)
     }
 
     struct CreateTarget: Equatable {
@@ -462,8 +495,16 @@ final class RepoPickerOverlay: PaletteOverlay {
         switch rows[selected] {
         case .worktree(let worktree, let parent): return (worktree, parent)
         case .open(let row), .elsewhere(let row):
-            guard row.isWorktree else { return nil }
+            guard row.isWorktree, row.removedWorktreeName == nil else { return nil }
             return listedWorktree(at: row.folder)
+        default: return nil
+        }
+    }
+
+    var selectedRemovedWorkspace: RunningWorkspace? {
+        guard rows.indices.contains(selected) else { return nil }
+        switch rows[selected] {
+        case .open(let row), .elsewhere(let row): return row.removedWorktreeName == nil ? nil : row
         default: return nil
         }
     }
@@ -738,6 +779,9 @@ final class RepoPickerOverlay: PaletteOverlay {
 
         func applyGitStatus() {
             guard let statusPath else { return }
+            if let removed = running?.removedWorktreeName {
+                return applyRemoved(removed)
+            }
             let head =
                 worktree.map { $0.branch ?? String($0.head.prefix(7)) }
                 ?? GitRepoStatus.branch(statusPath)
@@ -748,6 +792,13 @@ final class RepoPickerOverlay: PaletteOverlay {
 
             let churn = GitRepoStatus.churn(statusPath) ?? GitChurn()
             churnLabel.attributedStringValue = Self.churnText(churn)
+        }
+
+        private func applyRemoved(_ name: String) {
+            branchLabel.stringValue = "\(name) \(WorktreeOrigin.removedDetail)"
+            branchLabel.setAccessibilityLabel("worktree \(name), \(WorktreeOrigin.removedDetail)")
+            branchFloor.constant = min(branchLabel.intrinsicContentSize.width, Self.branchMinWidth)
+            churnLabel.attributedStringValue = NSAttributedString()
         }
     }
 }

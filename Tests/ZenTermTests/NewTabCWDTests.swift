@@ -73,6 +73,58 @@ final class NewTabCWDTests: WindowTestCase {
         XCTAssertEqual(tab.lastConfig?.workingDirectory, root)
     }
 
+    func test_drawersAndFloats_inARemovedWorktree_startInItsParentsFolder() throws {
+        let c = try makeWindowInRoot()
+        inheritCWD(true)
+        let parent = Workspace(
+            title: "alpha", path: FileManager.default.temporaryDirectory, main: nil, right: nil, bottom: nil,
+            focus: .main, env: [:])
+        let worktree = Worktree(path: root, branch: "one", head: "0000000", isLocked: false)
+        c.openWorkspaceForTesting(
+            Workspace(title: "alpha: one", path: root, main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
+            origin: WorktreeOrigin(parent: parent, worktree: worktree))
+        try XCTUnwrap(spawned.last).currentDirectory = root
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(c.runningWorkspaces().contains { $0.removedWorktreeName != nil }, "the worktree to read removed")
+
+        c.handle(.toggleBottomDrawer)
+        let drawer = try XCTUnwrap(spawned.last)
+        XCTAssertEqual(drawer.lastConfig?.workingDirectory, parent.path, "a drawer")
+        c.handle(.toggleBottomDrawer)
+
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+
+        let float = try XCTUnwrap(spawned.last)
+        XCTAssertEqual(float.lastConfig?.workingDirectory, parent.path, "a tool float")
+    }
+
+    func test_newSessions_inARemovedWorktree_startInItsParentsFolder() throws {
+        let c = try makeWindowInRoot()
+        inheritCWD(true)
+        let parent = Workspace(
+            title: "alpha", path: FileManager.default.temporaryDirectory, main: nil, right: nil, bottom: nil,
+            focus: .main, env: [:])
+        let worktree = Worktree(path: root, branch: "one", head: "0000000", isLocked: false)
+        c.openWorkspaceForTesting(
+            Workspace(title: "alpha: one", path: root, main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
+            origin: WorktreeOrigin(parent: parent, worktree: worktree))
+        try XCTUnwrap(spawned.last).currentDirectory = root
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(c.runningWorkspaces().contains { $0.removedWorktreeName != nil }, "the worktree to read removed")
+
+        c.handle(.splitVertical)
+        let pane = try XCTUnwrap(spawned.last)
+        XCTAssertEqual(pane.lastConfig?.workingDirectory, parent.path, "a split")
+        pane.currentDirectory = root
+
+        c.newTabForTesting()
+
+        let tab = try XCTUnwrap(spawned.last)
+        XCTAssertEqual(tab.lastConfig?.workingDirectory, parent.path, "a new tab")
+    }
+
     func test_split_inheritsTheCWDRegardlessOfTheKey() throws {
         let c = try makeWindowInRoot()
 

@@ -613,8 +613,19 @@ The workspace `carry` key names ignored files to copy into a new worktree.
   runs off-main and presents only if the same picker is still up.
 - **`WorktreeRemovalTracker` is app-wide and runs the delete**, because closing tabs can
   close the window first. A removing row reads `Removing <name>…`. Tabs close on
-  `Change.removed`, never on confirm or `failed`, matched by `TabController.openedCWD`,
-  and closing them leaves the card up. The finish re-lists.
+  `Change.removed`, never on confirm or `failed`, matched by `TabController.openedCWD` or
+  by the workspace's `WorktreeOrigin`, and closing them leaves the card up. The finish re-lists.
+- **An open worktree row removes like a Configured one.** It reads `Removing <name>…` while
+  the tracker holds it, and the finish rebuilds Open from `runningWorkspaces()` and drops
+  Open Elsewhere rows inside the path, with a closed parent's ghost once it has none.
+- **A worktree removed outside ZenTerm stays open, marked `removed`.** The title poll checks
+  `<worktree>/.git` off-main, skipping a path the tracker is removing and an unmounted volume.
+  The sidebar and picker read `WorkspaceController.isWorktreeRemoved`, and an open picker in
+  any window refreshes when it flips. A toast says so once and offers Close Workspace, ⌘⇧⌫
+  on its picker row does the same, and the mark clears if `.git` comes back. It never auto-closes, because
+  an agent in its panes may still be running. A session that would inherit a folder inside it
+  (a split, drawer or float, and a tab or window under `tab-inherit-cwd`) starts at the parent
+  workspace's folder instead (`WorktreeOrigin.relocating`).
 
 ### GitCommand
 

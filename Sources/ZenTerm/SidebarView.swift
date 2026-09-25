@@ -15,7 +15,7 @@ struct SidebarRowItem: Equatable {
     let id: SidebarRowID
     let variant: SettingsNavRow.Variant
     let name: String
-    let branch: String?
+    let detail: String?
     let number: Int?
     let isActive: Bool
     let makesWorktrees: Bool
@@ -258,7 +258,7 @@ final class SidebarView: NSView {
                 if isNew { row.widthAnchor.constraint(equalTo: rowStack.widthAnchor).isActive = true }
             }
             row.setTitle(item.name)
-            row.setDetail(item.branch)
+            row.setDetail(item.detail)
             row.setSelected(item.isActive)
             setNewWorktreeButton(on: row, for: item)
             row.setShowsAttention(item.isWaiting)

@@ -119,6 +119,13 @@ final class TabController: NSObject {
     // Falls back to the pane, because nil reads downstream as "no repository".
     var focusedCWD: URL? { focusedDrawerSurface?.currentDirectory ?? paneCanvas.focusedCWD }
 
+    var removedWorktree: () -> WorktreeOrigin? {
+        get { paneCanvas.removedWorktree }
+        set { paneCanvas.removedWorktree = newValue }
+    }
+
+    var sessionCWD: URL? { removedWorktree()?.relocating(focusedCWD) ?? focusedCWD }
+
     // Not `focusedCWD`: removing a worktree matches the folder the tab was opened for.
     let openedCWD: URL?
 
@@ -403,9 +410,9 @@ final class TabController: NSObject {
     private func drawerConfig(command: String?, token: Int) -> TerminalSurfaceConfig {
         let env = NavSocketServer.env(base: workspaceEnv, token: token)
         if let command, command != "shell" {
-            return ShellLaunch.program(command, cwd: focusedCWD, env: env)
+            return ShellLaunch.program(command, cwd: sessionCWD, env: env)
         }
-        return ShellLaunch.shell(cwd: focusedCWD, env: env)
+        return ShellLaunch.shell(cwd: sessionCWD, env: env)
     }
 
     private func drawerToken(_ panel: PanelRef) -> Int? {
@@ -642,26 +649,18 @@ final class TabController: NSObject {
         return false
     }
 
-    // Held chords auto-repeat, so repeats of one blocked verb coalesce into one toast.
-    private var lastZoomBlockToast: (verb: String, at: Date)?
-    private static let zoomBlockToastThrottle: TimeInterval = 3
+    private var zoomBlockToasts = ToastThrottle<String>()
 
-    private var lastFocusUnavailableToast: Date?
+    private var focusUnavailableToasts = ToastThrottle<Bool>()
 
-    private var lastNoNeighborToast: (direction: Direction, at: Date)?
+    private var noNeighborToasts = ToastThrottle<Direction>()
 
     private static var focusModeChord: String {
         Chord.displayed(.toggleZoom, in: GeneralConfig.current.keymap)?.displayGlyph ?? "Focus Mode"
     }
 
     private func toastZoomBlocked(_ verb: String) {
-        let now = Date()
-        if let last = lastZoomBlockToast, last.verb == verb,
-            now.timeIntervalSince(last.at) < Self.zoomBlockToastThrottle
-        {
-            return
-        }
-        lastZoomBlockToast = (verb, now)
+        guard zoomBlockToasts.allows(verb) else { return }
         onRequestToast?(
             ToastContent(
                 variant: .info, title: "Focus Mode",
@@ -669,11 +668,7 @@ final class TabController: NSObject {
     }
 
     private func toastFocusModeUnavailable() {
-        let now = Date()
-        if let last = lastFocusUnavailableToast, now.timeIntervalSince(last) < Self.zoomBlockToastThrottle {
-            return
-        }
-        lastFocusUnavailableToast = now
+        guard focusUnavailableToasts.allows() else { return }
         onRequestToast?(
             ToastContent(
                 variant: .info, title: "Focus Mode",
@@ -681,13 +676,7 @@ final class TabController: NSObject {
     }
 
     func toastNoNeighbor(_ direction: Direction) {
-        let now = Date()
-        if let last = lastNoNeighborToast, last.direction == direction,
-            now.timeIntervalSince(last.at) < Self.zoomBlockToastThrottle
-        {
-            return
-        }
-        lastNoNeighborToast = (direction, now)
+        guard noNeighborToasts.allows(direction) else { return }
         let action: KeyInterceptor.ReservedChord
         let word: String
         switch direction {

@@ -57,12 +57,6 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         return descendants(of: content).compactMap { $0 as? SurfaceFloatOverlay }
     }
 
-    private func toastText(_ c: WindowController) -> [String] {
-        guard let content = c.window.contentView else { return [] }
-        return descendants(of: content).compactMap { $0 as? ToastView }
-            .flatMap { descendants(of: $0).compactMap { ($0 as? NSTextField)?.stringValue } }
-    }
-
     private func toggleScratch(_ c: WindowController) {
         c.handle(.toggleToolFloat(ToolFloat.scratch.id))
     }
@@ -215,8 +209,8 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         XCTAssertTrue(c.isConfirmOpen, "a busy scratch must not be closed out from under the user")
         XCTAssertFalse(surface.terminated, "and nothing dies before the answer")
         XCTAssertTrue(
-            toastText(c).contains { $0.contains("Close Tab") },
-            "the confirm names the real effect: \(toastText(c))")
+            toastTexts(in: c).contains { $0.contains("Close Tab") },
+            "the confirm names the real effect: \(toastTexts(in: c))")
     }
 
     func test_theDockDotsScratchOnlyInTheTabItIsRunningIn() {
@@ -296,7 +290,7 @@ final class ScratchFloatInteractionTests: WindowTestCase {
         c.handle(.closePane)
 
         XCTAssertEqual(cards(c).count, 1, "⌘W must not reach the pane behind the card")
-        let labels = toastText(c)
+        let labels = toastTexts(in: c)
         XCTAssertTrue(
             labels.contains { $0.contains("Scratch") },
             "the notice has to name the thing to close first: \(labels)")

@@ -79,6 +79,9 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
                 other.activateWorkspace(workspace)
                 return true
             }
+            window.onWorktreeMarkChanged = { [weak window] in
+                others().filter { $0 !== window }.forEach { $0.refreshOpenPicker() }
+            }
             window.revealWorkspaceInAnotherWindow = { [weak window] path in
                 guard let other = AppDelegate.window(holding: path, among: others(), asking: window)
                 else { return false }
@@ -253,5 +256,30 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
 
         XCTAssertEqual(one.workspaceNamesForTesting, ["Workspace 1", "Alpha"])
         XCTAssertEqual(two.workspaceNamesForTesting, ["Workspace 1"])
+    }
+
+    func test_aPickerOpenInAnotherWindow_marksTheWorktreeWhenItGoes() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let (one, two) = makeWindows()
+        let parent = try XCTUnwrap(ConfigLoader.loadWorkspacesBlocking().first { $0.title == "Alpha" })
+        let worktree = Worktree(
+            path: parent.path.appendingPathComponent("feature/one", isDirectory: true), branch: "feature/one",
+            head: "a41c9e2d0f", isLocked: false)
+        two.openWorkspaceForTesting(
+            RepoPickerOverlay.workspace(for: worktree, parent: parent, repoRoot: nil),
+            origin: WorktreeOrigin(parent: parent, worktree: worktree))
+        let picker = try openPicker(in: one)
+        func removedRows() -> Int {
+            picker.rowViews.filter { ($0 as? RepoPickerOverlay.RowView)?.running?.removedWorktreeName != nil }.count
+        }
+        XCTAssertEqual(removedRows(), 0)
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+
+        two.checkForRemovedWorktreesForTesting()
+        waitUntil(removedRows() == 1, "the other window's picker to mark the row without a reopen")
+
+        WorktreeStore.isRemovedOverrideForTesting = { _ in false }
+        two.checkForRemovedWorktreesForTesting()
+        waitUntil(removedRows() == 0, "and to clear it again")
     }
 }
