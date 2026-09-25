@@ -51,20 +51,18 @@ final class AttentionStore {
 
     /// Folds an unseen latch into its tab, so closing the pane that spoke does not un-color the tab.
     func release(_ id: SurfaceID) {
-        changing { fold(id) }
-    }
-
-    private func fold(_ id: SurfaceID) {
-        guard let entry = entries.removeValue(forKey: id) else { return }
-        guard !entry.seen, entry.latched != .idle, let tab = entry.tab else { return }
-        let existing = residual[tab]
-        residual[tab] = Residual(
-            state: max(existing?.state ?? .idle, entry.latched),
-            since: earliest(existing?.since, entry.since),
-            waiting: (existing?.waiting ?? 0) + (entry.latched == .waiting ? 1 : 0),
-            waitingSince: entry.latched == .waiting
-                ? earliest(existing?.waitingSince, entry.waitingSince) : existing?.waitingSince
-        )
+        changing {
+            guard let entry = entries.removeValue(forKey: id) else { return }
+            guard !entry.seen, entry.latched != .idle, let tab = entry.tab else { return }
+            let existing = residual[tab]
+            residual[tab] = Residual(
+                state: max(existing?.state ?? .idle, entry.latched),
+                since: earliest(existing?.since, entry.since),
+                waiting: (existing?.waiting ?? 0) + (entry.latched == .waiting ? 1 : 0),
+                waitingSince: entry.latched == .waiting
+                    ? earliest(existing?.waitingSince, entry.waitingSince) : existing?.waitingSince
+            )
+        }
     }
 
     // Focus gates the toast, never the agent latch: the notification is one-shot, so blocked outlives a glance.

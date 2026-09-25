@@ -2833,14 +2833,12 @@ final class WindowController: NSObject {
         attention.markSeen(surface)
         answerFocusedAgent()
         if let tab = cardSurfaces.first(where: { $0.value == surface })?.key { takeDownCard(tab) }
-        renderAttention()
     }
 
     /// Clears the tab and the surface that asked. A window float belongs to no tab, so the tab alone would miss it.
     private func answer(_ id: TabID, surface: SurfaceID?) {
         surface.map { attention.markSeen($0) }
         clearAttention(id)
-        renderAttention()
     }
 
     private func mountAttentionToast(

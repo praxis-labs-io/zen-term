@@ -474,11 +474,18 @@ final class AttentionStoreTests: XCTestCase {
         store.setWorking(pane, false)
         store.answerAgent(pane)
         store.record(pane, .waiting, seen: false)
+        store.markSeen(pane)
+        store.endAgent(pane)
+        store.latchAgent(pane, .waiting)
+        store.record(pane, .waiting, seen: false)
+        store.markSeen(tab: tab)
+        store.record(pane, .waiting, seen: false)
         store.visit(tab) { _ in true }
         store.record(pane, .completed, seen: false)
         store.release(pane)
+        store.register(pane, tab: tab)
         store.dropTab(tab)
 
-        XCTAssertEqual(reports, 9)
+        XCTAssertEqual(reports, 16)
     }
 }
