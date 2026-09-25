@@ -279,7 +279,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   in. A launch whose program is `ai` or a known agent joins at launch, idle included; any
   surface that sends OSC 777 or indeterminate OSC 9;4 joins on that signal, and a title an
   agent's identification pattern recognises joins on that. The last is the only way in for
-  a hand-launched Codex, which emits no progress and notifies on only some stops. An agent
+  a hand-launched Codex, which emits no progress and notifies on only some stops, and the
+  only way a hand-launched Claude is listed, and named, before its first turn. An agent
   leaves when its surface is released, when its command finishes, or when its busy reading falls (the program exited to the
   shell), once its latch is answered. Only a *fall* from busy counts: a surface polled
   before its program starts has not been busy yet.

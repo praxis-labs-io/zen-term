@@ -193,6 +193,16 @@ final class AgentTitleRoutingTests: WindowTestCase {
         XCTAssertEqual(renderedAgentRows(c).map(\.id), [id], "an idle Codex at its prompt is still an agent")
     }
 
+    func test_aHandLaunchedClaude_isListedByNameAtLaunch() throws {
+        let c = makeWindow()
+        let (surface, id) = try firstPane(c)
+
+        push(AgentTitleFixtures.claudeIdle, from: surface)
+
+        let row = try XCTUnwrap(renderedAgentRows(c).first { $0.id == id }, "claude sends no progress until a turn")
+        XCTAssertTrue(row.detail.contains("claude"), "got \(row.detail)")
+    }
+
     func test_aCodexRelaunchedAfterExitingMidTurn_readsWorking() throws {
         let c = makeWindow()
         let (surface, id) = try firstPane(c)

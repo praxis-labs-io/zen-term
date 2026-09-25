@@ -222,10 +222,16 @@ final class AgentIdentificationTests: XCTestCase {
         }
     }
 
+    func test_claudesLaunchTitle_identifiesClaude() {
+        for title in [AgentTitleFixtures.claudeIdle, "◐ Claude Code"] {
+            XCTAssertEqual(AgentRules.agentName(matching: title), "claude", "\(title)")
+        }
+    }
+
     func test_aTitleThatProvesNothing_identifiesNobody() {
         let cases = [
             AgentTitleFixtures.codexIdle, AgentTitleFixtures.codexBareIdle,
-            AgentTitleFixtures.claudeWorking, AgentTitleFixtures.claudeIdle,
+            AgentTitleFixtures.claudeWorking, "✳ Multiple choice question tool", "Claude Code",
             "~", "/Users/drucial", "npm run build", "",
             "Action Required: review the deploy", "vim Action Required.md",
             "⠋ π - drucial", "⠋ Claude Code",

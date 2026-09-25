@@ -24,8 +24,12 @@ enum AgentRules {
                 .regex(codexPrompt),
                 .regex(codexWorkingTitle),
             ])
-        )
+        ),
+        ("claude", .regex(claudeLaunchTitle)),
     ]
+
+    // Claude's later titles carry only the tool name, so the one that names it is the one it opens with.
+    private static let claudeLaunchTitle = "^[✳◐◑◒◓] Claude Code$"
 
     // Older Claude and pi's spinner extension also lead with a braille frame; only Codex follows it with `task | cwd`.
     private static let codexWorkingTitle = "^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] .* \\| "
