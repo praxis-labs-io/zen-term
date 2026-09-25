@@ -117,6 +117,51 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
     private func rows(of c: WindowController) -> [SettingsNavRow] { c.sidebarForTesting.view.rowsForTesting }
 
+    private func toastTexts(in c: WindowController) -> [String] {
+        descendants(of: c.window.contentView!).compactMap { $0 as? ToastView }
+            .flatMap { descendants(of: $0).compactMap { ($0 as? NSTextField)?.stringValue } }
+    }
+
+    func test_aWorktreeRemovedOutsideZenTerm_staysOpenAndSaysSo() throws {
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        let tabs = c.tabOrderForTesting.count
+        WorktreeStore.isRemovedOverrideForTesting = { _ in true }
+
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(rows(of: c).contains { $0.detailForTesting == "removed" }, "the row to say it was removed")
+
+        let row = try XCTUnwrap(rows(of: c).first { $0.titleForTesting == "feature/one" })
+        XCTAssertEqual(row.detailForTesting, "removed")
+        XCTAssertEqual(c.tabOrderForTesting.count, tabs, "its panes keep running")
+        XCTAssertTrue(toastTexts(in: c).contains("Worktree Removed"))
+        XCTAssertTrue(toastTexts(in: c).contains("feature/one is no longer on disk."))
+
+        WorktreeStore.isRemovedOverrideForTesting = { _ in false }
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(!rows(of: c).contains { $0.detailForTesting == "removed" }, "the mark to clear when .git is back")
+    }
+
+    func test_aWorktreeZenTermIsRemoving_isNotMarkedRemoved() throws {
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        try openAlphaWorktree(branch: "feature/one", in: c)
+        c.worktreeRemovals.begin(alpha.appendingPathComponent("feature/one", isDirectory: true))
+        var checked = false
+        WorktreeStore.isRemovedOverrideForTesting = { _ in
+            checked = true
+            return true
+        }
+
+        c.checkForRemovedWorktreesForTesting()
+        waitUntil(checked, "the check to run")
+        drainMainQueue()
+
+        XCTAssertFalse(rows(of: c).contains { $0.detailForTesting == "removed" })
+        XCTAssertFalse(toastTexts(in: c).contains("Worktree Removed"))
+    }
+
     private func titles(of c: WindowController) -> [String] { rows(of: c).map(\.titleForTesting) }
 
     private func click(_ row: SettingsNavRow) throws {

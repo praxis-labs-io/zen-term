@@ -17,6 +17,7 @@ final class SidebarController {
         let isActive: Bool
         let isConfigured: Bool
         let isWaiting: Bool
+        let isWorktreeRemoved: Bool
     }
 
     private static let leadNameGap: CGFloat = 6
@@ -335,11 +336,12 @@ final class SidebarController {
                 return Entry(
                     row: .workspace(id), kind: kind, name: workspace.name, folder: workspace.folder,
                     number: numbers[id], isActive: workspace === active, isConfigured: workspace.isConfigured,
-                    isWaiting: waiting.contains(id))
+                    isWaiting: waiting.contains(id), isWorktreeRemoved: workspace.isWorktreeRemoved)
             case .ghost(let parent):
                 return Entry(
                     row: .ghost(parent.path.standardizedFileURL.path), kind: .ghost, name: parent.title,
-                    folder: nil, number: nil, isActive: false, isConfigured: true, isWaiting: false)
+                    folder: nil, number: nil, isActive: false, isConfigured: true, isWaiting: false,
+                    isWorktreeRemoved: false)
             }
         }
         let foldersChanged = next.compactMap(\.folder) != entries.compactMap(\.folder)
@@ -440,7 +442,8 @@ final class SidebarController {
         case .worktree(let origin):
             return SidebarRowItem(
                 id: entry.row, variant: .nested(symbol: worktreeSymbol), name: branch ?? origin.name,
-                detail: nil, number: entry.number, isActive: entry.isActive, makesWorktrees: false,
+                detail: entry.isWorktreeRemoved ? WorktreeOrigin.removedDetail : nil, number: entry.number,
+                isActive: entry.isActive, makesWorktrees: false,
                 isWaiting: entry.isWaiting)
         case .ghost:
             return SidebarRowItem(

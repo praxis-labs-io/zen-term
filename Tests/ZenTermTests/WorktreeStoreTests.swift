@@ -23,6 +23,23 @@ final class WorktreeStoreTests: XCTestCase {
         try super.tearDownWithError()
     }
 
+    func test_aCheckoutReadsRemovedOnceItsGitFileIsGone() throws {
+        let checkout = root.appendingPathComponent("checkout", isDirectory: true)
+        try FileManager.default.createDirectory(at: checkout, withIntermediateDirectories: true)
+        try "gitdir: elsewhere".write(to: checkout.appendingPathComponent(".git"), atomically: true, encoding: .utf8)
+        XCTAssertFalse(WorktreeStore.isRemoved(at: checkout))
+
+        try FileManager.default.removeItem(at: checkout.appendingPathComponent(".git"))
+
+        XCTAssertTrue(WorktreeStore.isRemoved(at: checkout), "a stray write can bring the folder back, never the .git")
+    }
+
+    func test_aCheckoutOnAnUnmountedVolume_isNeverReadAsRemoved() {
+        let checkout = URL(fileURLWithPath: "/Volumes/zenterm-no-such-volume-\(UUID().uuidString)/checkout")
+
+        XCTAssertFalse(WorktreeStore.isRemoved(at: checkout))
+    }
+
     func test_createExisting_landsOnABranchCheckedOutNowhere() throws {
         try GitFixture.run(["branch", "parked"], in: repo)
 

@@ -10,6 +10,7 @@ final class WorkspaceController {
     var name: String
     let folder: URL
     let origin: WorktreeOrigin?
+    var isWorktreeRemoved = false
     // Shared by a folder's workspace and its worktrees, so the group keeps its place as members close.
     let seat: Int
 

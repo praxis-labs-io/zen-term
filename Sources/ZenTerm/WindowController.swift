@@ -683,6 +683,35 @@ final class WindowController: NSObject {
 
         if busyDots() != lastBusyDots { renderDock() }
         trackAgentExits()
+        checkForRemovedWorktrees()
+    }
+
+    private var isCheckingForRemovedWorktrees = false
+
+    private func checkForRemovedWorktrees() {
+        let roots = workspaces.compactMap(\.origin?.path)
+        guard !isCheckingForRemovedWorktrees, !roots.isEmpty else { return }
+        isCheckingForRemovedWorktrees = true
+        GitRepoStatus.removedCheckouts(among: roots) { [weak self] removed in
+            self?.isCheckingForRemovedWorktrees = false
+            self?.markRemovedWorktrees(removed)
+        }
+    }
+
+    private func markRemovedWorktrees(_ removed: Set<URL>) {
+        var changed = false
+        for workspace in workspaces {
+            guard let origin = workspace.origin, !worktreeRemovals.isRemoving(origin.path) else { continue }
+            let isRemoved = removed.contains(origin.path)
+            guard workspace.isWorktreeRemoved != isRemoved else { continue }
+            workspace.isWorktreeRemoved = isRemoved
+            changed = true
+            guard isRemoved else { continue }
+            toasts.show(
+                ToastContent(
+                    variant: .warning, title: "Worktree Removed", message: "\(origin.name) is no longer on disk."))
+        }
+        if changed { renderTabBar() }
     }
 
     private func busyDots() -> (Bool, Bool, Bool) {
@@ -2760,6 +2789,8 @@ final class WindowController: NSObject {
         ]
         toast = toasts.showSticky(content, actions: actions)
     }
+
+    func checkForRemovedWorktreesForTesting() { checkForRemovedWorktrees() }
 
     func openWorkspaceForTesting(_ ws: Workspace, origin: WorktreeOrigin? = nil) {
         openWorkspace(ws, origin: origin)
