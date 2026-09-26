@@ -285,8 +285,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   came from (`Source`, ranked so a stronger source renames, a weaker one never does, and a
   missing name yields to any real name), and what it last said. `identify` is the one way
   in. A launch whose program is `ai` or a known agent joins at launch, idle included; any
-  surface that sends OSC 777 or indeterminate OSC 9;4 joins on that signal, and a title an
-  agent's identification pattern recognises joins on that. The last is the only way in for
+  surface that sends indeterminate OSC 9;4 joins on that signal, an OSC 777 whose title
+  names a known agent or the `ai` program as a whole token joins on that, and a title an agent's
+  identification pattern recognises joins on that. The last is the only way in for
   a hand-launched Codex, which emits no progress and notifies on only some stops, and the
   only way a hand-launched Claude is listed, and named, before its first turn. An agent
   leaves when its surface is released, when its command finishes, or when its busy reading falls (the program exited to the
@@ -294,12 +295,22 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   before its program starts has not been busy yet.
   The Agents rows join it with `agentState(of:)` and sort waiting (oldest first), working,
   done, idle, ties in sidebar order.
+- **Only an agent's OSC 777 can ask.** A notification from a surface that is not in the
+  roster, and whose title names no known agent or `ai` program, lands like a finished
+  command: `completed`, no banner, no row, and never over a tab that is already waiting.
+  An agent's notification goes through `AgentRules.notificationAttention`. Claude has body
+  rules: its permission prompt waits, its idle prompt carries no state (its progress
+  already closed the turn), and any other body completes. Codex's notification carries no
+  state, because it arrives before its title says what Codex wants; the move into its
+  Action Required title raises the waiting card and banner instead, once per ask. Any
+  other agent's notification waits.
 - **A state only the chrome can act on never reaches the tab number.** `working`
   says an agent is mid-turn, not that it wants you, so it stops at the dock's dot. The dot
   and the tab number are one signal at two altitudes; a hidden drawer or float asks
   through its dot because it has no number.
 - **Background command completion:** OSC 133 `COMMAND_FINISHED` over a threshold in a
-  background tab raises one sticky toast; the rank keeps it under a waiting agent.
+  background tab raises one sticky toast; the rank keeps it under a waiting agent. A
+  notification no agent sent raises the same card, with its own words.
 - Notification identity is `(windowID, tabID)`; `TabID` is per window. `AttentionCenter`
   records which windows are asking and since when, and answers nothing else.
 - `tearDown()` is idempotent, the single close path, and cancels pending confirms and

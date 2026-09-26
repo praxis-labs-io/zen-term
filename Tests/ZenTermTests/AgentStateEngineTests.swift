@@ -23,6 +23,12 @@ enum AgentTitleFixtures {
     static let claudeAnswered = "◐ Create test.txt"
 }
 
+enum AgentNotificationFixtures {
+    static let claudeTitle = "Claude Code"
+    static let claudePermission = "Claude needs your permission"
+    static let claudeIdlePrompt = "Claude is waiting for your input"
+}
+
 final class AgentStateEngineTests: XCTestCase {
     private func codexState(_ title: String) -> AgentSignalState? {
         AgentStateEngine.evaluate(AgentRules.rules(for: "codex"), title: title, progress: "4;0").state
@@ -241,6 +247,56 @@ final class AgentIdentificationTests: XCTestCase {
 
         for title in cases {
             XCTAssertNil(AgentRules.agentName(matching: title), "\(title) is not proof of an agent")
+        }
+    }
+
+    func test_claudesPermissionPrompt_asksForYou() {
+        let body = AgentNotificationFixtures.claudePermission
+        XCTAssertEqual(
+            AgentRules.notificationAttention(body: body, agentName: AgentNotificationFixtures.claudeTitle), .waiting)
+        XCTAssertEqual(AgentRules.notificationAttention(body: body, agentName: "claude"), .waiting)
+    }
+
+    func test_claudesIdlePrompt_carriesNoState() {
+        XCTAssertNil(
+            AgentRules.notificationAttention(
+                body: AgentNotificationFixtures.claudeIdlePrompt, agentName: AgentNotificationFixtures.claudeTitle))
+    }
+
+    func test_anythingElseClaudePosts_closesATurn() {
+        XCTAssertEqual(
+            AgentRules.notificationAttention(
+                body: "Refactor finished", agentName: AgentNotificationFixtures.claudeTitle),
+            .completed)
+    }
+
+    func test_aBlockedCodexTitle_carriesItsAsk_inBothBlinkStates() {
+        let captured = [
+            "[ . ] Action Required | Approve writing test2.txt | zen-term",
+            "[ ! ] Action Required | Approve writing test2.txt | zen-term",
+        ]
+        for title in captured {
+            XCTAssertEqual(AgentRules.codexAsk(fromTitle: title), "Approve writing test2.txt", title)
+        }
+        XCTAssertEqual(
+            AgentRules.codexAsk(fromTitle: "[ ! ] Action Required | Run cat a | wc | zen-term"), "Run cat a | wc")
+    }
+
+    func test_aTitleWithNoAsk_carriesNone() {
+        for title in ["[ ! ] Action Required | zen-term", "[ . ] Action Required", "⠋ Approve writing | zen-term"] {
+            XCTAssertNil(AgentRules.codexAsk(fromTitle: title), title)
+        }
+    }
+
+    func test_aCodexNotification_carriesNoState() {
+        XCTAssertNil(AgentRules.notificationAttention(body: "Approve writing test2.txt", agentName: "codex"))
+    }
+
+    func test_anAgentWithNoBodyRules_isTakenAtItsWord() {
+        for name in ["pi", nil] as [String?] {
+            XCTAssertEqual(
+                AgentRules.notificationAttention(body: "Refactor finished", agentName: name), .waiting,
+                "\(name ?? "an unnamed agent") has no rules to read its body by")
         }
     }
 }

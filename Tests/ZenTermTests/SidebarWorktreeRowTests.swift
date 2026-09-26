@@ -538,7 +538,9 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         c.activateWorkspaceForTesting(c.workspaceIDsForTesting[0])
         XCTAssertEqual(rows(of: c).map(\.showsAttentionForTesting), [false, false, false])
 
-        agent.delegate?.surface(agent, didPostNotification: TerminalNotification(title: "", body: "Wants to run"))
+        agent.delegate?.surface(
+            agent, didPostNotification: TerminalNotification(title: "Claude Code", body: "Claude needs your permission")
+        )
         waitUntil(rows(of: c)[2].showsAttentionForTesting, "the worktree row's dot")
 
         XCTAssertEqual(rows(of: c).map(\.showsAttentionForTesting), [false, false, true])

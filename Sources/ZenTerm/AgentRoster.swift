@@ -29,6 +29,17 @@ final class AgentRoster {
         return program == configured || knownAgents.contains(program) ? program : nil
     }
 
+    // A whole token, so `pi` is not found inside "pipeline" and `gemini-cli` is found whole.
+    static func agentName(notifying title: String, ai: String?) -> String? {
+        let words = Set(
+            title.lowercased().split { !$0.isLetter && !$0.isNumber && !programPunctuation.contains($0) }
+                .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: String(programPunctuation))) })
+        let candidates = knownAgents.sorted() + [ai.flatMap(Self.program(of:))].compactMap { $0 }
+        return candidates.first { words.contains($0.lowercased()) }
+    }
+
+    private static let programPunctuation: Set<Character> = ["-", "_", "."]
+
     static func program(of command: String) -> String? {
         command.split(whereSeparator: \.isWhitespace).first.map { URL(fileURLWithPath: String($0)).lastPathComponent }
     }

@@ -25,6 +25,7 @@ final class AgentFocusTests: WindowTestCase {
         }
         var config = GeneralConfig.builtIn
         config.attentionToast = .sticky
+        config.ai = "pi"
         GeneralConfig.setCurrentForTesting(config)
         WindowController.isPresent = { _ in true }
         WindowController.doneDecay = 0.3
@@ -209,7 +210,7 @@ final class AgentFocusTests: WindowTestCase {
         XCTAssertNotEqual(c.focusedSurfaceIDForTesting, first, "precondition: the split takes focus")
 
         firstSurface.delegate?.surface(
-            firstSurface, didPostNotification: TerminalNotification(title: "", body: "Wants to run swift test"))
+            firstSurface, didPostNotification: TerminalNotification(title: "pi", body: "Wants to run swift test"))
         drainMainQueue()
 
         XCTAssertNil(c.attentionStateForTesting(tabIndex: 0), "the tab number keeps using tab activeness")
@@ -252,7 +253,7 @@ final class AgentFocusTests: WindowTestCase {
         let pane = try XCTUnwrap(c.focusedSurfaceIDForTesting)
         let surface = try XCTUnwrap(spawned.first)
 
-        surface.delegate?.surface(surface, didPostNotification: TerminalNotification(title: "", body: "Done?"))
+        surface.delegate?.surface(surface, didPostNotification: TerminalNotification(title: "pi", body: "Done?"))
         drainMainQueue()
         XCTAssertEqual(c.agentStateForTesting(pane), .waiting)
 
@@ -276,7 +277,9 @@ final class AgentFocusTests: WindowTestCase {
         drainMainQueue()
 
         surface.delegate?.surface(
-            surface, didPostNotification: TerminalNotification(title: "", body: "Claude needs your permission"))
+            surface,
+            didPostNotification: TerminalNotification(
+                title: AgentNotificationFixtures.claudeTitle, body: AgentNotificationFixtures.claudePermission))
         drainMainQueue()
         XCTAssertEqual(c.agentStateForTesting(pane), .waiting)
 
@@ -296,7 +299,9 @@ final class AgentFocusTests: WindowTestCase {
         let surface = try XCTUnwrap(spawned.first)
 
         surface.delegate?.surface(
-            surface, didPostNotification: TerminalNotification(title: "", body: "Claude needs your permission"))
+            surface,
+            didPostNotification: TerminalNotification(
+                title: AgentNotificationFixtures.claudeTitle, body: AgentNotificationFixtures.claudePermission))
         drainMainQueue()
         XCTAssertEqual(c.agentStateForTesting(pane), .waiting)
 
@@ -312,13 +317,14 @@ final class AgentFocusTests: WindowTestCase {
         let c = makeWindow()
         let pane = try XCTUnwrap(c.focusedSurfaceIDForTesting)
         let surface = try XCTUnwrap(spawned.first)
+        c.identifyAgentForTesting(pane, name: "pi")
 
         surface.delegate?.surface(
-            surface, didPostNotification: TerminalNotification(title: "", body: "Claude needs your permission"))
+            surface, didPostNotification: TerminalNotification(title: "pi", body: "Approve the plan?"))
         drainMainQueue()
         let asking = try XCTUnwrap(c.agentRowForTesting(pane))
         XCTAssertEqual(c.agentStateForTesting(pane), .waiting, "a prompt you watched arrive is still blocked")
-        XCTAssertEqual(asking.summary, "Claude needs your permission")
+        XCTAssertEqual(asking.summary, "Approve the plan?")
 
         c.answerTypedAgent()
         drainMainQueue()

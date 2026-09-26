@@ -37,6 +37,24 @@ enum AgentRules {
     // The prompt blinks between `[ ! ]` and `[ . ]`, and a task's own words can say "Action Required".
     private static let codexPrompt = #"^\[ [!.] \] Action Required"#
 
+    static func notificationAttention(body: String, agentName: String?) -> SurfaceAttention? {
+        let agent = key(for: agentName)
+        guard !statelessNotifiers.contains(agent ?? "") else { return nil }
+        let rules = notificationRules.filter { $0.agent == agent }
+        guard !rules.isEmpty else { return .waiting }
+        guard let rule = rules.first(where: { $0.match.matches(body) }) else { return .completed }
+        return rule.state
+    }
+
+    // Codex posts before its title says what it wants, so its title rules own its state.
+    private static let statelessNotifiers: Set<String> = ["codex"]
+
+    // Claude's idle prompt lands a minute after its progress already closed the turn, so it carries no state.
+    private static let notificationRules: [(agent: String, state: SurfaceAttention?, match: RuleMatcher)] = [
+        ("claude", .waiting, .contains("needs your permission")),
+        ("claude", nil, .contains("is waiting for your input")),
+    ]
+
     static let clearedProgress = "4;0"
 
     static func progressRegion(_ progress: TerminalProgress?) -> String {
@@ -81,6 +99,13 @@ enum AgentRules {
     static func isClaudeResuming(from previous: String, to title: String, agentName: String?) -> Bool {
         guard key(for: agentName) == "claude", let glyph = title.first else { return false }
         return previous.first == "✳" && claudeWorkingGlyphs.contains(glyph)
+    }
+
+    static func codexAsk(fromTitle title: String) -> String? {
+        guard RulePatterns.matches(codexPrompt, title) else { return nil }
+        let parts = title.components(separatedBy: " | ")
+        let ask = parts.dropFirst().dropLast().joined(separator: " | ").trimmingCharacters(in: .whitespaces)
+        return ask.isEmpty ? nil : ask
     }
 
     // `✳` is left out: it heads the idle title Claude flickers to mid-turn, whose tail is only "Claude Code".
