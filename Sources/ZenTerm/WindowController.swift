@@ -2503,13 +2503,18 @@ final class WindowController: NSObject {
     }
 
     private func isFromAgent(_ surface: SurfaceID?, _ notification: TerminalNotification) -> Bool {
-        guard let surface, !agents.contains(surface) else { return true }
+        guard let surface, liveAgent(surface) == nil else { return true }
         return AgentRoster.agentName(notifying: notification.title, ai: GeneralConfig.current.ai) != nil
+    }
+
+    // An exited agent stays listed until its latch is answered, and the shell back in its pane is not it.
+    private func liveAgent(_ surface: SurfaceID) -> AgentRoster.Agent? {
+        agents.agents[surface].flatMap { $0.hasExited ? nil : $0 }
     }
 
     private func notificationAttention(_ surface: SurfaceID?, _ notification: TerminalNotification) -> SurfaceAttention?
     {
-        let listed = surface.flatMap { agents.agents[$0]?.name }
+        let listed = surface.flatMap { liveAgent($0)?.name }
         let name = listed ?? (notification.title.isEmpty ? nil : notification.title)
         return AgentRules.notificationAttention(body: notification.body, agentName: name)
     }
@@ -2824,7 +2829,7 @@ final class WindowController: NSObject {
 
     // An arrow key at a prompt sends nothing, so an agent that signals its own answer is never answered by a key.
     private func awaitsSignalAnswer(_ surface: SurfaceID) -> Bool {
-        guard let agent = agents.agents[surface], !agent.hasExited else { return false }
+        guard let agent = liveAgent(surface) else { return false }
         return AgentRules.key(for: agent.name) != nil && attention.agentState(of: surface) == .waiting
     }
 

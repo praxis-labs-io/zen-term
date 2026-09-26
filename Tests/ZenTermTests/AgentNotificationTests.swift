@@ -204,6 +204,22 @@ final class AgentNotificationTests: WindowTestCase {
         XCTAssertEqual(cardCount(c), 1)
     }
 
+    func test_theShellLeftInAFailedAgentsPane_isNotTheAgent() throws {
+        let c = makeWindow()
+        let pane = try backgroundPane(c)
+        let failure = TerminalCommandResult(exitCode: 1, duration: 1)
+        c.identifyAgentForTesting(pane.id, name: "pi")
+        pane.surface.delegate?.surface(pane.surface, commandDidFinish: failure)
+        drainMainQueue()
+
+        post(pane.surface, title: "build", body: "done")
+
+        XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .completed, "a shell's notification never waits")
+        XCTAssertEqual(
+            c.agentRowForTesting(pane.id)?.summary, WindowController.commandResultMessage(failure),
+            "the exited row keeps its own words")
+    }
+
     func test_aCodexNotification_changesNoState() throws {
         let c = makeWindow()
         let codex = try backgroundPane(c)
