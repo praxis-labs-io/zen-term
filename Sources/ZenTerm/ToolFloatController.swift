@@ -143,7 +143,6 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     private func focusShown() {
         guard let active = activeFloat else { return }
         active.surface.focus()
-        syncFocus()
         onFocusChanged?()
     }
 

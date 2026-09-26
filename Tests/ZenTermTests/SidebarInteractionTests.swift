@@ -655,6 +655,10 @@ final class SidebarInteractionTests: WindowTestCase {
         let float = try XCTUnwrap(controller.floatsForTesting.shownSurface as? RecordingSurface)
         XCTAssertTrue(controller.window.firstResponder === float.view)
         XCTAssertEqual(float.focusRenders.last, true)
+        let tookResponder = try XCTUnwrap(float.focusRenders.firstIndex(of: true))
+        XCTAssertFalse(
+            float.focusRenders[tookResponder...].contains(false),
+            "a same-turn blur between two focuses leaves libghostty's blink timer stopped")
         XCTAssertEqual(controller.floatsForTesting.shownOverlayForTesting?.isHaloVisible, true)
     }
 
