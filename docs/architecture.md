@@ -270,11 +270,17 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **An agent has a second latch that answering clears** (`agentState(of:)`), so a split
   asking in the active tab still reads waiting while its tab number stays quiet. It
   latches whatever the pane's focus, since the notification behind it comes only once,
-  and focus does not clear it: looking at a prompt is not answering it. Answering is
-  typing into the pane, where a key the chrome did not claim is aimed at the agent and a
-  reserved chord is not. A turn ending (`working` falling)
-  clears a waiting latch and leaves `completed`, here and nowhere else; a new turn
-  replaces that, never a waiting latch.
+  and focus does not clear it: looking at a prompt is not answering it. Claude and Codex
+  answer their own wait: Claude when a spinner title follows its `✳` prompt title, Codex
+  when its title leaves the prompt, and either when a turn starts. A key at their prompt
+  answers nothing, since an arrow key sends nothing. Any other agent is answered by typing
+  into the pane, where a key the chrome did not claim is aimed at the agent and a reserved
+  chord is not; typing also clears any agent's done or exited latch. A turn ending
+  (`working` falling) clears a waiting latch and leaves `completed`, here and nowhere
+  else; a new turn replaces that, and a waiting latch only for Claude and Codex. A
+  `completed` latch on the pane you are focused on clears after `doneDecay` of unbroken
+  focus, and leaving restarts the clock; a failed exit never decays. Tab numbers and cards
+  keep their own latch and do not decay.
 - **`AgentRoster` says which surfaces run an agent**, per window: its name, where the name
   came from (`Source`, ranked so a stronger source renames, a weaker one never does, and a
   missing name yields to any real name), and what it last said. `identify` is the one way

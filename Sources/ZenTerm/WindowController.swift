@@ -50,6 +50,7 @@ final class WindowController: NSObject {
 
     private var fontSizeCard: FontSizeCard?
     private var fontSizeDismissal: DispatchWorkItem?
+    private var pendingDoneDecay: DispatchWorkItem?
     private static let fontSizeCardLinger: TimeInterval = 1.2
 
     func showFontSize(_ text: String) {
@@ -890,6 +891,7 @@ final class WindowController: NSObject {
     private func restoreFocusToActive() {
         if floats.isOpen { floats.refocus() } else { activeController?.restoreUnifiedFocus() }
         syncWindowFocus()
+        if floats.isOpen { answerFocusedAgent() }
     }
 
     // One surface reports focused: the focused one in the key window's active tab, as libghostty's own apprt does.
@@ -2501,7 +2503,13 @@ final class WindowController: NSObject {
                 joined = true
             }
             guard self.agents.contains(surface) else { return }
+            let previous = self.agentStates.title(of: surface)
             self.agentStates.noteTitle(title, of: surface)
+            if self.attention.agentState(of: surface) == .waiting,
+                AgentRules.isClaudeResuming(from: previous, to: title, agentName: self.agents.agents[surface]?.name)
+            {
+                self.answerAgent(surface)
+            }
             if self.deriveAgentState(surface) { return }
             if self.agentStates.state(of: surface) == .working { self.noteTitleMessage(surface) }
             if joined { self.renderAgents() }
@@ -2526,11 +2534,15 @@ final class WindowController: NSObject {
             AgentRules.rules(for: agent.name), title: agentStates.title(of: surface),
             progress: agentStates.progress(of: surface))
         let wasHolding = agentStates.isHoldingIdle(surface)
+        let wasBlocked = agentStates.state(of: surface) == .blocked
         guard let next = agentStates.publish(surface, outcome) else {
             if !wasHolding, agentStates.isHoldingIdle(surface) { settleIdleHold(surface) }
             return false
         }
         Log.info("agent \(agent.name ?? AgentRoster.unnamed): \(outcome.label)", category: .workspace)
+        if attention.agentState(of: surface) == .waiting, wasBlocked || resumesAfterAsking(next, agent: agent) {
+            answerAgent(surface)
+        }
         applyDerived(next, to: surface)
         return true
     }
@@ -2553,6 +2565,7 @@ final class WindowController: NSObject {
             if attention.isWorking(surface) { answerAgent(surface) }
             attention.setWorking(surface, false)
             if !wasAsking { agents.setMessage(surface, nil) }
+            if surface == presentFocusedSurface { armDoneDecay() }
         case .blocked:
             guard let tab = tab(of: surface) else { return }
             attention.setWorking(surface, false)
@@ -2684,8 +2697,8 @@ final class WindowController: NSObject {
     // Presence, not just focus: an agent that speaks while you are in another app has not been seen.
     static var isPresent: (NSWindow) -> Bool = { NSApp.isActive && $0.isKeyWindow }
 
-    private func isFocused(_ surface: SurfaceID) -> Bool {
-        surface == focusedSurface && Self.isPresent(window)
+    private var presentFocusedSurface: SurfaceID? {
+        Self.isPresent(window) ? focusedSurface : nil
     }
 
     private var focusedSurface: SurfaceID? {
@@ -2696,18 +2709,49 @@ final class WindowController: NSObject {
 
     // Coming on screen answers the toast and the tab, never the agent: looking at a prompt is not answering it.
     private func answerFocusedAgent() {
-        if let surface = focusedSurface, isFocused(surface) {
+        if let surface = presentFocusedSurface {
             attention.markSeen(surface)
         }
+        armDoneDecay()
         renderAttention()
+    }
+
+    // A done row describes the pane you are looking at only until you have had a moment to read it.
+    static var doneDecay: TimeInterval = 5
+
+    private func armDoneDecay() {
+        pendingDoneDecay?.cancel()
+        guard let surface = presentFocusedSurface, agents.contains(surface),
+            attention.agentState(of: surface) == .completed
+        else { return }
+        let decay = DispatchWorkItem { [weak self] in self?.settleDone(surface) }
+        pendingDoneDecay = decay
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.doneDecay, execute: decay)
+    }
+
+    private func settleDone(_ surface: SurfaceID) {
+        guard presentFocusedSurface == surface, attention.agentState(of: surface) == .completed,
+            agents.agents[surface]?.hasExited == false
+        else { return }
+        answerAgent(surface)
     }
 
     // Runs on every keystroke the chrome passed on, which includes ones the find field takes before the pane.
     func answerTypedAgent() {
-        guard !search.isEditing, let surface = focusedSurface, isFocused(surface),
-            attention.agentState(of: surface) > .working
+        guard !search.isEditing, let surface = presentFocusedSurface,
+            attention.agentState(of: surface) > .working, !awaitsSignalAnswer(surface)
         else { return }
         answerAgent(surface)
+    }
+
+    // An arrow key at a prompt sends nothing, so an agent that signals its own answer is never answered by a key.
+    private func awaitsSignalAnswer(_ surface: SurfaceID) -> Bool {
+        guard let agent = agents.agents[surface], !agent.hasExited else { return false }
+        return AgentRules.key(for: agent.name) != nil && attention.agentState(of: surface) == .waiting
+    }
+
+    private func resumesAfterAsking(_ next: AgentSignalState, agent: AgentRoster.Agent) -> Bool {
+        next == .working && AgentRules.key(for: agent.name) != nil
     }
 
     // The row takes its tone from the store and its words from the roster, so both clear here or the row lies.
