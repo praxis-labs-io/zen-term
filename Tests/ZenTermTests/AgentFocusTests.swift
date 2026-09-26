@@ -317,15 +317,14 @@ final class AgentFocusTests: WindowTestCase {
         let c = makeWindow()
         let pane = try XCTUnwrap(c.focusedSurfaceIDForTesting)
         let surface = try XCTUnwrap(spawned.first)
+        c.identifyAgentForTesting(pane, name: "pi")
 
         surface.delegate?.surface(
-            surface,
-            didPostNotification: TerminalNotification(
-                title: AgentNotificationFixtures.claudeTitle, body: AgentNotificationFixtures.claudePermission))
+            surface, didPostNotification: TerminalNotification(title: "pi", body: "Approve the plan?"))
         drainMainQueue()
         let asking = try XCTUnwrap(c.agentRowForTesting(pane))
         XCTAssertEqual(c.agentStateForTesting(pane), .waiting, "a prompt you watched arrive is still blocked")
-        XCTAssertEqual(asking.summary, "Claude needs your permission")
+        XCTAssertEqual(asking.summary, "Approve the plan?")
 
         c.answerTypedAgent()
         drainMainQueue()

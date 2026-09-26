@@ -201,15 +201,15 @@ final class AgentTitleRoutingTests: WindowTestCase {
         XCTAssertEqual(c.agentStateForTesting(id), .idle, "a denied prompt leaves the title without a spinner")
     }
 
-    func test_aCodexThatAskedByNotification_isAnsweredByItsNextTurn() throws {
+    func test_aClaudeThatAskedOutsideATurn_isAnsweredByItsNextTurn() throws {
         let c = makeWindow()
         let (surface, id) = try firstPane(c)
-        push(AgentTitleFixtures.codexIdle, from: surface)
-        c.identifyAgentForTesting(id, name: "codex")
-        notify(TerminalNotification(title: "", body: "Approve writing test2.txt"), from: surface)
+        c.identifyAgentForTesting(id, name: "claude")
+        notify(TerminalNotification(title: "Claude Code", body: "Claude needs your permission"), from: surface)
         XCTAssertEqual(c.agentStateForTesting(id), .waiting, "precondition: it asked without its prompt title")
 
-        push(AgentTitleFixtures.codexWorking[0], from: surface)
+        surface.delegate?.surface(surface, progressDidChange: TerminalProgress(state: .indeterminate))
+        drainMainQueue()
 
         XCTAssertEqual(
             c.agentStateForTesting(id), .working, "a wait that never passed through the prompt title still ends")
