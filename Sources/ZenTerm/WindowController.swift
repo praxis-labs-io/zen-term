@@ -661,11 +661,14 @@ final class WindowController: NSObject {
                 if self.search.handle(event) { return true }
                 return self.scrollMode.handle(event)
             } : nil
+        let floatHoldsMode = active && floats.shownSurface != nil
+        let tabHoldsMode = active && !floatHoldsMode
+        floats.setFocusedSurfaceRendersFocused(!floatHoldsMode)
         if let previous = modeRenderTarget, previous !== activeController {
             previous.setFocusedSurfaceRendersFocused(true)
         }
-        modeRenderTarget = active ? activeController : nil
-        activeController?.setFocusedSurfaceRendersFocused(!active)
+        modeRenderTarget = tabHoldsMode ? activeController : nil
+        activeController?.setFocusedSurfaceRendersFocused(!tabHoldsMode)
     }
 
     private weak var modeRenderTarget: TabController?

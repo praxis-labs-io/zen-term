@@ -112,6 +112,27 @@ final class WindowKeyFocusTests: WindowTestCase {
         XCTAssertTrue(overlay.isHaloVisible)
     }
 
+    func test_aModeInAnOpenFloat_rendersItUnfocused_likeAPane() throws {
+        let c = makeWindow()
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let float = try XCTUnwrap(c.floatsForTesting.shownSurface as? RecordingSurface)
+        let pane = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
+        let paneRenders = pane.focusRenders.count
+
+        c.handle(.toggleScrollMode)
+
+        XCTAssertEqual(float.focusRenders.last, false)
+        XCTAssertFalse(
+            pane.focusRenders.dropFirst(paneRenders).contains(true), "the mode is the float's, not the pane's")
+
+        c.handle(.toggleScrollMode)
+
+        XCTAssertEqual(float.focusRenders.last, true)
+        XCTAssertEqual(
+            c.floatsForTesting.shownOverlayForTesting?.isHaloVisible, true, "a mode dims the cursor, not the edge")
+    }
+
     func test_aScratchFloatOpenedInANonKeyWindow_doesNotReportFocused() throws {
         let c = makeWindow()
         resignKey(c)
