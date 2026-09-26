@@ -40,6 +40,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     /// A float is seen when it is shown, not when it takes first responder: showing is the only moment it is looked at.
     var onShown: ((SurfaceID) -> Void)?
+    var onFocusChanged: (() -> Void)?
 
     // Keyed by the surface object: `surfaceForFloat` reuses a live surface, and a rebuilt registry key can disagree.
     private var idBySurface: [ObjectIdentifier: SurfaceID] = [:]
@@ -135,8 +136,33 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     }
 
     var shownSurface: TerminalSurface? { activeFloat?.surface }
+    var shownOverlayForTesting: SurfaceFloatOverlay? { activeFloat?.overlay }
 
-    func refocus() { activeFloat?.surface.focus() }
+    func refocus() {
+        guard let active = activeFloat else { return }
+        active.surface.focus()
+        onFocusChanged?()
+    }
+
+    func setHoldsKeyFocus(_ holds: Bool) {
+        holdsKeyFocus = holds
+        syncFocus()
+    }
+
+    private var holdsKeyFocus = true
+
+    func setFocusedSurfaceRendersFocused(_ focused: Bool) {
+        focusedSurfaceRendersFocused = focused
+        syncFocus()
+    }
+
+    private var focusedSurfaceRendersFocused = true
+
+    private func syncFocus() {
+        guard let active = activeFloat else { return }
+        active.surface.setFocused(holdsKeyFocus && focusedSurfaceRendersFocused)
+        active.overlay.isHaloVisible = holdsKeyFocus
+    }
 
     func reapplyTheme() { activeFloat?.overlay.reapplyTheme() }
 
@@ -188,7 +214,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     func reveal(_ id: SurfaceID) {
         if let active = activeFloat, idBySurface[ObjectIdentifier(active.surface)] == id {
-            return active.surface.focus()
+            return refocus()
         }
         guard let live = liveFloats.values.first(where: { idBySurface[ObjectIdentifier($0.surface)] == id }) else {
             return
@@ -218,7 +244,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         presentOverlay(overlay)
         activeFloat = (spec, surface, overlay, tab)
         yieldFocus()
-        surface.focus()
+        refocus()
         overlay.animateIn()
         idBySurface[ObjectIdentifier(surface)].map { onShown?($0) }
         onStateChanged?()
@@ -364,6 +390,9 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     }
     func surfaceGridDidReflow(_ s: TerminalSurface) {
         relay(s, .gridReflow)
+    }
+    func surfaceWantsFocus(_ s: TerminalSurface) {
+        if s === activeFloat?.surface { refocus() }
     }
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {
         relay(s, .search(.total(total)))

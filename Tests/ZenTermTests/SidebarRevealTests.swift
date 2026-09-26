@@ -719,6 +719,22 @@ final class SidebarRevealTests: WindowTestCase {
         XCTAssertGreaterThan(panel.haloOpacityForTesting, 0, "and the pane takes it back")
     }
 
+    func test_revealing_dimsAFocusedDrawersHalo_likeThePanes() throws {
+        let controller = try makeCollapsedController()
+        let sidebar = controller.sidebarForTesting
+        controller.handle(.toggleBottomDrawer)
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0, "precondition: the drawer glows before the card is up")
+
+        sidebar.reveal()
+
+        XCTAssertEqual(panel.haloOpacityForTesting, 0)
+
+        sidebar.hideReveal()
+
+        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0)
+    }
+
     func test_aModalOnScreen_stopsTheEdgeArming() throws {
         let controller = try makeCollapsedController()
         let sidebar = controller.sidebarForTesting

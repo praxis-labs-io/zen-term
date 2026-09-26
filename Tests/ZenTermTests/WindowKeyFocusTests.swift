@@ -77,6 +77,74 @@ final class WindowKeyFocusTests: WindowTestCase {
         XCTAssertEqual(drawer.focusRenders.last, true)
     }
 
+    func test_aFocusedDrawer_dropsItsHaloWithItsWindow() throws {
+        let c = makeWindow()
+        c.handle(.toggleBottomDrawer)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let panel = try XCTUnwrap(c.focusedPanelForTesting)
+        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0, "precondition: the drawer shows its halo")
+
+        resignKey(c)
+
+        XCTAssertEqual(panel.haloOpacityForTesting, 0)
+
+        becomeKey(c)
+
+        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0)
+    }
+
+    func test_anOpenScratchFloat_losesFocusWithItsWindow() throws {
+        let c = makeWindow()
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let float = try XCTUnwrap(c.floatsForTesting.shownSurface as? RecordingSurface)
+        let overlay = try XCTUnwrap(c.floatsForTesting.shownOverlayForTesting)
+        XCTAssertTrue(overlay.isHaloVisible, "precondition: the float shows its accent edge")
+
+        resignKey(c)
+
+        XCTAssertEqual(float.focusRenders.last, false)
+        XCTAssertFalse(overlay.isHaloVisible)
+
+        becomeKey(c)
+
+        XCTAssertEqual(float.focusRenders.last, true)
+        XCTAssertTrue(overlay.isHaloVisible)
+    }
+
+    func test_aModeInAnOpenFloat_rendersItUnfocused_likeAPane() throws {
+        let c = makeWindow()
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let float = try XCTUnwrap(c.floatsForTesting.shownSurface as? RecordingSurface)
+        let pane = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
+        let paneRenders = pane.focusRenders.count
+
+        c.handle(.toggleScrollMode)
+
+        XCTAssertEqual(float.focusRenders.last, false)
+        XCTAssertFalse(
+            pane.focusRenders.dropFirst(paneRenders).contains(true), "the mode is the float's, not the pane's")
+
+        c.handle(.toggleScrollMode)
+
+        XCTAssertEqual(float.focusRenders.last, true)
+        XCTAssertEqual(
+            c.floatsForTesting.shownOverlayForTesting?.isHaloVisible, true, "a mode dims the cursor, not the edge")
+    }
+
+    func test_aScratchFloatOpenedInANonKeyWindow_doesNotReportFocused() throws {
+        let c = makeWindow()
+        resignKey(c)
+
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        c.window.contentView?.layoutSubtreeIfNeeded()
+
+        let float = try XCTUnwrap(c.floatsForTesting.shownSurface as? RecordingSurface)
+        XCTAssertEqual(float.focusRenders.last, false)
+        XCTAssertEqual(c.floatsForTesting.shownOverlayForTesting?.isHaloVisible, false)
+    }
+
     func test_aTabLeftBehind_readsUnfocused_andComesBackWhenItIsActiveAgain() throws {
         let c = makeWindow()
         let first = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)

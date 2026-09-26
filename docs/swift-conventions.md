@@ -51,6 +51,11 @@ modifiers. A clear above `GhosttySurface.syncFocus`'s dedupe, or a clear of ever
 over-clears releases. A surface already unfocused retires nothing on resign, so it sends its own
 (`releaseHeldModifiers`).
 
+**Never send `setFocused(false)` between two focuses in the same turn.** libghostty cancels the cursor
+blink timer asynchronously, so a true arriving within about a millisecond of the false skips the restart
+and the cancel then lands: a filled cursor that never blinks. After `focus()`, let `syncWindowFocus` send
+the settled value once rather than re-applying a gate flag the resync has not updated yet.
+
 **A tracking area is geometric: z-order and hit-testing do not gate it.** A view under an opaque
 sibling still gets `mouseEntered`, so a hover feature suppressed by "something covers it" has to test
 that state explicitly, and a covered `IconButton` still pops its tooltip. Hiding it is the only way to
