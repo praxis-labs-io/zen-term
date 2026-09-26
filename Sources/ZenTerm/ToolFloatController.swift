@@ -138,9 +138,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     var shownSurface: TerminalSurface? { activeFloat?.surface }
     var shownOverlayForTesting: SurfaceFloatOverlay? { activeFloat?.overlay }
 
-    func refocus() { focusShown() }
-
-    private func focusShown() {
+    func refocus() {
         guard let active = activeFloat else { return }
         active.surface.focus()
         onFocusChanged?()
@@ -216,7 +214,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     func reveal(_ id: SurfaceID) {
         if let active = activeFloat, idBySurface[ObjectIdentifier(active.surface)] == id {
-            return focusShown()
+            return refocus()
         }
         guard let live = liveFloats.values.first(where: { idBySurface[ObjectIdentifier($0.surface)] == id }) else {
             return
@@ -246,7 +244,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         presentOverlay(overlay)
         activeFloat = (spec, surface, overlay, tab)
         yieldFocus()
-        focusShown()
+        refocus()
         overlay.animateIn()
         idBySurface[ObjectIdentifier(surface)].map { onShown?($0) }
         onStateChanged?()
@@ -394,7 +392,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         relay(s, .gridReflow)
     }
     func surfaceWantsFocus(_ s: TerminalSurface) {
-        if s === activeFloat?.surface { focusShown() }
+        if s === activeFloat?.surface { refocus() }
     }
     func surface(_ s: TerminalSurface, searchTotalDidChange total: Int?) {
         relay(s, .search(.total(total)))

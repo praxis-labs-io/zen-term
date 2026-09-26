@@ -53,8 +53,7 @@ enum CardChrome {
     private static func applyEdge(to card: NSView, cornerRadius: CGFloat, halo: Bool) {
         card.wantsLayer = true
         card.layer?.cornerRadius = cornerRadius
-        card.layer?.borderWidth = halo ? 1.5 : 1
-        card.layer?.borderColor = borderColor(halo: halo)
+        reapplyEdge(to: card, halo: halo)
     }
 
     private static func borderColor(halo: Bool) -> CGColor {
