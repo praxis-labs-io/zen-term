@@ -133,6 +133,20 @@ final class WindowKeyFocusTests: WindowTestCase {
             c.floatsForTesting.shownOverlayForTesting?.isHaloVisible, true, "a mode dims the cursor, not the edge")
     }
 
+    func test_aFloatSearchingWhenItsWindowLosesKey_endsUnfocused() throws {
+        let c = makeWindow()
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let float = try XCTUnwrap(c.floatsForTesting.shownSurface as? RecordingSurface)
+        c.handle(.toggleSearch)
+        XCTAssertTrue(c.search.isEditing, "precondition: the find field holds the keyboard")
+
+        resignKey(c)
+
+        XCTAssertEqual(
+            float.focusRenders.last, false, "ending the search hands the float the responder in a window that is not key")
+    }
+
     func test_aScratchFloatOpenedInANonKeyWindow_doesNotReportFocused() throws {
         let c = makeWindow()
         resignKey(c)
