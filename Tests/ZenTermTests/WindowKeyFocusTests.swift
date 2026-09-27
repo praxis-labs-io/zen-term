@@ -144,7 +144,8 @@ final class WindowKeyFocusTests: WindowTestCase {
         resignKey(c)
 
         XCTAssertEqual(
-            float.focusRenders.last, false, "ending the search hands the float the responder in a window that is not key")
+            float.focusRenders.last, false,
+            "ending the search hands the float the responder in a window that is not key")
     }
 
     func test_aScratchFloatOpenedInANonKeyWindow_doesNotReportFocused() throws {
