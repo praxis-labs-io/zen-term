@@ -3,13 +3,6 @@ import XCTest
 @testable import ZenTerm
 
 final class ConfigWriterTests: XCTestCase {
-    private func makeTempDir() throws -> URL {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("zenterm-config-writer-\(UUID().uuidString)", isDirectory: true)
-        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
-        return dir
-    }
-
     private func seed(_ text: String, in dir: URL) throws {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try text.write(to: dir.appendingPathComponent("config"), atomically: true, encoding: .utf8)
@@ -20,41 +13,41 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_scalarSet_replacesActiveValue_preservingTrailingComment() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed("font-size = 14   # points; clamped to 6…72\n", in: dir)
         try ConfigWriter.apply(scalars: ["font-size": "15"], configRoot: dir)
         XCTAssertEqual(try read(dir), "font-size = 15  # points; clamped to 6…72\n")
     }
 
     func test_scalarSet_insertsAfterCommentedDefault() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed("# Terminal\n# font-size = 14   # points\n", in: dir)
         try ConfigWriter.apply(scalars: ["font-size": "18"], configRoot: dir)
         XCTAssertEqual(try read(dir), "# Terminal\n# font-size = 14   # points\nfont-size = 18\n")
     }
 
     func test_scalarSet_appendsWhenAbsent() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed("# just a comment\n", in: dir)
         try ConfigWriter.apply(scalars: ["theme": "gruvbox"], configRoot: dir)
         XCTAssertEqual(try read(dir), "# just a comment\ntheme = gruvbox\n")
     }
 
     func test_scalarSet_createsFileWhenAbsent() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try ConfigWriter.apply(scalars: ["theme": "gruvbox"], configRoot: dir)
         XCTAssertEqual(try read(dir), "theme = gruvbox\n")
     }
 
     func test_removal_deletesActiveLine() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed("# font-size = 14\nfont-size = 20\ntheme = gruvbox\n", in: dir)
         try ConfigWriter.apply(removals: ["font-size"], configRoot: dir)
         XCTAssertEqual(try read(dir), "# font-size = 14\ntheme = gruvbox\n")
     }
 
     func test_preservesUnknownKeysAndBlankLines() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         let original = "# header\n\nunknown-key = keepme\n\ntheme = old\n"
         try seed(original, in: dir)
         try ConfigWriter.apply(scalars: ["theme": "new"], configRoot: dir)
@@ -62,7 +55,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_roundTripsThroughParser() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed("# comment\n", in: dir)
         try ConfigWriter.apply(scalars: ["font-size": "16", "backdrop-alpha": "0.5"], configRoot: dir)
         let parsed = ConfigLoader.loadGeneralConfig(configRoot: dir)
@@ -72,7 +65,6 @@ final class ConfigWriterTests: XCTestCase {
 
     func test_unreadableExistingFile_throwsWithoutClobbering() throws {
         let dir = try makeTempDir()
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let url = dir.appendingPathComponent("config")
         let garbage = Data([0xFF, 0xFE, 0xFF])
         try garbage.write(to: url)
@@ -83,8 +75,6 @@ final class ConfigWriterTests: XCTestCase {
     func test_writesThroughSymlink() throws {
         let dir = try makeTempDir()
         let target = try makeTempDir()
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
         let realFile = target.appendingPathComponent("real-config")
         try "theme = old\n".write(to: realFile, atomically: true, encoding: .utf8)
         let link = dir.appendingPathComponent("config")
@@ -98,7 +88,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_keybind_emitsOnlyNonDefaultOverrides() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed("# ─── Keybinds ───\n", in: dir)
         var desired = KeymapOverrides(binds: KeymapDefaults.map)
         desired.bind(.toggleCommandPalette, to: [Chord(command: true, shift: true, key: "o")])
@@ -109,7 +99,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_keybind_resetAll_removesReservedKeybindLines() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed("theme = x\nkeybind = toggle_zoom=cmd+shift+z\n", in: dir)
         try ConfigWriter.apply(
             keybinds: KeymapOverrides(binds: KeymapDefaults.map), configRoot: dir)
@@ -119,7 +109,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_keybind_preservesFloatKeybindLines() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed("keybind = toggle_float:dev=cmd+shift+d\nkeybind = toggle_zoom=cmd+shift+z\n", in: dir)
         try ConfigWriter.apply(
             keybinds: KeymapOverrides(binds: KeymapDefaults.map), configRoot: dir)
@@ -129,7 +119,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_keybind_leavesFloatDefinitionLinesUntouched() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed("float = title:dev command:\"npm run dev\" key:cmd+shift+d\n", in: dir)
         var desired = KeymapOverrides(binds: KeymapDefaults.map)
         desired.bind(.toggleZoom, to: [Chord(command: true, shift: true, key: "z")])
@@ -139,7 +129,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_keybind_unboundAction_emitsANoneLine() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         var desired = KeymapOverrides(binds: KeymapDefaults.map)
         desired.unbind(.findNext)
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
@@ -149,7 +139,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_keybind_unboundAction_survivesAReadAndRewrite() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         var desired = KeymapOverrides(binds: KeymapDefaults.map)
         desired.unbind(.findNext)
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
@@ -166,7 +156,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_keybind_rebindingOneAction_leavesAnotherActionsUnbindOnDisk() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed("keybind = find_next=none\n", in: dir)
         let loaded = ConfigLoader.loadGeneralConfig(configRoot: dir)
 
@@ -180,7 +170,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_keybind_bindingAnUnboundActionBack_dropsTheNoneLine() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed("keybind = clear_screen=none\n", in: dir)
         let loaded = ConfigLoader.loadGeneralConfig(configRoot: dir)
 
@@ -196,7 +186,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_keybind_roundTripsThroughAssembler() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         var desired = KeymapOverrides(binds: KeymapDefaults.map)
         desired.bind(.toggleZoom, to: [Chord(command: true, shift: true, key: "z")])
         try ConfigWriter.apply(keybinds: desired, configRoot: dir)
@@ -240,7 +230,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_float_upsert_appendsWhenAbsent() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed("theme = x\n", in: dir)
         try ConfigWriter.apply(
             floatUpserts: [float(title: "dev", command: "vim", toggle: Chord(command: true, shift: true, key: "d"))],
@@ -249,7 +239,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_float_upsert_replacesByIDPreservingComment() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed("float = order:1 title:dev command:old key:cmd+shift+d  # my dev float\n", in: dir)
         try ConfigWriter.apply(
             floatUpserts: [float(title: "dev", command: "new", toggle: Chord(command: true, shift: true, key: "d"))],
@@ -259,7 +249,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_float_removal_deletesByIDLeavingOthers() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed(
             "# tools\nfloat = title:dev command:vim key:cmd+shift+d\nfloat = title:top command:htop key:cmd+shift+t\n",
             in: dir)
@@ -268,7 +258,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_float_upsertWithRemoval_movesFloatToNewTitle() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed("float = title:dev command:vim key:cmd+shift+d\n", in: dir)
         let renamed = float(title: "devbox", command: "vim", toggle: Chord(command: true, shift: true, key: "d"))
         try ConfigWriter.apply(floatUpserts: [renamed], floatRemovals: ["dev"], configRoot: dir)
@@ -278,7 +268,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_floatOrder_renumbersInPlace_preservingTheFileAround() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed(
             """
             # tools
@@ -306,7 +296,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_floatOrder_roundTripsThroughLoader() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed(
             """
             float = title:a command:a key:cmd+shift+a
@@ -323,7 +313,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_floatOrder_stampsEveryFloat_evenWhenNoneHadOrder() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed(
             """
             float = title:a command:a key:cmd+shift+a
@@ -340,7 +330,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_float_rename_keepsItsPositionInTheDock() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try seed(
             """
             float = title:a command:a key:cmd+shift+a
@@ -362,7 +352,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_float_roundTripsThroughLoader() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try ConfigWriter.apply(
             floatUpserts: [
                 float(title: "dev", command: "npm run dev", toggle: Chord(command: true, shift: true, key: "d"))
@@ -430,7 +420,7 @@ final class ConfigWriterTests: XCTestCase {
     }
 
     func test_keybind_narrowingMultiChordAction_persistsAndRoundTrips() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         XCTAssertNil(
             KeymapDefaults.map[Chord(command: true, shift: true, key: "u")],
             "a default claimed the fixture's extra chord; move the fixture to a free one")

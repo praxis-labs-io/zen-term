@@ -5,21 +5,6 @@ import XCTest
 @testable import ZenTerm
 
 final class TerminalConfigWriteTests: XCTestCase {
-    private var tempDirs: [URL] = []
-
-    override func tearDownWithError() throws {
-        for dir in tempDirs { try? FileManager.default.removeItem(at: dir) }
-        tempDirs = []
-    }
-
-    private func makeTempDir() throws -> URL {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "zt-terminal-\(ProcessInfo.processInfo.globallyUniqueString)")
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        tempDirs.append(dir)
-        return dir
-    }
-
     func test_terminalScalars_writeAndReload() throws {
         let dir = try makeTempDir()
         try ConfigWriter.apply(

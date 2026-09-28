@@ -7,13 +7,6 @@ final class WorkspacesWriterTests: XCTestCase {
         URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
     }
 
-    private func makeTempDir() throws -> URL {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("zenterm-writer-\(UUID().uuidString)", isDirectory: true)
-        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
-        return dir
-    }
-
     private func assertRoundTrips(_ ws: Workspace, file: StaticString = #filePath, line: UInt = #line) {
         let parsed = WorkspacesParser.parse(WorkspacesWriter.serialize(ws))
         XCTAssertEqual(parsed.count, 1, "expected exactly one section", file: file, line: line)
@@ -98,7 +91,7 @@ final class WorkspacesWriterTests: XCTestCase {
     }
 
     func test_append_createsDirAndFile() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         try WorkspacesWriter.append(
             Workspace(
                 title: "First", path: expandTilde("~/Dev/first"),
@@ -109,7 +102,6 @@ final class WorkspacesWriterTests: XCTestCase {
 
     func test_append_preservesExistingContentAndComments() throws {
         let root = try makeTempDir()
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let url = root.appendingPathComponent("workspaces")
         try "# my hand-written header\n[Existing]\npath = ~/Dev/existing\n"
             .write(to: url, atomically: true, encoding: .utf8)
@@ -127,7 +119,6 @@ final class WorkspacesWriterTests: XCTestCase {
 
     func test_append_unreadableExistingFile_throwsWithoutClobbering() throws {
         let root = try makeTempDir()
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let url = root.appendingPathComponent("workspaces")
         let invalidUTF8 = Data([0xFF, 0xFE, 0xFF])
         try invalidUTF8.write(to: url)
@@ -141,9 +132,7 @@ final class WorkspacesWriterTests: XCTestCase {
 
     func test_append_writesThroughSymlink() throws {
         let root = try makeTempDir()
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let target = try makeTempDir()
-        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
         let realFile = target.appendingPathComponent("workspaces-real")
         try "# dotfiles\n".write(to: realFile, atomically: true, encoding: .utf8)
         let link = root.appendingPathComponent("workspaces")
@@ -163,7 +152,7 @@ final class WorkspacesWriterTests: XCTestCase {
     }
 
     func test_append_rejectsDuplicateTitle() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         let ws = Workspace(
             title: "Dup", path: expandTilde("~/Dev/dup"),
             main: nil, right: nil, bottom: nil, focus: .main, env: [:])
@@ -186,7 +175,7 @@ final class WorkspacesWriterTests: XCTestCase {
     }
 
     func test_update_replacesSectionInPlace_preservingNeighboursAndComments() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         try seed(
             """
             # my workspaces
@@ -220,7 +209,7 @@ final class WorkspacesWriterTests: XCTestCase {
     }
 
     func test_update_renamesSection_movingItToTheNewTitle() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         try seed("[Old]\npath = ~/Dev/old\n", in: root)
 
         try WorkspacesWriter.update(
@@ -234,7 +223,7 @@ final class WorkspacesWriterTests: XCTestCase {
     }
 
     func test_update_renameOntoExistingTitle_throwsWithoutClobbering() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         try seed("[A]\npath = ~/Dev/a\n\n[B]\npath = ~/Dev/b\n", in: root)
 
         XCTAssertThrowsError(
@@ -252,7 +241,7 @@ final class WorkspacesWriterTests: XCTestCase {
     }
 
     func test_update_handlesCRLFLineEndings_replacingInPlace() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         try seed("[Alpha]\r\npath = ~/Dev/alpha\r\n\r\n[Beta]\r\npath = ~/Dev/beta\r\n", in: root)
 
         try WorkspacesWriter.update(
@@ -268,7 +257,7 @@ final class WorkspacesWriterTests: XCTestCase {
     }
 
     func test_update_missingOriginal_fallsBackToAppend() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         try seed("[A]\npath = ~/Dev/a\n", in: root)
 
         try WorkspacesWriter.update(
@@ -281,7 +270,7 @@ final class WorkspacesWriterTests: XCTestCase {
     }
 
     func test_remove_dropsSection_preservingNeighbours() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         try seed(
             "[Alpha]\npath = ~/Dev/alpha\n\n[Beta]\npath = ~/Dev/beta\n\n[Gamma]\npath = ~/Dev/gamma\n",
             in: root)
@@ -295,7 +284,7 @@ final class WorkspacesWriterTests: XCTestCase {
     }
 
     func test_remove_lastSection_leavesTheRest() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         try seed("[Alpha]\npath = ~/Dev/alpha\n\n[Beta]\npath = ~/Dev/beta\n", in: root)
 
         try WorkspacesWriter.remove(title: "Beta", configRoot: root)
@@ -304,7 +293,7 @@ final class WorkspacesWriterTests: XCTestCase {
     }
 
     func test_remove_unknownTitle_isANoOp() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         try seed("[Alpha]\npath = ~/Dev/alpha\n", in: root)
 
         try WorkspacesWriter.remove(title: "Ghost", configRoot: root)
@@ -325,7 +314,7 @@ final class WorkspacesWriterTests: XCTestCase {
         """
 
     func test_swap_exchangesTwoSectionPositions() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         try seed(threeSections, in: root)
 
         XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
@@ -334,7 +323,7 @@ final class WorkspacesWriterTests: XCTestCase {
     }
 
     func test_swap_movesEachSectionsFieldsWithIt() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         try seed(threeSections, in: root)
 
         XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
@@ -347,7 +336,7 @@ final class WorkspacesWriterTests: XCTestCase {
     }
 
     func test_swap_handlesSectionsOfUnequalLength() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         try seed(
             """
             [Short]
@@ -371,7 +360,7 @@ final class WorkspacesWriterTests: XCTestCase {
     }
 
     func test_swap_exchangesNonAdjacentSections() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         try seed(threeSections, in: root)
 
         XCTAssertTrue(try WorkspacesWriter.swap("Gamma", with: "Alpha", configRoot: root))
@@ -380,7 +369,7 @@ final class WorkspacesWriterTests: XCTestCase {
     }
 
     func test_swap_carriesACommentAttachedToItsHeader() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         try seed(
             """
             # the one I actually work in
@@ -403,7 +392,7 @@ final class WorkspacesWriterTests: XCTestCase {
     }
 
     func test_swap_leavesABlankSeparatedBannerAtTheTop() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         try seed(
             """
             # zen-term workspaces — the ⌘⇧P project list.
@@ -425,7 +414,7 @@ final class WorkspacesWriterTests: XCTestCase {
     }
 
     func test_swap_preservesTheBlankSeparators() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         try seed(threeSections, in: root)
         let before = try read(root)
 
@@ -439,7 +428,7 @@ final class WorkspacesWriterTests: XCTestCase {
     }
 
     func test_swap_handlesCRLFLineEndings() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         try seed("[Alpha]\r\npath = ~/Dev/alpha\r\n\r\n[Beta]\r\npath = ~/Dev/beta\r\n", in: root)
 
         XCTAssertTrue(try WorkspacesWriter.swap("Beta", with: "Alpha", configRoot: root))
@@ -448,7 +437,7 @@ final class WorkspacesWriterTests: XCTestCase {
     }
 
     func test_swap_unknownTitle_isANoOp_andReportsIt() throws {
-        let root = try makeTempDir()
+        let root = tempDirPath()
         try seed(threeSections, in: root)
         let before = try read(root)
 

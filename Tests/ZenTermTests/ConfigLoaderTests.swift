@@ -4,14 +4,6 @@ import XCTest
 @testable import ZenTerm
 
 final class ConfigLoaderTests: XCTestCase {
-    private func makeTempDir() throws -> URL {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("zenterm-cfg-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
-        return dir
-    }
-
     func test_missingFileYieldsBuiltInDefault() throws {
         let root = try makeTempDir()
         let app = ConfigLoader.loadAppTheme(configRoot: root, general: .builtIn)

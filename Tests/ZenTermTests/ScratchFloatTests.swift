@@ -4,13 +4,6 @@ import XCTest
 @testable import ZenTerm
 
 final class ScratchFloatTests: XCTestCase {
-    private func makeTempDir() throws -> URL {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("zenterm-scratch-\(UUID().uuidString)", isDirectory: true)
-        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
-        return dir
-    }
-
     private func read(_ dir: URL) throws -> String {
         try String(contentsOf: dir.appendingPathComponent("config"), encoding: .utf8)
     }
@@ -38,7 +31,7 @@ final class ScratchFloatTests: XCTestCase {
     }
 
     func test_atItsDefault_scratchWritesNoLine() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         try ConfigWriter.apply(keybinds: KeymapOverrides(defaults: KeymapDefaults.map), configRoot: dir)
 
         XCTAssertEqual(scratchLines(try read(dir)), [])
@@ -46,7 +39,7 @@ final class ScratchFloatTests: XCTestCase {
     }
 
     func test_rebindingScratch_writesOneLine_andASecondWriteDoesNotDuplicateIt() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         var overrides = KeymapOverrides(defaults: KeymapDefaults.map)
         overrides.bind(.toggleToolFloat("scratch"), to: [Chord(command: true, key: "y")])
 
@@ -61,7 +54,6 @@ final class ScratchFloatTests: XCTestCase {
 
     func test_aUserFloatsKeybindLineIsStillPreserved() throws {
         let dir = try makeTempDir()
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try "keybind = toggle_float:btop=cmd+shift+b\n"
             .write(to: dir.appendingPathComponent("config"), atomically: true, encoding: .utf8)
 
@@ -71,7 +63,7 @@ final class ScratchFloatTests: XCTestCase {
     }
 
     func test_unbindingScratch_roundTripsThroughTheFile() throws {
-        let dir = try makeTempDir()
+        let dir = tempDirPath()
         var overrides = KeymapOverrides(defaults: KeymapDefaults.map)
         overrides.unbind(.toggleToolFloat("scratch"))
         try ConfigWriter.apply(keybinds: overrides, configRoot: dir)
