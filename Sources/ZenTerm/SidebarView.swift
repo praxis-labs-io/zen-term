@@ -402,8 +402,7 @@ final class SidebarView: NSView {
         guard let next = KeyboardFocus.step(from: current, delta: delta, count: stops.count) else { return }
         switch stops[next] {
         case let row as SettingsNavRow: row.takeKeyboardFocus()
-        case let row as SidebarAgentRow: row.takeKeyboardFocus()
-        case let row as SidebarWaitingElsewhereRow: row.takeKeyboardFocus()
+        case let row as SidebarJumpRow: row.takeKeyboardFocus()
         default: return
         }
         reveal(stops[next])
