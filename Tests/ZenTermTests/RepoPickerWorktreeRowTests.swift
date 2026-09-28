@@ -7,6 +7,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
     private var window: NSWindow?
 
     private var worktreeRoot: URL!
+    private var repoRoot: URL!
 
     override func setUp() {
         super.setUp()
@@ -14,6 +15,10 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         worktreeRoot =
             FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-wt-root-\(UUID().uuidString)", isDirectory: true)
+            .standardizedFileURL
+        repoRoot =
+            FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-wt-repos-\(UUID().uuidString)", isDirectory: true)
             .standardizedFileURL
         WorktreeStore.rootOverrideForTesting = worktreeRoot
         GitRepoStatus.resetForTesting()
@@ -23,6 +28,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         window = nil
         WorktreeStore.rootOverrideForTesting = nil
         GitRepoStatus.resetForTesting()
+        try? FileManager.default.removeItem(at: repoRoot)
         super.tearDown()
     }
 
@@ -996,7 +1002,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
     }
 
     private func path(_ name: String) -> URL {
-        FileManager.default.temporaryDirectory
+        repoRoot
             .appendingPathComponent("zenterm-wt-\(name)", isDirectory: true)
             .standardizedFileURL
     }
