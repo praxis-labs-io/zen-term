@@ -1420,7 +1420,7 @@ final class WindowController: NSObject {
         _ picker: RepoPickerOverlay, _ worktree: Worktree, from parent: Workspace,
         items: [ConfirmCardChecklist.Item]
     ) {
-        let name = WorktreeRemovalMessage.name(worktree)
+        let name = worktree.name
         let card = ConfirmCard(
             title: "Remove Worktree", items: items, confirmLabel: "Remove",
             background: Theme.current.chrome.background.nsColor,

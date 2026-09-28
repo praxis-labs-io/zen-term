@@ -9,7 +9,7 @@ struct WorktreeOrigin: Equatable {
 
     init(parent: Workspace, worktree: Worktree) {
         self.parent = parent
-        name = worktree.branch ?? String(worktree.head.prefix(7))
+        name = worktree.name
         path = worktree.path.standardizedFileURL
     }
 

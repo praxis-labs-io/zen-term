@@ -3,14 +3,10 @@ import Foundation
 enum WorktreeRemovalMessage {
     typealias Item = ConfirmCardChecklist.Item
 
-    static func name(_ worktree: Worktree) -> String {
-        worktree.branch ?? String(worktree.head.prefix(7))
-    }
-
     static func items(
         for worktree: Worktree, state: WorktreeState?, carried: [String], closes: ClosedByRemoval
     ) -> [Item] {
-        let name = name(worktree)
+        let name = worktree.name
         let detached = worktree.branch == nil
         var items = [whatItHolds(name: name, detached: detached, state: state)]
         if !carried.isEmpty {

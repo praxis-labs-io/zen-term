@@ -540,9 +540,8 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     /// A worktree is cut at the repo root, so a parent pointing into the repo opens at its own folder inside it.
     static func workspace(for worktree: Worktree, parent: Workspace, repoRoot: URL?) -> Workspace {
-        let name = worktree.branch ?? String(worktree.head.prefix(7))
-        return Workspace(
-            title: "\(parent.title): \(name)",
+        Workspace(
+            title: "\(parent.title): \(worktree.name)",
             path: GitRepo.mirrored(parent.path, from: repoRoot, into: worktree.path)
                 ?? worktree.path.standardizedFileURL,
             main: parent.main, right: parent.right, bottom: parent.bottom, focus: parent.focus,
@@ -608,7 +607,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         let name: String
 
         init(worktree: Worktree) {
-            name = worktree.branch ?? String(worktree.head.prefix(7))
+            name = worktree.name
             super.init()
 
             let spinner = Spinner()
@@ -783,7 +782,7 @@ final class RepoPickerOverlay: PaletteOverlay {
                 return applyRemoved(removed)
             }
             let head =
-                worktree.map { $0.branch ?? String($0.head.prefix(7)) }
+                worktree.map(\.name)
                 ?? GitRepoStatus.branch(statusPath)
             branchLabel.stringValue = head ?? ""
             branchLabel.setAccessibilityLabel(head.map { Self.headDescription($0, worktree) })

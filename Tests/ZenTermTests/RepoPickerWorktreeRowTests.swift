@@ -799,7 +799,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             if let header = view as? PaletteSectionHeader { return "header:\(header.title)" }
             guard let row = view as? RepoPickerOverlay.RowView else { return "?" }
             if let worktree = row.worktree {
-                return "worktree:\(worktree.branch ?? String(worktree.head.prefix(7)))"
+                return "worktree:\(worktree.name)"
             }
             if let workspace = row.workspace {
                 return (row.style == .ghost ? "muted:" : "workspace:") + workspace.title
