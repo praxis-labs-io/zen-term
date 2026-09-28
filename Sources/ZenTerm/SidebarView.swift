@@ -199,10 +199,7 @@ final class SidebarView: NSView {
 
     private func makeWaitingRow() -> SidebarWaitingElsewhereRow {
         let row = SidebarWaitingElsewhereRow { [weak self] in self?.onJumpElsewhere?() }
-        row.onArrowUp = { [weak self] in self?.moveFocus(-1) }
-        row.onArrowDown = { [weak self] in self?.moveFocus(1) }
-        row.onEscape = { [weak self] in self?.onLeave?() }
-        row.onFocusChanged = { [weak self] in self?.onFocusChanged?() }
+        wire(row)
         waitingRow = row
         return row
     }
@@ -228,12 +225,16 @@ final class SidebarView: NSView {
     private func agentRow(for id: SurfaceID) -> SidebarAgentRow {
         if let row = agentRows[id] { return row }
         let row = SidebarAgentRow { [weak self] in self?.onJump?(id) }
+        wire(row)
+        agentRows[id] = row
+        return row
+    }
+
+    private func wire(_ row: SidebarJumpRow) {
         row.onArrowUp = { [weak self] in self?.moveFocus(-1) }
         row.onArrowDown = { [weak self] in self?.moveFocus(1) }
         row.onEscape = { [weak self] in self?.onLeave?() }
         row.onFocusChanged = { [weak self] in self?.onFocusChanged?() }
-        agentRows[id] = row
-        return row
     }
 
     func render(_ items: [SidebarRowItem]) {
