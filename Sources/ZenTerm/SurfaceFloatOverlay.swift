@@ -138,8 +138,12 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost {
         chrome.findBarFill = isSolid ? background : ring.color
     }
 
+    var isHaloVisible = true {
+        didSet { if oldValue != isHaloVisible { CardChrome.reapplyEdge(to: card, halo: isHaloVisible) } }
+    }
+
     func reapplyTheme() {
-        CardChrome.reapplyEdge(to: card, halo: true)
+        CardChrome.reapplyEdge(to: card, halo: isHaloVisible)
         applyBackground()
         chrome.reapplyTheme()
     }

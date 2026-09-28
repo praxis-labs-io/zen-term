@@ -143,6 +143,7 @@ final class WindowController: NSObject {
             restoreFocus: { [weak self] in self?.activeController?.restoreUnifiedFocus() },
             currentTabID: { [weak self] in self?.activeWorkspace.activeID })
         controller.onStateChanged = { [weak self] in self?.renderDock() }
+        controller.onFocusChanged = { [weak self] in self?.syncWindowFocus() }
         controller.onRequestToast = { [weak self] content in self?.toasts.show(content) }
         controller.onProgress = { [weak self] surface, progress in
             self?.progressChanged(surface: surface, progress: progress)
@@ -648,11 +649,14 @@ final class WindowController: NSObject {
                 if self.search.handle(event) { return true }
                 return self.scrollMode.handle(event)
             } : nil
+        let floatHoldsMode = active && floats.shownSurface != nil
+        let tabHoldsMode = active && !floatHoldsMode
+        floats.setFocusedSurfaceRendersFocused(!floatHoldsMode)
         if let previous = modeRenderTarget, previous !== activeController {
             previous.setFocusedSurfaceRendersFocused(true)
         }
-        modeRenderTarget = active ? activeController : nil
-        activeController?.setFocusedSurfaceRendersFocused(!active)
+        modeRenderTarget = tabHoldsMode ? activeController : nil
+        activeController?.setFocusedSurfaceRendersFocused(!tabHoldsMode)
     }
 
     private weak var modeRenderTarget: TabController?
@@ -896,10 +900,12 @@ final class WindowController: NSObject {
 
     // One surface reports focused: the focused one in the key window's active tab, as libghostty's own apprt does.
     private func syncWindowFocus() {
-        activeController?.setHaloVisible(!sidebar.hasFocus && windowIsKey && !sidebar.isRevealed)
+        let holdsKeyFocus = windowIsKey && !sidebar.hasFocus
+        activeController?.setHaloVisible(holdsKeyFocus && !sidebar.isRevealed)
         for controller in allTabControllers {
-            controller.setWindowIsKey(windowIsKey && controller === activeController)
+            controller.setHoldsKeyFocus(holdsKeyFocus && controller === activeController)
         }
+        floats.setHoldsKeyFocus(holdsKeyFocus)
     }
 
     // Below `tabBar`, so the ⌘W guard toast fired over an open float stays visible.
@@ -2361,6 +2367,7 @@ final class WindowController: NSObject {
             self?.cancelConfirm()
             self?.endModes()
             self?.answerFocusedAgent()
+            self?.syncWindowFocus()
         }
         c.focusPastLeftEdge = { [weak self, weak c] in
             guard let self, c === self.activeController else { return false }

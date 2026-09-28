@@ -591,6 +591,94 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertTrue(controller.window.firstResponder === drawer.view)
     }
 
+    func test_navLeftIntoTheSidebar_blursThePaneBelowTheSeam_andNavRightRestoresIt() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        pane.focus()
+
+        try nav(.left, in: controller)
+        XCTAssertTrue(controller.sidebarForTesting.hasFocus)
+        XCTAssertEqual(pane.focusRenders.last, false, "the sidebar holds the keyboard, so the cursor stops blinking")
+
+        try nav(.right, in: controller)
+        XCTAssertEqual(pane.focusRenders.last, true)
+    }
+
+    func test_navLeftIntoTheSidebar_fromTheBottomDrawer_dropsItsHaloAndBlursIt() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleBottomDrawer)
+        let drawer = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0, "precondition: the drawer shows its halo")
+
+        try nav(.left, in: controller)
+        XCTAssertTrue(controller.sidebarForTesting.hasFocus)
+        XCTAssertEqual(panel.haloOpacityForTesting, 0)
+        XCTAssertEqual(drawer.focusRenders.last, false)
+
+        try nav(.right, in: controller)
+        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0)
+        XCTAssertEqual(drawer.focusRenders.last, true)
+    }
+
+    func test_clickingAPane_fromTheSidebar_givesItBackItsHaloAndCursor() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
+        let panel = try XCTUnwrap(controller.focusedPanelForTesting)
+        pane.focus()
+        controller.sidebarForTesting.focusActiveRow()
+        XCTAssertEqual(panel.haloOpacityForTesting, 0, "precondition: the sidebar took the halo")
+
+        let event = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: controller.window.windowNumber, context: nil, eventNumber: 0,
+                clickCount: 1, pressure: 1))
+        panel.mouseDown(with: event)
+
+        XCTAssertFalse(controller.sidebarForTesting.hasFocus)
+        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0)
+        XCTAssertEqual(pane.focusRenders.last, true)
+    }
+
+    func test_openingScratch_fromTheSidebar_showsTheFloatFocused() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.sidebarForTesting.focusActiveRow()
+        XCTAssertTrue(controller.sidebarForTesting.hasFocus)
+
+        controller.handle(.toggleToolFloat(ToolFloat.scratch.id))
+
+        let float = try XCTUnwrap(controller.floatsForTesting.shownSurface as? RecordingSurface)
+        XCTAssertTrue(controller.window.firstResponder === float.view)
+        XCTAssertEqual(float.focusRenders.last, true)
+        let tookResponder = try XCTUnwrap(float.focusRenders.firstIndex(of: true))
+        XCTAssertFalse(
+            float.focusRenders[tookResponder...].contains(false),
+            "a same-turn blur between two focuses leaves libghostty's blink timer stopped")
+        XCTAssertEqual(controller.floatsForTesting.shownOverlayForTesting?.isHaloVisible, true)
+    }
+
+    func test_clickingAnOpenFloat_fromTheSidebar_givesItBackItsEdgeAndCursor() throws {
+        let controller = makeController()
+        controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        let float = try XCTUnwrap(controller.floatsForTesting.shownSurface as? RecordingSurface)
+        let overlay = try XCTUnwrap(controller.floatsForTesting.shownOverlayForTesting)
+        controller.sidebarForTesting.focusActiveRow()
+        XCTAssertFalse(overlay.isHaloVisible, "precondition: the sidebar took the float's edge")
+
+        controller.window.makeFirstResponder(float.view)
+        float.delegate?.surfaceWantsFocus(float)
+
+        XCTAssertFalse(controller.sidebarForTesting.hasFocus)
+        XCTAssertTrue(overlay.isHaloVisible)
+        XCTAssertEqual(float.focusRenders.last, true)
+    }
+
     func test_nvimNavigatorFocusLeft_fromTheLeftmostPane_focusesTheSidebar() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
