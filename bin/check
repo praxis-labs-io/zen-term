@@ -43,8 +43,28 @@ JOBS="${SWIFT_BUILD_JOBS:-4}"
 echo "▸ swift build"
 swift build --jobs "$JOBS" 2>&1 | filter_noise
 
+TEST_LOG=$(mktemp -t zen-check-test)
+trap 'rm -f "$TEST_LOG"' EXIT
+
+# swift test names no failing case when a signal kills its test process, so name the case it died in.
+report_unfinished_cases() {
+    local unfinished
+    unfinished=$(awk '
+        /^Test Case .* started\.$/ { sub(/^Test Case /, ""); sub(/ started\.$/, ""); running[$0] = 1; next }
+        /^Test Case .* (passed|failed|skipped) / { sub(/^Test Case /, ""); sub(/ (passed|failed|skipped) .*$/, ""); delete running[$0] }
+        END { for (name in running) print "    " name }
+    ' "$TEST_LOG")
+    [[ -z "$unfinished" ]] && return 0
+    echo "✗ the test process died mid-case, with no result logged:" >&2
+    echo "$unfinished" >&2
+    echo "  A crash leaves a report in ~/Library/Logs/DiagnosticReports. None means it was killed." >&2
+}
+
 echo "▸ swift test"
-swift test --jobs "$JOBS" 2>&1 | filter_noise
+if ! swift test --jobs "$JOBS" 2>&1 | filter_noise | tee "$TEST_LOG"; then
+    report_unfinished_cases
+    exit 1
+fi
 
 echo "▸ swift format lint"
 swift format lint --strict --recursive Sources Tests
