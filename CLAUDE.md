@@ -50,9 +50,10 @@ Terminal-native. Xcode must be installed for the toolchain, but you never open i
   `swift format lint --strict`, `swiftlint --strict`. `bin/check --fix`
   auto-applies formatter and linter fixes. Requires `swiftlint`.
 - **Stop a dev build by its exact binary, never by a loose pattern.** Use
-  `zt-drive.sh quit`, or `pgrep -f '\.build/.*/ZenTerm$'` and check it matched one
-  process. `Products/Debug/ZenTerm` also matches `ZenTermTests.xctest`, so a
-  `kill`/`pkill` on it silently kills a test run in progress in any worktree.
+  `zt-drive.sh quit` (the `drive-dev-app` skill), or `pgrep -f '\.build/.*/ZenTerm$'`
+  and check it matched one process. `Products/Debug/ZenTerm` also matches
+  `ZenTermTests.xctest`, so a `kill`/`pkill` on it silently kills a test run in
+  progress in any worktree.
 
 **Run the full gate once, before pushing.** `bin/check` fully green before a push or a
 PR, not after each commit. Not just build and test: format-lint and swiftlint are part
