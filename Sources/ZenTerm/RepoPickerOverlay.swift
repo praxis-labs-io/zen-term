@@ -188,9 +188,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             guard let listing = listings[workspace.path.standardizedFileURL] else { continue }
             for worktree in listing.worktrees {
                 if worktree.path.standardizedFileURL == target { return (worktree, workspace) }
-                let mirror = GitRepo.mirrorPath(
-                    workspace.path, from: GitRepoStatus.repoRoot(workspace.path), into: worktree.path)
-                if mirror.standardizedFileURL == target { return (worktree, workspace) }
+                if Self.mirror(of: workspace, in: worktree) == target { return (worktree, workspace) }
             }
         }
         return nil
@@ -207,19 +205,19 @@ final class RepoPickerOverlay: PaletteOverlay {
     private static func isListed(
         _ worktree: Worktree, parent: Workspace, among listed: Set<URL>
     ) -> Bool {
-        let mirror = GitRepo.mirrorPath(
-            parent.path, from: GitRepoStatus.repoRoot(parent.path), into: worktree.path)
-        return listed.contains(worktree.path.standardizedFileURL)
-            || listed.contains(mirror.standardizedFileURL)
+        listed.contains(worktree.path.standardizedFileURL)
+            || listed.contains(mirror(of: parent, in: worktree))
     }
 
     // A worktree is cut at the repo root, so it also reads as open when the mirrored subfolder is.
     private static func worktreeOpenState(
         _ worktree: Worktree, parent: Workspace, openState: (URL) -> WorkspaceOpenState
     ) -> WorkspaceOpenState {
-        let mirror = GitRepo.mirrorPath(
-            parent.path, from: GitRepoStatus.repoRoot(parent.path), into: worktree.path)
-        return .strongest([openState(mirror), openState(worktree.path)])
+        .strongest([openState(mirror(of: parent, in: worktree)), openState(worktree.path)])
+    }
+
+    private static func mirror(of parent: Workspace, in worktree: Worktree) -> URL {
+        GitRepo.mirrorPath(parent.path, from: GitRepoStatus.repoRoot(parent.path), into: worktree.path)
     }
 
     override func numberOfRows() -> Int { rows.count }
@@ -540,9 +538,8 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     /// A worktree is cut at the repo root, so a parent pointing into the repo opens at its own folder inside it.
     static func workspace(for worktree: Worktree, parent: Workspace, repoRoot: URL?) -> Workspace {
-        let name = worktree.branch ?? String(worktree.head.prefix(7))
-        return Workspace(
-            title: "\(parent.title): \(name)",
+        Workspace(
+            title: "\(parent.title): \(worktree.name)",
             path: GitRepo.mirrored(parent.path, from: repoRoot, into: worktree.path)
                 ?? worktree.path.standardizedFileURL,
             main: parent.main, right: parent.right, bottom: parent.bottom, focus: parent.focus,
@@ -608,7 +605,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         let name: String
 
         init(worktree: Worktree) {
-            name = worktree.branch ?? String(worktree.head.prefix(7))
+            name = worktree.name
             super.init()
 
             let spinner = Spinner()
@@ -783,7 +780,7 @@ final class RepoPickerOverlay: PaletteOverlay {
                 return applyRemoved(removed)
             }
             let head =
-                worktree.map { $0.branch ?? String($0.head.prefix(7)) }
+                worktree.map(\.name)
                 ?? GitRepoStatus.branch(statusPath)
             branchLabel.stringValue = head ?? ""
             branchLabel.setAccessibilityLabel(head.map { Self.headDescription($0, worktree) })

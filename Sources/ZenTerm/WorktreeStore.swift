@@ -6,6 +6,8 @@ struct Worktree: Equatable {
     let branch: String?
     let head: String
     let isLocked: Bool
+
+    var name: String { branch ?? String(head.prefix(7)) }
 }
 
 struct WorktreeListing: Equatable {

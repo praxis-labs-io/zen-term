@@ -51,7 +51,7 @@ final class FloatBackgroundOverrideTests: WindowTestCase {
                     overlay.bottomAnchor.constraint(equalTo: host.bottomAnchor),
                 ])
             },
-            focusedCWD: { self.root },
+            sessionCWD: { self.root },
             yieldFocus: {},
             restoreFocus: {},
             makeSurface: {

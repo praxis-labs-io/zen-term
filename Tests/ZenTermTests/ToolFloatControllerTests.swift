@@ -58,7 +58,7 @@ final class ToolFloatControllerTests: WindowTestCase {
                     overlay.bottomAnchor.constraint(equalTo: host.bottomAnchor),
                 ])
             },
-            focusedCWD: { currentCWD },
+            sessionCWD: { currentCWD },
             yieldFocus: {},
             restoreFocus: {},
             makeSurface: {

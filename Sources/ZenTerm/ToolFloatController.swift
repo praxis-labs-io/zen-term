@@ -5,7 +5,7 @@ import TerminalKit
 /// Per window, not per app: a surface is one `NSView` and lives in one view hierarchy.
 final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     private let presentOverlay: (SurfaceFloatOverlay) -> Void
-    private let focusedCWD: () -> URL?
+    private let sessionCWD: () -> URL?
     private let yieldFocus: () -> Void
     private let restoreFocus: () -> Void
     /// Optional: `TabList.activeID` traps on an empty list, and `closeTab` empties it before teardown reads this.
@@ -49,7 +49,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     init(
         presentOverlay: @escaping (SurfaceFloatOverlay) -> Void,
-        focusedCWD: @escaping () -> URL?,
+        sessionCWD: @escaping () -> URL?,
         yieldFocus: @escaping () -> Void,
         restoreFocus: @escaping () -> Void,
         currentTabID: @escaping () -> TabID? = { nil },
@@ -57,7 +57,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         resolveRepoRoot: @escaping (URL?, @escaping (URL?) -> Void) -> Void = GitRepoStatus.repoRoot
     ) {
         self.presentOverlay = presentOverlay
-        self.focusedCWD = focusedCWD
+        self.sessionCWD = sessionCWD
         self.yieldFocus = yieldFocus
         self.restoreFocus = restoreFocus
         self.currentTabID = currentTabID
@@ -166,7 +166,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     func reapplyTheme() { activeFloat?.overlay.reapplyTheme() }
 
-    private func floatCWD(_ spec: ToolFloat) -> URL? { spec.dir ?? focusedCWD() }
+    private func floatCWD(_ spec: ToolFloat) -> URL? { spec.dir ?? sessionCWD() }
 
     func toggle(_ spec: ToolFloat) {
         if pendingOpen?.id == spec.id { cancelPendingOpen(); return }

@@ -135,7 +135,7 @@ final class WindowController: NSObject {
     private lazy var floats: ToolFloatController = {
         let controller = ToolFloatController(
             presentOverlay: { [weak self] overlay in self?.presentWindowFloat(overlay) },
-            focusedCWD: { [weak self] in self?.activeController?.sessionCWD },
+            sessionCWD: { [weak self] in self?.activeController?.sessionCWD },
             yieldFocus: { [weak self] in
                 self?.endModes()
                 self?.activeController?.yieldFocusToFloat()
@@ -1420,7 +1420,7 @@ final class WindowController: NSObject {
         _ picker: RepoPickerOverlay, _ worktree: Worktree, from parent: Workspace,
         items: [ConfirmCardChecklist.Item]
     ) {
-        let name = WorktreeRemovalMessage.name(worktree)
+        let name = worktree.name
         let card = ConfirmCard(
             title: "Remove Worktree", items: items, confirmLabel: "Remove",
             background: Theme.current.chrome.background.nsColor,

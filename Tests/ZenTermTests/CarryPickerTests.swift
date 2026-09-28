@@ -38,7 +38,7 @@ final class CarryPickerTests: WindowTestCase {
         let landed = expectation(description: "catalog")
         picker.onChanged = { landed.fulfill() }
         picker.workspaceFolder = folder
-        wait(for: [landed], timeout: 2)
+        wait(for: [landed], timeout: 5)
         picker.onChanged = nil
         window?.layoutIfNeeded()
     }

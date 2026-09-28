@@ -170,6 +170,29 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         XCTAssertTrue(sink.submitted.isEmpty)
     }
 
+    func test_cancellingTheMove_putsTheKeyboardBackInTheBranchField() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let (overlay, _) = mount(
+            branches: ["feature/zen-473"],
+            holders: ["feature/zen-473": .mainCheckout(URL(fileURLWithPath: "/tmp/repo"))])
+        let field = branchField(in: overlay).field
+        type("feature/zen-473", into: overlay)
+        try XCTUnwrap(button(in: overlay, title: "Create Worktree")).onTap()
+        let card = confirmCard(in: overlay)
+        XCTAssertFalse(KeyboardFocus.isFocused(field, in: window), "the confirm took the keyboard")
+
+        try XCTUnwrap(button(in: card, title: "Cancel")).onTap()
+        XCTAssertNotNil(card.superview, "the confirm is still leaving")
+        XCTAssertTrue(KeyboardFocus.isFocused(field, in: window), "Cancel hands the keyboard back")
+
+        overlay.focusInitialResponder()
+        XCTAssertTrue(
+            KeyboardFocus.isFocused(field, in: window), "a refocus during the exit lands in the field, not the card")
+
+        waitUntil(card.superview == nil, "the confirm to finish leaving")
+        XCTAssertTrue(KeyboardFocus.isFocused(field, in: window), "and it stays there")
+    }
+
     func test_escapeWithTheConfirmUp_leavesTheCardStanding() throws {
         let (overlay, sink) = mount(
             branches: ["feature/zen-473"],
