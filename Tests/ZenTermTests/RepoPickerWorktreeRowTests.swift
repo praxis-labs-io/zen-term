@@ -12,14 +12,8 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
     override func setUp() {
         super.setUp()
         Motion.isReduceMotionEnabled = { true }
-        worktreeRoot =
-            FileManager.default.temporaryDirectory
-            .appendingPathComponent("zenterm-wt-root-\(UUID().uuidString)", isDirectory: true)
-            .standardizedFileURL
-        repoRoot =
-            FileManager.default.temporaryDirectory
-            .appendingPathComponent("zenterm-wt-repos-\(UUID().uuidString)", isDirectory: true)
-            .standardizedFileURL
+        worktreeRoot = uniqueTempDir("zenterm-wt-root")
+        repoRoot = uniqueTempDir("zenterm-wt-repos")
         WorktreeStore.rootOverrideForTesting = worktreeRoot
         GitRepoStatus.resetForTesting()
     }
@@ -999,6 +993,12 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         RunningWorkspace(
             window: window, id: WorkspaceID(raw: 1), name: name, folder: folder, isWorktree: isWorktree,
             removedWorktreeName: removedWorktreeName)
+    }
+
+    private func uniqueTempDir(_ prefix: String) -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(prefix)-\(UUID().uuidString)", isDirectory: true)
+            .standardizedFileURL
     }
 
     private func path(_ name: String) -> URL {
