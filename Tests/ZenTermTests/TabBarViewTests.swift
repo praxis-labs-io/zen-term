@@ -163,18 +163,73 @@ final class TabBarViewTests: WindowTestCase {
         }
     }
 
-    func test_chipTooltip_readsFocusTabWithCommandShortcut() {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
+    func test_chipTooltip_namesThatTabsDirectoryWithCommandShortcut() {
+        let home = PathDisplay.homePath
+        let dirs = [TabID(1): URL(fileURLWithPath: home + "/Dev/one"), TabID(10): URL(fileURLWithPath: "/tmp/ten")]
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in }, directory: { dirs[$0] })
         tabBar.render([
             TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle),
             TabBarItem(id: TabID(10), index: 10, title: "ten", isActive: false, attentionState: .idle),
         ])
         let tooltips = tabBar.chipTooltipsForTesting
         XCTAssertEqual(tooltips.count, 2)
-        XCTAssertEqual(tooltips[0].label, "Focus tab")
+        XCTAssertEqual(tooltips[0].label, "~/Dev/one")
         XCTAssertEqual(tooltips[0].shortcut, CommandCatalog.spec(for: .selectTab(1)).shortcut)
-        XCTAssertEqual(tooltips[1].label, "Focus tab")
+        XCTAssertEqual(tooltips[1].label, "/tmp/ten")
         XCTAssertNil(tooltips[1].shortcut)
+    }
+
+    func test_hoveringAChip_showsItsDirectoryAsItIsNow() throws {
+        var dir = URL(fileURLWithPath: "/tmp/before")
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in }, directory: { _ in dir })
+        mount(tabBar)
+        tabBar.render([item(1, "one", index: 1, active: true)])
+        let chip = try XCTUnwrap(tabBar.chipsForTesting.first)
+        defer { TooltipPresenter.shared.dismissForTesting() }
+
+        try hover(chip)
+        XCTAssertEqual(try presentedTooltip().labelForTesting, "/tmp/before")
+
+        try unhover(chip)
+        dir = URL(fileURLWithPath: "/tmp/after")
+        try hover(chip)
+        XCTAssertEqual(try presentedTooltip().labelForTesting, "/tmp/after", "a cd after the chip was built shows")
+    }
+
+    func test_hoveringAChip_withNoKnownDirectory_showsNoTooltip() throws {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
+        mount(tabBar)
+        tabBar.render([item(1, "one", index: 1, active: true)])
+        TooltipPresenter.shared.dismissForTesting()
+
+        try hover(try XCTUnwrap(tabBar.chipsForTesting.first))
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+
+        XCTAssertNil(TooltipPresenter.shared.tooltipForTesting)
+    }
+
+    private func mouseEvent() throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .mouseMoved, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+    }
+
+    private func hover(_ chip: NSView) throws {
+        TooltipPresenter.shared.dismissForTesting()
+        chip.mouseEntered(with: try mouseEvent())
+    }
+
+    private func unhover(_ chip: NSView) throws {
+        chip.mouseExited(with: try mouseEvent())
+    }
+
+    private func presentedTooltip() throws -> ChromeTooltip {
+        let deadline = Date().addingTimeInterval(2)
+        while TooltipPresenter.shared.tooltipForTesting == nil, Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        }
+        return try XCTUnwrap(TooltipPresenter.shared.tooltipForTesting, "no tooltip appeared on hover")
     }
 
     func test_overflow_fadesWhenTabsExceedWidth() {
