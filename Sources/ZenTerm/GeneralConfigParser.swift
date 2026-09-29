@@ -273,7 +273,7 @@ enum GeneralConfigParser {
 
     private static func parseAgents(_ value: String) -> [String] {
         var agents: [String] = []
-        for entry in ConfigText.unquote(value).split(separator: ",") {
+        for entry in value.split(separator: ",") {
             guard let program = AgentRoster.program(of: String(entry))?.lowercased(), !agents.contains(program)
             else { continue }
             agents.append(program)

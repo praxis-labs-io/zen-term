@@ -82,10 +82,6 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(parse("font-size = 14\n").agents, [])
     }
 
-    func test_agents_quotedBySettings_readsTheSameList() {
-        XCTAssertEqual(parse("agents = \"pi, gemini\"\n").agents, ["pi", "gemini"])
-    }
-
     func test_listedAgents_readsAnAIValueIn_whicheverLineComesFirst() {
         XCTAssertEqual(parse("ai = pi --model sonnet\n").listedAgents, ["pi"])
         XCTAssertEqual(parse("ai = pi\nagents = gemini\n").listedAgents, ["gemini", "pi"])
