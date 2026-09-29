@@ -256,7 +256,7 @@ final class TabController: NSObject {
         self.makeSurface = makeSurface
         paneCanvas = PaneCanvasController(
             initialCWD: initialCWD, initialCommand: initialCommand, env: env,
-            makeSurface: makeSurface)
+            isToolFloatOpen: isToolFloatOpen, makeSurface: makeSurface)
         canvas = paneCanvas.canvasView
         canvas.translatesAutoresizingMaskIntoConstraints = false
         super.init()

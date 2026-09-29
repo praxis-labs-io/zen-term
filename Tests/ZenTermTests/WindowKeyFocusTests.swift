@@ -242,6 +242,29 @@ final class WindowKeyFocusTests: WindowTestCase {
         XCTAssertFalse(afterClose.contains(false), "a false between two trues leaves libghostty's blink cancelled")
     }
 
+    func test_aBackgroundPaneExitingUnderAFloat_leavesTheFloatTheKeyboard() throws {
+        let c = makeWindow()
+        let background = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
+        c.handle(.splitVertical)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let pane = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let float = try XCTUnwrap(c.floatsForTesting.shownSurface as? RecordingSurface)
+        let paneRenders = pane.focusRenders.count
+
+        background.delegate?.surfaceDidExit(background, code: 0)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+
+        XCTAssertTrue(c.window.firstResponder === float.view, "typing would land in a pane hidden under the float")
+        XCTAssertFalse(pane.focusRenders.dropFirst(paneRenders).contains(true), "only the float reports focused")
+
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+
+        XCTAssertTrue(
+            c.window.firstResponder === pane.view, "the surviving pane gets the keyboard once the float closes")
+    }
+
     func test_aPaneSurvivingAnExitWhileADrawerHoldsFocus_takesTheKeyboardAndReportsFocused() throws {
         let c = makeWindow()
         let pane = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
