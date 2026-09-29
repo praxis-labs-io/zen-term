@@ -18,6 +18,7 @@ final class TabBarView: NSView {
     private let onSelect: (TabID) -> Void
     private let onClose: (TabID) -> Void
     private let onRename: (TabID) -> Void
+    private let directory: (TabID) -> URL?
 
     static let height: CGFloat = 30
 
@@ -59,11 +60,13 @@ final class TabBarView: NSView {
     init(
         onSelect: @escaping (TabID) -> Void,
         onClose: @escaping (TabID) -> Void,
-        onRename: @escaping (TabID) -> Void
+        onRename: @escaping (TabID) -> Void,
+        directory: @escaping (TabID) -> URL? = { _ in nil }
     ) {
         self.onSelect = onSelect
         self.onClose = onClose
         self.onRename = onRename
+        self.directory = directory
         super.init(frame: .zero)
         wantsLayer = true
 
@@ -124,7 +127,8 @@ final class TabBarView: NSView {
                         id: id, attributed: Self.tabLabel(item), index: item.index,
                         onClick: { [weak self] in self?.onSelect(id) },
                         onMiddleClick: { [weak self] in self?.onClose(id) },
-                        onDoubleClick: { [weak self] in self?.onRename(id) })
+                        onDoubleClick: { [weak self] in self?.onRename(id) },
+                        directory: { [weak self] in self?.directory(id) })
                     docView.addSubview(fresh)
                     return fresh
                 }()
@@ -174,7 +178,7 @@ final class TabBarView: NSView {
 
     static func tabLabelStringForTesting(_ item: TabBarItem) -> String { tabLabel(item).string }
 
-    var chipTooltipsForTesting: [(label: String, shortcut: String?)] {
+    var chipTooltipsForTesting: [(label: String?, shortcut: String?)] {
         chips.map { ($0.tooltipLabelForTesting, $0.tooltipShortcutForTesting) }
     }
 
@@ -327,9 +331,10 @@ final class TabBarView: NSView {
         private let onClick: () -> Void
         private let onMiddleClick: (() -> Void)?
         private let onDoubleClick: (() -> Void)?
+        private let directory: () -> URL?
         private var isHovered = false
         private let label: NSTextField
-        private lazy var tooltip = TooltipHost(label: "Focus tab") { [weak self] in
+        private lazy var tooltip = TooltipHost(label: "") { [weak self] in
             guard let self, self.tabIndex <= 9 else { return nil }
             return CommandCatalog.spec(for: .selectTab(self.tabIndex)).shortcut
         }
@@ -342,19 +347,20 @@ final class TabBarView: NSView {
 
         var attributedLabelForTesting: NSAttributedString { label.attributedStringValue }
 
-        var tooltipLabelForTesting: String { tooltip.label }
+        var tooltipLabelForTesting: String? { directoryLabel }
         var tooltipShortcutForTesting: String? { tooltip.shortcutForTesting }
 
         init(
             id: TabID, attributed: NSAttributedString, index: Int,
             onClick: @escaping () -> Void, onMiddleClick: (() -> Void)?,
-            onDoubleClick: (() -> Void)?
+            onDoubleClick: (() -> Void)?, directory: @escaping () -> URL?
         ) {
             self.id = id
             self.tabIndex = index
             self.onClick = onClick
             self.onMiddleClick = onMiddleClick
             self.onDoubleClick = onDoubleClick
+            self.directory = directory
             label = NSTextField(labelWithAttributedString: attributed)
             label.lineBreakMode = .byTruncatingTail
             label.maximumNumberOfLines = 1
@@ -404,8 +410,12 @@ final class TabBarView: NSView {
             guard isHovered != on else { return }
             isHovered = on
             updateBackground()
-            if on { tooltip.show(from: self) } else { tooltip.hide(from: self) }
+            guard on, let path = directoryLabel else { return tooltip.hide(from: self) }
+            tooltip.label = path
+            tooltip.show(from: self)
         }
+
+        private var directoryLabel: String? { directory().map { PathDisplay.abbreviatingHome($0.path) } }
         override func mouseDown(with event: NSEvent) {
             tooltip.hide(from: self)
             if event.clickCount == 2 { onDoubleClick?() } else { onClick() }

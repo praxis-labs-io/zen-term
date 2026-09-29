@@ -88,4 +88,24 @@ final class FocusedCWDTests: WindowTestCase {
 
         XCTAssertEqual(c.sessionCWD, root, "an unknown drawer cwd must not read as no-repository")
     }
+
+    func test_tabChipTooltip_namesThatTabsDirectory_notTheFocusedTabs() throws {
+        let one = root.appendingPathComponent("one", isDirectory: true)
+        let two = root.appendingPathComponent("two", isDirectory: true)
+        let c = makeWindow()
+        try XCTUnwrap(spawned.first).currentDirectory = one
+        c.newTabForTesting()
+        try XCTUnwrap(spawned.last).currentDirectory = two
+
+        let tabBar = try XCTUnwrap(
+            descendants(of: c.containerForTesting).compactMap { $0 as? TabBarView }.first)
+        XCTAssertEqual(
+            tabBar.chipTooltipsForTesting.map(\.label),
+            [PathDisplay.abbreviatingHome(one.path), PathDisplay.abbreviatingHome(two.path)],
+            "each chip names its own tab's directory while tab 2 has focus")
+    }
+
+    private func descendants(of view: NSView) -> [NSView] {
+        view.subviews.flatMap { [$0] + descendants(of: $0) }
+    }
 }

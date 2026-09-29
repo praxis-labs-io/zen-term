@@ -369,11 +369,13 @@ final class WindowController: NSObject {
         var onSelect: (TabID) -> Void = { _ in }
         var onClose: (TabID) -> Void = { _ in }
         var onRename: (TabID) -> Void = { _ in }
+        var directoryOf: (TabID) -> URL? = { _ in nil }
         var onNewTab: () -> Void = {}
         tabBar = TabBarView(
             onSelect: { onSelect($0) },
             onClose: { onClose($0) },
-            onRename: { onRename($0) })
+            onRename: { onRename($0) },
+            directory: { directoryOf($0) })
         var onSplitH: () -> Void = {}
         var onSplitV: () -> Void = {}
         var onPalette: () -> Void = {}
@@ -404,6 +406,7 @@ final class WindowController: NSObject {
         onSelect = { [weak self] in self?.select($0) }
         onClose = { [weak self] in self?.requestCloseTab($0) }
         onRename = { [weak self] in self?.openRenameTab($0) }
+        directoryOf = { [weak self] id in self?.workspace(of: id)?.controller(id)?.focusedCWD }
         onNewTab = { [weak self] in self?.newTab() }
         onSplitH = { [weak self] in self?.handle(.splitHorizontal) }
         onSplitV = { [weak self] in self?.handle(.splitVertical) }
