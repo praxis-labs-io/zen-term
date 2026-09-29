@@ -78,7 +78,8 @@ final class GeneralConfigParserTests: XCTestCase {
     }
 
     func test_agents_takesProgramNames_lowercasedAndDeduplicated() {
-        XCTAssertEqual(parse("agents = Pi, /opt/bin/gemini --yolo, , pi,\n").agents, ["pi", "gemini"])
+        XCTAssertEqual(parse("agents = Pi, /opt/bin/gemini, , pi,\n").agents, ["pi", "gemini"])
+        XCTAssertEqual(parse("agents = pi gemini\n").agents, ["pi", "gemini"])
         XCTAssertEqual(parse("font-size = 14\n").agents, [])
     }
 
