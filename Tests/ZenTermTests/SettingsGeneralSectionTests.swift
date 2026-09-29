@@ -64,6 +64,18 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         XCTAssertEqual(segments[Segment.updates.rawValue].selectedIndex, 0, "automatic updates On")
     }
 
+    func test_agentPrograms_typedInTheField_registerAsAgents() throws {
+        _ = mountSegments()
+        let field = try XCTUnwrap(section?.controlForTesting("agents") as? FieldBox)
+
+        field.setText("Pi, gemini")
+        field.onChange?()
+        field.onEndEditing?()
+
+        XCTAssertEqual(GeneralConfig.current.listedAgents, ["pi", "gemini"])
+        XCTAssertEqual(AgentRoster.agentName(launching: "gemini", listed: GeneralConfig.current.listedAgents), "gemini")
+    }
+
     func test_notifications_selectingOff_writesFalse() {
         segment(.notifications).select(1)
 

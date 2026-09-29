@@ -114,6 +114,8 @@ enum GeneralConfigParser {
                 if !value.isEmpty { config.editor = value }
             case "ai":
                 if !value.isEmpty { config.ai = value }
+            case "agents":
+                config.agents = parseAgents(value)
             case "float":
                 let (float, floatDiagnostics) = ToolFloatParser.parseLine(value, fallbackOrder: floatLineIndex)
                 if let float, ToolFloat.isBuiltIn(float.id) {
@@ -267,6 +269,16 @@ enum GeneralConfigParser {
             hidden.insert(button)
         }
         return hidden
+    }
+
+    private static func parseAgents(_ value: String) -> [String] {
+        var agents: [String] = []
+        for entry in value.split(whereSeparator: { $0 == "," || $0.isWhitespace }) {
+            guard let program = AgentRoster.program(of: String(entry))?.lowercased(), !agents.contains(program)
+            else { continue }
+            agents.append(program)
+        }
+        return agents
     }
 
     private static func parseReduceMotion(

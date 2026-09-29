@@ -47,7 +47,7 @@ enum ShellLaunch {
 
     // Only an agent's exit is tracked, and marking every program would toast when nvim quits.
     private static func isAgent(_ command: String) -> Bool {
-        AgentRoster.agentName(launching: command, ai: GeneralConfig.current.ai) != nil
+        AgentRoster.agentName(launching: command, listed: GeneralConfig.current.listedAgents) != nil
     }
 
     // A `-c` shell runs no prompt hook, so the program's own exit reports no OSC 133 mark of its own.

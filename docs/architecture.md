@@ -284,9 +284,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **`AgentRoster` says which surfaces run an agent**, per window: its name, where the name
   came from (`Source`, ranked so a stronger source renames, a weaker one never does, and a
   missing name yields to any real name), and what it last said. `identify` is the one way
-  in. A launch whose program is `ai` or a known agent joins at launch, idle included; any
+  in. A launch whose program is a known or listed agent (`GeneralConfig.listedAgents`: `agents` plus the `ai` program) joins at launch, idle included; any
   surface that sends indeterminate OSC 9;4 joins on that signal, an OSC 777 whose title
-  names a known agent or the `ai` program as a whole token joins on that, and a title an agent's
+  names a known or listed agent as a whole token joins on that, and a title an agent's
   identification pattern recognises joins on that. The last is the only way in for
   a hand-launched Codex, which emits no progress and notifies on only some stops, and the
   only way a hand-launched Claude is listed, and named, before its first turn. An agent
@@ -296,7 +296,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   The Agents rows join it with `agentState(of:)` and sort waiting (oldest first), working,
   done, idle, ties in sidebar order.
 - **Only an agent's OSC 777 can ask.** A notification from a surface that is not in the
-  roster, and whose title names no known agent or `ai` program, lands like a finished
+  roster, and whose title names no known or listed agent, lands like a finished
   command: `completed`, no banner, no row, and never over a tab that is already waiting.
   An agent's notification goes through `AgentRules.notificationAttention`. Claude has body
   rules: its permission prompt waits, its idle prompt carries no state (its progress

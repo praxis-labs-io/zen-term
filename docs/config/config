@@ -164,11 +164,21 @@
 # tab-inherit-cwd = false             # true | false
 
 # The two commands the "Editor + AI + Shell" workspace preset launches, in its
-# main pane and its right drawer. Unset → nvim and claude. Any command works:
-# these are what the preset runs, not a declaration of what you use.
+# main pane and its right drawer. Unset → nvim and claude. Any command works.
+# The program `ai` runs also counts as an agent, as if it were listed in `agents`.
 # In-app Settings edit: applies to the next workspace you build from the preset.
 # editor = nvim
 # ai = claude
+
+# ─── Agents ──────────────────────────────────────────────────────────────────
+
+# Programs ZenTerm treats as agents, by program name, separated by commas or
+# spaces. claude and codex are built in. A listed program counts as an agent when
+# a workspace pane or tool float starts it, or when a notification's title names
+# it. claude and codex are also recognized from their terminal titles, so an
+# alias or a command typed at a prompt works for them.
+# In-app Settings edit: applies to the next agent that starts or notifies.
+# agents = pi, gemini
 
 # ─── Notifications ───────────────────────────────────────────────────────────
 
