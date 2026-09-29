@@ -17,21 +17,21 @@ final class SettingsGeneralSection: SettingsFormSection {
         }
         addGroup("Notifications") {
             self.addSegmentedRow(
-                key: "attention-toast", caption: "Card for a tab that needs you",
+                key: "attention-toast", caption: "Notice for a tab that needs you",
                 blurb: "Sticky waits to be answered; auto clears itself",
                 options: Self.dismissalTitles,
                 read: { Self.dismissalIndex($0.attentionToast) },
                 token: { LayoutFormat.toastDismissalToken(Self.dismissals[$0]) },
                 notifiesOnReselect: false)
             self.addSegmentedRow(
-                key: "completion-toast", caption: "Card for something that finished",
+                key: "completion-toast", caption: "Notice for something that finished",
                 blurb: "Sticky waits to be answered; auto clears itself",
                 options: Self.dismissalTitles,
                 read: { Self.dismissalIndex($0.completionToast) },
                 token: { LayoutFormat.toastDismissalToken(Self.dismissals[$0]) },
                 notifiesOnReselect: false)
             self.addNumericRow(
-                key: "toast-duration", caption: "How long a card that clears itself stays up",
+                key: "toast-duration", caption: "How long a notice that clears itself stays up",
                 blurb: "Seconds, for every notice that clears itself", range: 1...60,
                 read: { CGFloat($0.toastDuration) })
         }
