@@ -5,15 +5,15 @@ final class SettingsGeneralSection: SettingsFormSection {
 
     override func populate() {
         addGroup("Agents") {
-            self.addTextRow(
-                key: "agents", caption: "Agent programs",
-                blurb: "Comma separated. claude and codex are built in", placeholder: "pi, gemini",
-                read: { $0.agents.joined(separator: ", ") })
             self.addSegmentedRow(
                 key: "agent-notifications", caption: "Notify me when an agent needs attention",
                 blurb: "System banner when the app is unfocused", options: ["On", "Off"],
                 read: { $0.agentNotifications ? 0 : 1 },
                 token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
+            self.addTextRow(
+                key: "agents", caption: "Agent programs",
+                blurb: "claude and codex are built in", placeholder: "pi, gemini",
+                read: { $0.agents.joined(separator: ", ") })
         }
         addGroup("Notifications") {
             self.addSegmentedRow(

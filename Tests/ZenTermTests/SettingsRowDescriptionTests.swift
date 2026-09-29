@@ -75,6 +75,18 @@ final class SettingsRowDescriptionTests: WindowTestCase {
         }
     }
 
+    func test_generalSection_everyDescriptionFitsItsRow() {
+        let detail = mount(SettingsGeneralSection())
+        let labels = notes(in: detail)
+        XCTAssertFalse(labels.isEmpty, "expected the section to render descriptions")
+
+        for label in labels {
+            XCTAssertGreaterThanOrEqual(
+                label.frame.height + 0.5, neededHeight(of: label),
+                "clipped: \"\(label.stringValue)\" needs more room than the \(Int(label.frame.width))pt it got")
+        }
+    }
+
     func test_terminalSection_everyDescriptionFitsItsRow() {
         let detail = mount(SettingsTerminalSection())
         let labels = notes(in: detail)

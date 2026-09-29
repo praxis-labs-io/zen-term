@@ -143,17 +143,17 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         XCTAssertEqual(exited, 0, "cycling within the control must not exit to the nav")
     }
 
-    func test_upFromFirstStop_staysPut() throws {
-        _ = mountSegments()
-        let agents = try XCTUnwrap(section?.controlForTesting("agents") as? FieldBox)
+    func test_upFromFirstStop_staysPut() {
+        let notifications = mountSegments()[0]
         var exited = 0
         section?.onExitToNav = { exited += 1 }
 
-        hostWindow?.makeFirstResponder(agents.field)
-        let editor = try XCTUnwrap(hostWindow?.firstResponder as? NSTextView)
-        editor.keyDown(with: arrow(Self.upKey))
+        hostWindow?.makeFirstResponder(notifications)
+        notifications.keyDown(with: arrow(Self.upKey))
 
         XCTAssertEqual(exited, 0, "Up at the top of a section is a no-op, not a trip back to the nav")
-        XCTAssertTrue(KeyboardFocus.isFocused(agents.field, in: hostWindow), "and focus stays on the row it was on")
+        XCTAssertTrue(
+            KeyboardFocus.isFocused(notifications, in: hostWindow),
+            "and focus stays on the row it was on")
     }
 }
