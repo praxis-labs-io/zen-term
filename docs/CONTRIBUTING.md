@@ -40,6 +40,11 @@ Instruments; everything else is the terminal.
 Green means all four, not build and test. Format-lint and swiftlint fail CI on
 their own.
 
+Stop a `bin/run` build by its exact binary: `pgrep -f '\.build/.*/ZenTerm$'`, and
+check it matched one process before you kill it. A looser pattern like
+`Products/Debug/ZenTerm` also matches `ZenTermTests.xctest`, so it kills any test
+run in progress, in any worktree.
+
 Releases are cut by maintainers. `bin/release` needs signing, notarization, and
 update-signing credentials, so it stops at its preflight anywhere else.
 `bin/package-app` is the local build to hand someone.
