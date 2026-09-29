@@ -50,22 +50,29 @@ final class AgentRosterTests: XCTestCase {
         XCTAssertEqual(roster.agents[id]?.name, "claude")
     }
 
-    func test_aNotificationTitle_namesAKnownAgentOrTheConfiguredOne() {
-        XCTAssertEqual(AgentRoster.agentName(notifying: "Claude Code", ai: nil), "claude")
-        XCTAssertEqual(AgentRoster.agentName(notifying: "codex", ai: nil), "codex")
-        XCTAssertEqual(AgentRoster.agentName(notifying: "pi", ai: "pi --model sonnet"), "pi")
+    func test_aNotificationTitle_namesAKnownAgentOrAListedOne() {
+        XCTAssertEqual(AgentRoster.agentName(notifying: "Claude Code", listed: []), "claude")
+        XCTAssertEqual(AgentRoster.agentName(notifying: "codex", listed: []), "codex")
+        XCTAssertEqual(AgentRoster.agentName(notifying: "Gemini is waiting", listed: ["pi", "gemini"]), "gemini")
+    }
+
+    func test_aLaunch_namesAKnownOrListedProgram_byItsName() {
+        XCTAssertEqual(AgentRoster.agentName(launching: "/opt/bin/claude --resume", listed: []), "claude")
+        XCTAssertEqual(AgentRoster.agentName(launching: "gemini --yolo", listed: ["pi", "gemini"]), "gemini")
+        XCTAssertEqual(AgentRoster.agentName(launching: "Gemini", listed: ["gemini"]), "Gemini")
+        XCTAssertNil(AgentRoster.agentName(launching: "vim", listed: ["pi", "gemini"]))
     }
 
     func test_aNotificationTitle_namingNoAgent_isNoAgent() {
         for title in ["", "build", "btop", "make: done", "pipeline finished"] {
-            XCTAssertNil(AgentRoster.agentName(notifying: title, ai: "pi"), "\(title) names no agent")
+            XCTAssertNil(AgentRoster.agentName(notifying: title, listed: ["pi"]), "\(title) names no agent")
         }
     }
 
     func test_aConfiguredProgramWithPunctuation_matchesAsAWholeToken() {
-        XCTAssertEqual(AgentRoster.agentName(notifying: "gemini-cli", ai: "gemini-cli"), "gemini-cli")
-        XCTAssertEqual(AgentRoster.agentName(notifying: "Done: gemini-cli.", ai: "gemini-cli"), "gemini-cli")
-        XCTAssertEqual(AgentRoster.agentName(notifying: "aider.chat", ai: "aider.chat"), "aider.chat")
-        XCTAssertNil(AgentRoster.agentName(notifying: "gemini", ai: "gemini-cli"))
+        XCTAssertEqual(AgentRoster.agentName(notifying: "gemini-cli", listed: ["gemini-cli"]), "gemini-cli")
+        XCTAssertEqual(AgentRoster.agentName(notifying: "Done: gemini-cli.", listed: ["gemini-cli"]), "gemini-cli")
+        XCTAssertEqual(AgentRoster.agentName(notifying: "aider.chat", listed: ["aider.chat"]), "aider.chat")
+        XCTAssertNil(AgentRoster.agentName(notifying: "gemini", listed: ["gemini-cli"]))
     }
 }

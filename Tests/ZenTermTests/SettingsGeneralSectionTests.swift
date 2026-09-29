@@ -64,6 +64,18 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         XCTAssertEqual(segments[Segment.updates.rawValue].selectedIndex, 0, "automatic updates On")
     }
 
+    func test_agentPrograms_typedInTheField_registerAsAgents() throws {
+        _ = mountSegments()
+        let field = try XCTUnwrap(section?.controlForTesting("agents") as? FieldBox)
+
+        field.setText("Pi, gemini")
+        field.onChange?()
+        field.onEndEditing?()
+
+        XCTAssertEqual(GeneralConfig.current.listedAgents, ["pi", "gemini"])
+        XCTAssertEqual(AgentRoster.agentName(launching: "gemini", listed: GeneralConfig.current.listedAgents), "gemini")
+    }
+
     func test_notifications_selectingOff_writesFalse() {
         segment(.notifications).select(1)
 
@@ -131,17 +143,17 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         XCTAssertEqual(exited, 0, "cycling within the control must not exit to the nav")
     }
 
-    func test_upFromFirstStop_staysPut() {
-        let notifications = mountSegments()[0]
+    func test_upFromFirstStop_staysPut() throws {
+        _ = mountSegments()
+        let agents = try XCTUnwrap(section?.controlForTesting("agents") as? FieldBox)
         var exited = 0
         section?.onExitToNav = { exited += 1 }
 
-        hostWindow?.makeFirstResponder(notifications)
-        notifications.keyDown(with: arrow(Self.upKey))
+        hostWindow?.makeFirstResponder(agents.field)
+        let editor = try XCTUnwrap(hostWindow?.firstResponder as? NSTextView)
+        editor.keyDown(with: arrow(Self.upKey))
 
         XCTAssertEqual(exited, 0, "Up at the top of a section is a no-op, not a trip back to the nav")
-        XCTAssertTrue(
-            KeyboardFocus.isFocused(notifications, in: hostWindow),
-            "and focus stays on the row it was on")
+        XCTAssertTrue(KeyboardFocus.isFocused(agents.field, in: hostWindow), "and focus stays on the row it was on")
     }
 }

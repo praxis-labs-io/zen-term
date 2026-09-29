@@ -254,6 +254,20 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(items(c).map(\.state), [.idle])
     }
 
+    func test_aListedProgram_joinsOnLaunch_andByItsNotificationTitle() throws {
+        var config = GeneralConfig.current
+        config.agents = ["gemini"]
+        GeneralConfig.setCurrentForTesting(config)
+        let c = makeWindow()
+        c.openWorkspaceForTesting(recipe("zen-review", right: "gemini --yolo"))
+        XCTAssertEqual(items(c).map(\.detail), ["zen-review · gemini"])
+
+        let shell = try split(c)
+        notify(shell, "Waiting for input", title: "gemini")
+
+        XCTAssertEqual(items(c).count, 2)
+    }
+
     func test_aShellsNotification_joinsNothing_whileOneNamingAnAgent_joinsUnderThatName() throws {
         let c = makeWindow()
         let shell = try focusedAgent(c)

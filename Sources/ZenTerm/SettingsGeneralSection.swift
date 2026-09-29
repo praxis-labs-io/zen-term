@@ -4,12 +4,18 @@ final class SettingsGeneralSection: SettingsFormSection {
     override var navTitle: String { "General" }
 
     override func populate() {
-        addGroup("Notifications") {
+        addGroup("Agents") {
+            self.addTextRow(
+                key: "agents", caption: "Agent programs",
+                blurb: "Comma separated. claude and codex are built in", placeholder: "pi, gemini",
+                read: { $0.agents.joined(separator: ", ") })
             self.addSegmentedRow(
                 key: "agent-notifications", caption: "Notify me when an agent needs attention",
                 blurb: "System banner when the app is unfocused", options: ["On", "Off"],
                 read: { $0.agentNotifications ? 0 : 1 },
                 token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
+        }
+        addGroup("Notifications") {
             self.addSegmentedRow(
                 key: "attention-toast", caption: "Card for a tab that needs you",
                 blurb: "Sticky waits to be answered; auto clears itself",

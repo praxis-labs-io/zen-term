@@ -54,6 +54,7 @@ struct GeneralConfig: Equatable {
 
     var editor: String?
     var ai: String?
+    var agents: [String] = []
 
     var floats: [ToolFloat]
     var keymap: [Chord: KeyInterceptor.ReservedChord]
@@ -109,6 +110,11 @@ struct GeneralConfig: Equatable {
     #if DEBUG
         static func setCurrentForTesting(_ config: GeneralConfig) { current = config }
     #endif
+
+    var listedAgents: [String] {
+        let legacy = ai.flatMap(AgentRoster.program(of:))?.lowercased()
+        return legacy.map { agents.contains($0) ? agents : agents + [$0] } ?? agents
+    }
 
     var terminalBehavior: TerminalBehavior {
         TerminalBehavior(

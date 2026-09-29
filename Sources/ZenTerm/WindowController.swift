@@ -1480,7 +1480,7 @@ final class WindowController: NSObject {
             "bottom-drawer-fraction", "right-drawer-fraction", "drawer-resize-step", "max-drawer-fraction",
             "reduce-motion", "hide-toolbar-buttons":
             return .appearance
-        case "agent-notifications", "attention-toast", "completion-toast", "toast-duration",
+        case "agents", "agent-notifications", "attention-toast", "completion-toast", "toast-duration",
             "automatic-update-checks":
             return .general
         default:
@@ -2511,7 +2511,7 @@ final class WindowController: NSObject {
 
     private func isFromAgent(_ surface: SurfaceID?, _ notification: TerminalNotification) -> Bool {
         guard let surface, liveAgent(surface) == nil else { return true }
-        return AgentRoster.agentName(notifying: notification.title, ai: GeneralConfig.current.ai) != nil
+        return AgentRoster.agentName(notifying: notification.title, listed: GeneralConfig.current.listedAgents) != nil
     }
 
     // An exited agent stays listed until its latch is answered, and the shell back in its pane is not it.
@@ -2851,7 +2851,9 @@ final class WindowController: NSObject {
     }
 
     private func programLaunched(_ surface: SurfaceID, _ command: String) {
-        guard let name = AgentRoster.agentName(launching: command, ai: GeneralConfig.current.ai) else { return }
+        guard let name = AgentRoster.agentName(launching: command, listed: GeneralConfig.current.listedAgents) else {
+            return
+        }
         agents.identify(surface, name: name, source: .launch)
         renderAgents()
     }

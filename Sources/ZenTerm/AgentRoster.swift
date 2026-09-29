@@ -23,18 +23,18 @@ final class AgentRoster {
     private(set) var agents: [SurfaceID: Agent] = [:]
     private var busy: Set<SurfaceID> = []
 
-    static func agentName(launching command: String, ai: String?) -> String? {
+    static func agentName(launching command: String, listed: [String]) -> String? {
         guard let program = program(of: command) else { return nil }
-        let configured = ai.flatMap(Self.program(of:))
-        return program == configured || knownAgents.contains(program) ? program : nil
+        let name = program.lowercased()
+        return knownAgents.contains(name) || listed.contains(name) ? program : nil
     }
 
     // A whole token, so `pi` is not found inside "pipeline" and `gemini-cli` is found whole.
-    static func agentName(notifying title: String, ai: String?) -> String? {
+    static func agentName(notifying title: String, listed: [String]) -> String? {
         let words = Set(
             title.lowercased().split { !$0.isLetter && !$0.isNumber && !programPunctuation.contains($0) }
                 .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: String(programPunctuation))) })
-        let candidates = knownAgents.sorted() + [ai.flatMap(Self.program(of:))].compactMap { $0 }
+        let candidates = knownAgents.sorted() + listed
         return candidates.first { words.contains($0.lowercased()) }
     }
 

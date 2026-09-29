@@ -77,6 +77,22 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertNil(config.ai)
     }
 
+    func test_agents_takesProgramNames_lowercasedAndDeduplicated() {
+        XCTAssertEqual(parse("agents = Pi, /opt/bin/gemini --yolo, , pi,\n").agents, ["pi", "gemini"])
+        XCTAssertEqual(parse("font-size = 14\n").agents, [])
+    }
+
+    func test_agents_quotedBySettings_readsTheSameList() {
+        XCTAssertEqual(parse("agents = \"pi, gemini\"\n").agents, ["pi", "gemini"])
+    }
+
+    func test_listedAgents_readsAnAIValueIn_whicheverLineComesFirst() {
+        XCTAssertEqual(parse("ai = pi --model sonnet\n").listedAgents, ["pi"])
+        XCTAssertEqual(parse("ai = pi\nagents = gemini\n").listedAgents, ["gemini", "pi"])
+        XCTAssertEqual(parse("agents = gemini\nai = gemini\n").listedAgents, ["gemini"])
+        XCTAssertEqual(parse("font-size = 14\n").listedAgents, [])
+    }
+
     func test_automaticUpdateChecks_parsesAndDefaultsOn() {
         XCTAssertFalse(parse("automatic-update-checks = false\n").automaticUpdateChecks)
         XCTAssertTrue(parse("automatic-update-checks = true\n").automaticUpdateChecks)
