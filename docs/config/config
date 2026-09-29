@@ -88,7 +88,7 @@
 # window blur with the desktop behind it. The inner padding around a terminal
 # follows the same value, in a pane and in a tool float, so each reads as one
 # surface. A float frosts the panes it covers, the way a pane frosts the desktop.
-# Cards stay solid: toasts, Settings, the palette.
+# Settings, the palette and notices stay solid.
 # Set `backdrop-alpha` below to dial the window shell.
 # In-app Settings edit: applies live.
 # background-alpha = 1                # clamped to 0…1
@@ -188,21 +188,21 @@
 # In-app Settings edit: applies live.
 # agent-notifications = true          # true | false
 
-# The in-app card for a background tab, or a drawer or tool out of sight, that
+# The in-app notice for a background tab, or a drawer or tool out of sight, that
 # needs you. Sticky waits to be answered; auto clears itself after
 # `toast-duration`. Either way the tab's colored number and the drawer's or
-# tool's dot stay until you look at it or press Dismiss. Switch on a tool's card
+# tool's dot stay until you look at it or press Dismiss. Switch on a tool's notice
 # opens that tool.
-# In-app Settings edit: applies to the next notification.
+# In-app Settings edit: applies to the next notice.
 # attention-toast = sticky            # sticky | auto
 
-# The same, for a card that says something finished: a long command in a
+# The same, for a notice that says something finished: a long command in a
 # background tab, an agent's turn ending, or a notification from a program that
 # is not an agent.
-# In-app Settings edit: applies to the next notification.
+# In-app Settings edit: applies to the next notice.
 # completion-toast = sticky           # sticky | auto
 
-# Seconds a card that clears itself stays up. Covers every notice that clears
+# Seconds a notice that clears itself stays up. Covers every notice that clears
 # itself, not only the two above.
 # In-app Settings edit: applies to the next notice.
 # toast-duration = 4                  # 1-60
