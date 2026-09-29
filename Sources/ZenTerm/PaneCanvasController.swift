@@ -28,6 +28,8 @@ final class PaneCanvasController: NSObject {
 
     private var panesHoldFocus = true
 
+    private let isToolFloatOpen: () -> Bool
+
     private static let minSplitExtent: CGFloat = 240
     private static let resizeStep: Double = 0.04
     private static let minSplitRatio: Double = 0.12
@@ -119,12 +121,14 @@ final class PaneCanvasController: NSObject {
 
     init(
         initialCWD: URL? = nil, initialCommand: String? = nil, env: [String: String] = [:],
+        isToolFloatOpen: @escaping () -> Bool = { false },
         makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make
     ) {
         let firstLeaf = PaneID(1)
         self.tree = PaneTree(singleLeaf: firstLeaf)
         self.registry = PaneSurfaceRegistry(makeSurface: makeSurface)
         self.workspaceEnv = env
+        self.isToolFloatOpen = isToolFloatOpen
         super.init()
         nextID = 2
         if let initialCWD { cwdByLeaf[firstLeaf] = initialCWD }
@@ -250,7 +254,7 @@ final class PaneCanvasController: NSObject {
 
     /// Stored, because `updateHalo` rewrites the same state on every restructure.
     private var focusedSurfaceRendersFocused = true
-    // Separate from `panesHoldFocus`, which the drawers own: the window hides the halo without moving focus.
+    // Separate from `panesHoldFocus`: the window hides the halo without moving focus.
     private var haloIsVisible = true
     // A sibling window or the sidebar taking the keyboard leaves libghostty holding the pane focused unless this says otherwise.
     private var holdsKeyFocus = true
@@ -317,6 +321,7 @@ final class PaneCanvasController: NSObject {
         guard tree.contains(id) else { return }
         tree.focusedLeaf = id
         onTitleChanged?()
+        panesHoldFocus = true
         registry.surface(for: id)?.focus()
         updateHalo()
         if announces { onFocusChanged?() }
@@ -520,7 +525,7 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
         clearZoomIfLeafGone()
         reconcileAndRender()
         dissolveClosedPane(closing)
-        registry.surface(for: tree.focusedLeaf)?.focus()
+        if !isToolFloatOpen() { registry.surface(for: tree.focusedLeaf)?.focus() }
     }
 
     private func retryStart(_ id: PaneID) {
