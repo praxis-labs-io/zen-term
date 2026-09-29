@@ -250,7 +250,7 @@ final class PaneCanvasController: NSObject {
 
     /// Stored, because `updateHalo` rewrites the same state on every restructure.
     private var focusedSurfaceRendersFocused = true
-    // Separate from `panesHoldFocus`, which the drawers own: the window hides the halo without moving focus.
+    // Separate from `panesHoldFocus`: the window hides the halo without moving focus.
     private var haloIsVisible = true
     // A sibling window or the sidebar taking the keyboard leaves libghostty holding the pane focused unless this says otherwise.
     private var holdsKeyFocus = true
@@ -317,6 +317,7 @@ final class PaneCanvasController: NSObject {
         guard tree.contains(id) else { return }
         tree.focusedLeaf = id
         onTitleChanged?()
+        panesHoldFocus = true
         registry.surface(for: id)?.focus()
         updateHalo()
         if announces { onFocusChanged?() }

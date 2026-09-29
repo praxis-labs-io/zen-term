@@ -213,6 +213,35 @@ final class WindowKeyFocusTests: WindowTestCase {
             "the mode ended while the drawer held focus, and the pane's render flag has to come back with it")
     }
 
+    func test_closingAFloat_neverBlursThePaneBetweenItsTwoFocuses() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let paneRenders = pane.focusRenders.count
+
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+
+        let afterClose = Array(pane.focusRenders.dropFirst(paneRenders))
+        XCTAssertEqual(afterClose.first, true, "precondition: the pane takes first responder back")
+        XCTAssertFalse(afterClose.contains(false), "a false between two trues leaves libghostty's blink cancelled")
+    }
+
+    func test_closingAFocusedDrawer_neverBlursThePaneBetweenItsTwoFocuses() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
+        c.handle(.toggleBottomDrawer)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let paneRenders = pane.focusRenders.count
+
+        c.handle(.toggleBottomDrawer)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+
+        let afterClose = Array(pane.focusRenders.dropFirst(paneRenders))
+        XCTAssertEqual(afterClose.first, true, "precondition: the pane takes first responder back")
+        XCTAssertFalse(afterClose.contains(false), "a false between two trues leaves libghostty's blink cancelled")
+    }
+
     func test_aPaneSurvivingAnExitWhileADrawerHoldsFocus_takesTheKeyboardAndReportsFocused() throws {
         let c = makeWindow()
         let pane = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)
