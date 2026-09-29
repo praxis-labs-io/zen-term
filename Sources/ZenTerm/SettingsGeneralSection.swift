@@ -24,7 +24,7 @@ final class SettingsGeneralSection: SettingsFormSection {
                 token: { LayoutFormat.toastDismissalToken(Self.dismissals[$0]) },
                 notifiesOnReselect: false)
             self.addSegmentedRow(
-                key: "completion-toast", caption: "Card for a command that finished",
+                key: "completion-toast", caption: "Card for something that finished",
                 blurb: "Sticky waits to be answered; auto clears itself",
                 options: Self.dismissalTitles,
                 read: { Self.dismissalIndex($0.completionToast) },
