@@ -295,8 +295,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   shell), once its wait is answered. Only a *fall* from busy counts: a surface polled
   before its program starts has not been busy yet. A fall settles one poll later, so the
   command's own result lands first and tells a crash from a clean exit. A named agent
-  that exits non-zero, other than by SIGINT or SIGTERM, asks; any other exit raises
-  nothing. An unnamed agent's exit lands as a finished command.
+  that exits non-zero, other than by SIGINT or SIGTERM, asks; any other exit, and any
+  unnamed agent's, lands as a finished command.
   The Agents rows join it with `agentWait(of:)` and sort waiting (oldest first), working,
   idle, ties in sidebar order.
 - **Only an agent's OSC 777 can ask.** A notification from a surface that is not in the

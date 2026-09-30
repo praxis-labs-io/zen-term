@@ -123,6 +123,27 @@ final class AgentFocusTests: WindowTestCase {
         XCTAssertEqual(c.agentStateForTesting(pane), .idle, "looking at a finished turn is all it asked of you")
         XCTAssertNil(c.attentionStateForTesting(tabIndex: 0))
         XCTAssertEqual(c.agentRowForTesting(pane)?.summary, AttentionTone.idle.summary)
+        XCTAssertNil(c.waitingToastForTesting(tabIndex: 0), "the card goes with the wait it described")
+    }
+
+    func test_comingBack_answersAFinishedTurnInAnUnfocusedSplitInView() throws {
+        let c = makeWindow()
+        let first = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        let firstSurface = try XCTUnwrap(spawned.first)
+        c.identifyAgentForTesting(first, name: "claude")
+        c.handle(.splitVertical)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertNotEqual(c.focusedSurfaceIDForTesting, first, "precondition: the split takes focus")
+        WindowController.isPresent = { _ in false }
+        finishATurn(on: firstSurface)
+        XCTAssertEqual(c.agentWaitForTesting(first), .turnEnd, "precondition: it finished while you were away")
+
+        WindowController.isPresent = { _ in true }
+        c.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
+
+        XCTAssertNil(c.agentWaitForTesting(first), "a split on screen is in view, focused or not")
+        XCTAssertNil(c.attentionStateForTesting(tabIndex: 0))
+        XCTAssertNil(c.waitingToastForTesting(tabIndex: 0))
     }
 
     func test_aNewTurn_answersAFinishedTurn_andTakesDownItsCard() throws {

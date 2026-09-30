@@ -2580,8 +2580,8 @@ final class WindowController: NSObject {
     private func commandFinished(surface: SurfaceID?, id: TabID, result: TerminalCommandResult) {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.workspace(of: id) != nil else { return }
-            let endedAnAgent = surface.map { self.agentExited($0, in: id, result: result) } ?? false
-            guard !endedAnAgent, !self.isSeen(surface, in: id),
+            let crashedAgent = surface.map { self.agentExited($0, in: id, result: result) } ?? false
+            guard !crashedAgent, !self.isSeen(surface, in: id),
                 result.duration >= Self.commandCompletionThreshold,
                 self.attention.state(tab: id) != .waiting
             else { return }
@@ -2672,7 +2672,7 @@ final class WindowController: NSObject {
     private func applyDerived(_ state: AgentSignalState, to surface: SurfaceID) {
         switch state {
         case .working:
-            takeDownCard(of: surface)
+            if attention.agentWait(of: surface) != .ask { takeDownCard(of: surface) }
             attention.setWorking(surface, true)
             noteTitleMessage(surface)
         case .idle:
@@ -2861,13 +2861,14 @@ final class WindowController: NSObject {
         agents.setMessage(surface, message)
     }
 
-    // An unnamed agent is only a program that reported progress, so its exit is a command finishing.
+    // Only a named agent's crash asks; any other exit lands as a command finishing.
     private func agentExited(_ surface: SurfaceID, in id: TabID, result: TerminalCommandResult) -> Bool {
         guard let agent = agents.agents[surface] else { return false }
         let message = Self.commandResultMessage(result)
         exitsAwaitingResult.remove(surface)
         agents.markExited(surface, message: message)
-        if agent.name != nil, Self.isCrash(result) {
+        let crashed = agent.name != nil && Self.isCrash(result)
+        if crashed {
             let seen = isSeen(surface, in: id)
             takeDownTurnEndCard(of: surface)
             attention.endCrashedAgent(surface, seen: seen)
@@ -2877,7 +2878,7 @@ final class WindowController: NSObject {
             endAgent(surface)
         }
         renderAgents()
-        return agent.name != nil
+        return crashed
     }
 
     private static func isCrash(_ result: TerminalCommandResult) -> Bool {
@@ -3045,7 +3046,7 @@ final class WindowController: NSObject {
     private func surfaceShown(_ surface: SurfaceID) {
         attention.markSeen(surface)
         answerFocusedAgent()
-        if let tab = cardSurfaces.first(where: { $0.value == surface })?.key { takeDownCard(tab) }
+        takeDownCard(of: surface)
     }
 
     /// Clears the tab and the surface that asked. A window float belongs to no tab, so the tab alone would miss it.
@@ -3397,7 +3398,17 @@ extension WindowController: NSWindowDelegate {
         syncWindowFocus()
         sidebar.edgeReveal.recheck()
         sidebar.refreshBranches()
+        answerFinishedTurnsInView()
         answerFocusedAgent()
+    }
+
+    // Coming back looks at every pane in view, not only the focused one.
+    private func answerFinishedTurnsInView() {
+        for surface in agents.agents.keys where attention.agentWait(of: surface) == .turnEnd {
+            guard let tab = tab(of: surface), isSeen(surface, in: tab) else { continue }
+            takeDownCard(of: surface)
+            attention.markSeen(surface)
+        }
     }
 
     // Quit never fires `windowWillClose`, so without this every shell is orphaned.

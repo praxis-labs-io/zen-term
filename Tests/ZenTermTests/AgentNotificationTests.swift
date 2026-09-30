@@ -224,7 +224,7 @@ final class AgentNotificationTests: WindowTestCase {
         XCTAssertTrue(cardCopy(c).contains("Refactor finished"))
     }
 
-    func test_anAgentExitingCleanlyInABackgroundTab_raisesNothing() throws {
+    func test_anAgentExitingCleanlyInABackgroundTab_landsAsAFinishedCommand() throws {
         let c = makeWindow()
         let claude = try backgroundPane(c)
         c.identifyAgentForTesting(claude.id, name: "claude")
@@ -233,9 +233,38 @@ final class AgentNotificationTests: WindowTestCase {
         c.notifyCommandFinishedForTesting(tab: tab, result: TerminalCommandResult(exitCode: 0, duration: 600))
         drainMainQueue()
 
-        XCTAssertNil(c.attentionStateForTesting(tabIndex: 0), "quitting an agent is not news")
-        XCTAssertNil(c.agentRowForTesting(claude.id))
+        XCTAssertEqual(
+            c.attentionStateForTesting(tabIndex: 0), .completed, "a one-shot run you were not watching finished")
+        XCTAssertNil(c.agentRowForTesting(claude.id), "it does not wait on you")
+        XCTAssertTrue(cardCopy(c).contains("Finished in 10m 0s."))
+    }
+
+    func test_anAgentExitingCleanlyWhileYouWatch_raisesNothing() throws {
+        let c = makeWindow()
+        let id = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        c.identifyAgentForTesting(id, name: "claude")
+        let tab = try XCTUnwrap(c.tabIDsForTesting(workspace: c.workspaceIDsForTesting[0]).first)
+
+        c.notifyCommandFinishedForTesting(tab: tab, result: TerminalCommandResult(exitCode: 0, duration: 600))
+        drainMainQueue()
+
+        XCTAssertNil(c.attentionStateForTesting(tabIndex: 0), "quitting an agent you are looking at is not news")
         XCTAssertEqual(cardCount(c), 0)
+    }
+
+    func test_aNewTurn_leavesTheCardOfAnAskItDoesNotAnswer() throws {
+        let c = makeWindow()
+        let pi = try backgroundPane(c)
+        c.identifyAgentForTesting(pi.id, name: "pi")
+        post(pi.surface, title: "pi", body: "Approve the plan?")
+        XCTAssertEqual(cardCount(c), 1, "precondition: the ask raised its card")
+
+        pi.surface.delegate?.surface(
+            pi.surface, progressDidChange: TerminalProgress(state: .indeterminate, fraction: nil))
+        drainMainQueue()
+
+        XCTAssertEqual(c.agentRowForTesting(pi.id)?.state, .waiting, "only typing answers pi")
+        XCTAssertTrue(cardCopy(c).contains("Approve the plan?"), "the card stays as long as its ask does")
     }
 
     func test_anAgentCrashingInABackgroundTab_waits() throws {
