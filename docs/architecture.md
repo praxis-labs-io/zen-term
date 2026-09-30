@@ -267,20 +267,21 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   on screen: a closed drawer or float keeps its latch and its card. Releasing an unseen
   surface folds its latch into a per-tab residual, so a closed pane does not unmark the
   tab it left; the next visit drops it.
-- **An agent has a second latch that answering clears** (`agentState(of:)`), so a split
-  asking in the active tab still reads waiting while its tab number stays quiet. It
-  latches whatever the pane's focus, since the notification behind it comes only once,
-  and focus does not clear it: looking at a prompt is not answering it. Claude and Codex
-  answer their own wait: Claude when a spinner title follows its `✳` prompt title, Codex
-  when its title leaves the prompt, and either when a turn starts. A key at their prompt
-  answers nothing, since an arrow key sends nothing. Any other agent is answered by typing
-  into the pane, where a key the chrome did not claim is aimed at the agent and a reserved
-  chord is not; typing also clears any agent's done or exited latch. A turn ending
-  (`working` falling) clears a waiting latch and leaves `completed`, here and nowhere
-  else; a new turn replaces that, and a waiting latch only for Claude and Codex. A
-  `completed` latch on the pane you are focused on clears after `doneDecay` of unbroken
-  focus, and leaving restarts the clock; a failed exit never decays. Tab numbers and cards
-  keep their own latch and do not decay.
+- **An agent is working, waiting or idle, never done.** Its wait (`agentWait(of:)`) is
+  an `ask` or a `turnEnd`, and what answers it is the difference.
+  - An **ask** (a notification, Codex's Action Required title, a crash) latches whatever
+    the pane's focus, since the notification behind it comes only once, so a split asking
+    in the active tab reads waiting while its tab number stays quiet. Looking at a prompt
+    is not answering it. Claude and Codex answer their own ask: Claude when a spinner
+    title follows its `✳` prompt title, Codex when its title leaves the prompt, and either
+    when a turn starts. A key at their prompt answers nothing, since an arrow key sends
+    nothing. Any other agent is answered by typing into the pane, where a key the chrome
+    did not claim is aimed at the agent and a reserved chord is not.
+  - A **turn end** (a named agent's `working` falling) waits only if its surface is not
+    seen. It latches the surface as well and raises the waiting card, with no banner.
+    Looking at it, a new turn, typing or the agent exiting answers it.
+  - A turn ending answers an ask raised during it. A new turn takes down the card its
+    surface raised.
 - **`AgentRoster` says which surfaces run an agent**, per window: its name, where the name
   came from (`Source`, ranked so a stronger source renames, a weaker one never does, and a
   missing name yields to any real name), and what it last said. `identify` is the one way
@@ -291,19 +292,23 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   a hand-launched Codex, which emits no progress and notifies on only some stops, and the
   only way a hand-launched Claude is listed, and named, before its first turn. An agent
   leaves when its surface is released, when its command finishes, or when its busy reading falls (the program exited to the
-  shell), once its latch is answered. Only a *fall* from busy counts: a surface polled
-  before its program starts has not been busy yet.
-  The Agents rows join it with `agentState(of:)` and sort waiting (oldest first), working,
-  done, idle, ties in sidebar order.
+  shell), once its wait is answered. Only a *fall* from busy counts: a surface polled
+  before its program starts has not been busy yet. A fall settles one poll later, so the
+  command's own result lands first and tells a crash from a clean exit. A named agent
+  that exits non-zero, other than by SIGINT or SIGTERM, asks; any other exit raises
+  nothing. An unnamed agent's exit lands as a finished command.
+  The Agents rows join it with `agentWait(of:)` and sort waiting (oldest first), working,
+  idle, ties in sidebar order.
 - **Only an agent's OSC 777 can ask.** A notification from a surface that is not in the
   roster, and whose title names no known or listed agent, lands like a finished
   command: `completed`, no banner, no row, and never over a tab that is already waiting.
-  An agent's notification goes through `AgentRules.notificationAttention`. Claude has body
-  rules: its permission prompt waits, its idle prompt carries no state (its progress
-  already closed the turn), and any other body completes. Codex's notification carries no
+  An agent's notification goes through `AgentRules.notificationKind`. Codex's carries no
   state, because it arrives before its title says what Codex wants; the move into its
-  Action Required title raises the waiting card and banner instead, once per ask. Any
-  other agent's notification waits.
+  Action Required title raises the waiting card and banner instead, once per ask.
+  Claude's idle prompt is a turn end arriving a minute late: it only banners over a turn
+  end still unseen, and changes nothing once the turn was seen. It asks only from a Claude
+  that reports no progress, since Claude clears its progress at launch and none means
+  progress is off. Every other agent notification asks.
 - **A state only the chrome can act on never reaches the tab number.** `working`
   says an agent is mid-turn, not that it wants you, so it stops at the dock's dot. The dot
   and the tab number are one signal at two altitudes; a hidden drawer or float asks

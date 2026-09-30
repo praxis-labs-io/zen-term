@@ -50,7 +50,8 @@ final class WindowController: NSObject {
 
     private var fontSizeCard: FontSizeCard?
     private var fontSizeDismissal: DispatchWorkItem?
-    private var pendingDoneDecay: DispatchWorkItem?
+    // The poll can see an agent exit before its result arrives, and only the result can tell a crash.
+    private var exitsAwaitingResult: Set<SurfaceID> = []
     private static let fontSizeCardLinger: TimeInterval = 1.2
 
     func showFontSize(_ text: String) {
@@ -2418,26 +2419,9 @@ final class WindowController: NSObject {
             let message = notification.body.isEmpty ? notification.title : notification.body
             let target = owner.flatMap { self.workspace(of: $0) == nil ? nil : $0 } ?? activeID
             let address = self.floatCardAddress(spec, owner: owner, target: target)
-            let shown = self.isFloatShown(spec, surface)
-            guard self.isFromAgent(surface, notification) else {
-                return self.landNonAgentNotification(
-                    on: target, surface: surface, seen: shown, address: address, message: message)
-            }
-            guard let landing = self.notificationAttention(surface, notification) else {
-                return self.noteStatelessNotification(surface, notification)
-            }
-
-            self.pushBanner(for: target, address: address, message: message)
-
-            let tabWasWaiting = self.attention.state(tab: target) == .waiting
-            surface.map { self.attention.record($0, landing, seen: shown) }
-            surface.map { self.agentSignalled($0, name: notification.title, message: message) }
-            self.renderAgents()
-
-            guard !shown else { return }
-            self.presentAgentCard(
-                landing, tabWasWaiting: tabWasWaiting, for: target, address: address, message: message,
-                surface: surface)
+            self.land(
+                notification, from: surface, on: target, seen: self.isFloatShown(spec, surface), address: address,
+                message: message)
         }
     }
 
@@ -2445,27 +2429,50 @@ final class WindowController: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.workspace(of: id) != nil else { return }
             let message = notification.body.isEmpty ? notification.title : notification.body
-            let address = self.paneCardAddress(surface, in: id)
-            let seen = self.isSeen(surface, in: id)
-            guard self.isFromAgent(surface, notification) else {
-                return self.landNonAgentNotification(
-                    on: id, surface: surface, seen: seen, address: address, message: message)
-            }
-            guard let landing = self.notificationAttention(surface, notification) else {
-                return self.noteStatelessNotification(surface, notification)
-            }
-
-            self.pushBanner(for: id, address: address, message: message)
-
-            let tabWasWaiting = self.attention.state(tab: id) == .waiting
-            surface.map { self.attention.record($0, landing, seen: seen) }
-            surface.map { self.agentSignalled($0, name: notification.title, message: message) }
-            self.renderAgents()
-
-            guard !seen else { return }
-            self.presentAgentCard(
-                landing, tabWasWaiting: tabWasWaiting, for: id, address: address, message: message, surface: surface)
+            self.land(
+                notification, from: surface, on: id, seen: self.isSeen(surface, in: id),
+                address: self.paneCardAddress(surface, in: id), message: message)
         }
+    }
+
+    private func land(
+        _ notification: TerminalNotification, from surface: SurfaceID?, on id: TabID, seen: Bool, address: CardAddress,
+        message: String
+    ) {
+        guard isFromAgent(surface, notification) else {
+            return landNonAgentNotification(on: id, surface: surface, seen: seen, address: address, message: message)
+        }
+        switch notificationKind(surface, notification) {
+        case .stateless:
+            noteStatelessNotification(surface, notification)
+        case .ask:
+            landAsk(notification, from: surface, on: id, seen: seen, address: address, message: message)
+        case .idlePrompt:
+            landIdlePrompt(notification, from: surface, on: id, seen: seen, address: address, message: message)
+        }
+    }
+
+    // Progress already caught the turn end, so the prompt only carries the banner a missed turn end still owes.
+    private func landIdlePrompt(
+        _ notification: TerminalNotification, from surface: SurfaceID?, on id: TabID, seen: Bool, address: CardAddress,
+        message: String
+    ) {
+        guard let surface, agentStates.reportsProgress(surface) else {
+            return landAsk(notification, from: surface, on: id, seen: seen, address: address, message: message)
+        }
+        if attention.agentWait(of: surface) == .turnEnd { pushBanner(for: id, address: address, message: message) }
+    }
+
+    private func landAsk(
+        _ notification: TerminalNotification, from surface: SurfaceID?, on id: TabID, seen: Bool, address: CardAddress,
+        message: String
+    ) {
+        pushBanner(for: id, address: address, message: message)
+        surface.map { attention.ask($0, seen: seen) }
+        surface.map { agentSignalled($0, name: notification.title, message: message) }
+        renderAgents()
+        guard !seen else { return }
+        presentAttentionCard(.waiting, for: id, address: address, message: message, surface: surface)
     }
 
     private struct CardAddress {
@@ -2522,11 +2529,12 @@ final class WindowController: NSObject {
         agents.agents[surface].flatMap { $0.hasExited ? nil : $0 }
     }
 
-    private func notificationAttention(_ surface: SurfaceID?, _ notification: TerminalNotification) -> SurfaceAttention?
-    {
+    private func notificationKind(
+        _ surface: SurfaceID?, _ notification: TerminalNotification
+    ) -> AgentRules.NotificationKind {
         let listed = surface.flatMap { liveAgent($0)?.name }
         let name = listed ?? (notification.title.isEmpty ? nil : notification.title)
-        return AgentRules.notificationAttention(body: notification.body, agentName: name)
+        return AgentRules.notificationKind(body: notification.body, agentName: name)
     }
 
     private func noteStatelessNotification(_ surface: SurfaceID?, _ notification: TerminalNotification) {
@@ -2540,41 +2548,45 @@ final class WindowController: NSObject {
         on id: TabID, surface: SurfaceID?, seen: Bool, address: CardAddress, message: String
     ) {
         guard !seen, attention.state(tab: id) != .waiting else { return }
-        surface.map { attention.record($0, .completed, seen: false, fromAgent: false) }
+        surface.map { attention.record($0, .completed, seen: false) }
         presentAttentionCard(.completed(.positive), for: id, address: address, message: message, surface: surface)
         renderAttention()
     }
 
-    private func presentAgentCard(
-        _ landing: SurfaceAttention, tabWasWaiting: Bool, for id: TabID, address: CardAddress, message: String,
-        surface: SurfaceID?
-    ) {
-        if landing == .waiting {
-            presentAttentionCard(.waiting, for: id, address: address, message: message, surface: surface)
-        } else if !tabWasWaiting {
-            presentAttentionCard(.completed(.positive), for: id, address: address, message: message, surface: surface)
-        }
-    }
-
-    private func raiseBlockedCard(_ surface: SurfaceID, in id: TabID) {
+    private func raiseAskCard(_ surface: SurfaceID, in id: TabID, message: String) {
         let address = cardAddress(of: surface, in: id)
-        let message = AgentRules.codexAsk(fromTitle: agentStates.title(of: surface)) ?? Self.blockedMessage
         pushBanner(for: id, address: address, message: message)
         presentAttentionCard(.waiting, for: id, address: address, message: message, surface: surface)
     }
 
+    private func finishTurn(_ surface: SurfaceID) {
+        guard let tab = tab(of: surface) else { return }
+        attention.endTurn(surface, seen: isSeen(surface, in: tab))
+        guard attention.agentWait(of: surface) == .turnEnd, !hasAskCard(tab) else { return }
+        presentAttentionCard(
+            .waiting, for: tab, address: cardAddress(of: surface, in: tab), message: Self.turnEndMessage,
+            surface: surface)
+    }
+
+    // A tab shows one card, and a finished turn is never worth more than a question.
+    private func hasAskCard(_ tab: TabID) -> Bool {
+        cardSurfaces[tab].map { attention.agentWait(of: $0) == .ask } ?? false
+    }
+
     private static let blockedMessage = "Waiting for your approval."
+
+    private static let turnEndMessage = "Finished its turn."
 
     private func commandFinished(surface: SurfaceID?, id: TabID, result: TerminalCommandResult) {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.workspace(of: id) != nil else { return }
-            surface.map { self.agentExited($0, result: result) }
-            guard !self.isSeen(surface, in: id),
+            let endedAnAgent = surface.map { self.agentExited($0, in: id, result: result) } ?? false
+            guard !endedAnAgent, !self.isSeen(surface, in: id),
                 result.duration >= Self.commandCompletionThreshold,
                 self.attention.state(tab: id) != .waiting
             else { return }
 
-            surface.map { self.attention.record($0, .completed, seen: false, fromAgent: self.agents.contains($0)) }
+            surface.map { self.attention.record($0, .completed, seen: false) }
             self.presentAttentionCard(
                 .completed(result.exitCode.map { $0 == 0 ? .positive : .warning } ?? .positive), for: id,
                 address: self.paneCardAddress(surface, in: id), message: Self.commandResultMessage(result),
@@ -2607,7 +2619,7 @@ final class WindowController: NSObject {
             guard self.agents.contains(surface) else { return }
             let previous = self.agentStates.title(of: surface)
             self.agentStates.noteTitle(title, of: surface)
-            if self.attention.agentState(of: surface) == .waiting,
+            if self.attention.agentWait(of: surface) != nil,
                 AgentRules.isClaudeResuming(from: previous, to: title, agentName: self.agents.agents[surface]?.name)
             {
                 self.answerAgent(surface)
@@ -2620,7 +2632,7 @@ final class WindowController: NSObject {
 
     // The tail is the live tool name, so it moves many times inside one turn the state never leaves.
     private func noteTitleMessage(_ surface: SurfaceID) {
-        guard attention.agentState(of: surface) <= .working,
+        guard attention.agentWait(of: surface) == nil,
             let message = AgentRules.message(
                 fromTitle: agentStates.title(of: surface), agentName: agents.agents[surface]?.name),
             agents.agents[surface]?.message != message
@@ -2642,7 +2654,7 @@ final class WindowController: NSObject {
             return false
         }
         Log.info("agent \(agent.name ?? AgentRoster.unnamed): \(outcome.label)", category: .workspace)
-        if attention.agentState(of: surface) == .waiting, wasBlocked || resumesAfterAsking(next, agent: agent) {
+        if attention.agentWait(of: surface) != nil, wasBlocked || resumesAfterAsking(next, agent: agent) {
             answerAgent(surface)
         }
         applyDerived(next, to: surface)
@@ -2660,20 +2672,23 @@ final class WindowController: NSObject {
     private func applyDerived(_ state: AgentSignalState, to surface: SurfaceID) {
         switch state {
         case .working:
+            takeDownCard(of: surface)
             attention.setWorking(surface, true)
             noteTitleMessage(surface)
         case .idle:
-            let wasAsking = attention.agentState(of: surface) > .working
-            if attention.isWorking(surface) { answerAgent(surface) }
+            let endedTurn = attention.isWorking(surface)
+            if endedTurn { answerAgent(surface) }
             attention.setWorking(surface, false)
-            if !wasAsking { agents.setMessage(surface, nil) }
-            if surface == presentFocusedSurface { armDoneDecay() }
+            if attention.agentWait(of: surface) == nil { agents.setMessage(surface, nil) }
+            if endedTurn, agents.agents[surface]?.name != nil { finishTurn(surface) }
         case .blocked:
             guard let tab = tab(of: surface) else { return }
-            let seen = floats.float(of: surface).map { isFloatShown($0.spec, surface) } ?? isSeen(surface, in: tab)
+            let seen = isSeen(surface, in: tab)
             attention.setWorking(surface, false)
-            attention.record(surface, .waiting, seen: seen)
-            if !seen { raiseBlockedCard(surface, in: tab) }
+            attention.ask(surface, seen: seen)
+            guard !seen else { break }
+            let message = AgentRules.codexAsk(fromTitle: agentStates.title(of: surface)) ?? Self.blockedMessage
+            raiseAskCard(surface, in: tab, message: message)
         }
         renderAgents()
     }
@@ -2777,7 +2792,8 @@ final class WindowController: NSObject {
 
     // Layout is not enough: a pane you can see in a window you are not in has not been seen.
     private func isSeen(_ surface: SurfaceID?, in id: TabID) -> Bool {
-        isOnScreen(surface, in: id) && Self.isPresent(window)
+        if let surface, let float = floats.float(of: surface) { return isFloatShown(float.spec, surface) }
+        return isOnScreen(surface, in: id) && Self.isPresent(window)
     }
 
     /// A surface is on screen while its tab is active and, for a drawer, the drawer is open.
@@ -2800,39 +2816,18 @@ final class WindowController: NSObject {
         return activeController?.focusedSurfaceID
     }
 
-    // Coming on screen answers the toast and the tab, never the agent: looking at a prompt is not answering it.
+    // Coming on screen answers the toast, the tab and a finished turn, never an ask: looking is not answering.
     private func answerFocusedAgent() {
         if let surface = presentFocusedSurface {
             attention.markSeen(surface)
         }
-        armDoneDecay()
         renderAttention()
-    }
-
-    // A done row describes the pane you are looking at only until you have had a moment to read it.
-    static var doneDecay: TimeInterval = 5
-
-    private func armDoneDecay() {
-        pendingDoneDecay?.cancel()
-        guard let surface = presentFocusedSurface, agents.contains(surface),
-            attention.agentState(of: surface) == .completed
-        else { return }
-        let decay = DispatchWorkItem { [weak self] in self?.settleDone(surface) }
-        pendingDoneDecay = decay
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.doneDecay, execute: decay)
-    }
-
-    private func settleDone(_ surface: SurfaceID) {
-        guard presentFocusedSurface == surface, attention.agentState(of: surface) == .completed,
-            agents.agents[surface]?.hasExited == false
-        else { return }
-        answerAgent(surface)
     }
 
     // Runs on every keystroke the chrome passed on, which includes ones the find field takes before the pane.
     func answerTypedAgent() {
         guard !search.isEditing, let surface = presentFocusedSurface,
-            attention.agentState(of: surface) > .working, !awaitsSignalAnswer(surface)
+            attention.agentWait(of: surface) != nil, !awaitsSignalAnswer(surface)
         else { return }
         answerAgent(surface)
     }
@@ -2840,7 +2835,7 @@ final class WindowController: NSObject {
     // An arrow key at a prompt sends nothing, so an agent that signals its own answer is never answered by a key.
     private func awaitsSignalAnswer(_ surface: SurfaceID) -> Bool {
         guard let agent = liveAgent(surface) else { return false }
-        return AgentRules.key(for: agent.name) != nil && attention.agentState(of: surface) == .waiting
+        return AgentRules.key(for: agent.name) != nil && attention.agentWait(of: surface) == .ask
     }
 
     private func resumesAfterAsking(_ next: AgentSignalState, agent: AgentRoster.Agent) -> Bool {
@@ -2849,7 +2844,7 @@ final class WindowController: NSObject {
 
     // The row takes its tone from the store and its words from the roster, so both clear here or the row lies.
     private func answerAgent(_ surface: SurfaceID) {
-        if attention.agentState(of: surface) > .working { agents.setMessage(surface, nil) }
+        if attention.agentWait(of: surface) != nil { agents.setMessage(surface, nil) }
         attention.answerAgent(surface)
     }
 
@@ -2866,26 +2861,50 @@ final class WindowController: NSObject {
         agents.setMessage(surface, message)
     }
 
-    private func agentExited(_ surface: SurfaceID, result: TerminalCommandResult) {
-        guard agents.contains(surface) else { return }
-        let failed = result.exitCode.map { $0 != 0 && !Self.deliberateStopCodes.contains($0) } ?? false
-        agents.markExited(surface, failed: failed, message: Self.commandResultMessage(result))
-        attention.endAgent(surface, failed: failed)
-        agentStates.drop(surface)
+    // An unnamed agent is only a program that reported progress, so its exit is a command finishing.
+    private func agentExited(_ surface: SurfaceID, in id: TabID, result: TerminalCommandResult) -> Bool {
+        guard let agent = agents.agents[surface] else { return false }
+        let message = Self.commandResultMessage(result)
+        exitsAwaitingResult.remove(surface)
+        agents.markExited(surface, message: message)
+        if agent.name != nil, Self.isCrash(result) {
+            let seen = isSeen(surface, in: id)
+            takeDownTurnEndCard(of: surface)
+            attention.endCrashedAgent(surface, seen: seen)
+            agentStates.drop(surface)
+            if !seen { raiseAskCard(surface, in: id, message: message) }
+        } else {
+            endAgent(surface)
+        }
         renderAgents()
+        return agent.name != nil
+    }
+
+    private static func isCrash(_ result: TerminalCommandResult) -> Bool {
+        result.exitCode.map { $0 != 0 && !deliberateStopCodes.contains($0) } ?? false
+    }
+
+    private func endAgent(_ surface: SurfaceID) {
+        takeDownTurnEndCard(of: surface)
+        attention.endAgent(surface)
+        agentStates.drop(surface)
+    }
+
+    private func takeDownTurnEndCard(of surface: SurfaceID) {
+        if attention.agentWait(of: surface) == .turnEnd { takeDownCard(of: surface) }
     }
 
     private func trackAgentExits() {
         let before = agents.agents
+        let settling = exitsAwaitingResult
+        exitsAwaitingResult = []
+        for id in settling { endAgent(id) }
         for (id, agent) in before {
             agents.trackBusy(id, terminalSurface(id)?.isBusy ?? false)
-            if !agent.hasExited, agents.agents[id]?.hasExited == true {
-                attention.endAgent(id)
-                agentStates.drop(id)
-            }
+            if !agent.hasExited, agents.agents[id]?.hasExited == true { exitsAwaitingResult.insert(id) }
             if agentStates.isHoldingIdle(id) { deriveAgentState(id) }
         }
-        if agents.agents != before { renderAgents() }
+        if !settling.isEmpty || agents.agents != before { renderAgents() }
     }
 
     private func terminalSurface(_ id: SurfaceID) -> TerminalSurface? {
@@ -2898,7 +2917,10 @@ final class WindowController: NSObject {
     }
 
     private func renderAgents() {
-        for (id, agent) in agents.agents where agent.hasExited && attention.agentState(of: id) == .idle {
+        for (id, agent) in agents.agents
+        where agent.hasExited && !exitsAwaitingResult.contains(id) && attention.agentWait(of: id) == nil
+            && !attention.isWorking(id)
+        {
             agents.drop(id)
             agentStates.drop(id)
         }
@@ -2946,12 +2968,14 @@ final class WindowController: NSObject {
         typealias Ranked = (item: SidebarAgentItem, since: Date?, position: [Int])
         let located = agents.agents.compactMap { id, agent -> Ranked? in
             guard let place = agentPlace(id) else { return nil }
-            let state = AttentionTone(attention.agentState(of: id), failed: agent.failed)
+            let wait = attention.agentWait(of: id)
+            let state = AttentionTone(wait: wait, working: attention.isWorking(id))
+            let message = wait == .turnEnd ? Self.turnEndMessage : agent.message
             let item = SidebarAgentItem(
                 id: id, state: state,
-                summary: agent.message.map(SidebarAgentItem.summaryLine) ?? state.summary,
+                summary: message.map(SidebarAgentItem.summaryLine) ?? state.summary,
                 detail: "\(place.name) · \(agent.name ?? AgentRoster.unnamed)",
-                message: agent.message)
+                message: message)
             return (item, attention.agentSince(of: id), place.position)
         }
         return located.sorted { a, b in
@@ -3192,7 +3216,11 @@ final class WindowController: NSObject {
 
     func attentionStateForTesting(tab id: TabID) -> SurfaceAttention { attention.state(tab: id) }
 
-    func agentStateForTesting(_ surface: SurfaceID) -> SurfaceAttention { attention.agentState(of: surface) }
+    func agentStateForTesting(_ surface: SurfaceID) -> AttentionTone {
+        AttentionTone(wait: attention.agentWait(of: surface), working: attention.isWorking(surface))
+    }
+
+    func agentWaitForTesting(_ surface: SurfaceID) -> AttentionStore.AgentWait? { attention.agentWait(of: surface) }
 
     func agentRowForTesting(_ surface: SurfaceID) -> SidebarAgentItem? {
         agentItems().first { $0.id == surface }
@@ -3239,6 +3267,11 @@ final class WindowController: NSObject {
         attention.visit(id) { isOnScreen($0, in: id) }
         answerFocusedAgent()
         if isOnScreen(cardSurfaces[id], in: id) { takeDownCard(id) }
+    }
+
+    private func takeDownCard(of surface: SurfaceID) {
+        guard let id = cardSurfaces.first(where: { $0.value == surface })?.key else { return }
+        takeDownCard(id)
     }
 
     private func takeDownCard(_ id: TabID) {

@@ -12,7 +12,6 @@ final class AgentRoster {
         var name: String?
         var source: Source
         var message: String?
-        var failed = false
         var hasExited = false
     }
 
@@ -61,10 +60,9 @@ final class AgentRoster {
         agents[id]?.message = message
     }
 
-    func markExited(_ id: SurfaceID, failed: Bool, message: String) {
+    func markExited(_ id: SurfaceID, message: String) {
         guard agents[id] != nil else { return }
         agents[id]?.hasExited = true
-        agents[id]?.failed = failed
         agents[id]?.message = message
     }
 

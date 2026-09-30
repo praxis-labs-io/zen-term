@@ -9,6 +9,11 @@ enum WaitingTarget: Equatable {
 
 /// One window's attention: every surface latches its own, tabs and the window roll up by `max`. Main-thread only.
 final class AttentionStore {
+    // Looking at a finished turn answers it; an ask is answered only by answering it.
+    enum AgentWait: Equatable {
+        case turnEnd, ask
+    }
+
     private struct Entry: Equatable {
         var tab: TabID?
         var latched: SurfaceAttention = .idle
@@ -17,7 +22,7 @@ final class AttentionStore {
         var since: Date?
         // Its own clock, because `since` dates from the first latch of any kind, a completion included.
         var waitingSince: Date?
-        var agentLatched: SurfaceAttention = .idle
+        var agentWait: AgentWait?
         var agentSince: Date?
     }
 
@@ -65,10 +70,8 @@ final class AttentionStore {
         }
     }
 
-    // Focus gates the toast, never the agent latch: the notification is one-shot, so blocked outlives a glance.
-    func record(_ id: SurfaceID, _ event: SurfaceAttention, seen: Bool, fromAgent: Bool = true) {
+    func record(_ id: SurfaceID, _ event: SurfaceAttention, seen: Bool) {
         changing {
-            if fromAgent { latchAgent(id, event) }
             guard !seen else { return markSeen(id) }
             guard var entry = entries[id] else { return }
             entry.latched = max(entry.latched, event)
@@ -79,27 +82,53 @@ final class AttentionStore {
         }
     }
 
+    // Focus gates the toast, never the ask: the notification is one-shot, so an ask outlives a glance.
+    func ask(_ id: SurfaceID, seen: Bool) {
+        changing {
+            guard entries[id] != nil else { return }
+            record(id, .waiting, seen: seen)
+            entries[id]?.agentWait = .ask
+            if entries[id]?.agentSince == nil { entries[id]?.agentSince = now() }
+        }
+    }
+
+    func endTurn(_ id: SurfaceID, seen: Bool) {
+        changing {
+            guard !seen, entries[id] != nil, entries[id]?.agentWait == nil else { return }
+            record(id, .waiting, seen: false)
+            entries[id]?.agentWait = .turnEnd
+            entries[id]?.agentSince = now()
+        }
+    }
+
     /// A level, not an event: progress clearing has to be able to lower it again.
     func setWorking(_ id: SurfaceID, _ on: Bool) {
         changing {
             guard let wasWorking = entries[id]?.working else { return }
             entries[id]?.working = on
-            if wasWorking, !on { latchAgent(id, .completed) }
-            if !wasWorking, on, entries[id]?.agentLatched == .completed { answerAgent(id) }
+            if !wasWorking, on, entries[id]?.agentWait == .turnEnd { markSeen(id) }
         }
     }
 
-    func endAgent(_ id: SurfaceID, failed: Bool = false) {
+    func endAgent(_ id: SurfaceID) {
         changing {
             entries[id]?.working = false
             answerAgent(id)
-            if failed { latchAgent(id, .completed) }
+        }
+    }
+
+    // One change, or a render between the two reads an ended agent with nothing to ask and drops its row.
+    func endCrashedAgent(_ id: SurfaceID, seen: Bool) {
+        changing {
+            endAgent(id)
+            ask(id, seen: seen)
         }
     }
 
     func answerAgent(_ id: SurfaceID) {
         changing {
-            entries[id]?.agentLatched = .idle
+            if entries[id]?.agentWait == .turnEnd { markSeen(id) }
+            entries[id]?.agentWait = nil
             entries[id]?.agentSince = nil
         }
     }
@@ -126,6 +155,10 @@ final class AttentionStore {
             entries[id]?.latched = .idle
             entries[id]?.since = nil
             entries[id]?.waitingSince = nil
+            if entries[id]?.agentWait == .turnEnd {
+                entries[id]?.agentWait = nil
+                entries[id]?.agentSince = nil
+            }
         }
     }
 
@@ -140,9 +173,8 @@ final class AttentionStore {
         entries[id].map(effective) ?? .idle
     }
 
-    func agentState(of id: SurfaceID) -> SurfaceAttention {
-        guard let entry = entries[id] else { return .idle }
-        return max(entry.agentLatched, entry.working ? .working : .idle)
+    func agentWait(of id: SurfaceID) -> AgentWait? {
+        entries[id]?.agentWait
     }
 
     func isWorking(_ id: SurfaceID) -> Bool {
@@ -199,15 +231,6 @@ final class AttentionStore {
     var waitingCount: Int {
         entries.values.filter { !$0.seen && $0.latched == .waiting }.count
             + residual.values.reduce(0) { $0 + $1.waiting }
-    }
-
-    func latchAgent(_ id: SurfaceID, _ event: SurfaceAttention) {
-        changing {
-            guard var entry = entries[id], event > entry.agentLatched else { return }
-            entry.agentLatched = event
-            entry.agentSince = now()
-            entries[id] = entry
-        }
     }
 
     // One report per public call: a render between its steps would read a half-applied change.

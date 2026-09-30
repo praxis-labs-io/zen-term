@@ -37,23 +37,22 @@ enum AgentRules {
     // The prompt blinks between `[ ! ]` and `[ . ]`, and a task's own words can say "Action Required".
     private static let codexPrompt = #"^\[ [!.] \] Action Required"#
 
-    static func notificationAttention(body: String, agentName: String?) -> SurfaceAttention? {
+    enum NotificationKind: Equatable {
+        case stateless, ask, idlePrompt
+    }
+
+    static func notificationKind(body: String, agentName: String?) -> NotificationKind {
         let agent = key(for: agentName)
-        guard !statelessNotifiers.contains(agent ?? "") else { return nil }
-        let rules = notificationRules.filter { $0.agent == agent }
-        guard !rules.isEmpty else { return .waiting }
-        guard let rule = rules.first(where: { $0.match.matches(body) }) else { return .completed }
-        return rule.state
+        if statelessNotifiers.contains(agent ?? "") { return .stateless }
+        if agent == "claude", claudeIdlePrompt.matches(body) { return .idlePrompt }
+        return .ask
     }
 
     // Codex posts before its title says what it wants, so its title rules own its state.
     private static let statelessNotifiers: Set<String> = ["codex"]
 
-    // Claude's idle prompt lands a minute after its progress already closed the turn, so it carries no state.
-    private static let notificationRules: [(agent: String, state: SurfaceAttention?, match: RuleMatcher)] = [
-        ("claude", .waiting, .contains("needs your permission")),
-        ("claude", nil, .contains("is waiting for your input")),
-    ]
+    // Claude's idle prompt lands a minute after its progress already closed the turn.
+    private static let claudeIdlePrompt: RuleMatcher = .contains("is waiting for your input")
 
     static let clearedProgress = "4;0"
 

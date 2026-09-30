@@ -306,146 +306,221 @@ final class AttentionStoreTests: XCTestCase {
         XCTAssertEqual(store.state(tabs: [tab]), .waiting)
     }
 
-    func test_anAgentOnScreenButUnfocused_keepsWaiting_whileItsTabDoesNot() {
+    func test_anAgentOnScreenButUnfocused_keepsAsking_whileItsTabDoesNot() {
         let store = makeStore()
         let split = SurfaceIDs.mint()
         store.register(split, tab: tab)
 
-        store.record(split, .waiting, seen: true)
+        store.ask(split, seen: true)
 
         XCTAssertEqual(store.state(tab: tab), .idle)
-        XCTAssertEqual(store.agentState(of: split), .waiting)
+        XCTAssertEqual(store.agentWait(of: split), .ask)
     }
 
-    func test_anAgentThatAsksWhileWatched_stillReadsWaiting_andLeavesItsTabAlone() {
+    func test_anAgentThatAsksWhileWatched_stillAsks_andLeavesItsTabAlone() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
 
-        store.record(pane, .waiting, seen: true)
+        store.ask(pane, seen: true)
 
-        XCTAssertEqual(store.agentState(of: pane), .waiting)
+        XCTAssertEqual(store.agentWait(of: pane), .ask)
         XCTAssertEqual(store.state(tab: tab), .idle)
         XCTAssertEqual(store.waitingCount, 0)
     }
 
-    func test_anAgentThatAsksWhileWatched_keepsWaiting_onceTheTabIsLeft() {
+    func test_anAgentThatAsksWhileWatched_keepsAsking_onceTheTabIsLeft() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.record(pane, .waiting, seen: true)
+        store.ask(pane, seen: true)
 
         store.visit(tab) { _ in false }
 
-        XCTAssertEqual(store.agentState(of: pane), .waiting)
+        XCTAssertEqual(store.agentWait(of: pane), .ask)
     }
 
-    func test_answeringOrVisitingTheTab_leavesTheAgentWaiting() {
+    func test_answeringOrVisitingTheTab_leavesAnAskStanding() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.record(pane, .waiting, seen: false)
+        store.ask(pane, seen: false)
 
         store.markSeen(tab: tab)
         store.visit(tab) { _ in true }
 
         XCTAssertEqual(store.state(tab: tab), .idle)
-        XCTAssertEqual(store.agentState(of: pane), .waiting)
+        XCTAssertEqual(store.agentWait(of: pane), .ask)
     }
 
-    func test_answeringTheAgent_clearsWhatItLatched_andLeavesTheTabToItsOwnAnswer() {
+    func test_answeringAnAsk_clearsIt_andLeavesTheTabToItsOwnAnswer() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.record(pane, .waiting, seen: false)
+        store.ask(pane, seen: false)
 
         store.answerAgent(pane)
 
-        XCTAssertEqual(store.agentState(of: pane), .idle)
+        XCTAssertNil(store.agentWait(of: pane))
         XCTAssertNil(store.agentSince(of: pane))
         XCTAssertEqual(store.state(tab: tab), .waiting)
     }
 
-    func test_aTurnEnding_latchesDoneForTheAgentOnly() {
+    func test_workingFalling_latchesNothing() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
         store.setWorking(pane, true)
-        XCTAssertEqual(store.agentState(of: pane), .working)
 
         store.setWorking(pane, false)
 
-        XCTAssertEqual(store.agentState(of: pane), .completed)
+        XCTAssertNil(store.agentWait(of: pane), "a turn end is the host's to judge, not the level's")
         XCTAssertEqual(store.state(tab: tab), .idle)
     }
 
-    func test_aNewTurn_replacesDone_butNeverWaiting() {
-        let store = makeStore()
-        let done = SurfaceIDs.mint()
-        let asking = SurfaceIDs.mint()
-        store.register(done, tab: tab)
-        store.register(asking, tab: tab)
-        store.setWorking(done, true)
-        store.setWorking(done, false)
-        store.record(asking, .waiting, seen: false)
-
-        store.setWorking(done, true)
-        store.setWorking(asking, true)
-
-        XCTAssertEqual(store.agentState(of: done), .working)
-        XCTAssertEqual(store.agentState(of: asking), .waiting)
-    }
-
-    func test_progressClearingWithoutATurn_latchesNothing() {
+    func test_aTurnEndingUnseen_waitsOnTheAgentAndTheTab() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
 
-        store.setWorking(pane, false)
+        store.endTurn(pane, seen: false)
 
-        XCTAssertEqual(store.agentState(of: pane), .idle)
+        XCTAssertEqual(store.agentWait(of: pane), .turnEnd)
+        XCTAssertEqual(store.state(tab: tab), .waiting)
+        XCTAssertEqual(store.waitingCount, 1)
     }
 
-    func test_anAgentWaitingAfterADoneTurn_waitsSinceItAsked() {
+    func test_aTurnEndingSeen_latchesNothing() {
+        let store = makeStore()
+        let pane = SurfaceIDs.mint()
+        store.register(pane, tab: tab)
+
+        store.endTurn(pane, seen: true)
+
+        XCTAssertNil(store.agentWait(of: pane))
+        XCTAssertEqual(store.state(tab: tab), .idle)
+    }
+
+    func test_lookingAtAFinishedTurn_answersIt() {
+        let store = makeStore()
+        let viaPane = SurfaceIDs.mint()
+        let viaVisit = SurfaceIDs.mint()
+        store.register(viaPane, tab: tab)
+        store.register(viaVisit, tab: other)
+        store.endTurn(viaPane, seen: false)
+        store.endTurn(viaVisit, seen: false)
+
+        store.markSeen(viaPane)
+        store.visit(other) { _ in true }
+
+        XCTAssertNil(store.agentWait(of: viaPane))
+        XCTAssertNil(store.agentWait(of: viaVisit))
+        XCTAssertEqual(store.windowState, .idle)
+    }
+
+    func test_aNewTurn_answersAFinishedTurn_butNeverAnAsk() {
+        let store = makeStore()
+        let finished = SurfaceIDs.mint()
+        let asking = SurfaceIDs.mint()
+        store.register(finished, tab: tab)
+        store.register(asking, tab: other)
+        store.endTurn(finished, seen: false)
+        store.ask(asking, seen: false)
+
+        store.setWorking(finished, true)
+        store.setWorking(asking, true)
+
+        XCTAssertNil(store.agentWait(of: finished))
+        XCTAssertEqual(store.state(tab: tab), .working)
+        XCTAssertEqual(store.agentWait(of: asking), .ask)
+    }
+
+    func test_anAskOnAFinishedTurn_outlivesALook() {
+        let store = makeStore()
+        let pane = SurfaceIDs.mint()
+        store.register(pane, tab: tab)
+        store.endTurn(pane, seen: false)
+
+        store.ask(pane, seen: false)
+        store.markSeen(pane)
+
+        XCTAssertEqual(store.agentWait(of: pane), .ask)
+    }
+
+    func test_aTurnEnd_neverReplacesAnAsk() {
+        let store = makeStore()
+        let pane = SurfaceIDs.mint()
+        store.register(pane, tab: tab)
+        store.ask(pane, seen: true)
+
+        store.endTurn(pane, seen: false)
+
+        XCTAssertEqual(store.agentWait(of: pane), .ask)
+        XCTAssertEqual(store.state(tab: tab), .idle, "the ask was watched, so the tab has nothing new")
+    }
+
+    func test_answeringAFinishedTurn_clearsItsTabToo() {
+        let store = makeStore()
+        let pane = SurfaceIDs.mint()
+        store.register(pane, tab: tab)
+        store.endTurn(pane, seen: false)
+
+        store.answerAgent(pane)
+
+        XCTAssertNil(store.agentWait(of: pane))
+        XCTAssertEqual(store.state(tab: tab), .idle)
+    }
+
+    func test_anAgentEnding_dropsAFinishedTurn() {
+        let store = makeStore()
+        let pane = SurfaceIDs.mint()
+        store.register(pane, tab: tab)
+        store.endTurn(pane, seen: false)
+
+        store.endAgent(pane)
+
+        XCTAssertNil(store.agentWait(of: pane))
+        XCTAssertEqual(store.state(tab: tab), .idle)
+    }
+
+    func test_anAgentAskingAfterAFinishedTurnYouSaw_waitsSinceItAsked() {
         var clock = Date(timeIntervalSince1970: 100)
         let store = AttentionStore(now: { clock })
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.setWorking(pane, true)
-        store.setWorking(pane, false)
+        store.endTurn(pane, seen: false)
+        store.markSeen(pane)
 
         clock = Date(timeIntervalSince1970: 200)
-        store.record(pane, .waiting, seen: false)
+        store.ask(pane, seen: false)
 
-        XCTAssertEqual(store.agentState(of: pane), .waiting)
         XCTAssertEqual(store.agentSince(of: pane), clock)
     }
 
-    func test_aChange_reportsOnce_evenWhenItTouchesBothLatches() {
+    func test_aCrash_reportsOnce_withTheAskAlreadyInPlace() {
+        let store = makeStore()
+        let pane = SurfaceIDs.mint()
+        store.register(pane, tab: tab)
+        store.setWorking(pane, true)
+        var seenAtReport: [AttentionStore.AgentWait?] = []
+        store.onChange = { seenAtReport.append(store.agentWait(of: pane)) }
+
+        store.endCrashedAgent(pane, seen: true)
+
+        XCTAssertEqual(
+            seenAtReport, [.ask], "a render between ending the agent and latching its crash would drop its row")
+    }
+
+    func test_anAsk_reportsOnce_evenThoughItTouchesBothLatches() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
         var reports = 0
         store.onChange = { reports += 1 }
 
-        store.record(pane, .waiting, seen: false)
+        store.ask(pane, seen: false)
 
-        XCTAssertEqual(reports, 1, "a notification latches the tab and the agent in one change")
-    }
-
-    func test_aFailedExit_reportsOnce_withTheLatchAlreadyInPlace() {
-        let store = makeStore()
-        let pane = SurfaceIDs.mint()
-        store.register(pane, tab: tab)
-        store.setWorking(pane, true)
-        var seenAtReport: [SurfaceAttention] = []
-        store.onChange = { seenAtReport.append(store.agentState(of: pane)) }
-
-        store.endAgent(pane, failed: true)
-
-        XCTAssertEqual(
-            seenAtReport, [.completed],
-            "a render between ending the agent and latching its failure would read an idle agent")
+        XCTAssertEqual(reports, 1, "an ask latches the tab and the agent in one change")
     }
 
     func test_nothingMoving_reportsNothing() {
@@ -473,16 +548,19 @@ final class AttentionStoreTests: XCTestCase {
             ("register", { store.register(pane, tab: self.tab) }),
             ("setWorking on", { store.setWorking(pane, true) }),
             ("setWorking off", { store.setWorking(pane, false) }),
+            ("ask", { store.ask(pane, seen: false) }),
             ("answerAgent", { store.answerAgent(pane) }),
-            ("record", { store.record(pane, .waiting, seen: false) }),
             ("markSeen", { store.markSeen(pane) }),
+            ("record", { store.record(pane, .waiting, seen: false) }),
+            ("markSeen again", { store.markSeen(pane) }),
+            ("endTurn", { store.endTurn(pane, seen: false) }),
             ("endAgent", { store.endAgent(pane) }),
-            ("latchAgent", { store.latchAgent(pane, .waiting) }),
             ("record again", { store.record(pane, .waiting, seen: false) }),
             ("markSeen(tab:)", { store.markSeen(tab: self.tab) }),
             ("record before visit", { store.record(pane, .waiting, seen: false) }),
             ("visit", { store.visit(self.tab) { _ in true } }),
             ("record completed", { store.record(pane, .completed, seen: false) }),
+            ("endCrashedAgent", { store.endCrashedAgent(pane, seen: false) }),
             ("release", { store.release(pane) }),
             ("register again", { store.register(pane, tab: self.tab) }),
             ("dropTab", { store.dropTab(self.tab) }),
