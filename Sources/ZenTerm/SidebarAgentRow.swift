@@ -28,8 +28,7 @@ extension AttentionTone {
         switch self {
         case .waiting: return 0
         case .working: return 1
-        case .done, .failed: return 2
-        case .idle: return 3
+        case .idle: return 2
         }
     }
 
@@ -37,8 +36,6 @@ extension AttentionTone {
         switch self {
         case .waiting: return "Waiting"
         case .working: return "Working"
-        case .done: return "Done"
-        case .failed: return "Exited"
         case .idle: return "Idle"
         }
     }

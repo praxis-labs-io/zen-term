@@ -129,7 +129,14 @@ final class AgentNotificationTests: WindowTestCase {
         XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .waiting)
     }
 
-    func test_claudeSittingAtItsPrompt_changesNoState() throws {
+    private func finishATurn(on surface: RecordingSurface) {
+        surface.delegate?.surface(surface, progressDidChange: TerminalProgress(state: .indeterminate, fraction: nil))
+        drainMainQueue()
+        surface.delegate?.surface(surface, progressDidChange: nil)
+        drainMainQueue()
+    }
+
+    func test_claudesIdlePrompt_fromAClaudeReportingNoProgress_waits() throws {
         let c = makeWindow()
         let claude = try backgroundPane(c)
 
@@ -137,20 +144,158 @@ final class AgentNotificationTests: WindowTestCase {
             claude.surface, title: AgentNotificationFixtures.claudeTitle,
             body: AgentNotificationFixtures.claudeIdlePrompt)
 
-        XCTAssertNil(c.attentionStateForTesting(tabIndex: 0), "its turn already ended, and nothing is being asked")
-        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .idle)
+        XCTAssertEqual(
+            c.attentionStateForTesting(tabIndex: 0), .waiting, "with its progress off, this is the only turn end")
+        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .waiting)
+        XCTAssertEqual(cardCount(c), 1)
+    }
+
+    func test_claudesIdlePrompt_afterATurnYouSaw_changesNothing() throws {
+        let c = makeWindow()
+        let surface = try XCTUnwrap(spawned.last)
+        let id = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        c.identifyAgentForTesting(id, name: "claude")
+        finishATurn(on: surface)
+        c.newTabForTesting()
+        drainMainQueue()
+
+        post(surface, title: AgentNotificationFixtures.claudeTitle, body: AgentNotificationFixtures.claudeIdlePrompt)
+
+        XCTAssertNil(c.attentionStateForTesting(tabIndex: 0), "you saw the turn end, so nothing new is waiting")
+        XCTAssertEqual(c.agentRowForTesting(id)?.state, .idle)
+        XCTAssertNil(c.agentMessageForTesting(id), "an idle row never says Claude is waiting for your input")
         XCTAssertEqual(cardCount(c), 0)
     }
 
-    func test_anyOtherClaudeNotification_readsDone() throws {
+    func test_claudesIdlePrompt_afterATurnYouMissed_raisesNoSecondCard() throws {
+        let c = makeWindow()
+        let claude = try backgroundPane(c)
+        c.identifyAgentForTesting(claude.id, name: "claude")
+        finishATurn(on: claude.surface)
+        XCTAssertEqual(cardCount(c), 1, "precondition: the turn end raised its card")
+
+        post(
+            claude.surface, title: AgentNotificationFixtures.claudeTitle,
+            body: AgentNotificationFixtures.claudeIdlePrompt)
+
+        XCTAssertEqual(cardCount(c), 1)
+        XCTAssertTrue(cardCopy(c).contains("Finished its turn."), "the card the turn end raised stays")
+        XCTAssertEqual(c.agentRowForTesting(claude.id)?.summary, "Finished its turn.")
+    }
+
+    func test_aFinishedTurn_neverTakesTheCardOfAQuestionInItsTab() throws {
+        let c = makeWindow()
+        let asking = try XCTUnwrap(spawned.last)
+        c.handle(.splitHorizontal)
+        let finishing = try XCTUnwrap(spawned.last)
+        let finishingID = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        c.identifyAgentForTesting(finishingID, name: "claude")
+        c.newTabForTesting()
+        drainMainQueue()
+        post(asking, title: AgentNotificationFixtures.claudeTitle, body: AgentNotificationFixtures.claudePermission)
+
+        finishATurn(on: finishing)
+
+        XCTAssertEqual(c.agentWaitForTesting(finishingID), .turnEnd, "the finished turn still waits on its row")
+        XCTAssertTrue(cardCopy(c).contains(AgentNotificationFixtures.claudePermission))
+        XCTAssertFalse(cardCopy(c).contains("Finished its turn."))
+    }
+
+    func test_claudesPlanApproval_waits() throws {
+        let c = makeWindow()
+        let claude = try backgroundPane(c)
+
+        post(
+            claude.surface, title: AgentNotificationFixtures.claudeTitle,
+            body: AgentNotificationFixtures.claudePlanApproval)
+
+        XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .waiting)
+        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .waiting)
+    }
+
+    func test_anyOtherClaudeNotification_waits() throws {
         let c = makeWindow()
         let claude = try backgroundPane(c)
 
         post(claude.surface, title: AgentNotificationFixtures.claudeTitle, body: "Refactor finished")
 
-        XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .completed)
-        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .done)
+        XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .waiting)
+        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .waiting)
         XCTAssertTrue(cardCopy(c).contains("Refactor finished"))
+    }
+
+    func test_anAgentExitingCleanlyInABackgroundTab_landsAsAFinishedCommand() throws {
+        let c = makeWindow()
+        let claude = try backgroundPane(c)
+        c.identifyAgentForTesting(claude.id, name: "claude")
+        let tab = try XCTUnwrap(c.tabIDsForTesting(workspace: c.workspaceIDsForTesting[0]).first)
+
+        c.notifyCommandFinishedForTesting(tab: tab, result: TerminalCommandResult(exitCode: 0, duration: 600))
+        drainMainQueue()
+
+        XCTAssertEqual(
+            c.attentionStateForTesting(tabIndex: 0), .completed, "a one-shot run you were not watching finished")
+        XCTAssertNil(c.agentRowForTesting(claude.id), "it does not wait on you")
+        XCTAssertTrue(cardCopy(c).contains("Finished in 10m 0s."))
+    }
+
+    func test_anAgentExitingCleanlyWhileYouWatch_raisesNothing() throws {
+        let c = makeWindow()
+        let id = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        c.identifyAgentForTesting(id, name: "claude")
+        let tab = try XCTUnwrap(c.tabIDsForTesting(workspace: c.workspaceIDsForTesting[0]).first)
+
+        c.notifyCommandFinishedForTesting(tab: tab, result: TerminalCommandResult(exitCode: 0, duration: 600))
+        drainMainQueue()
+
+        XCTAssertNil(c.attentionStateForTesting(tabIndex: 0), "quitting an agent you are looking at is not news")
+        XCTAssertEqual(cardCount(c), 0)
+    }
+
+    func test_aNewTurn_leavesTheCardOfAnAskItDoesNotAnswer() throws {
+        let c = makeWindow()
+        let pi = try backgroundPane(c)
+        c.identifyAgentForTesting(pi.id, name: "pi")
+        post(pi.surface, title: "pi", body: "Approve the plan?")
+        XCTAssertEqual(cardCount(c), 1, "precondition: the ask raised its card")
+
+        pi.surface.delegate?.surface(
+            pi.surface, progressDidChange: TerminalProgress(state: .indeterminate, fraction: nil))
+        drainMainQueue()
+
+        XCTAssertEqual(c.agentRowForTesting(pi.id)?.state, .waiting, "only typing answers pi")
+        XCTAssertTrue(cardCopy(c).contains("Approve the plan?"), "the card stays as long as its ask does")
+    }
+
+    func test_anAgentCrashingInABackgroundTab_waits() throws {
+        let c = makeWindow()
+        let claude = try backgroundPane(c)
+        c.identifyAgentForTesting(claude.id, name: "claude")
+        let tab = try XCTUnwrap(c.tabIDsForTesting(workspace: c.workspaceIDsForTesting[0]).first)
+
+        c.notifyCommandFinishedForTesting(tab: tab, result: TerminalCommandResult(exitCode: 1, duration: 2))
+        drainMainQueue()
+
+        XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .waiting)
+        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .waiting)
+        XCTAssertTrue(cardCopy(c).contains("Exited 1 after 2s."))
+    }
+
+    func test_anAgentExitSeenByThePollFirst_stillReadsAsACrash() throws {
+        let c = makeWindow()
+        let claude = try backgroundPane(c)
+        c.identifyAgentForTesting(claude.id, name: "claude")
+        let tab = try XCTUnwrap(c.tabIDsForTesting(workspace: c.workspaceIDsForTesting[0]).first)
+        claude.surface.isBusy = true
+        c.trackAgentExitsForTesting()
+        claude.surface.isBusy = false
+        c.trackAgentExitsForTesting()
+
+        c.notifyCommandFinishedForTesting(tab: tab, result: TerminalCommandResult(exitCode: 1, duration: 2))
+        drainMainQueue()
+
+        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .waiting, "the poll noticed first, the result decides")
+        XCTAssertTrue(cardCopy(c).contains("Exited 1 after 2s."))
     }
 
     func test_aConfiguredAgentLaunchedByHand_joinsOnItsNotification() throws {
@@ -214,7 +359,7 @@ final class AgentNotificationTests: WindowTestCase {
 
         post(pane.surface, title: "build", body: "done")
 
-        XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .completed, "a shell's notification never waits")
+        XCTAssertFalse(cardCopy(c).contains("done"), "a shell's news never covers the crash waiting on you")
         XCTAssertEqual(
             c.agentRowForTesting(pane.id)?.summary, WindowController.commandResultMessage(failure),
             "the exited row keeps its own words")
@@ -232,22 +377,6 @@ final class AgentNotificationTests: WindowTestCase {
         XCTAssertEqual(c.agentRowForTesting(codex.id)?.state, .idle)
         XCTAssertEqual(cardCount(c), 0)
         XCTAssertEqual(c.agentMessageForTesting(codex.id), "Approve writing test2.txt")
-    }
-
-    func test_aDoneClaude_raisesNoCardOverATabStillAsking() throws {
-        let c = makeWindow()
-        let asking = try XCTUnwrap(spawned.last)
-        c.handle(.splitHorizontal)
-        let finishing = try XCTUnwrap(spawned.last)
-        c.newTabForTesting()
-        drainMainQueue()
-        post(asking, title: AgentNotificationFixtures.claudeTitle, body: AgentNotificationFixtures.claudePermission)
-
-        post(finishing, title: AgentNotificationFixtures.claudeTitle, body: "Refactor finished")
-
-        XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .waiting)
-        XCTAssertTrue(cardCopy(c).contains(AgentNotificationFixtures.claudePermission))
-        XCTAssertFalse(cardCopy(c).contains("Refactor finished"), "news never covers a question")
     }
 
     func test_aShellsNotification_leavesNoAgentLatch() throws {

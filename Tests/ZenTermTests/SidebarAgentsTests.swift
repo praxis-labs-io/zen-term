@@ -191,7 +191,7 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertTrue(rows(c).isEmpty)
     }
 
-    func test_rowsSortWaitingThenWorkingThenDoneThenIdle_asStatesChange() throws {
+    func test_rowsSortWaitingThenWorkingThenIdle_asStatesChange() throws {
         let c = makeWindow()
         let first = try focusedAgent(c)
         let second = try split(c)
@@ -204,8 +204,8 @@ final class SidebarAgentsTests: WindowTestCase {
         notify(first, "Wants to run swift test")
 
         XCTAssertEqual(items(c).map(\.id), [first.id, second.id, third.id])
-        XCTAssertEqual(items(c).map(\.state), [.waiting, .working, .done])
-        XCTAssertEqual(items(c).map(\.summary), ["Wants to run swift test", "Working", "Done"])
+        XCTAssertEqual(items(c).map(\.state), [.waiting, .working, .idle])
+        XCTAssertEqual(items(c).map(\.summary), ["Wants to run swift test", "Working", "Idle"])
         XCTAssertFalse(c.sidebarForTesting.view.agentsAreHiddenForTesting)
 
         notify(second, "Asks before the backfill")
@@ -213,9 +213,9 @@ final class SidebarAgentsTests: WindowTestCase {
 
         focus(first, in: c)
         c.answerTypedAgent()
-        XCTAssertEqual(items(c).map(\.id), [second.id, third.id, first.id])
-        XCTAssertEqual(items(c).map(\.state), [.waiting, .done, .idle])
-        XCTAssertEqual(items(c).last?.summary, "Idle", "an answered question does not linger")
+        XCTAssertEqual(items(c).map(\.id), [second.id, first.id, third.id])
+        XCTAssertEqual(items(c).map(\.state), [.waiting, .idle, .idle])
+        XCTAssertEqual(items(c)[1].summary, "Idle", "an answered question does not linger")
 
         progress(third, working: true)
         XCTAssertEqual(items(c).map(\.id), [second.id, third.id, first.id])
@@ -304,6 +304,8 @@ final class SidebarAgentsTests: WindowTestCase {
         c.trackAgentExitsForTesting()
         drawer.isBusy = false
         c.trackAgentExitsForTesting()
+        XCTAssertEqual(items(c).count, 1, "the exit's own result gets one poll to land first")
+        c.trackAgentExitsForTesting()
 
         XCTAssertTrue(items(c).isEmpty)
         XCTAssertTrue(c.sidebarForTesting.view.agentsAreHiddenForTesting)
@@ -339,7 +341,7 @@ final class SidebarAgentsTests: WindowTestCase {
         first.surface.isBusy = false
         c.trackAgentExitsForTesting()
 
-        XCTAssertEqual(items(c).map(\.state), [.failed])
+        XCTAssertEqual(items(c).map(\.state), [.waiting], "a crash waits on you")
         XCTAssertEqual(items(c).first?.summary, WindowController.commandResultMessage(result))
 
         focus(first, in: c)
@@ -357,6 +359,7 @@ final class SidebarAgentsTests: WindowTestCase {
 
         agent.surface.isBusy = false
         c.trackAgentExitsForTesting()
+        c.trackAgentExitsForTesting()
 
         XCTAssertTrue(items(c).isEmpty)
         XCTAssertEqual(c.agentStateForTesting(agent.id), .idle)
@@ -373,7 +376,8 @@ final class SidebarAgentsTests: WindowTestCase {
         first.surface.delegate?.surface(first.surface, commandDidFinish: result)
         drainMainQueue()
 
-        XCTAssertEqual(items(c).map(\.state), [.failed])
+        XCTAssertEqual(items(c).map(\.state), [.waiting])
+        XCTAssertEqual(items(c).first?.summary, WindowController.commandResultMessage(result))
     }
 
     func test_anAgentStoppedWithCtrlC_doesNotReadAsFailed() throws {
@@ -387,7 +391,7 @@ final class SidebarAgentsTests: WindowTestCase {
         first.surface.delegate?.surface(first.surface, commandDidFinish: result)
         drainMainQueue()
 
-        XCTAssertNotEqual(items(c).map(\.state), [.failed], "Ctrl-C is a deliberate stop, not a failure")
+        XCTAssertTrue(items(c).isEmpty, "Ctrl-C is a deliberate stop, not a crash")
         XCTAssertEqual(c.agentStateForTesting(first.id), .idle, "and it raises nothing at you")
     }
 

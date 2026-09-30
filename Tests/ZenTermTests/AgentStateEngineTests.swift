@@ -27,6 +27,7 @@ enum AgentNotificationFixtures {
     static let claudeTitle = "Claude Code"
     static let claudePermission = "Claude needs your permission"
     static let claudeIdlePrompt = "Claude is waiting for your input"
+    static let claudePlanApproval = "Claude Code needs your approval for the plan"
 }
 
 final class AgentStateEngineTests: XCTestCase {
@@ -253,21 +254,33 @@ final class AgentIdentificationTests: XCTestCase {
     func test_claudesPermissionPrompt_asksForYou() {
         let body = AgentNotificationFixtures.claudePermission
         XCTAssertEqual(
-            AgentRules.notificationAttention(body: body, agentName: AgentNotificationFixtures.claudeTitle), .waiting)
-        XCTAssertEqual(AgentRules.notificationAttention(body: body, agentName: "claude"), .waiting)
+            AgentRules.notificationKind(body: body, agentName: AgentNotificationFixtures.claudeTitle), .ask)
+        XCTAssertEqual(AgentRules.notificationKind(body: body, agentName: "claude"), .ask)
     }
 
-    func test_claudesIdlePrompt_carriesNoState() {
-        XCTAssertNil(
-            AgentRules.notificationAttention(
-                body: AgentNotificationFixtures.claudeIdlePrompt, agentName: AgentNotificationFixtures.claudeTitle))
-    }
-
-    func test_anythingElseClaudePosts_closesATurn() {
+    func test_claudesPlanApproval_asksForYou() {
         XCTAssertEqual(
-            AgentRules.notificationAttention(
-                body: "Refactor finished", agentName: AgentNotificationFixtures.claudeTitle),
-            .completed)
+            AgentRules.notificationKind(
+                body: AgentNotificationFixtures.claudePlanApproval, agentName: AgentNotificationFixtures.claudeTitle),
+            .ask)
+    }
+
+    func test_claudesIdlePrompt_isItsOwnKind() {
+        XCTAssertEqual(
+            AgentRules.notificationKind(
+                body: AgentNotificationFixtures.claudeIdlePrompt, agentName: AgentNotificationFixtures.claudeTitle),
+            .idlePrompt)
+    }
+
+    func test_onlyClaudesIdlePrompt_isAnIdlePrompt() {
+        XCTAssertEqual(
+            AgentRules.notificationKind(body: AgentNotificationFixtures.claudeIdlePrompt, agentName: "pi"), .ask)
+    }
+
+    func test_anythingElseClaudePosts_asksForYou() {
+        XCTAssertEqual(
+            AgentRules.notificationKind(body: "Refactor finished", agentName: AgentNotificationFixtures.claudeTitle),
+            .ask)
     }
 
     func test_aBlockedCodexTitle_carriesItsAsk_inBothBlinkStates() {
@@ -289,13 +302,14 @@ final class AgentIdentificationTests: XCTestCase {
     }
 
     func test_aCodexNotification_carriesNoState() {
-        XCTAssertNil(AgentRules.notificationAttention(body: "Approve writing test2.txt", agentName: "codex"))
+        XCTAssertEqual(
+            AgentRules.notificationKind(body: "Approve writing test2.txt", agentName: "codex"), .stateless)
     }
 
     func test_anAgentWithNoBodyRules_isTakenAtItsWord() {
         for name in ["pi", nil] as [String?] {
             XCTAssertEqual(
-                AgentRules.notificationAttention(body: "Refactor finished", agentName: name), .waiting,
+                AgentRules.notificationKind(body: "Refactor finished", agentName: name), .ask,
                 "\(name ?? "an unnamed agent") has no rules to read its body by")
         }
     }

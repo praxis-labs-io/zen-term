@@ -197,8 +197,7 @@
 # attention-toast = sticky            # sticky | auto
 
 # The same, for a notice that says something finished: a long command in a
-# background tab, an agent's turn ending, or a notification from a program that
-# is not an agent.
+# background tab, or a notification from a program that is not an agent.
 # In-app Settings edit: applies to the next notice.
 # completion-toast = sticky           # sticky | auto
 

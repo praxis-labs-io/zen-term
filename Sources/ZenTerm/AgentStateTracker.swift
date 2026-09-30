@@ -10,6 +10,7 @@ final class AgentStateTracker {
         var progress = AgentRules.clearedProgress
         var published: AgentSignalState = .idle
         var pendingIdleSince: Date?
+        var reportsProgress = false
     }
 
     private var entries: [SurfaceID: Entry] = [:]
@@ -25,6 +26,7 @@ final class AgentStateTracker {
 
     func noteProgress(_ progress: String, of id: SurfaceID) {
         entries[id, default: Entry()].progress = progress
+        entries[id]?.reportsProgress = true
     }
 
     func title(of id: SurfaceID) -> String { entries[id]?.title ?? "" }
@@ -54,6 +56,11 @@ final class AgentStateTracker {
 
     func state(of id: SurfaceID) -> AgentSignalState {
         entries[id]?.published ?? .idle
+    }
+
+    // Claude clears its progress at launch, so an agent that reports none has its progress turned off.
+    func reportsProgress(_ id: SurfaceID) -> Bool {
+        entries[id]?.reportsProgress == true
     }
 
     func isHoldingIdle(_ id: SurfaceID) -> Bool {

@@ -234,19 +234,21 @@ final class AgentTitleRoutingTests: WindowTestCase {
         XCTAssertEqual(c.agentMessageForTesting(id), "Create test.txt", "the row reads the tool it went back to")
     }
 
-    func test_typingAtADoneCodex_clearsIt() throws {
+    func test_typingAtAFinishedCodexTurn_answersIt() throws {
         let c = makeWindow()
         let (surface, id) = try firstPane(c)
+        WindowController.isPresent = { _ in false }
         push(AgentTitleFixtures.codexWorking[0], from: surface)
         push(AgentTitleFixtures.codexIdle, from: surface)
         let settled = expectation(description: "hold elapsed")
         DispatchQueue.main.asyncAfter(deadline: .now() + AgentStateTracker.idleHold + 0.2) { settled.fulfill() }
         wait(for: [settled], timeout: 2)
-        XCTAssertEqual(c.agentStateForTesting(id), .completed, "precondition: its turn ended")
+        XCTAssertEqual(c.agentWaitForTesting(id), .turnEnd, "precondition: its turn ended while you were away")
 
+        WindowController.isPresent = { _ in true }
         c.answerTypedAgent()
 
-        XCTAssertEqual(c.agentStateForTesting(id), .idle, "only a wait moved to the agent's own signal")
+        XCTAssertEqual(c.agentStateForTesting(id), .idle, "only an ask waits for the agent's own signal")
     }
 
     func test_aCustomAgent_isStillAnsweredByTyping() throws {
@@ -307,6 +309,7 @@ final class AgentTitleRoutingTests: WindowTestCase {
         surface.isBusy = true
         c.trackAgentExitsForTesting()
         surface.isBusy = false
+        c.trackAgentExitsForTesting()
         c.trackAgentExitsForTesting()
         XCTAssertNil(c.agentRowForTesting(id), "precondition: the interrupted Codex left")
 
