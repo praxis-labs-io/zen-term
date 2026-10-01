@@ -152,6 +152,22 @@ final class DrawerAttentionTests: WindowTestCase {
         XCTAssertTrue(toastViews(c).isEmpty)
     }
 
+    func test_comingBackToAnOpenDrawerThatAskedWhileYouWereAway_takesDownItsCard() throws {
+        let c = makeWindow()
+        let drawer = try closedRightDrawer(c)
+        c.handle(.toggleRightDrawer)
+        drainMainQueue()
+        WindowController.isPresent = { _ in false }
+        notify(drawer)
+        XCTAssertEqual(toastViews(c).count, 1, "precondition: the ask raised its card")
+
+        WindowController.isPresent = { _ in true }
+        c.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
+
+        XCTAssertTrue(toastViews(c).isEmpty, "an open drawer is in view")
+        XCTAssertEqual(c.windowAttentionForTesting, .idle)
+    }
+
     func test_aLongCommandFinishingInAWindowYouAreNotIn_stillSaysSo() throws {
         let c = makeWindow()
         WindowController.isPresent = { _ in false }

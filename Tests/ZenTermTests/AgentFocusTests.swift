@@ -218,6 +218,21 @@ final class AgentFocusTests: WindowTestCase {
         XCTAssertNil(c.attentionStateForTesting(tabIndex: 0))
     }
 
+    func test_comingBackToANotificationFromSomethingNotAnAgent_takesDownItsCard() throws {
+        let c = makeWindow()
+        let surface = try XCTUnwrap(spawned.first)
+        WindowController.isPresent = { _ in false }
+        surface.delegate?.surface(surface, didPostNotification: TerminalNotification(title: "make", body: "Build done"))
+        drainMainQueue()
+        XCTAssertNotNil(c.waitingToastForTesting(tabIndex: 0), "precondition: the notification raised its card")
+        XCTAssertNotNil(c.attentionStateForTesting(tabIndex: 0), "precondition: the tab shows it")
+
+        comeBack(c)
+
+        XCTAssertNil(c.waitingToastForTesting(tabIndex: 0))
+        XCTAssertNil(c.attentionStateForTesting(tabIndex: 0))
+    }
+
     func test_comingBackToAnAskInAShownFloat_takesDownItsCard() throws {
         let c = makeWindow()
         let float = try openFloat(c)
