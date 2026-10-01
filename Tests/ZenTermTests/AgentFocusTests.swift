@@ -146,6 +146,93 @@ final class AgentFocusTests: WindowTestCase {
         XCTAssertNil(c.waitingToastForTesting(tabIndex: 0))
     }
 
+    private func comeBack(_ c: WindowController) {
+        WindowController.isPresent = { _ in true }
+        c.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
+    }
+
+    func test_comingBackToAnAsk_takesDownItsCard_andTheTabDot_butLeavesItWaiting() throws {
+        WindowController.isPresent = { _ in false }
+        let c = makeWindow()
+        let pane = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        let surface = try XCTUnwrap(spawned.first)
+        surface.delegate?.surface(surface, didPostNotification: TerminalNotification(title: "pi", body: "Done?"))
+        drainMainQueue()
+        XCTAssertNotNil(c.waitingToastForTesting(tabIndex: 0), "precondition: the ask raised its card")
+        XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .waiting, "precondition: the tab shows it")
+
+        comeBack(c)
+
+        XCTAssertNil(c.waitingToastForTesting(tabIndex: 0), "a card for the pane you are looking at points nowhere")
+        XCTAssertNil(c.attentionStateForTesting(tabIndex: 0), "coming back to the tab is visiting it")
+        XCTAssertEqual(c.agentStateForTesting(pane), .waiting, "looking at an ask is not answering it")
+    }
+
+    func test_comingBackToAnAskInAnUnfocusedSplitInView_takesDownItsCard() throws {
+        let c = makeWindow()
+        let first = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        let firstSurface = try XCTUnwrap(spawned.first)
+        c.handle(.splitVertical)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertNotEqual(c.focusedSurfaceIDForTesting, first, "precondition: the split takes focus")
+        WindowController.isPresent = { _ in false }
+        firstSurface.delegate?.surface(
+            firstSurface, didPostNotification: TerminalNotification(title: "pi", body: "Wants to run swift test"))
+        drainMainQueue()
+        XCTAssertNotNil(c.waitingToastForTesting(tabIndex: 0), "precondition: the ask raised its card")
+
+        comeBack(c)
+
+        XCTAssertNil(c.waitingToastForTesting(tabIndex: 0), "a split on screen is in view, focused or not")
+        XCTAssertNil(c.attentionStateForTesting(tabIndex: 0))
+        XCTAssertEqual(c.agentStateForTesting(first), .waiting)
+    }
+
+    func test_comingBackToACrash_takesDownItsCard_butLeavesItWaiting() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        c.identifyAgentForTesting(pane, name: "claude")
+        WindowController.isPresent = { _ in false }
+        c.notifyCommandFinishedForTesting(tabIndex: 0, result: TerminalCommandResult(exitCode: 1, duration: 1))
+        drainMainQueue()
+        XCTAssertNotNil(c.waitingToastForTesting(tabIndex: 0), "precondition: the crash raised its card")
+
+        comeBack(c)
+
+        XCTAssertNil(c.waitingToastForTesting(tabIndex: 0))
+        XCTAssertNil(c.attentionStateForTesting(tabIndex: 0))
+        XCTAssertEqual(c.agentStateForTesting(pane), .waiting, "a crash waits for you to act on it")
+    }
+
+    func test_comingBackToAFinishedCommand_takesDownItsCard() throws {
+        let c = makeWindow()
+        WindowController.isPresent = { _ in false }
+        c.notifyCommandFinishedForTesting(tabIndex: 0, result: TerminalCommandResult(exitCode: 0, duration: 600))
+        drainMainQueue()
+        XCTAssertNotNil(c.waitingToastForTesting(tabIndex: 0), "precondition: the command raised its card")
+        XCTAssertNotNil(c.attentionStateForTesting(tabIndex: 0), "precondition: the tab shows it")
+
+        comeBack(c)
+
+        XCTAssertNil(c.waitingToastForTesting(tabIndex: 0))
+        XCTAssertNil(c.attentionStateForTesting(tabIndex: 0))
+    }
+
+    func test_comingBackToAnAskInAShownFloat_takesDownItsCard() throws {
+        let c = makeWindow()
+        let float = try openFloat(c)
+        WindowController.isPresent = { _ in false }
+        float.surface.delegate?.surface(
+            float.surface, didPostNotification: TerminalNotification(title: "pi", body: "Done?"))
+        drainMainQueue()
+        XCTAssertNotNil(c.waitingToastForTesting(tabIndex: 0), "precondition: the ask raised its card")
+
+        comeBack(c)
+
+        XCTAssertNil(c.waitingToastForTesting(tabIndex: 0), "a float on screen is in view")
+        XCTAssertEqual(c.agentStateForTesting(float.id), .waiting)
+    }
+
     func test_aNewTurn_answersAFinishedTurn_andTakesDownItsCard() throws {
         let c = makeWindow()
         let pane = try XCTUnwrap(c.focusedSurfaceIDForTesting)
