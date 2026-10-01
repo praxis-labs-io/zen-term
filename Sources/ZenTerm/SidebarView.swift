@@ -238,6 +238,7 @@ final class SidebarView: NSView {
     }
 
     func render(_ items: [SidebarRowItem]) {
+        rendersForTesting += 1
         let byID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
         var removedFocusedRow = false
         for (id, row) in rows where byID[id]?.variant != row.variant {
@@ -442,6 +443,8 @@ final class SidebarView: NSView {
     var addButtonForTesting: IconButton { addButton }
 
     var rowsForTesting: [SettingsNavRow] { orderedRows }
+
+    private(set) var rendersForTesting = 0
 
     var agentRowsForTesting: [SidebarAgentRow] { orderedAgentRows }
 

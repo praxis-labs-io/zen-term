@@ -1296,6 +1296,61 @@ final class SidebarInteractionTests: WindowTestCase {
             "the branch to land once it is read off the main thread")
     }
 
+    func test_row_followsABranchSwitchedWhileTheWindowStaysKey() throws {
+        let repo = try GitFixture.makeRepo(at: root.appendingPathComponent("repo", isDirectory: true))
+        let controller = makeController()
+        let id = controller.addWorkspaceForTesting(name: "repo", folder: repo)
+        controller.activateWorkspaceForTesting(id)
+        waitUntil(
+            controller.sidebarForTesting.view.rowsForTesting.last?.detailForTesting == "main",
+            "the first branch read to land")
+
+        try GitFixture.write("ref: refs/heads/other\n", to: repo.appendingPathComponent(".git/HEAD"))
+
+        waitUntil(
+            controller.sidebarForTesting.view.rowsForTesting.last?.detailForTesting == "other",
+            "the title poll to pick up the switch", timeout: 5)
+    }
+
+    func test_branchRefresh_rendersNothingWhenNoBranchMoved() throws {
+        let repo = try GitFixture.makeRepo(at: root.appendingPathComponent("repo", isDirectory: true))
+        let controller = makeController()
+        let sidebar = controller.sidebarForTesting
+        let id = controller.addWorkspaceForTesting(name: "repo", folder: repo)
+        controller.activateWorkspaceForTesting(id)
+        waitUntil(sidebar.view.rowsForTesting.last?.detailForTesting == "main", "the first branch read to land")
+        waitUntil(sidebar.branchProbesInFlightForTesting.isEmpty, "every first probe to land")
+        let renders = sidebar.view.rendersForTesting
+
+        sidebar.refreshBranches()
+        waitUntil(sidebar.branchProbesInFlightForTesting.isEmpty, "the refresh's probes to land")
+
+        XCTAssertEqual(sidebar.view.rendersForTesting, renders, "an unchanged branch must not re-render the rows")
+    }
+
+    func test_branchRefresh_skipsOnlyAFolderStillInFlight() throws {
+        let stuck = try GitFixture.makeRepo(at: root.appendingPathComponent("stuck", isDirectory: true))
+        let live = try GitFixture.makeRepo(at: root.appendingPathComponent("live", isDirectory: true))
+        let controller = makeController()
+        let sidebar = controller.sidebarForTesting
+        controller.activateWorkspaceForTesting(controller.addWorkspaceForTesting(name: "stuck", folder: stuck))
+        controller.activateWorkspaceForTesting(controller.addWorkspaceForTesting(name: "live", folder: live))
+        func detail(_ name: String) -> String? {
+            sidebar.view.rowsForTesting.first { $0.titleForTesting == name }?.detailForTesting
+        }
+        waitUntil(detail("stuck") == "main" && detail("live") == "main", "the first branch reads to land")
+        waitUntil(sidebar.branchProbesInFlightForTesting.isEmpty, "every first probe to land")
+
+        sidebar.holdBranchProbeForTesting(stuck)
+        try GitFixture.write("ref: refs/heads/other\n", to: stuck.appendingPathComponent(".git/HEAD"))
+        try GitFixture.write("ref: refs/heads/other\n", to: live.appendingPathComponent(".git/HEAD"))
+        sidebar.refreshBranches()
+
+        waitUntil(detail("live") == "other", "a hung folder must not stop the others refreshing")
+        XCTAssertEqual(detail("stuck"), "main", "a folder still in flight is not probed again")
+        XCTAssertEqual(sidebar.branchProbesInFlightForTesting, [stuck.standardizedFileURL])
+    }
+
     func test_aWindowsFirstRow_showsTheBranchOfTheFolderItStartedIn() throws {
         let repo = try GitFixture.makeRepo(at: root.appendingPathComponent("repo", isDirectory: true))
         let controller = makeController(initialCWD: repo)
