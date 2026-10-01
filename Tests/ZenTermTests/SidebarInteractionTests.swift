@@ -1319,29 +1319,36 @@ final class SidebarInteractionTests: WindowTestCase {
         let id = controller.addWorkspaceForTesting(name: "repo", folder: repo)
         controller.activateWorkspaceForTesting(id)
         waitUntil(sidebar.view.rowsForTesting.last?.detailForTesting == "main", "the first branch read to land")
-        waitUntil(sidebar.branchProbesInFlightForTesting == 0, "every first probe to land")
+        waitUntil(sidebar.branchProbesInFlightForTesting.isEmpty, "every first probe to land")
         let renders = sidebar.view.rendersForTesting
 
         sidebar.refreshBranches()
-        waitUntil(sidebar.branchProbesInFlightForTesting == 0, "the refresh's probes to land")
+        waitUntil(sidebar.branchProbesInFlightForTesting.isEmpty, "the refresh's probes to land")
 
         XCTAssertEqual(sidebar.view.rendersForTesting, renders, "an unchanged branch must not re-render the rows")
     }
 
-    func test_branchPoll_skipsWhileProbesAreInFlight() throws {
-        let repo = try GitFixture.makeRepo(at: root.appendingPathComponent("repo", isDirectory: true))
+    func test_branchRefresh_skipsOnlyAFolderStillInFlight() throws {
+        let stuck = try GitFixture.makeRepo(at: root.appendingPathComponent("stuck", isDirectory: true))
+        let live = try GitFixture.makeRepo(at: root.appendingPathComponent("live", isDirectory: true))
         let controller = makeController()
         let sidebar = controller.sidebarForTesting
-        let id = controller.addWorkspaceForTesting(name: "repo", folder: repo)
-        controller.activateWorkspaceForTesting(id)
-        waitUntil(sidebar.branchProbesInFlightForTesting == 0, "every first probe to land")
+        controller.activateWorkspaceForTesting(controller.addWorkspaceForTesting(name: "stuck", folder: stuck))
+        controller.activateWorkspaceForTesting(controller.addWorkspaceForTesting(name: "live", folder: live))
+        func detail(_ name: String) -> String? {
+            sidebar.view.rowsForTesting.first { $0.titleForTesting == name }?.detailForTesting
+        }
+        waitUntil(detail("stuck") == "main" && detail("live") == "main", "the first branch reads to land")
+        waitUntil(sidebar.branchProbesInFlightForTesting.isEmpty, "every first probe to land")
 
+        sidebar.holdBranchProbeForTesting(stuck)
+        try GitFixture.write("ref: refs/heads/other\n", to: stuck.appendingPathComponent(".git/HEAD"))
+        try GitFixture.write("ref: refs/heads/other\n", to: live.appendingPathComponent(".git/HEAD"))
         sidebar.refreshBranches()
-        let inFlight = sidebar.branchProbesInFlightForTesting
-        sidebar.pollBranches()
 
-        XCTAssertGreaterThan(inFlight, 0)
-        XCTAssertEqual(sidebar.branchProbesInFlightForTesting, inFlight, "a slow mount must not pile probes up")
+        waitUntil(detail("live") == "other", "a hung folder must not stop the others refreshing")
+        XCTAssertEqual(detail("stuck"), "main", "a folder still in flight is not probed again")
+        XCTAssertEqual(sidebar.branchProbesInFlightForTesting, [stuck.standardizedFileURL])
     }
 
     func test_aWindowsFirstRow_showsTheBranchOfTheFolderItStartedIn() throws {
