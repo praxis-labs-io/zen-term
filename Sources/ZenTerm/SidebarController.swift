@@ -44,6 +44,8 @@ final class SidebarController {
     private var revealID = 0
     private var isSliding = false
     private var entries: [Entry] = []
+    private var renderedRows: [SidebarRowItem] = []
+    private var branchProbesInFlight = 0
     var onLeave: () -> Void = {}
     var onFocusChanged: () -> Void = {}
     var onJump: (SurfaceID) -> Void = { _ in }
@@ -404,11 +406,25 @@ final class SidebarController {
     }
 
     func refreshBranches() {
-        GitRepoStatus.refresh(entries.compactMap(\.folder)) { [weak self] in self?.renderRows() }
+        let folders = entries.compactMap(\.folder)
+        branchProbesInFlight += folders.count
+        GitRepoStatus.refresh(folders) { [weak self] in self?.landBranchProbe() }
+    }
+
+    func pollBranches() {
+        guard branchProbesInFlight == 0 else { return }
+        refreshBranches()
+    }
+
+    // The cache is shared with other windows, the picker and Settings, so change is judged against these rows.
+    private func landBranchProbe() {
+        branchProbesInFlight -= 1
+        if entries.map(Self.rowItem) != renderedRows { renderRows() }
     }
 
     private func renderRows() {
-        view.render(entries.map(Self.rowItem))
+        renderedRows = entries.map(Self.rowItem)
+        view.render(renderedRows)
         renderLead()
     }
 
@@ -485,4 +501,6 @@ final class SidebarController {
     var liveToggleForTesting: IconButton { column.toggle.isHidden ? collapsedToggle : column.toggle }
 
     static func resetLastChoiceForTesting() { lastChoiceIsDocked = true }
+
+    var branchProbesInFlightForTesting: Int { branchProbesInFlight }
 }

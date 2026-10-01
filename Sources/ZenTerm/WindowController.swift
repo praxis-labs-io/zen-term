@@ -691,6 +691,7 @@ final class WindowController: NSObject {
         if busyDots() != lastBusyDots { renderDock() }
         trackAgentExits()
         checkForRemovedWorktrees()
+        sidebar.pollBranches()
     }
 
     private var isCheckingForRemovedWorktrees = false

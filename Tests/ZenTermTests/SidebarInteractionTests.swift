@@ -1296,6 +1296,54 @@ final class SidebarInteractionTests: WindowTestCase {
             "the branch to land once it is read off the main thread")
     }
 
+    func test_row_followsABranchSwitchedWhileTheWindowStaysKey() throws {
+        let repo = try GitFixture.makeRepo(at: root.appendingPathComponent("repo", isDirectory: true))
+        let controller = makeController()
+        let id = controller.addWorkspaceForTesting(name: "repo", folder: repo)
+        controller.activateWorkspaceForTesting(id)
+        waitUntil(
+            controller.sidebarForTesting.view.rowsForTesting.last?.detailForTesting == "main",
+            "the first branch read to land")
+
+        try GitFixture.write("ref: refs/heads/other\n", to: repo.appendingPathComponent(".git/HEAD"))
+
+        waitUntil(
+            controller.sidebarForTesting.view.rowsForTesting.last?.detailForTesting == "other",
+            "the title poll to pick up the switch", timeout: 5)
+    }
+
+    func test_branchRefresh_rendersNothingWhenNoBranchMoved() throws {
+        let repo = try GitFixture.makeRepo(at: root.appendingPathComponent("repo", isDirectory: true))
+        let controller = makeController()
+        let sidebar = controller.sidebarForTesting
+        let id = controller.addWorkspaceForTesting(name: "repo", folder: repo)
+        controller.activateWorkspaceForTesting(id)
+        waitUntil(sidebar.view.rowsForTesting.last?.detailForTesting == "main", "the first branch read to land")
+        waitUntil(sidebar.branchProbesInFlightForTesting == 0, "every first probe to land")
+        let renders = sidebar.view.rendersForTesting
+
+        sidebar.refreshBranches()
+        waitUntil(sidebar.branchProbesInFlightForTesting == 0, "the refresh's probes to land")
+
+        XCTAssertEqual(sidebar.view.rendersForTesting, renders, "an unchanged branch must not re-render the rows")
+    }
+
+    func test_branchPoll_skipsWhileProbesAreInFlight() throws {
+        let repo = try GitFixture.makeRepo(at: root.appendingPathComponent("repo", isDirectory: true))
+        let controller = makeController()
+        let sidebar = controller.sidebarForTesting
+        let id = controller.addWorkspaceForTesting(name: "repo", folder: repo)
+        controller.activateWorkspaceForTesting(id)
+        waitUntil(sidebar.branchProbesInFlightForTesting == 0, "every first probe to land")
+
+        sidebar.refreshBranches()
+        let inFlight = sidebar.branchProbesInFlightForTesting
+        sidebar.pollBranches()
+
+        XCTAssertGreaterThan(inFlight, 0)
+        XCTAssertEqual(sidebar.branchProbesInFlightForTesting, inFlight, "a slow mount must not pile probes up")
+    }
+
     func test_aWindowsFirstRow_showsTheBranchOfTheFolderItStartedIn() throws {
         let repo = try GitFixture.makeRepo(at: root.appendingPathComponent("repo", isDirectory: true))
         let controller = makeController(initialCWD: repo)
