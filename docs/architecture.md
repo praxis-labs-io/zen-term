@@ -262,7 +262,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   that report, so no mutating path chooses its own render.
 - **`seen` means on screen, not focused.** A pane is on screen while its tab is active in
   the active workspace, a drawer while that holds and it is open, a float while it is
-  shown. Coming on screen
+  shown. Coming on screen, or the window becoming key over it,
   answers a surface and takes down the card it raised. A visit answers only what it puts
   on screen: a closed drawer or float keeps its latch and its card. Releasing an unseen
   surface folds its latch into a per-tab residual, so a closed pane does not unmark the
