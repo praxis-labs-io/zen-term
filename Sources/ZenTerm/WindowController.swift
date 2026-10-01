@@ -3398,16 +3398,21 @@ extension WindowController: NSWindowDelegate {
         syncWindowFocus()
         sidebar.edgeReveal.recheck()
         sidebar.refreshBranches()
-        answerFinishedTurnsInView()
+        answerPanesInView()
         answerFocusedAgent()
     }
 
     // Coming back looks at every pane in view, not only the focused one.
-    private func answerFinishedTurnsInView() {
+    private func answerPanesInView() {
+        guard Self.isPresent(window) else { return }
+        if let active = activeWorkspace.activeID { attention.visit(active) { isSeen($0, in: active) } }
         for surface in agents.agents.keys where attention.agentWait(of: surface) == .turnEnd {
             guard let tab = tab(of: surface), isSeen(surface, in: tab) else { continue }
-            takeDownCard(of: surface)
             attention.markSeen(surface)
+        }
+        for id in attentionCards.keys where isSeen(cardSurfaces[id], in: id) {
+            cardSurfaces[id].map { attention.markSeen($0) }
+            takeDownCard(id)
         }
     }
 
