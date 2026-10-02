@@ -10,6 +10,8 @@ final class FakeSSHWatchers {
     var socketWatches = 0
     var cancels = 0
     var exitCancels = 0
+    var resolves = 0
+    var answerBeforeLogin: pid_t?? = .some(nil)
 
     var watchers: SSHConnection.Watchers {
         SSHConnection.Watchers(
@@ -19,7 +21,12 @@ final class FakeSSHWatchers {
                 self.appeared = appeared
                 return { [self] in cancels += 1 }
             },
-            checkMaster: { [self] _, _, found in self.found = found },
+            resolveMaster: { [self] _, _, found in
+                resolves += 1
+                guard let answer = answerBeforeLogin else { return self.found = found }
+                answerBeforeLogin = nil
+                found(answer)
+            },
             awaitExit: { [self] _, exited in
                 self.exited = exited
                 return { [self] in exitCancels += 1 }

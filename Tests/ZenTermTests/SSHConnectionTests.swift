@@ -113,6 +113,7 @@ final class SSHConnectionTests: XCTestCase {
         fake.connect()
 
         fake.exited?()
+        fake.answerBeforeLogin = .some(nil)
         let (pane, paneID) = surface(2)
         let (other, otherID) = surface(3)
         connection.start(pane, id: paneID, env: [:])
@@ -137,6 +138,88 @@ final class SSHConnectionTests: XCTestCase {
 
         XCTAssertEqual(connectedChanges, [true, false])
         XCTAssertEqual(fake.exitCancels, 1)
+    }
+
+    func test_aMasterAlreadyAnswering_connectsTheLoginWithoutWaitingForTheSocket() {
+        fake.answerBeforeLogin = .some(42)
+        let (login, loginID) = surface(1)
+
+        connection.start(login, id: loginID, env: [:])
+
+        XCTAssertEqual(connection.state, .connected)
+        XCTAssertEqual(login.startCount, 1)
+        XCTAssertEqual(fake.socketWatches, 0)
+        XCTAssertEqual(connectedChanges, [true])
+    }
+
+    func test_aSocketNoMasterAnswersOn_isNotConnected_andTheWatchWaitsForTheRealOne() {
+        let (login, loginID) = surface(1)
+        let (pane, paneID) = surface(2)
+        connection.start(login, id: loginID, env: [:])
+        fake.ready?()
+        connection.start(pane, id: paneID, env: [:])
+
+        fake.appeared?()
+        fake.found?(nil)
+
+        XCTAssertEqual(connection.state, .connecting)
+        XCTAssertEqual(connectedChanges, [])
+        XCTAssertEqual(pane.startCount, 0)
+        XCTAssertEqual(fake.socketWatches, 2)
+        fake.ready?()
+        XCTAssertEqual(login.startCount, 1, "re-arming the watch must not launch the login twice")
+        fake.connect()
+        XCTAssertEqual(pane.startCount, 1)
+        XCTAssertEqual(connectedChanges, [true])
+    }
+
+    private func socketFile(listening: Bool) throws -> (URL, Int32) {
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("zt-\(UUID().uuidString.prefix(8))")
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+        withUnsafeMutableBytes(of: &addr.sun_path) { buffer in
+            for (index, byte) in path.path.utf8.enumerated() { buffer[index] = byte }
+        }
+        let bound = withUnsafePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        try XCTSkipIf(bound != 0, "couldn't bind a test socket")
+        guard listening else {
+            Darwin.close(fd)
+            return (path, fd)
+        }
+        Darwin.listen(fd, 1)
+        DispatchQueue.global().async {
+            let client = Darwin.accept(fd, nil, nil)
+            if client >= 0 { Darwin.close(client) }
+        }
+        return (path, fd)
+    }
+
+    func test_theLiveResolve_removesASocketNothingListensOn() throws {
+        let (path, _) = try socketFile(listening: false)
+        defer { unlink(path.path) }
+
+        let pid = SSHConnection.Watchers.master(of: SSHHostID(name: "zt-test.invalid"), at: path)
+
+        XCTAssertNil(pid)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: path.path), "a refused socket is stale and must go")
+    }
+
+    func test_theLiveResolve_leavesASocketSomethingStillListensOn() throws {
+        let (path, fd) = try socketFile(listening: true)
+        defer {
+            close(fd)
+            unlink(path.path)
+        }
+
+        let pid = SSHConnection.Watchers.master(of: SSHHostID(name: "zt-test.invalid"), at: path)
+
+        XCTAssertNil(pid)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: path.path), "a socket that still answers is never removed")
     }
 
     func test_theLiveWatch_makesTheFolder_andSeesTheSocketAppear() throws {

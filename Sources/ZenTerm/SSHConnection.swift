@@ -11,7 +11,7 @@ final class SSHConnection {
         var awaitSocket:
             (_ path: URL, _ ready: @escaping @MainActor () -> Void, _ appeared: @escaping @MainActor () -> Void) ->
                 () -> Void
-        var checkMaster: (_ host: SSHHostID, _ path: URL, _ found: @escaping @MainActor (pid_t?) -> Void) -> Void
+        var resolveMaster: (_ host: SSHHostID, _ path: URL, _ found: @escaping @MainActor (pid_t?) -> Void) -> Void
         var awaitExit: (_ pid: pid_t, _ exited: @escaping @MainActor () -> Void) -> () -> Void
     }
 
@@ -29,7 +29,7 @@ final class SSHConnection {
 
     private let watchers: Watchers
     private var login: Waiting?
-    private var isLoginReady = false
+    private var isLoginLaunched = false
     private var waiting: [Waiting] = []
     private var stopWatching: (() -> Void)?
     private var isShutDown = false
@@ -53,11 +53,12 @@ final class SSHConnection {
         if state == .connected { return launch(surface, env: env) }
         if let login {
             guard login.id == id else { return waiting.append(Waiting(id: id, surface: surface, env: env)) }
-            if isLoginReady { launch(surface, env: env) }
+            if isLoginLaunched { launch(surface, env: env) }
             return
         }
         login = Waiting(id: id, surface: surface, env: env)
-        awaitSocket()
+        isLoginLaunched = false
+        watchers.resolveMaster(host, controlPath) { [weak self] pid in self?.resolvedBeforeLogin(pid) }
     }
 
     func isAwaitingLogin(on id: SurfaceID?) -> Bool {
@@ -88,8 +89,13 @@ final class SSHConnection {
         if wasConnected { onConnectedChange?(false) }
     }
 
+    private func resolvedBeforeLogin(_ pid: pid_t?) {
+        guard !isShutDown, state == .connecting, login != nil else { return }
+        guard let pid else { return awaitSocket() }
+        masterFound(pid)
+    }
+
     private func awaitSocket() {
-        isLoginReady = false
         stopWatching = watchers.awaitSocket(
             controlPath,
             { [weak self] in self?.loginReady() },
@@ -97,24 +103,30 @@ final class SSHConnection {
     }
 
     private func loginReady() {
-        guard !isShutDown, state == .connecting, let login else { return }
-        isLoginReady = true
+        guard !isShutDown, state == .connecting, let login, !isLoginLaunched else { return }
+        isLoginLaunched = true
         if let surface = login.surface { launch(surface, env: login.env) }
     }
 
     private func socketAppeared() {
         guard !isShutDown, state == .connecting else { return }
-        watchers.checkMaster(host, controlPath) { [weak self] pid in self?.masterFound(pid) }
+        watchers.resolveMaster(host, controlPath) { [weak self] pid in self?.resolvedOnSocket(pid) }
     }
 
-    private func masterFound(_ pid: pid_t?) {
+    private func resolvedOnSocket(_ pid: pid_t?) {
         guard !isShutDown, state == .connecting else { return }
-        Log.info("ssh connection up (master pid \(pid.map(String.init) ?? "unknown"))", category: .workspace)
+        guard let pid else { return awaitSocket() }
+        masterFound(pid)
+    }
+
+    private func masterFound(_ pid: pid_t) {
+        Log.info("ssh connection up (master pid \(pid))", category: .workspace)
         state = .connected
+        let unlaunchedLogin = isLoginLaunched ? nil : login
         login = nil
         stopWatching?()
-        stopWatching = pid.map { watchers.awaitExit($0) { [weak self] in self?.masterExited() } }
-        let flushing = waiting
+        stopWatching = watchers.awaitExit(pid) { [weak self] in self?.masterExited() }
+        let flushing = (unlaunchedLogin.map { [$0] } ?? []) + waiting
         waiting = []
         for entry in flushing { entry.surface.map { launch($0, env: entry.env) } }
         onConnectedChange?(true)
@@ -136,17 +148,28 @@ final class SSHConnection {
 extension SSHConnection.Watchers {
     private static let checkTimeout: TimeInterval = 5
 
+    // A refused connect is the one answer that proves no master is listening; anything else leaves the socket alone.
+    nonisolated static func master(of host: SSHHostID, at path: URL) -> pid_t? {
+        guard FileManager.default.fileExists(atPath: path.path),
+            case .success(let output) = Subprocess.run(
+                URL(fileURLWithPath: SSHLaunch.executable),
+                SSHLaunch.checkArguments(host: host, controlPath: path), timeout: checkTimeout)
+        else { return nil }
+        if let pid = SSHLaunch.masterPID(in: output.stderr + "\n" + output.stdout) { return pid }
+        guard output.stderr.contains("Connection refused") else { return nil }
+        Log.info("ssh: removing a control socket no master answers on", category: .workspace)
+        unlink(path.path)
+        return nil
+    }
+
     static let live = SSHConnection.Watchers(
         awaitSocket: { path, ready, appeared in
             let watch = ControlSocketWatch(path: path, ready: ready, appeared: appeared)
             return watch.cancel
         },
-        checkMaster: { host, path, found in
+        resolveMaster: { host, path, found in
             DispatchQueue.global(qos: .userInitiated).async {
-                let result = Subprocess.run(
-                    URL(fileURLWithPath: SSHLaunch.executable),
-                    SSHLaunch.checkArguments(host: host, controlPath: path), timeout: checkTimeout)
-                let pid = (try? result.get()).flatMap { SSHLaunch.masterPID(in: $0.stderr + "\n" + $0.stdout) }
+                let pid = master(of: host, at: path)
                 DispatchQueue.main.async { found(pid) }
             }
         },

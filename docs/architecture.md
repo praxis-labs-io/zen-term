@@ -575,7 +575,9 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   sends no prompt marks). Only the first surface, the login, starts until the socket appears;
   the rest wait, so a host asks for its password once. `ControlSocketWatch` watches the
   folder rather than polling, `ssh -O check` names the master, and its exit source reports
-  the host disconnected. A login that ends before the socket drops the waiting surfaces and
+  the host disconnected. The check runs before the login launches and again when the socket
+  appears; a socket that refuses the connection is stale and is removed, and anything else is
+  left alone. A login that ends before the socket drops the waiting surfaces and
   closes the workspace back to Connect. Closing a host's last tab returns to Connect.
 - **Writers go through `ConfigFileIO`:** never treat an unreadable file as empty, and
   write through symlinks. `ConfigWriter` preserves comments and unknown keys.

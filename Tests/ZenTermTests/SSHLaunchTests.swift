@@ -86,7 +86,7 @@ final class SSHLaunchTests: XCTestCase {
     func test_theCheckAsksTheMasterAtTheSamePath() {
         XCTAssertEqual(
             SSHLaunch.checkArguments(host: host, controlPath: URL(fileURLWithPath: "/tmp/a b/1-ab")),
-            ["-o", "ControlPath=\"/tmp/a b/1-ab\"", "-O", "check", "--", "devbox"])
+            ["-o", "BatchMode=yes", "-o", "ControlPath=\"/tmp/a b/1-ab\"", "-O", "check", "--", "devbox"])
     }
 
     func test_theMastersPidIsReadFromTheCheck() {
