@@ -39,7 +39,6 @@ final class SSHHostProbe {
     private var pathMonitor: NWPathMonitor?
     private var lastPath: NWPath?
     private var pendingSettle: DispatchWorkItem?
-    private var observers: [(NotificationCenter, NSObjectProtocol)] = []
 
     init(center: SSHHostStatusCenter) {
         self.center = center
@@ -91,13 +90,12 @@ final class SSHHostProbe {
     private func observe(
         _ notifications: NotificationCenter, _ name: Notification.Name, _ handle: @escaping (SSHHostProbe) -> Void
     ) {
-        let token = notifications.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+        _ = notifications.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 handle(self)
             }
         }
-        observers.append((notifications, token))
     }
 
     private func refreshWatching() {
