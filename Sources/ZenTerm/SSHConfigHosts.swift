@@ -74,11 +74,21 @@ enum SSHConfigHosts {
 
     private static func arguments(_ text: Substring) -> [String] {
         var args: [String] = []
-        for token in text.split(whereSeparator: \.isWhitespace) {
-            if token.hasPrefix("#") { break }
-            let unquoted = token.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
-            if !unquoted.isEmpty { args.append(unquoted) }
+        var token = ""
+        var isQuoted = false
+        for char in text {
+            if char == "\"" {
+                isQuoted.toggle()
+            } else if char.isWhitespace && !isQuoted {
+                if !token.isEmpty { args.append(token) }
+                token = ""
+            } else if char == "#" && token.isEmpty && !isQuoted {
+                return args
+            } else {
+                token.append(char)
+            }
         }
+        if !token.isEmpty { args.append(token) }
         return args
     }
 

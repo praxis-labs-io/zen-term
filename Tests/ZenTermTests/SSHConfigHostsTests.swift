@@ -105,6 +105,33 @@ final class SSHConfigHostsTests: XCTestCase {
         XCTAssertEqual(SSHConfigHosts.listing(of: config).aliases, ["alpha", "bravo"])
     }
 
+    func test_aQuotedInclude_isOnePath_evenWithASpaceAndAGlob() throws {
+        try write("Host spaced\n", to: "config files/work.conf")
+        try write("Host skipped\n", to: "config files/notes.txt")
+        let config = try write("Include \"config files/*.conf\"\n")
+
+        XCTAssertEqual(SSHConfigHosts.listing(of: config).aliases, ["spaced"])
+    }
+
+    func test_aQuotedHostAlias_isOneAlias_withoutItsQuotes() throws {
+        let config = try write("Host \"devbox\" \"two words\"\n")
+
+        XCTAssertEqual(SSHConfigHosts.listing(of: config).aliases, ["devbox", "two words"])
+    }
+
+    func test_mixesQuotedAndUnquotedArguments() throws {
+        try write("Host first\n", to: "a dir/one")
+        try write("Host second\n", to: "two")
+        let config = try write(
+            """
+            Include "a dir/one" two
+            Host plain "quoted alias" tail # "not an alias"
+            """)
+
+        XCTAssertEqual(
+            SSHConfigHosts.listing(of: config).aliases, ["first", "second", "plain", "quoted alias", "tail"])
+    }
+
     func test_anIncludeCycle_endsWithoutRepeating() throws {
         try write("Host loop\nInclude config\n", to: "loop")
         let config = try write("Host start\nInclude loop\n")
