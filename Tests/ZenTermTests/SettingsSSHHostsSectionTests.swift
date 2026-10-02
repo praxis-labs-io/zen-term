@@ -133,7 +133,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
 
         let detail = mount()
 
-        XCTAssertEqual(groupCaptions(in: detail), ["~/.SSH/CONFIG", "ADDED HOSTS"])
+        XCTAssertEqual(groupCaptions(in: detail), ["SSH CONFIG", "ADDED HOSTS"])
         XCTAssertEqual(captions(in: detail), ["devbox", "prod", "deploy@10.0.0.5"])
         XCTAssertEqual(toggles(in: detail).map(\.selectedIndex), [1, 0], "Off, On")
         let typedRow = try XCTUnwrap(rows(in: detail).last)
@@ -157,7 +157,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
 
         let detail = mount()
 
-        XCTAssertEqual(groupCaptions(in: detail), ["~/.SSH/CONFIG"])
+        XCTAssertEqual(groupCaptions(in: detail), ["SSH CONFIG"])
         XCTAssertTrue(removeButtons(in: detail).isEmpty)
     }
 
@@ -184,7 +184,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
 
         let detail = mount()
 
-        XCTAssertEqual(groupCaptions(in: detail), ["~/.SSH/CONFIG", "ADDED HOSTS"])
+        XCTAssertEqual(groupCaptions(in: detail), ["SSH CONFIG", "ADDED HOSTS"])
         XCTAssertNotNil(label("Couldn't read ~/.ssh/config.", in: detail))
         XCTAssertEqual(captions(in: detail), ["devbox"])
         XCTAssertEqual(removeButtons(in: detail).map(\.title), ["Remove"])

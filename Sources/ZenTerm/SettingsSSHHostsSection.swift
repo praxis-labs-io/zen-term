@@ -128,7 +128,7 @@ final class SettingsSSHHostsSection: SettingsSection {
 
         if let listing, !listing.isEmpty {
             if !listing.aliases.isEmpty || listing.isConfigUnreadable {
-                addCaption("~/.ssh/config", to: stack)
+                addCaption("SSH config", to: stack)
                 if listing.isConfigUnreadable { addNote("Couldn't read ~/.ssh/config.", to: stack) }
                 let enabled = GeneralConfig.current.sshHosts
                 for alias in listing.aliases { add(makeToggleRow(alias, isOn: enabled.contains(alias)), to: stack) }
@@ -202,7 +202,8 @@ final class SettingsSSHHostsSection: SettingsSection {
         let button = AppButton(title: "Remove", variant: .secondary)
         button.isKeyboardFocusable = true
         let row = LayoutRow(
-            caption: host, description: destination(of: host), control: button, controlNote: nil, controlWidth: nil)
+            caption: host, description: destination(of: host), control: button, controlNote: nil,
+            controlWidth: Self.removalButtonWidth)
         button.onTap = { [weak self, weak row, weak button] in
             guard let self, let row, let button, !Self.isKeyRepeat else { return }
             self.toggleRemoval(of: host, row: row, button: button)
@@ -232,6 +233,12 @@ final class SettingsSSHHostsSection: SettingsSection {
         }
         showRemoval(removedAt[host] != nil, of: host, row: row, button: button)
     }
+
+    // Fits either title so the button keeps its edge when Remove turns into Undo.
+    private static let removalButtonWidth: CGFloat =
+        ["Remove", "Undo"].map {
+            AppButton(title: $0, variant: .secondary).fittingSize.width
+        }.max() ?? 0
 
     private func showRemoval(_ isRemoved: Bool, of host: String, row: LayoutRow, button: AppButton) {
         row.isDimmed = isRemoved
