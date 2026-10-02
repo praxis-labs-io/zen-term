@@ -1,0 +1,75 @@
+import ControlProtocol
+import XCTest
+
+final class ControlRequestTests: XCTestCase {
+    private func decode(_ line: String) -> Result<ControlRequest, ControlRequest.Rejection> {
+        ControlRequest.decode(Data(line.utf8))
+    }
+
+    private func rejection(_ line: String) -> ControlRequest.Rejection? {
+        guard case .failure(let rejection) = decode(line) else { return nil }
+        return rejection
+    }
+
+    func test_decodesAWellFormedRequest() {
+        XCTAssertEqual(
+            try decode(#"{"v":1,"id":7,"cmd":"list","caller":{"pane":31}}"#).get(),
+            ControlRequest(id: 7, cmd: .list, caller: ControlCaller(pane: 31)))
+    }
+
+    func test_decodesWithATrailingNewlineAndUnknownFields() {
+        XCTAssertEqual(
+            try decode("{\"v\":1,\"id\":2,\"cmd\":\"hello\",\"args\":{\"x\":1}}\n").get(),
+            ControlRequest(id: 2, cmd: .hello))
+    }
+
+    func test_garbageIsABadRequestWithNoID() {
+        let rejection = rejection("garbage not json")
+        XCTAssertEqual(rejection?.error.code, .badRequest)
+        XCTAssertNil(rejection?.id)
+    }
+
+    func test_aNonObjectIsABadRequest() {
+        XCTAssertEqual(rejection("[1,2]")?.error.code, .badRequest)
+    }
+
+    func test_missingVersionIsABadRequestThatKeepsTheID() {
+        let rejection = rejection(#"{"id":4,"cmd":"list"}"#)
+        XCTAssertEqual(rejection?.error.code, .badRequest)
+        XCTAssertEqual(rejection?.id, 4)
+    }
+
+    func test_missingIDIsABadRequest() {
+        XCTAssertEqual(rejection(#"{"v":1,"cmd":"list"}"#)?.error.code, .badRequest)
+    }
+
+    func test_aStringIDIsABadRequest() {
+        XCTAssertEqual(rejection(#"{"v":1,"id":"a","cmd":"list"}"#)?.error.code, .badRequest)
+    }
+
+    func test_missingCommandIsABadRequestThatKeepsTheID() {
+        let rejection = rejection(#"{"v":1,"id":5}"#)
+        XCTAssertEqual(rejection?.error.code, .badRequest)
+        XCTAssertEqual(rejection?.id, 5)
+    }
+
+    func test_unknownCommandIsUnknownCommand() {
+        let rejection = rejection(#"{"v":1,"id":6,"cmd":"tab.explode"}"#)
+        XCTAssertEqual(rejection?.error.code, .unknownCommand)
+        XCTAssertEqual(rejection?.id, 6)
+    }
+
+    func test_newerVersionIsUnsupportedAndNamesTheSpokenOne() {
+        let rejection = rejection(#"{"v":2,"id":8,"cmd":"list"}"#)
+        XCTAssertEqual(rejection?.error.code, .unsupportedVersion)
+        XCTAssertEqual(rejection?.id, 8)
+        XCTAssertTrue(rejection?.error.message.contains("version 1") == true, "\(String(describing: rejection))")
+    }
+
+    func test_encodedRequestRoundTrips() throws {
+        let request = ControlRequest(id: 3, cmd: .hello, caller: ControlCaller(pane: 9))
+        let line = try ControlWire.line(request)
+        XCTAssertEqual(line.last, 0x0A)
+        XCTAssertEqual(try ControlRequest.decode(line).get(), request)
+    }
+}

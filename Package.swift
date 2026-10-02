@@ -63,6 +63,10 @@ let package = Package(
             name: "TabKit",
             swiftSettings: mainThreadEnforced
         ),
+        .target(
+            name: "ControlProtocol",
+            swiftSettings: mainThreadEnforced
+        ),
         .executableTarget(
             name: "ZenTerm",
             dependencies: [
@@ -92,6 +96,11 @@ let package = Package(
         .testTarget(
             name: "TabKitTests",
             dependencies: ["TabKit"],
+            swiftSettings: mainThreadEnforced
+        ),
+        .testTarget(
+            name: "ControlProtocolTests",
+            dependencies: ["ControlProtocol"],
             swiftSettings: mainThreadEnforced
         ),
         .testTarget(
