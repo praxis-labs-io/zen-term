@@ -377,9 +377,9 @@ final class PaneCanvasController: NSObject {
         tree = tree.splitting(source, axis: axis, newLeaf: newLeaf, newSplit: newSplit)
         if !focusing { tree.focusedLeaf = focused }
         reconcileAndRender()
+        canvasView.layoutSubtreeIfNeeded()
         if focusing { focusActivePane() }
         if !Motion.isReduceMotionEnabled(), let split = splitViewByID[newSplit] {
-            canvasView.layoutSubtreeIfNeeded()
             split.animateSplitIn(
                 duration: Motion.pageSlideDuration, timing: Motion.landingTiming,
                 suspendGrids: { [weak self] suspended in

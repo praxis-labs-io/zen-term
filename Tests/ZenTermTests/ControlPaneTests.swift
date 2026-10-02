@@ -124,6 +124,23 @@ final class ControlPaneTests: WindowTestCase {
         XCTAssertNil(new.lastConfig?.args.first { $0.contains(";") }, "a split without cmd runs a shell")
     }
 
+    func test_aSplitInABackgroundTabLaysTheNewPaneOutAtItsShareOfTheCanvas() throws {
+        let c = makeWindow()
+        let showing = try XCTUnwrap(spawned.first)
+        _ = try XCTUnwrap(c.openTab(in: c.activeWorkspaceID, cwd: nil, command: nil))
+        let background = try XCTUnwrap(spawned.last)
+        XCTAssertNil(background.view.window)
+        XCTAssertEqual(background.view.bounds.size, showing.view.bounds.size)
+
+        let opened = try result(
+            send(.paneSplit, ControlArgs(pane: token(of: background), dir: .right)), as: PaneResult.self)
+
+        let new = try surface(opened.pane).view.bounds.size
+        XCTAssertEqual(new.height, showing.view.bounds.height)
+        XCTAssertGreaterThan(new.width, showing.view.bounds.width / 3)
+        XCTAssertLessThan(new.width, showing.view.bounds.width / 2)
+    }
+
     func test_splitWithAnAgentCommandIdentifiesTheAgentInList() throws {
         let c = makeWindow()
         let caller = try token(of: XCTUnwrap(spawned.first))
