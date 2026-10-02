@@ -1474,7 +1474,7 @@ final class WindowController: NSObject {
         switch key {
         case "font-family", "font-size", "font-thicken", "cursor-style", "cursor-style-blink",
             "cursor-thickness", "cursor-shader", "background-alpha", "macos-option-as-alt",
-            "scroll-multiplier", "shell", "shell-args", "tab-inherit-cwd", "editor", "ai":
+            "scroll-multiplier", "shell", "shell-args", "tab-inherit-cwd":
             return .terminal
         case "theme", "accent-color", "window-chrome", "backdrop-alpha", "window-gutter", "pane-gap",
             "bottom-drawer-fraction", "right-drawer-fraction", "drawer-resize-step", "max-drawer-fraction",

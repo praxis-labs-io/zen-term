@@ -44,7 +44,6 @@ final class GeneralConfigParserTests: XCTestCase {
             shell = /bin/bash
             shell-args = -l -i
             tab-inherit-cwd = true
-            editor = vim
             ai = codex
             """)
         XCTAssertEqual(config.fontName, "Menlo")
@@ -67,14 +66,18 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.shell, "/bin/bash")
         XCTAssertEqual(config.shellArgs, ["-l", "-i"])
         XCTAssertTrue(config.tabInheritCWD)
-        XCTAssertEqual(config.editor, "vim")
         XCTAssertEqual(config.ai, "codex")
     }
 
-    func test_editorAndAI_absent_fallsBackToNil() {
+    func test_ai_absent_fallsBackToNil() {
         let config = parse("font-size = 14\n")
-        XCTAssertNil(config.editor)
         XCTAssertNil(config.ai)
+    }
+
+    func test_anOldEditorLine_isIgnoredSilently() {
+        let config = parse("editor = vim\n")
+        XCTAssertEqual(config, parse(""))
+        XCTAssertTrue(config.configDiagnostics.isEmpty)
     }
 
     func test_agents_takesProgramNames_lowercasedAndDeduplicated() {

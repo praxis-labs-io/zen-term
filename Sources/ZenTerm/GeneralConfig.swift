@@ -52,7 +52,6 @@ struct GeneralConfig: Equatable {
     var shellArgs: [String]
     var tabInheritCWD: Bool
 
-    var editor: String?
     var ai: String?
     var agents: [String] = []
 
@@ -61,9 +60,6 @@ struct GeneralConfig: Equatable {
     /// Carried beside `keymap`: an action missing from it is either unbound or a collision.
     var unboundActions: Set<KeyInterceptor.ReservedChord> = []
     var configDiagnostics: [ConfigDiagnostic] = []
-
-    static let defaultEditor = "nvim"
-    static let defaultAI = "claude"
 
     static let builtIn = GeneralConfig(
         cursorStyle: .block,
@@ -96,7 +92,6 @@ struct GeneralConfig: Equatable {
         shell: nil,
         shellArgs: [],
         tabInheritCWD: false,
-        editor: nil,
         ai: nil,
         floats: [],
         keymap: KeymapDefaults.map)
