@@ -212,7 +212,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   chords, ⌘P, ⌘⌃T, and revealing a background tab. An open workspace slides in on the y axis, from
   below when it sits lower in `navigable`; a new one has no canvas yet, so it mounts each
   of its tabs without motion, applies each tab's recipe in the same turn, and lands on the
-  tab its launch focus names. A close's landing slides the same way.
+  tab its launch focus names. A close's landing slides the same way. An SSH host's row selects
+  it through `activate(_ host:)`, which closes the open card, float and confirm the same way.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
   workspace costs nothing beyond an inactive tab.
 - **Tab ids are minted by the window**, not by the workspace, so they stay unique across a

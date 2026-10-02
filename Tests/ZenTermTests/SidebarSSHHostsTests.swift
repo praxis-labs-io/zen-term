@@ -138,11 +138,9 @@ final class SidebarSSHHostsTests: WindowTestCase {
         XCTAssertTrue(c.window.firstResponder === workspace, "↑ climbs back into Workspaces")
     }
 
-    func test_return_onAHostRow_doesNothing() throws {
+    func test_return_onAHostRow_selectsTheHost() throws {
         pin(hosts: ["devbox"])
         let c = makeWindow()
-        let active = c.sidebarForTesting.view.rowsForTesting.map { $0.titleForTesting }
-        let surface = c.focusedSurfaceIDForTesting
         let recorder = KeyRecorder()
         recorder.nextResponder = c.window.nextResponder
         c.window.nextResponder = recorder
@@ -151,11 +149,60 @@ final class SidebarSSHHostsTests: WindowTestCase {
         c.window.sendEvent(key(36, "\r", flags: [], in: c))
 
         XCTAssertEqual(recorder.keyCodes, [], "Return is handled, so AppKit does not beep")
+        XCTAssertEqual(c.selectedHostForTesting, SSHHostID(name: "devbox"))
+        XCTAssertEqual(c.window.title, "devbox")
+    }
 
-        XCTAssertTrue(c.window.firstResponder === hostRows(c).first, "focus stays on the host")
-        XCTAssertEqual(c.sidebarForTesting.focusedStop, .host("devbox"))
-        XCTAssertEqual(c.sidebarForTesting.view.rowsForTesting.map { $0.titleForTesting }, active)
-        XCTAssertEqual(c.focusedSurfaceIDForTesting, surface)
+    func test_clickingAHostRow_selectsTheHost() throws {
+        pin(hosts: ["devbox", "staging"])
+        let c = makeWindow()
+
+        try click(XCTUnwrap(hostRows(c).last))
+
+        XCTAssertEqual(c.selectedHostForTesting, SSHHostID(name: "staging"))
+    }
+
+    func test_theSelectedHost_marksOnlyItsRowSelected() throws {
+        pin(hosts: ["devbox", "staging"])
+        let c = makeWindow()
+
+        try click(XCTUnwrap(hostRows(c).last))
+
+        XCTAssertEqual(hostRows(c).map { $0.isAccessibilitySelected() }, [false, true])
+        XCTAssertFalse(
+            c.sidebarForTesting.view.rowsForTesting.contains { $0.isAccessibilitySelected() },
+            "no workspace row reads selected over a host")
+    }
+
+    func test_selectingAHost_closesTheOpenCard() throws {
+        pin(hosts: ["devbox"])
+        let c = makeWindow()
+        c.handle(.toggleCommandPalette)
+        XCTAssertTrue(c.isModalOverlayOpen)
+
+        try click(XCTUnwrap(hostRows(c).first))
+
+        XCTAssertFalse(c.isModalOverlayOpen)
+        XCTAssertEqual(c.selectedHostForTesting, SSHHostID(name: "devbox"))
+    }
+
+    func test_focusingTheSidebar_overAHost_landsOnItsRow() throws {
+        pin(hosts: ["devbox", "staging"])
+        let c = makeWindow()
+        try click(XCTUnwrap(hostRows(c).last))
+
+        c.handle(.focusSidebar)
+
+        XCTAssertEqual(c.sidebarForTesting.focusedStop, .host("staging"))
+    }
+
+    private func click(_ row: NSView) throws {
+        let event = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: row.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
+                clickCount: 1, pressure: 1))
+        row.mouseDown(with: event)
     }
 
     private final class KeyRecorder: NSResponder {

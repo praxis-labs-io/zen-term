@@ -453,6 +453,10 @@ final class WindowController: NSObject {
         onCloseWorkspace = { [weak self] in self?.requestCloseWorkspace(id: $0) }
         sidebar.onJump = { [weak self] in self?.jumpToAgent($0) }
         sidebar.onJumpElsewhere = { [weak self] in self?.jumpToWaitingElsewhere() }
+        sidebar.onActivateHost = { [weak self] host in
+            self?.sidebar.hideReveal()
+            self?.activate(host)
+        }
         onOpenWorkspace = { [weak self] in self?.handle(.toggleRepoPicker) }
         onBottom = { [weak self] in self?.handle(.toggleBottomDrawer) }
         onRight = { [weak self] in self?.handle(.toggleRightDrawer) }
@@ -1078,6 +1082,17 @@ final class WindowController: NSObject {
         selection = .workspace(workspace)
         mount(transition)
         if let tab = workspace.activeID { visit(tab) }
+        renderAttention()
+    }
+
+    private func activate(_ host: SSHHostID) {
+        guard host != selection.host else { restoreFocusToActive(); return }
+        Log.info("ssh host selected", category: .workspace)
+        closeModal()
+        closeFloatForTabChange()
+        cancelConfirm()
+        selection = .host(host)
+        mount(.instant)
         renderAttention()
     }
 
@@ -3276,6 +3291,8 @@ final class WindowController: NSObject {
         return activeWorkspace.id
     }
 
+    var selectedHostForTesting: SSHHostID? { selection.host }
+
     func selectHostForTesting(_ host: SSHHostID) {
         selection = .host(host)
         mount(.instant)
@@ -3403,7 +3420,9 @@ final class WindowController: NSObject {
         case .host(let host): window.title = host.name
         }
         let waiting = workspaces.filter { attention.state(tabs: $0.tabIDs) == .waiting }.map(\.id)
-        sidebar.render(order: order, workspaces: workspaces, active: activeWorkspace, waiting: Set(waiting))
+        sidebar.render(
+            order: order, workspaces: workspaces, active: activeWorkspace, activeHost: selection.host,
+            waiting: Set(waiting))
         renderAgents()
         for (id, card) in attentionCards {
             cardTitles[id].map { card.setTitle($0()) }
