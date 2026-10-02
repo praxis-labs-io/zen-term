@@ -212,9 +212,17 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   ⌘⌃[ ] and a close's landing all read it.
 - **`activate(_:)` is the single path a switch goes through**: a row click, the workspace
   chords, ⌘P, ⌘⌃T, and revealing a background tab. An open workspace slides in on the y axis, from
-  below when it sits lower in `navigable`; a new one has no canvas yet, so it mounts each
-  of its tabs without motion, applies each tab's recipe in the same turn, and lands on the
-  tab its launch focus names. A close's landing slides the same way.
+  below when it sits lower in `navigable`; a new one mounts without motion, its tabs already
+  started with their recipes, on the tab its launch focus names. A close's landing slides the
+  same way.
+- **Every tab and workspace verb is a headless operation the chrome wraps.** `openTab`,
+  `appendWorkspace` and `removeTab` create, start or end without moving the view, and the
+  chords and the control socket call the same one. The chrome's wrapper closes the modal and
+  the float, then selects, activates or remounts. A new tab is appended behind the active one
+  (`TabList.append`), started unmounted, and laid out at the mounted canvas's frame, with
+  `TerminalSurfaceConfig.backingScale` standing in for the window it does not have yet, so its
+  programs start on the grid they will mount into rather than libghostty's default. Focus
+  moving inside a tab that is not active is not the user's, so it cancels nothing.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
   workspace costs nothing beyond an inactive tab.
 - **Tab ids are minted by the window**, not by the workspace, so they stay unique across a

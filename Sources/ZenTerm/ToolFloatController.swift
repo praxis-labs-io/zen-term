@@ -76,8 +76,12 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     }
 
     func hiddenRunningTitles(scope tab: TabID?) -> [String] {
+        runningTitles(scope: tab) { [activeFloat] in activeFloat?.surface !== $0 }
+    }
+
+    func runningTitles(scope tab: TabID?, where include: (TerminalSurface) -> Bool = { _ in true }) -> [String] {
         liveFloats.values
-            .filter { $0.tab == tab && $0.surface.isBusy && activeFloat?.surface !== $0.surface }
+            .filter { $0.tab == tab && $0.surface.isBusy && include($0.surface) }
             .map(\.spec.title)
             .sorted()
     }
