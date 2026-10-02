@@ -70,7 +70,7 @@ let package = Package(
         .executableTarget(
             name: "ZenTerm",
             dependencies: [
-                "TerminalKit", "PaneKit", "TabKit", "AppLog",
+                "TerminalKit", "PaneKit", "TabKit", "AppLog", "ControlProtocol",
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
             resources: [
@@ -110,7 +110,7 @@ let package = Package(
         ),
         .testTarget(
             name: "ZenTermTests",
-            dependencies: ["ZenTerm", "TabKit"],
+            dependencies: ["ZenTerm", "TabKit", "ControlProtocol"],
             swiftSettings: mainThreadEnforced + [.defaultIsolation(MainActor.self)]
         ),
     ]

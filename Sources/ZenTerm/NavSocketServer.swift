@@ -3,51 +3,12 @@ import Foundation
 
 /// A `setvim` hold clears when its connection closes, since the kernel closes the fd however nvim dies.
 final class NavSocketServer {
-    /// Per pid: a shared path let a second instance bind over this one and delete it on quit.
-    static var socketURL: URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("ZenTerm", isDirectory: true)
-        return base.appendingPathComponent("nav.\(getpid()).sock")
-    }
-    static var socketPath: String { socketURL.path }
+    static let prefix = "nav."
 
-    /// Probes liveness with a connect rather than a pid check, which pid recycling could fool.
+    static var socketPath: String { SocketListener.path(prefix: prefix) }
+
     static func sweepStaleSockets(in directory: String) {
-        guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory) else { return }
-        for name in names where name.hasPrefix("nav.") && name.hasSuffix(".sock") {
-            if pid_t(name.dropFirst("nav.".count).dropLast(".sock".count)) == getpid() { continue }
-            let path = directory + "/" + name
-            if !hasListener(at: path) { unlink(path) }
-        }
-    }
-
-    /// Answers live when the probe cannot run, so the sweep never deletes a file it did not check.
-    private static func hasListener(at path: String) -> Bool {
-        guard var addr = socketAddress(for: path) else { return true }
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else { return true }
-        defer { close(fd) }
-        let connected = withUnsafePointer(to: &addr) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
-            }
-        }
-        return connected == 0
-    }
-
-    private static func socketAddress(for path: String) -> sockaddr_un? {
-        var addr = sockaddr_un()
-        addr.sun_family = sa_family_t(AF_UNIX)
-        let pathBytes = Array(path.utf8)
-        let capacity = MemoryLayout.size(ofValue: addr.sun_path)
-        guard pathBytes.count < capacity else { return nil }
-        withUnsafeMutablePointer(to: &addr.sun_path) {
-            $0.withMemoryRebound(to: UInt8.self, capacity: capacity) { dst in
-                for (i, byte) in pathBytes.enumerated() { dst[i] = byte }
-                dst[pathBytes.count] = 0
-            }
-        }
-        return addr
+        SocketListener.sweepStaleSockets(prefix: prefix, in: directory)
     }
 
     static func env(token: Int) -> [String: String] {
@@ -59,87 +20,28 @@ final class NavSocketServer {
     }
 
     private let apply: (NavCommand) -> Void
-    private let path: String
     private let recvTimeout: time_t
-    private let queue = DispatchQueue(label: "com.zenterm.nav-socket")
     /// Its own queue: a held connection parks a thread for the life of an nvim.
     private let connections = DispatchQueue(
         label: "com.zenterm.nav-connections", qos: .utility, attributes: .concurrent)
-    private var acceptSource: DispatchSourceRead?
+    private var listener: SocketListener?
 
     init(
         path: String = NavSocketServer.socketPath, recvTimeout: time_t = 2,
         apply: @escaping (NavCommand) -> Void
     ) {
-        self.path = path
         self.recvTimeout = recvTimeout
         self.apply = apply
+        listener = SocketListener(prefix: Self.prefix, path: path, name: "NavSocket", category: .nav) {
+            [weak self] conn in self?.acceptOne(conn)
+        }
     }
 
-    func start() {
-        stop()
+    func start() { listener?.start() }
 
-        try? FileManager.default.createDirectory(
-            at: URL(fileURLWithPath: path).deletingLastPathComponent(), withIntermediateDirectories: true)
+    func stop() { listener?.stop() }
 
-        if path == Self.socketPath {
-            let directory = URL(fileURLWithPath: path).deletingLastPathComponent().path
-            queue.async { Self.sweepStaleSockets(in: directory) }
-        }
-
-        unlink(path)
-
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else {
-            Log.warning(
-                "NavSocket: socket() failed (\(errnoText())) — seamless nav disabled", category: .nav)
-            return
-        }
-
-        guard var addr = Self.socketAddress(for: path) else {
-            Log.warning(
-                "NavSocket: socket path too long for sun_path: \(path) — seamless nav disabled",
-                category: .nav)
-            close(fd)
-            return
-        }
-
-        let bound = withUnsafePointer(to: &addr) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
-            }
-        }
-        guard bound == 0, listen(fd, 8) == 0 else {
-            Log.warning(
-                "NavSocket: bind/listen on \(path) failed (\(errnoText())) — seamless nav disabled",
-                category: .nav)
-            close(fd)
-            return
-        }
-
-        let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
-        source.setEventHandler { [weak self] in self?.acceptOne(listenFD: fd) }
-        source.setCancelHandler { close(fd) }
-        source.resume()
-        acceptSource = source
-    }
-
-    private func errnoText() -> String {
-        let code = errno
-        var message = [CChar](repeating: 0, count: 256)
-        strerror_r(code, &message, message.count)
-        return "errno \(code): \(String(cString: message))"
-    }
-
-    func stop() {
-        acceptSource?.cancel()
-        acceptSource = nil
-        unlink(path)
-    }
-
-    private func acceptOne(listenFD: Int32) {
-        let conn = accept(listenFD, nil, nil)
-        guard conn >= 0 else { return }
+    private func acceptOne(_ conn: Int32) {
         Self.setRecvTimeout(recvTimeout, on: conn)
         connections.async { [weak self] in
             guard let self else {
@@ -198,6 +100,4 @@ final class NavSocketServer {
         DispatchQueue.main.async { [weak self] in self?.apply(command) }
         return command
     }
-
-    deinit { stop() }
 }
