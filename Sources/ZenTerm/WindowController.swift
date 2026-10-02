@@ -1392,9 +1392,8 @@ final class WindowController: NSObject {
         func isPresentingForTesting(_ card: NewWorktreeOverlay) -> Bool { isPresenting(card) }
     #endif
 
-    // `.notThere` stays silent: one section covers a repo before and after its first install.
     private func reportCarry(_ report: CarryReport) {
-        let lost = report.skipped.filter { $0.reason != .notThere }
+        let lost = report.lost
         guard !lost.isEmpty else { return }
         let list = lost.map { "\($0.name) \($0.reason.explanation)" }.joined(separator: ", ")
         toasts.show(
@@ -2012,8 +2011,12 @@ final class WindowController: NSObject {
         return openTab(in: workspace, cwd: cwd, command: command)
     }
 
-    func openConfiguredWorkspace(_ ws: Workspace) -> WorkspaceID {
-        appendWorkspace(named: ws.title, at: ws.path, config: ws).id
+    func openConfiguredWorkspace(_ ws: Workspace, origin: WorktreeOrigin? = nil) -> WorkspaceID {
+        appendWorkspace(named: ws.title, at: ws.path, config: ws, origin: origin).id
+    }
+
+    func worktreeParentFolder(of id: WorkspaceID) -> URL? {
+        workspaces.first { $0.id == id }.map { $0.origin?.parent.path ?? $0.folder }
     }
 
     func openUnconfiguredWorkspace(at folder: URL) -> WorkspaceID { appendUnconfiguredWorkspace(at: folder).id }
@@ -2058,6 +2061,16 @@ final class WindowController: NSObject {
         guard let c = controller(tab) else { return }
         if c.isSinglePane { return removeTab(tab) }
         c.close(pane: token)
+    }
+
+    func closeStakes(atPath path: URL) -> CloseStakes {
+        let tabs = allTabIDs.filter { isClosedByRemoval($0, atPath: path) }
+        let closesWindow = closedByRemoval(atPath: path).thisWindow
+        return CloseStakes(
+            closesWindow: closesWindow, isRunning: tabs.contains(where: isRunning(tab:)),
+            panes: tabs.compactMap(controller).flatMap(\.paneHandles).filter(\.surface.isBusy).map(listing(of:)),
+            floats: tabs.flatMap { floats.runningTitles(scope: $0) }
+                + (closesWindow ? floats.runningTitles(scope: nil) : []))
     }
 
     private func workspaceOpenState(at path: URL) -> WorkspaceOpenState {

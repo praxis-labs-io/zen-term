@@ -9,6 +9,7 @@ struct ControlResponder {
     var bringForward: (WindowController) -> Void = { _ in }
     var isInFront: (WindowController) -> Bool = { _ in false }
     var loadWorkspaces: (@escaping ([Workspace]) -> Void) -> Void = { ConfigLoader.loadWorkspaces(completion: $0) }
+    var worktreeRemovals = WorktreeRemovalTracker()
 
     func respond(to request: ControlRequest, reply: @escaping (ControlReply) -> Void) {
         switch request.cmd {
@@ -27,6 +28,9 @@ struct ControlResponder {
         case .paneClose: reply(closePane(request))
         case .paneSend: reply(sendToPane(request))
         case .paneRead: reply(readPane(request))
+        case .worktreeList: listWorktrees(request, reply: reply)
+        case .worktreeCreate: createWorktree(request, reply: reply)
+        case .worktreeRemove: removeWorktree(request, reply: reply)
         }
     }
 
@@ -73,7 +77,7 @@ struct ControlResponder {
         }
     }
 
-    private static func names(_ entry: Workspace, _ address: String) -> Bool {
+    static func names(_ entry: Workspace, _ address: String) -> Bool {
         switch ControlAddress.Workspace(address) {
         case .folder(let path): return entry.path.standardizedFileURL.path == Self.standardized(path)
         case .host: return false

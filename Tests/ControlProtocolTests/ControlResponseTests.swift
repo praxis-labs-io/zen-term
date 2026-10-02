@@ -90,6 +90,18 @@ final class ControlResponseTests: XCTestCase {
         XCTAssertEqual(decoded.error, refusal)
     }
 
+    func test_aWorktreeRefusalCarriesItsFiles_andACloseRefusalOmitsThem() throws {
+        let removal = ControlError(
+            .refused, "Removing feat/x loses 1 uncommitted file.",
+            details: .init(panes: [], floats: [], closesWindow: false, files: ["notes.txt"], lostCommits: 0))
+        let line = try removal.responseLine(id: 6)
+        XCTAssertTrue(text(line).contains(#""files":["notes.txt"]"#), text(line))
+        XCTAssertEqual(try JSONDecoder().decode(ControlResponse<NoPayload>.self, from: line).error, removal)
+
+        let close = ControlError(.refused, "", details: .init(panes: [], floats: [], closesWindow: true))
+        XCTAssertFalse(text(try close.responseLine(id: 7)).contains("files"))
+    }
+
     func test_socketFileNamesMatchOnlyControlSockets() {
         XCTAssertTrue(ControlEndpoint.isSocketFileName("control.123.sock"))
         XCTAssertFalse(ControlEndpoint.isSocketFileName("nav.123.sock"))
