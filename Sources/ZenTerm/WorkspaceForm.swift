@@ -103,7 +103,9 @@ struct WorkspaceForm: Equatable {
     @discardableResult
     mutating func setLaunchFocus(_ region: Workspace.Region, inTab index: Int) -> Bool {
         guard tabs.indices.contains(index), isOpen(region, inTab: index) else { return false }
-        launchFocus = Workspace.LaunchFocus(tab: index, region: region)
+        let focus = Workspace.LaunchFocus(tab: index, region: region)
+        if focus != launchFocus { lastRemoval = nil }
+        launchFocus = focus
         return true
     }
 
@@ -112,6 +114,7 @@ struct WorkspaceForm: Equatable {
         guard repaired != launchFocus else { return nil }
         let closed = Self.label(for: launchFocus.region)
         launchFocus = repaired
+        lastRemoval = nil
         return "The \(closed.lowercased()) is closed. \(chipLabel(at: repaired.tab))'s main pane opens focused."
     }
 

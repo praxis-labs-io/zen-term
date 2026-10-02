@@ -279,6 +279,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
         }
         drawing.onOpenFocused = { [weak self] region in
             guard let self, self.form.setLaunchFocus(region, inTab: self.form.selected) else { return }
+            if self.form.lastRemoval == nil { self.showNotice(nil, undoable: false) }
             self.renderTabs()
         }
         drawing.onExitUp = { [weak self] in self?.moveVertical(-1) }

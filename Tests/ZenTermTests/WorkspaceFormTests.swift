@@ -94,6 +94,15 @@ final class WorkspaceFormTests: XCTestCase {
         XCTAssertEqual(form.selected, 0)
     }
 
+    func test_movingTheLaunchFocus_afterARemoval_takesUndoAway() {
+        var form = editing([Workspace.Tab(main: "nvim", right: "claude"), Workspace.Tab(name: "gate")])
+
+        _ = form.removeTab(at: 1)
+        form.setLaunchFocus(.right, inTab: 0)
+
+        XCTAssertNil(form.lastRemoval, "undo would put back the focus the user just moved")
+    }
+
     func test_undo_putsTheTabFocusAndSelectionBack() {
         let tabs = [Workspace.Tab(main: "nvim", right: "claude"), Workspace.Tab(name: "gate")]
         let focus = Workspace.LaunchFocus(tab: 0, region: .right)
