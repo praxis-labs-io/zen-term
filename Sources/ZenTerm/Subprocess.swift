@@ -8,8 +8,14 @@ enum Subprocess {
         let stderr: String
     }
 
+    struct TimedOut: Error {}
+
+    private static let killGrace: TimeInterval = 1
+
     // Drains both pipes before waiting, or a child filling the 64K stderr buffer deadlocks.
-    static func run(_ executable: URL, _ args: [String], in dir: URL? = nil) -> Result<Output, Error> {
+    static func run(
+        _ executable: URL, _ args: [String], in dir: URL? = nil, timeout: TimeInterval? = nil
+    ) -> Result<Output, Error> {
         let process = Process()
         process.executableURL = executable
         process.arguments = args
@@ -19,6 +25,8 @@ enum Subprocess {
         let err = Pipe()
         process.standardOutput = out
         process.standardError = err
+        let exited = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in exited.signal() }
 
         do {
             try process.run()
@@ -26,13 +34,20 @@ enum Subprocess {
             return .failure(error)
         }
 
+        var outData = Data()
         var errData = Data()
-        let errDrain = DispatchQueue(label: "Subprocess.stderr")
         let drained = DispatchGroup()
-        errDrain.async(group: drained) { errData = err.fileHandleForReading.readDataToEndOfFile() }
-        let outData = out.fileHandleForReading.readDataToEndOfFile()
-        drained.wait()
-        process.waitUntilExit()
+        DispatchQueue.global(qos: .utility).async(group: drained) {
+            outData = out.fileHandleForReading.readDataToEndOfFile()
+        }
+        DispatchQueue.global(qos: .utility).async(group: drained) {
+            errData = err.fileHandleForReading.readDataToEndOfFile()
+        }
+        let deadline: DispatchTime = timeout.map { .now() + $0 } ?? .distantFuture
+        guard drained.wait(timeout: deadline) == .success, exited.wait(timeout: deadline) == .success else {
+            stop(process, exited: exited)
+            return .failure(TimedOut())
+        }
 
         return .success(
             Output(
@@ -41,5 +56,12 @@ enum Subprocess {
                     .trimmingCharacters(in: .whitespacesAndNewlines),
                 stderr: String(decoding: errData, as: UTF8.self)
                     .trimmingCharacters(in: .whitespacesAndNewlines)))
+    }
+
+    private static func stop(_ process: Process, exited: DispatchSemaphore) {
+        process.terminate()
+        guard exited.wait(timeout: .now() + killGrace) == .timedOut else { return }
+        kill(process.processIdentifier, SIGKILL)
+        exited.wait()
     }
 }

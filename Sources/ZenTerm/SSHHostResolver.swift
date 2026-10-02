@@ -6,13 +6,17 @@ enum SSHHostResolver {
         nonisolated(unsafe) static var destinationOverrideForTesting: ((String) -> String?)?
     #endif
 
+    // A `Match exec` that never returns would otherwise hold a worker forever.
+    private static let resolveTimeout: TimeInterval = 5
+
     // Blocking: callers own the hop off the main thread.
     static func destination(of host: String) -> String? {
         #if DEBUG
             if let destinationOverrideForTesting { return destinationOverrideForTesting(host) }
         #endif
         guard
-            case .success(let output) = Subprocess.run(URL(fileURLWithPath: "/usr/bin/ssh"), ["-G", "--", host]),
+            case .success(let output) = Subprocess.run(
+                URL(fileURLWithPath: "/usr/bin/ssh"), ["-G", "--", host], timeout: resolveTimeout),
             output.status == 0
         else { return nil }
         return destination(inDump: output.stdout)
