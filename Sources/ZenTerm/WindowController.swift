@@ -1105,6 +1105,7 @@ final class WindowController: NSObject {
         closeModal()
         closeFloatForTabChange()
         cancelConfirm()
+        endModes()
         selection = .host(host)
         mount(.instant)
         renderAttention()

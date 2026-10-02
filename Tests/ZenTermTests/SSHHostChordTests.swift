@@ -238,4 +238,31 @@ final class SSHHostChordTests: WindowTestCase {
 
         XCTAssertEqual(selected(c), "a")
     }
+
+    private final class ModeHostSpy: KeyModeHosting {
+        var modeHandler: ((NSEvent) -> Bool)?
+    }
+
+    func test_selectingAHost_endsScrollModeAndTakesItsKeysOffTheHiddenPane() throws {
+        let c = makeWindow(hosts: ["devbox"])
+        let spy = ModeHostSpy()
+        c.keyModeHost = spy
+        c.handle(.toggleScrollMode)
+        XCTAssertTrue(c.scrollMode.isActive)
+
+        try click(row("devbox", in: c))
+
+        XCTAssertFalse(c.scrollMode.isActive)
+        XCTAssertNil(spy.modeHandler, "no mode key reaches the hidden terminal")
+    }
+
+    func test_selectingAHost_endsSearch() throws {
+        let c = makeWindow(hosts: ["devbox"])
+        c.handle(.toggleSearch)
+        XCTAssertTrue(c.search.isActive)
+
+        try click(row("devbox", in: c))
+
+        XCTAssertFalse(c.search.isActive)
+    }
 }
