@@ -209,7 +209,7 @@ final class ControlWorktreeTests: WindowTestCase {
         let refused = try error(send(.worktreeRemove, ControlArgs(workspace: repo.path, branch: "feat/x")))
 
         XCTAssertEqual(refused.code, .refused)
-        XCTAssertEqual(refused.message, "Removing feat/x loses 1 uncommitted file.")
+        XCTAssertEqual(refused.message, "Removing feat/x would lose 1 uncommitted file.")
         XCTAssertEqual(refused.details?.files, ["notes.txt"])
         XCTAssertEqual(refused.details?.lostCommits, 0)
         XCTAssertTrue(GitFixture.exists(worktree.path))
@@ -222,6 +222,29 @@ final class ControlWorktreeTests: WindowTestCase {
         XCTAssertFalse(GitFixture.exists(worktree.path))
         XCTAssertFalse(names(in: c).contains("Repo: feat/x"))
         XCTAssertFalse(removals.isRemoving(worktree.path))
+    }
+
+    func test_removeRefusesACleanWorktreeWhoseTabIsRunning_andNamesWhatWouldStop_untilForced() throws {
+        let c = makeWindow()
+        let worktree = try openWorktree("feat/x", in: c)
+        let busy = try XCTUnwrap(spawned.last)
+        busy.isBusy = true
+        busy.title = "npm run dev"
+
+        let refused = try error(send(.worktreeRemove, ControlArgs(workspace: repo.path, branch: "feat/x")))
+
+        XCTAssertEqual(refused.code, .refused)
+        XCTAssertEqual(refused.message, "Removing feat/x would stop npm run dev.")
+        XCTAssertEqual(refused.details?.panes.map(\.title), ["npm run dev"])
+        XCTAssertEqual(refused.details?.files, [])
+        XCTAssertTrue(GitFixture.exists(worktree.path))
+
+        _ = try result(
+            send(.worktreeRemove, ControlArgs(workspace: repo.path, force: true, branch: "feat/x")),
+            as: NoPayload.self)
+
+        XCTAssertFalse(GitFixture.exists(worktree.path))
+        XCTAssertFalse(names(in: c).contains("Repo: feat/x"))
     }
 
     func test_removeByPathTakesACleanWorktreeWithoutForce() throws {

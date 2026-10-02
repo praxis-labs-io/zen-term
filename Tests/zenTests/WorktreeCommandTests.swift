@@ -33,18 +33,20 @@ final class WorktreeCommandTests: XCTestCase {
             byFolder.args(in: "/src/zen"), ControlArgs(workspace: "/src/zen/app", path: "/src/wt", force: false))
     }
 
-    func test_aRemovalRefusalListsTheFilesItWouldLose() {
+    func test_aRemovalRefusalListsTheFilesItWouldLose_thenWhatItWouldStop() {
         let refusal = ControlError(
-            .refused, "Removing feat/x loses 2 uncommitted files.",
+            .refused, "Removing feat/x would stop npm run dev and lose 2 uncommitted files.",
             details: .init(
-                panes: [], floats: [], closesWindow: false, files: ["notes.txt", "src/a.swift"], lostCommits: 0))
+                panes: [.init(token: 31, drawer: nil, title: "npm run dev", cwd: "/wt", busy: true, agent: nil)],
+                floats: [], closesWindow: false, files: ["notes.txt", "src/a.swift"], lostCommits: 0))
 
         XCTAssertEqual(
             ControlClient.describe(refusal),
             """
-            Removing feat/x loses 2 uncommitted files. (refused)
+            Removing feat/x would stop npm run dev and lose 2 uncommitted files. (refused)
               notes.txt
               src/a.swift
+              31  npm run dev  /wt
             Pass --force to go ahead.
             """)
     }
