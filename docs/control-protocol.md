@@ -300,14 +300,18 @@ branch holds, or when git can't say. A locked worktree is always `refused`.
 
 `zen hello` and `zen list` print the result as JSON. `zen list --pretty` prints an
 indented tree instead. Exit codes: 0 ok, 1 the app answered with an error or didn't
-answer within 10 seconds, 2 usage, 3 no instance or the connection failed.
+answer within 10 seconds (5 minutes for `worktree create` and `worktree remove`), 2 usage,
+3 no instance or the connection failed.
 
 Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|close`,
-`zen tab new|select|rename|close` and `zen pane split|focus|close|send|read`, with
-`--focus` and `--force` for those fields. A command that returns something prints it as
-JSON, except `zen pane read`, which prints the text; the rest print nothing.
-`zen pane split` splits to the right unless `--dir down` says otherwise. `zen` sends
+`zen tab new|select|rename|close`, `zen pane split|focus|close|send|read` and
+`zen worktree list|create|remove`, with `--focus` and `--force` for those fields. A command
+that returns something prints it as JSON, except `zen pane read`, which prints the text; the
+rest print nothing. `zen pane split` splits to the right unless `--dir down` says otherwise.
+`zen worktree create <branch>` takes `--base default|current` and `--existing`.
+`zen worktree remove` takes a folder when it starts with `/`, `~` or `.`, and a branch
+otherwise. `zen` sends
 folders as absolute paths, read against its own folder, and refuses a `--cwd` or
 `workspace new` folder that does not exist. A workspace argument is a folder when it
 starts with `/`, `~` or `.`, and a title otherwise. A refusal prints what it would stop,
-one line each.
+one line each. A worktree refusal lists the files it would lose first.
