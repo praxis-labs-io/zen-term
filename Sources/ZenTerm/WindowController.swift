@@ -2448,6 +2448,7 @@ final class WindowController: NSObject {
         let needsConfirm =
             closesWindow
             || active.focusedPaneIsBusy
+            || isAwaitingLogin(on: active.focusedSurfaceID)
             || (lastPane && activeWorkspace?.activeID.map(isRunning(tab:)) ?? false)
         guard needsConfirm else {
             if active.closeFocused() == false { activeWorkspace?.activeID.map { closeTab($0) } }
@@ -2465,8 +2466,21 @@ final class WindowController: NSObject {
             message: CloseWarning.message(closing: subject, naming: names), confirmLabel: "Close"
         ) { [weak self] in
             guard let self, let active = self.activeController else { return }
+            if let workspace = self.activeWorkspace, self.isAwaitingLogin(on: active.focusedSurfaceID) {
+                return self.abandonLogin(of: workspace)
+            }
             if active.closeFocused() == false { self.activeWorkspace?.activeID.map { self.closeTab($0) } }
         }
+    }
+
+    private func isAwaitingLogin(on surface: SurfaceID?) -> Bool {
+        activeWorkspace?.connection?.isAwaitingLogin(on: surface) ?? false
+    }
+
+    private func abandonLogin(of workspace: WorkspaceController) {
+        Log.info("ssh login closed before connecting", category: .workspace)
+        workspace.connection?.shutdown()
+        closeTabs(of: workspace)
     }
 
     private func requestCloseTab(_ id: TabID) {

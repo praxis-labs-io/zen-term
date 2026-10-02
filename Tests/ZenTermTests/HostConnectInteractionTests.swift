@@ -93,6 +93,14 @@ final class HostConnectInteractionTests: WindowTestCase {
         return descendants(of: content).contains { ($0 as? NSTextField)?.stringValue == message }
     }
 
+    private func press(button title: String, in c: WindowController) throws {
+        let content = try XCTUnwrap(c.window.contentView)
+        let button = try XCTUnwrap(
+            descendants(of: content).compactMap { $0 as? AppButton }.first { $0.title == title })
+        button.performClick(nil)
+        drainMainQueue()
+    }
+
     private func drainMainQueue() {
         let drained = expectation(description: "main queue drained")
         DispatchQueue.main.async { drained.fulfill() }
@@ -273,5 +281,54 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         XCTAssertNotNil(c.connectViewForTesting)
         XCTAssertTrue(showsToast("Couldn't connect to devbox.", in: c))
+    }
+
+    func test_closingTheLoginWhileConnecting_asksFirst_andChangesNothingUntilAnswered() throws {
+        let (c, login) = try connected()
+        let tabs = c.tabOrderForTesting
+
+        c.handle(.closePane)
+
+        XCTAssertTrue(c.isConfirmOpen, "closing the login ends the connection, so it asks like a running pane")
+        XCTAssertFalse(login.terminated)
+        XCTAssertEqual(c.tabOrderForTesting, tabs)
+    }
+
+    func test_cancellingTheLoginClose_leavesTheLoginRunning() throws {
+        let (c, login) = try connected()
+        c.handle(.closePane)
+
+        try press(button: "Cancel", in: c)
+
+        XCTAssertFalse(c.isConfirmOpen)
+        XCTAssertFalse(login.terminated)
+        XCTAssertNil(c.connectViewForTesting)
+        XCTAssertEqual(c.activeConnectionForTesting?.state, .connecting)
+    }
+
+    func test_confirmingTheLoginClose_returnsToConnect_withoutAFailureToast() throws {
+        let (c, login) = try connected()
+        c.handle(.splitVertical)
+        let waiting = try XCTUnwrap(spawned.last)
+        c.handle(.prevPane)
+        XCTAssertTrue(c.focusedSurfaceForTesting === login, "precondition: the login pane has focus")
+        c.handle(.closePane)
+
+        try press(button: "Close", in: c)
+        fake.connect()
+
+        XCTAssertNotNil(c.connectViewForTesting)
+        XCTAssertTrue(login.terminated)
+        XCTAssertEqual(waiting.startCount, 0)
+        XCTAssertFalse(showsToast("Couldn't connect to devbox.", in: c), "the user closed it; nothing failed")
+    }
+
+    func test_closingAWaitingPaneWhileConnecting_doesNotAsk() throws {
+        let (c, _) = try connected()
+        c.handle(.splitVertical)
+
+        c.handle(.closePane)
+
+        XCTAssertFalse(c.isConfirmOpen)
     }
 }

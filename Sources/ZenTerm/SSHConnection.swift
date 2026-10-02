@@ -60,6 +60,11 @@ final class SSHConnection {
         awaitSocket()
     }
 
+    func isAwaitingLogin(on id: SurfaceID?) -> Bool {
+        guard let id, state == .connecting, !isShutDown else { return false }
+        return login?.id == id
+    }
+
     func release(_ ids: [SurfaceID]) {
         waiting.removeAll { ids.contains($0.id) }
         guard state == .connecting, let login, ids.contains(login.id) else { return }
