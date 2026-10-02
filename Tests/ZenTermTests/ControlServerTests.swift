@@ -93,27 +93,53 @@ final class ControlServerTests: XCTestCase {
         XCTAssertEqual(response.v, 1)
     }
 
+    private func paddedHello(length: Int) -> String {
+        let head = #"{"v":1,"id":5,"cmd":"hello","pad":""#
+        let tail = #""}"#
+        return head + String(repeating: "x", count: length - head.count - tail.count) + tail
+    }
+
     func test_anOverlongLineIsRefusedAndTheConnectionClosed() throws {
-        let long = String(repeating: "x", count: ControlWire.maxLineLength + 10)
+        let line = try XCTUnwrap(firstReply(toRaw: String(repeating: "x", count: ControlWire.maxLineLength + 10)))
+        XCTAssertEqual(try decode(line, as: NoPayload.self).error?.code, .badRequest)
+    }
+
+    func test_anOverlongLineWhoseNewlineArrivesWithItIsRefused() throws {
+        let request = paddedHello(length: ControlWire.maxLineLength + 10)
+        XCTAssertEqual(request.utf8.count, ControlWire.maxLineLength + 10)
+
+        let line = try XCTUnwrap(firstReply(toRaw: request + "\n"))
+
+        let response = try decode(line, as: NoPayload.self)
+        XCTAssertEqual(response.error?.code, .badRequest, line)
+        XCTAssertNil(response.id)
+        XCTAssertEqual(appliedOnMain, [])
+    }
+
+    func test_aLineAtTheLimitIsAnswered() throws {
+        let line = try XCTUnwrap(firstReply(toRaw: paddedHello(length: ControlWire.maxLineLength) + "\n"))
+        XCTAssertEqual(try decode(line, as: HelloResult.self).id, 5)
+    }
+
+    private func firstReply(toRaw payload: String) throws -> String? {
         let fd = try UnixSocket.connect(to: path)
         defer { close(fd) }
-        let done = expectation(description: "reply and close")
+        let done = expectation(description: "first reply")
         var reply = Data()
         DispatchQueue.global().async {
-            _ = UnixSocket.writeAll(Data(long.utf8), to: fd)
+            defer { done.fulfill() }
+            _ = UnixSocket.writeAll(Data(payload.utf8), to: fd)
             var timeout = timeval(tv_sec: 3, tv_usec: 0)
             setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
             var chunk = [UInt8](repeating: 0, count: 1024)
-            while true {
+            while !reply.contains(0x0A) {
                 let n = read(fd, &chunk, chunk.count)
                 if n <= 0 { break }
                 reply.append(contentsOf: chunk[0..<n])
             }
-            done.fulfill()
         }
         wait(for: [done], timeout: 5)
-        let line = try XCTUnwrap(String(decoding: reply, as: UTF8.self).split(separator: "\n").first)
-        XCTAssertEqual(try decode(String(line), as: NoPayload.self).error?.code, .badRequest)
+        return String(decoding: reply, as: UTF8.self).split(separator: "\n").first.map(String.init)
     }
 
     func test_socketFileIsOwnerOnly() throws {

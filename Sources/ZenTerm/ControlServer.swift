@@ -53,14 +53,16 @@ final class ControlServer {
             while let newline = pending.firstIndex(of: 0x0A) {
                 let line = Data(pending[pending.startIndex..<newline])
                 pending.removeSubrange(pending.startIndex...newline)
+                guard line.count <= ControlWire.maxLineLength else { return refuseOverlongLine(on: fd) }
                 guard UnixSocket.writeAll(reply(to: line), to: fd) else { return }
             }
-            if pending.count > ControlWire.maxLineLength {
-                let tooLong = ControlError(.badRequest, "The request line is longer than 64 KiB.")
-                _ = UnixSocket.writeAll(Self.encoded(.failure(tooLong), id: nil), to: fd)
-                return
-            }
+            if pending.count > ControlWire.maxLineLength { return refuseOverlongLine(on: fd) }
         }
+    }
+
+    private func refuseOverlongLine(on fd: Int32) {
+        let tooLong = ControlError(.badRequest, "The request line is longer than 64 KiB.")
+        _ = UnixSocket.writeAll(Self.encoded(.failure(tooLong), id: nil), to: fd)
     }
 
     private func reply(to line: Data) -> Data {
