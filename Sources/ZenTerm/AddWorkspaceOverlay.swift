@@ -457,7 +457,7 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             name: editingWorkspace?.tabs[0].name, main: recipe.main, right: recipe.right, bottom: recipe.bottom)
         let laterTabs = editingWorkspace?.tabs.dropFirst() ?? []
         let focus =
-            editingWorkspace.map(\.focus).flatMap { $0.tab == 0 ? nil : $0 }
+            editingWorkspace.map(\.focus).flatMap { $0.tab == 0 || recipe.focus != .main ? nil : $0 }
             ?? Workspace.LaunchFocus(tab: 0, region: recipe.focus)
         return Workspace(
             title: title, path: folder, tabs: [firstTab] + laterTabs, focus: focus,

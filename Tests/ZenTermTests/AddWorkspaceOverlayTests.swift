@@ -48,6 +48,28 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         XCTAssertEqual(sink.submitted.first?.focus, ws.focus)
     }
 
+    func test_movingFocusOntoTheFirstTab_whenALaterTabHoldsIt_savesTheNewFocus() throws {
+        let ws = Workspace(
+            title: "ZenTerm", path: try makeRealDir(),
+            tabs: [Workspace.Tab(main: "nvim", right: "claude"), Workspace.Tab(name: "gate", bottom: "bin/check")],
+            focus: Workspace.LaunchFocus(tab: 1, region: .bottom), env: [:])
+        let (overlay, sink) = mount(editing: ws)
+        let focus = try XCTUnwrap(segment(in: overlay, containing: "Bottom"))
+        window?.makeFirstResponder(focus)
+
+        let right = String(UnicodeScalar(NSRightArrowFunctionKey)!)
+        focus.keyDown(
+            with: try XCTUnwrap(
+                NSEvent.keyEvent(
+                    with: .keyDown, location: .zero, modifierFlags: [.function, .numericPad],
+                    timestamp: 0, windowNumber: 0, context: nil, characters: right,
+                    charactersIgnoringModifiers: right, isARepeat: false, keyCode: 124)))
+        try XCTUnwrap(button(in: overlay, title: "Save")).onTap()
+
+        XCTAssertEqual(sink.submitted.first?.focus, Workspace.LaunchFocus(tab: 0, region: .right))
+        XCTAssertEqual(sink.submitted.first?.tabs, ws.tabs)
+    }
+
     func test_editingTheFirstTabsFocus_savesItOnTheFirstTab() throws {
         let ws = Workspace(
             title: "ZenTerm", path: try makeRealDir(),
