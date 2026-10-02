@@ -91,7 +91,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let responder = ControlResponder(
             windows: { [weak self] in self?.windows ?? [] }, keyWindow: { [weak self] in self?.keyController() },
-            bringForward: { [weak self] in self?.bringForward($0) })
+            bringForward: { [weak self] in self?.bringForward($0) },
+            isInFront: { NSApp.isActive && $0.window.isKeyWindow })
         let control = ControlServer { responder.respond(to: $0, reply: $1) }
         control.start()
         controlSocket = control

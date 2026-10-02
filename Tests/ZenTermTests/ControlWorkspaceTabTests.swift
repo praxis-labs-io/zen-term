@@ -14,6 +14,7 @@ final class ControlWorkspaceTabTests: WindowTestCase {
     private var configured: [Workspace] = []
     private var configReads = 0
     private var raised: [WindowController] = []
+    private var appIsActive = true
     private let originalPresence = WindowController.isPresent
     private let folder = FileManager.default.temporaryDirectory.appendingPathComponent("zt-control-alpha")
 
@@ -57,6 +58,7 @@ final class ControlWorkspaceTabTests: WindowTestCase {
         var responder = ControlResponder(
             windows: { [unowned self] in controllers }, keyWindow: { [unowned self] in controllers.first })
         responder.bringForward = { [unowned self] in raised.append($0) }
+        responder.isInFront = { [unowned self] in appIsActive && $0 === controllers.first }
         responder.loadWorkspaces = { [unowned self] completion in
             configReads += 1
             completion(configured)
@@ -306,6 +308,16 @@ final class ControlWorkspaceTabTests: WindowTestCase {
         XCTAssertEqual(there.activeWorkspaceIDForTesting, there.workspaceIDsForTesting.last)
         XCTAssertTrue(raised.first === there)
         XCTAssertFalse(raised.contains { $0 === here })
+    }
+
+    func test_selectingATabInTheKeyWindowRaisesItWhileTheAppIsInTheBackground() throws {
+        let c = makeWindow()
+        let opened = try result(send(.tabNew), as: TabResult.self)
+        appIsActive = false
+
+        _ = try result(send(.tabSelect, ControlArgs(tab: opened.tab)), as: NoPayload.self)
+
+        XCTAssertTrue(raised.first === c)
     }
 
     func test_workspaceCloseRefusesTheLastOneAndClosesABackgroundOneQuietly() throws {

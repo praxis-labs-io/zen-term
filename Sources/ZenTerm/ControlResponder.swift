@@ -7,6 +7,7 @@ struct ControlResponder {
     let windows: () -> [WindowController]
     let keyWindow: () -> WindowController?
     var bringForward: (WindowController) -> Void = { _ in }
+    var isInFront: (WindowController) -> Bool = { _ in false }
     var loadWorkspaces: (@escaping ([Workspace]) -> Void) -> Void = { ConfigLoader.loadWorkspaces(completion: $0) }
 
     func respond(to request: ControlRequest, reply: @escaping (ControlReply) -> Void) {
@@ -175,7 +176,7 @@ struct ControlResponder {
     }
 
     private func raise(_ window: WindowController) {
-        guard window !== keyWindow() else { return }
+        guard !isInFront(window) else { return }
         bringForward(window)
     }
 
