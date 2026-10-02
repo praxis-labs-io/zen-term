@@ -305,6 +305,27 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault, "the handle leaves with the process")
     }
 
+    func test_render_aFilteredOutFloat_losesItsButtonAndDivider() {
+        let dock = makeDock([float("dev"), float("top")])
+
+        dock.render(overlay: OverlayState(), floatID: nil, showsToolFloat: { $0 == "top" })
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault + ["│", "top"])
+
+        dock.render(overlay: OverlayState(), floatID: nil, showsToolFloat: { _ in false })
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault)
+
+        dock.render(overlay: OverlayState(), floatID: nil)
+        XCTAssertEqual(dock.visibleLayoutForTesting, Self.fixedDefault + ["│", "dev", "top"])
+    }
+
+    func test_render_theFilterLeavesScratchAlone() {
+        let dock = makeDock([float("dev")])
+
+        dock.render(overlay: OverlayState(), floatID: nil, showsToolFloat: { _ in false })
+
+        XCTAssertTrue(dock.visibleLayoutForTesting.contains("Scratch"))
+    }
+
     func test_hiddenFloat_surfacesWhileItsCardIsShown() {
         var hidden = float("dev")
         hidden.showsInToolbar = false
