@@ -9,11 +9,17 @@ final class ControlSocketWatch: @unchecked Sendable {
     private var source: DispatchSourceFileSystemObject?
     private var isCancelled = false
 
-    init(path: URL, ready: @escaping @MainActor () -> Void, appeared: @escaping @MainActor () -> Void) {
+    init(
+        path: URL, ready: @escaping @MainActor () -> Void, appeared: @escaping @MainActor () -> Void,
+        unwatchable: @escaping @MainActor () -> Void
+    ) {
         self.path = path
         self.appeared = appeared
         queue.async { [self] in
-            arm()
+            guard arm() else {
+                if !isCancelled { DispatchQueue.main.async { unwatchable() } }
+                return
+            }
             DispatchQueue.main.async { ready() }
             check()
         }
@@ -23,7 +29,7 @@ final class ControlSocketWatch: @unchecked Sendable {
         queue.async { [self] in stop() }
     }
 
-    private func arm() {
+    private func arm() -> Bool {
         let folder = path.deletingLastPathComponent()
         do {
             try FileManager.default.createDirectory(
@@ -31,10 +37,11 @@ final class ControlSocketWatch: @unchecked Sendable {
         } catch {
             Log.error("ssh: couldn't create \(folder.path): \(error)", category: .workspace)
         }
-        guard !isCancelled else { return }
+        guard !isCancelled else { return true }
         let descriptor = open(folder.path, O_EVTONLY)
         guard descriptor >= 0 else {
-            return Log.error("ssh: couldn't watch \(folder.path) for the control socket", category: .workspace)
+            Log.error("ssh: couldn't watch \(folder.path) for the control socket", category: .workspace)
+            return false
         }
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: descriptor, eventMask: .write, queue: queue)
@@ -42,6 +49,7 @@ final class ControlSocketWatch: @unchecked Sendable {
         source.setCancelHandler { close(descriptor) }
         self.source = source
         source.resume()
+        return true
     }
 
     private func check() {

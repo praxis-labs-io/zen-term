@@ -218,6 +218,35 @@ final class SSHConnectionTests: XCTestCase {
         XCTAssertEqual(fake.socketWatches, SSHConnection.checksBeforeGivingUp, "no watch after giving up")
     }
 
+    func test_aSocketFolderThatCannotBeWatched_failsTheConnectionLikeALogin() {
+        let (login, loginID) = surface(1)
+        let (pane, paneID) = surface(2)
+        connection.start(login, id: loginID, env: [:])
+        connection.start(pane, id: paneID, env: [:])
+
+        fake.unwatchable?()
+
+        XCTAssertEqual(connection.state, .failed)
+        XCTAssertEqual(loginFailures, 1)
+        XCTAssertEqual(login.startCount, 0)
+        XCTAssertEqual(pane.startCount, 0)
+    }
+
+    func test_theLiveWatch_reportsAFolderItCannotMake() throws {
+        let blocker = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-blocker-\(UUID().uuidString)")
+        FileManager.default.createFile(atPath: blocker.path, contents: nil)
+        defer { try? FileManager.default.removeItem(at: blocker) }
+        let path = blocker.appendingPathComponent("ssh", isDirectory: true).appendingPathComponent("1-ab")
+        let unwatchable = expectation(description: "unwatchable")
+
+        let cancel = SSHConnection.Watchers.live.awaitSocket(
+            path, { XCTFail("nothing is watching, so the login must not start") }, {}, { unwatchable.fulfill() })
+        defer { cancel() }
+
+        wait(for: [unwatchable], timeout: 2)
+    }
+
     private func socketFile(listening: Bool) throws -> (URL, Int32) {
         let path = FileManager.default.temporaryDirectory.appendingPathComponent("zt-\(UUID().uuidString.prefix(8))")
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
@@ -275,7 +304,8 @@ final class SSHConnectionTests: XCTestCase {
         let ready = expectation(description: "ready")
         let appeared = expectation(description: "appeared")
 
-        let cancel = SSHConnection.Watchers.live.awaitSocket(path, { ready.fulfill() }, { appeared.fulfill() })
+        let cancel = SSHConnection.Watchers.live.awaitSocket(
+            path, { ready.fulfill() }, { appeared.fulfill() }, { XCTFail("the folder can be watched") })
         defer { cancel() }
         wait(for: [ready], timeout: 2)
         var isFolder: ObjCBool = false

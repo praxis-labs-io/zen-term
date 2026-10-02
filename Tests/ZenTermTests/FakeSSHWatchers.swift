@@ -5,6 +5,7 @@ import Foundation
 final class FakeSSHWatchers {
     var ready: (@MainActor () -> Void)?
     var appeared: (@MainActor () -> Void)?
+    var unwatchable: (@MainActor () -> Void)?
     var found: (@MainActor (pid_t?) -> Void)?
     var exited: (@MainActor () -> Void)?
     var socketWatches = 0
@@ -16,10 +17,11 @@ final class FakeSSHWatchers {
 
     var watchers: SSHConnection.Watchers {
         SSHConnection.Watchers(
-            awaitSocket: { [self] _, ready, appeared in
+            awaitSocket: { [self] _, ready, appeared, unwatchable in
                 socketWatches += 1
                 self.ready = ready
                 self.appeared = appeared
+                self.unwatchable = unwatchable
                 return { [self] in cancels += 1 }
             },
             resolveMaster: { [self] _, _, found in

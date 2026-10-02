@@ -9,8 +9,10 @@ final class SSHConnection {
 
     struct Watchers {
         var awaitSocket:
-            (_ path: URL, _ ready: @escaping @MainActor () -> Void, _ appeared: @escaping @MainActor () -> Void) ->
-                () -> Void
+            (
+                _ path: URL, _ ready: @escaping @MainActor () -> Void, _ appeared: @escaping @MainActor () -> Void,
+                _ unwatchable: @escaping @MainActor () -> Void
+            ) -> () -> Void
         var resolveMaster: (_ host: SSHHostID, _ path: URL, _ found: @escaping @MainActor (pid_t?) -> Void) -> Void
         var awaitExit: (_ pid: pid_t, _ exited: @escaping @MainActor () -> Void) -> () -> Void
         var after: (_ delay: TimeInterval, _ work: @escaping @MainActor () -> Void) -> Void
@@ -109,13 +111,19 @@ final class SSHConnection {
         stopWatching = watchers.awaitSocket(
             controlPath,
             { [weak self] in self?.loginReady() },
-            { [weak self] in self?.socketAppeared() })
+            { [weak self] in self?.socketAppeared() },
+            { [weak self] in self?.socketUnwatchable() })
     }
 
     private func loginReady() {
         guard !isShutDown, state == .connecting, let login, !isLoginLaunched else { return }
         isLoginLaunched = true
         if let surface = login.surface { launch(surface, env: login.env) }
+    }
+
+    private func socketUnwatchable() {
+        guard !isShutDown, state == .connecting else { return }
+        fail("ssh: the control socket's folder can't be watched, so the connection can't be seen")
     }
 
     private func socketAppeared() {
@@ -187,8 +195,8 @@ extension SSHConnection.Watchers {
     }
 
     static let live = SSHConnection.Watchers(
-        awaitSocket: { path, ready, appeared in
-            let watch = ControlSocketWatch(path: path, ready: ready, appeared: appeared)
+        awaitSocket: { path, ready, appeared, unwatchable in
+            let watch = ControlSocketWatch(path: path, ready: ready, appeared: appeared, unwatchable: unwatchable)
             return watch.cancel
         },
         resolveMaster: { host, path, found in
