@@ -180,7 +180,6 @@ final class SSHConnection {
 extension SSHConnection.Watchers {
     private static let checkTimeout: TimeInterval = 5
 
-    // A refused connect is the one answer that proves no master is listening; anything else leaves the socket alone.
     nonisolated static func master(of host: SSHHostID, at path: URL) -> pid_t? {
         guard FileManager.default.fileExists(atPath: path.path),
             case .success(let output) = Subprocess.run(
