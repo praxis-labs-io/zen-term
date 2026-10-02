@@ -43,7 +43,6 @@ final class SocketListener {
     private let queue: DispatchQueue
     private var acceptSource: DispatchSourceRead?
 
-    /// `ownerUID` is the only peer admitted; anything else is closed unread.
     init(
         prefix: String, path: String? = nil, name: String, category: LogCategory, ownerUID: uid_t = geteuid(),
         accept: @escaping (Int32) -> Void
@@ -57,7 +56,6 @@ final class SocketListener {
         queue = DispatchQueue(label: "com.zenterm.\(name)-listener")
     }
 
-    /// False when the socket could not be bound, which is logged.
     @discardableResult
     func start() -> Bool {
         stop()

@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let worktreeRemovals = WorktreeRemovalTracker()
     private let keys = KeyInterceptor()
     private var navSocket: NavSocketServer?
+    private var controlSocket: ControlServer?
     private var quitConfirmPending = false
     private var updateController: UpdateController?
 
@@ -94,6 +95,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         socket.start()
         navSocket = socket
+
+        let responder = ControlResponder { [weak self] in self?.windows ?? [] }
+        let control = ControlServer { responder.respond(to: $0) }
+        control.start()
+        controlSocket = control
 
         AgentNotifier.shared.installDelegate()
         AgentNotifier.shared.onActivate = { [weak self] windowID, tabID in
@@ -290,6 +296,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         navSocket?.stop()
+        controlSocket?.stop()
     }
 
     /// `windowWillClose` does not fire on termination, so quit has to tear each window down itself.

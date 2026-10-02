@@ -15,10 +15,6 @@ final class NavSocketServer {
         ["ZEN_SOCK": socketPath, "ZEN_PANE": String(token)]
     }
 
-    static func env(base: [String: String], token: Int) -> [String: String] {
-        base.merging(env(token: token)) { _, new in new }
-    }
-
     private let apply: (NavCommand) -> Void
     private let recvTimeout: time_t
     /// Its own queue: a held connection parks a thread for the life of an nvim.
