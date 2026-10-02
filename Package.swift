@@ -15,6 +15,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.0"),
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
     ],
     targets: [
         .binaryTarget(
@@ -83,6 +84,14 @@ let package = Package(
                 .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
             ]
         ),
+        .executableTarget(
+            name: "zen",
+            dependencies: [
+                "ControlProtocol",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            swiftSettings: mainThreadEnforced
+        ),
         .testTarget(
             name: "TerminalKitTests",
             dependencies: ["TerminalKit"],
@@ -101,6 +110,11 @@ let package = Package(
         .testTarget(
             name: "ControlProtocolTests",
             dependencies: ["ControlProtocol"],
+            swiftSettings: mainThreadEnforced
+        ),
+        .testTarget(
+            name: "zenTests",
+            dependencies: ["zen", "ControlProtocol"],
             swiftSettings: mainThreadEnforced
         ),
         .testTarget(
