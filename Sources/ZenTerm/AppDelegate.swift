@@ -89,8 +89,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         socket.start()
         navSocket = socket
 
-        let responder = ControlResponder { [weak self] in self?.windows ?? [] }
-        let control = ControlServer { responder.respond(to: $0) }
+        let responder = ControlResponder(
+            windows: { [weak self] in self?.windows ?? [] }, keyWindow: { [weak self] in self?.keyController() },
+            bringForward: { [weak self] in self?.bringForward($0) },
+            isInFront: { NSApp.isActive && $0.window.isKeyWindow })
+        let control = ControlServer { responder.respond(to: $0, reply: $1) }
         control.start()
         controlSocket = control
 
@@ -179,9 +182,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Self.window(holding: path, among: windows, asking: asking)
     }
 
+    private func bringForward(_ wc: WindowController) {
+        NSApp.activate(ignoringOtherApps: true)
+        if wc.window.isMiniaturized { wc.window.deminiaturize(nil) }
+        wc.window.makeKeyAndOrderFront(nil)
+    }
+
     private func keyController() -> WindowController? {
-        guard let key = NSApp.keyWindow else { return windows.first }
+        guard let key = NSApp.keyWindow else { return Self.frontmost(of: windows, in: NSApp.orderedWindows) }
         return windows.first { $0.window === key }
+    }
+
+    static func frontmost(of controllers: [WindowController], in ordered: [NSWindow]) -> WindowController? {
+        ordered.lazy.compactMap { window in controllers.first { $0.window === window } }.first ?? controllers.first
     }
 
     private func reportBackendShadow() {

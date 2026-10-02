@@ -66,6 +66,30 @@ final class ControlResponseTests: XCTestCase {
         XCTAssertEqual(ControlAddress.window(3), "w3")
     }
 
+    func test_tabAddressReadsBack() {
+        XCTAssertEqual(ControlAddress.tab("w1.t14").map { [$0.window, $0.tab] }, [1, 14])
+        for malformed in ["w1", "t14", "w1.t", "1.14", "w1.t14.x", "wx.t1", ""] {
+            XCTAssertNil(ControlAddress.tab(malformed), malformed)
+        }
+    }
+
+    func test_workspaceAddressIsAFolderAHostOrATitle() {
+        XCTAssertEqual(ControlAddress.Workspace("/src/app"), .folder("/src/app"))
+        XCTAssertEqual(ControlAddress.Workspace("ssh:devbox"), .host("devbox"))
+        XCTAssertEqual(ControlAddress.Workspace("zen-term: feat/x"), .title("zen-term: feat/x"))
+    }
+
+    func test_aRefusalCarriesWhatForceWouldEnd() throws {
+        let pane = ListResult.Pane(token: 31, drawer: nil, title: "npm run dev", cwd: "/app", busy: true, agent: nil)
+        let refusal = ControlError(
+            .refused, "Closing tab w1.t3 would stop npm run dev.",
+            details: .init(panes: [pane], floats: ["Scratch"], closesWindow: false))
+        let line = try refusal.responseLine(id: 5)
+        XCTAssertTrue(text(line).contains(#""closesWindow":false"#), text(line))
+        let decoded = try JSONDecoder().decode(ControlResponse<NoPayload>.self, from: line)
+        XCTAssertEqual(decoded.error, refusal)
+    }
+
     func test_socketFileNamesMatchOnlyControlSockets() {
         XCTAssertTrue(ControlEndpoint.isSocketFileName("control.123.sock"))
         XCTAssertFalse(ControlEndpoint.isSocketFileName("nav.123.sock"))

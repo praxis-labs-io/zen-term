@@ -32,13 +32,13 @@ final class WorkspaceControllerTests: WindowTestCase {
         XCTAssertEqual(workspace.activeID, TabID(1))
     }
 
-    func test_addAppendsAndActivates() {
+    func test_appendLeavesTheActiveTabActive() {
         let workspace = makeWorkspace()
 
-        workspace.add(TabID(2))
+        workspace.append(TabID(2))
 
         XCTAssertEqual(workspace.tabIDs, [TabID(1), TabID(2)])
-        XCTAssertEqual(workspace.activeID, TabID(2))
+        XCTAssertEqual(workspace.activeID, TabID(1))
     }
 
     func test_setControllerFilesItAndSeedsItsTitle() {
@@ -68,17 +68,17 @@ final class WorkspaceControllerTests: WindowTestCase {
 
     func test_selectMovesTheActiveTab() {
         let workspace = makeWorkspace()
-        workspace.add(TabID(2))
+        workspace.append(TabID(2))
 
-        workspace.select(TabID(1))
+        workspace.select(TabID(2))
 
-        XCTAssertEqual(workspace.activeID, TabID(1))
+        XCTAssertEqual(workspace.activeID, TabID(2))
     }
 
     func test_moveReordersAndKeepsTheActiveTabActive() {
         let workspace = makeWorkspace()
-        workspace.add(TabID(2))
-        workspace.add(TabID(3))
+        workspace.append(TabID(2))
+        workspace.append(TabID(3))
         workspace.select(TabID(2))
 
         XCTAssertTrue(workspace.move(TabID(3), by: -2))
@@ -90,7 +90,7 @@ final class WorkspaceControllerTests: WindowTestCase {
     func test_closeDropsTheTabAndItsController() {
         let workspace = makeWorkspace()
         workspace.setController(makeController(), for: TabID(1))
-        workspace.add(TabID(2))
+        workspace.append(TabID(2))
         workspace.setController(makeController(), for: TabID(2))
 
         XCTAssertTrue(workspace.close(TabID(2)))
@@ -114,7 +114,7 @@ final class WorkspaceControllerTests: WindowTestCase {
     func test_allSurfacesSpansEveryTab() {
         let workspace = makeWorkspace()
         workspace.setController(makeController(), for: TabID(1))
-        workspace.add(TabID(2))
+        workspace.append(TabID(2))
         workspace.setController(makeController(), for: TabID(2))
         workspace.controller(TabID(1))?.start()
         workspace.controller(TabID(2))?.start()
@@ -127,7 +127,7 @@ final class WorkspaceControllerTests: WindowTestCase {
         let first = makeController()
         let second = makeController()
         workspace.setController(first, for: TabID(1))
-        workspace.add(TabID(2))
+        workspace.append(TabID(2))
         workspace.setController(second, for: TabID(2))
         first.start()
         second.start()

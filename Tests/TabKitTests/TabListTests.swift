@@ -15,16 +15,16 @@ final class TabListTests: XCTestCase {
         XCTAssertEqual(list.activeID, TabID(1))
     }
 
-    func test_add_appendsAndActivates() {
+    func test_append_leavesTheActiveTabActive() {
         var list = TabList(first: TabID(1))
-        list.add(TabID(2))
+        list.append(TabID(2))
         XCTAssertEqual(list.order, [TabID(1), TabID(2)])
-        XCTAssertEqual(list.activeID, TabID(2))
+        XCTAssertEqual(list.activeID, TabID(1))
     }
 
     func test_select_presentAndAbsent() {
         var list = TabList(first: TabID(1))
-        list.add(TabID(2))
+        list.append(TabID(2))
         list.select(TabID(1))
         XCTAssertEqual(list.activeID, TabID(1))
         list.select(TabID(99))
@@ -33,7 +33,7 @@ final class TabListTests: XCTestCase {
 
     func test_selectByIndex_clamps() {
         var list = TabList(first: TabID(1))
-        list.add(TabID(2)); list.add(TabID(3))
+        list.append(TabID(2)); list.append(TabID(3))
         list.select(index: 99)
         XCTAssertEqual(list.activeID, TabID(3))
         list.select(index: -5)
@@ -42,7 +42,8 @@ final class TabListTests: XCTestCase {
 
     func test_close_nonActiveLeft_shiftsActiveIndex() {
         var list = TabList(first: TabID(1))
-        list.add(TabID(2)); list.add(TabID(3))
+        list.append(TabID(2)); list.append(TabID(3))
+        list.select(TabID(3))
         XCTAssertTrue(list.close(TabID(1)))
         XCTAssertEqual(list.order, [TabID(2), TabID(3)])
         XCTAssertEqual(list.activeID, TabID(3))
@@ -50,7 +51,7 @@ final class TabListTests: XCTestCase {
 
     func test_close_nonActiveRight_leavesActiveUnchanged() {
         var list = TabList(first: TabID(1))
-        list.add(TabID(2)); list.add(TabID(3))
+        list.append(TabID(2)); list.append(TabID(3))
         list.select(TabID(1))
         XCTAssertTrue(list.close(TabID(3)))
         XCTAssertEqual(list.order, [TabID(1), TabID(2)])
@@ -59,7 +60,7 @@ final class TabListTests: XCTestCase {
 
     func test_close_active_promotesRightNeighbor() {
         var list = TabList(first: TabID(1))
-        list.add(TabID(2)); list.add(TabID(3))
+        list.append(TabID(2)); list.append(TabID(3))
         list.select(TabID(2))
         XCTAssertTrue(list.close(TabID(2)))
         XCTAssertEqual(list.order, [TabID(1), TabID(3)])
@@ -68,7 +69,8 @@ final class TabListTests: XCTestCase {
 
     func test_close_activeRightmost_clampsToNewLast() {
         var list = TabList(first: TabID(1))
-        list.add(TabID(2)); list.add(TabID(3))
+        list.append(TabID(2)); list.append(TabID(3))
+        list.select(TabID(3))
         XCTAssertTrue(list.close(TabID(3)))
         XCTAssertEqual(list.order, [TabID(1), TabID(2)])
         XCTAssertEqual(list.activeID, TabID(2))
@@ -89,8 +91,8 @@ final class TabListTests: XCTestCase {
 
     func test_move_shiftsOneSlotInEachDirection() {
         var list = TabList(first: TabID(1))
-        list.add(TabID(2))
-        list.add(TabID(3))
+        list.append(TabID(2))
+        list.append(TabID(3))
 
         XCTAssertTrue(list.move(TabID(3), by: -1))
         XCTAssertEqual(list.order, [TabID(1), TabID(3), TabID(2)])
@@ -101,8 +103,9 @@ final class TabListTests: XCTestCase {
 
     func test_move_keepsTheMovedTabActive() {
         var list = TabList(first: TabID(1))
-        list.add(TabID(2))
-        list.add(TabID(3))
+        list.append(TabID(2))
+        list.append(TabID(3))
+        list.select(TabID(3))
 
         list.move(TabID(3), by: -1)
 
@@ -112,8 +115,9 @@ final class TabListTests: XCTestCase {
 
     func test_move_leavesTheActiveTabActiveWhenAnotherMoves() {
         var list = TabList(first: TabID(1))
-        list.add(TabID(2))
-        list.add(TabID(3))
+        list.append(TabID(2))
+        list.append(TabID(3))
+        list.select(TabID(3))
 
         list.move(TabID(1), by: 1)
 
@@ -123,7 +127,7 @@ final class TabListTests: XCTestCase {
 
     func test_move_isANoOpAtEitherWall() {
         var list = TabList(first: TabID(1))
-        list.add(TabID(2))
+        list.append(TabID(2))
 
         XCTAssertFalse(list.move(TabID(1), by: -1), "already leftmost")
         XCTAssertFalse(list.move(TabID(2), by: 1), "already rightmost")
@@ -134,15 +138,15 @@ final class TabListTests: XCTestCase {
         var list = TabList(first: TabID(1))
         XCTAssertFalse(list.move(TabID(1), by: 1))
 
-        list.add(TabID(2))
+        list.append(TabID(2))
         XCTAssertFalse(list.move(TabID(99), by: 1))
         XCTAssertEqual(list.order, [TabID(1), TabID(2)])
     }
 
     func test_move_clampsAnOversizedDelta() {
         var list = TabList(first: TabID(1))
-        list.add(TabID(2))
-        list.add(TabID(3))
+        list.append(TabID(2))
+        list.append(TabID(3))
 
         XCTAssertTrue(list.move(TabID(1), by: 99))
 
@@ -151,9 +155,9 @@ final class TabListTests: XCTestCase {
 
     func test_move_clampsRatherThanTrappingOnAnOverflowingDelta() {
         var list = TabList(first: TabID(1))
-        list.add(TabID(2))
-        list.add(TabID(3))
-        list.add(TabID(4))
+        list.append(TabID(2))
+        list.append(TabID(3))
+        list.append(TabID(4))
         list.select(TabID(2))
 
         XCTAssertTrue(list.move(TabID(2), by: .max))
