@@ -1309,16 +1309,15 @@ final class WindowController: NSObject {
             id: mintWorkspaceID(), isConfigured: false, name: host.name, folder: ShellLaunch.defaultCWD,
             firstTab: tab, connection: connection)
         connection.onLoginFailed = { [weak self, weak workspace] in
-            DispatchQueue.main.async { workspace.map { self?.loginFailed($0) } }
+            DispatchQueue.main.async { self?.loginFailed(on: host, closing: workspace) }
         }
         workspaces.append(workspace)
         activate(workspace.id)
         installController(id: tab, in: workspace, cwd: nil, config: nil, transition: .instant)
     }
 
-    private func loginFailed(_ workspace: WorkspaceController) {
-        guard let host = workspace.host else { return }
-        if workspaces.contains(where: { $0 === workspace }) { closeTabs(of: workspace) }
+    private func loginFailed(on host: SSHHostID, closing workspace: WorkspaceController?) {
+        if let workspace, workspaces.contains(where: { $0 === workspace }) { closeTabs(of: workspace) }
         toasts.show(ToastContent(variant: .warning, title: "SSH Host", message: Self.connectFailedMessage(for: host)))
     }
 

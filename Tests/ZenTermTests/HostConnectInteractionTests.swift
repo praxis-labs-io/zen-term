@@ -264,4 +264,14 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(lines.first, "Couldn't connect to")
         XCTAssertLessThanOrEqual((lines[0] as NSString).size(withAttributes: font).width, ToastView.messageMaxWidth)
     }
+
+    func test_aLoginThatEndsBeforeConnecting_inItsOnlyPane_stillWarns() throws {
+        let (c, login) = try connected()
+
+        login.delegate?.surfaceDidExit(login, code: 255)
+        drainMainQueue()
+
+        XCTAssertNotNil(c.connectViewForTesting)
+        XCTAssertTrue(showsToast("Couldn't connect to devbox.", in: c))
+    }
 }
