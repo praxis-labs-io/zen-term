@@ -108,34 +108,37 @@ extension ControlResponder {
     private func refusal(removing worktree: Worktree, holding state: WorktreeState?) -> ControlError? {
         let stakes = windows().map { $0.closeStakes(atPath: worktree.path) }
         let isRunning = stakes.contains(where: \.isRunning)
-        guard !isRunning, state?.isClean == true else {
+        let closesWindow = stakes.contains(where: \.closesWindow)
+        guard !isRunning, !closesWindow, state?.isClean == true else {
             let details = ControlError.Details(
-                panes: stakes.flatMap(\.panes), floats: stakes.flatMap(\.floats),
-                closesWindow: stakes.contains(where: \.closesWindow), files: state.map { $0.files.map(\.path) },
-                lostCommits: state?.lostCommits)
-            let message = Self.refusalMessage(removing: worktree, holding: state, stopping: isRunning ? details : nil)
+                panes: stakes.flatMap(\.panes), floats: stakes.flatMap(\.floats), closesWindow: closesWindow,
+                files: state.map { $0.files.map(\.path) }, lostCommits: state?.lostCommits)
+            let message = Self.refusalMessage(removing: worktree, holding: state, isRunning: isRunning, details)
             return ControlError(.refused, message, details: details)
         }
         return nil
     }
 
     private static func refusalMessage(
-        removing worktree: Worktree, holding state: WorktreeState?, stopping running: ControlError.Details?
+        removing worktree: Worktree, holding state: WorktreeState?, isRunning: Bool, _ details: ControlError.Details
     ) -> String {
-        let stop = running.map { running in
-            let named = running.panes.map { $0.title.isEmpty ? "pane \($0.token)" : $0.title } + running.floats
-            return named.isEmpty ? "stop what it is running" : "stop \(named.joined(separator: ", "))"
+        var consequences: [String] = []
+        if details.closesWindow { consequences.append("close the window") }
+        if isRunning {
+            let named = details.panes.map { $0.title.isEmpty ? "pane \($0.token)" : $0.title } + details.floats
+            consequences.append(named.isEmpty ? "stop what it is running" : "stop \(named.joined(separator: ", "))")
         }
         guard let state else {
             let unread = "Couldn't read \(worktree.name) to check for uncommitted files or commits."
-            return stop.map { "\(unread) Removing it would \($0)." } ?? unread
+            guard !consequences.isEmpty else { return unread }
+            return "\(unread) Removing it would \(consequences.joined(separator: " and "))."
         }
         let lost = [
             state.lostCommits > 0 ? WorktreeRemovalMessage.counted(state.lostCommits, "commit") : nil,
             state.files.isEmpty ? nil : WorktreeRemovalMessage.counted(state.files.count, "uncommitted file"),
         ].compactMap { $0 }
-        let lose = lost.isEmpty ? nil : "lose \(lost.joined(separator: " and "))"
-        return "Removing \(worktree.name) would \([stop, lose].compactMap { $0 }.joined(separator: " and "))."
+        if !lost.isEmpty { consequences.append("lose \(lost.joined(separator: " and "))") }
+        return "Removing \(worktree.name) would \(consequences.joined(separator: " and "))."
     }
 
     private func withWorktreeEntry(

@@ -293,7 +293,8 @@ is in neither list. `workspace` is in the shape `list` uses.
 
 Removes the workspace's worktree at that folder or on that branch, and closes every tab
 open in it in any window. The branch stays. It answers once the folder is gone. `refused`
-without `force` when anything in those tabs is running, when the worktree holds
+without `force` when anything in those tabs is running, when closing them would close a
+window, when the worktree holds
 uncommitted or untracked files or commits no branch holds, or when git can't say, so
 removing the worktree a caller runs in needs `force`. A locked worktree is always
 `refused`.

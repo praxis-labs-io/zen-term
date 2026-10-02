@@ -247,6 +247,27 @@ final class ControlWorktreeTests: WindowTestCase {
         XCTAssertFalse(names(in: c).contains("Repo: feat/x"))
     }
 
+    func test_removeRefusesACleanIdleWorktreeThatIsAllItsWindowHolds_untilForced() throws {
+        let c = makeWindow()
+        let home = try XCTUnwrap(c.workspaceIDsForTesting.first)
+        let worktree = try openWorktree("feat/x", in: c)
+        for tab in c.tabIDsForTesting(workspace: home) { c.closeTabForTesting(tab: tab) }
+        XCTAssertEqual(c.workspaceNamesForTesting, ["Repo: feat/x"])
+
+        let refused = try error(send(.worktreeRemove, ControlArgs(workspace: repo.path, branch: "feat/x")))
+
+        XCTAssertEqual(refused.code, .refused)
+        XCTAssertEqual(refused.message, "Removing feat/x would close the window.")
+        XCTAssertEqual(refused.details?.closesWindow, true)
+        XCTAssertTrue(GitFixture.exists(worktree.path))
+
+        _ = try result(
+            send(.worktreeRemove, ControlArgs(workspace: repo.path, force: true, branch: "feat/x")),
+            as: NoPayload.self)
+
+        XCTAssertFalse(GitFixture.exists(worktree.path))
+    }
+
     func test_removeByPathTakesACleanWorktreeWithoutForce() throws {
         let c = makeWindow()
         let caller = try repoPane(in: c)
