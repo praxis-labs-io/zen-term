@@ -2433,6 +2433,9 @@ final class WindowController: NSObject {
     private func requestClosePane() {
         guard let active = activeController else { return }
 
+        if let workspace = activeWorkspace, isAwaitingLogin(on: active.focusedSurfaceID) {
+            return confirmAbandoningLogin(of: workspace, closing: active.isDrawerFocused ? .drawer : .pane)
+        }
         if active.isDrawerFocused {
             guard active.focusedDrawerIsBusy else { active.closeFocusedDrawer(); return }
             presentConfirm(
@@ -2444,11 +2447,13 @@ final class WindowController: NSObject {
         }
 
         let lastPane = active.isSinglePane
+        if lastPane, let workspace = activeWorkspace, let tab = workspace.activeID, holdsAwaitingLogin(tab: tab) {
+            return confirmAbandoningLogin(of: workspace, closing: .tab)
+        }
         let closesWindow = lastPane && activeTabIDs.count == 1 && closesWindow(closing: activeWorkspace)
         let needsConfirm =
             closesWindow
             || active.focusedPaneIsBusy
-            || isAwaitingLogin(on: active.focusedSurfaceID)
             || (lastPane && activeWorkspace?.activeID.map(isRunning(tab:)) ?? false)
         guard needsConfirm else {
             if active.closeFocused() == false { activeWorkspace?.activeID.map { closeTab($0) } }
@@ -2466,15 +2471,33 @@ final class WindowController: NSObject {
             message: CloseWarning.message(closing: subject, naming: names), confirmLabel: "Close"
         ) { [weak self] in
             guard let self, let active = self.activeController else { return }
-            if let workspace = self.activeWorkspace, self.isAwaitingLogin(on: active.focusedSurfaceID) {
-                return self.abandonLogin(of: workspace)
-            }
             if active.closeFocused() == false { self.activeWorkspace?.activeID.map { self.closeTab($0) } }
         }
     }
 
     private func isAwaitingLogin(on surface: SurfaceID?) -> Bool {
         activeWorkspace?.connection?.isAwaitingLogin(on: surface) ?? false
+    }
+
+    private func holdsAwaitingLogin(tab id: TabID) -> Bool {
+        guard let connection = workspace(of: id)?.connection, let tab = controller(id) else { return false }
+        return tab.surfaceIDs.contains { connection.isAwaitingLogin(on: $0) }
+    }
+
+    private func holdsAwaitingLogin(_ workspace: WorkspaceController) -> Bool {
+        workspace.tabIDs.contains(where: holdsAwaitingLogin(tab:))
+    }
+
+    private func confirmAbandoningLogin(of workspace: WorkspaceController, closing target: CloseWarning.LoginTarget) {
+        guard let host = workspace.host else { return }
+        let subject = CloseWarning.Subject.login(host: host.name, closing: target)
+        presentConfirm(
+            variant: .warning, title: subject.title,
+            message: CloseWarning.message(closing: subject, naming: []), confirmLabel: "Close"
+        ) { [weak self, weak workspace] in
+            guard let self, let workspace, self.workspaces.contains(where: { $0 === workspace }) else { return }
+            self.abandonLogin(of: workspace)
+        }
     }
 
     private func abandonLogin(of workspace: WorkspaceController) {
@@ -2485,6 +2508,7 @@ final class WindowController: NSObject {
 
     private func requestCloseTab(_ id: TabID) {
         guard let workspace = workspace(of: id) else { return }
+        if holdsAwaitingLogin(tab: id) { return confirmAbandoningLogin(of: workspace, closing: .tab) }
         let closesWindow = workspace.tabIDs.count == 1 && closesWindow(closing: workspace)
         guard closesWindow || isRunning(tab: id) else { closeTab(id); return }
         let subject: CloseWarning.Subject =
@@ -2503,6 +2527,7 @@ final class WindowController: NSObject {
     }
 
     private func requestCloseWorkspace(_ workspace: WorkspaceController) {
+        if holdsAwaitingLogin(workspace) { return confirmAbandoningLogin(of: workspace, closing: .workspace) }
         let closesWindow = closesWindow(closing: workspace)
         guard closesWindow || isRunning(workspace: workspace) else {
             closeTabs(of: workspace)
@@ -2546,11 +2571,13 @@ final class WindowController: NSObject {
 
     private func isRunning(tab id: TabID) -> Bool {
         controller(id)?.allSurfaces.contains(where: \.isBusy) == true || floats.hasBusyInScope(id)
+            || holdsAwaitingLogin(tab: id)
     }
 
     private func isRunning(workspace: WorkspaceController) -> Bool {
         workspace.allSurfaces.contains(where: \.isBusy)
             || workspace.tabIDs.contains(where: floats.hasBusyInScope)
+            || holdsAwaitingLogin(workspace)
     }
 
     private func hiddenRunningNames(inTab id: TabID) -> [String] {
