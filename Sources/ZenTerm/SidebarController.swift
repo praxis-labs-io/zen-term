@@ -367,7 +367,7 @@ final class SidebarController {
     func focusStop(_ stop: SidebarFocusStop) -> Bool { isShown && view.focusStop(stop) }
 
     enum NewWorktreeRefusal: CaseIterable {
-        case worktree, unconfigured, notARepo, agent
+        case worktree, unconfigured, notARepo, agent, host
 
         var message: String {
             let chord = CommandCatalog.spec(for: .createWorktree).shortcut
@@ -377,6 +377,7 @@ final class SidebarController {
             case .unconfigured: return "This workspace isn't configured.\nSet one up with Add Workspace… in \(picker)."
             case .notARepo: return "This workspace isn't a git repository.\nWorktrees need a git repository."
             case .agent: return "Agents don't start worktrees.\nPress \(chord) on a workspace row."
+            case .host: return "SSH hosts don't start worktrees.\nPress \(chord) on a workspace row."
             }
         }
     }
@@ -390,6 +391,7 @@ final class SidebarController {
 
     var focusedWorktreeRefusal: NewWorktreeRefusal? {
         if view.agentsSectionHasFocus { return .agent }
+        if view.hostsSectionHasFocus { return .host }
         guard let row = view.focusedRow, let entry = entries.first(where: { $0.row == row }),
             !Self.rowItem(entry).makesWorktrees
         else { return nil }
@@ -466,6 +468,8 @@ final class SidebarController {
     }
 
     func renderAgents(_ items: [SidebarAgentItem]) { view.renderAgents(items) }
+
+    func renderHosts(_ hosts: [String]) { view.renderHosts(hosts) }
 
     func renderWaitingElsewhere(agents: Int, windows: Int, index: Int) {
         view.renderWaitingElsewhere(agents: agents, windows: windows, index: index)

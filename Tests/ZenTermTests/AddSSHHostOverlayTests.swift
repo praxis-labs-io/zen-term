@@ -1,0 +1,89 @@
+import AppKit
+import XCTest
+
+@testable import ZenTerm
+
+final class AddSSHHostOverlayTests: WindowTestCase {
+    private var window: NSWindow?
+    private var submitted: [String] = []
+    private var cancelled = 0
+
+    override func tearDownWithError() throws {
+        window = nil
+        try super.tearDownWithError()
+    }
+
+    private func descendants(of view: NSView) -> [NSView] {
+        view.subviews.flatMap { [$0] + descendants(of: $0) }
+    }
+
+    private func mount() -> AddSSHHostOverlay {
+        let overlay = AddSSHHostOverlay(
+            background: Theme.current.chrome.background.nsColor,
+            onSubmit: { [weak self] in self?.submitted.append($0) },
+            onCancel: { [weak self] in self?.cancelled += 1 })
+        let win = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        win.contentView?.addSubview(overlay)
+        overlay.frame = win.contentView!.bounds
+        window = win
+        overlay.focusInitialResponder()
+        return overlay
+    }
+
+    private func field(in overlay: NSView) -> FieldBox {
+        descendants(of: overlay).compactMap { $0 as? FieldBox }.first!
+    }
+
+    private func pressReturn(in box: FieldBox) {
+        _ = box.control(box.field, textView: NSTextView(), doCommandBy: #selector(NSResponder.insertNewline(_:)))
+    }
+
+    private func visibleMessage(in overlay: NSView) -> String? {
+        descendants(of: overlay).compactMap { $0 as? NSTextField }
+            .first { !$0.isHidden && $0.textColor == Theme.current.chrome.destructive.nsColor }?.stringValue
+    }
+
+    func test_return_submitsTheTrimmedHost() {
+        let overlay = mount()
+        field(in: overlay).setText("  deploy@10.0.0.5 ")
+
+        pressReturn(in: field(in: overlay))
+
+        XCTAssertEqual(submitted, ["deploy@10.0.0.5"])
+    }
+
+    func test_anEmptyHost_staysOpenWithAMessage() {
+        let overlay = mount()
+        field(in: overlay).setText("   ")
+
+        pressReturn(in: field(in: overlay))
+
+        XCTAssertEqual(submitted, [])
+        XCTAssertEqual(visibleMessage(in: overlay), "Enter a host.")
+    }
+
+    func test_aHostWithASpaceOrComma_isRefused() {
+        let overlay = mount()
+        for text in ["dev box", "dev,box"] {
+            field(in: overlay).setText(text)
+
+            pressReturn(in: field(in: overlay))
+
+            XCTAssertEqual(visibleMessage(in: overlay), "Can't contain spaces, commas, # or \".", text)
+        }
+        XCTAssertEqual(submitted, [])
+    }
+
+    func test_escape_cancels() {
+        let overlay = mount()
+        let escape = NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+            characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53)!
+
+        _ = overlay.performKeyEquivalent(with: escape)
+
+        XCTAssertEqual(cancelled, 1)
+    }
+}

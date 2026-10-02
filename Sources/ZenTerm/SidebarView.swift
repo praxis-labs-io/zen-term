@@ -7,6 +7,7 @@ enum SidebarRowID: Hashable {
 
 enum SidebarFocusStop: Equatable {
     case row(SidebarRowID)
+    case host(String)
     case agent(SurfaceID)
     case waitingElsewhere
 }
@@ -42,6 +43,13 @@ final class SidebarView: NSView {
     private var hoverCovers = 0
     private weak var hoverExempt: NSView?
     let rowMenu = SidebarRowMenu()
+    private let hostsCaption = FieldCaption("SSH", required: false)
+    private let hostStack = NSStackView()
+    private var hostRows: [String: SettingsNavRow] = [:]
+    private var hostsBelowRows: [NSLayoutConstraint] = []
+    private var agentsBelowRows: [NSLayoutConstraint] = []
+    private var agentsBelowHosts: [NSLayoutConstraint] = []
+    private var contentEndsAtHosts: NSLayoutConstraint?
     private let agentsCaption = FieldCaption("Agents", required: false)
     private let agentStack = NSStackView()
     private let scroll = FadingScrollView()
@@ -81,6 +89,7 @@ final class SidebarView: NSView {
         }
         installScroll()
         for view in [caption, addButton, rowStack] { content.addSubview(view) }
+        installHosts()
         installAgents()
 
         NSLayoutConstraint.activate([
@@ -125,6 +134,23 @@ final class SidebarView: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    private func installHosts() {
+        hostStack.orientation = .vertical
+        hostStack.alignment = .leading
+        hostStack.spacing = 0
+        hostStack.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(hostsCaption)
+        content.addSubview(hostStack)
+        contentEndsAtHosts = content.bottomAnchor.constraint(equalTo: hostStack.bottomAnchor)
+        hostsBelowRows = section(hostsCaption, hostStack, below: rowStack.bottomAnchor)
+        NSLayoutConstraint.activate(
+            hostsBelowRows + [
+                hostsCaption.leadingAnchor.constraint(equalTo: caption.leadingAnchor),
+                hostStack.leadingAnchor.constraint(equalTo: rowStack.leadingAnchor),
+                hostStack.trailingAnchor.constraint(equalTo: rowStack.trailingAnchor),
+            ])
+    }
+
     private func installAgents() {
         agentStack.orientation = .vertical
         agentStack.alignment = .leading
@@ -135,16 +161,23 @@ final class SidebarView: NSView {
         content.addSubview(agentStack)
         contentEndsAtRows = content.bottomAnchor.constraint(equalTo: rowStack.bottomAnchor)
         contentEndsAtAgents = content.bottomAnchor.constraint(equalTo: agentStack.bottomAnchor)
+        agentsBelowRows = section(agentsCaption, agentStack, below: rowStack.bottomAnchor)
+        agentsBelowHosts = section(agentsCaption, agentStack, below: hostStack.bottomAnchor)
         NSLayoutConstraint.activate([
             agentsCaption.leadingAnchor.constraint(equalTo: caption.leadingAnchor),
-            agentsCaption.centerYAnchor.constraint(
-                equalTo: rowStack.bottomAnchor, constant: Self.sectionGap + Self.captionHeight / 2),
-            agentStack.topAnchor.constraint(
-                equalTo: rowStack.bottomAnchor, constant: Self.sectionGap + Self.captionHeight),
             agentStack.leadingAnchor.constraint(equalTo: rowStack.leadingAnchor),
             agentStack.trailingAnchor.constraint(equalTo: rowStack.trailingAnchor),
         ])
-        refreshAgentsSection()
+        refreshSections()
+    }
+
+    private func section(
+        _ caption: NSView, _ stack: NSView, below anchor: NSLayoutYAxisAnchor
+    ) -> [NSLayoutConstraint] {
+        [
+            caption.centerYAnchor.constraint(equalTo: anchor, constant: Self.sectionGap + Self.captionHeight / 2),
+            stack.topAnchor.constraint(equalTo: anchor, constant: Self.sectionGap + Self.captionHeight),
+        ]
     }
 
     func limitContent(above anchor: NSLayoutYAxisAnchor) {
@@ -155,12 +188,56 @@ final class SidebarView: NSView {
     private func refreshAgentsSection() {
         let lostFocusedRow = refreshWaitingRow()
         arrangeAgents()
-        let hidden = agentViews.isEmpty && waitingRow == nil
-        agentsCaption.isHidden = hidden
-        agentStack.isHidden = hidden
-        (hidden ? contentEndsAtAgents : contentEndsAtRows)?.isActive = false
-        (hidden ? contentEndsAtRows : contentEndsAtAgents)?.isActive = true
+        refreshSections()
         if lostFocusedRow { onLeave?() }
+    }
+
+    // A hidden section takes its gap with it, so each visible one hangs off the last visible one above it.
+    private func refreshSections() {
+        let showsHosts = !hostRows.isEmpty
+        let showsAgents = !agentViews.isEmpty || waitingRow != nil
+        hostsCaption.isHidden = !showsHosts
+        hostStack.isHidden = !showsHosts
+        agentsCaption.isHidden = !showsAgents
+        agentStack.isHidden = !showsAgents
+        NSLayoutConstraint.deactivate(
+            (showsHosts ? agentsBelowRows : agentsBelowHosts)
+                + [contentEndsAtRows, contentEndsAtHosts, contentEndsAtAgents].compactMap { $0 })
+        NSLayoutConstraint.activate(showsHosts ? agentsBelowHosts : agentsBelowRows)
+        let end = showsAgents ? contentEndsAtAgents : showsHosts ? contentEndsAtHosts : contentEndsAtRows
+        end?.isActive = true
+    }
+
+    func renderHosts(_ hosts: [String]) {
+        var removedFocusedRow = false
+        for (host, row) in hostRows where !hosts.contains(host) {
+            removedFocusedRow = removedFocusedRow || KeyboardFocus.isFocused(row, in: window)
+            row.removeFromSuperview()
+            hostRows[host] = nil
+        }
+        for (index, host) in hosts.enumerated() {
+            let row = hostRow(for: host)
+            guard hostStack.arrangedSubviews.firstIndex(of: row) != index else { continue }
+            let isNew = row.superview == nil
+            if !isNew { hostStack.removeArrangedSubview(row) }
+            hostStack.insertArrangedSubview(row, at: index)
+            if isNew { row.widthAnchor.constraint(equalTo: hostStack.widthAnchor).isActive = true }
+        }
+        refreshSections()
+        refreshRowHover()
+        if removedFocusedRow { onLeave?() }
+    }
+
+    private func hostRow(for host: String) -> SettingsNavRow {
+        if let row = hostRows[host] { return row }
+        let row = SettingsNavRow(title: host, variant: .faint, focusesOnClick: false) {}
+        row.onArrowUp = { [weak self] in self?.moveFocus(-1) }
+        row.onArrowDown = { [weak self] in self?.moveFocus(1) }
+        row.onFocusChanged = { [weak self] in self?.onFocusChanged?() }
+        row.onReturn = {}
+        row.onEscape = { [weak self] in self?.onLeave?() }
+        hostRows[host] = row
+        return row
     }
 
     func renderWaitingElsewhere(agents: Int, windows: Int, index: Int) {
@@ -326,7 +403,7 @@ final class SidebarView: NSView {
     var isHoverCovered: Bool { hoverCovers > 0 }
 
     private var hoverRows: [any HoverSuppressing] {
-        Array(rows.values) + Array(agentRows.values) + (waitingRow.map { [$0] } ?? [])
+        Array(rows.values) + Array(hostRows.values) + Array(agentRows.values) + (waitingRow.map { [$0] } ?? [])
     }
 
     private func setNewWorktreeButton(on row: SettingsNavRow, for item: SidebarRowItem) {
@@ -365,10 +442,17 @@ final class SidebarView: NSView {
         agentStack.arrangedSubviews.contains { KeyboardFocus.isFocused($0, in: window) }
     }
 
+    var hostsSectionHasFocus: Bool {
+        hostStack.arrangedSubviews.contains { KeyboardFocus.isFocused($0, in: window) }
+    }
+
     var focusedRow: SidebarRowID? { rows.first { KeyboardFocus.isFocused($0.value, in: window) }?.key }
 
     var focusedStop: SidebarFocusStop? {
         if let id = focusedRow { return .row(id) }
+        if let host = hostRows.first(where: { KeyboardFocus.isFocused($0.value, in: window) })?.key {
+            return .host(host)
+        }
         if let row = waitingRow, KeyboardFocus.isFocused(row, in: window) { return .waitingElsewhere }
         return agentRows.first { KeyboardFocus.isFocused($0.value, in: window) }.map { .agent($0.key) }
     }
@@ -377,6 +461,11 @@ final class SidebarView: NSView {
     func focusStop(_ stop: SidebarFocusStop) -> Bool {
         switch stop {
         case .row(let id): return focusRow(id)
+        case .host(let host):
+            guard let row = hostRows[host] else { return false }
+            row.takeKeyboardFocus()
+            reveal(row)
+            return true
         case .agent(let id):
             guard let row = agentRows[id] else { return false }
             row.takeKeyboardFocus()
@@ -410,7 +499,7 @@ final class SidebarView: NSView {
         reveal(stops[next])
     }
 
-    private var focusStops: [NSView] { orderedRows + agentStack.arrangedSubviews }
+    private var focusStops: [NSView] { orderedRows + hostStack.arrangedSubviews + agentStack.arrangedSubviews }
 
     private var orderedAgentRows: [SidebarAgentRow] {
         agentStack.arrangedSubviews.compactMap { $0 as? SidebarAgentRow }
@@ -431,7 +520,9 @@ final class SidebarView: NSView {
         rowMenu.close()
         caption.reapplyTheme()
         addButton.reapplyTheme()
+        hostsCaption.reapplyTheme()
         agentsCaption.reapplyTheme()
+        for row in hostRows.values { row.reapplyTheme() }
         for row in rows.values {
             row.reapplyTheme()
             (row.hoverAccessory as? IconButton)?.reapplyTheme()
@@ -447,6 +538,10 @@ final class SidebarView: NSView {
     private(set) var rendersForTesting = 0
 
     var agentRowsForTesting: [SidebarAgentRow] { orderedAgentRows }
+
+    var hostRowsForTesting: [SettingsNavRow] { hostStack.arrangedSubviews.compactMap { $0 as? SettingsNavRow } }
+
+    var hostsAreHiddenForTesting: Bool { hostStack.isHidden && hostsCaption.isHidden }
 
     var agentsAreHiddenForTesting: Bool { agentStack.isHidden && agentsCaption.isHidden }
 

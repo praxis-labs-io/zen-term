@@ -130,6 +130,31 @@ final class SettingsTabTraversalTests: WindowTestCase {
         XCTAssertIdentical(tab(from: rows[0]), rows[1], "Tab advances to the next row")
     }
 
+    func test_tab_fromSSHHostToggle_advancesToTheNextRow_andShiftTabRetreats() throws {
+        let sshConfig = tempRoot.appendingPathComponent("ssh_config")
+        try "Host devbox\nHost prod\n".write(to: sshConfig, atomically: true, encoding: .utf8)
+        SSHConfigHosts.userConfigOverrideForTesting = sshConfig
+        SSHHostResolver.destinationOverrideForTesting = { _ in nil }
+        addTeardownBlock {
+            SSHConfigHosts.userConfigOverrideForTesting = nil
+            SSHHostResolver.destinationOverrideForTesting = nil
+        }
+        let section = SettingsSSHHostsSection()
+        self.section = section
+        var exitedToNav = 0
+        section.onExitToNav = { exitedToNav += 1 }
+        let detail = mount(section.makeDetailView())
+        waitUntil(
+            descendants(of: detail).compactMap { $0 as? SegmentedControl }.count == 2, "a row per Host entry")
+        let toggles = descendants(of: detail).compactMap { $0 as? SegmentedControl }
+
+        XCTAssertIdentical(tab(from: toggles[0]), toggles[1], "Tab advances to the next row")
+        XCTAssertIdentical(tab(from: toggles[1], shift: true), toggles[0], "Shift-Tab retreats one stop")
+        XCTAssertEqual(exitedToNav, 0)
+        _ = tab(from: toggles[0], shift: true)
+        XCTAssertEqual(exitedToNav, 1, "Shift-Tab from the first stop exits to the nav")
+    }
+
     func test_tab_fromKeybindChip_advancesToTheNextChip() throws {
         try seed("")
         let section = SettingsKeybindsSection(capturer: nil)

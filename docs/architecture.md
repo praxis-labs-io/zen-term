@@ -546,6 +546,10 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   `WindowController.deliverConfigDiagnosticsNotice`, and retracted by `ConfigApplier`
   only when problems clear.
 - **No file watcher.** Hand edits apply on ⌘⇧,.
+- **`~/.ssh/config` is read, never written.** Settings > SSH Hosts lists its literal `Host`
+  aliases (following `Include`, skipping `Match` blocks) off-main each time it mounts, and
+  `ssh -G` resolves each one. `ssh-hosts` holds which are on, plus typed hosts; the sidebar's
+  SSH rows stay out of `WorkspaceOrder`, so they take no number.
 - **Writers go through `ConfigFileIO`:** never treat an unreadable file as empty, and
   write through symlinks. `ConfigWriter` preserves comments and unknown keys.
 

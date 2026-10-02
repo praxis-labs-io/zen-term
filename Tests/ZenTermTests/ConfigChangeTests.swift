@@ -84,6 +84,7 @@ final class ConfigChangeTests: XCTestCase {
         XCTAssertEqual(change(from: { $0.automaticUpdateChecks.toggle() }), .updates)
         XCTAssertEqual(change(from: { $0.hiddenToolbarButtons = [.focusMode] }), .toolbarButtons)
         XCTAssertEqual(change(from: { $0.toastDuration = 9 }), .toasts)
+        XCTAssertEqual(change(from: { $0.sshHosts = ["devbox"] }), .sshHosts)
         XCTAssertEqual(
             change(from: {
                 $0.configDiagnostics = [
@@ -142,7 +143,7 @@ final class ConfigChangeTests: XCTestCase {
     func test_allContainsEveryKind() {
         for kind: ConfigChange in [
             .theme, .chromeLayout, .terminalBehavior, .floats, .keymap, .motion, .diagnostics, .updates,
-            .toolbarButtons, .toasts,
+            .toolbarButtons, .toasts, .sshHosts,
         ] {
             XCTAssertTrue(ConfigChange.all.contains(kind), "\(kind.rawValue) missing from .all")
         }
