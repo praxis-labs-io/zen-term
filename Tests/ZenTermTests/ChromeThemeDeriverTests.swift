@@ -16,6 +16,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(chrome.attention, TerminalColor(hex: "#ea9a97"))
         XCTAssertEqual(chrome.positive, TerminalColor(hex: "#3e8fb0"))
         XCTAssertEqual(chrome.muted, TerminalColor(red: 134, green: 132, blue: 150))
+        XCTAssertEqual(chrome.cursor, TerminalColor(hex: "#6b6790"))
     }
 
     func test_chromeThemeStaysEquatable_acrossAllFields() {
@@ -27,6 +28,11 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertNotEqual(
             ChromeThemeDeriver.derive(from: Theme.rosePineZen),
             ChromeThemeDeriver.derive(from: recolored))
+        var recursored = Theme.rosePineZen
+        recursored.cursor = TerminalColor(red: 255, green: 255, blue: 255)
+        XCTAssertNotEqual(
+            ChromeThemeDeriver.derive(from: Theme.rosePineZen),
+            ChromeThemeDeriver.derive(from: recursored))
     }
 
     func test_accentOverride_movesOnlyTheAccentRole() {
@@ -40,6 +46,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(overridden.destructive, base.destructive)
         XCTAssertEqual(overridden.attention, base.attention)
         XCTAssertEqual(overridden.positive, base.positive)
+        XCTAssertEqual(overridden.cursor, base.cursor)
         XCTAssertEqual(overridden.muted, base.muted)
         XCTAssertEqual(overridden.background, base.background)
         XCTAssertEqual(overridden.foreground, base.foreground)

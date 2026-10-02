@@ -11,6 +11,7 @@ struct ChromeTheme: Equatable {
     let attention: TerminalColor
     let muted: TerminalColor
     let positive: TerminalColor
+    let cursor: TerminalColor
     /// Per theme: foreground to background separation runs 0.40 to 0.94, so a constant alpha is not a constant border.
     let fillScale: CGFloat
     /// Check `1 / inkBoost` before raising it: above that a level clamps to opaque.
