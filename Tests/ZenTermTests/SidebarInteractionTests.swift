@@ -1348,7 +1348,9 @@ final class SidebarInteractionTests: WindowTestCase {
 
         waitUntil(detail("live") == "other", "a hung folder must not stop the others refreshing")
         XCTAssertEqual(detail("stuck"), "main", "a folder still in flight is not probed again")
-        XCTAssertEqual(sidebar.branchProbesInFlightForTesting, [stuck.standardizedFileURL])
+        waitUntil(
+            sidebar.branchProbesInFlightForTesting == [stuck.standardizedFileURL],
+            "every probe but the hung folder's to land")
     }
 
     func test_aWindowsFirstRow_showsTheBranchOfTheFolderItStartedIn() throws {
