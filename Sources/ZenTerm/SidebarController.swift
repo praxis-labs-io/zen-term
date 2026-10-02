@@ -325,7 +325,7 @@ final class SidebarController {
     var isPinnedExternally: () -> Bool = { false }
 
     func render(
-        order: WorkspaceOrder, workspaces: [WorkspaceController], active: WorkspaceController,
+        order: WorkspaceOrder, workspaces: [WorkspaceController], active: WorkspaceController?,
         waiting: Set<WorkspaceID>
     ) {
         let byID = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
@@ -403,8 +403,8 @@ final class SidebarController {
     }
 
     func focusActiveRow() {
-        guard let active = entries.first(where: \.isActive) else { return }
-        view.focusRow(active.row)
+        guard let row = (entries.first(where: \.isActive) ?? entries.first)?.row else { return }
+        view.focusRow(row)
     }
 
     func refreshBranches() {

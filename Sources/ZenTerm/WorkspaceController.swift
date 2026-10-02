@@ -10,6 +10,7 @@ final class WorkspaceController {
     var name: String
     let folder: URL
     let origin: WorktreeOrigin?
+    let host: SSHHostID?
     var isWorktreeRemoved = false
 
     var removedWorktree: WorktreeOrigin? { isWorktreeRemoved ? origin : nil }
@@ -22,13 +23,14 @@ final class WorkspaceController {
 
     init(
         id: WorkspaceID, isConfigured: Bool, name: String, folder: URL, firstTab: TabID,
-        origin: WorktreeOrigin? = nil, seat: Int? = nil
+        origin: WorktreeOrigin? = nil, seat: Int? = nil, host: SSHHostID? = nil
     ) {
         self.id = id
         self.isConfigured = isConfigured
         self.name = name
         self.folder = folder
         self.origin = origin
+        self.host = host
         self.seat = seat ?? id.raw
         tabs = TabList(first: firstTab)
     }
