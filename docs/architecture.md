@@ -209,8 +209,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   entry is never in a group. `navigable` skips ghosts and Offline SSH hosts, and lists
   reachable hosts after the workspaces in `ssh-hosts` order; the sidebar's numbers, ⌘⌃1…9 and
   ⌘⌃[ ] read it, and a close's landing reads its workspaces alone. ⌘⌃[ ] from an Offline host
-  step to the nearest reachable row by sidebar position. A connected host's workspace carries
-  the host and stays out of the workspace rows.
+  step to the nearest reachable row by sidebar position.
 - **`activate(_:)` is the single path a switch goes through**: a row click, the workspace
   chords, ⌘P, ⌘⌃T, and revealing a background tab. An open workspace slides in on the y axis, from
   below when it sits lower in `navigable`; a new one has no canvas yet, so it mounts each
@@ -556,7 +555,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
 - **`~/.ssh/config` is read, never written.** Settings > SSH Hosts lists its literal `Host`
   aliases (following `Include`, skipping `Match` blocks) off-main each time it mounts, and
   `ssh -G` resolves each one. `ssh-hosts` holds which are on, plus typed hosts, and the
-  sidebar's SSH rows read Offline, Online or Connected.
+  sidebar's SSH rows read Offline or Online.
 - **`SSHHostProbe` keeps each host's reachability in `SSHHostStatusCenter`, and never logs in.**
   Off-main, at most four at a time, it resolves the host with `ssh -G`, once until `ssh-hosts`
   or the network changes because `Match exec` can prompt, and reads the greeting on a TCP
@@ -564,8 +563,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   any preamble lines RFC 4253 allows, is Online, anything else Offline. A
   `ProxyJump` or `ProxyCommand` host reads Online unprobed. It runs every minute while the app
   is active, and on activation, wake and network change (`NWPathMonitor`); an answer from before
-  a network change is dropped and asked again. A host reads Online until its first answer, and
-  a connected host takes its status from the connection, not the probe.
+  a network change is dropped and asked again. A host reads Online until its first answer.
 - **Writers go through `ConfigFileIO`:** never treat an unreadable file as empty, and
   write through symlinks. `ConfigWriter` preserves comments and unknown keys.
 
