@@ -269,6 +269,7 @@ public protocol TerminalSurface: AnyObject {
     /// The background the terminal last reported (OSC 11), or nil if it never has.
     var backgroundOverride: TerminalColor? { get }
 
+    /// Does nothing once `terminate()` has run, so a start held back for later cannot revive a closed surface.
     func start(_ config: TerminalSurfaceConfig)
     func focus()
 

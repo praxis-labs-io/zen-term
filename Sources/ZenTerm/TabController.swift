@@ -245,18 +245,22 @@ final class TabController: NSObject {
 
     private let makeSurface: () -> TerminalSurface
 
+    private let startSurface: SurfaceStart
+
     init(
         initialCWD: URL?, initialCommand: String? = nil, env: [String: String] = [:],
         isToolFloatOpen: @escaping () -> Bool = { false },
-        makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make
+        makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
+        startSurface: @escaping SurfaceStart = { surface, _, config in surface.start(config) }
     ) {
         workspaceEnv = env
+        self.startSurface = startSurface
         openedCWD = initialCWD
         self.isToolFloatOpen = isToolFloatOpen
         self.makeSurface = makeSurface
         paneCanvas = PaneCanvasController(
             initialCWD: initialCWD, initialCommand: initialCommand, env: env,
-            isToolFloatOpen: isToolFloatOpen, makeSurface: makeSurface)
+            isToolFloatOpen: isToolFloatOpen, makeSurface: makeSurface, startSurface: startSurface)
         canvas = paneCanvas.canvasView
         canvas.translatesAutoresizingMaskIntoConstraints = false
         super.init()
@@ -394,7 +398,7 @@ final class TabController: NSObject {
         let surfaceID = SurfaceIDs.mint()
         bottomDrawerSurfaceID = surfaceID
         onSurfacesRegistered?([surfaceID])
-        surface.start(drawerConfig(command: bottomDrawerCommand, token: token))
+        startSurface(surface, surfaceID, drawerConfig(command: bottomDrawerCommand, token: token))
         announceLaunch(surfaceID, bottomDrawerCommand)
         bottomDrawerSurface = surface
         let panel = makeDrawerPanel(edge: .bottom, surface: surface)
@@ -481,7 +485,7 @@ final class TabController: NSObject {
         let surfaceID = SurfaceIDs.mint()
         rightDrawerSurfaceID = surfaceID
         onSurfacesRegistered?([surfaceID])
-        surface.start(drawerConfig(command: rightDrawerCommand, token: token))
+        startSurface(surface, surfaceID, drawerConfig(command: rightDrawerCommand, token: token))
         announceLaunch(surfaceID, rightDrawerCommand)
         rightDrawerSurface = surface
         let panel = makeDrawerPanel(edge: .right, surface: surface)

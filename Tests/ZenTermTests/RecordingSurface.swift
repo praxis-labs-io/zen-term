@@ -24,6 +24,7 @@ final class RecordingSurface: NSObject, TerminalSurface {
     var failOnStart = false
     private(set) var startCount = 0
     func start(_ config: TerminalSurfaceConfig) {
+        guard !terminated else { return }
         startCount += 1
         lastConfig = config
         if let theme = config.theme, let behavior = config.behavior {

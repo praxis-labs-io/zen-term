@@ -11,6 +11,7 @@ final class PaneCanvasController: NSObject {
     private var cwdByLeaf: [PaneID: URL] = [:]
     private var hostByLeaf: [PaneID: PanelHostView] = [:]
     private var launchByLeaf: [PaneID: TerminalSurfaceConfig] = [:]
+    private let startSurface: SurfaceStart
     private var tokenByLeaf: [PaneID: Int] = [:]
     private var surfaceIDByLeaf: [PaneID: SurfaceID] = [:]
     /// Consumed on first start; a split never inherits it.
@@ -122,9 +123,11 @@ final class PaneCanvasController: NSObject {
     init(
         initialCWD: URL? = nil, initialCommand: String? = nil, env: [String: String] = [:],
         isToolFloatOpen: @escaping () -> Bool = { false },
-        makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make
+        makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
+        startSurface: @escaping SurfaceStart = { surface, _, config in surface.start(config) }
     ) {
         let firstLeaf = PaneID(1)
+        self.startSurface = startSurface
         self.tree = PaneTree(singleLeaf: firstLeaf)
         self.registry = PaneSurfaceRegistry(makeSurface: makeSurface)
         self.workspaceEnv = env
@@ -178,7 +181,7 @@ final class PaneCanvasController: NSObject {
                 launch = ShellLaunch.shell(cwd: cwdByLeaf[id], env: navEnv(token: token))
             }
             launchByLeaf[id] = launch
-            surface.start(launch)
+            startSurface(surface, surfaceID, launch)
             if let cmd = launchedCommand { onProgramLaunched?(surfaceID, cmd) }
             Log.info("surface started (pane \(id))", category: .surface)
         }
@@ -529,8 +532,10 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     }
 
     private func retryStart(_ id: PaneID) {
-        guard let surface = registry.surface(for: id), let launch = launchByLeaf[id] else { return }
-        surface.start(launch)
+        guard let surface = registry.surface(for: id), let surfaceID = surfaceIDByLeaf[id],
+            let launch = launchByLeaf[id]
+        else { return }
+        startSurface(surface, surfaceID, launch)
     }
 
     private func leafID(of surface: TerminalSurface) -> PaneID? {

@@ -14,6 +14,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     private var lastTheme: TerminalTheme?
     private var lastBehavior: TerminalBehavior = .default
     private var tracksBusy = true
+    private var isTerminated = false
 
     public private(set) var backgroundOverride: TerminalColor?
 
@@ -60,6 +61,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
 
     // Syncs focus and occlusion at birth: libghostty defaults a new surface to focused and visible.
     public func start(_ config: TerminalSurfaceConfig) {
+        guard !isTerminated else { return }
         var cfg = ghostty_surface_config_new()
         cfg.platform_tag = GHOSTTY_PLATFORM_MACOS
         cfg.platform = ghostty_platform_u(
@@ -354,6 +356,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
 
     // Records sessions before the free, which closes the pty; the reap after it catches what SIGHUP missed.
     public func terminate() {
+        isTerminated = true
         SecureInput.shared.removeScoped(secureInputID)
         cancelShaderSettle()
         removeAppActiveObservers()
