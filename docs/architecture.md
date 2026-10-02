@@ -553,6 +553,13 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   aliases (following `Include`, skipping `Match` blocks) off-main each time it mounts, and
   `ssh -G` resolves each one. `ssh-hosts` holds which are on, plus typed hosts; the sidebar's
   SSH rows stay out of `WorkspaceOrder`, so they take no number.
+- **`SSHHostProbe` keeps each host's reachability in `SSHHostStatusCenter`, and never logs in.**
+  Off-main, at most four at a time, it resolves the host with `ssh -G` and reads the first
+  bytes of a TCP connection to its port: an `SSH-` banner is Online, anything else Offline. A
+  `ProxyJump` or `ProxyCommand` host reads Online unprobed. It runs every minute while the app
+  is active, and on activation, wake and network change (`NWPathMonitor`); an answer from before
+  a network change is dropped and asked again. A host reads Online until its first answer, and
+  a connected host takes its status from the connection, not the probe.
 - **Writers go through `ConfigFileIO`:** never treat an unreadable file as empty, and
   write through symlinks. `ConfigWriter` preserves comments and unknown keys.
 

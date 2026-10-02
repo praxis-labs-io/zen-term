@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var navSocket: NavSocketServer?
     private var quitConfirmPending = false
     private var updateController: UpdateController?
+    private let hostProbe = SSHHostProbe(center: .shared)
 
     private lazy var configApplier = ConfigApplier(
         sinks: ConfigApplier.Sinks(
@@ -52,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         AppConfig.loadAtLaunch()
         MotionConfig.apply(GeneralConfig.current.reduceMotion)
+        hostProbe.start(hosts: GeneralConfig.current.sshHosts)
 
         if GeneralConfig.current.debug { Log.isVerbose = true }
         Log.info("ZenTerm launched v\(AppVersion.current)", category: .app)
@@ -102,7 +104,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(
             forName: .configDidChange, object: nil, queue: .main
         ) { [weak self] note in
-            MainActor.assumeIsolated { self?.configApplier.apply(ConfigChange.from(note)) }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let change = ConfigChange.from(note)
+                self.configApplier.apply(change)
+                if change.contains(.sshHosts) { self.hostProbe.setHosts(GeneralConfig.current.sshHosts) }
+            }
         }
 
         if UpdateController.isSupported {
