@@ -76,6 +76,16 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         XCTAssertEqual(submitted, [])
     }
 
+    func test_aHostStartingWithADash_isRefused() {
+        let overlay = mount()
+        field(in: overlay).setText("-oProxyCommand=x")
+
+        pressReturn(in: field(in: overlay))
+
+        XCTAssertEqual(visibleMessage(in: overlay), "Can't start with -.")
+        XCTAssertEqual(submitted, [])
+    }
+
     func test_escape_cancels() {
         let overlay = mount()
         let escape = NSEvent.keyEvent(

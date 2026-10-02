@@ -92,6 +92,10 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(parse("font-size = 14\n").sshHosts, [])
     }
 
+    func test_sshHosts_dropsEntriesThatWouldReadAsSSHOptions() {
+        XCTAssertEqual(parse("ssh-hosts = -oProxyCommand=x, devbox\n").sshHosts, ["devbox"])
+    }
+
     func test_listedAgents_readsAnAIValueIn_whicheverLineComesFirst() {
         XCTAssertEqual(parse("ai = pi --model sonnet\n").listedAgents, ["pi"])
         XCTAssertEqual(parse("ai = pi\nagents = gemini\n").listedAgents, ["gemini", "pi"])

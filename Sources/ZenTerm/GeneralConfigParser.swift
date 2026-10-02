@@ -285,8 +285,8 @@ enum GeneralConfigParser {
 
     private static func parseSSHHosts(_ value: String) -> [String] {
         var hosts: [String] = []
-        for entry in value.split(whereSeparator: { $0 == "," || $0.isWhitespace }) where !hosts.contains(String(entry))
-        {
+        for entry in value.split(whereSeparator: { $0 == "," || $0.isWhitespace })
+        where !entry.hasPrefix("-") && !hosts.contains(String(entry)) {
             hosts.append(String(entry))
         }
         return hosts

@@ -59,6 +59,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         if host.contains(where: { $0.isWhitespace || ",#\"".contains($0) }) {
             return "Can't contain spaces, commas, # or \"."
         }
+        if host.hasPrefix("-") { return "Can't start with -." }
         return nil
     }
 
