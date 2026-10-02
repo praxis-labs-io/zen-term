@@ -472,7 +472,8 @@ also claims Ctrl-nav and gets no `$ZEN_PANE`.
 bind, the per-pid path, the stale sweep, the `0600` mode and the `getpeereid` check. A
 request decodes on the connection's thread, applies on main through `ControlResponder`,
 and is written back from the connection's thread, so a client that stops reading never
-stalls main. A token resolves to its window, tab and surface by walking the windows
+stalls main. A command that reads off-main (`workspace.open` reading the workspaces file)
+replies when the read lands, holding only its own connection. A token resolves to its window, tab and surface by walking the windows
 (`ControlResponder.locate`), not through a second registry.
 
 **The theme state file** backs zen-theme.nvim (`docs/nvim-theme-protocol.md`).
