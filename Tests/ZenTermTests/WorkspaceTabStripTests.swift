@@ -94,6 +94,17 @@ final class WorkspaceTabStripTests: WindowTestCase {
         XCTAssertEqual(strip.chips.map(\.isSelected), [false, true])
     }
 
+    func test_moreTabsThanFit_scrollTheNewestIntoView_andKeepThePlusInTheStrip() throws {
+        mount((0..<12).map { Workspace.Tab(name: "a-long-tab-name-\($0)") })
+
+        strip.addButtonForTesting.mouseDown(with: try mouse(.leftMouseDown, at: strip.addButtonForTesting))
+
+        let newest = try XCTUnwrap(strip.chips.last)
+        XCTAssertTrue(newest.isSelected)
+        XCTAssertTrue(strip.visibleChipsRectForTesting.contains(newest.frame), "the new tab scrolls into view")
+        XCTAssertLessThanOrEqual(strip.addButtonForTesting.frame.maxX, strip.bounds.width, "＋ stays in the strip")
+    }
+
     func test_onlyTheTabThatOpensFocused_carriesTheDot() {
         mount(
             [Workspace.Tab(main: "nvim"), Workspace.Tab(name: "gate")],

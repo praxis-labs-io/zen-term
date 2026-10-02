@@ -28,7 +28,7 @@ final class TabBarView: NSView {
     private static let bandNudge: CGFloat = 6
     // The floating sidebar keeps its own toggle this far above the card's bottom, matching the docked one's band.
     static let chipBandInset: CGFloat = height / 2 + bandNudge
-    private static let fadeWidth: CGFloat = 28
+    static let fadeWidth: CGFloat = 28
 
     static let chipFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
     // The rename editor matches it, or the text reflows on open.

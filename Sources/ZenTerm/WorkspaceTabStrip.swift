@@ -18,6 +18,10 @@ final class WorkspaceTabStrip: NSView {
 
     private(set) var chips: [WorkspaceTabChip] = []
     private var selected = 0
+    private var revealsSelection = false
+    private let scrollView = NSScrollView()
+    private let docView = FlippedView()
+    private let edgeFade = EdgeFade(axis: .horizontal)
     private var drag: (index: Int, offset: CGFloat)?
     private lazy var addButton = IconButton(
         symbol: "plus", size: NSSize(width: Self.addSize, height: Self.addSize), pointSize: 12,
@@ -29,10 +33,27 @@ final class WorkspaceTabStrip: NSView {
 
     var addButtonForTesting: IconButton { addButton }
     var isRenameHintVisibleForTesting: Bool { !renameHint.isHidden }
+    var visibleChipsRectForTesting: CGRect { scrollView.contentView.documentVisibleRect }
 
     init() {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
+        scrollView.wantsLayer = true
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasHorizontalScroller = false
+        scrollView.hasVerticalScroller = false
+        scrollView.horizontalScrollElasticity = .allowed
+        scrollView.verticalScrollElasticity = .none
+        scrollView.automaticallyAdjustsContentInsets = false
+        scrollView.contentInsets = .init()
+        scrollView.documentView = docView
+        scrollView.layer?.mask = edgeFade.layer
+        addSubview(scrollView)
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(clipBoundsChanged),
+            name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
         addButton.translatesAutoresizingMaskIntoConstraints = true
         addSubview(addButton)
         buildRenameHint()
@@ -48,8 +69,10 @@ final class WorkspaceTabStrip: NSView {
     var isRenaming: Bool { chips.contains(where: \.isRenaming) }
 
     func render(_ form: WorkspaceForm) {
+        if chips.count != form.tabs.count { revealsSelection = true }
         while chips.count < form.tabs.count { chips.append(makeChip()) }
         while chips.count > form.tabs.count { chips.removeLast().removeFromSuperview() }
+        if selected != form.selected { revealsSelection = true }
         selected = form.selected
         for (index, chip) in chips.enumerated() {
             let fallback = form.tabs[index].main ?? WorkspaceForm.shellLabel
@@ -87,12 +110,42 @@ final class WorkspaceTabStrip: NSView {
             chips[index].frame = CGRect(x: originX, y: 0, width: widths[index], height: WorkspaceTabChip.height)
             x += widths[index] + Self.chipSpacing
         }
-        addButton.frame = CGRect(x: x, y: 0, width: Self.addSize, height: Self.addSize)
+        let contentWidth = max(0, x - Self.chipSpacing)
         renameHint.isHidden = !isRenaming
         let hintSize = renameHint.fittingSize
+        let trailingRoom = Self.chipSpacing + Self.addSize + (isRenaming ? Self.hintSpacing + hintSize.width : 0)
+        let visibleWidth = min(contentWidth, max(0, bounds.width - trailingRoom))
+        scrollView.frame = CGRect(x: 0, y: 0, width: visibleWidth, height: WorkspaceTabChip.height)
+        docView.frame = CGRect(x: 0, y: 0, width: contentWidth, height: WorkspaceTabChip.height)
+        let addX = visibleWidth + Self.chipSpacing
+        addButton.frame = CGRect(x: addX, y: 0, width: Self.addSize, height: Self.addSize)
         renameHint.frame = CGRect(
-            x: x + Self.addSize + Self.hintSpacing, y: (WorkspaceTabChip.height - hintSize.height) / 2,
+            x: addX + Self.addSize + Self.hintSpacing, y: (WorkspaceTabChip.height - hintSize.height) / 2,
             width: hintSize.width, height: hintSize.height)
+        if revealsSelection, let chip = selectedChip {
+            chip.scrollToVisible(chip.bounds.insetBy(dx: -TabBarView.fadeWidth, dy: 0))
+        }
+        revealsSelection = false
+        clampScrollIfContentFits()
+        updateFade()
+    }
+
+    @objc private func clipBoundsChanged() { updateFade() }
+
+    private func clampScrollIfContentFits() {
+        let clip = scrollView.contentView
+        guard docView.frame.width <= clip.bounds.width, clip.bounds.origin.x > 0 else { return }
+        clip.scroll(to: .zero)
+        scrollView.reflectScrolledClipView(clip)
+    }
+
+    private func updateFade() {
+        let clip = scrollView.contentView
+        let leftOverflow = clip.bounds.origin.x > 0.5
+        let rightOverflow = docView.frame.width - (clip.bounds.origin.x + clip.bounds.width) > 0.5
+        let width = scrollView.bounds.width > 2 * TabBarView.fadeWidth ? TabBarView.fadeWidth : 0
+        edgeFade.update(
+            frame: scrollView.bounds, start: leftOverflow ? width : 0, end: rightOverflow ? width : 0)
     }
 
     private func slotOrigins(_ widths: [CGFloat]) -> [CGFloat] {
@@ -127,7 +180,7 @@ final class WorkspaceTabStrip: NSView {
 
     private func makeChip() -> WorkspaceTabChip {
         let chip = WorkspaceTabChip()
-        addSubview(chip)
+        docView.addSubview(chip)
         chip.onSelect = { [weak self, weak chip] in
             guard let self, let chip, let index = self.chips.firstIndex(where: { $0 === chip }) else { return }
             self.onSelect?(index)

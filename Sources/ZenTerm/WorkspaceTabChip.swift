@@ -94,7 +94,7 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
     }
 
     var fittingWidth: CGFloat {
-        let text = isRenaming ? renameWidth : ceil(label.attributedStringValue.size().width) + 2
+        let text = isRenaming ? renameWidth : ceil(label.intrinsicContentSize.width)
         var width = Self.inset * 2 + text
         if opensFocused { width += Self.accessorySpacing + Self.dotDiameter }
         if showsClose { width += Self.accessorySpacing / 2 + Self.closeSize }

@@ -249,6 +249,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
         let row = NSStackView(views: [titleGroup, folderGroup])
         row.orientation = .horizontal
         row.alignment = .top
+        row.distribution = .fill
         row.spacing = 12
         return row
     }
@@ -265,7 +266,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
             self?.form.moveTab(at: from, to: to)
             self?.tabsChanged()
         }
-        tabStrip.onArrowUp = { [weak self] in self?.moveVertical(-1) }
+        tabStrip.onArrowUp = { [weak self] in self?.drawing.focus(.bottom) }
         tabStrip.onArrowDown = { [weak self] in self?.moveVertical(1) }
         tabStrip.onTab = { [weak self] in self?.moveTab(1) }
         tabStrip.onBacktab = { [weak self] in self?.moveTab(-1) }
@@ -290,7 +291,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
         drawing.onTab = { [weak self] in self?.moveTab(1) }
         drawing.onBacktab = { [weak self] in self?.moveTab(-1) }
 
-        let stack = Self.vStack([tabStrip, drawing], spacing: 10)
+        let stack = Self.vStack([drawing, tabStrip], spacing: 10)
         let group = LabeledField(caption: caption("Tabs", required: false), control: stack)
         tabsGroup = group
         return group
@@ -433,8 +434,8 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
 
     private func verticalStops() -> [NSView] {
         var stops: [NSView] = [titleField.field, folderPicker.field.field]
-        if let chip = tabStrip.selectedChip { stops.append(chip) }
         if let main = drawing.stop(for: .main) { stops.append(main) }
+        if let chip = tabStrip.selectedChip { stops.append(chip) }
         for row in envRows { stops.append(row.keyBox.field) }
         stops.append(addVarButton)
         if let carryStop = carryPicker.focusStop { stops.append(carryStop) }

@@ -448,19 +448,23 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         XCTAssertTrue(KeyboardFocus.isFocused(list, in: window))
     }
 
-    func test_downFromTheFolder_reachesTheTabStrip_andThenTheMainPane() throws {
+    func test_downFromTheFolder_walksTheDrawingTopToBottom_thenTheTabStrip() throws {
         let (overlay, _) = mount()
+        let drawing = overlay.drawingForTesting
         window?.makeFirstResponder(picker(in: overlay).field.field)
 
         try XCTUnwrap(editor).keyDown(with: try arrow(125, NSDownArrowFunctionKey))
+        XCTAssertTrue(KeyboardFocus.isFocused(try XCTUnwrap(drawing.region(.main)).field, in: window))
+
+        try XCTUnwrap(editor).keyDown(with: try arrow(125, NSDownArrowFunctionKey))
+        let bottom = try XCTUnwrap(drawing.stop(for: .bottom))
+        XCTAssertIdentical(window?.firstResponder, bottom)
+
+        bottom.keyDown(with: try arrow(125, NSDownArrowFunctionKey))
         XCTAssertIdentical(window?.firstResponder, overlay.tabStripForTesting.chips[0])
 
-        overlay.tabStripForTesting.chips[0].keyDown(with: try arrow(125, NSDownArrowFunctionKey))
-        XCTAssertTrue(
-            KeyboardFocus.isFocused(try XCTUnwrap(overlay.drawingForTesting.region(.main)).field, in: window))
-
-        try XCTUnwrap(editor).keyDown(with: try arrow(126, NSUpArrowFunctionKey))
-        XCTAssertIdentical(window?.firstResponder, overlay.tabStripForTesting.chips[0])
+        overlay.tabStripForTesting.chips[0].keyDown(with: try arrow(126, NSUpArrowFunctionKey))
+        XCTAssertIdentical(window?.firstResponder, bottom, "up from the strip lands on the row right above it")
     }
 
     func test_rightFromTheName_reachesTheFolder() throws {
