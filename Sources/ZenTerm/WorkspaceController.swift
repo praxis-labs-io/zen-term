@@ -50,8 +50,8 @@ final class WorkspaceController {
 
     func setTitle(_ title: String?, for id: TabID) { titleByTab[id] = title }
 
-    /// Appends `id` and makes it active. Its controller arrives separately, once the caller has wired it.
-    func add(_ id: TabID) { tabs.add(id) }
+    /// Appends `id` without activating it. Its controller arrives separately, once the caller has wired it.
+    func append(_ id: TabID) { tabs.append(id) }
 
     /// Files the controller and seeds its title. A replaced tab keeps its id, so this also overwrites.
     func setController(_ controller: TabController, for id: TabID) {

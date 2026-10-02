@@ -16,10 +16,9 @@ public struct TabList {
         return order[activeIndex]
     }
 
-    /// Appends `id` and makes it active.
-    public mutating func add(_ id: TabID) {
+    /// Appends `id`. The active tab stays active.
+    public mutating func append(_ id: TabID) {
         order.append(id)
-        activeIndex = order.count - 1
     }
 
     public mutating func select(_ id: TabID) {

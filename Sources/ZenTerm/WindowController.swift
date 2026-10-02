@@ -995,7 +995,8 @@ final class WindowController: NSObject {
         closeModal()
         closeFloatForTabChange()
         let id = mintTabID()
-        activeWorkspace.add(id)
+        activeWorkspace.append(id)
+        activeWorkspace.select(id)
         installController(id: id, cwd: cwd, config: nil, transition: .slide(from: .fromRight))
     }
 
@@ -2019,7 +2020,10 @@ final class WindowController: NSObject {
         workspaces.append(workspace)
         activate(workspace.id)
         for (index, tab) in tabs.enumerated() {
-            if index > 0 { workspace.add(tab) }
+            if index > 0 {
+                workspace.append(tab)
+                workspace.select(tab)
+            }
             installController(id: tab, cwd: folder, config: config, tab: index, transition: .instant)
         }
         guard let config, tabs[config.focus.tab] != workspace.activeID else { return }
