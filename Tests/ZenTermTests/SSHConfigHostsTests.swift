@@ -163,6 +163,20 @@ final class SSHConfigHostsTests: XCTestCase {
         XCTAssertEqual(SSHConfigHosts.listing(of: config), SSHConfigHosts.Listing(aliases: [], isUnreadable: true))
     }
 
+    func test_aConfigWithAnInvalidUTF8Byte_stillYieldsItsHosts() throws {
+        try XCTUnwrap("# caf\u{E9}\nHost included\n".data(using: .isoLatin1))
+            .write(to: dir.appendingPathComponent("latin1"))
+        var bytes = Data("# note ".utf8)
+        bytes.append(0xFF)
+        bytes.append(contentsOf: "\nHost kept\nInclude latin1\n".utf8)
+        let config = dir.appendingPathComponent("config")
+        try bytes.write(to: config)
+
+        XCTAssertEqual(
+            SSHConfigHosts.listing(of: config),
+            SSHConfigHosts.Listing(aliases: ["kept", "included"], isUnreadable: false))
+    }
+
     func test_anUnreadableInclude_doesNotMarkTheConfigUnreadable() throws {
         let included = try write("Host hidden\n", to: "more")
         try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: included.path)

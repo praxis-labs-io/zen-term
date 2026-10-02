@@ -37,10 +37,10 @@ enum SSHConfigHosts {
     ) -> Bool {
         guard depth <= maxIncludeDepth,
             visited.insert(file.resolvingSymlinksInPath().standardizedFileURL.path).inserted,
-            let text = try? String(contentsOf: file, encoding: .utf8)
+            let data = try? Data(contentsOf: file)
         else { return false }
         var inMatch = false
-        for line in text.components(separatedBy: .newlines) {
+        for line in String(decoding: data, as: UTF8.self).components(separatedBy: .newlines) {
             guard let (keyword, args) = directive(line) else { continue }
             switch keyword {
             case "host":
