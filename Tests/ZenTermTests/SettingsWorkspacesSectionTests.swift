@@ -107,7 +107,7 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
     func test_row_buildsWithItsBadgeHidden_whenNothingHasProbedTheFolder() {
         let row = WorkspaceRow(
             workspace: Workspace(
-                title: "Repo", path: tempRoot, main: nil, right: nil, bottom: nil, focus: .main, env: [:]))
+                title: "Repo", path: tempRoot, tabs: [], env: [:]))
         let badge = descendants(of: row).compactMap { $0 as? NSImageView }.first
         XCTAssertEqual(badge?.isHidden, true, "nothing has probed the folder yet")
     }

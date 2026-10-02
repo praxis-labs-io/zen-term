@@ -77,11 +77,10 @@ final class NewTabCWDTests: WindowTestCase {
         let c = try makeWindowInRoot()
         inheritCWD(true)
         let parent = Workspace(
-            title: "alpha", path: FileManager.default.temporaryDirectory, main: nil, right: nil, bottom: nil,
-            focus: .main, env: [:])
+            title: "alpha", path: FileManager.default.temporaryDirectory, tabs: [], env: [:])
         let worktree = Worktree(path: root, branch: "one", head: "0000000", isLocked: false)
         c.openWorkspaceForTesting(
-            Workspace(title: "alpha: one", path: root, main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
+            Workspace(title: "alpha: one", path: root, tabs: [], env: [:]),
             origin: WorktreeOrigin(parent: parent, worktree: worktree))
         try XCTUnwrap(spawned.last).currentDirectory = root
         WorktreeStore.isRemovedOverrideForTesting = { _ in true }
@@ -103,11 +102,10 @@ final class NewTabCWDTests: WindowTestCase {
         let c = try makeWindowInRoot()
         inheritCWD(true)
         let parent = Workspace(
-            title: "alpha", path: FileManager.default.temporaryDirectory, main: nil, right: nil, bottom: nil,
-            focus: .main, env: [:])
+            title: "alpha", path: FileManager.default.temporaryDirectory, tabs: [], env: [:])
         let worktree = Worktree(path: root, branch: "one", head: "0000000", isLocked: false)
         c.openWorkspaceForTesting(
-            Workspace(title: "alpha: one", path: root, main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
+            Workspace(title: "alpha: one", path: root, tabs: [], env: [:]),
             origin: WorktreeOrigin(parent: parent, worktree: worktree))
         try XCTUnwrap(spawned.last).currentDirectory = root
         WorktreeStore.isRemovedOverrideForTesting = { _ in true }

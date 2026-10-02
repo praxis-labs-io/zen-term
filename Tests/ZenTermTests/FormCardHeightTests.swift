@@ -27,7 +27,7 @@ final class FormCardHeightTests: WindowTestCase {
     func test_theCreateWorktreeCard_staysUnderTheCap() throws {
         let workspace = Workspace(
             title: "ZenTerm", path: URL(fileURLWithPath: "/tmp/zenterm-fixture"),
-            main: nil, right: nil, bottom: nil, focus: .main, env: [:],
+            tabs: [], env: [:],
             carry: (0..<30).map { "entry-\($0)" })
         let overlay = NewWorktreeOverlay(
             workspace: workspace,
@@ -42,7 +42,7 @@ final class FormCardHeightTests: WindowTestCase {
         let branch = "feature/zen-454-create-a-worktree-from-an-existing-branch"
         let workspace = Workspace(
             title: "ZenTerm", path: URL(fileURLWithPath: "/tmp/zenterm-fixture"),
-            main: nil, right: nil, bottom: nil, focus: .main, env: [:],
+            tabs: [], env: [:],
             carry: (0..<30).map { "entry-\($0)" })
         let overlay = NewWorktreeOverlay(
             workspace: workspace,
@@ -64,8 +64,8 @@ final class FormCardHeightTests: WindowTestCase {
 
     func test_aCappedCard_scrollsItsBodyRatherThanFlatteningIt() throws {
         let ws = Workspace(
-            title: "W", path: FileManager.default.temporaryDirectory, main: "a", right: "b",
-            bottom: "c", focus: .main,
+            title: "W", path: FileManager.default.temporaryDirectory,
+            tabs: [Workspace.Tab(main: "a", right: "b", bottom: "c")],
             env: Dictionary(uniqueKeysWithValues: (0..<10).map { ("KEY\($0)", "v") }),
             carry: [".env"])
         let overlay = AddWorkspaceOverlay(

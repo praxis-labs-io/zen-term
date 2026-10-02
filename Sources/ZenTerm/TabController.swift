@@ -317,10 +317,10 @@ final class TabController: NSObject {
     }
     func focusActivePane() { paneCanvas.focusActivePane() }
 
-    func applyRecipe(_ ws: Workspace) {
-        if ws.right != nil, !isRightOpen { toggleRightDrawer() }
-        if ws.bottom != nil, !isBottomOpen { toggleBottomDrawer() }
-        switch ws.focus {
+    func applyRecipe(_ tab: Workspace.Tab, focus: Workspace.Region) {
+        if tab.right != nil, !isRightOpen { toggleRightDrawer() }
+        if tab.bottom != nil, !isBottomOpen { toggleBottomDrawer() }
+        switch focus {
         case .right where isRightOpen: focusDrawer(.right)
         case .bottom where isBottomOpen: focusDrawer(.bottom)
         default: focusActivePane()

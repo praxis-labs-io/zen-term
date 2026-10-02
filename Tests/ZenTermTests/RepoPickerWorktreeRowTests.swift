@@ -235,8 +235,8 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let repo = path("alpha")
         var chosen: Workspace?
         let parent = Workspace(
-            title: "alpha", path: repo, main: "nvim", right: "claude", bottom: "shell",
-            focus: .right, env: ["A": "1"], carry: [".env"])
+            title: "alpha", path: repo, tabs: [Workspace.Tab(main: "nvim", right: "claude", bottom: "shell")],
+            focus: Workspace.LaunchFocus(tab: 0, region: .right), env: ["A": "1"], carry: [".env"])
         let overlay = makeRepoPicker(entries: [parent], onChoose: { ws, _ in chosen = ws })
         mount(overlay)
         overlay.setWorktrees(listing(repo, "feature"), for: repo)
@@ -245,10 +245,10 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
 
         XCTAssertEqual(chosen?.title, "alpha: feature")
         XCTAssertEqual(chosen?.path.lastPathComponent, "feature")
-        XCTAssertEqual(chosen?.main, "nvim")
-        XCTAssertEqual(chosen?.right, "claude")
-        XCTAssertEqual(chosen?.bottom, "shell")
-        XCTAssertEqual(chosen?.focus, .right)
+        XCTAssertEqual(chosen?.tabs[0].main, "nvim")
+        XCTAssertEqual(chosen?.tabs[0].right, "claude")
+        XCTAssertEqual(chosen?.tabs[0].bottom, "shell")
+        XCTAssertEqual(chosen?.focus, Workspace.LaunchFocus(tab: 0, region: .right))
         XCTAssertEqual(chosen?.env, ["A": "1"])
         XCTAssertEqual(chosen?.carry, [".env"])
     }
@@ -331,7 +331,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let shared = owner.appendingPathComponent(".git")
         var chosen: Workspace?
         let ownerWorkspace = Workspace(
-            title: "b-x", path: owner, main: "nvim", right: nil, bottom: nil, focus: .main, env: [:])
+            title: "b-x", path: owner, tabs: [Workspace.Tab(main: "nvim")], env: [:])
         let overlay = makeRepoPicker(
             entries: [ownerWorkspace, workspace("a-x", path: other)],
             onChoose: { ws, _ in chosen = ws })
@@ -351,7 +351,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
             "the filter reorders the workspaces, and the worktree stays with b-x")
         let index = try XCTUnwrap(shape(of: overlay).firstIndex(of: "worktree:shared-branch"))
         overlay.activate(index: index, modifiers: [])
-        XCTAssertEqual(chosen?.main, "nvim", "b-x's recipe, not a-x's")
+        XCTAssertEqual(chosen?.tabs[0].main, "nvim", "b-x's recipe, not a-x's")
     }
 
     func test_filter_findsADetachedWorktreeByItsShortHead() {
@@ -1024,7 +1024,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
     private func workspace(_ title: String, path: URL = FileManager.default.temporaryDirectory)
         -> Workspace
     {
-        Workspace(title: title, path: path, main: nil, right: nil, bottom: nil, focus: .main, env: [:])
+        Workspace(title: title, path: path, tabs: [], env: [:])
     }
 
     private func setKeymap(_ map: [Chord: KeyInterceptor.ReservedChord]) {

@@ -20,7 +20,7 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
     func test_editingAWorkspace_roundTripsCarryThroughThePicker() throws {
         let ws = Workspace(
             title: "ZenTerm", path: try makeRealDir(),
-            main: nil, right: nil, bottom: nil, focus: .main, env: [:],
+            tabs: [], env: [:],
             carry: ["node_modules", ".env"])
         let (overlay, sink) = mount(editing: ws)
         field(in: overlay, placeholder: "Workspace name").setText("Renamed")
@@ -29,6 +29,59 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
 
         XCTAssertEqual(sink.submitted.first?.title, "Renamed")
         XCTAssertEqual(sink.submitted.first?.carry, ["node_modules", ".env"])
+    }
+
+    func test_editingAMultiTabWorkspace_keepsTheLaterTabsAndTheirFocus() throws {
+        let ws = Workspace(
+            title: "ZenTerm", path: try makeRealDir(),
+            tabs: [
+                Workspace.Tab(name: "editor", main: "nvim"),
+                Workspace.Tab(name: "gate", bottom: "bin/check"),
+            ],
+            focus: Workspace.LaunchFocus(tab: 1, region: .bottom), env: [:])
+        let (overlay, sink) = mount(editing: ws)
+        field(in: overlay, placeholder: "Workspace name").setText("Renamed")
+
+        try XCTUnwrap(button(in: overlay, title: "Save")).onTap()
+
+        XCTAssertEqual(sink.submitted.first?.tabs, ws.tabs)
+        XCTAssertEqual(sink.submitted.first?.focus, ws.focus)
+    }
+
+    func test_movingFocusOntoTheFirstTab_whenALaterTabHoldsIt_savesTheNewFocus() throws {
+        let ws = Workspace(
+            title: "ZenTerm", path: try makeRealDir(),
+            tabs: [Workspace.Tab(main: "nvim", right: "claude"), Workspace.Tab(name: "gate", bottom: "bin/check")],
+            focus: Workspace.LaunchFocus(tab: 1, region: .bottom), env: [:])
+        let (overlay, sink) = mount(editing: ws)
+        let focus = try XCTUnwrap(segment(in: overlay, containing: "Bottom"))
+        window?.makeFirstResponder(focus)
+
+        let right = String(UnicodeScalar(NSRightArrowFunctionKey)!)
+        focus.keyDown(
+            with: try XCTUnwrap(
+                NSEvent.keyEvent(
+                    with: .keyDown, location: .zero, modifierFlags: [.function, .numericPad],
+                    timestamp: 0, windowNumber: 0, context: nil, characters: right,
+                    charactersIgnoringModifiers: right, isARepeat: false, keyCode: 124)))
+        try XCTUnwrap(button(in: overlay, title: "Save")).onTap()
+
+        XCTAssertEqual(sink.submitted.first?.focus, Workspace.LaunchFocus(tab: 0, region: .right))
+        XCTAssertEqual(sink.submitted.first?.tabs, ws.tabs)
+    }
+
+    func test_editingTheFirstTabsFocus_savesItOnTheFirstTab() throws {
+        let ws = Workspace(
+            title: "ZenTerm", path: try makeRealDir(),
+            tabs: [Workspace.Tab(main: "nvim", right: "claude"), Workspace.Tab(name: "gate")],
+            focus: Workspace.LaunchFocus(tab: 0, region: .right), env: [:])
+        let (overlay, sink) = mount(editing: ws)
+
+        XCTAssertEqual(segment(in: overlay, containing: "Bottom")?.selectedIndex, 1)
+        try XCTUnwrap(button(in: overlay, title: "Save")).onTap()
+
+        XCTAssertEqual(sink.submitted.first?.focus, ws.focus)
+        XCTAssertEqual(sink.submitted.first?.tabs, ws.tabs)
     }
 
     func test_choosingAFolder_loadsWhatGitIgnoresThere() throws {
@@ -53,7 +106,7 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
     func test_whatIsPickedInCarry_isWhatIsSubmitted() throws {
         let dir = try makeRealDir()
         let ws = Workspace(
-            title: "ZenTerm", path: dir, main: nil, right: nil, bottom: nil, focus: .main,
+            title: "ZenTerm", path: dir, tabs: [],
             env: [:], carry: [".env"])
         let (overlay, sink) = mount(editing: ws)
         let carry = try XCTUnwrap(carryPicker(in: overlay))
@@ -78,7 +131,7 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
     func test_downFromTheEnvButton_reachesTheCarryList() throws {
         let dir = try makeRealDir()
         let ws = Workspace(
-            title: "ZenTerm", path: dir, main: nil, right: nil, bottom: nil, focus: .main,
+            title: "ZenTerm", path: dir, tabs: [],
             env: [:], carry: ["node_modules"])
         let (overlay, _) = mount(editing: ws)
         let carry = try XCTUnwrap(carryPicker(in: overlay))
@@ -100,8 +153,10 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
 
     func test_theCard_staysUnderTheSettingsHeight_howeverMuchItHolds() throws {
         let ws = Workspace(
-            title: "Big", path: try makeRealDir(), main: "nvim", right: "claude", bottom: "shell",
-            focus: .bottom, env: Dictionary(uniqueKeysWithValues: (0..<12).map { ("KEY\($0)", "v") }),
+            title: "Big", path: try makeRealDir(),
+            tabs: [Workspace.Tab(main: "nvim", right: "claude", bottom: "shell")],
+            focus: Workspace.LaunchFocus(tab: 0, region: .bottom),
+            env: Dictionary(uniqueKeysWithValues: (0..<12).map { ("KEY\($0)", "v") }),
             carry: (0..<20).map { "entry-\($0)" })
         let overlay = AddWorkspaceOverlay(
             editing: ws, existingTitles: [], background: Theme.current.chrome.background.nsColor,
@@ -203,8 +258,7 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
     func test_editForm_prefillsTitleAndFolder() throws {
         let dir = try makeRealDir()
         let ws = Workspace(
-            title: "Alpha", path: dir, main: "nvim", right: "claude", bottom: "shell",
-            focus: .main, env: [:])
+            title: "Alpha", path: dir, tabs: [Workspace.Tab(main: "nvim", right: "claude", bottom: "shell")], env: [:])
         let (overlay, _) = mount(editing: ws)
 
         XCTAssertEqual(field(in: overlay, placeholder: "Workspace name").text, "Alpha")
@@ -216,7 +270,7 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
     func test_editForm_savesChangedTitle() throws {
         let dir = try makeRealDir()
         let ws = Workspace(
-            title: "Alpha", path: dir, main: nil, right: nil, bottom: nil, focus: .main, env: [:])
+            title: "Alpha", path: dir, tabs: [], env: [:])
         let (overlay, sink) = mount(editing: ws)
 
         field(in: overlay, placeholder: "Workspace name").setText("Renamed")
@@ -230,7 +284,7 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
     func test_editForm_hasSaveButton_notAdd() throws {
         let dir = try makeRealDir()
         let ws = Workspace(
-            title: "Alpha", path: dir, main: nil, right: nil, bottom: nil, focus: .main, env: [:])
+            title: "Alpha", path: dir, tabs: [], env: [:])
         let (overlay, _) = mount(editing: ws)
         XCTAssertNotNil(button(in: overlay, title: "Save"))
         XCTAssertNil(button(in: overlay, title: "Add Workspace"))
@@ -239,7 +293,7 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
     func test_editForm_deleteButton_firesOnDelete() throws {
         let dir = try makeRealDir()
         let ws = Workspace(
-            title: "Alpha", path: dir, main: nil, right: nil, bottom: nil, focus: .main, env: [:])
+            title: "Alpha", path: dir, tabs: [], env: [:])
         let (overlay, sink) = mount(editing: ws, withDelete: true)
         let delete = button(in: overlay, title: "Delete")
         XCTAssertNotNil(delete, "editing an existing workspace shows a Delete button")
@@ -265,17 +319,16 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         button(in: overlay, title: "Add Workspace")?.onTap()
 
         XCTAssertEqual(sink.submitted.count, 1)
-        XCTAssertEqual(sink.submitted.first?.main, "vim")
-        XCTAssertEqual(sink.submitted.first?.right, "codex")
-        XCTAssertEqual(sink.submitted.first?.bottom, "shell")
+        XCTAssertEqual(sink.submitted.first?.tabs[0].main, "vim")
+        XCTAssertEqual(sink.submitted.first?.tabs[0].right, "codex")
+        XCTAssertEqual(sink.submitted.first?.tabs[0].bottom, "shell")
     }
 
     func test_editForm_matchingConfiguredPreset_selectsEditorAIShellSegment() throws {
         setPresetConfig(editor: "vim", ai: "codex")
         let dir = try makeRealDir()
         let ws = Workspace(
-            title: "Gamma", path: dir, main: "vim", right: "codex", bottom: "shell",
-            focus: .main, env: [:])
+            title: "Gamma", path: dir, tabs: [Workspace.Tab(main: "vim", right: "codex", bottom: "shell")], env: [:])
         let (overlay, _) = mount(editing: ws)
 
         XCTAssertEqual(segment(in: overlay, containing: "Editor + AI + Shell")?.selectedIndex, 1)
@@ -285,8 +338,7 @@ final class AddWorkspaceOverlayTests: WindowTestCase {
         setPresetConfig(editor: "vim", ai: "codex")
         let dir = try makeRealDir()
         let ws = Workspace(
-            title: "Delta", path: dir, main: "nvim", right: "claude", bottom: "shell",
-            focus: .main, env: [:])
+            title: "Delta", path: dir, tabs: [Workspace.Tab(main: "nvim", right: "claude", bottom: "shell")], env: [:])
         let (overlay, _) = mount(editing: ws)
 
         XCTAssertEqual(segment(in: overlay, containing: "Editor + AI + Shell")?.selectedIndex, 1)

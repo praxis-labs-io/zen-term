@@ -762,13 +762,15 @@ final class WindowController: NSObject {
 
     deinit { titlePoll?.invalidate() }
 
-    private func makeController(cwd: URL?, config ws: Workspace? = nil) -> TabController {
-        let mainCommand = ws?.main.flatMap { $0 == "shell" ? nil : $0 }
+    private func makeController(cwd: URL?, config ws: Workspace? = nil, tab index: Int = 0) -> TabController {
+        let tab = ws?.tabs[index]
+        let mainCommand = tab?.main.flatMap { $0 == "shell" ? nil : $0 }
         let c = TabController(
             initialCWD: cwd, initialCommand: mainCommand, env: ws?.env ?? [:],
             isToolFloatOpen: { [weak self] in self?.floats.isOpen ?? false })
-        c.rightDrawerCommand = ws?.right
-        c.bottomDrawerCommand = ws?.bottom
+        c.rightDrawerCommand = tab?.right
+        c.bottomDrawerCommand = tab?.bottom
+        c.pinnedTitle = tab?.name
         return c
     }
 
@@ -980,13 +982,17 @@ final class WindowController: NSObject {
         installController(id: id, cwd: cwd, config: nil, transition: .slide(from: .fromRight))
     }
 
-    private func installController(id: TabID, cwd: URL?, config: Workspace?, transition: MountTransition) {
-        let c = makeController(cwd: cwd, config: config)
+    private func installController(
+        id: TabID, cwd: URL?, config: Workspace?, tab index: Int = 0, transition: MountTransition
+    ) {
+        let c = makeController(cwd: cwd, config: config, tab: index)
         activeWorkspace.setController(c, for: id)
         wire(c, id: id)
         mount(transition)
         c.start()
-        if let config { c.applyRecipe(config) }
+        if let config {
+            c.applyRecipe(config.tabs[index], focus: config.focus.tab == index ? config.focus.region : .main)
+        }
         renderTabBar()
     }
 
@@ -1945,15 +1951,22 @@ final class WindowController: NSObject {
         named name: String, at folder: URL, config: Workspace?, origin: WorktreeOrigin? = nil
     ) {
         Log.info("workspace opened", category: .workspace)
-        let tab = mintTabID()
+        let tabs = (0..<(config?.tabs.count ?? 1)).map { _ in mintTabID() }
         let group = config.map { _ in (origin?.parent.path ?? folder).standardizedFileURL.path }
         let seat = group.flatMap { group in workspaces.first { WorkspaceOrder.groupFolder(of: $0) == group }?.seat }
         let workspace = WorkspaceController(
-            id: mintWorkspaceID(), isConfigured: config != nil, name: name, folder: folder, firstTab: tab,
+            id: mintWorkspaceID(), isConfigured: config != nil, name: name, folder: folder, firstTab: tabs[0],
             origin: origin, seat: seat)
         workspaces.append(workspace)
         activate(workspace.id)
-        installController(id: tab, cwd: folder, config: config, transition: .instant)
+        for (index, tab) in tabs.enumerated() {
+            if index > 0 { workspace.add(tab) }
+            installController(id: tab, cwd: folder, config: config, tab: index, transition: .instant)
+        }
+        guard let config, tabs[config.focus.tab] != workspace.activeID else { return }
+        workspace.select(tabs[config.focus.tab])
+        mount(.instant)
+        renderTabBar()
     }
 
     func handle(_ chord: KeyInterceptor.ReservedChord) {

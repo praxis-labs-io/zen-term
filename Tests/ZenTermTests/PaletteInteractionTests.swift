@@ -294,8 +294,7 @@ final class PaletteInteractionTests: WindowTestCase {
 
     private func workspace(_ title: String, path: URL = FileManager.default.temporaryDirectory) -> Workspace {
         Workspace(
-            title: title, path: path, main: nil, right: nil,
-            bottom: nil, focus: .main, env: [:])
+            title: title, path: path, tabs: [], env: [:])
     }
 
     private func makeRepoPicker(

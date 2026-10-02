@@ -391,7 +391,7 @@ final class WindowControllerWorkspaceTests: WindowTestCase {
         XCTAssertFalse(texts(in: card).contains { $0.hasPrefix("Workspace 1: ") })
 
         c.openWorkspaceForTesting(
-            Workspace(title: "Other", path: root, main: nil, right: nil, bottom: nil, focus: .main, env: [:]))
+            Workspace(title: "Other", path: root, tabs: [], env: [:]))
 
         XCTAssertTrue(
             texts(in: card).contains { $0.hasPrefix("Workspace 1: ") }, "the card now says which workspace asked")

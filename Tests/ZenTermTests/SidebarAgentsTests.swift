@@ -83,7 +83,7 @@ final class SidebarAgentsTests: WindowTestCase {
         let folder = root.appendingPathComponent(title, isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return Workspace(
-            title: title, path: folder, main: nil, right: right, bottom: nil, focus: .main, env: [:])
+            title: title, path: folder, tabs: [Workspace.Tab(right: right)], env: [:])
     }
 
     private func drainMainQueue() {

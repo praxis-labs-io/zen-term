@@ -513,7 +513,7 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         let sink = Sink()
         let workspace = Workspace(
             title: "ZenTerm", path: URL(fileURLWithPath: "/tmp/zenterm-fixture"),
-            main: nil, right: nil, bottom: nil, focus: .main, env: [:], carry: carry)
+            tabs: [], env: [:], carry: carry)
         let overlay = NewWorktreeOverlay(
             workspace: workspace,
             options: WorktreeStore.CreateOptions(

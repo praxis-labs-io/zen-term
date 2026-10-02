@@ -46,14 +46,15 @@ final class WorkspaceRecipeTests: WindowTestCase {
 
     private func bothDrawers() -> Workspace {
         Workspace(
-            title: "probe", path: URL(fileURLWithPath: NSTemporaryDirectory()), main: nil,
-            right: "shell", bottom: "shell", focus: .main, env: [:])
+            title: "probe", path: URL(fileURLWithPath: NSTemporaryDirectory()),
+            tabs: [Workspace.Tab(right: "shell", bottom: "shell")], env: [:])
     }
 
     private func focusedOnTheRightDrawer() -> Workspace {
         Workspace(
-            title: "probe", path: URL(fileURLWithPath: NSTemporaryDirectory()), main: nil,
-            right: "shell", bottom: "shell", focus: .right, env: [:])
+            title: "probe", path: URL(fileURLWithPath: NSTemporaryDirectory()),
+            tabs: [Workspace.Tab(right: "shell", bottom: "shell")],
+            focus: Workspace.LaunchFocus(tab: 0, region: .right), env: [:])
     }
 
     func test_opening_revealsTheWorkspacesDrawersInTheSameTurn() {
@@ -81,5 +82,85 @@ final class WorkspaceRecipeTests: WindowTestCase {
             focused.first?.isHeaderVisibleForTesting == true,
             "the recipe's focus landed on a drawer and stayed there, rather than being taken back "
                 + "by the main pane because the recipe ran before the tab started")
+    }
+
+    private func threeTabs() -> Workspace {
+        Workspace(
+            title: "probe", path: URL(fileURLWithPath: NSTemporaryDirectory()),
+            tabs: [
+                Workspace.Tab(name: "editor", main: "first-main"),
+                Workspace.Tab(main: "second-main", right: "second-right"),
+                Workspace.Tab(name: "gate", main: "third-main", bottom: "shell"),
+            ],
+            focus: Workspace.LaunchFocus(tab: 1, region: .right), env: [:])
+    }
+
+    private func launchLine(of surface: TerminalSurface?) -> String {
+        (surface as? RecordingSurface)?.lastConfig?.args.last ?? ""
+    }
+
+    private func mainLaunchLines(in controller: WindowController) -> [String] {
+        controller.tabOrderForTesting.map {
+            launchLine(of: controller.controllerForTesting(tab: $0)?.allSurfaces.first)
+        }
+    }
+
+    private func assertOpensTheThreeTabsInOrder(_ controller: WindowController, line: UInt = #line) {
+        let lines = mainLaunchLines(in: controller)
+        XCTAssertEqual(lines.count, 3, line: line)
+        for (launched, command) in zip(lines, ["first-main", "second-main", "third-main"]) {
+            XCTAssertTrue(launched.contains(command), "\(command) runs in its own tab, in order", line: line)
+        }
+    }
+
+    func test_opening_startsEveryTabInOrder() {
+        let controller = makeController()
+
+        controller.openWorkspaceForTesting(threeTabs())
+
+        assertOpensTheThreeTabsInOrder(controller)
+        let second = controller.controllerForTesting(tab: controller.tabOrderForTesting[1])
+        XCTAssertTrue(second?.allSurfaces.contains { launchLine(of: $0).contains("second-right") } == true)
+    }
+
+    func test_namedTabsPinTheirTitle_andUnnamedOnesStayLive() throws {
+        let controller = makeController()
+
+        controller.openWorkspaceForTesting(threeTabs())
+
+        let tabs = controller.tabOrderForTesting
+        XCTAssertEqual(controller.tabTitlesForTesting[0], "editor")
+        XCTAssertEqual(controller.tabTitlesForTesting[2], "gate")
+        XCTAssertNil(try XCTUnwrap(controller.controllerForTesting(tab: tabs[1])).pinnedTitle)
+    }
+
+    func test_launchFocus_landsInItsTabsDrawer_andHoldsOnceTheOtherTabsMount() {
+        let controller = makeController()
+
+        controller.openWorkspaceForTesting(threeTabs())
+
+        XCTAssertEqual(controller.activeTabIDForTesting, controller.tabOrderForTesting[1])
+        XCTAssertTrue(launchLine(of: controller.focusedSurfaceForTesting).contains("second-right"))
+        let deadline = Date().addingTimeInterval(0.3)
+        while Date() < deadline { RunLoop.current.run(mode: .default, before: deadline) }
+        XCTAssertTrue(
+            launchLine(of: controller.focusedSurfaceForTesting).contains("second-right"),
+            "the third tab's mount must not take the focus back to a pane")
+        XCTAssertTrue((controller.focusedSurfaceForTesting as? RecordingSurface)?.isFocused == true)
+    }
+
+    func test_aWorktreeOfTheWorkspace_opensTheSameTabs() {
+        let controller = makeController()
+        let parent = threeTabs()
+        let worktreePath = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("wt-\(UUID())")
+        let worktree = Worktree(path: worktreePath, branch: "feature", head: "abc1234", isLocked: false)
+
+        controller.openWorkspaceForTesting(
+            RepoPickerOverlay.workspace(for: worktree, parent: parent, repoRoot: nil),
+            origin: WorktreeOrigin(parent: parent, worktree: worktree))
+
+        assertOpensTheThreeTabsInOrder(controller)
+        XCTAssertEqual(controller.tabTitlesForTesting[0], "editor")
+        XCTAssertEqual(controller.activeTabIDForTesting, controller.tabOrderForTesting[1])
     }
 }

@@ -71,7 +71,7 @@ final class ConfigLoaderTests: XCTestCase {
             .write(to: root.appendingPathComponent("workspaces"), atomically: true, encoding: .utf8)
         let workspaces = ConfigLoader.loadWorkspacesBlocking(configRoot: root)
         XCTAssertEqual(workspaces.map(\.title), ["ZenTerm"])
-        XCTAssertEqual(workspaces.first?.main, "nvim")
+        XCTAssertEqual(workspaces.first?.tabs[0].main, "nvim")
     }
 
     func test_loadWorkspaces_async_deliversTheParsedListOnTheMainThread() throws {

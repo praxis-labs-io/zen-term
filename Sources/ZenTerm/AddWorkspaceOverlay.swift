@@ -358,13 +358,15 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         titleEditedByUser = true
         titleField.setText(ws.title)
         folderPicker.setText(PathDisplay.abbreviatingHome(ws.path.path))
-        let choice = layoutChoice(for: ws)
+        let firstTab = ws.tabs[0]
+        let firstTabFocus = ws.focus.tab == 0 ? ws.focus.region : .main
+        let choice = layoutChoice(for: firstTab, focus: firstTabFocus)
         layoutSegment.setSelection(Self.layoutIndex(for: choice))
         if choice == .custom {
-            mainField.setText(ws.main ?? "")
-            rightField.setText(ws.right ?? "")
-            bottomField.setText(ws.bottom ?? "")
-            focusSegment.setSelection(Self.focusIndex(for: ws.focus))
+            mainField.setText(firstTab.main ?? "")
+            rightField.setText(firstTab.right ?? "")
+            bottomField.setText(firstTab.bottom ?? "")
+            focusSegment.setSelection(Self.focusIndex(for: firstTabFocus))
         }
         for key in ws.env.keys.sorted() {
             let row = addEnvRow()
@@ -375,16 +377,16 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
         carryPicker.workspaceFolder = ws.path
     }
 
-    private func layoutChoice(for ws: Workspace) -> LayoutChoice {
-        if ws.focus == .main, ws.main == nil, ws.right == nil, ws.bottom == nil { return .minimal }
-        if ws.focus == .main, ws.bottom == "shell", matchesEditorAIPreset(ws) { return .editorAIShell }
+    private func layoutChoice(for tab: Workspace.Tab, focus: Workspace.Region) -> LayoutChoice {
+        if focus == .main, tab.main == nil, tab.right == nil, tab.bottom == nil { return .minimal }
+        if focus == .main, tab.bottom == "shell", matchesEditorAIPreset(tab) { return .editorAIShell }
         return .custom
     }
 
     /// Accepts the built-in default pair too, so a workspace stamped before a config change stays the preset.
-    private func matchesEditorAIPreset(_ ws: Workspace) -> Bool {
-        (ws.main == presetEditor && ws.right == presetAI)
-            || (ws.main == GeneralConfig.defaultEditor && ws.right == GeneralConfig.defaultAI)
+    private func matchesEditorAIPreset(_ tab: Workspace.Tab) -> Bool {
+        (tab.main == presetEditor && tab.right == presetAI)
+            || (tab.main == GeneralConfig.defaultEditor && tab.right == GeneralConfig.defaultAI)
     }
 
     private static func layoutIndex(for choice: LayoutChoice) -> Int {
@@ -451,9 +453,14 @@ final class AddWorkspaceOverlay: NSView, ModalOverlay {
             guard !key.isEmpty else { continue }
             env[key] = row.value.trimmingCharacters(in: .whitespaces)
         }
+        let firstTab = Workspace.Tab(
+            name: editingWorkspace?.tabs[0].name, main: recipe.main, right: recipe.right, bottom: recipe.bottom)
+        let laterTabs = editingWorkspace?.tabs.dropFirst() ?? []
+        let focus =
+            editingWorkspace.map(\.focus).flatMap { $0.tab == 0 || recipe.focus != .main ? nil : $0 }
+            ?? Workspace.LaunchFocus(tab: 0, region: recipe.focus)
         return Workspace(
-            title: title, path: folder,
-            main: recipe.main, right: recipe.right, bottom: recipe.bottom, focus: recipe.focus,
+            title: title, path: folder, tabs: [firstTab] + laterTabs, focus: focus,
             env: env, carry: carryPicker.carried)
     }
 
