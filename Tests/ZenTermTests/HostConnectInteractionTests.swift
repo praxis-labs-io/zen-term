@@ -142,6 +142,17 @@ final class HostConnectInteractionTests: WindowTestCase {
         return descendants(of: content).compactMap { $0 as? ToastView }
     }
 
+    private func runFromPalette(_ query: String, in c: WindowController) throws {
+        c.handle(.toggleCommandPalette)
+        let palette = try XCTUnwrap(
+            descendants(of: try XCTUnwrap(c.window.contentView)).compactMap { $0 as? CommandPaletteOverlay }.first)
+        let field = try XCTUnwrap(
+            descendants(of: palette).compactMap { $0 as? NSTextField }.first { $0.delegate === palette })
+        field.stringValue = query
+        palette.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: field))
+        _ = palette.control(field, textView: NSTextView(), doCommandBy: #selector(NSResponder.insertNewline(_:)))
+    }
+
     private func dockButton(_ label: String, in c: WindowController) -> IconButton? {
         descendants(of: c.dockForTesting).compactMap { $0 as? IconButton }.first { $0.accessibilityLabel() == label }
     }
@@ -501,6 +512,30 @@ final class HostConnectInteractionTests: WindowTestCase {
         c.handle(.toggleToolFloat("pi"))
 
         XCTAssertTrue(c.floatsForTesting.shownSurface === pi)
+    }
+
+    func test_thePaletteInAHost_opensAFloatThatNeedsYou_andToastsForAnyOther() throws {
+        let (c, pi) = try piRunningHiddenInAConnectedHost()
+
+        try runFromPalette("pi", in: c)
+
+        XCTAssertFalse(c.floatsForTesting.isOpen)
+        XCTAssertTrue(showsToast("Tool floats run on this Mac, not on devbox.", in: c))
+
+        ask(pi)
+        try runFromPalette("pi", in: c)
+
+        XCTAssertTrue(c.floatsForTesting.shownSurface === pi)
+    }
+
+    func test_thePaletteOnConnect_opensAFloatThatNeedsYou() throws {
+        let (c, pi) = try piRunningHiddenOnConnect()
+        ask(pi)
+
+        try runFromPalette("pi", in: c)
+
+        XCTAssertTrue(c.floatsForTesting.shownSurface === pi)
+        XCTAssertEqual(c.selectedHostForTesting, host)
     }
 
     func test_theCollapsedLead_namesTheHost() {
