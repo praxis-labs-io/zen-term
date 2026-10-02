@@ -413,6 +413,8 @@ final class SidebarController {
         }
     }
 
+    var hostIDs: [SSHHostID] { hosts.map(\.id) }
+
     func focusActiveRow() {
         if let host = hosts.first(where: \.isActive) {
             view.focusStop(.host(host.id.name))

@@ -545,7 +545,10 @@ final class WindowController: NSObject {
                     self.sidebar.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
                     self.renderDock()
                 }
-                if change.contains(.sshHosts) { self.renderTabBar() }
+                if change.contains(.sshHosts) {
+                    self.leaveRemovedHost(shownHosts: self.sidebar.hostIDs)
+                    self.renderTabBar()
+                }
                 if change.contains(.theme) || change.contains(.keymap) || change.contains(.floats) {
                     self.modal?.overlay.reapplyTheme()
                 }
@@ -935,6 +938,16 @@ final class WindowController: NSObject {
 
     private func closeFloatForTabChange() { floats.close() }
 
+    private func focusActive() {
+        if floats.isOpen {
+            floats.refocus()
+        } else if let activeController {
+            activeController.restoreUnifiedFocus()
+        } else if activeWorkspace == nil {
+            window.makeFirstResponder(nil)
+        }
+    }
+
     private func captureFocusReturn() {
         focusReturn = sidebar.hasFocus ? sidebar.focusedStop : nil
     }
@@ -946,14 +959,9 @@ final class WindowController: NSObject {
         restoreFocusToActive()
     }
 
+    // An open card holds the keyboard until it closes, and closing it comes back through here.
     private func restoreFocusToActive() {
-        if floats.isOpen {
-            floats.refocus()
-        } else if let activeController {
-            activeController.restoreUnifiedFocus()
-        } else if activeWorkspace == nil {
-            window.makeFirstResponder(nil)
-        }
+        if modal == nil { focusActive() }
         syncWindowFocus()
         if floats.isOpen { answerFocusedAgent() }
     }
@@ -1099,6 +1107,30 @@ final class WindowController: NSObject {
         cancelConfirm()
         selection = .host(host)
         mount(.instant)
+        renderAttention()
+    }
+
+    // Leaves an open card up, since a host is usually removed from inside Settings.
+    private func leaveRemovedHost(shownHosts: [SSHHostID]) {
+        guard case .host(let host) = selection, !GeneralConfig.current.sshHosts.contains(host.name) else { return }
+        let current = order
+        let reachable = Set(current.navigable)
+        let place = shownHosts.firstIndex(of: host) ?? shownHosts.count
+        let nearest = (shownHosts[min(place + 1, shownHosts.count)...] + shownHosts[..<place].reversed())
+            .map(WorkspaceOrder.Target.host)
+            .first(where: reachable.contains)
+        guard let landing = nearest ?? current.navigableWorkspaces.first.map(WorkspaceOrder.Target.workspace)
+        else { return }
+        switch landing {
+        case .workspace(let id):
+            guard let workspace = workspaces.first(where: { $0.id == id }) else { return }
+            selection = .workspace(workspace)
+            mount(.instant)
+            if let tab = workspace.activeID { visit(tab) }
+        case .host(let next):
+            selection = .host(next)
+            mount(.instant)
+        }
         renderAttention()
     }
 

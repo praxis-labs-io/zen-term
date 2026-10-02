@@ -180,4 +180,18 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
             c.closedByRemoval(atPath: root), ClosedByRemoval(thisWindow: true),
             "Workspace 1 opened in root too, so nothing is left to hold the window")
     }
+
+    func test_closingTheActiveWorkspace_underSettings_leavesSettingsTheKeyboard() throws {
+        let c = makeWindow()
+        let wanted = try folder("feature-x")
+        c.openWorkspaceForTesting(workspace("x", at: wanted))
+        c.handle(.openSettings)
+        XCTAssertTrue(c.isModalOverlayOpen)
+        let focused = try XCTUnwrap(c.window.firstResponder)
+
+        c.closeTabs(atPath: wanted)
+
+        XCTAssertTrue(c.isModalOverlayOpen)
+        XCTAssertTrue(c.window.firstResponder === focused, "Settings keeps the keyboard")
+    }
 }

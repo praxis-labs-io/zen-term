@@ -173,4 +173,69 @@ final class SSHHostChordTests: WindowTestCase {
         XCTAssertEqual(c.sidebarForTesting.focusedStop, .host("devbox"))
         XCTAssertTrue(c.window.firstResponder === (try row("devbox", in: c)))
     }
+
+    private func configure(hosts: [String]) {
+        var config = GeneralConfig.current
+        config.sshHosts = hosts
+        GeneralConfig.setCurrentForTesting(config)
+        NotificationCenter.default.post(
+            name: .configDidChange, object: nil, userInfo: [ConfigChange.userInfoKey: ConfigChange.sshHosts])
+        let drained = expectation(description: "main queue")
+        OperationQueue.main.addOperation { drained.fulfill() }
+        wait(for: [drained], timeout: 2)
+    }
+
+    func test_removingTheSelectedHost_landsOnTheNextHostBelow() throws {
+        let c = makeWindow(hosts: ["a", "b", "c"])
+        try click(row("b", in: c))
+
+        configure(hosts: ["a", "c"])
+
+        XCTAssertEqual(selected(c), "c")
+        XCTAssertEqual(c.window.title, "c")
+    }
+
+    func test_removingTheLastSelectedHost_landsOnTheHostAbove_skippingOfflineOnes() throws {
+        let c = makeWindow(hosts: ["a", "b", "c", "d"], offline: ["b", "d"])
+        try click(row("c", in: c))
+
+        configure(hosts: ["a", "b", "d"])
+
+        XCTAssertEqual(selected(c), "a")
+    }
+
+    func test_removingTheOnlyHost_landsOnTheFirstWorkspace() throws {
+        let c = makeWindow(hosts: ["devbox"])
+        let workspace = c.activeWorkspaceIDForTesting
+        try click(row("devbox", in: c))
+
+        configure(hosts: [])
+
+        XCTAssertNil(selected(c))
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, workspace)
+        XCTAssertNotNil(c.activeTabIDForTesting)
+    }
+
+    func test_removingTheSelectedHost_fromSettings_leavesSettingsOpen() throws {
+        let c = makeWindow(hosts: ["a", "b"])
+        try click(row("a", in: c))
+        c.handle(.openSettings)
+        XCTAssertTrue(c.isModalOverlayOpen)
+        let focused = c.window.firstResponder
+
+        configure(hosts: ["b"])
+
+        XCTAssertEqual(selected(c), "b")
+        XCTAssertTrue(c.isModalOverlayOpen)
+        XCTAssertTrue(c.window.firstResponder === focused, "Settings keeps the keyboard")
+    }
+
+    func test_removingAnotherHost_keepsTheSelection() throws {
+        let c = makeWindow(hosts: ["a", "b"])
+        try click(row("a", in: c))
+
+        configure(hosts: ["a"])
+
+        XCTAssertEqual(selected(c), "a")
+    }
 }
