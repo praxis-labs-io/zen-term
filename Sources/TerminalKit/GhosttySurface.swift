@@ -471,8 +471,8 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     }
 
     public func text(lastLines count: Int) -> String? {
-        guard surfacePtr != nil, count > 0 else { return nil }
-        var lines = hostView.readScreenText().components(separatedBy: "\n")
+        guard count > 0, let screen = hostView.readScreenText() else { return nil }
+        var lines = screen.components(separatedBy: "\n")
         while let last = lines.last, last.allSatisfy(\.isWhitespace) { lines.removeLast() }
         return lines.suffix(count).joined(separator: "\n")
     }

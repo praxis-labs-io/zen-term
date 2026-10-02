@@ -66,13 +66,13 @@ extension GhosttyHostView {
         if let cache = accessibilityContentsCache, now - cache.fetchedAt < .milliseconds(500) {
             return cache.value
         }
-        let contents = readScreenText()
+        let contents = readScreenText() ?? ""
         accessibilityContentsCache = (contents, now)
         return contents
     }
 
-    func readScreenText() -> String {
-        guard let surfacePtr else { return "" }
+    func readScreenText() -> String? {
+        guard let surfacePtr else { return nil }
         var text = ghostty_text_s()
         let wholeScreen = ghostty_selection_s(
             top_left: ghostty_point_s(
@@ -80,9 +80,9 @@ extension GhosttyHostView {
             bottom_right: ghostty_point_s(
                 tag: GHOSTTY_POINT_SCREEN, coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT, x: 0, y: 0),
             rectangle: false)
-        guard ghostty_surface_read_text(surfacePtr, wholeScreen, &text) else { return "" }
+        guard ghostty_surface_read_text(surfacePtr, wholeScreen, &text) else { return nil }
         defer { ghostty_surface_free_text(surfacePtr, &text) }
-        guard let ptr = text.text else { return "" }
+        guard let ptr = text.text else { return nil }
         return String(cString: ptr)
     }
 }

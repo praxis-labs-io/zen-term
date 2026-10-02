@@ -305,6 +305,19 @@ final class ControlPaneTests: WindowTestCase {
         XCTAssertEqual(try error(send(.paneRead, ControlArgs(lines: 0), from: token(of: target))).code, .badRequest)
     }
 
+    func test_aScreenThatCannotBeReadAnswersFailedRatherThanEmptyText() throws {
+        _ = makeWindow()
+        let target = try XCTUnwrap(spawned.first)
+        target.screenIsUnreadable = true
+
+        let lines = try error(send(.paneRead, ControlArgs(lines: 100), from: token(of: target)))
+        XCTAssertEqual(lines.code, .failed)
+        XCTAssertEqual(lines.message, "Pane \(try token(of: target)) could not be read.")
+
+        target.cellMetrics = nil
+        XCTAssertEqual(try error(send(.paneRead, from: token(of: target))).code, .failed)
+    }
+
     func test_withoutACallerAPaneCommandActsOnTheKeyWindowsFocusedPane() throws {
         _ = makeWindow()
         let focused = try XCTUnwrap(spawned.first)

@@ -129,8 +129,10 @@ final class RecordingSurface: NSObject, TerminalSurface {
     }
 
     var scrollback: [String] = []
+    var screenIsUnreadable = false
 
     func text(lastLines count: Int) -> String? {
+        guard !screenIsUnreadable else { return nil }
         var lines = scrollback + rows
         while let last = lines.last, last.isEmpty { lines.removeLast() }
         return lines.suffix(count).joined(separator: "\n")

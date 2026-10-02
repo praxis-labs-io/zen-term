@@ -319,6 +319,7 @@ public protocol TerminalSurface: AnyObject {
     func text(in range: TerminalViewportRange) -> String?
 
     /// The last `count` lines of the screen and its scrollback, soft wraps joined and trailing blank lines dropped.
+    /// Nil when the screen cannot be read.
     func text(lastLines count: Int) -> String?
 
     /// Runs or re-runs a scrollback search. An empty needle stops the engine only.
