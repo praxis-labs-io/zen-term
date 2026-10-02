@@ -241,7 +241,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wc.revealHostInAnotherWindow = { [weak self, weak wc] host in
             guard let other = self?.windows.first(where: { $0 !== wc && $0.holdsHost(host) }) else { return false }
             Self.bringForward(other)
-            other.activateHost(host)
+            other.activate(host)
             return true
         }
         if centered { wc.window.center() }

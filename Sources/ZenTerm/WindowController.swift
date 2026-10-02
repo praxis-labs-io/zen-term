@@ -1117,9 +1117,8 @@ final class WindowController: NSObject {
         renderAttention()
     }
 
-    private func activate(_ host: SSHHostID) {
-        if let connected = workspaces.first(where: { $0.host == host }) { return activate(connected.id) }
-        if revealHostInAnotherWindow?(host) == true { return }
+    func activate(_ host: SSHHostID) {
+        if revealOpenHost(host) { return }
         guard host != selection.host else { restoreFocusToActive(); return }
         Log.info("ssh host selected", category: .workspace)
         closeModal()
@@ -1298,9 +1297,17 @@ final class WindowController: NSObject {
         renderAttention()
     }
 
+    // One live session per host across the app: an open one is jumped to, never opened a second time.
+    private func revealOpenHost(_ host: SSHHostID) -> Bool {
+        if let open = workspaces.first(where: { $0.host == host }) {
+            activate(open.id)
+            return true
+        }
+        return revealHostInAnotherWindow?(host) == true
+    }
+
     private func connect(_ host: SSHHostID) {
-        guard selection.host == host, activeWorkspace == nil else { return }
-        if revealHostInAnotherWindow?(host) == true { return }
+        guard selection.host == host, activeWorkspace == nil, !revealOpenHost(host) else { return }
         Log.info("ssh host connecting", category: .workspace)
         let connection = SSHConnection(host: host)
         connection.onConnectedChange = { SSHHostStatusCenter.shared.setConnected($0, host: host) }
@@ -1334,8 +1341,6 @@ final class WindowController: NSObject {
     }
 
     func holdsHost(_ host: SSHHostID) -> Bool { workspaces.contains { $0.host == host } }
-
-    func activateHost(_ host: SSHHostID) { activate(host) }
 
     private func presentModal(_ overlay: ModalOverlay, kind: ModalKind) {
         if let activeWorkspace, activeWorkspace.activeController == nil { return }

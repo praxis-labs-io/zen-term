@@ -238,7 +238,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         let hostTabs = c.tabOrderForTesting
         c.activateWorkspaceForTesting(c.workspaceIDsForTesting[0])
 
-        c.activateHost(host)
+        c.activate(host)
 
         XCTAssertEqual(c.tabOrderForTesting, hostTabs)
         XCTAssertNil(c.connectViewForTesting)
