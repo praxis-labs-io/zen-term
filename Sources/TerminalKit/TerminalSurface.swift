@@ -8,6 +8,8 @@ public struct TerminalSurfaceConfig {
     public var fontSize: CGFloat?
     public var theme: TerminalTheme?
     public var behavior: TerminalBehavior?
+    /// The backing scale of the window the surface will mount into. Sizes the grid while it has no window.
+    public var backingScale: CGFloat?
 
     public init(
         command: String? = nil,
@@ -16,7 +18,8 @@ public struct TerminalSurfaceConfig {
         environment: [String: String] = [:],
         fontSize: CGFloat? = nil,
         theme: TerminalTheme? = nil,
-        behavior: TerminalBehavior? = nil
+        behavior: TerminalBehavior? = nil,
+        backingScale: CGFloat? = nil
     ) {
         self.command = command
         self.args = args
@@ -25,6 +28,7 @@ public struct TerminalSurfaceConfig {
         self.fontSize = fontSize
         self.theme = theme
         self.behavior = behavior
+        self.backingScale = backingScale
     }
 }
 
