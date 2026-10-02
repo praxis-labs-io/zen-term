@@ -264,7 +264,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   the workspace level is that call: `state(tabs:)` takes the ids and the store learns
   nothing about workspaces.
   It reports each real change once, from the outermost call, and the window renders from
-  that report, so no mutating path chooses its own render.
+  that report, so no mutating path chooses its own render. A window float asks from the
+  active tab; over a Connect screen, which has none, its card files under
+  `untabbedCardSlot`, a `TabID` never minted.
 - **`seen` means on screen, not focused.** A pane is on screen while its tab is active in
   the active workspace, a drawer while that holds and it is open, a float while it is
   shown. Coming on screen, or the window becoming key over it,
@@ -448,7 +450,8 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
 - **The modal gate** in `WindowController.handle(_:)` runs confirm, modal card, tool
   float, then dispatch. A window's `WindowSelection` is a workspace or an SSH host's Connect
   screen (`HostConnectView`); that screen has no tab, so dispatch drops any chord that is not
-  `worksWithoutTab`, except ⌘T, which connects, and a card stays open for a chord it would drop. App-global chords bypass it in `AppDelegate.route`; a palette pick
+  `worksWithoutTab`, except ⌘T, which connects, and a float toggle, which opens or closes only
+  a float the dock shows there and is silent otherwise, and a card stays open for a chord it would drop. App-global chords bypass it in `AppDelegate.route`; a palette pick
   of one returns there through `onAppGlobalCommand`. The sidebar toggle passes through an
   open card, which stays open. A card is offered every other chord first
   (`ModalOverlay.handle`, how the workspace form takes the tab shortcuts) and swallows

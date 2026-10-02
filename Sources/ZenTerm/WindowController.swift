@@ -141,7 +141,7 @@ final class WindowController: NSObject {
                 self?.endModes()
                 self?.activeController?.yieldFocusToFloat()
             },
-            restoreFocus: { [weak self] in self?.activeController?.restoreUnifiedFocus() },
+            restoreFocus: { [weak self] in self?.focusActive() },
             currentTabID: { [weak self] in self?.activeWorkspace?.activeID },
             startShell: { [weak self] surface, id, launch in
                 Self.surfaceStart(over: self?.activeWorkspace?.connection)(surface, id, launch)
@@ -1332,8 +1332,13 @@ final class WindowController: NSObject {
     }
 
     private func toggleToolFloat(_ id: String, in host: SSHHostID) {
-        guard showsToolFloat(id), let surface = floats.surfaceID(id) else { return toastFloatsStayLocal(on: host) }
+        if !toggleRunningFloat(id) { toastFloatsStayLocal(on: host) }
+    }
+
+    private func toggleRunningFloat(_ id: String) -> Bool {
+        guard showsToolFloat(id), let surface = floats.surfaceID(id) else { return false }
         if floats.activeID == id { floats.close() } else { floats.reveal(surface) }
+        return true
     }
 
     private func toastFloatsStayLocal(on host: SSHHostID) {
@@ -2255,6 +2260,11 @@ final class WindowController: NSObject {
         if case .host(let host) = selection {
             if chord == .newTab { return connect(host) }
             if chord == .navRight, sidebar.hasFocus { return restoreFocusToActive() }
+            if case .toggleToolFloat(let id) = chord {
+                pendingModal = nil
+                _ = toggleRunningFloat(id)
+                return
+            }
         }
         guard activeWorkspace != nil || chord.worksWithoutTab else { return }
         switch chord {
@@ -2670,7 +2680,8 @@ final class WindowController: NSObject {
         surface: SurfaceID?, _ notification: TerminalNotification, from spec: ToolFloat, owner: TabID?
     ) {
         DispatchQueue.main.async { [weak self] in
-            guard let self, let activeID = self.activeWorkspace?.activeID else { return }
+            guard let self else { return }
+            let activeID = self.activeWorkspace?.activeID ?? Self.untabbedCardSlot
             let message = notification.body.isEmpty ? notification.title : notification.body
             let target = owner.flatMap { self.workspace(of: $0) == nil ? nil : $0 } ?? activeID
             let address = self.floatCardAddress(spec, owner: owner, target: target)
@@ -2950,8 +2961,12 @@ final class WindowController: NSObject {
 
     // A window float belongs to no tab, so it asks from whichever tab is showing it.
     private func tab(of surface: SurfaceID) -> TabID? {
-        attention.tab(of: surface) ?? (floats.float(of: surface) != nil ? activeWorkspace?.activeID : nil)
+        attention.tab(of: surface)
+            ?? (floats.float(of: surface) != nil ? activeWorkspace?.activeID ?? Self.untabbedCardSlot : nil)
     }
+
+    // Never minted: a float asking over a Connect screen has no tab, and its card still needs a key.
+    private static let untabbedCardSlot = TabID(0)
 
     // A shell reports a signal death as 128+n. SIGINT and SIGTERM are someone stopping the agent, not it failing.
     private static let deliberateStopCodes: Set<Int> = [130, 143]
