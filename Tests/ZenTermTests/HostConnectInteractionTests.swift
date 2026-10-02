@@ -28,6 +28,8 @@ final class HostConnectInteractionTests: WindowTestCase {
         WindowController.isPresent = { _ in true }
         var config = GeneralConfig.builtIn
         config.sshHosts = [host.name]
+        config.floats = [Self.pi]
+        config.ai = "pi"
         GeneralConfig.setCurrentForTesting(config)
         fake = FakeSSHWatchers()
         SSHConnection.watchersOverrideForTesting = fake.watchers
@@ -49,6 +51,11 @@ final class HostConnectInteractionTests: WindowTestCase {
         try super.tearDownWithError()
     }
 
+    private static let pi = ToolFloat(
+        id: "pi", order: 0, title: "pi", icon: ToolFloatParser.defaultIcon, command: "pi", dir: nil,
+        widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false, persist: .window,
+        toggle: Chord(command: true, shift: true, key: "b"))
+
     private func makeWindow() -> WindowController {
         let c = WindowController(contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
         controllers.append(c)
@@ -67,7 +74,12 @@ final class HostConnectInteractionTests: WindowTestCase {
     }
 
     private func connected() throws -> (WindowController, login: RecordingSurface) {
-        let c = onConnectScreen()
+        try connect(onConnectScreen())
+    }
+
+    private func connect(_ c: WindowController) throws -> (WindowController, login: RecordingSurface) {
+        c.selectHostForTesting(host)
+        spawned = []
         c.handle(.newTab)
         fake.ready?()
         c.window.contentView?.layoutSubtreeIfNeeded()
@@ -99,6 +111,24 @@ final class HostConnectInteractionTests: WindowTestCase {
             descendants(of: content).compactMap { $0 as? AppButton }.first { $0.title == title })
         button.performClick(nil)
         drainMainQueue()
+    }
+
+    private func piRunningHiddenInAConnectedHost() throws -> (WindowController, pi: RecordingSurface) {
+        let c = makeWindow()
+        c.handle(.toggleToolFloat("pi"))
+        let pi = try XCTUnwrap(spawned.first { $0.lastConfig?.args == ["-l", "-i", "-c", "pi"] })
+        c.handle(.toggleToolFloat("pi"))
+        _ = try connect(c)
+        fake.connect()
+        return (c, pi)
+    }
+
+    private func dockButton(_ label: String, in c: WindowController) -> IconButton? {
+        descendants(of: c.dockForTesting).compactMap { $0 as? IconButton }.first { $0.accessibilityLabel() == label }
+    }
+
+    private func dockShows(_ label: String, in c: WindowController) -> Bool {
+        c.dockForTesting.visibleLayoutForTesting.contains(label)
     }
 
     private func drainMainQueue() {
@@ -248,10 +278,66 @@ final class HostConnectInteractionTests: WindowTestCase {
         let (c, _) = try connected()
         fake.connect()
 
-        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        c.handle(.toggleToolFloat("pi"))
 
         XCTAssertFalse(c.floatsForTesting.isOpen)
         XCTAssertTrue(showsToast("Tool floats run on this Mac, not on devbox.", in: c))
+    }
+
+    func test_aConnectedHost_hidesYourToolFloatButtons_andALocalWorkspaceShowsThem() throws {
+        let (c, _) = try connected()
+        fake.connect()
+
+        XCTAssertFalse(dockShows("pi", in: c))
+        XCTAssertNotEqual(c.dockForTesting.visibleLayoutForTesting.last, "│")
+
+        c.activateWorkspaceForTesting(c.workspaceIDsForTesting[0])
+
+        XCTAssertTrue(dockShows("pi", in: c))
+    }
+
+    func test_aFloatThatNeedsYou_keepsItsButtonInAHost_andTheButtonOpensIt() throws {
+        let (c, pi) = try piRunningHiddenInAConnectedHost()
+        XCTAssertFalse(dockShows("pi", in: c))
+
+        pi.delegate?.surface(pi, didPostNotification: TerminalNotification(title: "pi", body: "needs input"))
+        drainMainQueue()
+
+        XCTAssertTrue(dockShows("pi", in: c))
+        XCTAssertEqual(c.dockForTesting.dottedToolFloatIDsForTesting, ["pi"])
+        let spawnedBefore = spawned.count
+        _ = try XCTUnwrap(dockButton("pi", in: c)).accessibilityPerformPress()
+
+        XCTAssertEqual(c.floatsForTesting.activeID, "pi")
+        XCTAssertTrue(c.floatsForTesting.shownSurface === pi, "the running float opens, nothing respawns")
+        XCTAssertEqual(spawned.count, spawnedBefore)
+        XCTAssertTrue(dockShows("pi", in: c))
+
+        c.handle(.toggleToolFloat("pi"))
+
+        XCTAssertFalse(c.floatsForTesting.isOpen)
+        XCTAssertFalse(dockShows("pi", in: c), "once answered and closed, it leaves the host's dock")
+    }
+
+    func test_aFloatThatIsOnlyWorking_staysHiddenInAHost() throws {
+        let (c, pi) = try piRunningHiddenInAConnectedHost()
+
+        pi.delegate?.surface(pi, progressDidChange: TerminalProgress(state: .indeterminate, fraction: nil))
+        drainMainQueue()
+
+        XCTAssertFalse(dockShows("pi", in: c))
+    }
+
+    func test_aFloatThatFinished_keepsItsButtonInAHost() throws {
+        var config = GeneralConfig.current
+        config.ai = nil
+        GeneralConfig.setCurrentForTesting(config)
+        let (c, pi) = try piRunningHiddenInAConnectedHost()
+
+        pi.delegate?.surface(pi, didPostNotification: TerminalNotification(title: "pi", body: "done"))
+        drainMainQueue()
+
+        XCTAssertTrue(dockShows("pi", in: c))
     }
 
     func test_theCollapsedLead_namesTheHost() {

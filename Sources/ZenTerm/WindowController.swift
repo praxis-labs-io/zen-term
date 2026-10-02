@@ -1327,6 +1327,11 @@ final class WindowController: NSObject {
         return width <= ToastView.messageMaxWidth ? line : "Couldn't connect to\n\(host.name)."
     }
 
+    private func toggleToolFloat(_ id: String, in host: SSHHostID) {
+        guard showsToolFloat(id), let surface = floats.surfaceID(id) else { return toastFloatsStayLocal(on: host) }
+        if floats.activeID == id { floats.close() } else { floats.reveal(surface) }
+    }
+
     private func toastFloatsStayLocal(on host: SSHHostID) {
         toasts.show(
             ToastContent(
@@ -2330,7 +2335,7 @@ final class WindowController: NSObject {
             }
         case .toggleToolFloat(let id):
             pendingModal = nil
-            if let host = activeWorkspace?.host { return toastFloatsStayLocal(on: host) }
+            if let host = activeWorkspace?.host { return toggleToolFloat(id, in: host) }
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
         case .createWorktree:
@@ -3602,11 +3607,20 @@ final class WindowController: NSObject {
             tab: activeWorkspace?.activeID,
             isLiveInBackground: floats.isLiveInBackground, isFloatBusy: floats.isBusy,
             drawerAttention: { [weak self] edge in self?.drawerAttention(edge) ?? .idle },
-            floatAttention: { [weak self] id in
-                self?.floats.surfaceID(id).map { self?.attention.state(of: $0) ?? .idle } ?? .idle
-            })
+            floatAttention: { [weak self] id in self?.floatAttention(id) ?? .idle },
+            showsToolFloat: { [weak self] id in self?.showsToolFloat(id) ?? true })
         lastBusyDots = busyDots()
         sidebar.setOpenModal(palette: modal?.kind == .commandPalette, settings: modal?.kind == .settings)
+    }
+
+    private func floatAttention(_ id: String) -> SurfaceAttention {
+        floats.surfaceID(id).map(attention.state(of:)) ?? .idle
+    }
+
+    // A host's floats run on this Mac, so one shows there only while it is open or needs you.
+    private func showsToolFloat(_ id: String) -> Bool {
+        guard activeWorkspace?.host != nil else { return true }
+        return floats.activeID == id || floatAttention(id) >= .completed
     }
 
     private func drawerAttention(_ edge: DrawerEdge) -> SurfaceAttention {
