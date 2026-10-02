@@ -246,6 +246,12 @@ final class SidebarView: NSView {
         if removedFocusedRow { onLeave?() }
     }
 
+    // Only ⌘⌃1…9 exist, so a row numbered past nine has no shortcut to show.
+    private static func selectShortcut(_ number: Int?) -> String? {
+        guard let number, number <= 9 else { return nil }
+        return CommandCatalog.spec(for: .selectWorkspace(number)).shortcut
+    }
+
     private static func hostVariant(_ item: SidebarHostItem) -> SettingsNavRow.Variant {
         item.status == .offline ? .faint : .standard
     }
@@ -266,8 +272,7 @@ final class SidebarView: NSView {
             [weak self] in self?.onActivateHost?(id)
         }
         row.tooltip = TooltipHost(label: "Open host") { [weak self] in
-            guard let number = self?.hostNumbers[host], number <= 9 else { return nil }
-            return CommandCatalog.spec(for: .selectWorkspace(number)).shortcut
+            Self.selectShortcut(self?.hostNumbers[host])
         }
         row.onArrowUp = { [weak self] in self?.moveFocus(-1) }
         row.onArrowDown = { [weak self] in self?.moveFocus(1) }
@@ -405,8 +410,7 @@ final class SidebarView: NSView {
         }
         if case .workspace = id {
             row.tooltip = TooltipHost(label: "Switch workspace") { [weak self] in
-                guard let number = self?.numbers[id], number <= 9 else { return nil }
-                return CommandCatalog.spec(for: .selectWorkspace(number)).shortcut
+                Self.selectShortcut(self?.numbers[id])
             }
         }
         row.onArrowUp = { [weak self] in self?.moveFocus(-1) }
