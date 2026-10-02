@@ -32,13 +32,25 @@ enum SSHLaunch {
     }
 
     static func arguments(host: SSHHostID, controlPath: URL) -> [String] {
-        let path = controlPath.path.replacingOccurrences(of: "%", with: "%%")
-        return [
+        [
             "-o", "ControlMaster=auto",
-            "-o", "ControlPath=\"\(path)\"",
+            "-o", controlPathOption(controlPath),
             "-o", "ControlPersist=\(controlPersistSeconds)",
             "--", host.name,
         ]
+    }
+
+    static func checkArguments(host: SSHHostID, controlPath: URL) -> [String] {
+        ["-o", controlPathOption(controlPath), "-O", "check", "--", host.name]
+    }
+
+    static func masterPID(in output: String) -> pid_t? {
+        guard let start = output.range(of: "pid=")?.upperBound else { return nil }
+        return pid_t(output[start...].prefix(while: \.isNumber))
+    }
+
+    private static func controlPathOption(_ controlPath: URL) -> String {
+        "ControlPath=\"\(controlPath.path.replacingOccurrences(of: "%", with: "%%"))\""
     }
 
     static func config(host: SSHHostID, controlPath: URL, env: [String: String] = [:]) -> TerminalSurfaceConfig {

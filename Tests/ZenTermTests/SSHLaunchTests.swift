@@ -82,4 +82,16 @@ final class SSHLaunchTests: XCTestCase {
         XCTAssertEqual(path.deletingLastPathComponent().path, fallback.path)
         XCTAssertLessThanOrEqual(path.path.utf8.count, SSHLaunch.controlPathBudget)
     }
+
+    func test_theCheckAsksTheMasterAtTheSamePath() {
+        XCTAssertEqual(
+            SSHLaunch.checkArguments(host: host, controlPath: URL(fileURLWithPath: "/tmp/a b/1-ab")),
+            ["-o", "ControlPath=\"/tmp/a b/1-ab\"", "-O", "check", "--", "devbox"])
+    }
+
+    func test_theMastersPidIsReadFromTheCheck() {
+        XCTAssertEqual(SSHLaunch.masterPID(in: "Master running (pid=4242)\r"), 4242)
+        XCTAssertNil(SSHLaunch.masterPID(in: "Control socket connect(/tmp/x): No such file or directory"))
+        XCTAssertNil(SSHLaunch.masterPID(in: "pid=)"))
+    }
 }
