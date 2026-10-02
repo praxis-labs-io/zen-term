@@ -189,8 +189,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func keyController() -> WindowController? {
-        guard let key = NSApp.keyWindow else { return windows.first }
+        guard let key = NSApp.keyWindow else { return Self.frontmost(of: windows, in: NSApp.orderedWindows) }
         return windows.first { $0.window === key }
+    }
+
+    static func frontmost(of controllers: [WindowController], in ordered: [NSWindow]) -> WindowController? {
+        ordered.lazy.compactMap { window in controllers.first { $0.window === window } }.first ?? controllers.first
     }
 
     private func reportBackendShadow() {

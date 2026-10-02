@@ -101,7 +101,8 @@ Requests are decoded off the main thread, applied on it, and written back off it
 | Window | `w<window>`                       |                                               |
 
 A command with no target acts on the caller: `caller.pane`, its tab, its workspace.
-Without a caller it acts on the key window's active workspace and tab, and its focused pane. A `caller.pane`
+Without a caller it acts on the active workspace, tab and focused pane of the key window,
+or of the frontmost ZenTerm window while the app is in the background. A `caller.pane`
 that names no pane is `not_found`.
 
 Without `focus`, no command moves what is on screen: a new tab joins its workspace's tab
