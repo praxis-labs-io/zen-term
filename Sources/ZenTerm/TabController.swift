@@ -251,7 +251,7 @@ final class TabController: NSObject {
         initialCWD: URL?, initialCommand: String? = nil, env: [String: String] = [:],
         isToolFloatOpen: @escaping () -> Bool = { false },
         makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
-        startSurface: @escaping SurfaceStart = { surface, _, config in surface.start(config) }
+        startSurface: @escaping SurfaceStart = startSurfaceNow
     ) {
         workspaceEnv = env
         self.startSurface = startSurface

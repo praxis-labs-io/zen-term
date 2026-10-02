@@ -813,7 +813,7 @@ final class WindowController: NSObject {
                 { [weak connection] surface, id, launch in
                     connection?.start(surface, id: id, env: launch.environment)
                 }
-            } ?? { surface, _, launch in surface.start(launch) })
+            } ?? startSurfaceNow)
         c.rightDrawerCommand = tab?.right
         c.bottomDrawerCommand = tab?.bottom
         c.pinnedTitle = tab?.name
