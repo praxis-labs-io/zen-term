@@ -71,7 +71,7 @@ extension GhosttyHostView {
         return contents
     }
 
-    private func readScreenText() -> String {
+    func readScreenText() -> String {
         guard let surfacePtr else { return "" }
         var text = ghostty_text_s()
         let wholeScreen = ghostty_selection_s(

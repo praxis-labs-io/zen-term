@@ -412,6 +412,10 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         text.withCString { ghostty_surface_text(surfacePtr, $0, byteCount) }
     }
 
+    public func submit() {
+        performBindingAction("text:\\r")
+    }
+
     public func copySelection() -> String? {
         guard let surfacePtr, ghostty_surface_has_selection(surfacePtr) else { return nil }
         var text = ghostty_text_s()
@@ -464,6 +468,13 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     public func text(in range: TerminalViewportRange) -> String? {
         guard let metrics = cellMetrics else { return nil }
         return text(in: range, metrics: metrics)
+    }
+
+    public func text(lastLines count: Int) -> String? {
+        guard surfacePtr != nil, count > 0 else { return nil }
+        var lines = hostView.readScreenText().components(separatedBy: "\n")
+        while let last = lines.last, last.allSatisfy(\.isWhitespace) { lines.removeLast() }
+        return lines.suffix(count).joined(separator: "\n")
     }
 
     private func text(in range: TerminalViewportRange, metrics: TerminalCellMetrics) -> String? {

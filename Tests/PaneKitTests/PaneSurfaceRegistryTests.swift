@@ -14,8 +14,10 @@ private final class FakeSurface: NSObject, TerminalSurface {
     func focus() {}
     func terminate() { terminated = true }
     func paste(_ text: String) {}
+    func submit() {}
     func copySelection() -> String? { nil }
     func scroll(_ command: TerminalScroll) {}
+    func text(lastLines count: Int) -> String? { nil }
 }
 
 final class PaneSurfaceRegistryTests: XCTestCase {
