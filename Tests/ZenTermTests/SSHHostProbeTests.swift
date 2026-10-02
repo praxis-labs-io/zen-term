@@ -117,7 +117,7 @@ final class SSHHostProbeTests: XCTestCase {
         XCTAssertEqual(status("inner"), .online)
     }
 
-    func test_noRoundRuns_whileTheNetworkIsDown() {
+    func test_noHostIsConnectedTo_whileTheNetworkIsDown() {
         probe.setHosts(["devbox"])
         waitUntil(answers.askCount("devbox") == 1, "the first round")
         probe.networkChanged(isUp: false)
@@ -209,5 +209,16 @@ final class SSHHostProbeTests: XCTestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(0.5))
         XCTAssertEqual(answers.askCount("devbox"), 1, "nothing is asked while the interface comes back")
         waitUntil(answers.askCount("devbox") == 2, "the settled round")
+    }
+
+    func test_aJumpHostResolvedAfterTheNetworkDrops_stillReadsOnline() {
+        answers.queue([.proxied], for: "inner")
+        probe.setHosts(["inner"])
+
+        probe.networkChanged(isUp: false)
+
+        waitUntil(answers.resolveCount("inner") == 2, "the host to be resolved again")
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertEqual(status("inner"), .online)
     }
 }

@@ -155,15 +155,16 @@ final class SSHHostProbe {
         self.timer = timer
     }
 
+    // Without a network only `ssh -G` runs, so a jump host still learns it is one.
     private func probe(_ targets: [String]) {
-        guard isNetworkUp else { return }
+        let isNetworkUp = self.isNetworkUp
         for host in targets where !inFlight.contains(host) && center.status(of: SSHHostID(name: host)) != .connected {
             inFlight.insert(host)
             let generation = self.generation
             let cached = endpoints[host]
             Self.queue.addOperation { [weak self] in
                 let endpoint = cached ?? Self.resolve(host)
-                let isReachable = endpoint.map(Self.isReachable) ?? false
+                let isReachable = endpoint.map { $0 == .proxied || (isNetworkUp && Self.isReachable($0)) } ?? false
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated {
                         self?.land(endpoint, isReachable: isReachable, for: host, generation: generation)
