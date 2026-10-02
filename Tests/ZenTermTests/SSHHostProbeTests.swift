@@ -3,25 +3,44 @@ import XCTest
 @testable import ZenTerm
 
 final class SSHHostProbeTests: XCTestCase {
+    enum Answer {
+        case online
+        case offline
+        case proxied
+    }
+
     private final class Answers: @unchecked Sendable {
         private let lock = NSLock()
-        private var queued: [String: [SSHHostProbe.Answer]] = [:]
+        private var queued: [String: [Answer]] = [:]
         private var asked: [String] = []
+        private var resolved: [String] = []
 
-        func queue(_ answers: [SSHHostProbe.Answer], for host: String) {
+        func queue(_ answers: [Answer], for host: String) {
             lock.withLock { queued[host] = answers }
         }
 
-        func answer(_ host: String) -> SSHHostProbe.Answer {
+        func resolve(_ host: String) -> SSHHostResolver.Endpoint? {
+            lock.withLock {
+                resolved.append(host)
+                if queued[host]?.first == .proxied {
+                    asked.append(host)
+                    return .proxied
+                }
+                return .direct(hostname: host, port: 22)
+            }
+        }
+
+        func banner(_ host: String) -> Bool {
             lock.withLock {
                 asked.append(host)
                 let answers = queued[host] ?? [.online]
                 if answers.count > 1 { queued[host] = Array(answers.dropFirst()) }
-                return answers[0]
+                return answers[0] == .online
             }
         }
 
         func askCount(_ host: String) -> Int { lock.withLock { asked.filter { $0 == host }.count } }
+        func resolveCount(_ host: String) -> Int { lock.withLock { resolved.filter { $0 == host }.count } }
     }
 
     private let answers = Answers()
@@ -31,12 +50,14 @@ final class SSHHostProbeTests: XCTestCase {
     override func setUp() {
         super.setUp()
         let answers = self.answers
-        SSHHostProbe.answerOverrideForTesting = { answers.answer($0) }
+        SSHHostProbe.resolveOverrideForTesting = { answers.resolve($0) }
+        SSHHostProbe.bannerOverrideForTesting = { host, _ in answers.banner(host) }
         probe = SSHHostProbe(center: center)
     }
 
     override func tearDown() {
-        SSHHostProbe.answerOverrideForTesting = nil
+        SSHHostProbe.resolveOverrideForTesting = nil
+        SSHHostProbe.bannerOverrideForTesting = nil
         probe = nil
         super.tearDown()
     }
@@ -144,5 +165,38 @@ final class SSHHostProbeTests: XCTestCase {
 
         RunLoop.current.run(until: Date().addingTimeInterval(1.3))
         XCTAssertEqual(answers.askCount("devbox"), 1)
+    }
+
+    func test_aSecondRound_reusesTheResolvedEndpoint() {
+        probe.setHosts(["devbox"])
+        waitUntil(answers.askCount("devbox") == 1, "the first round")
+
+        probe.probeAll()
+
+        waitUntil(answers.askCount("devbox") == 2, "the second round")
+        XCTAssertEqual(answers.resolveCount("devbox"), 1)
+    }
+
+    func test_aNetworkChange_resolvesAgain() {
+        probe.setHosts(["devbox"])
+        waitUntil(answers.askCount("devbox") == 1, "the first round")
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+
+        probe.networkChanged(isUp: true)
+
+        waitUntil(answers.askCount("devbox") == 2, "the settled round")
+        XCTAssertEqual(answers.resolveCount("devbox"), 2)
+    }
+
+    func test_aHostsChange_resolvesAgain() {
+        probe.setHosts(["devbox"])
+        waitUntil(answers.askCount("devbox") == 1, "the first round")
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+
+        probe.setHosts(["devbox", "other"])
+        probe.probeAll()
+
+        waitUntil(answers.askCount("devbox") == 2, "the next round")
+        XCTAssertEqual(answers.resolveCount("devbox"), 2)
     }
 }

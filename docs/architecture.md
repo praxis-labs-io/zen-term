@@ -558,8 +558,9 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   `ssh -G` resolves each one. `ssh-hosts` holds which are on, plus typed hosts, and the
   sidebar's SSH rows read Offline, Online or Connected.
 - **`SSHHostProbe` keeps each host's reachability in `SSHHostStatusCenter`, and never logs in.**
-  Off-main, at most four at a time, it resolves the host with `ssh -G` and reads the first
-  bytes of a TCP connection to its port: an `SSH-` banner is Online, anything else Offline. A
+  Off-main, at most four at a time, it resolves the host with `ssh -G`, once until `ssh-hosts`
+  or the network changes because `Match exec` can prompt, and reads the first bytes of a TCP
+  connection to its port: an `SSH-` banner is Online, anything else Offline. A
   `ProxyJump` or `ProxyCommand` host reads Online unprobed. It runs every minute while the app
   is active, and on activation, wake and network change (`NWPathMonitor`); an answer from before
   a network change is dropped and asked again. A host reads Online until its first answer, and
