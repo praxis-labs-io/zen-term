@@ -1335,8 +1335,13 @@ final class WindowController: NSObject {
         if !toggleRunningFloat(id) { toastFloatsStayLocal(on: host) }
     }
 
+    private func togglesRunningFloat(_ chord: KeyInterceptor.ReservedChord) -> Bool {
+        guard case .toggleToolFloat(let id) = chord else { return false }
+        return showsToolFloat(id) && floats.surfaceID(id) != nil
+    }
+
     private func toggleRunningFloat(_ id: String) -> Bool {
-        guard showsToolFloat(id), let surface = floats.surfaceID(id) else { return false }
+        guard togglesRunningFloat(.toggleToolFloat(id)), let surface = floats.surfaceID(id) else { return false }
         if floats.activeID == id { floats.close() } else { floats.reveal(surface) }
         return true
     }
@@ -2217,7 +2222,7 @@ final class WindowController: NSObject {
                 return
             case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue,
                 .newTool:
-                guard activeWorkspace != nil || chord.worksWithoutTab else { return }
+                guard activeWorkspace != nil || chord.worksWithoutTab || togglesRunningFloat(chord) else { return }
                 closingModalKind = modal.kind
                 closeModal()
             default:

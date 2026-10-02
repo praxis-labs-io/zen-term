@@ -124,6 +124,7 @@ final class HostConnectInteractionTests: WindowTestCase {
     }
 
     private func piRunningHiddenOnConnect() throws -> (WindowController, pi: RecordingSurface) {
+        spawned = []
         let c = makeWindow()
         c.handle(.toggleToolFloat("pi"))
         let pi = try XCTUnwrap(spawned.first { $0.lastConfig?.args == ["-l", "-i", "-c", "pi"] })
@@ -536,6 +537,36 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         XCTAssertTrue(c.floatsForTesting.shownSurface === pi)
         XCTAssertEqual(c.selectedHostForTesting, host)
+    }
+
+    func test_aFloatThatNeedsYou_opensOverACardOnConnect_byItsShortcutOrItsButton() throws {
+        for card: KeyInterceptor.ReservedChord in [.toggleCommandPalette, .openSettings] {
+            for viaButton in [false, true] {
+                let (c, pi) = try piRunningHiddenOnConnect()
+                ask(pi)
+                c.handle(card)
+                XCTAssertTrue(c.isModalOverlayOpen)
+
+                if viaButton {
+                    _ = try XCTUnwrap(dockButton("pi", in: c)).accessibilityPerformPress()
+                } else {
+                    c.handle(.toggleToolFloat("pi"))
+                }
+
+                XCTAssertFalse(c.isModalOverlayOpen, "\(card), button: \(viaButton)")
+                XCTAssertTrue(c.floatsForTesting.shownSurface === pi, "\(card), button: \(viaButton)")
+            }
+        }
+    }
+
+    func test_anInertFloatShortcutOnConnect_leavesTheCardOpen() throws {
+        let (c, _) = try piRunningHiddenOnConnect()
+        c.handle(.toggleCommandPalette)
+
+        c.handle(.toggleToolFloat("pi"))
+
+        XCTAssertTrue(c.isModalOverlayOpen)
+        XCTAssertFalse(c.floatsForTesting.isOpen)
     }
 
     func test_theCollapsedLead_namesTheHost() {
