@@ -253,10 +253,11 @@ scrollback, a prompt included. Trailing blank lines are dropped.
 indented tree instead. Exit codes: 0 ok, 1 the app answered with an error or didn't
 answer within 10 seconds, 2 usage, 3 no instance or the connection failed.
 
-Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|close` and
+Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|close`,
 `zen tab new|select|rename|close` and `zen pane split|focus|close|send|read`, with
-`--focus` and `--force` for those fields. A
-command that returns something prints it as JSON; the rest print nothing. `zen` sends
+`--focus` and `--force` for those fields. A command that returns something prints it as
+JSON, except `zen pane read`, which prints the text; the rest print nothing.
+`zen pane split` splits to the right unless `--dir down` says otherwise. `zen` sends
 folders as absolute paths, read against its own folder, and refuses a `--cwd` or
 `workspace new` folder that does not exist. A workspace argument is a folder when it
 starts with `/`, `~` or `.`, and a title otherwise. A refusal prints what it would stop,
