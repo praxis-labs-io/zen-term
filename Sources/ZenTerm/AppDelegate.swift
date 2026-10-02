@@ -64,20 +64,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         keys.onReservedChord = { [weak self] chord in self?.route(chord) }
         keys.onKeyToFocus = { [weak self] in self?.keyController()?.answerTypedAgent() }
         keys.passThroughGuard = { [weak self] chord, action in
-            if TextEditingChords.owns(chord, firstResponder: NSApp.keyWindow?.firstResponder) {
-                return true
+            let firstResponder = NSApp.keyWindow?.firstResponder
+            guard let controller = self?.keyController() else {
+                return TextEditingChords.owns(chord, firstResponder: firstResponder)
+                    || PickerChordGuard.shouldPassThrough(
+                        action: action, repoPickerIsOpen: false, sidebarHasFocus: false)
             }
-            let controller = self?.keyController()
-            if PickerChordGuard.shouldPassThrough(
-                action: action, repoPickerIsOpen: controller?.isRepoPickerOpen == true,
-                sidebarHasFocus: controller?.isSidebarFocused == true)
-            {
-                return true
-            }
-            return NavGuard.shouldPassThrough(
-                chord: chord, action: action,
-                focusedPaneIsVim: controller?.focusedPaneIsVim == true,
-                toolFloatIsOpen: controller?.isToolFloatOpen == true)
+            return controller.passesThrough(chord, as: action, firstResponder: firstResponder)
         }
         keys.onModifierChange = { [weak self] event in
             self?.windows.forEach { $0.modifiersDidChange(event) }

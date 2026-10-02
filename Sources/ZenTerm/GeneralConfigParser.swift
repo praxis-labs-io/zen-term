@@ -110,8 +110,6 @@ enum GeneralConfigParser {
                 config.shellArgs = value.split(whereSeparator: \.isWhitespace).map(String.init)
             case "tab-inherit-cwd":
                 if let b = parseBool(value, key, &diagnostics) { config.tabInheritCWD = b }
-            case "editor":
-                if !value.isEmpty { config.editor = value }
             case "ai":
                 if !value.isEmpty { config.ai = value }
             case "agents":

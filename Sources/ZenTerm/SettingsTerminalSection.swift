@@ -64,14 +64,6 @@ final class SettingsTerminalSection: SettingsFormSection {
                 options: ["Home", "Current pane"], read: { $0.tabInheritCWD ? 1 : 0 },
                 token: { LayoutFormat.boolToken($0 == 1) }, notifiesOnReselect: false)
         }
-        addGroup("Workspace") {
-            self.addTextRow(
-                key: "editor", caption: "Editor", blurb: "Editor for the Editor + AI + Shell preset",
-                placeholder: GeneralConfig.defaultEditor, read: { $0.editor ?? "" }, width: 200)
-            self.addTextRow(
-                key: "ai", caption: "AI", blurb: "AI tool for the Editor + AI + Shell preset",
-                placeholder: GeneralConfig.defaultAI, read: { $0.ai ?? "" }, width: 200)
-        }
     }
 
     /// Static so the stored read closure doesn't retain the section.

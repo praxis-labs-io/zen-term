@@ -350,7 +350,7 @@ final class CarryPicker: NSView, ThemeReapplying {
     }
 
     private func summary() -> String {
-        carried.isEmpty ? "Nothing chosen" : "\(carried.count) file\(carried.count == 1 ? "" : "s")"
+        carried.isEmpty ? "Nothing chosen" : "\(carried.count) chosen"
     }
 
     static let captionText = "Files git ignores that a worktree needs to run."

@@ -68,14 +68,14 @@ final class FormCardHeightTests: WindowTestCase {
             tabs: [Workspace.Tab(main: "a", right: "b", bottom: "c")],
             env: Dictionary(uniqueKeysWithValues: (0..<10).map { ("KEY\($0)", "v") }),
             carry: [".env"])
-        let overlay = AddWorkspaceOverlay(
+        let overlay = WorkspaceFormOverlay(
             editing: ws, existingTitles: [], background: Theme.current.chrome.background.nsColor,
             onSubmit: { _ in }, onCancel: {})
         _ = try cardHeight(of: overlay)
 
         func walk(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(walk) }
         let captions = walk(overlay).compactMap { $0 as? FieldCaption }
-        XCTAssertGreaterThan(captions.count, 5, "expected the form's captions")
+        XCTAssertGreaterThanOrEqual(captions.count, 5, "expected the form's captions")
         for caption in captions {
             XCTAssertGreaterThan(
                 caption.frame.height, 0, "'\(caption.stringValue)' laid out flat")

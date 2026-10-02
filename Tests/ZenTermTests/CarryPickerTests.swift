@@ -99,7 +99,7 @@ final class CarryPickerTests: WindowTestCase {
         toggle(list, row: 1)
 
         XCTAssertEqual(picker.carried, [".env"])
-        XCTAssertEqual(list.buttonTitleForTesting, "1 file")
+        XCTAssertEqual(list.buttonTitleForTesting, "1 chosen")
         XCTAssertEqual(list.itemsForTesting.map(\.isChecked), [false, true])
     }
 
