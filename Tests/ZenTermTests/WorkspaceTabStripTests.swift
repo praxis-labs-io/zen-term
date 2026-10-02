@@ -79,6 +79,10 @@ final class WorkspaceTabStripTests: WindowTestCase {
         try key(124, String(UnicodeScalar(NSRightArrowFunctionKey)!), flags: [.function, .numericPad])
     }
 
+    private func leftArrow() throws -> NSEvent {
+        try key(123, String(UnicodeScalar(NSLeftArrowFunctionKey)!), flags: [.function, .numericPad])
+    }
+
     private func returnKey() throws -> NSEvent { try key(36, "\r") }
 
     private func escapeKey() throws -> NSEvent { try key(53, "\u{1b}") }
@@ -88,7 +92,7 @@ final class WorkspaceTabStripTests: WindowTestCase {
     func test_thePlus_addsATab_andSelectsIt() throws {
         mount([Workspace.Tab(main: "nvim")])
 
-        strip.addButtonForTesting.mouseDown(with: try mouse(.leftMouseDown, at: strip.addButtonForTesting))
+        strip.addButtonForTesting.performClick(nil)
 
         XCTAssertEqual(strip.chips.map(\.title), ["nvim", "shell"])
         XCTAssertEqual(strip.chips.map(\.isSelected), [false, true])
@@ -97,7 +101,7 @@ final class WorkspaceTabStripTests: WindowTestCase {
     func test_moreTabsThanFit_scrollTheNewestIntoView_andKeepThePlusInTheStrip() throws {
         mount((0..<12).map { Workspace.Tab(name: "a-long-tab-name-\($0)") })
 
-        strip.addButtonForTesting.mouseDown(with: try mouse(.leftMouseDown, at: strip.addButtonForTesting))
+        strip.addButtonForTesting.performClick(nil)
 
         let newest = try XCTUnwrap(strip.chips.last)
         XCTAssertTrue(newest.isSelected)
@@ -125,7 +129,7 @@ final class WorkspaceTabStripTests: WindowTestCase {
 
     func test_renamingAChipAtTheScrolledEnd_keepsItInView_besideTheHint() throws {
         mount((0..<12).map { Workspace.Tab(name: "a-long-tab-name-\($0)") })
-        strip.addButtonForTesting.mouseDown(with: try mouse(.leftMouseDown, at: strip.addButtonForTesting))
+        strip.addButtonForTesting.performClick(nil)
         let newest = try XCTUnwrap(strip.chips.last)
 
         newest.beginRename()
@@ -133,6 +137,19 @@ final class WorkspaceTabStripTests: WindowTestCase {
 
         XCTAssertTrue(strip.isRenameHintVisibleForTesting)
         XCTAssertTrue(strip.visibleChipsRectForTesting.contains(newest.frame), "the hint must not push it out of view")
+    }
+
+    func test_rightFromTheLastChip_reachesThePlus_andLeftComesBack() throws {
+        mount([Workspace.Tab(main: "nvim"), Workspace.Tab(name: "gate")])
+        form.select(1)
+        rerender()
+        strip.focusSelectedChip()
+
+        strip.chips[1].keyDown(with: try rightArrow())
+        XCTAssertTrue(strip.isAddButtonFocused, "＋ is a keyboard stop after the last chip")
+
+        strip.addButtonForTesting.keyDown(with: try leftArrow())
+        XCTAssertIdentical(window?.firstResponder, strip.chips[1])
     }
 
     func test_onlyTheTabThatOpensFocused_carriesTheDot() {

@@ -196,7 +196,7 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         typeFolder(try makeRealDir(named: "site").path, in: overlay)
         let strip = overlay.tabStripForTesting
 
-        strip.addButtonForTesting.onClick()
+        strip.addButtonForTesting.performClick(nil)
         XCTAssertEqual(strip.chips.map(\.title), ["shell", "shell"])
         XCTAssertTrue(
             KeyboardFocus.isFocused(try XCTUnwrap(overlay.drawingForTesting.region(.main)).field, in: window),

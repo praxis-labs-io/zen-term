@@ -24,16 +24,13 @@ final class WorkspaceTabStrip: NSView {
     private let docView = FlippedView()
     private let edgeFade = EdgeFade(axis: .horizontal)
     private var drag: (index: Int, offset: CGFloat)?
-    private lazy var addButton = IconButton(
-        symbol: "plus", size: NSSize(width: Self.addSize, height: Self.addSize), pointSize: 12,
-        accessibilityLabel: "Add tab", shortcut: { CommandCatalog.spec(for: .newTab).shortcut }
-    ) { [weak self] in self?.onAdd?() }
+    private lazy var addButton = AppButton(variant: .muted, symbol: "plus") { [weak self] in self?.onAdd?() }
     private let idleHint = NSStackView()
     private let renameHint = NSStackView()
     private var hintLabels: [NSTextField] = []
     private var hintCaps: [KeycapView] = []
 
-    var addButtonForTesting: IconButton { addButton }
+    var addButtonForTesting: AppButton { addButton }
     var isRenameHintVisibleForTesting: Bool { !renameHint.isHidden }
     var isIdleHintVisibleForTesting: Bool { !idleHint.isHidden }
     var visibleChipsRectForTesting: CGRect { scrollView.contentView.documentVisibleRect }
@@ -58,6 +55,17 @@ final class WorkspaceTabStrip: NSView {
             self, selector: #selector(clipBoundsChanged),
             name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
         addButton.translatesAutoresizingMaskIntoConstraints = true
+        addButton.isKeyboardFocusable = true
+        addButton.setAccessibilityLabel("Add tab")
+        addButton.onArrowLeft = { [weak self] in
+            guard let self, !self.chips.isEmpty else { return }
+            self.onSelect?(self.chips.count - 1)
+            self.focusSelectedChip()
+        }
+        addButton.onArrowUp = { [weak self] in self?.onArrowUp?() }
+        addButton.onArrowDown = { [weak self] in self?.onArrowDown?() }
+        addButton.onTab = { [weak self] in self?.onTab?() }
+        addButton.onBacktab = { [weak self] in self?.onBacktab?() }
         addSubview(addButton)
         buildRenameHint()
         heightAnchor.constraint(equalToConstant: WorkspaceTabChip.height + Self.hintGap + Self.hintHeight)
@@ -91,6 +99,10 @@ final class WorkspaceTabStrip: NSView {
         guard let chip = selectedChip else { return }
         window?.makeFirstResponder(chip)
     }
+
+    func focusAddButton() { window?.makeFirstResponder(addButton) }
+
+    var isAddButtonFocused: Bool { window?.firstResponder === addButton }
 
     func beginRenamingSelected() { selectedChip?.beginRename() }
 
@@ -241,6 +253,7 @@ final class WorkspaceTabStrip: NSView {
 
     private func step(from index: Int, by delta: Int) {
         let next = index + delta
+        if next == chips.count { return focusAddButton() }
         guard chips.indices.contains(next) else { return }
         onSelect?(next)
         focusSelectedChip()

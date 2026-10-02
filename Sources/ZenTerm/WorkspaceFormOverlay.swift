@@ -453,7 +453,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
 
     private func currentVerticalAnchor(in stops: [NSView]) -> NSView? {
         if let direct = stops.first(where: isFocused) { return direct }
-        if isStripFocused { return tabStrip.selectedChip }
+        if isStripFocused || tabStrip.isAddButtonFocused { return tabStrip.selectedChip }
         if case .region = focusSpot { return drawing.stop(for: .main) }
         for row in envRows where isFocused(row.valueBox.field) || isFocused(row.removeButton) {
             return row.keyBox.field
