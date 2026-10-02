@@ -611,8 +611,10 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
 
         let title = effectiveTitle
         var titleMessage: String?
-        if !typedTitle.isEmpty, typedTitle.contains(where: { "[]#\"".contains($0) }) {
-            titleMessage = "Can't contain [ ] # or \"."
+        if title.contains(where: { "[]#\"".contains($0) }) {
+            titleMessage =
+                typedTitle.isEmpty
+                ? "The folder's name contains [ ] # or \". Type a name." : "Can't contain [ ] # or \"."
         } else if !title.isEmpty, existingTitles.contains(title) {
             titleMessage = "A workspace named \(title) already exists."
         } else if includeRequired, title.isEmpty {

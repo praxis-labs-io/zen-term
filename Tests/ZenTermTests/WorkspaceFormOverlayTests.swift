@@ -149,6 +149,17 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         XCTAssertEqual(sink.submitted.first?.focus, ws.focus)
     }
 
+    func test_aFolderNameTheFileCantHold_isRejected_whenTheNameComesFromTheFolder() throws {
+        let (overlay, sink) = mount()
+        typeFolder(try makeRealDir(named: "app#2").path, in: overlay)
+        typeName("", in: overlay)
+
+        try save(overlay)
+
+        XCTAssertTrue(sink.submitted.isEmpty, "a [app#2] header would not read back")
+        XCTAssertTrue(KeyboardFocus.isFocused(overlay.titleFieldForTesting.field, in: window))
+    }
+
     func test_movingATabMidRename_keepsTheNewNameOnThatTab() throws {
         let ws = Workspace(
             title: "ZenTerm", path: try makeRealDir(),
