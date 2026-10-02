@@ -91,7 +91,7 @@ The app confirms before ending running processes or losing work. The CLI refuses
 | `pane.split` | `pane?`, `dir` (`right` or `down`), `cmd?`, `focus` | pane token |
 | `pane.focus` | `pane` | reveals its tab |
 | `pane.close` | `pane`, `force` | |
-| `pane.send` | `pane?`, `text`, `enter` | through `paste`, so multi-line text arrives as one block. `enter` sends `"\r"` as a second paste. |
+| `pane.send` | `pane?`, `text`, `enter` | through `paste`, so multi-line text arrives as one block. `enter` then calls `submit()`, which sends Return outside any paste. |
 | `pane.read` | `pane?`, `lines?` | the viewport by default. `lines` returns the last N lines including scrollback. Trailing blanks trimmed. |
 | `worktree.list` | `workspace?` | worktrees of the workspace's repo |
 | `worktree.create` | `workspace?`, `branch`, `base` (`default` or `current`), `existing`, `focus` | worktree path, carry report, opened workspace |
