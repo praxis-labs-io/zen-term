@@ -67,8 +67,8 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         cfg.platform = ghostty_platform_u(
             macos: ghostty_platform_macos_s(nsview: Unmanaged.passUnretained(hostView).toOpaque()))
         cfg.userdata = Unmanaged.passUnretained(self).toOpaque()
-        cfg.scale_factor = Double(
-            hostView.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0)
+        hostView.detachedScale = config.backingScale
+        cfg.scale_factor = Double(hostView.backingScale)
         cfg.font_size = config.fontSize.map { Float($0) } ?? 0
 
         let command: String? = config.command.map { cmd in
@@ -447,7 +447,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         guard let surfacePtr else { return nil }
         let size = ghostty_surface_size(surfacePtr)
         guard size.cell_height_px > 0, size.cell_width_px > 0 else { return nil }
-        let scale = hostView.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
+        let scale = hostView.backingScale
         return TerminalCellMetrics(
             columns: Int(size.columns),
             rows: Int(size.rows),

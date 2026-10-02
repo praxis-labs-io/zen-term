@@ -17,6 +17,7 @@ final class PaneCanvasController: NSObject {
     /// Consumed on first start; a split never inherits it.
     private var startupCommandByLeaf: [PaneID: String] = [:]
     private let workspaceEnv: [String: String]
+    private let backingScale: CGFloat?
     private var nextID = 1
 
     private var zoomedLeaf: PaneID?
@@ -122,6 +123,7 @@ final class PaneCanvasController: NSObject {
 
     init(
         initialCWD: URL? = nil, initialCommand: String? = nil, env: [String: String] = [:],
+        backingScale: CGFloat? = nil,
         isToolFloatOpen: @escaping () -> Bool = { false },
         makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
         startSurface: @escaping SurfaceStart = startSurfaceNow
@@ -131,6 +133,7 @@ final class PaneCanvasController: NSObject {
         self.tree = PaneTree(singleLeaf: firstLeaf)
         self.registry = PaneSurfaceRegistry(makeSurface: makeSurface)
         self.workspaceEnv = env
+        self.backingScale = backingScale
         self.isToolFloatOpen = isToolFloatOpen
         super.init()
         nextID = 2
@@ -173,13 +176,14 @@ final class PaneCanvasController: NSObject {
             surfaceIDByLeaf[id] = surfaceID
             registered.append((surfaceID, id))
             let token = registerNavToken(for: id)
-            let launch: TerminalSurfaceConfig
+            var launch: TerminalSurfaceConfig
             let launchedCommand = startupCommandByLeaf.removeValue(forKey: id)
             if let cmd = launchedCommand {
                 launch = ShellLaunch.program(cmd, cwd: cwdByLeaf[id], env: navEnv(token: token))
             } else {
                 launch = ShellLaunch.shell(cwd: cwdByLeaf[id], env: navEnv(token: token))
             }
+            launch.backingScale = backingScale
             launchByLeaf[id] = launch
             startSurface(surface, surfaceID, launch)
             if let cmd = launchedCommand { onProgramLaunched?(surfaceID, cmd) }

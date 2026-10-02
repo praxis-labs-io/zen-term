@@ -12,9 +12,13 @@ final class ControlServerTests: XCTestCase {
         super.setUp()
         path = "/tmp/zt-control-\(getpid())-\(name.hashValue & 0xFFFF).sock"
         appliedOnMain = []
-        let server = ControlServer(path: path) { [unowned self] request in
+        let server = ControlServer(path: path) { [unowned self] request, reply in
             appliedOnMain.append(Thread.isMainThread)
-            return .success(HelloResult(app: "test-\(request.id)"))
+            guard request.cmd == .list else { return reply(.success(HelloResult(app: "test-\(request.id)"))) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                reply(.success(HelloResult(app: "later-\(request.id)")))
+                reply(.success(HelloResult(app: "twice-\(request.id)")))
+            }
         }
         server.start()
         self.server = server
@@ -64,6 +68,14 @@ final class ControlServerTests: XCTestCase {
         XCTAssertTrue(response.ok)
         XCTAssertEqual(response.result, HelloResult(app: "test-7"))
         XCTAssertEqual(appliedOnMain, [true])
+    }
+
+    func test_aReplyThatArrivesLaterIsWrittenOnceAndInOrder() throws {
+        let replies = try exchange(
+            [#"{"v":1,"id":1,"cmd":"list"}"#, #"{"v":1,"id":2,"cmd":"hello"}"#, #"{"v":1,"id":3,"cmd":"hello"}"#],
+            expecting: 3)
+        let answered = try replies.map { try decode($0, as: HelloResult.self).result?.app }
+        XCTAssertEqual(answered, ["later-1", "test-2", "test-3"])
     }
 
     func test_malformedLineIsABadRequestAndTheConnectionStaysUsable() throws {

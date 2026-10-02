@@ -8,7 +8,7 @@ typealias ControlReply = Result<any ControlPayload, ControlError>
 final class ControlServer {
     static var socketPath: String { SocketListener.path(prefix: ControlEndpoint.fileNamePrefix) }
 
-    private let respond: @MainActor (ControlRequest) -> ControlReply
+    private let respond: @MainActor (ControlRequest, @escaping @MainActor (ControlReply) -> Void) -> Void
     private let idleTimeout: time_t
     private let connections = DispatchQueue(
         label: "com.zenterm.control-connections", qos: .userInitiated, attributes: .concurrent)
@@ -16,7 +16,7 @@ final class ControlServer {
 
     init(
         path: String = ControlServer.socketPath, idleTimeout: time_t = 30,
-        respond: @escaping @MainActor (ControlRequest) -> ControlReply
+        respond: @escaping @MainActor (ControlRequest, @escaping @MainActor (ControlReply) -> Void) -> Void
     ) {
         self.respond = respond
         self.idleTimeout = idleTimeout
@@ -80,8 +80,15 @@ final class ControlServer {
         let answered = DispatchSemaphore(value: 0)
         var reply: ControlReply = .failure(ControlError(.failed, "ZenTerm did not answer."))
         DispatchQueue.main.async { [respond] in
-            reply = MainActor.assumeIsolated { respond(request) }
-            answered.signal()
+            MainActor.assumeIsolated {
+                var isAnswered = false
+                respond(request) { answer in
+                    guard !isAnswered else { return }
+                    isAnswered = true
+                    reply = answer
+                    answered.signal()
+                }
+            }
         }
         answered.wait()
         return reply

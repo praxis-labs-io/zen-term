@@ -10,6 +10,8 @@ public struct TerminalSurfaceConfig {
     public var behavior: TerminalBehavior?
     /// False for a session whose prompt marks never arrive (a remote shell), so `isBusy` always reads false.
     public var tracksBusy: Bool
+    /// The backing scale of the window the surface will mount into. Sizes the grid while it has no window.
+    public var backingScale: CGFloat?
 
     public init(
         command: String? = nil,
@@ -19,7 +21,8 @@ public struct TerminalSurfaceConfig {
         fontSize: CGFloat? = nil,
         theme: TerminalTheme? = nil,
         behavior: TerminalBehavior? = nil,
-        tracksBusy: Bool = true
+        tracksBusy: Bool = true,
+        backingScale: CGFloat? = nil
     ) {
         self.command = command
         self.args = args
@@ -29,6 +32,7 @@ public struct TerminalSurfaceConfig {
         self.theme = theme
         self.behavior = behavior
         self.tracksBusy = tracksBusy
+        self.backingScale = backingScale
     }
 }
 

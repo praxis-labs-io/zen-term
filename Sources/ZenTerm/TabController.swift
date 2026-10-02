@@ -262,8 +262,10 @@ final class TabController: NSObject {
 
     private let startSurface: SurfaceStart
 
+    private let backingScale: CGFloat?
+
     init(
-        initialCWD: URL?, initialCommand: String? = nil, env: [String: String] = [:],
+        initialCWD: URL?, initialCommand: String? = nil, env: [String: String] = [:], backingScale: CGFloat? = nil,
         isToolFloatOpen: @escaping () -> Bool = { false },
         makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
         startSurface: @escaping SurfaceStart = startSurfaceNow
@@ -271,10 +273,11 @@ final class TabController: NSObject {
         workspaceEnv = env
         self.startSurface = startSurface
         openedCWD = initialCWD
+        self.backingScale = backingScale
         self.isToolFloatOpen = isToolFloatOpen
         self.makeSurface = makeSurface
         paneCanvas = PaneCanvasController(
-            initialCWD: initialCWD, initialCommand: initialCommand, env: env,
+            initialCWD: initialCWD, initialCommand: initialCommand, env: env, backingScale: backingScale,
             isToolFloatOpen: isToolFloatOpen, makeSurface: makeSurface, startSurface: startSurface)
         canvas = paneCanvas.canvasView
         canvas.translatesAutoresizingMaskIntoConstraints = false
@@ -393,7 +396,7 @@ final class TabController: NSObject {
             break
         }
         isBottomOpen.toggle()
-        let animate = !Motion.isReduceMotionEnabled()
+        let animate = !Motion.isReduceMotionEnabled() && view.window != nil
         if isBottomOpen {
             _ = ensureBottomDrawerPanel()
             if animate { animateBottomDrawer(opening: true) } else { relayoutPanels() }
@@ -428,10 +431,14 @@ final class TabController: NSObject {
 
     private func drawerConfig(command: String?, token: Int) -> TerminalSurfaceConfig {
         let env = PaneEnvironment.variables(base: workspaceEnv, token: token)
-        if let command, command != "shell" {
-            return ShellLaunch.program(command, cwd: sessionCWD, env: env)
-        }
-        return ShellLaunch.shell(cwd: sessionCWD, env: env)
+        var config =
+            if let command, command != "shell" {
+                ShellLaunch.program(command, cwd: sessionCWD, env: env)
+            } else {
+                ShellLaunch.shell(cwd: sessionCWD, env: env)
+            }
+        config.backingScale = backingScale
+        return config
     }
 
     private func drawerToken(_ panel: PanelRef) -> Int? {
@@ -480,7 +487,7 @@ final class TabController: NSObject {
             break
         }
         isRightOpen.toggle()
-        let animate = !Motion.isReduceMotionEnabled()
+        let animate = !Motion.isReduceMotionEnabled() && view.window != nil
         if isRightOpen {
             _ = ensureRightDrawerPanel()
             if animate { animateRightDrawer(opening: true) } else { relayoutPanels() }

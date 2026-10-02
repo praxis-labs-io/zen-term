@@ -60,8 +60,11 @@ final class ControlListingTests: WindowTestCase {
     }
 
     private func list(_ c: WindowController) throws -> ListResult {
-        let reply = ControlResponder { [c] }.respond(to: ControlRequest(id: 1, cmd: .list))
-        return try XCTUnwrap(try reply.get() as? ListResult)
+        var reply: ControlReply?
+        ControlResponder(windows: { [c] }, keyWindow: { c }).respond(to: ControlRequest(id: 1, cmd: .list)) {
+            reply = $0
+        }
+        return try XCTUnwrap(try XCTUnwrap(reply).get() as? ListResult)
     }
 
     private func openWorktree(in c: WindowController) {
@@ -133,7 +136,7 @@ final class ControlListingTests: WindowTestCase {
         let c = makeWindow()
         c.handle(.toggleBottomDrawer)
         let drawer = try XCTUnwrap(spawned.last)
-        let responder = ControlResponder { [c] }
+        let responder = ControlResponder(windows: { [c] }, keyWindow: { c })
 
         let found = try XCTUnwrap(responder.locate(pane: try token(of: drawer)))
 
@@ -145,8 +148,11 @@ final class ControlListingTests: WindowTestCase {
     }
 
     func test_helloNamesTheProtocolVersion() throws {
-        let reply = ControlResponder { [] }.respond(to: ControlRequest(id: 1, cmd: .hello))
-        let hello = try XCTUnwrap(try reply.get() as? HelloResult)
+        var reply: ControlReply?
+        ControlResponder(windows: { [] }, keyWindow: { nil }).respond(to: ControlRequest(id: 1, cmd: .hello)) {
+            reply = $0
+        }
+        let hello = try XCTUnwrap(try XCTUnwrap(reply).get() as? HelloResult)
         XCTAssertEqual(hello.protocolVersion, ControlWire.version)
         XCTAssertEqual(hello.app, AppVersion.current)
     }

@@ -72,4 +72,38 @@ final class ControlRequestTests: XCTestCase {
         XCTAssertEqual(line.last, 0x0A)
         XCTAssertEqual(try ControlRequest.decode(line).get(), request)
     }
+
+    func test_decodesArgsAndIgnoresFieldsTheyDoNotTake() {
+        XCTAssertEqual(
+            try decode(#"{"v":1,"id":9,"cmd":"tab.new","args":{"cmd":"npm run dev","focus":true,"x":1}}"#).get(),
+            ControlRequest(id: 9, cmd: .tabNew, args: ControlArgs(cmd: "npm run dev", focus: true)))
+    }
+
+    func test_nullArgsAreNoArgs() {
+        XCTAssertEqual(
+            try decode(#"{"v":1,"id":9,"cmd":"tab.close","args":null}"#).get(), ControlRequest(id: 9, cmd: .tabClose))
+    }
+
+    func test_mistypedArgsAreABadRequestThatKeepsTheID() {
+        let mistyped = rejection(#"{"v":1,"id":10,"cmd":"tab.close","args":{"force":"yes"}}"#)
+        XCTAssertEqual(mistyped?.error.code, .badRequest)
+        XCTAssertEqual(mistyped?.id, 10)
+        XCTAssertEqual(rejection(#"{"v":1,"id":11,"cmd":"tab.close","args":[1]}"#)?.error.code, .badRequest)
+    }
+
+    func test_requestWithArgsRoundTrips() throws {
+        let request = ControlRequest(
+            id: 4, cmd: .workspaceOpen, args: ControlArgs(workspace: "/src/app", focus: true),
+            caller: ControlCaller(pane: 2))
+        XCTAssertEqual(try ControlRequest.decode(ControlWire.line(request)).get(), request)
+    }
+
+    func test_everyCommandHasItsWireName() {
+        XCTAssertEqual(
+            ControlCommand.allCases.map(\.rawValue),
+            [
+                "hello", "list", "workspace.open", "workspace.new", "workspace.switch", "workspace.close", "tab.new",
+                "tab.select", "tab.rename", "tab.close",
+            ])
+    }
 }
