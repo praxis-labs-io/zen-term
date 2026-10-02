@@ -152,6 +152,17 @@ final class WorkspaceTabStripTests: WindowTestCase {
         XCTAssertIdentical(window?.firstResponder, strip.chips[1])
     }
 
+    func test_voiceOver_seesTheSelectedChip_andCanSelectAnother() {
+        mount([Workspace.Tab(main: "nvim"), Workspace.Tab(name: "gate")])
+        XCTAssertEqual(strip.chips.map { $0.isAccessibilitySelected() }, [true, false])
+
+        XCTAssertTrue(strip.chips[1].accessibilityPerformPress())
+
+        XCTAssertEqual(form.selected, 1)
+        XCTAssertEqual(strip.chips.map { $0.isAccessibilitySelected() }, [false, true])
+        XCTAssertIdentical(window?.firstResponder, strip.chips[1])
+    }
+
     func test_onlyTheTabThatOpensFocused_carriesTheDot() {
         mount(
             [Workspace.Tab(main: "nvim"), Workspace.Tab(name: "gate")],

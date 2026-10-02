@@ -94,6 +94,7 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         self.opensFocused = opensFocused
         isRemovable = removable
         setAccessibilityLabel(title)
+        setAccessibilitySelected(selected)
         restyle()
         needsLayout = true
     }
@@ -236,6 +237,13 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         window?.makeFirstResponder(self)
         dragStartX = superview?.convert(event.locationInWindow, from: nil).x
         isDragging = false
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        guard !isRenaming else { return false }
+        onSelect?()
+        window?.makeFirstResponder(self)
+        return true
     }
 
     override func mouseDragged(with event: NSEvent) {
