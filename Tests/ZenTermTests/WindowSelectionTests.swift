@@ -8,6 +8,7 @@ import XCTest
 final class WindowSelectionTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var originalConfig: GeneralConfig!
+    private let originalPresence = WindowController.isPresent
     private var controller: WindowController?
     private var spawned: [RecordingSurface] = []
     private var tempRoot: URL!
@@ -23,6 +24,7 @@ final class WindowSelectionTests: WindowTestCase {
             return surface
         }
         GeneralConfig.setCurrentForTesting(.builtIn)
+        SidebarController.resetLastChoiceForTesting()
         tempRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-selection-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
@@ -37,6 +39,8 @@ final class WindowSelectionTests: WindowTestCase {
         ConfigLoader.defaultRootOverrideForTesting = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
+        WindowController.isPresent = originalPresence
+        SidebarController.resetLastChoiceForTesting()
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }
@@ -168,5 +172,100 @@ final class WindowSelectionTests: WindowTestCase {
         XCTAssertTrue(surface.view.window === c.window)
         XCTAssertTrue(c.window.firstResponder === surface.view)
         XCTAssertEqual(c.window.title, name)
+    }
+
+    private func toastViews(_ c: WindowController) -> [ToastView] {
+        guard let content = c.window.contentView else { return [] }
+        return descendants(of: content).compactMap { $0 as? ToastView }
+    }
+
+    private func descendants(of view: NSView) -> [NSView] {
+        view.subviews + view.subviews.flatMap { descendants(of: $0) }
+    }
+
+    private func drainMainQueue() {
+        let expectation = expectation(description: "main queue")
+        DispatchQueue.main.async { expectation.fulfill() }
+        wait(for: [expectation], timeout: 2)
+    }
+
+    func test_aHost_togglesTheSidebar() throws {
+        let (c, _) = try makeFocusedWorkspaceWindow()
+        c.selectHostForTesting(SSHHostID(name: "devbox"))
+        XCTAssertTrue(c.sidebarForTesting.isDocked, "precondition: the sidebar is docked")
+
+        c.handle(.toggleSidebar)
+
+        XCTAssertFalse(c.sidebarForTesting.isDocked)
+    }
+
+    func test_aHost_movesFocusIntoTheSidebar() throws {
+        let (c, _) = try makeFocusedWorkspaceWindow()
+        c.selectHostForTesting(SSHHostID(name: "devbox"))
+
+        c.handle(.focusSidebar)
+
+        XCTAssertTrue(c.sidebarForTesting.hasFocus)
+    }
+
+    func test_aHost_hidingAFloatingSidebar_handsFocusToTheWindow() throws {
+        let (c, _) = try makeFocusedWorkspaceWindow()
+        c.window.setContentSize(c.window.contentMinSize)
+        c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
+        c.selectHostForTesting(SSHHostID(name: "devbox"))
+        c.handle(.toggleSidebar)
+        XCTAssertTrue(c.sidebarForTesting.isRevealed, "precondition: too narrow to dock, so the sidebar floats")
+        XCTAssertTrue(c.sidebarForTesting.hasFocus, "precondition: the floating sidebar takes focus")
+
+        c.handle(.toggleSidebar)
+
+        XCTAssertFalse(c.sidebarForTesting.hasFocus)
+        XCTAssertTrue(c.window.firstResponder === c.window)
+    }
+
+    func test_aHost_dismissesTheOldestToast() throws {
+        let (c, _) = try makeFocusedWorkspaceWindow()
+        c.selectHostForTesting(SSHHostID(name: "devbox"))
+        c.showToast(ToastContent(variant: .info, title: "First", message: "One."))
+        XCTAssertEqual(toastViews(c).count, 1, "precondition: a toast is up")
+
+        c.handle(.dismissToast)
+        drainMainQueue()
+
+        XCTAssertTrue(toastViews(c).isEmpty)
+    }
+
+    func test_aHost_dismissesEveryToast() throws {
+        let (c, _) = try makeFocusedWorkspaceWindow()
+        c.selectHostForTesting(SSHHostID(name: "devbox"))
+        c.showToast(ToastContent(variant: .info, title: "First", message: "One."))
+        c.showToast(ToastContent(variant: .info, title: "Second", message: "Two."))
+        XCTAssertEqual(toastViews(c).count, 2, "precondition: two toasts are up")
+
+        c.handle(.dismissAllToasts)
+        drainMainQueue()
+
+        XCTAssertTrue(toastViews(c).isEmpty)
+    }
+
+    func test_aHost_jumpsToAnAgentWaitingInAWorkspace() throws {
+        var config = GeneralConfig.builtIn
+        config.ai = "pi"
+        GeneralConfig.setCurrentForTesting(config)
+        WindowController.isPresent = { _ in false }
+        let (c, surface) = try makeFocusedWorkspaceWindow()
+        let workspace = c.activeWorkspaceIDForTesting
+        let agent = try XCTUnwrap(c.focusedSurfaceIDForTesting)
+        surface.delegate?.surface(
+            surface, didPostNotification: TerminalNotification(title: "pi", body: "Wants to run swift test"))
+        drainMainQueue()
+        XCTAssertEqual(c.agentStateForTesting(agent), .waiting, "precondition: the agent is waiting")
+        c.selectHostForTesting(SSHHostID(name: "devbox"))
+
+        c.handle(.nextWaitingAgent)
+
+        XCTAssertEqual(c.tabOrderForTesting, c.tabIDsForTesting(workspace: workspace))
+        XCTAssertEqual(c.focusedSurfaceIDForTesting, agent)
+        XCTAssertTrue(c.window.firstResponder === surface.view)
     }
 }

@@ -919,7 +919,13 @@ final class WindowController: NSObject {
     }
 
     private func restoreFocusToActive() {
-        if floats.isOpen { floats.refocus() } else { activeController?.restoreUnifiedFocus() }
+        if floats.isOpen {
+            floats.refocus()
+        } else if let activeController {
+            activeController.restoreUnifiedFocus()
+        } else if activeWorkspace == nil {
+            window.makeFirstResponder(nil)
+        }
         syncWindowFocus()
         if floats.isOpen { answerFocusedAgent() }
     }

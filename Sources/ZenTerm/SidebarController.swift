@@ -401,8 +401,8 @@ final class SidebarController {
     }
 
     func focusActiveRow() {
-        guard let active = entries.first(where: \.isActive) else { return }
-        view.focusRow(active.row)
+        guard let row = (entries.first(where: \.isActive) ?? entries.first)?.row else { return }
+        view.focusRow(row)
     }
 
     func refreshBranches() {
