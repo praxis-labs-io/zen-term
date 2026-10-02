@@ -39,7 +39,8 @@ final class SettingsSSHHostsSection: SettingsSection {
 
     private var listing: Listing?
     private var destinations: [String: String] = [:]
-    private var removedAt: [String: Int] = [:]
+    private var removed: Set<String> = []
+    private var orderBeforeRemovals: [String]?
     private var hostRows: [HostRow] = []
     private let addButton = AppButton(title: "＋ Add Host…", variant: .muted)
     private var captions: [NSTextField] = []
@@ -92,7 +93,8 @@ final class SettingsSSHHostsSection: SettingsSection {
     private func load() {
         listing = nil
         destinations = [:]
-        removedAt = [:]
+        removed = []
+        orderBeforeRemovals = nil
         populate()
         mountGeneration += 1
         let generation = mountGeneration
@@ -213,7 +215,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         button.onArrowLeft = { [weak self] in self?.onExitToNav?() }
         button.onTab = { [weak self, weak button] in self?.moveTab(from: button, delta: 1) }
         button.onBacktab = { [weak self, weak button] in self?.moveTab(from: button, delta: -1) }
-        showRemoval(removedAt[host] != nil, of: host, row: row, button: button)
+        showRemoval(removed.contains(host), of: host, row: row, button: button)
         return HostRow(host: host, row: row, control: .remove(button))
     }
 
@@ -222,16 +224,24 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private func toggleRemoval(of host: String, row: LayoutRow, button: AppButton) {
-        if let index = removedAt[host] {
+        if removed.contains(host) {
+            let index = restoredIndex(of: host)
             guard save(row: row, { try SSHHostsWriter.insert(host, at: index) }) else { return }
-            removedAt[host] = nil
+            removed.remove(host)
         } else {
             let enabled = GeneralConfig.current.sshHosts
-            let index = enabled.firstIndex(of: host) ?? enabled.count
             guard save(row: row, { try SSHHostsWriter.set(host, on: false) }) else { return }
-            removedAt[host] = index
+            if orderBeforeRemovals == nil { orderBeforeRemovals = enabled }
+            removed.insert(host)
         }
-        showRemoval(removedAt[host] != nil, of: host, row: row, button: button)
+        showRemoval(removed.contains(host), of: host, row: row, button: button)
+    }
+
+    private func restoredIndex(of host: String) -> Int {
+        let enabled = GeneralConfig.current.sshHosts
+        guard let order = orderBeforeRemovals, let position = order.firstIndex(of: host) else { return enabled.count }
+        let next = order[(position + 1)...].first { enabled.contains($0) }
+        return next.flatMap { enabled.firstIndex(of: $0) } ?? enabled.count
     }
 
     // Fits either title so the button keeps its edge when Remove turns into Undo.

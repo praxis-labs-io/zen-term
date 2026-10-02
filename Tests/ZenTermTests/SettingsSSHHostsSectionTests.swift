@@ -247,6 +247,21 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
             removeButtons(in: detail).map(\.title), ["Remove", "Remove", "Remove"], "no other host was removed")
     }
 
+    func test_undoingSeveralRemovals_inEitherOrder_restoresTheOriginalOrder() throws {
+        for undoOrder in [[0, 1], [1, 0]] {
+            try seed(ssh: nil, config: "ssh-hosts = alpha, beta, gamma\n")
+            let detail = mount()
+            let buttons = removeButtons(in: detail)
+
+            press(key(36), on: buttons[0])
+            press(key(36), on: buttons[1])
+            XCTAssertEqual(GeneralConfig.current.sshHosts, ["gamma"])
+            for index in undoOrder { press(key(36), on: buttons[index]) }
+
+            XCTAssertEqual(GeneralConfig.current.sshHosts, ["alpha", "beta", "gamma"], "undo order \(undoOrder)")
+        }
+    }
+
     func test_aHeldReturn_doesNotFlipTheHostBack() throws {
         try seed(ssh: nil, config: "ssh-hosts = deploy@10.0.0.5, ops@10.0.0.6\n")
         let detail = mount()
