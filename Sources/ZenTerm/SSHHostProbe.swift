@@ -12,7 +12,7 @@ final class SSHHostProbe {
     private static let roundInterval: TimeInterval = 60
     private static let roundTolerance: TimeInterval = 10
     nonisolated private static let connectTimeout = 5
-    // Path updates arrive in bursts while an interface comes up.
+    // Path updates arrive in bursts while an interface comes up, and a wake lands before the interface is back.
     private static let networkSettle: TimeInterval = 1
     nonisolated private static let banner = Data("SSH-".utf8)
 
@@ -48,7 +48,7 @@ final class SSHHostProbe {
         let workspace = NSWorkspace.shared.notificationCenter
         observe(app, NSApplication.didBecomeActiveNotification) { $0.appDidBecomeActive() }
         observe(app, NSApplication.didResignActiveNotification) { $0.refreshTimer() }
-        observe(workspace, NSWorkspace.didWakeNotification) { $0.probeAll() }
+        observe(workspace, NSWorkspace.didWakeNotification) { $0.systemDidWake() }
         setHosts(hosts)
     }
 
@@ -77,6 +77,13 @@ final class SSHHostProbe {
             }
             return
         }
+        probeOnceSettled()
+    }
+
+    func systemDidWake() { probeOnceSettled() }
+
+    private func probeOnceSettled() {
+        pendingSettle?.cancel()
         let settle = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.probeAll() } }
         pendingSettle = settle
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.networkSettle, execute: settle)

@@ -199,4 +199,15 @@ final class SSHHostProbeTests: XCTestCase {
         waitUntil(answers.askCount("devbox") == 2, "the next round")
         XCTAssertEqual(answers.resolveCount("devbox"), 2)
     }
+
+    func test_aWake_waitsForTheNetworkToSettleBeforeProbing() {
+        probe.setHosts(["devbox"])
+        waitUntil(answers.askCount("devbox") == 1, "the first round")
+
+        probe.systemDidWake()
+
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        XCTAssertEqual(answers.askCount("devbox"), 1, "nothing is asked while the interface comes back")
+        waitUntil(answers.askCount("devbox") == 2, "the settled round")
+    }
 }
