@@ -45,15 +45,17 @@ carries `caller.pane` only when it is the inherited socket.
 ## Requests
 
 ```json
-{"v":1,"id":1,"cmd":"list","caller":{"pane":31}}
+{"v":1,"id":1,"cmd":"tab.new","args":{"cmd":"npm run dev"},"caller":{"pane":31}}
 ```
 
 - `v`: the protocol version the client speaks. Required. This build speaks `1`.
 - `id`: an integer, echoed on the response. Required.
 - `cmd`: the command name. Required.
+- `args`: an object of the command's arguments. Optional, and absent or `null` means none.
+  A field of the wrong type is a `bad_request`.
 - `caller.pane`: the client's `$ZEN_PANE`, when it runs in a pane. Optional.
 
-Unknown fields are ignored.
+Unknown fields are ignored, in `args` too.
 
 ## Responses
 
@@ -63,7 +65,7 @@ Unknown fields are ignored.
 ```
 
 `v` is the version the app speaks. `id` is `null` when the request had no
-integer `id` that could be read.
+integer `id` that could be read. A command with nothing to return answers `{}`.
 
 | Code                  | When                                                     |
 | --------------------- | -------------------------------------------------------- |
@@ -72,8 +74,19 @@ integer `id` that could be read.
 | `unsupported_version` | `v` is newer than the app speaks; the response's `v` says which it does. |
 | `not_found`           | A target names nothing that exists.                      |
 | `ambiguous`           | A target names more than one thing.                      |
-| `refused`             | The command would end running work or lose it.           |
+| `refused`             | The command would end running work or lose it. Carries `details`. |
 | `failed`              | The app could not do it.                                 |
+
+A `refused` error says what `force` would end:
+
+```json
+{"code":"refused","message":"Closing tab w1.t3 would stop npm run dev.",
+ "details":{"closesWindow":false,"floats":[],"panes":[{"token":31,"title":"npm run dev","cwd":"/Users/me/app","busy":true}]}}
+```
+
+`panes` are the running panes and drawers, in the shape `list` uses. `floats` are the
+titles of running tool floats. `closesWindow` is true when the close would take the
+window with it.
 
 Requests are decoded off the main thread, applied on it, and written back off it.
 
@@ -83,7 +96,20 @@ Requests are decoded off the main thread, applied on it, and written back off it
 | ------ | --------------------------------- | --------------------------------------------- |
 | Pane   | its `$ZEN_PANE` token, e.g. `31`  | Unique across the app and never reused. Drawers have tokens. |
 | Tab    | `w<window>.t<tab>`, e.g. `w1.t14` | Tab ids are minted per window, so the window is part of it. |
+| Workspace | its folder as an absolute path, or its title | Matched across every window. More than one match is `ambiguous`. |
+| SSH host workspace | `ssh:<host>`             | Reserved. Nothing answers to it yet, so it is `not_found`. |
 | Window | `w<window>`                       |                                               |
+
+A command with no target acts on the caller: `caller.pane`, its tab, its workspace.
+Without a caller it acts on the key window's active workspace and tab. A `caller.pane`
+that names no pane is `not_found`.
+
+Without `focus`, no command moves what is on screen: a new tab joins its workspace's tab
+bar behind the active one, a new workspace joins the sidebar, and no modal card, confirm,
+tool float or scroll mode closes. `focus` switches to what was opened, as a click would,
+and brings its window forward when it is not the key window. Closing the tab on screen
+lands on its neighbour and closes a tool float or confirm over it, and leaves a modal card
+open.
 
 ## Commands
 
@@ -122,6 +148,64 @@ is listed from its first opening until it closes, shown or hidden.
 - `cwd`: absent when it is not known.
 - `agent`: present when the pane runs an agent. `state` is `working`, `waiting` or
   `idle`; `name` is absent for an agent that has not been named.
+
+### `workspace.open`
+
+`args`: `workspace` (required), `focus`.
+
+Returns a workspace that is already open, in whichever window holds it, rather than
+opening a second copy. Otherwise opens the workspaces-file entry whose folder or title
+matches, with its tabs and launch focus, in the caller's window. When neither matches it is
+`not_found`.
+
+```json
+{"window":"w1","workspace":{"title":"zen-term","folder":"/Users/me/src/zen-term",
+  "configured":true,"active":false,"tabs":[...]}}
+```
+
+`workspace` is in the shape `list` uses.
+
+### `workspace.new`
+
+`args`: `path` (absolute, the home folder by default), `focus`.
+
+Opens a workspace with no config entry at the end of the caller's window's sidebar,
+named the way a new workspace is named in the app. Returns it as `workspace.open` does.
+
+### `workspace.switch`
+
+`args`: `workspace`. Switches its window to it.
+
+### `workspace.close`
+
+`args`: `workspace`, `force`. Closes each of its tabs. `refused` without `force` when
+anything in it is running, or when it is the window's last workspace.
+
+### `tab.new`
+
+`args`: `workspace`, `cwd` (absolute), `cmd`, `focus`.
+
+Opens a tab in the workspace running `cmd` in a shell, or a shell. It starts in `cwd`,
+else in the caller's folder when the caller is in that workspace, else where a new tab
+in the app would.
+
+```json
+{"tab":"w1.t14","pane":31}
+```
+
+### `tab.select`
+
+`args`: `tab`. Shows it, switching its window to its workspace first.
+
+### `tab.rename`
+
+`args`: `tab`, `title` (required). An empty `title` gives the tab back the title its
+program sets.
+
+### `tab.close`
+
+`args`: `tab`, `force`. `refused` without `force` when anything in it is running, or when
+it is the window's last tab.
 
 ## `zen`
 

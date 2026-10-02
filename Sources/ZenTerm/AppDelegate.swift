@@ -89,8 +89,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         socket.start()
         navSocket = socket
 
-        let responder = ControlResponder { [weak self] in self?.windows ?? [] }
-        let control = ControlServer { responder.respond(to: $0) }
+        let responder = ControlResponder(
+            windows: { [weak self] in self?.windows ?? [] }, keyWindow: { [weak self] in self?.keyController() },
+            bringForward: { [weak self] in self?.bringForward($0) })
+        let control = ControlServer { responder.respond(to: $0, reply: $1) }
         control.start()
         controlSocket = control
 
@@ -177,6 +179,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func otherWindow(holding path: URL, asking: WindowController?) -> WindowController? {
         Self.window(holding: path, among: windows, asking: asking)
+    }
+
+    private func bringForward(_ wc: WindowController) {
+        NSApp.activate(ignoringOtherApps: true)
+        if wc.window.isMiniaturized { wc.window.deminiaturize(nil) }
+        wc.window.makeKeyAndOrderFront(nil)
     }
 
     private func keyController() -> WindowController? {
