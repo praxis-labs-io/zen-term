@@ -313,6 +313,8 @@ final class WindowController: NSObject {
 
     var isRepoPickerOpen: Bool { modal?.kind == .repoPicker }
 
+    func modalOwns(_ chord: Chord) -> Bool { modal?.overlay.owns(chord) == true }
+
     var isSidebarFocused: Bool { sidebar.hasFocus }
 
     private var activeFloatName: String? {
@@ -1980,6 +1982,7 @@ final class WindowController: NSObject {
                 closeModal()
                 return
             }
+            if modal.overlay.handle(chord) { return }
             if modal.kind == .repoPicker, chord == .createWorktree {
                 createWorktreeFromPicker()
                 return
@@ -3105,6 +3108,8 @@ final class WindowController: NSObject {
     }
 
     func checkForRemovedWorktreesForTesting() { checkForRemovedWorktrees() }
+
+    func presentModalForTesting(_ overlay: ModalOverlay) { presentModal(overlay, kind: .workspaceForm) }
 
     func openWorkspaceForTesting(_ ws: Workspace, origin: WorktreeOrigin? = nil) {
         openWorkspace(ws, origin: origin)

@@ -6,11 +6,15 @@ protocol ModalOverlay: NSView {
     func animateOut(completion: @escaping () -> Void)
     func reapplyTheme()
     var isShowingOverlaidCard: Bool { get }
+    func handle(_ chord: KeyInterceptor.ReservedChord) -> Bool
+    func owns(_ chord: Chord) -> Bool
 }
 
 extension ModalOverlay {
     func reapplyTheme() {}
     var isShowingOverlaidCard: Bool { false }
+    func handle(_ chord: KeyInterceptor.ReservedChord) -> Bool { false }
+    func owns(_ chord: Chord) -> Bool { false }
 }
 
 /// Swallows clicks so a tap on the card doesn't reach the dismissing backdrop.

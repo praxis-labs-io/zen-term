@@ -68,6 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return true
             }
             let controller = self?.keyController()
+            if controller?.modalOwns(chord) == true { return true }
             if PickerChordGuard.shouldPassThrough(
                 action: action, repoPickerIsOpen: controller?.isRepoPickerOpen == true,
                 sidebarHasFocus: controller?.isSidebarFocused == true)
