@@ -209,7 +209,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   entry is never in a group. `navigable` skips ghosts and Offline SSH hosts, and lists
   reachable hosts after the workspaces in `ssh-hosts` order; the sidebar's numbers, ⌘⌃1…9 and
   ⌘⌃[ ] read it, and a close's landing reads its workspaces alone. ⌘⌃[ ] from an Offline host
-  step to the nearest reachable row by sidebar position.
+  step to the nearest reachable row by sidebar position. A connected host's workspace carries
+  the host and stays out of the workspace rows.
 - **`activate(_:)` is the single path a switch goes through**: a row click, the workspace
   chords, ⌘P, ⌘⌃T, and revealing a background tab. An open workspace slides in on the y axis, from
   below when it sits lower in `navigable`; a new one has no canvas yet, so it mounts each
