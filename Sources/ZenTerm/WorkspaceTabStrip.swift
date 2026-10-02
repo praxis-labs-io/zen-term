@@ -4,7 +4,8 @@ import AppKit
 final class WorkspaceTabStrip: NSView {
     private static let chipSpacing: CGFloat = 4
     private static let addSize: CGFloat = 26
-    private static let hintSpacing: CGFloat = 10
+    private static let hintGap: CGFloat = 8
+    private static let hintHeight: CGFloat = 20
 
     var onSelect: ((Int) -> Void)?
     var onAdd: (() -> Void)?
@@ -27,12 +28,14 @@ final class WorkspaceTabStrip: NSView {
         symbol: "plus", size: NSSize(width: Self.addSize, height: Self.addSize), pointSize: 12,
         accessibilityLabel: "Add tab", shortcut: { CommandCatalog.spec(for: .newTab).shortcut }
     ) { [weak self] in self?.onAdd?() }
+    private let idleHint = NSStackView()
     private let renameHint = NSStackView()
     private var hintLabels: [NSTextField] = []
     private var hintCaps: [KeycapView] = []
 
     var addButtonForTesting: IconButton { addButton }
     var isRenameHintVisibleForTesting: Bool { !renameHint.isHidden }
+    var isIdleHintVisibleForTesting: Bool { !idleHint.isHidden }
     var visibleChipsRectForTesting: CGRect { scrollView.contentView.documentVisibleRect }
 
     init() {
@@ -57,7 +60,8 @@ final class WorkspaceTabStrip: NSView {
         addButton.translatesAutoresizingMaskIntoConstraints = true
         addSubview(addButton)
         buildRenameHint()
-        heightAnchor.constraint(equalToConstant: WorkspaceTabChip.height).isActive = true
+        heightAnchor.constraint(equalToConstant: WorkspaceTabChip.height + Self.hintGap + Self.hintHeight)
+            .isActive = true
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -113,17 +117,19 @@ final class WorkspaceTabStrip: NSView {
             x += widths[index] + Self.chipSpacing
         }
         let contentWidth = max(0, x - Self.chipSpacing)
-        renameHint.isHidden = !isRenaming
-        let hintSize = renameHint.fittingSize
-        let trailingRoom = Self.chipSpacing + Self.addSize + (isRenaming ? Self.hintSpacing + hintSize.width : 0)
-        let visibleWidth = min(contentWidth, max(0, bounds.width - trailingRoom))
+        let addX = max(0, bounds.width - Self.addSize)
+        let visibleWidth = min(contentWidth, max(0, addX - Self.chipSpacing))
         scrollView.frame = CGRect(x: 0, y: 0, width: visibleWidth, height: WorkspaceTabChip.height)
         docView.frame = CGRect(x: 0, y: 0, width: contentWidth, height: WorkspaceTabChip.height)
-        let addX = visibleWidth + Self.chipSpacing
         addButton.frame = CGRect(x: addX, y: 0, width: Self.addSize, height: Self.addSize)
-        renameHint.frame = CGRect(
-            x: addX + Self.addSize + Self.hintSpacing, y: (WorkspaceTabChip.height - hintSize.height) / 2,
-            width: hintSize.width, height: hintSize.height)
+        renameHint.isHidden = !isRenaming
+        idleHint.isHidden = isRenaming
+        for hint in [idleHint, renameHint] {
+            let size = hint.fittingSize
+            hint.frame = CGRect(
+                x: 0, y: WorkspaceTabChip.height + Self.hintGap + (Self.hintHeight - size.height) / 2,
+                width: size.width, height: size.height)
+        }
         if let chip = chips.first(where: \.isRenaming) ?? (revealsSelection ? selectedChip : nil) {
             chip.scrollToVisible(chip.bounds.insetBy(dx: -TabBarView.fadeWidth, dy: 0))
         }
@@ -206,6 +212,7 @@ final class WorkspaceTabStrip: NSView {
         chip.onRenamingChanged = { [weak self] in
             guard let self else { return }
             self.renameHint.isHidden = !self.isRenaming
+            self.idleHint.isHidden = self.isRenaming
             self.needsLayout = true
         }
         chip.onWidthChanged = { [weak self] in self?.needsLayout = true }
@@ -248,22 +255,38 @@ final class WorkspaceTabStrip: NSView {
     }
 
     private func buildRenameHint() {
-        renameHint.orientation = .horizontal
-        renameHint.alignment = .centerY
-        renameHint.spacing = 6
-        for (key, text) in [("⏎", "rename"), ("esc", "cancel")] {
-            let cap = KeycapView(shortcut: key)
-            let label = NSTextField(labelWithString: text)
-            label.font = .systemFont(ofSize: 11)
-            label.textColor = Theme.current.chrome.ink(.muted)
-            hintCaps.append(cap)
-            hintLabels.append(label)
-            renameHint.addArrangedSubview(cap)
-            renameHint.addArrangedSubview(label)
-            renameHint.setCustomSpacing(12, after: label)
-        }
-        renameHint.translatesAutoresizingMaskIntoConstraints = true
+        fill(idleHint, with: [.text("Double-click or"), .key("⏎"), .text("to rename a tab")])
+        fill(renameHint, with: [.key("⏎"), .text("rename"), .gap, .key("esc"), .text("cancel")])
         renameHint.isHidden = true
-        addSubview(renameHint)
+    }
+
+    private enum HintPart {
+        case key(String)
+        case text(String)
+        case gap
+    }
+
+    private func fill(_ hint: NSStackView, with parts: [HintPart]) {
+        hint.orientation = .horizontal
+        hint.alignment = .centerY
+        hint.spacing = 6
+        for part in parts {
+            switch part {
+            case .key(let key):
+                let cap = KeycapView(shortcut: key)
+                hintCaps.append(cap)
+                hint.addArrangedSubview(cap)
+            case .text(let text):
+                let label = NSTextField(labelWithString: text)
+                label.font = .systemFont(ofSize: 11)
+                label.textColor = Theme.current.chrome.ink(.muted)
+                hintLabels.append(label)
+                hint.addArrangedSubview(label)
+            case .gap:
+                if let last = hint.arrangedSubviews.last { hint.setCustomSpacing(12, after: last) }
+            }
+        }
+        hint.translatesAutoresizingMaskIntoConstraints = true
+        addSubview(hint)
     }
 }

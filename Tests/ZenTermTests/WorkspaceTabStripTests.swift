@@ -179,8 +179,8 @@ final class WorkspaceTabStripTests: WindowTestCase {
 
         chip.mouseDown(with: try mouse(.leftMouseDown, at: chip, clicks: 2))
 
+        XCTAssertTrue(strip.isIdleHintVisibleForTesting == false && strip.isRenameHintVisibleForTesting)
         XCTAssertTrue(chip.isRenaming)
-        XCTAssertTrue(strip.isRenameHintVisibleForTesting)
         XCTAssertEqual(chip.renameFieldForTesting.placeholderAttributedString?.string, "bin/check")
         let editor = try XCTUnwrap(fieldEditor, "the inline field has to take the keyboard")
         editor.string = "gate"
