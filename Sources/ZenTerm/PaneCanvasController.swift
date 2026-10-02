@@ -155,7 +155,7 @@ final class PaneCanvasController: NSObject {
     }
 
     private func navEnv(token: Int) -> [String: String] {
-        NavSocketServer.env(base: workspaceEnv, token: token)
+        PaneEnvironment.variables(base: workspaceEnv, token: token)
     }
 
     func start() {
@@ -549,6 +549,17 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     var focusedSurfaceID: SurfaceID? { surfaceIDByLeaf[tree.focusedLeaf] }
 
     var liveSurfaceIDs: [SurfaceID] { tree.leafIDs.compactMap { surfaceIDByLeaf[$0] } }
+
+    var paneHandles: [PaneHandle] {
+        tree.leafIDs.compactMap { id in
+            guard let token = tokenByLeaf[id], let surfaceID = surfaceIDByLeaf[id],
+                let surface = registry.surface(for: id)
+            else { return nil }
+            return PaneHandle(
+                token: token, surfaceID: surfaceID, surface: surface, drawer: nil,
+                cwd: surface.currentDirectory ?? cwdByLeaf[id])
+        }
+    }
 
     private func leafID(of surface: SurfaceID) -> PaneID? {
         surfaceIDByLeaf.first { $0.value == surface }?.key

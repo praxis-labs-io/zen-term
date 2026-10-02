@@ -1,5 +1,6 @@
 import AppKit
 import AppLog
+import ControlProtocol
 import PaneKit
 import TabKit
 import TerminalKit
@@ -2230,6 +2231,63 @@ final class WindowController: NSObject {
                     removedWorktreeName: nil)
             }
         }
+    }
+
+    func listing() -> ListResult.Window {
+        let byID = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
+        return ListResult.Window(
+            id: ControlAddress.window(windowID), key: window.isKeyWindow,
+            workspaces: order.navigableWorkspaces.compactMap { byID[$0] }.map(listing(of:)))
+    }
+
+    private func listing(of workspace: WorkspaceController) -> ListResult.Workspace {
+        let tabs = workspace.tabIDs.compactMap { id -> ListResult.Tab? in
+            guard let tab = workspace.controller(id) else { return nil }
+            return ListResult.Tab(
+                id: ControlAddress.tab(window: windowID, tab: id.raw), title: title(of: id),
+                active: id == workspace.activeID, panes: tab.paneHandles.map(listing(of:)))
+        }
+        return ListResult.Workspace(
+            title: workspace.name, folder: workspace.folder.path, configured: workspace.isConfigured,
+            worktree: workspace.origin.map { ListResult.Worktree(name: $0.name, parent: $0.parent.path.path) },
+            active: workspace === activeWorkspace, tabs: tabs)
+    }
+
+    private func listing(of pane: PaneHandle) -> ListResult.Pane {
+        let agent = agents.agents[pane.surfaceID].map { agent in
+            let tone = AttentionTone(
+                wait: attention.agentWait(of: pane.surfaceID), working: attention.isWorking(pane.surfaceID))
+            return ListResult.Agent(name: agent.name, state: Self.agentState(tone))
+        }
+        return ListResult.Pane(
+            token: pane.token, drawer: pane.drawer.map(Self.drawer), title: pane.surface.title,
+            cwd: pane.cwd?.path, busy: pane.surface.isBusy, agent: agent)
+    }
+
+    private static func agentState(_ tone: AttentionTone) -> ListResult.AgentState {
+        switch tone {
+        case .waiting: return .waiting
+        case .working: return .working
+        case .idle: return .idle
+        }
+    }
+
+    private static func drawer(_ edge: DrawerEdge) -> ListResult.Drawer {
+        switch edge {
+        case .bottom: return .bottom
+        case .right: return .right
+        }
+    }
+
+    func pane(token: Int) -> (tab: TabID, pane: PaneHandle)? {
+        for workspace in workspaces {
+            for id in workspace.tabIDs {
+                if let pane = workspace.controller(id)?.paneHandles.first(where: { $0.token == token }) {
+                    return (id, pane)
+                }
+            }
+        }
+        return nil
     }
 
     func holdsWorkspace(_ id: WorkspaceID) -> Bool { workspaces.contains { $0.id == id } }

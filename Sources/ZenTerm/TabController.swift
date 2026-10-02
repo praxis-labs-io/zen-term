@@ -180,6 +180,21 @@ final class TabController: NSObject {
         paneCanvas.liveSurfaceIDs + [bottomDrawerSurfaceID, rightDrawerSurfaceID].compactMap { $0 }
     }
 
+    var paneHandles: [PaneHandle] {
+        paneCanvas.paneHandles + [drawerHandle(.bottom), drawerHandle(.right)].compactMap { $0 }
+    }
+
+    private func drawerHandle(_ edge: DrawerEdge) -> PaneHandle? {
+        let drawer: (token: Int?, id: SurfaceID?, surface: TerminalSurface?)
+        switch edge {
+        case .bottom: drawer = (bottomDrawerToken, bottomDrawerSurfaceID, bottomDrawerSurface)
+        case .right: drawer = (rightDrawerToken, rightDrawerSurfaceID, rightDrawerSurface)
+        }
+        guard let token = drawer.token, let surfaceID = drawer.id, let surface = drawer.surface else { return nil }
+        return PaneHandle(
+            token: token, surfaceID: surfaceID, surface: surface, drawer: edge, cwd: surface.currentDirectory)
+    }
+
     func surface(_ id: SurfaceID) -> TerminalSurface? {
         if id == bottomDrawerSurfaceID { return bottomDrawerSurface }
         if id == rightDrawerSurfaceID { return rightDrawerSurface }
@@ -412,7 +427,7 @@ final class TabController: NSObject {
     }
 
     private func drawerConfig(command: String?, token: Int) -> TerminalSurfaceConfig {
-        let env = NavSocketServer.env(base: workspaceEnv, token: token)
+        let env = PaneEnvironment.variables(base: workspaceEnv, token: token)
         if let command, command != "shell" {
             return ShellLaunch.program(command, cwd: sessionCWD, env: env)
         }

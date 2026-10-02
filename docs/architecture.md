@@ -62,6 +62,8 @@ TerminalKit          the ONLY target that may import GhosttyKit
 
   TabKit             pure leaf used by ZenTerm: imports nothing
   AppLog             Foundation + os leaf used by TerminalKit and ZenTerm
+  ControlProtocol    Foundation leaf: the control socket's wire types, used by ZenTerm and zen
+  zen                the control CLI: ControlProtocol + swift-argument-parser, nothing else
 ```
 
 The package graph enforces the seam: `ZenTerm` has no `GhosttyKit` dependency, so an
@@ -480,6 +482,15 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
 exported as `$ZEN_SOCK`; per-pid so a dev build cannot unlink the installed app's socket.
 Failure is silent. `NavGuard.shouldPassThrough` passes Ctrl-nav only. An open tool float
 also claims Ctrl-nav and gets no `$ZEN_PANE`.
+
+**The control socket** backs `zen` (`docs/control-protocol.md`). `ControlServer` listens on
+`control.<pid>.sock` beside the nav socket, exported as `$ZEN_CONTROL_SOCK` by
+`PaneEnvironment` with the nav variables. Both servers sit on `SocketListener`, which owns
+bind, the per-pid path, the stale sweep, the `0600` mode and the `getpeereid` check. A
+request decodes on the connection's thread, applies on main through `ControlResponder`,
+and is written back from the connection's thread, so a client that stops reading never
+stalls main. A token resolves to its window, tab and surface by walking the windows
+(`ControlResponder.locate`), not through a second registry.
 
 **The theme state file** backs zen-theme.nvim (`docs/nvim-theme-protocol.md`).
 `ThemePublisher` writes `~/Library/Application Support/ZenTerm/theme.json` at launch and
