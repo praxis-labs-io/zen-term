@@ -32,7 +32,7 @@ final class RepoPickerWorktreeChurnTests: WindowTestCase {
         let overlay = RepoPickerOverlay(
             entries: [
                 Workspace(
-                    title: "work", path: repo, main: nil, right: nil, bottom: nil, focus: .main,
+                    title: "work", path: repo, tabs: [],
                     env: [:])
             ],
             background: Theme.current.chrome.background.nsColor,

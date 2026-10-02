@@ -244,7 +244,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
     private func makeWorktreeCard() -> NewWorktreeOverlay {
         let workspace = Workspace(
             title: "ZenTerm", path: FileManager.default.temporaryDirectory,
-            main: nil, right: nil, bottom: nil, focus: .main, env: [:], carry: ["node_modules"])
+            tabs: [], env: [:], carry: ["node_modules"])
         let overlay = NewWorktreeOverlay(
             workspace: workspace,
             options: WorktreeStore.CreateOptions(

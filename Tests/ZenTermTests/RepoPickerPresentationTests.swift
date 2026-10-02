@@ -332,8 +332,7 @@ final class RepoPickerPresentationTests: WindowTestCase {
             isDirectory: true)
         c.openWorkspaceForTesting(
             Workspace(
-                title: "feature/one", path: removed, main: nil, right: nil, bottom: nil,
-                focus: .main, env: [:]))
+                title: "feature/one", path: removed, tabs: [], env: [:]))
         c.handle(.toggleRepoPicker)
         waitUntil(!pickers(in: c).isEmpty, "the picker to be presented")
         let picker = try XCTUnwrap(pickers(in: c).first)

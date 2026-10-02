@@ -14,21 +14,35 @@ enum WorkspacesWriter {
     /// Matches the alignment in `docs/config/workspaces`.
     private static let keyColumnWidth = 6
 
+    private static let tabIndent = "  "
+
     /// `carry` keeps its authored order; env keys sort for stable output.
     static func serialize(_ ws: Workspace) -> String {
         var lines = ["[\(ws.title)]"]
-        func add(_ key: String, _ rendered: String) {
+        func add(_ key: String, _ rendered: String, indent: String = "") {
             let paddedKey = key.padding(toLength: max(key.count, keyColumnWidth), withPad: " ", startingAt: 0)
-            lines.append("\(paddedKey) = \(rendered)")
+            lines.append("\(indent)\(paddedKey) = \(rendered)")
+        }
+        func addTab(_ index: Int, indent: String = "") {
+            let tab = ws.tabs[index]
+            for region in Workspace.Region.allCases {
+                if let command = tab.command(in: region) { add(region.rawValue, quoted(command), indent: indent) }
+            }
+            if ws.focus.tab == index, ws.focus != .start { add("focus", ws.focus.region.rawValue, indent: indent) }
         }
         add("path", quoted(PathDisplay.abbreviatingHome(ws.path.path)))
-        if let main = ws.main { add("main", quoted(main)) }
-        if let right = ws.right { add("right", quoted(right)) }
-        if let bottom = ws.bottom { add("bottom", quoted(bottom)) }
-        if ws.focus != .main { add("focus", ws.focus.rawValue) }
+        let isFlat = ws.tabs.count == 1 && ws.tabs[0].name == nil
+        if isFlat { addTab(0) }
         for entry in ws.carry { add("carry", quoted(entry)) }
         for key in ws.env.keys.sorted() {
             add("env", "\(key)=\(quoted(ws.env[key] ?? ""))")
+        }
+        if !isFlat {
+            for index in ws.tabs.indices {
+                lines.append("")
+                lines.append(ws.tabs[index].name.map { "tab = \(quoted($0))" } ?? "tab")
+                addTab(index, indent: tabIndent)
+            }
         }
         return lines.joined(separator: "\n") + "\n"
     }

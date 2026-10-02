@@ -131,7 +131,7 @@ final class NewWorkspaceTests: WindowTestCase {
     func test_closingTheFirstWorkspace_thenCmdCtrlT_givesAWorkspaceBack() throws {
         let c = makeWindow()
         c.openWorkspaceForTesting(
-            Workspace(title: "Alpha", path: root, main: nil, right: nil, bottom: nil, focus: .main, env: [:]))
+            Workspace(title: "Alpha", path: root, tabs: [], env: [:]))
         c.handle(.selectWorkspace(1))
         c.handle(.closeWorkspace)
         XCTAssertEqual(c.workspaceNamesForTesting, ["Alpha"])

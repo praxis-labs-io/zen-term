@@ -50,7 +50,7 @@ final class WindowControllerTabsAtPathTests: WindowTestCase {
 
     private func workspace(_ title: String, at path: URL) -> Workspace {
         Workspace(
-            title: title, path: path, main: nil, right: nil, bottom: nil, focus: .main, env: [:])
+            title: title, path: path, tabs: [], env: [:])
     }
 
     func test_countsOnlyTheTabsOpenedAtThatPath() throws {

@@ -30,10 +30,18 @@ enum WorkspacesParser {
                 continue
             }
 
-            guard let equals = line.firstIndex(of: "=") else { continue }
-            let key = line[..<equals].trimmingCharacters(in: .whitespaces)
-            let rawValue = String(line[line.index(after: equals)...]).trimmingCharacters(in: .whitespaces)
-            let value = ConfigText.unquote(rawValue)
+            let key: String
+            let value: String
+            if let equals = line.firstIndex(of: "=") {
+                key = line[..<equals].trimmingCharacters(in: .whitespaces)
+                let rawValue = String(line[line.index(after: equals)...]).trimmingCharacters(in: .whitespaces)
+                value = ConfigText.unquote(rawValue)
+            } else if line == Section.tabKey {
+                key = line
+                value = ""
+            } else {
+                continue
+            }
             guard current != nil else {
                 Log.warning(
                     "Workspaces: `\(key)` appears before any [section] — ignored", category: .workspace)
@@ -46,23 +54,27 @@ enum WorkspacesParser {
     }
 
     private struct Section {
+        static let tabKey = "tab"
+
         let title: String
         var path: String?
-        var main: String?
-        var right: String?
-        var bottom: String?
-        var focusRaw: String?
+        var tabs: [Workspace.Tab] = []
+        var focus: Workspace.LaunchFocus?
         var env: [(key: String, value: String)] = []
         var carry: [String] = []
 
         mutating func set(key: String, value: String) {
+            if key == Self.tabKey {
+                tabs.append(Workspace.Tab(name: value.isEmpty ? nil : value))
+                return
+            }
             if key != "env", value.isEmpty { return }
             switch key {
             case "path": path = value
-            case "main": main = value
-            case "right": right = value
-            case "bottom": bottom = value
-            case "focus": focusRaw = value
+            case "main": setInCurrentTab(.main, value)
+            case "right": setInCurrentTab(.right, value)
+            case "bottom": setInCurrentTab(.bottom, value)
+            case "focus": setFocus(value)
             case "env":
                 guard let equals = value.firstIndex(of: "=") else {
                     Log.warning(
@@ -95,24 +107,43 @@ enum WorkspacesParser {
             }
         }
 
+        private mutating func setInCurrentTab(_ region: Workspace.Region, _ command: String) {
+            if tabs.isEmpty { tabs.append(Workspace.Tab()) }
+            let index = tabs.count - 1
+            switch region {
+            case .main: tabs[index].main = command
+            case .right: tabs[index].right = command
+            case .bottom: tabs[index].bottom = command
+            }
+        }
+
+        private mutating func setFocus(_ raw: String) {
+            if tabs.isEmpty { tabs.append(Workspace.Tab()) }
+            if focus != nil {
+                Log.warning(
+                    "Workspaces: `\(title)` has more than one `focus` — the last one wins", category: .workspace)
+            }
+            let region = Workspace.Region(rawValue: raw.lowercased())
+            if region == nil {
+                Log.warning(
+                    "Workspaces: `\(title)` focus `\(raw)` isn't main/right/bottom — using main",
+                    category: .workspace)
+            }
+            focus = Workspace.LaunchFocus(tab: tabs.count - 1, region: region ?? .main)
+        }
+
         func build() -> Workspace? {
             guard let path, !path.isEmpty else {
                 Log.warning(
                     "Workspaces: `\(title)` has no `path` — section dropped", category: .workspace)
                 return nil
             }
-            let focus = focusRaw.flatMap { Workspace.Region(rawValue: $0.lowercased()) } ?? .main
-            if let focusRaw, Workspace.Region(rawValue: focusRaw.lowercased()) == nil {
-                Log.warning(
-                    "Workspaces: `\(title)` focus `\(focusRaw)` isn't main/right/bottom — using main",
-                    category: .workspace)
-            }
             var envMap: [String: String] = [:]
             for entry in env { envMap[entry.key] = entry.value }
             return Workspace(
                 title: title,
                 path: URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true),
-                main: main, right: right, bottom: bottom, focus: focus, env: envMap, carry: carry)
+                tabs: tabs, focus: focus ?? .start, env: envMap, carry: carry)
         }
     }
 

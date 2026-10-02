@@ -17,28 +17,30 @@ final class WorkspacesWriterTests: XCTestCase {
         assertRoundTrips(
             Workspace(
                 title: "Scratch", path: expandTilde("~/Dev/scratch"),
-                main: nil, right: nil, bottom: nil, focus: .main, env: [:]))
+                tabs: [], env: [:]))
     }
 
     func test_fullRecipe_roundTrips() {
         assertRoundTrips(
             Workspace(
                 title: "ZenTerm", path: expandTilde("~/Dev/zen-term"),
-                main: "nvim", right: "claude", bottom: "shell", focus: .right, env: [:]))
+                tabs: [Workspace.Tab(main: "nvim", right: "claude", bottom: "shell")],
+                focus: Workspace.LaunchFocus(tab: 0, region: .right), env: [:]))
     }
 
     func test_env_roundTrips_regardlessOfKeyOrder() {
         assertRoundTrips(
             Workspace(
                 title: "Web", path: expandTilde("~/Dev/web"),
-                main: "nvim", right: nil, bottom: nil, focus: .main,
+                tabs: [Workspace.Tab(main: "nvim")],
                 env: ["PORT": "3000", "NODE_ENV": "development", "API_URL": "http://localhost"]))
     }
 
     func test_spacedCommand_isQuoted_andRoundTrips() {
         let ws = Workspace(
             title: "Dev", path: expandTilde("~/Dev/app"),
-            main: nil, right: nil, bottom: "npm run dev", focus: .bottom, env: [:])
+            tabs: [Workspace.Tab(bottom: "npm run dev")], focus: Workspace.LaunchFocus(tab: 0, region: .bottom),
+            env: [:])
         XCTAssertTrue(WorkspacesWriter.serialize(ws).contains("bottom = \"npm run dev\""))
         assertRoundTrips(ws)
     }
@@ -47,14 +49,14 @@ final class WorkspacesWriterTests: XCTestCase {
         assertRoundTrips(
             Workspace(
                 title: "ZenTerm", path: expandTilde("~/Dev/zen-term"),
-                main: nil, right: nil, bottom: nil, focus: .main, env: [:],
+                tabs: [], env: [:],
                 carry: ["node_modules", ".env"]))
     }
 
     func test_carryWithSpace_isQuoted_andRoundTrips() {
         let ws = Workspace(
             title: "Spaced", path: expandTilde("~/Dev/spaced"),
-            main: nil, right: nil, bottom: nil, focus: .main, env: [:], carry: ["build output"])
+            tabs: [], env: [:], carry: ["build output"])
         XCTAssertTrue(WorkspacesWriter.serialize(ws).contains("carry  = \"build output\""))
         assertRoundTrips(ws)
     }
@@ -62,7 +64,7 @@ final class WorkspacesWriterTests: XCTestCase {
     func test_envValueWithSpace_isQuoted_andRoundTrips() {
         let ws = Workspace(
             title: "Spaced", path: expandTilde("~/Dev/spaced"),
-            main: nil, right: nil, bottom: nil, focus: .main, env: ["GREETING": "hello world"])
+            tabs: [], env: ["GREETING": "hello world"])
         XCTAssertTrue(WorkspacesWriter.serialize(ws).contains("GREETING=\"hello world\""))
         assertRoundTrips(ws)
     }
@@ -71,7 +73,7 @@ final class WorkspacesWriterTests: XCTestCase {
         let serialized = WorkspacesWriter.serialize(
             Workspace(
                 title: "Bare", path: expandTilde("~/x"),
-                main: nil, right: nil, bottom: nil, focus: .main, env: [:]))
+                tabs: [], env: [:]))
         func emitsKey(_ key: String) -> Bool {
             serialized.split(separator: "\n").contains { $0.hasPrefix(key) }
         }
@@ -83,7 +85,7 @@ final class WorkspacesWriterTests: XCTestCase {
     func test_valueWithHash_isQuoted_andRoundTrips() {
         let ws = Workspace(
             title: "Hashy", path: expandTilde("~/Dev/hashy"),
-            main: nil, right: nil, bottom: "echo # done", focus: .main, env: ["TAG": "v1 #rc"])
+            tabs: [Workspace.Tab(bottom: "echo # done")], env: ["TAG": "v1 #rc"])
         let serialized = WorkspacesWriter.serialize(ws)
         XCTAssertTrue(serialized.contains("\"echo # done\""))
         XCTAssertTrue(serialized.contains("TAG=\"v1 #rc\""))
@@ -95,7 +97,7 @@ final class WorkspacesWriterTests: XCTestCase {
         try WorkspacesWriter.append(
             Workspace(
                 title: "First", path: expandTilde("~/Dev/first"),
-                main: "nvim", right: nil, bottom: nil, focus: .main, env: [:]),
+                tabs: [Workspace.Tab(main: "nvim")], env: [:]),
             configRoot: root)
         XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["First"])
     }
@@ -109,7 +111,7 @@ final class WorkspacesWriterTests: XCTestCase {
         try WorkspacesWriter.append(
             Workspace(
                 title: "Added", path: expandTilde("~/Dev/added"),
-                main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
+                tabs: [], env: [:]),
             configRoot: root)
 
         let text = try String(contentsOf: url, encoding: .utf8)
@@ -125,7 +127,7 @@ final class WorkspacesWriterTests: XCTestCase {
 
         let ws = Workspace(
             title: "New", path: expandTilde("~/Dev/new"),
-            main: nil, right: nil, bottom: nil, focus: .main, env: [:])
+            tabs: [], env: [:])
         XCTAssertThrowsError(try WorkspacesWriter.append(ws, configRoot: root))
         XCTAssertEqual(try Data(contentsOf: url), invalidUTF8, "the unreadable file must be left untouched")
     }
@@ -141,7 +143,7 @@ final class WorkspacesWriterTests: XCTestCase {
         try WorkspacesWriter.append(
             Workspace(
                 title: "Linked", path: expandTilde("~/Dev/linked"),
-                main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
+                tabs: [], env: [:]),
             configRoot: root)
 
         let type = try FileManager.default.attributesOfItem(atPath: link.path)[.type] as? FileAttributeType
@@ -155,7 +157,7 @@ final class WorkspacesWriterTests: XCTestCase {
         let root = tempDirPath()
         let ws = Workspace(
             title: "Dup", path: expandTilde("~/Dev/dup"),
-            main: nil, right: nil, bottom: nil, focus: .main, env: [:])
+            tabs: [], env: [:])
         try WorkspacesWriter.append(ws, configRoot: root)
         XCTAssertThrowsError(try WorkspacesWriter.append(ws, configRoot: root)) { error in
             guard case WorkspacesWriter.WriteError.titleExists("Dup") = error else {
@@ -193,15 +195,15 @@ final class WorkspacesWriterTests: XCTestCase {
         try WorkspacesWriter.update(
             Workspace(
                 title: "Beta", path: expandTilde("~/Dev/beta-moved"),
-                main: "vim", right: "claude", bottom: nil, focus: .main, env: [:]),
+                tabs: [Workspace.Tab(main: "vim", right: "claude")], env: [:]),
             originalTitle: "Beta", configRoot: root)
 
         let parsed = ConfigLoader.loadWorkspacesBlocking(configRoot: root)
         XCTAssertEqual(parsed.map(\.title), ["Alpha", "Beta", "Gamma"])
         let beta = parsed.first { $0.title == "Beta" }
         XCTAssertEqual(beta?.path, expandTilde("~/Dev/beta-moved"))
-        XCTAssertEqual(beta?.main, "vim")
-        XCTAssertEqual(beta?.right, "claude")
+        XCTAssertEqual(beta?.tabs[0].main, "vim")
+        XCTAssertEqual(beta?.tabs[0].right, "claude")
         let text = try read(root)
         XCTAssertTrue(text.contains("# my workspaces"))
         XCTAssertTrue(text.contains("[Alpha]"))
@@ -215,7 +217,7 @@ final class WorkspacesWriterTests: XCTestCase {
         try WorkspacesWriter.update(
             Workspace(
                 title: "New", path: expandTilde("~/Dev/old"),
-                main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
+                tabs: [], env: [:]),
             originalTitle: "Old", configRoot: root)
 
         XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["New"])
@@ -230,7 +232,7 @@ final class WorkspacesWriterTests: XCTestCase {
             try WorkspacesWriter.update(
                 Workspace(
                     title: "B", path: expandTilde("~/Dev/a"),
-                    main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
+                    tabs: [], env: [:]),
                 originalTitle: "A", configRoot: root)
         ) { error in
             guard case WorkspacesWriter.WriteError.titleExists("B") = error else {
@@ -247,7 +249,7 @@ final class WorkspacesWriterTests: XCTestCase {
         try WorkspacesWriter.update(
             Workspace(
                 title: "Beta", path: expandTilde("~/Dev/beta-moved"),
-                main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
+                tabs: [], env: [:]),
             originalTitle: "Beta", configRoot: root)
 
         let text = try read(root)
@@ -263,7 +265,7 @@ final class WorkspacesWriterTests: XCTestCase {
         try WorkspacesWriter.update(
             Workspace(
                 title: "Fresh", path: expandTilde("~/Dev/fresh"),
-                main: nil, right: nil, bottom: nil, focus: .main, env: [:]),
+                tabs: [], env: [:]),
             originalTitle: "Ghost", configRoot: root)
 
         XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["A", "Fresh"])
@@ -330,9 +332,9 @@ final class WorkspacesWriterTests: XCTestCase {
 
         let parsed = ConfigLoader.loadWorkspacesBlocking(configRoot: root)
         XCTAssertEqual(parsed.first { $0.title == "Beta" }?.path, expandTilde("~/Dev/beta"))
-        XCTAssertEqual(parsed.first { $0.title == "Beta" }?.main, "nvim")
+        XCTAssertEqual(parsed.first { $0.title == "Beta" }?.tabs[0].main, "nvim")
         XCTAssertEqual(parsed.first { $0.title == "Alpha" }?.path, expandTilde("~/Dev/alpha"))
-        XCTAssertNil(parsed.first { $0.title == "Alpha" }?.main)
+        XCTAssertNil(parsed.first { $0.title == "Alpha" }?.tabs[0].main)
     }
 
     func test_swap_handlesSectionsOfUnequalLength() throws {
@@ -354,8 +356,8 @@ final class WorkspacesWriterTests: XCTestCase {
 
         let parsed = ConfigLoader.loadWorkspacesBlocking(configRoot: root)
         XCTAssertEqual(parsed.map(\.title), ["Long", "Short"])
-        XCTAssertEqual(parsed.first { $0.title == "Long" }?.right, "claude")
-        XCTAssertEqual(parsed.first { $0.title == "Long" }?.focus, .right)
+        XCTAssertEqual(parsed.first { $0.title == "Long" }?.tabs[0].right, "claude")
+        XCTAssertEqual(parsed.first { $0.title == "Long" }?.focus, Workspace.LaunchFocus(tab: 0, region: .right))
         XCTAssertEqual(parsed.first { $0.title == "Short" }?.path, expandTilde("~/Dev/short"))
     }
 
@@ -444,5 +446,124 @@ final class WorkspacesWriterTests: XCTestCase {
         XCTAssertFalse(try WorkspacesWriter.swap("Alpha", with: "Ghost", configRoot: root))
 
         XCTAssertEqual(try read(root), before, "a stale row must not rearrange the file")
+    }
+
+    private func threeTabs(focus: Workspace.LaunchFocus = .start) -> Workspace {
+        Workspace(
+            title: "ZenTerm", path: expandTilde("~/Dev/zen-term"),
+            tabs: [
+                Workspace.Tab(name: "nvim", main: "nvim", right: "claude"),
+                Workspace.Tab(name: "the gate", bottom: "bin/check"),
+                Workspace.Tab(main: "lazygit"),
+            ],
+            focus: focus, env: ["LOG_LEVEL": "debug"], carry: [".env"])
+    }
+
+    func test_singleUnnamedTab_writesTheFlatForm() {
+        let ws = Workspace(
+            title: "ZenTerm", path: expandTilde("~/Dev/zen-term"),
+            tabs: [Workspace.Tab(main: "nvim", right: "claude", bottom: "shell")],
+            focus: Workspace.LaunchFocus(tab: 0, region: .right), env: ["A": "1"], carry: [".env"])
+        XCTAssertEqual(
+            WorkspacesWriter.serialize(ws),
+            """
+            [ZenTerm]
+            path   = ~/Dev/zen-term
+            main   = nvim
+            right  = claude
+            bottom = shell
+            focus  = right
+            carry  = .env
+            env    = A=1
+
+            """)
+    }
+
+    func test_multipleTabs_writeWorkspaceKeysThenIndentedTabs() {
+        XCTAssertEqual(
+            WorkspacesWriter.serialize(threeTabs(focus: Workspace.LaunchFocus(tab: 1, region: .bottom))),
+            """
+            [ZenTerm]
+            path   = ~/Dev/zen-term
+            carry  = .env
+            env    = LOG_LEVEL=debug
+
+            tab = nvim
+              main   = nvim
+              right  = claude
+
+            tab = "the gate"
+              bottom = bin/check
+              focus  = bottom
+
+            tab
+              main   = lazygit
+
+            """)
+    }
+
+    func test_multipleTabs_roundTrip() {
+        assertRoundTrips(threeTabs())
+        assertRoundTrips(threeTabs(focus: Workspace.LaunchFocus(tab: 2, region: .right)))
+    }
+
+    func test_focusAtTheStart_isOmitted() {
+        XCTAssertFalse(WorkspacesWriter.serialize(threeTabs()).contains("focus"))
+    }
+
+    func test_singleNamedTab_writesItsTabLine() {
+        let ws = Workspace(
+            title: "Solo", path: expandTilde("~/Dev/solo"), tabs: [Workspace.Tab(name: "editor", main: "nvim")],
+            env: [:])
+        let serialized = WorkspacesWriter.serialize(ws)
+        XCTAssertTrue(serialized.contains("\ntab = editor\n  main   = nvim\n"))
+        assertRoundTrips(ws)
+    }
+
+    func test_update_multiTabSection_keepsNeighboursAndSurroundingComments() throws {
+        let root = tempDirPath()
+        try seed(
+            """
+            # my workspaces
+            [Alpha]
+            path = ~/Dev/alpha
+
+            # the main one
+            [ZenTerm]
+            path = ~/Dev/zen-term
+
+            tab = old
+              main = vim
+
+            tab
+              main = htop
+            # trailing note
+
+            [Gamma]
+            path = ~/Dev/gamma
+            """, in: root)
+
+        try WorkspacesWriter.update(threeTabs(), originalTitle: "ZenTerm", configRoot: root)
+
+        let parsed = ConfigLoader.loadWorkspacesBlocking(configRoot: root)
+        XCTAssertEqual(parsed.map(\.title), ["Alpha", "ZenTerm", "Gamma"])
+        XCTAssertEqual(parsed.first { $0.title == "ZenTerm" }, threeTabs())
+        let text = try read(root)
+        XCTAssertTrue(text.contains("# my workspaces\n[Alpha]"))
+        XCTAssertTrue(text.contains("# the main one\n[ZenTerm]"))
+        XCTAssertTrue(text.contains("  main   = lazygit\n# trailing note\n\n[Gamma]"))
+        XCTAssertFalse(text.contains("htop"), "the old tabs are replaced, not left behind a blank line")
+    }
+
+    func test_remove_multiTabSection_takesItsTabsWithIt() throws {
+        let root = tempDirPath()
+        try seed(
+            "[Alpha]\npath = ~/Dev/alpha\n\n" + WorkspacesWriter.serialize(threeTabs())
+                + "\n[Gamma]\npath = ~/Dev/gamma\n", in: root)
+
+        try WorkspacesWriter.remove(title: "ZenTerm", configRoot: root)
+
+        XCTAssertEqual(ConfigLoader.loadWorkspacesBlocking(configRoot: root).map(\.title), ["Alpha", "Gamma"])
+        XCTAssertFalse(try read(root).contains("tab"))
     }
 }

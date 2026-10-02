@@ -744,7 +744,7 @@ final class WorktreeStoreTests: XCTestCase {
         let package = try makePackage()
         try GitFixture.write("secret\n", to: package.appendingPathComponent(".env"))
         let parent = Workspace(
-            title: "rails", path: package, main: nil, right: nil, bottom: nil, focus: .main,
+            title: "rails", path: package, tabs: [],
             env: [:], carry: [".env"])
 
         let worktree = try WorktreeStore.create(branch: "carried", in: package)
@@ -770,7 +770,7 @@ final class WorktreeStoreTests: XCTestCase {
         try GitFixture.write("dep\n", to: modules.appendingPathComponent("dep.js"))
         try GitFixture.write("node_modules/\n", to: package.appendingPathComponent(".gitignore"))
         let parent = Workspace(
-            title: "rails", path: package, main: nil, right: nil, bottom: nil, focus: .main,
+            title: "rails", path: package, tabs: [],
             env: [:], carry: [".env", "node_modules"])
 
         let worktree = try WorktreeStore.create(branch: "predates", in: package)
@@ -799,7 +799,7 @@ final class WorktreeStoreTests: XCTestCase {
     func test_createFromTheRepoRoot_stillCarries() throws {
         try GitFixture.write("secret\n", to: repo.appendingPathComponent(".env"))
         let parent = Workspace(
-            title: "work", path: repo, main: nil, right: nil, bottom: nil, focus: .main,
+            title: "work", path: repo, tabs: [],
             env: [:], carry: [".env"])
 
         let worktree = try WorktreeStore.create(branch: "at-root", in: repo)

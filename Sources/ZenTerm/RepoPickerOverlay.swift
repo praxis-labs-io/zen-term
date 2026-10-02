@@ -542,8 +542,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             title: "\(parent.title): \(worktree.name)",
             path: GitRepo.mirrored(parent.path, from: repoRoot, into: worktree.path)
                 ?? worktree.path.standardizedFileURL,
-            main: parent.main, right: parent.right, bottom: parent.bottom, focus: parent.focus,
-            env: parent.env, carry: parent.carry)
+            tabs: parent.tabs, focus: parent.focus, env: parent.env, carry: parent.carry)
     }
 
     final class ActionRowView: SelectableRowView {
