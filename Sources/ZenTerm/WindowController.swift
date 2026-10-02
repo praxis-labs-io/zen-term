@@ -315,6 +315,20 @@ final class WindowController: NSObject {
 
     func modalOwns(_ chord: Chord) -> Bool { modal?.overlay.owns(chord) == true }
 
+    func passesThrough(
+        _ chord: Chord, as action: KeyInterceptor.ReservedChord, firstResponder: NSResponder?
+    ) -> Bool {
+        if TextEditingChords.owns(chord, firstResponder: firstResponder) { return true }
+        if modalOwns(chord) { return true }
+        if PickerChordGuard.shouldPassThrough(
+            action: action, repoPickerIsOpen: isRepoPickerOpen, sidebarHasFocus: isSidebarFocused)
+        {
+            return true
+        }
+        return NavGuard.shouldPassThrough(
+            chord: chord, action: action, focusedPaneIsVim: focusedPaneIsVim, toolFloatIsOpen: isToolFloatOpen)
+    }
+
     var isSidebarFocused: Bool { sidebar.hasFocus }
 
     private var activeFloatName: String? {

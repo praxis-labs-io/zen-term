@@ -60,7 +60,7 @@ final class WorkspaceFormWindowTests: WindowTestCase {
     private func interceptor(for c: WindowController) -> KeyInterceptor {
         let keys = KeyInterceptor()
         keys.setKeymap(KeymapDefaults.map)
-        keys.passThroughGuard = { chord, _ in c.modalOwns(chord) }
+        keys.passThroughGuard = { c.passesThrough($0, as: $1, firstResponder: c.window.firstResponder) }
         keys.onReservedChord = { c.handle($0) }
         return keys
     }

@@ -282,10 +282,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         let keys = KeyInterceptor()
         keys.setKeymap(KeymapDefaults.map)
         keys.onReservedChord = { c.handle($0) }
-        keys.passThroughGuard = { _, action in
-            PickerChordGuard.shouldPassThrough(
-                action: action, repoPickerIsOpen: c.isRepoPickerOpen, sidebarHasFocus: c.isSidebarFocused)
-        }
+        keys.passThroughGuard = { c.passesThrough($0, as: $1, firstResponder: c.window.firstResponder) }
         return keys
     }
 
