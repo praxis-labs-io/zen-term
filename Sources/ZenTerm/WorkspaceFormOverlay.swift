@@ -8,7 +8,6 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
     private static let namePlaceholder = "Named after the folder"
     private static let submitChord = Chord(command: true, key: "⏎")
     private static let launchFocusChord = Chord(command: true, key: "l")
-    private static let launchFocusKeyCode: UInt16 = 37
 
     private enum Problem {
         case view(NSView)
@@ -143,13 +142,8 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
         ) {
             return true
         }
-        if Self.isLaunchFocusKey(event) { return drawing.openFocusedAtFocusedRegion() }
+        if Chord(event: event) == Self.launchFocusChord { return drawing.openFocusedAtFocusedRegion() }
         return super.performKeyEquivalent(with: event)
-    }
-
-    private static func isLaunchFocusKey(_ event: NSEvent) -> Bool {
-        event.keyCode == launchFocusKeyCode
-            && event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command
     }
 
     func owns(_ chord: Chord) -> Bool { chord == Self.submitChord || chord == Self.launchFocusChord }

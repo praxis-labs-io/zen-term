@@ -251,6 +251,16 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         XCTAssertEqual(sink.submitted.first?.focus, Workspace.LaunchFocus(tab: 0, region: .right))
     }
 
+    func test_commandL_matchesTheCharacterTyped_notWhereTheKeySitsOnQWERTY() throws {
+        let ws = Workspace(
+            title: "ZenTerm", path: try makeRealDir(), tabs: [Workspace.Tab(main: "nvim", right: "claude")], env: [:])
+        let (overlay, _) = mount(editing: ws)
+        overlay.drawingForTesting.focus(.right)
+
+        XCTAssertTrue(overlay.performKeyEquivalent(with: try key(35, "l", flags: [.command])), "Dvorak's L")
+        XCTAssertTrue(try XCTUnwrap(overlay.drawingForTesting.region(.right)).isMarkerVisibleForTesting)
+    }
+
     func test_emptyingTheDrawerThatOpensFocused_movesItToTheMainPane_andTheFooterSaysSo() throws {
         let ws = Workspace(
             title: "ZenTerm", path: try makeRealDir(),
