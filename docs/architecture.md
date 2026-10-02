@@ -652,11 +652,12 @@ The workspace `carry` key names ignored files to copy into a new worktree.
   (a split, drawer or float, and a tab or window under `tab-inherit-cwd`) starts at the parent
   workspace's folder instead (`WorktreeOrigin.relocating`).
 
-### GitCommand
+### Subprocess and GitCommand
 
-`GitCommand` holds the app's only `Process()` sites, blocking by design. Both pipes drain
-concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. It gates on
-`xcode-select -p`, since `/usr/bin/git` without Command Line Tools opens a system prompt.
+`Subprocess.run` is the app's one run-and-capture `Process()` site, blocking by design. Both
+pipes drain concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. `GitCommand`
+runs git through it and gates on `xcode-select -p`, since `/usr/bin/git` without Command Line
+Tools opens a system prompt.
 
 ## Invariants that will bite you
 

@@ -41,42 +41,16 @@ enum GitCommand {
         return process.terminationStatus == 0
     }()
 
-    // Drains both pipes before waiting, or a child filling the 64K stderr buffer deadlocks.
     static func run(_ args: [String], in dir: URL) -> Result<String, Error> {
         guard isAvailable else {
             return .failure(Failure(status: -1, stderr: "git is not available."))
         }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["git"] + args
-        process.currentDirectoryURL = dir
-
-        let out = Pipe()
-        let err = Pipe()
-        process.standardOutput = out
-        process.standardError = err
-
-        do {
-            try process.run()
-        } catch {
-            return .failure(error)
-        }
-
-        var errData = Data()
-        let errDrain = DispatchQueue(label: "GitCommand.stderr")
-        let drained = DispatchGroup()
-        errDrain.async(group: drained) { errData = err.fileHandleForReading.readDataToEndOfFile() }
-        let outData = out.fileHandleForReading.readDataToEndOfFile()
-        drained.wait()
-        process.waitUntilExit()
-
-        let stdout = String(decoding: outData, as: UTF8.self)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard process.terminationStatus == 0 else {
-            let stderr = String(decoding: errData, as: UTF8.self)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            return .failure(Failure(status: process.terminationStatus, stderr: stderr))
-        }
-        return .success(stdout)
+        return Subprocess.run(URL(fileURLWithPath: "/usr/bin/env"), ["git"] + args, in: dir)
+            .flatMap { output in
+                guard output.status == 0 else {
+                    return .failure(Failure(status: output.status, stderr: output.stderr))
+                }
+                return .success(output.stdout)
+            }
     }
 }
