@@ -212,3 +212,11 @@ it is the window's last tab.
 `zen hello` and `zen list` print the result as JSON. `zen list --pretty` prints an
 indented tree instead. Exit codes: 0 ok, 1 the app answered with an error or didn't
 answer within 10 seconds, 2 usage, 3 no instance or the connection failed.
+
+Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|close` and
+`zen tab new|select|rename|close`, with `--focus` and `--force` for those fields. A
+command that returns something prints it as JSON; the rest print nothing. `zen` sends
+folders as absolute paths, read against its own folder, and refuses a `--cwd` or
+`workspace new` folder that does not exist. A workspace argument is a folder when it
+starts with `/`, `~` or `.`, and a title otherwise. A refusal prints what it would stop,
+one line each.

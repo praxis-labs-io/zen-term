@@ -9,7 +9,9 @@ struct ControlClient {
     let caller: ControlCaller?
     var replyTimeout: time_t = 10
 
-    func send<Payload: ControlPayload>(_ cmd: ControlCommand, expecting: Payload.Type) throws(ZenFailure) -> Payload {
+    func send<Payload: ControlPayload>(
+        _ cmd: ControlCommand, _ args: ControlArgs = ControlArgs(), expecting: Payload.Type
+    ) throws(ZenFailure) -> Payload {
         let fd: Int32
         do {
             fd = try UnixSocket.connect(to: path)
@@ -20,7 +22,7 @@ struct ControlClient {
         var timeout = timeval(tv_sec: replyTimeout, tv_usec: 0)
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
 
-        let request = ControlRequest(id: 1, cmd: cmd, caller: caller)
+        let request = ControlRequest(id: 1, cmd: cmd, args: args, caller: caller)
         guard let line = try? ControlWire.line(request), UnixSocket.writeAll(line, to: fd) else {
             throw .noInstance("Couldn't send the request to ZenTerm at \(path).")
         }
@@ -31,9 +33,21 @@ struct ControlClient {
         } catch {
             throw .app("ZenTerm sent a reply zen can't read.")
         }
-        if let error = response.error { throw .app("\(error.message) (\(error.code.rawValue))") }
+        if let error = response.error { throw .app(Self.describe(error)) }
         guard response.ok, let result = response.result else { throw .app("ZenTerm sent an empty reply.") }
         return result
+    }
+
+    static func describe(_ error: ControlError) -> String {
+        let head = "\(error.message) (\(error.code.rawValue))"
+        guard error.code == .refused, let details = error.details else { return head }
+        let panes = details.panes.map { pane in
+            "  "
+                + [String(pane.token), pane.title.isEmpty ? nil : pane.title, pane.cwd].compactMap { $0 }
+                .joined(separator: "  ")
+        }
+        let floats = details.floats.map { "  \($0) float" }
+        return ([head] + panes + floats + ["Pass --force to go ahead."]).joined(separator: "\n")
     }
 
     private func readLine(from fd: Int32) throws(ZenFailure) -> Data {
