@@ -7,6 +7,9 @@ struct Zen: ParsableCommand {
         abstract: "Control a running ZenTerm.",
         subcommands: [Hello.self, List.self])
 
+    // Parses `--socket` before the subcommand; argument-parser hands the value to the subcommand's own copy.
+    @OptionGroup var connection: ConnectionOptions
+
     struct Hello: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract: "Print the app version and the protocol version it speaks, as JSON.")
