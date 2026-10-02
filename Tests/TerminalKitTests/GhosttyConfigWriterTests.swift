@@ -34,7 +34,7 @@ final class GhosttyConfigWriterTests: XCTestCase {
     func test_nilThemeStillEmitsBehaviorBaseline() {
         let text = GhosttyConfigWriter.configText(for: nil)
         XCTAssertTrue(text.contains("cursor-style = block\n"))
-        XCTAssertTrue(text.contains("shell-integration-features = no-cursor\n"))
+        XCTAssertTrue(text.contains("shell-integration-features = no-cursor,ssh-env\n"))
         XCTAssertTrue(text.contains("mouse-hide-while-typing = true\n"))
         XCTAssertFalse(text.contains("font-family"))
         XCTAssertFalse(text.contains("palette"))
