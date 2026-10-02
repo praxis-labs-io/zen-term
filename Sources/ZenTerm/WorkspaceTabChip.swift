@@ -40,12 +40,14 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         weight: .semibold, accessibilityLabel: "Remove tab", shortcut: { CommandCatalog.spec(for: .closeTab).shortcut }
     ) { [weak self] in self?.onRemove?() }
     private let renameField = RenameField()
+    private let renameTooltip = TooltipHost(label: "Double-click to rename")
 
     var isRenaming: Bool { !renameField.isHidden }
     var renameFieldForTesting: NSTextField { renameField }
     var isCloseVisibleForTesting: Bool { !closeButton.isHidden }
     var isDotVisibleForTesting: Bool { !dot.isHidden }
     var closeButtonForTesting: IconButton { closeButton }
+    var isHoveredForTesting: Bool { isHovered }
     var isTitleTruncatedForTesting: Bool {
         label.cell?.expansionFrame(withFrame: label.bounds, in: label).isEmpty == false
     }
@@ -213,18 +215,25 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
                 rect: bounds, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self))
     }
 
-    override func mouseEntered(with event: NSEvent) { setHovered(true) }
-    override func mouseExited(with event: NSEvent) { setHovered(false) }
+    override func mouseEntered(with event: NSEvent) { setHover(true) }
+    override func mouseExited(with event: NSEvent) { setHover(false) }
 
-    private func setHovered(_ on: Bool) {
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { renameTooltip.hide(from: self) }
+    }
+
+    func setHover(_ on: Bool) {
         guard isHovered != on else { return }
         isHovered = on
+        if on, !isRenaming { renameTooltip.show(from: self) } else { renameTooltip.hide(from: self) }
         restyle()
         superview?.needsLayout = true
         needsLayout = true
     }
 
     override func mouseDown(with event: NSEvent) {
+        renameTooltip.hide(from: self)
         guard !isRenaming else { return super.mouseDown(with: event) }
         if event.clickCount == 2 {
             beginRename()
@@ -256,6 +265,7 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
 
     func beginRename() {
         guard !isRenaming else { return }
+        renameTooltip.hide(from: self)
         onSelect?()
         renameField.stringValue = title == defaultName ? "" : title
         renameField.isHidden = false

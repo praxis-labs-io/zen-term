@@ -128,9 +128,23 @@ final class WorkspaceTabStrip: NSView {
         revealsSelection = false
         clampScrollIfContentFits()
         updateFade()
+        refreshHover()
     }
 
-    @objc private func clipBoundsChanged() { updateFade() }
+    @objc private func clipBoundsChanged() {
+        updateFade()
+        refreshHover()
+    }
+
+    // Per-chip tracking areas miss `mouseExited` when chips move or scroll under a stationary pointer.
+    private func refreshHover() {
+        guard let window, window.isKeyWindow else { return chips.forEach { $0.setHover(false) } }
+        let pointer = window.mouseLocationOutsideOfEventStream
+        let visible = scrollView.contentView.documentVisibleRect
+        for chip in chips {
+            chip.setHover(chip.frame.intersects(visible) && chip.convert(chip.bounds, to: nil).contains(pointer))
+        }
+    }
 
     private func clampScrollIfContentFits() {
         let clip = scrollView.contentView

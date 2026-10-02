@@ -111,6 +111,18 @@ final class WorkspaceTabStripTests: WindowTestCase {
         XCTAssertEqual(strip.chips.map(\.isTitleTruncatedForTesting), [false, false, false])
     }
 
+    func test_aChipThePointerHasLeft_dropsItsHover_whenTheStripLaysOutAgain() throws {
+        mount([Workspace.Tab(main: "nvim"), Workspace.Tab(name: "gate"), Workspace.Tab()])
+        for chip in strip.chips { chip.mouseEntered(with: try mouse(.mouseMoved, at: chip)) }
+        XCTAssertTrue(strip.chips.allSatisfy(\.isHoveredForTesting))
+
+        form.addTab()
+        rerender()
+
+        XCTAssertEqual(
+            strip.chips.filter(\.isHoveredForTesting).count, 0, "only the chip under the pointer stays hovered")
+    }
+
     func test_onlyTheTabThatOpensFocused_carriesTheDot() {
         mount(
             [Workspace.Tab(main: "nvim"), Workspace.Tab(name: "gate")],
