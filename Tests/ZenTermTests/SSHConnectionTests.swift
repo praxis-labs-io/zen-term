@@ -165,12 +165,57 @@ final class SSHConnectionTests: XCTestCase {
         XCTAssertEqual(connection.state, .connecting)
         XCTAssertEqual(connectedChanges, [])
         XCTAssertEqual(pane.startCount, 0)
+        XCTAssertEqual(fake.socketWatches, 1, "the re-check waits")
+        fake.runDelayed()
         XCTAssertEqual(fake.socketWatches, 2)
         fake.ready?()
         XCTAssertEqual(login.startCount, 1, "re-arming the watch must not launch the login twice")
         fake.connect()
         XCTAssertEqual(pane.startCount, 1)
         XCTAssertEqual(connectedChanges, [true])
+    }
+
+    func test_aSocketThatNeverAnswersAsAMaster_isNotRecheckedInATightLoop() throws {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-loop-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let path = folder.appendingPathComponent("1-ab")
+        FileManager.default.createFile(atPath: path.path, contents: nil)
+        var resolves = 0
+        var watchers = SSHConnection.Watchers.live
+        watchers.resolveMaster = { _, _, found in
+            resolves += 1
+            found(nil)
+        }
+        let live = SSHConnection(host: host, controlPath: path, watchers: watchers)
+        defer { live.shutdown() }
+        let (login, loginID) = surface(1)
+
+        live.start(login, id: loginID, env: [:])
+        let deadline = Date().addingTimeInterval(0.5)
+        while Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.02)) }
+
+        XCTAssertLessThanOrEqual(resolves, 3, "a socket no master answers on must not spin ssh -O check")
+    }
+
+    func test_aSocketNoMasterEverAnswersOn_failsLikeALogin_afterAFewChecks() {
+        let (login, loginID) = surface(1)
+        let (pane, paneID) = surface(2)
+        connection.start(login, id: loginID, env: [:])
+        fake.ready?()
+        connection.start(pane, id: paneID, env: [:])
+
+        for _ in 0..<SSHConnection.checksBeforeGivingUp {
+            fake.appeared?()
+            fake.found?(nil)
+            fake.runDelayed()
+        }
+
+        XCTAssertEqual(connection.state, .failed)
+        XCTAssertEqual(loginFailures, 1)
+        XCTAssertEqual(pane.startCount, 0)
+        XCTAssertEqual(fake.socketWatches, SSHConnection.checksBeforeGivingUp, "no watch after giving up")
     }
 
     private func socketFile(listening: Bool) throws -> (URL, Int32) {

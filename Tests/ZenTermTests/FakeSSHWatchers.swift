@@ -11,6 +11,7 @@ final class FakeSSHWatchers {
     var cancels = 0
     var exitCancels = 0
     var resolves = 0
+    var delayed: [@MainActor () -> Void] = []
     var answerBeforeLogin: pid_t?? = .some(nil)
 
     var watchers: SSHConnection.Watchers {
@@ -30,11 +31,18 @@ final class FakeSSHWatchers {
             awaitExit: { [self] _, exited in
                 self.exited = exited
                 return { [self] in exitCancels += 1 }
-            })
+            },
+            after: { [self] _, work in delayed.append(work) })
     }
 
     func connect(pid: pid_t? = 42) {
         appeared?()
         found?(pid)
+    }
+
+    func runDelayed() {
+        let due = delayed
+        delayed = []
+        due.forEach { $0() }
     }
 }

@@ -13,7 +13,12 @@ final class SSHConnection {
                 () -> Void
         var resolveMaster: (_ host: SSHHostID, _ path: URL, _ found: @escaping @MainActor (pid_t?) -> Void) -> Void
         var awaitExit: (_ pid: pid_t, _ exited: @escaping @MainActor () -> Void) -> () -> Void
+        var after: (_ delay: TimeInterval, _ work: @escaping @MainActor () -> Void) -> Void
     }
+
+    // A socket that answers no check would otherwise re-fire its watch at once and spin `ssh -O check`.
+    static let recheckDelay: TimeInterval = 1
+    static let checksBeforeGivingUp = 3
 
     private struct Waiting {
         let id: SurfaceID
@@ -33,6 +38,7 @@ final class SSHConnection {
     private var waiting: [Waiting] = []
     private var stopWatching: (() -> Void)?
     private var isShutDown = false
+    private var failedChecks = 0
 
     #if DEBUG
         static var watchersOverrideForTesting: Watchers?
@@ -69,7 +75,11 @@ final class SSHConnection {
     func release(_ ids: [SurfaceID]) {
         waiting.removeAll { ids.contains($0.id) }
         guard state == .connecting, let login, ids.contains(login.id) else { return }
-        Log.info("ssh login ended before the connection came up", category: .workspace)
+        fail("ssh login ended before the connection came up")
+    }
+
+    private func fail(_ reason: String) {
+        Log.info(reason, category: .workspace)
         state = .failed
         waiting = []
         self.login = nil
@@ -115,13 +125,27 @@ final class SSHConnection {
 
     private func resolvedOnSocket(_ pid: pid_t?) {
         guard !isShutDown, state == .connecting else { return }
-        guard let pid else { return awaitSocket() }
+        guard let pid else { return recheckLater() }
         masterFound(pid)
+    }
+
+    private func recheckLater() {
+        stopWatching?()
+        stopWatching = nil
+        failedChecks += 1
+        guard failedChecks < Self.checksBeforeGivingUp else {
+            return fail("ssh: no master answered on \(controlPath.path) after \(failedChecks) checks")
+        }
+        watchers.after(Self.recheckDelay) { [weak self] in
+            guard let self, !self.isShutDown, self.state == .connecting else { return }
+            self.awaitSocket()
+        }
     }
 
     private func masterFound(_ pid: pid_t) {
         Log.info("ssh connection up (master pid \(pid))", category: .workspace)
         state = .connected
+        failedChecks = 0
         let unlaunchedLogin = isLoginLaunched ? nil : login
         login = nil
         stopWatching?()
@@ -186,5 +210,8 @@ extension SSHConnection.Watchers {
                 DispatchQueue.main.async { exited() }
             }
             return { source.cancel() }
+        },
+        after: { delay, work in
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { work() }
         })
 }
