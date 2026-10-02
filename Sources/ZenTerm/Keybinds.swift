@@ -102,6 +102,28 @@ extension KeyInterceptor.ReservedChord {
         }
     }
 
+    var worksWithoutTab: Bool {
+        switch self {
+        case .toggleRepoPicker, .toggleCommandPalette, .openSettings,
+            .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWindow,
+            .newWindow, .reloadConfig, .checkForUpdates, .increaseFontSize, .decreaseFontSize, .resetFontSize:
+            return true
+        case .splitVertical, .splitHorizontal, .navLeft, .navRight, .navUp, .navDown, .prevPane, .nextPane,
+            .closePane, .closeTab, .newTab, .selectTab, .prevTab, .nextTab,
+            .moveTabLeft, .moveTabRight, .renameTab,
+            .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
+            .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen, .toggleSidebar, .focusSidebar,
+            .toggleToolFloat, .newWorkspace, .createWorktree, .removeWorktree,
+            .reportIssue, .newTool, .toggleScrollMode, .toggleSearch, .scrollToTop, .scrollToBottom, .scrollPageUp,
+            .scrollPageDown,
+            .findNext, .findPrevious, .searchSelection, .clearScreen, .scrollToSelection,
+            .writeScreenFile, .copyScreenFilePath, .openScreenFile, .selectAll, .pasteSelection,
+            .jumpToPreviousPrompt, .jumpToNextPrompt, .dismissToast, .dismissAllToasts,
+            .closeWorkspace, .nextWaitingAgent:
+            return false
+        }
+    }
+
     var isEditableInSettings: Bool {
         switch self {
         case .increaseFontSize, .decreaseFontSize, .resetFontSize: return false

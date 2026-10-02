@@ -10,7 +10,7 @@ final class WindowController: NSObject {
     let window: HostWindow
 
     private var workspaces: [WorkspaceController]
-    private var activeWorkspace: WorkspaceController
+    private var selection: WindowSelection
     private var nextWorkspaceID = 2
     private var attentionCards: [TabID: ToastView] = [:]
     // A card is keyed by the tab it sits on but answers one surface, which may be a drawer or a float.
@@ -142,7 +142,7 @@ final class WindowController: NSObject {
                 self?.activeController?.yieldFocusToFloat()
             },
             restoreFocus: { [weak self] in self?.activeController?.restoreUnifiedFocus() },
-            currentTabID: { [weak self] in self?.activeWorkspace.activeID })
+            currentTabID: { [weak self] in self?.activeWorkspace?.activeID })
         controller.onStateChanged = { [weak self] in self?.renderDock() }
         controller.onFocusChanged = { [weak self] in self?.syncWindowFocus() }
         controller.onRequestToast = { [weak self] content in self?.toasts.show(content) }
@@ -337,7 +337,11 @@ final class WindowController: NSObject {
         toasts.show(ToastContent(variant: .info, title: "New Worktree", message: refusal.message))
     }
 
-    private var activeController: TabController? { activeWorkspace.activeController }
+    private var activeWorkspace: WorkspaceController? { selection.workspace }
+
+    private var activeController: TabController? { activeWorkspace?.activeController }
+
+    private var activeTabIDs: [TabID] { activeWorkspace?.tabIDs ?? [] }
 
     private var allTabIDs: [TabID] { workspaces.flatMap(\.tabIDs) }
 
@@ -366,7 +370,7 @@ final class WindowController: NSObject {
             id: WorkspaceID(raw: 1), isConfigured: false, name: Self.unconfiguredName(among: []),
             folder: initialCWD ?? ShellLaunch.defaultCWD, firstTab: firstID)
         workspaces = [firstWorkspace]
-        activeWorkspace = firstWorkspace
+        selection = .workspace(firstWorkspace)
         var onSelect: (TabID) -> Void = { _ in }
         var onClose: (TabID) -> Void = { _ in }
         var onRename: (TabID) -> Void = { _ in }
@@ -439,7 +443,7 @@ final class WindowController: NSObject {
         onZoom = { [weak self] in self?.handle(.toggleZoom) }
         onToolFloat = { [weak self] spec in self?.handle(.toggleToolFloat(spec.id)) }
 
-        activeWorkspace.setController(makeController(cwd: initialCWD), for: firstID)
+        firstWorkspace.setController(makeController(cwd: initialCWD), for: firstID)
 
         layoutContainer()
         yieldSidebarIfNarrow()
@@ -795,18 +799,25 @@ final class WindowController: NSObject {
         case slide(from: SlideEdge)
     }
 
+    private var selectedCanvas: NSView? {
+        switch selection {
+        case .workspace(let workspace): return workspace.activeController?.view
+        case .host: return nil
+        }
+    }
+
     private func mount(_ transition: MountTransition) {
-        guard let c = activeController, mountedCanvas !== c.view else {
+        guard let canvas = selectedCanvas, mountedCanvas !== canvas else {
             restoreFocusToActive()
             renderDock()
             return
         }
         let outgoing = mountedCanvas
-        pinCanvas(c.view)
+        pinCanvas(canvas)
         if let outgoing {
-            canvasHost.addSubview(c.view, positioned: .above, relativeTo: outgoing)
+            canvasHost.addSubview(canvas, positioned: .above, relativeTo: outgoing)
         }
-        mountedCanvas = c.view
+        mountedCanvas = canvas
         restoreFocusToActive()
         renderDock()
 
@@ -816,7 +827,7 @@ final class WindowController: NSObject {
         case .slide(let edge):
             container.layoutSubtreeIfNeeded()
             beginCanvasSlide(from: edge)
-            Motion.slideSwap(incoming: c.view, outgoing: outgoing, offset: slideOffset(from: edge)) { [weak self] in
+            Motion.slideSwap(incoming: canvas, outgoing: outgoing, offset: slideOffset(from: edge)) { [weak self] in
                 self?.detachIfInactive(outgoing)
                 self?.endCanvasSlide()
             }
@@ -974,19 +985,21 @@ final class WindowController: NSObject {
     }
 
     private func addTab(cwd: URL?) {
+        guard let workspace = activeWorkspace else { return }
         Log.info("tab opened", category: .tabs)
         closeModal()
         closeFloatForTabChange()
         let id = mintTabID()
-        activeWorkspace.add(id)
-        installController(id: id, cwd: cwd, config: nil, transition: .slide(from: .fromRight))
+        workspace.add(id)
+        installController(id: id, in: workspace, cwd: cwd, config: nil, transition: .slide(from: .fromRight))
     }
 
     private func installController(
-        id: TabID, cwd: URL?, config: Workspace?, tab index: Int = 0, transition: MountTransition
+        id: TabID, in workspace: WorkspaceController, cwd: URL?, config: Workspace?, tab index: Int = 0,
+        transition: MountTransition
     ) {
         let c = makeController(cwd: cwd, config: config, tab: index)
-        activeWorkspace.setController(c, for: id)
+        workspace.setController(c, for: id)
         wire(c, id: id)
         mount(transition)
         c.start()
@@ -998,8 +1011,7 @@ final class WindowController: NSObject {
 
     private func select(_ id: TabID, slideFrom: SlideEdge? = nil) {
         closeModal()
-        let workspace = activeWorkspace
-        guard workspace.tabIDs.contains(id), id != workspace.activeID else { return }
+        guard let workspace = activeWorkspace, workspace.tabIDs.contains(id), id != workspace.activeID else { return }
         Log.info("tab switched", category: .tabs)
         closeFloatForTabChange()
         cancelConfirm()
@@ -1030,22 +1042,22 @@ final class WindowController: NSObject {
         closeModal()
         closeFloatForTabChange()
         cancelConfirm()
-        let transition = workspaceSlide(from: activeWorkspace.id, to: id)
-        activeWorkspace = workspace
+        let transition = workspaceSlide(from: activeWorkspace?.id, to: id)
+        selection = .workspace(workspace)
         mount(transition)
         if let tab = workspace.activeID { visit(tab) }
         renderAttention()
     }
 
-    private func workspaceSlide(from old: WorkspaceID, to new: WorkspaceID) -> MountTransition {
+    private func workspaceSlide(from old: WorkspaceID?, to new: WorkspaceID) -> MountTransition {
         let ids = order.navigable
-        guard let from = ids.firstIndex(of: old), let to = ids.firstIndex(of: new) else { return .instant }
+        guard let old, let from = ids.firstIndex(of: old), let to = ids.firstIndex(of: new) else { return .instant }
         return .slide(from: to > from ? .fromBottom : .fromTop)
     }
 
     private func cycleTab(_ delta: Int) {
-        let ids = activeWorkspace.tabIDs
-        guard ids.count > 1, let active = activeWorkspace.activeID,
+        let ids = activeTabIDs
+        guard ids.count > 1, let active = activeWorkspace?.activeID,
             let i = ids.firstIndex(of: active)
         else { return }
         select(ids[(i + delta + ids.count) % ids.count], slideFrom: delta > 0 ? .fromRight : .fromLeft)
@@ -1055,7 +1067,7 @@ final class WindowController: NSObject {
         sidebar.hideReveal()
         switch row {
         case .workspace(let id):
-            guard id != activeWorkspace.id else { restoreFocusToActive(); return }
+            guard id != activeWorkspace?.id else { restoreFocusToActive(); return }
             activate(id)
         case .ghost(let path):
             guard let parent = ghostParent(at: path) else { return }
@@ -1073,12 +1085,14 @@ final class WindowController: NSObject {
 
     private func cycleWorkspace(_ delta: Int) {
         let ids = order.navigable
-        guard ids.count > 1, let i = ids.firstIndex(of: activeWorkspace.id) else { return }
+        guard ids.count > 1, let current = activeWorkspace?.id, let i = ids.firstIndex(of: current) else { return }
         activate(ids[(i + delta + ids.count) % ids.count])
     }
 
     private func moveActiveTab(_ delta: Int) {
-        guard let id = activeWorkspace.activeID, activeWorkspace.move(id, by: delta) else { return }
+        guard let workspace = activeWorkspace, let id = workspace.activeID, workspace.move(id, by: delta) else {
+            return
+        }
         Log.info("tab moved", category: .tabs)
         renderTabBar()
     }
@@ -1131,7 +1145,7 @@ final class WindowController: NSObject {
         attention.dropTab(id)
         guard workspace.close(id) else { return closeWorkspace(workspace) }
         if isOnScreen {
-            if let active = activeWorkspace.activeID { visit(active) }
+            if let active = activeWorkspace?.activeID { visit(active) }
             mount(.instant)
         }
         renderAttention()
@@ -1147,14 +1161,14 @@ final class WindowController: NSObject {
         let remaining = order.navigable
         guard let next = workspaces.first(where: { $0.id == remaining[min(place, remaining.count - 1)] })
         else { return }
-        activeWorkspace = next
+        selection = .workspace(next)
         mount(.slide(from: place < remaining.count ? .fromBottom : .fromTop))
         if let tab = next.activeID { visit(tab) }
         renderAttention()
     }
 
     private func presentModal(_ overlay: ModalOverlay, kind: ModalKind) {
-        guard activeController != nil else { return }
+        if let activeWorkspace, activeWorkspace.activeController == nil { return }
         captureFocusReturn()
         endModes()
         floats.cancelPendingOpen()
@@ -1215,7 +1229,7 @@ final class WindowController: NSObject {
         let palette = CommandPaletteOverlay(
             commands: { [weak self] in
                 CommandCatalog.commands(
-                    tabCount: self?.activeWorkspace.tabIDs.count ?? 0,
+                    tabCount: self?.activeTabIDs.count ?? 0,
                     workspaceCount: self?.workspaces.count ?? 0)
             },
             background: Theme.current.chrome.background.nsColor,
@@ -1961,7 +1975,7 @@ final class WindowController: NSObject {
         activate(workspace.id)
         for (index, tab) in tabs.enumerated() {
             if index > 0 { workspace.add(tab) }
-            installController(id: tab, cwd: folder, config: config, tab: index, transition: .instant)
+            installController(id: tab, in: workspace, cwd: folder, config: config, tab: index, transition: .instant)
         }
         guard let config, tabs[config.focus.tab] != workspace.activeID else { return }
         workspace.select(tabs[config.focus.tab])
@@ -1970,7 +1984,7 @@ final class WindowController: NSObject {
     }
 
     func handle(_ chord: KeyInterceptor.ReservedChord) {
-        guard activeWorkspace.activeID != nil else { return }
+        if let activeWorkspace, activeWorkspace.activeID == nil { return }
         closingModalKind = nil
         let active = activeController
         if isConfirmOpen { return }
@@ -2037,6 +2051,7 @@ final class WindowController: NSObject {
                 return
             }
         }
+        guard activeWorkspace != nil || chord.worksWithoutTab else { return }
         switch chord {
         case .splitVertical:
             Log.info("pane split (vertical)", category: .panes)
@@ -2057,19 +2072,19 @@ final class WindowController: NSObject {
         case .newTab: newTab()
         case .selectTab(let n):
             let idx = n - 1
-            let ids = activeWorkspace.tabIDs
+            let ids = activeTabIDs
             if idx >= 0 && idx < ids.count { select(ids[idx]) }
         case .prevTab: cycleTab(-1)
         case .nextTab: cycleTab(1)
         case .moveTabLeft: moveActiveTab(-1)
         case .moveTabRight: moveActiveTab(1)
-        case .renameTab: activeWorkspace.activeID.map { openRenameTab($0) }
+        case .renameTab: activeWorkspace?.activeID.map { openRenameTab($0) }
         case .closePane:
             Log.info("close pane", category: .panes)
             requestClosePane()
         case .closeTab:
             Log.info("close tab", category: .tabs)
-            activeWorkspace.activeID.map(requestCloseTab)
+            activeWorkspace?.activeID.map(requestCloseTab)
         case .closeWindow:
             Log.info("close window", category: .tabs)
             requestCloseWindow()
@@ -2140,7 +2155,7 @@ final class WindowController: NSObject {
         case .nextWaitingAgent: jumpToNextWaitingAgent()
         case .closeWorkspace:
             Log.info("close workspace", category: .workspace)
-            requestCloseWorkspace(activeWorkspace)
+            if let activeWorkspace { requestCloseWorkspace(activeWorkspace) }
         case .newWorkspace: newWorkspace()
         }
     }
@@ -2196,7 +2211,7 @@ final class WindowController: NSObject {
     func selectTab(_ id: TabID) { reveal(id) }
 
     func clearActiveTabNotification() {
-        guard let id = activeWorkspace.activeID else { return }
+        guard let id = activeWorkspace?.activeID else { return }
         AgentNotifier.shared.clear(windowID: windowID, tabID: id)
     }
 
@@ -2232,13 +2247,13 @@ final class WindowController: NSObject {
         }
 
         let lastPane = active.isSinglePane
-        let closesWindow = lastPane && activeWorkspace.tabIDs.count == 1 && workspaces.count == 1
+        let closesWindow = lastPane && activeTabIDs.count == 1 && workspaces.count == 1
         let needsConfirm =
             closesWindow
             || active.focusedPaneIsBusy
-            || (lastPane && activeWorkspace.activeID.map(isRunning(tab:)) ?? false)
+            || (lastPane && activeWorkspace?.activeID.map(isRunning(tab:)) ?? false)
         guard needsConfirm else {
-            if active.closeFocused() == false { activeWorkspace.activeID.map { closeTab($0) } }
+            if active.closeFocused() == false { activeWorkspace?.activeID.map { closeTab($0) } }
             return
         }
 
@@ -2247,13 +2262,13 @@ final class WindowController: NSObject {
         let names =
             closesWindow
             ? runningNamesInWindow()
-            : (lastPane ? activeWorkspace.activeID.map(hiddenRunningNames(inTab:)) ?? [] : [])
+            : (lastPane ? activeWorkspace?.activeID.map(hiddenRunningNames(inTab:)) ?? [] : [])
         presentConfirm(
             variant: .warning, title: subject.title,
             message: CloseWarning.message(closing: subject, naming: names), confirmLabel: "Close"
         ) { [weak self] in
             guard let self, let active = self.activeController else { return }
-            if active.closeFocused() == false { self.activeWorkspace.activeID.map { self.closeTab($0) } }
+            if active.closeFocused() == false { self.activeWorkspace?.activeID.map { self.closeTab($0) } }
         }
     }
 
@@ -2331,10 +2346,10 @@ final class WindowController: NSObject {
         let named: [String]
         if workspaces.count > 1 {
             named = workspaces.filter(isRunning(workspace:)).map(\.name)
-        } else if activeWorkspace.tabIDs.count > 1 {
+        } else if let activeWorkspace, activeWorkspace.tabIDs.count > 1 {
             named = runningTabNames(in: activeWorkspace)
         } else {
-            named = activeWorkspace.activeID.map(hiddenRunningNames(inTab:)) ?? []
+            named = activeWorkspace?.activeID.map(hiddenRunningNames(inTab:)) ?? []
         }
         return named + floats.hiddenRunningTitles(scope: nil)
     }
@@ -2429,7 +2444,7 @@ final class WindowController: NSObject {
         surface: SurfaceID?, _ notification: TerminalNotification, from spec: ToolFloat, owner: TabID?
     ) {
         DispatchQueue.main.async { [weak self] in
-            guard let self, let activeID = self.activeWorkspace.activeID else { return }
+            guard let self, let activeID = self.activeWorkspace?.activeID else { return }
             let message = notification.body.isEmpty ? notification.title : notification.body
             let target = owner.flatMap { self.workspace(of: $0) == nil ? nil : $0 } ?? activeID
             let address = self.floatCardAddress(spec, owner: owner, target: target)
@@ -2709,7 +2724,7 @@ final class WindowController: NSObject {
 
     // A window float belongs to no tab, so it asks from whichever tab is showing it.
     private func tab(of surface: SurfaceID) -> TabID? {
-        attention.tab(of: surface) ?? (floats.float(of: surface) != nil ? activeWorkspace.activeID : nil)
+        attention.tab(of: surface) ?? (floats.float(of: surface) != nil ? activeWorkspace?.activeID : nil)
     }
 
     // A shell reports a signal death as 128+n. SIGINT and SIGTERM are someone stopping the agent, not it failing.
@@ -2812,7 +2827,7 @@ final class WindowController: NSObject {
 
     /// A surface is on screen while its tab is active and, for a drawer, the drawer is open.
     private func isOnScreen(_ surface: SurfaceID?, in id: TabID) -> Bool {
-        guard id == activeWorkspace.activeID else { return false }
+        guard id == activeWorkspace?.activeID else { return false }
         guard let surface else { return true }
         return controller(id)?.isOnScreen(surface) ?? true
     }
@@ -3124,30 +3139,30 @@ final class WindowController: NSObject {
     }
 
     func notifyAgentForTesting(tabIndex: Int, message: String) {
-        guard activeWorkspace.tabIDs.indices.contains(tabIndex) else { return }
-        notifyAgentForTesting(tab: activeWorkspace.tabIDs[tabIndex], message: message)
+        guard activeTabIDs.indices.contains(tabIndex) else { return }
+        notifyAgentForTesting(tab: activeTabIDs[tabIndex], message: message)
     }
 
     func waitingToastForTesting(tabIndex: Int) -> ToastView? {
-        guard activeWorkspace.tabIDs.indices.contains(tabIndex) else { return nil }
-        return attentionCards[activeWorkspace.tabIDs[tabIndex]]
+        guard activeTabIDs.indices.contains(tabIndex) else { return nil }
+        return attentionCards[activeTabIDs[tabIndex]]
     }
 
     func notifyCommandFinishedForTesting(tabIndex: Int, result: TerminalCommandResult) {
-        guard activeWorkspace.tabIDs.indices.contains(tabIndex) else { return }
-        let id = activeWorkspace.tabIDs[tabIndex]
+        guard activeTabIDs.indices.contains(tabIndex) else { return }
+        let id = activeTabIDs[tabIndex]
         commandFinished(surface: controller(id)?.focusedSurfaceID, id: id, result: result)
     }
 
     func attentionStateForTesting(tabIndex: Int) -> TabAttentionState? {
-        guard activeWorkspace.tabIDs.indices.contains(tabIndex) else { return nil }
-        let state = attention.state(tab: activeWorkspace.tabIDs[tabIndex]).tabState
+        guard activeTabIDs.indices.contains(tabIndex) else { return nil }
+        let state = attention.state(tab: activeTabIDs[tabIndex]).tabState
         return state == .idle ? nil : state
     }
 
     func notifyProgressForTesting(tabIndex: Int, progress: TerminalProgress?) {
-        guard activeWorkspace.tabIDs.indices.contains(tabIndex),
-            let surface = controller(activeWorkspace.tabIDs[tabIndex])?.focusedSurfaceID
+        guard activeTabIDs.indices.contains(tabIndex),
+            let surface = controller(activeTabIDs[tabIndex])?.focusedSurfaceID
         else { return }
         progressChanged(surface: surface, progress: progress)
     }
@@ -3157,41 +3172,41 @@ final class WindowController: NSObject {
     var dockForTesting: ToggleDock { dock }
 
     func tabTitleForTesting(index: Int) -> String? {
-        guard activeWorkspace.tabIDs.indices.contains(index) else { return nil }
-        return title(of: activeWorkspace.tabIDs[index])
+        guard activeTabIDs.indices.contains(index) else { return nil }
+        return title(of: activeTabIDs[index])
     }
 
     func surfaceAttentionForTesting(tabIndex: Int) -> SurfaceAttention? {
-        guard activeWorkspace.tabIDs.indices.contains(tabIndex) else { return nil }
-        return attention.state(tab: activeWorkspace.tabIDs[tabIndex])
+        guard activeTabIDs.indices.contains(tabIndex) else { return nil }
+        return attention.state(tab: activeTabIDs[tabIndex])
     }
 
     func newTabForTesting() { handle(.newTab) }
     func closeTabForTesting(index: Int) {
-        guard activeWorkspace.tabIDs.indices.contains(index) else { return }
-        closeTab(activeWorkspace.tabIDs[index])
+        guard activeTabIDs.indices.contains(index) else { return }
+        closeTab(activeTabIDs[index])
     }
 
     func selectTabForTesting(index: Int) {
-        guard activeWorkspace.tabIDs.indices.contains(index) else { return }
-        select(activeWorkspace.tabIDs[index])
+        guard activeTabIDs.indices.contains(index) else { return }
+        select(activeTabIDs[index])
     }
 
     func renameActiveTabForTesting(to name: String) {
-        activeWorkspace.activeID.map { renameTab($0, to: name) }
+        activeWorkspace?.activeID.map { renameTab($0, to: name) }
     }
 
     func renameTabForTesting(index: Int) {
-        guard activeWorkspace.tabIDs.indices.contains(index) else { return }
-        openRenameTab(activeWorkspace.tabIDs[index])
+        guard activeTabIDs.indices.contains(index) else { return }
+        openRenameTab(activeTabIDs[index])
     }
 
     var floatsForTesting: ToolFloatController { floats }
 
-    var tabOrderForTesting: [TabID] { activeWorkspace.tabIDs }
-    var tabTitlesForTesting: [String] { activeWorkspace.tabIDs.map { title(of: $0) } }
+    var tabOrderForTesting: [TabID] { activeTabIDs }
+    var tabTitlesForTesting: [String] { activeTabIDs.map { title(of: $0) } }
 
-    var activeTabIDForTesting: TabID? { activeWorkspace.activeID }
+    var activeTabIDForTesting: TabID? { activeWorkspace?.activeID }
 
     var workspaceIDsForTesting: [WorkspaceID] { workspaces.map(\.id) }
 
@@ -3201,7 +3216,16 @@ final class WindowController: NSObject {
 
     var containerForTesting: NSView { container }
 
-    var activeWorkspaceIDForTesting: WorkspaceID { activeWorkspace.id }
+    var activeWorkspaceIDForTesting: WorkspaceID {
+        guard let activeWorkspace else { preconditionFailure("the window has a host selected") }
+        return activeWorkspace.id
+    }
+
+    func selectHostForTesting(_ host: SSHHostID) {
+        selection = .host(host)
+        mount(.instant)
+        renderAttention()
+    }
 
     func addWorkspaceForTesting(name: String, folder: URL) -> WorkspaceID {
         let id = mintTabID()
@@ -3311,15 +3335,15 @@ final class WindowController: NSObject {
     }
 
     private func renderTabBar() {
-        let items = activeWorkspace.tabIDs.enumerated().map { i, id in
+        let items = activeTabIDs.enumerated().map { i, id in
             TabBarItem(
                 id: id, index: i + 1,
                 title: title(of: id),
-                isActive: id == activeWorkspace.activeID,
+                isActive: id == activeWorkspace?.activeID,
                 attentionState: attention.state(tab: id).tabState)
         }
         tabBar.render(items)
-        window.title = activeWorkspace.name
+        if let activeWorkspace { window.title = activeWorkspace.name }
         let waiting = workspaces.filter { attention.state(tabs: $0.tabIDs) == .waiting }.map(\.id)
         sidebar.render(order: order, workspaces: workspaces, active: activeWorkspace, waiting: Set(waiting))
         renderAgents()
@@ -3345,7 +3369,7 @@ final class WindowController: NSObject {
         let overlay = activeController?.overlayState ?? OverlayState()
         dock.render(
             overlay: overlay, floatID: floats.activeID,
-            tab: activeWorkspace.activeID,
+            tab: activeWorkspace?.activeID,
             isLiveInBackground: floats.isLiveInBackground, isFloatBusy: floats.isBusy,
             drawerAttention: { [weak self] edge in self?.drawerAttention(edge) ?? .idle },
             floatAttention: { [weak self] id in
@@ -3362,7 +3386,7 @@ final class WindowController: NSObject {
     }
 
     private func bindFirstControllerIfNeeded() {
-        guard let firstID = activeWorkspace.activeID, let c = activeWorkspace.controller(firstID)
+        guard let workspace = activeWorkspace, let firstID = workspace.activeID, let c = workspace.controller(firstID)
         else { return }
         wire(c, id: firstID)
     }
@@ -3419,7 +3443,7 @@ extension WindowController: NSWindowDelegate {
     // Coming back looks at every pane in view, not only the focused one.
     private func answerPanesInView() {
         guard Self.isPresent(window) else { return }
-        if let active = activeWorkspace.activeID { attention.visit(active) { isSeen($0, in: active) } }
+        if let active = activeWorkspace?.activeID { attention.visit(active) { isSeen($0, in: active) } }
         for surface in agents.agents.keys where attention.agentWait(of: surface) == .turnEnd {
             guard let tab = tab(of: surface), isSeen(surface, in: tab) else { continue }
             attention.markSeen(surface)

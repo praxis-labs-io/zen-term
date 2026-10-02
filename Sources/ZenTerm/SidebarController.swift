@@ -325,7 +325,7 @@ final class SidebarController {
     var isPinnedExternally: () -> Bool = { false }
 
     func render(
-        order: WorkspaceOrder, workspaces: [WorkspaceController], active: WorkspaceController,
+        order: WorkspaceOrder, workspaces: [WorkspaceController], active: WorkspaceController?,
         waiting: Set<WorkspaceID>
     ) {
         let byID = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
