@@ -578,7 +578,8 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   the host disconnected. The check runs before the login launches and again when the socket
   appears; a socket that refuses the connection is stale and is removed, and anything else is
   left alone. A login that ends before the socket drops the waiting surfaces and
-  closes the workspace back to Connect. Closing a host's last tab returns to Connect.
+  closes the workspace back to Connect. Closing a host's last pane, tab or workspace returns
+  to Connect and never counts as closing the window, even when the host is all the window holds.
 - **Writers go through `ConfigFileIO`:** never treat an unreadable file as empty, and
   write through symlinks. `ConfigWriter` preserves comments and unknown keys.
 

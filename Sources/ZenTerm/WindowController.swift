@@ -2444,7 +2444,7 @@ final class WindowController: NSObject {
         }
 
         let lastPane = active.isSinglePane
-        let closesWindow = lastPane && activeTabIDs.count == 1 && workspaces.count == 1
+        let closesWindow = lastPane && activeTabIDs.count == 1 && closesWindow(closing: activeWorkspace)
         let needsConfirm =
             closesWindow
             || active.focusedPaneIsBusy
@@ -2485,7 +2485,7 @@ final class WindowController: NSObject {
 
     private func requestCloseTab(_ id: TabID) {
         guard let workspace = workspace(of: id) else { return }
-        let closesWindow = workspace.tabIDs.count == 1 && workspaces.count == 1
+        let closesWindow = workspace.tabIDs.count == 1 && closesWindow(closing: workspace)
         guard closesWindow || isRunning(tab: id) else { closeTab(id); return }
         let subject: CloseWarning.Subject =
             closesWindow ? .lastTab(running: windowIsRunning) : .tab
@@ -2503,7 +2503,7 @@ final class WindowController: NSObject {
     }
 
     private func requestCloseWorkspace(_ workspace: WorkspaceController) {
-        let closesWindow = workspaces.count == 1
+        let closesWindow = closesWindow(closing: workspace)
         guard closesWindow || isRunning(workspace: workspace) else {
             closeTabs(of: workspace)
             return
@@ -2516,6 +2516,11 @@ final class WindowController: NSObject {
             message: CloseWarning.message(closing: subject, naming: names),
             confirmLabel: "Close"
         ) { [weak self] in self?.closeTabs(of: workspace) }
+    }
+
+    // A host's workspace closes back to its Connect screen, so only a lone local workspace takes the window.
+    private func closesWindow(closing workspace: WorkspaceController?) -> Bool {
+        workspace?.host == nil && workspaces.count == 1
     }
 
     private func closeTabs(of workspace: WorkspaceController) {

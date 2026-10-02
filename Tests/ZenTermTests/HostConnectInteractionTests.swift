@@ -331,4 +331,61 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         XCTAssertFalse(c.isConfirmOpen)
     }
+
+    private func onlyAConnectedHost() throws -> WindowController {
+        let (c, _) = try connected()
+        fake.connect()
+        let local = c.workspaceIDsForTesting[0]
+        c.activateWorkspaceForTesting(local)
+        c.handle(.closeTab)
+        XCTAssertEqual(c.workspaceIDsForTesting.count, 1, "precondition: only the host's workspace is left")
+        XCTAssertEqual(c.selectedHostForTesting, host)
+        return c
+    }
+
+    private func assertBackOnConnect(_ c: WindowController, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertFalse(
+            c.isConfirmOpen, "a host close never takes the window, so it never asks to", file: file, line: line)
+        XCTAssertTrue(c.window.isVisible, file: file, line: line)
+        XCTAssertNotNil(c.connectViewForTesting, file: file, line: line)
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting?.connectButton, file: file, line: line)
+    }
+
+    func test_closingTheLastPaneOfAWindowsOnlyHost_returnsToConnectWithoutAsking() throws {
+        let c = try onlyAConnectedHost()
+
+        c.handle(.closePane)
+
+        assertBackOnConnect(c)
+    }
+
+    func test_closingTheLastTabOfAWindowsOnlyHost_returnsToConnectWithoutAsking() throws {
+        let c = try onlyAConnectedHost()
+
+        c.handle(.closeTab)
+
+        assertBackOnConnect(c)
+    }
+
+    func test_closingAWindowsOnlyHostWorkspace_returnsToConnectWithoutAsking() throws {
+        let c = try onlyAConnectedHost()
+
+        c.handle(.closeWorkspace)
+
+        assertBackOnConnect(c)
+    }
+
+    func test_closingTheLocalWorkspaceBesideAHost_closesItWithoutAsking_andLandsOnTheHost() throws {
+        let (c, _) = try connected()
+        fake.connect()
+        let local = c.workspaceIDsForTesting[0]
+        c.activateWorkspaceForTesting(local)
+
+        c.handle(.closePane)
+
+        XCTAssertFalse(c.isConfirmOpen)
+        XCTAssertFalse(c.workspaceIDsForTesting.contains(local))
+        XCTAssertEqual(c.selectedHostForTesting, host)
+        XCTAssertNil(c.connectViewForTesting, "it lands on the connected host's panes")
+    }
 }
