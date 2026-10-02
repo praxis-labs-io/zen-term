@@ -28,7 +28,7 @@ final class SSHConfigHostsTests: XCTestCase {
                 User deploy
             """)
 
-        XCTAssertEqual(SSHConfigHosts.aliases(in: config), ["devbox", "dev", "prod"])
+        XCTAssertEqual(SSHConfigHosts.listing(of: config).aliases, ["devbox", "dev", "prod"])
     }
 
     func test_skipsWildcardsAndNegations() throws {
@@ -39,7 +39,7 @@ final class SSHConfigHostsTests: XCTestCase {
             Host *.example.com web? !bastion jump
             """)
 
-        XCTAssertEqual(SSHConfigHosts.aliases(in: config), ["jump"])
+        XCTAssertEqual(SSHConfigHosts.listing(of: config).aliases, ["jump"])
     }
 
     func test_readsTheKeywordInAnyCase_withAnEqualsSeparator() throws {
@@ -50,7 +50,7 @@ final class SSHConfigHostsTests: XCTestCase {
             \tHost\tgamma
             """)
 
-        XCTAssertEqual(SSHConfigHosts.aliases(in: config), ["alpha", "beta", "gamma"])
+        XCTAssertEqual(SSHConfigHosts.listing(of: config).aliases, ["alpha", "beta", "gamma"])
     }
 
     func test_ignoresComments() throws {
@@ -61,7 +61,7 @@ final class SSHConfigHostsTests: XCTestCase {
             Host real # trailing note
             """)
 
-        XCTAssertEqual(SSHConfigHosts.aliases(in: config), ["real"])
+        XCTAssertEqual(SSHConfigHosts.listing(of: config).aliases, ["real"])
     }
 
     func test_skipsMatchBlocks_untilTheNextHost() throws {
@@ -75,7 +75,7 @@ final class SSHConfigHostsTests: XCTestCase {
             Host after
             """)
 
-        XCTAssertEqual(SSHConfigHosts.aliases(in: config), ["before", "after"])
+        XCTAssertEqual(SSHConfigHosts.listing(of: config).aliases, ["before", "after"])
     }
 
     func test_followsARelativeInclude_againstTheConfigsFolder() throws {
@@ -86,14 +86,14 @@ final class SSHConfigHostsTests: XCTestCase {
             Host local
             """)
 
-        XCTAssertEqual(SSHConfigHosts.aliases(in: config), ["included", "local"])
+        XCTAssertEqual(SSHConfigHosts.listing(of: config).aliases, ["included", "local"])
     }
 
     func test_followsAnAbsoluteInclude() throws {
         let other = try write("Host elsewhere\n", to: "other/hosts")
         let config = try write("Include \(other.path)\nHost local\n")
 
-        XCTAssertEqual(SSHConfigHosts.aliases(in: config), ["elsewhere", "local"])
+        XCTAssertEqual(SSHConfigHosts.listing(of: config).aliases, ["elsewhere", "local"])
     }
 
     func test_expandsAGlobbedInclude_inNameOrder() throws {
@@ -102,28 +102,47 @@ final class SSHConfigHostsTests: XCTestCase {
         try write("Host skipped\n", to: "config.d/notes.txt")
         let config = try write("Include config.d/[0-9]*\n")
 
-        XCTAssertEqual(SSHConfigHosts.aliases(in: config), ["alpha", "bravo"])
+        XCTAssertEqual(SSHConfigHosts.listing(of: config).aliases, ["alpha", "bravo"])
     }
 
     func test_anIncludeCycle_endsWithoutRepeating() throws {
         try write("Host loop\nInclude config\n", to: "loop")
         let config = try write("Host start\nInclude loop\n")
 
-        XCTAssertEqual(SSHConfigHosts.aliases(in: config), ["start", "loop"])
+        XCTAssertEqual(SSHConfigHosts.listing(of: config).aliases, ["start", "loop"])
     }
 
     func test_deduplicatesAcrossFiles() throws {
         try write("Host shared\nHost extra\n", to: "more")
         let config = try write("Host shared\nInclude more\n")
 
-        XCTAssertEqual(SSHConfigHosts.aliases(in: config), ["shared", "extra"])
+        XCTAssertEqual(SSHConfigHosts.listing(of: config).aliases, ["shared", "extra"])
     }
 
     func test_aMissingFileOrInclude_yieldsWhatCanBeRead() throws {
-        XCTAssertEqual(SSHConfigHosts.aliases(in: dir.appendingPathComponent("absent")), [])
+        XCTAssertEqual(
+            SSHConfigHosts.listing(of: dir.appendingPathComponent("absent")),
+            SSHConfigHosts.Listing(aliases: [], isUnreadable: false), "a missing config is not a failure")
         let config = try write("Include nowhere\nHost kept\n")
 
-        XCTAssertEqual(SSHConfigHosts.aliases(in: config), ["kept"])
+        XCTAssertEqual(
+            SSHConfigHosts.listing(of: config), SSHConfigHosts.Listing(aliases: ["kept"], isUnreadable: false))
+    }
+
+    func test_aConfigThatExistsButCannotBeRead_isReportedUnreadable() throws {
+        let config = try write("Host hidden\n")
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: config.path)
+
+        XCTAssertEqual(SSHConfigHosts.listing(of: config), SSHConfigHosts.Listing(aliases: [], isUnreadable: true))
+    }
+
+    func test_anUnreadableInclude_doesNotMarkTheConfigUnreadable() throws {
+        let included = try write("Host hidden\n", to: "more")
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: included.path)
+        let config = try write("Include more\nHost kept\n")
+
+        XCTAssertEqual(
+            SSHConfigHosts.listing(of: config), SSHConfigHosts.Listing(aliases: ["kept"], isUnreadable: false))
     }
 
     func test_destination_readsUserAndHostnameFromTheDump() {

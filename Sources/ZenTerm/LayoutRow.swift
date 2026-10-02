@@ -8,6 +8,7 @@ final class LayoutRow: NSView {
     private let controlNoteLabel: NSTextField?
     private let messageLabel = NSTextField(labelWithString: "")
     private(set) var messageKind: MessageKind?
+    var isDimmed = false { didSet { reapplyTheme() } }
 
     init(caption: String, description: String?, control: NSView, controlNote: String?, controlWidth: CGFloat?) {
         let label = NSTextField(labelWithString: caption)
@@ -93,9 +94,10 @@ final class LayoutRow: NSView {
     }
 
     func reapplyTheme() {
-        captionLabel.textColor = Theme.current.chrome.foreground.nsColor
-        descriptionLabel?.textColor = Theme.current.chrome.ink(.muted)
-        controlNoteLabel?.textColor = Theme.current.chrome.ink(.muted)
+        let chrome = Theme.current.chrome
+        captionLabel.textColor = isDimmed ? chrome.ink(.faint) : chrome.foreground.nsColor
+        descriptionLabel?.textColor = chrome.ink(isDimmed ? .faint : .muted)
+        controlNoteLabel?.textColor = chrome.ink(.muted)
         messageLabel.textColor = LayoutRow.ink(for: messageKind)
     }
 }

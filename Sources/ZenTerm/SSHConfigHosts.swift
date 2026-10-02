@@ -1,8 +1,13 @@
 import Darwin
 import Foundation
 
-// Lists the literal `Host` aliases of an ssh config, best-effort: anything it cannot read is skipped.
+// Lists the literal `Host` aliases of an ssh config, best-effort: an include it cannot read is skipped.
 enum SSHConfigHosts {
+    struct Listing: Equatable {
+        let aliases: [String]
+        let isUnreadable: Bool
+    }
+
     #if DEBUG
         static var userConfigOverrideForTesting: URL?
     #endif
@@ -18,21 +23,22 @@ enum SSHConfigHosts {
 
     private static let maxIncludeDepth = 16  // OpenSSH's own `Include` limit
 
-    static func aliases(in file: URL) -> [String] {
+    static func listing(of file: URL) -> Listing {
         var aliases: [String] = []
         var visited: Set<String> = []
-        collect(
+        let wasRead = collect(
             file, includeBase: file.deletingLastPathComponent(), depth: 0, visited: &visited, into: &aliases)
-        return aliases
+        return Listing(aliases: aliases, isUnreadable: !wasRead && FileManager.default.fileExists(atPath: file.path))
     }
 
+    @discardableResult
     private static func collect(
         _ file: URL, includeBase: URL, depth: Int, visited: inout Set<String>, into aliases: inout [String]
-    ) {
+    ) -> Bool {
         guard depth <= maxIncludeDepth,
             visited.insert(file.resolvingSymlinksInPath().standardizedFileURL.path).inserted,
             let text = try? String(contentsOf: file, encoding: .utf8)
-        else { return }
+        else { return false }
         var inMatch = false
         for line in text.components(separatedBy: .newlines) {
             guard let (keyword, args) = directive(line) else { continue }
@@ -52,6 +58,7 @@ enum SSHConfigHosts {
                 continue
             }
         }
+        return true
     }
 
     private static func directive(_ line: String) -> (String, [String])? {

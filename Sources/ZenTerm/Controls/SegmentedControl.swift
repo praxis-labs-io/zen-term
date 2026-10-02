@@ -9,7 +9,6 @@ final class SegmentedControl: NSView {
     var onArrowLeft: (() -> Void)?
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
-    var onDelete: (() -> Void)?
 
     var isEnabled = true {
         didSet {
@@ -118,7 +117,6 @@ final class SegmentedControl: NSView {
         case .down, .activate: onArrowDown?()
         case .tab(let shift) where onTab != nil || onBacktab != nil:
             shift ? onBacktab?() : onTab?()
-        case .delete where onDelete != nil: onDelete?()
         default: super.keyDown(with: event)
         }
     }

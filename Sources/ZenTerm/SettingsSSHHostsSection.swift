@@ -4,16 +4,32 @@ final class SettingsSSHHostsSection: SettingsSection {
     var navTitle: String { "SSH Hosts" }
     var onExitToNav: (() -> Void)?
     var onAddHost: (() -> Void)?
+    var hostToFocus: String?
 
-    private struct Listed {
-        let host: String
-        let isTyped: Bool
+    private struct Listing {
+        let aliases: [String]
+        let typed: [String]
+        let isConfigUnreadable: Bool
+
+        var isEmpty: Bool { aliases.isEmpty && typed.isEmpty && !isConfigUnreadable }
+    }
+
+    private enum HostControl {
+        case toggle(SegmentedControl)
+        case remove(AppButton)
+
+        var view: NSView {
+            switch self {
+            case .toggle(let toggle): toggle
+            case .remove(let button): button
+            }
+        }
     }
 
     private struct HostRow {
         let host: String
         let row: LayoutRow
-        let toggle: SegmentedControl
+        let control: HostControl
     }
 
     private enum Stop: Equatable {
@@ -21,16 +37,23 @@ final class SettingsSSHHostsSection: SettingsSection {
         case add
     }
 
-    private var listed: [Listed]?
+    private var listing: Listing?
     private var destinations: [String: String] = [:]
+    private var removedAt: [String: Int] = [:]
     private var hostRows: [HostRow] = []
     private let addButton = AppButton(title: "＋ Add Host…", variant: .muted)
-    private weak var caption: NSTextField?
-    private weak var emptyHint: NSTextField?
+    private var captions: [NSTextField] = []
+    private var notes: [NSTextField] = []
     private var rowsStack: NSStackView?
     private var mountGeneration = 0
 
     private static let loadQueue = DispatchQueue(label: "com.zenterm.ssh-config-load", qos: .userInitiated)
+
+    // Focus stays on Remove once it reads Undo, so a held Return would flip the host back and forth.
+    private static var isKeyRepeat: Bool {
+        guard let event = NSApp.currentEvent, event.type == .keyDown else { return false }
+        return event.isARepeat
+    }
 
     func makeDetailView() -> NSView {
         let stack = NSStackView()
@@ -51,40 +74,44 @@ final class SettingsSSHHostsSection: SettingsSection {
         return SettingsDetail.scroll(for: stack)
     }
 
-    func detailStops() -> [NSView] { hostRows.map(\.toggle) + [addButton] }
+    func detailStops() -> [NSView] { hostRows.map(\.control.view) + [addButton] }
 
     func reapplyTheme() {
-        caption?.textColor = Theme.current.chrome.ink(.muted)
-        emptyHint?.textColor = Theme.current.chrome.ink(.muted)
+        captions.forEach { $0.textColor = Theme.current.chrome.ink(.muted) }
+        notes.forEach { $0.textColor = Theme.current.chrome.ink(.muted) }
         for hostRow in hostRows {
             hostRow.row.reapplyTheme()
-            hostRow.toggle.reapplyTheme()
+            switch hostRow.control {
+            case .toggle(let toggle): toggle.reapplyTheme()
+            case .remove(let button): button.reapplyTheme()
+            }
         }
         addButton.reapplyTheme()
     }
 
     private func load() {
-        listed = nil
+        listing = nil
         destinations = [:]
+        removedAt = [:]
         populate()
         mountGeneration += 1
         let generation = mountGeneration
         let file = SSHConfigHosts.userConfig
         Self.loadQueue.async { [weak self] in
-            let aliases = SSHConfigHosts.aliases(in: file)
+            let config = SSHConfigHosts.listing(of: file)
             DispatchQueue.main.async {
                 guard let self, generation == self.mountGeneration else { return }
-                self.land(aliases, generation: generation)
+                self.land(config, generation: generation)
             }
         }
     }
 
-    private func land(_ aliases: [String], generation: Int) {
-        let typed = GeneralConfig.current.sshHosts.filter { !aliases.contains($0) }
-        let list = aliases.map { Listed(host: $0, isTyped: false) } + typed.map { Listed(host: $0, isTyped: true) }
-        listed = list
-        populate()
-        SSHHostResolver.destinations(of: list.map(\.host)) { [weak self] found in
+    private func land(_ config: SSHConfigHosts.Listing, generation: Int) {
+        let typed = GeneralConfig.current.sshHosts.filter { !config.aliases.contains($0) }
+        listing = Listing(aliases: config.aliases, typed: typed, isConfigUnreadable: config.isUnreadable)
+        populate(focusing: hostToFocus.map { .host($0) })
+        hostToFocus = nil
+        SSHHostResolver.destinations(of: config.aliases + typed) { [weak self] found in
             guard let self, generation == self.mountGeneration, !found.isEmpty else { return }
             self.destinations = found
             self.populate()
@@ -96,30 +123,24 @@ final class SettingsSSHHostsSection: SettingsSection {
         let restore = target ?? focusedStop()
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         hostRows = []
+        captions = []
+        notes = []
 
-        let caption = SettingsDetail.groupCaption("SSH Hosts")
-        self.caption = caption
-        let header = SettingsDetail.headerRow(caption: caption, hint: nil)
-        stack.addArrangedSubview(header)
-        header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-
-        if let listed, listed.isEmpty {
-            let hint = NSTextField(
-                labelWithString: "No SSH hosts yet. Add one, or add a Host entry to ~/.ssh/config.")
-            hint.font = .systemFont(ofSize: 12)
-            hint.textColor = Theme.current.chrome.ink(.muted)
-            hint.lineBreakMode = .byWordWrapping
-            hint.maximumNumberOfLines = 0
-            emptyHint = hint
-            stack.addArrangedSubview(hint)
-            hint.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        } else if let listed {
-            let enabled = GeneralConfig.current.sshHosts
-            for entry in listed {
-                let hostRow = makeRow(entry, isOn: enabled.contains(entry.host))
-                hostRows.append(hostRow)
-                stack.addArrangedSubview(hostRow.row)
-                hostRow.row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        if let listing, !listing.isEmpty {
+            if !listing.aliases.isEmpty || listing.isConfigUnreadable {
+                addCaption("~/.ssh/config", to: stack)
+                if listing.isConfigUnreadable { addNote("Couldn't read ~/.ssh/config.", to: stack) }
+                let enabled = GeneralConfig.current.sshHosts
+                for alias in listing.aliases { add(makeToggleRow(alias, isOn: enabled.contains(alias)), to: stack) }
+            }
+            if !listing.typed.isEmpty {
+                addCaption("Added hosts", to: stack)
+                for host in listing.typed { add(makeRemoveRow(host), to: stack) }
+            }
+        } else {
+            addCaption("SSH Hosts", to: stack)
+            if listing != nil {
+                addNote("No SSH hosts yet. Add one, or add a Host entry to ~/.ssh/config.", to: stack)
             }
         }
 
@@ -131,12 +152,40 @@ final class SettingsSSHHostsSection: SettingsSection {
         restore.map(focus)
     }
 
-    private func makeRow(_ entry: Listed, isOn: Bool) -> HostRow {
-        let host = entry.host
+    private func addCaption(_ title: String, to stack: NSStackView) {
+        if let previous = stack.arrangedSubviews.last { stack.setCustomSpacing(18, after: previous) }
+        let caption = SettingsDetail.groupCaption(title)
+        captions.append(caption)
+        let header = SettingsDetail.headerRow(caption: caption, hint: nil)
+        stack.addArrangedSubview(header)
+        header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+    }
+
+    private func addNote(_ text: String, to stack: NSStackView) {
+        let note = NSTextField(labelWithString: text)
+        note.font = .systemFont(ofSize: 12)
+        note.textColor = Theme.current.chrome.ink(.muted)
+        note.lineBreakMode = .byWordWrapping
+        note.maximumNumberOfLines = 0
+        notes.append(note)
+        stack.addArrangedSubview(note)
+        note.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+    }
+
+    private func add(_ hostRow: HostRow, to stack: NSStackView) {
+        hostRows.append(hostRow)
+        stack.addArrangedSubview(hostRow.row)
+        hostRow.row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+    }
+
+    private func destination(of host: String) -> String? {
+        destinations[host].flatMap { $0 == host ? nil : $0 }
+    }
+
+    private func makeToggleRow(_ host: String, isOn: Bool) -> HostRow {
         let toggle = SegmentedControl(options: ["On", "Off"], selectedIndex: isOn ? 0 : 1) { _ in }
-        let destination = destinations[host].flatMap { $0 == host ? nil : $0 }
         let row = LayoutRow(
-            caption: host, description: destination, control: toggle, controlNote: nil, controlWidth: nil)
+            caption: host, description: destination(of: host), control: toggle, controlNote: nil, controlWidth: nil)
         toggle.onChange = { [weak self, weak row, weak toggle] index in
             guard let row, let toggle else { return }
             self?.turn(host, on: index == 0, row: row, toggle: toggle)
@@ -146,59 +195,73 @@ final class SettingsSSHHostsSection: SettingsSection {
         toggle.onArrowLeft = { [weak self] in self?.onExitToNav?() }
         toggle.onTab = { [weak self, weak toggle] in self?.moveTab(from: toggle, delta: 1) }
         toggle.onBacktab = { [weak self, weak toggle] in self?.moveTab(from: toggle, delta: -1) }
-        if entry.isTyped {
-            toggle.onDelete = { [weak self, weak row] in
-                guard let row else { return }
-                self?.remove(host, row: row)
-            }
+        return HostRow(host: host, row: row, control: .toggle(toggle))
+    }
+
+    private func makeRemoveRow(_ host: String) -> HostRow {
+        let button = AppButton(title: "Remove", variant: .secondary)
+        button.isKeyboardFocusable = true
+        let row = LayoutRow(
+            caption: host, description: destination(of: host), control: button, controlNote: nil, controlWidth: nil)
+        button.onTap = { [weak self, weak row, weak button] in
+            guard let self, let row, let button, !Self.isKeyRepeat else { return }
+            self.toggleRemoval(of: host, row: row, button: button)
         }
-        return HostRow(host: host, row: row, toggle: toggle)
+        button.onArrowUp = { [weak self, weak button] in self?.moveFocus(from: button, delta: -1) }
+        button.onArrowDown = { [weak self, weak button] in self?.moveFocus(from: button, delta: 1) }
+        button.onArrowLeft = { [weak self] in self?.onExitToNav?() }
+        button.onTab = { [weak self, weak button] in self?.moveTab(from: button, delta: 1) }
+        button.onBacktab = { [weak self, weak button] in self?.moveTab(from: button, delta: -1) }
+        showRemoval(removedAt[host] != nil, of: host, row: row, button: button)
+        return HostRow(host: host, row: row, control: .remove(button))
     }
 
     private func turn(_ host: String, on: Bool, row: LayoutRow, toggle: SegmentedControl) {
-        guard write(host, on: on, row: row) else {
-            toggle.setSelection(on ? 1 : 0)
-            return
-        }
-        row.showMessage(nil)
+        if !save(row: row, { try SSHHostsWriter.set(host, on: on) }) { toggle.setSelection(on ? 1 : 0) }
     }
 
-    // Deferred a turn because the rebuild frees this row's control while its `keyDown` is on the stack.
-    private func remove(_ host: String, row: LayoutRow) {
-        DispatchQueue.main.async { [weak self, weak row] in
-            guard let self, let row, var list = self.listed,
-                let index = list.firstIndex(where: { $0.host == host }),
-                self.write(host, on: false, row: row)
-            else { return }
-            list.remove(at: index)
-            self.listed = list
-            let neighbour = list.indices.contains(index) ? list[index] : list.last
-            self.populate(focusing: neighbour.map { .host($0.host) } ?? .add)
+    private func toggleRemoval(of host: String, row: LayoutRow, button: AppButton) {
+        if let index = removedAt[host] {
+            guard save(row: row, { try SSHHostsWriter.insert(host, at: index) }) else { return }
+            removedAt[host] = nil
+        } else {
+            let enabled = GeneralConfig.current.sshHosts
+            let index = enabled.firstIndex(of: host) ?? enabled.count
+            guard save(row: row, { try SSHHostsWriter.set(host, on: false) }) else { return }
+            removedAt[host] = index
         }
+        showRemoval(removedAt[host] != nil, of: host, row: row, button: button)
     }
 
-    private func write(_ host: String, on: Bool, row: LayoutRow) -> Bool {
+    private func showRemoval(_ isRemoved: Bool, of host: String, row: LayoutRow, button: AppButton) {
+        row.isDimmed = isRemoved
+        button.setTitle(isRemoved ? "Undo" : "Remove")
+        button.setAccessibilityLabel(isRemoved ? "Undo removing \(host)" : "Remove \(host)")
+    }
+
+    private func save(row: LayoutRow, _ change: () throws -> Void) -> Bool {
         do {
-            try SSHHostsWriter.set(host, on: on)
+            try change()
         } catch {
-            row.showMessage("Couldn't write config: \(error.localizedDescription)")
+            row.showMessage("Couldn't save ZenTerm's config: \(error.localizedDescription)")
             return false
         }
         AppConfig.reload()
+        row.showMessage(nil)
         return true
     }
 
     private func focusedStop() -> Stop? {
         let window = rowsStack?.window
         if KeyboardFocus.isFocused(addButton, in: window) { return .add }
-        return hostRows.first { KeyboardFocus.isFocused($0.toggle, in: window) }.map { .host($0.host) }
+        return hostRows.first { KeyboardFocus.isFocused($0.control.view, in: window) }.map { .host($0.host) }
     }
 
     private func focus(_ stop: Stop) {
         let target: NSView? =
             switch stop {
             case .add: addButton
-            case .host(let host): hostRows.first { $0.host == host }?.toggle
+            case .host(let host): hostRows.first { $0.host == host }?.control.view
             }
         guard let target = target ?? detailStops().first else { return }
         rowsStack?.window?.makeFirstResponder(target)
@@ -206,7 +269,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private func scrollTarget(_ stop: NSView) -> NSView {
-        hostRows.first { $0.toggle === stop }?.row ?? stop
+        hostRows.first { $0.control.view === stop }?.row ?? stop
     }
 
     private func moveFocus(from view: NSView?, delta: Int) {

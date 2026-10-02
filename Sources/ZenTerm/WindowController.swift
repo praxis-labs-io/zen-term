@@ -1522,7 +1522,7 @@ final class WindowController: NSObject {
         }
     #endif
 
-    private func openSettings(landing: SettingsLanding = .top) {
+    private func openSettings(landing: SettingsLanding = .top, focusingSSHHost host: String? = nil) {
         if modal?.kind == .settings { closeModal(); return }
         let toolsSection = SettingsToolsSection()
         toolsSection.onEditFloat = { [weak self] float in self?.openToolFloatForm(editing: float) }
@@ -1534,6 +1534,7 @@ final class WindowController: NSObject {
         }
         let sshHostsSection = SettingsSSHHostsSection()
         sshHostsSection.onAddHost = { [weak self] in self?.openAddSSHHost() }
+        sshHostsSection.hostToFocus = host
         let sections: [SettingsSection] = [
             SettingsAppearanceSection(),
             SettingsGeneralSection(),
@@ -1758,16 +1759,16 @@ final class WindowController: NSObject {
             toasts.show(
                 ToastContent(
                     variant: .warning, title: "Couldn't Add SSH Host",
-                    message: "Failed to write \(host) to the config file: \(error.localizedDescription)"))
+                    message: "Couldn't save \(host) to ZenTerm's config: \(error.localizedDescription)"))
             return
         }
         AppConfig.reload()
-        reopenSettingsOnSSHHosts()
+        reopenSettingsOnSSHHosts(focusing: host)
     }
 
-    private func reopenSettingsOnSSHHosts() {
+    private func reopenSettingsOnSSHHosts(focusing host: String? = nil) {
         closeModal()
-        openSettings(landing: .sshHosts)
+        openSettings(landing: .sshHosts, focusingSSHHost: host)
     }
 
     private func reopenSettingsOnTools() {
