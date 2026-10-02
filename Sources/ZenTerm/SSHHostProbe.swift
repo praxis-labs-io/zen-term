@@ -12,6 +12,10 @@ final class SSHHostProbe {
     private static let roundInterval: TimeInterval = 60
     private static let roundTolerance: TimeInterval = 10
     nonisolated private static let connectTimeout = 5
+    nonisolated private static let bannerTimeout: TimeInterval = 5
+    // RFC 4253 4.2 caps a greeting line at 255 bytes; past a few lines of preamble the server is not sshd.
+    nonisolated private static let maxGreetingLine = 255
+    nonisolated private static let maxGreetingLines = 8
     // Path updates arrive in bursts while an interface comes up, and a wake lands before the interface is back.
     private static let networkSettle: TimeInterval = 1
     nonisolated private static let banner = Data("SSH-".utf8)
@@ -200,33 +204,79 @@ final class SSHHostProbe {
         }
     }
 
-    // Blocking: reads only the server's banner, which sshd sends before any authentication.
-    nonisolated private static func answersSSH(_ hostname: String, port: UInt16) -> Bool {
+    // Blocking: reads only the server's greeting, which sshd sends before any authentication.
+    nonisolated static func answersSSH(
+        _ hostname: String, port: UInt16, connectTimeout: Int = connectTimeout,
+        bannerTimeout: TimeInterval = bannerTimeout
+    ) -> Bool {
         guard let port = NWEndpoint.Port(rawValue: port) else { return false }
         let tcp = NWProtocolTCP.Options()
         tcp.connectionTimeout = connectTimeout
         let connection = NWConnection(
             host: NWEndpoint.Host(hostname), port: port, using: NWParameters(tls: nil, tcp: tcp))
-        let lock = NSLock()
-        var isSSH = false
-        let settled = DispatchSemaphore(value: 0)
+        defer { connection.cancel() }
+        final class Progress: @unchecked Sendable {
+            private let lock = NSLock()
+            private var ready = false
+            private var ssh = false
+            var isReady: Bool {
+                get { lock.withLock { ready } }
+                set { lock.withLock { ready = newValue } }
+            }
+            var isSSH: Bool {
+                get { lock.withLock { ssh } }
+                set { lock.withLock { ssh = newValue } }
+            }
+        }
+        let progress = Progress()
+        let connected = DispatchSemaphore(value: 0)
+        let answered = DispatchSemaphore(value: 0)
         connection.stateUpdateHandler = { state in
             switch state {
             case .ready:
-                connection.receive(minimumIncompleteLength: banner.count, maximumLength: banner.count) {
-                    data, _, _, _ in
-                    lock.withLock { isSSH = data == banner }
-                    settled.signal()
-                }
+                progress.isReady = true
+                connected.signal()
             case .waiting, .failed:
-                settled.signal()
+                connected.signal()
             default:
                 break
             }
         }
+        func read(after received: Data) {
+            connection.receive(minimumIncompleteLength: 1, maximumLength: maxGreetingLine) {
+                data, _, isComplete, error in
+                let buffer = received + (data ?? Data())
+                if let verdict = greeting(in: buffer) {
+                    progress.isSSH = verdict
+                    answered.signal()
+                    return
+                }
+                guard !isComplete, error == nil else {
+                    answered.signal()
+                    return
+                }
+                read(after: buffer)
+            }
+        }
         connection.start(queue: DispatchQueue(label: "ZenTerm.SSHHostProbe.connection"))
-        _ = settled.wait(timeout: .now() + .seconds(connectTimeout))
-        connection.cancel()
-        return lock.withLock { isSSH }
+        _ = connected.wait(timeout: .now() + .seconds(connectTimeout))
+        guard progress.isReady else { return false }
+        read(after: Data())
+        _ = answered.wait(timeout: .now() + bannerTimeout)
+        return progress.isSSH
+    }
+
+    // RFC 4253 4.2: a server may send lines before its `SSH-` version line. Nil until the bytes decide it.
+    nonisolated static func greeting(in data: Data) -> Bool? {
+        var line = data[...]
+        for _ in 0..<maxGreetingLines {
+            if line.starts(with: banner) { return true }
+            guard let newline = line.firstIndex(of: UInt8(ascii: "\n")) else {
+                return line.count < maxGreetingLine ? nil : false
+            }
+            guard line.distance(from: line.startIndex, to: newline) < maxGreetingLine else { return false }
+            line = line[line.index(after: newline)...]
+        }
+        return false
     }
 }
