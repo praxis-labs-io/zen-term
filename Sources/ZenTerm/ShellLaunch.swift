@@ -30,10 +30,11 @@ enum ShellLaunch {
     static func program(_ command: String, cwd: URL?, env: [String: String] = [:]) -> TerminalSurfaceConfig {
         let sh = userShell
         let tail = "\(zshIntegrationRearm(for: sh))exec \(sh) -l -i"
+        let title = titling(command, for: sh)
         let script =
             isAgent(command)
-            ? "\(commandStart)\(command); \(commandFinish(for: sh))\(tail)"
-            : "\(command); \(tail)"
+            ? "\(title)\(commandStart)\(command); \(commandFinish(for: sh))\(tail)"
+            : "\(title)\(command); \(tail)"
         return TerminalSurfaceConfig(
             command: sh,
             args: ["-l", "-i", "-c", script],
@@ -48,6 +49,22 @@ enum ShellLaunch {
     // Only an agent's exit is tracked, and marking every program would toast when nvim quits.
     private static func isAgent(_ command: String) -> Bool {
         AgentRoster.agentName(launching: command, listed: GeneralConfig.current.listedAgents) != nil
+    }
+
+    // A `-c` shell runs no preexec hook, so nothing titles the pane while the command runs.
+    private static func titling(_ command: String, for shell: String) -> String {
+        let title = String(
+            command.unicodeScalars.map { $0.properties.generalCategory == .control ? " " : Character($0) })
+        return "printf '\\033]2;%s\\007' \(singleQuoted(title, for: shell)); "
+    }
+
+    // fish reads `\\` and `\'` as escapes inside single quotes, where a POSIX shell takes every byte literally.
+    private static func singleQuoted(_ text: String, for shell: String) -> String {
+        guard URL(fileURLWithPath: shell).lastPathComponent == "fish" else {
+            return "'" + text.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        }
+        let escaped = text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
+        return "'" + escaped + "'"
     }
 
     // A `-c` shell runs no prompt hook, so the program's own exit reports no OSC 133 mark of its own.

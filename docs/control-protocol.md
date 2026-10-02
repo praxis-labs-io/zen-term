@@ -145,7 +145,8 @@ is listed from its first opening until it closes, shown or hidden.
 - `worktree`: present when the workspace was opened from a worktree. `parent` is
   the folder of the workspace it belongs to.
 - `drawer`: `bottom` or `right`, absent for a pane.
-- `title`: the title the program last set, empty when it set none.
+- `title`: the title the program last set. A pane started with a command is titled with
+  that command until its program sets one. Empty when nothing set one.
 - `cwd`: absent when it is not known.
 - `agent`: present when the pane runs an agent. `state` is `working`, `waiting` or
   `idle`; `name` is absent for an agent that has not been named.

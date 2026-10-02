@@ -104,7 +104,7 @@ final class ControlPaneTests: WindowTestCase {
             send(.paneSplit, ControlArgs(cmd: "htop", dir: .right), from: callerToken), as: PaneResult.self)
 
         let new = try surface(opened.pane)
-        XCTAssertTrue(new.lastConfig?.args.last?.hasPrefix("htop;") == true, "\(String(describing: new.lastConfig))")
+        XCTAssertTrue(new.lastConfig?.args.last?.contains("; htop; ") == true, "\(String(describing: new.lastConfig))")
         XCTAssertEqual(panes(c).map(\.token), [callerToken, opened.pane])
         XCTAssertTrue(c.focusedSurfaceForTesting === caller)
         XCTAssertTrue(c.window.firstResponder === caller.view, "the rebuild dropped the caller's keyboard focus")
