@@ -7,7 +7,7 @@ public enum ControlEndpoint {
     public static let fileNamePrefix = "control."
     public static let fileNameSuffix = ".sock"
 
-    /// `~/Library/Application Support/ZenTerm`, which also holds the nav socket and the theme file.
+    /// `~/Library/Application Support/ZenTerm`.
     public static var directory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ZenTerm", isDirectory: true)
