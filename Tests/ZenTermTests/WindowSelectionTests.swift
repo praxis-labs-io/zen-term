@@ -9,6 +9,7 @@ final class WindowSelectionTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var originalConfig: GeneralConfig!
     private var controller: WindowController?
+    private var spawned: [RecordingSurface] = []
     private var tempRoot: URL!
 
     override func setUpWithError() throws {
@@ -16,7 +17,11 @@ final class WindowSelectionTests: WindowTestCase {
         originalOverride = TerminalSurfaceFactory.makeOverride
         originalConfig = GeneralConfig.current
         Motion.isReduceMotionEnabled = { true }
-        TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
+        TerminalSurfaceFactory.makeOverride = { [weak self] in
+            let surface = RecordingSurface()
+            self?.spawned.append(surface)
+            return surface
+        }
         GeneralConfig.setCurrentForTesting(.builtIn)
         tempRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-selection-\(UUID().uuidString)", isDirectory: true)
@@ -28,6 +33,7 @@ final class WindowSelectionTests: WindowTestCase {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller.map { AttentionCenter.shared.forget(windowID: $0.windowID) }
         controller = nil
+        spawned = []
         ConfigLoader.defaultRootOverrideForTesting = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
@@ -112,5 +118,55 @@ final class WindowSelectionTests: WindowTestCase {
         c.handle(.closeWindow)
 
         XCTAssertTrue(closed)
+    }
+
+    private func makeFocusedWorkspaceWindow() throws -> (WindowController, RecordingSurface) {
+        let c = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800),
+            initialCWD: FileManager.default.temporaryDirectory)
+        controller = c
+        c.mountAndStart()
+        c.window.makeKeyAndOrderFront(nil)
+        let surface = try XCTUnwrap(spawned.last)
+        surface.focus()
+        XCTAssertTrue(c.window.firstResponder === surface.view, "precondition: the workspace's pane holds focus")
+        return (c, surface)
+    }
+
+    func test_aHost_takesTheWorkspacesCanvasOffTheWindow() throws {
+        let (c, surface) = try makeFocusedWorkspaceWindow()
+
+        c.selectHostForTesting(SSHHostID(name: "devbox"))
+
+        XCTAssertNil(surface.view.window, "the workspace's pane is no longer mounted under a host")
+    }
+
+    func test_aHost_takesFocusOffTheWorkspacesPane() throws {
+        let (c, _) = try makeFocusedWorkspaceWindow()
+
+        c.selectHostForTesting(SSHHostID(name: "devbox"))
+
+        XCTAssertTrue(c.window.firstResponder === c.window, "keys go to the window, not a pane out of view")
+        XCTAssertFalse(spawned.contains { $0.view === c.window.firstResponder })
+    }
+
+    func test_aHost_titlesTheWindowWithItsName() throws {
+        let (c, _) = try makeFocusedWorkspaceWindow()
+
+        c.selectHostForTesting(SSHHostID(name: "devbox"))
+
+        XCTAssertEqual(c.window.title, "devbox")
+    }
+
+    func test_selectingTheWorkspaceAgain_remountsAndFocusesItsPane() throws {
+        let (c, surface) = try makeFocusedWorkspaceWindow()
+        let name = try XCTUnwrap(c.workspaceNamesForTesting.first)
+        c.selectHostForTesting(SSHHostID(name: "devbox"))
+
+        c.handle(.selectWorkspace(1))
+
+        XCTAssertTrue(surface.view.window === c.window)
+        XCTAssertTrue(c.window.firstResponder === surface.view)
+        XCTAssertEqual(c.window.title, name)
     }
 }

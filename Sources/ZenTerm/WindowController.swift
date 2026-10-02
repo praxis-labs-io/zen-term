@@ -807,7 +807,8 @@ final class WindowController: NSObject {
     }
 
     private func mount(_ transition: MountTransition) {
-        guard let canvas = selectedCanvas, mountedCanvas !== canvas else {
+        guard let canvas = selectedCanvas else { return unmountCanvas() }
+        guard mountedCanvas !== canvas else {
             restoreFocusToActive()
             renderDock()
             return
@@ -832,6 +833,13 @@ final class WindowController: NSObject {
                 self?.endCanvasSlide()
             }
         }
+    }
+
+    private func unmountCanvas() {
+        restoreFocusToActive()
+        mountedCanvas?.removeFromSuperview()
+        mountedCanvas = nil
+        renderDock()
     }
 
     private func slideOffset(from edge: SlideEdge) -> CGVector {
@@ -3343,7 +3351,10 @@ final class WindowController: NSObject {
                 attentionState: attention.state(tab: id).tabState)
         }
         tabBar.render(items)
-        if let activeWorkspace { window.title = activeWorkspace.name }
+        switch selection {
+        case .workspace(let workspace): window.title = workspace.name
+        case .host(let host): window.title = host.name
+        }
         let waiting = workspaces.filter { attention.state(tabs: $0.tabIDs) == .waiting }.map(\.id)
         sidebar.render(order: order, workspaces: workspaces, active: activeWorkspace, waiting: Set(waiting))
         renderAgents()
