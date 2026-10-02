@@ -35,6 +35,7 @@ final class SSHHostProbe {
     private var generation = 0
     private var isNetworkUp = true
     private var isStarted = false
+    private var isWatching = false
     private var timer: Timer?
     private var pathMonitor: NWPathMonitor?
     private var lastPath: NWPath?
@@ -98,16 +99,18 @@ final class SSHHostProbe {
         }
     }
 
+    // A watch that stopped knows nothing of the network since, so a new one starts up until its monitor says otherwise.
     private func refreshWatching() {
         refreshTimer()
-        let watches = isStarted && !hosts.isEmpty
-        guard watches != (pathMonitor != nil) else { return }
-        guard watches else {
-            pathMonitor?.cancel()
-            pathMonitor = nil
-            lastPath = nil
-            return
-        }
+        let watches = !hosts.isEmpty
+        guard watches != isWatching else { return }
+        isWatching = watches
+        pathMonitor?.cancel()
+        pathMonitor = nil
+        lastPath = nil
+        pendingSettle?.cancel()
+        isNetworkUp = true
+        guard watches, isStarted else { return }
         let monitor = NWPathMonitor()
         monitor.pathUpdateHandler = { [weak self] path in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.pathUpdated(path) } }
@@ -116,11 +119,17 @@ final class SSHHostProbe {
         pathMonitor = monitor
     }
 
-    // The first update reports the path the probe started on, which is not a change.
     private func pathUpdated(_ path: NWPath) {
         defer { lastPath = path }
-        guard let lastPath, lastPath != path else { return }
-        networkChanged(isUp: path.status == .satisfied)
+        let isUp = path.status == .satisfied
+        guard let lastPath else { return firstPathReported(isUp: isUp) }
+        guard lastPath != path else { return }
+        networkChanged(isUp: isUp)
+    }
+
+    func firstPathReported(isUp: Bool) {
+        guard isUp != isNetworkUp else { return }
+        networkChanged(isUp: isUp)
     }
 
     private func refreshTimer() {

@@ -97,13 +97,14 @@ final class SSHHostProbeTests: XCTestCase {
     }
 
     func test_noRoundRuns_whileTheNetworkIsDown() {
+        probe.setHosts(["devbox"])
+        waitUntil(answers.askCount("devbox") == 1, "the first round")
         probe.networkChanged(isUp: false)
 
-        probe.setHosts(["devbox"])
         probe.probeAll()
 
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-        XCTAssertEqual(answers.askCount("devbox"), 0)
+        XCTAssertEqual(answers.askCount("devbox"), 1)
     }
 
     func test_aRemovedHost_forgetsItsReachability() {
@@ -114,5 +115,34 @@ final class SSHHostProbeTests: XCTestCase {
         probe.setHosts([])
 
         XCTAssertEqual(status("devbox"), .online)
+    }
+
+    func test_aWatchStartedAfterTheNetworkWentDown_probesAgain() {
+        probe.setHosts(["first"])
+        probe.networkChanged(isUp: false)
+        probe.setHosts([])
+
+        probe.setHosts(["devbox"])
+
+        waitUntil(answers.askCount("devbox") == 1, "the new watch to probe")
+    }
+
+    func test_aNewMonitorsFirstReport_ofNoNetwork_takesHostsOffline() {
+        probe.setHosts(["devbox"])
+        waitUntil(answers.askCount("devbox") == 1, "the first round")
+
+        probe.firstPathReported(isUp: false)
+
+        XCTAssertEqual(status("devbox"), .offline)
+    }
+
+    func test_aNewMonitorsFirstReport_ofTheNetworkItAssumed_startsNoRound() {
+        probe.setHosts(["devbox"])
+        waitUntil(answers.askCount("devbox") == 1, "the first round")
+
+        probe.firstPathReported(isUp: true)
+
+        RunLoop.current.run(until: Date().addingTimeInterval(1.3))
+        XCTAssertEqual(answers.askCount("devbox"), 1)
     }
 }
