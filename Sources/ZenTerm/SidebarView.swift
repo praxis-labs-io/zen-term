@@ -14,6 +14,8 @@ enum SidebarFocusStop: Equatable {
 
 struct SidebarHostItem: Equatable {
     let id: SSHHostID
+    let status: SSHHostStatus
+    let number: Int?
     let isActive: Bool
 }
 
@@ -51,6 +53,7 @@ final class SidebarView: NSView {
     private let hostsCaption = FieldCaption("SSH", required: false)
     private let hostStack = NSStackView()
     private var hostRows: [String: SettingsNavRow] = [:]
+    private var hostNumbers: [String: Int] = [:]
     private var hostsBelowRows: [NSLayoutConstraint] = []
     private var agentsBelowRows: [NSLayoutConstraint] = []
     private var agentsBelowHosts: [NSLayoutConstraint] = []
@@ -214,17 +217,23 @@ final class SidebarView: NSView {
         end?.isActive = true
     }
 
+    // A status change swaps the row's variant, so the rebuilt row takes the old one's keyboard focus.
     func renderHosts(_ items: [SidebarHostItem]) {
-        let hosts = items.map(\.id.name)
+        let byName = Dictionary(uniqueKeysWithValues: items.map { ($0.id.name, $0) })
         var removedFocusedRow = false
-        for (host, row) in hostRows where !hosts.contains(host) {
-            removedFocusedRow = removedFocusedRow || KeyboardFocus.isFocused(row, in: window)
+        var refocus: String?
+        for (host, row) in hostRows where byName[host].map(Self.hostVariant) != row.variant {
+            if KeyboardFocus.isFocused(row, in: window) {
+                if byName[host] == nil { removedFocusedRow = true } else { refocus = host }
+            }
             row.removeFromSuperview()
             hostRows[host] = nil
         }
+        hostNumbers = byName.compactMapValues(\.number)
         for (index, item) in items.enumerated() {
-            let row = hostRow(for: item.id.name)
+            let row = hostRow(for: item)
             row.setSelected(item.isActive)
+            row.setDetail(Self.hostDetail(item.status))
             guard hostStack.arrangedSubviews.firstIndex(of: row) != index else { continue }
             let isNew = row.superview == nil
             if !isNew { hostStack.removeArrangedSubview(row) }
@@ -233,14 +242,32 @@ final class SidebarView: NSView {
         }
         refreshSections()
         refreshRowHover()
+        if let refocus { focusStop(.host(refocus)) }
         if removedFocusedRow { onLeave?() }
     }
 
-    private func hostRow(for host: String) -> SettingsNavRow {
+    private static func hostVariant(_ item: SidebarHostItem) -> SettingsNavRow.Variant {
+        item.status == .offline ? .faint : .standard
+    }
+
+    private static func hostDetail(_ status: SSHHostStatus) -> String {
+        switch status {
+        case .offline: return "Offline"
+        case .online: return "Online"
+        case .connected: return "Connected"
+        }
+    }
+
+    private func hostRow(for item: SidebarHostItem) -> SettingsNavRow {
+        let host = item.id.name
         if let row = hostRows[host] { return row }
-        let id = SSHHostID(name: host)
-        let row = SettingsNavRow(title: host, variant: .faint, focusesOnClick: false) { [weak self] in
-            self?.onActivateHost?(id)
+        let id = item.id
+        let row = SettingsNavRow(title: host, variant: Self.hostVariant(item), focusesOnClick: false) {
+            [weak self] in self?.onActivateHost?(id)
+        }
+        row.tooltip = TooltipHost(label: "Open host") { [weak self] in
+            guard let number = self?.hostNumbers[host], number <= 9 else { return nil }
+            return CommandCatalog.spec(for: .selectWorkspace(number)).shortcut
         }
         row.onArrowUp = { [weak self] in self?.moveFocus(-1) }
         row.onArrowDown = { [weak self] in self?.moveFocus(1) }

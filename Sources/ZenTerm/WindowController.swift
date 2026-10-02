@@ -298,6 +298,7 @@ final class WindowController: NSObject {
     private var titlePoll: Timer?
 
     private var configObserver: NSObjectProtocol?
+    private var hostStatusObserver: NSObjectProtocol?
     private var attentionObserver: NSObjectProtocol?
     /// Raises the window holding the agent that has waited longest and lands on it. False when it has gone.
     var revealWaitingAgentElsewhere: ((Int) -> Bool)?
@@ -480,6 +481,12 @@ final class WindowController: NSObject {
             }
         }
 
+        hostStatusObserver = NotificationCenter.default.addObserver(
+            forName: .sshHostStatusDidChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.renderTabBar() }
+        }
+
         configObserver = NotificationCenter.default.addObserver(
             forName: .configDidChange, object: nil, queue: .main
         ) { [weak self] note in
@@ -538,7 +545,7 @@ final class WindowController: NSObject {
                     self.sidebar.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
                     self.renderDock()
                 }
-                if change.contains(.sshHosts) { self.sidebar.renderHosts(GeneralConfig.current.sshHosts) }
+                if change.contains(.sshHosts) { self.renderTabBar() }
                 if change.contains(.theme) || change.contains(.keymap) || change.contains(.floats) {
                     self.modal?.overlay.reapplyTheme()
                 }
@@ -577,7 +584,6 @@ final class WindowController: NSObject {
         container.addSubview(dock)
         sidebar.install(in: container, besideTabBar: tabBar)
         sidebar.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
-        sidebar.renderHosts(GeneralConfig.current.sshHosts)
         NSLayoutConstraint.activate([
             canvasHost.leadingAnchor.constraint(equalTo: sidebar.edgeAnchor),
             canvasHost.trailingAnchor.constraint(equalTo: container.trailingAnchor),
@@ -1097,7 +1103,7 @@ final class WindowController: NSObject {
     }
 
     private func workspaceSlide(from old: WorkspaceID?, to new: WorkspaceID) -> MountTransition {
-        let ids = order.navigable
+        let ids = order.navigableWorkspaces
         guard let old, let from = ids.firstIndex(of: old), let to = ids.firstIndex(of: new) else { return .instant }
         return .slide(from: to > from ? .fromBottom : .fromTop)
     }
@@ -1128,12 +1134,27 @@ final class WindowController: NSObject {
         workspaces.lazy.compactMap(\.origin?.parent).first { $0.path.standardizedFileURL.path == path }
     }
 
-    private var order: WorkspaceOrder { WorkspaceOrder(workspaces) }
+    private var order: WorkspaceOrder {
+        let hosts = GeneralConfig.current.sshHosts.map(SSHHostID.init).map {
+            WorkspaceOrder.Host(id: $0, status: SSHHostStatusCenter.shared.status(of: $0))
+        }
+        return WorkspaceOrder(workspaces, hosts: hosts)
+    }
+
+    private var selectedTarget: WorkspaceOrder.Target? {
+        selection.host.map(WorkspaceOrder.Target.host) ?? activeWorkspace.map { .workspace($0.id) }
+    }
+
+    private func activate(_ target: WorkspaceOrder.Target) {
+        switch target {
+        case .workspace(let id): activate(id)
+        case .host(let host): activate(host)
+        }
+    }
 
     private func cycleWorkspace(_ delta: Int) {
-        let ids = order.navigable
-        guard ids.count > 1, let current = activeWorkspace?.id, let i = ids.firstIndex(of: current) else { return }
-        activate(ids[(i + delta + ids.count) % ids.count])
+        guard let current = selectedTarget, let next = order.stop(after: current, delta) else { return }
+        activate(next)
     }
 
     private func moveActiveTab(_ delta: Int) {
@@ -1200,12 +1221,12 @@ final class WindowController: NSObject {
 
     private func closeWorkspace(_ workspace: WorkspaceController) {
         Log.info("workspace closed", category: .workspace)
-        guard let place = order.navigable.firstIndex(of: workspace.id) else { return }
+        guard let place = order.navigableWorkspaces.firstIndex(of: workspace.id) else { return }
         workspaces.removeAll { $0 === workspace }
         worktreeRemovedToasts[workspace.id].map(toasts.dismiss)
         guard !workspaces.isEmpty else { window.close(); return }
         guard workspace === activeWorkspace else { renderAttention(); return }
-        let remaining = order.navigable
+        let remaining = order.navigableWorkspaces
         guard let next = workspaces.first(where: { $0.id == remaining[min(place, remaining.count - 1)] })
         else { return }
         selection = .workspace(next)
@@ -2216,8 +2237,8 @@ final class WindowController: NSObject {
         case .reportIssue: openReportIssue()
         case .newTool: openToolFloatForm(editing: nil, returnTo: toolFormReturnForNewTool())
         case .selectWorkspace(let n):
-            let ids = order.navigable
-            if ids.indices.contains(n - 1) { activate(ids[n - 1]) }
+            let stops = order.navigable
+            if stops.indices.contains(n - 1) { activate(stops[n - 1]) }
         case .prevWorkspace: cycleWorkspace(-1)
         case .nextWorkspace: cycleWorkspace(1)
         case .nextWaitingAgent: jumpToNextWaitingAgent()
@@ -3483,6 +3504,8 @@ final class WindowController: NSObject {
         titlePoll = nil
         if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
         configObserver = nil
+        if let hostStatusObserver { NotificationCenter.default.removeObserver(hostStatusObserver) }
+        hostStatusObserver = nil
         floats.shutdown()
         sidebar.shutdown()
         for workspace in workspaces { workspace.shutdown() }

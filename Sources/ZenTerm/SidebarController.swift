@@ -45,8 +45,6 @@ final class SidebarController {
     private var isSliding = false
     private var entries: [Entry] = []
     private var renderedRows: [SidebarRowItem] = []
-    private var hostNames: [String] = []
-    private var activeHost: SSHHostID?
     private var hosts: [SidebarHostItem] = []
     private var branchProbesInFlight: Set<URL> = []
     var onLeave: () -> Void = {}
@@ -335,6 +333,9 @@ final class SidebarController {
     ) {
         let byID = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
         let numbers = Dictionary(uniqueKeysWithValues: order.navigable.enumerated().map { ($1, $0 + 1) })
+        let nextHosts = order.hosts.map {
+            SidebarHostItem(id: $0.id, status: $0.status, number: numbers[.host($0.id)], isActive: $0.id == activeHost)
+        }
         let next = order.entries.compactMap { entry -> Entry? in
             switch entry {
             case .workspace(let id), .worktree(let id):
@@ -342,7 +343,8 @@ final class SidebarController {
                 let kind = workspace.origin.map(Entry.Kind.worktree) ?? .workspace
                 return Entry(
                     row: .workspace(id), kind: kind, name: workspace.name, folder: workspace.folder,
-                    number: numbers[id], isActive: workspace === active, isConfigured: workspace.isConfigured,
+                    number: numbers[.workspace(id)], isActive: workspace === active,
+                    isConfigured: workspace.isConfigured,
                     isWaiting: waiting.contains(id), isWorktreeRemoved: workspace.isWorktreeRemoved)
             case .ghost(let parent):
                 return Entry(
@@ -353,8 +355,10 @@ final class SidebarController {
         }
         let foldersChanged = next.compactMap(\.folder) != entries.compactMap(\.folder)
         entries = next
-        self.activeHost = activeHost
-        renderHostRows()
+        if nextHosts != hosts {
+            hosts = nextHosts
+            view.renderHosts(hosts)
+        }
         renderRows()
         if foldersChanged { refreshBranches() }
     }
@@ -479,16 +483,6 @@ final class SidebarController {
     }
 
     func renderAgents(_ items: [SidebarAgentItem]) { view.renderAgents(items) }
-
-    func renderHosts(_ names: [String]) {
-        hostNames = names
-        renderHostRows()
-    }
-
-    private func renderHostRows() {
-        hosts = hostNames.map { SidebarHostItem(id: SSHHostID(name: $0), isActive: SSHHostID(name: $0) == activeHost) }
-        view.renderHosts(hosts)
-    }
 
     func renderWaitingElsewhere(agents: Int, windows: Int, index: Int) {
         view.renderWaitingElsewhere(agents: agents, windows: windows, index: index)

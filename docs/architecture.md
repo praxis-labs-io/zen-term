@@ -206,8 +206,11 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   workspace at its parent's folder, or under a ghost row built from that origin when the
   parent is closed. A group's first member mints its `seat` and later members inherit it,
   so the group holds its place as members close and reopen. A workspace with no config
-  entry is never in a group. `navigable` skips ghosts; the sidebar's numbers, ⌘⌃1…9,
-  ⌘⌃[ ] and a close's landing all read it.
+  entry is never in a group. `navigable` skips ghosts and Offline SSH hosts, and lists
+  reachable hosts after the workspaces in `ssh-hosts` order; the sidebar's numbers, ⌘⌃1…9 and
+  ⌘⌃[ ] read it, and a close's landing reads its workspaces alone. ⌘⌃[ ] from an Offline host
+  step to the nearest reachable row by sidebar position. A connected host's workspace carries
+  the host and stays out of the workspace rows.
 - **`activate(_:)` is the single path a switch goes through**: a row click, the workspace
   chords, ⌘P, ⌘⌃T, and revealing a background tab. An open workspace slides in on the y axis, from
   below when it sits lower in `navigable`; a new one has no canvas yet, so it mounts each
@@ -552,8 +555,8 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
 - **No file watcher.** Hand edits apply on ⌘⇧,.
 - **`~/.ssh/config` is read, never written.** Settings > SSH Hosts lists its literal `Host`
   aliases (following `Include`, skipping `Match` blocks) off-main each time it mounts, and
-  `ssh -G` resolves each one. `ssh-hosts` holds which are on, plus typed hosts; the sidebar's
-  SSH rows stay out of `WorkspaceOrder`, so they take no number.
+  `ssh -G` resolves each one. `ssh-hosts` holds which are on, plus typed hosts, and the
+  sidebar's SSH rows read Offline, Online or Connected.
 - **`SSHHostProbe` keeps each host's reachability in `SSHHostStatusCenter`, and never logs in.**
   Off-main, at most four at a time, it resolves the host with `ssh -G` and reads the first
   bytes of a TCP connection to its port: an `SSH-` banner is Online, anything else Offline. A
