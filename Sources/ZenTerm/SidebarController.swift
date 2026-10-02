@@ -445,6 +445,10 @@ final class SidebarController {
     }
 
     private func renderLead() {
+        if let host = hosts.first(where: \.isActive) {
+            lead.setWorkspaceName(host.id.name)
+            return applyLeadWidth()
+        }
         guard let active = entries.first(where: \.isActive) else { return }
         if case .worktree(let origin) = active.kind {
             lead.setWorkspaceName(

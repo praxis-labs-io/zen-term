@@ -34,10 +34,18 @@ final class SSHConnection {
     private var stopWatching: (() -> Void)?
     private var isShutDown = false
 
-    init(host: SSHHostID, controlPath: URL? = nil, watchers: Watchers = .live) {
+    #if DEBUG
+        static var watchersOverrideForTesting: Watchers?
+    #endif
+
+    init(host: SSHHostID, controlPath: URL? = nil, watchers: Watchers? = nil) {
         self.host = host
         self.controlPath = controlPath ?? SSHLaunch.controlPath(for: host)
-        self.watchers = watchers
+        #if DEBUG
+            self.watchers = watchers ?? Self.watchersOverrideForTesting ?? .live
+        #else
+            self.watchers = watchers ?? .live
+        #endif
     }
 
     func start(_ surface: TerminalSurface, id: SurfaceID, env: [String: String]) {

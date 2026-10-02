@@ -7,7 +7,8 @@ final class WorkspaceOrderTests: XCTestCase {
     private func workspace(_ raw: Int, host: SSHHostID? = nil) -> WorkspaceController {
         WorkspaceController(
             id: WorkspaceID(raw: raw), isConfigured: false, name: "Workspace \(raw)",
-            folder: URL(fileURLWithPath: "/tmp/\(raw)"), firstTab: TabID(raw), host: host)
+            folder: URL(fileURLWithPath: "/tmp/\(raw)"), firstTab: TabID(raw),
+            connection: host.map { SSHConnection(host: $0) })
     }
 
     private func host(_ name: String, _ status: SSHHostStatus) -> WorkspaceOrder.Host {

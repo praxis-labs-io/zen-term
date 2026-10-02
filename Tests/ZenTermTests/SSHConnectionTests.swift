@@ -4,38 +4,8 @@ import XCTest
 @testable import ZenTerm
 
 final class SSHConnectionTests: XCTestCase {
-    private final class FakeWatchers {
-        var ready: (@MainActor () -> Void)?
-        var appeared: (@MainActor () -> Void)?
-        var found: (@MainActor (pid_t?) -> Void)?
-        var exited: (@MainActor () -> Void)?
-        var socketWatches = 0
-        var cancels = 0
-        var exitCancels = 0
-
-        var watchers: SSHConnection.Watchers {
-            SSHConnection.Watchers(
-                awaitSocket: { [self] _, ready, appeared in
-                    socketWatches += 1
-                    self.ready = ready
-                    self.appeared = appeared
-                    return { [self] in cancels += 1 }
-                },
-                checkMaster: { [self] _, _, found in self.found = found },
-                awaitExit: { [self] _, exited in
-                    self.exited = exited
-                    return { [self] in exitCancels += 1 }
-                })
-        }
-
-        func connect(pid: pid_t? = 42) {
-            appeared?()
-            found?(pid)
-        }
-    }
-
     private let host = SSHHostID(name: "devbox")
-    private var fake: FakeWatchers!
+    private var fake: FakeSSHWatchers!
     private var connection: SSHConnection!
     private var connectedChanges: [Bool] = []
     private var loginFailures = 0
@@ -43,7 +13,7 @@ final class SSHConnectionTests: XCTestCase {
     override func setUp() {
         super.setUp()
         GeneralConfig.setCurrentForTesting(.builtIn)
-        fake = FakeWatchers()
+        fake = FakeSSHWatchers()
         connection = SSHConnection(
             host: host, controlPath: URL(fileURLWithPath: "/tmp/zt/1-ab"), watchers: fake.watchers)
         connection.onConnectedChange = { [weak self] in self?.connectedChanges.append($0) }

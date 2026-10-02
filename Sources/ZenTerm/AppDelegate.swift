@@ -240,6 +240,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             other.activateWorkspace(at: path)
             return true
         }
+        wc.revealHostInAnotherWindow = { [weak self, weak wc] host in
+            guard let other = self?.windows.first(where: { $0 !== wc && $0.holdsHost(host) }) else { return false }
+            NSApp.activate(ignoringOtherApps: true)
+            if other.window.isMiniaturized { other.window.deminiaturize(nil) }
+            other.window.makeKeyAndOrderFront(nil)
+            other.activateHost(host)
+            return true
+        }
         if centered { wc.window.center() }
         wc.onClosed = { [weak self, weak wc] in
             guard let self, let wc else { return }

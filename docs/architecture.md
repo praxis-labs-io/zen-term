@@ -442,8 +442,9 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   the winner to its defaults. A user float that takes a chord gets Accept only; one that
   loses it gets Revert only. Settings rows show the conflict but do not resolve it.
 - **The modal gate** in `WindowController.handle(_:)` runs confirm, modal card, tool
-  float, then dispatch. A window's `WindowSelection` is a workspace or an SSH host; a host
-  has no tab, so dispatch drops any chord that is not `worksWithoutTab`. App-global chords bypass it in `AppDelegate.route`; a palette pick
+  float, then dispatch. A window's `WindowSelection` is a workspace or an SSH host's Connect
+  screen (`HostConnectView`); that screen has no tab, so dispatch drops any chord that is not
+  `worksWithoutTab`, except ⌘T, which connects, and a card stays open for a chord it would drop. App-global chords bypass it in `AppDelegate.route`; a palette pick
   of one returns there through `onAppGlobalCommand`. The sidebar toggle passes through an
   open card, which stays open. A card is offered every other chord first
   (`ModalOverlay.handle`, how the workspace form takes the tab shortcuts) and swallows
@@ -555,7 +556,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
 - **`~/.ssh/config` is read, never written.** Settings > SSH Hosts lists its literal `Host`
   aliases (following `Include`, skipping `Match` blocks) off-main each time it mounts, and
   `ssh -G` resolves each one. `ssh-hosts` holds which are on, plus typed hosts, and the
-  sidebar's SSH rows read Offline or Online.
+  sidebar's SSH rows read Offline, Online or Connected.
 - **`SSHHostProbe` keeps each host's reachability in `SSHHostStatusCenter`, and never logs in.**
   Off-main, at most four at a time, it resolves the host with `ssh -G`, once until `ssh-hosts`,
   the network, or the date on `~/.ssh/config` or a file it includes changes, because
@@ -564,7 +565,18 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   any preamble lines RFC 4253 allows, is Online, anything else Offline. A
   `ProxyJump` or `ProxyCommand` host reads Online unprobed. It runs every minute while the app
   is active, and on activation, wake and network change (`NWPathMonitor`); an answer from before
-  a network change is dropped and asked again. A host reads Online until its first answer.
+  a network change is dropped and asked again. A host reads Online until its first answer, and
+  a connected host takes its status from the connection, not the probe.
+- **A connected host is a workspace whose tabs run ssh over one `SSHConnection`.** Every pane
+  and drawer starts through the tab's injected `SurfaceStart`, which for a host runs
+  `/usr/bin/ssh` with `ControlMaster=auto`, a `ControlPath` under `Application Support/ZenTerm/ssh`
+  (the temp folder when that path passes 86 bytes, since ssh binds a longer temporary name
+  first) and `ControlPersist=60`, as `xterm-256color` with busy tracking off (a remote shell
+  sends no prompt marks). Only the first surface, the login, starts until the socket appears;
+  the rest wait, so a host asks for its password once. `ControlSocketWatch` watches the
+  folder rather than polling, `ssh -O check` names the master, and its exit source reports
+  the host disconnected. A login that ends before the socket drops the waiting surfaces and
+  closes the workspace back to Connect. Closing a host's last tab returns to Connect.
 - **Writers go through `ConfigFileIO`:** never treat an unreadable file as empty, and
   write through symlinks. `ConfigWriter` preserves comments and unknown keys.
 
