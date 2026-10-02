@@ -557,8 +557,9 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   `ssh -G` resolves each one. `ssh-hosts` holds which are on, plus typed hosts, and the
   sidebar's SSH rows read Offline or Online.
 - **`SSHHostProbe` keeps each host's reachability in `SSHHostStatusCenter`, and never logs in.**
-  Off-main, at most four at a time, it resolves the host with `ssh -G`, once until `ssh-hosts`
-  or the network changes because `Match exec` can prompt, and reads the greeting on a TCP
+  Off-main, at most four at a time, it resolves the host with `ssh -G`, once until `ssh-hosts`,
+  the network, or the date on `~/.ssh/config` or a file it includes changes, because
+  `Match exec` can prompt, and reads the greeting on a TCP
   connection to its port, with separate connect and greeting timeouts: an `SSH-` line, after
   any preamble lines RFC 4253 allows, is Online, anything else Offline. A
   `ProxyJump` or `ProxyCommand` host reads Online unprobed. It runs every minute while the app

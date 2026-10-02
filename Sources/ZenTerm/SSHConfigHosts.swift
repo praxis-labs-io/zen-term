@@ -31,6 +31,14 @@ enum SSHConfigHosts {
         return Listing(aliases: aliases, isUnreadable: !wasRead && FileManager.default.fileExists(atPath: file.path))
     }
 
+    // Every file the config reads through `Include`, resolved, whether or not it could be read.
+    static func files(of file: URL) -> [String] {
+        var aliases: [String] = []
+        var visited: Set<String> = []
+        collect(file, includeBase: file.deletingLastPathComponent(), depth: 0, visited: &visited, into: &aliases)
+        return visited.sorted()
+    }
+
     @discardableResult
     private static func collect(
         _ file: URL, includeBase: URL, depth: Int, visited: inout Set<String>, into aliases: inout [String]

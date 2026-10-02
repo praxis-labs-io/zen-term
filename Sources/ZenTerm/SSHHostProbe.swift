@@ -32,6 +32,7 @@ final class SSHHostProbe {
     private var proxied: Set<String> = []
     // `ssh -G` reruns `Match exec`, which can prompt, so a host resolves once per config and network.
     private var endpoints: [String: SSHHostResolver.Endpoint] = [:]
+    private var configStamp: [String: Date]?
     private var inFlight: Set<String> = []
     private var generation = 0
     private var isNetworkUp = true
@@ -155,8 +156,22 @@ final class SSHHostProbe {
         self.timer = timer
     }
 
-    // Without a network only `ssh -G` runs, so a jump host still learns it is one.
+    // A round first reads the ssh config's dates off-main, since an edit there can move a host.
     private func probe(_ targets: [String]) {
+        Self.queue.addOperation { [weak self] in
+            let stamp = Self.readConfigStamp()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.probe(targets, configStamp: stamp) }
+            }
+        }
+    }
+
+    // Without a network only `ssh -G` runs, so a jump host still learns it is one.
+    private func probe(_ targets: [String], configStamp stamp: [String: Date]) {
+        if stamp != configStamp {
+            endpoints = [:]
+            configStamp = stamp
+        }
         let isNetworkUp = self.isNetworkUp
         for host in targets where !inFlight.contains(host) && center.status(of: SSHHostID(name: host)) != .connected {
             inFlight.insert(host)
@@ -184,6 +199,14 @@ final class SSHHostProbe {
         endpoints[host] = endpoint
         if endpoint == .proxied { proxied.insert(host) } else { proxied.remove(host) }
         center.setReachable(isReachable, host: SSHHostID(name: host))
+    }
+
+    nonisolated private static func readConfigStamp() -> [String: Date] {
+        var stamp: [String: Date] = [:]
+        for path in SSHConfigHosts.files(of: SSHConfigHosts.userConfig) {
+            stamp[path] = (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate] as? Date
+        }
+        return stamp
     }
 
     nonisolated private static func resolve(_ host: String) -> SSHHostResolver.Endpoint? {
