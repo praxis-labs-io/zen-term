@@ -46,6 +46,9 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
     var isCloseVisibleForTesting: Bool { !closeButton.isHidden }
     var isDotVisibleForTesting: Bool { !dot.isHidden }
     var closeButtonForTesting: IconButton { closeButton }
+    var isTitleTruncatedForTesting: Bool {
+        label.cell?.expansionFrame(withFrame: label.bounds, in: label).isEmpty == false
+    }
 
     init() {
         super.init(frame: .zero)
@@ -94,7 +97,7 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
     }
 
     var fittingWidth: CGFloat {
-        let text = isRenaming ? renameWidth : ceil(label.intrinsicContentSize.width)
+        let text = isRenaming ? renameWidth : ceil(label.cell?.cellSize.width ?? label.intrinsicContentSize.width)
         var width = Self.inset * 2 + text
         if opensFocused { width += Self.accessorySpacing + Self.dotDiameter }
         if showsClose { width += Self.accessorySpacing / 2 + Self.closeSize }

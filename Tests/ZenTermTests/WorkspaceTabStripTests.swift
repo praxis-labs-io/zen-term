@@ -105,6 +105,12 @@ final class WorkspaceTabStripTests: WindowTestCase {
         XCTAssertLessThanOrEqual(strip.addButtonForTesting.frame.maxX, strip.bounds.width, "＋ stays in the strip")
     }
 
+    func test_everyChip_showsItsWholeTitle_selectedOrNot() {
+        mount([Workspace.Tab(), Workspace.Tab(name: "gate"), Workspace.Tab(main: "nvim")])
+
+        XCTAssertEqual(strip.chips.map(\.isTitleTruncatedForTesting), [false, false, false])
+    }
+
     func test_onlyTheTabThatOpensFocused_carriesTheDot() {
         mount(
             [Workspace.Tab(main: "nvim"), Workspace.Tab(name: "gate")],
