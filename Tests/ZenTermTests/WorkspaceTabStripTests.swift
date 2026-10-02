@@ -123,6 +123,18 @@ final class WorkspaceTabStripTests: WindowTestCase {
             strip.chips.filter(\.isHoveredForTesting).count, 0, "only the chip under the pointer stays hovered")
     }
 
+    func test_renamingAChipAtTheScrolledEnd_keepsItInView_besideTheHint() throws {
+        mount((0..<12).map { Workspace.Tab(name: "a-long-tab-name-\($0)") })
+        strip.addButtonForTesting.mouseDown(with: try mouse(.leftMouseDown, at: strip.addButtonForTesting))
+        let newest = try XCTUnwrap(strip.chips.last)
+
+        newest.beginRename()
+        window?.contentView?.layoutSubtreeIfNeeded()
+
+        XCTAssertTrue(strip.isRenameHintVisibleForTesting)
+        XCTAssertTrue(strip.visibleChipsRectForTesting.contains(newest.frame), "the hint must not push it out of view")
+    }
+
     func test_onlyTheTabThatOpensFocused_carriesTheDot() {
         mount(
             [Workspace.Tab(main: "nvim"), Workspace.Tab(name: "gate")],

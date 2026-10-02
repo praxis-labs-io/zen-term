@@ -124,7 +124,7 @@ final class WorkspaceTabStrip: NSView {
         renameHint.frame = CGRect(
             x: addX + Self.addSize + Self.hintSpacing, y: (WorkspaceTabChip.height - hintSize.height) / 2,
             width: hintSize.width, height: hintSize.height)
-        if revealsSelection, let chip = selectedChip {
+        if let chip = chips.first(where: \.isRenaming) ?? (revealsSelection ? selectedChip : nil) {
             chip.scrollToVisible(chip.bounds.insetBy(dx: -TabBarView.fadeWidth, dy: 0))
         }
         revealsSelection = false
@@ -208,6 +208,7 @@ final class WorkspaceTabStrip: NSView {
             self.renameHint.isHidden = !self.isRenaming
             self.needsLayout = true
         }
+        chip.onWidthChanged = { [weak self] in self?.needsLayout = true }
         chip.onArrowLeft = { [weak self, weak chip] in self?.withIndex(of: chip) { self?.step(from: $0, by: -1) } }
         chip.onArrowRight = { [weak self, weak chip] in self?.withIndex(of: chip) { self?.step(from: $0, by: 1) } }
         chip.onArrowUp = { [weak self] in self?.onArrowUp?() }

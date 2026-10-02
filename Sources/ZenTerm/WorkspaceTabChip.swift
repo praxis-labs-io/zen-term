@@ -11,6 +11,7 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
     var onRemove: (() -> Void)?
     var onRename: ((String) -> Void)?
     var onRenamingChanged: (() -> Void)?
+    var onWidthChanged: (() -> Void)?
     var onArrowLeft: (() -> Void)?
     var onArrowRight: (() -> Void)?
     var onArrowUp: (() -> Void)?
@@ -228,7 +229,7 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         isHovered = on
         if on, !isRenaming { renameTooltip.show(from: self) } else { renameTooltip.hide(from: self) }
         restyle()
-        superview?.needsLayout = true
+        onWidthChanged?()
         needsLayout = true
     }
 
@@ -272,7 +273,7 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         label.isHidden = true
         onRenamingChanged?()
         restyle()
-        superview?.needsLayout = true
+        onWidthChanged?()
         needsLayout = true
         window?.makeFirstResponder(renameField)
         renameField.applyThemedCaret()
@@ -298,13 +299,13 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         if refocus { window?.makeFirstResponder(self) }
         if commit { onRename?(typed) }
         restyle()
-        superview?.needsLayout = true
+        onWidthChanged?()
         needsLayout = true
         onRenamingChanged?()
     }
 
     func controlTextDidChange(_ obj: Notification) {
-        superview?.needsLayout = true
+        onWidthChanged?()
         needsLayout = true
     }
 
