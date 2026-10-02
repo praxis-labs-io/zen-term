@@ -387,6 +387,31 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertTrue(dockShows("pi", in: c))
     }
 
+    func test_theConnectScreen_hidesTheDock_andConnectingBringsItBack() throws {
+        let c = onConnectScreen()
+
+        XCTAssertEqual(c.dockForTesting.visibleLayoutForTesting, [])
+
+        c.handle(.newTab)
+
+        XCTAssertTrue(dockShows("New tab", in: c))
+        XCTAssertTrue(dockShows("Scratch", in: c))
+    }
+
+    func test_aFloatThatNeedsYou_keepsItsButtonOnConnect() throws {
+        let c = makeWindow()
+        c.handle(.toggleToolFloat("pi"))
+        let pi = try XCTUnwrap(spawned.first { $0.lastConfig?.args == ["-l", "-i", "-c", "pi"] })
+        c.handle(.toggleToolFloat("pi"))
+        pi.delegate?.surface(pi, didPostNotification: TerminalNotification(title: "pi", body: "needs input"))
+        drainMainQueue()
+
+        c.activateHost(host)
+
+        XCTAssertEqual(c.dockForTesting.visibleLayoutForTesting, ["pi"])
+        XCTAssertEqual(c.dockForTesting.dottedToolFloatIDsForTesting, ["pi"])
+    }
+
     func test_theCollapsedLead_namesTheHost() {
         let c = onConnectScreen()
 

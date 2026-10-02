@@ -549,7 +549,6 @@ final class WindowController: NSObject {
                     self.renderDock()
                 }
                 if change.contains(.toolbarButtons) {
-                    self.dock.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
                     self.sidebar.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
                     self.renderDock()
                 }
@@ -3607,6 +3606,7 @@ final class WindowController: NSObject {
 
     private func renderDock() {
         let overlay = activeController?.overlayState ?? OverlayState()
+        dock.setHiddenButtons(isOnConnect ? Set(ToolbarButton.allCases) : GeneralConfig.current.hiddenToolbarButtons)
         dock.render(
             overlay: overlay, floatID: floats.activeID,
             tab: activeWorkspace?.activeID,
@@ -3622,9 +3622,11 @@ final class WindowController: NSObject {
         floats.surfaceID(id).map(attention.state(of:)) ?? .idle
     }
 
+    private var isOnConnect: Bool { activeWorkspace == nil }
+
     // A host's floats run on this Mac, so one shows there only while it is open or needs you.
     private func showsToolFloat(_ id: String) -> Bool {
-        guard activeWorkspace?.host != nil else { return true }
+        guard selection.host != nil else { return true }
         return floats.activeID == id || floatAttention(id) >= .completed
     }
 

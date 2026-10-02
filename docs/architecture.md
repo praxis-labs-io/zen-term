@@ -384,6 +384,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   `tabID/id` and shut down with their tab; Scratch is the only one. In a connected host a
   user float runs on this Mac, so its button shows only while it is open, completed or
   waiting, its toggle only opens or closes that running float, and any other toggle toasts.
+  The Connect screen hides the whole dock but for those same float buttons.
 - **Every silent no-op is a toast**, throttled at 3s per kind because held chords repeat.
 - **A surface stating current state is retracted when the cause clears.**
 - **A toast's keys live on the card root** (`ToastView.performKeyEquivalent` and
