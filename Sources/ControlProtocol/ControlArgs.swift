@@ -10,10 +10,17 @@ public struct ControlArgs: Codable, Equatable, Sendable {
     public var title: String?
     public var focus: Bool?
     public var force: Bool?
+    /// A pane or drawer token.
+    public var pane: Int?
+    public var dir: PaneDirection?
+    public var text: String?
+    public var enter: Bool?
+    public var lines: Int?
 
     public init(
         workspace: String? = nil, path: String? = nil, tab: String? = nil, cwd: String? = nil, cmd: String? = nil,
-        title: String? = nil, focus: Bool? = nil, force: Bool? = nil
+        title: String? = nil, focus: Bool? = nil, force: Bool? = nil, pane: Int? = nil, dir: PaneDirection? = nil,
+        text: String? = nil, enter: Bool? = nil, lines: Int? = nil
     ) {
         self.workspace = workspace
         self.path = path
@@ -23,5 +30,10 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         self.title = title
         self.focus = focus
         self.force = force
+        self.pane = pane
+        self.dir = dir
+        self.text = text
+        self.enter = enter
+        self.lines = lines
     }
 }

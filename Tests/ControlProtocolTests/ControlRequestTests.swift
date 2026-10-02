@@ -104,6 +104,17 @@ final class ControlRequestTests: XCTestCase {
             [
                 "hello", "list", "workspace.open", "workspace.new", "workspace.switch", "workspace.close", "tab.new",
                 "tab.select", "tab.rename", "tab.close",
+                "pane.split", "pane.focus", "pane.close", "pane.send", "pane.read",
             ])
+    }
+
+    func test_paneArgsRoundTripAndAnUnknownDirectionIsABadRequest() throws {
+        let request = ControlRequest(
+            id: 5, cmd: .paneSplit,
+            args: ControlArgs(cmd: "make watch", pane: 31, dir: .down, text: "x", enter: true, lines: 3))
+        XCTAssertEqual(try ControlRequest.decode(ControlWire.line(request)).get(), request)
+        let line = Data(#"{"v":1,"id":6,"cmd":"pane.split","args":{"dir":"left"}}"#.utf8)
+        guard case .failure(let rejection) = ControlRequest.decode(line) else { return XCTFail("decoded a left split") }
+        XCTAssertEqual(rejection.error.code, .badRequest)
     }
 }
