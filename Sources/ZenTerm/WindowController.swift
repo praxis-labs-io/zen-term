@@ -1348,43 +1348,22 @@ final class WindowController: NSObject {
     private func createWorktree(
         _ request: NewWorktreeOverlay.Request, from target: RepoPickerOverlay.CreateTarget
     ) {
-        let workspace = target.workspace
         let card = modal?.overlay as? NewWorktreeOverlay
         card?.beginWork("Creating \(Self.branchName(of: request))")
-        DispatchQueue.global(qos: .userInitiated).async { [weak self, weak card] in
-            let result: Result<(Workspace, WorktreeOrigin, CarryReport), Error>
-            do {
-                let worktree: Worktree
-                switch request {
-                case .newBranch(let branch, let base):
-                    worktree = try WorktreeStore.create(branch: branch, base: base, in: target.repo)
-                case .existingBranch(let branch):
-                    worktree = try WorktreeStore.create(existingBranch: branch, in: target.repo)
-                }
-                let repoRoot = GitRepo.repoRoot(for: workspace.path)
-                let opened = RepoPickerOverlay.workspace(
-                    for: worktree, parent: workspace, repoRoot: repoRoot)
-                let report = WorktreeCarry.copy(
-                    workspace.carry, from: workspace.path, intoCheckout: worktree.path,
-                    repoRoot: repoRoot,
-                    onEntry: { name in
-                        DispatchQueue.main.async { [weak self, weak card] in
-                            guard let card, self?.isPresenting(card) == true else { return }
-                            card.setPhase("Copying \(name)")
-                        }
-                    })
-                result = .success((opened, WorktreeOrigin(parent: workspace, worktree: worktree), report))
-            } catch {
-                result = .failure(error)
-            }
-            DispatchQueue.main.async { [weak self, weak card] in
+        WorktreeCreation.start(
+            request, from: target,
+            onPhase: { [weak self, weak card] phase in
+                guard let card, self?.isPresenting(card) == true else { return }
+                card.setPhase(phase)
+            },
+            completion: { [weak self, weak card] result in
                 guard let self else { return }
                 let stillUp = card.map(self.isPresenting) ?? false
                 switch result {
-                case .success(let (opened, origin, report)):
+                case .success(let created):
                     if stillUp { self.closeModal() }
-                    self.openWorkspace(opened, origin: origin)
-                    self.reportCarry(report)
+                    self.openWorkspace(created.workspace, origin: created.origin)
+                    self.reportCarry(created.carry)
                 case .failure(let error):
                     if stillUp {
                         card?.failWork(error.localizedDescription)
@@ -1395,8 +1374,7 @@ final class WindowController: NSObject {
                                 message: error.localizedDescription))
                     }
                 }
-            }
-        }
+            })
     }
 
     static func branchName(of request: NewWorktreeOverlay.Request) -> String {
