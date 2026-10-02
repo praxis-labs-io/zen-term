@@ -31,11 +31,16 @@ Every pane and drawer shell gets:
 | `ZEN_CONTROL_SOCK` | Absolute path to this instance's control socket.    |
 | `ZEN_PANE`         | This pane's token (also the nav protocol's token).   |
 
-Tool floats get neither. A client without `$ZEN_CONTROL_SOCK` lists
-`control.*.sock` in the folder above and connects to each: one that accepts is a
-running instance. `zen` uses the only live socket. It exits 3 when there is none,
-and exits 3 listing them when there are several. `zen --socket <path>` overrides
-both.
+Tool floats get neither. A shell that outlives its instance (a tmux session across a
+relaunch) holds a dead `$ZEN_CONTROL_SOCK`, and its `$ZEN_PANE` names a pane in that
+dead instance, since tokens restart in a new one.
+
+`zen` uses `$ZEN_CONTROL_SOCK` when something accepts a connect on it, and sends
+`$ZEN_PANE` as `caller.pane`. Otherwise it lists `control.*.sock` in the folder above
+and connects to each: one that accepts is a running instance. It uses the only live
+socket and sends no caller. It exits 3 when there is none, and exits 3 listing them
+when there are several. `zen --socket <path>` is used as given, with no fallback, and
+carries `caller.pane` only when it is the inherited socket.
 
 ## Requests
 

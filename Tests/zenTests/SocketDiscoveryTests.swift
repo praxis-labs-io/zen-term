@@ -74,15 +74,58 @@ final class SocketDiscoveryTests: XCTestCase {
         XCTAssertEqual(failure, .noInstance("ZenTerm isn't running."))
     }
 
-    func test_theEnvironmentWinsOverTheSearch() throws {
-        _ = try listen("control.101.sock")
+    func test_aLiveInheritedSocketWinsOverTheSearchAndKeepsTheCallerPane() throws {
+        let inherited = try listen("control.101.sock")
         _ = try listen("control.202.sock")
+        let environment = ["ZEN_CONTROL_SOCK": inherited, "ZEN_PANE": "31"]
 
-        XCTAssertEqual(try resolve(environment: ["ZEN_CONTROL_SOCK": "/x/control.9.sock"]).get(), "/x/control.9.sock")
+        let path = try resolve(environment: environment).get()
+
+        XCTAssertEqual(path, inherited)
+        XCTAssertEqual(ConnectionOptions.caller(for: path, environment: environment), ControlCaller(pane: 31))
     }
 
-    func test_theFlagWinsOverTheEnvironment() {
+    func test_aDeadInheritedSocketFallsBackToTheLiveOne_withNoCallerPane() throws {
+        let stale = deadSocketFile("control.102.sock")
+        let live = try listen("control.202.sock")
+        let environment = ["ZEN_CONTROL_SOCK": stale, "ZEN_PANE": "31"]
+
+        let path = try resolve(environment: environment).get()
+
+        XCTAssertEqual(path, live)
+        XCTAssertNil(
+            ConnectionOptions.caller(for: path, environment: environment),
+            "the dead instance's pane token means nothing to the live one")
+    }
+
+    func test_aDeadInheritedSocketWithSeveralLiveOnes_exitsThreeListingThem() throws {
+        let first = try listen("control.101.sock")
+        let second = try listen("control.202.sock")
+
+        guard case .failure(let failure) = resolve(environment: ["ZEN_CONTROL_SOCK": "/x/control.9.sock"]) else {
+            return XCTFail("a dead inherited socket must not pick between two instances")
+        }
+        XCTAssertEqual(failure.exitCode, 3)
+        XCTAssertTrue(failure.message.contains(first) && failure.message.contains(second), failure.message)
+    }
+
+    func test_aDeadInheritedSocketWithNoInstance_exitsThree() {
         XCTAssertEqual(
-            try resolve(explicit: "/flag.sock", environment: ["ZEN_CONTROL_SOCK": "/env.sock"]).get(), "/flag.sock")
+            resolve(environment: ["ZEN_CONTROL_SOCK": "/x/control.9.sock"]),
+            .failure(.noInstance("ZenTerm isn't running.")))
+    }
+
+    func test_theFlagIsTakenAsGiven_evenWhenDeadAndAnInstanceIsLive() throws {
+        let live = try listen("control.202.sock")
+
+        XCTAssertEqual(
+            try resolve(explicit: "/dead/flag.sock", environment: ["ZEN_CONTROL_SOCK": live]).get(), "/dead/flag.sock")
+    }
+
+    func test_theFlagNamingAnotherInstance_sendsNoCallerPane() {
+        let environment = ["ZEN_CONTROL_SOCK": "/a/control.1.sock", "ZEN_PANE": "31"]
+        XCTAssertNil(ConnectionOptions.caller(for: "/b/control.2.sock", environment: environment))
+        XCTAssertEqual(
+            ConnectionOptions.caller(for: "/a/control.1.sock", environment: environment), ControlCaller(pane: 31))
     }
 }

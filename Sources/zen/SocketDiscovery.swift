@@ -1,13 +1,15 @@
 import ControlProtocol
 import Foundation
 
-/// Picks the control socket: `--socket`, then `$ZEN_CONTROL_SOCK`, then the one live socket in the app's folder.
+/// Picks the control socket: `--socket`, then a live `$ZEN_CONTROL_SOCK`, then the one live socket in the app's folder.
 enum SocketDiscovery {
     static func resolve(
         explicit: String?, environment: [String: String], directory: URL = ControlEndpoint.directory
     ) throws(ZenFailure) -> String {
         if let explicit { return explicit }
-        if let inherited = environment[ControlEndpoint.environmentKey], !inherited.isEmpty { return inherited }
+        if let inherited = environment[ControlEndpoint.environmentKey], !inherited.isEmpty, isLive(inherited) {
+            return inherited
+        }
         let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
         let live = names.filter(ControlEndpoint.isSocketFileName).sorted()
             .map { directory.appendingPathComponent($0).path }
