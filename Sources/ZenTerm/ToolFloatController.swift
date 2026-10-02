@@ -11,6 +11,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     /// Optional: `TabList.activeID` traps on an empty list, and `closeTab` empties it before teardown reads this.
     private let currentTabID: () -> TabID?
     private let makeSurface: () -> TerminalSurface
+    private let startShell: SurfaceStart
     /// Its completion must arrive on the main thread: the continuation mutates state and presents the overlay.
     var resolveRepoRoot: (URL?, @escaping (URL?) -> Void) -> Void
     private var toggleGeneration = 0
@@ -54,6 +55,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         restoreFocus: @escaping () -> Void,
         currentTabID: @escaping () -> TabID? = { nil },
         makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
+        startShell: @escaping SurfaceStart = { surface, _, launch in surface.start(launch) },
         resolveRepoRoot: @escaping (URL?, @escaping (URL?) -> Void) -> Void = GitRepoStatus.repoRoot
     ) {
         self.presentOverlay = presentOverlay
@@ -62,6 +64,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         self.restoreFocus = restoreFocus
         self.currentTabID = currentTabID
         self.makeSurface = makeSurface
+        self.startShell = startShell
         self.resolveRepoRoot = resolveRepoRoot
         super.init()
     }
@@ -283,7 +286,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         idBySurface[ObjectIdentifier(surface)] = surfaceID
         onSurfaceRegistered?(surfaceID, scopedTab(for: spec))
         if spec.command.isEmpty {
-            surface.start(ShellLaunch.shell(cwd: cwd))
+            startShell(surface, surfaceID, ShellLaunch.shell(cwd: cwd))
         } else {
             surface.start(
                 TerminalSurfaceConfig(

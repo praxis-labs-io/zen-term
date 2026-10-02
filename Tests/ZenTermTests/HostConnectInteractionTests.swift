@@ -284,6 +284,53 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertTrue(showsToast("Tool floats run on this Mac, not on devbox.", in: c))
     }
 
+    func test_scratchWhileConnecting_waitsForTheSharedConnection_thenStartsOverIt() throws {
+        let (c, login) = try connected()
+
+        _ = try XCTUnwrap(dockButton("Scratch", in: c)).accessibilityPerformPress()
+        let scratch = try XCTUnwrap(spawned.last)
+
+        XCTAssertFalse(scratch === login)
+        XCTAssertTrue(c.floatsForTesting.shownSurface === scratch)
+        XCTAssertEqual(scratch.startCount, 0)
+        fake.connect()
+        XCTAssertEqual(scratch.startCount, 1)
+        XCTAssertEqual(scratch.lastConfig?.command, "/usr/bin/ssh")
+        XCTAssertEqual(scratch.lastConfig?.args.last, "devbox")
+        XCTAssertEqual(fake.socketWatches, 1, "Scratch rides the login's connection, so nothing asks again")
+    }
+
+    func test_scratchInAConnectedHost_startsAtOnceOverSSH() throws {
+        let (c, _) = try connected()
+        fake.connect()
+
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        let scratch = try XCTUnwrap(spawned.last)
+
+        XCTAssertTrue(c.floatsForTesting.shownSurface === scratch)
+        XCTAssertEqual(scratch.startCount, 1)
+        XCTAssertEqual(scratch.lastConfig?.command, "/usr/bin/ssh")
+        XCTAssertFalse(showsToast("Tool floats run on this Mac, not on devbox.", in: c))
+    }
+
+    func test_aScratchThatLogsInAfterADrop_andEndsFirst_failsTheConnection() throws {
+        let (c, _) = try connected()
+        fake.connect()
+        fake.exited?()
+
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        let scratch = try XCTUnwrap(c.floatsForTesting.shownSurface as? RecordingSurface)
+        let connection = try XCTUnwrap(c.activeConnectionForTesting)
+        XCTAssertTrue(
+            connection.isAwaitingLogin(on: c.floatsForTesting.surfaceID(ToolFloat.scratch.id)),
+            "after a drop, Scratch is the surface that logs in again")
+        scratch.delegate?.surfaceDidExit(scratch, code: 255)
+        drainMainQueue()
+
+        XCTAssertNotNil(c.connectViewForTesting)
+        XCTAssertTrue(showsToast("Couldn't connect to devbox.", in: c))
+    }
+
     func test_aConnectedHost_hidesYourToolFloatButtons_andALocalWorkspaceShowsThem() throws {
         let (c, _) = try connected()
         fake.connect()

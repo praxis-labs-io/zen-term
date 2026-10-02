@@ -142,7 +142,10 @@ final class WindowController: NSObject {
                 self?.activeController?.yieldFocusToFloat()
             },
             restoreFocus: { [weak self] in self?.activeController?.restoreUnifiedFocus() },
-            currentTabID: { [weak self] in self?.activeWorkspace?.activeID })
+            currentTabID: { [weak self] in self?.activeWorkspace?.activeID },
+            startShell: { [weak self] surface, id, launch in
+                Self.surfaceStart(over: self?.activeWorkspace?.connection)(surface, id, launch)
+            })
         controller.onStateChanged = { [weak self] in self?.renderDock() }
         controller.onFocusChanged = { [weak self] in self?.syncWindowFocus() }
         controller.onRequestToast = { [weak self] content in self?.toasts.show(content) }
@@ -156,6 +159,7 @@ final class WindowController: NSObject {
             self?.attention.register(surface, tab: tab)
         }
         controller.onSurfaceReleased = { [weak self] surface in
+            self?.attention.tab(of: surface).flatMap { self?.workspace(of: $0) }?.connection?.release([surface])
             self?.attention.release(surface)
             self?.agents.drop(surface)
             self?.agentStates.drop(surface)
@@ -809,15 +813,16 @@ final class WindowController: NSObject {
         let c = TabController(
             initialCWD: cwd, initialCommand: mainCommand, env: ws?.env ?? [:],
             isToolFloatOpen: { [weak self] in self?.floats.isOpen ?? false },
-            startSurface: connection.map { connection in
-                { [weak connection] surface, id, launch in
-                    connection?.start(surface, id: id, env: launch.environment)
-                }
-            } ?? { surface, _, launch in surface.start(launch) })
+            startSurface: Self.surfaceStart(over: connection))
         c.rightDrawerCommand = tab?.right
         c.bottomDrawerCommand = tab?.bottom
         c.pinnedTitle = tab?.name
         return c
+    }
+
+    private static func surfaceStart(over connection: SSHConnection?) -> SurfaceStart {
+        guard let connection else { return { surface, _, launch in surface.start(launch) } }
+        return { [weak connection] surface, id, launch in connection?.start(surface, id: id, env: launch.environment) }
     }
 
     private func mintTabID() -> TabID { defer { nextTabID += 1 }; return TabID(nextTabID) }
@@ -2335,7 +2340,7 @@ final class WindowController: NSObject {
             }
         case .toggleToolFloat(let id):
             pendingModal = nil
-            if let host = activeWorkspace?.host { return toggleToolFloat(id, in: host) }
+            if let host = activeWorkspace?.host, id != ToolFloat.scratch.id { return toggleToolFloat(id, in: host) }
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
         case .createWorktree:
