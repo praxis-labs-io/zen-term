@@ -548,6 +548,10 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   `WindowController.deliverConfigDiagnosticsNotice`, and retracted by `ConfigApplier`
   only when problems clear.
 - **No file watcher.** Hand edits apply on ⌘⇧,.
+- **`~/.ssh/config` is read, never written.** Settings > SSH Hosts lists its literal `Host`
+  aliases (following `Include`, skipping `Match` blocks) off-main each time it mounts, and
+  `ssh -G` resolves each one. `ssh-hosts` holds which are on, plus typed hosts; the sidebar's
+  SSH rows stay out of `WorkspaceOrder`, so they take no number.
 - **Writers go through `ConfigFileIO`:** never treat an unreadable file as empty, and
   write through symlinks. `ConfigWriter` preserves comments and unknown keys.
 
@@ -654,11 +658,12 @@ The workspace `carry` key names ignored files to copy into a new worktree.
   (a split, drawer or float, and a tab or window under `tab-inherit-cwd`) starts at the parent
   workspace's folder instead (`WorktreeOrigin.relocating`).
 
-### GitCommand
+### Subprocess and GitCommand
 
-`GitCommand` holds the app's only `Process()` sites, blocking by design. Both pipes drain
-concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. It gates on
-`xcode-select -p`, since `/usr/bin/git` without Command Line Tools opens a system prompt.
+`Subprocess.run` is the app's one run-and-capture `Process()` site, blocking by design. Both
+pipes drain concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. `GitCommand`
+runs git through it and gates on `xcode-select -p`, since `/usr/bin/git` without Command Line
+Tools opens a system prompt.
 
 ## Invariants that will bite you
 

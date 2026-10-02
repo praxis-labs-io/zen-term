@@ -54,6 +54,7 @@ struct GeneralConfig: Equatable {
 
     var ai: String?
     var agents: [String] = []
+    var sshHosts: [String] = []
 
     var floats: [ToolFloat]
     var keymap: [Chord: KeyInterceptor.ReservedChord]

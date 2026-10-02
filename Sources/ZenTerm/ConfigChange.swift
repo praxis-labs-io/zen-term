@@ -24,9 +24,11 @@ struct ConfigChange: OptionSet {
 
     static let toasts = ConfigChange(rawValue: 1 << 9)
 
+    static let sshHosts = ConfigChange(rawValue: 1 << 10)
+
     static let all: ConfigChange = [
         .theme, .chromeLayout, .terminalBehavior, .floats, .keymap, .motion, .diagnostics, .updates,
-        .toolbarButtons, .toasts,
+        .toolbarButtons, .toasts, .sshHosts,
     ]
 
     static let userInfoKey = "ZenTerm.configChange"
@@ -51,6 +53,7 @@ struct ConfigChange: OptionSet {
         if old.automaticUpdateChecks != new.automaticUpdateChecks { change.insert(.updates) }
         if old.hiddenToolbarButtons != new.hiddenToolbarButtons { change.insert(.toolbarButtons) }
         if old.toastDuration != new.toastDuration { change.insert(.toasts) }
+        if old.sshHosts != new.sshHosts { change.insert(.sshHosts) }
         return change
     }
 

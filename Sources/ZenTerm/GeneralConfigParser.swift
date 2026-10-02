@@ -114,6 +114,8 @@ enum GeneralConfigParser {
                 if !value.isEmpty { config.ai = value }
             case "agents":
                 config.agents = parseAgents(value)
+            case "ssh-hosts":
+                config.sshHosts = parseSSHHosts(value)
             case "float":
                 let (float, floatDiagnostics) = ToolFloatParser.parseLine(value, fallbackOrder: floatLineIndex)
                 if let float, ToolFloat.isBuiltIn(float.id) {
@@ -277,6 +279,15 @@ enum GeneralConfigParser {
             agents.append(program)
         }
         return agents
+    }
+
+    private static func parseSSHHosts(_ value: String) -> [String] {
+        var hosts: [String] = []
+        for entry in value.split(whereSeparator: { $0 == "," || $0.isWhitespace })
+        where !entry.hasPrefix("-") && !hosts.contains(String(entry)) {
+            hosts.append(String(entry))
+        }
+        return hosts
     }
 
     private static func parseReduceMotion(

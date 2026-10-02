@@ -202,14 +202,14 @@ final class WindowController: NSObject {
 
     private enum ModalKind {
         case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm, reportIssue
-        case renameTab, worktreeForm
+        case renameTab, worktreeForm, sshHostForm
 
         var selfToggle: KeyInterceptor.ReservedChord? {
             switch self {
             case .repoPicker: return .toggleRepoPicker
             case .commandPalette: return .toggleCommandPalette
             case .settings: return .openSettings
-            case .workspaceForm, .toolFloatForm, .reportIssue, .renameTab, .worktreeForm:
+            case .workspaceForm, .toolFloatForm, .reportIssue, .renameTab, .worktreeForm, .sshHostForm:
                 return nil
             }
         }
@@ -530,6 +530,7 @@ final class WindowController: NSObject {
                     self.sidebar.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
                     self.renderDock()
                 }
+                if change.contains(.sshHosts) { self.sidebar.renderHosts(GeneralConfig.current.sshHosts) }
                 if change.contains(.theme) || change.contains(.keymap) || change.contains(.floats) {
                     self.modal?.overlay.reapplyTheme()
                 }
@@ -568,6 +569,7 @@ final class WindowController: NSObject {
         container.addSubview(dock)
         sidebar.install(in: container, besideTabBar: tabBar)
         sidebar.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
+        sidebar.renderHosts(GeneralConfig.current.sshHosts)
         NSLayoutConstraint.activate([
             canvasHost.leadingAnchor.constraint(equalTo: sidebar.edgeAnchor),
             canvasHost.trailingAnchor.constraint(equalTo: container.trailingAnchor),
@@ -1473,7 +1475,7 @@ final class WindowController: NSObject {
         presentModal(overlay, kind: .reportIssue)
     }
 
-    private enum SettingsLanding { case top, tools, workspaces, terminal, appearance, general, shortcuts }
+    private enum SettingsLanding { case top, tools, workspaces, terminal, appearance, general, shortcuts, sshHosts }
 
     private static func landing(for scope: ConfigDiagnostic.Scope) -> SettingsLanding {
         switch scope {
@@ -1497,6 +1499,8 @@ final class WindowController: NSObject {
         case "agents", "agent-notifications", "attention-toast", "completion-toast", "toast-duration",
             "automatic-update-checks":
             return .general
+        case "ssh-hosts":
+            return .sshHosts
         default:
             return .top
         }
@@ -1511,6 +1515,7 @@ final class WindowController: NSObject {
         case .appearance: return "Appearance"
         case .general: return "General"
         case .shortcuts: return "Shortcuts"
+        case .sshHosts: return "SSH Hosts"
         }
     }
 
@@ -1520,7 +1525,7 @@ final class WindowController: NSObject {
         }
     #endif
 
-    private func openSettings(landing: SettingsLanding = .top) {
+    private func openSettings(landing: SettingsLanding = .top, focusingSSHHost host: String? = nil) {
         if modal?.kind == .settings { closeModal(); return }
         let toolsSection = SettingsToolsSection()
         toolsSection.onEditFloat = { [weak self] float in self?.openToolFloatForm(editing: float) }
@@ -1530,6 +1535,9 @@ final class WindowController: NSObject {
         workspacesSection.onReorder = { [weak self] moved, neighbour in
             self?.reorderWorkspaces(moved, with: neighbour) ?? false
         }
+        let sshHostsSection = SettingsSSHHostsSection()
+        sshHostsSection.onAddHost = { [weak self] in self?.openAddSSHHost() }
+        sshHostsSection.hostToFocus = host
         let sections: [SettingsSection] = [
             SettingsAppearanceSection(),
             SettingsGeneralSection(),
@@ -1537,6 +1545,7 @@ final class WindowController: NSObject {
             SettingsKeybindsSection(capturer: keybindCapturer),
             toolsSection,
             workspacesSection,
+            sshHostsSection,
         ].sorted { $0.navTitle.localizedCaseInsensitiveCompare($1.navTitle) == .orderedAscending }
         let overlay = SettingsOverlay(
             sections: sections,
@@ -1735,6 +1744,34 @@ final class WindowController: NSObject {
             return
         }
         AppConfig.reload()
+    }
+
+    private func openAddSSHHost() {
+        closeModal()
+        let overlay = AddSSHHostOverlay(
+            background: Theme.current.chrome.background.nsColor,
+            onSubmit: { [weak self] host in self?.addSSHHost(host) },
+            onCancel: { [weak self] in self?.reopenSettingsOnSSHHosts() })
+        presentModal(overlay, kind: .sshHostForm)
+    }
+
+    private func addSSHHost(_ host: String) {
+        do {
+            try SSHHostsWriter.set(host, on: true)
+        } catch {
+            toasts.show(
+                ToastContent(
+                    variant: .warning, title: "Couldn't Add SSH Host",
+                    message: "Couldn't save \(host) to ZenTerm's config: \(error.localizedDescription)"))
+            return
+        }
+        AppConfig.reload()
+        reopenSettingsOnSSHHosts(focusing: host)
+    }
+
+    private func reopenSettingsOnSSHHosts(focusing host: String? = nil) {
+        closeModal()
+        openSettings(landing: .sshHosts, focusingSSHHost: host)
     }
 
     private func reopenSettingsOnTools() {
