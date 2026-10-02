@@ -10,7 +10,7 @@
 # malformed `env` line is dropped, a `carry` entry that leaves the workspace is dropped,
 # and nothing here can crash the app (bad lines are logged and skipped). Manage workspaces
 # from inside the app too, in Settings → Workspaces (add / edit / delete / reorder), or the
-# Add Workspace… row at the foot of the ⌘P picker to add-and-open one.
+# Add Workspace… row at the foot of the ⌘P picker. A workspace added either way opens.
 # Hand-edits to this file are picked up the next time you open the ⌘P picker (or on
 # restart).
 #

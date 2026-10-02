@@ -150,7 +150,8 @@ bring-your-own theme and washes out on light themes. Everything resolves from
 
 - **Terminal surfaces:** build `TerminalSurfaceConfig(theme: Theme.current.terminal)`.
 - **Chrome UI:** use `Theme.current.chrome` roles (`background`, `foreground`,
-  `info`, `warning`, `destructive`, `accent`, `attention`, `muted`).
+  `info`, `warning`, `destructive`, `accent`, `attention`, `muted`, `positive`,
+  `cursor`).
 - **Text and icons take `chrome.ink(.faint / .muted / .subtle / .normal)`, never an
   alpha.** Four weights, no fifth: `faint` is quieter than what it sits beside (a
   disabled label, a hint opposite a caption), `muted` recedes (captions, hints,

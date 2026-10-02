@@ -551,7 +551,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
 
         XCTAssertTrue(
             sink.submitted.isEmpty,
-            "a nonexistent DIRECTORY blocks submit, mirroring AddWorkspaceOverlay's folder check")
+            "a nonexistent DIRECTORY blocks submit, mirroring WorkspaceFormOverlay's folder check")
     }
 
     func test_dirField_existingFolder_allowsSubmit() {

@@ -313,6 +313,22 @@ final class WindowController: NSObject {
 
     var isRepoPickerOpen: Bool { modal?.kind == .repoPicker }
 
+    func modalOwns(_ chord: Chord) -> Bool { modal?.overlay.owns(chord) == true }
+
+    func passesThrough(
+        _ chord: Chord, as action: KeyInterceptor.ReservedChord, firstResponder: NSResponder?
+    ) -> Bool {
+        if TextEditingChords.owns(chord, firstResponder: firstResponder) { return true }
+        if modalOwns(chord) { return true }
+        if PickerChordGuard.shouldPassThrough(
+            action: action, repoPickerIsOpen: isRepoPickerOpen, sidebarHasFocus: isSidebarFocused)
+        {
+            return true
+        }
+        return NavGuard.shouldPassThrough(
+            chord: chord, action: action, focusedPaneIsVim: focusedPaneIsVim, toolFloatIsOpen: isToolFloatOpen)
+    }
+
     var isSidebarFocused: Bool { sidebar.hasFocus }
 
     private var activeFloatName: String? {
@@ -1225,21 +1241,8 @@ final class WindowController: NSObject {
         presentModal(palette, kind: .commandPalette)
     }
 
-    // Waits for the load so the collision check is right from the first keystroke.
     private func openAddWorkspaceForm() {
-        closeModal()
-        pendingModal = .workspaceForm
-        ConfigLoader.loadWorkspaces { [weak self] workspaces in
-            guard let self, self.pendingModal == .workspaceForm else { return }
-            self.pendingModal = nil
-            let form = AddWorkspaceOverlay(
-                existingTitles: Set(workspaces.map(\.title)),
-                background: Theme.current.chrome.background.nsColor,
-                onSubmit: { [weak self] ws in self?.submitNewWorkspace(ws) },
-                onCancel: { [weak self] in self?.closeModal() }
-            )
-            self.presentModal(form, kind: .workspaceForm)
-        }
+        openWorkspaceForm(editing: nil, returningTo: { [weak self] in self?.closeModal() })
     }
 
     private func createWorktreeFromPicker() {
@@ -1485,7 +1488,7 @@ final class WindowController: NSObject {
         switch key {
         case "font-family", "font-size", "font-thicken", "cursor-style", "cursor-style-blink",
             "cursor-thickness", "cursor-shader", "background-alpha", "macos-option-as-alt",
-            "scroll-multiplier", "shell", "shell-args", "tab-inherit-cwd", "editor", "ai":
+            "scroll-multiplier", "shell", "shell-args", "tab-inherit-cwd":
             return .terminal
         case "theme", "accent-color", "window-chrome", "backdrop-alpha", "window-gutter", "pane-gap",
             "bottom-drawer-fraction", "right-drawer-fraction", "drawer-resize-step", "max-drawer-fraction",
@@ -1752,13 +1755,17 @@ final class WindowController: NSObject {
             let existingTitles = Set(workspaces.map(\.title))
                 .subtracting(workspace.map { [$0.title] } ?? [])
             let originalTitle = workspace?.title
-            let form = AddWorkspaceOverlay(
+            let form = WorkspaceFormOverlay(
                 editing: workspace,
                 existingTitles: existingTitles,
                 background: Theme.current.chrome.background.nsColor,
                 onSubmit: { [weak self] built in
-                    self?.submitWorkspace(
-                        built, replacing: originalTitle, then: onSaved.map { saved in { saved(built) } } ?? done)
+                    if let originalTitle {
+                        self?.submitWorkspace(
+                            built, replacing: originalTitle, then: onSaved.map { saved in { saved(built) } } ?? done)
+                    } else {
+                        self?.submitNewWorkspace(built)
+                    }
                 },
                 onCancel: done,
                 onDelete: workspace.map { existing in
@@ -1769,15 +1776,9 @@ final class WindowController: NSObject {
         }
     }
 
-    private func submitWorkspace(
-        _ ws: Workspace, replacing originalTitle: String?, then done: (() -> Void)? = nil
-    ) {
+    private func submitWorkspace(_ ws: Workspace, replacing originalTitle: String, then done: @escaping () -> Void) {
         do {
-            if let originalTitle {
-                try WorkspacesWriter.update(ws, originalTitle: originalTitle)
-            } else {
-                try WorkspacesWriter.append(ws)
-            }
+            try WorkspacesWriter.update(ws, originalTitle: originalTitle)
         } catch {
             toasts.show(
                 ToastContent(
@@ -1785,7 +1786,7 @@ final class WindowController: NSObject {
                     message: "Failed to write \(ws.title) to the workspaces file: \(error.localizedDescription)"))
             return
         }
-        (done ?? reopenSettingsOnWorkspaces)()
+        done()
     }
 
     private func deleteWorkspace(_ ws: Workspace, then done: (() -> Void)? = nil) {
@@ -1980,6 +1981,7 @@ final class WindowController: NSObject {
                 closeModal()
                 return
             }
+            if modal.overlay.handle(chord) { return }
             if modal.kind == .repoPicker, chord == .createWorktree {
                 createWorktreeFromPicker()
                 return
@@ -3105,6 +3107,8 @@ final class WindowController: NSObject {
     }
 
     func checkForRemovedWorktreesForTesting() { checkForRemovedWorktrees() }
+
+    func presentModalForTesting(_ overlay: ModalOverlay) { presentModal(overlay, kind: .workspaceForm) }
 
     func openWorkspaceForTesting(_ ws: Workspace, origin: WorktreeOrigin? = nil) {
         openWorkspace(ws, origin: origin)

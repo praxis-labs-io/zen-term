@@ -777,10 +777,8 @@ final class SidebarInteractionTests: WindowTestCase {
         defer { NavRegistry.shared.setVim(token: token, false) }
         let keys = interceptor(for: controller)
         keys.setKeymap([Chord(control: true, key: "→"): .navRight])
-        keys.passThroughGuard = { chord, action in
-            NavGuard.shouldPassThrough(
-                chord: chord, action: action, focusedPaneIsVim: controller.focusedPaneIsVim,
-                toolFloatIsOpen: false)
+        keys.passThroughGuard = {
+            controller.passesThrough($0, as: $1, firstResponder: controller.window.firstResponder)
         }
         XCTAssertTrue(controller.focusedPaneIsVim)
 

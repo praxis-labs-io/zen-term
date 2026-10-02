@@ -156,10 +156,10 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         try XCTUnwrap(descendants(of: view).compactMap { $0 as? AppButton }.first { $0.title == title })
     }
 
-    private func editWorkspace(from card: NewWorktreeOverlay, in c: WindowController) throws -> AddWorkspaceOverlay {
+    private func editWorkspace(from card: NewWorktreeOverlay, in c: WindowController) throws -> WorkspaceFormOverlay {
         try button("Choose what to copy", in: card).onTap()
-        waitUntil(!modals(AddWorkspaceOverlay.self, in: c).isEmpty, "the workspace form to be presented")
-        return try XCTUnwrap(modals(AddWorkspaceOverlay.self, in: c).first)
+        waitUntil(!modals(WorkspaceFormOverlay.self, in: c).isEmpty, "the workspace form to be presented")
+        return try XCTUnwrap(modals(WorkspaceFormOverlay.self, in: c).first)
     }
 
     private func openCardFromThePlus(in c: WindowController) throws -> NewWorktreeOverlay {
@@ -282,10 +282,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         let keys = KeyInterceptor()
         keys.setKeymap(KeymapDefaults.map)
         keys.onReservedChord = { c.handle($0) }
-        keys.passThroughGuard = { _, action in
-            PickerChordGuard.shouldPassThrough(
-                action: action, repoPickerIsOpen: c.isRepoPickerOpen, sidebarHasFocus: c.isSidebarFocused)
-        }
+        keys.passThroughGuard = { c.passesThrough($0, as: $1, firstResponder: c.window.firstResponder) }
         return keys
     }
 

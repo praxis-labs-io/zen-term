@@ -16,6 +16,7 @@ enum ChromeThemeDeriver {
             attention: slot(6),
             muted: blend(terminal.foreground, terminal.background, 0.55),
             positive: slot(2),
+            cursor: terminal.cursor,
             fillScale: fillScale(for: terminal))
     }
 
