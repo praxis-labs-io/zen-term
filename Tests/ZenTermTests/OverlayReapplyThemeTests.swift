@@ -93,8 +93,8 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertNotEqual(colorBefore, card.layer?.borderColor)
     }
 
-    func test_reapplyTheme_recolorsAddWorkspaceOverlayAndPreservesTypedTitle() throws {
-        let overlay = AddWorkspaceOverlay(
+    func test_reapplyTheme_recolorsWorkspaceFormOverlayAndPreservesTypedTitle() throws {
+        let overlay = WorkspaceFormOverlay(
             existingTitles: [], background: Theme.current.chrome.background.nsColor,
             onSubmit: { _ in }, onCancel: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
@@ -110,7 +110,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         }
         guard
             let titleField = descendants(of: overlay).compactMap({ $0 as? FieldBox })
-                .first(where: { $0.placeholder == "Workspace name" })
+                .first(where: { $0.placeholder == "Named after the folder" })
         else {
             return XCTFail("expected the title field")
         }
@@ -130,7 +130,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
     }
 
     func test_reapplyTheme_recolorsAddWorkspaceCardShell() throws {
-        let overlay = AddWorkspaceOverlay(
+        let overlay = WorkspaceFormOverlay(
             existingTitles: [], background: Theme.current.chrome.background.nsColor,
             onSubmit: { _ in }, onCancel: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
@@ -256,7 +256,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
     }
 
     func test_reapplyTheme_recolorsTheFormCardsFooterHairline() throws {
-        let overlay = AddWorkspaceOverlay(
+        let overlay = WorkspaceFormOverlay(
             existingTitles: [], background: Theme.current.chrome.background.nsColor,
             onSubmit: { _ in }, onCancel: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
@@ -278,7 +278,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
     }
 
     func test_reapplyTheme_recolorsTheCarryListAndKeepsWhatIsPicked() throws {
-        let overlay = AddWorkspaceOverlay(
+        let overlay = WorkspaceFormOverlay(
             existingTitles: [], background: Theme.current.chrome.background.nsColor,
             onSubmit: { _ in }, onCancel: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
@@ -309,7 +309,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
     }
 
     func test_reapplyTheme_recolorsEnvRowAndPreservesTypedKey() throws {
-        let overlay = AddWorkspaceOverlay(
+        let overlay = WorkspaceFormOverlay(
             existingTitles: [], background: Theme.current.chrome.background.nsColor,
             onSubmit: { _ in }, onCancel: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
@@ -354,7 +354,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
     }
 
     func test_reapplyTheme_recolorsFieldGroupCaption() throws {
-        let overlay = AddWorkspaceOverlay(
+        let overlay = WorkspaceFormOverlay(
             existingTitles: [], background: Theme.current.chrome.background.nsColor,
             onSubmit: { _ in }, onCancel: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
@@ -383,7 +383,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
     }
 
     func test_reapplyTheme_recolorsBareGroupCaption() throws {
-        let overlay = AddWorkspaceOverlay(
+        let overlay = WorkspaceFormOverlay(
             existingTitles: [], background: Theme.current.chrome.background.nsColor,
             onSubmit: { _ in }, onCancel: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
@@ -393,9 +393,9 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
         guard
             let caption = descendants(of: overlay).compactMap({ $0 as? NSTextField })
-                .first(where: { $0.attributedStringValue.string == "LAYOUT" })
+                .first(where: { $0.attributedStringValue.string == "ENVIRONMENT" })
         else {
-            return XCTFail("expected the LAYOUT caption")
+            return XCTFail("expected the ENVIRONMENT caption")
         }
         let colorBefore =
             caption.attributedStringValue.attribute(.foregroundColor, at: 0, effectiveRange: nil)

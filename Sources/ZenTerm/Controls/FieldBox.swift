@@ -22,7 +22,12 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     func setText(_ value: String) { field.stringValue = value }
 
     // Retained because `placeholderString` reads nil once `placeholderAttributedString` is set.
-    let placeholder: String
+    private(set) var placeholder: String
+
+    func setPlaceholder(_ value: String) {
+        placeholder = value
+        applyPlaceholder()
+    }
 
     init(placeholder: String) {
         self.placeholder = placeholder

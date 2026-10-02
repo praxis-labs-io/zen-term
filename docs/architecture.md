@@ -391,7 +391,7 @@ New modal surfaces compose the existing primitives.
 - **Primitives:** `AppButton` (variants `primary`, `secondary`, `muted`, `destructive`,
   `segment`, `link`), `SegmentedControl`, `FieldBox` + `LabeledField`, `ModalCard.swift`
   for card chrome and scrolling, `FormCard` for forms (body scrolls, footer pinned,
-  capped at `FormCard.maxHeight`).
+  capped at `FormCard.maxHeight`; the workspace form takes its own taller cap).
 - **Keyboard model:** ↑/↓ between rows, ←/→ within a row, Return advances, ⌘Return
   submits, Esc cancels. Every card is fully operable without a mouse.
 - **Input focus** is driven from `becomeFirstResponder` and `controlTextDidEndEditing`;
@@ -441,9 +441,11 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
 - **The modal gate** in `WindowController.handle(_:)` runs confirm, modal card, tool
   float, then dispatch. App-global chords bypass it in `AppDelegate.route`; a palette pick
   of one returns there through `onAppGlobalCommand`. The sidebar toggle passes through an
-  open card, which stays open. A card swallows other chords; a float
-  raises a notice for pane commands and passes reading chords to its own buffer
-  (`modeTarget`).
+  open card, which stays open. A card is offered every other chord first
+  (`ModalOverlay.handle`, how the workspace form takes the tab shortcuts) and swallows
+  what it declines; a key it `owns` passes `passThroughGuard` to reach it as a key event
+  (the workspace form's ⌘↩ and ⌘L). A float raises a notice for pane commands and passes
+  reading chords to its own buffer (`modeTarget`).
 - **Picker chords go through `PickerChordGuard`** (⌥⏎, ⌘⇧⌫), because a bound chord is
   otherwise consumed app-wide and those keys belong to shells and TUIs. A focused sidebar
   row claims ⌥⏎ too.
@@ -692,5 +694,5 @@ concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. It gates
 
 - No web panes, no built-in floats besides Scratch, no second backend
   (DEBUG `makeOverride` is for test stubs).
-- No session restore or detach/reattach, no smooth scroll, no tab drag-to-reorder.
+- No session restore or detach/reattach, no smooth scroll, no drag-to-reorder in the tab bar.
 - `surfaceDidRingBell` is emitted with no consumers.

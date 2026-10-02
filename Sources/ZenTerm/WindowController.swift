@@ -1227,21 +1227,8 @@ final class WindowController: NSObject {
         presentModal(palette, kind: .commandPalette)
     }
 
-    // Waits for the load so the collision check is right from the first keystroke.
     private func openAddWorkspaceForm() {
-        closeModal()
-        pendingModal = .workspaceForm
-        ConfigLoader.loadWorkspaces { [weak self] workspaces in
-            guard let self, self.pendingModal == .workspaceForm else { return }
-            self.pendingModal = nil
-            let form = AddWorkspaceOverlay(
-                existingTitles: Set(workspaces.map(\.title)),
-                background: Theme.current.chrome.background.nsColor,
-                onSubmit: { [weak self] ws in self?.submitNewWorkspace(ws) },
-                onCancel: { [weak self] in self?.closeModal() }
-            )
-            self.presentModal(form, kind: .workspaceForm)
-        }
+        openWorkspaceForm(editing: nil, returningTo: { [weak self] in self?.closeModal() })
     }
 
     private func createWorktreeFromPicker() {
@@ -1754,13 +1741,17 @@ final class WindowController: NSObject {
             let existingTitles = Set(workspaces.map(\.title))
                 .subtracting(workspace.map { [$0.title] } ?? [])
             let originalTitle = workspace?.title
-            let form = AddWorkspaceOverlay(
+            let form = WorkspaceFormOverlay(
                 editing: workspace,
                 existingTitles: existingTitles,
                 background: Theme.current.chrome.background.nsColor,
                 onSubmit: { [weak self] built in
-                    self?.submitWorkspace(
-                        built, replacing: originalTitle, then: onSaved.map { saved in { saved(built) } } ?? done)
+                    if let originalTitle {
+                        self?.submitWorkspace(
+                            built, replacing: originalTitle, then: onSaved.map { saved in { saved(built) } } ?? done)
+                    } else {
+                        self?.submitNewWorkspace(built)
+                    }
                 },
                 onCancel: done,
                 onDelete: workspace.map { existing in
@@ -1771,15 +1762,9 @@ final class WindowController: NSObject {
         }
     }
 
-    private func submitWorkspace(
-        _ ws: Workspace, replacing originalTitle: String?, then done: (() -> Void)? = nil
-    ) {
+    private func submitWorkspace(_ ws: Workspace, replacing originalTitle: String, then done: @escaping () -> Void) {
         do {
-            if let originalTitle {
-                try WorkspacesWriter.update(ws, originalTitle: originalTitle)
-            } else {
-                try WorkspacesWriter.append(ws)
-            }
+            try WorkspacesWriter.update(ws, originalTitle: originalTitle)
         } catch {
             toasts.show(
                 ToastContent(
@@ -1787,7 +1772,7 @@ final class WindowController: NSObject {
                     message: "Failed to write \(ws.title) to the workspaces file: \(error.localizedDescription)"))
             return
         }
-        (done ?? reopenSettingsOnWorkspaces)()
+        done()
     }
 
     private func deleteWorkspace(_ ws: Workspace, then done: (() -> Void)? = nil) {
