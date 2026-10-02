@@ -124,7 +124,7 @@ final class PaneCanvasController: NSObject {
         initialCWD: URL? = nil, initialCommand: String? = nil, env: [String: String] = [:],
         isToolFloatOpen: @escaping () -> Bool = { false },
         makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
-        startSurface: @escaping SurfaceStart = { surface, _, config in surface.start(config) }
+        startSurface: @escaping SurfaceStart = startSurfaceNow
     ) {
         let firstLeaf = PaneID(1)
         self.startSurface = startSurface

@@ -55,7 +55,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         restoreFocus: @escaping () -> Void,
         currentTabID: @escaping () -> TabID? = { nil },
         makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
-        startShell: @escaping SurfaceStart = { surface, _, launch in surface.start(launch) },
+        startShell: @escaping SurfaceStart = startSurfaceNow,
         resolveRepoRoot: @escaping (URL?, @escaping (URL?) -> Void) -> Void = GitRepoStatus.repoRoot
     ) {
         self.presentOverlay = presentOverlay

@@ -129,7 +129,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         c.handle(.toggleToolFloat("pi"))
         let pi = try XCTUnwrap(spawned.first { $0.lastConfig?.args == ["-l", "-i", "-c", "pi"] })
         c.handle(.toggleToolFloat("pi"))
-        c.activateHost(host)
+        c.activate(host)
         return (c, pi)
     }
 
@@ -299,7 +299,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         let hostTabs = c.tabOrderForTesting
         c.activateWorkspaceForTesting(c.workspaceIDsForTesting[0])
 
-        c.activateHost(host)
+        c.activate(host)
 
         XCTAssertEqual(c.tabOrderForTesting, hostTabs)
         XCTAssertNil(c.connectViewForTesting)
@@ -437,7 +437,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         pi.delegate?.surface(pi, didPostNotification: TerminalNotification(title: "pi", body: "needs input"))
         drainMainQueue()
 
-        c.activateHost(host)
+        c.activate(host)
 
         XCTAssertEqual(c.dockForTesting.visibleLayoutForTesting, ["pi"])
         XCTAssertEqual(c.dockForTesting.dottedToolFloatIDsForTesting, ["pi"])
@@ -702,5 +702,113 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertFalse(c.workspaceIDsForTesting.contains(local))
         XCTAssertEqual(c.selectedHostForTesting, host)
         XCTAssertNil(c.connectViewForTesting, "it lands on the connected host's panes")
+    }
+
+    private func middleClickFirstTab(in c: WindowController) throws {
+        let content = try XCTUnwrap(c.window.contentView)
+        content.layoutSubtreeIfNeeded()
+        let chip = try XCTUnwrap(
+            descendants(of: content).first { String(describing: type(of: $0)) == "Chip" }, "no tab chip")
+        let cg = try XCTUnwrap(
+            CGEvent(
+                mouseEventSource: nil, mouseType: .otherMouseDown, mouseCursorPosition: .zero,
+                mouseButton: .center))
+        chip.otherMouseDown(with: try XCTUnwrap(NSEvent(cgEvent: cg)))
+        drainMainQueue()
+    }
+
+    private func assertAbandonsTheLogin(
+        _ c: WindowController, login: TerminalSurface, waiting: RecordingSurface?, asking message: String,
+        file: StaticString = #filePath, line: UInt = #line
+    ) throws {
+        XCTAssertTrue(c.isConfirmOpen, "closing the login asks first, like a running process", file: file, line: line)
+        XCTAssertTrue(showsToast(message, in: c), "the confirm says what goes", file: file, line: line)
+        XCTAssertNil(c.connectViewForTesting, "nothing closes before the answer", file: file, line: line)
+
+        try press(button: "Close", in: c)
+        fake.connect()
+
+        XCTAssertNotNil(c.connectViewForTesting, file: file, line: line)
+        XCTAssertFalse(showsToast("Couldn't connect to devbox.", in: c), "the user closed it", file: file, line: line)
+        XCTAssertEqual(waiting?.startCount ?? 0, 0, "waiting panes never start", file: file, line: line)
+    }
+
+    func test_closingTheLoginTab_whileConnecting_asksThenAbandonsQuietly() throws {
+        let (c, login) = try connected()
+        c.handle(.newTab)
+        let waiting = spawned.last
+        c.handle(.prevTab)
+
+        c.handle(.closeTab)
+
+        try assertAbandonsTheLogin(
+            c, login: login, waiting: waiting,
+            asking: "Closing this tab will stop connecting to devbox and close its tabs.")
+    }
+
+    func test_middleClickingTheLoginTab_whileConnecting_asksThenAbandonsQuietly() throws {
+        let (c, login) = try connected()
+        c.handle(.newTab)
+        let waiting = spawned.last
+
+        try middleClickFirstTab(in: c)
+
+        try assertAbandonsTheLogin(
+            c, login: login, waiting: waiting,
+            asking: "Closing this tab will stop connecting to devbox and close its tabs.")
+    }
+
+    func test_closingAConnectingHostsWorkspace_asksThenAbandonsQuietly() throws {
+        let (c, login) = try connected()
+        c.handle(.newTab)
+        let waiting = spawned.last
+
+        c.handle(.closeWorkspace)
+
+        try assertAbandonsTheLogin(
+            c, login: login, waiting: waiting,
+            asking: "Closing this workspace will stop connecting to devbox and close its tabs.")
+    }
+
+    func test_closingTheLoginPane_saysTheHostsTabsGoToo() throws {
+        let (c, login) = try connected()
+        c.handle(.splitVertical)
+        let waiting = spawned.last
+        c.handle(.prevPane)
+
+        c.handle(.closePane)
+
+        try assertAbandonsTheLogin(
+            c, login: login, waiting: waiting,
+            asking: "Closing this pane will stop connecting to devbox and close its tabs.")
+    }
+
+    func test_closingADrawerThatBecameTheLoginAfterADrop_asksThenAbandonsQuietly() throws {
+        let (c, _) = try connected()
+        fake.connect()
+        fake.exited?()
+        fake.answerBeforeLogin = .some(nil)
+
+        c.handle(.toggleBottomDrawer)
+        let drawer = try XCTUnwrap(spawned.last)
+        XCTAssertEqual(c.activeConnectionForTesting?.isAwaitingLogin(on: c.focusedSurfaceIDForTesting), true)
+        c.handle(.closePane)
+
+        try assertAbandonsTheLogin(
+            c, login: drawer, waiting: nil,
+            asking: "Closing this drawer will stop connecting to devbox and close its tabs.")
+    }
+
+    func test_theLoginCloseCopy_fitsTwoLinesOfTheToast() {
+        func height(_ text: String) -> CGFloat {
+            (text as NSString).boundingRect(
+                with: NSSize(width: ToastView.messageMaxWidth, height: .greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin], attributes: [.font: ToastView.messageFont]
+            ).height
+        }
+        for target: CloseWarning.LoginTarget in [.pane, .drawer, .tab, .workspace] {
+            let message = CloseWarning.message(closing: .login(host: "devbox", closing: target), naming: [])
+            XCTAssertLessThanOrEqual(height(message), height("One\nTwo"), message)
+        }
     }
 }
