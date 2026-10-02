@@ -13,6 +13,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
 
     private var lastTheme: TerminalTheme?
     private var lastBehavior: TerminalBehavior = .default
+    private var tracksBusy = true
 
     public private(set) var backgroundOverride: TerminalColor?
 
@@ -47,7 +48,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
 
     // Reads OSC 133 prompt marks: a shell without integration reads busy, a background job does not.
     public var isBusy: Bool {
-        guard let surfacePtr else { return false }
+        guard tracksBusy, let surfacePtr else { return false }
         return ghostty_surface_needs_confirm_quit(surfacePtr)
     }
 
@@ -91,6 +92,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
 
         Self.recordShellSessions()
 
+        tracksBusy = config.tracksBusy
         lastTheme = config.theme
         lastBehavior = config.behavior ?? .default
         lastFontSize = config.fontSize ?? config.theme?.fontSize
