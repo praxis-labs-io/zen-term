@@ -149,6 +149,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
     func owns(_ chord: Chord) -> Bool { chord == Self.submitChord || chord == Self.launchFocusChord }
 
     func handle(_ chord: KeyInterceptor.ReservedChord) -> Bool {
+        if chord != .renameTab { tabStrip.commitRename() }
         switch chord {
         case .newTab: addTab()
         case .closeTab: removeTab(at: form.selected, focusingStrip: isStripFocused)

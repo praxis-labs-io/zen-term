@@ -149,6 +149,37 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         XCTAssertEqual(sink.submitted.first?.focus, ws.focus)
     }
 
+    func test_movingATabMidRename_keepsTheNewNameOnThatTab() throws {
+        let ws = Workspace(
+            title: "ZenTerm", path: try makeRealDir(),
+            tabs: [Workspace.Tab(name: "a"), Workspace.Tab(name: "b"), Workspace.Tab(name: "c")], env: [:])
+        let (overlay, sink) = mount(editing: ws)
+        let strip = overlay.tabStripForTesting
+        overlay.handle(.selectTab(2))
+        strip.beginRenamingSelected()
+        try XCTUnwrap(editor).string = "renamed"
+
+        XCTAssertTrue(overlay.handle(.moveTabRight))
+        try save(overlay, editing: true)
+
+        XCTAssertEqual(sink.submitted.first?.tabs.map(\.name), ["a", "c", "renamed"])
+    }
+
+    func test_closingATabMidRename_leavesTheOtherTabsNamesAlone() throws {
+        let ws = Workspace(
+            title: "ZenTerm", path: try makeRealDir(),
+            tabs: [Workspace.Tab(name: "a"), Workspace.Tab(name: "b"), Workspace.Tab(name: "c")], env: [:])
+        let (overlay, sink) = mount(editing: ws)
+        overlay.handle(.selectTab(2))
+        overlay.tabStripForTesting.beginRenamingSelected()
+        try XCTUnwrap(editor).string = "renamed"
+
+        XCTAssertTrue(overlay.handle(.closeTab))
+        try save(overlay, editing: true)
+
+        XCTAssertEqual(sink.submitted.first?.tabs.map(\.name), ["a", "c"])
+    }
+
     func test_addingRenamingAndEditingATab_isWhatIsSaved() throws {
         let (overlay, sink) = mount()
         typeFolder(try makeRealDir(named: "site").path, in: overlay)

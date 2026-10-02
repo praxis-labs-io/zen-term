@@ -280,6 +280,8 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
     }
 
     @discardableResult
+    func commitRename() { endRename(commit: true, refocus: true) }
+
     func cancelRename() -> Bool {
         guard isRenaming else { return false }
         isCancellingRename = true

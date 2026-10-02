@@ -90,6 +90,8 @@ final class WorkspaceTabStrip: NSView {
 
     func beginRenamingSelected() { selectedChip?.beginRename() }
 
+    func commitRename() { chips.forEach { $0.commitRename() } }
+
     @discardableResult
     func cancelRename() -> Bool { chips.contains { $0.cancelRename() } }
 
