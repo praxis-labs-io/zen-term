@@ -180,6 +180,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Self.window(holding: path, among: windows, asking: asking)
     }
 
+    private static func bringForward(_ wc: WindowController) {
+        NSApp.activate(ignoringOtherApps: true)
+        if wc.window.isMiniaturized { wc.window.deminiaturize(nil) }
+        wc.window.makeKeyAndOrderFront(nil)
+    }
+
     private func keyController() -> WindowController? {
         guard let key = NSApp.keyWindow else { return windows.first }
         return windows.first { $0.window === key }
@@ -214,37 +220,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let other = self?.windows.first(where: { $0 !== wc && $0.windowID == window }),
                 other.holdsWorkspace(id)
             else { return false }
-            NSApp.activate(ignoringOtherApps: true)
-            if other.window.isMiniaturized { other.window.deminiaturize(nil) }
-            other.window.makeKeyAndOrderFront(nil)
+            Self.bringForward(other)
             other.activateWorkspace(id)
             return true
         }
         wc.revealWaitingAgentElsewhere = { [weak self, weak wc] window in
             guard let other = self?.windows.first(where: { $0 !== wc && $0.windowID == window })
             else { return false }
-            return other.revealLongestWaitingAgent {
-                NSApp.activate(ignoringOtherApps: true)
-                if other.window.isMiniaturized { other.window.deminiaturize(nil) }
-                other.window.makeKeyAndOrderFront(nil)
-            }
+            return other.revealLongestWaitingAgent { Self.bringForward(other) }
         }
         wc.isWorkspaceOpenInAnotherWindow = { [weak self, weak wc] path in
             self?.otherWindow(holding: path, asking: wc) != nil
         }
         wc.revealWorkspaceInAnotherWindow = { [weak self, weak wc] path in
             guard let other = self?.otherWindow(holding: path, asking: wc) else { return false }
-            NSApp.activate(ignoringOtherApps: true)
-            if other.window.isMiniaturized { other.window.deminiaturize(nil) }
-            other.window.makeKeyAndOrderFront(nil)
+            Self.bringForward(other)
             other.activateWorkspace(at: path)
             return true
         }
         wc.revealHostInAnotherWindow = { [weak self, weak wc] host in
             guard let other = self?.windows.first(where: { $0 !== wc && $0.holdsHost(host) }) else { return false }
-            NSApp.activate(ignoringOtherApps: true)
-            if other.window.isMiniaturized { other.window.deminiaturize(nil) }
-            other.window.makeKeyAndOrderFront(nil)
+            Self.bringForward(other)
             other.activateHost(host)
             return true
         }
