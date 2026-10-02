@@ -305,7 +305,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
         XCTAssertNotEqual(before, list.layer?.borderColor)
         XCTAssertEqual(carry.carried, ["node_modules"], "a recolor never loses what was picked")
-        XCTAssertEqual(list.buttonTitleForTesting, "1 file")
+        XCTAssertEqual(list.buttonTitleForTesting, "1 chosen")
     }
 
     func test_reapplyTheme_recolorsEnvRowAndPreservesTypedKey() throws {
