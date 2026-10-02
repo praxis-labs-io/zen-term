@@ -126,5 +126,5 @@ is listed from its first opening until it closes, shown or hidden.
 ## `zen`
 
 `zen hello` and `zen list` print the result as JSON. `zen list --pretty` prints an
-indented tree instead. Exit codes: 0 ok, 1 the app answered with an error, 2 usage,
-3 no instance or the connection failed.
+indented tree instead. Exit codes: 0 ok, 1 the app answered with an error or didn't
+answer within 10 seconds, 2 usage, 3 no instance or the connection failed.

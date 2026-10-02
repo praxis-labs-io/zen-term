@@ -72,4 +72,19 @@ final class ControlClientTests: XCTestCase {
             XCTAssertEqual(($0 as? ZenFailure)?.exitCode, 3)
         }
     }
+
+    func test_noAnswerWithinTheTimeoutIsAnAppErrorNotAMissingInstance() {
+        let fd = listener
+        DispatchQueue.global().async {
+            let conn = accept(fd, nil, nil)
+            guard conn >= 0 else { return }
+            Thread.sleep(forTimeInterval: 3)
+            close(conn)
+        }
+
+        let client = ControlClient(path: path, caller: nil, replyTimeout: 1)
+        XCTAssertThrowsError(try client.send(.list, expecting: ListResult.self)) {
+            XCTAssertEqual($0 as? ZenFailure, .app("ZenTerm didn't answer within 1 seconds."))
+        }
+    }
 }
