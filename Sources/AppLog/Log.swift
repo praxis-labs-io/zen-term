@@ -10,6 +10,7 @@ public struct LogCategory: Hashable, Sendable {
     public static let config = LogCategory("config")
     public static let keybinds = LogCategory("keybinds")
     public static let nav = LogCategory("nav")
+    public static let control = LogCategory("control")
     public static let update = LogCategory("update")
     public static let surface = LogCategory("surface")
     public static let workspace = LogCategory("workspace")
