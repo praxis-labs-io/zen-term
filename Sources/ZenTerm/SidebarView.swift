@@ -12,6 +12,13 @@ enum SidebarFocusStop: Equatable {
     case waitingElsewhere
 }
 
+struct SidebarHostItem: Equatable {
+    let id: SSHHostID
+    let status: SSHHostStatus
+    let number: Int?
+    let isActive: Bool
+}
+
 struct SidebarRowItem: Equatable {
     let id: SidebarRowID
     let variant: SettingsNavRow.Variant
@@ -46,6 +53,7 @@ final class SidebarView: NSView {
     private let hostsCaption = FieldCaption("SSH", required: false)
     private let hostStack = NSStackView()
     private var hostRows: [String: SettingsNavRow] = [:]
+    private var hostNumbers: [String: Int] = [:]
     private var hostsBelowRows: [NSLayoutConstraint] = []
     private var agentsBelowRows: [NSLayoutConstraint] = []
     private var agentsBelowHosts: [NSLayoutConstraint] = []
@@ -65,6 +73,7 @@ final class SidebarView: NSView {
     var onFocusChanged: (() -> Void)?
     var onJump: ((SurfaceID) -> Void)?
     var onJumpElsewhere: (() -> Void)?
+    var onActivateHost: ((SSHHostID) -> Void)?
     private let onActivate: (SidebarRowID) -> Void
     private let onNewWorktree: (SidebarRowID) -> Void
     private let onCloseWorkspace: (WorkspaceID) -> Void
@@ -208,15 +217,21 @@ final class SidebarView: NSView {
         end?.isActive = true
     }
 
-    func renderHosts(_ hosts: [String]) {
+    func renderHosts(_ items: [SidebarHostItem]) {
+        let byName = Dictionary(uniqueKeysWithValues: items.map { ($0.id.name, $0) })
         var removedFocusedRow = false
-        for (host, row) in hostRows where !hosts.contains(host) {
+        for (host, row) in hostRows where byName[host] == nil {
             removedFocusedRow = removedFocusedRow || KeyboardFocus.isFocused(row, in: window)
             row.removeFromSuperview()
             hostRows[host] = nil
         }
-        for (index, host) in hosts.enumerated() {
-            let row = hostRow(for: host)
+        hostNumbers = byName.compactMapValues(\.number)
+        for (index, item) in items.enumerated() {
+            let row = hostRow(for: item)
+            row.setSelected(item.isActive)
+            let status = item.status
+            row.setDot({ status.ink }, accessibilityValue: Self.hostStatusWord(status))
+            row.setTitleInk(status == .offline ? { status.ink } : nil)
             guard hostStack.arrangedSubviews.firstIndex(of: row) != index else { continue }
             let isNew = row.superview == nil
             if !isNew { hostStack.removeArrangedSubview(row) }
@@ -228,13 +243,34 @@ final class SidebarView: NSView {
         if removedFocusedRow { onLeave?() }
     }
 
-    private func hostRow(for host: String) -> SettingsNavRow {
+    // Only ⌘⌃1…9 exist, so a row numbered past nine has no shortcut to show.
+    private static func selectShortcut(_ number: Int?) -> String? {
+        guard let number, number <= 9 else { return nil }
+        return CommandCatalog.spec(for: .selectWorkspace(number)).shortcut
+    }
+
+    private static func hostStatusWord(_ status: SSHHostStatus) -> String {
+        switch status {
+        case .offline: return "Offline"
+        case .online: return "Online"
+        case .connected: return "Connected"
+        }
+    }
+
+    private func hostRow(for item: SidebarHostItem) -> SettingsNavRow {
+        let host = item.id.name
         if let row = hostRows[host] { return row }
-        let row = SettingsNavRow(title: host, variant: .faint, focusesOnClick: false) {}
+        let id = item.id
+        let row = SettingsNavRow(title: host, focusesOnClick: false) {
+            [weak self] in self?.onActivateHost?(id)
+        }
+        row.tooltip = TooltipHost(label: "Open host") { [weak self] in
+            Self.selectShortcut(self?.hostNumbers[host])
+        }
         row.onArrowUp = { [weak self] in self?.moveFocus(-1) }
         row.onArrowDown = { [weak self] in self?.moveFocus(1) }
         row.onFocusChanged = { [weak self] in self?.onFocusChanged?() }
-        row.onReturn = {}
+        row.onReturn = { [weak self] in self?.onActivateHost?(id) }
         row.onEscape = { [weak self] in self?.onLeave?() }
         hostRows[host] = row
         return row
@@ -340,7 +376,7 @@ final class SidebarView: NSView {
             row.setDetail(item.detail)
             row.setSelected(item.isActive)
             setNewWorktreeButton(on: row, for: item)
-            row.setShowsAttention(item.isWaiting)
+            row.setDot(item.isWaiting ? { AttentionTone.waiting.ink } : nil, accessibilityValue: "Agent waiting")
         }
         if activeRow != previouslyActive { revealActiveRow() }
         refreshRowHover()
@@ -367,8 +403,7 @@ final class SidebarView: NSView {
         }
         if case .workspace = id {
             row.tooltip = TooltipHost(label: "Switch workspace") { [weak self] in
-                guard let number = self?.numbers[id], number <= 9 else { return nil }
-                return CommandCatalog.spec(for: .selectWorkspace(number)).shortcut
+                Self.selectShortcut(self?.numbers[id])
             }
         }
         row.onArrowUp = { [weak self] in self?.moveFocus(-1) }

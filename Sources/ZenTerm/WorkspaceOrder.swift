@@ -1,6 +1,6 @@
 import Foundation
 
-// The sidebar's order: groups by seat, a workspace leading its worktrees, each group in open order.
+// The sidebar's order: groups by seat, a workspace leading its worktrees, each group in open order, then SSH hosts.
 @MainActor
 struct WorkspaceOrder {
     enum Entry: Equatable {
@@ -9,24 +9,36 @@ struct WorkspaceOrder {
         case ghost(Workspace)
     }
 
+    enum Target: Hashable {
+        case workspace(WorkspaceID)
+        case host(SSHHostID)
+    }
+
+    struct Host: Equatable {
+        let id: SSHHostID
+        let status: SSHHostStatus
+    }
+
     private enum GroupKey: Hashable {
         case folder(String)
         case alone(WorkspaceID)
     }
 
     let entries: [Entry]
+    let hosts: [Host]
 
     static func groupFolder(of workspace: WorkspaceController) -> String? {
         if let origin = workspace.origin { return origin.parent.path.standardizedFileURL.path }
         return workspace.isConfigured ? workspace.folder.standardizedFileURL.path : nil
     }
 
-    init(_ workspaces: [WorkspaceController]) {
+    init(_ workspaces: [WorkspaceController], hosts: [Host] = []) {
+        self.hosts = hosts
         var seats: [(key: GroupKey, seat: Int)] = []
         var leads: [GroupKey: WorkspaceID] = [:]
         var ghosts: [GroupKey: Workspace] = [:]
         var worktrees: [GroupKey: [WorkspaceID]] = [:]
-        for workspace in workspaces {
+        for workspace in workspaces where workspace.host == nil {
             let key: GroupKey
             if let origin = workspace.origin {
                 key = .folder(origin.parent.path.standardizedFileURL.path)
@@ -45,9 +57,23 @@ struct WorkspaceOrder {
         }
     }
 
-    func position(of id: WorkspaceID) -> Int? { navigable.firstIndex(of: id) }
+    func position(of id: WorkspaceID) -> Int? { navigableWorkspaces.firstIndex(of: id) }
 
-    var navigable: [WorkspaceID] {
+    var navigable: [Target] {
+        navigableWorkspaces.map(Target.workspace) + hosts.filter(\.status.isNavigable).map { .host($0.id) }
+    }
+
+    func stop(after current: Target, _ delta: Int) -> Target? {
+        let line = navigableWorkspaces.map(Target.workspace) + hosts.map { .host($0.id) }
+        guard delta != 0, let start = line.firstIndex(of: current) else { return nil }
+        let stops = Set(navigable)
+        let step = delta > 0 ? 1 : -1
+        return (1..<max(line.count, 1)).lazy
+            .map { line[(start + $0 * step + line.count) % line.count] }
+            .first { stops.contains($0) }
+    }
+
+    var navigableWorkspaces: [WorkspaceID] {
         entries.compactMap {
             switch $0 {
             case .workspace(let id), .worktree(let id): return id

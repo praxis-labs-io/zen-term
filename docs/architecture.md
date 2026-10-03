@@ -206,13 +206,16 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   workspace at its parent's folder, or under a ghost row built from that origin when the
   parent is closed. A group's first member mints its `seat` and later members inherit it,
   so the group holds its place as members close and reopen. A workspace with no config
-  entry is never in a group. `navigable` skips ghosts; the sidebar's numbers, ⌘⌃1…9,
-  ⌘⌃[ ] and a close's landing all read it.
+  entry is never in a group. `navigable` skips ghosts and Offline SSH hosts, and lists
+  reachable hosts after the workspaces in `ssh-hosts` order; the sidebar's numbers, ⌘⌃1…9 and
+  ⌘⌃[ ] read it, and a close's landing reads its workspaces alone. ⌘⌃[ ] from an Offline host
+  step to the nearest reachable row by sidebar position.
 - **`activate(_:)` is the single path a switch goes through**: a row click, the workspace
   chords, ⌘P, ⌘⌃T, and revealing a background tab. An open workspace slides in on the y axis, from
   below when it sits lower in `navigable`; a new one has no canvas yet, so it mounts each
   of its tabs without motion, applies each tab's recipe in the same turn, and lands on the
-  tab its launch focus names. A close's landing slides the same way.
+  tab its launch focus names. A close's landing slides the same way. An SSH host's row selects
+  it through `activate(_ host:)`, which closes the open card, float and confirm the same way.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
   workspace costs nothing beyond an inactive tab.
 - **Tab ids are minted by the window**, not by the workspace, so they stay unique across a
@@ -551,8 +554,20 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
 - **No file watcher.** Hand edits apply on ⌘⇧,.
 - **`~/.ssh/config` is read, never written.** Settings > SSH Hosts lists its literal `Host`
   aliases (following `Include`, skipping `Match` blocks) off-main each time it mounts, and
-  `ssh -G` resolves each one. `ssh-hosts` holds which are on, plus typed hosts; the sidebar's
-  SSH rows stay out of `WorkspaceOrder`, so they take no number.
+  `ssh -G` resolves each one. `ssh-hosts` holds which are on, plus typed hosts, and the
+  sidebar's SSH rows show their status as a dot (`SSHHostStatus.ink`): Offline takes the idle
+  agent row's ink on the dot and the title, Online is positive, and the status word is the
+  row's accessibility value rather than visible text.
+- **`SSHHostProbe` keeps each host's reachability in `SSHHostStatusCenter`, and never logs in.**
+  Off-main, at most four at a time, it resolves the host with `ssh -G`, once until `ssh-hosts`,
+  the network, or the date on `~/.ssh/config` or a file it includes changes, because
+  `Match exec` can prompt, and reads the greeting on a TCP
+  connection to its port, with separate connect and greeting timeouts: an `SSH-` line, after
+  any preamble lines RFC 4253 allows, is Online, anything else Offline. A
+  `ProxyJump` or `ProxyCommand` host reads Online once `ssh -G` names its proxy, with no TCP check. It runs every minute while the app
+  is active, and on activation, wake and network change (`NWPathMonitor`); an answer from before
+  a network change is dropped and asked again. A host reads Offline until the probe reaches it,
+  so an unanswered host takes no number.
 - **Writers go through `ConfigFileIO`:** never treat an unreadable file as empty, and
   write through symlinks. `ConfigWriter` preserves comments and unknown keys.
 

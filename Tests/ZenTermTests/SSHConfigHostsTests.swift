@@ -197,4 +197,37 @@ final class SSHConfigHostsTests: XCTestCase {
         XCTAssertEqual(SSHHostResolver.destination(inDump: dump), "drew@10.0.0.2")
         XCTAssertNil(SSHHostResolver.destination(inDump: "host devbox\nport 22\n"))
     }
+
+    func test_endpoint_readsHostnameAndPortFromTheDump() {
+        let dump = """
+            host devbox
+            user drew
+            hostname 10.0.0.2
+            port 2222
+            """
+
+        XCTAssertEqual(SSHHostResolver.endpoint(inDump: dump), .direct(hostname: "10.0.0.2", port: 2222))
+    }
+
+    func test_endpoint_withoutAPort_isTwentyTwo() {
+        XCTAssertEqual(
+            SSHHostResolver.endpoint(inDump: "host devbox\nhostname devbox.lan\n"),
+            .direct(hostname: "devbox.lan", port: 22))
+    }
+
+    func test_endpoint_behindAJumpHost_isProxied() {
+        let dump = "host inner\nhostname 10.0.0.9\nport 22\nproxyjump bastion\n"
+
+        XCTAssertEqual(SSHHostResolver.endpoint(inDump: dump), .proxied)
+    }
+
+    func test_endpoint_behindAProxyCommand_isProxied() {
+        let dump = "host inner\nhostname 10.0.0.9\nport 22\nproxycommand nc %h %p\n"
+
+        XCTAssertEqual(SSHHostResolver.endpoint(inDump: dump), .proxied)
+    }
+
+    func test_endpoint_withNoHostname_isNil() {
+        XCTAssertNil(SSHHostResolver.endpoint(inDump: "host devbox\nport 22\n"))
+    }
 }
