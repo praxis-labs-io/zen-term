@@ -41,7 +41,13 @@ enum SSHLaunch {
     }
 
     static func checkArguments(host: SSHHostID, controlPath: URL) -> [String] {
-        ["-o", "BatchMode=yes", "-o", controlPathOption(controlPath), "-O", "check", "--", host.name]
+        [
+            "-F", "/dev/null",
+            "-o", "BatchMode=yes",
+            "-o", controlPathOption(controlPath),
+            "-O", "check",
+            "--", host.name,
+        ]
     }
 
     static func masterPID(in output: String) -> pid_t? {

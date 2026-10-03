@@ -603,6 +603,11 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   the pid the exit source watched (a clean disconnect, and ssh removes its socket), or resolves the
   socket with `ssh -O check` when none is known yet. It never relies on `ControlPersist`, and it
   signals only a pid whose executable is `/usr/bin/ssh`, so a recycled pid is left alone.
+- **Launch sweeps the masters a force quit or crash left behind.** `SSHSocketSweep`, off-main,
+  reads both socket folders and checks only sockets named for a pid that is no longer running,
+  never this instance's or another running one's (dev and release share the folders). It removes
+  one that refuses and ends a master that answers. Every `ssh -O check` runs with `-F /dev/null`,
+  so it never runs the user's `Match exec`, and the sweep can check a socket whose host it cannot name.
 - **Writers go through `ConfigFileIO`:** never treat an unreadable file as empty, and
   write through symlinks. `ConfigWriter` preserves comments and unknown keys.
 

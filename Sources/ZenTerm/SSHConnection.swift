@@ -206,6 +206,14 @@ extension SSHConnection.Watchers {
         return nil
     }
 
+    nonisolated static func terminate(master pid: pid_t) {
+        guard isSSH(pid) else {
+            return Log.info("ssh: pid \(pid) is no longer ssh, so it is left running", category: .workspace)
+        }
+        kill(pid, SIGTERM)
+        Log.info("ssh connection ended (master pid \(pid))", category: .workspace)
+    }
+
     nonisolated static func isSSH(_ pid: pid_t) -> Bool {
         guard pid > 1 else { return false }
         var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
@@ -241,11 +249,5 @@ extension SSHConnection.Watchers {
         after: { delay, work in
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { work() }
         },
-        endMaster: { pid in
-            guard isSSH(pid) else {
-                return Log.info("ssh: pid \(pid) is no longer ssh, so it is left running", category: .workspace)
-            }
-            kill(pid, SIGTERM)
-            Log.info("ssh connection ended (master pid \(pid))", category: .workspace)
-        })
+        endMaster: { pid in terminate(master: pid) })
 }

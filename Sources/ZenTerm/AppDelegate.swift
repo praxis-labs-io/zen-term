@@ -54,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppConfig.loadAtLaunch()
         MotionConfig.apply(GeneralConfig.current.reduceMotion)
         hostProbe.start(hosts: GeneralConfig.current.sshHosts)
+        SSHSocketSweep.start()
 
         if GeneralConfig.current.debug { Log.isVerbose = true }
         Log.info("ZenTerm launched v\(AppVersion.current)", category: .app)
