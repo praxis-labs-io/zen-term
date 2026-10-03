@@ -264,7 +264,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   the workspace level is that call: `state(tabs:)` takes the ids and the store learns
   nothing about workspaces.
   It reports each real change once, from the outermost call, and the window renders from
-  that report, so no mutating path chooses its own render.
+  that report, so no mutating path chooses its own render. A window float asks from the
+  active tab; over a Connect screen, which has none, its card files under
+  `untabbedCardSlot`, a `TabID` never minted.
 - **`seen` means on screen, not focused.** A pane is on screen while its tab is active in
   the active workspace, a drawer while that holds and it is open, a float while it is
   shown. Coming on screen, or the window becoming key over it,
@@ -381,7 +383,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   the traffic lights and `ChromeMetrics.topInset` follows.
 - **Tool floats are window-level** because a surface is one `NSView`. `ToolFloatController`
   reaches the active tab through closures. `ToolFloat.Scope.tab` floats are filed under
-  `tabID/id` and shut down with their tab; Scratch is the only one.
+  `tabID/id` and shut down with their tab; Scratch is the only one. A host shows no user
+  float button, and the Connect screen hides the whole dock. There a float's card, shortcut
+  or palette row opens or closes it only while it is open, completed or waiting; any other
+  toggle toasts in a connected host.
 - **Every silent no-op is a toast**, throttled at 3s per kind because held chords repeat.
 - **A surface stating current state is retracted when the cause clears.**
 - **A toast's keys live on the card root** (`ToastView.performKeyEquivalent` and
@@ -447,9 +452,10 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   screen (`HostConnectView`), one `PanelHostView` that takes ↵ and is focused, haloed and themed
   like a pane through the same `syncWindowFocus` and live-apply paths. Its left edge leads into the
   sidebar (or shows the same hint a pane does when the sidebar is hidden); up, down and right do
-  nothing. It has no tab, so dispatch
-  drops any chord that is not `worksWithoutTab`, except ⌘T, which connects, and a card stays open
-  for a chord it would drop. App-global chords bypass it in `AppDelegate.route`; a palette pick
+  nothing. It has no tab, so dispatch drops any chord that is not `worksWithoutTab`, except ⌘T,
+  which connects, and a float toggle, which opens or closes only a running float that is open or
+  needs you and is silent otherwise, and a card stays open for a chord it would drop. App-global
+  chords bypass it in `AppDelegate.route`; a palette pick
   of one returns there through `onAppGlobalCommand`. The sidebar toggle passes through an
   open card, which stays open. A card is offered every other chord first
   (`ModalOverlay.handle`, how the workspace form takes the tab shortcuts) and swallows
@@ -576,7 +582,8 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   so an unanswered host takes no number, and a connected host takes its status from the
   connection, not the probe.
 - **A connected host is a workspace whose tabs run ssh over one `SSHConnection`.** Every pane
-  and drawer starts through the tab's injected `SurfaceStart`, which for a host runs
+  and drawer, and Scratch, starts through the tab's injected `SurfaceStart` (a user float
+  never does, since a host's start keeps only the launch's environment), which for a host runs
   `/usr/bin/ssh` with `ControlMaster=auto`, a `ControlPath` under `Application Support/ZenTerm/ssh`
   (the temp folder when that path passes 86 bytes, since ssh binds a longer temporary name
   first) and `ControlPersist=60`, as `xterm-256color` with busy tracking off (a remote shell

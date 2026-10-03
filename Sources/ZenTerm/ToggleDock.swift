@@ -162,7 +162,8 @@ final class ToggleDock: NSView {
         isLiveInBackground: (String) -> Bool = { _ in false },
         isFloatBusy: (String) -> Bool = { _ in false },
         drawerAttention: (DrawerEdge) -> SurfaceAttention = { _ in .idle },
-        floatAttention: (String) -> SurfaceAttention = { _ in .idle }
+        floatAttention: (String) -> SurfaceAttention = { _ in .idle },
+        showsToolFloat: (String) -> Bool = { _ in true }
     ) {
         if tab != surfacedTab {
             surfacedTab = tab
@@ -175,7 +176,7 @@ final class ToggleDock: NSView {
             btn.isActive = floatID == id
             btn.activityState = attention
             btn.showsActivity = isLive || attention != .idle
-            btn.isHidden = toolbarHiddenFloatIDs.contains(id) && floatID != id && !isLive
+            btn.isHidden = !showsToolFloat(id) || (toolbarHiddenFloatIDs.contains(id) && floatID != id && !isLive)
         }
 
         scratchBtn.isActive = floatID == ToolFloat.scratch.id

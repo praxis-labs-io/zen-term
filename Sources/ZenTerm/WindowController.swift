@@ -141,8 +141,11 @@ final class WindowController: NSObject {
                 self?.endModes()
                 self?.activeController?.yieldFocusToFloat()
             },
-            restoreFocus: { [weak self] in self?.activeController?.restoreUnifiedFocus() },
-            currentTabID: { [weak self] in self?.activeWorkspace?.activeID })
+            restoreFocus: { [weak self] in self?.focusActive() },
+            currentTabID: { [weak self] in self?.activeWorkspace?.activeID },
+            startShell: { [weak self] surface, id, launch in
+                Self.surfaceStart(over: self?.activeWorkspace?.connection)(surface, id, launch)
+            })
         controller.onStateChanged = { [weak self] in self?.renderDock() }
         controller.onFocusChanged = { [weak self] in self?.syncWindowFocus() }
         controller.onRequestToast = { [weak self] content in self?.toasts.show(content) }
@@ -156,6 +159,7 @@ final class WindowController: NSObject {
             self?.attention.register(surface, tab: tab)
         }
         controller.onSurfaceReleased = { [weak self] surface in
+            self?.attention.tab(of: surface).flatMap { self?.workspace(of: $0) }?.connection?.release([surface])
             self?.attention.release(surface)
             self?.agents.drop(surface)
             self?.agentStates.drop(surface)
@@ -546,7 +550,6 @@ final class WindowController: NSObject {
                     self.renderDock()
                 }
                 if change.contains(.toolbarButtons) {
-                    self.dock.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
                     self.sidebar.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
                     self.renderDock()
                 }
@@ -810,15 +813,16 @@ final class WindowController: NSObject {
         let c = TabController(
             initialCWD: cwd, initialCommand: mainCommand, env: ws?.env ?? [:],
             isToolFloatOpen: { [weak self] in self?.floats.isOpen ?? false },
-            startSurface: connection.map { connection in
-                { [weak connection] surface, id, launch in
-                    connection?.start(surface, id: id, env: launch.environment)
-                }
-            } ?? startSurfaceNow)
+            startSurface: Self.surfaceStart(over: connection))
         c.rightDrawerCommand = tab?.right
         c.bottomDrawerCommand = tab?.bottom
         c.pinnedTitle = tab?.name
         return c
+    }
+
+    private static func surfaceStart(over connection: SSHConnection?) -> SurfaceStart {
+        guard let connection else { return startSurfaceNow }
+        return { [weak connection] surface, id, launch in connection?.start(surface, id: id, env: launch.environment) }
     }
 
     private func mintTabID() -> TabID { defer { nextTabID += 1 }; return TabID(nextTabID) }
@@ -1336,6 +1340,21 @@ final class WindowController: NSObject {
         let line = "Couldn't connect to \(host.name)."
         let width = (line as NSString).size(withAttributes: [.font: ToastView.messageFont]).width
         return width <= ToastView.messageMaxWidth ? line : "Couldn't connect to\n\(host.name)."
+    }
+
+    private func toggleToolFloat(_ id: String, in host: SSHHostID) {
+        if !toggleRunningFloat(id) { toastFloatsStayLocal(on: host) }
+    }
+
+    private func togglesRunningFloat(_ chord: KeyInterceptor.ReservedChord) -> Bool {
+        guard case .toggleToolFloat(let id) = chord else { return false }
+        return floats.surfaceID(id) != nil && (floats.activeID == id || floatAttention(id) >= .completed)
+    }
+
+    private func toggleRunningFloat(_ id: String) -> Bool {
+        guard togglesRunningFloat(.toggleToolFloat(id)), let surface = floats.surfaceID(id) else { return false }
+        if floats.activeID == id { floats.close() } else { floats.reveal(surface) }
+        return true
     }
 
     private func toastFloatsStayLocal(on host: SSHHostID) {
@@ -2212,7 +2231,7 @@ final class WindowController: NSObject {
                 return
             case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue,
                 .newTool:
-                guard activeWorkspace != nil || chord.worksWithoutTab else { return }
+                guard activeWorkspace != nil || chord.worksWithoutTab || togglesRunningFloat(chord) else { return }
                 closingModalKind = modal.kind
                 closeModal()
             default:
@@ -2254,6 +2273,11 @@ final class WindowController: NSObject {
         }
         if case .host(let host) = selection {
             if chord == .newTab { return connect(host) }
+            if case .toggleToolFloat(let id) = chord {
+                pendingModal = nil
+                _ = toggleRunningFloat(id)
+                return
+            }
             switch chord {
             case .navLeft: return navigate(.left)
             case .navRight: return navigate(.right)
@@ -2345,7 +2369,7 @@ final class WindowController: NSObject {
             }
         case .toggleToolFloat(let id):
             pendingModal = nil
-            if let host = activeWorkspace?.host { return toastFloatsStayLocal(on: host) }
+            if let host = activeWorkspace?.host, id != ToolFloat.scratch.id { return toggleToolFloat(id, in: host) }
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
         case .createWorktree:
@@ -2718,7 +2742,8 @@ final class WindowController: NSObject {
         surface: SurfaceID?, _ notification: TerminalNotification, from spec: ToolFloat, owner: TabID?
     ) {
         DispatchQueue.main.async { [weak self] in
-            guard let self, let activeID = self.activeWorkspace?.activeID else { return }
+            guard let self else { return }
+            let activeID = self.activeWorkspace?.activeID ?? Self.untabbedCardSlot
             let message = notification.body.isEmpty ? notification.title : notification.body
             let target = owner.flatMap { self.workspace(of: $0) == nil ? nil : $0 } ?? activeID
             let address = self.floatCardAddress(spec, owner: owner, target: target)
@@ -2998,8 +3023,12 @@ final class WindowController: NSObject {
 
     // A window float belongs to no tab, so it asks from whichever tab is showing it.
     private func tab(of surface: SurfaceID) -> TabID? {
-        attention.tab(of: surface) ?? (floats.float(of: surface) != nil ? activeWorkspace?.activeID : nil)
+        attention.tab(of: surface)
+            ?? (floats.float(of: surface) != nil ? activeWorkspace?.activeID ?? Self.untabbedCardSlot : nil)
     }
+
+    // Never minted: a float asking over a Connect screen has no tab, and its card still needs a key.
+    private static let untabbedCardSlot = TabID(0)
 
     // A shell reports a signal death as 128+n. SIGINT and SIGTERM are someone stopping the agent, not it failing.
     private static let deliberateStopCodes: Set<Int> = [130, 143]
@@ -3654,17 +3683,26 @@ final class WindowController: NSObject {
 
     private func renderDock() {
         let overlay = activeController?.overlayState ?? OverlayState()
+        dock.setHiddenButtons(isOnConnect ? Set(ToolbarButton.allCases) : GeneralConfig.current.hiddenToolbarButtons)
         dock.render(
             overlay: overlay, floatID: floats.activeID,
             tab: activeWorkspace?.activeID,
             isLiveInBackground: floats.isLiveInBackground, isFloatBusy: floats.isBusy,
             drawerAttention: { [weak self] edge in self?.drawerAttention(edge) ?? .idle },
-            floatAttention: { [weak self] id in
-                self?.floats.surfaceID(id).map { self?.attention.state(of: $0) ?? .idle } ?? .idle
-            })
+            floatAttention: { [weak self] id in self?.floatAttention(id) ?? .idle },
+            showsToolFloat: { [weak self] _ in self?.showsToolFloats ?? true })
         lastBusyDots = busyDots()
         sidebar.setOpenModal(palette: modal?.kind == .commandPalette, settings: modal?.kind == .settings)
     }
+
+    private func floatAttention(_ id: String) -> SurfaceAttention {
+        floats.surfaceID(id).map(attention.state(of:)) ?? .idle
+    }
+
+    private var isOnConnect: Bool { activeWorkspace == nil }
+
+    // A host's floats run on this Mac, so a host shows none; one that needs you asks through its card.
+    private var showsToolFloats: Bool { selection.host == nil }
 
     private func drawerAttention(_ edge: DrawerEdge) -> SurfaceAttention {
         guard let ids = activeController?.drawerSurfaceIDs else { return .idle }
