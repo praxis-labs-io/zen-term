@@ -22,6 +22,11 @@ struct ControlResponder {
         case .tabSelect: reply(selectTab(request))
         case .tabRename: reply(renameTab(request))
         case .tabClose: reply(closeTab(request))
+        case .paneSplit: reply(splitPane(request))
+        case .paneFocus: reply(focusPane(request))
+        case .paneClose: reply(closePane(request))
+        case .paneSend: reply(sendToPane(request))
+        case .paneRead: reply(readPane(request))
         }
     }
 
@@ -175,7 +180,7 @@ struct ControlResponder {
         return WorkspaceResult(window: ControlAddress.window(place.window.windowID), workspace: listing)
     }
 
-    private func raise(_ window: WindowController) {
+    func raise(_ window: WindowController) {
         guard !isInFront(window) else { return }
         bringForward(window)
     }

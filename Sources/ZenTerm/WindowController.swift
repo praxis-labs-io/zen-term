@@ -2369,6 +2369,28 @@ final class WindowController: NSObject {
                 + (closesWindow ? floats.runningTitles(scope: nil) : []))
     }
 
+    func focusedPane(of tab: TabID) -> PaneHandle? {
+        guard let c = controller(tab) else { return nil }
+        return c.paneHandles.first { $0.surfaceID == c.focusedSurfaceID }
+    }
+
+    func splitPane(_ token: Int, in tab: TabID, axis: SplitAxis, command: String?) -> PaneSplitResult? {
+        controller(tab)?.split(pane: token, axis: axis, command: command)
+    }
+
+    func closeStakes(pane: PaneHandle, in tab: TabID) -> CloseStakes? {
+        guard let c = controller(tab) else { return nil }
+        if c.isSinglePane { return closeStakes(tab: tab) }
+        let busy = pane.surface.isBusy
+        return CloseStakes(closesWindow: false, isRunning: busy, panes: busy ? [listing(of: pane)] : [], floats: [])
+    }
+
+    func removePane(_ token: Int, in tab: TabID) {
+        guard let c = controller(tab) else { return }
+        if c.isSinglePane { return removeTab(tab) }
+        c.close(pane: token)
+    }
+
     private func workspaceOpenState(at path: URL) -> WorkspaceOpenState {
         if holdsWorkspace(at: path) { return .here }
         return isWorkspaceOpenInAnotherWindow?(path) == true ? .elsewhere : .closed
@@ -3619,11 +3641,15 @@ final class WindowController: NSObject {
             pendingModal = nil
             floats.reveal(surface)
         } else if let tab = attention.tab(of: surface) {
-            reveal(tab)
-            if floats.isOpen { closeFloatForTabChange() }
-            controller(tab)?.focus(surface: surface)
+            focus(surface, in: tab)
         }
         answerFocusedAgent()
+    }
+
+    func focus(_ surface: SurfaceID, in tab: TabID) {
+        reveal(tab)
+        if floats.isOpen { closeFloatForTabChange() }
+        controller(tab)?.focus(surface: surface)
     }
 
     /// Answers whatever `surface` asked now that it is on screen, and takes down the card it raised.

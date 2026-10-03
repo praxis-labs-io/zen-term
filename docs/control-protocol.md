@@ -74,7 +74,7 @@ integer `id` that could be read. A command with nothing to return answers `{}`.
 | `unsupported_version` | `v` is newer than the app speaks; the response's `v` says which it does. |
 | `not_found`           | A target names nothing that exists.                      |
 | `ambiguous`           | A target names more than one thing.                      |
-| `refused`             | The command would end running work or lose it. Carries `details`. |
+| `refused`             | The command would end running work or lose it, and carries `details`. Also a split in Focus Mode. |
 | `failed`              | The app could not do it.                                 |
 
 A `refused` error says what `force` would end:
@@ -101,8 +101,8 @@ Requests are decoded off the main thread, applied on it, and written back off it
 | Window | `w<window>`                       |                                               |
 
 A command with no target acts on the caller: `caller.pane`, its tab, its workspace.
-Without a caller it acts on the active workspace and tab of the key window, or of the
-frontmost ZenTerm window while the app is in the background. A `caller.pane`
+Without a caller it acts on the active workspace, tab and focused pane of the key window,
+or of the frontmost ZenTerm window while the app is in the background. A `caller.pane`
 that names no pane is `not_found`.
 
 Without `focus`, no command moves what is on screen: a new tab joins its workspace's tab
@@ -145,7 +145,8 @@ is listed from its first opening until it closes, shown or hidden.
 - `worktree`: present when the workspace was opened from a worktree. `parent` is
   the folder of the workspace it belongs to.
 - `drawer`: `bottom` or `right`, absent for a pane.
-- `title`: the title the program last set, empty when it set none.
+- `title`: the title the program last set. A pane started with a command is titled with
+  that command until its program sets one. Empty when nothing set one.
 - `cwd`: absent when it is not known.
 - `agent`: present when the pane runs an agent. `state` is `working`, `waiting` or
   `idle`; `name` is absent for an agent that has not been named.
@@ -208,15 +209,57 @@ program sets.
 `args`: `tab`, `force`. `refused` without `force` when anything in it is running, or when
 it is the window's last tab.
 
+### `pane.split`
+
+`args`: `pane`, `dir` (required, `right` or `down`), `cmd`, `focus`.
+
+Splits the pane, starting the new one in its folder, running `cmd` in a shell or a shell.
+Focus stays on the pane that had it. A drawer does not split. `refused` when the pane's tab
+is in Focus Mode, and `failed` when the pane is too small to split.
+
+```json
+{"pane":32}
+```
+
+### `pane.focus`
+
+`args`: `pane`. Shows its tab and focuses it, opening a drawer that is closed.
+
+### `pane.close`
+
+`args`: `pane`, `force`. `refused` without `force` when the pane is running something. The
+last pane of a tab closes the tab, refused as `tab.close` would be. A drawer is not closed.
+
+### `pane.send`
+
+`args`: `pane`, `text` (required), `enter`.
+
+Pastes `text`, so several lines arrive as one block. `enter` then sends Return outside the
+paste, which runs the block once at a shell prompt. It delivers text, not keys: control
+characters become spaces.
+
+### `pane.read`
+
+`args`: `pane`, `lines`.
+
+Returns the rows on screen, or with `lines` the last that many lines of the screen and its
+scrollback, a prompt included. Trailing blank lines are dropped.
+
+```json
+{"text":"$ seq 3\n1\n2\n3"}
+```
+
 ## `zen`
 
 `zen hello` and `zen list` print the result as JSON. `zen list --pretty` prints an
 indented tree instead. Exit codes: 0 ok, 1 the app answered with an error or didn't
 answer within 10 seconds, 2 usage, 3 no instance or the connection failed.
 
-Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|close` and
-`zen tab new|select|rename|close`, with `--focus` and `--force` for those fields. A
-command that returns something prints it as JSON; the rest print nothing. `zen` sends
+Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|close`,
+`zen tab new|select|rename|close` and `zen pane split|focus|close|send|read`, with
+`--focus` and `--force` for those fields. A command that returns something prints it as
+JSON, except `zen pane read`, which prints the text; the rest print nothing.
+`zen pane split` splits to the right unless `--dir down` says otherwise. `zen` sends
 folders as absolute paths, read against its own folder, and refuses a `--cwd` or
 `workspace new` folder that does not exist. A workspace argument is a folder when it
 starts with `/`, `~` or `.`, and a title otherwise. A refusal prints what it would stop,

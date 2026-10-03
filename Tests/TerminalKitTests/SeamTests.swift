@@ -17,8 +17,10 @@ private final class SpySurface: TerminalSurface {
     func focus() { isFocused = true }
     func terminate() {}
     func paste(_ text: String) {}
+    func submit() {}
     func copySelection() -> String? { nil }
     func scroll(_ command: TerminalScroll) {}
+    func text(lastLines count: Int) -> String? { nil }
 }
 
 private final class RecordingDelegate: TerminalSurfaceDelegate {

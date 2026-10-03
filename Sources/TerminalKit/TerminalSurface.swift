@@ -294,6 +294,10 @@ public protocol TerminalSurface: AnyObject {
     func setSizeSyncSuspended(_ suspended: Bool)
 
     func paste(_ text: String)
+
+    /// Sends Return to the program outside any paste, the way a keypress would end a line.
+    func submit()
+
     func copySelection() -> String?
 
     /// The viewport cell the selection starts on, or nil when nothing is selected.
@@ -318,6 +322,10 @@ public protocol TerminalSurface: AnyObject {
 
     /// The text in `range`, with soft-wrapped rows joined into one line.
     func text(in range: TerminalViewportRange) -> String?
+
+    /// The last `count` lines of the screen and its scrollback, soft wraps joined and trailing blank lines dropped.
+    /// Nil when the screen cannot be read.
+    func text(lastLines count: Int) -> String?
 
     /// Runs or re-runs a scrollback search. An empty needle stops the engine only.
     func search(_ needle: String)

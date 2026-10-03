@@ -325,6 +325,13 @@ final class TabController: NSObject {
         if isZoomed { toastZoomBlocked("split"); return }
         paneCanvas.split(axis)
     }
+    func split(pane token: Int, axis: SplitAxis, command: String?) -> PaneSplitResult {
+        if isZoomed { return .focusMode }
+        return paneCanvas.split(token: token, axis: axis, command: command).map { .opened(token: $0) } ?? .tooSmall
+    }
+
+    func close(pane token: Int) { paneCanvas.close(token: token) }
+
     @discardableResult func closeFocused() -> Bool {
         exitZoomIfNeeded()
         return paneCanvas.closeFocused()
