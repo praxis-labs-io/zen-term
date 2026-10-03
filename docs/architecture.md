@@ -562,9 +562,10 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   `Match exec` can prompt, and reads the greeting on a TCP
   connection to its port, with separate connect and greeting timeouts: an `SSH-` line, after
   any preamble lines RFC 4253 allows, is Online, anything else Offline. A
-  `ProxyJump` or `ProxyCommand` host reads Online unprobed. It runs every minute while the app
+  `ProxyJump` or `ProxyCommand` host reads Online once `ssh -G` names its proxy, with no TCP check. It runs every minute while the app
   is active, and on activation, wake and network change (`NWPathMonitor`); an answer from before
-  a network change is dropped and asked again. A host reads Offline until the probe reaches it, so an unanswered host takes no number.
+  a network change is dropped and asked again. A host reads Offline until the probe reaches it,
+  so an unanswered host takes no number.
 - **Writers go through `ConfigFileIO`:** never treat an unreadable file as empty, and
   write through symlinks. `ConfigWriter` preserves comments and unknown keys.
 
