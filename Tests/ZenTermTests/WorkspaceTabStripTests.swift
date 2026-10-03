@@ -109,6 +109,24 @@ final class WorkspaceTabStripTests: WindowTestCase {
         XCTAssertLessThanOrEqual(strip.addButtonForTesting.frame.maxX, strip.bounds.width, "＋ stays in the strip")
     }
 
+    func test_tabsPastAnEdge_fadeOnlyThatEdge() {
+        mount((0..<12).map { Workspace.Tab(name: "a-long-tab-name-\($0)") })
+        let scroll = strip.chipsScrollForTesting
+
+        XCTAssertTrue(scroll.fadedEdgesForTesting == (false, true), "at the start, only the trailing edge fades")
+
+        form.select(11)
+        rerender()
+
+        XCTAssertTrue(scroll.fadedEdgesForTesting == (true, false), "at the end, only the leading edge fades")
+    }
+
+    func test_tabsThatFit_fadeNeitherEdge() {
+        mount([Workspace.Tab(name: "one"), Workspace.Tab(name: "two")])
+
+        XCTAssertTrue(strip.chipsScrollForTesting.fadedEdgesForTesting == (false, false))
+    }
+
     func test_everyChip_showsItsWholeTitle_selectedOrNot() {
         mount([Workspace.Tab(), Workspace.Tab(name: "gate"), Workspace.Tab(main: "nvim")])
 

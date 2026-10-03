@@ -1,19 +1,41 @@
 import AppKit
 
 final class FadingScrollView: NSScrollView {
-    static let fadeDepth: CGFloat = 16
+    let fadeDepth: CGFloat
 
-    private let fade = EdgeFade(axis: .vertical)
+    private let axis: EdgeFade.Axis
+    private let fade: EdgeFade
     private var isObserving = false
 
     // A full-size-content window pads a scrollable view by the titlebar height, which reads as a gap above the content.
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
+    init(axis: EdgeFade.Axis = .vertical) {
+        self.axis = axis
+        fade = EdgeFade(axis: axis)
+        fadeDepth = axis == .vertical ? 16 : 28
+        super.init(frame: .zero)
         automaticallyAdjustsContentInsets = false
         contentInsets = .init()
     }
 
+    convenience init(document: NSView) {
+        self.init(axis: .vertical)
+        drawsBackground = false
+        hasVerticalScroller = true
+        verticalScroller = SlimScroller()
+        scrollerStyle = .overlay
+        autohidesScrollers = true
+        documentView = document
+        translatesAutoresizingMaskIntoConstraints = false
+    }
+
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    // One fade depth of margin, or a view scrolled to an edge lands under the fade.
+    func reveal(_ view: NSView) {
+        let margin = view.bounds.insetBy(
+            dx: axis == .horizontal ? -fadeDepth : 0, dy: axis == .vertical ? -fadeDepth : 0)
+        view.scrollToVisible(margin)
+    }
 
     override func layout() {
         super.layout()
@@ -36,6 +58,19 @@ final class FadingScrollView: NSScrollView {
     }
 
     @objc private func refreshFade() {
+        let (start, end) = axis == .vertical ? verticalOverflow() : horizontalOverflow()
+        let length = axis == .vertical ? bounds.height : bounds.width
+        let depth = length > 2 * fadeDepth ? fadeDepth : 0
+        fade.update(frame: bounds, start: start ? depth : 0, end: end ? depth : 0)
+    }
+
+    private func horizontalOverflow() -> (start: Bool, end: Bool) {
+        let visible = documentVisibleRect
+        let width = documentView?.frame.width ?? 0
+        return (visible.minX > 0.5, width - visible.maxX > 0.5)
+    }
+
+    private func verticalOverflow() -> (start: Bool, end: Bool) {
         let visible = documentVisibleRect
         let height = documentView?.frame.height ?? 0
         let nearOrigin = visible.minY > 0.5
@@ -43,11 +78,13 @@ final class FadingScrollView: NSScrollView {
         let hidesAbove = contentView.isFlipped ? nearOrigin : nearEnd
         let hidesBelow = contentView.isFlipped ? nearEnd : nearOrigin
         let startIsTop = layer?.contentsAreFlipped() ?? false
-        fade.update(
-            frame: bounds,
-            start: (startIsTop ? hidesAbove : hidesBelow) ? Self.fadeDepth : 0,
-            end: (startIsTop ? hidesBelow : hidesAbove) ? Self.fadeDepth : 0)
+        return startIsTop ? (hidesAbove, hidesBelow) : (hidesBelow, hidesAbove)
     }
 
     var fadeForTesting: CAGradientLayer { fade.layer }
+
+    var fadedEdgesForTesting: (start: Bool, end: Bool) {
+        let colors = (fade.layer.colors as? [CGColor]) ?? []
+        return (colors.first?.alpha == 0, colors.last?.alpha == 0)
+    }
 }

@@ -28,7 +28,6 @@ final class TabBarView: NSView {
     private static let bandNudge: CGFloat = 6
     // The floating sidebar keeps its own toggle this far above the card's bottom, matching the docked one's band.
     static let chipBandInset: CGFloat = height / 2 + bandNudge
-    static let fadeWidth: CGFloat = 28
 
     static let chipFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .medium)
     // The rename editor matches it, or the text reflows on open.
@@ -44,11 +43,10 @@ final class TabBarView: NSView {
     static var activeInkForTesting: NSColor { activeInk }
     static var idleInkForTesting: NSColor { idleInk }
 
-    private let scrollView = NSScrollView()
+    private let scrollView = FadingScrollView(axis: .horizontal)
     private let docView = NSView()
     // Kept per tab across renders: rebuilding blinked the hovered chip's tooltip on every title poll.
     private var chips: [Chip] = []
-    private let edgeFade = EdgeFade(axis: .horizontal)
     private let tracer = CALayer()
     private var activeTabID: TabID?
     // A move changes the slot but not the active tab; only this separates it from a title poll.
@@ -73,18 +71,14 @@ final class TabBarView: NSView {
         docView.wantsLayer = true
         docView.layer?.addSublayer(tracer)
 
-        scrollView.wantsLayer = true
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
         scrollView.hasHorizontalScroller = false
         scrollView.hasVerticalScroller = false
         scrollView.horizontalScrollElasticity = .allowed
         scrollView.verticalScrollElasticity = .none
-        scrollView.automaticallyAdjustsContentInsets = false
-        scrollView.contentInsets = .init()
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.documentView = docView
-        scrollView.layer?.mask = edgeFade.layer
         addSubview(scrollView)
 
         let clip = scrollView.contentView
@@ -148,7 +142,7 @@ final class TabBarView: NSView {
             moveTracer(to: tracerFrame(for: activeChip), animated: activeTabID != nil && selectionChanged)
             tracer.isHidden = false
             if selectionChanged || slotChanged {
-                activeChip.scrollToVisible(activeChip.bounds.insetBy(dx: -Self.fadeWidth, dy: 0))
+                scrollView.reveal(activeChip)
             }
             activeTabIndex = newIndex
         } else {
@@ -156,7 +150,6 @@ final class TabBarView: NSView {
             activeTabIndex = nil
         }
         activeTabID = newActive
-        updateFade()
         refreshHover()
     }
 
@@ -172,9 +165,9 @@ final class TabBarView: NSView {
 
     var tracerColorForTesting: NSColor? { tracer.backgroundColor.flatMap { NSColor(cgColor: $0) } }
 
-    var isOverflowFadedForTesting: Bool { hasRightOverflow }
+    var isOverflowFadedForTesting: Bool { scrollView.fadedEdgesForTesting.end }
 
-    var isLeadingFadedForTesting: Bool { hasLeftOverflow }
+    var isLeadingFadedForTesting: Bool { scrollView.fadedEdgesForTesting.start }
 
     static func tabLabelStringForTesting(_ item: TabBarItem) -> String { tabLabel(item).string }
 
@@ -188,14 +181,12 @@ final class TabBarView: NSView {
         let clip = scrollView.contentView
         clip.scroll(to: CGPoint(x: x, y: 0))
         scrollView.reflectScrolledClipView(clip)
-        updateFade()
     }
 
     override func layout() {
         super.layout()
         layoutChips()
         clampScrollIfContentFits()
-        updateFade()
     }
 
     private func layoutChips() {
@@ -220,7 +211,6 @@ final class TabBarView: NSView {
     }
 
     @objc private func clipBoundsChanged() {
-        updateFade()
         refreshHover()
     }
 
@@ -236,22 +226,6 @@ final class TabBarView: NSView {
             let underPointer = chip.frame.intersects(visible) && chip.convert(chip.bounds, to: nil).contains(mouse)
             chip.setHover(underPointer)
         }
-    }
-
-    private var hasRightOverflow: Bool {
-        let clip = scrollView.contentView
-        let visibleMaxX = clip.bounds.origin.x + clip.bounds.width
-        return docView.frame.width - visibleMaxX > 0.5
-    }
-
-    private var hasLeftOverflow: Bool {
-        scrollView.contentView.bounds.origin.x > 0.5
-    }
-
-    private func updateFade() {
-        let width = scrollView.bounds.width > 2 * Self.fadeWidth ? Self.fadeWidth : 0
-        edgeFade.update(
-            frame: scrollView.bounds, start: hasLeftOverflow ? width : 0, end: hasRightOverflow ? width : 0)
     }
 
     private func tracerFrame(for chip: NSView) -> CGRect {
