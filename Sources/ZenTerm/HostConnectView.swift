@@ -11,8 +11,7 @@ final class HostConnectView: NSView {
     private static let detailMaxWidth: CGFloat = 420
     private static let eyebrowFont = NSFont.monospacedSystemFont(ofSize: 10, weight: .medium)
     private static let eyebrowKern: CGFloat = 1
-    private static let titleFont = NSFont.systemFont(ofSize: 32, weight: .semibold)
-    private static let titleKern: CGFloat = -0.3
+    private static let titleFont = NSFont.systemFont(ofSize: 15, weight: .semibold)
     private static let destinationFont = NSFont.monospacedSystemFont(ofSize: 12.5, weight: .regular)
     private static let detailFont = NSFont.systemFont(ofSize: 13)
 
@@ -138,7 +137,7 @@ final class HostConnectView: NSView {
             "SSH HOST", font: Self.eyebrowFont, kern: Self.eyebrowKern, color: chrome.ink(.faint),
             breaking: .byClipping)
         title.attributedStringValue = Self.line(
-            "Connect to \(host.name)", font: Self.titleFont, kern: Self.titleKern, color: chrome.foreground.nsColor,
+            "Connect to \(host.name)", font: Self.titleFont, kern: 0, color: chrome.foreground.nsColor,
             breaking: .byTruncatingMiddle)
         destinationLine.textColor = chrome.ink(.muted)
         applyDetail()
