@@ -1,7 +1,8 @@
 import AppKit
 
 final class HostRouteView: NSView {
-    private static let lineSize = NSSize(width: 220, height: 24)
+    static let preferredLineLength: CGFloat = 120
+    private static let lineHeight: CGFloat = 24
     private static let minimumLineWidth: CGFloat = 24
     // Under the window's own sizing priorities, so a narrow canvas shortens the line rather than widening the window.
     private static let lineWidthPreference = NSLayoutConstraint.Priority(rawValue: 490)
@@ -27,7 +28,7 @@ final class HostRouteView: NSView {
         line.fillColor = nil
         lineHost.layer?.addSublayer(line)
 
-        let preferredWidth = lineHost.widthAnchor.constraint(equalToConstant: Self.lineSize.width)
+        let preferredWidth = lineHost.widthAnchor.constraint(equalToConstant: Self.preferredLineLength)
         preferredWidth.priority = Self.lineWidthPreference
         addSubview(mac)
         addSubview(lineHost)
@@ -38,9 +39,9 @@ final class HostRouteView: NSView {
             mac.bottomAnchor.constraint(equalTo: bottomAnchor),
             lineHost.leadingAnchor.constraint(equalTo: mac.trailingAnchor),
             preferredWidth,
-            lineHost.widthAnchor.constraint(lessThanOrEqualToConstant: Self.lineSize.width),
+            lineHost.widthAnchor.constraint(lessThanOrEqualToConstant: Self.preferredLineLength),
             lineHost.widthAnchor.constraint(greaterThanOrEqualToConstant: Self.minimumLineWidth),
-            lineHost.heightAnchor.constraint(equalToConstant: Self.lineSize.height),
+            lineHost.heightAnchor.constraint(equalToConstant: Self.lineHeight),
             lineHost.centerYAnchor.constraint(
                 equalTo: topAnchor, constant: RouteEndpointView.tileSide / 2),
             destination.leadingAnchor.constraint(equalTo: lineHost.trailingAnchor),
@@ -56,7 +57,7 @@ final class HostRouteView: NSView {
     override func layout() {
         super.layout()
         let width = lineHost.bounds.width
-        let midY = Self.lineSize.height / 2
+        let midY = Self.lineHeight / 2
         let path = CGMutablePath()
         path.move(to: CGPoint(x: Self.lineInset, y: midY))
         path.addLine(to: CGPoint(x: max(Self.lineInset, width - Self.lineInset), y: midY))
