@@ -10,13 +10,12 @@ final class HostRouteView: NSView {
     private static let lineWidth: CGFloat = 1.6
     private static let idleDash: [NSNumber] = [2, 7]
 
-    private let mac = RouteEndpointView(symbol: "laptopcomputer", name: "This Mac")
-    private let destination: RouteEndpointView
+    private let mac = RouteEndpointView(symbol: "laptopcomputer", name: "Client")
+    private let destination = RouteEndpointView(symbol: "server.rack", name: "Host")
     private let lineHost = NSView()
     private let line = CAShapeLayer()
 
-    init(host: SSHHostID) {
-        destination = RouteEndpointView(symbol: "server.rack", name: host.alias)
+    init() {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
