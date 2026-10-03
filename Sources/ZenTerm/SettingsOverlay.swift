@@ -257,7 +257,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
             detail.bottomAnchor.constraint(equalTo: detailContainer.bottomAnchor),
         ])
         window?.makeFirstResponder(navRows[index])
-        navRows[index].scrollToVisible(navRows[index].bounds)
+        navScroll.reveal(navRows[index])
     }
 
     private func moveNav(_ delta: Int, wrap: Bool = false) {

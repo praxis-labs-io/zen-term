@@ -238,6 +238,30 @@ final class DropdownTests: WindowTestCase {
         XCTAssertTrue(dropdown.isHighlightedRowVisibleForTesting)
     }
 
+    func test_arrowingDownPastTheFold_keepsTheHighlightClearOfTheFade() throws {
+        let items = (0..<15).map {
+            DropdownItem(title: "Theme \($0)", group: nil, note: nil, isSelected: $0 == 0)
+        }
+        let dropdown = Dropdown(items: items, selectedIndex: 0) { _ in }
+        dropdown.translatesAutoresizingMaskIntoConstraints = true
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 500),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView?.addSubview(dropdown)
+        dropdown.frame = NSRect(x: 20, y: 400, width: 220, height: 30)
+
+        dropdown.openListForTesting()
+        for _ in 0..<9 { dropdown.moveHighlightForTesting(1) }
+
+        let row = try XCTUnwrap(dropdown.highlightedRowForTesting)
+        let scroll = try XCTUnwrap(row.enclosingScrollView as? FadingScrollView)
+        let frame = row.convert(row.bounds, to: scroll.documentView)
+        XCTAssertGreaterThan(scroll.documentVisibleRect.minY, 0, "precondition: the list has scrolled")
+        XCTAssertGreaterThanOrEqual(
+            scroll.documentVisibleRect.maxY - frame.maxY, scroll.fadeDepth - 0.5,
+            "the highlighted row clears the bottom fade")
+    }
+
     func test_openList_hangsBelowTheButton() {
         let dropdown = Self.dropdown(rows: 3)
         let window = Self.window(height: 400)

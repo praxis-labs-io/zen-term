@@ -179,7 +179,7 @@ final class BranchField: NSView, ThemeReapplying {
         let chrome = Theme.current.chrome
         if rowViews.indices.contains(highlighted) {
             let row = rowViews[highlighted]
-            row.scrollToVisible(row.bounds)
+            popover.reveal(row)
         }
         for (index, row) in rowViews.enumerated() {
             let branch = matches[index]
