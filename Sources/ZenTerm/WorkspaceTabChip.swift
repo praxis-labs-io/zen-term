@@ -279,9 +279,9 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         renameField.currentEditor()?.selectAll(nil)
     }
 
-    @discardableResult
     func commitRename() { endRename(commit: true, refocus: true) }
 
+    @discardableResult
     func cancelRename() -> Bool {
         guard isRenaming else { return false }
         isCancellingRename = true
