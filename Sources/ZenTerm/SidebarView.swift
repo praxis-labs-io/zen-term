@@ -217,15 +217,11 @@ final class SidebarView: NSView {
         end?.isActive = true
     }
 
-    // A status change swaps the row's variant, so the rebuilt row takes the old one's keyboard focus.
     func renderHosts(_ items: [SidebarHostItem]) {
         let byName = Dictionary(uniqueKeysWithValues: items.map { ($0.id.name, $0) })
         var removedFocusedRow = false
-        var refocus: String?
-        for (host, row) in hostRows where byName[host].map(Self.hostVariant) != row.variant {
-            if KeyboardFocus.isFocused(row, in: window) {
-                if byName[host] == nil { removedFocusedRow = true } else { refocus = host }
-            }
+        for (host, row) in hostRows where byName[host] == nil {
+            removedFocusedRow = removedFocusedRow || KeyboardFocus.isFocused(row, in: window)
             row.removeFromSuperview()
             hostRows[host] = nil
         }
@@ -233,7 +229,9 @@ final class SidebarView: NSView {
         for (index, item) in items.enumerated() {
             let row = hostRow(for: item)
             row.setSelected(item.isActive)
-            row.setDetail(Self.hostDetail(item.status))
+            let status = item.status
+            row.setDot({ status.ink }, accessibilityValue: Self.hostStatusWord(status))
+            row.setTitleInk(status == .offline ? { status.ink } : nil)
             guard hostStack.arrangedSubviews.firstIndex(of: row) != index else { continue }
             let isNew = row.superview == nil
             if !isNew { hostStack.removeArrangedSubview(row) }
@@ -242,7 +240,6 @@ final class SidebarView: NSView {
         }
         refreshSections()
         refreshRowHover()
-        if let refocus { focusStop(.host(refocus)) }
         if removedFocusedRow { onLeave?() }
     }
 
@@ -252,11 +249,7 @@ final class SidebarView: NSView {
         return CommandCatalog.spec(for: .selectWorkspace(number)).shortcut
     }
 
-    private static func hostVariant(_ item: SidebarHostItem) -> SettingsNavRow.Variant {
-        item.status == .offline ? .faint : .standard
-    }
-
-    private static func hostDetail(_ status: SSHHostStatus) -> String {
+    private static func hostStatusWord(_ status: SSHHostStatus) -> String {
         switch status {
         case .offline: return "Offline"
         case .online: return "Online"
@@ -268,7 +261,7 @@ final class SidebarView: NSView {
         let host = item.id.name
         if let row = hostRows[host] { return row }
         let id = item.id
-        let row = SettingsNavRow(title: host, variant: Self.hostVariant(item), focusesOnClick: false) {
+        let row = SettingsNavRow(title: host, focusesOnClick: false) {
             [weak self] in self?.onActivateHost?(id)
         }
         row.tooltip = TooltipHost(label: "Open host") { [weak self] in
@@ -383,7 +376,7 @@ final class SidebarView: NSView {
             row.setDetail(item.detail)
             row.setSelected(item.isActive)
             setNewWorktreeButton(on: row, for: item)
-            row.setShowsAttention(item.isWaiting)
+            row.setDot(item.isWaiting ? { AttentionTone.waiting.ink } : nil, accessibilityValue: "Agent waiting")
         }
         if activeRow != previouslyActive { revealActiveRow() }
         refreshRowHover()
