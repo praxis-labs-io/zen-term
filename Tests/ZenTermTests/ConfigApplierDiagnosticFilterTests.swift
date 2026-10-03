@@ -115,7 +115,8 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
         applier.surfaceConfigNotices()
 
         XCTAssertEqual(announced.count, 1, "\(announced)")
-        XCTAssertTrue(announced[0].message.contains("frobnicate"), announced[0].message)
+        let message = try XCTUnwrap(announced.first?.message)
+        XCTAssertTrue(message.contains("frobnicate"), message)
     }
 
     func test_aMixedConfig_announcesOnlyTheProblem() throws {
@@ -125,8 +126,9 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
         applier.surfaceConfigNotices()
 
         XCTAssertEqual(announced.count, 1, "\(announced)")
-        XCTAssertTrue(announced[0].message.contains("frobnicate"), announced[0].message)
-        XCTAssertFalse(announced[0].message.contains("scroll_to_selection"), announced[0].message)
+        let message = try XCTUnwrap(announced.first?.message)
+        XCTAssertTrue(message.contains("frobnicate"), message)
+        XCTAssertFalse(message.contains("scroll_to_selection"), message)
     }
 
     func test_fixingTheProblem_retractsEvenWithAnExplanationLeft() throws {

@@ -56,8 +56,8 @@ final class UpdateControllerHostingTests: WindowTestCase {
         XCTAssertFalse(titles.contains { $0.contains("is available") }, "stale card not replaced: \(titles)")
     }
 
-    func test_inertNotice_fitsTheToastWrapColumn() {
-        for line in UpdateController.inertNotice.message.split(separator: "\n") {
+    func test_inertNotice_fitsTheToastWrapColumn() throws {
+        for line in try XCTUnwrap(UpdateController.inertNotice.message).split(separator: "\n") {
             let width = (String(line) as NSString)
                 .size(withAttributes: [.font: ToastView.messageFont]).width
             XCTAssertLessThanOrEqual(

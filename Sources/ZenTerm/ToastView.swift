@@ -5,11 +5,11 @@ struct ToastContent: Equatable {
     let title: String
     /// Follows `title` and never truncates, so a long title gives way before it does.
     let titleTail: String?
-    let message: String
+    let message: String?
     let icon: String?
 
     init(
-        variant: ToastVariant, title: String, titleTail: String? = nil, message: String,
+        variant: ToastVariant, title: String, titleTail: String? = nil, message: String?,
         icon: String? = nil
     ) {
         self.variant = variant
@@ -63,7 +63,7 @@ final class ToastView: ShadowCardView {
         self.variant = content.variant
         self.titleLabel = NSTextField(labelWithString: content.title)
         self.titleTailLabel = content.titleTail.map { NSTextField(labelWithString: $0) }
-        self.messageLabel = NSTextField(wrappingLabelWithString: content.message)
+        self.messageLabel = NSTextField(wrappingLabelWithString: content.message ?? "")
         let variant = content.variant
         self.badge = IconBadge(
             symbol: content.icon ?? variant.defaultIcon, accessibilityDescription: content.title, size: .regular,
@@ -100,11 +100,12 @@ final class ToastView: ShadowCardView {
         header.orientation = .horizontal
         header.alignment = .centerY
         header.spacing = 6
-        let col = NSStackView(views: [header, messageLabel])
+        let hasMessage = content.message != nil
+        let col = NSStackView(views: hasMessage ? [header, messageLabel] : [header])
         col.orientation = .vertical
         col.alignment = .leading
         col.spacing = 3
-        messageLabel.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
+        if hasMessage { messageLabel.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true }
         header.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
 
         for resolve in actions.compactMap(\.shortcut) {
@@ -131,13 +132,13 @@ final class ToastView: ShadowCardView {
             row.alignment = .centerY
             row.spacing = 6
             col.addArrangedSubview(row)
-            col.setCustomSpacing(9, after: messageLabel)
+            col.setCustomSpacing(9, after: hasMessage ? messageLabel : header)
             row.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
         }
 
         let root = NSStackView(views: [badge, col])
         root.orientation = .horizontal
-        root.alignment = .top
+        root.alignment = hasMessage || !actions.isEmpty ? .top : .centerY
         root.distribution = .fill
         root.spacing = 12
         root.translatesAutoresizingMaskIntoConstraints = false
