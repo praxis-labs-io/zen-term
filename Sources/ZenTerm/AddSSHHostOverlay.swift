@@ -1,7 +1,7 @@
 import AppKit
 
 final class AddSSHHostOverlay: NSView, ModalOverlay {
-    private let onSubmit: (String) -> Void
+    private let onSubmit: (SSHHostEntry) -> Void
     private let onCancel: () -> Void
 
     private let card = CardView()
@@ -11,10 +11,13 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
     private let hostField = FieldBox(placeholder: "user@host or alias")
     private let hostCaption = FieldCaption("Host", required: true)
     private lazy var hostGroup = LabeledField(caption: hostCaption, control: hostField)
+    private let nameField = FieldBox(placeholder: "Shown in place of the host")
+    private let nameCaption = FieldCaption("Name", required: false)
+    private lazy var nameGroup = LabeledField(caption: nameCaption, control: nameField)
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private let addButton = AppButton(title: "Add", variant: .primary, keyEquivalent: "\r")
 
-    init(background: NSColor, onSubmit: @escaping (String) -> Void, onCancel: @escaping () -> Void) {
+    init(background: NSColor, onSubmit: @escaping (SSHHostEntry) -> Void, onCancel: @escaping () -> Void) {
         self.onSubmit = onSubmit
         self.onCancel = onCancel
         super.init(frame: .zero)
@@ -63,6 +66,10 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         return nil
     }
 
+    static func problem(withName name: String) -> String? {
+        name.contains("\"") ? "Can't contain \"." : nil
+    }
+
     func focusInitialResponder() {
         window?.makeFirstResponder(hostField.field)
         hostField.field.applyThemedCaret()
@@ -95,7 +102,8 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         CardChrome.reapplyTheme(to: card)
         header.textColor = Theme.current.chrome.foreground.nsColor
         hostGroup.reapplyTheme()
-        let controls: [ThemeReapplying] = [hostField, cancelButton, addButton]
+        nameGroup.reapplyTheme()
+        let controls: [ThemeReapplying] = [hostField, nameField, cancelButton, addButton]
         controls.forEach { $0.reapplyTheme() }
     }
 
@@ -103,9 +111,19 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         header.font = .systemFont(ofSize: 15, weight: .semibold)
         header.textColor = Theme.current.chrome.foreground.nsColor
 
-        hostField.onEnter = { [weak self] in self?.submit() }
+        hostField.onEnter = { [weak self] in self?.focus(self?.nameField.field) }
+        hostField.onArrowDown = { [weak self] in self?.focus(self?.nameField.field) }
         hostField.onSubmit = { [weak self] in self?.submit() }
         hostField.onChange = { [weak self] in self?.hostGroup.setMessage(nil) }
+        hostField.onTab = { [weak self] in self?.focus(self?.nameField.field) }
+        hostField.onBacktab = { [weak self] in self?.focus(self?.addButton) }
+
+        nameField.onEnter = { [weak self] in self?.submit() }
+        nameField.onSubmit = { [weak self] in self?.submit() }
+        nameField.onChange = { [weak self] in self?.nameGroup.setMessage(nil) }
+        nameField.onArrowUp = { [weak self] in self?.focus(self?.hostField.field) }
+        nameField.onTab = { [weak self] in self?.focus(self?.cancelButton) }
+        nameField.onBacktab = { [weak self] in self?.focus(self?.hostField.field) }
 
         cancelButton.onTap = { [weak self] in self?.onCancel() }
         addButton.onTap = { [weak self] in self?.submit() }
@@ -117,7 +135,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         cancelButton.onTab = { [weak self] in self?.focus(self?.addButton) }
         addButton.onTab = { [weak self] in self?.focus(self?.hostField.field) }
         addButton.onBacktab = { [weak self] in self?.focus(self?.cancelButton) }
-        cancelButton.onBacktab = { [weak self] in self?.focus(self?.hostField.field) }
+        cancelButton.onBacktab = { [weak self] in self?.focus(self?.nameField.field) }
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -126,7 +144,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         footer.spacing = 8
         footer.translatesAutoresizingMaskIntoConstraints = false
 
-        let content = NSStackView(views: [header, hostGroup, footer])
+        let content = NSStackView(views: [header, hostGroup, nameGroup, footer])
         content.orientation = .vertical
         content.alignment = .leading
         content.spacing = 12
@@ -147,8 +165,15 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         let host = hostField.text.trimmingCharacters(in: .whitespacesAndNewlines)
         if let problem = Self.problem(with: host) {
             hostGroup.setMessage(problem)
+            focus(hostField.field)
             return
         }
-        onSubmit(host)
+        let name = nameField.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let problem = Self.problem(withName: name) {
+            nameGroup.setMessage(problem)
+            focus(nameField.field)
+            return
+        }
+        onSubmit(SSHHostEntry(alias: host, name: name.isEmpty ? nil : name))
     }
 }

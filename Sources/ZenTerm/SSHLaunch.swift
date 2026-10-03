@@ -44,8 +44,8 @@ enum SSHLaunch {
             "-o", "ControlPersist=\(controlPersistSeconds)",
         ]
         switch form {
-        case .loginShell: return options + ["-t", "--", host.name, loginShellCommand]
-        case .plain: return options + ["--", host.name]
+        case .loginShell: return options + ["-t", "--", host.alias, loginShellCommand]
+        case .plain: return options + ["--", host.alias]
         }
     }
 
@@ -68,7 +68,7 @@ enum SSHLaunch {
             "-o", "BatchMode=yes",
             "-o", controlPathOption(controlPath),
             "-O", "check",
-            "--", host.name,
+            "--", host.alias,
         ]
     }
 
@@ -99,6 +99,6 @@ enum SSHLaunch {
     }
 
     private static func digest(of host: SSHHostID) -> String {
-        SHA256.hash(data: Data(host.name.utf8)).prefix(4).map { String(format: "%02x", $0) }.joined()
+        SHA256.hash(data: Data(host.alias.utf8)).prefix(4).map { String(format: "%02x", $0) }.joined()
     }
 }

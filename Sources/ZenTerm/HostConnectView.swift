@@ -21,6 +21,7 @@ final class HostConnectView: NSView {
     private static let eyebrowVisibility = NSStackView.VisibilityPriority(rawValue: 600)
 
     let host: SSHHostID
+    private var name: String
     private let onConnect: () -> Void
     private var status: SSHHostStatus
     private let grid = DotGridView()
@@ -36,10 +37,11 @@ final class HostConnectView: NSView {
     private var gutterConstraints: [NSLayoutConstraint] = []
 
     init(
-        host: SSHHostID, status: SSHHostStatus, destination: String?, onConnect: @escaping () -> Void,
+        host: SSHHostID, name: String, status: SSHHostStatus, destination: String?, onConnect: @escaping () -> Void,
         onFocusRequest: @escaping () -> Void
     ) {
         self.host = host
+        self.name = name
         self.status = status
         self.onConnect = onConnect
         route = HostRouteView()
@@ -48,7 +50,6 @@ final class HostConnectView: NSView {
         panel = PanelHostView(content: content, meta: nil, onFocusRequest: onFocusRequest)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        connectButton.setAccessibilityLabel("Connect to \(host.name)")
 
         eyebrow.maximumNumberOfLines = 1
         title.maximumNumberOfLines = 1
@@ -126,6 +127,13 @@ final class HostConnectView: NSView {
         applyDetail()
     }
 
+    func setName(_ name: String) {
+        guard name != self.name else { return }
+        self.name = name
+        applyName()
+        applyDetail()
+    }
+
     func setDestination(_ text: String?) {
         destinationLine.stringValue = text ?? ""
         destinationLine.isHidden = text == nil
@@ -138,9 +146,7 @@ final class HostConnectView: NSView {
         eyebrow.attributedStringValue = Self.line(
             "SSH HOST", font: Self.eyebrowFont, kern: Self.eyebrowKern, color: chrome.ink(.faint),
             breaking: .byClipping)
-        title.attributedStringValue = Self.line(
-            "Connect to \(host.name)", font: Self.titleFont, kern: 0, color: chrome.foreground.nsColor,
-            breaking: .byTruncatingMiddle)
+        applyName()
         destinationLine.textColor = chrome.ink(.muted)
         applyDetail()
         connectButton.reapplyTheme()
@@ -161,9 +167,16 @@ final class HostConnectView: NSView {
         detail.invalidateIntrinsicContentSize()
     }
 
+    private func applyName() {
+        title.attributedStringValue = Self.line(
+            "Connect to \(name)", font: Self.titleFont, kern: 0, color: Theme.current.chrome.foreground.nsColor,
+            breaking: .byTruncatingMiddle)
+        connectButton.setAccessibilityLabel("Connect to \(name)")
+    }
+
     private func applyDetail() {
         detail.stringValue =
-            status == .offline ? "\(host.name) appears offline. Connect anyway?" : "Signs in with your ssh config."
+            status == .offline ? "\(name) appears offline. Connect anyway?" : "Signs in with your ssh config."
         detail.textColor = Theme.current.chrome.ink(.muted)
     }
 

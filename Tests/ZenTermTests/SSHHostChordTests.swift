@@ -42,12 +42,12 @@ final class SSHHostChordTests: WindowTestCase {
     private func makeWindow(hosts: [String], offline: [String] = [], connected: [String] = []) -> WindowController {
         self.hosts = hosts
         var config = GeneralConfig.builtIn
-        config.sshHosts = hosts
+        config.sshHosts = hosts.map { SSHHostEntry(alias: $0) }
         GeneralConfig.setCurrentForTesting(config)
         for host in hosts where !offline.contains(host) {
-            SSHHostStatusCenter.shared.setReachable(true, host: SSHHostID(name: host))
+            SSHHostStatusCenter.shared.setReachable(true, host: SSHHostID(alias: host))
         }
-        for host in connected { SSHHostStatusCenter.shared.setConnected(true, host: SSHHostID(name: host)) }
+        for host in connected { SSHHostStatusCenter.shared.setConnected(true, host: SSHHostID(alias: host)) }
         let c = WindowController(contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
         controllers.append(c)
         c.mountAndStart()
@@ -69,7 +69,7 @@ final class SSHHostChordTests: WindowTestCase {
         row.mouseDown(with: event)
     }
 
-    private func selected(_ c: WindowController) -> String? { c.selectedHostForTesting?.name }
+    private func selected(_ c: WindowController) -> String? { c.selectedHostForTesting?.alias }
 
     func test_aWorkspaceNumber_reachesAConnectedHost_pastHostsThatAreNotConnected() {
         let c = makeWindow(hosts: ["down", "up", "live"], offline: ["down"], connected: ["live"])
@@ -163,13 +163,13 @@ final class SSHHostChordTests: WindowTestCase {
         let row = try row("devbox", in: c)
         XCTAssertEqual(row.titleInkForTesting, AttentionTone.idle.ink)
 
-        SSHHostStatusCenter.shared.setReachable(true, host: SSHHostID(name: "devbox"))
+        SSHHostStatusCenter.shared.setReachable(true, host: SSHHostID(alias: "devbox"))
 
         XCTAssertTrue(try self.row("devbox", in: c) === row, "the row is repainted, not rebuilt")
         XCTAssertEqual(try status("devbox", in: c), "Online")
         XCTAssertEqual(row.titleInkForTesting, AttentionTone.idle.ink)
 
-        SSHHostStatusCenter.shared.setConnected(true, host: SSHHostID(name: "devbox"))
+        SSHHostStatusCenter.shared.setConnected(true, host: SSHHostID(alias: "devbox"))
 
         XCTAssertEqual(try status("devbox", in: c), "Connected")
         XCTAssertEqual(row.titleInkForTesting, Theme.current.chrome.foreground.nsColor)
@@ -179,7 +179,7 @@ final class SSHHostChordTests: WindowTestCase {
         let c = makeWindow(hosts: ["devbox"])
         let online = try row("devbox", in: c)
 
-        SSHHostStatusCenter.shared.setConnected(true, host: SSHHostID(name: "devbox"))
+        SSHHostStatusCenter.shared.setConnected(true, host: SSHHostID(alias: "devbox"))
 
         XCTAssertTrue(try row("devbox", in: c) === online, "the row is repainted, not rebuilt")
         XCTAssertEqual(online.dotColorForTesting, SSHHostStatus.connected.ink.cgColor)
@@ -199,7 +199,7 @@ final class SSHHostChordTests: WindowTestCase {
     func test_aHostDisconnecting_takesItsNumberAndRedrawsItsRow() throws {
         let c = makeWindow(hosts: ["devbox"], connected: ["devbox"])
 
-        SSHHostStatusCenter.shared.setConnected(false, host: SSHHostID(name: "devbox"))
+        SSHHostStatusCenter.shared.setConnected(false, host: SSHHostID(alias: "devbox"))
 
         XCTAssertEqual(try status("devbox", in: c), "Online")
         XCTAssertNil(try row("devbox", in: c).tooltip?.shortcutForTesting)
@@ -211,7 +211,7 @@ final class SSHHostChordTests: WindowTestCase {
         let c = makeWindow(hosts: ["devbox", "other"])
         XCTAssertTrue(c.sidebarForTesting.focusStop(.host("devbox")))
 
-        SSHHostStatusCenter.shared.setReachable(false, host: SSHHostID(name: "devbox"))
+        SSHHostStatusCenter.shared.setReachable(false, host: SSHHostID(alias: "devbox"))
 
         XCTAssertEqual(c.sidebarForTesting.focusedStop, .host("devbox"))
         XCTAssertTrue(c.window.firstResponder === (try row("devbox", in: c)))
@@ -219,7 +219,7 @@ final class SSHHostChordTests: WindowTestCase {
 
     private func configure(hosts: [String]) {
         var config = GeneralConfig.current
-        config.sshHosts = hosts
+        config.sshHosts = hosts.map { SSHHostEntry(alias: $0) }
         GeneralConfig.setCurrentForTesting(config)
         NotificationCenter.default.post(
             name: .configDidChange, object: nil, userInfo: [ConfigChange.userInfoKey: ConfigChange.sshHosts])
@@ -311,11 +311,11 @@ final class SSHHostChordTests: WindowTestCase {
         c.handle(.selectWorkspace(2))
         XCTAssertNil(selected(c), "an unanswered host is not a stop")
 
-        SSHHostStatusCenter.shared.setReachable(true, host: SSHHostID(name: "fresh"))
+        SSHHostStatusCenter.shared.setReachable(true, host: SSHHostID(alias: "fresh"))
         c.handle(.selectWorkspace(2))
         XCTAssertNil(selected(c), "an online host is not a stop either")
 
-        SSHHostStatusCenter.shared.setConnected(true, host: SSHHostID(name: "fresh"))
+        SSHHostStatusCenter.shared.setConnected(true, host: SSHHostID(alias: "fresh"))
         c.handle(.selectWorkspace(2))
         XCTAssertEqual(selected(c), "fresh")
     }

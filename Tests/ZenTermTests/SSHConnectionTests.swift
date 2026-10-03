@@ -4,7 +4,7 @@ import XCTest
 @testable import ZenTerm
 
 final class SSHConnectionTests: XCTestCase {
-    private let host = SSHHostID(name: "devbox")
+    private let host = SSHHostID(alias: "devbox")
     private var fake: FakeSSHWatchers!
     private var connection: SSHConnection!
     private var connectedChanges: [Bool] = []
@@ -451,7 +451,7 @@ final class SSHConnectionTests: XCTestCase {
         let (path, _) = try socketFile(listening: false)
         defer { unlink(path.path) }
 
-        let pid = SSHConnection.Watchers.master(of: SSHHostID(name: "zt-test.invalid"), at: path)
+        let pid = SSHConnection.Watchers.master(of: SSHHostID(alias: "zt-test.invalid"), at: path)
 
         XCTAssertNil(pid)
         XCTAssertFalse(FileManager.default.fileExists(atPath: path.path), "a refused socket is stale and must go")
@@ -464,7 +464,7 @@ final class SSHConnectionTests: XCTestCase {
             unlink(path.path)
         }
 
-        let pid = SSHConnection.Watchers.master(of: SSHHostID(name: "zt-test.invalid"), at: path)
+        let pid = SSHConnection.Watchers.master(of: SSHHostID(alias: "zt-test.invalid"), at: path)
 
         XCTAssertNil(pid)
         XCTAssertTrue(FileManager.default.fileExists(atPath: path.path), "a socket that still answers is never removed")

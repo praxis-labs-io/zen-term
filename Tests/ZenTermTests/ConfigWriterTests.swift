@@ -447,4 +447,36 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(keymap[Chord(command: true, shift: true, key: "\\")], .splitVertical)
         XCTAssertNil(keymap[Chord(command: true, shift: true, key: "u")])
     }
+
+    func test_sshHosts_replaceTheBlockWhereItsFirstLineStood_keepingEachHostsComment() throws {
+        let dir = tempDirPath()
+        try seed("theme = a\nssh-host = devbox  # the build box\nfont-size = 14\nssh-host = prod\n", in: dir)
+        try ConfigWriter.apply(
+            sshHosts: [SSHHostEntry(alias: "prod"), SSHHostEntry(alias: "devbox", name: "Build box")], configRoot: dir)
+        XCTAssertEqual(
+            try read(dir),
+            "theme = a\nssh-host = prod\nssh-host = devbox: Build box  # the build box\nfont-size = 14\n")
+    }
+
+    func test_sshHosts_insertAfterTheCommentedExamples_andAnEmptyListRemovesEveryLine() throws {
+        let dir = tempDirPath()
+        try seed("# ssh-host = devbox\n# ssh-host = prod: Production\ntheme = a\n", in: dir)
+        try ConfigWriter.apply(sshHosts: [SSHHostEntry(alias: "devbox")], configRoot: dir)
+        XCTAssertEqual(
+            try read(dir), "# ssh-host = devbox\n# ssh-host = prod: Production\nssh-host = devbox\ntheme = a\n")
+        try ConfigWriter.apply(sshHosts: [], configRoot: dir)
+        XCTAssertEqual(try read(dir), "# ssh-host = devbox\n# ssh-host = prod: Production\ntheme = a\n")
+    }
+
+    func test_sshHosts_roundTripThroughTheParser_quotingANameWithAHash() throws {
+        let dir = tempDirPath()
+        let hosts = [
+            SSHHostEntry(alias: "devbox", name: "Box #2"), SSHHostEntry(alias: "deploy@fe80::1", name: "Router"),
+            SSHHostEntry(alias: "prod"),
+        ]
+        try ConfigWriter.apply(sshHosts: hosts, configRoot: dir)
+        let text = try read(dir)
+        XCTAssertTrue(text.contains("ssh-host = devbox: \"Box #2\"\n"), text)
+        XCTAssertEqual(ConfigLoader.loadGeneralConfig(configRoot: dir).sshHosts, hosts)
+    }
 }

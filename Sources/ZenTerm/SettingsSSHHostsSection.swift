@@ -50,6 +50,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     private var listing: Listing?
     private var destinations: [String: String] = [:]
     private var removed: Set<String> = []
+    private var dropped: [String: SSHHostEntry] = [:]
     private var orderBeforeRemovals: [String]?
     private var hostRows: [HostRow] = []
     private let addButton = AppButton(title: "＋ Add Host…", variant: .muted)
@@ -104,6 +105,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         listing = nil
         destinations = [:]
         removed = []
+        dropped = [:]
         orderBeforeRemovals = nil
         populate()
         mountGeneration += 1
@@ -119,7 +121,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private func land(_ config: SSHConfigHosts.Listing, generation: Int) {
-        let typed = GeneralConfig.current.sshHosts.filter { !config.aliases.contains($0) }
+        let typed = GeneralConfig.current.sshHostAliases.filter { !config.aliases.contains($0) }
         listing = Listing(aliases: config.aliases, typed: typed, isConfigUnreadable: config.isUnreadable)
         populate(focusing: hostToFocus.map { .host($0) })
         hostToFocus = nil
@@ -142,7 +144,7 @@ final class SettingsSSHHostsSection: SettingsSection {
             if !listing.aliases.isEmpty || listing.isConfigUnreadable {
                 addCaption("SSH config", to: stack)
                 if listing.isConfigUnreadable { addNote("Couldn't read ~/.ssh/config.", to: stack) }
-                let enabled = GeneralConfig.current.sshHosts
+                let enabled = GeneralConfig.current.sshHostAliases
                 for alias in listing.aliases { add(makeToggleRow(alias, isOn: enabled.contains(alias)), to: stack) }
             }
             if !listing.typed.isEmpty {
@@ -190,14 +192,20 @@ final class SettingsSSHHostsSection: SettingsSection {
         hostRow.row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
 
+    private func label(of host: String) -> String {
+        GeneralConfig.current.sshHosts.first { $0.alias == host }?.name ?? dropped[host]?.name ?? host
+    }
+
     private func destination(of host: String) -> String? {
-        destinations[host].flatMap { $0 == host ? nil : $0 }
+        let address = destinations[host] ?? host
+        return address == label(of: host) ? nil : address
     }
 
     private func makeToggleRow(_ host: String, isOn: Bool) -> HostRow {
         let toggle = SegmentedControl(options: ["On", "Off"], selectedIndex: isOn ? 0 : 1) { _ in }
         let row = LayoutRow(
-            caption: host, description: destination(of: host), control: toggle, controlNote: nil, controlWidth: nil)
+            caption: label(of: host), description: destination(of: host), control: toggle, controlNote: nil,
+            controlWidth: nil)
         toggle.onChange = { [weak self, weak row, weak toggle] index in
             guard let row, let toggle else { return }
             self?.turn(host, on: index == 0, row: row, toggle: toggle)
@@ -214,7 +222,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         let button = AppButton(title: "Remove", variant: .secondary)
         button.isKeyboardFocusable = true
         let row = LayoutRow(
-            caption: host, description: destination(of: host), control: button, controlNote: nil,
+            caption: label(of: host), description: destination(of: host), control: button, controlNote: nil,
             controlWidth: Self.removalButtonWidth)
         button.onTap = { [weak self, weak row, weak button] in
             guard let self, let row, let button, !Self.isKeyRepeat else { return }
@@ -232,7 +240,10 @@ final class SettingsSSHHostsSection: SettingsSection {
     private func turn(_ host: String, on: Bool, row: LayoutRow, toggle: SegmentedControl) {
         let save = { [weak self] in
             guard let self else { return }
-            if !self.save(row: row, { try SSHHostsWriter.set(host, on: on) }) { toggle.setSelection(on ? 1 : 0) }
+            let saved = self.save(row: row) {
+                on ? try SSHHostsWriter.add(self.restored(host)) : try self.drop(host)
+            }
+            if !saved { toggle.setSelection(on ? 1 : 0) }
         }
         guard !on else { return save() }
         confirmDisconnect(
@@ -243,7 +254,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     private func toggleRemoval(of host: String, row: LayoutRow, button: AppButton) {
         guard !removed.contains(host) else {
             let index = restoredIndex(of: host)
-            guard save(row: row, { try SSHHostsWriter.insert(host, at: index) }) else { return }
+            guard save(row: row, { try SSHHostsWriter.add(restored(host), at: index) }) else { return }
             removed.remove(host)
             return showRemoval(false, of: host, row: row, button: button)
         }
@@ -251,8 +262,8 @@ final class SettingsSSHHostsSection: SettingsSection {
             of: host, by: .removing,
             proceed: { [weak self] in
                 guard let self else { return }
-                let enabled = GeneralConfig.current.sshHosts
-                guard self.save(row: row, { try SSHHostsWriter.set(host, on: false) }) else { return }
+                let enabled = GeneralConfig.current.sshHostAliases
+                guard self.save(row: row, { try self.drop(host) }) else { return }
                 if self.orderBeforeRemovals == nil { self.orderBeforeRemovals = enabled }
                 self.removed.insert(host)
                 self.showRemoval(true, of: host, row: row, button: button)
@@ -263,7 +274,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         of host: String, by disconnecting: Disconnecting, proceed: @escaping () -> Void,
         cancel: @escaping () -> Void
     ) {
-        guard let session = hostSession?(SSHHostID(name: host)), session != .failed, let presentConfirm,
+        guard let session = hostSession?(SSHHostID(alias: host)), session != .failed, let presentConfirm,
             let dismissConfirm
         else { return proceed() }
         let consequence =
@@ -271,8 +282,8 @@ final class SettingsSSHHostsSection: SettingsSection {
             ? "disconnect it and stop everything running in it" : "stop connecting to it and close its tabs"
         presentConfirm(
             ConfirmCard(
-                title: "\(disconnecting.action) \(host)",
-                message: "\(disconnecting.gerund) \(host) will \(consequence).",
+                title: "\(disconnecting.action) \(label(of: host))",
+                message: "\(disconnecting.gerund) \(label(of: host)) will \(consequence).",
                 confirmLabel: disconnecting.action, background: Theme.current.chrome.background.nsColor,
                 onCancel: { [weak self] in
                     dismissConfirm {
@@ -288,8 +299,15 @@ final class SettingsSSHHostsSection: SettingsSection {
                 }))
     }
 
+    private func drop(_ host: String) throws {
+        if let entry = GeneralConfig.current.sshHosts.first(where: { $0.alias == host }) { dropped[host] = entry }
+        try SSHHostsWriter.remove(host)
+    }
+
+    private func restored(_ host: String) -> SSHHostEntry { dropped[host] ?? SSHHostEntry(alias: host) }
+
     private func restoredIndex(of host: String) -> Int {
-        let enabled = GeneralConfig.current.sshHosts
+        let enabled = GeneralConfig.current.sshHostAliases
         guard let order = orderBeforeRemovals, let position = order.firstIndex(of: host) else { return enabled.count }
         let next = order[(position + 1)...].first { enabled.contains($0) }
         return next.flatMap { enabled.firstIndex(of: $0) } ?? enabled.count
@@ -304,7 +322,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     private func showRemoval(_ isRemoved: Bool, of host: String, row: LayoutRow, button: AppButton) {
         row.isDimmed = isRemoved
         button.setTitle(isRemoved ? "Undo" : "Remove")
-        button.setAccessibilityLabel(isRemoved ? "Undo removing \(host)" : "Remove \(host)")
+        button.setAccessibilityLabel(isRemoved ? "Undo removing \(label(of: host))" : "Remove \(label(of: host))")
     }
 
     private func save(row: LayoutRow, _ change: () throws -> Void) -> Bool {

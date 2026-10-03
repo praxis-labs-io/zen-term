@@ -71,10 +71,11 @@ final class SSHHostProbe {
     }
 
     func setHosts(_ next: [String]) {
+        guard next != hosts else { return }
         for host in hosts where !next.contains(host) {
             proxied.remove(host)
-            center.setReachable(false, host: SSHHostID(name: host))
-            center.setDestination(nil, host: SSHHostID(name: host))
+            center.setReachable(false, host: SSHHostID(alias: host))
+            center.setDestination(nil, host: SSHHostID(alias: host))
         }
         let added = next.filter { !hosts.contains($0) }
         hosts = next
@@ -92,7 +93,7 @@ final class SSHHostProbe {
         pendingSettle?.cancel()
         guard isUp else {
             for host in hosts where !proxied.contains(host) {
-                center.setReachable(false, host: SSHHostID(name: host))
+                center.setReachable(false, host: SSHHostID(alias: host))
             }
             return
         }
@@ -187,7 +188,7 @@ final class SSHHostProbe {
             configStamp = stamp
         }
         let isNetworkUp = self.isNetworkUp
-        for host in targets where !inFlight.contains(host) && center.status(of: SSHHostID(name: host)) != .connected {
+        for host in targets where !inFlight.contains(host) && center.status(of: SSHHostID(alias: host)) != .connected {
             inFlight.insert(host)
             let generation = self.generation
             let cached = resolutions[host]
@@ -220,8 +221,8 @@ final class SSHHostProbe {
         guard !isStale else { return probe([host]) }
         resolutions[host] = resolution
         if endpoint == .proxied { proxied.insert(host) } else { proxied.remove(host) }
-        center.setReachable(answer.isReachable, host: SSHHostID(name: host))
-        center.setDestination(resolution?.destination, host: SSHHostID(name: host))
+        center.setReachable(answer.isReachable, host: SSHHostID(alias: host))
+        center.setDestination(resolution?.destination, host: SSHHostID(alias: host))
     }
 
     private static func describe(_ endpoint: SSHHostResolver.Endpoint?) -> String {

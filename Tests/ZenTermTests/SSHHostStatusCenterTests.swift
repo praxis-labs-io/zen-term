@@ -3,7 +3,7 @@ import XCTest
 @testable import ZenTerm
 
 final class SSHHostStatusCenterTests: XCTestCase {
-    private let devbox = SSHHostID(name: "devbox")
+    private let devbox = SSHHostID(alias: "devbox")
     private var posts = 0
     private var observer: NSObjectProtocol?
 
