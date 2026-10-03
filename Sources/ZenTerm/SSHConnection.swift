@@ -16,6 +16,7 @@ final class SSHConnection {
         var resolveMaster: (_ host: SSHHostID, _ path: URL, _ found: @escaping @MainActor (pid_t?) -> Void) -> Void
         var awaitExit: (_ pid: pid_t, _ exited: @escaping @MainActor () -> Void) -> () -> Void
         var after: (_ delay: TimeInterval, _ work: @escaping @MainActor () -> Void) -> Void
+        var endMaster: (_ pid: pid_t) -> Void
     }
 
     // A socket that answers no check would otherwise re-fire its watch at once and spin `ssh -O check`.
@@ -41,6 +42,8 @@ final class SSHConnection {
     private var stopWatching: (() -> Void)?
     private var isShutDown = false
     private var failedChecks = 0
+    private var masterPID: pid_t?
+    private var isMasterEnded = false
 
     #if DEBUG
         static var watchersOverrideForTesting: Watchers?
@@ -101,6 +104,14 @@ final class SSHConnection {
         if wasConnected { onConnectedChange?(false) }
     }
 
+    func endMaster() {
+        guard !isMasterEnded else { return }
+        isMasterEnded = true
+        if let masterPID { return watchers.endMaster(masterPID) }
+        let end = watchers.endMaster
+        watchers.resolveMaster(host, controlPath) { pid in pid.map(end) }
+    }
+
     private func resolvedBeforeLogin(_ pid: pid_t?) {
         guard !isShutDown, state == .connecting, login != nil else { return }
         guard let pid else { return awaitSocket() }
@@ -154,6 +165,7 @@ final class SSHConnection {
         Log.info("ssh connection up (master pid \(pid))", category: .workspace)
         state = .connected
         failedChecks = 0
+        masterPID = pid
         let unlaunchedLogin = isLoginLaunched ? nil : login
         login = nil
         stopWatching?()
@@ -168,6 +180,7 @@ final class SSHConnection {
         guard !isShutDown, state == .connected else { return }
         Log.info("ssh connection ended", category: .workspace)
         state = .connecting
+        masterPID = nil
         stopWatching = nil
         onConnectedChange?(false)
     }
@@ -191,6 +204,13 @@ extension SSHConnection.Watchers {
         Log.info("ssh: removing a control socket no master answers on", category: .workspace)
         unlink(path.path)
         return nil
+    }
+
+    nonisolated static func isSSH(_ pid: pid_t) -> Bool {
+        guard pid > 1 else { return false }
+        var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+        guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return false }
+        return String(cString: buffer) == SSHLaunch.executable
     }
 
     static let live = SSHConnection.Watchers(
@@ -220,5 +240,12 @@ extension SSHConnection.Watchers {
         },
         after: { delay, work in
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { work() }
+        },
+        endMaster: { pid in
+            guard isSSH(pid) else {
+                return Log.info("ssh: pid \(pid) is no longer ssh, so it is left running", category: .workspace)
+            }
+            kill(pid, SIGTERM)
+            Log.info("ssh connection ended (master pid \(pid))", category: .workspace)
         })
 }

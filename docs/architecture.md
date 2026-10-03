@@ -117,7 +117,8 @@ share `SystemReport`, and never carry the environment or config.
   and only leaderless sessions are swept.
 - **Quit drives teardown by hand.** `windowWillClose` does not fire on termination, so
   `applicationShouldTerminate` tears down every window and waits (capped) on
-  `ShellSessionReaper.drainForQuit` and the worktree removal tracker.
+  `ShellSessionReaper.drainForQuit` and the worktree removal tracker. An SSH master runs in a
+  session of its own, so the reaper never sees it: each host's teardown ends it itself.
 - **Every input event libghostty sees is an explicit `NSView` override.** Nothing
   catches the rest, so a missing override drops events silently. Modifier events carry
   which side moved (`ghosttySidedMods`, key events only; mouse callbacks take unsided
@@ -595,6 +596,11 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   left alone. A login that ends before the socket drops the waiting surfaces and
   closes the workspace back to Connect. Closing a host's last pane, tab or workspace returns
   to Connect and never counts as closing the window, even when the host is all the window holds.
+- **A host's workspace ends its master when it shuts down, after its surfaces.** Ending it first
+  makes every live pane exit 255 into the exit flows. `SSHConnection.endMaster` sends `SIGTERM` to
+  the pid the exit source watched (a clean disconnect, and ssh removes its socket), or resolves the
+  socket with `ssh -O check` when none is known yet. It never relies on `ControlPersist`, and it
+  signals only a pid whose executable is `/usr/bin/ssh`, so a recycled pid is left alone.
 - **Writers go through `ConfigFileIO`:** never treat an unreadable file as empty, and
   write through symlinks. `ConfigWriter` preserves comments and unknown keys.
 

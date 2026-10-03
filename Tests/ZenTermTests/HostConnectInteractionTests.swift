@@ -269,6 +269,35 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertNotEqual(SSHHostStatusCenter.shared.status(of: host), .connected)
     }
 
+    private func recordPanesAtMasterEnd() -> () -> [Bool] {
+        var panesGone: [Bool] = []
+        fake.onEnd = { [unowned self] in panesGone.append(spawned.allSatisfy(\.terminated)) }
+        return { panesGone }
+    }
+
+    func test_closingAHostsLastPane_endsItsMaster_afterItsPanesAreGone() throws {
+        let (c, _) = try connected()
+        fake.connect(pid: 42)
+        let panesGone = recordPanesAtMasterEnd()
+
+        c.handle(.closePane)
+
+        XCTAssertEqual(fake.ended, [42])
+        XCTAssertEqual(panesGone(), [true], "ending the master first makes every live pane exit 255")
+    }
+
+    func test_closingTheWindow_endsAConnectedHostsMaster_afterItsPanesAreGone() throws {
+        let (c, _) = try connected()
+        c.handle(.newTab)
+        fake.connect(pid: 42)
+        let panesGone = recordPanesAtMasterEnd()
+
+        c.tearDownForQuit()
+
+        XCTAssertEqual(fake.ended, [42])
+        XCTAssertEqual(panesGone(), [true])
+    }
+
     func test_closingTheLastLocalWorkspace_landsOnTheConnectedHost() throws {
         let (c, _) = try connected()
         fake.connect()

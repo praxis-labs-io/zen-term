@@ -81,5 +81,6 @@ final class WorkspaceController {
         for controller in controllerByTab.values { controller.shutdown() }
         controllerByTab.removeAll()
         titleByTab.removeAll()
+        connection?.endMaster()
     }
 }
