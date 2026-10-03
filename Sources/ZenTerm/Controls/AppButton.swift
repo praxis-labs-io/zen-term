@@ -1,20 +1,7 @@
 import AppKit
 
 final class AppButton: NSButton {
-    enum Variant { case primary, secondary, muted, destructive, segment, link, filled }
-
-    private struct Metrics {
-        let height: CGFloat
-        let horizontalPadding: CGFloat
-        let cornerRadius: CGFloat
-        let fontSize: CGFloat
-        let keycapGap: CGFloat
-    }
-
-    private static let standardMetrics = Metrics(
-        height: 26, horizontalPadding: 8, cornerRadius: 6, fontSize: 12, keycapGap: 6)
-    private static let filledMetrics = Metrics(
-        height: 38, horizontalPadding: 18, cornerRadius: 10, fontSize: 13, keycapGap: 10)
+    enum Variant { case primary, secondary, muted, destructive, segment, link }
 
     var onTap: () -> Void
     var isOn = false { didSet { restyle() } }
@@ -35,48 +22,31 @@ final class AppButton: NSButton {
     private var isFocusedStop = false { didSet { restyle() } }
     private var trackingAreaRef: NSTrackingArea?
 
-    private let metrics: Metrics
-    private let keycap: KeycapView?
+    private let horizontalPadding: CGFloat = 8
+    private let height: CGFloat = 26
 
     override var isEnabled: Bool { didSet { restyle() } }
 
     override var intrinsicContentSize: NSSize {
         var size = super.intrinsicContentSize
-        size.width += metrics.horizontalPadding * 2 + keycapReserve
-        size.height = metrics.height
+        size.width += horizontalPadding * 2
+        size.height = height
         return size
     }
 
-    private var keycapReserve: CGFloat {
-        guard let keycap else { return 0 }
-        return metrics.keycapGap + keycap.intrinsicContentSize.width
-    }
-
     init(
-        title: String = "", variant: Variant, symbol: String? = nil, shortcut: String? = nil,
-        keyEquivalent: String = "", keyEquivalentModifierMask: NSEvent.ModifierFlags = [],
-        onTap: @escaping () -> Void = {}
+        title: String = "", variant: Variant, symbol: String? = nil, keyEquivalent: String = "",
+        keyEquivalentModifierMask: NSEvent.ModifierFlags = [], onTap: @escaping () -> Void = {}
     ) {
         self.onTap = onTap
         self.variant = variant
         self.symbolName = symbol
         self.labelText = title
-        self.metrics = variant == .filled ? Self.filledMetrics : Self.standardMetrics
-        self.keycap = shortcut.map { KeycapView(shortcut: $0) }
         super.init(frame: .zero)
-        if keycap != nil { cell = KeycapClearingCell() }
         translatesAutoresizingMaskIntoConstraints = false
         isBordered = false
         wantsLayer = true
-        layer?.cornerRadius = metrics.cornerRadius
-        if let keycap {
-            addSubview(keycap)
-            NSLayoutConstraint.activate([
-                keycap.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -metrics.horizontalPadding),
-                keycap.centerYAnchor.constraint(equalTo: centerYAnchor),
-            ])
-            (cell as? KeycapClearingCell)?.trailingReserve = keycapReserve
-        }
+        layer?.cornerRadius = 6
         setButtonType(.momentaryChange)
         if let symbol {
             let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
@@ -98,10 +68,7 @@ final class AppButton: NSButton {
         restyle()
     }
 
-    func reapplyTheme() {
-        keycap?.reapplyTheme()
-        restyle()
-    }
+    func reapplyTheme() { restyle() }
 
     override var acceptsFirstResponder: Bool { isKeyboardFocusable && isEnabled }
 
@@ -177,25 +144,18 @@ final class AppButton: NSButton {
                 isFocusedStop
                 ? chrome.accent.nsColor : (isHovered ? chrome.foreground.nsColor : chrome.muted.nsColor)
             background = .clear
-        case .filled:
-            textColor = isEnabled ? chrome.background.nsColor : chrome.ink(.faint)
-            let solid = chrome.accent.nsColor
-            let lifted = ChromeTheme.surface(tint: chrome.fill(.hover), over: solid)
-            background = isEnabled ? (isHovered ? lifted : solid) : chrome.fill(.rest)
         }
         layer?.backgroundColor = background.cgColor
-        keycap?.tone = variant == .filled && isEnabled ? .inverse : .plain
         let outlined = (isFocusedStop || showsFocusOutline) && variant != .link
         layer?.borderWidth = outlined ? 1.5 : 0
-        let ring = variant == .filled ? chrome.foreground : chrome.accent
-        layer?.borderColor = outlined ? ring.nsColor.cgColor : nil
+        layer?.borderColor = outlined ? chrome.accent.nsColor.cgColor : nil
         if symbolName != nil {
             contentTintColor = textColor
         } else {
             let isLink = variant == .link
             var attributes: [NSAttributedString.Key: Any] = [
                 .foregroundColor: textColor,
-                .font: NSFont.systemFont(ofSize: isLink ? 13 : metrics.fontSize, weight: isLink ? .regular : .semibold),
+                .font: NSFont.systemFont(ofSize: isLink ? 13 : 12, weight: isLink ? .regular : .semibold),
             ]
             if isLink, isFocusedStop { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
             attributedTitle = NSAttributedString(string: labelText, attributes: attributes)
@@ -208,14 +168,4 @@ final class AppButton: NSButton {
     }
 
     @objc private func fire() { onTap() }
-
-    var keycapForTesting: KeycapView? { keycap }
-}
-
-private final class KeycapClearingCell: NSButtonCell {
-    var trailingReserve: CGFloat = 0
-
-    override func drawTitle(_ title: NSAttributedString, withFrame frame: NSRect, in controlView: NSView) -> NSRect {
-        super.drawTitle(title, withFrame: frame.offsetBy(dx: -trailingReserve / 2, dy: 0), in: controlView)
-    }
 }

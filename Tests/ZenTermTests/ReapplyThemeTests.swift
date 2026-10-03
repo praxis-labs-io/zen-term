@@ -68,20 +68,6 @@ final class ReapplyThemeTests: WindowTestCase {
         XCTAssertNotEqual(colorBefore, attributedTitleColor(button))
     }
 
-    func test_reapplyTheme_recolorsAFilledButtonsKeycap() throws {
-        let button = AppButton(title: "Connect", variant: .filled, shortcut: "⏎") {}
-        let window = makeWindow()
-        window.contentView?.addSubview(button)
-        let keycap = try XCTUnwrap(button.keycapForTesting)
-        let fillBefore = keycap.layer?.backgroundColor
-
-        Theme.setCurrentForTesting(try makeAlternateTheme())
-        button.reapplyTheme()
-
-        XCTAssertNotEqual(fillBefore, keycap.layer?.backgroundColor)
-        XCTAssertEqual(keycap.layer?.backgroundColor, KeycapView.Tone.inverse.fill.cgColor)
-    }
-
     func test_reapplyTheme_recolorsConfirmCardListStatus() throws {
         let list = ConfirmCardList(rows: [
             .entry(

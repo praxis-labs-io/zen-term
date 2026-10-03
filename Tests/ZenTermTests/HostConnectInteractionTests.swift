@@ -1071,12 +1071,10 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(panel.paintedBackgroundForTesting.ring.alphaComponent, 0.5, accuracy: 0.01)
     }
 
-    func test_theConnectButton_isTheFilledButton_withItsReturnKeycap_andNoOutlineOfItsOwn() throws {
+    func test_theConnectButton_isTheFilledPrimaryButton_withNoOutlineOfItsOwn() throws {
         let c = onConnectScreen()
         let button = try XCTUnwrap(c.connectViewForTesting).connectButtonForTesting
 
-        XCTAssertEqual(button.layer?.backgroundColor, Theme.current.chrome.accent.nsColor.cgColor)
-        XCTAssertEqual(button.keycapForTesting?.shortcut, "⏎")
         XCTAssertFalse(button.showsFocusOutline)
         XCTAssertFalse(button.acceptsFirstResponder, "the panel takes ↵, so the button never draws a focus ring")
         XCTAssertEqual(button.layer?.borderWidth, 0)

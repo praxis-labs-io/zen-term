@@ -1,27 +1,6 @@
 import AppKit
 
 final class KeycapView: NSView {
-    enum Tone {
-        case plain
-        case inverse
-
-        var ink: NSColor {
-            let chrome = Theme.current.chrome
-            switch self {
-            case .plain: return chrome.ink(.subtle)
-            case .inverse: return chrome.background.nsColor
-            }
-        }
-
-        var fill: NSColor {
-            let chrome = Theme.current.chrome
-            switch self {
-            case .plain: return chrome.fill(.rest)
-            case .inverse: return chrome.tint(chrome.background, alpha: ChromeTheme.badgeTint)
-            }
-        }
-    }
-
     private static let height: CGFloat = 20
     private static let horizontalInset: CGFloat = 7
     private static let cornerRadius: CGFloat = 6
@@ -37,19 +16,16 @@ final class KeycapView: NSView {
         "⇞": "chevron.up.2", "⇟": "chevron.down.2",
         "⇥": "arrow.right.to.line",
     ]
+    private static var ink: NSColor { Theme.current.chrome.ink(.subtle) }
 
     let shortcut: String
-    var tone: Tone {
-        didSet { if tone != oldValue { reapplyTheme() } }
-    }
     private let showsBackground: Bool
     private let tokenStack: NSStackView
 
-    init(shortcut: String, showsBackground: Bool = true, tone: Tone = .plain) {
+    init(shortcut: String, showsBackground: Bool = true) {
         self.shortcut = shortcut
         self.showsBackground = showsBackground
-        self.tone = tone
-        let stack = NSStackView(views: Self.tokens(for: shortcut, ink: tone.ink))
+        let stack = NSStackView(views: Self.tokens(for: shortcut))
         stack.orientation = .horizontal
         stack.spacing = Self.tokenSpacing
         stack.alignment = .centerY
@@ -57,7 +33,7 @@ final class KeycapView: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = Self.cornerRadius
-        if showsBackground { layer?.backgroundColor = tone.fill.cgColor }
+        if showsBackground { layer?.backgroundColor = Theme.current.chrome.fill(.rest).cgColor }
         translatesAutoresizingMaskIntoConstraints = false
 
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -73,33 +49,31 @@ final class KeycapView: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
     /// Without it a keycap is the elastic view in a stack and stretches into a pill.
     override var intrinsicContentSize: NSSize {
         NSSize(width: tokenStack.fittingSize.width + Self.horizontalInset * 2, height: Self.height)
     }
 
     func reapplyTheme() {
-        if showsBackground { layer?.backgroundColor = tone.fill.cgColor }
+        if showsBackground { layer?.backgroundColor = Theme.current.chrome.fill(.rest).cgColor }
         tokenStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        Self.tokens(for: shortcut, ink: tone.ink).forEach { tokenStack.addArrangedSubview($0) }
+        Self.tokens(for: shortcut).forEach { tokenStack.addArrangedSubview($0) }
         invalidateIntrinsicContentSize()
     }
 
-    private static func tokens(for shortcut: String, ink: NSColor) -> [NSView] {
+    private static func tokens(for shortcut: String) -> [NSView] {
         var views: [NSView] = []
         var run = ""
         func flushRun() {
             if !run.isEmpty {
-                views.append(keyLabel(run, ink: ink))
+                views.append(keyLabel(run))
                 run = ""
             }
         }
         for ch in shortcut {
             if let symbol = glyphSymbols[ch] {
                 flushRun()
-                views.append(modifierIcon(symbol, ink: ink))
+                views.append(modifierIcon(symbol))
             } else {
                 run.append(ch)
             }
@@ -108,7 +82,7 @@ final class KeycapView: NSView {
         return views
     }
 
-    private static func modifierIcon(_ symbol: String, ink: NSColor) -> NSView {
+    private static func modifierIcon(_ symbol: String) -> NSView {
         let view = NSImageView()
         view.image = glyphImage(symbol, pointSize: Self.symbolPointSize)
         view.contentTintColor = ink
@@ -135,7 +109,7 @@ final class KeycapView: NSView {
         return image
     }
 
-    private static func keyLabel(_ text: String, ink: NSColor) -> NSTextField {
+    private static func keyLabel(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text)
         label.font = .monospacedSystemFont(ofSize: Self.labelFontSize, weight: .medium)
         label.textColor = ink
