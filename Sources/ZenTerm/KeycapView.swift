@@ -39,7 +39,9 @@ final class KeycapView: NSView {
     ]
 
     let shortcut: String
-    let tone: Tone
+    var tone: Tone {
+        didSet { if tone != oldValue { reapplyTheme() } }
+    }
     private let showsBackground: Bool
     private let tokenStack: NSStackView
 

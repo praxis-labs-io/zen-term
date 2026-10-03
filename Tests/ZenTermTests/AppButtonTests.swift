@@ -99,4 +99,15 @@ final class AppButtonTests: WindowTestCase {
         XCTAssertEqual(keycap.tone, .inverse)
         XCTAssertEqual(keycap.layer?.backgroundColor, KeycapView.Tone.inverse.fill.cgColor)
     }
+
+    func test_aDisabledFilledButton_dropsItsKeycapsInverseTone() throws {
+        let (button, _, keycap) = try mountFilled()
+
+        button.isEnabled = false
+
+        XCTAssertEqual(keycap.tone, .plain, "an inverse keycap on the disabled fill reads as a dark smudge")
+        XCTAssertEqual(keycap.layer?.backgroundColor, KeycapView.Tone.plain.fill.cgColor)
+        button.isEnabled = true
+        XCTAssertEqual(keycap.tone, .inverse)
+    }
 }

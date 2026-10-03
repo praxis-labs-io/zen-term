@@ -62,7 +62,7 @@ final class AppButton: NSButton {
         self.symbolName = symbol
         self.labelText = title
         self.metrics = variant == .filled ? Self.filledMetrics : Self.standardMetrics
-        self.keycap = shortcut.map { KeycapView(shortcut: $0, tone: variant == .filled ? .inverse : .plain) }
+        self.keycap = shortcut.map { KeycapView(shortcut: $0) }
         super.init(frame: .zero)
         if keycap != nil { cell = KeycapClearingCell() }
         translatesAutoresizingMaskIntoConstraints = false
@@ -184,6 +184,7 @@ final class AppButton: NSButton {
             background = isEnabled ? (isHovered ? lifted : solid) : chrome.fill(.rest)
         }
         layer?.backgroundColor = background.cgColor
+        keycap?.tone = variant == .filled && isEnabled ? .inverse : .plain
         let outlined = (isFocusedStop || showsFocusOutline) && variant != .link
         layer?.borderWidth = outlined ? 1.5 : 0
         let ring = variant == .filled ? chrome.foreground : chrome.accent
