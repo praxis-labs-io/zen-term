@@ -5,26 +5,22 @@ import TerminalKit
 final class IconBadge: NSView {
     enum Size {
         case regular
-        case large
 
         var side: CGFloat {
             switch self {
             case .regular: return 28
-            case .large: return 36
             }
         }
 
         var pointSize: CGFloat {
             switch self {
             case .regular: return 13
-            case .large: return 17
             }
         }
 
         var cornerRadius: CGFloat {
             switch self {
             case .regular: return 7
-            case .large: return 9
             }
         }
     }
