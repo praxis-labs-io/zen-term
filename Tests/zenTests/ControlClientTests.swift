@@ -65,6 +65,21 @@ final class ControlClientTests: XCTestCase {
         }
     }
 
+    func test_anAppSpeakingANewerProtocolIsRefused() {
+        answerOnce { request in
+            Data("{\"v\":\(ControlWire.version + 1),\"id\":\(request.id),\"ok\":true,\"result\":{}}\n".utf8)
+        }
+
+        XCTAssertThrowsError(try ControlClient(path: path, caller: nil).send(.list, expecting: ListResult.self)) {
+            let failure = $0 as? ZenFailure
+            XCTAssertEqual(failure?.exitCode, 1)
+            XCTAssertEqual(
+                failure?.message,
+                "ZenTerm speaks protocol version \(ControlWire.version + 1), and this zen speaks "
+                    + "\(ControlWire.version). Run the zen inside that ZenTerm, at ZenTerm.app/Contents/MacOS/zen.")
+        }
+    }
+
     func test_aHangUpWithoutAnswerIsAConnectionFailure() {
         answerOnce { _ in Data() }
 

@@ -5,8 +5,10 @@ struct Zen: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "zen",
         abstract: "Control a running ZenTerm.",
+        version: BundleVersion.current,
         subcommands: [
             Hello.self, List.self, WorkspaceCommands.self, TabCommands.self, PaneCommands.self, WorktreeCommands.self,
+            Action.self,
         ])
 
     // Parses `--socket` before the subcommand; argument-parser hands the value to the subcommand's own copy.
@@ -36,6 +38,20 @@ struct Zen: ParsableCommand {
         func run() throws {
             let list = try connection.client().send(.list, expecting: ListResult.self)
             print(pretty ? ListTree.text(list) : try JSONOutput.text(list))
+        }
+    }
+
+    struct Action: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Run a keymap action in the key window, as its shortcut would.")
+
+        @OptionGroup var connection: ConnectionOptions
+
+        @Argument(help: "The action's config name, like toggle_sidebar or split_vertical.")
+        var name: String
+
+        func run() throws {
+            _ = try connection.client().send(.action, ControlArgs(name: name), expecting: NoPayload.self)
         }
     }
 

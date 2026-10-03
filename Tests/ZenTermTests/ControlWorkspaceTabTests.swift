@@ -328,6 +328,18 @@ final class ControlWorkspaceTabTests: WindowTestCase {
         XCTAssertTrue(AppDelegate.frontmost(of: controllers, in: []) === first)
     }
 
+    func test_aKeyWindowThatIsNotATerminalLeavesTheFrontmostTerminalAsTheDefaultTarget() {
+        let first = makeWindow()
+        let second = makeWindow()
+        let about = NSWindow()
+
+        let target = AppDelegate.controlTarget(
+            of: controllers, key: about, in: [about, second.window, first.window])
+
+        XCTAssertTrue(target === second)
+        XCTAssertTrue(AppDelegate.controlTarget(of: controllers, key: first.window, in: [second.window]) === first)
+    }
+
     func test_workspaceCloseRefusesTheLastOneAndClosesABackgroundOneQuietly() throws {
         let c = makeWindow()
         XCTAssertEqual(try error(send(.workspaceClose)).details?.closesWindow, true)

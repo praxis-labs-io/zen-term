@@ -15,6 +15,10 @@ final class ZenExitCodeTests: XCTestCase {
         XCTAssertEqual(Zen.exitCode(running: ["list", "--socket", "/tmp/zt-nothing-\(getpid()).sock"]), 3)
     }
 
+    func test_versionIsNotAFailure() {
+        XCTAssertEqual(Zen.exitCode(running: ["--version"]), 0)
+    }
+
     func test_helpIsNotAFailure() {
         XCTAssertEqual(Zen.exitCode(running: ["--help"]), 0)
     }

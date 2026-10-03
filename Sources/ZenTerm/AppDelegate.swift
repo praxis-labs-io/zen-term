@@ -62,7 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configApplier.surfaceConfigNotices()
         ThemePublisher.publish()
 
-        keys.onReservedChord = { [weak self] chord in self?.route(chord) }
+        keys.onReservedChord = { [weak self] chord in self?.route(chord, in: self?.keyController()) }
         keys.onKeyToFocus = { [weak self] in self?.keyController()?.answerTypedAgent() }
         keys.passThroughGuard = { [weak self] chord, action in
             let firstResponder = NSApp.keyWindow?.firstResponder
@@ -90,9 +90,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         navSocket = socket
 
         let responder = ControlResponder(
-            windows: { [weak self] in self?.windows ?? [] }, keyWindow: { [weak self] in self?.keyController() },
+            windows: { [weak self] in self?.windows ?? [] }, keyWindow: { [weak self] in self?.controlTarget() },
             bringForward: { [weak self] in self?.bringForward($0) },
-            isInFront: { NSApp.isActive && $0.window.isKeyWindow }, worktreeRemovals: worktreeRemovals)
+            isInFront: { NSApp.isActive && $0.window.isKeyWindow }, worktreeRemovals: worktreeRemovals,
+            runAction: { [weak self] in self?.route($0, in: self?.controlTarget()) })
         let control = ControlServer { responder.respond(to: $0, reply: $1) }
         control.start()
         controlSocket = control
@@ -123,11 +124,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    private func route(_ chord: KeyInterceptor.ReservedChord) {
+    private func route(_ chord: KeyInterceptor.ReservedChord, in target: WindowController?) {
         if case .newWindow = chord {
-            if let key = keyController(), key.isModalOverlayOpen || key.isConfirmOpen { return }
+            if let target, target.isModalOverlayOpen || target.isConfirmOpen { return }
             newWindow(
-                initialCWD: ShellLaunch.newSessionCWD(focused: keyController()?.sessionCWD),
+                initialCWD: ShellLaunch.newSessionCWD(focused: target?.sessionCWD),
                 centered: false)
             return
         }
@@ -137,7 +138,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if case .checkForUpdates = chord {
             guard let updateController else {
-                keyController()?.showToast(UpdateController.inertNotice)
+                target?.showToast(UpdateController.inertNotice)
                 return
             }
             updateController.checkForUpdates()
@@ -145,24 +146,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         switch chord {
         case .increaseFontSize, .decreaseFontSize, .resetFontSize:
-            if let key = keyController(), key.isModalOverlayOpen || key.isConfirmOpen { return }
+            if let target, target.isModalOverlayOpen || target.isConfirmOpen { return }
             switch chord {
-            case .increaseFontSize: applyFontSize { SessionFontSize.step(by: 1) }
-            case .decreaseFontSize: applyFontSize { SessionFontSize.step(by: -1) }
-            default: applyFontSize { SessionFontSize.reset() }
+            case .increaseFontSize: applyFontSize(showingOn: target) { SessionFontSize.step(by: 1) }
+            case .decreaseFontSize: applyFontSize(showingOn: target) { SessionFontSize.step(by: -1) }
+            default: applyFontSize(showingOn: target) { SessionFontSize.reset() }
             }
-        default: keyController()?.handle(chord)
+        default: target?.handle(chord)
         }
     }
 
     /// App-global because libghostty applies its own font-size binds to the focused surface alone.
-    private func applyFontSize(_ move: () -> Void) {
+    private func applyFontSize(showingOn target: WindowController?, _ move: () -> Void) {
         let before = SessionFontSize.points
         move()
         if SessionFontSize.points != before {
             for window in windows { window.applySessionFontSize() }
         }
-        keyController()?.showFontSize(SessionFontSize.display)
+        target?.showFontSize(SessionFontSize.display)
     }
 
     private func activateTab(windowID: Int, tabID: TabID) {
@@ -193,6 +194,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return windows.first { $0.window === key }
     }
 
+    private func controlTarget() -> WindowController? {
+        Self.controlTarget(of: windows, key: NSApp.keyWindow, in: NSApp.orderedWindows)
+    }
+
+    static func controlTarget(
+        of controllers: [WindowController], key: NSWindow?, in ordered: [NSWindow]
+    ) -> WindowController? {
+        controllers.first { $0.window === key } ?? frontmost(of: controllers, in: ordered)
+    }
+
     static func frontmost(of controllers: [WindowController], in ordered: [NSWindow]) -> WindowController? {
         ordered.lazy.compactMap { window in controllers.first { $0.window === window } }.first ?? controllers.first
     }
@@ -208,7 +219,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let wc = WindowController(contentRect: rect, initialCWD: initialCWD)
         wc.keybindCapturer = keys
         wc.keyModeHost = keys
-        wc.onAppGlobalCommand = { [weak self] chord in self?.route(chord) }
+        wc.onAppGlobalCommand = { [weak self] chord in self?.route(chord, in: self?.keyController()) }
         wc.worktreeRemovals = worktreeRemovals
         wc.onClosedByRemovalAtPath = { [weak self, weak wc] path in
             self?.windows.reduce(ClosedByRemoval()) {

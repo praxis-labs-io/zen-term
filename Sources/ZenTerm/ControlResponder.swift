@@ -10,6 +10,7 @@ struct ControlResponder {
     var isInFront: (WindowController) -> Bool = { _ in false }
     var loadWorkspaces: (@escaping ([Workspace]) -> Void) -> Void = { ConfigLoader.loadWorkspaces(completion: $0) }
     var worktreeRemovals = WorktreeRemovalTracker()
+    var runAction: (KeyInterceptor.ReservedChord) -> Void = { _ in }
 
     func respond(to request: ControlRequest, reply: @escaping (ControlReply) -> Void) {
         switch request.cmd {
@@ -31,6 +32,7 @@ struct ControlResponder {
         case .worktreeList: listWorktrees(request, reply: reply)
         case .worktreeCreate: createWorktree(request, reply: reply)
         case .worktreeRemove: removeWorktree(request, reply: reply)
+        case .action: reply(performAction(request))
         }
     }
 
@@ -173,6 +175,20 @@ struct ControlResponder {
             place.window.removeTab(place.id)
             return .success(NoPayload())
         }
+    }
+
+    private func performAction(_ request: ControlRequest) -> ControlReply {
+        guard let name = request.args.name else {
+            return .failure(ControlError(.badRequest, "action needs the name of a keymap action."))
+        }
+        let actions = KeyInterceptor.ReservedChord.everyAction
+        guard let action = KeyInterceptor.ReservedChord(token: name), actions.contains(action) else {
+            let names = actions.map(\.actionToken).joined(separator: ", ")
+            return .failure(ControlError(.notFound, "There is no action named \(name). The actions are \(names)."))
+        }
+        guard keyWindow() != nil else { return .failure(ControlError(.notFound, "No ZenTerm window is open.")) }
+        runAction(action)
+        return .success(NoPayload())
     }
 
     private func present(_ place: WorkspacePlace, focus: Bool?) -> any ControlPayload {
