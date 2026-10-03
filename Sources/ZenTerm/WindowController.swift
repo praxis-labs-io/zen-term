@@ -1428,7 +1428,8 @@ final class WindowController: NSObject {
             commands: { [weak self] in
                 CommandCatalog.commands(
                     tabCount: self?.activeTabIDs.count ?? 0,
-                    workspaceCount: self?.workspaces.count ?? 0)
+                    workspaceCount: self?.workspaces.count ?? 0,
+                    onHost: self?.selection.host != nil)
             },
             background: Theme.current.chrome.background.nsColor,
             onRun: { [weak self] chord in self?.runCommand(chord) },
@@ -2560,6 +2561,10 @@ final class WindowController: NSObject {
 
     private func abandonLogin(of workspace: WorkspaceController) {
         Log.info("ssh login closed before connecting", category: .workspace)
+        disconnect(workspace)
+    }
+
+    private func disconnect(_ workspace: WorkspaceController) {
         workspace.connection?.shutdown()
         closeTabs(of: workspace)
     }
@@ -2585,7 +2590,10 @@ final class WindowController: NSObject {
     }
 
     private func requestCloseWorkspace(_ workspace: WorkspaceController) {
-        if holdsAwaitingLogin(workspace) { return confirmAbandoningLogin(of: workspace, closing: .workspace) }
+        if workspace.host != nil {
+            Log.info("ssh host disconnected", category: .workspace)
+            return disconnect(workspace)
+        }
         let closesWindow = closesWindow(closing: workspace)
         guard closesWindow || isRunning(workspace: workspace) else {
             closeTabs(of: workspace)

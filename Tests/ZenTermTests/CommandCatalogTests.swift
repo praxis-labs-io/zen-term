@@ -16,6 +16,24 @@ final class CommandCatalogTests: XCTestCase {
         super.tearDown()
     }
 
+    func test_aConnectedHost_listsDisconnect_inPlaceOfCloseWorkspace() {
+        let titles = CommandCatalog.commands(tabCount: 1, workspaceCount: 1, onHost: true).map(\.title)
+
+        XCTAssertTrue(titles.contains("Disconnect"))
+        XCTAssertFalse(titles.contains("Close Workspace"))
+        let disconnect = CommandCatalog.commands(tabCount: 1, workspaceCount: 1, onHost: true)
+            .first { $0.title == "Disconnect" }
+        XCTAssertEqual(disconnect?.chord, .closeWorkspace)
+        XCTAssertEqual(disconnect?.shortcut, CommandCatalog.spec(for: .closeWorkspace).shortcut)
+    }
+
+    func test_aHostsConnectScreen_listsNeitherDisconnectNorCloseWorkspace() {
+        let titles = CommandCatalog.commands(tabCount: 0, workspaceCount: 0, onHost: true).map(\.title)
+
+        XCTAssertFalse(titles.contains("Disconnect"), "there is nothing to disconnect")
+        XCTAssertFalse(titles.contains("Close Workspace"))
+    }
+
     func test_baseCommands_orderAndCount() {
         let names = CommandCatalog.commands(tabCount: 0, workspaceCount: 0)
             .filter { if case .toggleToolFloat = $0.chord { return false } else { return true } }

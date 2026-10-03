@@ -97,7 +97,7 @@ enum CommandCatalog {
         Chord.displayed(chord, in: GeneralConfig.current.keymap)?.displayGlyph ?? ""
     }
 
-    static func commands(tabCount: Int, workspaceCount: Int) -> [PaletteCommand] {
+    static func commands(tabCount: Int, workspaceCount: Int, onHost: Bool = false) -> [PaletteCommand] {
         var chords: [KeyInterceptor.ReservedChord] = ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
         chords += [.newTool]
         chords += [.openSettings, .reloadConfig, .checkForUpdates, .reportIssue]
@@ -105,7 +105,8 @@ enum CommandCatalog {
         if workspaceCount > 0 {
             chords += (1...min(workspaceCount, 9)).map { .selectWorkspace($0) }
         }
-        chords += [.closeWorkspace, .nextWaitingAgent]
+        if !onHost || tabCount > 0 { chords += [.closeWorkspace] }
+        chords += [.nextWaitingAgent]
         chords += [
             .toggleBottomDrawer, .toggleRightDrawer,
             .newTab, .prevTab, .nextTab, .moveTabLeft, .moveTabRight, .renameTab, .closeTab,
@@ -129,7 +130,11 @@ enum CommandCatalog {
             .resetFontSize,
         ]
         chords += [.dismissToast, .dismissAllToasts]
-        return chords.map(spec(for:))
+        return chords.map { onHost && $0 == .closeWorkspace ? disconnect : spec(for: $0) }
+    }
+
+    private static var disconnect: PaletteCommand {
+        workspace("Disconnect", displayGlyph(for: .closeWorkspace), .closeWorkspace)
     }
 
     private static func pane(

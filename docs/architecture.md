@@ -596,6 +596,8 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   left alone. A login that ends before the socket drops the waiting surfaces and
   closes the workspace back to Connect. Closing a host's last pane, tab or workspace returns
   to Connect and never counts as closing the window, even when the host is all the window holds.
+  ⌘⌃W on a host is Disconnect, in the palette too: it never asks, even while connecting, and ↵
+  on Connect reconnects.
 - **A host's workspace ends its master when it shuts down, after its surfaces.** Ending it first
   makes every live pane exit 255 into the exit flows. `SSHConnection.endMaster` sends `SIGTERM` to
   the pid the exit source watched (a clean disconnect, and ssh removes its socket), or resolves the

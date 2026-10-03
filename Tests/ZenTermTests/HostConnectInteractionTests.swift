@@ -298,6 +298,58 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(panesGone(), [true])
     }
 
+    private func pressDisconnect(in c: WindowController) throws {
+        let keys = KeyInterceptor()
+        keys.setKeymap(KeymapDefaults.map)
+        keys.onReservedChord = { c.handle($0) }
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.command, .control], timestamp: 0,
+                windowNumber: c.window.windowNumber, context: nil, characters: "\u{17}",
+                charactersIgnoringModifiers: "w", isARepeat: false, keyCode: 13))
+        XCTAssertNil(keys.route(event), "the chord is claimed, not passed to the pane")
+    }
+
+    func test_cmdCtrlW_onAConnectedHost_disconnectsWithoutAsking_evenWithSomethingRunning() throws {
+        let (c, login) = try connected()
+        fake.connect(pid: 42)
+        login.isBusy = true
+
+        try pressDisconnect(in: c)
+
+        XCTAssertFalse(c.isConfirmOpen, "Disconnect is labeled and ↵ reconnects, so it never asks")
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
+        XCTAssertEqual(c.selectedHostForTesting, host)
+        XCTAssertEqual(fake.ended, [42])
+        XCTAssertTrue(login.terminated)
+        XCTAssertNotEqual(SSHHostStatusCenter.shared.status(of: host), .connected)
+        XCTAssertEqual(c.sidebarForTesting.hostIDs, [host], "the row stays")
+    }
+
+    func test_returnAfterDisconnecting_reconnects() throws {
+        let (c, _) = try connected()
+        fake.connect()
+        try pressDisconnect(in: c)
+        spawned = []
+        fake.answerBeforeLogin = .some(nil)
+
+        try press(36, "\r", in: c)
+        fake.ready?()
+
+        XCTAssertNil(c.connectViewForTesting)
+        XCTAssertEqual(spawned.first?.startCount, 1, "a fresh login starts")
+    }
+
+    func test_thePaletteInAConnectedHost_disconnects() throws {
+        let (c, _) = try connected()
+        fake.connect(pid: 42)
+
+        try runFromPalette("Disconnect", in: c)
+
+        XCTAssertNotNil(c.connectViewForTesting)
+        XCTAssertEqual(fake.ended, [42])
+    }
+
     func test_closingTheLastLocalWorkspace_landsOnTheConnectedHost() throws {
         let (c, _) = try connected()
         fake.connect()
@@ -780,16 +832,18 @@ final class HostConnectInteractionTests: WindowTestCase {
             asking: "Closing this tab will stop connecting to devbox and close its tabs.")
     }
 
-    func test_closingAConnectingHostsWorkspace_asksThenAbandonsQuietly() throws {
-        let (c, login) = try connected()
+    func test_disconnectingWhileConnecting_returnsToConnectAtOnce_withoutAFailureToast() throws {
+        let (c, _) = try connected()
         c.handle(.newTab)
-        let waiting = spawned.last
+        let waiting = try XCTUnwrap(spawned.last)
 
-        c.handle(.closeWorkspace)
+        try pressDisconnect(in: c)
+        fake.connect()
 
-        try assertAbandonsTheLogin(
-            c, login: login, waiting: waiting,
-            asking: "Closing this workspace will stop connecting to devbox and close its tabs.")
+        XCTAssertFalse(c.isConfirmOpen, "Disconnect says what it does, so it never asks")
+        XCTAssertNotNil(c.connectViewForTesting)
+        XCTAssertFalse(showsToast("Couldn't connect to devbox.", in: c), "the user ended it")
+        XCTAssertEqual(waiting.startCount, 0)
     }
 
     func test_closingTheLoginPane_saysTheHostsTabsGoToo() throws {
@@ -828,7 +882,7 @@ final class HostConnectInteractionTests: WindowTestCase {
                 options: [.usesLineFragmentOrigin], attributes: [.font: ToastView.messageFont]
             ).height
         }
-        for target: CloseWarning.LoginTarget in [.pane, .drawer, .tab, .workspace] {
+        for target: CloseWarning.LoginTarget in [.pane, .drawer, .tab] {
             let message = CloseWarning.message(closing: .login(host: "devbox", closing: target), naming: [])
             XCTAssertLessThanOrEqual(height(message), height("One\nTwo"), message)
         }

@@ -442,6 +442,7 @@
 # keybind = next_workspace=cmd+ctrl+]
 # keybind = select_workspace_1=cmd+ctrl+1         # … through select_workspace_9=cmd+ctrl+9
 # keybind = close_workspace=cmd+ctrl+w           # asks first if something runs, or if it is the last
+#                                                # one; on an SSH host, disconnects without asking
 # keybind = next_waiting_agent=cmd+shift+a       # the agent in this window that has waited longest
 #
 # ─── Coming from Ghostty ─────────────────────────────────────────────────────
