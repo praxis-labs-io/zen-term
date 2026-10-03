@@ -9,6 +9,7 @@ struct ControlResponder {
     var bringForward: (WindowController) -> Void = { _ in }
     var isInFront: (WindowController) -> Bool = { _ in false }
     var loadWorkspaces: (@escaping ([Workspace]) -> Void) -> Void = { ConfigLoader.loadWorkspaces(completion: $0) }
+    var worktreeRemovals = WorktreeRemovalTracker()
 
     func respond(to request: ControlRequest, reply: @escaping (ControlReply) -> Void) {
         switch request.cmd {
@@ -27,6 +28,9 @@ struct ControlResponder {
         case .paneClose: reply(closePane(request))
         case .paneSend: reply(sendToPane(request))
         case .paneRead: reply(readPane(request))
+        case .worktreeList: listWorktrees(request, reply: reply)
+        case .worktreeCreate: createWorktree(request, reply: reply)
+        case .worktreeRemove: removeWorktree(request, reply: reply)
         }
     }
 
@@ -73,7 +77,7 @@ struct ControlResponder {
         }
     }
 
-    private static func names(_ entry: Workspace, _ address: String) -> Bool {
+    static func names(_ entry: Workspace, _ address: String) -> Bool {
         switch ControlAddress.Workspace(address) {
         case .folder(let path): return entry.path.standardizedFileURL.path == Self.standardized(path)
         case .host: return false
@@ -186,15 +190,17 @@ struct ControlResponder {
     }
 
     static func refusal(closing name: String, _ stakes: CloseStakes) -> ControlError {
-        let running = stakes.panes.map { $0.title.isEmpty ? "pane \($0.token)" : $0.title } + stakes.floats
         var consequences: [String] = []
         if stakes.closesWindow { consequences.append("close the window") }
-        if stakes.isRunning {
-            consequences.append(running.isEmpty ? "stop what it is running" : "stop \(running.joined(separator: ", "))")
-        }
+        if stakes.isRunning { consequences.append(stopping(stakes.panes, stakes.floats)) }
         return ControlError(
-            .refused, "Closing \(name) would \(consequences.joined(separator: " and ")).",
+            .refused, "Closing \(name) would \(CloseWarning.list(consequences)).",
             details: ControlError.Details(panes: stakes.panes, floats: stakes.floats, closesWindow: stakes.closesWindow)
         )
+    }
+
+    static func stopping(_ panes: [ListResult.Pane], _ floats: [String]) -> String {
+        let running = panes.map { $0.title.isEmpty ? "pane \($0.token)" : $0.title } + floats
+        return running.isEmpty ? "stop what it is running" : "stop \(CloseWarning.list(running))"
     }
 }

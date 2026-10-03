@@ -1579,43 +1579,22 @@ final class WindowController: NSObject {
     private func createWorktree(
         _ request: NewWorktreeOverlay.Request, from target: RepoPickerOverlay.CreateTarget
     ) {
-        let workspace = target.workspace
         let card = modal?.overlay as? NewWorktreeOverlay
         card?.beginWork("Creating \(Self.branchName(of: request))")
-        DispatchQueue.global(qos: .userInitiated).async { [weak self, weak card] in
-            let result: Result<(Workspace, WorktreeOrigin, CarryReport), Error>
-            do {
-                let worktree: Worktree
-                switch request {
-                case .newBranch(let branch, let base):
-                    worktree = try WorktreeStore.create(branch: branch, base: base, in: target.repo)
-                case .existingBranch(let branch):
-                    worktree = try WorktreeStore.create(existingBranch: branch, in: target.repo)
-                }
-                let repoRoot = GitRepo.repoRoot(for: workspace.path)
-                let opened = RepoPickerOverlay.workspace(
-                    for: worktree, parent: workspace, repoRoot: repoRoot)
-                let report = WorktreeCarry.copy(
-                    workspace.carry, from: workspace.path, intoCheckout: worktree.path,
-                    repoRoot: repoRoot,
-                    onEntry: { name in
-                        DispatchQueue.main.async { [weak self, weak card] in
-                            guard let card, self?.isPresenting(card) == true else { return }
-                            card.setPhase("Copying \(name)")
-                        }
-                    })
-                result = .success((opened, WorktreeOrigin(parent: workspace, worktree: worktree), report))
-            } catch {
-                result = .failure(error)
-            }
-            DispatchQueue.main.async { [weak self, weak card] in
+        WorktreeCreation.start(
+            request, from: target,
+            onPhase: { [weak self, weak card] phase in
+                guard let card, self?.isPresenting(card) == true else { return }
+                card.setPhase(phase)
+            },
+            completion: { [weak self, weak card] result in
                 guard let self else { return }
                 let stillUp = card.map(self.isPresenting) ?? false
                 switch result {
-                case .success(let (opened, origin, report)):
+                case .success(let created):
                     if stillUp { self.closeModal() }
-                    self.openWorkspace(opened, origin: origin)
-                    self.reportCarry(report)
+                    self.openWorkspace(created.workspace, origin: created.origin)
+                    self.reportCarry(created.carry)
                 case .failure(let error):
                     if stillUp {
                         card?.failWork(error.localizedDescription)
@@ -1626,8 +1605,7 @@ final class WindowController: NSObject {
                                 message: error.localizedDescription))
                     }
                 }
-            }
-        }
+            })
     }
 
     static func branchName(of request: NewWorktreeOverlay.Request) -> String {
@@ -1645,9 +1623,8 @@ final class WindowController: NSObject {
         func isPresentingForTesting(_ card: NewWorktreeOverlay) -> Bool { isPresenting(card) }
     #endif
 
-    // `.notThere` stays silent: one section covers a repo before and after its first install.
     private func reportCarry(_ report: CarryReport) {
-        let lost = report.skipped.filter { $0.reason != .notThere }
+        let lost = report.lost
         guard !lost.isEmpty else { return }
         let list = lost.map { "\($0.name) \($0.reason.explanation)" }.joined(separator: ", ")
         toasts.show(
@@ -2343,8 +2320,12 @@ final class WindowController: NSObject {
         return openTab(in: workspace, cwd: cwd, command: command)
     }
 
-    func openConfiguredWorkspace(_ ws: Workspace) -> WorkspaceID {
-        appendWorkspace(named: ws.title, at: ws.path, config: ws).id
+    func openConfiguredWorkspace(_ ws: Workspace, origin: WorktreeOrigin? = nil) -> WorkspaceID {
+        appendWorkspace(named: ws.title, at: ws.path, config: ws, origin: origin).id
+    }
+
+    func worktreeParentFolder(of id: WorkspaceID) -> URL? {
+        workspaces.first { $0.id == id }.map { $0.origin?.parent.path ?? $0.folder }
     }
 
     func openUnconfiguredWorkspace(at folder: URL) -> WorkspaceID { appendUnconfiguredWorkspace(at: folder).id }
@@ -2389,6 +2370,16 @@ final class WindowController: NSObject {
         guard let c = controller(tab) else { return }
         if c.isSinglePane { return removeTab(tab) }
         c.close(pane: token)
+    }
+
+    func closeStakes(atPath path: URL) -> CloseStakes {
+        let tabs = allTabIDs.filter { isClosedByRemoval($0, atPath: path) }
+        let closesWindow = closedByRemoval(atPath: path).thisWindow
+        return CloseStakes(
+            closesWindow: closesWindow, isRunning: tabs.contains(where: isRunning(tab:)),
+            panes: tabs.compactMap(controller).flatMap(\.paneHandles).filter(\.surface.isBusy).map(listing(of:)),
+            floats: tabs.flatMap { floats.runningTitles(scope: $0) }
+                + (closesWindow ? floats.runningTitles(scope: nil) : []))
     }
 
     private func workspaceOpenState(at path: URL) -> WorkspaceOpenState {

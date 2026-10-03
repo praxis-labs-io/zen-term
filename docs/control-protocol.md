@@ -74,7 +74,7 @@ integer `id` that could be read. A command with nothing to return answers `{}`.
 | `unsupported_version` | `v` is newer than the app speaks; the response's `v` says which it does. |
 | `not_found`           | A target names nothing that exists.                      |
 | `ambiguous`           | A target names more than one thing.                      |
-| `refused`             | The command would end running work or lose it, and carries `details`. Also a split in Focus Mode. |
+| `refused`             | The command would end running work or lose it, or does not apply to its target: a split in Focus Mode, or a worktree command on a workspace with no entry. Carries `details` when `force` would go ahead. |
 | `failed`              | The app could not do it.                                 |
 
 A `refused` error says what `force` would end:
@@ -87,6 +87,8 @@ A `refused` error says what `force` would end:
 `panes` are the running panes and drawers, in the shape `list` uses. `floats` are the
 titles of running tool floats. `closesWindow` is true when the close would take the
 window with it.
+A worktree removal's refusal adds `files`, its uncommitted and untracked files, and
+`lostCommits`, the commits on it that no branch or other worktree holds.
 
 Requests are decoded off the main thread, applied on it, and written back off it.
 
@@ -249,18 +251,70 @@ scrollback, a prompt included. Trailing blank lines are dropped.
 {"text":"$ seq 3\n1\n2\n3"}
 ```
 
+### `worktree.list`
+
+`args`: `workspace`.
+
+The worktrees of the workspace's repo, its main checkout left out. Every worktree command
+resolves the workspace to its entry in the workspaces file, read fresh, and a worktree
+workspace to the workspace it was made from. A workspace with no entry is `refused`.
+
+```json
+{"worktrees":[{"path":"/Users/me/.zenterm/worktrees/zen-term-1a2b3c4d/feat-x","branch":"feat/x",
+  "head":"4f1c9e0d2b7a6c5e8f3a1b0c9d8e7f6a5b4c3d2e","locked":false}]}
+```
+
+`branch` is absent for a detached checkout.
+
+### `worktree.create`
+
+`args`: `branch` (required), `workspace`, `base`, `existing`, `focus`.
+
+Makes a worktree on a new branch cut from `base`: `default`, the default branch, unless
+`current` cuts it from what the workspace's checkout is on. `existing` checks out a branch
+that already exists instead and ignores `base`. It copies the entry's `carry` into the
+worktree and opens a workspace there, nested under the workspace it was made from, in the
+window that has that workspace open, else the caller's window. It answers once the copy
+finishes. Anything git refuses is `failed`, with the message the app's New Worktree card
+shows.
+
+```json
+{"path":"/Users/me/.zenterm/worktrees/zen-term-1a2b3c4d/feat-x",
+ "carry":{"carried":[".env"],"skipped":[{"name":"node_modules","reason":"is tracked by git"}]},
+ "window":"w1","workspace":{"title":"zen-term: feat/x",...}}
+```
+
+`skipped` holds what was there to copy and did not arrive. An entry with nothing to copy
+is in neither list. `workspace` is in the shape `list` uses.
+
+### `worktree.remove`
+
+`args`: `path` (absolute) or `branch`, `workspace`, `force`.
+
+Removes the workspace's worktree at that folder or on that branch, and closes every tab
+open in it in any window. The branch stays. It answers once the folder is gone. `refused`
+without `force` when anything in those tabs is running, when closing them would close a
+window, when the worktree holds
+uncommitted or untracked files or commits no branch holds, or when git can't say, so
+removing the worktree a caller runs in needs `force`. A locked worktree is always
+`refused`.
+
 ## `zen`
 
 `zen hello` and `zen list` print the result as JSON. `zen list --pretty` prints an
 indented tree instead. Exit codes: 0 ok, 1 the app answered with an error or didn't
-answer within 10 seconds, 2 usage, 3 no instance or the connection failed.
+answer within 10 seconds (5 minutes for `worktree create` and `worktree remove`), 2 usage,
+3 no instance or the connection failed.
 
 Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|close`,
-`zen tab new|select|rename|close` and `zen pane split|focus|close|send|read`, with
-`--focus` and `--force` for those fields. A command that returns something prints it as
-JSON, except `zen pane read`, which prints the text; the rest print nothing.
-`zen pane split` splits to the right unless `--dir down` says otherwise. `zen` sends
+`zen tab new|select|rename|close`, `zen pane split|focus|close|send|read` and
+`zen worktree list|create|remove`, with `--focus` and `--force` for those fields. A command
+that returns something prints it as JSON, except `zen pane read`, which prints the text; the
+rest print nothing. `zen pane split` splits to the right unless `--dir down` says otherwise.
+`zen worktree create <branch>` takes `--base default|current` or `--existing`, not both.
+`zen worktree remove` takes a folder when it starts with `/`, `~` or `.`, and a branch
+otherwise. `zen` sends
 folders as absolute paths, read against its own folder, and refuses a `--cwd` or
 `workspace new` folder that does not exist. A workspace argument is a folder when it
 starts with `/`, `~` or `.`, and a title otherwise. A refusal prints what it would stop,
-one line each.
+one line each. A worktree refusal lists the files it would lose first.

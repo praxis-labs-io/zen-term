@@ -10,16 +10,24 @@ public struct ControlError: Error, Codable, Equatable, Sendable {
         self.details = details
     }
 
-    /// The running panes and floats a close would stop, and whether it would close the window.
+    /// The running panes and floats a close would stop, whether it would close the window, and for a worktree
+    /// removal the uncommitted files and the commits no branch holds.
     public struct Details: Codable, Equatable, Sendable {
         public let panes: [ListResult.Pane]
         public let floats: [String]
         public let closesWindow: Bool
+        public let files: [String]?
+        public let lostCommits: Int?
 
-        public init(panes: [ListResult.Pane], floats: [String], closesWindow: Bool) {
+        public init(
+            panes: [ListResult.Pane], floats: [String], closesWindow: Bool, files: [String]? = nil,
+            lostCommits: Int? = nil
+        ) {
             self.panes = panes
             self.floats = floats
             self.closesWindow = closesWindow
+            self.files = files
+            self.lostCommits = lostCommits
         }
     }
 }
