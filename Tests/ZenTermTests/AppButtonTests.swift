@@ -54,4 +54,49 @@ final class AppButtonTests: WindowTestCase {
         XCTAssertEqual(button.layer?.borderWidth, 1.5)
         XCTAssertEqual(button.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor)
     }
+
+    private func mountFilled(onTap: @escaping () -> Void = {}) throws -> (AppButton, NSWindow, KeycapView) {
+        let button = AppButton(title: "Connect", variant: .filled, shortcut: "⏎", onTap: onTap)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        let content = try XCTUnwrap(window.contentView)
+        content.addSubview(button)
+        NSLayoutConstraint.activate([
+            button.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            button.centerYAnchor.constraint(equalTo: content.centerYAnchor),
+        ])
+        content.layoutSubtreeIfNeeded()
+        return (button, window, try XCTUnwrap(button.keycapForTesting))
+    }
+
+    func test_aClickOnAFilledButtonsKeycap_reachesTheButton() throws {
+        var taps = 0
+        let (button, window, keycap) = try mountFilled { taps += 1 }
+        let content = try XCTUnwrap(window.contentView)
+        let onKeycap = keycap.convert(NSPoint(x: keycap.bounds.midX, y: keycap.bounds.midY), to: content)
+
+        let hit = content.hitTest(onKeycap)
+        XCTAssertTrue(hit === button, "the keycap must not swallow the click")
+        (hit as? NSButton)?.performClick(nil)
+
+        XCTAssertEqual(taps, 1)
+    }
+
+    func test_aFilledButtonsKeycap_sitsInsideIt() throws {
+        let (button, _, keycap) = try mountFilled()
+
+        XCTAssertTrue(button.bounds.contains(keycap.frame), "the keycap is clipped by the button")
+        XCTAssertEqual(button.title, "Connect")
+    }
+
+    func test_aFilledButton_isSolidAccent_withItsKeycapInverted() throws {
+        let (button, _, keycap) = try mountFilled()
+        let chrome = Theme.current.chrome
+
+        XCTAssertEqual(button.layer?.backgroundColor, chrome.accent.nsColor.cgColor)
+        XCTAssertEqual(titleColor(button), chrome.background.nsColor)
+        XCTAssertEqual(keycap.tone, .inverse)
+        XCTAssertEqual(keycap.layer?.backgroundColor, KeycapView.Tone.inverse.fill.cgColor)
+    }
 }

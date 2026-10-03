@@ -403,7 +403,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 New modal surfaces compose the existing primitives.
 
 - **Primitives:** `AppButton` (variants `primary`, `secondary`, `muted`, `destructive`,
-  `segment`, `link`), `SegmentedControl`, `FieldBox` + `LabeledField`, `ModalCard.swift`
+  `segment`, `link`, and `filled`, a solid accent fill; any can carry a shortcut keycap inside),
+  `SegmentedControl`, `FieldBox` + `LabeledField`, `ModalCard.swift`
   for card chrome and scrolling, `FormCard` for forms (body scrolls, footer pinned,
   capped at `FormCard.maxHeight`; the workspace form takes its own taller cap).
 - **Keyboard model:** ↑/↓ between rows, ←/→ within a row, Return advances, ⌘Return
