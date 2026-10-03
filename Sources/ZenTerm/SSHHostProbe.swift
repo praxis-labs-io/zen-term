@@ -1,9 +1,22 @@
 import AppKit
+import AppLog
 import Network
 
 // Keeps each SSH host's reachability current by connecting to its ssh port and reading the banner, never logging in.
 @MainActor
 final class SSHHostProbe {
+    enum Answer: String {
+        case reachable = "reachable"
+        case proxied = "proxied, not connected to"
+        case bannerMissing = "banner missing"
+        case connectFailed = "connect failed or timed out"
+        case resolveFailed = "resolve failed"
+        case networkDown = "network down, not connected to"
+
+        // A jump host's own reachability is not this Mac's to test, so it reads Online.
+        var isReachable: Bool { self == .reachable || self == .proxied }
+    }
+
     #if DEBUG
         nonisolated(unsafe) static var resolveOverrideForTesting: ((String) -> SSHHostResolver.Endpoint?)?
         nonisolated(unsafe) static var bannerOverrideForTesting: ((String, UInt16) -> Bool)?
@@ -60,7 +73,7 @@ final class SSHHostProbe {
     func setHosts(_ next: [String]) {
         for host in hosts where !next.contains(host) {
             proxied.remove(host)
-            center.setReachable(true, host: SSHHostID(name: host))
+            center.setReachable(false, host: SSHHostID(name: host))
         }
         let added = next.filter { !hosts.contains($0) }
         hosts = next
@@ -179,10 +192,10 @@ final class SSHHostProbe {
             let cached = endpoints[host]
             Self.queue.addOperation { [weak self] in
                 let endpoint = cached ?? Self.resolve(host)
-                let isReachable = endpoint.map { $0 == .proxied || (isNetworkUp && Self.isReachable($0)) } ?? false
+                let answer = Self.answer(endpoint, isNetworkUp: isNetworkUp)
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated {
-                        self?.land(endpoint, isReachable: isReachable, for: host, generation: generation)
+                        self?.land(answer, from: endpoint, for: host, generation: generation, isNetworkUp: isNetworkUp)
                     }
                 }
             }
@@ -191,14 +204,28 @@ final class SSHHostProbe {
 
     // An answer from before a network change describes the old network, so the host is asked again.
     private func land(
-        _ endpoint: SSHHostResolver.Endpoint?, isReachable: Bool, for host: String, generation: Int
+        _ answer: Answer, from endpoint: SSHHostResolver.Endpoint?, for host: String, generation: Int,
+        isNetworkUp: Bool
     ) {
         inFlight.remove(host)
+        let isStale = generation != self.generation
+        Log.info(
+            "ssh probe \(host) at \(Self.describe(endpoint)), network \(isNetworkUp ? "up" : "down"), "
+                + "generation \(generation): \(answer.rawValue)\(isStale ? ", stale, asking again" : "")",
+            category: .workspace)
         guard hosts.contains(host) else { return }
-        guard generation == self.generation else { return probe([host]) }
+        guard !isStale else { return probe([host]) }
         endpoints[host] = endpoint
         if endpoint == .proxied { proxied.insert(host) } else { proxied.remove(host) }
-        center.setReachable(isReachable, host: SSHHostID(name: host))
+        center.setReachable(answer.isReachable, host: SSHHostID(name: host))
+    }
+
+    private static func describe(_ endpoint: SSHHostResolver.Endpoint?) -> String {
+        switch endpoint {
+        case .direct(let hostname, let port): return "\(hostname):\(port)"
+        case .proxied: return "a proxy"
+        case nil: return "no endpoint"
+        }
     }
 
     nonisolated private static func readConfigStamp() -> [String: Date] {
@@ -216,13 +243,16 @@ final class SSHHostProbe {
         return SSHHostResolver.endpoint(of: host)
     }
 
-    // A jump host's own reachability is not this Mac's to test, so it reads Online.
-    nonisolated private static func isReachable(_ endpoint: SSHHostResolver.Endpoint) -> Bool {
+    nonisolated private static func answer(_ endpoint: SSHHostResolver.Endpoint?, isNetworkUp: Bool) -> Answer {
         switch endpoint {
-        case .proxied: return true
+        case nil: return .resolveFailed
+        case .proxied: return .proxied
+        case .direct where !isNetworkUp: return .networkDown
         case .direct(let hostname, let port):
             #if DEBUG
-                if let bannerOverrideForTesting { return bannerOverrideForTesting(hostname, port) }
+                if let bannerOverrideForTesting {
+                    return bannerOverrideForTesting(hostname, port) ? .reachable : .bannerMissing
+                }
             #endif
             return answersSSH(hostname, port: port)
         }
@@ -232,8 +262,8 @@ final class SSHHostProbe {
     nonisolated static func answersSSH(
         _ hostname: String, port: UInt16, connectTimeout: Int = connectTimeout,
         bannerTimeout: TimeInterval = bannerTimeout
-    ) -> Bool {
-        guard let port = NWEndpoint.Port(rawValue: port) else { return false }
+    ) -> Answer {
+        guard let port = NWEndpoint.Port(rawValue: port) else { return .connectFailed }
         let tcp = NWProtocolTCP.Options()
         tcp.connectionTimeout = connectTimeout
         let connection = NWConnection(
@@ -284,10 +314,10 @@ final class SSHHostProbe {
         }
         connection.start(queue: DispatchQueue(label: "ZenTerm.SSHHostProbe.connection"))
         _ = connected.wait(timeout: .now() + .seconds(connectTimeout))
-        guard progress.isReady else { return false }
+        guard progress.isReady else { return .connectFailed }
         read(after: Data())
         _ = answered.wait(timeout: .now() + bannerTimeout)
-        return progress.isSSH
+        return progress.isSSH ? .reachable : .bannerMissing
     }
 
     // RFC 4253 4.2: a server may send lines before its `SSH-` version line. Nil until the bytes decide it.

@@ -557,17 +557,20 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
 - **`~/.ssh/config` is read, never written.** Settings > SSH Hosts lists its literal `Host`
   aliases (following `Include`, skipping `Match` blocks) off-main each time it mounts, and
   `ssh -G` resolves each one. `ssh-hosts` holds which are on, plus typed hosts, and the
-  sidebar's SSH rows read Offline, Online or Connected.
+  sidebar's SSH rows show their status as a dot (`SSHHostStatus.ink`): Offline takes the idle
+  agent row's ink on the dot and the title, Online is positive, Connected is accent, and the
+  status word is the row's accessibility value rather than visible text.
 - **`SSHHostProbe` keeps each host's reachability in `SSHHostStatusCenter`, and never logs in.**
   Off-main, at most four at a time, it resolves the host with `ssh -G`, once until `ssh-hosts`,
   the network, or the date on `~/.ssh/config` or a file it includes changes, because
   `Match exec` can prompt, and reads the greeting on a TCP
   connection to its port, with separate connect and greeting timeouts: an `SSH-` line, after
   any preamble lines RFC 4253 allows, is Online, anything else Offline. A
-  `ProxyJump` or `ProxyCommand` host reads Online unprobed. It runs every minute while the app
+  `ProxyJump` or `ProxyCommand` host reads Online once `ssh -G` names its proxy, with no TCP check. It runs every minute while the app
   is active, and on activation, wake and network change (`NWPathMonitor`); an answer from before
-  a network change is dropped and asked again. A host reads Online until its first answer, and
-  a connected host takes its status from the connection, not the probe.
+  a network change is dropped and asked again. A host reads Offline until the probe reaches it,
+  so an unanswered host takes no number, and a connected host takes its status from the
+  connection, not the probe.
 - **A connected host is a workspace whose tabs run ssh over one `SSHConnection`.** Every pane
   and drawer starts through the tab's injected `SurfaceStart`, which for a host runs
   `/usr/bin/ssh` with `ControlMaster=auto`, a `ControlPath` under `Application Support/ZenTerm/ssh`

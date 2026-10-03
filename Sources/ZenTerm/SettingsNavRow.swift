@@ -23,6 +23,9 @@ final class SettingsNavRow: NSView, HoverSuppressing {
     private let attentionDot = NSView()
     private var attentionDotWidth: NSLayoutConstraint?
     private var attentionDotGap: NSLayoutConstraint?
+    private var dotInk: (() -> NSColor)?
+    private var dotAccessibilityValue: String?
+    private var titleInk: (() -> NSColor)?
     private let onActivate: () -> Void
     private let focusesOnClick: Bool
     private var isTakingKeyboardFocus = false
@@ -42,7 +45,6 @@ final class SettingsNavRow: NSView, HoverSuppressing {
     private static let accessoryInset: CGFloat = 5
     private static let attentionDotDiameter: CGFloat = 6
     private static let attentionDotGapToDetail: CGFloat = 6
-    private static let attentionAccessibilityValue = "Agent waiting"
 
     init(
         title: String, variant: Variant = .standard, focusesOnClick: Bool = true,
@@ -150,18 +152,33 @@ final class SettingsNavRow: NSView, HoverSuppressing {
 
     func setDetail(_ detail: String?) {
         detailLabel.stringValue = detail ?? ""
+        refreshDotLayout()
         refreshAccessibilityValue()
     }
 
-    func setShowsAttention(_ shows: Bool) {
-        attentionDot.isHidden = !shows
-        attentionDotWidth?.constant = shows ? Self.attentionDotDiameter : 0
-        attentionDotGap?.constant = shows ? -Self.attentionDotGapToDetail : 0
+    func setDot(_ ink: (() -> NSColor)?, accessibilityValue: String?) {
+        dotInk = ink
+        dotAccessibilityValue = ink == nil ? nil : accessibilityValue
+        attentionDot.isHidden = ink == nil
+        attentionDot.layer?.backgroundColor = ink?().cgColor
+        refreshDotLayout()
         refreshAccessibilityValue()
+    }
+
+    func setTitleInk(_ ink: (() -> NSColor)?) {
+        titleInk = ink
+        refreshLabelInk()
+    }
+
+    // With no detail beside it, the dot takes the detail's trailing inset rather than sitting a gap short of it.
+    private func refreshDotLayout() {
+        let shows = !attentionDot.isHidden
+        attentionDotWidth?.constant = shows ? Self.attentionDotDiameter : 0
+        attentionDotGap?.constant = shows && !detailLabel.stringValue.isEmpty ? -Self.attentionDotGapToDetail : 0
     }
 
     private func refreshAccessibilityValue() {
-        let parts = [detailLabel.stringValue, attentionDot.isHidden ? "" : Self.attentionAccessibilityValue]
+        let parts = [detailLabel.stringValue, dotAccessibilityValue ?? ""]
         let value = parts.filter { !$0.isEmpty }.joined(separator: ", ")
         setAccessibilityValue(value.isEmpty ? nil : value)
     }
@@ -174,16 +191,22 @@ final class SettingsNavRow: NSView, HoverSuppressing {
 
     var showsAttentionForTesting: Bool { !attentionDot.isHidden }
 
+    var dotColorForTesting: CGColor? { attentionDot.isHidden ? nil : attentionDot.layer?.backgroundColor }
+
     func reapplyTheme() {
         refreshLabelInk()
         detailLabel.textColor = Theme.current.chrome.ink(.muted)
         glyph.contentTintColor = Theme.current.chrome.ink(.faint)
-        attentionDot.layer?.backgroundColor = AttentionTone.waiting.ink.cgColor
+        attentionDot.layer?.backgroundColor = dotInk?().cgColor
         refreshFill()
     }
 
     private func refreshLabelInk() {
         let chrome = Theme.current.chrome
+        if let titleInk {
+            label.textColor = titleInk()
+            return
+        }
         switch variant {
         case .standard: label.textColor = chrome.foreground.nsColor
         case .nested: label.textColor = chrome.ink(isSelected ? .normal : .subtle)

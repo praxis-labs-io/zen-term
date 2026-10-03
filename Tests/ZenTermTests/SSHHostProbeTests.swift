@@ -92,9 +92,9 @@ final class SSHHostProbeTests: XCTestCase {
 
         probe.setHosts(["up", "down", "inner"])
 
-        waitUntil(status("down") == .offline, "the unreachable host to read Offline")
-        XCTAssertEqual(status("up"), .online)
-        XCTAssertEqual(status("inner"), .online, "a jump host reads Online")
+        waitUntil(answers.askCount("down") == 1 && answers.askCount("inner") == 1, "the round")
+        waitUntil(status("up") == .online && status("inner") == .online, "the answers to land")
+        XCTAssertEqual(status("down"), .offline)
     }
 
     func test_aConnectedHost_isNotProbed() {
@@ -154,13 +154,12 @@ final class SSHHostProbeTests: XCTestCase {
     }
 
     func test_aRemovedHost_forgetsItsReachability() {
-        answers.queue([.offline], for: "devbox")
         probe.setHosts(["devbox"])
-        waitUntil(status("devbox") == .offline, "the host to read Offline")
+        waitUntil(status("devbox") == .online, "the host to read Online")
 
         probe.setHosts([])
 
-        XCTAssertEqual(status("devbox"), .online)
+        XCTAssertEqual(status("devbox"), .offline)
     }
 
     func test_aWatchStartedAfterTheNetworkWentDown_probesAgain() {

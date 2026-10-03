@@ -21,12 +21,21 @@ final class SSHHostStatusCenterTests: XCTestCase {
         super.tearDown()
     }
 
-    func test_aHostNoProbeHasAnswered_readsOnline() {
-        XCTAssertEqual(SSHHostStatusCenter().status(of: devbox), .online)
+    func test_aHostNoProbeHasAnswered_readsOffline() {
+        XCTAssertEqual(SSHHostStatusCenter().status(of: devbox), .offline)
     }
 
-    func test_anUnreachableHost_readsOffline() {
+    func test_aReachableHost_readsOnline() {
         let center = SSHHostStatusCenter()
+
+        center.setReachable(true, host: devbox)
+
+        XCTAssertEqual(center.status(of: devbox), .online)
+    }
+
+    func test_aHostThatStopsAnswering_readsOffline() {
+        let center = SSHHostStatusCenter()
+        center.setReachable(true, host: devbox)
 
         center.setReachable(false, host: devbox)
 
@@ -55,15 +64,15 @@ final class SSHHostStatusCenterTests: XCTestCase {
     func test_onlyARealChange_isAnnounced() {
         let center = SSHHostStatusCenter()
 
-        center.setReachable(true, host: devbox)
-        XCTAssertEqual(posts, 0, "already online")
+        center.setReachable(false, host: devbox)
+        XCTAssertEqual(posts, 0, "already offline")
 
-        center.setReachable(false, host: devbox)
-        center.setReachable(false, host: devbox)
+        center.setReachable(true, host: devbox)
+        center.setReachable(true, host: devbox)
         XCTAssertEqual(posts, 1)
 
         center.setConnected(true, host: devbox)
-        center.setReachable(true, host: devbox)
+        center.setReachable(false, host: devbox)
         XCTAssertEqual(posts, 2, "the probe cannot move a connected host")
     }
 }
