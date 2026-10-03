@@ -34,6 +34,13 @@ final class AppButton: NSButton {
             case .large: return 13
             }
         }
+
+        var keycapGap: CGFloat {
+            switch self {
+            case .standard: return 6
+            case .large: return 8
+            }
+        }
     }
 
     var onTap: () -> Void
@@ -50,6 +57,7 @@ final class AppButton: NSButton {
 
     private let variant: Variant
     private let size: Size
+    private let keycap: KeycapView?
     private let symbolName: String?
     private var labelText: String
     private var isHovered = false { didSet { restyle() } }
@@ -60,14 +68,19 @@ final class AppButton: NSButton {
 
     override var intrinsicContentSize: NSSize {
         var fitted = super.intrinsicContentSize
-        fitted.width += size.horizontalPadding * 2
+        fitted.width += size.horizontalPadding * 2 + keycapReserve
         fitted.height = size.height
         return fitted
     }
 
+    private var keycapReserve: CGFloat {
+        guard let keycap else { return 0 }
+        return size.keycapGap + keycap.intrinsicContentSize.width
+    }
+
     init(
         title: String = "", variant: Variant, size: Size = .standard, symbol: String? = nil,
-        keyEquivalent: String = "", keyEquivalentModifierMask: NSEvent.ModifierFlags = [],
+        shortcut: String? = nil, keyEquivalent: String = "", keyEquivalentModifierMask: NSEvent.ModifierFlags = [],
         onTap: @escaping () -> Void = {}
     ) {
         self.onTap = onTap
@@ -75,7 +88,18 @@ final class AppButton: NSButton {
         self.size = size
         self.symbolName = symbol
         self.labelText = title
+        self.keycap = shortcut.map { KeycapView(shortcut: $0) }
         super.init(frame: .zero)
+        if let keycap {
+            let cell = KeycapClearingCell()
+            cell.trailingReserve = keycapReserve
+            self.cell = cell
+            addSubview(keycap)
+            NSLayoutConstraint.activate([
+                keycap.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -size.horizontalPadding),
+                keycap.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+        }
         translatesAutoresizingMaskIntoConstraints = false
         isBordered = false
         wantsLayer = true
@@ -101,7 +125,10 @@ final class AppButton: NSButton {
         restyle()
     }
 
-    func reapplyTheme() { restyle() }
+    func reapplyTheme() {
+        keycap?.reapplyTheme()
+        restyle()
+    }
 
     override var acceptsFirstResponder: Bool { isKeyboardFocusable && isEnabled }
 
@@ -201,4 +228,14 @@ final class AppButton: NSButton {
     }
 
     @objc private func fire() { onTap() }
+
+    var keycapForTesting: KeycapView? { keycap }
+}
+
+private final class KeycapClearingCell: NSButtonCell {
+    var trailingReserve: CGFloat = 0
+
+    override func drawTitle(_ title: NSAttributedString, withFrame frame: NSRect, in controlView: NSView) -> NSRect {
+        super.drawTitle(title, withFrame: frame.offsetBy(dx: -trailingReserve / 2, dy: 0), in: controlView)
+    }
 }

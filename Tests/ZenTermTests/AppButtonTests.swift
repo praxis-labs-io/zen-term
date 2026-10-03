@@ -86,4 +86,30 @@ final class AppButtonTests: WindowTestCase {
         XCTAssertEqual(standard.layer?.cornerRadius, 6)
         withExtendedLifetime(windows) {}
     }
+
+    func test_aClickOnAButtonsKeycap_reachesTheButton() throws {
+        var taps = 0
+        let button = AppButton(title: "Connect", variant: .primary, size: .large, shortcut: "⏎") { taps += 1 }
+        let window = try mountFitted(button)
+        let content = try XCTUnwrap(window.contentView)
+        let keycap = try XCTUnwrap(button.keycapForTesting)
+        let onKeycap = keycap.convert(NSPoint(x: keycap.bounds.midX, y: keycap.bounds.midY), to: content)
+
+        let hit = content.hitTest(onKeycap)
+        XCTAssertTrue(hit === button, "the keycap must not swallow the click")
+        (hit as? NSButton)?.performClick(nil)
+
+        XCTAssertEqual(taps, 1)
+    }
+
+    func test_aButtonsKeycap_sitsInsideIt_besideItsTitle() throws {
+        let button = AppButton(title: "Connect", variant: .primary, shortcut: "⏎")
+        let window = try mountFitted(button)
+        let keycap = try XCTUnwrap(button.keycapForTesting)
+
+        XCTAssertTrue(button.bounds.contains(keycap.frame), "the keycap is clipped by the button")
+        XCTAssertEqual(button.title, "Connect")
+        XCTAssertEqual(keycap.shortcut, "⏎")
+        withExtendedLifetime(window) {}
+    }
 }
