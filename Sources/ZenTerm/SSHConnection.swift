@@ -8,6 +8,7 @@ final class SSHConnection {
     enum State: Equatable { case connecting, connected, failed }
 
     struct Watchers {
+        var resolveLaunch: (_ host: SSHHostID, _ found: @escaping @MainActor (SSHLaunch.Form) -> Void) -> Void
         var awaitSocket:
             (
                 _ path: URL, _ ready: @escaping @MainActor () -> Void, _ appeared: @escaping @MainActor () -> Void,
@@ -37,6 +38,7 @@ final class SSHConnection {
 
     private let watchers: Watchers
     private var login: Waiting?
+    private var form: SSHLaunch.Form?
     private var isLoginLaunched = false
     private var waiting: [Waiting] = []
     private var stopWatching: (() -> Void)?
@@ -69,6 +71,17 @@ final class SSHConnection {
         }
         login = Waiting(id: id, surface: surface, env: env)
         isLoginLaunched = false
+        guard form == nil else { return resolveMasterBeforeLogin() }
+        watchers.resolveLaunch(host) { [weak self] form in self?.resolvedLaunch(form) }
+    }
+
+    private func resolvedLaunch(_ form: SSHLaunch.Form) {
+        guard !isShutDown, state == .connecting, login != nil else { return }
+        self.form = form
+        resolveMasterBeforeLogin()
+    }
+
+    private func resolveMasterBeforeLogin() {
         watchers.resolveMaster(host, controlPath) { [weak self] pid in self?.resolvedBeforeLogin(pid) }
     }
 
@@ -187,7 +200,11 @@ final class SSHConnection {
     }
 
     private func launch(_ surface: TerminalSurface, env: [String: String]) {
-        surface.start(SSHLaunch.config(host: host, controlPath: controlPath, env: env))
+        guard let form else {
+            Log.error("ssh: a host surface launched before its config was read", category: .workspace)
+            return assertionFailure("a host surface launched before its config was read")
+        }
+        surface.start(SSHLaunch.config(host: host, controlPath: controlPath, form: form, env: env))
     }
 }
 
@@ -237,6 +254,12 @@ extension SSHConnection.Watchers {
     }
 
     static let live = SSHConnection.Watchers(
+        resolveLaunch: { host, found in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let form = SSHHostResolver.launchForm(of: host.name)
+                DispatchQueue.main.async { found(form) }
+            }
+        },
         awaitSocket: { path, ready, appeared, unwatchable in
             let watch = ControlSocketWatch(path: path, ready: ready, appeared: appeared, unwatchable: unwatchable)
             return watch.cancel

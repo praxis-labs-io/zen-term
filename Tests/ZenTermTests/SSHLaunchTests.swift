@@ -1,3 +1,4 @@
+import TerminalKit
 import XCTest
 
 @testable import ZenTerm
@@ -17,10 +18,10 @@ final class SSHLaunchTests: XCTestCase {
         return URL(fileURLWithPath: "/" + String(repeating: "d", count: padding), isDirectory: true)
     }
 
-    func test_eachControlOptionAppearsOnce_beforeTheHost_withNoVerboseFlag() {
+    func test_aPlainLaunch_givesEachControlOptionOnce_beforeTheHost_withNoVerboseFlag() {
         let path = URL(fileURLWithPath: "/Users/me/Library/Application Support/ZenTerm/ssh/1-abcdef12")
 
-        let args = SSHLaunch.arguments(host: host, controlPath: path)
+        let args = SSHLaunch.arguments(host: host, controlPath: path, form: .plain)
 
         XCTAssertEqual(
             args,
@@ -33,15 +34,39 @@ final class SSHLaunchTests: XCTestCase {
         XCTAssertFalse(args.contains("-v"))
     }
 
+    func test_aLoginShellLaunch_asksForATerminal_andRunsTheCommandAfterTheHost() {
+        let path = URL(fileURLWithPath: "/tmp/1-ab")
+
+        let args = SSHLaunch.arguments(host: host, controlPath: path, form: .loginShell)
+
+        XCTAssertEqual(
+            args,
+            SSHLaunch.arguments(host: host, controlPath: path, form: .plain).dropLast(2)
+                + ["-t", "--", "devbox", SSHLaunch.loginShellCommand])
+    }
+
+    func test_theLoginShellCommand_namesThisTerminal_andExecsTheUsersLoginShell() throws {
+        let version = try XCTUnwrap(TerminalIdentity.environment["TERM_PROGRAM_VERSION"])
+
+        XCTAssertEqual(
+            SSHLaunch.loginShellCommand,
+            #"exec env 'COLORTERM=truecolor' 'TERM_PROGRAM=ghostty' 'TERM_PROGRAM_VERSION=\#(version)' "$SHELL" -l"#)
+    }
+
+    func test_aRemoteWord_survivesAQuoteInside() {
+        XCTAssertEqual(SSHLaunch.remoteWord("it's"), #"'it'\''s'"#)
+    }
+
     func test_aPercentInThePath_isEscapedSoSSHDoesNotExpandIt() {
-        let args = SSHLaunch.arguments(host: host, controlPath: URL(fileURLWithPath: "/tmp/100%/1-ab"))
+        let args = SSHLaunch.arguments(
+            host: host, controlPath: URL(fileURLWithPath: "/tmp/100%/1-ab"), form: .loginShell)
 
         XCTAssertTrue(args.contains("ControlPath=\"/tmp/100%%/1-ab\""))
     }
 
     func test_theConfigRunsSSHDirectly_asXterm256color_withoutBusyTracking() {
         let config = SSHLaunch.config(
-            host: host, controlPath: URL(fileURLWithPath: "/tmp/1-ab"), env: ["ZEN_SOCK": "/tmp/nav"])
+            host: host, controlPath: URL(fileURLWithPath: "/tmp/1-ab"), form: .plain, env: ["ZEN_SOCK": "/tmp/nav"])
 
         XCTAssertEqual(config.command, "/usr/bin/ssh")
         XCTAssertEqual(config.args.last, "devbox")

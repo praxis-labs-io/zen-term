@@ -4,6 +4,12 @@ import TerminalKit
 
 // A host pane's launch: ssh sharing one ControlMaster connection per host, with no local shell around it.
 enum SSHLaunch {
+    enum Form: Equatable {
+        case loginShell
+        // ssh refuses a command-line command beside a host's own `RemoteCommand`.
+        case plain
+    }
+
     static let executable = "/usr/bin/ssh"
 
     // ssh binds `<path>.<16 chars>` first, and a path past this fails only after the login succeeds.
@@ -31,13 +37,29 @@ enum SSHLaunch {
         return fallback.appendingPathComponent(name)
     }
 
-    static func arguments(host: SSHHostID, controlPath: URL) -> [String] {
-        [
+    static func arguments(host: SSHHostID, controlPath: URL, form: Form) -> [String] {
+        let options = [
             "-o", "ControlMaster=auto",
             "-o", controlPathOption(controlPath),
             "-o", "ControlPersist=\(controlPersistSeconds)",
-            "--", host.name,
         ]
+        switch form {
+        case .loginShell: return options + ["-t", "--", host.name, loginShellCommand]
+        case .plain: return options + ["--", host.name]
+        }
+    }
+
+    // Programs on the host, Claude's progress among them, see the same terminal a local pane gives them.
+    static var loginShellCommand: String {
+        let identity = TerminalIdentity.environment.sorted { $0.key < $1.key }.map {
+            remoteWord("\($0.key)=\($0.value)")
+        }
+        return (["exec", "env"] + identity + [#""$SHELL""#, "-l"]).joined(separator: " ")
+    }
+
+    // Single quotes, since a csh login shell parses the command too.
+    static func remoteWord(_ text: String) -> String {
+        "'" + text.replacingOccurrences(of: "'", with: #"'\''"#) + "'"
     }
 
     static func checkArguments(host: SSHHostID, controlPath: URL) -> [String] {
@@ -59,12 +81,19 @@ enum SSHLaunch {
         "ControlPath=\"\(controlPath.path.replacingOccurrences(of: "%", with: "%%"))\""
     }
 
-    static func config(host: SSHHostID, controlPath: URL, env: [String: String] = [:]) -> TerminalSurfaceConfig {
+    static var workingDirectory: URL { ShellLaunch.defaultCWD }
+
+    // libghostty replaces a cleared title with the pane's pwd, and a host pane's is the local folder ssh starts in.
+    static var clearedTitle: String { workingDirectory.path }
+
+    static func config(
+        host: SSHHostID, controlPath: URL, form: Form, env: [String: String] = [:]
+    ) -> TerminalSurfaceConfig {
         var environment = env
         environment["TERM"] = "xterm-256color"
         return TerminalSurfaceConfig(
-            command: executable, args: arguments(host: host, controlPath: controlPath),
-            workingDirectory: ShellLaunch.defaultCWD, environment: environment,
+            command: executable, args: arguments(host: host, controlPath: controlPath, form: form),
+            workingDirectory: workingDirectory, environment: environment,
             fontSize: SessionFontSize.points, theme: Theme.current.terminal,
             behavior: GeneralConfig.current.terminalBehavior, tracksBusy: false)
     }

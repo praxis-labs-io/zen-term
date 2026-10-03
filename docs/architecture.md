@@ -304,7 +304,11 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   before its program starts has not been busy yet. A fall settles one poll later, so the
   command's own result lands first and tells a crash from a clean exit. A named agent
   that exits non-zero, other than by SIGINT or SIGTERM, asks; any other exit, and any
-  unnamed agent's, lands as a finished command.
+  unnamed agent's, lands as a finished command. A host sends neither a result nor a busy
+  reading, so there an agent leaves when its title clears, which Claude and Codex both send on
+  exit. libghostty turns a cleared title into the pane's pwd, which on a host is the local folder
+  ssh started in, so that path is the signal. Only on a host: locally a cleared title would drop
+  the agent before the result that tells a crash from a clean exit.
   The Agents rows join it with `agentWait(of:)` and sort waiting (oldest first), working,
   idle, ties in sidebar order.
 - **Only an agent's OSC 777 can ask.** A notification from a surface that is not in the
@@ -570,7 +574,9 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   `ssh -G` resolves each one. `ssh-hosts` holds which are on, plus typed hosts, and the
   sidebar's SSH rows show their status as a dot (`SSHHostStatus.ink`): Offline takes the idle
   agent row's ink on the dot and the title, Online is positive, Connected is accent, and the
-  status word is the row's accessibility value rather than visible text.
+  status word is the row's accessibility value rather than visible text. While an agent in a
+  connected host's workspace waits, the dot takes the waiting ink a workspace row's does, from
+  the same rollup, and the value reads `Connected, Agent waiting`.
 - **`SSHHostProbe` keeps each host's reachability in `SSHHostStatusCenter`, and never logs in.**
   Off-main, at most four at a time, it resolves the host with `ssh -G`, once until `ssh-hosts`,
   the network, or the date on `~/.ssh/config` or a file it includes changes, because
@@ -588,7 +594,14 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   `/usr/bin/ssh` with `ControlMaster=auto`, a `ControlPath` under `Application Support/ZenTerm/ssh`
   (the temp folder when that path passes 86 bytes, since ssh binds a longer temporary name
   first) and `ControlPersist=60`, as `xterm-256color` with busy tracking off (a remote shell
-  sends no prompt marks). Only the first surface, the login, starts until the socket appears;
+  sends no prompt marks). With `-t` it runs `exec env COLORTERM=… TERM_PROGRAM=…
+  TERM_PROGRAM_VERSION=… "$SHELL" -l` on the host, the values from `TerminalIdentity`: Claude
+  reports progress only to a ghostty it recognises, and ssh forwards none of them without the
+  server's `AcceptEnv`.
+  `env`, because csh has no prefix assignment. A host whose ssh config sets its own
+  `RemoteCommand`, or whose config can't be read, launches plain, since ssh refuses both; the
+  connection reads that once with `ssh -G`, off-main, before its first login.
+  Only the first surface, the login, starts until the socket appears;
   the rest wait, so a host asks for its password once. `ControlSocketWatch` watches the
   folder rather than polling, `ssh -O check` names the master, and its exit source reports
   the host disconnected. The check runs before the login launches and again when the socket

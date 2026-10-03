@@ -28,6 +28,17 @@ enum SSHHostResolver {
         dump(of: host).flatMap(endpoint(inDump:))
     }
 
+    // Blocking: callers own the hop off the main thread.
+    static func launchForm(of host: String) -> SSHLaunch.Form {
+        launchForm(inDump: dump(of: host))
+    }
+
+    // An unread config may hold a `RemoteCommand`, and only the plain form survives one.
+    static func launchForm(inDump dump: String?) -> SSHLaunch.Form {
+        guard let dump, fields(inDump: dump)["remotecommand"] == nil else { return .plain }
+        return .loginShell
+    }
+
     static func destination(inDump dump: String) -> String? {
         let fields = fields(inDump: dump)
         guard let user = fields["user"], let hostname = fields["hostname"] else { return nil }
