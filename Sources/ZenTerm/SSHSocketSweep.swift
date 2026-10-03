@@ -4,9 +4,9 @@ import Foundation
 // Ends the ssh masters a force-quit or crashed ZenTerm left running, and removes their sockets.
 enum SSHSocketSweep {
     struct Effects {
-        var isAlive: (pid_t) -> Bool
+        var isZenTermRunning: (pid_t) -> Bool
         var resolveMaster: (URL) -> pid_t?
-        var endMaster: (pid_t) -> Void
+        var endMaster: (pid_t, URL) -> Void
     }
 
     // The sweep cannot name the host a socket was for, and an ssh control command never contacts it.
@@ -21,11 +21,13 @@ enum SSHSocketSweep {
         for directory in directories {
             let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
             for name in names {
-                guard let owner = owner(ofSocketNamed: name), owner != ownPID, !effects.isAlive(owner) else { continue }
+                guard let owner = owner(ofSocketNamed: name), owner != ownPID, !effects.isZenTermRunning(owner) else {
+                    continue
+                }
                 let path = directory.appendingPathComponent(name)
                 guard let master = effects.resolveMaster(path) else { continue }
                 Log.info("ssh: ending a master left by ZenTerm pid \(owner)", category: .workspace)
-                effects.endMaster(master)
+                effects.endMaster(master, path)
             }
         }
     }
@@ -41,7 +43,9 @@ enum SSHSocketSweep {
 
 extension SSHSocketSweep.Effects {
     static let live = SSHSocketSweep.Effects(
-        isAlive: { pid in kill(pid, 0) == 0 || errno == EPERM },
+        isZenTermRunning: { pid in
+            SSHConnection.Watchers.executable(of: pid).map { URL(fileURLWithPath: $0).lastPathComponent } == "ZenTerm"
+        },
         resolveMaster: { path in SSHConnection.Watchers.master(of: SSHSocketSweep.placeholderHost, at: path) },
-        endMaster: { pid in SSHConnection.Watchers.terminate(master: pid) })
+        endMaster: { pid, path in SSHConnection.Watchers.terminate(master: pid, at: path) })
 }

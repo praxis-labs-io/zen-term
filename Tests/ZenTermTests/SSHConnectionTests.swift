@@ -208,23 +208,41 @@ final class SSHConnectionTests: XCTestCase {
         return !process.isRunning
     }
 
-    func test_theLiveEnd_terminatesAnSSHProcess() throws {
-        let ssh = try spawn(
+    private let livePath = URL(fileURLWithPath: "/tmp/zt-live/4242-abcdef01")
+
+    private func sshNaming(_ controlPath: URL) throws -> Process {
+        try spawn(
             SSHLaunch.executable,
-            ["-F", "/dev/null", "-o", "BatchMode=yes", "-o", "ProxyCommand=/bin/sleep 30", "zt-test.invalid"])
+            [
+                "-F", "/dev/null", "-o", "BatchMode=yes", "-o", "ControlPath=\"\(controlPath.path)\"",
+                "-o", "ProxyCommand=/bin/sleep 30", "zt-test.invalid",
+            ])
+    }
+
+    func test_theLiveEnd_terminatesTheSSHHoldingThisControlPath() throws {
+        let ssh = try sshNaming(livePath)
         defer { if ssh.isRunning { ssh.terminate() } }
 
-        SSHConnection.Watchers.live.endMaster(ssh.processIdentifier)
+        SSHConnection.Watchers.live.endMaster(ssh.processIdentifier, livePath)
 
         XCTAssertTrue(waitForExit(ssh, within: 2))
-        XCTAssertEqual(ssh.terminationReason, .uncaughtSignal)
+        XCTAssertEqual(ssh.isRunning ? nil : ssh.terminationReason, .uncaughtSignal)
+    }
+
+    func test_theLiveEnd_leavesAnSSHForAnotherControlPathRunning() throws {
+        let ssh = try sshNaming(URL(fileURLWithPath: "/tmp/zt-live/9999-abcdef01"))
+        defer { ssh.terminate() }
+
+        SSHConnection.Watchers.live.endMaster(ssh.processIdentifier, livePath)
+
+        XCTAssertFalse(waitForExit(ssh, within: 0.3), "a pid recycled by the user's own ssh must never be signalled")
     }
 
     func test_theLiveEnd_leavesAProcessThatIsNotSSHRunning() throws {
-        let sleeper = try spawn("/bin/sleep", ["30"])
+        let sleeper = try spawn("/bin/sh", ["-c", "sleep 30", livePath.path])
         defer { sleeper.terminate() }
 
-        SSHConnection.Watchers.live.endMaster(sleeper.processIdentifier)
+        SSHConnection.Watchers.live.endMaster(sleeper.processIdentifier, livePath)
 
         XCTAssertFalse(waitForExit(sleeper, within: 0.3), "a recycled pid must never be signalled")
     }

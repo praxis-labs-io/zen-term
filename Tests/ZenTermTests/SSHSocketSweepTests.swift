@@ -28,12 +28,12 @@ final class SSHSocketSweepTests: XCTestCase {
 
     private func recording(master: pid_t?) -> SSHSocketSweep.Effects {
         SSHSocketSweep.Effects(
-            isAlive: { [livePID] in $0 == livePID },
+            isZenTermRunning: { [livePID] in $0 == livePID },
             resolveMaster: { [unowned self] path in
                 resolved.append(path.lastPathComponent)
                 return master
             },
-            endMaster: { [unowned self] in ended.append($0) })
+            endMaster: { [unowned self] pid, _ in ended.append(pid) })
     }
 
     func test_aSocketNamesTheZenTermThatMadeIt() {
@@ -98,7 +98,7 @@ final class SSHSocketSweepTests: XCTestCase {
 
     private var liveChecks: SSHSocketSweep.Effects {
         var effects = SSHSocketSweep.Effects.live
-        effects.endMaster = { [unowned self] in ended.append($0) }
+        effects.endMaster = { [unowned self] pid, _ in ended.append(pid) }
         return effects
     }
 
@@ -112,12 +112,35 @@ final class SSHSocketSweepTests: XCTestCase {
         XCTAssertEqual(ended, [])
     }
 
-    func test_theLiveSweep_leavesARunningInstancesSocket() throws {
-        let name = "\(getppid())-bbbbbbbb"
+    private func runningZenTerm() throws -> Process {
+        let binary = folder.appendingPathComponent("ZenTerm")
+        try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/sleep"), to: binary)
+        let process = Process()
+        process.executableURL = binary
+        process.arguments = ["30"]
+        try process.run()
+        return process
+    }
+
+    func test_theLiveSweep_leavesARunningZenTermsSocket() throws {
+        let zenTerm = try runningZenTerm()
+        defer { zenTerm.terminate() }
+        let name = "\(zenTerm.processIdentifier)-bbbbbbbb"
         try refusingSocket(named: name)
 
         SSHSocketSweep.sweep([folder], effects: liveChecks)
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: folder.appendingPathComponent(name).path))
+    }
+
+    func test_theLiveSweep_checksASocketWhosePidNowBelongsToSomethingElse() throws {
+        let name = "\(getppid())-bbbbbbbb"
+        try refusingSocket(named: name)
+
+        SSHSocketSweep.sweep([folder], effects: liveChecks)
+
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: folder.appendingPathComponent(name).path),
+            "a dead ZenTerm's pid reused by another process must not hide its masters forever")
     }
 }

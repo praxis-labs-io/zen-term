@@ -37,7 +37,7 @@ final class FakeSSHWatchers {
                 return { [self] in exitCancels += 1 }
             },
             after: { [self] _, work in delayed.append(work) },
-            endMaster: { [self] pid in
+            endMaster: { [self] pid, _ in
                 ended.append(pid)
                 onEnd?()
             })

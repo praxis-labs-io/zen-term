@@ -604,10 +604,11 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   makes every live pane exit 255 into the exit flows. `SSHConnection.endMaster` sends `SIGTERM` to
   the pid the exit source watched (a clean disconnect, and ssh removes its socket), or resolves the
   socket with `ssh -O check` when none is known yet. It never relies on `ControlPersist`, and it
-  signals only a pid whose executable is `/usr/bin/ssh`, so a recycled pid is left alone.
+  signals only a `/usr/bin/ssh` whose command line names that control path, so a recycled pid is
+  left alone.
 - **Launch sweeps the masters a force quit or crash left behind.** `SSHSocketSweep`, off-main,
-  reads both socket folders and checks only sockets named for a pid that is no longer running,
-  never this instance's or another running one's (dev and release share the folders). It removes
+  reads both socket folders and checks only sockets named for a pid that is no longer a running
+  ZenTerm, never this instance's or another running one's (dev and release share the folders). It removes
   one that refuses and ends a master that answers. Every `ssh -O check` runs with `-F /dev/null`,
   so it never runs the user's `Match exec`, and the sweep can check a socket whose host it cannot name.
 - **Writers go through `ConfigFileIO`:** never treat an unreadable file as empty, and

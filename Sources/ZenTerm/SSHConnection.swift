@@ -16,7 +16,7 @@ final class SSHConnection {
         var resolveMaster: (_ host: SSHHostID, _ path: URL, _ found: @escaping @MainActor (pid_t?) -> Void) -> Void
         var awaitExit: (_ pid: pid_t, _ exited: @escaping @MainActor () -> Void) -> () -> Void
         var after: (_ delay: TimeInterval, _ work: @escaping @MainActor () -> Void) -> Void
-        var endMaster: (_ pid: pid_t) -> Void
+        var endMaster: (_ pid: pid_t, _ controlPath: URL) -> Void
     }
 
     // A socket that answers no check would otherwise re-fire its watch at once and spin `ssh -O check`.
@@ -107,9 +107,10 @@ final class SSHConnection {
     func endMaster() {
         guard !isMasterEnded else { return }
         isMasterEnded = true
-        if let masterPID { return watchers.endMaster(masterPID) }
+        if let masterPID { return watchers.endMaster(masterPID, controlPath) }
         let end = watchers.endMaster
-        watchers.resolveMaster(host, controlPath) { pid in pid.map(end) }
+        let path = controlPath
+        watchers.resolveMaster(host, controlPath) { pid in pid.map { end($0, path) } }
     }
 
     private func resolvedBeforeLogin(_ pid: pid_t?) {
@@ -206,19 +207,33 @@ extension SSHConnection.Watchers {
         return nil
     }
 
-    nonisolated static func terminate(master pid: pid_t) {
-        guard isSSH(pid) else {
-            return Log.info("ssh: pid \(pid) is no longer ssh, so it is left running", category: .workspace)
+    nonisolated static func terminate(master pid: pid_t, at controlPath: URL) {
+        guard isMaster(pid, at: controlPath) else {
+            return Log.info("ssh: pid \(pid) is no longer this master, so it is left running", category: .workspace)
         }
         kill(pid, SIGTERM)
         Log.info("ssh connection ended (master pid \(pid))", category: .workspace)
     }
 
-    nonisolated static func isSSH(_ pid: pid_t) -> Bool {
-        guard pid > 1 else { return false }
+    nonisolated static func isMaster(_ pid: pid_t, at controlPath: URL) -> Bool {
+        guard pid > 1, executable(of: pid) == SSHLaunch.executable else { return false }
+        return commandLine(of: pid)?.contains(controlPath.path) == true
+    }
+
+    nonisolated static func executable(of pid: pid_t) -> String? {
         var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
-        guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return false }
-        return String(cString: buffer) == SSHLaunch.executable
+        guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
+        return String(cString: buffer)
+    }
+
+    // ssh retitles a master as `ssh: <ControlPath> [mux]` over its arguments, so the path survives either way.
+    private nonisolated static func commandLine(of pid: pid_t) -> String? {
+        var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
+        var size = 0
+        guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > 0 else { return nil }
+        var buffer = [UInt8](repeating: 0, count: size)
+        guard sysctl(&mib, 3, &buffer, &size, nil, 0) == 0 else { return nil }
+        return String(decoding: buffer.prefix(size).map { $0 == 0 ? 0x20 : $0 }, as: UTF8.self)
     }
 
     static let live = SSHConnection.Watchers(
@@ -249,5 +264,5 @@ extension SSHConnection.Watchers {
         after: { delay, work in
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { work() }
         },
-        endMaster: { pid in terminate(master: pid) })
+        endMaster: { pid, controlPath in terminate(master: pid, at: controlPath) })
 }
