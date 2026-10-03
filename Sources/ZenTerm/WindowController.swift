@@ -159,7 +159,7 @@ final class WindowController: NSObject {
             self?.attention.register(surface, tab: tab)
         }
         controller.onSurfaceReleased = { [weak self] surface in
-            self?.attention.tab(of: surface).flatMap { self?.workspace(of: $0) }?.connection?.release([surface])
+            self?.workspace(holding: surface)?.connection?.release([surface])
             self?.attention.release(surface)
             self?.agents.drop(surface)
             self?.agentStates.drop(surface)
@@ -378,6 +378,10 @@ final class WindowController: NSObject {
     // A tab's callbacks outlive its workspace being active, so every lookup by id searches all of them.
     private func workspace(of id: TabID) -> WorkspaceController? {
         workspaces.first { $0.tabIDs.contains(id) }
+    }
+
+    private func workspace(holding surface: SurfaceID) -> WorkspaceController? {
+        attention.tab(of: surface).flatMap(workspace(of:))
     }
 
     private func controller(_ id: TabID) -> TabController? { workspace(of: id)?.controller(id) }
@@ -2978,6 +2982,9 @@ final class WindowController: NSObject {
     private func titleChanged(surface: SurfaceID, title: String) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            if title.isEmpty, self.liveAgent(surface) != nil, self.workspace(holding: surface)?.host != nil {
+                return self.endHostAgent(surface)
+            }
             var joined = false
             if !self.agents.contains(surface), let name = AgentRules.agentName(matching: title) {
                 self.agents.identify(surface, name: name, source: .signal)
@@ -3260,6 +3267,13 @@ final class WindowController: NSObject {
         takeDownTurnEndCard(of: surface)
         attention.endAgent(surface)
         agentStates.drop(surface)
+    }
+
+    // A host sends no command result, so an agent clearing its title on the way out is its only exit.
+    private func endHostAgent(_ surface: SurfaceID) {
+        endAgent(surface)
+        agents.drop(surface)
+        renderAgents()
     }
 
     private func takeDownTurnEndCard(of surface: SurfaceID) {
