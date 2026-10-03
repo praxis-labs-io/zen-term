@@ -54,4 +54,36 @@ final class AppButtonTests: WindowTestCase {
         XCTAssertEqual(button.layer?.borderWidth, 1.5)
         XCTAssertEqual(button.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor)
     }
+
+    private func mountFitted(_ button: AppButton) throws -> NSWindow {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        let content = try XCTUnwrap(window.contentView)
+        content.addSubview(button)
+        NSLayoutConstraint.activate([
+            button.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            button.centerYAnchor.constraint(equalTo: content.centerYAnchor),
+        ])
+        content.layoutSubtreeIfNeeded()
+        return window
+    }
+
+    private func titleFont(_ button: AppButton) -> NSFont? {
+        button.attributedTitle.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+    }
+
+    func test_aLargeButton_laysOutTallerWithALargerLabel_andTheStandardSizeIsUnchanged() throws {
+        let large = AppButton(title: "Connect", variant: .primary, size: .large)
+        let standard = AppButton(title: "Connect", variant: .primary)
+        let windows = [try mountFitted(large), try mountFitted(standard)]
+
+        XCTAssertEqual(large.frame.height, 32)
+        XCTAssertEqual(titleFont(large)?.pointSize, 13)
+        XCTAssertEqual(large.layer?.cornerRadius, 8)
+        XCTAssertEqual(standard.frame.height, 26)
+        XCTAssertEqual(titleFont(standard)?.pointSize, 12)
+        XCTAssertEqual(standard.layer?.cornerRadius, 6)
+        withExtendedLifetime(windows) {}
+    }
 }
