@@ -112,7 +112,7 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         let screen = try XCTUnwrap(c.connectViewForTesting)
         XCTAssertTrue(c.window.firstResponder === screen)
-        XCTAssertEqual(screen.messageForTesting, "Press ↵ to connect to devbox.")
+        XCTAssertEqual(screen.messageForTesting, "Connect to devbox")
         XCTAssertEqual(c.tabOrderForTesting, [])
         XCTAssertEqual(c.window.title, "devbox")
     }

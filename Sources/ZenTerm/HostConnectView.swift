@@ -25,7 +25,7 @@ final class HostConnectView: NSView {
 
         icon.image = NSImage(systemSymbolName: "server.rack", accessibilityDescription: nil)?
             .withSymbolConfiguration(.init(pointSize: Self.iconSize, weight: .light))
-        message.stringValue = "Press ↵ to connect to \(host.name)."
+        message.stringValue = "Connect to \(host.name)"
         message.font = .systemFont(ofSize: 13)
         message.alignment = .center
         message.lineBreakMode = .byTruncatingMiddle
