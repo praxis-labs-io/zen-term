@@ -597,7 +597,9 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   closes the workspace back to Connect. Closing a host's last pane, tab or workspace returns
   to Connect and never counts as closing the window, even when the host is all the window holds.
   ⌘⌃W on a host is Disconnect, in the palette too: it never asks, even while connecting, and ↵
-  on Connect reconnects.
+  on Connect reconnects. A host leaving `ssh-hosts`, from Settings or a hand edit, disconnects in every
+  window and lands the way a removed host's Connect screen does. Settings warns first, in a
+  `ConfirmCard` over Settings, when the host is open in any window.
 - **A host's workspace ends its master when it shuts down, after its surfaces.** Ending it first
   makes every live pane exit 255 into the exit flows. `SSHConnection.endMaster` sends `SIGTERM` to
   the pid the exit source watched (a clean disconnect, and ssh removes its socket), or resolves the

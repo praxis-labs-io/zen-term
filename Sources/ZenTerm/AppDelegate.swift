@@ -245,6 +245,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             other.activate(host)
             return true
         }
+        wc.hostSessionInAnyWindow = { [weak self] host in
+            self?.windows.lazy.compactMap { $0.session(of: host) }.first
+        }
         if centered { wc.window.center() }
         wc.onClosed = { [weak self, weak wc] in
             guard let self, let wc else { return }
