@@ -592,12 +592,12 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   (the temp folder when that path passes 86 bytes, since ssh binds a longer temporary name
   first) and `ControlPersist=60`, as `xterm-256color` with busy tracking off (a remote shell
   sends no prompt marks). With `-t` it runs `exec env TERM_PROGRAM=… TERM_PROGRAM_VERSION=…
-  "$SHELL" -l` on the host, the values from `TerminalIdentity`, so programs there see the terminal
-  a local pane gives them: Claude reports progress only to a ghostty it recognises, and ssh
-  forwards neither variable without the server's `AcceptEnv`. `env`, because csh has no prefix
-  assignment. A remote command means sshd prints no MOTD or last-login line. A host whose ssh
-  config sets its own `RemoteCommand` launches plain, since ssh refuses both; the connection reads
-  that once with `ssh -G`, off-main, before its first login. Only the first surface, the login, starts until the socket appears;
+  "$SHELL" -l` on the host, the values from `TerminalIdentity`: Claude reports progress only to
+  a ghostty it recognises, and ssh forwards neither variable without the server's `AcceptEnv`.
+  `env`, because csh has no prefix assignment. A host whose ssh config sets its own
+  `RemoteCommand`, or whose config can't be read, launches plain, since ssh refuses both; the
+  connection reads that once with `ssh -G`, off-main, before its first login.
+  Only the first surface, the login, starts until the socket appears;
   the rest wait, so a host asks for its password once. `ControlSocketWatch` watches the
   folder rather than polling, `ssh -O check` names the master, and its exit source reports
   the host disconnected. The check runs before the login launches and again when the socket
