@@ -190,7 +190,7 @@
 # COLORTERM a local pane gets, so Claude reports its progress and programs use
 # 24-bit color as they do locally. The host's login banner and last-login line
 # do not show. A host whose ssh config sets RemoteCommand runs that command
-# instead.
+# instead, and a host whose config ssh cannot read opens a plain ssh login.
 
 # ─── Notifications ───────────────────────────────────────────────────────────
 
