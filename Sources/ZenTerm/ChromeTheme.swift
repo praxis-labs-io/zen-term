@@ -60,6 +60,7 @@ struct ChromeTheme: Equatable {
     /// Heavier than `border`: it has to contain an arbitrary color, and a black slot vanishes on the list card.
     static let swatchRing: CGFloat = 0.15
     static let gridDot: CGFloat = 0.048
+    static let tile: CGFloat = 0.043
 
     func fill(_ tint: TerminalColor? = nil, alpha: CGFloat) -> NSColor {
         (tint ?? foreground).nsColor.withAlphaComponent(min(1, alpha * Self.inkBoost * fillScale))
