@@ -103,8 +103,6 @@ final class AppButton: NSButton {
         restyle()
     }
 
-    override func hitTest(_ point: NSPoint) -> NSView? { super.hitTest(point) == nil ? nil : self }
-
     override var acceptsFirstResponder: Bool { isKeyboardFocusable && isEnabled }
 
     override func becomeFirstResponder() -> Bool {

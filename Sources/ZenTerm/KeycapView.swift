@@ -71,6 +71,8 @@ final class KeycapView: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
     /// Without it a keycap is the elastic view in a stack and stretches into a pill.
     override var intrinsicContentSize: NSSize {
         NSSize(width: tokenStack.fittingSize.width + Self.horizontalInset * 2, height: Self.height)
