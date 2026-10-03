@@ -36,8 +36,7 @@ final class ToastView: ShadowCardView {
     private let messageLabel: NSTextField
     private var closeButton: IconButton?
     private var actionButtons: [AppButton] = []
-    private let badgeFill = NSView()
-    private let badgeIcon = NSImageView()
+    private let badge: IconBadge
 
     private static let width: CGFloat = 300
 
@@ -65,6 +64,10 @@ final class ToastView: ShadowCardView {
         self.titleLabel = NSTextField(labelWithString: content.title)
         self.titleTailLabel = content.titleTail.map { NSTextField(labelWithString: $0) }
         self.messageLabel = NSTextField(wrappingLabelWithString: content.message)
+        let variant = content.variant
+        self.badge = IconBadge(
+            symbol: content.icon ?? variant.defaultIcon, accessibilityDescription: content.title, size: .regular,
+            role: { variant.role(in: $0) })
         super.init(frame: .zero)
 
         translatesAutoresizingMaskIntoConstraints = false
@@ -74,17 +77,6 @@ final class ToastView: ShadowCardView {
         layer?.borderWidth = 1
         layer?.borderColor = FloatShadow.edge.cgColor
         FloatShadow.applyShadow(to: self)
-
-        badgeFill.wantsLayer = true
-        badgeFill.layer?.cornerRadius = 7
-        badgeFill.translatesAutoresizingMaskIntoConstraints = false
-        badgeIcon.image = NSImage(
-            systemSymbolName: content.icon ?? content.variant.defaultIcon,
-            accessibilityDescription: content.title)
-        badgeIcon.symbolConfiguration = .init(pointSize: 13, weight: .semibold)
-        badgeIcon.translatesAutoresizingMaskIntoConstraints = false
-        badgeFill.addSubview(badgeIcon)
-        applyBadgeTheme()
 
         titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         titleLabel.textColor = Self.titleColor
@@ -143,7 +135,7 @@ final class ToastView: ShadowCardView {
             row.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
         }
 
-        let root = NSStackView(views: [badgeFill, col])
+        let root = NSStackView(views: [badge, col])
         root.orientation = .horizontal
         root.alignment = .top
         root.distribution = .fill
@@ -153,10 +145,6 @@ final class ToastView: ShadowCardView {
 
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: Self.width),
-            badgeFill.widthAnchor.constraint(equalToConstant: 28),
-            badgeFill.heightAnchor.constraint(equalToConstant: 28),
-            badgeIcon.centerXAnchor.constraint(equalTo: badgeFill.centerXAnchor),
-            badgeIcon.centerYAnchor.constraint(equalTo: badgeFill.centerYAnchor),
             root.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
             root.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
             root.topAnchor.constraint(equalTo: topAnchor, constant: 12),
@@ -247,14 +235,7 @@ final class ToastView: ShadowCardView {
         shortcutSlots.forEach { $0.reapplyTheme() }
         closeButton?.reapplyTheme()
         actionButtons.forEach { $0.reapplyTheme() }
-        applyBadgeTheme()
-    }
-
-    private func applyBadgeTheme() {
-        let chrome = Theme.current.chrome
-        let role = variant.role(in: chrome)
-        badgeFill.layer?.backgroundColor = chrome.tint(role, alpha: ChromeTheme.badgeTint).cgColor
-        badgeIcon.contentTintColor = role.nsColor
+        badge.reapplyTheme()
     }
 
     var actionTitleColorsForTesting: [NSColor] {
@@ -265,8 +246,8 @@ final class ToastView: ShadowCardView {
         }
     }
 
-    var badgeFillForTesting: CGColor? { badgeFill.layer?.backgroundColor }
-    var badgeIconTintForTesting: NSColor? { badgeIcon.contentTintColor }
+    var badgeFillForTesting: CGColor? { badge.fillForTesting }
+    var badgeIconTintForTesting: NSColor? { badge.iconTintForTesting }
 
     func setTitle(_ title: String) {
         guard titleLabel.stringValue != title else { return }

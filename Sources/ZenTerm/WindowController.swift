@@ -510,6 +510,7 @@ final class WindowController: NSObject {
                     self.window.setWindowChromeVisible(GeneralConfig.current.windowChrome)
                     self.sidebar.reapplyChromeLayout()
                     for controller in self.allTabControllers { controller.reapplyChromeLayout() }
+                    self.connectView?.reapplyChromeLayout()
                     self.reapplyFloatLayout()
                     self.reapplyModalLayout()
                     self.builtToasts?.reapplyInsets(
@@ -522,6 +523,7 @@ final class WindowController: NSObject {
                 }
                 if change.contains(.theme) || change.contains(.terminalBehavior) {
                     self.floats.reapplyTheme()
+                    self.connectView?.reapplyTheme()
                 }
                 if change.contains(.theme) {
                     self.tabBar.reapplyTheme()
@@ -530,7 +532,6 @@ final class WindowController: NSObject {
                     self.confirmToast?.reapplyTheme()
                     self.attentionCards.values.forEach { $0.reapplyTheme() }
                     self.fontSizeCard?.reapplyTheme()
-                    self.connectView?.reapplyTheme()
                 }
                 if change.contains(.toasts) {
                     self.builtToasts?.reapplyDuration(GeneralConfig.current.toastDuration)
@@ -854,7 +855,9 @@ final class WindowController: NSObject {
 
     private func hostConnectView(for host: SSHHostID) -> HostConnectView {
         if let connectView, connectView.host == host { return connectView }
-        let view = HostConnectView(host: host) { [weak self] in self?.connect(host) }
+        let view = HostConnectView(
+            host: host, onConnect: { [weak self] in self?.connect(host) },
+            onFocusRequest: { [weak self] in self?.restoreFocusToActive() })
         connectView = view
         return view
     }
@@ -966,7 +969,7 @@ final class WindowController: NSObject {
         } else if let activeController {
             activeController.restoreUnifiedFocus()
         } else if activeWorkspace == nil {
-            window.makeFirstResponder(connectView?.connectButton)
+            window.makeFirstResponder(connectView)
         }
     }
 
@@ -992,6 +995,7 @@ final class WindowController: NSObject {
     private func syncWindowFocus() {
         let holdsKeyFocus = windowIsKey && !sidebar.hasFocus
         activeController?.setHaloVisible(holdsKeyFocus && !sidebar.isRevealed)
+        connectView?.setHaloVisible(activeWorkspace == nil && holdsKeyFocus && !sidebar.isRevealed)
         for controller in allTabControllers {
             controller.setHoldsKeyFocus(holdsKeyFocus && controller === activeController)
         }
@@ -2269,11 +2273,17 @@ final class WindowController: NSObject {
         }
         if case .host(let host) = selection {
             if chord == .newTab { return connect(host) }
-            if chord == .navRight, sidebar.hasFocus { return restoreFocusToActive() }
             if case .toggleToolFloat(let id) = chord {
                 pendingModal = nil
                 _ = toggleRunningFloat(id)
                 return
+            }
+            switch chord {
+            case .navLeft: return navigate(.left)
+            case .navRight: return navigate(.right)
+            case .navUp: return navigate(.up)
+            case .navDown: return navigate(.down)
+            default: break
             }
         }
         guard activeWorkspace != nil || chord.worksWithoutTab else { return }
@@ -2387,8 +2397,27 @@ final class WindowController: NSObject {
     }
 
     private func navigate(_ direction: Direction) {
-        guard sidebar.hasFocus else { activeController?.navigate(direction); return }
+        guard sidebar.hasFocus else {
+            guard let activeController else { return navigateFromConnect(direction) }
+            return activeController.navigate(direction)
+        }
         if direction == .right { restoreFocusToActive() } else { activeController?.toastNoNeighbor(direction) }
+    }
+
+    private var connectNoNeighborToasts = ToastThrottle<Direction>()
+
+    // Connect is one panel with nothing beside it, so only its left edge leads anywhere: to the sidebar.
+    private func navigateFromConnect(_ direction: Direction) {
+        guard direction == .left, !focusSidebar(), let hint = sidebarHint(for: direction),
+            connectNoNeighborToasts.allows(direction)
+        else { return }
+        toasts.show(TabController.noNeighborToast(direction, hint: hint))
+    }
+
+    private func sidebarHint(for direction: Direction) -> String? {
+        guard direction == .left, !sidebar.isDocked else { return nil }
+        let chord = CommandCatalog.spec(for: .toggleSidebar).shortcut
+        return chord.isEmpty ? nil : "Press \(chord) to show the sidebar."
     }
 
     private func focusSidebar() -> Bool {
@@ -2678,11 +2707,7 @@ final class WindowController: NSObject {
             guard let self, c === self.activeController else { return false }
             return self.focusSidebar()
         }
-        c.noNeighborHint = { [weak self] direction in
-            guard let self, direction == .left, !sidebar.isDocked else { return nil }
-            let chord = CommandCatalog.spec(for: .toggleSidebar).shortcut
-            return chord.isEmpty ? nil : "Press \(chord) to show the sidebar."
-        }
+        c.noNeighborHint = { [weak self] direction in self?.sidebarHint(for: direction) }
         c.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
         c.onProgress = { [weak self] surface, progress in
             self?.progressChanged(surface: surface, progress: progress)

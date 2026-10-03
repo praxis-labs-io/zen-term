@@ -150,7 +150,7 @@ final class WindowSelectionTests: WindowTestCase {
 
         c.selectHostForTesting(SSHHostID(name: "devbox"))
 
-        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting?.connectButton)
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
         XCTAssertFalse(spawned.contains { $0.view === c.window.firstResponder })
     }
 
@@ -220,7 +220,7 @@ final class WindowSelectionTests: WindowTestCase {
         c.handle(.toggleSidebar)
 
         XCTAssertFalse(c.sidebarForTesting.hasFocus)
-        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting?.connectButton)
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
     }
 
     func test_aHost_dismissesTheOldestToast() throws {

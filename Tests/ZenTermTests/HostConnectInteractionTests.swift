@@ -172,8 +172,8 @@ final class HostConnectInteractionTests: WindowTestCase {
         let c = onConnectScreen()
 
         let screen = try XCTUnwrap(c.connectViewForTesting)
-        XCTAssertTrue(c.window.firstResponder === screen.connectButton)
-        XCTAssertEqual(screen.messageForTesting, "Press ↵ to connect to devbox.")
+        XCTAssertTrue(c.window.firstResponder === screen)
+        XCTAssertEqual(screen.messageForTesting, "Connect to devbox")
         XCTAssertEqual(c.tabOrderForTesting, [])
         XCTAssertEqual(c.window.title, "devbox")
     }
@@ -236,7 +236,7 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         c.handle(.navRight)
 
-        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting?.connectButton)
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
     }
 
     func test_whileConnecting_aNewPaneWaits_thenStartsOnceConnected() throws {
@@ -265,7 +265,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(c.selectedHostForTesting, host)
         XCTAssertEqual(c.workspaceIDsForTesting.count, local.count - 1)
         let screen = try XCTUnwrap(c.connectViewForTesting)
-        XCTAssertTrue(c.window.firstResponder === screen.connectButton)
+        XCTAssertTrue(c.window.firstResponder === screen)
         XCTAssertNotEqual(SSHHostStatusCenter.shared.status(of: host), .connected)
     }
 
@@ -496,7 +496,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         c.handle(.toggleToolFloat("pi"))
 
         XCTAssertFalse(c.floatsForTesting.isOpen)
-        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting?.connectButton)
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
         XCTAssertEqual(c.dockForTesting.visibleLayoutForTesting, [])
     }
 
@@ -656,7 +656,7 @@ final class HostConnectInteractionTests: WindowTestCase {
             c.isConfirmOpen, "a host close never takes the window, so it never asks to", file: file, line: line)
         XCTAssertTrue(c.window.isVisible, file: file, line: line)
         XCTAssertNotNil(c.connectViewForTesting, file: file, line: line)
-        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting?.connectButton, file: file, line: line)
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting, file: file, line: line)
     }
 
     func test_closingTheLastPaneOfAWindowsOnlyHost_returnsToConnectWithoutAsking() throws {
@@ -803,5 +803,164 @@ final class HostConnectInteractionTests: WindowTestCase {
             let message = CloseWarning.message(closing: .login(host: "devbox", closing: target), naming: [])
             XCTAssertLessThanOrEqual(height(message), height("One\nTwo"), message)
         }
+    }
+
+    private func halo(_ c: WindowController) throws -> Float {
+        try XCTUnwrap(c.connectViewForTesting).panelForTesting.haloOpacityForTesting
+    }
+
+    private func postConfigChange(_ change: ConfigChange) {
+        NotificationCenter.default.post(
+            name: .configDidChange, object: nil, userInfo: [ConfigChange.userInfoKey: change])
+        drainMainQueue()
+    }
+
+    func test_connect_isFocusedAndHaloed_likeAPane() throws {
+        let c = onConnectScreen()
+
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
+        XCTAssertGreaterThan(try halo(c), 0)
+    }
+
+    func test_connectsHalo_followsTheWindowsKeyState() throws {
+        let c = onConnectScreen()
+
+        c.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification))
+        XCTAssertEqual(try halo(c), 0)
+        c.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
+
+        XCTAssertGreaterThan(try halo(c), 0)
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
+    }
+
+    func test_clickingConnect_fromTheSidebar_takesFocusAndTheHaloBack() throws {
+        let c = onConnectScreen()
+        c.handle(.focusSidebar)
+        XCTAssertEqual(try halo(c), 0, "precondition: the sidebar holds focus")
+        let panel = try XCTUnwrap(c.connectViewForTesting).panelForTesting
+        let event = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+
+        panel.mouseDown(with: event)
+
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
+        XCTAssertFalse(c.sidebarForTesting.hasFocus)
+        XCTAssertGreaterThan(try halo(c), 0)
+    }
+
+    func test_aRevealedFloatingSidebar_takesConnectsHalo() throws {
+        let c = onConnectScreen()
+        c.window.setContentSize(c.window.contentMinSize)
+        c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
+
+        c.handle(.toggleSidebar)
+        XCTAssertTrue(c.sidebarForTesting.isRevealed, "precondition: too narrow to dock, so it floats")
+        XCTAssertEqual(try halo(c), 0)
+        c.handle(.toggleSidebar)
+
+        XCTAssertGreaterThan(try halo(c), 0)
+    }
+
+    func test_connect_paintsTheTerminalBackground_andFollowsATranslucentOne() throws {
+        let c = onConnectScreen()
+        let panel = try XCTUnwrap(c.connectViewForTesting).panelForTesting
+        XCTAssertEqual(panel.paintedBackgroundForTesting.fill, Theme.current.terminal.background.nsColor.cgColor)
+
+        var config = GeneralConfig.current
+        config.backgroundAlpha = 0.5
+        GeneralConfig.setCurrentForTesting(config)
+        postConfigChange(.terminalBehavior)
+
+        XCTAssertNil(panel.paintedBackgroundForTesting.fill, "translucent, the ring paints instead of the fill")
+        XCTAssertEqual(panel.paintedBackgroundForTesting.ring.alphaComponent, 0.5, accuracy: 0.01)
+    }
+
+    func test_theConnectButton_isTheFilledPrimaryButton_withNoOutlineOfItsOwn() throws {
+        let c = onConnectScreen()
+        let button = try XCTUnwrap(c.connectViewForTesting).connectButtonForTesting
+
+        XCTAssertFalse(button.showsFocusOutline)
+        XCTAssertFalse(button.acceptsFirstResponder, "the panel takes ↵, so the button never draws a focus ring")
+        XCTAssertEqual(button.layer?.borderWidth, 0)
+        XCTAssertNotNil(button.layer?.backgroundColor)
+    }
+
+    func test_leftFromConnect_movesToTheSidebar_andRightComesBack_withTheHalo() throws {
+        let c = onConnectScreen()
+
+        c.handle(.navLeft)
+        XCTAssertTrue(c.sidebarForTesting.hasFocus, "Connect's left edge leads into the sidebar, as a pane's does")
+        XCTAssertEqual(try halo(c), 0)
+        c.handle(.navRight)
+
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
+        XCTAssertGreaterThan(try halo(c), 0)
+    }
+
+    func test_focusSidebarFromConnect_dropsTheHalo_andRightBringsItBack() throws {
+        let c = onConnectScreen()
+
+        c.handle(.focusSidebar)
+        XCTAssertEqual(try halo(c), 0)
+        c.handle(.navRight)
+
+        XCTAssertGreaterThan(try halo(c), 0)
+    }
+
+    func test_upDownAndRightOnConnect_doNothing() throws {
+        let c = onConnectScreen()
+
+        for chord: KeyInterceptor.ReservedChord in [.navUp, .navDown, .navRight] {
+            c.handle(chord)
+            XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting, "\(chord) moved focus")
+        }
+
+        guard let content = c.window.contentView else { return XCTFail("no content") }
+        XCTAssertFalse(
+            descendants(of: content).contains { ($0 as? NSTextField)?.stringValue.hasPrefix("No pane") == true },
+            "Connect has no neighbours, so there's nothing to say")
+    }
+
+    func test_leftFromConnect_withTheSidebarHidden_saysHowToShowIt_likeAPane() throws {
+        let c = onConnectScreen()
+        c.handle(.toggleSidebar)
+        c.handle(.focusSidebar)
+        c.handle(.toggleSidebar)
+        XCTAssertFalse(c.sidebarForTesting.isShown, "precondition: the sidebar is hidden")
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
+
+        c.handle(.navLeft)
+
+        let chord = CommandCatalog.spec(for: .toggleSidebar).shortcut
+        XCTAssertTrue(showsToast("No pane left to focus\nPress \(chord) to show the sidebar.", in: c))
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
+    }
+
+    func test_fillScreen_worksOverConnect_andTogglesBack() throws {
+        let c = onConnectScreen()
+        let visible = try XCTUnwrap((c.window.screen ?? NSScreen.main)?.visibleFrame, "no screen to fill")
+        let before = c.window.frame
+        try XCTSkipIf(before == visible, "the window already fills the screen")
+
+        c.handle(.fillScreen)
+        XCTAssertEqual(c.window.frame.width, visible.width, accuracy: 1)
+        XCTAssertEqual(c.window.frame.height, visible.height, accuracy: 1)
+        c.handle(.fillScreen)
+
+        XCTAssertEqual(c.window.frame.width, before.width, accuracy: 1)
+        XCTAssertEqual(c.window.frame.height, before.height, accuracy: 1)
+    }
+
+    func test_connectLeadsWithALargeNeutralBadge() throws {
+        let c = onConnectScreen()
+        let screen = try XCTUnwrap(c.connectViewForTesting)
+        let badge = try XCTUnwrap(descendants(of: screen).lazy.compactMap { $0 as? IconBadge }.first)
+        let chrome = Theme.current.chrome
+
+        XCTAssertEqual(badge.iconTintForTesting, chrome.muted.nsColor)
+        XCTAssertEqual(badge.fillForTesting, chrome.tint(chrome.muted, alpha: ChromeTheme.badgeTint).cgColor)
+        XCTAssertEqual(badge.fittingSize.width, IconBadge.Size.large.side)
     }
 }
