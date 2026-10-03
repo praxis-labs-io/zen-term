@@ -25,7 +25,7 @@ final class SSHHostChordTests: WindowTestCase {
     override func tearDownWithError() throws {
         for host in hosts.map(SSHHostID.init) {
             SSHHostStatusCenter.shared.setConnected(false, host: host)
-            SSHHostStatusCenter.shared.setReachable(true, host: host)
+            SSHHostStatusCenter.shared.setReachable(false, host: host)
         }
         for controller in controllers {
             controller.windowWillClose(Notification(name: NSWindow.willCloseNotification))
@@ -44,7 +44,9 @@ final class SSHHostChordTests: WindowTestCase {
         var config = GeneralConfig.builtIn
         config.sshHosts = hosts
         GeneralConfig.setCurrentForTesting(config)
-        for host in offline { SSHHostStatusCenter.shared.setReachable(false, host: SSHHostID(name: host)) }
+        for host in hosts where !offline.contains(host) {
+            SSHHostStatusCenter.shared.setReachable(true, host: SSHHostID(name: host))
+        }
         for host in connected { SSHHostStatusCenter.shared.setConnected(true, host: SSHHostID(name: host)) }
         let c = WindowController(contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
         controllers.append(c)
@@ -134,14 +136,49 @@ final class SSHHostChordTests: WindowTestCase {
         XCTAssertEqual(c.activeWorkspaceIDForTesting, workspace)
     }
 
-    func test_hostRows_readTheirStatus() throws {
+    private func status(_ host: String, in c: WindowController) throws -> String? {
+        try row(host, in: c).accessibilityValue() as? String
+    }
+
+    func test_hostRows_sayTheirStatusToVoiceOver_andShowNoStatusText() throws {
         let c = makeWindow(hosts: ["down", "up", "live"], offline: ["down"], connected: ["live"])
 
-        XCTAssertEqual(try row("down", in: c).detailForTesting, "Offline")
-        XCTAssertEqual(try row("up", in: c).detailForTesting, "Online")
-        XCTAssertEqual(try row("live", in: c).detailForTesting, "Connected")
-        XCTAssertEqual(try row("down", in: c).variant, .faint)
-        XCTAssertEqual(try row("up", in: c).variant, .standard)
+        XCTAssertEqual(try status("down", in: c), "Offline")
+        XCTAssertEqual(try status("up", in: c), "Online")
+        XCTAssertEqual(try status("live", in: c), "Connected")
+        XCTAssertEqual(try row("up", in: c).detailForTesting, "")
+    }
+
+    func test_hostRows_dotTheirStatusInItsInk() throws {
+        let c = makeWindow(hosts: ["down", "up", "live"], offline: ["down"], connected: ["live"])
+
+        XCTAssertEqual(try row("down", in: c).dotColorForTesting, SSHHostStatus.offline.ink.cgColor)
+        XCTAssertEqual(try row("up", in: c).dotColorForTesting, SSHHostStatus.online.ink.cgColor)
+        XCTAssertEqual(try row("live", in: c).dotColorForTesting, SSHHostStatus.connected.ink.cgColor)
+    }
+
+    func test_anOfflineHost_paintsItsTitleLikeAnIdleAgent_andGoingOnlineRepaintsItInPlace() throws {
+        let c = makeWindow(hosts: ["devbox"], offline: ["devbox"])
+        let offline = try row("devbox", in: c)
+        XCTAssertEqual(offline.titleInkForTesting, AttentionTone.idle.ink)
+
+        SSHHostStatusCenter.shared.setReachable(true, host: SSHHostID(name: "devbox"))
+
+        XCTAssertTrue(try row("devbox", in: c) === offline, "the row is repainted, not rebuilt")
+        XCTAssertEqual(offline.titleInkForTesting, Theme.current.chrome.foreground.nsColor)
+        XCTAssertEqual(offline.dotColorForTesting, SSHHostStatus.online.ink.cgColor)
+        XCTAssertEqual(try status("devbox", in: c), "Online")
+    }
+
+    func test_aHostConnecting_repaintsItsDotInPlace() throws {
+        let c = makeWindow(hosts: ["devbox"])
+        let online = try row("devbox", in: c)
+
+        SSHHostStatusCenter.shared.setConnected(true, host: SSHHostID(name: "devbox"))
+
+        XCTAssertTrue(try row("devbox", in: c) === online, "the row is repainted, not rebuilt")
+        XCTAssertEqual(online.dotColorForTesting, SSHHostStatus.connected.ink.cgColor)
+        XCTAssertEqual(try status("devbox", in: c), "Connected")
     }
 
     func test_onlyReachableHostRows_offerAWorkspaceShortcut() throws {
@@ -158,7 +195,7 @@ final class SSHHostChordTests: WindowTestCase {
 
         SSHHostStatusCenter.shared.setReachable(false, host: SSHHostID(name: "devbox"))
 
-        XCTAssertEqual(try row("devbox", in: c).detailForTesting, "Offline")
+        XCTAssertEqual(try status("devbox", in: c), "Offline")
         XCTAssertNil(try row("devbox", in: c).tooltip?.shortcutForTesting)
         c.handle(.selectWorkspace(2))
         XCTAssertNil(selected(c))
@@ -264,5 +301,19 @@ final class SSHHostChordTests: WindowTestCase {
         try click(row("devbox", in: c))
 
         XCTAssertFalse(c.search.isActive)
+    }
+
+    func test_aNewHost_readsOfflineAndTakesNoNumber_untilItsFirstAnswer() throws {
+        let c = makeWindow(hosts: [])
+        configure(hosts: ["fresh"])
+        hosts = ["fresh"]
+
+        XCTAssertEqual(try status("fresh", in: c), "Offline")
+        c.handle(.selectWorkspace(2))
+        XCTAssertNil(selected(c), "an unanswered host is not a stop")
+
+        SSHHostStatusCenter.shared.setReachable(true, host: SSHHostID(name: "fresh"))
+        c.handle(.selectWorkspace(2))
+        XCTAssertEqual(selected(c), "fresh")
     }
 }

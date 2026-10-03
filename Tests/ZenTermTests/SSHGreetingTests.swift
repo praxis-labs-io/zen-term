@@ -61,20 +61,33 @@ final class SSHGreetingTests: XCTestCase {
     func test_aServerWithAPreamble_answersSSH() throws {
         let port = try serve("Welcome to devbox\r\nSSH-2.0-test\r\n")
 
-        XCTAssertTrue(SSHHostProbe.answersSSH("127.0.0.1", port: port, connectTimeout: 2, bannerTimeout: 2))
+        XCTAssertEqual(
+            SSHHostProbe.answersSSH("127.0.0.1", port: port, connectTimeout: 2, bannerTimeout: 2), .reachable)
     }
 
     func test_aSlowGreeting_getsItsOwnTimeoutPastTheConnect() throws {
         let port = try serve("SSH-2.0-test\r\n", after: 1.5)
 
-        XCTAssertTrue(SSHHostProbe.answersSSH("127.0.0.1", port: port, connectTimeout: 1, bannerTimeout: 3))
+        XCTAssertEqual(
+            SSHHostProbe.answersSSH("127.0.0.1", port: port, connectTimeout: 1, bannerTimeout: 3), .reachable)
     }
 
     func test_aSilentServer_isNotSSH_onceTheGreetingTimesOut() throws {
         let port = try serve(nil)
         let start = Date()
 
-        XCTAssertFalse(SSHHostProbe.answersSSH("127.0.0.1", port: port, connectTimeout: 2, bannerTimeout: 0.5))
+        XCTAssertEqual(
+            SSHHostProbe.answersSSH("127.0.0.1", port: port, connectTimeout: 2, bannerTimeout: 0.5), .bannerMissing)
         XCTAssertLessThan(Date().timeIntervalSince(start), 1.5)
+    }
+
+    func test_aClosedPort_isAFailedConnect_notAMissingBanner() throws {
+        let port = try serve(nil)
+        listener?.cancel()
+        listener = nil
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+
+        XCTAssertEqual(
+            SSHHostProbe.answersSSH("127.0.0.1", port: port, connectTimeout: 2, bannerTimeout: 2), .connectFailed)
     }
 }
