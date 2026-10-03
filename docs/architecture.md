@@ -504,7 +504,10 @@ request decodes on the connection's thread, applies on main through `ControlResp
 and is written back from the connection's thread, so a client that stops reading never
 stalls main. A command that reads off-main (`workspace.open` reading the workspaces file)
 replies when the read lands, holding only its own connection. A token resolves to its window, tab and surface by walking the windows
-(`ControlResponder.locate`), not through a second registry.
+(`ControlResponder.locate`), not through a second registry. `action` hands its keymap action
+to `AppDelegate.route`, the path a reserved chord takes, so it meets the same app-global and
+modal gates a keystroke does; only the keystroke-level pass-through guards are skipped, since
+there is no key to pass through.
 
 **The theme state file** backs zen-theme.nvim (`docs/nvim-theme-protocol.md`).
 `ThemePublisher` writes `~/Library/Application Support/ZenTerm/theme.json` at launch and

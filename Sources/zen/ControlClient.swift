@@ -27,6 +27,11 @@ struct ControlClient {
             throw .noInstance("Couldn't send the request to ZenTerm at \(path).")
         }
         let reply = try readLine(from: fd)
+        if let spoken = try? JSONDecoder().decode(SpokenVersion.self, from: reply).v, spoken > ControlWire.version {
+            throw .app(
+                "ZenTerm speaks protocol version \(spoken), and this zen speaks \(ControlWire.version). "
+                    + "Run the zen inside that ZenTerm, at ZenTerm.app/Contents/MacOS/zen.")
+        }
         let response: ControlResponse<Payload>
         do {
             response = try JSONDecoder().decode(ControlResponse<Payload>.self, from: reply)
@@ -50,6 +55,8 @@ struct ControlClient {
         let files = (details.files ?? []).map { "  \($0)" }
         return ([head] + files + panes + floats + ["Pass --force to go ahead."]).joined(separator: "\n")
     }
+
+    private struct SpokenVersion: Decodable { let v: Int }
 
     private func readLine(from fd: Int32) throws(ZenFailure) -> Data {
         var reply = Data()
