@@ -308,6 +308,8 @@ final class WindowController: NSObject {
 
     private var configObserver: NSObjectProtocol?
     private var hostStatusObserver: NSObjectProtocol?
+    // Read at the change, not from the sidebar, which a disconnect's status change redraws first.
+    private var hostOrder = GeneralConfig.current.sshHosts.map(SSHHostID.init)
     private var attentionObserver: NSObjectProtocol?
     /// Raises the window holding the agent that has waited longest and lands on it. False when it has gone.
     var revealWaitingAgentElsewhere: ((Int) -> Bool)?
@@ -556,8 +558,10 @@ final class WindowController: NSObject {
                     self.renderDock()
                 }
                 if change.contains(.sshHosts) {
+                    let shownHosts = self.hostOrder
+                    self.hostOrder = GeneralConfig.current.sshHosts.map(SSHHostID.init)
                     self.disconnectRemovedHosts()
-                    self.leaveRemovedHost(shownHosts: self.sidebar.hostIDs)
+                    self.leaveRemovedHost(shownHosts: shownHosts)
                     self.renderTabBar()
                 }
                 if change.contains(.theme) || change.contains(.keymap) || change.contains(.floats) {

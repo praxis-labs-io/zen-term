@@ -238,6 +238,21 @@ final class SSHHostTurnOffTests: WindowTestCase {
         XCTAssertEqual(fake.ended, [42])
     }
 
+    func test_aConnectedHostTurnedOff_landsOnTheNextRowInSidebarOrder() throws {
+        let prod = SSHHostID(name: "prod")
+        for host in [prod, typed] { SSHHostStatusCenter.shared.setReachable(true, host: host) }
+        defer { for host in [prod, typed] { SSHHostStatusCenter.shared.setReachable(false, host: host) } }
+        let c = makeWindow()
+        open(devbox, in: c)
+
+        try "ssh-hosts = prod, deploy@10.0.0.5\n".write(
+            to: configRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+        AppConfig.reload()
+        drainMainQueue()
+
+        XCTAssertEqual(c.selectedHostForTesting, prod, "devbox sat above prod, so prod is next")
+    }
+
     func test_aHostTurnedOffByEditingTheConfig_disconnects() throws {
         let c = makeWindow()
         open(devbox, in: c)
