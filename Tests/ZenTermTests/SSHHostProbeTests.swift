@@ -26,7 +26,11 @@ final class SSHHostProbeTests: XCTestCase {
             lock.withLock { queued[host] = answers }
         }
 
-        func resolve(_ host: String) -> SSHHostResolver.Endpoint? {
+        func resolve(_ host: String) -> SSHHostResolver.Resolution? {
+            SSHHostResolver.Resolution(endpoint: endpoint(host), destination: "drew@\(host).lan")
+        }
+
+        private func endpoint(_ host: String) -> SSHHostResolver.Endpoint? {
             let held: DispatchSemaphore? = lock.withLock {
                 resolved.append(host)
                 defer { gate = nil }
@@ -199,6 +203,25 @@ final class SSHHostProbeTests: XCTestCase {
 
         waitUntil(answers.askCount("devbox") == 2, "the second round")
         XCTAssertEqual(answers.resolveCount("devbox"), 1)
+    }
+
+    func test_aResolvedHost_publishesWhereSSHWillSignIn_fromTheSameResolution() {
+        probe.setHosts(["devbox"])
+        waitUntil(center.destination(of: SSHHostID(name: "devbox")) == "drew@devbox.lan", "the destination to land")
+
+        probe.probeAll()
+
+        waitUntil(answers.askCount("devbox") == 2, "the second round")
+        XCTAssertEqual(answers.resolveCount("devbox"), 1, "the destination must not cost a second ssh -G")
+    }
+
+    func test_aRemovedHost_forgetsItsDestination() {
+        probe.setHosts(["devbox"])
+        waitUntil(center.destination(of: SSHHostID(name: "devbox")) != nil, "the destination to land")
+
+        probe.setHosts([])
+
+        XCTAssertNil(center.destination(of: SSHHostID(name: "devbox")))
     }
 
     func test_aNetworkChange_resolvesAgain() {

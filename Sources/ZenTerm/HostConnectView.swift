@@ -27,7 +27,7 @@ final class HostConnectView: NSView {
     private let route: HostRouteView
     private let eyebrow = NSTextField(labelWithString: "")
     private let title = NSTextField(labelWithString: "")
-    private let destination = NSTextField(labelWithString: "")
+    private let destinationLine = NSTextField(labelWithString: "")
     private let detail = NSTextField(wrappingLabelWithString: "")
     private let connectButton: AppButton
     private let stack = NSStackView()
@@ -35,7 +35,7 @@ final class HostConnectView: NSView {
     private var gutterConstraints: [NSLayoutConstraint] = []
 
     init(
-        host: SSHHostID, status: SSHHostStatus, onConnect: @escaping () -> Void,
+        host: SSHHostID, status: SSHHostStatus, destination: String?, onConnect: @escaping () -> Void,
         onFocusRequest: @escaping () -> Void
     ) {
         self.host = host
@@ -52,22 +52,22 @@ final class HostConnectView: NSView {
         eyebrow.maximumNumberOfLines = 1
         title.maximumNumberOfLines = 1
         title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        destination.font = Self.destinationFont
-        destination.alignment = .center
-        destination.lineBreakMode = .byTruncatingMiddle
-        destination.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        destinationLine.font = Self.destinationFont
+        destinationLine.alignment = .center
+        destinationLine.lineBreakMode = .byTruncatingMiddle
+        destinationLine.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         detail.font = Self.detailFont
         detail.alignment = .center
         detail.preferredMaxLayoutWidth = Self.detailMaxWidth
 
-        [route, eyebrow, title, destination, detail, connectButton].forEach(stack.addArrangedSubview)
+        [route, eyebrow, title, destinationLine, detail, connectButton].forEach(stack.addArrangedSubview)
         stack.orientation = .vertical
         stack.alignment = .centerX
         stack.detachesHiddenViews = true
         stack.setCustomSpacing(Self.routeToEyebrow, after: route)
         stack.setCustomSpacing(Self.eyebrowToTitle, after: eyebrow)
         stack.setCustomSpacing(Self.titleToDestination, after: title)
-        stack.setCustomSpacing(Self.destinationToDetail, after: destination)
+        stack.setCustomSpacing(Self.destinationToDetail, after: destinationLine)
         stack.setCustomSpacing(Self.detailToButton, after: detail)
         stack.setVisibilityPriority(Self.routeVisibility, for: route)
         stack.setVisibilityPriority(Self.eyebrowVisibility, for: eyebrow)
@@ -99,6 +99,7 @@ final class HostConnectView: NSView {
             stack.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -Self.edgeSpacing),
         ])
         route.setStatus(status)
+        setDestination(destination)
         reapplyTheme()
     }
 
@@ -121,8 +122,8 @@ final class HostConnectView: NSView {
     }
 
     func setDestination(_ text: String?) {
-        destination.stringValue = text ?? ""
-        destination.isHidden = text == nil
+        destinationLine.stringValue = text ?? ""
+        destinationLine.isHidden = text == nil
     }
 
     func reapplyTheme() {
@@ -135,7 +136,7 @@ final class HostConnectView: NSView {
         title.attributedStringValue = Self.line(
             "Connect to \(host.name)", font: Self.titleFont, kern: Self.titleKern, color: chrome.foreground.nsColor,
             breaking: .byTruncatingMiddle)
-        destination.textColor = chrome.ink(.muted)
+        destinationLine.textColor = chrome.ink(.muted)
         applyDetail()
         connectButton.reapplyTheme()
         panel.reapplyTheme()
@@ -167,7 +168,7 @@ final class HostConnectView: NSView {
 
     var titleForTesting: String { title.stringValue }
     var detailForTesting: String { detail.stringValue }
-    var destinationForTesting: String? { destination.isHidden ? nil : destination.stringValue }
+    var destinationForTesting: String? { destinationLine.isHidden ? nil : destinationLine.stringValue }
     var routeForTesting: HostRouteView { route }
     var detachedForTesting: [NSView] { stack.detachedViews }
     var panelForTesting: PanelHostView { panel }

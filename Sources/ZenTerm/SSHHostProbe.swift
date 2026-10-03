@@ -18,7 +18,7 @@ final class SSHHostProbe {
     }
 
     #if DEBUG
-        nonisolated(unsafe) static var resolveOverrideForTesting: ((String) -> SSHHostResolver.Endpoint?)?
+        nonisolated(unsafe) static var resolveOverrideForTesting: ((String) -> SSHHostResolver.Resolution?)?
         nonisolated(unsafe) static var bannerOverrideForTesting: ((String, UInt16) -> Bool)?
     #endif
 
@@ -44,7 +44,7 @@ final class SSHHostProbe {
     private var hosts: [String] = []
     private var proxied: Set<String> = []
     // `ssh -G` reruns `Match exec`, which can prompt, so a host resolves once per config and network.
-    private var endpoints: [String: SSHHostResolver.Endpoint] = [:]
+    private var resolutions: [String: SSHHostResolver.Resolution] = [:]
     private var configStamp: [String: Date]?
     private var inFlight: Set<String> = []
     private var generation = 0
@@ -74,10 +74,11 @@ final class SSHHostProbe {
         for host in hosts where !next.contains(host) {
             proxied.remove(host)
             center.setReachable(false, host: SSHHostID(name: host))
+            center.setDestination(nil, host: SSHHostID(name: host))
         }
         let added = next.filter { !hosts.contains($0) }
         hosts = next
-        endpoints = [:]
+        resolutions = [:]
         refreshWatching()
         probe(added)
     }
@@ -87,7 +88,7 @@ final class SSHHostProbe {
     func networkChanged(isUp: Bool) {
         generation += 1
         isNetworkUp = isUp
-        endpoints = [:]
+        resolutions = [:]
         pendingSettle?.cancel()
         guard isUp else {
             for host in hosts where !proxied.contains(host) {
@@ -182,20 +183,21 @@ final class SSHHostProbe {
     // Without a network only `ssh -G` runs, so a jump host still learns it is one.
     private func probe(_ targets: [String], configStamp stamp: [String: Date]) {
         if stamp != configStamp {
-            endpoints = [:]
+            resolutions = [:]
             configStamp = stamp
         }
         let isNetworkUp = self.isNetworkUp
         for host in targets where !inFlight.contains(host) && center.status(of: SSHHostID(name: host)) != .connected {
             inFlight.insert(host)
             let generation = self.generation
-            let cached = endpoints[host]
+            let cached = resolutions[host]
             Self.queue.addOperation { [weak self] in
-                let endpoint = cached ?? Self.resolve(host)
-                let answer = Self.answer(endpoint, isNetworkUp: isNetworkUp)
+                let resolution = cached ?? Self.resolve(host)
+                let answer = Self.answer(resolution?.endpoint, isNetworkUp: isNetworkUp)
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated {
-                        self?.land(answer, from: endpoint, for: host, generation: generation, isNetworkUp: isNetworkUp)
+                        self?.land(
+                            answer, from: resolution, for: host, generation: generation, isNetworkUp: isNetworkUp)
                     }
                 }
             }
@@ -204,10 +206,11 @@ final class SSHHostProbe {
 
     // An answer from before a network change describes the old network, so the host is asked again.
     private func land(
-        _ answer: Answer, from endpoint: SSHHostResolver.Endpoint?, for host: String, generation: Int,
+        _ answer: Answer, from resolution: SSHHostResolver.Resolution?, for host: String, generation: Int,
         isNetworkUp: Bool
     ) {
         inFlight.remove(host)
+        let endpoint = resolution?.endpoint
         let isStale = generation != self.generation
         Log.info(
             "ssh probe \(host) at \(Self.describe(endpoint)), network \(isNetworkUp ? "up" : "down"), "
@@ -215,9 +218,10 @@ final class SSHHostProbe {
             category: .workspace)
         guard hosts.contains(host) else { return }
         guard !isStale else { return probe([host]) }
-        endpoints[host] = endpoint
+        resolutions[host] = resolution
         if endpoint == .proxied { proxied.insert(host) } else { proxied.remove(host) }
         center.setReachable(answer.isReachable, host: SSHHostID(name: host))
+        center.setDestination(resolution?.destination, host: SSHHostID(name: host))
     }
 
     private static func describe(_ endpoint: SSHHostResolver.Endpoint?) -> String {
@@ -236,11 +240,11 @@ final class SSHHostProbe {
         return stamp
     }
 
-    nonisolated private static func resolve(_ host: String) -> SSHHostResolver.Endpoint? {
+    nonisolated private static func resolve(_ host: String) -> SSHHostResolver.Resolution? {
         #if DEBUG
             if let resolveOverrideForTesting { return resolveOverrideForTesting(host) }
         #endif
-        return SSHHostResolver.endpoint(of: host)
+        return SSHHostResolver.resolution(of: host)
     }
 
     nonisolated private static func answer(_ endpoint: SSHHostResolver.Endpoint?, isNetworkUp: Bool) -> Answer {

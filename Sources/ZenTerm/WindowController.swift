@@ -501,7 +501,7 @@ final class WindowController: NSObject {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.renderTabBar()
-                self?.connectView.map { $0.setStatus(SSHHostStatusCenter.shared.status(of: $0.host)) }
+                self?.refreshConnectView()
             }
         }
 
@@ -871,11 +871,18 @@ final class WindowController: NSObject {
         if let connectView, connectView.host == host { return connectView }
         let view = HostConnectView(
             host: host, status: SSHHostStatusCenter.shared.status(of: host),
+            destination: SSHHostStatusCenter.shared.destination(of: host),
             onConnect: { [weak self] in self?.connect(host) },
             onFocusRequest: { [weak self] in self?.restoreFocusToActive() })
         connectView = view
-        SSHHostResolver.destinations(of: [host.name]) { [weak view] found in view?.setDestination(found[host.name]) }
         return view
+    }
+
+    private func refreshConnectView() {
+        guard let connectView else { return }
+        let center = SSHHostStatusCenter.shared
+        connectView.setStatus(center.status(of: connectView.host))
+        connectView.setDestination(center.destination(of: connectView.host))
     }
 
     private func mount(_ transition: MountTransition) {

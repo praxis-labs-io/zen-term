@@ -4,7 +4,7 @@ extension Notification.Name {
     static let sshHostStatusDidChange = Notification.Name("sshHostStatusDidChange")
 }
 
-// Each SSH host's status for every window: Offline until the probe reaches it, overridden by a live connection.
+// Each SSH host's status and resolved destination for every window: Offline until the probe reaches it, overridden by a live connection.
 @MainActor
 final class SSHHostStatusCenter {
     static let shared = SSHHostStatusCenter()
@@ -13,6 +13,7 @@ final class SSHHostStatusCenter {
 
     private var reachable: Set<SSHHostID> = []
     private var connected: Set<SSHHostID> = []
+    private var destinations: [SSHHostID: String] = [:]
 
     func status(of host: SSHHostID) -> SSHHostStatus {
         if connected.contains(host) { return .connected }
@@ -29,6 +30,14 @@ final class SSHHostStatusCenter {
         announcingChange(of: host) {
             if isReachable { reachable.insert(host) } else { reachable.remove(host) }
         }
+    }
+
+    func destination(of host: SSHHostID) -> String? { destinations[host] }
+
+    func setDestination(_ destination: String?, host: SSHHostID) {
+        guard destinations[host] != destination else { return }
+        destinations[host] = destination
+        NotificationCenter.default.post(name: .sshHostStatusDidChange, object: nil)
     }
 
     // Only a real change announces itself, so a probe round that confirms what is shown redraws nothing.

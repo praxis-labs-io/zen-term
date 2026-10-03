@@ -35,7 +35,6 @@ final class HostConnectInteractionTests: WindowTestCase {
         GeneralConfig.setCurrentForTesting(config)
         fake = FakeSSHWatchers()
         SSHConnection.watchersOverrideForTesting = fake.watchers
-        SSHHostResolver.destinationOverrideForTesting = { _ in "drew@10.0.0.12" }
     }
 
     override func tearDownWithError() throws {
@@ -46,7 +45,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         controllers = []
         spawned = []
         SSHConnection.watchersOverrideForTesting = nil
-        SSHHostResolver.destinationOverrideForTesting = nil
+        SSHHostStatusCenter.shared.setDestination(nil, host: host)
         SSHHostStatusCenter.shared.setConnected(false, host: host)
         SSHHostStatusCenter.shared.setReachable(false, host: host)
         TerminalSurfaceFactory.makeOverride = originalOverride
@@ -1125,19 +1124,22 @@ final class HostConnectInteractionTests: WindowTestCase {
             screen.routeForTesting.destinationForTesting.statusMarkForTesting.fill, SSHHostStatus.online.ink.cgColor)
     }
 
-    func test_theConnectScreen_showsWhereSSHWillSignIn_onceItsConfigResolves() throws {
+    func test_theConnectScreen_showsWhereSSHWillSignIn_fromTheProbesResolution() throws {
+        SSHHostStatusCenter.shared.setDestination("drew@10.0.0.12", host: host)
         let c = onConnectScreen()
-        let screen = try XCTUnwrap(c.connectViewForTesting)
 
-        waitUntil(screen.destinationForTesting == "drew@10.0.0.12", "the destination to resolve")
+        XCTAssertEqual(try XCTUnwrap(c.connectViewForTesting).destinationForTesting, "drew@10.0.0.12")
     }
 
-    func test_aHostWhoseConfigDoesNotResolve_showsNoDestinationLine() throws {
-        SSHHostResolver.destinationOverrideForTesting = { _ in nil }
+    func test_aHostNotYetResolved_hidesTheDestinationLine_untilItsResolutionLands() throws {
         let c = onConnectScreen()
         let screen = try XCTUnwrap(c.connectViewForTesting)
+        XCTAssertNil(screen.destinationForTesting, "an empty line would hold space and then collapse")
 
-        waitUntil(screen.destinationForTesting == nil, "the destination line to hide")
+        SSHHostStatusCenter.shared.setDestination("drew@10.0.0.12", host: host)
+        drainMainQueue()
+
+        XCTAssertEqual(screen.destinationForTesting, "drew@10.0.0.12")
     }
 
     func test_clickingConnect_connects() throws {
