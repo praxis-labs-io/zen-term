@@ -18,4 +18,5 @@ public enum ControlCommand: String, Codable, Sendable, CaseIterable {
     case worktreeList = "worktree.list"
     case worktreeCreate = "worktree.create"
     case worktreeRemove = "worktree.remove"
+    case action
 }

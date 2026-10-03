@@ -299,6 +299,17 @@ uncommitted or untracked files or commits no branch holds, or when git can't say
 removing the worktree a caller runs in needs `force`. A locked worktree is always
 `refused`.
 
+### `action`
+
+`args`: `name` (required).
+
+Runs a keymap action by its config name, like `toggle_sidebar` or `split_vertical`, in the
+key window, or the frontmost ZenTerm window while the app is in the background. It goes
+through the same gate as the action's shortcut: with a card or confirm open, it does what
+the shortcut does there, which can be nothing. The aliases a `keybind` line accepts work
+too. `toggle_float:<id>` takes the id of a configured float. A name that is not an action
+is `not_found`, and its message lists every action.
+
 ## `zen`
 
 `zen hello` and `zen list` print the result as JSON. `zen list --pretty` prints an
@@ -308,7 +319,8 @@ answer within 10 seconds (5 minutes for `worktree create` and `worktree remove`)
 
 Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|close`,
 `zen tab new|select|rename|close`, `zen pane split|focus|close|send|read` and
-`zen worktree list|create|remove`, with `--focus` and `--force` for those fields. A command
+`zen worktree list|create|remove`, with `--focus` and `--force` for those fields.
+`zen action <name>` runs a keymap action. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
 rest print nothing. `zen pane split` splits to the right unless `--dir down` says otherwise.
 `zen worktree create <branch>` takes `--base default|current` or `--existing`, not both.

@@ -214,6 +214,29 @@ extension KeyInterceptor.ReservedChord {
             }
         }
     }
+
+    static var everyAction: [KeyInterceptor.ReservedChord] {
+        let fixed: [KeyInterceptor.ReservedChord] = [
+            .splitHorizontal, .splitVertical, .closePane,
+            .navLeft, .navRight, .navUp, .navDown, .prevPane, .nextPane,
+            .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
+            .newTab, .newWindow, .closeTab, .closeWindow, .prevTab, .nextTab,
+            .moveTabLeft, .moveTabRight, .renameTab,
+            .toggleSidebar, .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen, .focusSidebar,
+            .toggleScrollMode, .toggleSearch,
+            .scrollToTop, .scrollToBottom, .scrollPageUp, .scrollPageDown,
+            .jumpToPreviousPrompt, .jumpToNextPrompt, .scrollToSelection, .searchSelection, .findNext, .findPrevious,
+            .clearScreen, .pasteSelection, .dismissToast, .dismissAllToasts, .selectAll,
+            .writeScreenFile, .copyScreenFilePath, .openScreenFile,
+            .toggleRepoPicker, .toggleCommandPalette, .createWorktree, .removeWorktree,
+            .openSettings, .reloadConfig, .increaseFontSize, .decreaseFontSize, .resetFontSize,
+            .checkForUpdates, .reportIssue, .newTool,
+            .newWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace, .nextWaitingAgent,
+        ]
+        let numbered: [KeyInterceptor.ReservedChord] =
+            (1...9).map { .selectTab($0) } + (1...9).map { .selectWorkspace($0) }
+        return fixed + numbered + ToolFloatCatalog.all.map { .toggleToolFloat($0.id) }
+    }
 }
 
 /// One chord per action, except increase font size, which also needs ⌘⇧= for the US ⌘+ keypress.
