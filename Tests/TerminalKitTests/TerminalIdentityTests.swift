@@ -39,7 +39,10 @@ final class TerminalIdentityTests: XCTestCase {
         surface.start(
             TerminalSurfaceConfig(
                 command: "/bin/sh",
-                args: ["-c", #"printf '\033]0;%s|%s\007' "$TERM_PROGRAM" "$TERM_PROGRAM_VERSION"; sleep 100"#]))
+                args: [
+                    "-c",
+                    #"printf '\033]0;%s|%s|%s\007' "$COLORTERM" "$TERM_PROGRAM" "$TERM_PROGRAM_VERSION"; sleep 100"#,
+                ]))
         defer {
             surface.view.removeFromSuperview()
             surface.terminate()
@@ -51,9 +54,10 @@ final class TerminalIdentityTests: XCTestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.05))
         }
 
+        let colors = try XCTUnwrap(TerminalIdentity.environment["COLORTERM"])
         let program = try XCTUnwrap(TerminalIdentity.environment["TERM_PROGRAM"])
         let version = try XCTUnwrap(TerminalIdentity.environment["TERM_PROGRAM_VERSION"])
         XCTAssertFalse(version.isEmpty)
-        XCTAssertEqual(recorder.titles.last { $0.contains("|") }, "\(program)|\(version)")
+        XCTAssertEqual(recorder.titles.last { $0.contains("|") }, "\(colors)|\(program)|\(version)")
     }
 }

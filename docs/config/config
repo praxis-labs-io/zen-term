@@ -186,10 +186,11 @@
 # In-app Settings edit: applies live.
 # ssh-hosts = devbox, prod, deploy@10.0.0.5
 
-# Each pane on a host opens your login shell there with TERM_PROGRAM set to
-# ghostty, so an agent like Claude reports its progress as it does locally.
-# The host's login banner and last-login line do not show. A host whose ssh
-# config sets RemoteCommand runs that command instead.
+# Each pane on a host opens your login shell there with the TERM_PROGRAM and
+# COLORTERM a local pane gets, so Claude reports its progress and programs use
+# 24-bit color as they do locally. The host's login banner and last-login line
+# do not show. A host whose ssh config sets RemoteCommand runs that command
+# instead.
 
 # ─── Notifications ───────────────────────────────────────────────────────────
 

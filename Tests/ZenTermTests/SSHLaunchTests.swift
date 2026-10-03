@@ -50,7 +50,7 @@ final class SSHLaunchTests: XCTestCase {
 
         XCTAssertEqual(
             SSHLaunch.loginShellCommand,
-            #"exec env 'TERM_PROGRAM=ghostty' 'TERM_PROGRAM_VERSION=\#(version)' "$SHELL" -l"#)
+            #"exec env 'COLORTERM=truecolor' 'TERM_PROGRAM=ghostty' 'TERM_PROGRAM_VERSION=\#(version)' "$SHELL" -l"#)
     }
 
     func test_aRemoteWord_survivesAQuoteInside() {

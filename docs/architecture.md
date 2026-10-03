@@ -592,9 +592,10 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   `/usr/bin/ssh` with `ControlMaster=auto`, a `ControlPath` under `Application Support/ZenTerm/ssh`
   (the temp folder when that path passes 86 bytes, since ssh binds a longer temporary name
   first) and `ControlPersist=60`, as `xterm-256color` with busy tracking off (a remote shell
-  sends no prompt marks). With `-t` it runs `exec env TERM_PROGRAM=… TERM_PROGRAM_VERSION=…
-  "$SHELL" -l` on the host, the values from `TerminalIdentity`: Claude reports progress only to
-  a ghostty it recognises, and ssh forwards neither variable without the server's `AcceptEnv`.
+  sends no prompt marks). With `-t` it runs `exec env COLORTERM=… TERM_PROGRAM=…
+  TERM_PROGRAM_VERSION=… "$SHELL" -l` on the host, the values from `TerminalIdentity`: Claude
+  reports progress only to a ghostty it recognises, and ssh forwards none of them without the
+  server's `AcceptEnv`.
   `env`, because csh has no prefix assignment. A host whose ssh config sets its own
   `RemoteCommand`, or whose config can't be read, launches plain, since ssh refuses both; the
   connection reads that once with `ssh -G`, off-main, before its first login.

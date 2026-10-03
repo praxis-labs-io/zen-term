@@ -1,8 +1,9 @@
 import GhosttyKit
 
-/// The variables naming this terminal that its own child processes see, such as `TERM_PROGRAM`.
+/// The variables naming this terminal and its color depth, as its own child processes see them.
 public enum TerminalIdentity {
     public static let environment: [String: String] = [
+        "COLORTERM": "truecolor",
         "TERM_PROGRAM": "ghostty",
         "TERM_PROGRAM_VERSION": version,
     ]
