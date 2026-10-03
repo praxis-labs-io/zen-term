@@ -120,6 +120,27 @@ final class HostAgentTests: WindowTestCase {
         XCTAssertNil(host.c.agentWaitForTesting(host.loginID), "landing on it answers the turn end")
     }
 
+    private func hostRow(_ c: WindowController) throws -> SettingsNavRow {
+        try XCTUnwrap(c.sidebarForTesting.view.hostRowsForTesting.first { $0.titleForTesting == "devbox" })
+    }
+
+    func test_aWaitingHostAgent_takesTheHostRowsDot_untilItIsAnswered() throws {
+        let host = try connected()
+        claudeWorking(on: host.login)
+        host.c.activateWorkspaceForTesting(host.local)
+        XCTAssertEqual(try hostRow(host.c).accessibilityValue() as? String, "Connected")
+
+        progress(nil, from: host.login)
+
+        XCTAssertEqual(try hostRow(host.c).accessibilityValue() as? String, "Connected, Agent waiting")
+        XCTAssertEqual(try hostRow(host.c).dotColorForTesting, AttentionTone.waiting.ink.cgColor)
+
+        host.c.handle(.nextWaitingAgent)
+
+        XCTAssertEqual(try hostRow(host.c).accessibilityValue() as? String, "Connected")
+        XCTAssertEqual(try hostRow(host.c).dotColorForTesting, SSHHostStatus.connected.ink.cgColor)
+    }
+
     func test_aHostAgentClearingItsTitle_endsItsRow_andTakesDownItsWait() throws {
         let host = try connected()
         claudeWorking(on: host.login)

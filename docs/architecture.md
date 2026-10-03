@@ -574,7 +574,9 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   `ssh -G` resolves each one. `ssh-hosts` holds which are on, plus typed hosts, and the
   sidebar's SSH rows show their status as a dot (`SSHHostStatus.ink`): Offline takes the idle
   agent row's ink on the dot and the title, Online is positive, Connected is accent, and the
-  status word is the row's accessibility value rather than visible text.
+  status word is the row's accessibility value rather than visible text. While an agent in a
+  connected host's workspace waits, the dot takes the waiting ink a workspace row's does, from
+  the same rollup, and the value reads `Connected, Agent waiting`.
 - **`SSHHostProbe` keeps each host's reachability in `SSHHostStatusCenter`, and never logs in.**
   Off-main, at most four at a time, it resolves the host with `ssh -G`, once until `ssh-hosts`,
   the network, or the date on `~/.ssh/config` or a file it includes changes, because

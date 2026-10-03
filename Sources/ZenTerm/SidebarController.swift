@@ -333,8 +333,11 @@ final class SidebarController {
     ) {
         let byID = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
         let numbers = Dictionary(uniqueKeysWithValues: order.navigable.enumerated().map { ($1, $0 + 1) })
+        let waitingHosts = Set(workspaces.filter { waiting.contains($0.id) }.compactMap(\.host))
         let nextHosts = order.hosts.map {
-            SidebarHostItem(id: $0.id, status: $0.status, number: numbers[.host($0.id)], isActive: $0.id == activeHost)
+            SidebarHostItem(
+                id: $0.id, status: $0.status, number: numbers[.host($0.id)], isActive: $0.id == activeHost,
+                isWaiting: $0.status == .connected && waitingHosts.contains($0.id))
         }
         let next = order.entries.compactMap { entry -> Entry? in
             switch entry {

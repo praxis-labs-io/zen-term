@@ -17,6 +17,7 @@ struct SidebarHostItem: Equatable {
     let status: SSHHostStatus
     let number: Int?
     let isActive: Bool
+    let isWaiting: Bool
 }
 
 struct SidebarRowItem: Equatable {
@@ -230,7 +231,12 @@ final class SidebarView: NSView {
             let row = hostRow(for: item)
             row.setSelected(item.isActive)
             let status = item.status
-            row.setDot({ status.ink }, accessibilityValue: Self.hostStatusWord(status))
+            let word = Self.hostStatusWord(status)
+            if item.isWaiting {
+                row.setDot({ AttentionTone.waiting.ink }, accessibilityValue: "\(word), Agent waiting")
+            } else {
+                row.setDot({ status.ink }, accessibilityValue: word)
+            }
             row.setTitleInk(status == .offline ? { status.ink } : nil)
             guard hostStack.arrangedSubviews.firstIndex(of: row) != index else { continue }
             let isNew = row.superview == nil
