@@ -103,9 +103,10 @@ Requests are decoded off the main thread, applied on it, and written back off it
 | Window | `w<window>`                       |                                               |
 
 A command with no target acts on the caller: `caller.pane`, its tab, its workspace.
-Without a caller it acts on the active workspace, tab and focused pane of the key window,
-or of the frontmost ZenTerm window while the app is in the background. A `caller.pane`
-that names no pane is `not_found`.
+Without a caller it acts on the active workspace, tab and focused pane of the key window.
+When no terminal window is key, because the app is in the background or a window like
+About is in front, it acts on the frontmost terminal window. A `caller.pane` that names no
+pane is `not_found`.
 
 Without `focus`, no command moves what is on screen: a new tab joins its workspace's tab
 bar behind the active one, a new workspace joins the sidebar, and no modal card, confirm,
@@ -304,11 +305,11 @@ removing the worktree a caller runs in needs `force`. A locked worktree is alway
 `args`: `name` (required).
 
 Runs a keymap action by its config name, like `toggle_sidebar` or `split_vertical`, in the
-key window, or the frontmost ZenTerm window while the app is in the background. It goes
-through the same gate as the action's shortcut: with a card or confirm open, it does what
-the shortcut does there, which can be nothing. The aliases a `keybind` line accepts work
-too. `toggle_float:<id>` takes the id of a configured float. A name that is not an action
-is `not_found`, and its message lists every action.
+same window a command with no target acts on. It goes through the same gate as the
+action's shortcut: with a card or confirm open, it does what the shortcut does there, which
+can be nothing. The aliases a `keybind` line accepts work too. `toggle_float:<id>` takes the
+id of a configured float. A name that is not an action is `not_found`, and its message
+lists every action.
 
 ## `zen`
 
