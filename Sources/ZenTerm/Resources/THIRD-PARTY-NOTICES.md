@@ -9,7 +9,8 @@ dependency manifest. What gets linked is a property of the build: a manifest lis
 what could be linked, and `libghostty-fat.a` is an archive the linker draws from
 selectively. Most were found by probing `Contents/MacOS/ZenTerm` itself. Sparkle
 is the exception: it ships as a framework under `Contents/Frameworks` rather than
-linked into the executable, so it is confirmed there instead. Fonts are embedded
+linked into the executable, so it is confirmed there instead. Swift Argument Parser
+is linked into `Contents/MacOS/zen`, the command-line tool, rather than the app. Fonts are embedded
 data with no symbols, so they were found by parsing sfnt table directories out of
 the same executable. Icons, themes, shaders, and shell integration are plain files
 copied into the resource bundle, so they were found by listing it.
@@ -2891,6 +2892,22 @@ IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 ```
 
+### Swift Argument Parser
+
+**Apache-2.0, with the Runtime Library Exception**
+
+Parses the arguments of `zen`, the command-line tool that ships at `Contents/MacOS/zen`. Version 1.8.2. Copyright (c) 2020 Apple Inc. and the Swift project authors. See the Apache License 2.0 in full at the end of this file. Its exception reads:
+
+```text
+## Runtime Library Exception to the Apache 2.0 License: ##
+
+
+    As an exception, if you use this Software to compile your source code and
+    portions of this Software are embedded into the binary product as a result,
+    you may redistribute such product without providing attribution as would
+    otherwise be required by Sections 4(a), 4(b) and 4(d) of the License.
+```
+
 ## Fonts
 
 ### JetBrains Mono
@@ -3833,7 +3850,7 @@ THE SOFTWARE.
 
 ## Apache License 2.0
 
-Referenced by SPIRV-Cross, Highway, and Tokyo Night above.
+Referenced by SPIRV-Cross, Highway, Swift Argument Parser, and Tokyo Night above.
 
 ```text
                                  Apache License
