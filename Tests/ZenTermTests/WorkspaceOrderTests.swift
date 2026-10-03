@@ -12,11 +12,11 @@ final class WorkspaceOrderTests: XCTestCase {
     }
 
     private func host(_ name: String, _ status: SSHHostStatus) -> WorkspaceOrder.Host {
-        WorkspaceOrder.Host(id: SSHHostID(name: name), status: status)
+        WorkspaceOrder.Host(id: SSHHostID(alias: name), status: status)
     }
 
     private func ws(_ raw: Int) -> WorkspaceOrder.Target { .workspace(WorkspaceID(raw: raw)) }
-    private func h(_ name: String) -> WorkspaceOrder.Target { .host(SSHHostID(name: name)) }
+    private func h(_ name: String) -> WorkspaceOrder.Target { .host(SSHHostID(alias: name)) }
 
     func test_navigable_putsConnectedHostsAfterWorkspaces_inConfigOrder() {
         let order = WorkspaceOrder(
@@ -36,7 +36,7 @@ final class WorkspaceOrderTests: XCTestCase {
 
     func test_aHostsWorkspace_isNotAWorkspaceRow() {
         let order = WorkspaceOrder(
-            [workspace(1), workspace(2, host: SSHHostID(name: "devbox"))], hosts: [host("devbox", .connected)])
+            [workspace(1), workspace(2, host: SSHHostID(alias: "devbox"))], hosts: [host("devbox", .connected)])
 
         XCTAssertEqual(order.entries, [.workspace(WorkspaceID(raw: 1))])
         XCTAssertEqual(order.navigable, [ws(1), h("devbox")])

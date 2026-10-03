@@ -256,7 +256,7 @@ extension SSHConnection.Watchers {
     static let live = SSHConnection.Watchers(
         resolveLaunch: { host, found in
             DispatchQueue.global(qos: .userInitiated).async {
-                let form = SSHHostResolver.launchForm(of: host.name)
+                let form = SSHHostResolver.launchForm(of: host.alias)
                 DispatchQueue.main.async { found(form) }
             }
         },

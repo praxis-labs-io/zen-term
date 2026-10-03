@@ -420,7 +420,7 @@ final class SidebarController {
 
     func focusActiveRow() {
         if let host = hosts.first(where: \.isActive) {
-            view.focusStop(.host(host.id.name))
+            view.focusStop(.host(host.id.alias))
             return
         }
         guard let row = (entries.first(where: \.isActive) ?? entries.first)?.row else { return }
@@ -449,7 +449,7 @@ final class SidebarController {
 
     private func renderLead() {
         if let host = hosts.first(where: \.isActive) {
-            lead.setWorkspaceName(host.id.name)
+            lead.setWorkspaceName(host.id.alias)
             return applyLeadWidth()
         }
         guard let active = entries.first(where: \.isActive) else { return }

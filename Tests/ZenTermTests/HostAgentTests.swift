@@ -6,7 +6,7 @@ import XCTest
 
 @MainActor
 final class HostAgentTests: WindowTestCase {
-    private let host = SSHHostID(name: "devbox")
+    private let host = SSHHostID(alias: "devbox")
     private var originalOverride: (() -> TerminalSurface)?
     private var originalConfig: GeneralConfig!
     private let originalPresence = WindowController.isPresent
@@ -27,7 +27,7 @@ final class HostAgentTests: WindowTestCase {
         }
         WindowController.isPresent = { _ in true }
         var config = GeneralConfig.builtIn
-        config.sshHosts = [host.name]
+        config.sshHosts = [host.alias]
         GeneralConfig.setCurrentForTesting(config)
         fake = FakeSSHWatchers()
         SSHConnection.watchersOverrideForTesting = fake.watchers

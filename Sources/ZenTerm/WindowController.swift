@@ -1163,7 +1163,7 @@ final class WindowController: NSObject {
 
     // Leaves an open card up, since a host is usually removed from inside Settings.
     private func leaveRemovedHost(shownHosts: [SSHHostID]) {
-        guard case .host(let host) = selection, !GeneralConfig.current.sshHosts.contains(host.name) else { return }
+        guard case .host(let host) = selection, !GeneralConfig.current.sshHosts.contains(host.alias) else { return }
         let place = shownHosts.firstIndex(of: host) ?? shownHosts.count
         let nearestHost = (shownHosts[min(place + 1, shownHosts.count)...] + shownHosts[..<place].reversed())
             .lazy.compactMap { next in self.workspaces.first { $0.host == next } }.first
@@ -1349,7 +1349,7 @@ final class WindowController: NSObject {
         connection.onConnectedChange = { SSHHostStatusCenter.shared.setConnected($0, host: host) }
         let tab = mintTabID()
         let workspace = WorkspaceController(
-            id: mintWorkspaceID(), isConfigured: false, name: host.name, folder: ShellLaunch.defaultCWD,
+            id: mintWorkspaceID(), isConfigured: false, name: host.alias, folder: ShellLaunch.defaultCWD,
             firstTab: tab, connection: connection)
         connection.onLoginFailed = { [weak self, weak workspace] in
             DispatchQueue.main.async { self?.loginFailed(on: host, closing: workspace) }
@@ -1363,7 +1363,7 @@ final class WindowController: NSObject {
         if let workspace, workspaces.contains(where: { $0 === workspace }) { closeTabs(of: workspace) }
         toasts.show(
             ToastContent(
-                variant: .warning, title: "Couldn't Connect to", titleTail: " \(host.name)", message: nil))
+                variant: .warning, title: "Couldn't Connect to", titleTail: " \(host.alias)", message: nil))
     }
 
     private func toggleToolFloat(_ id: String, in host: SSHHostID) {
@@ -1384,7 +1384,7 @@ final class WindowController: NSObject {
     private func toastFloatsStayLocal(on host: SSHHostID) {
         toasts.show(
             ToastContent(
-                variant: .info, title: "Tool Floats", message: "Tool floats run on this Mac, not on \(host.name)."))
+                variant: .info, title: "Tool Floats", message: "Tool floats run on this Mac, not on \(host.alias)."))
     }
 
     func holdsHost(_ host: SSHHostID) -> Bool { workspaces.contains { $0.host == host } }
@@ -2586,7 +2586,7 @@ final class WindowController: NSObject {
 
     private func confirmAbandoningLogin(of workspace: WorkspaceController, closing target: CloseWarning.LoginTarget) {
         guard let host = workspace.host else { return }
-        let subject = CloseWarning.Subject.login(host: host.name, closing: target)
+        let subject = CloseWarning.Subject.login(host: host.alias, closing: target)
         presentConfirm(
             variant: .warning, title: subject.title,
             message: CloseWarning.message(closing: subject, naming: []), confirmLabel: "Close"
@@ -2610,7 +2610,7 @@ final class WindowController: NSObject {
     private func disconnectRemovedHosts() {
         let enabled = GeneralConfig.current.sshHosts
         for workspace in workspaces {
-            guard let host = workspace.host, !enabled.contains(host.name) else { continue }
+            guard let host = workspace.host, !enabled.contains(host.alias) else { continue }
             Log.info("ssh host turned off, so it disconnects", category: .workspace)
             disconnect(workspace, dismissingModal: false)
         }
@@ -3725,7 +3725,7 @@ final class WindowController: NSObject {
         tabBar.render(items)
         switch selection {
         case .workspace(let workspace): window.title = workspace.name
-        case .host(let host): window.title = host.name
+        case .host(let host): window.title = host.alias
         }
         let waiting = workspaces.filter { attention.state(tabs: $0.tabIDs) == .waiting }.map(\.id)
         sidebar.render(

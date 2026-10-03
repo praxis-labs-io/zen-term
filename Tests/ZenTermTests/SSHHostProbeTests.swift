@@ -88,7 +88,7 @@ final class SSHHostProbeTests: XCTestCase {
         super.tearDown()
     }
 
-    private func status(_ host: String) -> SSHHostStatus { center.status(of: SSHHostID(name: host)) }
+    private func status(_ host: String) -> SSHHostStatus { center.status(of: SSHHostID(alias: host)) }
 
     func test_addedHosts_areProbedAndTheirAnswersLand() {
         answers.queue([.offline], for: "down")
@@ -102,7 +102,7 @@ final class SSHHostProbeTests: XCTestCase {
     }
 
     func test_aConnectedHost_isNotProbed() {
-        center.setConnected(true, host: SSHHostID(name: "live"))
+        center.setConnected(true, host: SSHHostID(alias: "live"))
         answers.queue([.offline], for: "other")
 
         probe.setHosts(["live", "other"])
@@ -118,7 +118,7 @@ final class SSHHostProbeTests: XCTestCase {
         let observer = NotificationCenter.default.addObserver(
             forName: .sshHostStatusDidChange, object: nil, queue: nil
         ) { [center] _ in
-            MainActor.assumeIsolated { seen.append(center.status(of: SSHHostID(name: "devbox"))) }
+            MainActor.assumeIsolated { seen.append(center.status(of: SSHHostID(alias: "devbox"))) }
         }
         defer { NotificationCenter.default.removeObserver(observer) }
 
@@ -207,7 +207,7 @@ final class SSHHostProbeTests: XCTestCase {
 
     func test_aResolvedHost_publishesWhereSSHWillSignIn_fromTheSameResolution() {
         probe.setHosts(["devbox"])
-        waitUntil(center.destination(of: SSHHostID(name: "devbox")) == "drew@devbox.lan", "the destination to land")
+        waitUntil(center.destination(of: SSHHostID(alias: "devbox")) == "drew@devbox.lan", "the destination to land")
 
         probe.probeAll()
 
@@ -217,11 +217,11 @@ final class SSHHostProbeTests: XCTestCase {
 
     func test_aRemovedHost_forgetsItsDestination() {
         probe.setHosts(["devbox"])
-        waitUntil(center.destination(of: SSHHostID(name: "devbox")) != nil, "the destination to land")
+        waitUntil(center.destination(of: SSHHostID(alias: "devbox")) != nil, "the destination to land")
 
         probe.setHosts([])
 
-        XCTAssertNil(center.destination(of: SSHHostID(name: "devbox")))
+        XCTAssertNil(center.destination(of: SSHHostID(alias: "devbox")))
     }
 
     func test_aNetworkChange_resolvesAgain() {

@@ -263,7 +263,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         of host: String, by disconnecting: Disconnecting, proceed: @escaping () -> Void,
         cancel: @escaping () -> Void
     ) {
-        guard let session = hostSession?(SSHHostID(name: host)), session != .failed, let presentConfirm,
+        guard let session = hostSession?(SSHHostID(alias: host)), session != .failed, let presentConfirm,
             let dismissConfirm
         else { return proceed() }
         let consequence =

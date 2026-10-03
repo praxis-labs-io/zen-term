@@ -5,8 +5,8 @@ import XCTest
 @testable import ZenTerm
 
 final class SSHHostTurnOffTests: WindowTestCase {
-    private let devbox = SSHHostID(name: "devbox")
-    private let typed = SSHHostID(name: "deploy@10.0.0.5")
+    private let devbox = SSHHostID(alias: "devbox")
+    private let typed = SSHHostID(alias: "deploy@10.0.0.5")
     private var configRoot: URL!
     private var originalSurface: (() -> TerminalSurface)?
     private let originalPresence = WindowController.isPresent
@@ -239,7 +239,7 @@ final class SSHHostTurnOffTests: WindowTestCase {
     }
 
     func test_aConnectedHostTurnedOff_landsOnTheNextHostConnectedHere_pastAnOnlineOne() throws {
-        let prod = SSHHostID(name: "prod")
+        let prod = SSHHostID(alias: "prod")
         SSHHostStatusCenter.shared.setReachable(true, host: prod)
         defer { SSHHostStatusCenter.shared.setReachable(false, host: prod) }
         let c = makeWindow()

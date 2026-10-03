@@ -16,7 +16,7 @@ final class HostRouteView: NSView {
     private let line = CAShapeLayer()
 
     init(host: SSHHostID) {
-        destination = RouteEndpointView(symbol: "server.rack", name: host.name)
+        destination = RouteEndpointView(symbol: "server.rack", name: host.alias)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 

@@ -4,7 +4,7 @@ import XCTest
 @testable import ZenTerm
 
 final class SSHLaunchTests: XCTestCase {
-    private let host = SSHHostID(name: "devbox")
+    private let host = SSHHostID(alias: "devbox")
     private let fallback = URL(fileURLWithPath: "/tmp/fallback", isDirectory: true)
 
     override func setUp() {
@@ -86,7 +86,7 @@ final class SSHLaunchTests: XCTestCase {
         XCTAssertTrue(hex.allSatisfy(\.isHexDigit))
         XCTAssertNotEqual(
             SSHLaunch.controlPath(
-                for: SSHHostID(name: "other"), in: URL(fileURLWithPath: "/tmp/zt"), fallback: fallback, pid: 42),
+                for: SSHHostID(alias: "other"), in: URL(fileURLWithPath: "/tmp/zt"), fallback: fallback, pid: 42),
             path)
     }
 

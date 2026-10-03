@@ -6,7 +6,7 @@ import XCTest
 
 @MainActor
 final class HostConnectInteractionTests: WindowTestCase {
-    private let host = SSHHostID(name: "devbox")
+    private let host = SSHHostID(alias: "devbox")
     private var originalOverride: (() -> TerminalSurface)?
     private var originalConfig: GeneralConfig!
     private var originalTheme: AppTheme!
@@ -29,7 +29,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         }
         WindowController.isPresent = { _ in true }
         var config = GeneralConfig.builtIn
-        config.sshHosts = [host.name]
+        config.sshHosts = [host.alias]
         config.floats = [Self.pi]
         config.ai = "pi"
         GeneralConfig.setCurrentForTesting(config)
@@ -115,9 +115,9 @@ final class HostConnectInteractionTests: WindowTestCase {
     }
 
     private func longHostWindow() -> (WindowController, SSHHostID) {
-        let long = SSHHostID(name: "build-runner-07.internal")
+        let long = SSHHostID(alias: "build-runner-07.internal")
         var config = GeneralConfig.current
-        config.sshHosts = [host.name, long.name]
+        config.sshHosts = [host.alias, long.alias]
         GeneralConfig.setCurrentForTesting(config)
         let c = makeWindow()
         c.selectHostForTesting(long)
@@ -687,7 +687,7 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         let toast = try XCTUnwrap(cards(in: c).first)
         let labels = descendants(of: toast).compactMap { $0 as? NSTextField }
-        let tail = try XCTUnwrap(labels.first { $0.stringValue == " \(long.name)" })
+        let tail = try XCTUnwrap(labels.first { $0.stringValue == " \(long.alias)" })
         let lead = try XCTUnwrap(labels.first { $0.stringValue == "Couldn't Connect to" })
         XCTAssertGreaterThanOrEqual(tail.frame.width, tail.intrinsicContentSize.width, "the host name was cut")
         XCTAssertLessThan(lead.frame.width, lead.intrinsicContentSize.width, "precondition: the title is crowded")
