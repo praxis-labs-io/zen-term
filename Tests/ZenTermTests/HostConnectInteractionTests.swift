@@ -787,6 +787,7 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         XCTAssertNotNil(c.connectViewForTesting)
         XCTAssertFalse(quitAsks(in: delegate, c), "with no tab anywhere there is nothing to warn about")
+        XCTAssertTrue(delegate.windowsForTesting.isEmpty, "quitting without asking still tears every window down")
     }
 
     func test_closingTheLocalWorkspaceBesideAHost_closesItWithoutAsking_andLandsOnTheHost() throws {

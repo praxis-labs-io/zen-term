@@ -312,9 +312,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let key = keyController(), windows.contains(where: \.holdsSessions) else {
+        guard let key = keyController() else {
             worktreeRemovals.whenIdle {
                 self.drainSessionSweeps { NSApp.reply(toApplicationShouldTerminate: true) }
+            }
+            return .terminateLater
+        }
+        guard windows.contains(where: \.holdsSessions) else {
+            tearDownAllWindows {
+                self.worktreeRemovals.whenIdle { NSApp.reply(toApplicationShouldTerminate: true) }
             }
             return .terminateLater
         }
