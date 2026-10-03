@@ -687,6 +687,10 @@ final class TabController: NSObject {
 
     func toastNoNeighbor(_ direction: Direction) {
         guard noNeighborToasts.allows(direction) else { return }
+        onRequestToast?(Self.noNeighborToast(direction, hint: noNeighborHint?(direction)))
+    }
+
+    static func noNeighborToast(_ direction: Direction, hint: String?) -> ToastContent {
         let action: KeyInterceptor.ReservedChord
         let word: String
         switch direction {
@@ -695,12 +699,10 @@ final class TabController: NSObject {
         case .up: action = .navUp; word = "up"
         case .down: action = .navDown; word = "down"
         }
-        let hint = noNeighborHint?(direction).map { "\n\($0)" } ?? ""
-        onRequestToast?(
-            ToastContent(
-                variant: .info,
-                title: CommandCatalog.spec(for: action).title,
-                message: "No pane \(word) to focus\(hint)"))
+        return ToastContent(
+            variant: .info,
+            title: CommandCatalog.spec(for: action).title,
+            message: "No pane \(word) to focus\(hint.map { "\n\($0)" } ?? "")")
     }
 
     // Pane leaf ids are non-negative, so drawer sentinels cannot collide with them.

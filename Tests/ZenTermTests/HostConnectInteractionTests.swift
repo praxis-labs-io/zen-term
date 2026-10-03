@@ -578,4 +578,55 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(button.layer?.borderWidth, 0)
         XCTAssertNotNil(button.layer?.backgroundColor)
     }
+
+    func test_leftFromConnect_movesToTheSidebar_andRightComesBack_withTheHalo() throws {
+        let c = onConnectScreen()
+
+        c.handle(.navLeft)
+        XCTAssertTrue(c.sidebarForTesting.hasFocus, "Connect's left edge leads into the sidebar, as a pane's does")
+        XCTAssertEqual(try halo(c), 0)
+        c.handle(.navRight)
+
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
+        XCTAssertGreaterThan(try halo(c), 0)
+    }
+
+    func test_focusSidebarFromConnect_dropsTheHalo_andRightBringsItBack() throws {
+        let c = onConnectScreen()
+
+        c.handle(.focusSidebar)
+        XCTAssertEqual(try halo(c), 0)
+        c.handle(.navRight)
+
+        XCTAssertGreaterThan(try halo(c), 0)
+    }
+
+    func test_upDownAndRightOnConnect_doNothing() throws {
+        let c = onConnectScreen()
+
+        for chord: KeyInterceptor.ReservedChord in [.navUp, .navDown, .navRight] {
+            c.handle(chord)
+            XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting, "\(chord) moved focus")
+        }
+
+        guard let content = c.window.contentView else { return XCTFail("no content") }
+        XCTAssertFalse(
+            descendants(of: content).contains { ($0 as? NSTextField)?.stringValue.hasPrefix("No pane") == true },
+            "Connect has no neighbours, so there's nothing to say")
+    }
+
+    func test_leftFromConnect_withTheSidebarHidden_saysHowToShowIt_likeAPane() throws {
+        let c = onConnectScreen()
+        c.handle(.toggleSidebar)
+        c.handle(.focusSidebar)
+        c.handle(.toggleSidebar)
+        XCTAssertFalse(c.sidebarForTesting.isShown, "precondition: the sidebar is hidden")
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
+
+        c.handle(.navLeft)
+
+        let chord = CommandCatalog.spec(for: .toggleSidebar).shortcut
+        XCTAssertTrue(showsToast("No pane left to focus\nPress \(chord) to show the sidebar.", in: c))
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
+    }
 }

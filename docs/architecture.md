@@ -445,7 +445,9 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
 - **The modal gate** in `WindowController.handle(_:)` runs confirm, modal card, tool
   float, then dispatch. A window's `WindowSelection` is a workspace or an SSH host's Connect
   screen (`HostConnectView`), one `PanelHostView` that takes ↵ and is focused, haloed and themed
-  like a pane through the same `syncWindowFocus` and live-apply paths. It has no tab, so dispatch
+  like a pane through the same `syncWindowFocus` and live-apply paths. Its left edge leads into the
+  sidebar (or shows the same hint a pane does when the sidebar is hidden); up, down and right do
+  nothing. It has no tab, so dispatch
   drops any chord that is not `worksWithoutTab`, except ⌘T, which connects, and a card stays open
   for a chord it would drop. App-global chords bypass it in `AppDelegate.route`; a palette pick
   of one returns there through `onAppGlobalCommand`. The sidebar toggle passes through an

@@ -2254,7 +2254,13 @@ final class WindowController: NSObject {
         }
         if case .host(let host) = selection {
             if chord == .newTab { return connect(host) }
-            if chord == .navRight, sidebar.hasFocus { return restoreFocusToActive() }
+            switch chord {
+            case .navLeft: return navigate(.left)
+            case .navRight: return navigate(.right)
+            case .navUp: return navigate(.up)
+            case .navDown: return navigate(.down)
+            default: break
+            }
         }
         guard activeWorkspace != nil || chord.worksWithoutTab else { return }
         switch chord {
@@ -2367,8 +2373,27 @@ final class WindowController: NSObject {
     }
 
     private func navigate(_ direction: Direction) {
-        guard sidebar.hasFocus else { activeController?.navigate(direction); return }
+        guard sidebar.hasFocus else {
+            guard let activeController else { return navigateFromConnect(direction) }
+            return activeController.navigate(direction)
+        }
         if direction == .right { restoreFocusToActive() } else { activeController?.toastNoNeighbor(direction) }
+    }
+
+    private var connectNoNeighborToasts = ToastThrottle<Direction>()
+
+    // Connect is one panel with nothing beside it, so only its left edge leads anywhere: to the sidebar.
+    private func navigateFromConnect(_ direction: Direction) {
+        guard direction == .left, !focusSidebar(), let hint = sidebarHint(for: direction),
+            connectNoNeighborToasts.allows(direction)
+        else { return }
+        toasts.show(TabController.noNeighborToast(direction, hint: hint))
+    }
+
+    private func sidebarHint(for direction: Direction) -> String? {
+        guard direction == .left, !sidebar.isDocked else { return nil }
+        let chord = CommandCatalog.spec(for: .toggleSidebar).shortcut
+        return chord.isEmpty ? nil : "Press \(chord) to show the sidebar."
     }
 
     private func focusSidebar() -> Bool {
@@ -2658,11 +2683,7 @@ final class WindowController: NSObject {
             guard let self, c === self.activeController else { return false }
             return self.focusSidebar()
         }
-        c.noNeighborHint = { [weak self] direction in
-            guard let self, direction == .left, !sidebar.isDocked else { return nil }
-            let chord = CommandCatalog.spec(for: .toggleSidebar).shortcut
-            return chord.isEmpty ? nil : "Press \(chord) to show the sidebar."
-        }
+        c.noNeighborHint = { [weak self] direction in self?.sidebarHint(for: direction) }
         c.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
         c.onProgress = { [weak self] surface, progress in
             self?.progressChanged(surface: surface, progress: progress)
