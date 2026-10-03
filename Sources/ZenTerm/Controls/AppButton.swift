@@ -88,7 +88,8 @@ final class AppButton: NSButton {
         self.size = size
         self.symbolName = symbol
         self.labelText = title
-        self.keycap = shortcut.map { KeycapView(shortcut: $0, style: variant == .primary ? .glyph(ink: \.accent) : .chip) }
+        let keycapStyle: KeycapView.Style = variant == .primary ? .glyph(ink: \.accent) : .chip
+        self.keycap = shortcut.map { KeycapView(shortcut: $0, style: keycapStyle) }
         super.init(frame: .zero)
         if let keycap {
             let cell = KeycapClearingCell()
