@@ -1351,7 +1351,7 @@ final class WindowController: NSObject {
         if let workspace, workspaces.contains(where: { $0 === workspace }) { closeTabs(of: workspace) }
         toasts.show(
             ToastContent(
-                variant: .warning, title: "Couldn't Connect to \(host.name)", message: nil))
+                variant: .warning, title: "Couldn't Connect to", titleTail: " \(host.name)", message: nil))
     }
 
     private func toggleToolFloat(_ id: String, in host: SSHHostID) {

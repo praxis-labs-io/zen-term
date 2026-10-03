@@ -85,6 +85,7 @@ final class ToastView: ShadowCardView {
         titleTailLabel?.font = titleLabel.font
         titleTailLabel?.textColor = Self.titleColor
         titleTailLabel?.setContentCompressionResistancePriority(.required, for: .horizontal)
+        titleTailLabel?.lineBreakMode = .byTruncatingMiddle
 
         messageLabel?.font = Self.messageFont
         messageLabel?.textColor = Self.messageColor
