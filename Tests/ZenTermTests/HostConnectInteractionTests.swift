@@ -645,14 +645,14 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(c.window.frame.height, before.height, accuracy: 1)
     }
 
-    func test_connectLeadsWithALargeAccentBadge() throws {
+    func test_connectLeadsWithALargeNeutralBadge() throws {
         let c = onConnectScreen()
         let screen = try XCTUnwrap(c.connectViewForTesting)
         let badge = try XCTUnwrap(descendants(of: screen).lazy.compactMap { $0 as? IconBadge }.first)
         let chrome = Theme.current.chrome
 
-        XCTAssertEqual(badge.iconTintForTesting, chrome.accent.nsColor)
-        XCTAssertEqual(badge.fillForTesting, chrome.tint(chrome.accent, alpha: ChromeTheme.badgeTint).cgColor)
+        XCTAssertEqual(badge.iconTintForTesting, chrome.muted.nsColor)
+        XCTAssertEqual(badge.fillForTesting, chrome.tint(chrome.muted, alpha: ChromeTheme.badgeTint).cgColor)
         XCTAssertEqual(badge.fittingSize.width, IconBadge.Size.large.side)
     }
 }

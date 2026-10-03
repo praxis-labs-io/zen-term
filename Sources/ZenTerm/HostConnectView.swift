@@ -8,7 +8,7 @@ final class HostConnectView: NSView {
 
     let host: SSHHostID
     private let onConnect: () -> Void
-    private let icon = IconBadge(symbol: "server.rack", accessibilityDescription: nil, size: .large) { $0.accent }
+    private let icon = IconBadge(symbol: "server.rack", accessibilityDescription: nil, size: .large) { $0.muted }
     private let message = NSTextField(labelWithString: "")
     private let connectButton: AppButton
     private let panel: PanelHostView
