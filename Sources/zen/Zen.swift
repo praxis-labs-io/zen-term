@@ -5,6 +5,7 @@ struct Zen: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "zen",
         abstract: "Control a running ZenTerm.",
+        version: BundleVersion.current,
         subcommands: [
             Hello.self, List.self, WorkspaceCommands.self, TabCommands.self, PaneCommands.self, WorktreeCommands.self,
             Action.self,

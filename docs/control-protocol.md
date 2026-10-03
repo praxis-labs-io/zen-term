@@ -317,6 +317,11 @@ indented tree instead. Exit codes: 0 ok, 1 the app answered with an error or did
 answer within 10 seconds (5 minutes for `worktree create` and `worktree remove`), 2 usage,
 3 no instance or the connection failed.
 
+`zen --version` prints the version of the ZenTerm.app it sits in, through a symlink too, and
+`0.0.0+src` for a build from source. A response whose `v` is newer than the protocol `zen`
+speaks is refused with exit 1, before its result is read, and the message names both
+versions.
+
 Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|close`,
 `zen tab new|select|rename|close`, `zen pane split|focus|close|send|read` and
 `zen worktree list|create|remove`, with `--focus` and `--force` for those fields.
