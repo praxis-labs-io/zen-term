@@ -378,7 +378,8 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         XCTAssertNotNil(c.connectViewForTesting)
         XCTAssertEqual(waiting.startCount, 0)
-        XCTAssertTrue(showsToast("Couldn't connect to devbox.", in: c))
+        XCTAssertTrue(showsToast("Couldn't Connect to devbox", in: c), "the title names the host")
+        XCTAssertFalse(showsToast("Couldn't connect to devbox.", in: c), "the title says it all")
     }
 
     func test_reselectingAConnectedHost_landsOnItsWorkspace() throws {
@@ -446,7 +447,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         drainMainQueue()
 
         XCTAssertNotNil(c.connectViewForTesting)
-        XCTAssertTrue(showsToast("Couldn't connect to devbox.", in: c))
+        XCTAssertTrue(showsToast("Couldn't Connect to devbox", in: c))
     }
 
     func test_aConnectedHost_hidesYourToolFloatButtons_andALocalWorkspaceShowsThem() throws {
@@ -655,19 +656,6 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "devbox")
     }
 
-    func test_theConnectFailure_breaksBeforeAHostTooLongForOneLine() {
-        let font: [NSAttributedString.Key: Any] = [.font: ToastView.messageFont]
-        let short = WindowController.connectFailedMessage(for: host)
-        let long = WindowController.connectFailedMessage(
-            for: SSHHostID(name: "build-runner-07.eu-west-2.compute.internal"))
-
-        XCTAssertEqual(short, "Couldn't connect to devbox.")
-        XCTAssertLessThanOrEqual((short as NSString).size(withAttributes: font).width, ToastView.messageMaxWidth)
-        let lines = long.split(separator: "\n").map(String.init)
-        XCTAssertEqual(lines.first, "Couldn't connect to")
-        XCTAssertLessThanOrEqual((lines[0] as NSString).size(withAttributes: font).width, ToastView.messageMaxWidth)
-    }
-
     func test_aLoginThatEndsBeforeConnecting_inItsOnlyPane_stillWarns() throws {
         let (c, login) = try connected()
 
@@ -675,7 +663,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         drainMainQueue()
 
         XCTAssertNotNil(c.connectViewForTesting)
-        XCTAssertTrue(showsToast("Couldn't connect to devbox.", in: c))
+        XCTAssertTrue(showsToast("Couldn't Connect to devbox", in: c))
     }
 
     func test_closingTheLoginWhileConnecting_asksFirst_andChangesNothingUntilAnswered() throws {
@@ -715,7 +703,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertNotNil(c.connectViewForTesting)
         XCTAssertTrue(login.terminated)
         XCTAssertEqual(waiting.startCount, 0)
-        XCTAssertFalse(showsToast("Couldn't connect to devbox.", in: c), "the user closed it; nothing failed")
+        XCTAssertFalse(showsToast("Couldn't Connect to devbox", in: c), "the user closed it; nothing failed")
     }
 
     func test_closingAWaitingPaneWhileConnecting_doesNotAsk() throws {
@@ -835,7 +823,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         fake.connect()
 
         XCTAssertNotNil(c.connectViewForTesting, file: file, line: line)
-        XCTAssertFalse(showsToast("Couldn't connect to devbox.", in: c), "the user closed it", file: file, line: line)
+        XCTAssertFalse(showsToast("Couldn't Connect to devbox", in: c), "the user closed it", file: file, line: line)
         XCTAssertEqual(waiting?.startCount ?? 0, 0, "waiting panes never start", file: file, line: line)
     }
 
@@ -874,7 +862,7 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         XCTAssertFalse(c.isConfirmOpen, "Disconnect says what it does, so it never asks")
         XCTAssertNotNil(c.connectViewForTesting)
-        XCTAssertFalse(showsToast("Couldn't connect to devbox.", in: c), "the user ended it")
+        XCTAssertFalse(showsToast("Couldn't Connect to devbox", in: c), "the user ended it")
         XCTAssertEqual(waiting.startCount, 0)
     }
 

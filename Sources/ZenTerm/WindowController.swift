@@ -1349,13 +1349,9 @@ final class WindowController: NSObject {
 
     private func loginFailed(on host: SSHHostID, closing workspace: WorkspaceController?) {
         if let workspace, workspaces.contains(where: { $0 === workspace }) { closeTabs(of: workspace) }
-        toasts.show(ToastContent(variant: .warning, title: "SSH Host", message: Self.connectFailedMessage(for: host)))
-    }
-
-    static func connectFailedMessage(for host: SSHHostID) -> String {
-        let line = "Couldn't connect to \(host.name)."
-        let width = (line as NSString).size(withAttributes: [.font: ToastView.messageFont]).width
-        return width <= ToastView.messageMaxWidth ? line : "Couldn't connect to\n\(host.name)."
+        toasts.show(
+            ToastContent(
+                variant: .warning, title: "Couldn't Connect to \(host.name)", message: nil))
     }
 
     private func toggleToolFloat(_ id: String, in host: SSHHostID) {
