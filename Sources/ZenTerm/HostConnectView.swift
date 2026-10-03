@@ -2,14 +2,13 @@ import AppKit
 
 // The canvas for an SSH host that isn't connected: one panel, framed like a pane, that connects on ↵.
 final class HostConnectView: NSView {
-    private static let iconSize: CGFloat = 28
     private static let spacing: CGFloat = 12
     private static let iconToMessage: CGFloat = 16
     private static let messageToButton: CGFloat = 20
 
     let host: SSHHostID
     private let onConnect: () -> Void
-    private let icon = NSImageView()
+    private let icon = IconBadge(symbol: "server.rack", accessibilityDescription: nil, size: .large) { $0.accent }
     private let message = NSTextField(labelWithString: "")
     private let connectButton: AppButton
     private let panel: PanelHostView
@@ -25,8 +24,6 @@ final class HostConnectView: NSView {
         translatesAutoresizingMaskIntoConstraints = false
         connectButton.setAccessibilityLabel("Connect to \(host.name)")
 
-        icon.image = NSImage(systemSymbolName: "server.rack", accessibilityDescription: nil)?
-            .withSymbolConfiguration(.init(pointSize: Self.iconSize, weight: .light))
         message.stringValue = "Connect to \(host.name)"
         message.font = .systemFont(ofSize: 13)
         message.alignment = .center
@@ -70,7 +67,7 @@ final class HostConnectView: NSView {
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        icon.contentTintColor = chrome.ink(.muted)
+        icon.reapplyTheme()
         message.textColor = chrome.ink(.muted)
         connectButton.reapplyTheme()
         panel.reapplyTheme()
