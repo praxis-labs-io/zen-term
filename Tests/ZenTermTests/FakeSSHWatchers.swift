@@ -12,6 +12,10 @@ final class FakeSSHWatchers {
     var cancels = 0
     var exitCancels = 0
     var resolves = 0
+    var launchResolves = 0
+    var launchForm: SSHLaunch.Form = .loginShell
+    var holdsLaunch = false
+    var launchFound: (@MainActor (SSHLaunch.Form) -> Void)?
     var delayed: [@MainActor () -> Void] = []
     var answerBeforeLogin: pid_t?? = .some(nil)
     var ended: [pid_t] = []
@@ -19,6 +23,11 @@ final class FakeSSHWatchers {
 
     var watchers: SSHConnection.Watchers {
         SSHConnection.Watchers(
+            resolveLaunch: { [self] _, found in
+                launchResolves += 1
+                guard !holdsLaunch else { return launchFound = found }
+                found(launchForm)
+            },
             awaitSocket: { [self] _, ready, appeared, unwatchable in
                 socketWatches += 1
                 self.ready = ready

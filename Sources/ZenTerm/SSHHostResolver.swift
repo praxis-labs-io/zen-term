@@ -28,6 +28,15 @@ enum SSHHostResolver {
         dump(of: host).flatMap(endpoint(inDump:))
     }
 
+    // Blocking: callers own the hop off the main thread.
+    static func ownsRemoteCommand(_ host: String) -> Bool {
+        dump(of: host).map(ownsRemoteCommand(inDump:)) ?? false
+    }
+
+    static func ownsRemoteCommand(inDump dump: String) -> Bool {
+        fields(inDump: dump)["remotecommand"] != nil
+    }
+
     static func destination(inDump dump: String) -> String? {
         let fields = fields(inDump: dump)
         guard let user = fields["user"], let hostname = fields["hostname"] else { return nil }

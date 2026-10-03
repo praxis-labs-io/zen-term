@@ -4,6 +4,12 @@ import TerminalKit
 
 // A host pane's launch: ssh sharing one ControlMaster connection per host, with no local shell around it.
 enum SSHLaunch {
+    enum Form: Equatable {
+        case loginShell
+        // ssh refuses a command-line command beside a host's own `RemoteCommand`.
+        case plain
+    }
+
     static let executable = "/usr/bin/ssh"
 
     // ssh binds `<path>.<16 chars>` first, and a path past this fails only after the login succeeds.

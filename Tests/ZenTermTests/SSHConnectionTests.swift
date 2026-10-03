@@ -127,6 +127,48 @@ final class SSHConnectionTests: XCTestCase {
         XCTAssertEqual(other.startCount, 0)
     }
 
+    func test_theLoginWaitsForTheHostsConfig_beforeLookingForAMaster() {
+        fake.holdsLaunch = true
+        let (login, loginID) = surface(1)
+        connection.start(login, id: loginID, env: [:])
+
+        XCTAssertEqual(fake.launchResolves, 1)
+        XCTAssertEqual(fake.resolves, 0, "the master check would launch the login before its form is known")
+        fake.launchFound?(.loginShell)
+        fake.ready?()
+
+        XCTAssertEqual(fake.resolves, 1)
+        XCTAssertEqual(login.startCount, 1)
+    }
+
+    func test_aConfigAnsweringAfterShutdown_looksForNoMaster() {
+        fake.holdsLaunch = true
+        let (login, loginID) = surface(1)
+        connection.start(login, id: loginID, env: [:])
+        connection.shutdown()
+
+        fake.launchFound?(.loginShell)
+
+        XCTAssertEqual(fake.resolves, 0)
+        XCTAssertEqual(login.startCount, 0)
+    }
+
+    func test_aLoginAfterTheMasterExits_readsTheHostsConfigOnlyOnce() {
+        let (login, loginID) = surface(1)
+        connection.start(login, id: loginID, env: [:])
+        fake.ready?()
+        fake.connect()
+        fake.exited?()
+        fake.answerBeforeLogin = .some(nil)
+
+        let (pane, paneID) = surface(2)
+        connection.start(pane, id: paneID, env: [:])
+        fake.ready?()
+
+        XCTAssertEqual(fake.launchResolves, 1)
+        XCTAssertEqual(pane.startCount, 1)
+    }
+
     func test_shuttingDownAConnectedHost_reportsItDisconnected_andStopsWatching() {
         let (login, loginID) = surface(1)
         connection.start(login, id: loginID, env: [:])
