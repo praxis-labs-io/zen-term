@@ -71,12 +71,12 @@ final class SSHHostChordTests: WindowTestCase {
 
     private func selected(_ c: WindowController) -> String? { c.selectedHostForTesting?.name }
 
-    func test_aWorkspaceNumber_reachesAnOnlineHost_pastAnOfflineOne() {
-        let c = makeWindow(hosts: ["down", "up"], offline: ["down"])
+    func test_aWorkspaceNumber_reachesAConnectedHost_pastHostsThatAreNotConnected() {
+        let c = makeWindow(hosts: ["down", "up", "live"], offline: ["down"], connected: ["live"])
 
         c.handle(.selectWorkspace(2))
 
-        XCTAssertEqual(selected(c), "up")
+        XCTAssertEqual(selected(c), "live")
     }
 
     func test_aConnectedHost_takesANumber() {
@@ -87,8 +87,8 @@ final class SSHHostChordTests: WindowTestCase {
         XCTAssertEqual(selected(c), "live")
     }
 
-    func test_aNumberPastTheLastReachableHost_doesNothing() {
-        let c = makeWindow(hosts: ["up", "down"], offline: ["down"])
+    func test_aNumberPastTheLastConnectedHost_doesNothing() {
+        let c = makeWindow(hosts: ["live", "up", "down"], offline: ["down"], connected: ["live"])
         let workspace = c.activeWorkspaceIDForTesting
 
         c.handle(.selectWorkspace(3))
@@ -97,39 +97,40 @@ final class SSHHostChordTests: WindowTestCase {
         XCTAssertEqual(c.activeWorkspaceIDForTesting, workspace)
     }
 
-    func test_nextWorkspace_runsThroughReachableHostsAndWrapsBack() {
+    func test_nextWorkspace_runsThroughConnectedHostsOnlyAndWrapsBack() {
         let c = makeWindow(hosts: ["up", "down", "live"], offline: ["down"], connected: ["live"])
         let workspace = c.activeWorkspaceIDForTesting
 
         c.handle(.nextWorkspace)
-        XCTAssertEqual(selected(c), "up")
-        c.handle(.nextWorkspace)
-        XCTAssertEqual(selected(c), "live", "the offline host is skipped")
+        XCTAssertEqual(selected(c), "live", "the online and offline hosts are skipped")
         c.handle(.nextWorkspace)
         XCTAssertNil(selected(c))
         XCTAssertEqual(c.activeWorkspaceIDForTesting, workspace)
     }
 
-    func test_previousWorkspace_fromTheWorkspace_landsOnTheLastReachableHost() {
-        let c = makeWindow(hosts: ["up", "down"], offline: ["down"])
+    func test_previousWorkspace_fromTheWorkspace_landsOnTheLastConnectedHost() {
+        let c = makeWindow(hosts: ["live", "up", "down"], offline: ["down"], connected: ["live"])
 
         c.handle(.prevWorkspace)
 
-        XCTAssertEqual(selected(c), "up")
+        XCTAssertEqual(selected(c), "live")
     }
 
-    func test_fromAnOfflineHost_theCycleStepsToTheNearestReachableRow() throws {
-        let c = makeWindow(hosts: ["before", "down", "after"], offline: ["down"])
+    func test_fromAHostThatIsNotConnected_theCycleStepsToTheNearestConnectedRow() throws {
+        let c = makeWindow(
+            hosts: ["before", "down", "up", "after"], offline: ["down"], connected: ["before", "after"])
         let workspace = c.activeWorkspaceIDForTesting
 
-        try click(row("down", in: c))
-        XCTAssertEqual(selected(c), "down", "clicking an offline host still opens it")
-        c.handle(.nextWorkspace)
-        XCTAssertEqual(selected(c), "after")
+        for host in ["down", "up"] {
+            try click(row(host, in: c))
+            XCTAssertEqual(selected(c), host, "clicking a host that is not connected still opens it")
+            c.handle(.nextWorkspace)
+            XCTAssertEqual(selected(c), "after")
 
-        try click(row("down", in: c))
-        c.handle(.prevWorkspace)
-        XCTAssertEqual(selected(c), "before")
+            try click(row(host, in: c))
+            c.handle(.prevWorkspace)
+            XCTAssertEqual(selected(c), "before")
+        }
 
         c.handle(.prevWorkspace)
         XCTAssertNil(selected(c))
@@ -181,21 +182,22 @@ final class SSHHostChordTests: WindowTestCase {
         XCTAssertEqual(try status("devbox", in: c), "Connected")
     }
 
-    func test_onlyReachableHostRows_offerAWorkspaceShortcut() throws {
-        let c = makeWindow(hosts: ["down", "up"], offline: ["down"])
+    func test_onlyConnectedHostRows_offerAWorkspaceShortcut() throws {
+        let c = makeWindow(hosts: ["down", "up", "live"], offline: ["down"], connected: ["live"])
 
-        XCTAssertEqual(try row("up", in: c).tooltip?.label, "Open host")
+        XCTAssertEqual(try row("live", in: c).tooltip?.label, "Open host")
         XCTAssertEqual(
-            try row("up", in: c).tooltip?.shortcutForTesting, CommandCatalog.spec(for: .selectWorkspace(2)).shortcut)
+            try row("live", in: c).tooltip?.shortcutForTesting, CommandCatalog.spec(for: .selectWorkspace(2)).shortcut)
+        XCTAssertNil(try row("up", in: c).tooltip?.shortcutForTesting)
         XCTAssertNil(try row("down", in: c).tooltip?.shortcutForTesting)
     }
 
-    func test_aHostGoingOffline_takesItsNumberAndRedrawsItsRow() throws {
-        let c = makeWindow(hosts: ["devbox"])
+    func test_aHostDisconnecting_takesItsNumberAndRedrawsItsRow() throws {
+        let c = makeWindow(hosts: ["devbox"], connected: ["devbox"])
 
-        SSHHostStatusCenter.shared.setReachable(false, host: SSHHostID(name: "devbox"))
+        SSHHostStatusCenter.shared.setConnected(false, host: SSHHostID(name: "devbox"))
 
-        XCTAssertEqual(try status("devbox", in: c), "Offline")
+        XCTAssertEqual(try status("devbox", in: c), "Online")
         XCTAssertNil(try row("devbox", in: c).tooltip?.shortcutForTesting)
         c.handle(.selectWorkspace(2))
         XCTAssertNil(selected(c))
@@ -222,23 +224,16 @@ final class SSHHostChordTests: WindowTestCase {
         wait(for: [drained], timeout: 2)
     }
 
-    func test_removingTheSelectedHost_landsOnTheNextHostBelow() throws {
-        let c = makeWindow(hosts: ["a", "b", "c"])
+    func test_removingTheSelectedHost_landsOnTheFirstWorkspace_notAHostThatIsNotConnected() throws {
+        let c = makeWindow(hosts: ["a", "b", "c"], connected: ["c"])
+        let workspace = c.activeWorkspaceIDForTesting
         try click(row("b", in: c))
 
         configure(hosts: ["a", "c"])
 
-        XCTAssertEqual(selected(c), "c")
-        XCTAssertEqual(c.window.title, "c")
-    }
-
-    func test_removingTheLastSelectedHost_landsOnTheHostAbove_skippingOfflineOnes() throws {
-        let c = makeWindow(hosts: ["a", "b", "c", "d"], offline: ["b", "d"])
-        try click(row("c", in: c))
-
-        configure(hosts: ["a", "b", "d"])
-
-        XCTAssertEqual(selected(c), "a")
+        XCTAssertNil(selected(c), "c reads Connected but holds no workspace in this window")
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, workspace)
+        XCTAssertNil(c.connectViewForTesting)
     }
 
     func test_removingTheOnlyHost_landsOnTheFirstWorkspace() throws {
@@ -262,7 +257,7 @@ final class SSHHostChordTests: WindowTestCase {
 
         configure(hosts: ["b"])
 
-        XCTAssertEqual(selected(c), "b")
+        XCTAssertNil(selected(c))
         XCTAssertTrue(c.isModalOverlayOpen)
         XCTAssertTrue(c.window.firstResponder === focused, "Settings keeps the keyboard")
     }
@@ -303,7 +298,7 @@ final class SSHHostChordTests: WindowTestCase {
         XCTAssertFalse(c.search.isActive)
     }
 
-    func test_aNewHost_readsOfflineAndTakesNoNumber_untilItsFirstAnswer() throws {
+    func test_aNewHost_readsOfflineAndTakesNoNumber_untilItConnects() throws {
         let c = makeWindow(hosts: [])
         configure(hosts: ["fresh"])
         hosts = ["fresh"]
@@ -313,6 +308,10 @@ final class SSHHostChordTests: WindowTestCase {
         XCTAssertNil(selected(c), "an unanswered host is not a stop")
 
         SSHHostStatusCenter.shared.setReachable(true, host: SSHHostID(name: "fresh"))
+        c.handle(.selectWorkspace(2))
+        XCTAssertNil(selected(c), "an online host is not a stop either")
+
+        SSHHostStatusCenter.shared.setConnected(true, host: SSHHostID(name: "fresh"))
         c.handle(.selectWorkspace(2))
         XCTAssertEqual(selected(c), "fresh")
     }

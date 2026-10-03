@@ -1152,24 +1152,14 @@ final class WindowController: NSObject {
     // Leaves an open card up, since a host is usually removed from inside Settings.
     private func leaveRemovedHost(shownHosts: [SSHHostID]) {
         guard case .host(let host) = selection, !GeneralConfig.current.sshHosts.contains(host.name) else { return }
-        let current = order
-        let reachable = Set(current.navigable)
         let place = shownHosts.firstIndex(of: host) ?? shownHosts.count
-        let nearest = (shownHosts[min(place + 1, shownHosts.count)...] + shownHosts[..<place].reversed())
-            .map(WorkspaceOrder.Target.host)
-            .first(where: reachable.contains)
-        guard let landing = nearest ?? current.navigableWorkspaces.first.map(WorkspaceOrder.Target.workspace)
-        else { return }
-        switch landing {
-        case .workspace(let id):
-            guard let workspace = workspaces.first(where: { $0.id == id }) else { return }
-            selection = .workspace(workspace)
-            mount(.instant)
-            if let tab = workspace.activeID { visit(tab) }
-        case .host(let next):
-            selection = .host(next)
-            mount(.instant)
-        }
+        let nearestHost = (shownHosts[min(place + 1, shownHosts.count)...] + shownHosts[..<place].reversed())
+            .lazy.compactMap { next in self.workspaces.first { $0.host == next } }.first
+        let firstWorkspace = order.navigableWorkspaces.first.flatMap { id in workspaces.first { $0.id == id } }
+        guard let landing = nearestHost ?? firstWorkspace else { return }
+        selection = .workspace(landing)
+        mount(.instant)
+        if let tab = landing.activeID { visit(tab) }
         renderAttention()
     }
 
