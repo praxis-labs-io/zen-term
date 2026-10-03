@@ -400,9 +400,9 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         XCTAssertEqual(asked, 1)
     }
 
-    private func addHostThroughSettings(_ host: String, ssh: String, check: (WindowController, NSView) throws -> Void)
-        throws
-    {
+    private func addHostThroughSettings(
+        _ host: String, name: String? = nil, ssh: String, check: (WindowController, NSView) throws -> Void
+    ) throws {
         let originalSurface = TerminalSurfaceFactory.makeOverride
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
         Motion.isReduceMotionEnabled = { true }
@@ -421,9 +421,13 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
 
         add.onTap()
         let overlay = try XCTUnwrap(descendants(of: content).compactMap { $0 as? AddSSHHostOverlay }.first)
-        let box = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? FieldBox }.first)
-        box.setText(host)
-        _ = box.control(box.field, textView: NSTextView(), doCommandBy: #selector(NSResponder.insertNewline(_:)))
+        let boxes = descendants(of: overlay).compactMap { $0 as? FieldBox }
+        boxes[0].setText(host)
+        if let name { boxes[1].setText(name) }
+        let addButton = try XCTUnwrap(
+            descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Add" })
+        c.window.makeFirstResponder(addButton)
+        addButton.keyDown(with: key(36))
         try check(c, content)
     }
 
@@ -439,6 +443,16 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
             waitUntil(
                 c.sidebarForTesting.view.hostRowsForTesting.map(\.titleForTesting) == ["deploy@10.0.0.5"],
                 "the sidebar to list the new host")
+        }
+    }
+
+    func test_addingAHostWithAName_writesTheName_andListsItByName() throws {
+        try addHostThroughSettings("deploy@10.0.0.5", name: "Deploy box", ssh: "Host devbox\n") { c, content in
+            XCTAssertTrue(configText().contains("ssh-host = deploy@10.0.0.5: Deploy box\n"), "got: \(configText())")
+            waitUntil(captions(in: content) == ["devbox", "Deploy box"], "Settings to reopen listing the host by name")
+            waitUntil(
+                c.sidebarForTesting.view.hostRowsForTesting.map(\.titleForTesting) == ["Deploy box"],
+                "the sidebar to list the host by name")
         }
     }
 

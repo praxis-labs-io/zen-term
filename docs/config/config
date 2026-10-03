@@ -189,6 +189,8 @@
 #
 # A name after a colon and a space is what ZenTerm shows for the host in place
 # of its alias. ssh still connects with the alias. Quote a name that holds #.
+# Settings > SSH Hosts takes a name for a host you add; name a Host entry from
+# ~/.ssh/config, or clear a name, here.
 # ssh-host = prod: Production
 
 # Each pane on a host opens your login shell there with the TERM_PROGRAM and

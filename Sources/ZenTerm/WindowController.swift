@@ -2000,18 +2000,18 @@ final class WindowController: NSObject {
         presentModal(overlay, kind: .sshHostForm)
     }
 
-    private func addSSHHost(_ host: String) {
+    private func addSSHHost(_ host: SSHHostEntry) {
         do {
-            try SSHHostsWriter.add(SSHHostEntry(alias: host))
+            try SSHHostsWriter.add(host)
         } catch {
             toasts.show(
                 ToastContent(
                     variant: .warning, title: "Couldn't Add SSH Host",
-                    message: "Couldn't save \(host) to ZenTerm's config: \(error.localizedDescription)"))
+                    message: "Couldn't save \(host.alias) to ZenTerm's config: \(error.localizedDescription)"))
             return
         }
         AppConfig.reload()
-        reopenSettingsOnSSHHosts(focusing: host)
+        reopenSettingsOnSSHHosts(focusing: host.alias)
     }
 
     private func reopenSettingsOnSSHHosts(focusing host: String? = nil) {
