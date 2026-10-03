@@ -1344,7 +1344,7 @@ final class WindowController: NSObject {
 
     private func togglesRunningFloat(_ chord: KeyInterceptor.ReservedChord) -> Bool {
         guard case .toggleToolFloat(let id) = chord else { return false }
-        return showsToolFloat(id) && floats.surfaceID(id) != nil
+        return floats.surfaceID(id) != nil && (floats.activeID == id || floatAttention(id) >= .completed)
     }
 
     private func toggleRunningFloat(_ id: String) -> Bool {
@@ -3665,7 +3665,7 @@ final class WindowController: NSObject {
             isLiveInBackground: floats.isLiveInBackground, isFloatBusy: floats.isBusy,
             drawerAttention: { [weak self] edge in self?.drawerAttention(edge) ?? .idle },
             floatAttention: { [weak self] id in self?.floatAttention(id) ?? .idle },
-            showsToolFloat: { [weak self] id in self?.showsToolFloat(id) ?? true })
+            showsToolFloat: { [weak self] _ in self?.showsToolFloats ?? true })
         lastBusyDots = busyDots()
         sidebar.setOpenModal(palette: modal?.kind == .commandPalette, settings: modal?.kind == .settings)
     }
@@ -3676,11 +3676,8 @@ final class WindowController: NSObject {
 
     private var isOnConnect: Bool { activeWorkspace == nil }
 
-    // A host's floats run on this Mac, so one shows there only while it is open or needs you.
-    private func showsToolFloat(_ id: String) -> Bool {
-        guard selection.host != nil else { return true }
-        return floats.activeID == id || floatAttention(id) >= .completed
-    }
+    // A host's floats run on this Mac, so a host shows none; one that needs you asks through its card.
+    private var showsToolFloats: Bool { selection.host == nil }
 
     private func drawerAttention(_ edge: DrawerEdge) -> SurfaceAttention {
         guard let ids = activeController?.drawerSurfaceIDs else { return .idle }

@@ -383,10 +383,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   the traffic lights and `ChromeMetrics.topInset` follows.
 - **Tool floats are window-level** because a surface is one `NSView`. `ToolFloatController`
   reaches the active tab through closures. `ToolFloat.Scope.tab` floats are filed under
-  `tabID/id` and shut down with their tab; Scratch is the only one. In a connected host a
-  user float runs on this Mac, so its button shows only while it is open, completed or
-  waiting, its toggle only opens or closes that running float, and any other toggle toasts.
-  The Connect screen hides the whole dock but for those same float buttons.
+  `tabID/id` and shut down with their tab; Scratch is the only one. A user float runs on
+  this Mac, so a host shows no user float button, and the Connect screen hides the whole
+  dock. There a float's card, shortcut or palette row opens or closes it only while it is
+  open, completed or waiting; any other toggle toasts in a connected host.
 - **Every silent no-op is a toast**, throttled at 3s per kind because held chords repeat.
 - **A surface stating current state is retracted when the cause clears.**
 - **A toast's keys live on the card root** (`ToastView.performKeyEquivalent` and
@@ -451,7 +451,7 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   float, then dispatch. A window's `WindowSelection` is a workspace or an SSH host's Connect
   screen (`HostConnectView`); that screen has no tab, so dispatch drops any chord that is not
   `worksWithoutTab`, except ⌘T, which connects, and a float toggle, which opens or closes only
-  a float the dock shows there and is silent otherwise, and a card stays open for a chord it would drop. App-global chords bypass it in `AppDelegate.route`; a palette pick
+  a running float that is open or needs you and is silent otherwise, and a card stays open for a chord it would drop. App-global chords bypass it in `AppDelegate.route`; a palette pick
   of one returns there through `onAppGlobalCommand`. The sidebar toggle passes through an
   open card, which stays open. A card is offered every other chord first
   (`ModalOverlay.handle`, how the workspace form takes the tab shortcuts) and swallows

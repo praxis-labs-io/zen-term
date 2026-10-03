@@ -374,39 +374,37 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertTrue(dockShows("pi", in: c))
     }
 
-    func test_aFloatThatNeedsYou_keepsItsButtonInAHost_andTheButtonOpensIt() throws {
+    func test_aFloatThatNeedsYou_getsNoButtonInAHost_andItsShortcutOpensAndClosesIt() throws {
         let (c, pi) = try piRunningHiddenInAConnectedHost()
-        XCTAssertFalse(dockShows("pi", in: c))
 
-        pi.delegate?.surface(pi, didPostNotification: TerminalNotification(title: "pi", body: "needs input"))
-        drainMainQueue()
+        ask(pi)
 
-        XCTAssertTrue(dockShows("pi", in: c))
-        XCTAssertEqual(c.dockForTesting.dottedToolFloatIDsForTesting, ["pi"])
+        XCTAssertFalse(dockShows("pi", in: c), "its card asks for it, not the host's dock")
         let spawnedBefore = spawned.count
-        _ = try XCTUnwrap(dockButton("pi", in: c)).accessibilityPerformPress()
+        c.handle(.toggleToolFloat("pi"))
 
-        XCTAssertEqual(c.floatsForTesting.activeID, "pi")
         XCTAssertTrue(c.floatsForTesting.shownSurface === pi, "the running float opens, nothing respawns")
         XCTAssertEqual(spawned.count, spawnedBefore)
-        XCTAssertTrue(dockShows("pi", in: c))
+        XCTAssertFalse(dockShows("pi", in: c), "an open float gets no button in a host either")
 
         c.handle(.toggleToolFloat("pi"))
 
         XCTAssertFalse(c.floatsForTesting.isOpen)
-        XCTAssertFalse(dockShows("pi", in: c), "once answered and closed, it leaves the host's dock")
     }
 
-    func test_aFloatThatIsOnlyWorking_staysHiddenInAHost() throws {
+    func test_aFloatThatIsOnlyWorking_staysHiddenInAHost_andItsShortcutToasts() throws {
         let (c, pi) = try piRunningHiddenInAConnectedHost()
 
         pi.delegate?.surface(pi, progressDidChange: TerminalProgress(state: .indeterminate, fraction: nil))
         drainMainQueue()
+        c.handle(.toggleToolFloat("pi"))
 
         XCTAssertFalse(dockShows("pi", in: c))
+        XCTAssertFalse(c.floatsForTesting.isOpen)
+        XCTAssertTrue(showsToast("Tool floats run on this Mac, not on devbox.", in: c))
     }
 
-    func test_aFloatThatFinished_keepsItsButtonInAHost() throws {
+    func test_aFloatThatFinished_getsNoButtonInAHost_andItsShortcutOpensIt() throws {
         var config = GeneralConfig.current
         config.ai = nil
         GeneralConfig.setCurrentForTesting(config)
@@ -414,8 +412,11 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         pi.delegate?.surface(pi, didPostNotification: TerminalNotification(title: "pi", body: "done"))
         drainMainQueue()
+        XCTAssertFalse(dockShows("pi", in: c))
 
-        XCTAssertTrue(dockShows("pi", in: c))
+        c.handle(.toggleToolFloat("pi"))
+
+        XCTAssertTrue(c.floatsForTesting.shownSurface === pi)
     }
 
     func test_theConnectScreen_hidesTheDock_andConnectingBringsItBack() throws {
@@ -429,7 +430,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertTrue(dockShows("Scratch", in: c))
     }
 
-    func test_aFloatThatNeedsYou_keepsItsButtonOnConnect() throws {
+    func test_aFloatThatNeedsYou_getsNoButtonOnConnect() throws {
         let c = makeWindow()
         c.handle(.toggleToolFloat("pi"))
         let pi = try XCTUnwrap(spawned.first { $0.lastConfig?.args == ["-l", "-i", "-c", "pi"] })
@@ -439,19 +440,17 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         c.activate(host)
 
-        XCTAssertEqual(c.dockForTesting.visibleLayoutForTesting, ["pi"])
-        XCTAssertEqual(c.dockForTesting.dottedToolFloatIDsForTesting, ["pi"])
+        XCTAssertEqual(c.dockForTesting.visibleLayoutForTesting, [])
     }
 
-    func test_aFloatAskingOverConnect_raisesItsCard_andDotsItsButton() throws {
+    func test_aFloatAskingOverConnect_raisesItsCard_andLeavesTheDockEmpty() throws {
         let (c, pi) = try piRunningHiddenOnConnect()
 
         ask(pi)
 
         XCTAssertEqual(cards(in: c).count, 1)
         XCTAssertEqual(c.windowAttentionForTesting, .waiting)
-        XCTAssertEqual(c.dockForTesting.visibleLayoutForTesting, ["pi"])
-        XCTAssertEqual(c.dockForTesting.dottedToolFloatIDsForTesting, ["pi"])
+        XCTAssertEqual(c.dockForTesting.visibleLayoutForTesting, [])
     }
 
     func test_aFloatsTurnEndingOverConnect_raisesItsCard() throws {
@@ -463,7 +462,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         drainMainQueue()
 
         XCTAssertEqual(cards(in: c).count, 1)
-        XCTAssertEqual(c.dockForTesting.visibleLayoutForTesting, ["pi"])
+        XCTAssertEqual(c.dockForTesting.visibleLayoutForTesting, [])
     }
 
     func test_aFloatsCardOnConnect_opensTheFloatOverConnect() throws {
@@ -487,14 +486,14 @@ final class HostConnectInteractionTests: WindowTestCase {
         ask(pi)
         let workspaces = c.workspaceIDsForTesting
 
-        _ = try XCTUnwrap(dockButton("pi", in: c)).accessibilityPerformPress()
+        c.handle(.toggleToolFloat("pi"))
         XCTAssertTrue(c.window.firstResponder === pi.view)
         try press(36, "\r", in: c)
 
         XCTAssertEqual(c.workspaceIDsForTesting, workspaces, "Return belongs to the float, not Connect")
         XCTAssertNil(c.activeConnectionForTesting)
 
-        _ = try XCTUnwrap(dockButton("pi", in: c)).accessibilityPerformPress()
+        c.handle(.toggleToolFloat("pi"))
 
         XCTAssertFalse(c.floatsForTesting.isOpen)
         XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting?.connectButton)
@@ -539,23 +538,17 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(c.selectedHostForTesting, host)
     }
 
-    func test_aFloatThatNeedsYou_opensOverACardOnConnect_byItsShortcutOrItsButton() throws {
+    func test_aFloatThatNeedsYou_opensOverACardOnConnect_byItsShortcut() throws {
         for card: KeyInterceptor.ReservedChord in [.toggleCommandPalette, .openSettings] {
-            for viaButton in [false, true] {
-                let (c, pi) = try piRunningHiddenOnConnect()
-                ask(pi)
-                c.handle(card)
-                XCTAssertTrue(c.isModalOverlayOpen)
+            let (c, pi) = try piRunningHiddenOnConnect()
+            ask(pi)
+            c.handle(card)
+            XCTAssertTrue(c.isModalOverlayOpen)
 
-                if viaButton {
-                    _ = try XCTUnwrap(dockButton("pi", in: c)).accessibilityPerformPress()
-                } else {
-                    c.handle(.toggleToolFloat("pi"))
-                }
+            c.handle(.toggleToolFloat("pi"))
 
-                XCTAssertFalse(c.isModalOverlayOpen, "\(card), button: \(viaButton)")
-                XCTAssertTrue(c.floatsForTesting.shownSurface === pi, "\(card), button: \(viaButton)")
-            }
+            XCTAssertFalse(c.isModalOverlayOpen, "\(card)")
+            XCTAssertTrue(c.floatsForTesting.shownSurface === pi, "\(card)")
         }
     }
 
