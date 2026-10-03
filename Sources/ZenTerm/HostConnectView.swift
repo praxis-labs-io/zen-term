@@ -11,7 +11,8 @@ final class HostConnectView: NSView {
     private static let detailMaxWidth: CGFloat = 420
     private static let eyebrowFont = NSFont.monospacedSystemFont(ofSize: 10, weight: .medium)
     private static let eyebrowKern: CGFloat = 1
-    private static let titleFont = NSFont.systemFont(ofSize: 15, weight: .semibold)
+    static let titlePointSize: CGFloat = 22
+    private static let titleFont = NSFont.systemFont(ofSize: titlePointSize, weight: .semibold)
     private static let destinationFont = NSFont.monospacedSystemFont(ofSize: 12.5, weight: .regular)
     private static let detailFont = NSFont.systemFont(ofSize: 13)
 
@@ -42,7 +43,8 @@ final class HostConnectView: NSView {
         self.status = status
         self.onConnect = onConnect
         route = HostRouteView(host: host)
-        connectButton = AppButton(title: "Connect", variant: .primary, onTap: onConnect)
+        connectButton = AppButton(
+            title: "Connect", variant: .primary, size: .large, shortcut: "⏎", onTap: onConnect)
         panel = PanelHostView(content: content, meta: nil, onFocusRequest: onFocusRequest)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
