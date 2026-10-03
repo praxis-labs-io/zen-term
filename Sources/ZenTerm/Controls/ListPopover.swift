@@ -102,14 +102,7 @@ final class ListPopover {
         doc.translatesAutoresizingMaskIntoConstraints = false
         doc.addSubview(stack)
 
-        let scroll = NSScrollView()
-        scroll.drawsBackground = false
-        scroll.hasVerticalScroller = true
-        scroll.verticalScroller = SlimScroller()
-        scroll.scrollerStyle = .overlay
-        scroll.autohidesScrollers = true
-        scroll.documentView = doc
-        scroll.translatesAutoresizingMaskIntoConstraints = false
+        let scroll = FadingScrollView(document: doc)
 
         let card = ShadowCardView()
         card.wantsLayer = true

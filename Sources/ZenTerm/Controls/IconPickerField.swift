@@ -19,6 +19,7 @@ final class IconPickerField: NSView {
     /// Vertical nav walks rows, not a column stride, because a "Current" section is a row of one.
     private let rows: [Range<Int>]
     private var cells: [IconButton] = []
+    private weak var gridScroll: FadingScrollView?
     private var highlighted = 0
 
     private static let columns = 8
@@ -39,6 +40,7 @@ final class IconPickerField: NSView {
         orderedSymbols.indices.contains(highlighted) ? orderedSymbols[highlighted] : nil
     }
     var cellCountForTesting: Int { cells.count }
+    var highlightedCellForTesting: NSView? { cells.indices.contains(highlighted) ? cells[highlighted] : nil }
     func moveHighlightForTesting(_ delta: Int) { moveHighlight(delta) }
     func moveVerticallyForTesting(_ rows: Int) { moveVertically(rows) }
     func commitHighlightForTesting() { commitHighlight() }
@@ -243,14 +245,8 @@ final class IconPickerField: NSView {
         let doc = FlippedView()
         doc.translatesAutoresizingMaskIntoConstraints = false
         doc.addSubview(grid)
-        let scroll = NSScrollView()
-        scroll.drawsBackground = false
-        scroll.hasVerticalScroller = true
-        scroll.verticalScroller = SlimScroller()
-        scroll.scrollerStyle = .overlay
-        scroll.autohidesScrollers = true
-        scroll.documentView = doc
-        scroll.translatesAutoresizingMaskIntoConstraints = false
+        let scroll = FadingScrollView(document: doc)
+        gridScroll = scroll
 
         let card = ShadowCardView()
         card.wantsLayer = true
@@ -299,14 +295,14 @@ final class IconPickerField: NSView {
         let target = rows[min(max(row + delta, 0), rows.count - 1)]
         highlighted = target.lowerBound + min(column, target.count - 1)
         refreshHighlight()
-        cells[highlighted].scrollToVisible(cells[highlighted].bounds)
+        gridScroll?.reveal(cells[highlighted])
     }
 
     private func moveHighlight(_ delta: Int) {
         guard !cells.isEmpty else { return }
         highlighted = min(max(highlighted + delta, 0), cells.count - 1)
         refreshHighlight()
-        cells[highlighted].scrollToVisible(cells[highlighted].bounds)
+        gridScroll?.reveal(cells[highlighted])
     }
 
     private func refreshHighlight() {

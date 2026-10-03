@@ -51,6 +51,35 @@ final class TextAreaBoxTests: WindowTestCase {
         XCTAssertEqual(tabbed, 1)
     }
 
+    func test_textPastTheBottom_fadesOnlyTheEdgeItContinuesPast() throws {
+        let box = TextAreaBox(placeholder: "x")
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 140),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        let content = try XCTUnwrap(window.contentView)
+        content.addSubview(box)
+        NSLayoutConstraint.activate([
+            box.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            box.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            box.topAnchor.constraint(equalTo: content.topAnchor),
+        ])
+        content.layoutSubtreeIfNeeded()
+        let scroll = box.scrollForTesting
+
+        XCTAssertTrue(scroll.fadedEdgesForTesting == (false, false), "empty text fades neither edge")
+
+        box.setText((1...20).map { "line \($0)" }.joined(separator: "\n"))
+        let container = try XCTUnwrap(box.textView.textContainer)
+        box.textView.layoutManager?.ensureLayout(for: container)
+        XCTAssertGreaterThan(box.textView.frame.height, scroll.bounds.height, "precondition: the text overflows")
+        let atTop = scroll.fadedEdgesForTesting
+        XCTAssertTrue(atTop.start != atTop.end, "at the top, exactly one edge fades")
+
+        box.textView.scrollToEndOfDocument(nil)
+        XCTAssertTrue(
+            scroll.fadedEdgesForTesting == (atTop.end, atTop.start), "at the end, only the other edge fades")
+    }
+
     func test_placeholder_drawsWhereTheFirstGlyphLands() throws {
         let box = TextAreaBox(placeholder: "What went wrong")
         let window = NSWindow(

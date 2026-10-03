@@ -148,6 +148,22 @@ final class IconPickerFieldTests: WindowTestCase {
     }
 
     @discardableResult
+    func test_arrowingDownPastTheFold_keepsTheHighlightClearOfTheFade() throws {
+        let (field, window) = openedField(selected: IconCatalog.symbols[0], windowHeight: 320)
+        let scroll = try XCTUnwrap(
+            window.contentView?.firstDescendant { $0 is FadingScrollView } as? FadingScrollView)
+        scroll.layoutSubtreeIfNeeded()
+
+        field.moveVerticallyForTesting(6)
+
+        let cell = try XCTUnwrap(field.highlightedCellForTesting)
+        let frame = cell.convert(cell.bounds, to: scroll.documentView)
+        XCTAssertGreaterThan(scroll.documentVisibleRect.minY, 0, "precondition: the grid has scrolled")
+        XCTAssertGreaterThanOrEqual(
+            scroll.documentVisibleRect.maxY - frame.maxY, scroll.fadeDepth - 0.5,
+            "the highlighted cell clears the bottom fade")
+    }
+
     private func openedField(
         selected: String, windowHeight: CGFloat = 400
     ) -> (IconPickerField, NSWindow) {
