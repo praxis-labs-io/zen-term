@@ -56,6 +56,14 @@ final class KeycapView: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
+    var inkForTesting: NSColor? {
+        switch tokenStack.arrangedSubviews.first {
+        case let icon as NSImageView: return icon.contentTintColor
+        case let label as NSTextField: return label.textColor
+        default: return nil
+        }
+    }
+
     /// Without it a keycap is the elastic view in a stack and stretches into a pill.
     override var intrinsicContentSize: NSSize {
         NSSize(width: tokenStack.fittingSize.width + Self.inset(style) * 2, height: Self.height)

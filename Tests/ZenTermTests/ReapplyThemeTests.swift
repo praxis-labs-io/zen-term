@@ -73,13 +73,14 @@ final class ReapplyThemeTests: WindowTestCase {
         let window = makeWindow()
         window.contentView?.addSubview(button)
         let keycap = try XCTUnwrap(button.keycapForTesting)
-        let fillBefore = keycap.layer?.backgroundColor
+        let inkBefore = keycap.inkForTesting
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
         button.reapplyTheme()
 
-        XCTAssertNotEqual(fillBefore, keycap.layer?.backgroundColor)
-        XCTAssertEqual(keycap.layer?.backgroundColor, Theme.current.chrome.fill(.rest).cgColor)
+        XCTAssertNotEqual(inkBefore, keycap.inkForTesting)
+        XCTAssertEqual(keycap.inkForTesting, Theme.current.chrome.accent.nsColor)
+        XCTAssertNil(keycap.layer?.backgroundColor, "a primary button's keycap is a bare glyph")
     }
 
     func test_reapplyTheme_recolorsConfirmCardListStatus() throws {
