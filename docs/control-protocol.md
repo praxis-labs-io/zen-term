@@ -311,7 +311,7 @@ Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|close`,
 `zen worktree list|create|remove`, with `--focus` and `--force` for those fields. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
 rest print nothing. `zen pane split` splits to the right unless `--dir down` says otherwise.
-`zen worktree create <branch>` takes `--base default|current` and `--existing`.
+`zen worktree create <branch>` takes `--base default|current` or `--existing`, not both.
 `zen worktree remove` takes a folder when it starts with `/`, `~` or `.`, and a branch
 otherwise. `zen` sends
 folders as absolute paths, read against its own folder, and refuses a `--cwd` or

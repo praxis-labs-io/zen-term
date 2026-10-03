@@ -45,7 +45,7 @@ struct WorktreeCommands: ParsableCommand {
         var workspace: String?
 
         @Option(help: "Where a new branch starts: the default branch, or what the workspace's checkout is on.")
-        var base: Base = .defaultBranch
+        var base: Base?
 
         @Flag(help: "Check out a branch that already exists.")
         var existing = false
@@ -53,10 +53,14 @@ struct WorktreeCommands: ParsableCommand {
         @Flag(help: "Switch to it.")
         var focus = false
 
+        func validate() throws {
+            if existing, base != nil { throw ValidationError("--base only applies to a new branch, not --existing.") }
+        }
+
         func run() throws {
             let args = ControlArgs(
-                workspace: workspace.map(CommandPath.workspace), focus: focus, branch: branch, base: base.rawValue,
-                existing: existing)
+                workspace: workspace.map(CommandPath.workspace), focus: focus, branch: branch,
+                base: (base ?? .defaultBranch).rawValue, existing: existing)
             var client = try connection.client()
             client.replyTimeout = WorktreeCommands.gitReplyTimeout
             print(try JSONOutput.text(client.send(.worktreeCreate, args, expecting: WorktreeResult.self)))

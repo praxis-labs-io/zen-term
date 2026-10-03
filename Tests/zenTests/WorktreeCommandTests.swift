@@ -7,19 +7,24 @@ import XCTest
 final class WorktreeCommandTests: XCTestCase {
     func test_createParsesItsBranchAndFlags() throws {
         let create = try XCTUnwrap(
-            try Zen.parseAsRoot(["worktree", "create", "feat/x", "--base", "current", "--existing", "--focus"])
+            try Zen.parseAsRoot(["worktree", "create", "feat/x", "--base", "current", "--focus"])
                 as? WorktreeCommands.Create)
         XCTAssertEqual(create.branch, "feat/x")
         XCTAssertEqual(create.base, .current)
-        XCTAssertTrue(create.existing)
         XCTAssertTrue(create.focus)
 
-        let plain = try XCTUnwrap(try Zen.parseAsRoot(["worktree", "create", "feat/y"]) as? WorktreeCommands.Create)
-        XCTAssertEqual(plain.base.rawValue, "default")
+        let existing = try XCTUnwrap(
+            try Zen.parseAsRoot(["worktree", "create", "feat/y", "--existing"]) as? WorktreeCommands.Create)
+        XCTAssertTrue(existing.existing)
+        XCTAssertNil(existing.base)
     }
 
     func test_aBaseThatIsNeitherDefaultNorCurrentIsAUsageError() {
         XCTAssertEqual(Zen.exitCode(running: ["worktree", "create", "feat/x", "--base", "main"]), 2)
+    }
+
+    func test_aBaseWithExistingIsAUsageError() {
+        XCTAssertEqual(Zen.exitCode(running: ["worktree", "create", "feat/x", "--existing", "--base", "current"]), 2)
     }
 
     func test_removeSendsABranchAsABranch_andAFolderAsAnAbsolutePath() throws {
