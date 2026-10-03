@@ -629,4 +629,19 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertTrue(showsToast("No pane left to focus\nPress \(chord) to show the sidebar.", in: c))
         XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
     }
+
+    func test_fillScreen_worksOverConnect_andTogglesBack() throws {
+        let c = onConnectScreen()
+        let visible = try XCTUnwrap((c.window.screen ?? NSScreen.main)?.visibleFrame, "no screen to fill")
+        let before = c.window.frame
+        try XCTSkipIf(before == visible, "the window already fills the screen")
+
+        c.handle(.fillScreen)
+        XCTAssertEqual(c.window.frame.width, visible.width, accuracy: 1)
+        XCTAssertEqual(c.window.frame.height, visible.height, accuracy: 1)
+        c.handle(.fillScreen)
+
+        XCTAssertEqual(c.window.frame.width, before.width, accuracy: 1)
+        XCTAssertEqual(c.window.frame.height, before.height, accuracy: 1)
+    }
 }
