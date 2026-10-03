@@ -2982,7 +2982,9 @@ final class WindowController: NSObject {
     private func titleChanged(surface: SurfaceID, title: String) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            if title.isEmpty, self.liveAgent(surface) != nil, self.workspace(holding: surface)?.host != nil {
+            if title == SSHLaunch.clearedTitle, self.liveAgent(surface) != nil,
+                self.workspace(holding: surface)?.host != nil
+            {
                 return self.endHostAgent(surface)
             }
             var joined = false

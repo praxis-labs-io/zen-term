@@ -305,9 +305,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   command's own result lands first and tells a crash from a clean exit. A named agent
   that exits non-zero, other than by SIGINT or SIGTERM, asks; any other exit, and any
   unnamed agent's, lands as a finished command. A host sends neither a result nor a busy
-  reading, so there an agent leaves when its title clears to empty, which Claude and Codex both
-  send on exit. Only on a host: locally an empty title would drop the agent before the result
-  that tells a crash from a clean exit.
+  reading, so there an agent leaves when its title clears, which Claude and Codex both send on
+  exit. libghostty turns a cleared title into the pane's pwd, which on a host is the local folder
+  ssh started in, so that path is the signal. Only on a host: locally a cleared title would drop
+  the agent before the result that tells a crash from a clean exit.
   The Agents rows join it with `agentWait(of:)` and sort waiting (oldest first), working,
   idle, ties in sidebar order.
 - **Only an agent's OSC 777 can ask.** A notification from a surface that is not in the

@@ -81,6 +81,11 @@ enum SSHLaunch {
         "ControlPath=\"\(controlPath.path.replacingOccurrences(of: "%", with: "%%"))\""
     }
 
+    static var workingDirectory: URL { ShellLaunch.defaultCWD }
+
+    // libghostty replaces a cleared title with the pane's pwd, and a host pane's is the local folder ssh starts in.
+    static var clearedTitle: String { workingDirectory.path }
+
     static func config(
         host: SSHHostID, controlPath: URL, form: Form, env: [String: String] = [:]
     ) -> TerminalSurfaceConfig {
@@ -88,7 +93,7 @@ enum SSHLaunch {
         environment["TERM"] = "xterm-256color"
         return TerminalSurfaceConfig(
             command: executable, args: arguments(host: host, controlPath: controlPath, form: form),
-            workingDirectory: ShellLaunch.defaultCWD, environment: environment,
+            workingDirectory: workingDirectory, environment: environment,
             fontSize: SessionFontSize.points, theme: Theme.current.terminal,
             behavior: GeneralConfig.current.terminalBehavior, tracksBusy: false)
     }

@@ -127,7 +127,7 @@ final class HostAgentTests: WindowTestCase {
         progress(nil, from: host.login)
         XCTAssertNotNil(host.c.agentWaitForTesting(host.loginID), "precondition: the turn end waits")
 
-        push("", from: host.login)
+        push(SSHLaunch.clearedTitle, from: host.login)
 
         XCTAssertNil(host.c.agentRowForTesting(host.loginID))
         XCTAssertNil(host.c.agentWaitForTesting(host.loginID))
@@ -136,7 +136,7 @@ final class HostAgentTests: WindowTestCase {
     func test_aHostAgentLaunchedAgainAfterItsExit_getsAFreshRow() throws {
         let host = try connected()
         claudeWorking(on: host.login)
-        push("", from: host.login)
+        push(SSHLaunch.clearedTitle, from: host.login)
 
         push("✳ Claude Code", from: host.login)
 
@@ -152,7 +152,7 @@ final class HostAgentTests: WindowTestCase {
         claudeWorking(on: scratch)
         XCTAssertEqual(host.c.agentRowForTesting(scratchID)?.state, .working, "precondition: Scratch is listed")
 
-        push("", from: scratch)
+        push(SSHLaunch.clearedTitle, from: scratch)
 
         XCTAssertNil(host.c.agentRowForTesting(scratchID))
     }
@@ -164,7 +164,7 @@ final class HostAgentTests: WindowTestCase {
         let local = try XCTUnwrap(host.c.terminalSurfaceForTesting(localID) as? RecordingSurface)
         host.c.identifyAgentForTesting(localID, name: "claude")
 
-        push("", from: local)
+        push(SSHLaunch.clearedTitle, from: local)
         XCTAssertNotNil(host.c.agentRowForTesting(localID), "a local exit waits for its command's result")
         local.delegate?.surface(local, commandDidFinish: TerminalCommandResult(exitCode: 1, duration: 1))
         drainMainQueue()
