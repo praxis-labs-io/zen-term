@@ -4,19 +4,19 @@ extension Notification.Name {
     static let sshHostStatusDidChange = Notification.Name("sshHostStatusDidChange")
 }
 
-// Each SSH host's status for every window: the probe's reachability, overridden by a live connection.
+// Each SSH host's status for every window: Offline until the probe reaches it, overridden by a live connection.
 @MainActor
 final class SSHHostStatusCenter {
     static let shared = SSHHostStatusCenter()
 
     init() {}
 
-    private var unreachable: Set<SSHHostID> = []
+    private var reachable: Set<SSHHostID> = []
     private var connected: Set<SSHHostID> = []
 
     func status(of host: SSHHostID) -> SSHHostStatus {
         if connected.contains(host) { return .connected }
-        return unreachable.contains(host) ? .offline : .online
+        return reachable.contains(host) ? .online : .offline
     }
 
     func setConnected(_ isConnected: Bool, host: SSHHostID) {
@@ -27,7 +27,7 @@ final class SSHHostStatusCenter {
 
     func setReachable(_ isReachable: Bool, host: SSHHostID) {
         announcingChange(of: host) {
-            if isReachable { unreachable.remove(host) } else { unreachable.insert(host) }
+            if isReachable { reachable.insert(host) } else { reachable.remove(host) }
         }
     }
 

@@ -25,7 +25,7 @@ final class SSHHostChordTests: WindowTestCase {
     override func tearDownWithError() throws {
         for host in hosts.map(SSHHostID.init) {
             SSHHostStatusCenter.shared.setConnected(false, host: host)
-            SSHHostStatusCenter.shared.setReachable(true, host: host)
+            SSHHostStatusCenter.shared.setReachable(false, host: host)
         }
         for controller in controllers {
             controller.windowWillClose(Notification(name: NSWindow.willCloseNotification))
@@ -44,7 +44,9 @@ final class SSHHostChordTests: WindowTestCase {
         var config = GeneralConfig.builtIn
         config.sshHosts = hosts
         GeneralConfig.setCurrentForTesting(config)
-        for host in offline { SSHHostStatusCenter.shared.setReachable(false, host: SSHHostID(name: host)) }
+        for host in hosts where !offline.contains(host) {
+            SSHHostStatusCenter.shared.setReachable(true, host: SSHHostID(name: host))
+        }
         for host in connected { SSHHostStatusCenter.shared.setConnected(true, host: SSHHostID(name: host)) }
         let c = WindowController(contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
         controllers.append(c)
@@ -264,5 +266,19 @@ final class SSHHostChordTests: WindowTestCase {
         try click(row("devbox", in: c))
 
         XCTAssertFalse(c.search.isActive)
+    }
+
+    func test_aNewHost_readsOfflineAndTakesNoNumber_untilItsFirstAnswer() throws {
+        let c = makeWindow(hosts: [])
+        configure(hosts: ["fresh"])
+        hosts = ["fresh"]
+
+        XCTAssertEqual(try row("fresh", in: c).detailForTesting, "Offline")
+        c.handle(.selectWorkspace(2))
+        XCTAssertNil(selected(c), "an unanswered host is not a stop")
+
+        SSHHostStatusCenter.shared.setReachable(true, host: SSHHostID(name: "fresh"))
+        c.handle(.selectWorkspace(2))
+        XCTAssertEqual(selected(c), "fresh")
     }
 }
