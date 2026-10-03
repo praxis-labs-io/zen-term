@@ -66,7 +66,7 @@ final class ShellLaunchTests: XCTestCase {
             config.args,
             [
                 "-l", "-i", "-c",
-                "nvim .; if [[ -n \"$GHOSTTY_RESOURCES_DIR\" ]]; then "
+                "printf '\\033]2;%s\\007' 'nvim .'; nvim .; if [[ -n \"$GHOSTTY_RESOURCES_DIR\" ]]; then "
                     + "if [[ -n \"${ZDOTDIR+X}\" ]]; then export GHOSTTY_ZSH_ZDOTDIR=\"$ZDOTDIR\"; fi; "
                     + "export ZDOTDIR=\"$GHOSTTY_RESOURCES_DIR/shell-integration/zsh\"; fi; "
                     + "exec /bin/zsh -l -i",
@@ -77,7 +77,11 @@ final class ShellLaunchTests: XCTestCase {
     func test_program_doesNotRearmIntegration_forANonZshShell() {
         withConfig(shell: "/usr/local/bin/fish")
         let config = ShellLaunch.program("nvim .", cwd: nil)
-        XCTAssertEqual(config.args, ["-l", "-i", "-c", "nvim .; exec /usr/local/bin/fish -l -i"])
+        XCTAssertEqual(
+            config.args,
+            [
+                "-l", "-i", "-c", "printf '\\033]2;%s\\007' 'nvim .'; nvim .; exec /usr/local/bin/fish -l -i",
+            ])
     }
 
     func test_program_marksAnAgentsExit_soAnEarlyExitNeedsNoBusyPoll() {
@@ -85,7 +89,8 @@ final class ShellLaunchTests: XCTestCase {
         let script = ShellLaunch.program("claude --resume", cwd: nil).args.last
         XCTAssertEqual(
             script?.hasPrefix(
-                "printf '\\033]133;C\\007'; claude --resume; printf '\\033]133;D;%d\\007' $?; "),
+                "printf '\\033]2;%s\\007' 'claude --resume'; printf '\\033]133;C\\007'; claude --resume; printf '\\033]133;D;%d\\007' $?; "
+            ),
             true, "the exit mark carries the agent's own status, right where it exits")
     }
 
@@ -93,7 +98,8 @@ final class ShellLaunchTests: XCTestCase {
         withConfig(shell: "/usr/local/bin/fish")
         XCTAssertEqual(
             ShellLaunch.program("claude", cwd: nil).args.last,
-            "printf '\\033]133;C\\007'; claude; printf '\\033]133;D;%d\\007' $status; "
+            "printf '\\033]2;%s\\007' 'claude'; printf '\\033]133;C\\007'; claude; "
+                + "printf '\\033]133;D;%d\\007' $status; "
                 + "exec /usr/local/bin/fish -l -i",
             "$? is a syntax error in fish")
     }
@@ -102,6 +108,24 @@ final class ShellLaunchTests: XCTestCase {
         withConfig(shell: "/bin/zsh")
         let script = try? XCTUnwrap(ShellLaunch.program("nvim .", cwd: nil).args.last)
         XCTAssertEqual(script?.contains("133;"), false, "only an agent's exit is reported")
+    }
+
+    func test_program_titlesThePaneWithItsCommand_quotingASingleQuote() {
+        withConfig(shell: "/bin/zsh")
+        let script = ShellLaunch.program(#"echo "it's""#, cwd: nil).args.last ?? ""
+        XCTAssertTrue(script.hasPrefix(#"printf '\033]2;%s\007' 'echo "it'\''s"'; echo "it's"; "#), script)
+    }
+
+    func test_program_titlesAMultiLineCommandOnOneLine() {
+        withConfig(shell: "/bin/zsh")
+        let script = ShellLaunch.program("make\nmake test", cwd: nil).args.last ?? ""
+        XCTAssertTrue(script.hasPrefix(#"printf '\033]2;%s\007' 'make make test'; "#), script)
+    }
+
+    func test_program_titlesThePaneWithFishQuoting_underFish() {
+        withConfig(shell: "/usr/local/bin/fish")
+        let script = ShellLaunch.program(#"echo 'a\b'"#, cwd: nil).args.last ?? ""
+        XCTAssertTrue(script.hasPrefix(#"printf '\033]2;%s\007' 'echo \'a\\b\''; "#), script)
     }
 
     func test_program_injectsEnvAndDefaultsCwdToHome() {

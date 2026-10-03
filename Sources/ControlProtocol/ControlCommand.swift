@@ -10,4 +10,9 @@ public enum ControlCommand: String, Codable, Sendable, CaseIterable {
     case tabSelect = "tab.select"
     case tabRename = "tab.rename"
     case tabClose = "tab.close"
+    case paneSplit = "pane.split"
+    case paneFocus = "pane.focus"
+    case paneClose = "pane.close"
+    case paneSend = "pane.send"
+    case paneRead = "pane.read"
 }

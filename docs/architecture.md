@@ -7,10 +7,11 @@ history, rejected designs, measurements or copy reasoning. Shortcuts live in `do
 
 `TerminalSurface` (`Sources/TerminalKit/TerminalSurface.swift`) is the
 contract. A surface vends an `NSView`, a title, a cwd, a busy flag and the background
-its program last reported. It takes `start`, `focus`, `terminate`, `paste`,
+its program last reported. It takes `start`, `focus`, `terminate`, `paste`, `submit`,
 `copySelection`, `applyAppearance`, `setFontSize` and `scroll`, reports its grid as
 `cellMetrics`, and reads its own screen back a row at a time (`text(viewportRow:)`,
-wrapped rows split) or a span at a time (`text(in:)`, wrapped rows joined).
+wrapped rows split), a span at a time (`text(in:)`, wrapped rows joined), or as its last
+lines, scrollback included (`text(lastLines:)`).
 
 Types that travel with it: `TerminalSurfaceConfig`, `TerminalSurfaceDelegate` (events
 out, defaulted to no-ops), `TerminalTheme`, `TerminalBehavior`.
@@ -130,8 +131,9 @@ share `SystemReport`, and never carry the environment or config.
 ### What the backend will and won't do
 
 - **`paste` is the real bracketed paste path** (`ghostty_surface_text`). Multi-line text
-  arrives as one block and skips the unsafe-paste prompt. To submit, send `"\r"` as a
-  separate `paste`.
+  arrives as one block and skips the unsafe-paste prompt, and control bytes become spaces.
+  To submit, call `submit()`, which writes Return outside the paste: a `"\r"` paste lands
+  inside the brackets, where zsh inserts it as text.
 - **Links open on ⌘-click only**; ⌘-hover shows `LinkPreviewView`.
 - **No per-pane user variable.** `OSC 1337 SetUserVar` is unimplemented upstream. Pane
   signals ride the nav socket (`$ZEN_SOCK`, `$ZEN_PANE`).
@@ -223,6 +225,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   `TerminalSurfaceConfig.backingScale` standing in for the window it does not have yet, so its
   programs start on the grid they will mount into rather than libghostty's default. Focus
   moving inside a tab that is not active is not the user's, so it cancels nothing.
+  Pane verbs take a token: `PaneCanvasController.split(token:axis:command:)` and
+  `close(token:)` leave focus on the pane that had it, and put back the keyboard focus the
+  rebuild drops.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
   workspace costs nothing beyond an inactive tab.
 - **Tab ids are minted by the window**, not by the workspace, so they stay unique across a

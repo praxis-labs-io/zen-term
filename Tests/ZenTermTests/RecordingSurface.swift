@@ -59,8 +59,17 @@ final class RecordingSurface: NSObject, TerminalSurface {
     func setFocused(_ focused: Bool) { focusRenders.append(focused) }
     private(set) var sizeSyncHolds = 0
     func setSizeSyncSuspended(_ suspended: Bool) { sizeSyncHolds = max(0, sizeSyncHolds + (suspended ? 1 : -1)) }
+    enum Input: Equatable {
+        case paste(String)
+        case submit
+    }
+    private(set) var inputs: [Input] = []
     private(set) var pastes: [String] = []
-    func paste(_ text: String) { pastes.append(text) }
+    func paste(_ text: String) {
+        pastes.append(text)
+        inputs.append(.paste(text))
+    }
+    func submit() { inputs.append(.submit) }
     var selectionText: String?
     func copySelection() -> String? { selectionText }
     private(set) var scrolls: [TerminalScroll] = []
@@ -117,6 +126,16 @@ final class RecordingSurface: NSObject, TerminalSurface {
             in: TerminalViewportRange(
                 startRow: row, startColumn: 0, endRow: row,
                 endColumn: max((cellMetrics?.columns ?? rows[row].count) - 1, 0)))
+    }
+
+    var scrollback: [String] = []
+    var screenIsUnreadable = false
+
+    func text(lastLines count: Int) -> String? {
+        guard !screenIsUnreadable else { return nil }
+        var lines = scrollback + rows
+        while let last = lines.last, last.isEmpty { lines.removeLast() }
+        return lines.suffix(count).joined(separator: "\n")
     }
 
     static let unwritten: Character = "\0"
