@@ -33,7 +33,7 @@ final class ToastView: ShadowCardView {
     private let variant: ToastVariant
     private let titleLabel: NSTextField
     private let titleTailLabel: NSTextField?
-    private let messageLabel: NSTextField
+    private let messageLabel: NSTextField?
     private var closeButton: IconButton?
     private var actionButtons: [AppButton] = []
     private let badge: IconBadge
@@ -63,7 +63,7 @@ final class ToastView: ShadowCardView {
         self.variant = content.variant
         self.titleLabel = NSTextField(labelWithString: content.title)
         self.titleTailLabel = content.titleTail.map { NSTextField(labelWithString: $0) }
-        self.messageLabel = NSTextField(wrappingLabelWithString: content.message ?? "")
+        self.messageLabel = content.message.map { NSTextField(wrappingLabelWithString: $0) }
         let variant = content.variant
         self.badge = IconBadge(
             symbol: content.icon ?? variant.defaultIcon, accessibilityDescription: content.title, size: .regular,
@@ -86,9 +86,9 @@ final class ToastView: ShadowCardView {
         titleTailLabel?.textColor = Self.titleColor
         titleTailLabel?.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        messageLabel.font = Self.messageFont
-        messageLabel.textColor = Self.messageColor
-        messageLabel.preferredMaxLayoutWidth = Self.messageMaxWidth
+        messageLabel?.font = Self.messageFont
+        messageLabel?.textColor = Self.messageColor
+        messageLabel?.preferredMaxLayoutWidth = Self.messageMaxWidth
 
         let headerSpacer = NSView()
         headerSpacer.setContentHuggingPriority(.init(rawValue: 1), for: .horizontal)
@@ -100,13 +100,12 @@ final class ToastView: ShadowCardView {
         header.orientation = .horizontal
         header.alignment = .centerY
         header.spacing = 6
-        let hasMessage = content.message != nil
-        let col = NSStackView(views: hasMessage ? [header, messageLabel] : [header])
+        let lines = [header] + (messageLabel.map { [$0] } ?? [])
+        let col = NSStackView(views: lines)
         col.orientation = .vertical
         col.alignment = .leading
         col.spacing = 3
-        if hasMessage { messageLabel.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true }
-        header.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
+        for line in lines { line.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true }
 
         for resolve in actions.compactMap(\.shortcut) {
             let slot = ShortcutSlot(group: header, resolve: resolve)
@@ -132,13 +131,13 @@ final class ToastView: ShadowCardView {
             row.alignment = .centerY
             row.spacing = 6
             col.addArrangedSubview(row)
-            col.setCustomSpacing(9, after: hasMessage ? messageLabel : header)
+            col.setCustomSpacing(9, after: lines[lines.count - 1])
             row.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
         }
 
         let root = NSStackView(views: [badge, col])
         root.orientation = .horizontal
-        root.alignment = hasMessage || !actions.isEmpty ? .top : .centerY
+        root.alignment = col.arrangedSubviews.count > 1 ? .top : .centerY
         root.distribution = .fill
         root.spacing = 12
         root.translatesAutoresizingMaskIntoConstraints = false
@@ -232,7 +231,7 @@ final class ToastView: ShadowCardView {
         layer?.borderColor = FloatShadow.edge.cgColor
         titleLabel.textColor = Self.titleColor
         titleTailLabel?.textColor = Self.titleColor
-        messageLabel.textColor = Self.messageColor
+        messageLabel?.textColor = Self.messageColor
         shortcutSlots.forEach { $0.reapplyTheme() }
         closeButton?.reapplyTheme()
         actionButtons.forEach { $0.reapplyTheme() }
