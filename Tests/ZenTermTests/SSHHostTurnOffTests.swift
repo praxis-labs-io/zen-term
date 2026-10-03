@@ -238,11 +238,12 @@ final class SSHHostTurnOffTests: WindowTestCase {
         XCTAssertEqual(fake.ended, [42])
     }
 
-    func test_aConnectedHostTurnedOff_landsOnTheNextRowInSidebarOrder() throws {
+    func test_aConnectedHostTurnedOff_landsOnTheNextHostConnectedHere_pastAnOnlineOne() throws {
         let prod = SSHHostID(name: "prod")
-        for host in [prod, typed] { SSHHostStatusCenter.shared.setReachable(true, host: host) }
-        defer { for host in [prod, typed] { SSHHostStatusCenter.shared.setReachable(false, host: host) } }
+        SSHHostStatusCenter.shared.setReachable(true, host: prod)
+        defer { SSHHostStatusCenter.shared.setReachable(false, host: prod) }
         let c = makeWindow()
+        open(typed, in: c)
         open(devbox, in: c)
 
         try "ssh-hosts = prod, deploy@10.0.0.5\n".write(
@@ -250,7 +251,8 @@ final class SSHHostTurnOffTests: WindowTestCase {
         AppConfig.reload()
         drainMainQueue()
 
-        XCTAssertEqual(c.selectedHostForTesting, prod, "devbox sat above prod, so prod is next")
+        XCTAssertEqual(c.selectedHostForTesting, typed, "devbox sat above prod, which is online but not connected")
+        XCTAssertNil(c.connectViewForTesting, "it lands on the connected host's panes")
     }
 
     func test_aHostTurnedOffByEditingTheConfig_disconnects() throws {

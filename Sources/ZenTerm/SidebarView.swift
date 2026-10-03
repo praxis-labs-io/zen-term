@@ -237,7 +237,7 @@ final class SidebarView: NSView {
             } else {
                 row.setDot({ status.ink }, accessibilityValue: word)
             }
-            row.setTitleInk(status == .offline ? { status.ink } : nil)
+            row.setTitleInk(status == .connected ? nil : { AttentionTone.idle.ink })
             guard hostStack.arrangedSubviews.firstIndex(of: row) != index else { continue }
             let isNew = row.superview == nil
             if !isNew { hostStack.removeArrangedSubview(row) }
