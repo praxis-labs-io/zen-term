@@ -6,10 +6,14 @@ import Foundation
 enum CommandPath {
     static func workspace(_ text: String) -> String { workspace(text, in: FileManager.default.currentDirectoryPath) }
 
-    // A worktree's title can hold a slash from its branch, so only these prefixes read as a folder.
     static func workspace(_ text: String, in cwd: String) -> String {
-        guard text.hasPrefix("/") || text.hasPrefix("~") || text.hasPrefix(".") else { return text }
+        guard looksLikePath(text) else { return text }
         return absolute(text, in: cwd)
+    }
+
+    // A worktree's title and a branch can hold a slash, so only these prefixes read as a folder.
+    static func looksLikePath(_ text: String) -> Bool {
+        text.hasPrefix("/") || text.hasPrefix("~") || text.hasPrefix(".")
     }
 
     static func folder(_ text: String) throws -> String {

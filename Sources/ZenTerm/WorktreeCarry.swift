@@ -22,6 +22,9 @@ struct CarryReport: Equatable {
     let skipped: [Skipped]
 
     var isEmpty: Bool { carried.isEmpty && skipped.isEmpty }
+
+    // `.notThere` is left out: one entry covers a repo before and after its first install.
+    var lost: [Skipped] { skipped.filter { $0.reason != .notThere } }
 }
 
 extension CarryReport.Skipped.Reason {

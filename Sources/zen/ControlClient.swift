@@ -47,7 +47,8 @@ struct ControlClient {
                 .joined(separator: "  ")
         }
         let floats = details.floats.map { "  \($0) float" }
-        return ([head] + panes + floats + ["Pass --force to go ahead."]).joined(separator: "\n")
+        let files = (details.files ?? []).map { "  \($0)" }
+        return ([head] + files + panes + floats + ["Pass --force to go ahead."]).joined(separator: "\n")
     }
 
     private func readLine(from fd: Int32) throws(ZenFailure) -> Data {

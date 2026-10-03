@@ -217,6 +217,37 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting.last)
     }
 
+    func test_creatingFromTheCard_copiesTheCarry_andClosesTheCard() throws {
+        try "[Repo]\npath = \(repo.path)\ncarry = .env\n"
+            .write(to: tempRoot.appendingPathComponent("workspaces"), atomically: true, encoding: .utf8)
+        try GitFixture.write("SECRET=1\n", to: repo.appendingPathComponent(".env"))
+        let c = makeWindow()
+        let card = try openCardFromThePlus(in: c)
+
+        card.setBranchForTesting("feature/carried")
+        try button("Create Worktree", in: card).performClick(nil)
+
+        waitUntil(rows(of: c).count == 3, "the new worktree's row", timeout: 10)
+        XCTAssertTrue(modals(NewWorktreeOverlay.self, in: c).isEmpty)
+        let worktree = try XCTUnwrap(WorktreeStore.list(in: repo).first { $0.branch == "feature/carried" })
+        XCTAssertTrue(GitFixture.exists(worktree.path.appendingPathComponent(".env")))
+    }
+
+    func test_aBranchGitRefuses_leavesTheCardUpWithTheStoresMessage() throws {
+        let c = makeWindow()
+        let card = try openCardFromThePlus(in: c)
+
+        card.setBranchForTesting("feature..dots")
+        try button("Create Worktree", in: card).performClick(nil)
+
+        let message = WorktreeStore.WorktreeError.invalidBranchName("feature..dots").localizedDescription
+        waitUntil(
+            descendants(of: card).contains { ($0 as? NSTextField)?.stringValue == message && !$0.isHidden },
+            "the card to show why", timeout: 10)
+        XCTAssertEqual(rows(of: c).count, 2)
+        XCTAssertTrue(try WorktreeStore.list(in: repo).isEmpty)
+    }
+
     func test_neitherTheDefaultWorkspace_norAWorktree_offersNewWorktree() throws {
         let c = makeWindow()
         let row = try openRepoWorkspace(in: c)

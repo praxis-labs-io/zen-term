@@ -5,7 +5,9 @@ struct Zen: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "zen",
         abstract: "Control a running ZenTerm.",
-        subcommands: [Hello.self, List.self, WorkspaceCommands.self, TabCommands.self, PaneCommands.self])
+        subcommands: [
+            Hello.self, List.self, WorkspaceCommands.self, TabCommands.self, PaneCommands.self, WorktreeCommands.self,
+        ])
 
     // Parses `--socket` before the subcommand; argument-parser hands the value to the subcommand's own copy.
     @OptionGroup var connection: ConnectionOptions
