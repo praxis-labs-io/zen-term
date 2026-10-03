@@ -158,17 +158,21 @@ final class SSHHostChordTests: WindowTestCase {
         XCTAssertEqual(try row("live", in: c).dotColorForTesting, SSHHostStatus.connected.ink.cgColor)
     }
 
-    func test_anOfflineHost_paintsItsTitleLikeAnIdleAgent_andGoingOnlineRepaintsItInPlace() throws {
+    func test_aHostNotConnected_paintsItsTitleLikeAnIdleAgent_andConnectingRepaintsItInPlace() throws {
         let c = makeWindow(hosts: ["devbox"], offline: ["devbox"])
-        let offline = try row("devbox", in: c)
-        XCTAssertEqual(offline.titleInkForTesting, AttentionTone.idle.ink)
+        let row = try row("devbox", in: c)
+        XCTAssertEqual(row.titleInkForTesting, AttentionTone.idle.ink)
 
         SSHHostStatusCenter.shared.setReachable(true, host: SSHHostID(name: "devbox"))
 
-        XCTAssertTrue(try row("devbox", in: c) === offline, "the row is repainted, not rebuilt")
-        XCTAssertEqual(offline.titleInkForTesting, Theme.current.chrome.foreground.nsColor)
-        XCTAssertEqual(offline.dotColorForTesting, SSHHostStatus.online.ink.cgColor)
+        XCTAssertTrue(try self.row("devbox", in: c) === row, "the row is repainted, not rebuilt")
         XCTAssertEqual(try status("devbox", in: c), "Online")
+        XCTAssertEqual(row.titleInkForTesting, AttentionTone.idle.ink)
+
+        SSHHostStatusCenter.shared.setConnected(true, host: SSHHostID(name: "devbox"))
+
+        XCTAssertEqual(try status("devbox", in: c), "Connected")
+        XCTAssertEqual(row.titleInkForTesting, Theme.current.chrome.foreground.nsColor)
     }
 
     func test_aHostConnecting_repaintsItsDotInPlace() throws {
