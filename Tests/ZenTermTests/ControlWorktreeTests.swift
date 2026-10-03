@@ -268,6 +268,22 @@ final class ControlWorktreeTests: WindowTestCase {
         XCTAssertFalse(GitFixture.exists(worktree.path))
     }
 
+    func test_aRefusalWithSeveralReasonsReadsAsOneList() throws {
+        let c = makeWindow()
+        let home = try XCTUnwrap(c.workspaceIDsForTesting.first)
+        let worktree = try openWorktree("feat/x", in: c)
+        for tab in c.tabIDsForTesting(workspace: home) { c.closeTabForTesting(tab: tab) }
+        let busy = try XCTUnwrap(spawned.last)
+        busy.isBusy = true
+        busy.title = "npm run dev"
+        try GitFixture.write("draft\n", to: worktree.path.appendingPathComponent("notes.txt"))
+
+        let refused = try error(send(.worktreeRemove, ControlArgs(workspace: repo.path, branch: "feat/x")))
+
+        XCTAssertEqual(
+            refused.message, "Removing feat/x would close the window, stop npm run dev and lose 1 uncommitted file.")
+    }
+
     func test_removeByPathTakesACleanWorktreeWithoutForce() throws {
         let c = makeWindow()
         let caller = try repoPane(in: c)

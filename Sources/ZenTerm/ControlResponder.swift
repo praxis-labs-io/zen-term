@@ -190,15 +190,17 @@ struct ControlResponder {
     }
 
     static func refusal(closing name: String, _ stakes: CloseStakes) -> ControlError {
-        let running = stakes.panes.map { $0.title.isEmpty ? "pane \($0.token)" : $0.title } + stakes.floats
         var consequences: [String] = []
         if stakes.closesWindow { consequences.append("close the window") }
-        if stakes.isRunning {
-            consequences.append(running.isEmpty ? "stop what it is running" : "stop \(running.joined(separator: ", "))")
-        }
+        if stakes.isRunning { consequences.append(stopping(stakes.panes, stakes.floats)) }
         return ControlError(
-            .refused, "Closing \(name) would \(consequences.joined(separator: " and ")).",
+            .refused, "Closing \(name) would \(CloseWarning.list(consequences)).",
             details: ControlError.Details(panes: stakes.panes, floats: stakes.floats, closesWindow: stakes.closesWindow)
         )
+    }
+
+    static func stopping(_ panes: [ListResult.Pane], _ floats: [String]) -> String {
+        let running = panes.map { $0.title.isEmpty ? "pane \($0.token)" : $0.title } + floats
+        return running.isEmpty ? "stop what it is running" : "stop \(CloseWarning.list(running))"
     }
 }

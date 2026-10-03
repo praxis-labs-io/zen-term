@@ -124,21 +124,18 @@ extension ControlResponder {
     ) -> String {
         var consequences: [String] = []
         if details.closesWindow { consequences.append("close the window") }
-        if isRunning {
-            let named = details.panes.map { $0.title.isEmpty ? "pane \($0.token)" : $0.title } + details.floats
-            consequences.append(named.isEmpty ? "stop what it is running" : "stop \(named.joined(separator: ", "))")
-        }
+        if isRunning { consequences.append(stopping(details.panes, details.floats)) }
         guard let state else {
             let unread = "Couldn't read \(worktree.name) to check for uncommitted files or commits."
             guard !consequences.isEmpty else { return unread }
-            return "\(unread) Removing it would \(consequences.joined(separator: " and "))."
+            return "\(unread) Removing it would \(CloseWarning.list(consequences))."
         }
         let lost = [
             state.lostCommits > 0 ? WorktreeRemovalMessage.counted(state.lostCommits, "commit") : nil,
             state.files.isEmpty ? nil : WorktreeRemovalMessage.counted(state.files.count, "uncommitted file"),
         ].compactMap { $0 }
-        if !lost.isEmpty { consequences.append("lose \(lost.joined(separator: " and "))") }
-        return "Removing \(worktree.name) would \(consequences.joined(separator: " and "))."
+        if !lost.isEmpty { consequences.append("lose \(CloseWarning.list(lost))") }
+        return "Removing \(worktree.name) would \(CloseWarning.list(consequences))."
     }
 
     private func withWorktreeEntry(
