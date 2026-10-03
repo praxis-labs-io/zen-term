@@ -4,6 +4,8 @@ import AppKit
 final class HostConnectView: NSView {
     private static let iconSize: CGFloat = 28
     private static let spacing: CGFloat = 12
+    private static let iconToMessage: CGFloat = 16
+    private static let messageToButton: CGFloat = 20
 
     let host: SSHHostID
     private let onConnect: () -> Void
@@ -33,7 +35,8 @@ final class HostConnectView: NSView {
         let stack = NSStackView(views: [icon, message, connectButton])
         stack.orientation = .vertical
         stack.alignment = .centerX
-        stack.spacing = Self.spacing
+        stack.setCustomSpacing(Self.iconToMessage, after: icon)
+        stack.setCustomSpacing(Self.messageToButton, after: message)
         stack.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(stack)
         panel.translatesAutoresizingMaskIntoConstraints = false
