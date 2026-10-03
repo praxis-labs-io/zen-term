@@ -2477,6 +2477,8 @@ final class WindowController: NSObject {
 
     var tabCount: Int { allTabIDs.count }
 
+    var holdsSessions: Bool { !allTabIDs.isEmpty || !floats.allSurfaces.isEmpty }
+
     func selectTab(_ id: TabID) { reveal(id) }
 
     func clearActiveTabNotification() {

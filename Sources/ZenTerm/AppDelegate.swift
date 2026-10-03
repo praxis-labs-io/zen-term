@@ -312,7 +312,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let key = keyController() else {
+        guard let key = keyController(), windows.contains(where: \.holdsSessions) else {
             worktreeRemovals.whenIdle {
                 self.drainSessionSweeps { NSApp.reply(toApplicationShouldTerminate: true) }
             }
@@ -342,6 +342,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     #if DEBUG
         func addWindowForTesting() { newWindow(initialCWD: nil, centered: false) }
+
+        var windowsForTesting: [WindowController] { windows }
 
         func quitTeardownForTesting(then completion: @escaping () -> Void) {
             tearDownAllWindows(then: completion)

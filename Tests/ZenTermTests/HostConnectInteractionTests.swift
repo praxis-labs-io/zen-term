@@ -764,6 +764,31 @@ final class HostConnectInteractionTests: WindowTestCase {
         assertBackOnConnect(c)
     }
 
+    private func quitAsks(in delegate: AppDelegate, _ c: WindowController) -> Bool {
+        XCTAssertEqual(delegate.applicationShouldTerminate(NSApp), .terminateLater)
+        defer { NSApp.reply(toApplicationShouldTerminate: false) }
+        guard c.isConfirmOpen else { return false }
+        try? press(button: "Cancel", in: c)
+        return true
+    }
+
+    func test_quittingWithNothingOpenButAConnectScreen_doesNotAsk() throws {
+        let delegate = AppDelegate()
+        delegate.addWindowForTesting()
+        let c = try XCTUnwrap(delegate.windowsForTesting.first)
+        controllers.append(c)
+        _ = try connect(c)
+        fake.connect()
+        c.activateWorkspaceForTesting(c.workspaceIDsForTesting[0])
+        c.handle(.closeTab)
+        XCTAssertTrue(quitAsks(in: delegate, c), "precondition: a connected host's tab is something to close")
+
+        c.handle(.closeWorkspace)
+
+        XCTAssertNotNil(c.connectViewForTesting)
+        XCTAssertFalse(quitAsks(in: delegate, c), "with no tab anywhere there is nothing to warn about")
+    }
+
     func test_closingTheLocalWorkspaceBesideAHost_closesItWithoutAsking_andLandsOnTheHost() throws {
         let (c, _) = try connected()
         fake.connect()
