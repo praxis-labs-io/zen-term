@@ -1288,6 +1288,21 @@ final class WindowController: NSObject {
         worktreeRemovedToasts[workspace.id].map(toasts.dismiss)
         guard !workspaces.isEmpty else { window.close(); return }
         guard workspace === activeWorkspace else { renderAttention(); return }
+        land(at: place)
+    }
+
+    private func closeConnectScreen() {
+        Log.info("connect screen closed", category: .workspace)
+        guard workspaces.isEmpty else { return land(at: order.navigableWorkspaces.count) }
+        presentConfirm(
+            variant: .warning, title: CloseWarning.Subject.lastPane(running: windowIsRunning).title,
+            message: CloseWarning.message(
+                closing: .lastPane(running: windowIsRunning), naming: runningNamesInWindow()),
+            confirmLabel: "Close"
+        ) { [weak self] in self?.window.close() }
+    }
+
+    private func land(at place: Int) {
         let remaining = order.navigableWorkspaces
         let landing = remaining.isEmpty ? workspaces.first?.id : remaining[min(place, remaining.count - 1)]
         guard let next = workspaces.first(where: { $0.id == landing }) else { return }
@@ -2295,6 +2310,7 @@ final class WindowController: NSObject {
             case .navRight: return navigate(.right)
             case .navUp: return navigate(.up)
             case .navDown: return navigate(.down)
+            case .closePane: return closeConnectScreen()
             default: break
             }
         }
