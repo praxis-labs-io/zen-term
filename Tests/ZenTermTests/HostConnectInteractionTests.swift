@@ -9,6 +9,7 @@ final class HostConnectInteractionTests: WindowTestCase {
     private let host = SSHHostID(name: "devbox")
     private var originalOverride: (() -> TerminalSurface)?
     private var originalConfig: GeneralConfig!
+    private var originalTheme: AppTheme!
     private let originalPresence = WindowController.isPresent
     private var controllers: [WindowController] = []
     private var spawned: [RecordingSurface] = []
@@ -18,6 +19,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         try super.setUpWithError()
         originalOverride = TerminalSurfaceFactory.makeOverride
         originalConfig = GeneralConfig.current
+        originalTheme = Theme.current
         Motion.isReduceMotionEnabled = { true }
         SidebarController.resetLastChoiceForTesting()
         TerminalSurfaceFactory.makeOverride = { [weak self] in
@@ -33,6 +35,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         GeneralConfig.setCurrentForTesting(config)
         fake = FakeSSHWatchers()
         SSHConnection.watchersOverrideForTesting = fake.watchers
+        SSHHostResolver.destinationOverrideForTesting = { _ in "drew@10.0.0.12" }
     }
 
     override func tearDownWithError() throws {
@@ -43,9 +46,12 @@ final class HostConnectInteractionTests: WindowTestCase {
         controllers = []
         spawned = []
         SSHConnection.watchersOverrideForTesting = nil
+        SSHHostResolver.destinationOverrideForTesting = nil
         SSHHostStatusCenter.shared.setConnected(false, host: host)
+        SSHHostStatusCenter.shared.setReachable(false, host: host)
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
+        Theme.setCurrentForTesting(originalTheme)
         WindowController.isPresent = originalPresence
         SidebarController.resetLastChoiceForTesting()
         try super.tearDownWithError()
@@ -173,7 +179,7 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         let screen = try XCTUnwrap(c.connectViewForTesting)
         XCTAssertTrue(c.window.firstResponder === screen)
-        XCTAssertEqual(screen.messageForTesting, "Connect to devbox")
+        XCTAssertEqual(screen.titleForTesting, "Connect to devbox")
         XCTAssertEqual(c.tabOrderForTesting, [])
         XCTAssertEqual(c.window.title, "devbox")
     }
@@ -986,10 +992,12 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(panel.paintedBackgroundForTesting.ring.alphaComponent, 0.5, accuracy: 0.01)
     }
 
-    func test_theConnectButton_isTheFilledPrimaryButton_withNoOutlineOfItsOwn() throws {
+    func test_theConnectButton_isTheFilledButton_withItsReturnKeycap_andNoOutlineOfItsOwn() throws {
         let c = onConnectScreen()
         let button = try XCTUnwrap(c.connectViewForTesting).connectButtonForTesting
 
+        XCTAssertEqual(button.layer?.backgroundColor, Theme.current.chrome.accent.nsColor.cgColor)
+        XCTAssertEqual(button.keycapForTesting?.shortcut, "⏎")
         XCTAssertFalse(button.showsFocusOutline)
         XCTAssertFalse(button.acceptsFirstResponder, "the panel takes ↵, so the button never draws a focus ring")
         XCTAssertEqual(button.layer?.borderWidth, 0)
@@ -1062,14 +1070,101 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(c.window.frame.height, before.height, accuracy: 1)
     }
 
-    func test_connectLeadsWithALargeNeutralBadge() throws {
+    func test_anOnlineHost_saysItSignsInWithYourSSHConfig_andBadgesTheHostFilled() throws {
+        SSHHostStatusCenter.shared.setReachable(true, host: host)
         let c = onConnectScreen()
         let screen = try XCTUnwrap(c.connectViewForTesting)
-        let badge = try XCTUnwrap(descendants(of: screen).lazy.compactMap { $0 as? IconBadge }.first)
-        let chrome = Theme.current.chrome
+        let mark = screen.routeForTesting.destinationForTesting.statusMarkForTesting
 
-        XCTAssertEqual(badge.iconTintForTesting, chrome.muted.nsColor)
-        XCTAssertEqual(badge.fillForTesting, chrome.tint(chrome.muted, alpha: ChromeTheme.badgeTint).cgColor)
-        XCTAssertEqual(badge.fittingSize.width, IconBadge.Size.large.side)
+        XCTAssertEqual(screen.detailForTesting, "Signs in with your ssh config.")
+        XCTAssertEqual(mark.fill, SSHHostStatus.online.ink.cgColor)
+        XCTAssertNil(mark.stroke)
+    }
+
+    func test_anOfflineHost_offersToConnectAnyway_andBadgesTheHostHollow() throws {
+        let c = onConnectScreen()
+        let screen = try XCTUnwrap(c.connectViewForTesting)
+        let mark = screen.routeForTesting.destinationForTesting.statusMarkForTesting
+
+        XCTAssertEqual(screen.detailForTesting, "devbox appears offline. Connect anyway?")
+        XCTAssertNil(mark.fill)
+        XCTAssertEqual(mark.stroke, SSHHostStatus.offline.ink.cgColor)
+    }
+
+    func test_aHostComingOnline_updatesTheConnectScreenItIsShowing() throws {
+        let c = onConnectScreen()
+        let screen = try XCTUnwrap(c.connectViewForTesting)
+        XCTAssertEqual(screen.detailForTesting, "devbox appears offline. Connect anyway?", "precondition: offline")
+
+        SSHHostStatusCenter.shared.setReachable(true, host: host)
+        drainMainQueue()
+
+        XCTAssertEqual(screen.detailForTesting, "Signs in with your ssh config.")
+        XCTAssertEqual(
+            screen.routeForTesting.destinationForTesting.statusMarkForTesting.fill, SSHHostStatus.online.ink.cgColor)
+    }
+
+    func test_theConnectScreen_showsWhereSSHWillSignIn_onceItsConfigResolves() throws {
+        let c = onConnectScreen()
+        let screen = try XCTUnwrap(c.connectViewForTesting)
+
+        waitUntil(screen.destinationForTesting == "drew@10.0.0.12", "the destination to resolve")
+    }
+
+    func test_aHostWhoseConfigDoesNotResolve_showsNoDestinationLine() throws {
+        SSHHostResolver.destinationOverrideForTesting = { _ in nil }
+        let c = onConnectScreen()
+        let screen = try XCTUnwrap(c.connectViewForTesting)
+
+        waitUntil(screen.destinationForTesting == nil, "the destination line to hide")
+    }
+
+    func test_clickingConnect_connects() throws {
+        let c = onConnectScreen()
+
+        try press(button: "Connect", in: c)
+        fake.ready?()
+
+        XCTAssertNil(c.connectViewForTesting)
+        XCTAssertEqual(spawned.first?.lastConfig?.command, "/usr/bin/ssh")
+    }
+
+    func test_aThemeChange_recolorsTheRouteAndItsBadge() throws {
+        SSHHostStatusCenter.shared.setReachable(true, host: host)
+        let c = onConnectScreen()
+        let route = try XCTUnwrap(c.connectViewForTesting).routeForTesting
+        let strokeBefore = route.lineStrokeForTesting
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-connect-theme-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        try "background = #010101\nforeground = #fefefe\npalette = 2=#00ff00\n"
+            .write(to: dir.appendingPathComponent("theme"), atomically: true, encoding: .utf8)
+        Theme.setCurrentForTesting(ConfigLoader.loadAppTheme(configRoot: dir, general: .builtIn))
+
+        postConfigChange(.theme)
+
+        XCTAssertNotEqual(route.lineStrokeForTesting, strokeBefore)
+        XCTAssertEqual(route.lineStrokeForTesting, Theme.current.chrome.ink(.muted).cgColor)
+        XCTAssertEqual(
+            route.destinationForTesting.statusMarkForTesting.fill, SSHHostStatus.online.ink.cgColor)
+    }
+
+    func test_atTheSmallestWindow_connectStaysOnScreen_andTheRouteGivesWay() throws {
+        let c = onConnectScreen()
+        let screen = try XCTUnwrap(c.connectViewForTesting)
+        let content = try XCTUnwrap(c.window.contentView)
+
+        c.window.setContentSize(c.window.contentMinSize)
+        c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
+        content.layoutSubtreeIfNeeded()
+
+        let button = screen.connectButtonForTesting
+        let panel = screen.panelForTesting
+        XCTAssertNotNil(button.window, "the button was detached")
+        XCTAssertTrue(
+            panel.bounds.contains(button.convert(button.bounds, to: panel)), "Connect is clipped off the screen")
+        XCTAssertTrue(
+            screen.detachedForTesting.contains(screen.routeForTesting), "the route should give way before Connect does")
     }
 }

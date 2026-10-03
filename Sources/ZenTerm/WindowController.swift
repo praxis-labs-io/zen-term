@@ -499,7 +499,10 @@ final class WindowController: NSObject {
         hostStatusObserver = NotificationCenter.default.addObserver(
             forName: .sshHostStatusDidChange, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.renderTabBar() }
+            MainActor.assumeIsolated {
+                self?.renderTabBar()
+                self?.connectView.map { $0.setStatus(SSHHostStatusCenter.shared.status(of: $0.host)) }
+            }
         }
 
         configObserver = NotificationCenter.default.addObserver(
@@ -867,9 +870,11 @@ final class WindowController: NSObject {
     private func hostConnectView(for host: SSHHostID) -> HostConnectView {
         if let connectView, connectView.host == host { return connectView }
         let view = HostConnectView(
-            host: host, onConnect: { [weak self] in self?.connect(host) },
+            host: host, status: SSHHostStatusCenter.shared.status(of: host),
+            onConnect: { [weak self] in self?.connect(host) },
             onFocusRequest: { [weak self] in self?.restoreFocusToActive() })
         connectView = view
+        SSHHostResolver.destinations(of: [host.name]) { [weak view] found in view?.setDestination(found[host.name]) }
         return view
     }
 

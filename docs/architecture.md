@@ -589,6 +589,10 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   a network change is dropped and asked again. A host reads Offline until the probe reaches it,
   so an unanswered host takes no number, and a connected host takes its status from the
   connection, not the probe.
+- **The Connect screen follows the host's status live.** Its route diagram badges the host
+  with the status, its copy offers Connect anyway while Offline, and the `user@hostname` line
+  comes from `ssh -G` off-main. A window too short for it all detaches the diagram, then the
+  eyebrow, so Connect never leaves the screen.
 - **A connected host is a workspace whose tabs run ssh over one `SSHConnection`.** Every pane
   and drawer, and Scratch, starts through the tab's injected `SurfaceStart` (a user float
   never does, since a host's start keeps only the launch's environment), which for a host runs
