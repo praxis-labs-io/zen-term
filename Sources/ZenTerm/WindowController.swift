@@ -243,6 +243,8 @@ final class WindowController: NSObject {
 
     var revealHostInAnotherWindow: ((SSHHostID) -> Bool)?
 
+    var hostSessionInAnyWindow: ((SSHHostID) -> SSHConnection.State?)?
+
     var openWorkspacesElsewhere: (() -> [RunningWorkspace])?
 
     var onWorktreeMarkChanged: (() -> Void)?
@@ -306,6 +308,8 @@ final class WindowController: NSObject {
 
     private var configObserver: NSObjectProtocol?
     private var hostStatusObserver: NSObjectProtocol?
+    // Read at the change, not from the sidebar, which a disconnect's status change redraws first.
+    private var hostOrder = GeneralConfig.current.sshHosts.map(SSHHostID.init)
     private var attentionObserver: NSObjectProtocol?
     /// Raises the window holding the agent that has waited longest and lands on it. False when it has gone.
     var revealWaitingAgentElsewhere: ((Int) -> Bool)?
@@ -554,7 +558,10 @@ final class WindowController: NSObject {
                     self.renderDock()
                 }
                 if change.contains(.sshHosts) {
-                    self.leaveRemovedHost(shownHosts: self.sidebar.hostIDs)
+                    let shownHosts = self.hostOrder
+                    self.hostOrder = GeneralConfig.current.sshHosts.map(SSHHostID.init)
+                    self.disconnectRemovedHosts()
+                    self.leaveRemovedHost(shownHosts: shownHosts)
                     self.renderTabBar()
                 }
                 if change.contains(.theme) || change.contains(.keymap) || change.contains(.floats) {
@@ -1365,6 +1372,10 @@ final class WindowController: NSObject {
 
     func holdsHost(_ host: SSHHostID) -> Bool { workspaces.contains { $0.host == host } }
 
+    func session(of host: SSHHostID) -> SSHConnection.State? {
+        workspaces.first { $0.host == host }?.connection?.state
+    }
+
     private func presentModal(_ overlay: ModalOverlay, kind: ModalKind) {
         if let activeWorkspace, activeWorkspace.activeController == nil { return }
         captureFocusReturn()
@@ -1428,7 +1439,8 @@ final class WindowController: NSObject {
             commands: { [weak self] in
                 CommandCatalog.commands(
                     tabCount: self?.activeTabIDs.count ?? 0,
-                    workspaceCount: self?.workspaces.count ?? 0)
+                    workspaceCount: self?.workspaces.count ?? 0,
+                    onHost: self?.selection.host != nil)
             },
             background: Theme.current.chrome.background.nsColor,
             onRun: { [weak self] chord in self?.runCommand(chord) },
@@ -1732,6 +1744,10 @@ final class WindowController: NSObject {
         let sshHostsSection = SettingsSSHHostsSection()
         sshHostsSection.onAddHost = { [weak self] in self?.openAddSSHHost() }
         sshHostsSection.hostToFocus = host
+        sshHostsSection.hostSession = { [weak self] host in
+            guard let self else { return nil }
+            return self.hostSessionInAnyWindow.map { $0(host) } ?? self.session(of: host)
+        }
         let sections: [SettingsSection] = [
             SettingsAppearanceSection(),
             SettingsGeneralSection(),
@@ -1751,6 +1767,8 @@ final class WindowController: NSObject {
             onClose: { [weak self] in self?.closeModal() }
         )
         overlay.onReportIssue = { [weak self] in self?.openReportIssue() }
+        sshHostsSection.presentConfirm = { [weak overlay] in overlay?.presentConfirm($0) }
+        sshHostsSection.dismissConfirm = { [weak overlay] then in overlay?.dismissConfirm(then: then) }
         presentModal(overlay, kind: .settings)
     }
 
@@ -2463,6 +2481,8 @@ final class WindowController: NSObject {
 
     var tabCount: Int { allTabIDs.count }
 
+    var holdsSessions: Bool { !allTabIDs.isEmpty || !floats.allSurfaces.isEmpty }
+
     func selectTab(_ id: TabID) { reveal(id) }
 
     func clearActiveTabNotification() {
@@ -2560,8 +2580,22 @@ final class WindowController: NSObject {
 
     private func abandonLogin(of workspace: WorkspaceController) {
         Log.info("ssh login closed before connecting", category: .workspace)
+        disconnect(workspace)
+    }
+
+    private func disconnect(_ workspace: WorkspaceController, dismissingModal: Bool = true) {
         workspace.connection?.shutdown()
-        closeTabs(of: workspace)
+        closeTabs(of: workspace, dismissingModal: dismissingModal)
+    }
+
+    // Leaves an open card up, since a host is usually turned off from inside Settings.
+    private func disconnectRemovedHosts() {
+        let enabled = GeneralConfig.current.sshHosts
+        for workspace in workspaces {
+            guard let host = workspace.host, !enabled.contains(host.name) else { continue }
+            Log.info("ssh host turned off, so it disconnects", category: .workspace)
+            disconnect(workspace, dismissingModal: false)
+        }
     }
 
     private func requestCloseTab(_ id: TabID) {
@@ -2585,7 +2619,10 @@ final class WindowController: NSObject {
     }
 
     private func requestCloseWorkspace(_ workspace: WorkspaceController) {
-        if holdsAwaitingLogin(workspace) { return confirmAbandoningLogin(of: workspace, closing: .workspace) }
+        if workspace.host != nil {
+            Log.info("ssh host disconnected", category: .workspace)
+            return disconnect(workspace)
+        }
         let closesWindow = closesWindow(closing: workspace)
         guard closesWindow || isRunning(workspace: workspace) else {
             closeTabs(of: workspace)
@@ -2606,9 +2643,11 @@ final class WindowController: NSObject {
         workspace?.host == nil && workspaces.count == 1
     }
 
-    private func closeTabs(of workspace: WorkspaceController) {
+    private func closeTabs(of workspace: WorkspaceController, dismissingModal: Bool = true) {
         let background = workspace.tabIDs.filter { $0 != workspace.activeID }
-        for id in background + [workspace.activeID].compactMap({ $0 }) { closeTab(id) }
+        for id in background + [workspace.activeID].compactMap({ $0 }) {
+            closeTab(id, dismissingModal: dismissingModal)
+        }
     }
 
     private func requestCloseWindow() {

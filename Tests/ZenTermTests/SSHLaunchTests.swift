@@ -83,10 +83,13 @@ final class SSHLaunchTests: XCTestCase {
         XCTAssertLessThanOrEqual(path.path.utf8.count, SSHLaunch.controlPathBudget)
     }
 
-    func test_theCheckAsksTheMasterAtTheSamePath() {
+    func test_theCheckAsksTheMasterAtTheSamePath_withoutReadingTheUsersConfig() {
         XCTAssertEqual(
             SSHLaunch.checkArguments(host: host, controlPath: URL(fileURLWithPath: "/tmp/a b/1-ab")),
-            ["-o", "BatchMode=yes", "-o", "ControlPath=\"/tmp/a b/1-ab\"", "-O", "check", "--", "devbox"])
+            [
+                "-F", "/dev/null", "-o", "BatchMode=yes", "-o", "ControlPath=\"/tmp/a b/1-ab\"", "-O", "check", "--",
+                "devbox",
+            ])
     }
 
     func test_theMastersPidIsReadFromTheCheck() {

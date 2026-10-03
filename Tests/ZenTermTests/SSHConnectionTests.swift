@@ -140,6 +140,113 @@ final class SSHConnectionTests: XCTestCase {
         XCTAssertEqual(fake.exitCancels, 1)
     }
 
+    func test_endingAConnectedHost_signalsTheMasterItWatched() {
+        let (login, loginID) = surface(1)
+        connection.start(login, id: loginID, env: [:])
+        fake.ready?()
+        fake.connect(pid: 42)
+
+        connection.shutdown()
+        connection.endMaster()
+
+        XCTAssertEqual(fake.ended, [42])
+    }
+
+    func test_aMasterThatAlreadyExited_isNeverSignalled() {
+        let (login, loginID) = surface(1)
+        connection.start(login, id: loginID, env: [:])
+        fake.ready?()
+        fake.connect(pid: 42)
+        fake.exited?()
+
+        connection.shutdown()
+        connection.endMaster()
+        fake.found?(nil)
+
+        XCTAssertEqual(fake.ended, [], "a pid freed by an exited master may belong to anything by now")
+    }
+
+    func test_aMasterThatCameUpMidConnect_isResolvedThenEnded() {
+        let (login, loginID) = surface(1)
+        connection.start(login, id: loginID, env: [:])
+        fake.ready?()
+        fake.appeared?()
+
+        connection.shutdown()
+        connection.endMaster()
+        fake.found?(77)
+
+        XCTAssertEqual(fake.ended, [77])
+    }
+
+    func test_endingTwice_signalsTheMasterOnce() {
+        let (login, loginID) = surface(1)
+        connection.start(login, id: loginID, env: [:])
+        fake.ready?()
+        fake.connect(pid: 42)
+
+        connection.endMaster()
+        connection.endMaster()
+
+        XCTAssertEqual(fake.ended, [42])
+    }
+
+    private func spawn(_ executable: String, _ arguments: [String]) throws -> Process {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        return process
+    }
+
+    private func waitForExit(_ process: Process, within timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while process.isRunning, Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.02)) }
+        return !process.isRunning
+    }
+
+    private let livePath = URL(fileURLWithPath: "/tmp/zt-live/4242-abcdef01")
+
+    private func sshNaming(_ controlPath: URL) throws -> Process {
+        try spawn(
+            SSHLaunch.executable,
+            [
+                "-F", "/dev/null", "-o", "BatchMode=yes", "-o", "ControlPath=\"\(controlPath.path)\"",
+                "-o", "ProxyCommand=/bin/sleep 30", "zt-test.invalid",
+            ])
+    }
+
+    func test_theLiveEnd_terminatesTheSSHHoldingThisControlPath() throws {
+        let ssh = try sshNaming(livePath)
+        defer { if ssh.isRunning { ssh.terminate() } }
+
+        SSHConnection.Watchers.live.endMaster(ssh.processIdentifier, livePath)
+
+        XCTAssertTrue(waitForExit(ssh, within: 2))
+        XCTAssertEqual(ssh.isRunning ? nil : ssh.terminationReason, .uncaughtSignal)
+    }
+
+    func test_theLiveEnd_leavesAnSSHForAnotherControlPathRunning() throws {
+        let ssh = try sshNaming(URL(fileURLWithPath: "/tmp/zt-live/9999-abcdef01"))
+        defer { ssh.terminate() }
+
+        SSHConnection.Watchers.live.endMaster(ssh.processIdentifier, livePath)
+
+        XCTAssertFalse(waitForExit(ssh, within: 0.3), "a pid recycled by the user's own ssh must never be signalled")
+    }
+
+    func test_theLiveEnd_leavesAProcessThatIsNotSSHRunning() throws {
+        let sleeper = try spawn("/bin/sh", ["-c", "sleep 30", livePath.path])
+        defer { sleeper.terminate() }
+
+        SSHConnection.Watchers.live.endMaster(sleeper.processIdentifier, livePath)
+
+        XCTAssertFalse(waitForExit(sleeper, within: 0.3), "a recycled pid must never be signalled")
+    }
+
     func test_aMasterAlreadyAnswering_connectsTheLoginWithoutWaitingForTheSocket() {
         fake.answerBeforeLogin = .some(42)
         let (login, loginID) = surface(1)

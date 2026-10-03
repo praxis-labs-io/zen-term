@@ -5,6 +5,9 @@ final class SettingsSSHHostsSection: SettingsSection {
     var onExitToNav: (() -> Void)?
     var onAddHost: (() -> Void)?
     var hostToFocus: String?
+    var hostSession: ((SSHHostID) -> SSHConnection.State?)?
+    var presentConfirm: ((ConfirmCard) -> Void)?
+    var dismissConfirm: ((@escaping () -> Void) -> Void)?
 
     private struct Listing {
         let aliases: [String]
@@ -30,6 +33,13 @@ final class SettingsSSHHostsSection: SettingsSection {
         let host: String
         let row: LayoutRow
         let control: HostControl
+    }
+
+    private enum Disconnecting {
+        case turningOff, removing
+
+        var action: String { self == .turningOff ? "Turn Off" : "Remove" }
+        var gerund: String { self == .turningOff ? "Turning off" : "Removing" }
     }
 
     private enum Stop: Equatable {
@@ -220,21 +230,62 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private func turn(_ host: String, on: Bool, row: LayoutRow, toggle: SegmentedControl) {
-        if !save(row: row, { try SSHHostsWriter.set(host, on: on) }) { toggle.setSelection(on ? 1 : 0) }
+        let save = { [weak self] in
+            guard let self else { return }
+            if !self.save(row: row, { try SSHHostsWriter.set(host, on: on) }) { toggle.setSelection(on ? 1 : 0) }
+        }
+        guard !on else { return save() }
+        confirmDisconnect(
+            of: host, by: .turningOff, proceed: save,
+            cancel: { toggle.setSelection(0) })
     }
 
     private func toggleRemoval(of host: String, row: LayoutRow, button: AppButton) {
-        if removed.contains(host) {
+        guard !removed.contains(host) else {
             let index = restoredIndex(of: host)
             guard save(row: row, { try SSHHostsWriter.insert(host, at: index) }) else { return }
             removed.remove(host)
-        } else {
-            let enabled = GeneralConfig.current.sshHosts
-            guard save(row: row, { try SSHHostsWriter.set(host, on: false) }) else { return }
-            if orderBeforeRemovals == nil { orderBeforeRemovals = enabled }
-            removed.insert(host)
+            return showRemoval(false, of: host, row: row, button: button)
         }
-        showRemoval(removed.contains(host), of: host, row: row, button: button)
+        confirmDisconnect(
+            of: host, by: .removing,
+            proceed: { [weak self] in
+                guard let self else { return }
+                let enabled = GeneralConfig.current.sshHosts
+                guard self.save(row: row, { try SSHHostsWriter.set(host, on: false) }) else { return }
+                if self.orderBeforeRemovals == nil { self.orderBeforeRemovals = enabled }
+                self.removed.insert(host)
+                self.showRemoval(true, of: host, row: row, button: button)
+            }, cancel: {})
+    }
+
+    private func confirmDisconnect(
+        of host: String, by disconnecting: Disconnecting, proceed: @escaping () -> Void,
+        cancel: @escaping () -> Void
+    ) {
+        guard let session = hostSession?(SSHHostID(name: host)), session != .failed, let presentConfirm,
+            let dismissConfirm
+        else { return proceed() }
+        let consequence =
+            session == .connected
+            ? "disconnect it and stop everything running in it" : "stop connecting to it and close its tabs"
+        presentConfirm(
+            ConfirmCard(
+                title: "\(disconnecting.action) \(host)",
+                message: "\(disconnecting.gerund) \(host) will \(consequence).",
+                confirmLabel: disconnecting.action, background: Theme.current.chrome.background.nsColor,
+                onCancel: { [weak self] in
+                    dismissConfirm {
+                        cancel()
+                        self?.focus(.host(host))
+                    }
+                },
+                onConfirm: { [weak self] in
+                    dismissConfirm {
+                        proceed()
+                        self?.focus(.host(host))
+                    }
+                }))
     }
 
     private func restoredIndex(of host: String) -> Int {

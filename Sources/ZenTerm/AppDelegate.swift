@@ -54,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppConfig.loadAtLaunch()
         MotionConfig.apply(GeneralConfig.current.reduceMotion)
         hostProbe.start(hosts: GeneralConfig.current.sshHosts)
+        SSHSocketSweep.start()
 
         if GeneralConfig.current.debug { Log.isVerbose = true }
         Log.info("ZenTerm launched v\(AppVersion.current)", category: .app)
@@ -244,6 +245,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             other.activate(host)
             return true
         }
+        wc.hostSessionInAnyWindow = { [weak self] host in
+            self?.windows.lazy.compactMap { $0.session(of: host) }.first
+        }
         if centered { wc.window.center() }
         wc.onClosed = { [weak self, weak wc] in
             guard let self, let wc else { return }
@@ -314,6 +318,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return .terminateLater
         }
+        guard windows.contains(where: \.holdsSessions) else {
+            tearDownAllWindows {
+                self.worktreeRemovals.whenIdle { NSApp.reply(toApplicationShouldTerminate: true) }
+            }
+            return .terminateLater
+        }
         if quitConfirmPending { return .terminateCancel }
         quitConfirmPending = true
         let tabCount = windows.reduce(0) { $0 + $1.tabCount }
@@ -338,6 +348,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     #if DEBUG
         func addWindowForTesting() { newWindow(initialCWD: nil, centered: false) }
+
+        var windowsForTesting: [WindowController] { windows }
 
         func quitTeardownForTesting(then completion: @escaping () -> Void) {
             tearDownAllWindows(then: completion)

@@ -117,7 +117,8 @@ share `SystemReport`, and never carry the environment or config.
   and only leaderless sessions are swept.
 - **Quit drives teardown by hand.** `windowWillClose` does not fire on termination, so
   `applicationShouldTerminate` tears down every window and waits (capped) on
-  `ShellSessionReaper.drainForQuit` and the worktree removal tracker.
+  `ShellSessionReaper.drainForQuit` and the worktree removal tracker. An SSH master runs in a
+  session of its own, so the reaper never sees it: each host's teardown ends it itself.
 - **Every input event libghostty sees is an explicit `NSView` override.** Nothing
   catches the rest, so a missing override drops events silently. Modifier events carry
   which side moved (`ghosttySidedMods`, key events only; mouse callbacks take unsided
@@ -175,10 +176,10 @@ single modal slot, tab bar and dock. `WorkspaceController` owns one workspace: a
 its `TabController`s and their titles. `TabController` owns one tab: a
 `PaneCanvasController` and two drawers.
 
-- **A window starts with one workspace, with no config entry**, and one workspace is
-  always active. A workspace without a config entry is named "Workspace N", the lowest
-  number no open workspace in the window holds. ⌘⌃T opens one at the end of the sidebar,
-  in the home folder: a workspace is a place, and one opened on the focused pane's folder
+- **A window starts with one workspace, with no config entry**, and shows either a workspace
+  or an SSH host's Connect screen, which has no workspace behind it. A workspace without a
+  config entry is named "Workspace N", the lowest number no open workspace in the window holds.
+  ⌘⌃T opens one at the end of the sidebar, in the home folder: a workspace is a place, and one opened on the focused pane's folder
   would collide with the open workspace already identified by it. A workspace is open when
   one with a config entry is open at its folder, so renaming it in Settings does not open a
   second copy.
@@ -595,6 +596,21 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   left alone. A login that ends before the socket drops the waiting surfaces and
   closes the workspace back to Connect. Closing a host's last pane, tab or workspace returns
   to Connect and never counts as closing the window, even when the host is all the window holds.
+  ⌘⌃W on a host is Disconnect, in the palette too: it never asks, even while connecting, and ↵
+  on Connect reconnects. A host leaving `ssh-hosts`, from Settings or a hand edit, disconnects in every
+  window and lands the way a removed host's Connect screen does. Settings warns first, in a
+  `ConfirmCard` over Settings, when the host is open in any window.
+- **A host's workspace ends its master when it shuts down, after its surfaces.** Ending it first
+  makes every live pane exit 255 into the exit flows. `SSHConnection.endMaster` sends `SIGTERM` to
+  the pid the exit source watched (a clean disconnect, and ssh removes its socket), or resolves the
+  socket with `ssh -O check` when none is known yet. It never relies on `ControlPersist`, and it
+  signals only a `/usr/bin/ssh` whose command line names that control path, so a recycled pid is
+  left alone.
+- **Launch sweeps the masters a force quit or crash left behind.** `SSHSocketSweep`, off-main,
+  reads both socket folders and checks only sockets named for a pid that is no longer a running
+  ZenTerm, never this instance's or another running one's (dev and release share the folders). It removes
+  one that refuses and ends a master that answers. Every `ssh -O check` runs with `-F /dev/null`,
+  so it never runs the user's `Match exec`, and the sweep can check a socket whose host it cannot name.
 - **Writers go through `ConfigFileIO`:** never treat an unreadable file as empty, and
   write through symlinks. `ConfigWriter` preserves comments and unknown keys.
 

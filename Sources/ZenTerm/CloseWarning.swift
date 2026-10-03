@@ -1,5 +1,5 @@
 enum CloseWarning {
-    enum LoginTarget: String { case pane, drawer, tab, workspace }
+    enum LoginTarget: String { case pane, drawer, tab }
 
     enum Subject: Equatable {
         case pane, drawer, tab, window

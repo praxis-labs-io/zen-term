@@ -269,6 +269,87 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertNotEqual(SSHHostStatusCenter.shared.status(of: host), .connected)
     }
 
+    private func recordPanesAtMasterEnd() -> () -> [Bool] {
+        var panesGone: [Bool] = []
+        fake.onEnd = { [unowned self] in panesGone.append(spawned.allSatisfy(\.terminated)) }
+        return { panesGone }
+    }
+
+    func test_closingAHostsLastPane_endsItsMaster_afterItsPanesAreGone() throws {
+        let (c, _) = try connected()
+        fake.connect(pid: 42)
+        let panesGone = recordPanesAtMasterEnd()
+
+        c.handle(.closePane)
+
+        XCTAssertEqual(fake.ended, [42])
+        XCTAssertEqual(panesGone(), [true], "ending the master first makes every live pane exit 255")
+    }
+
+    func test_closingTheWindow_endsAConnectedHostsMaster_afterItsPanesAreGone() throws {
+        let (c, _) = try connected()
+        c.handle(.newTab)
+        fake.connect(pid: 42)
+        let panesGone = recordPanesAtMasterEnd()
+
+        c.tearDownForQuit()
+
+        XCTAssertEqual(fake.ended, [42])
+        XCTAssertEqual(panesGone(), [true])
+    }
+
+    private func pressDisconnect(in c: WindowController) throws {
+        let keys = KeyInterceptor()
+        keys.setKeymap(KeymapDefaults.map)
+        keys.onReservedChord = { c.handle($0) }
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.command, .control], timestamp: 0,
+                windowNumber: c.window.windowNumber, context: nil, characters: "\u{17}",
+                charactersIgnoringModifiers: "w", isARepeat: false, keyCode: 13))
+        XCTAssertNil(keys.route(event), "the chord is claimed, not passed to the pane")
+    }
+
+    func test_cmdCtrlW_onAConnectedHost_disconnectsWithoutAsking_evenWithSomethingRunning() throws {
+        let (c, login) = try connected()
+        fake.connect(pid: 42)
+        login.isBusy = true
+
+        try pressDisconnect(in: c)
+
+        XCTAssertFalse(c.isConfirmOpen, "Disconnect is labeled and ↵ reconnects, so it never asks")
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
+        XCTAssertEqual(c.selectedHostForTesting, host)
+        XCTAssertEqual(fake.ended, [42])
+        XCTAssertTrue(login.terminated)
+        XCTAssertNotEqual(SSHHostStatusCenter.shared.status(of: host), .connected)
+        XCTAssertEqual(c.sidebarForTesting.hostIDs, [host], "the row stays")
+    }
+
+    func test_returnAfterDisconnecting_reconnects() throws {
+        let (c, _) = try connected()
+        fake.connect()
+        try pressDisconnect(in: c)
+        spawned = []
+        fake.answerBeforeLogin = .some(nil)
+
+        try press(36, "\r", in: c)
+        fake.ready?()
+
+        XCTAssertNil(c.connectViewForTesting)
+        XCTAssertEqual(spawned.first?.startCount, 1, "a fresh login starts")
+    }
+
+    func test_thePaletteInAConnectedHost_disconnects() throws {
+        let (c, _) = try connected()
+        fake.connect(pid: 42)
+
+        try runFromPalette("Disconnect", in: c)
+
+        XCTAssertNotNil(c.connectViewForTesting)
+        XCTAssertEqual(fake.ended, [42])
+    }
+
     func test_closingTheLastLocalWorkspace_landsOnTheConnectedHost() throws {
         let (c, _) = try connected()
         fake.connect()
@@ -683,6 +764,32 @@ final class HostConnectInteractionTests: WindowTestCase {
         assertBackOnConnect(c)
     }
 
+    private func quitAsks(in delegate: AppDelegate, _ c: WindowController) -> Bool {
+        XCTAssertEqual(delegate.applicationShouldTerminate(NSApp), .terminateLater)
+        defer { NSApp.reply(toApplicationShouldTerminate: false) }
+        guard c.isConfirmOpen else { return false }
+        try? press(button: "Cancel", in: c)
+        return true
+    }
+
+    func test_quittingWithNothingOpenButAConnectScreen_doesNotAsk() throws {
+        let delegate = AppDelegate()
+        delegate.addWindowForTesting()
+        let c = try XCTUnwrap(delegate.windowsForTesting.first)
+        controllers.append(c)
+        _ = try connect(c)
+        fake.connect()
+        c.activateWorkspaceForTesting(c.workspaceIDsForTesting[0])
+        c.handle(.closeTab)
+        XCTAssertTrue(quitAsks(in: delegate, c), "precondition: a connected host's tab is something to close")
+
+        c.handle(.closeWorkspace)
+
+        XCTAssertNotNil(c.connectViewForTesting)
+        XCTAssertFalse(quitAsks(in: delegate, c), "with no tab anywhere there is nothing to warn about")
+        XCTAssertTrue(delegate.windowsForTesting.isEmpty, "quitting without asking still tears every window down")
+    }
+
     func test_closingTheLocalWorkspaceBesideAHost_closesItWithoutAsking_andLandsOnTheHost() throws {
         let (c, _) = try connected()
         fake.connect()
@@ -751,16 +858,18 @@ final class HostConnectInteractionTests: WindowTestCase {
             asking: "Closing this tab will stop connecting to devbox and close its tabs.")
     }
 
-    func test_closingAConnectingHostsWorkspace_asksThenAbandonsQuietly() throws {
-        let (c, login) = try connected()
+    func test_disconnectingWhileConnecting_returnsToConnectAtOnce_withoutAFailureToast() throws {
+        let (c, _) = try connected()
         c.handle(.newTab)
-        let waiting = spawned.last
+        let waiting = try XCTUnwrap(spawned.last)
 
-        c.handle(.closeWorkspace)
+        try pressDisconnect(in: c)
+        fake.connect()
 
-        try assertAbandonsTheLogin(
-            c, login: login, waiting: waiting,
-            asking: "Closing this workspace will stop connecting to devbox and close its tabs.")
+        XCTAssertFalse(c.isConfirmOpen, "Disconnect says what it does, so it never asks")
+        XCTAssertNotNil(c.connectViewForTesting)
+        XCTAssertFalse(showsToast("Couldn't connect to devbox.", in: c), "the user ended it")
+        XCTAssertEqual(waiting.startCount, 0)
     }
 
     func test_closingTheLoginPane_saysTheHostsTabsGoToo() throws {
@@ -799,7 +908,7 @@ final class HostConnectInteractionTests: WindowTestCase {
                 options: [.usesLineFragmentOrigin], attributes: [.font: ToastView.messageFont]
             ).height
         }
-        for target: CloseWarning.LoginTarget in [.pane, .drawer, .tab, .workspace] {
+        for target: CloseWarning.LoginTarget in [.pane, .drawer, .tab] {
             let message = CloseWarning.message(closing: .login(host: "devbox", closing: target), naming: [])
             XCTAssertLessThanOrEqual(height(message), height("One\nTwo"), message)
         }
