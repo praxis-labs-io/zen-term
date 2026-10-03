@@ -107,13 +107,13 @@ extension KeyInterceptor.ReservedChord {
         case .toggleRepoPicker, .toggleCommandPalette, .openSettings,
             .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWindow,
             .newWindow, .reloadConfig, .checkForUpdates, .increaseFontSize, .decreaseFontSize, .resetFontSize,
-            .toggleSidebar, .focusSidebar, .dismissToast, .dismissAllToasts, .nextWaitingAgent:
+            .toggleSidebar, .focusSidebar, .dismissToast, .dismissAllToasts, .nextWaitingAgent, .fillScreen:
             return true
         case .splitVertical, .splitHorizontal, .navLeft, .navRight, .navUp, .navDown, .prevPane, .nextPane,
             .closePane, .closeTab, .newTab, .selectTab, .prevTab, .nextTab,
             .moveTabLeft, .moveTabRight, .renameTab,
             .resizeLeft, .resizeRight, .resizeUp, .resizeDown,
-            .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom, .fillScreen,
+            .toggleBottomDrawer, .toggleRightDrawer, .toggleZoom,
             .toggleToolFloat, .newWorkspace, .createWorktree, .removeWorktree,
             .reportIssue, .newTool, .toggleScrollMode, .toggleSearch, .scrollToTop, .scrollToBottom, .scrollPageUp,
             .scrollPageDown,

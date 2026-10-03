@@ -1,8 +1,11 @@
 enum CloseWarning {
+    enum LoginTarget: String { case pane, drawer, tab, workspace }
+
     enum Subject: Equatable {
         case pane, drawer, tab, window
         case workspace(String)
         case lastPane(running: Bool), lastTab(running: Bool), lastWorkspace(running: Bool)
+        case login(host: String, closing: LoginTarget)
 
         var title: String {
             switch self {
@@ -11,6 +14,7 @@ enum CloseWarning {
             case .tab: return "Close Tab"
             case .workspace: return "Close Workspace"
             case .window, .lastPane, .lastTab, .lastWorkspace: return "Close Window"
+            case .login(_, let target): return "Close \(target.rawValue.capitalized)"
             }
         }
 
@@ -30,6 +34,8 @@ enum CloseWarning {
             case .lastWorkspace(let running):
                 return "Closing this workspace will close the window"
                     + (running ? " and stop everything running in it" : "")
+            case .login(let host, let target):
+                return "Closing this \(target.rawValue) will stop connecting to \(host) and close its tabs"
             }
         }
     }

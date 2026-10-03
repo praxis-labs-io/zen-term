@@ -10,7 +10,8 @@ final class WorkspaceController {
     var name: String
     let folder: URL
     let origin: WorktreeOrigin?
-    let host: SSHHostID?
+    let connection: SSHConnection?
+    var host: SSHHostID? { connection?.host }
     var isWorktreeRemoved = false
 
     var removedWorktree: WorktreeOrigin? { isWorktreeRemoved ? origin : nil }
@@ -23,14 +24,14 @@ final class WorkspaceController {
 
     init(
         id: WorkspaceID, isConfigured: Bool, name: String, folder: URL, firstTab: TabID,
-        origin: WorktreeOrigin? = nil, seat: Int? = nil, host: SSHHostID? = nil
+        origin: WorktreeOrigin? = nil, seat: Int? = nil, connection: SSHConnection? = nil
     ) {
         self.id = id
         self.isConfigured = isConfigured
         self.name = name
         self.folder = folder
         self.origin = origin
-        self.host = host
+        self.connection = connection
         self.seat = seat ?? id.raw
         tabs = TabList(first: firstTab)
     }
@@ -76,6 +77,7 @@ final class WorkspaceController {
     }
 
     func shutdown() {
+        connection?.shutdown()
         for controller in controllerByTab.values { controller.shutdown() }
         controllerByTab.removeAll()
         titleByTab.removeAll()

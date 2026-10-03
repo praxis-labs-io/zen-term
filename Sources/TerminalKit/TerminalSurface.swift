@@ -8,6 +8,8 @@ public struct TerminalSurfaceConfig {
     public var fontSize: CGFloat?
     public var theme: TerminalTheme?
     public var behavior: TerminalBehavior?
+    /// False for a session whose prompt marks never arrive (a remote shell), so `isBusy` always reads false.
+    public var tracksBusy: Bool
 
     public init(
         command: String? = nil,
@@ -16,7 +18,8 @@ public struct TerminalSurfaceConfig {
         environment: [String: String] = [:],
         fontSize: CGFloat? = nil,
         theme: TerminalTheme? = nil,
-        behavior: TerminalBehavior? = nil
+        behavior: TerminalBehavior? = nil,
+        tracksBusy: Bool = true
     ) {
         self.command = command
         self.args = args
@@ -25,6 +28,7 @@ public struct TerminalSurfaceConfig {
         self.fontSize = fontSize
         self.theme = theme
         self.behavior = behavior
+        self.tracksBusy = tracksBusy
     }
 }
 
@@ -265,6 +269,7 @@ public protocol TerminalSurface: AnyObject {
     /// The background the terminal last reported (OSC 11), or nil if it never has.
     var backgroundOverride: TerminalColor? { get }
 
+    /// Does nothing once `terminate()` has run.
     func start(_ config: TerminalSurfaceConfig)
     func focus()
 

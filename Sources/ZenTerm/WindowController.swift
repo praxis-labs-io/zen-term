@@ -193,6 +193,7 @@ final class WindowController: NSObject {
     private let dock: ToggleDock
     private let sidebar: SidebarController
     private var mountedCanvas: NSView?
+    private var connectView: HostConnectView?
     private var focusReturn: SidebarFocusStop?
     private var windowIsKey = true
     private var activeCanvasSlides = 0
@@ -235,6 +236,8 @@ final class WindowController: NSObject {
     var isWorkspaceOpenInAnotherWindow: ((URL) -> Bool)?
 
     var revealWorkspaceInAnotherWindow: ((URL) -> Bool)?
+
+    var revealHostInAnotherWindow: ((SSHHostID) -> Bool)?
 
     var openWorkspacesElsewhere: (() -> [RunningWorkspace])?
 
@@ -503,6 +506,7 @@ final class WindowController: NSObject {
                     self.window.setWindowChromeVisible(GeneralConfig.current.windowChrome)
                     self.sidebar.reapplyChromeLayout()
                     for controller in self.allTabControllers { controller.reapplyChromeLayout() }
+                    self.connectView?.reapplyChromeLayout()
                     self.reapplyFloatLayout()
                     self.reapplyModalLayout()
                     self.builtToasts?.reapplyInsets(
@@ -515,6 +519,7 @@ final class WindowController: NSObject {
                 }
                 if change.contains(.theme) || change.contains(.terminalBehavior) {
                     self.floats.reapplyTheme()
+                    self.connectView?.reapplyTheme()
                 }
                 if change.contains(.theme) {
                     self.tabBar.reapplyTheme()
@@ -797,12 +802,19 @@ final class WindowController: NSObject {
 
     deinit { titlePoll?.invalidate() }
 
-    private func makeController(cwd: URL?, config ws: Workspace? = nil, tab index: Int = 0) -> TabController {
+    private func makeController(
+        cwd: URL?, config ws: Workspace? = nil, tab index: Int = 0, connection: SSHConnection? = nil
+    ) -> TabController {
         let tab = ws?.tabs[index]
         let mainCommand = tab?.main.flatMap { $0 == "shell" ? nil : $0 }
         let c = TabController(
             initialCWD: cwd, initialCommand: mainCommand, env: ws?.env ?? [:],
-            isToolFloatOpen: { [weak self] in self?.floats.isOpen ?? false })
+            isToolFloatOpen: { [weak self] in self?.floats.isOpen ?? false },
+            startSurface: connection.map { connection in
+                { [weak connection] surface, id, launch in
+                    connection?.start(surface, id: id, env: launch.environment)
+                }
+            } ?? startSurfaceNow)
         c.rightDrawerCommand = tab?.right
         c.bottomDrawerCommand = tab?.bottom
         c.pinnedTitle = tab?.name
@@ -833,8 +845,17 @@ final class WindowController: NSObject {
     private var selectedCanvas: NSView? {
         switch selection {
         case .workspace(let workspace): return workspace.activeController?.view
-        case .host: return nil
+        case .host(let host): return hostConnectView(for: host)
         }
+    }
+
+    private func hostConnectView(for host: SSHHostID) -> HostConnectView {
+        if let connectView, connectView.host == host { return connectView }
+        let view = HostConnectView(
+            host: host, onConnect: { [weak self] in self?.connect(host) },
+            onFocusRequest: { [weak self] in self?.restoreFocusToActive() })
+        connectView = view
+        return view
     }
 
     private func mount(_ transition: MountTransition) {
@@ -944,7 +965,7 @@ final class WindowController: NSObject {
         } else if let activeController {
             activeController.restoreUnifiedFocus()
         } else if activeWorkspace == nil {
-            window.makeFirstResponder(nil)
+            window.makeFirstResponder(connectView)
         }
     }
 
@@ -970,6 +991,7 @@ final class WindowController: NSObject {
     private func syncWindowFocus() {
         let holdsKeyFocus = windowIsKey && !sidebar.hasFocus
         activeController?.setHaloVisible(holdsKeyFocus && !sidebar.isRevealed)
+        connectView?.setHaloVisible(activeWorkspace == nil && holdsKeyFocus && !sidebar.isRevealed)
         for controller in allTabControllers {
             controller.setHoldsKeyFocus(holdsKeyFocus && controller === activeController)
         }
@@ -1048,7 +1070,7 @@ final class WindowController: NSObject {
         id: TabID, in workspace: WorkspaceController, cwd: URL?, config: Workspace?, tab index: Int = 0,
         transition: MountTransition
     ) {
-        let c = makeController(cwd: cwd, config: config, tab: index)
+        let c = makeController(cwd: cwd, config: config, tab: index, connection: workspace.connection)
         workspace.setController(c, for: id)
         wire(c, id: id)
         mount(transition)
@@ -1099,7 +1121,8 @@ final class WindowController: NSObject {
         renderAttention()
     }
 
-    private func activate(_ host: SSHHostID) {
+    func activate(_ host: SSHHostID) {
+        if revealOpenHost(host) { return }
         guard host != selection.host else { restoreFocusToActive(); return }
         Log.info("ssh host selected", category: .workspace)
         closeModal()
@@ -1254,19 +1277,74 @@ final class WindowController: NSObject {
 
     private func closeWorkspace(_ workspace: WorkspaceController) {
         Log.info("workspace closed", category: .workspace)
+        if let host = workspace.host { return closeHostWorkspace(workspace, returningTo: host) }
         guard let place = order.navigableWorkspaces.firstIndex(of: workspace.id) else { return }
         workspaces.removeAll { $0 === workspace }
         worktreeRemovedToasts[workspace.id].map(toasts.dismiss)
         guard !workspaces.isEmpty else { window.close(); return }
         guard workspace === activeWorkspace else { renderAttention(); return }
         let remaining = order.navigableWorkspaces
-        guard let next = workspaces.first(where: { $0.id == remaining[min(place, remaining.count - 1)] })
-        else { return }
+        let landing = remaining.isEmpty ? workspaces.first?.id : remaining[min(place, remaining.count - 1)]
+        guard let next = workspaces.first(where: { $0.id == landing }) else { return }
         selection = .workspace(next)
         mount(.slide(from: place < remaining.count ? .fromBottom : .fromTop))
         if let tab = next.activeID { visit(tab) }
         renderAttention()
     }
+
+    private func closeHostWorkspace(_ workspace: WorkspaceController, returningTo host: SSHHostID) {
+        workspaces.removeAll { $0 === workspace }
+        workspace.shutdown()
+        guard workspace === activeWorkspace else { renderAttention(); return }
+        selection = .host(host)
+        mount(.instant)
+        renderAttention()
+    }
+
+    // One live session per host across the app: an open one is jumped to, never opened a second time.
+    private func revealOpenHost(_ host: SSHHostID) -> Bool {
+        if let open = workspaces.first(where: { $0.host == host }) {
+            activate(open.id)
+            return true
+        }
+        return revealHostInAnotherWindow?(host) == true
+    }
+
+    private func connect(_ host: SSHHostID) {
+        guard selection.host == host, activeWorkspace == nil, !revealOpenHost(host) else { return }
+        Log.info("ssh host connecting", category: .workspace)
+        let connection = SSHConnection(host: host)
+        connection.onConnectedChange = { SSHHostStatusCenter.shared.setConnected($0, host: host) }
+        let tab = mintTabID()
+        let workspace = WorkspaceController(
+            id: mintWorkspaceID(), isConfigured: false, name: host.name, folder: ShellLaunch.defaultCWD,
+            firstTab: tab, connection: connection)
+        connection.onLoginFailed = { [weak self, weak workspace] in
+            DispatchQueue.main.async { self?.loginFailed(on: host, closing: workspace) }
+        }
+        workspaces.append(workspace)
+        activate(workspace.id)
+        installController(id: tab, in: workspace, cwd: nil, config: nil, transition: .instant)
+    }
+
+    private func loginFailed(on host: SSHHostID, closing workspace: WorkspaceController?) {
+        if let workspace, workspaces.contains(where: { $0 === workspace }) { closeTabs(of: workspace) }
+        toasts.show(ToastContent(variant: .warning, title: "SSH Host", message: Self.connectFailedMessage(for: host)))
+    }
+
+    static func connectFailedMessage(for host: SSHHostID) -> String {
+        let line = "Couldn't connect to \(host.name)."
+        let width = (line as NSString).size(withAttributes: [.font: ToastView.messageFont]).width
+        return width <= ToastView.messageMaxWidth ? line : "Couldn't connect to\n\(host.name)."
+    }
+
+    private func toastFloatsStayLocal(on host: SSHHostID) {
+        toasts.show(
+            ToastContent(
+                variant: .info, title: "Tool Floats", message: "Tool floats run on this Mac, not on \(host.name)."))
+    }
+
+    func holdsHost(_ host: SSHHostID) -> Bool { workspaces.contains { $0.host == host } }
 
     private func presentModal(_ overlay: ModalOverlay, kind: ModalKind) {
         if let activeWorkspace, activeWorkspace.activeController == nil { return }
@@ -2134,6 +2212,7 @@ final class WindowController: NSObject {
                 return
             case .toggleRepoPicker, .toggleCommandPalette, .openSettings, .toggleToolFloat, .reportIssue,
                 .newTool:
+                guard activeWorkspace != nil || chord.worksWithoutTab else { return }
                 closingModalKind = modal.kind
                 closeModal()
             default:
@@ -2171,6 +2250,16 @@ final class WindowController: NSObject {
                 break
             default:
                 return
+            }
+        }
+        if case .host(let host) = selection {
+            if chord == .newTab { return connect(host) }
+            switch chord {
+            case .navLeft: return navigate(.left)
+            case .navRight: return navigate(.right)
+            case .navUp: return navigate(.up)
+            case .navDown: return navigate(.down)
+            default: break
             }
         }
         guard activeWorkspace != nil || chord.worksWithoutTab else { return }
@@ -2256,6 +2345,7 @@ final class WindowController: NSObject {
             }
         case .toggleToolFloat(let id):
             pendingModal = nil
+            if let host = activeWorkspace?.host { return toastFloatsStayLocal(on: host) }
             if let spec = ToolFloatCatalog.byID(id) { floats.toggle(spec) }
         case .toggleRepoPicker: toggleRepoPicker()
         case .createWorktree:
@@ -2283,8 +2373,27 @@ final class WindowController: NSObject {
     }
 
     private func navigate(_ direction: Direction) {
-        guard sidebar.hasFocus else { activeController?.navigate(direction); return }
+        guard sidebar.hasFocus else {
+            guard let activeController else { return navigateFromConnect(direction) }
+            return activeController.navigate(direction)
+        }
         if direction == .right { restoreFocusToActive() } else { activeController?.toastNoNeighbor(direction) }
+    }
+
+    private var connectNoNeighborToasts = ToastThrottle<Direction>()
+
+    // Connect is one panel with nothing beside it, so only its left edge leads anywhere: to the sidebar.
+    private func navigateFromConnect(_ direction: Direction) {
+        guard direction == .left, !focusSidebar(), let hint = sidebarHint(for: direction),
+            connectNoNeighborToasts.allows(direction)
+        else { return }
+        toasts.show(TabController.noNeighborToast(direction, hint: hint))
+    }
+
+    private func sidebarHint(for direction: Direction) -> String? {
+        guard direction == .left, !sidebar.isDocked else { return nil }
+        let chord = CommandCatalog.spec(for: .toggleSidebar).shortcut
+        return chord.isEmpty ? nil : "Press \(chord) to show the sidebar."
     }
 
     private func focusSidebar() -> Bool {
@@ -2358,6 +2467,9 @@ final class WindowController: NSObject {
     private func requestClosePane() {
         guard let active = activeController else { return }
 
+        if let workspace = activeWorkspace, isAwaitingLogin(on: active.focusedSurfaceID) {
+            return confirmAbandoningLogin(of: workspace, closing: active.isDrawerFocused ? .drawer : .pane)
+        }
         if active.isDrawerFocused {
             guard active.focusedDrawerIsBusy else { active.closeFocusedDrawer(); return }
             presentConfirm(
@@ -2369,7 +2481,10 @@ final class WindowController: NSObject {
         }
 
         let lastPane = active.isSinglePane
-        let closesWindow = lastPane && activeTabIDs.count == 1 && workspaces.count == 1
+        if lastPane, let workspace = activeWorkspace, let tab = workspace.activeID, holdsAwaitingLogin(tab: tab) {
+            return confirmAbandoningLogin(of: workspace, closing: .tab)
+        }
+        let closesWindow = lastPane && activeTabIDs.count == 1 && closesWindow(closing: activeWorkspace)
         let needsConfirm =
             closesWindow
             || active.focusedPaneIsBusy
@@ -2394,9 +2509,41 @@ final class WindowController: NSObject {
         }
     }
 
+    private func isAwaitingLogin(on surface: SurfaceID?) -> Bool {
+        activeWorkspace?.connection?.isAwaitingLogin(on: surface) ?? false
+    }
+
+    private func holdsAwaitingLogin(tab id: TabID) -> Bool {
+        guard let connection = workspace(of: id)?.connection, let tab = controller(id) else { return false }
+        return tab.surfaceIDs.contains { connection.isAwaitingLogin(on: $0) }
+    }
+
+    private func holdsAwaitingLogin(_ workspace: WorkspaceController) -> Bool {
+        workspace.tabIDs.contains(where: holdsAwaitingLogin(tab:))
+    }
+
+    private func confirmAbandoningLogin(of workspace: WorkspaceController, closing target: CloseWarning.LoginTarget) {
+        guard let host = workspace.host else { return }
+        let subject = CloseWarning.Subject.login(host: host.name, closing: target)
+        presentConfirm(
+            variant: .warning, title: subject.title,
+            message: CloseWarning.message(closing: subject, naming: []), confirmLabel: "Close"
+        ) { [weak self, weak workspace] in
+            guard let self, let workspace, self.workspaces.contains(where: { $0 === workspace }) else { return }
+            self.abandonLogin(of: workspace)
+        }
+    }
+
+    private func abandonLogin(of workspace: WorkspaceController) {
+        Log.info("ssh login closed before connecting", category: .workspace)
+        workspace.connection?.shutdown()
+        closeTabs(of: workspace)
+    }
+
     private func requestCloseTab(_ id: TabID) {
         guard let workspace = workspace(of: id) else { return }
-        let closesWindow = workspace.tabIDs.count == 1 && workspaces.count == 1
+        if holdsAwaitingLogin(tab: id) { return confirmAbandoningLogin(of: workspace, closing: .tab) }
+        let closesWindow = workspace.tabIDs.count == 1 && closesWindow(closing: workspace)
         guard closesWindow || isRunning(tab: id) else { closeTab(id); return }
         let subject: CloseWarning.Subject =
             closesWindow ? .lastTab(running: windowIsRunning) : .tab
@@ -2414,7 +2561,8 @@ final class WindowController: NSObject {
     }
 
     private func requestCloseWorkspace(_ workspace: WorkspaceController) {
-        let closesWindow = workspaces.count == 1
+        if holdsAwaitingLogin(workspace) { return confirmAbandoningLogin(of: workspace, closing: .workspace) }
+        let closesWindow = closesWindow(closing: workspace)
         guard closesWindow || isRunning(workspace: workspace) else {
             closeTabs(of: workspace)
             return
@@ -2427,6 +2575,11 @@ final class WindowController: NSObject {
             message: CloseWarning.message(closing: subject, naming: names),
             confirmLabel: "Close"
         ) { [weak self] in self?.closeTabs(of: workspace) }
+    }
+
+    // A host's workspace closes back to its Connect screen, so only a lone local workspace takes the window.
+    private func closesWindow(closing workspace: WorkspaceController?) -> Bool {
+        workspace?.host == nil && workspaces.count == 1
     }
 
     private func closeTabs(of workspace: WorkspaceController) {
@@ -2452,11 +2605,13 @@ final class WindowController: NSObject {
 
     private func isRunning(tab id: TabID) -> Bool {
         controller(id)?.allSurfaces.contains(where: \.isBusy) == true || floats.hasBusyInScope(id)
+            || holdsAwaitingLogin(tab: id)
     }
 
     private func isRunning(workspace: WorkspaceController) -> Bool {
         workspace.allSurfaces.contains(where: \.isBusy)
             || workspace.tabIDs.contains(where: floats.hasBusyInScope)
+            || holdsAwaitingLogin(workspace)
     }
 
     private func hiddenRunningNames(inTab id: TabID) -> [String] {
@@ -2528,11 +2683,7 @@ final class WindowController: NSObject {
             guard let self, c === self.activeController else { return false }
             return self.focusSidebar()
         }
-        c.noNeighborHint = { [weak self] direction in
-            guard let self, direction == .left, !sidebar.isDocked else { return nil }
-            let chord = CommandCatalog.spec(for: .toggleSidebar).shortcut
-            return chord.isEmpty ? nil : "Press \(chord) to show the sidebar."
-        }
+        c.noNeighborHint = { [weak self] direction in self?.sidebarHint(for: direction) }
         c.onSurfaceEvent = { [weak self] surface, event in self?.report(surface, event) }
         c.onProgress = { [weak self] surface, progress in
             self?.progressChanged(surface: surface, progress: progress)
@@ -2545,6 +2696,7 @@ final class WindowController: NSObject {
             ids.forEach { self?.attention.register($0, tab: id) }
         }
         c.onSurfacesReleased = { [weak self] ids in
+            self?.workspace(of: id)?.connection?.release(ids)
             ids.forEach {
                 self?.attention.release($0)
                 self?.agents.drop($0)
@@ -3346,6 +3498,10 @@ final class WindowController: NSObject {
     }
 
     var selectedHostForTesting: SSHHostID? { selection.host }
+
+    var connectViewForTesting: HostConnectView? { mountedCanvas as? HostConnectView }
+
+    var activeConnectionForTesting: SSHConnection? { activeWorkspace?.connection }
 
     func selectHostForTesting(_ host: SSHHostID) {
         selection = .host(host)

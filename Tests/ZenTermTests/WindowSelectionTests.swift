@@ -60,7 +60,7 @@ final class WindowSelectionTests: WindowTestCase {
         let (c, workspace) = makeHostWindow()
 
         for chord: KeyInterceptor.ReservedChord in [
-            .newTab, .splitVertical, .closePane, .closeTab, .renameTab, .closeWorkspace, .newWorkspace,
+            .splitVertical, .closePane, .closeTab, .renameTab, .closeWorkspace, .newWorkspace,
             .selectTab(1),
         ] {
             c.handle(chord)
@@ -145,12 +145,12 @@ final class WindowSelectionTests: WindowTestCase {
         XCTAssertNil(surface.view.window, "the workspace's pane is no longer mounted under a host")
     }
 
-    func test_aHost_takesFocusOffTheWorkspacesPane() throws {
+    func test_aHost_movesFocusFromTheWorkspacesPaneToConnect() throws {
         let (c, _) = try makeFocusedWorkspaceWindow()
 
         c.selectHostForTesting(SSHHostID(name: "devbox"))
 
-        XCTAssertTrue(c.window.firstResponder === c.window, "keys go to the window, not a pane out of view")
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
         XCTAssertFalse(spawned.contains { $0.view === c.window.firstResponder })
     }
 
@@ -208,7 +208,7 @@ final class WindowSelectionTests: WindowTestCase {
         XCTAssertTrue(c.sidebarForTesting.hasFocus)
     }
 
-    func test_aHost_hidingAFloatingSidebar_handsFocusToTheWindow() throws {
+    func test_aHost_hidingAFloatingSidebar_handsFocusToConnect() throws {
         let (c, _) = try makeFocusedWorkspaceWindow()
         c.window.setContentSize(c.window.contentMinSize)
         c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
@@ -220,7 +220,7 @@ final class WindowSelectionTests: WindowTestCase {
         c.handle(.toggleSidebar)
 
         XCTAssertFalse(c.sidebarForTesting.hasFocus)
-        XCTAssertTrue(c.window.firstResponder === c.window)
+        XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
     }
 
     func test_aHost_dismissesTheOldestToast() throws {
