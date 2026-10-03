@@ -183,6 +183,10 @@
 # Each is a Host alias from ~/.ssh/config or a user@host. Settings > SSH Hosts
 # lists every Host entry in ~/.ssh/config to turn on or off, and adds or
 # removes others.
+# Each pane on a host opens your login shell there with TERM_PROGRAM set to
+# ghostty, so an agent like Claude reports its progress as it does locally.
+# The host's login banner and last-login line do not show. A host whose ssh
+# config sets RemoteCommand runs that command instead.
 # In-app Settings edit: applies live.
 # ssh-hosts = devbox, prod, deploy@10.0.0.5
 

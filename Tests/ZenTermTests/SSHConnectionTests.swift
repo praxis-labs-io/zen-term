@@ -31,7 +31,7 @@ final class SSHConnectionTests: XCTestCase {
 
         XCTAssertEqual(login.startCount, 1)
         XCTAssertEqual(login.lastConfig?.command, "/usr/bin/ssh")
-        XCTAssertEqual(login.lastConfig?.args.last, "devbox")
+        XCTAssertEqual(login.lastConfig?.args.suffix(2), ["devbox", SSHLaunch.loginShellCommand])
         XCTAssertEqual(login.lastConfig?.environment["A"], "1")
         XCTAssertEqual(connection.state, .connecting)
     }
@@ -125,6 +125,31 @@ final class SSHConnectionTests: XCTestCase {
         XCTAssertEqual(fake.socketWatches, 2)
         XCTAssertEqual(pane.startCount, 1)
         XCTAssertEqual(other.startCount, 0)
+    }
+
+    func test_aHostWithItsOwnRemoteCommand_launchesTheLoginAndEveryJoiningPanePlain() {
+        fake.launchForm = .plain
+        let (login, loginID) = surface(1)
+        let (pane, paneID) = surface(2)
+        connection.start(login, id: loginID, env: [:])
+        fake.ready?()
+        connection.start(pane, id: paneID, env: [:])
+        fake.connect()
+
+        XCTAssertEqual(login.lastConfig?.args.last, "devbox")
+        XCTAssertEqual(pane.lastConfig?.args.last, "devbox")
+        XCTAssertFalse(pane.lastConfig?.args.contains("-t") ?? true)
+    }
+
+    func test_everyPaneOfAnOrdinaryHost_launchesTheLoginShellAsThisTerminal() {
+        let (login, loginID) = surface(1)
+        let (pane, paneID) = surface(2)
+        connection.start(login, id: loginID, env: [:])
+        fake.ready?()
+        connection.start(pane, id: paneID, env: [:])
+        fake.connect()
+
+        XCTAssertEqual(pane.lastConfig?.args.suffix(4), ["-t", "--", "devbox", SSHLaunch.loginShellCommand])
     }
 
     func test_theLoginWaitsForTheHostsConfig_beforeLookingForAMaster() {

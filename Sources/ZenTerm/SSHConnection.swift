@@ -200,7 +200,8 @@ final class SSHConnection {
     }
 
     private func launch(_ surface: TerminalSurface, env: [String: String]) {
-        surface.start(SSHLaunch.config(host: host, controlPath: controlPath, env: env))
+        guard let form else { return assertionFailure("a host surface launched before its config was read") }
+        surface.start(SSHLaunch.config(host: host, controlPath: controlPath, form: form, env: env))
     }
 }
 

@@ -189,7 +189,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(c.selectedHostForTesting, host)
         XCTAssertEqual(spawned.count, 1)
         XCTAssertEqual(spawned[0].lastConfig?.command, "/usr/bin/ssh")
-        XCTAssertEqual(spawned[0].lastConfig?.args.last, "devbox")
+        XCTAssertEqual(spawned[0].lastConfig?.args.suffix(2), ["devbox", SSHLaunch.loginShellCommand])
         XCTAssertEqual(c.window.title, "devbox")
     }
 
@@ -408,7 +408,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         fake.connect()
         XCTAssertEqual(scratch.startCount, 1)
         XCTAssertEqual(scratch.lastConfig?.command, "/usr/bin/ssh")
-        XCTAssertEqual(scratch.lastConfig?.args.last, "devbox")
+        XCTAssertEqual(scratch.lastConfig?.args.suffix(2), ["devbox", SSHLaunch.loginShellCommand])
         XCTAssertEqual(fake.socketWatches, 1, "Scratch rides the login's connection, so nothing asks again")
     }
 
