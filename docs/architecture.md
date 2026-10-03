@@ -176,10 +176,10 @@ single modal slot, tab bar and dock. `WorkspaceController` owns one workspace: a
 its `TabController`s and their titles. `TabController` owns one tab: a
 `PaneCanvasController` and two drawers.
 
-- **A window starts with one workspace, with no config entry**, and one workspace is
-  always active. A workspace without a config entry is named "Workspace N", the lowest
-  number no open workspace in the window holds. ⌘⌃T opens one at the end of the sidebar,
-  in the home folder: a workspace is a place, and one opened on the focused pane's folder
+- **A window starts with one workspace, with no config entry**, and shows either a workspace
+  or an SSH host's Connect screen, which has no workspace behind it. A workspace without a
+  config entry is named "Workspace N", the lowest number no open workspace in the window holds.
+  ⌘⌃T opens one at the end of the sidebar, in the home folder: a workspace is a place, and one opened on the focused pane's folder
   would collide with the open workspace already identified by it. A workspace is open when
   one with a config entry is open at its folder, so renaming it in Settings does not open a
   second copy.
