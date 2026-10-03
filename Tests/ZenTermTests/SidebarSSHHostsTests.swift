@@ -44,7 +44,7 @@ final class SidebarSSHHostsTests: WindowTestCase {
     private func pin(hosts: [String]) {
         var config = GeneralConfig.builtIn
         config.ai = "pi"
-        config.sshHosts = hosts
+        config.sshHosts = hosts.map { SSHHostEntry(alias: $0) }
         GeneralConfig.setCurrentForTesting(config)
     }
 

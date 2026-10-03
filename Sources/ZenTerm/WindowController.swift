@@ -309,7 +309,7 @@ final class WindowController: NSObject {
     private var configObserver: NSObjectProtocol?
     private var hostStatusObserver: NSObjectProtocol?
     // Read at the change, not from the sidebar, which a disconnect's status change redraws first.
-    private var hostOrder = GeneralConfig.current.sshHosts.map(SSHHostID.init)
+    private var hostOrder = GeneralConfig.current.sshHostAliases.map(SSHHostID.init)
     private var attentionObserver: NSObjectProtocol?
     /// Raises the window holding the agent that has waited longest and lands on it. False when it has gone.
     var revealWaitingAgentElsewhere: ((Int) -> Bool)?
@@ -566,7 +566,7 @@ final class WindowController: NSObject {
                 }
                 if change.contains(.sshHosts) {
                     let shownHosts = self.hostOrder
-                    self.hostOrder = GeneralConfig.current.sshHosts.map(SSHHostID.init)
+                    self.hostOrder = GeneralConfig.current.sshHostAliases.map(SSHHostID.init)
                     self.disconnectRemovedHosts()
                     self.leaveRemovedHost(shownHosts: shownHosts)
                     self.renderTabBar()
@@ -1163,7 +1163,9 @@ final class WindowController: NSObject {
 
     // Leaves an open card up, since a host is usually removed from inside Settings.
     private func leaveRemovedHost(shownHosts: [SSHHostID]) {
-        guard case .host(let host) = selection, !GeneralConfig.current.sshHosts.contains(host.alias) else { return }
+        guard case .host(let host) = selection, !GeneralConfig.current.sshHostAliases.contains(host.alias) else {
+            return
+        }
         let place = shownHosts.firstIndex(of: host) ?? shownHosts.count
         let nearestHost = (shownHosts[min(place + 1, shownHosts.count)...] + shownHosts[..<place].reversed())
             .lazy.compactMap { next in self.workspaces.first { $0.host == next } }.first
@@ -1208,7 +1210,7 @@ final class WindowController: NSObject {
     }
 
     private var order: WorkspaceOrder {
-        let hosts = GeneralConfig.current.sshHosts.map(SSHHostID.init).map {
+        let hosts = GeneralConfig.current.sshHostAliases.map(SSHHostID.init).map {
             WorkspaceOrder.Host(id: $0, status: SSHHostStatusCenter.shared.status(of: $0))
         }
         return WorkspaceOrder(workspaces, hosts: hosts)
@@ -1722,7 +1724,7 @@ final class WindowController: NSObject {
         case "agents", "agent-notifications", "attention-toast", "completion-toast", "toast-duration",
             "automatic-update-checks":
             return .general
-        case "ssh-hosts":
+        case "ssh-host":
             return .sshHosts
         default:
             return .top
@@ -1986,7 +1988,7 @@ final class WindowController: NSObject {
 
     private func addSSHHost(_ host: String) {
         do {
-            try SSHHostsWriter.set(host, on: true)
+            try SSHHostsWriter.add(SSHHostEntry(alias: host))
         } catch {
             toasts.show(
                 ToastContent(
@@ -2608,7 +2610,7 @@ final class WindowController: NSObject {
 
     // Leaves an open card up, since a host is usually turned off from inside Settings.
     private func disconnectRemovedHosts() {
-        let enabled = GeneralConfig.current.sshHosts
+        let enabled = GeneralConfig.current.sshHostAliases
         for workspace in workspaces {
             guard let host = workspace.host, !enabled.contains(host.alias) else { continue }
             Log.info("ssh host turned off, so it disconnects", category: .workspace)

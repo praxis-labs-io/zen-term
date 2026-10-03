@@ -208,7 +208,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   parent is closed. A group's first member mints its `seat` and later members inherit it,
   so the group holds its place as members close and reopen. A workspace with no config
   entry is never in a group. `navigable` skips ghosts and SSH hosts that are not Connected, and
-  lists connected hosts after the workspaces in `ssh-hosts` order; the sidebar's numbers, ⌘⌃1…9 and
+  lists connected hosts after the workspaces in `ssh-host` order; the sidebar's numbers, ⌘⌃1…9 and
   ⌘⌃[ ] read it, and a close's landing reads its workspaces alone. ⌘⌃[ ] from a host that is not
   connected step to the nearest stop by sidebar position. A removed host's Connect screen lands on
   the nearest host row with a workspace in this window, else the first workspace. A connected
@@ -574,14 +574,15 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
 - **No file watcher.** Hand edits apply on ⌘⇧,.
 - **`~/.ssh/config` is read, never written.** Settings > SSH Hosts lists its literal `Host`
   aliases (following `Include`, skipping `Match` blocks) off-main each time it mounts, and
-  `ssh -G` resolves each one. `ssh-hosts` holds which are on, plus typed hosts, and the
-  sidebar's SSH rows show their status as a dot (`SSHHostStatus.ink`): Offline takes the idle
-  agent row's ink on the dot and the title, Online is positive, Connected is accent, and the
-  status word is the row's accessibility value rather than visible text. While an agent in a
-  connected host's workspace waits, the dot takes the waiting ink a workspace row's does, from
-  the same rollup, and the value reads `Connected, Agent waiting`.
+  `ssh -G` resolves each one. The `ssh-host` lines hold which are on, plus typed hosts, each
+  with an optional name, and the sidebar's SSH rows show their status as a dot
+  (`SSHHostStatus.ink`): Offline takes the idle agent row's ink on the dot and the title,
+  Online is positive, Connected is accent, and the status word is the row's accessibility
+  value rather than visible text. While an agent in a connected host's workspace waits, the
+  dot takes the waiting ink a workspace row's does, from the same rollup, and the value reads
+  `Connected, Agent waiting`.
 - **`SSHHostProbe` keeps each host's reachability in `SSHHostStatusCenter`, and never logs in.**
-  Off-main, at most four at a time, it resolves the host with `ssh -G`, once until `ssh-hosts`,
+  Off-main, at most four at a time, it resolves the host with `ssh -G`, once until the host list,
   the network, or the date on `~/.ssh/config` or a file it includes changes, because
   `Match exec` can prompt, and reads the greeting on a TCP
   connection to its port, with separate connect and greeting timeouts: an `SSH-` line, after
@@ -614,7 +615,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   closes the workspace back to Connect. Closing a host's last pane, tab or workspace returns
   to Connect and never counts as closing the window, even when the host is all the window holds.
   ⌘⌃W on a host is Disconnect, in the palette too: it never asks, even while connecting, and ↵
-  on Connect reconnects. A host leaving `ssh-hosts`, from Settings or a hand edit, disconnects in every
+  on Connect reconnects. A host leaving the `ssh-host` lines, from Settings or a hand edit, disconnects in every
   window and lands the way a removed host's Connect screen does. Settings warns first, in a
   `ConfirmCard` over Settings, when the host is open in any window.
 - **A host's workspace ends its master when it shuts down, after its surfaces.** Ending it first

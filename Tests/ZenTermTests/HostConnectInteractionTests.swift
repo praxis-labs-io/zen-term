@@ -29,7 +29,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         }
         WindowController.isPresent = { _ in true }
         var config = GeneralConfig.builtIn
-        config.sshHosts = [host.alias]
+        config.sshHosts = [SSHHostEntry(alias: host.alias)]
         config.floats = [Self.pi]
         config.ai = "pi"
         GeneralConfig.setCurrentForTesting(config)
@@ -117,7 +117,7 @@ final class HostConnectInteractionTests: WindowTestCase {
     private func longHostWindow() -> (WindowController, SSHHostID) {
         let long = SSHHostID(alias: "build-runner-07.internal")
         var config = GeneralConfig.current
-        config.sshHosts = [host.alias, long.alias]
+        config.sshHosts = [SSHHostEntry(alias: host.alias), SSHHostEntry(alias: long.alias)]
         GeneralConfig.setCurrentForTesting(config)
         let c = makeWindow()
         c.selectHostForTesting(long)

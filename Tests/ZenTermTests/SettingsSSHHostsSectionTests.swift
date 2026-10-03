@@ -129,7 +129,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     func test_groupsConfigHostsWithOnOff_andAddedHostsWithRemove() throws {
         try seed(
             ssh: "Host devbox\nHost prod\n",
-            config: "ssh-hosts = deploy@10.0.0.5, prod\n")
+            config: "ssh-host = deploy@10.0.0.5\nssh-host = prod\n")
 
         let detail = mount()
 
@@ -143,7 +143,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     }
 
     func test_noConfigHosts_listsOnlyAddedHosts() throws {
-        try seed(ssh: nil, config: "ssh-hosts = deploy@10.0.0.5\n")
+        try seed(ssh: nil, config: "ssh-host = deploy@10.0.0.5\n")
 
         let detail = mount()
 
@@ -179,7 +179,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     }
 
     func test_anUnreadableSSHConfig_saysSo_andListsEnabledHostsAsAdded() throws {
-        try seed(ssh: "Host devbox\n", config: "ssh-hosts = devbox\n")
+        try seed(ssh: "Host devbox\n", config: "ssh-host = devbox\n")
         try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: sshConfig.path)
 
         let detail = mount()
@@ -191,27 +191,28 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     }
 
     func test_turningAHostOn_appendsItToTheConfig() throws {
-        try seed(ssh: "Host devbox\nHost prod\n", config: "ssh-hosts = prod\n")
+        try seed(ssh: "Host devbox\nHost prod\n", config: "ssh-host = prod\n")
         let detail = mount()
 
         press(arrow(123), on: toggles(in: detail)[0])
 
-        XCTAssertTrue(configText().contains("ssh-hosts = prod, devbox"), "got: \(configText())")
-        XCTAssertEqual(GeneralConfig.current.sshHosts, ["prod", "devbox"])
+        XCTAssertTrue(configText().contains("ssh-host = prod\nssh-host = devbox"), "got: \(configText())")
+        XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["prod", "devbox"])
     }
 
     func test_turningTheLastHostOff_removesTheKey() throws {
-        try seed(ssh: "Host devbox\n", config: "ssh-hosts = devbox\n")
+        try seed(ssh: "Host devbox\n", config: "ssh-host = devbox\n")
         let detail = mount()
 
         press(arrow(124), on: toggles(in: detail)[0])
 
-        XCTAssertFalse(configText().contains("ssh-hosts"), "got: \(configText())")
-        XCTAssertEqual(GeneralConfig.current.sshHosts, [])
+        XCTAssertFalse(configText().contains("ssh-host"), "got: \(configText())")
+        XCTAssertEqual(GeneralConfig.current.sshHostAliases, [])
     }
 
     func test_remove_writesTheHostOut_andKeepsTheRowFaintWithUndoFocused() throws {
-        try seed(ssh: "Host devbox\n", config: "ssh-hosts = devbox, deploy@10.0.0.5, ops@10.0.0.6\n")
+        try seed(
+            ssh: "Host devbox\n", config: "ssh-host = devbox\nssh-host = deploy@10.0.0.5\nssh-host = ops@10.0.0.6\n")
         let detail = mount()
         let button = removeButtons(in: detail)[0]
         let row = rows(in: detail)[1]
@@ -219,7 +220,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         press(key(36), on: button)
         settle()
 
-        XCTAssertEqual(GeneralConfig.current.sshHosts, ["devbox", "ops@10.0.0.6"])
+        XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["devbox", "ops@10.0.0.6"])
         XCTAssertEqual(captions(in: detail), ["devbox", "deploy@10.0.0.5", "ops@10.0.0.6"])
         XCTAssertEqual(button.title, "Undo")
         XCTAssertTrue(row.isDimmed)
@@ -229,7 +230,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     }
 
     func test_undo_restoresTheHostAtItsOriginalPosition() throws {
-        try seed(ssh: nil, config: "ssh-hosts = alpha, deploy@10.0.0.5, ops@10.0.0.6\n")
+        try seed(ssh: nil, config: "ssh-host = alpha\nssh-host = deploy@10.0.0.5\nssh-host = ops@10.0.0.6\n")
         let detail = mount()
         let button = removeButtons(in: detail)[1]
         let row = rows(in: detail)[1]
@@ -237,8 +238,10 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         press(key(36), on: button)
         press(key(36), on: button)
 
-        XCTAssertEqual(GeneralConfig.current.sshHosts, ["alpha", "deploy@10.0.0.5", "ops@10.0.0.6"])
-        XCTAssertTrue(configText().contains("ssh-hosts = alpha, deploy@10.0.0.5, ops@10.0.0.6"), configText())
+        XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["alpha", "deploy@10.0.0.5", "ops@10.0.0.6"])
+        XCTAssertTrue(
+            configText().contains("ssh-host = alpha\nssh-host = deploy@10.0.0.5\nssh-host = ops@10.0.0.6"), configText()
+        )
         XCTAssertEqual(button.title, "Remove")
         XCTAssertFalse(row.isDimmed)
         XCTAssertEqual(rowCaption(row)?.textColor, Theme.current.chrome.foreground.nsColor)
@@ -247,23 +250,49 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
             removeButtons(in: detail).map(\.title), ["Remove", "Remove", "Remove"], "no other host was removed")
     }
 
+    func test_undo_restoresTheHostsName() throws {
+        try seed(ssh: nil, config: "ssh-host = alpha\nssh-host = deploy@10.0.0.5: Deploy box\n")
+        let detail = mount()
+        let button = removeButtons(in: detail)[1]
+
+        press(key(36), on: button)
+        XCTAssertEqual(GeneralConfig.current.sshHosts, [SSHHostEntry(alias: "alpha")])
+        press(key(36), on: button)
+
+        XCTAssertEqual(
+            GeneralConfig.current.sshHosts,
+            [SSHHostEntry(alias: "alpha"), SSHHostEntry(alias: "deploy@10.0.0.5", name: "Deploy box")])
+    }
+
+    func test_turningAHostOffAndOnAgain_keepsItsName() throws {
+        try seed(ssh: "Host devbox\n", config: "ssh-host = devbox: Build box\n")
+        let detail = mount()
+        let toggle = toggles(in: detail)[0]
+
+        press(arrow(124), on: toggle)
+        XCTAssertEqual(GeneralConfig.current.sshHosts, [])
+        press(arrow(123), on: toggle)
+
+        XCTAssertEqual(GeneralConfig.current.sshHosts, [SSHHostEntry(alias: "devbox", name: "Build box")])
+    }
+
     func test_undoingSeveralRemovals_inEitherOrder_restoresTheOriginalOrder() throws {
         for undoOrder in [[0, 1], [1, 0]] {
-            try seed(ssh: nil, config: "ssh-hosts = alpha, beta, gamma\n")
+            try seed(ssh: nil, config: "ssh-host = alpha\nssh-host = beta\nssh-host = gamma\n")
             let detail = mount()
             let buttons = removeButtons(in: detail)
 
             press(key(36), on: buttons[0])
             press(key(36), on: buttons[1])
-            XCTAssertEqual(GeneralConfig.current.sshHosts, ["gamma"])
+            XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["gamma"])
             for index in undoOrder { press(key(36), on: buttons[index]) }
 
-            XCTAssertEqual(GeneralConfig.current.sshHosts, ["alpha", "beta", "gamma"], "undo order \(undoOrder)")
+            XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["alpha", "beta", "gamma"], "undo order \(undoOrder)")
         }
     }
 
     func test_aHeldReturn_doesNotFlipTheHostBack() throws {
-        try seed(ssh: nil, config: "ssh-hosts = deploy@10.0.0.5, ops@10.0.0.6\n")
+        try seed(ssh: nil, config: "ssh-host = deploy@10.0.0.5\nssh-host = ops@10.0.0.6\n")
         let detail = mount()
         let button = removeButtons(in: detail)[0]
 
@@ -271,7 +300,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         for _ in 0..<2 {
             press(key(36, isARepeat: true), on: button)
 
-            XCTAssertEqual(GeneralConfig.current.sshHosts, ["ops@10.0.0.6"])
+            XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["ops@10.0.0.6"])
             XCTAssertEqual(button.title, "Undo")
         }
     }
@@ -283,7 +312,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
             return host == "ops" ? "drew@10.0.0.7" : nil
         }
         defer { (0..<8).forEach { _ in gate.signal() } }
-        try seed(ssh: nil, config: "ssh-hosts = deploy@10.0.0.5, ops\n")
+        try seed(ssh: nil, config: "ssh-host = deploy@10.0.0.5\nssh-host = ops\n")
         let detail = mount()
         let button = removeButtons(in: detail)[0]
         press(key(36), on: button)
@@ -299,7 +328,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     }
 
     func test_aRemovedHost_isGoneNextTime() throws {
-        try seed(ssh: nil, config: "ssh-hosts = deploy@10.0.0.5, ops@10.0.0.6\n")
+        try seed(ssh: nil, config: "ssh-host = deploy@10.0.0.5\nssh-host = ops@10.0.0.6\n")
         press(key(36), on: removeButtons(in: mount())[0])
 
         let reopened = mount()
@@ -309,7 +338,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     }
 
     func test_removeButton_namesItsHostForAccessibility() throws {
-        try seed(ssh: nil, config: "ssh-hosts = deploy@10.0.0.5\n")
+        try seed(ssh: nil, config: "ssh-host = deploy@10.0.0.5\n")
         let detail = mount()
         let button = removeButtons(in: detail)[0]
 
@@ -319,7 +348,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     }
 
     func test_aFailedRemove_saysSo_andLeavesTheRowAsItWas() throws {
-        try seed(ssh: nil, config: "ssh-hosts = deploy@10.0.0.5\n")
+        try seed(ssh: nil, config: "ssh-host = deploy@10.0.0.5\n")
         let detail = mount()
         let button = removeButtons(in: detail)[0]
         let row = rows(in: detail)[0]
@@ -328,7 +357,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
 
         press(key(36), on: button)
 
-        XCTAssertEqual(GeneralConfig.current.sshHosts, ["deploy@10.0.0.5"])
+        XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["deploy@10.0.0.5"])
         XCTAssertEqual(button.title, "Remove")
         XCTAssertFalse(row.isDimmed)
         XCTAssertTrue(
@@ -374,7 +403,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         }
         c.mountAndStart()
         let content = try XCTUnwrap(c.window.contentView)
-        c.openSettings(for: .setting(key: "ssh-hosts"))
+        c.openSettings(for: .setting(key: "ssh-host"))
         waitUntil(!captions(in: content).isEmpty, "Settings to land on SSH Hosts")
         let add = try XCTUnwrap(
             descendants(of: content).compactMap { $0 as? AppButton }.first { $0.title == "＋ Add Host…" })
@@ -389,7 +418,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
 
     func test_addingAHost_fromSettings_listsItEverywhere_andFocusesIt() throws {
         try addHostThroughSettings("deploy@10.0.0.5", ssh: "Host devbox\n") { c, content in
-            XCTAssertTrue(configText().contains("ssh-hosts = deploy@10.0.0.5"), "got: \(configText())")
+            XCTAssertTrue(configText().contains("ssh-host = deploy@10.0.0.5"), "got: \(configText())")
             waitUntil(
                 captions(in: content) == ["devbox", "deploy@10.0.0.5"], "Settings to reopen listing the new host")
             XCTAssertEqual(toggles(in: content).map(\.selectedIndex), [1])

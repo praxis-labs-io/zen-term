@@ -27,7 +27,7 @@ final class HostAgentTests: WindowTestCase {
         }
         WindowController.isPresent = { _ in true }
         var config = GeneralConfig.builtIn
-        config.sshHosts = [host.alias]
+        config.sshHosts = [SSHHostEntry(alias: host.alias)]
         GeneralConfig.setCurrentForTesting(config)
         fake = FakeSSHWatchers()
         SSHConnection.watchersOverrideForTesting = fake.watchers

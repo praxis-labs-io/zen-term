@@ -18,7 +18,7 @@ final class SSHHostTurnOffTests: WindowTestCase {
         configRoot = try makeTempDir()
         let sshConfig = try makeTempDir().appendingPathComponent("config")
         try "Host devbox\nHost prod\n".write(to: sshConfig, atomically: true, encoding: .utf8)
-        try "ssh-hosts = devbox, prod, deploy@10.0.0.5\n"
+        try "ssh-host = devbox\nssh-host = prod\nssh-host = deploy@10.0.0.5\n"
             .write(to: configRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         ConfigLoader.defaultRootOverrideForTesting = configRoot
         SSHConfigHosts.userConfigOverrideForTesting = sshConfig
@@ -71,7 +71,7 @@ final class SSHHostTurnOffTests: WindowTestCase {
 
     private func openSettings(in c: WindowController) throws -> NSView {
         let content = try XCTUnwrap(c.window.contentView)
-        c.openSettings(for: .setting(key: "ssh-hosts"))
+        c.openSettings(for: .setting(key: "ssh-host"))
         waitUntil(toggles(in: content).count == 2, "Settings to land on SSH Hosts")
         return content
     }
@@ -126,7 +126,7 @@ final class SSHHostTurnOffTests: WindowTestCase {
         XCTAssertTrue(
             texts(in: card).contains("Turning off devbox will disconnect it and stop everything running in it."))
         XCTAssertNotNil(settings(in: content), "the warning keeps Settings open")
-        XCTAssertTrue(GeneralConfig.current.sshHosts.contains("devbox"))
+        XCTAssertTrue(GeneralConfig.current.sshHostAliases.contains("devbox"))
         XCTAssertTrue(c.holdsHost(devbox))
     }
 
@@ -143,7 +143,7 @@ final class SSHHostTurnOffTests: WindowTestCase {
         XCTAssertNil(card(in: content))
         XCTAssertEqual(toggle.selectedIndex, 0, "On again")
         XCTAssertIdentical(c.window.firstResponder, toggle)
-        XCTAssertTrue(GeneralConfig.current.sshHosts.contains("devbox"))
+        XCTAssertTrue(GeneralConfig.current.sshHostAliases.contains("devbox"))
         XCTAssertTrue(c.holdsHost(devbox))
         XCTAssertEqual(fake.ended, [])
     }
@@ -177,7 +177,7 @@ final class SSHHostTurnOffTests: WindowTestCase {
         try button("Turn Off", in: XCTUnwrap(card(in: content))).onTap()
         drainMainQueue()
 
-        XCTAssertFalse(GeneralConfig.current.sshHosts.contains("devbox"))
+        XCTAssertFalse(GeneralConfig.current.sshHostAliases.contains("devbox"))
         XCTAssertFalse(c.holdsHost(devbox))
         XCTAssertEqual(fake.ended, [42])
         XCTAssertNotEqual(c.selectedHostForTesting, devbox, "it lands where a removed host's Connect screen does")
@@ -203,7 +203,7 @@ final class SSHHostTurnOffTests: WindowTestCase {
         try turnOff(toggles(in: content)[0], in: c)
 
         XCTAssertNil(card(in: content))
-        XCTAssertFalse(GeneralConfig.current.sshHosts.contains("devbox"))
+        XCTAssertFalse(GeneralConfig.current.sshHostAliases.contains("devbox"))
     }
 
     func test_removingAConnectedAddedHost_warnsWithRemove_thenDisconnects() throws {
@@ -246,7 +246,7 @@ final class SSHHostTurnOffTests: WindowTestCase {
         open(typed, in: c)
         open(devbox, in: c)
 
-        try "ssh-hosts = prod, deploy@10.0.0.5\n".write(
+        try "ssh-host = prod\nssh-host = deploy@10.0.0.5\n".write(
             to: configRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         AppConfig.reload()
         drainMainQueue()
@@ -259,7 +259,7 @@ final class SSHHostTurnOffTests: WindowTestCase {
         let c = makeWindow()
         open(devbox, in: c)
 
-        try "ssh-hosts = prod\n".write(
+        try "ssh-host = prod\n".write(
             to: configRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         AppConfig.reload()
         drainMainQueue()

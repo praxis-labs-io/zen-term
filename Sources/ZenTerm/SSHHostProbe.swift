@@ -71,6 +71,7 @@ final class SSHHostProbe {
     }
 
     func setHosts(_ next: [String]) {
+        guard next != hosts else { return }
         for host in hosts where !next.contains(host) {
             proxied.remove(host)
             center.setReachable(false, host: SSHHostID(alias: host))

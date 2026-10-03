@@ -247,6 +247,18 @@ final class SSHHostProbeTests: XCTestCase {
         XCTAssertEqual(answers.resolveCount("devbox"), 2)
     }
 
+    func test_theSameHostsAgain_keepTheirResolution() {
+        probe.setHosts(["devbox"])
+        waitUntil(answers.askCount("devbox") == 1, "the first round")
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+
+        probe.setHosts(["devbox"])
+        probe.probeAll()
+
+        waitUntil(answers.askCount("devbox") == 2, "the next round")
+        XCTAssertEqual(answers.resolveCount("devbox"), 1, "renaming a host must not cost another ssh -G")
+    }
+
     func test_aWake_waitsForTheNetworkToSettleBeforeProbing() {
         probe.setHosts(["devbox"])
         waitUntil(answers.askCount("devbox") == 1, "the first round")

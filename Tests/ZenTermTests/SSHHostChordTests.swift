@@ -42,7 +42,7 @@ final class SSHHostChordTests: WindowTestCase {
     private func makeWindow(hosts: [String], offline: [String] = [], connected: [String] = []) -> WindowController {
         self.hosts = hosts
         var config = GeneralConfig.builtIn
-        config.sshHosts = hosts
+        config.sshHosts = hosts.map { SSHHostEntry(alias: $0) }
         GeneralConfig.setCurrentForTesting(config)
         for host in hosts where !offline.contains(host) {
             SSHHostStatusCenter.shared.setReachable(true, host: SSHHostID(alias: host))
@@ -219,7 +219,7 @@ final class SSHHostChordTests: WindowTestCase {
 
     private func configure(hosts: [String]) {
         var config = GeneralConfig.current
-        config.sshHosts = hosts
+        config.sshHosts = hosts.map { SSHHostEntry(alias: $0) }
         GeneralConfig.setCurrentForTesting(config)
         NotificationCenter.default.post(
             name: .configDidChange, object: nil, userInfo: [ConfigChange.userInfoKey: ConfigChange.sshHosts])

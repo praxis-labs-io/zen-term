@@ -54,7 +54,7 @@ struct GeneralConfig: Equatable {
 
     var ai: String?
     var agents: [String] = []
-    var sshHosts: [String] = []
+    var sshHosts: [SSHHostEntry] = []
 
     var floats: [ToolFloat]
     var keymap: [Chord: KeyInterceptor.ReservedChord]
@@ -110,6 +110,12 @@ struct GeneralConfig: Equatable {
     var listedAgents: [String] {
         let legacy = ai.flatMap(AgentRoster.program(of:))?.lowercased()
         return legacy.map { agents.contains($0) ? agents : agents + [$0] } ?? agents
+    }
+
+    var sshHostAliases: [String] { sshHosts.map(\.alias) }
+
+    func displayName(of host: SSHHostID) -> String {
+        sshHosts.first { $0.alias == host.alias }?.name ?? host.alias
     }
 
     var terminalBehavior: TerminalBehavior {
