@@ -458,8 +458,10 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   like a pane through the same `syncWindowFocus` and live-apply paths. Its left edge leads into the
   sidebar (or shows the same hint a pane does when the sidebar is hidden); up, down and right do
   nothing. It has no tab, so dispatch drops any chord that is not `worksWithoutTab`, except ⌘T,
-  which connects, and a float toggle, which opens or closes only a running float that is open or
-  needs you and is silent otherwise, and a card stays open for a chord it would drop. App-global
+  which connects, ⌘W, which lands where a close of the last workspace row would (or, with no
+  workspace left, confirms and closes the window as the last pane does), and a float toggle, which opens or closes only a running
+  float that is open or needs you and is silent otherwise, and a card stays open for a chord it
+  would drop. App-global
   chords bypass it in `AppDelegate.route`; a palette pick
   of one returns there through `onAppGlobalCommand`. The sidebar toggle passes through an
   open card, which stays open. A card is offered every other chord first
