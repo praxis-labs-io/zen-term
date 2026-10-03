@@ -1190,4 +1190,36 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertTrue(
             screen.detachedForTesting.contains(screen.routeForTesting), "the route should give way before Connect does")
     }
+
+    func test_atTheNarrowestWidths_withTheWidestGutter_theScreenFitsTheWindow() throws {
+        var config = GeneralConfig.current
+        config.windowGutter = 64
+        GeneralConfig.setCurrentForTesting(config)
+        let (c, _) = longHostWindow()
+        let screen = try XCTUnwrap(c.connectViewForTesting)
+        let content = try XCTUnwrap(c.window.contentView)
+
+        let widths = [(SidebarController.minimumDockableWidth, true), (c.window.contentMinSize.width, false)]
+        for (width, docked) in widths {
+            c.window.setContentSize(NSSize(width: width, height: 800))
+            c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
+            content.layoutSubtreeIfNeeded()
+            XCTAssertEqual(c.sidebarForTesting.isDocked, docked, "precondition at \(width)")
+
+            let route = screen.routeForTesting
+            XCTAssertNotNil(route.window, "precondition: tall enough to keep the route at \(width)")
+            let routeFrame = route.convert(route.bounds, to: content)
+            let panelFrame = screen.panelForTesting.convert(screen.panelForTesting.bounds, to: content)
+            XCTAssertEqual(content.bounds.width, width, "the screen pushed the window's content wider at \(width)")
+            XCTAssertLessThanOrEqual(panelFrame.maxX, width, "the screen runs off the window at \(width)")
+            XCTAssertLessThanOrEqual(routeFrame.maxX, panelFrame.maxX, "the route runs off the screen at \(width)")
+            XCTAssertGreaterThanOrEqual(routeFrame.minX, panelFrame.minX, "the route runs off the screen at \(width)")
+            let detail = screen.detailFieldForTesting
+            XCTAssertGreaterThanOrEqual(
+                detail.frame.height, detail.intrinsicContentSize.height, "the detail is cut short at \(width)")
+            XCTAssertLessThanOrEqual(
+                detail.intrinsicContentSize.width, detail.frame.width + 1,
+                "the detail wraps wider than it is at \(width)")
+        }
+    }
 }

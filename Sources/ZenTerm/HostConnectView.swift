@@ -32,6 +32,7 @@ final class HostConnectView: NSView {
     private let connectButton: AppButton
     private let stack = NSStackView()
     private let panel: PanelHostView
+    private let content = NSView()
     private var gutterConstraints: [NSLayoutConstraint] = []
 
     init(
@@ -43,7 +44,6 @@ final class HostConnectView: NSView {
         self.onConnect = onConnect
         route = HostRouteView(host: host)
         connectButton = AppButton(title: "Connect", variant: .filled, shortcut: "⏎", onTap: onConnect)
-        let content = NSView()
         panel = PanelHostView(content: content, meta: nil, onFocusRequest: onFocusRequest)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
@@ -59,6 +59,7 @@ final class HostConnectView: NSView {
         detail.font = Self.detailFont
         detail.alignment = .center
         detail.preferredMaxLayoutWidth = Self.detailMaxWidth
+        detail.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         [route, eyebrow, title, destinationLine, detail, connectButton].forEach(stack.addArrangedSubview)
         stack.orientation = .vertical
@@ -98,6 +99,9 @@ final class HostConnectView: NSView {
             stack.leadingAnchor.constraint(greaterThanOrEqualTo: content.leadingAnchor, constant: Self.edgeSpacing),
             stack.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -Self.edgeSpacing),
         ])
+        content.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(fitDetailToWidth), name: NSView.frameDidChangeNotification, object: content)
         route.setStatus(status)
         setDestination(destination)
         reapplyTheme()
@@ -149,6 +153,13 @@ final class HostConnectView: NSView {
         panel.reapplyChromeLayout()
     }
 
+    @objc private func fitDetailToWidth() {
+        let width = min(Self.detailMaxWidth, content.frame.width - Self.edgeSpacing * 2)
+        guard width > 0, detail.preferredMaxLayoutWidth != width else { return }
+        detail.preferredMaxLayoutWidth = width
+        detail.invalidateIntrinsicContentSize()
+    }
+
     private func applyDetail() {
         detail.stringValue =
             status == .offline ? "\(host.name) appears offline. Connect anyway?" : "Signs in with your ssh config."
@@ -168,6 +179,7 @@ final class HostConnectView: NSView {
 
     var titleForTesting: String { title.stringValue }
     var detailForTesting: String { detail.stringValue }
+    var detailFieldForTesting: NSTextField { detail }
     var destinationForTesting: String? { destinationLine.isHidden ? nil : destinationLine.stringValue }
     var routeForTesting: HostRouteView { route }
     var detachedForTesting: [NSView] { stack.detachedViews }
