@@ -227,7 +227,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         let before = c.workspaceIDsForTesting
 
         for chord: KeyInterceptor.ReservedChord in [
-            .splitVertical, .splitHorizontal, .toggleBottomDrawer, .toggleRightDrawer, .closePane, .closeTab,
+            .splitVertical, .splitHorizontal, .toggleBottomDrawer, .toggleRightDrawer, .closeTab, .closeWorkspace,
             .toggleToolFloat(ToolFloat.scratch.id),
         ] {
             c.handle(chord)
@@ -319,13 +319,18 @@ final class HostConnectInteractionTests: WindowTestCase {
     }
 
     private func pressDisconnect(in c: WindowController) throws {
+        try pressW([.command, .control], in: c)
+    }
+
+    private func pressW(_ modifiers: NSEvent.ModifierFlags, in c: WindowController) throws {
         let keys = KeyInterceptor()
         keys.setKeymap(KeymapDefaults.map)
         keys.onReservedChord = { c.handle($0) }
+        let typed = modifiers.contains(.control) ? "\u{17}" : modifiers.contains(.option) ? "∑" : "w"
         let event = try XCTUnwrap(
             NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: [.command, .control], timestamp: 0,
-                windowNumber: c.window.windowNumber, context: nil, characters: "\u{17}",
+                with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 0,
+                windowNumber: c.window.windowNumber, context: nil, characters: typed,
                 charactersIgnoringModifiers: "w", isARepeat: false, keyCode: 13))
         XCTAssertNil(keys.route(event), "the chord is claimed, not passed to the pane")
     }
@@ -828,6 +833,60 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertFalse(c.workspaceIDsForTesting.contains(local))
         XCTAssertEqual(c.selectedHostForTesting, host)
         XCTAssertNil(c.connectViewForTesting, "it lands on the connected host's panes")
+    }
+
+    func test_cmdW_onConnect_landsOnTheNearestWorkspace_withoutAsking() throws {
+        let c = makeWindow()
+        c.handle(.newWorkspace)
+        let nearest = try XCTUnwrap(c.workspaceIDsForTesting.last)
+        c.activate(host)
+        XCTAssertNotNil(c.connectViewForTesting, "precondition: on the Connect screen")
+
+        try pressW(.command, in: c)
+
+        XCTAssertFalse(c.isConfirmOpen, "nothing runs on the Connect screen")
+        XCTAssertNil(c.selectedHostForTesting)
+        XCTAssertNil(c.connectViewForTesting)
+        XCTAssertEqual(
+            c.activeTabIDForTesting, c.tabIDsForTesting(workspace: nearest).first,
+            "the host rows sit below the last workspace")
+        XCTAssertEqual(c.workspaceIDsForTesting.count, 2, "no workspace closes on the way")
+    }
+
+    func test_cmdW_onConnect_withNoWorkspaceLeft_asksLikeTheLastPane_thenClosesTheWindow() throws {
+        let c = try onlyAConnectedHost()
+        c.handle(.closeWorkspace)
+        XCTAssertEqual(c.workspaceIDsForTesting, [], "precondition: nothing is open but the Connect screen")
+
+        try pressW(.command, in: c)
+
+        XCTAssertTrue(c.isConfirmOpen, "a close that takes the window confirms first")
+        XCTAssertTrue(showsToast("Closing this pane will close the window.", in: c))
+        XCTAssertTrue(c.window.isVisible, "nothing closes before the answer")
+
+        try press(button: "Close", in: c)
+
+        XCTAssertFalse(c.window.isVisible)
+    }
+
+    func test_cmdW_onConnect_withNoWorkspaceLeft_cancelled_staysOnConnect() throws {
+        let c = try onlyAConnectedHost()
+        c.handle(.closeWorkspace)
+
+        try pressW(.command, in: c)
+        try press(button: "Cancel", in: c)
+
+        XCTAssertTrue(c.window.isVisible)
+        XCTAssertNotNil(c.connectViewForTesting)
+    }
+
+    func test_closePaneFromThePalette_onConnect_leavesIt() throws {
+        let c = onConnectScreen()
+
+        try runFromPalette("Close Pane", in: c)
+
+        XCTAssertNil(c.selectedHostForTesting)
+        XCTAssertNil(c.connectViewForTesting)
     }
 
     private func middleClickFirstTab(in c: WindowController) throws {

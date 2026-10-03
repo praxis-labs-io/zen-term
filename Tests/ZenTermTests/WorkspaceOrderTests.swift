@@ -18,16 +18,18 @@ final class WorkspaceOrderTests: XCTestCase {
     private func ws(_ raw: Int) -> WorkspaceOrder.Target { .workspace(WorkspaceID(raw: raw)) }
     private func h(_ name: String) -> WorkspaceOrder.Target { .host(SSHHostID(name: name)) }
 
-    func test_navigable_putsReachableHostsAfterWorkspaces_inConfigOrder() {
+    func test_navigable_putsConnectedHostsAfterWorkspaces_inConfigOrder() {
         let order = WorkspaceOrder(
             [workspace(1), workspace(2)],
-            hosts: [host("live", .connected), host("down", .offline), host("up", .online)])
+            hosts: [
+                host("live", .connected), host("down", .offline), host("up", .online), host("also", .connected),
+            ])
 
-        XCTAssertEqual(order.navigable, [ws(1), ws(2), h("live"), h("up")])
+        XCTAssertEqual(order.navigable, [ws(1), ws(2), h("live"), h("also")])
     }
 
-    func test_navigable_withEveryHostOffline_isTheWorkspaces() {
-        let order = WorkspaceOrder([workspace(1)], hosts: [host("a", .offline), host("b", .offline)])
+    func test_navigable_withNoHostConnected_isTheWorkspaces() {
+        let order = WorkspaceOrder([workspace(1)], hosts: [host("a", .offline), host("b", .online)])
 
         XCTAssertEqual(order.navigable, [ws(1)])
     }
@@ -47,44 +49,51 @@ final class WorkspaceOrderTests: XCTestCase {
         XCTAssertEqual(order.navigableWorkspaces, [WorkspaceID(raw: 1), WorkspaceID(raw: 2)])
     }
 
-    func test_next_fromTheLastWorkspace_skipsOfflineHosts() {
-        let order = WorkspaceOrder([workspace(1)], hosts: [host("down", .offline), host("up", .online)])
+    func test_next_fromTheLastWorkspace_skipsHostsThatAreNotConnected() {
+        let order = WorkspaceOrder(
+            [workspace(1)], hosts: [host("down", .offline), host("up", .online), host("live", .connected)])
 
-        XCTAssertEqual(order.stop(after: ws(1), 1), h("up"))
+        XCTAssertEqual(order.stop(after: ws(1), 1), h("live"))
     }
 
     func test_next_fromTheLastHost_wrapsToTheFirstWorkspace() {
-        let order = WorkspaceOrder([workspace(1)], hosts: [host("up", .online), host("down", .offline)])
+        let order = WorkspaceOrder([workspace(1)], hosts: [host("live", .connected), host("up", .online)])
 
-        XCTAssertEqual(order.stop(after: h("up"), 1), ws(1))
+        XCTAssertEqual(order.stop(after: h("live"), 1), ws(1))
     }
 
-    func test_previous_fromTheFirstWorkspace_wrapsToTheLastReachableHost() {
+    func test_previous_fromTheFirstWorkspace_wrapsToTheLastConnectedHost() {
         let order = WorkspaceOrder(
             [workspace(1), workspace(2)],
-            hosts: [host("up", .online), host("live", .connected), host("down", .offline)])
+            hosts: [host("live", .connected), host("up", .online), host("down", .offline)])
 
         XCTAssertEqual(order.stop(after: ws(1), -1), h("live"))
     }
 
-    func test_fromAnOfflineHost_stepsToTheNearestReachableStopInEachDirection() {
+    func test_fromAHostThatIsNotConnected_stepsToTheNearestStopInEachDirection() {
         let order = WorkspaceOrder(
             [workspace(1)],
-            hosts: [host("before", .online), host("down", .offline), host("gone", .offline), host("after", .online)])
+            hosts: [
+                host("before", .connected), host("down", .offline), host("up", .online), host("after", .connected),
+            ])
 
-        XCTAssertEqual(order.stop(after: h("down"), 1), h("after"))
-        XCTAssertEqual(order.stop(after: h("down"), -1), h("before"))
+        for current in [h("down"), h("up")] {
+            XCTAssertEqual(order.stop(after: current, 1), h("after"))
+            XCTAssertEqual(order.stop(after: current, -1), h("before"))
+        }
     }
 
-    func test_fromAnOfflineHost_withNothingReachableAfterIt_wrapsToTheFirstWorkspace() {
-        let order = WorkspaceOrder([workspace(1)], hosts: [host("down", .offline)])
+    func test_fromAHostThatIsNotConnected_withNoConnectedHost_wrapsToTheFirstWorkspace() {
+        let order = WorkspaceOrder([workspace(1)], hosts: [host("up", .online), host("down", .offline)])
 
-        XCTAssertEqual(order.stop(after: h("down"), 1), ws(1))
-        XCTAssertEqual(order.stop(after: h("down"), -1), ws(1))
+        for current in [h("up"), h("down")] {
+            XCTAssertEqual(order.stop(after: current, 1), ws(1))
+            XCTAssertEqual(order.stop(after: current, -1), ws(1))
+        }
     }
 
     func test_theOnlyStop_hasNoNeighbour() {
-        let order = WorkspaceOrder([workspace(1)], hosts: [host("down", .offline)])
+        let order = WorkspaceOrder([workspace(1)], hosts: [host("up", .online), host("down", .offline)])
 
         XCTAssertNil(order.stop(after: ws(1), 1))
     }

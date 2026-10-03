@@ -207,11 +207,12 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   workspace at its parent's folder, or under a ghost row built from that origin when the
   parent is closed. A group's first member mints its `seat` and later members inherit it,
   so the group holds its place as members close and reopen. A workspace with no config
-  entry is never in a group. `navigable` skips ghosts and Offline SSH hosts, and lists
-  reachable hosts after the workspaces in `ssh-hosts` order; the sidebar's numbers, ⌘⌃1…9 and
-  ⌘⌃[ ] read it, and a close's landing reads its workspaces alone. ⌘⌃[ ] from an Offline host
-  step to the nearest reachable row by sidebar position. A connected host's workspace carries
-  the host and stays out of the workspace rows.
+  entry is never in a group. `navigable` skips ghosts and SSH hosts that are not Connected, and
+  lists connected hosts after the workspaces in `ssh-hosts` order; the sidebar's numbers, ⌘⌃1…9 and
+  ⌘⌃[ ] read it, and a close's landing reads its workspaces alone. ⌘⌃[ ] from a host that is not
+  connected step to the nearest stop by sidebar position. A removed host's Connect screen lands on
+  the nearest host row with a workspace in this window, else the first workspace. A connected
+  host's workspace carries the host and stays out of the workspace rows.
 - **`activate(_:)` is the single path a switch goes through**: a row click, the workspace
   chords, ⌘P, ⌘⌃T, and revealing a background tab. An open workspace slides in on the y axis, from
   below when it sits lower in `navigable`; a new one has no canvas yet, so it mounts each
@@ -459,8 +460,10 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   like a pane through the same `syncWindowFocus` and live-apply paths. Its left edge leads into the
   sidebar (or shows the same hint a pane does when the sidebar is hidden); up, down and right do
   nothing. It has no tab, so dispatch drops any chord that is not `worksWithoutTab`, except ⌘T,
-  which connects, and a float toggle, which opens or closes only a running float that is open or
-  needs you and is silent otherwise, and a card stays open for a chord it would drop. App-global
+  which connects, ⌘W, which lands where a close of the last workspace row would (or, with no
+  workspace left, confirms and closes the window as the last pane does), and a float toggle, which opens or closes only a running
+  float that is open or needs you and is silent otherwise, and a card stays open for a chord it
+  would drop. App-global
   chords bypass it in `AppDelegate.route`; a palette pick
   of one returns there through `onAppGlobalCommand`. The sidebar toggle passes through an
   open card, which stays open. A card is offered every other chord first
@@ -587,8 +590,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   `ProxyJump` or `ProxyCommand` host reads Online once `ssh -G` names its proxy, with no TCP check. It runs every minute while the app
   is active, and on activation, wake and network change (`NWPathMonitor`); an answer from before
   a network change is dropped and asked again. A host reads Offline until the probe reaches it,
-  so an unanswered host takes no number, and a connected host takes its status from the
-  connection, not the probe.
+  and a connected host takes its status from the connection, not the probe.
 - **The Connect screen reads its host from `SSHHostStatusCenter`**: the status, and the
   destination the probe resolved from the same `ssh -G`, so it never runs ssh itself.
 - **A connected host is a workspace whose tabs run ssh over one `SSHConnection`.** Every pane
