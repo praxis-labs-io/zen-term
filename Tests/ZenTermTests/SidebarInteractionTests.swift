@@ -1253,7 +1253,7 @@ final class SidebarInteractionTests: WindowTestCase {
 
         XCTAssertFalse(isOnScreen(try XCTUnwrap(rows.last), in: scroll), "precondition: rows remain below")
         XCTAssertGreaterThanOrEqual(
-            margins(of: goingDown, in: scroll).below, FadingScrollView.fadeDepth - 0.5,
+            margins(of: goingDown, in: scroll).below, scroll.fadeDepth - 0.5,
             "a row reached going down clears the bottom fade")
 
         for _ in 0..<(last - 10) { controller.window.sendEvent(key(.up, in: controller)) }
@@ -1261,7 +1261,7 @@ final class SidebarInteractionTests: WindowTestCase {
 
         XCTAssertFalse(isOnScreen(rows[first], in: scroll), "precondition: rows remain above")
         XCTAssertGreaterThanOrEqual(
-            margins(of: goingUp, in: scroll).above, FadingScrollView.fadeDepth - 0.5,
+            margins(of: goingUp, in: scroll).above, scroll.fadeDepth - 0.5,
             "a row reached going up clears the top fade")
     }
 

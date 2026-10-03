@@ -17,6 +17,12 @@ custom_rules:
     regex: "\\b(HACK|XXX|TEMP|REMOVEME)\\b"
     message: "Remove the marker and fix it now, or file a Linear ticket (CLAUDE.md)."
     severity: warning
+  unfaded_scroll_view:
+    name: "Unfaded scroll view"
+    included: "Sources/ZenTerm/.*\\.swift"
+    regex: "\\bNSScrollView\\("
+    message: "Build scroll areas with FadingScrollView so content fades at the edges it continues past."
+    severity: warning
 
 identifier_name:
   # The pane tree uses deliberate short names (a, b, id, dx, dy, v, …).

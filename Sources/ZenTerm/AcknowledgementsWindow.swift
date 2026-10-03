@@ -24,7 +24,7 @@ final class AcknowledgementsWindow {
         window.isReleasedWhenClosed = false
         window.center()
 
-        let scroll = NSScrollView()
+        let scroll = FadingScrollView()
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
         scroll.borderType = .noBorder

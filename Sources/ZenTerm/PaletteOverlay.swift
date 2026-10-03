@@ -44,7 +44,7 @@ class PaletteOverlay: NSView, ModalOverlay {
     private let divider = NSView()
     private let footerDivider = NSView()
     private let rowsStack = NSStackView()
-    private let scrollView = NSScrollView()
+    private let scrollView: FadingScrollView
     private let emptyLabel: NSTextField
     private var footerHintLabels: [NSTextField] = []
     private var footerHintItems: [String: NSView] = [:]
@@ -74,6 +74,8 @@ class PaletteOverlay: NSView, ModalOverlay {
         self.emptyListHeight = emptyListHeight
         self.emptyLabel = NSTextField(labelWithString: emptyText)
         self.searchPlaceholder = placeholder
+        let doc = FlippedView()
+        self.scrollView = FadingScrollView(document: doc)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -113,16 +115,8 @@ class PaletteOverlay: NSView, ModalOverlay {
         rowsStack.spacing = 0
         rowsStack.alignment = .leading
         rowsStack.translatesAutoresizingMaskIntoConstraints = false
-        let doc = FlippedView()
         doc.translatesAutoresizingMaskIntoConstraints = false
         doc.addSubview(rowsStack)
-        scrollView.drawsBackground = false
-        scrollView.hasVerticalScroller = true
-        scrollView.verticalScroller = SlimScroller()
-        scrollView.scrollerStyle = .overlay
-        scrollView.autohidesScrollers = true
-        scrollView.documentView = doc
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
 
         emptyLabel.font = .systemFont(ofSize: 13)
         emptyLabel.textColor = Theme.current.chrome.ink(.muted)

@@ -6,14 +6,7 @@ enum SettingsDetail {
         doc.translatesAutoresizingMaskIntoConstraints = false
         doc.addSubview(rowsStack)
 
-        let scroll = FadingScrollView()
-        scroll.drawsBackground = false
-        scroll.hasVerticalScroller = true
-        scroll.verticalScroller = SlimScroller()
-        scroll.scrollerStyle = .overlay
-        scroll.autohidesScrollers = true
-        scroll.documentView = doc
-        scroll.translatesAutoresizingMaskIntoConstraints = false
+        let scroll = FadingScrollView(document: doc)
 
         NSLayoutConstraint.activate([
             doc.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),

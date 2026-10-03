@@ -10,6 +10,7 @@ final class ListPopover {
 
     private unowned let anchor: NSView
     private var card: NSView?
+    private weak var scroll: FadingScrollView?
     private var resizeObserver: NSObjectProtocol?
 
     var onSelfClose: (() -> Void)?
@@ -53,6 +54,8 @@ final class ListPopover {
             }
         }
     }
+
+    func reveal(_ row: NSView) { scroll?.reveal(row) }
 
     func close() {
         card?.removeFromSuperview()
@@ -102,14 +105,8 @@ final class ListPopover {
         doc.translatesAutoresizingMaskIntoConstraints = false
         doc.addSubview(stack)
 
-        let scroll = NSScrollView()
-        scroll.drawsBackground = false
-        scroll.hasVerticalScroller = true
-        scroll.verticalScroller = SlimScroller()
-        scroll.scrollerStyle = .overlay
-        scroll.autohidesScrollers = true
-        scroll.documentView = doc
-        scroll.translatesAutoresizingMaskIntoConstraints = false
+        let scroll = FadingScrollView(document: doc)
+        self.scroll = scroll
 
         let card = ShadowCardView()
         card.wantsLayer = true

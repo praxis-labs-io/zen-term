@@ -10,7 +10,7 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
     var onSubmit: (() -> Void)?
 
     let placeholder: String
-    private let scroll = NSScrollView()
+    private lazy var scroll = FadingScrollView(document: textView)
 
     private static var restFill: NSColor { Theme.current.chrome.fill(.rest) }
     private static var focusFill: NSColor { Theme.current.chrome.selectionFill }
@@ -49,12 +49,6 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         textView.delegate = self
         textView.onFocusChange = { [weak self] focused in self?.setFocused(focused) }
 
-        scroll.drawsBackground = false
-        scroll.hasVerticalScroller = true
-        scroll.verticalScroller = SlimScroller()
-        scroll.autohidesScrollers = true
-        scroll.documentView = textView
-        scroll.translatesAutoresizingMaskIntoConstraints = false
         addSubview(scroll)
 
         textView.placeholder = placeholder
@@ -110,6 +104,8 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         layer?.borderColor = (focused ? chrome.accent.nsColor : chrome.fill(alpha: ChromeTheme.border)).cgColor
         layer?.borderWidth = focused ? 1.5 : 1
     }
+
+    var scrollForTesting: FadingScrollView { scroll }
 
     func reapplyTheme() {
         setFocused(window?.firstResponder === textView)

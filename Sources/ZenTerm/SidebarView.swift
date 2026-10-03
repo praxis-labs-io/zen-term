@@ -387,12 +387,7 @@ final class SidebarView: NSView {
     private func revealActiveRow() {
         guard !hasFocus, let id = activeRow, let row = rows[id] else { return }
         layoutSubtreeIfNeeded()
-        reveal(row)
-    }
-
-    // One fade depth of margin, or a row scrolled to an edge lands under the fade.
-    private func reveal(_ row: NSView) {
-        row.scrollToVisible(row.bounds.insetBy(dx: 0, dy: -FadingScrollView.fadeDepth))
+        scroll.reveal(row)
     }
 
     private func row(for item: SidebarRowItem) -> SettingsNavRow {
@@ -499,17 +494,17 @@ final class SidebarView: NSView {
         case .host(let host):
             guard let row = hostRows[host] else { return false }
             row.takeKeyboardFocus()
-            reveal(row)
+            scroll.reveal(row)
             return true
         case .agent(let id):
             guard let row = agentRows[id] else { return false }
             row.takeKeyboardFocus()
-            reveal(row)
+            scroll.reveal(row)
             return true
         case .waitingElsewhere:
             guard let row = waitingRow else { return false }
             row.takeKeyboardFocus()
-            reveal(row)
+            scroll.reveal(row)
             return true
         }
     }
@@ -518,7 +513,7 @@ final class SidebarView: NSView {
     func focusRow(_ id: SidebarRowID) -> Bool {
         guard let row = rows[id] else { return false }
         row.takeKeyboardFocus()
-        reveal(row)
+        scroll.reveal(row)
         return true
     }
 
@@ -531,7 +526,7 @@ final class SidebarView: NSView {
         case let row as SidebarJumpRow: row.takeKeyboardFocus()
         default: return
         }
-        reveal(stops[next])
+        scroll.reveal(stops[next])
     }
 
     private var focusStops: [NSView] { orderedRows + hostStack.arrangedSubviews + agentStack.arrangedSubviews }

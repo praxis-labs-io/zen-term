@@ -264,7 +264,7 @@ final class CheckboxDropdown: NSView {
         refreshRows()
         guard rowViews.indices.contains(next) else { return }
         let row = rowViews[next]
-        row.scrollToVisible(row.bounds)
+        popover.reveal(row)
     }
 
     private func toggleHighlight() {

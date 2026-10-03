@@ -61,6 +61,7 @@ final class Dropdown: NSView {
     var listCardSizeForTesting: NSSize { popover.cardFrame.size }
     var listCardFrameForTesting: NSRect { popover.cardFrame }
     func moveHighlightForTesting(_ delta: Int) { moveHighlight(delta) }
+    var highlightedRowForTesting: NSView? { rowViews.first { $0.index == highlighted } }
     var isHighlightedRowVisibleForTesting: Bool {
         guard rowViews.indices.contains(highlighted),
             let clip = rowViews[highlighted].enclosingScrollView?.contentView
@@ -329,7 +330,7 @@ final class Dropdown: NSView {
 
     private func scrollHighlightIntoView() {
         guard let row = rowViews.first(where: { $0.index == highlighted }) else { return }
-        row.scrollToVisible(row.bounds)
+        popover.reveal(row)
     }
 
     private func commitHighlight() {
