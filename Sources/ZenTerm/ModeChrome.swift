@@ -168,7 +168,7 @@ private final class PanelHeader: NSView {
     init(_ meta: PanelMeta) {
         title = meta.title
         action = meta.action
-        keycap = KeycapView(shortcut: CommandCatalog.spec(for: meta.action).shortcut, showsBackground: false)
+        keycap = KeycapView(shortcut: CommandCatalog.spec(for: meta.action).shortcut, style: .plain)
         super.init(frame: .zero)
         titleField.translatesAutoresizingMaskIntoConstraints = false
         addSubview(titleField)
@@ -199,7 +199,7 @@ private final class PanelHeader: NSView {
 
     private func rebuildKeycap() {
         keycap.removeFromSuperview()
-        keycap = KeycapView(shortcut: CommandCatalog.spec(for: action).shortcut, showsBackground: false)
+        keycap = KeycapView(shortcut: CommandCatalog.spec(for: action).shortcut, style: .plain)
         addSubview(keycap)
         activateKeycapConstraints()
     }
