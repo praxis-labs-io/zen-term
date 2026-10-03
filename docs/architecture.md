@@ -384,8 +384,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **Tool floats are window-level** because a surface is one `NSView`. `ToolFloatController`
   reaches the active tab through closures. `ToolFloat.Scope.tab` floats are filed under
   `tabID/id` and shut down with their tab; Scratch is the only one. A host shows no user
-  float button, and the Connect screen hides the whole dock. There a float's card, shortcut or palette row opens or closes it only while it is
-  open, completed or waiting; any other toggle toasts in a connected host.
+  float button, and the Connect screen hides the whole dock. There a float's card, shortcut
+  or palette row opens or closes it only while it is open, completed or waiting; any other
+  toggle toasts in a connected host.
 - **Every silent no-op is a toast**, throttled at 3s per kind because held chords repeat.
 - **A surface stating current state is retracted when the cause clears.**
 - **A toast's keys live on the card root** (`ToastView.performKeyEquivalent` and
