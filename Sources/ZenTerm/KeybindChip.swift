@@ -40,7 +40,7 @@ final class KeybindChip: NSView {
     func render(shortcut: String) {
         host.subviews.forEach { $0.removeFromSuperview() }
         let content: NSView =
-            shortcut.isEmpty ? placeholder("Not set") : KeycapView(shortcut: shortcut, showsBackground: false)
+            shortcut.isEmpty ? placeholder("Not set") : KeycapView(shortcut: shortcut, style: .plain)
         content.translatesAutoresizingMaskIntoConstraints = false
         host.addSubview(content)
         NSLayoutConstraint.activate([

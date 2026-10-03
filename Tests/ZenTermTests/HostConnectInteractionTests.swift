@@ -9,6 +9,7 @@ final class HostConnectInteractionTests: WindowTestCase {
     private let host = SSHHostID(name: "devbox")
     private var originalOverride: (() -> TerminalSurface)?
     private var originalConfig: GeneralConfig!
+    private var originalTheme: AppTheme!
     private let originalPresence = WindowController.isPresent
     private var controllers: [WindowController] = []
     private var spawned: [RecordingSurface] = []
@@ -18,6 +19,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         try super.setUpWithError()
         originalOverride = TerminalSurfaceFactory.makeOverride
         originalConfig = GeneralConfig.current
+        originalTheme = Theme.current
         Motion.isReduceMotionEnabled = { true }
         SidebarController.resetLastChoiceForTesting()
         TerminalSurfaceFactory.makeOverride = { [weak self] in
@@ -43,9 +45,12 @@ final class HostConnectInteractionTests: WindowTestCase {
         controllers = []
         spawned = []
         SSHConnection.watchersOverrideForTesting = nil
+        SSHHostStatusCenter.shared.setDestination(nil, host: host)
         SSHHostStatusCenter.shared.setConnected(false, host: host)
+        SSHHostStatusCenter.shared.setReachable(false, host: host)
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
+        Theme.setCurrentForTesting(originalTheme)
         WindowController.isPresent = originalPresence
         SidebarController.resetLastChoiceForTesting()
         try super.tearDownWithError()
@@ -103,6 +108,21 @@ final class HostConnectInteractionTests: WindowTestCase {
     private func showsToast(_ message: String, in c: WindowController) -> Bool {
         guard let content = c.window.contentView else { return false }
         return descendants(of: content).contains { ($0 as? NSTextField)?.stringValue == message }
+    }
+
+    private func failureToastNames(_ host: String, in c: WindowController) -> Bool {
+        showsToast("Couldn't Connect to", in: c) && showsToast(" \(host)", in: c)
+    }
+
+    private func longHostWindow() -> (WindowController, SSHHostID) {
+        let long = SSHHostID(name: "build-runner-07.internal")
+        var config = GeneralConfig.current
+        config.sshHosts = [host.name, long.name]
+        GeneralConfig.setCurrentForTesting(config)
+        let c = makeWindow()
+        c.selectHostForTesting(long)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        return (c, long)
     }
 
     private func press(button title: String, in c: WindowController) throws {
@@ -173,7 +193,7 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         let screen = try XCTUnwrap(c.connectViewForTesting)
         XCTAssertTrue(c.window.firstResponder === screen)
-        XCTAssertEqual(screen.messageForTesting, "Connect to devbox")
+        XCTAssertEqual(screen.titleForTesting, "Connect to devbox")
         XCTAssertEqual(c.tabOrderForTesting, [])
         XCTAssertEqual(c.window.title, "devbox")
     }
@@ -377,7 +397,7 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         XCTAssertNotNil(c.connectViewForTesting)
         XCTAssertEqual(waiting.startCount, 0)
-        XCTAssertTrue(showsToast("Couldn't connect to devbox.", in: c))
+        XCTAssertTrue(failureToastNames("devbox", in: c))
     }
 
     func test_reselectingAConnectedHost_landsOnItsWorkspace() throws {
@@ -445,7 +465,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         drainMainQueue()
 
         XCTAssertNotNil(c.connectViewForTesting)
-        XCTAssertTrue(showsToast("Couldn't connect to devbox.", in: c))
+        XCTAssertTrue(failureToastNames("devbox", in: c))
     }
 
     func test_aConnectedHost_hidesYourToolFloatButtons_andALocalWorkspaceShowsThem() throws {
@@ -654,17 +674,23 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "devbox")
     }
 
-    func test_theConnectFailure_breaksBeforeAHostTooLongForOneLine() {
-        let font: [NSAttributedString.Key: Any] = [.font: ToastView.messageFont]
-        let short = WindowController.connectFailedMessage(for: host)
-        let long = WindowController.connectFailedMessage(
-            for: SSHHostID(name: "build-runner-07.eu-west-2.compute.internal"))
+    func test_theConnectFailure_keepsALongHostWhole_andLetsTheLeadGiveWay() throws {
+        let (c, long) = longHostWindow()
+        spawned = []
+        c.handle(.newTab)
+        fake.ready?()
+        let login = try XCTUnwrap(spawned.first)
 
-        XCTAssertEqual(short, "Couldn't connect to devbox.")
-        XCTAssertLessThanOrEqual((short as NSString).size(withAttributes: font).width, ToastView.messageMaxWidth)
-        let lines = long.split(separator: "\n").map(String.init)
-        XCTAssertEqual(lines.first, "Couldn't connect to")
-        XCTAssertLessThanOrEqual((lines[0] as NSString).size(withAttributes: font).width, ToastView.messageMaxWidth)
+        login.delegate?.surfaceDidExit(login, code: 255)
+        drainMainQueue()
+        c.window.contentView?.layoutSubtreeIfNeeded()
+
+        let toast = try XCTUnwrap(cards(in: c).first)
+        let labels = descendants(of: toast).compactMap { $0 as? NSTextField }
+        let tail = try XCTUnwrap(labels.first { $0.stringValue == " \(long.name)" })
+        let lead = try XCTUnwrap(labels.first { $0.stringValue == "Couldn't Connect to" })
+        XCTAssertGreaterThanOrEqual(tail.frame.width, tail.intrinsicContentSize.width, "the host name was cut")
+        XCTAssertLessThan(lead.frame.width, lead.intrinsicContentSize.width, "precondition: the title is crowded")
     }
 
     func test_aLoginThatEndsBeforeConnecting_inItsOnlyPane_stillWarns() throws {
@@ -674,7 +700,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         drainMainQueue()
 
         XCTAssertNotNil(c.connectViewForTesting)
-        XCTAssertTrue(showsToast("Couldn't connect to devbox.", in: c))
+        XCTAssertTrue(failureToastNames("devbox", in: c))
     }
 
     func test_closingTheLoginWhileConnecting_asksFirst_andChangesNothingUntilAnswered() throws {
@@ -714,7 +740,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertNotNil(c.connectViewForTesting)
         XCTAssertTrue(login.terminated)
         XCTAssertEqual(waiting.startCount, 0)
-        XCTAssertFalse(showsToast("Couldn't connect to devbox.", in: c), "the user closed it; nothing failed")
+        XCTAssertFalse(failureToastNames("devbox", in: c), "the user closed it; nothing failed")
     }
 
     func test_closingAWaitingPaneWhileConnecting_doesNotAsk() throws {
@@ -888,7 +914,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         fake.connect()
 
         XCTAssertNotNil(c.connectViewForTesting, file: file, line: line)
-        XCTAssertFalse(showsToast("Couldn't connect to devbox.", in: c), "the user closed it", file: file, line: line)
+        XCTAssertFalse(failureToastNames("devbox", in: c), "the user closed it", file: file, line: line)
         XCTAssertEqual(waiting?.startCount ?? 0, 0, "waiting panes never start", file: file, line: line)
     }
 
@@ -927,7 +953,7 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         XCTAssertFalse(c.isConfirmOpen, "Disconnect says what it does, so it never asks")
         XCTAssertNotNil(c.connectViewForTesting)
-        XCTAssertFalse(showsToast("Couldn't connect to devbox.", in: c), "the user ended it")
+        XCTAssertFalse(failureToastNames("devbox", in: c), "the user ended it")
         XCTAssertEqual(waiting.startCount, 0)
     }
 
@@ -1049,6 +1075,9 @@ final class HostConnectInteractionTests: WindowTestCase {
         let c = onConnectScreen()
         let button = try XCTUnwrap(c.connectViewForTesting).connectButtonForTesting
 
+        XCTAssertEqual(button.frame.height, AppButton.Size.large.height)
+        XCTAssertEqual(button.keycapForTesting?.shortcut, "⏎")
+
         XCTAssertFalse(button.showsFocusOutline)
         XCTAssertFalse(button.acceptsFirstResponder, "the panel takes ↵, so the button never draws a focus ring")
         XCTAssertEqual(button.layer?.borderWidth, 0)
@@ -1121,14 +1150,136 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(c.window.frame.height, before.height, accuracy: 1)
     }
 
-    func test_connectLeadsWithALargeNeutralBadge() throws {
+    func test_anOnlineHost_saysItSignsInWithYourSSHConfig_andBadgesTheHostFilled() throws {
+        SSHHostStatusCenter.shared.setReachable(true, host: host)
         let c = onConnectScreen()
         let screen = try XCTUnwrap(c.connectViewForTesting)
-        let badge = try XCTUnwrap(descendants(of: screen).lazy.compactMap { $0 as? IconBadge }.first)
-        let chrome = Theme.current.chrome
+        let mark = screen.routeForTesting.destinationForTesting.statusMarkForTesting
 
-        XCTAssertEqual(badge.iconTintForTesting, chrome.muted.nsColor)
-        XCTAssertEqual(badge.fillForTesting, chrome.tint(chrome.muted, alpha: ChromeTheme.badgeTint).cgColor)
-        XCTAssertEqual(badge.fittingSize.width, IconBadge.Size.large.side)
+        XCTAssertEqual(screen.detailForTesting, "Signs in with your ssh config.")
+        XCTAssertEqual(mark.fill, SSHHostStatus.online.ink.cgColor)
+        XCTAssertNil(mark.stroke)
+    }
+
+    func test_anOfflineHost_offersToConnectAnyway_andBadgesTheHostHollow() throws {
+        let c = onConnectScreen()
+        let screen = try XCTUnwrap(c.connectViewForTesting)
+        let mark = screen.routeForTesting.destinationForTesting.statusMarkForTesting
+
+        XCTAssertEqual(screen.detailForTesting, "devbox appears offline. Connect anyway?")
+        XCTAssertNil(mark.fill)
+        XCTAssertEqual(mark.stroke, SSHHostStatus.offline.ink.cgColor)
+    }
+
+    func test_aHostComingOnline_updatesTheConnectScreenItIsShowing() throws {
+        let c = onConnectScreen()
+        let screen = try XCTUnwrap(c.connectViewForTesting)
+        XCTAssertEqual(screen.detailForTesting, "devbox appears offline. Connect anyway?", "precondition: offline")
+
+        SSHHostStatusCenter.shared.setReachable(true, host: host)
+        drainMainQueue()
+
+        XCTAssertEqual(screen.detailForTesting, "Signs in with your ssh config.")
+        XCTAssertEqual(
+            screen.routeForTesting.destinationForTesting.statusMarkForTesting.fill, SSHHostStatus.online.ink.cgColor)
+    }
+
+    func test_theConnectScreen_showsWhereSSHWillSignIn_fromTheProbesResolution() throws {
+        SSHHostStatusCenter.shared.setDestination("drew@10.0.0.12", host: host)
+        let c = onConnectScreen()
+
+        XCTAssertEqual(try XCTUnwrap(c.connectViewForTesting).destinationForTesting, "drew@10.0.0.12")
+    }
+
+    func test_aHostNotYetResolved_hidesTheDestinationLine_untilItsResolutionLands() throws {
+        let c = onConnectScreen()
+        let screen = try XCTUnwrap(c.connectViewForTesting)
+        XCTAssertNil(screen.destinationForTesting, "an empty line would hold space and then collapse")
+
+        SSHHostStatusCenter.shared.setDestination("drew@10.0.0.12", host: host)
+        drainMainQueue()
+
+        XCTAssertEqual(screen.destinationForTesting, "drew@10.0.0.12")
+    }
+
+    func test_clickingConnect_connects() throws {
+        let c = onConnectScreen()
+
+        try press(button: "Connect", in: c)
+        fake.ready?()
+
+        XCTAssertNil(c.connectViewForTesting)
+        XCTAssertEqual(spawned.first?.lastConfig?.command, "/usr/bin/ssh")
+    }
+
+    func test_aThemeChange_recolorsTheRouteAndItsBadge() throws {
+        SSHHostStatusCenter.shared.setReachable(true, host: host)
+        let c = onConnectScreen()
+        let route = try XCTUnwrap(c.connectViewForTesting).routeForTesting
+        let strokeBefore = route.lineStrokeForTesting
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-connect-theme-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        try "background = #010101\nforeground = #fefefe\npalette = 2=#00ff00\n"
+            .write(to: dir.appendingPathComponent("theme"), atomically: true, encoding: .utf8)
+        Theme.setCurrentForTesting(ConfigLoader.loadAppTheme(configRoot: dir, general: .builtIn))
+
+        postConfigChange(.theme)
+
+        XCTAssertNotEqual(route.lineStrokeForTesting, strokeBefore)
+        XCTAssertEqual(route.lineStrokeForTesting, Theme.current.chrome.ink(.muted).cgColor)
+        XCTAssertEqual(
+            route.destinationForTesting.statusMarkForTesting.fill, SSHHostStatus.online.ink.cgColor)
+    }
+
+    func test_atTheSmallestWindow_connectStaysOnScreen_andTheRouteGivesWay() throws {
+        let c = onConnectScreen()
+        let screen = try XCTUnwrap(c.connectViewForTesting)
+        let content = try XCTUnwrap(c.window.contentView)
+
+        c.window.setContentSize(c.window.contentMinSize)
+        c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
+        content.layoutSubtreeIfNeeded()
+
+        let button = screen.connectButtonForTesting
+        let panel = screen.panelForTesting
+        XCTAssertNotNil(button.window, "the button was detached")
+        XCTAssertTrue(
+            panel.bounds.contains(button.convert(button.bounds, to: panel)), "Connect is clipped off the screen")
+        XCTAssertTrue(
+            screen.detachedForTesting.contains(screen.routeForTesting), "the route should give way before Connect does")
+    }
+
+    func test_atTheNarrowestWidths_withTheWidestGutter_theScreenFitsTheWindow() throws {
+        var config = GeneralConfig.current
+        config.windowGutter = 64
+        GeneralConfig.setCurrentForTesting(config)
+        let (c, _) = longHostWindow()
+        let screen = try XCTUnwrap(c.connectViewForTesting)
+        let content = try XCTUnwrap(c.window.contentView)
+
+        let widths = [(SidebarController.minimumDockableWidth, true), (c.window.contentMinSize.width, false)]
+        for (width, docked) in widths {
+            c.window.setContentSize(NSSize(width: width, height: 800))
+            c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
+            content.layoutSubtreeIfNeeded()
+            XCTAssertEqual(c.sidebarForTesting.isDocked, docked, "precondition at \(width)")
+
+            let route = screen.routeForTesting
+            XCTAssertNotNil(route.window, "precondition: tall enough to keep the route at \(width)")
+            let routeFrame = route.convert(route.bounds, to: content)
+            let panelFrame = screen.panelForTesting.convert(screen.panelForTesting.bounds, to: content)
+            XCTAssertEqual(content.bounds.width, width, "the screen pushed the window's content wider at \(width)")
+            XCTAssertLessThanOrEqual(panelFrame.maxX, width, "the screen runs off the window at \(width)")
+            XCTAssertLessThanOrEqual(routeFrame.maxX, panelFrame.maxX, "the route runs off the screen at \(width)")
+            XCTAssertGreaterThanOrEqual(routeFrame.minX, panelFrame.minX, "the route runs off the screen at \(width)")
+            let detail = screen.detailFieldForTesting
+            XCTAssertGreaterThanOrEqual(
+                detail.frame.height, detail.intrinsicContentSize.height, "the detail is cut short at \(width)")
+            XCTAssertLessThanOrEqual(
+                detail.intrinsicContentSize.width, detail.frame.width + 1,
+                "the detail wraps wider than it is at \(width)")
+        }
     }
 }

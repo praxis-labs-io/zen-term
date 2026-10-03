@@ -101,7 +101,7 @@ final class ConfigDiagnosticToastTests: XCTestCase {
               cmd+| can't be typed
             """)
         XCTAssertFalse(
-            content.message.contains("in your config"),
+            try XCTUnwrap(content.message).contains("in your config"),
             "the title already says it; repeating it per line is what forced the wrap")
     }
 
@@ -183,8 +183,9 @@ final class ConfigDiagnosticToastTests: XCTestCase {
                 ConfigDiagnostic(scope: .toolFloat(label: "Open Lazygit"), problem: .floatMissingField("command:")),
             ]))
         XCTAssertEqual(content.title, "2 problems in your config")
-        XCTAssertTrue(content.message.contains("font-size"), content.message)
-        XCTAssertTrue(content.message.contains("Open Lazygit"), content.message)
+        let message = try XCTUnwrap(content.message)
+        XCTAssertTrue(message.contains("font-size"), message)
+        XCTAssertTrue(message.contains("Open Lazygit"), message)
     }
 
     func test_nonKeybindSummaryLines_fitTheToastWithoutWrapping() {
@@ -226,7 +227,8 @@ final class ConfigDiagnosticToastTests: XCTestCase {
         let content = try XCTUnwrap(ConfigDiagnostic.toast(for: GeneralConfig.current.configDiagnostics))
         XCTAssertTrue(content.title.contains("BTop"), content.title)
         XCTAssertFalse(content.title.contains("btop has"), "fell back to the raw id: \(content.title)")
-        XCTAssertTrue(content.message.contains("new_tab"), content.message)
+        let message = try XCTUnwrap(content.message)
+        XCTAssertTrue(message.contains("new_tab"), message)
     }
 
     func test_aConfigThatStealsAChord_producesAToast() throws {
@@ -236,6 +238,7 @@ final class ConfigDiagnosticToastTests: XCTestCase {
 
         let content = try XCTUnwrap(ConfigDiagnostic.toast(for: GeneralConfig.current.configDiagnostics))
         XCTAssertTrue(content.title.contains("Split Vertically"), content.title)
-        XCTAssertTrue(content.message.contains("toggle_focus_mode"), content.message)
+        let message = try XCTUnwrap(content.message)
+        XCTAssertTrue(message.contains("toggle_focus_mode"), message)
     }
 }

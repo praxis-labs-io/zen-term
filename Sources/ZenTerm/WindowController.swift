@@ -499,7 +499,10 @@ final class WindowController: NSObject {
         hostStatusObserver = NotificationCenter.default.addObserver(
             forName: .sshHostStatusDidChange, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.renderTabBar() }
+            MainActor.assumeIsolated {
+                self?.renderTabBar()
+                self?.refreshConnectView()
+            }
         }
 
         configObserver = NotificationCenter.default.addObserver(
@@ -867,10 +870,19 @@ final class WindowController: NSObject {
     private func hostConnectView(for host: SSHHostID) -> HostConnectView {
         if let connectView, connectView.host == host { return connectView }
         let view = HostConnectView(
-            host: host, onConnect: { [weak self] in self?.connect(host) },
+            host: host, status: SSHHostStatusCenter.shared.status(of: host),
+            destination: SSHHostStatusCenter.shared.destination(of: host),
+            onConnect: { [weak self] in self?.connect(host) },
             onFocusRequest: { [weak self] in self?.restoreFocusToActive() })
         connectView = view
         return view
+    }
+
+    private func refreshConnectView() {
+        guard let connectView else { return }
+        let center = SSHHostStatusCenter.shared
+        connectView.setStatus(center.status(of: connectView.host))
+        connectView.setDestination(center.destination(of: connectView.host))
     }
 
     private func mount(_ transition: MountTransition) {
@@ -1349,13 +1361,9 @@ final class WindowController: NSObject {
 
     private func loginFailed(on host: SSHHostID, closing workspace: WorkspaceController?) {
         if let workspace, workspaces.contains(where: { $0 === workspace }) { closeTabs(of: workspace) }
-        toasts.show(ToastContent(variant: .warning, title: "SSH Host", message: Self.connectFailedMessage(for: host)))
-    }
-
-    static func connectFailedMessage(for host: SSHHostID) -> String {
-        let line = "Couldn't connect to \(host.name)."
-        let width = (line as NSString).size(withAttributes: [.font: ToastView.messageFont]).width
-        return width <= ToastView.messageMaxWidth ? line : "Couldn't connect to\n\(host.name)."
+        toasts.show(
+            ToastContent(
+                variant: .warning, title: "Couldn't Connect to", titleTail: " \(host.name)", message: nil))
     }
 
     private func toggleToolFloat(_ id: String, in host: SSHHostID) {

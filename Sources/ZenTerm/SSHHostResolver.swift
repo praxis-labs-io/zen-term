@@ -7,6 +7,11 @@ enum SSHHostResolver {
         case proxied
     }
 
+    struct Resolution: Equatable {
+        let endpoint: Endpoint?
+        let destination: String?
+    }
+
     #if DEBUG
         nonisolated(unsafe) static var destinationOverrideForTesting: ((String) -> String?)?
     #endif
@@ -26,6 +31,11 @@ enum SSHHostResolver {
     // Blocking: callers own the hop off the main thread.
     static func endpoint(of host: String) -> Endpoint? {
         dump(of: host).flatMap(endpoint(inDump:))
+    }
+
+    // Blocking: callers own the hop off the main thread.
+    static func resolution(of host: String) -> Resolution? {
+        dump(of: host).map { Resolution(endpoint: endpoint(inDump: $0), destination: destination(inDump: $0)) }
     }
 
     // Blocking: callers own the hop off the main thread.
