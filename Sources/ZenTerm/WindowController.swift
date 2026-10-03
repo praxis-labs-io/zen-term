@@ -506,6 +506,7 @@ final class WindowController: NSObject {
                     self.window.setWindowChromeVisible(GeneralConfig.current.windowChrome)
                     self.sidebar.reapplyChromeLayout()
                     for controller in self.allTabControllers { controller.reapplyChromeLayout() }
+                    self.connectView?.reapplyChromeLayout()
                     self.reapplyFloatLayout()
                     self.reapplyModalLayout()
                     self.builtToasts?.reapplyInsets(
@@ -518,6 +519,7 @@ final class WindowController: NSObject {
                 }
                 if change.contains(.theme) || change.contains(.terminalBehavior) {
                     self.floats.reapplyTheme()
+                    self.connectView?.reapplyTheme()
                 }
                 if change.contains(.theme) {
                     self.tabBar.reapplyTheme()
@@ -526,7 +528,6 @@ final class WindowController: NSObject {
                     self.confirmToast?.reapplyTheme()
                     self.attentionCards.values.forEach { $0.reapplyTheme() }
                     self.fontSizeCard?.reapplyTheme()
-                    self.connectView?.reapplyTheme()
                 }
                 if change.contains(.toasts) {
                     self.builtToasts?.reapplyDuration(GeneralConfig.current.toastDuration)
@@ -850,7 +851,9 @@ final class WindowController: NSObject {
 
     private func hostConnectView(for host: SSHHostID) -> HostConnectView {
         if let connectView, connectView.host == host { return connectView }
-        let view = HostConnectView(host: host) { [weak self] in self?.connect(host) }
+        let view = HostConnectView(
+            host: host, onConnect: { [weak self] in self?.connect(host) },
+            onFocusRequest: { [weak self] in self?.restoreFocusToActive() })
         connectView = view
         return view
     }
@@ -962,7 +965,7 @@ final class WindowController: NSObject {
         } else if let activeController {
             activeController.restoreUnifiedFocus()
         } else if activeWorkspace == nil {
-            window.makeFirstResponder(connectView?.connectButton)
+            window.makeFirstResponder(connectView)
         }
     }
 
@@ -988,6 +991,7 @@ final class WindowController: NSObject {
     private func syncWindowFocus() {
         let holdsKeyFocus = windowIsKey && !sidebar.hasFocus
         activeController?.setHaloVisible(holdsKeyFocus && !sidebar.isRevealed)
+        connectView?.setHaloVisible(activeWorkspace == nil && holdsKeyFocus && !sidebar.isRevealed)
         for controller in allTabControllers {
             controller.setHoldsKeyFocus(holdsKeyFocus && controller === activeController)
         }

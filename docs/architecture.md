@@ -444,8 +444,10 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   loses it gets Revert only. Settings rows show the conflict but do not resolve it.
 - **The modal gate** in `WindowController.handle(_:)` runs confirm, modal card, tool
   float, then dispatch. A window's `WindowSelection` is a workspace or an SSH host's Connect
-  screen (`HostConnectView`); that screen has no tab, so dispatch drops any chord that is not
-  `worksWithoutTab`, except ⌘T, which connects, and a card stays open for a chord it would drop. App-global chords bypass it in `AppDelegate.route`; a palette pick
+  screen (`HostConnectView`), one `PanelHostView` that takes ↵ and is focused, haloed and themed
+  like a pane through the same `syncWindowFocus` and live-apply paths. It has no tab, so dispatch
+  drops any chord that is not `worksWithoutTab`, except ⌘T, which connects, and a card stays open
+  for a chord it would drop. App-global chords bypass it in `AppDelegate.route`; a palette pick
   of one returns there through `onAppGlobalCommand`. The sidebar toggle passes through an
   open card, which stays open. A card is offered every other chord first
   (`ModalOverlay.handle`, how the workspace form takes the tab shortcuts) and swallows
