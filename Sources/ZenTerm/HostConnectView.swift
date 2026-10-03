@@ -42,7 +42,7 @@ final class HostConnectView: NSView {
         self.host = host
         self.status = status
         self.onConnect = onConnect
-        route = HostRouteView(host: host)
+        route = HostRouteView()
         connectButton = AppButton(
             title: "Connect", variant: .primary, size: .large, shortcut: "⏎", onTap: onConnect)
         panel = PanelHostView(content: content, meta: nil, onFocusRequest: onFocusRequest)
