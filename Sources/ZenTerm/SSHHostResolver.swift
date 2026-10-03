@@ -29,12 +29,14 @@ enum SSHHostResolver {
     }
 
     // Blocking: callers own the hop off the main thread.
-    static func ownsRemoteCommand(_ host: String) -> Bool {
-        dump(of: host).map(ownsRemoteCommand(inDump:)) ?? false
+    static func launchForm(of host: String) -> SSHLaunch.Form {
+        launchForm(inDump: dump(of: host))
     }
 
-    static func ownsRemoteCommand(inDump dump: String) -> Bool {
-        fields(inDump: dump)["remotecommand"] != nil
+    // An unread config may hold a `RemoteCommand`, and only the plain form survives one.
+    static func launchForm(inDump dump: String?) -> SSHLaunch.Form {
+        guard let dump, fields(inDump: dump)["remotecommand"] == nil else { return .plain }
+        return .loginShell
     }
 
     static func destination(inDump dump: String) -> String? {

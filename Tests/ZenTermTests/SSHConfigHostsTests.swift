@@ -198,9 +198,13 @@ final class SSHConfigHostsTests: XCTestCase {
         XCTAssertNil(SSHHostResolver.destination(inDump: "host devbox\nport 22\n"))
     }
 
-    func test_aHostWithItsOwnRemoteCommand_ownsOne_andAnyOtherDoesNot() {
-        XCTAssertTrue(SSHHostResolver.ownsRemoteCommand(inDump: "host devbox\nremotecommand tmux new -A\n"))
-        XCTAssertFalse(SSHHostResolver.ownsRemoteCommand(inDump: "host devbox\nrequesttty auto\n"))
+    func test_aHostWithItsOwnRemoteCommand_launchesPlain_andAnyOtherRunsTheLoginShell() {
+        XCTAssertEqual(SSHHostResolver.launchForm(inDump: "host devbox\nremotecommand tmux new -A\n"), .plain)
+        XCTAssertEqual(SSHHostResolver.launchForm(inDump: "host devbox\nrequesttty auto\n"), .loginShell)
+    }
+
+    func test_aHostWhoseConfigCannotBeRead_launchesPlain() {
+        XCTAssertEqual(SSHHostResolver.launchForm(inDump: nil), .plain)
     }
 
     func test_endpoint_readsHostnameAndPortFromTheDump() {

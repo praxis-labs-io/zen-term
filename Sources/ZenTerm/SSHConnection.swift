@@ -200,7 +200,10 @@ final class SSHConnection {
     }
 
     private func launch(_ surface: TerminalSurface, env: [String: String]) {
-        guard let form else { return assertionFailure("a host surface launched before its config was read") }
+        guard let form else {
+            Log.error("ssh: a host surface launched before its config was read", category: .workspace)
+            return assertionFailure("a host surface launched before its config was read")
+        }
         surface.start(SSHLaunch.config(host: host, controlPath: controlPath, form: form, env: env))
     }
 }
@@ -253,7 +256,7 @@ extension SSHConnection.Watchers {
     static let live = SSHConnection.Watchers(
         resolveLaunch: { host, found in
             DispatchQueue.global(qos: .userInitiated).async {
-                let form: SSHLaunch.Form = SSHHostResolver.ownsRemoteCommand(host.name) ? .plain : .loginShell
+                let form = SSHHostResolver.launchForm(of: host.name)
                 DispatchQueue.main.async { found(form) }
             }
         },
