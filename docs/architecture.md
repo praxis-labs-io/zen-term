@@ -575,12 +575,13 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
 - **`~/.ssh/config` is read, never written.** Settings > SSH Hosts lists its literal `Host`
   aliases (following `Include`, skipping `Match` blocks) off-main each time it mounts, and
   `ssh -G` resolves each one. The `ssh-host` lines hold which are on, plus typed hosts, each
-  with an optional name, and the sidebar's SSH rows show their status as a dot
-  (`SSHHostStatus.ink`): Offline takes the idle agent row's ink on the dot and the title,
-  Online is positive, Connected is accent, and the status word is the row's accessibility
-  value rather than visible text. While an agent in a connected host's workspace waits, the
-  dot takes the waiting ink a workspace row's does, from the same rollup, and the value reads
-  `Connected, Agent waiting`.
+  with an optional name. A name is only a label, read through `GeneralConfig.displayName(of:)`
+  with the alias as fallback; ssh, control sockets and `SSHHostID` use the alias. The
+  sidebar's SSH rows show their status as a dot (`SSHHostStatus.ink`): Offline takes the idle
+  agent row's ink on the dot and the title, Online is positive, Connected is accent, and the
+  status word is the row's accessibility value rather than visible text. While an agent in a
+  connected host's workspace waits, the dot takes the waiting ink a workspace row's does, from
+  the same rollup, and the value reads `Connected, Agent waiting`.
 - **`SSHHostProbe` keeps each host's reachability in `SSHHostStatusCenter`, and never logs in.**
   Off-main, at most four at a time, it resolves the host with `ssh -G`, once until the host list,
   the network, or the date on `~/.ssh/config` or a file it includes changes, because

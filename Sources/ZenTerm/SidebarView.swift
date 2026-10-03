@@ -14,6 +14,7 @@ enum SidebarFocusStop: Equatable {
 
 struct SidebarHostItem: Equatable {
     let id: SSHHostID
+    let name: String
     let status: SSHHostStatus
     let number: Int?
     let isActive: Bool
@@ -229,6 +230,7 @@ final class SidebarView: NSView {
         hostNumbers = byName.compactMapValues(\.number)
         for (index, item) in items.enumerated() {
             let row = hostRow(for: item)
+            row.setTitle(item.name)
             row.setSelected(item.isActive)
             let status = item.status
             let word = Self.hostStatusWord(status)
@@ -267,7 +269,7 @@ final class SidebarView: NSView {
         let host = item.id.alias
         if let row = hostRows[host] { return row }
         let id = item.id
-        let row = SettingsNavRow(title: host, focusesOnClick: false) {
+        let row = SettingsNavRow(title: item.name, focusesOnClick: false) {
             [weak self] in self?.onActivateHost?(id)
         }
         row.tooltip = TooltipHost(label: "Open host") { [weak self] in

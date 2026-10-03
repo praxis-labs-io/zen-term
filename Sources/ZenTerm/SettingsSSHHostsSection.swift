@@ -192,14 +192,20 @@ final class SettingsSSHHostsSection: SettingsSection {
         hostRow.row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
 
+    private func label(of host: String) -> String {
+        GeneralConfig.current.sshHosts.first { $0.alias == host }?.name ?? dropped[host]?.name ?? host
+    }
+
     private func destination(of host: String) -> String? {
-        destinations[host].flatMap { $0 == host ? nil : $0 }
+        let address = destinations[host] ?? host
+        return address == label(of: host) ? nil : address
     }
 
     private func makeToggleRow(_ host: String, isOn: Bool) -> HostRow {
         let toggle = SegmentedControl(options: ["On", "Off"], selectedIndex: isOn ? 0 : 1) { _ in }
         let row = LayoutRow(
-            caption: host, description: destination(of: host), control: toggle, controlNote: nil, controlWidth: nil)
+            caption: label(of: host), description: destination(of: host), control: toggle, controlNote: nil,
+            controlWidth: nil)
         toggle.onChange = { [weak self, weak row, weak toggle] index in
             guard let row, let toggle else { return }
             self?.turn(host, on: index == 0, row: row, toggle: toggle)
@@ -216,7 +222,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         let button = AppButton(title: "Remove", variant: .secondary)
         button.isKeyboardFocusable = true
         let row = LayoutRow(
-            caption: host, description: destination(of: host), control: button, controlNote: nil,
+            caption: label(of: host), description: destination(of: host), control: button, controlNote: nil,
             controlWidth: Self.removalButtonWidth)
         button.onTap = { [weak self, weak row, weak button] in
             guard let self, let row, let button, !Self.isKeyRepeat else { return }
@@ -276,8 +282,8 @@ final class SettingsSSHHostsSection: SettingsSection {
             ? "disconnect it and stop everything running in it" : "stop connecting to it and close its tabs"
         presentConfirm(
             ConfirmCard(
-                title: "\(disconnecting.action) \(host)",
-                message: "\(disconnecting.gerund) \(host) will \(consequence).",
+                title: "\(disconnecting.action) \(label(of: host))",
+                message: "\(disconnecting.gerund) \(label(of: host)) will \(consequence).",
                 confirmLabel: disconnecting.action, background: Theme.current.chrome.background.nsColor,
                 onCancel: { [weak self] in
                     dismissConfirm {
@@ -316,7 +322,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     private func showRemoval(_ isRemoved: Bool, of host: String, row: LayoutRow, button: AppButton) {
         row.isDimmed = isRemoved
         button.setTitle(isRemoved ? "Undo" : "Remove")
-        button.setAccessibilityLabel(isRemoved ? "Undo removing \(host)" : "Remove \(host)")
+        button.setAccessibilityLabel(isRemoved ? "Undo removing \(label(of: host))" : "Remove \(label(of: host))")
     }
 
     private func save(row: LayoutRow, _ change: () throws -> Void) -> Bool {

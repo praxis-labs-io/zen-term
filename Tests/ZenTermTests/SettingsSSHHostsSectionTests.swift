@@ -142,6 +142,17 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         XCTAssertNil(label("Couldn't read ~/.ssh/config.", in: detail))
     }
 
+    func test_aNamedHost_isListedByName_overItsAddress() throws {
+        try seed(ssh: "Host devbox\n", config: "ssh-host = devbox: Build box\nssh-host = deploy@10.0.0.5: Deploy\n")
+
+        let detail = mount()
+
+        XCTAssertEqual(captions(in: detail), ["Build box", "Deploy"])
+        XCTAssertNotNil(label("devbox", in: detail))
+        XCTAssertNotNil(label("deploy@10.0.0.5", in: detail))
+        XCTAssertEqual(removeButtons(in: detail).first?.accessibilityLabel(), "Remove Deploy")
+    }
+
     func test_noConfigHosts_listsOnlyAddedHosts() throws {
         try seed(ssh: nil, config: "ssh-host = deploy@10.0.0.5\n")
 

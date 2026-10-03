@@ -336,7 +336,8 @@ final class SidebarController {
         let waitingHosts = Set(workspaces.filter { waiting.contains($0.id) }.compactMap(\.host))
         let nextHosts = order.hosts.map {
             SidebarHostItem(
-                id: $0.id, status: $0.status, number: numbers[.host($0.id)], isActive: $0.id == activeHost,
+                id: $0.id, name: GeneralConfig.current.displayName(of: $0.id), status: $0.status,
+                number: numbers[.host($0.id)], isActive: $0.id == activeHost,
                 isWaiting: $0.status == .connected && waitingHosts.contains($0.id))
         }
         let next = order.entries.compactMap { entry -> Entry? in
@@ -449,7 +450,7 @@ final class SidebarController {
 
     private func renderLead() {
         if let host = hosts.first(where: \.isActive) {
-            lead.setWorkspaceName(host.id.alias)
+            lead.setWorkspaceName(host.name)
             return applyLeadWidth()
         }
         guard let active = entries.first(where: \.isActive) else { return }
