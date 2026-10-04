@@ -112,4 +112,20 @@ final class AppButtonTests: WindowTestCase {
         XCTAssertEqual(keycap.shortcut, "⏎")
         withExtendedLifetime(window) {}
     }
+
+    func test_disablingAPrimaryButton_fadesItsKeycapGlyphWithItsLabel() throws {
+        let button = AppButton(title: "Connect", variant: .primary, size: .large, shortcut: "⏎")
+        let window = try mountFitted(button)
+        let keycap = try XCTUnwrap(button.keycapForTesting)
+        let chrome = Theme.current.chrome
+        XCTAssertEqual(keycap.inkForTesting, chrome.accent.nsColor, "precondition: enabled reads accent")
+
+        button.isEnabled = false
+
+        XCTAssertEqual(titleColor(button), chrome.ink(.faint))
+        XCTAssertEqual(keycap.inkForTesting, chrome.ink(.faint), "the glyph stayed accent beside a faint label")
+        button.isEnabled = true
+        XCTAssertEqual(keycap.inkForTesting, chrome.accent.nsColor)
+        withExtendedLifetime(window) {}
+    }
 }

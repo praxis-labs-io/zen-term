@@ -20,11 +20,13 @@ final class KeycapView: NSView {
     enum Style {
         case chip
         case plain
-        case glyph(ink: KeyPath<ChromeTheme, TerminalColor>)
+        case glyph(ink: (ChromeTheme) -> NSColor)
     }
 
     let shortcut: String
-    private let style: Style
+    var style: Style {
+        didSet { reapplyTheme() }
+    }
     private let tokenStack: NSStackView
 
     init(shortcut: String, style: Style = .chip) {
@@ -94,7 +96,7 @@ final class KeycapView: NSView {
         let chrome = Theme.current.chrome
         switch style {
         case .chip, .plain: return chrome.ink(.subtle)
-        case .glyph(let ink): return chrome[keyPath: ink].nsColor
+        case .glyph(let ink): return ink(chrome)
         }
     }
 

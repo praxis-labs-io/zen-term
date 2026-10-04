@@ -98,6 +98,20 @@ final class PanelHostViewTests: WindowTestCase {
             "the terminal's own area must be left unpainted for the surface to show through")
     }
 
+    func test_translucentPanelThatFillsItsContent_paintsTheRingAndTheMiddleAlike() {
+        var config = GeneralConfig.builtIn
+        config.backgroundAlpha = 0.5
+        GeneralConfig.setCurrentForTesting(config)
+
+        let panel = PanelHostView(content: NSView(), meta: nil, fillsContent: true, onFocusRequest: {})
+        mount(panel)
+
+        let ring = paintedAlpha(of: panel, at: NSPoint(x: 5, y: panel.bounds.midY))
+        let middle = paintedAlpha(of: panel, at: NSPoint(x: panel.bounds.midX, y: panel.bounds.midY))
+        XCTAssertGreaterThan(middle, 0, "content that isn't a terminal has nothing else to paint its middle")
+        XCTAssertEqual(ring, middle, accuracy: 0.02, "the padding must not read as a band around the content")
+    }
+
     func test_dialledTranslucentAfterBuild_paintsThePaddingRing() {
         let panel = PanelHostView(content: NSView(), meta: nil, onFocusRequest: {})
         mount(panel)
