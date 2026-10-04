@@ -569,7 +569,6 @@ final class WindowController: NSObject {
                     self.hostOrder = GeneralConfig.current.sshHostAliases.map(SSHHostID.init)
                     self.disconnectRemovedHosts()
                     self.leaveRemovedHost(shownHosts: shownHosts)
-                    self.renameHostWorkspaces()
                     self.refreshConnectView()
                     self.renderTabBar()
                 }
@@ -1355,8 +1354,7 @@ final class WindowController: NSObject {
         connection.onConnectedChange = { SSHHostStatusCenter.shared.setConnected($0, host: host) }
         let tab = mintTabID()
         let workspace = WorkspaceController(
-            id: mintWorkspaceID(), isConfigured: false, name: GeneralConfig.current.displayName(of: host),
-            folder: ShellLaunch.defaultCWD,
+            id: mintWorkspaceID(), isConfigured: false, name: host.alias, folder: ShellLaunch.defaultCWD,
             firstTab: tab, connection: connection)
         connection.onLoginFailed = { [weak self, weak workspace] in
             DispatchQueue.main.async { self?.loginFailed(on: host, closing: workspace) }
@@ -1394,13 +1392,6 @@ final class WindowController: NSObject {
             ToastContent(
                 variant: .info, title: "Tool Floats",
                 message: "Tool floats run on this Mac, not on \(GeneralConfig.current.displayName(of: host))."))
-    }
-
-    private func renameHostWorkspaces() {
-        for workspace in workspaces {
-            guard let host = workspace.host else { continue }
-            workspace.name = GeneralConfig.current.displayName(of: host)
-        }
     }
 
     func holdsHost(_ host: SSHHostID) -> Bool { workspaces.contains { $0.host == host } }

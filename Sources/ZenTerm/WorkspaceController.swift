@@ -7,7 +7,8 @@ import TerminalKit
 final class WorkspaceController {
     let id: WorkspaceID
     let isConfigured: Bool
-    var name: String
+    private let givenName: String
+    var name: String { host.map { GeneralConfig.current.displayName(of: $0) } ?? givenName }
     let folder: URL
     let origin: WorktreeOrigin?
     let connection: SSHConnection?
@@ -28,7 +29,7 @@ final class WorkspaceController {
     ) {
         self.id = id
         self.isConfigured = isConfigured
-        self.name = name
+        self.givenName = name
         self.folder = folder
         self.origin = origin
         self.connection = connection
