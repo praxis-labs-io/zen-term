@@ -1067,8 +1067,8 @@ final class HostConnectInteractionTests: WindowTestCase {
         GeneralConfig.setCurrentForTesting(config)
         postConfigChange(.terminalBehavior)
 
-        XCTAssertNil(panel.paintedBackgroundForTesting.fill, "translucent, the ring paints instead of the fill")
-        XCTAssertEqual(panel.paintedBackgroundForTesting.ring.alphaComponent, 0.5, accuracy: 0.01)
+        let fill = try XCTUnwrap(panel.paintedBackgroundForTesting.fill, "translucent, the whole panel still fills")
+        XCTAssertEqual(fill.alpha, 0.5, accuracy: 0.01, "at the terminal's alpha, so the padding reads as no band")
     }
 
     func test_theConnectButton_isTheFilledPrimaryButton_withNoOutlineOfItsOwn() throws {

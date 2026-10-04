@@ -45,7 +45,7 @@ final class HostConnectView: NSView {
         route = HostRouteView()
         connectButton = AppButton(
             title: "Connect", variant: .primary, size: .large, shortcut: "⏎", onTap: onConnect)
-        panel = PanelHostView(content: content, meta: nil, onFocusRequest: onFocusRequest)
+        panel = PanelHostView(content: content, meta: nil, fillsContent: true, onFocusRequest: onFocusRequest)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         connectButton.setAccessibilityLabel("Connect to \(host.name)")

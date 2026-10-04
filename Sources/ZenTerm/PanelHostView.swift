@@ -15,6 +15,8 @@ final class PanelHostView: NSView, TerminalModeHost {
     private let halo = OutsideShadowView()
     private let baseMeta: PanelMeta?
     private let zoomMeta: PanelMeta?
+    // Content that isn't a terminal paints no background of its own, so a translucent panel fills it whole.
+    private let fillsContent: Bool
 
     private lazy var chrome = ModeChrome(
         container: clip, content: content, padding: padding, header: baseMeta ?? zoomMeta,
@@ -78,10 +80,11 @@ final class PanelHostView: NSView, TerminalModeHost {
     private static let haloBlur: CGFloat = 8
 
     init(
-        content: NSView, meta: PanelMeta?, zoomMeta: PanelMeta? = nil,
+        content: NSView, meta: PanelMeta?, zoomMeta: PanelMeta? = nil, fillsContent: Bool = false,
         onFocusRequest: @escaping () -> Void
     ) {
         self.onFocusRequest = onFocusRequest
+        self.fillsContent = fillsContent
         self.content = content
         self.baseMeta = meta
         self.zoomMeta = zoomMeta
@@ -213,9 +216,10 @@ final class PanelHostView: NSView, TerminalModeHost {
         let background = (backgroundOverride ?? Theme.current.chrome.background).nsColor
         let alpha = CGFloat(GeneralConfig.current.backgroundAlpha)
         let isSolid = GeneralConfig.current.terminalBehavior.isBackgroundSolid
-        clip.layer?.backgroundColor = isSolid ? background.cgColor : nil
-        ring.isHidden = isSolid
-        ring.color = background.withAlphaComponent(alpha)
+        let translucent = background.withAlphaComponent(alpha)
+        clip.layer?.backgroundColor = isSolid ? background.cgColor : (fillsContent ? translucent.cgColor : nil)
+        ring.isHidden = isSolid || fillsContent
+        ring.color = translucent
         chrome.findBarFill = isSolid ? background : ring.color
     }
 
