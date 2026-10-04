@@ -44,7 +44,7 @@ final class SidebarSSHHostsTests: WindowTestCase {
     private func pin(hosts: [String]) {
         var config = GeneralConfig.builtIn
         config.ai = "pi"
-        config.sshHosts = hosts
+        config.sshHosts = hosts.map { SSHHostEntry(alias: $0) }
         GeneralConfig.setCurrentForTesting(config)
     }
 
@@ -149,7 +149,7 @@ final class SidebarSSHHostsTests: WindowTestCase {
         c.window.sendEvent(key(36, "\r", flags: [], in: c))
 
         XCTAssertEqual(recorder.keyCodes, [], "Return is handled, so AppKit does not beep")
-        XCTAssertEqual(c.selectedHostForTesting, SSHHostID(name: "devbox"))
+        XCTAssertEqual(c.selectedHostForTesting, SSHHostID(alias: "devbox"))
         XCTAssertEqual(c.window.title, "devbox")
     }
 
@@ -159,7 +159,7 @@ final class SidebarSSHHostsTests: WindowTestCase {
 
         try click(XCTUnwrap(hostRows(c).last))
 
-        XCTAssertEqual(c.selectedHostForTesting, SSHHostID(name: "staging"))
+        XCTAssertEqual(c.selectedHostForTesting, SSHHostID(alias: "staging"))
     }
 
     func test_theSelectedHost_marksOnlyItsRowSelected() throws {
@@ -183,7 +183,7 @@ final class SidebarSSHHostsTests: WindowTestCase {
         try click(XCTUnwrap(hostRows(c).first))
 
         XCTAssertFalse(c.isModalOverlayOpen)
-        XCTAssertEqual(c.selectedHostForTesting, SSHHostID(name: "devbox"))
+        XCTAssertEqual(c.selectedHostForTesting, SSHHostID(alias: "devbox"))
     }
 
     func test_focusingTheSidebar_overAHost_landsOnItsRow() throws {

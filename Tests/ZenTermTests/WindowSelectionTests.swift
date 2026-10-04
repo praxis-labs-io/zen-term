@@ -52,7 +52,7 @@ final class WindowSelectionTests: WindowTestCase {
         c.mountAndStart()
         controller = c
         let workspace = c.activeWorkspaceIDForTesting
-        c.selectHostForTesting(SSHHostID(name: "devbox"))
+        c.selectHostForTesting(SSHHostID(alias: "devbox"))
         return (c, workspace)
     }
 
@@ -140,7 +140,7 @@ final class WindowSelectionTests: WindowTestCase {
     func test_aHost_takesTheWorkspacesCanvasOffTheWindow() throws {
         let (c, surface) = try makeFocusedWorkspaceWindow()
 
-        c.selectHostForTesting(SSHHostID(name: "devbox"))
+        c.selectHostForTesting(SSHHostID(alias: "devbox"))
 
         XCTAssertNil(surface.view.window, "the workspace's pane is no longer mounted under a host")
     }
@@ -148,7 +148,7 @@ final class WindowSelectionTests: WindowTestCase {
     func test_aHost_movesFocusFromTheWorkspacesPaneToConnect() throws {
         let (c, _) = try makeFocusedWorkspaceWindow()
 
-        c.selectHostForTesting(SSHHostID(name: "devbox"))
+        c.selectHostForTesting(SSHHostID(alias: "devbox"))
 
         XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
         XCTAssertFalse(spawned.contains { $0.view === c.window.firstResponder })
@@ -157,7 +157,7 @@ final class WindowSelectionTests: WindowTestCase {
     func test_aHost_titlesTheWindowWithItsName() throws {
         let (c, _) = try makeFocusedWorkspaceWindow()
 
-        c.selectHostForTesting(SSHHostID(name: "devbox"))
+        c.selectHostForTesting(SSHHostID(alias: "devbox"))
 
         XCTAssertEqual(c.window.title, "devbox")
     }
@@ -165,7 +165,7 @@ final class WindowSelectionTests: WindowTestCase {
     func test_selectingTheWorkspaceAgain_remountsAndFocusesItsPane() throws {
         let (c, surface) = try makeFocusedWorkspaceWindow()
         let name = try XCTUnwrap(c.workspaceNamesForTesting.first)
-        c.selectHostForTesting(SSHHostID(name: "devbox"))
+        c.selectHostForTesting(SSHHostID(alias: "devbox"))
 
         c.handle(.selectWorkspace(1))
 
@@ -191,7 +191,7 @@ final class WindowSelectionTests: WindowTestCase {
 
     func test_aHost_togglesTheSidebar() throws {
         let (c, _) = try makeFocusedWorkspaceWindow()
-        c.selectHostForTesting(SSHHostID(name: "devbox"))
+        c.selectHostForTesting(SSHHostID(alias: "devbox"))
         XCTAssertTrue(c.sidebarForTesting.isDocked, "precondition: the sidebar is docked")
 
         c.handle(.toggleSidebar)
@@ -201,7 +201,7 @@ final class WindowSelectionTests: WindowTestCase {
 
     func test_aHost_movesFocusIntoTheSidebar() throws {
         let (c, _) = try makeFocusedWorkspaceWindow()
-        c.selectHostForTesting(SSHHostID(name: "devbox"))
+        c.selectHostForTesting(SSHHostID(alias: "devbox"))
 
         c.handle(.focusSidebar)
 
@@ -212,7 +212,7 @@ final class WindowSelectionTests: WindowTestCase {
         let (c, _) = try makeFocusedWorkspaceWindow()
         c.window.setContentSize(c.window.contentMinSize)
         c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
-        c.selectHostForTesting(SSHHostID(name: "devbox"))
+        c.selectHostForTesting(SSHHostID(alias: "devbox"))
         c.handle(.toggleSidebar)
         XCTAssertTrue(c.sidebarForTesting.isRevealed, "precondition: too narrow to dock, so the sidebar floats")
         XCTAssertTrue(c.sidebarForTesting.hasFocus, "precondition: the floating sidebar takes focus")
@@ -225,7 +225,7 @@ final class WindowSelectionTests: WindowTestCase {
 
     func test_aHost_dismissesTheOldestToast() throws {
         let (c, _) = try makeFocusedWorkspaceWindow()
-        c.selectHostForTesting(SSHHostID(name: "devbox"))
+        c.selectHostForTesting(SSHHostID(alias: "devbox"))
         c.showToast(ToastContent(variant: .info, title: "First", message: "One."))
         XCTAssertEqual(toastViews(c).count, 1, "precondition: a toast is up")
 
@@ -237,7 +237,7 @@ final class WindowSelectionTests: WindowTestCase {
 
     func test_aHost_dismissesEveryToast() throws {
         let (c, _) = try makeFocusedWorkspaceWindow()
-        c.selectHostForTesting(SSHHostID(name: "devbox"))
+        c.selectHostForTesting(SSHHostID(alias: "devbox"))
         c.showToast(ToastContent(variant: .info, title: "First", message: "One."))
         c.showToast(ToastContent(variant: .info, title: "Second", message: "Two."))
         XCTAssertEqual(toastViews(c).count, 2, "precondition: two toasts are up")
@@ -260,7 +260,7 @@ final class WindowSelectionTests: WindowTestCase {
             surface, didPostNotification: TerminalNotification(title: "pi", body: "Wants to run swift test"))
         drainMainQueue()
         XCTAssertEqual(c.agentStateForTesting(agent), .waiting, "precondition: the agent is waiting")
-        c.selectHostForTesting(SSHHostID(name: "devbox"))
+        c.selectHostForTesting(SSHHostID(alias: "devbox"))
 
         c.handle(.nextWaitingAgent)
 

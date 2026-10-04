@@ -10,7 +10,7 @@ enum SSHSocketSweep {
     }
 
     // The sweep cannot name the host a socket was for, and an ssh control command never contacts it.
-    private static let placeholderHost = SSHHostID(name: "zenterm-sweep.invalid")
+    private static let placeholderHost = SSHHostID(alias: "zenterm-sweep.invalid")
 
     static func start() {
         let directories = [SSHLaunch.socketDirectory, SSHLaunch.fallbackDirectory]

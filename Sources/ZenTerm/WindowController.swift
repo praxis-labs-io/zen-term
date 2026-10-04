@@ -309,7 +309,7 @@ final class WindowController: NSObject {
     private var configObserver: NSObjectProtocol?
     private var hostStatusObserver: NSObjectProtocol?
     // Read at the change, not from the sidebar, which a disconnect's status change redraws first.
-    private var hostOrder = GeneralConfig.current.sshHosts.map(SSHHostID.init)
+    private var hostOrder = GeneralConfig.current.sshHostAliases.map(SSHHostID.init)
     private var attentionObserver: NSObjectProtocol?
     /// Raises the window holding the agent that has waited longest and lands on it. False when it has gone.
     var revealWaitingAgentElsewhere: ((Int) -> Bool)?
@@ -566,9 +566,10 @@ final class WindowController: NSObject {
                 }
                 if change.contains(.sshHosts) {
                     let shownHosts = self.hostOrder
-                    self.hostOrder = GeneralConfig.current.sshHosts.map(SSHHostID.init)
+                    self.hostOrder = GeneralConfig.current.sshHostAliases.map(SSHHostID.init)
                     self.disconnectRemovedHosts()
                     self.leaveRemovedHost(shownHosts: shownHosts)
+                    self.refreshConnectView()
                     self.renderTabBar()
                 }
                 if change.contains(.theme) || change.contains(.keymap) || change.contains(.floats) {
@@ -870,7 +871,8 @@ final class WindowController: NSObject {
     private func hostConnectView(for host: SSHHostID) -> HostConnectView {
         if let connectView, connectView.host == host { return connectView }
         let view = HostConnectView(
-            host: host, status: SSHHostStatusCenter.shared.status(of: host),
+            host: host, name: GeneralConfig.current.displayName(of: host),
+            status: SSHHostStatusCenter.shared.status(of: host),
             destination: SSHHostStatusCenter.shared.destination(of: host),
             onConnect: { [weak self] in self?.connect(host) },
             onFocusRequest: { [weak self] in self?.restoreFocusToActive() })
@@ -881,6 +883,7 @@ final class WindowController: NSObject {
     private func refreshConnectView() {
         guard let connectView else { return }
         let center = SSHHostStatusCenter.shared
+        connectView.setName(GeneralConfig.current.displayName(of: connectView.host))
         connectView.setStatus(center.status(of: connectView.host))
         connectView.setDestination(center.destination(of: connectView.host))
     }
@@ -1163,7 +1166,9 @@ final class WindowController: NSObject {
 
     // Leaves an open card up, since a host is usually removed from inside Settings.
     private func leaveRemovedHost(shownHosts: [SSHHostID]) {
-        guard case .host(let host) = selection, !GeneralConfig.current.sshHosts.contains(host.name) else { return }
+        guard case .host(let host) = selection, !GeneralConfig.current.sshHostAliases.contains(host.alias) else {
+            return
+        }
         let place = shownHosts.firstIndex(of: host) ?? shownHosts.count
         let nearestHost = (shownHosts[min(place + 1, shownHosts.count)...] + shownHosts[..<place].reversed())
             .lazy.compactMap { next in self.workspaces.first { $0.host == next } }.first
@@ -1208,7 +1213,7 @@ final class WindowController: NSObject {
     }
 
     private var order: WorkspaceOrder {
-        let hosts = GeneralConfig.current.sshHosts.map(SSHHostID.init).map {
+        let hosts = GeneralConfig.current.sshHostAliases.map(SSHHostID.init).map {
             WorkspaceOrder.Host(id: $0, status: SSHHostStatusCenter.shared.status(of: $0))
         }
         return WorkspaceOrder(workspaces, hosts: hosts)
@@ -1349,7 +1354,7 @@ final class WindowController: NSObject {
         connection.onConnectedChange = { SSHHostStatusCenter.shared.setConnected($0, host: host) }
         let tab = mintTabID()
         let workspace = WorkspaceController(
-            id: mintWorkspaceID(), isConfigured: false, name: host.name, folder: ShellLaunch.defaultCWD,
+            id: mintWorkspaceID(), isConfigured: false, name: host.alias, folder: ShellLaunch.defaultCWD,
             firstTab: tab, connection: connection)
         connection.onLoginFailed = { [weak self, weak workspace] in
             DispatchQueue.main.async { self?.loginFailed(on: host, closing: workspace) }
@@ -1363,7 +1368,8 @@ final class WindowController: NSObject {
         if let workspace, workspaces.contains(where: { $0 === workspace }) { closeTabs(of: workspace) }
         toasts.show(
             ToastContent(
-                variant: .warning, title: "Couldn't Connect to", titleTail: " \(host.name)", message: nil))
+                variant: .warning, title: "Couldn't Connect to",
+                titleTail: " \(GeneralConfig.current.displayName(of: host))", message: nil))
     }
 
     private func toggleToolFloat(_ id: String, in host: SSHHostID) {
@@ -1384,7 +1390,8 @@ final class WindowController: NSObject {
     private func toastFloatsStayLocal(on host: SSHHostID) {
         toasts.show(
             ToastContent(
-                variant: .info, title: "Tool Floats", message: "Tool floats run on this Mac, not on \(host.name)."))
+                variant: .info, title: "Tool Floats",
+                message: "Tool floats run on this Mac, not on \(GeneralConfig.current.displayName(of: host))."))
     }
 
     func holdsHost(_ host: SSHHostID) -> Bool { workspaces.contains { $0.host == host } }
@@ -1722,7 +1729,7 @@ final class WindowController: NSObject {
         case "agents", "agent-notifications", "attention-toast", "completion-toast", "toast-duration",
             "automatic-update-checks":
             return .general
-        case "ssh-hosts":
+        case "ssh-host":
             return .sshHosts
         default:
             return .top
@@ -1759,7 +1766,12 @@ final class WindowController: NSObject {
             self?.reorderWorkspaces(moved, with: neighbour) ?? false
         }
         let sshHostsSection = SettingsSSHHostsSection()
-        sshHostsSection.onAddHost = { [weak self] in self?.openAddSSHHost() }
+        sshHostsSection.onAddHost = { [weak self] in
+            self?.openSSHHostForm(.add(taken: Set(GeneralConfig.current.sshHostAliases)))
+        }
+        sshHostsSection.onEditHost = { [weak self] host, address in
+            self?.openSSHHostForm(.edit(host, address: address))
+        }
         sshHostsSection.hostToFocus = host
         sshHostsSection.hostSession = { [weak self] host in
             guard let self else { return nil }
@@ -1975,27 +1987,46 @@ final class WindowController: NSObject {
         AppConfig.reload()
     }
 
-    private func openAddSSHHost() {
+    private func openSSHHostForm(_ mode: AddSSHHostOverlay.Mode) {
         closeModal()
+        let edited: String? =
+            switch mode {
+            case .add: nil
+            case .edit(let host, _): host.alias
+            }
         let overlay = AddSSHHostOverlay(
-            background: Theme.current.chrome.background.nsColor,
-            onSubmit: { [weak self] host in self?.addSSHHost(host) },
-            onCancel: { [weak self] in self?.reopenSettingsOnSSHHosts() })
+            mode: mode, background: Theme.current.chrome.background.nsColor,
+            onSubmit: { [weak self] host in edited == nil ? self?.addSSHHost(host) : self?.renameSSHHost(host) },
+            onCancel: { [weak self] in self?.reopenSettingsOnSSHHosts(focusing: edited) })
         presentModal(overlay, kind: .sshHostForm)
     }
 
-    private func addSSHHost(_ host: String) {
+    private func addSSHHost(_ host: SSHHostEntry) {
         do {
-            try SSHHostsWriter.set(host, on: true)
+            try SSHHostsWriter.add(host)
         } catch {
             toasts.show(
                 ToastContent(
                     variant: .warning, title: "Couldn't Add SSH Host",
-                    message: "Couldn't save \(host) to ZenTerm's config: \(error.localizedDescription)"))
+                    message: "Couldn't save \(host.alias) to ZenTerm's config: \(error.localizedDescription)"))
             return
         }
         AppConfig.reload()
-        reopenSettingsOnSSHHosts(focusing: host)
+        reopenSettingsOnSSHHosts(focusing: host.alias)
+    }
+
+    private func renameSSHHost(_ host: SSHHostEntry) {
+        do {
+            try SSHHostsWriter.rename(host.alias, to: host.name)
+        } catch {
+            toasts.show(
+                ToastContent(
+                    variant: .warning, title: "Couldn't Save SSH Host",
+                    message: "Couldn't save \(host.alias) to ZenTerm's config: \(error.localizedDescription)"))
+            return
+        }
+        AppConfig.reload()
+        reopenSettingsOnSSHHosts(focusing: host.alias)
     }
 
     private func reopenSettingsOnSSHHosts(focusing host: String? = nil) {
@@ -2586,7 +2617,8 @@ final class WindowController: NSObject {
 
     private func confirmAbandoningLogin(of workspace: WorkspaceController, closing target: CloseWarning.LoginTarget) {
         guard let host = workspace.host else { return }
-        let subject = CloseWarning.Subject.login(host: host.name, closing: target)
+        let subject = CloseWarning.Subject.login(
+            host: GeneralConfig.current.displayName(of: host), closing: target)
         presentConfirm(
             variant: .warning, title: subject.title,
             message: CloseWarning.message(closing: subject, naming: []), confirmLabel: "Close"
@@ -2608,9 +2640,9 @@ final class WindowController: NSObject {
 
     // Leaves an open card up, since a host is usually turned off from inside Settings.
     private func disconnectRemovedHosts() {
-        let enabled = GeneralConfig.current.sshHosts
+        let enabled = GeneralConfig.current.sshHostAliases
         for workspace in workspaces {
-            guard let host = workspace.host, !enabled.contains(host.name) else { continue }
+            guard let host = workspace.host, !enabled.contains(host.alias) else { continue }
             Log.info("ssh host turned off, so it disconnects", category: .workspace)
             disconnect(workspace, dismissingModal: false)
         }
@@ -3725,7 +3757,7 @@ final class WindowController: NSObject {
         tabBar.render(items)
         switch selection {
         case .workspace(let workspace): window.title = workspace.name
-        case .host(let host): window.title = host.name
+        case .host(let host): window.title = GeneralConfig.current.displayName(of: host)
         }
         let waiting = workspaces.filter { attention.state(tabs: $0.tabIDs) == .waiting }.map(\.id)
         sidebar.render(

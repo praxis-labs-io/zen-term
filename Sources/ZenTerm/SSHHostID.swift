@@ -1,3 +1,3 @@
 struct SSHHostID: Hashable {
-    let name: String
+    let alias: String
 }

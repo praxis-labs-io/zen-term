@@ -5,7 +5,7 @@ import XCTest
 
 final class AddSSHHostOverlayTests: WindowTestCase {
     private var window: NSWindow?
-    private var submitted: [String] = []
+    private var submitted: [SSHHostEntry] = []
     private var cancelled = 0
 
     override func tearDownWithError() throws {
@@ -17,9 +17,9 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
-    private func mount() -> AddSSHHostOverlay {
+    private func mount(_ mode: AddSSHHostOverlay.Mode = .add(taken: [])) -> AddSSHHostOverlay {
         let overlay = AddSSHHostOverlay(
-            background: Theme.current.chrome.background.nsColor,
+            mode: mode, background: Theme.current.chrome.background.nsColor,
             onSubmit: { [weak self] in self?.submitted.append($0) },
             onCancel: { [weak self] in self?.cancelled += 1 })
         let win = NSWindow(
@@ -36,6 +36,10 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         descendants(of: overlay).compactMap { $0 as? FieldBox }.first!
     }
 
+    private func nameField(in overlay: NSView) -> FieldBox {
+        descendants(of: overlay).compactMap { $0 as? FieldBox }[1]
+    }
+
     private func pressReturn(in box: FieldBox) {
         _ = box.control(box.field, textView: NSTextView(), doCommandBy: #selector(NSResponder.insertNewline(_:)))
     }
@@ -45,20 +49,44 @@ final class AddSSHHostOverlayTests: WindowTestCase {
             .first { !$0.isHidden && $0.textColor == Theme.current.chrome.destructive.nsColor }?.stringValue
     }
 
-    func test_return_submitsTheTrimmedHost() {
+    func test_returnOnHost_movesToName_andReturnOnName_submitsTheTrimmedHostWithNoName() {
         let overlay = mount()
         field(in: overlay).setText("  deploy@10.0.0.5 ")
 
         pressReturn(in: field(in: overlay))
+        XCTAssertEqual(submitted, [])
+        XCTAssertIdentical(window?.firstResponder, nameField(in: overlay).field.currentEditor())
+        pressReturn(in: nameField(in: overlay))
 
-        XCTAssertEqual(submitted, ["deploy@10.0.0.5"])
+        XCTAssertEqual(submitted, [SSHHostEntry(alias: "deploy@10.0.0.5")])
+    }
+
+    func test_aTypedName_isSubmittedTrimmed() {
+        let overlay = mount()
+        field(in: overlay).setText("deploy@10.0.0.5")
+        nameField(in: overlay).setText("  Deploy box ")
+
+        pressReturn(in: nameField(in: overlay))
+
+        XCTAssertEqual(submitted, [SSHHostEntry(alias: "deploy@10.0.0.5", name: "Deploy box")])
+    }
+
+    func test_aNameWithAQuote_isRefused() {
+        let overlay = mount()
+        field(in: overlay).setText("deploy@10.0.0.5")
+        nameField(in: overlay).setText("The \"box\"")
+
+        pressReturn(in: nameField(in: overlay))
+
+        XCTAssertEqual(visibleMessage(in: overlay), "Can't contain \".")
+        XCTAssertEqual(submitted, [])
     }
 
     func test_anEmptyHost_staysOpenWithAMessage() {
         let overlay = mount()
         field(in: overlay).setText("   ")
 
-        pressReturn(in: field(in: overlay))
+        pressReturn(in: nameField(in: overlay))
 
         XCTAssertEqual(submitted, [])
         XCTAssertEqual(visibleMessage(in: overlay), "Enter a host.")
@@ -69,7 +97,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         for text in ["dev box", "dev,box"] {
             field(in: overlay).setText(text)
 
-            pressReturn(in: field(in: overlay))
+            pressReturn(in: nameField(in: overlay))
 
             XCTAssertEqual(visibleMessage(in: overlay), "Can't contain spaces, commas, # or \".", text)
         }
@@ -80,10 +108,85 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         let overlay = mount()
         field(in: overlay).setText("-oProxyCommand=x")
 
-        pressReturn(in: field(in: overlay))
+        pressReturn(in: nameField(in: overlay))
 
         XCTAssertEqual(visibleMessage(in: overlay), "Can't start with -.")
         XCTAssertEqual(submitted, [])
+    }
+
+    func test_aHostEndingWithAColon_isRefused_becauseItWouldReadBackWithoutTheColon() {
+        let overlay = mount()
+        field(in: overlay).setText("devbox:")
+
+        pressReturn(in: nameField(in: overlay))
+
+        XCTAssertEqual(visibleMessage(in: overlay), "Can't end with :.")
+        XCTAssertEqual(submitted, [])
+        XCTAssertEqual(SSHHostEntry(configValue: "devbox:")?.alias, "devbox")
+    }
+
+    func test_aHostAlreadyAdded_isRefused_ratherThanDroppingTheTypedName() {
+        let overlay = mount(.add(taken: ["devbox"]))
+        field(in: overlay).setText("devbox")
+        nameField(in: overlay).setText("Build box")
+
+        pressReturn(in: nameField(in: overlay))
+
+        XCTAssertEqual(visibleMessage(in: overlay), "Already added.")
+        XCTAssertIdentical(window?.firstResponder, field(in: overlay).field.currentEditor())
+        XCTAssertEqual(submitted, [])
+    }
+
+    private func button(_ title: String, in overlay: NSView) -> AppButton? {
+        descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == title }
+    }
+
+    private func header(in overlay: NSView) -> String? {
+        descendants(of: overlay).compactMap { $0 as? NSTextField }.first { $0.font?.pointSize == 15 }?.stringValue
+    }
+
+    func test_editing_showsTheHostFixed_andFocusesItsName() throws {
+        let overlay = mount(.edit(SSHHostEntry(alias: "devbox", name: "Build box"), address: "drew@10.0.1.12"))
+
+        XCTAssertEqual(header(in: overlay), "Edit SSH Host")
+        XCTAssertNotNil(button("Save", in: overlay))
+        XCTAssertNil(button("Add", in: overlay))
+        XCTAssertEqual(field(in: overlay).field.stringValue, "devbox  drew@10.0.1.12")
+        XCTAssertFalse(field(in: overlay).field.isEditable)
+        XCTAssertFalse(field(in: overlay).field.acceptsFirstResponder)
+        XCTAssertEqual(nameField(in: overlay).text, "Build box")
+        XCTAssertIdentical(window?.firstResponder, nameField(in: overlay).field.currentEditor())
+        XCTAssertEqual(header(in: mount()), "Add SSH Host")
+    }
+
+    func test_editing_saveSubmitsTheAliasWithTheNewName_andAnEmptyNameClearsIt() throws {
+        let overlay = mount(.edit(SSHHostEntry(alias: "devbox", name: "Build box"), address: nil))
+        nameField(in: overlay).setText("  Builder ")
+        let save = try XCTUnwrap(button("Save", in: overlay))
+        window?.makeFirstResponder(save)
+
+        save.keyDown(with: returnKey())
+        nameField(in: overlay).setText("   ")
+        pressReturn(in: nameField(in: overlay))
+
+        XCTAssertEqual(
+            submitted, [SSHHostEntry(alias: "devbox", name: "Builder"), SSHHostEntry(alias: "devbox", name: nil)])
+    }
+
+    func test_editing_refusesANameWithAQuote() {
+        let overlay = mount(.edit(SSHHostEntry(alias: "devbox"), address: nil))
+        nameField(in: overlay).setText("The \"box\"")
+
+        pressReturn(in: nameField(in: overlay))
+
+        XCTAssertEqual(visibleMessage(in: overlay), "Can't contain \".")
+        XCTAssertEqual(submitted, [])
+    }
+
+    private func returnKey() -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+            characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36)!
     }
 
     func test_escape_cancels() {

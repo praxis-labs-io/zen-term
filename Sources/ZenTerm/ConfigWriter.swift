@@ -8,6 +8,7 @@ enum ConfigWriter {
         keybinds: KeymapOverrides? = nil,
         floatUpserts: [ToolFloat] = [],
         floatRemovals: Set<String> = [],
+        sshHosts: [SSHHostEntry]? = nil,
         configRoot: URL = ConfigLoader.defaultRoot
     ) throws {
         try FileManager.default.createDirectory(at: configRoot, withIntermediateDirectories: true)
@@ -21,6 +22,7 @@ enum ConfigWriter {
         if !floatUpserts.isEmpty || !floatRemovals.isEmpty {
             applyFloats(upserts: floatUpserts, removals: floatRemovals, in: &lines)
         }
+        if let sshHosts { applySSHHosts(sshHosts, in: &lines) }
 
         var output = lines.joined(separator: "\n")
         if !output.isEmpty { output += "\n" }
@@ -167,6 +169,38 @@ enum ConfigWriter {
         guard activeAssignmentKey(line) == "float", let equals = line.firstIndex(of: "=") else { return nil }
         let value = ConfigText.stripComment(String(line[line.index(after: equals)...]))
         return ToolFloatParser.identity(fields: ToolFloatParser.fields(value))
+    }
+
+    private static func applySSHHosts(_ hosts: [SSHHostEntry], in lines: inout [String]) {
+        let key = SSHHostsWriter.key
+        var comments: [String: String] = [:]
+        for line in lines where activeAssignmentKey(line) == key {
+            guard let alias = sshHostAlias(of: line), let comment = ConfigText.trailingComment(of: line) else {
+                continue
+            }
+            comments[alias] = comment
+        }
+        let block = hosts.map { host in
+            let rendered = "\(key) = \(host.configValue)"
+            return comments[host.alias].map { "\(rendered)  \($0)" } ?? rendered
+        }
+        let isHostLine = { (line: String) in activeAssignmentKey(line) == key && sshHostAlias(of: line) != nil }
+        if let first = lines.firstIndex(where: isHostLine) {
+            lines.removeAll(where: isHostLine)
+            lines.insert(contentsOf: block, at: first)
+        } else if let rejected = lines.lastIndex(where: { activeAssignmentKey($0) == key }) {
+            lines.insert(contentsOf: block, at: rejected + 1)
+        } else if let example = lines.lastIndex(where: { commentedAssignmentKey($0) == key }) {
+            lines.insert(contentsOf: block, at: example + 1)
+        } else {
+            lines.append(contentsOf: block)
+        }
+    }
+
+    private static func sshHostAlias(of line: String) -> String? {
+        guard let equals = line.firstIndex(of: "=") else { return nil }
+        let value = ConfigText.stripComment(String(line[line.index(after: equals)...]))
+        return SSHHostEntry(configValue: value.trimmingCharacters(in: .whitespaces))?.alias
     }
 
     private static func quotedValue(_ value: String) -> String {

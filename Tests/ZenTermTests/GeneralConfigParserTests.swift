@@ -86,17 +86,60 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(parse("font-size = 14\n").agents, [])
     }
 
-    func test_sshHosts_keepsOrderAndDropsDuplicates() {
+    func test_sshHost_isRepeatable_keepingOrderAndTheFirstLineForAnAlias() {
+        let config = parse(
+            """
+            ssh-host = devbox
+            ssh-host = prod: Production
+            ssh-host = deploy@10.0.0.5
+            ssh-host = devbox: Later
+            ssh-host = Prod
+            """)
         XCTAssertEqual(
-            parse("ssh-hosts = devbox, prod, , deploy@10.0.0.5, devbox\n").sshHosts,
-            ["devbox", "prod", "deploy@10.0.0.5"])
-        XCTAssertEqual(parse("ssh-hosts = devbox prod\n").sshHosts, ["devbox", "prod"])
-        XCTAssertEqual(parse("ssh-hosts = Prod, prod\n").sshHosts, ["Prod", "prod"])
+            config.sshHosts,
+            [
+                SSHHostEntry(alias: "devbox"), SSHHostEntry(alias: "prod", name: "Production"),
+                SSHHostEntry(alias: "deploy@10.0.0.5"), SSHHostEntry(alias: "Prod"),
+            ])
+        XCTAssertTrue(config.configDiagnostics.isEmpty)
         XCTAssertEqual(parse("font-size = 14\n").sshHosts, [])
     }
 
-    func test_sshHosts_dropsEntriesThatWouldReadAsSSHOptions() {
-        XCTAssertEqual(parse("ssh-hosts = -oProxyCommand=x, devbox\n").sshHosts, ["devbox"])
+    func test_sshHost_nameFollowsTheFirstColonBeforeASpace() {
+        let cases: [(String, SSHHostEntry)] = [
+            ("devbox: Build box", SSHHostEntry(alias: "devbox", name: "Build box")),
+            ("devbox :  Build box: east ", SSHHostEntry(alias: "devbox", name: "Build box: east")),
+            ("devbox:", SSHHostEntry(alias: "devbox")),
+            ("devbox:   ", SSHHostEntry(alias: "devbox")),
+            ("devbox: \"Box #2\"", SSHHostEntry(alias: "devbox", name: "Box #2")),
+            ("deploy@fe80::1", SSHHostEntry(alias: "deploy@fe80::1")),
+            ("deploy@fe80::1: Router", SSHHostEntry(alias: "deploy@fe80::1", name: "Router")),
+            ("ssh://deploy@10.0.0.5:2222", SSHHostEntry(alias: "ssh://deploy@10.0.0.5:2222")),
+        ]
+        for (value, expected) in cases {
+            XCTAssertEqual(parse("ssh-host = \(value)\n").sshHosts, [expected], value)
+        }
+    }
+
+    func test_sshHost_dropsALineThatWouldReadAsAnSSHOptionOrHasNoColon() {
+        for value in ["-oProxyCommand=x", "devbox Build box", ": Build box"] {
+            let config = parse("ssh-host = \(value)\nssh-host = prod\n")
+            XCTAssertEqual(config.sshHosts, [SSHHostEntry(alias: "prod")], value)
+            XCTAssertEqual(
+                config.configDiagnostics,
+                [
+                    ConfigDiagnostic(
+                        scope: .setting(key: "ssh-host"),
+                        problem: .invalidValue(got: value, expected: "host, or host: name"))
+                ], value)
+        }
+    }
+
+    func test_sshHost_displayNameFallsBackToTheAlias() {
+        let config = parse("ssh-host = devbox: Build box\nssh-host = prod\n")
+        XCTAssertEqual(config.displayName(of: SSHHostID(alias: "devbox")), "Build box")
+        XCTAssertEqual(config.displayName(of: SSHHostID(alias: "prod")), "prod")
+        XCTAssertEqual(config.displayName(of: SSHHostID(alias: "gone")), "gone")
     }
 
     func test_listedAgents_readsAnAIValueIn_whicheverLineComesFirst() {
