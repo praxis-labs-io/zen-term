@@ -555,6 +555,15 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         }
     }
 
+    func test_renamingAHostThatIsNoLongerListed_throws_ratherThanSavingNothing() {
+        GeneralConfig.setCurrentForTesting(.builtIn)
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+
+        XCTAssertThrowsError(try SSHHostsWriter.rename("gone", to: "Gone", configRoot: root)) {
+            XCTAssertTrue($0 is SSHHostsWriter.NoLongerListed)
+        }
+    }
+
     func test_aClickOnAHostsToggle_turnsItOff_withoutOpeningTheForm() throws {
         try inSettings(ssh: "Host devbox\n", config: "ssh-host = devbox: Build box\n") { c, content in
             let off = try XCTUnwrap(
