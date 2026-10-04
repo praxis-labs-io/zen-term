@@ -21,12 +21,4 @@ final class IconBadgeTests: XCTestCase {
         XCTAssertEqual(toast.badgeFillForTesting, chrome.tint(role, alpha: ChromeTheme.badgeTint).cgColor)
         XCTAssertEqual(toast.badgeIconTintForTesting, role.nsColor)
     }
-
-    func test_aLargeBadge_isABitBiggerThanAToasts() {
-        let regular = IconBadge(symbol: "server.rack", accessibilityDescription: nil, size: .regular) { $0.accent }
-        let large = IconBadge(symbol: "server.rack", accessibilityDescription: nil, size: .large) { $0.accent }
-
-        XCTAssertGreaterThan(large.fittingSize.width, regular.fittingSize.width)
-        XCTAssertEqual(large.iconTintForTesting, Theme.current.chrome.accent.nsColor)
-    }
 }

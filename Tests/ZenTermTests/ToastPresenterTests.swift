@@ -47,6 +47,19 @@ final class ToastPresenterTests: WindowTestCase {
             isARepeat: false, keyCode: keyCode)!
     }
 
+    func test_aTitleOnlyToast_laysOutNoEmptyMessageLine() {
+        func descendants(of view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants(of: $0) } }
+        let titled = ToastView(
+            content: ToastContent(variant: .warning, title: "Couldn't Connect to devbox", message: nil))
+        let withMessage = ToastView(
+            content: ToastContent(variant: .warning, title: "Couldn't Connect", message: "Why."))
+
+        XCTAssertFalse(
+            descendants(of: titled).contains { ($0 as? NSTextField)?.stringValue.isEmpty == true },
+            "an empty message still takes a line")
+        XCTAssertLessThan(titled.fittingSize.height, withMessage.fittingSize.height)
+    }
+
     func test_aLongTitle_givesWayBeforeItsTail() throws {
         let host = makeHost()
         let presenter = ToastPresenter(host: host, topInset: 12, trailingInset: 12)

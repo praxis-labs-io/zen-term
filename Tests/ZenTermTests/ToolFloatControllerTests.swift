@@ -570,9 +570,9 @@ final class ToolFloatControllerTests: WindowTestCase {
         XCTAssertTrue(floatSurfaces(spawned(), command: "gitdash").isEmpty)
         XCTAssertEqual(toasts.count, 1)
         XCTAssertTrue(
-            toasts[0].message.contains(PathDisplay.abbreviatingHome(notes.path)),
+            toasts[0].message?.contains(PathDisplay.abbreviatingHome(notes.path)) == true,
             "the guard evaluated the PINNED dir, so the toast must name it — \"run `git init` here\" "
-                + "points at the focused pane, which is a repo and irrelevant: \(toasts[0].message)")
+                + "points at the focused pane, which is a repo and irrelevant: \(toasts[0].message ?? "")")
     }
 
     func test_isLiveInBackground_trueOnlyWhileLiveAndHidden() throws {

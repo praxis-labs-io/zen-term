@@ -16,7 +16,7 @@ final class ChromeTooltip: HoverCardView {
         super.init(frame: .zero)
         var views: [NSView] = [labelField]
         if let shortcut, !shortcut.isEmpty {
-            views.append(KeycapView(shortcut: shortcut, showsBackground: true))
+            views.append(KeycapView(shortcut: shortcut))
         }
         let stack = NSStackView(views: views)
         stack.orientation = .horizontal

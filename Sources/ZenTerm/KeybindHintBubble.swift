@@ -128,7 +128,7 @@ final class KeybindHintBubble: ShadowCardView {
             label.textColor = Theme.current.chrome.ink(.muted)
             content = label
         } else {
-            content = KeycapView(shortcut: glyph, showsBackground: false)
+            content = KeycapView(shortcut: glyph, style: .plain)
         }
         content.translatesAutoresizingMaskIntoConstraints = false
         previewHost.addSubview(content)

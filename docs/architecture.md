@@ -404,7 +404,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 New modal surfaces compose the existing primitives.
 
 - **Primitives:** `AppButton` (variants `primary`, `secondary`, `muted`, `destructive`,
-  `segment`, `link`), `SegmentedControl`, `FieldBox` + `LabeledField`, `ModalCard.swift`
+  `segment`, `link`; sizes `standard` and `large`; an optional shortcut keycap inside),
+  `SegmentedControl`, `FieldBox` + `LabeledField`, `ModalCard.swift`
   for card chrome and scrolling, `FormCard` for forms (body scrolls, footer pinned,
   capped at `FormCard.maxHeight`; the workspace form takes its own taller cap).
 - **Keyboard model:** ↑/↓ between rows, ←/→ within a row, Return advances, ⌘Return
@@ -590,6 +591,8 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   is active, and on activation, wake and network change (`NWPathMonitor`); an answer from before
   a network change is dropped and asked again. A host reads Offline until the probe reaches it,
   and a connected host takes its status from the connection, not the probe.
+- **The Connect screen reads its host from `SSHHostStatusCenter`**: the status, and the
+  destination the probe resolved from the same `ssh -G`, so it never runs ssh itself.
 - **A connected host is a workspace whose tabs run ssh over one `SSHConnection`.** Every pane
   and drawer, and Scratch, starts through the tab's injected `SurfaceStart` (a user float
   never does, since a host's start keeps only the launch's environment), which for a host runs
