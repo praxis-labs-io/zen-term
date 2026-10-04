@@ -197,7 +197,8 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         line.lineBreakMode = .byTruncatingTail
         let font = hostField.field.font ?? .systemFont(ofSize: 13)
         let text = NSMutableAttributedString(
-            string: alias, attributes: [.font: font, .foregroundColor: chrome.foreground.nsColor, .paragraphStyle: line])
+            string: alias,
+            attributes: [.font: font, .foregroundColor: chrome.foreground.nsColor, .paragraphStyle: line])
         if let address {
             text.append(
                 NSAttributedString(
