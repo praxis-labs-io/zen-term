@@ -64,7 +64,12 @@ final class AppButton: NSButton {
     private var isFocusedStop = false { didSet { restyle() } }
     private var trackingAreaRef: NSTrackingArea?
 
-    override var isEnabled: Bool { didSet { restyle() } }
+    override var isEnabled: Bool {
+        didSet {
+            if isEnabled != oldValue, let keycap { keycap.style = Self.keycapStyle(for: variant, isEnabled: isEnabled) }
+            restyle()
+        }
+    }
 
     override var intrinsicContentSize: NSSize {
         var fitted = super.intrinsicContentSize
@@ -88,8 +93,7 @@ final class AppButton: NSButton {
         self.size = size
         self.symbolName = symbol
         self.labelText = title
-        let keycapStyle: KeycapView.Style = variant == .primary ? .glyph(ink: \.accent) : .chip
-        self.keycap = shortcut.map { KeycapView(shortcut: $0, style: keycapStyle) }
+        self.keycap = shortcut.map { KeycapView(shortcut: $0, style: Self.keycapStyle(for: variant, isEnabled: true)) }
         super.init(frame: .zero)
         if let keycap {
             let cell = KeycapClearingCell()
@@ -124,6 +128,11 @@ final class AppButton: NSButton {
     func setTitle(_ title: String) {
         labelText = title
         restyle()
+    }
+
+    private static func keycapStyle(for variant: Variant, isEnabled: Bool) -> KeycapView.Style {
+        guard variant == .primary else { return .chip }
+        return .glyph { isEnabled ? $0.accent.nsColor : $0.ink(.faint) }
     }
 
     func reapplyTheme() {
