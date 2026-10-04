@@ -114,6 +114,17 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         XCTAssertEqual(submitted, [])
     }
 
+    func test_aHostEndingWithAColon_isRefused_becauseItWouldReadBackWithoutTheColon() {
+        let overlay = mount()
+        field(in: overlay).setText("devbox:")
+
+        pressReturn(in: nameField(in: overlay))
+
+        XCTAssertEqual(visibleMessage(in: overlay), "Can't end with :.")
+        XCTAssertEqual(submitted, [])
+        XCTAssertEqual(SSHHostEntry(configValue: "devbox:")?.alias, "devbox")
+    }
+
     func test_escape_cancels() {
         let overlay = mount()
         let escape = NSEvent.keyEvent(
