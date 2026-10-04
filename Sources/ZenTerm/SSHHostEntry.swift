@@ -23,6 +23,8 @@ struct SSHHostEntry: Equatable {
         self.init(alias: alias, name: name.flatMap { $0.isEmpty ? nil : $0 })
     }
 
+    var displayName: String { name ?? alias }
+
     var configValue: String {
         guard let name else { return alias }
         return "\(alias): \(name.contains("#") ? "\"\(name)\"" : name)"

@@ -388,6 +388,22 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         XCTAssertEqual(captions(in: detail), ["devbox", "prod"])
     }
 
+    func test_aNamedHost_describesItselfByAlias_thenItsAddressWhenTheyDiffer() throws {
+        SSHHostResolver.destinationOverrideForTesting = { host in
+            ["devbox": "drew@10.0.0.2", "prod": "prod", "ops": "drew@10.0.0.3"][host]
+        }
+        try seed(
+            ssh: "Host devbox\nHost prod\nHost ops\n",
+            config: "ssh-host = devbox: Build box\nssh-host = prod: Production\nssh-host = ops\n")
+
+        let detail = mount()
+        waitUntil(label("drew@10.0.0.3", in: detail) != nil, "the resolved destinations to show")
+
+        XCTAssertEqual(captions(in: detail), ["Build box", "Production", "ops"])
+        XCTAssertNotNil(label("devbox · drew@10.0.0.2", in: detail))
+        XCTAssertNotNil(label("prod", in: detail), "an address that is the alias is not repeated")
+    }
+
     func test_addButton_asksForAHost() throws {
         let detail = mount()
         var asked = 0

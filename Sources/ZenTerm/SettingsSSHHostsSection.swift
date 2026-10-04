@@ -192,19 +192,22 @@ final class SettingsSSHHostsSection: SettingsSection {
         hostRow.row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
 
-    private func label(of host: String) -> String {
-        GeneralConfig.current.sshHosts.first { $0.alias == host }?.name ?? dropped[host]?.name ?? host
+    private func entry(of host: String) -> SSHHostEntry {
+        GeneralConfig.current.sshHosts.first { $0.alias == host } ?? restored(host)
     }
 
-    private func destination(of host: String) -> String? {
-        let address = destinations[host] ?? host
-        return address == label(of: host) ? nil : address
+    private func label(of host: String) -> String { entry(of: host).displayName }
+
+    private func description(of host: String) -> String? {
+        let address = destinations[host].flatMap { $0 == host ? nil : $0 }
+        guard entry(of: host).name != nil else { return address }
+        return address.map { "\(host) · \($0)" } ?? host
     }
 
     private func makeToggleRow(_ host: String, isOn: Bool) -> HostRow {
         let toggle = SegmentedControl(options: ["On", "Off"], selectedIndex: isOn ? 0 : 1) { _ in }
         let row = LayoutRow(
-            caption: label(of: host), description: destination(of: host), control: toggle, controlNote: nil,
+            caption: label(of: host), description: description(of: host), control: toggle, controlNote: nil,
             controlWidth: nil)
         toggle.onChange = { [weak self, weak row, weak toggle] index in
             guard let row, let toggle else { return }
@@ -222,7 +225,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         let button = AppButton(title: "Remove", variant: .secondary)
         button.isKeyboardFocusable = true
         let row = LayoutRow(
-            caption: label(of: host), description: destination(of: host), control: button, controlNote: nil,
+            caption: label(of: host), description: description(of: host), control: button, controlNote: nil,
             controlWidth: Self.removalButtonWidth)
         button.onTap = { [weak self, weak row, weak button] in
             guard let self, let row, let button, !Self.isKeyRepeat else { return }
