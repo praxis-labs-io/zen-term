@@ -1,6 +1,7 @@
 import AppKit
 
 final class AddSSHHostOverlay: NSView, ModalOverlay {
+    private let taken: Set<String>
     private let onSubmit: (SSHHostEntry) -> Void
     private let onCancel: () -> Void
 
@@ -17,7 +18,11 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private let addButton = AppButton(title: "Add", variant: .primary, keyEquivalent: "\r")
 
-    init(background: NSColor, onSubmit: @escaping (SSHHostEntry) -> Void, onCancel: @escaping () -> Void) {
+    init(
+        taken: Set<String>, background: NSColor, onSubmit: @escaping (SSHHostEntry) -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        self.taken = taken
         self.onSubmit = onSubmit
         self.onCancel = onCancel
         super.init(frame: .zero)
@@ -164,7 +169,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
 
     private func submit() {
         let host = hostField.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let problem = Self.problem(with: host) {
+        if let problem = Self.problem(with: host) ?? (taken.contains(host) ? "Already added." : nil) {
             hostGroup.setMessage(problem)
             focus(hostField.field)
             return

@@ -17,9 +17,9 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
-    private func mount() -> AddSSHHostOverlay {
+    private func mount(taken: Set<String> = []) -> AddSSHHostOverlay {
         let overlay = AddSSHHostOverlay(
-            background: Theme.current.chrome.background.nsColor,
+            taken: taken, background: Theme.current.chrome.background.nsColor,
             onSubmit: { [weak self] in self?.submitted.append($0) },
             onCancel: { [weak self] in self?.cancelled += 1 })
         let win = NSWindow(
@@ -123,6 +123,18 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         XCTAssertEqual(visibleMessage(in: overlay), "Can't end with :.")
         XCTAssertEqual(submitted, [])
         XCTAssertEqual(SSHHostEntry(configValue: "devbox:")?.alias, "devbox")
+    }
+
+    func test_aHostAlreadyAdded_isRefused_ratherThanDroppingTheTypedName() {
+        let overlay = mount(taken: ["devbox"])
+        field(in: overlay).setText("devbox")
+        nameField(in: overlay).setText("Build box")
+
+        pressReturn(in: nameField(in: overlay))
+
+        XCTAssertEqual(visibleMessage(in: overlay), "Already added.")
+        XCTAssertIdentical(window?.firstResponder, field(in: overlay).field.currentEditor())
+        XCTAssertEqual(submitted, [])
     }
 
     func test_escape_cancels() {
