@@ -6,6 +6,7 @@ final class SSHHostRow: NSView {
     var isEditable: Bool {
         didSet {
             guard isEditable != oldValue else { return }
+            setAccessibilityElement(isEditable)
             window?.invalidateCursorRects(for: self)
         }
     }
@@ -27,6 +28,8 @@ final class SSHHostRow: NSView {
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
         layer?.cornerRadius = 8
+        setAccessibilityRole(.button)
+        setAccessibilityElement(isEditable)
 
         addSubview(layout)
         NSLayoutConstraint.activate([
@@ -43,6 +46,12 @@ final class SSHHostRow: NSView {
     func reapplyTheme() {
         layout.reapplyTheme()
         restyle()
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        guard isEditable else { return false }
+        onActivate?()
+        return true
     }
 
     override var acceptsFirstResponder: Bool { isEditable }

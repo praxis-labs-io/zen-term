@@ -543,6 +543,18 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         }
     }
 
+    func test_aHostRow_isAButtonNamedForItsHost_thatOpensTheEditFormWhenPressed() throws {
+        try inSettings(ssh: "", config: "ssh-host = deploy@10.0.0.5: Deploy box\n") { _, content in
+            let row = try XCTUnwrap(hostRows(in: content).first)
+
+            XCTAssertEqual(row.accessibilityRole(), .button)
+            XCTAssertEqual(row.accessibilityLabel(), "Edit Deploy box")
+            XCTAssertTrue(row.accessibilityPerformPress())
+
+            XCTAssertEqual(formTitle(try XCTUnwrap(form(in: content))), "Edit SSH Host")
+        }
+    }
+
     func test_aClickOnAHostsToggle_turnsItOff_withoutOpeningTheForm() throws {
         try inSettings(ssh: "Host devbox\n", config: "ssh-host = devbox: Build box\n") { c, content in
             let off = try XCTUnwrap(

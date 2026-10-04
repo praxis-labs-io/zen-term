@@ -247,6 +247,7 @@ final class SettingsSSHHostsSection: SettingsSection {
             caption: label(of: host), description: description(of: host), control: control, controlNote: nil,
             controlWidth: controlWidth)
         let row = SSHHostRow(host: host, layout: layout, isEditable: isEditable)
+        row.setAccessibilityLabel("Edit \(label(of: host))")
         row.onActivate = { [weak self] in self?.edit(host) }
         row.onArrowUp = { [weak self, weak row] in self?.moveFocus(from: row, delta: -1) }
         row.onArrowDown = { [weak self, weak row] in self?.moveFocus(from: row, delta: 1) }
