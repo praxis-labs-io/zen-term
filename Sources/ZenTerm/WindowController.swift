@@ -1985,7 +1985,7 @@ final class WindowController: NSObject {
     private func openAddSSHHost() {
         closeModal()
         let overlay = AddSSHHostOverlay(
-            taken: Set(GeneralConfig.current.sshHostAliases), background: Theme.current.chrome.background.nsColor,
+            mode: .add(taken: Set(GeneralConfig.current.sshHostAliases)), background: Theme.current.chrome.background.nsColor,
             onSubmit: { [weak self] host in self?.addSSHHost(host) },
             onCancel: { [weak self] in self?.reopenSettingsOnSSHHosts() })
         presentModal(overlay, kind: .sshHostForm)
