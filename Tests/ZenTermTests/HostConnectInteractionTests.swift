@@ -1270,6 +1270,19 @@ final class HostConnectInteractionTests: WindowTestCase {
             XCTAssertNotNil(route.window, "precondition: tall enough to keep the route at \(width)")
             let routeFrame = route.convert(route.bounds, to: content)
             let panelFrame = screen.panelForTesting.convert(screen.panelForTesting.bounds, to: content)
+            if content.bounds.width != width {
+                let views: [(String, NSView)] = [
+                    ("route", screen.routeForTesting), ("detail", screen.detailFieldForTesting),
+                    ("button", screen.connectButtonForTesting), ("panel", screen.panelForTesting),
+                ]
+                for (name, view) in views {
+                    print("DIAG \(name) frame=\(view.frame) intrinsic=\(view.intrinsicContentSize) fitting=\(view.fittingSize)")
+                }
+                print("DIAG detail pmlw=\(screen.detailFieldForTesting.preferredMaxLayoutWidth) minSize=\(c.window.contentMinSize)")
+                for view in descendants(of: screen) where view.intrinsicContentSize.width > 300 {
+                    print("DIAG wide \(type(of: view)) \(view.intrinsicContentSize) \((view as? NSTextField)?.stringValue ?? "")")
+                }
+            }
             XCTAssertEqual(content.bounds.width, width, "the screen pushed the window's content wider at \(width)")
             XCTAssertLessThanOrEqual(panelFrame.maxX, width, "the screen runs off the window at \(width)")
             XCTAssertLessThanOrEqual(routeFrame.maxX, panelFrame.maxX, "the route runs off the screen at \(width)")
