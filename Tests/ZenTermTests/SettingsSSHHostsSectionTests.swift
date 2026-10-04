@@ -416,13 +416,13 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         XCTAssertEqual(asked, 1)
     }
 
-    private func addHostThroughSettings(
-        _ host: String, name: String? = nil, ssh: String, check: (WindowController, NSView) throws -> Void
+    private func inSettings(
+        ssh: String, config: String?, _ body: (WindowController, NSView) throws -> Void
     ) throws {
         let originalSurface = TerminalSurfaceFactory.makeOverride
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
         Motion.isReduceMotionEnabled = { true }
-        try seed(ssh: ssh, config: nil)
+        try seed(ssh: ssh, config: config)
         let c = WindowController(contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), initialCWD: nil)
         defer {
             c.windowWillClose(Notification(name: NSWindow.willCloseNotification))
@@ -432,19 +432,56 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         let content = try XCTUnwrap(c.window.contentView)
         c.openSettings(for: .setting(key: "ssh-host"))
         waitUntil(!captions(in: content).isEmpty, "Settings to land on SSH Hosts")
-        let add = try XCTUnwrap(
-            descendants(of: content).compactMap { $0 as? AppButton }.first { $0.title == "＋ Add Host…" })
+        content.layoutSubtreeIfNeeded()
+        try body(c, content)
+    }
 
-        add.onTap()
-        let overlay = try XCTUnwrap(descendants(of: content).compactMap { $0 as? AddSSHHostOverlay }.first)
-        let boxes = descendants(of: overlay).compactMap { $0 as? FieldBox }
-        boxes[0].setText(host)
-        if let name { boxes[1].setText(name) }
-        let addButton = try XCTUnwrap(
-            descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Add" })
-        c.window.makeFirstResponder(addButton)
-        addButton.keyDown(with: key(36))
-        try check(c, content)
+    private func addHostThroughSettings(
+        _ host: String, name: String? = nil, ssh: String, check: (WindowController, NSView) throws -> Void
+    ) throws {
+        try inSettings(ssh: ssh, config: nil) { c, content in
+            let add = try XCTUnwrap(
+                descendants(of: content).compactMap { $0 as? AppButton }.first { $0.title == "＋ Add Host…" })
+
+            add.onTap()
+            let overlay = try XCTUnwrap(form(in: content))
+            let boxes = descendants(of: overlay).compactMap { $0 as? FieldBox }
+            boxes[0].setText(host)
+            if let name { boxes[1].setText(name) }
+            let addButton = try XCTUnwrap(
+                descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Add" })
+            c.window.makeFirstResponder(addButton)
+            addButton.keyDown(with: key(36))
+            try check(c, content)
+        }
+    }
+
+    private func form(in content: NSView) -> AddSSHHostOverlay? {
+        descendants(of: content).compactMap { $0 as? AddSSHHostOverlay }.first
+    }
+
+    private func formTitle(_ overlay: NSView) -> String? {
+        descendants(of: overlay).compactMap { $0 as? NSTextField }.first { $0.font?.pointSize == 15 }?.stringValue
+    }
+
+    private func hostRows(in view: NSView) -> [SSHHostRow] {
+        descendants(of: view).compactMap { $0 as? SSHHostRow }
+    }
+
+    private func click(_ view: NSView, in c: WindowController) throws -> NSView {
+        let content = try XCTUnwrap(c.window.contentView)
+        let point = view.convert(NSPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
+        let target = try XCTUnwrap(content.hitTest(point))
+        let event = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
+                windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        if let button = target as? NSButton {
+            button.performClick(nil)
+        } else {
+            target.mouseDown(with: event)
+        }
+        return target
     }
 
     func test_addingAHost_fromSettings_listsItEverywhere_andFocusesIt() throws {
@@ -455,7 +492,8 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
             XCTAssertEqual(toggles(in: content).map(\.selectedIndex), [1])
             let remove = try XCTUnwrap(removeButtons(in: content).first)
             settle()
-            XCTAssertIdentical(c.window.firstResponder, remove, "focus lands on the host just added")
+            XCTAssertIdentical(c.window.firstResponder, hostRows(in: content)[1], "focus lands on the host just added")
+            XCTAssertNotNil(remove)
             waitUntil(
                 c.sidebarForTesting.view.hostRowsForTesting.map(\.titleForTesting) == ["deploy@10.0.0.5"],
                 "the sidebar to list the new host")
@@ -477,8 +515,119 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
             waitUntil(
                 toggles(in: content).map(\.selectedIndex) == [1, 0], "Settings to reopen with prod turned on")
             settle()
-            XCTAssertIdentical(c.window.firstResponder, toggles(in: content)[1], "focus lands on prod")
+            XCTAssertIdentical(c.window.firstResponder, hostRows(in: content)[1], "focus lands on prod")
             XCTAssertTrue(removeButtons(in: content).isEmpty)
         }
+    }
+
+    func test_aClickOnAHostRow_opensItsEditForm_forConfigAndAddedHosts() throws {
+        try inSettings(ssh: "Host devbox\n", config: "ssh-host = devbox: Build box\nssh-host = deploy@10.0.0.5\n") {
+            c, content in
+            let devbox = try XCTUnwrap(rowCaption(rows(in: content)[0]))
+
+            try click(devbox, in: c)
+
+            let overlay = try XCTUnwrap(form(in: content))
+            XCTAssertEqual(formTitle(overlay), "Edit SSH Host")
+            let boxes = descendants(of: overlay).compactMap { $0 as? FieldBox }
+            XCTAssertEqual(boxes.map(\.text), ["devbox", "Build box"])
+
+            overlay.performKeyEquivalent(with: escape())
+            waitUntil(form(in: content) == nil && !captions(in: content).isEmpty, "Settings to come back")
+            content.layoutSubtreeIfNeeded()
+            let deploy = try XCTUnwrap(rowCaption(rows(in: content)[1]))
+            try click(deploy, in: c)
+
+            let added = try XCTUnwrap(form(in: content))
+            XCTAssertEqual(descendants(of: added).compactMap { $0 as? FieldBox }.map(\.text), ["deploy@10.0.0.5", ""])
+        }
+    }
+
+    func test_aClickOnAHostsToggle_turnsItOff_withoutOpeningTheForm() throws {
+        try inSettings(ssh: "Host devbox\n", config: "ssh-host = devbox: Build box\n") { c, content in
+            let off = try XCTUnwrap(
+                descendants(of: toggles(in: content)[0]).compactMap { $0 as? AppButton }.first { $0.title == "Off" })
+
+            let hit = try click(off, in: c)
+
+            XCTAssertIdentical(hit, off)
+            XCTAssertEqual(GeneralConfig.current.sshHostAliases, [])
+            XCTAssertNil(form(in: content))
+        }
+    }
+
+    func test_anOffHostsRow_opensNoForm() throws {
+        try inSettings(ssh: "Host devbox\nHost prod\n", config: "ssh-host = devbox\n") { c, content in
+            let prod = try XCTUnwrap(rowCaption(rows(in: content)[1]))
+
+            try click(prod, in: c)
+
+            XCTAssertNil(form(in: content))
+        }
+    }
+
+    func test_saveWritesTheName_andClearingItRemovesTheName() throws {
+        try inSettings(ssh: "Host devbox\n", config: "ssh-host = devbox  # the build box\n") { c, content in
+            for (typed, line) in [
+                ("Builder", "ssh-host = devbox: Builder  # the build box\n"),
+                ("", "ssh-host = devbox  # the build box\n"),
+            ] {
+                let row = try XCTUnwrap(hostRows(in: content).first)
+                press(key(36), on: row)
+                let overlay = try XCTUnwrap(form(in: content))
+                descendants(of: overlay).compactMap { $0 as? FieldBox }[1].setText(typed)
+                let save = try XCTUnwrap(
+                    descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Save" })
+                c.window.makeFirstResponder(save)
+                save.keyDown(with: key(36))
+
+                XCTAssertEqual(configText(), line)
+                waitUntil(form(in: content) == nil && !captions(in: content).isEmpty, "Settings to come back")
+                XCTAssertEqual(captions(in: content), [typed.isEmpty ? "devbox" : typed])
+                settle()
+                XCTAssertIdentical(c.window.firstResponder, hostRows(in: content).first, "focus is back on the host")
+            }
+        }
+    }
+
+    func test_keyboard_returnOpensTheForm_rightReachesTheControl_andLeftComesBack() throws {
+        try seed(ssh: "Host devbox\nHost prod\n", config: "ssh-host = devbox: Build box\nssh-host = ops@10.0.0.6\n")
+        let detail = mount()
+        var edited: [SSHHostEntry] = []
+        section?.onEditHost = { host, _ in edited.append(host) }
+        let rows = hostRows(in: detail)
+        let toggle = toggles(in: detail)[0]
+        let remove = removeButtons(in: detail)[0]
+
+        XCTAssertEqual(
+            section?.detailStops().map(ObjectIdentifier.init),
+            [rows[0], toggle, toggles(in: detail)[1], rows[2], remove].map(ObjectIdentifier.init)
+                + (section?.detailStops().suffix(1).map(ObjectIdentifier.init) ?? []),
+            "an Off host's row is not a stop")
+
+        press(key(36), on: rows[0])
+        XCTAssertEqual(edited, [SSHHostEntry(alias: "devbox", name: "Build box")])
+
+        press(arrow(124), on: rows[0])
+        XCTAssertIdentical(window?.firstResponder, toggle)
+        XCTAssertEqual(toggle.selectedIndex, 0, "reaching the toggle does not flip it")
+        press(arrow(123), on: toggle)
+        XCTAssertIdentical(window?.firstResponder, rows[0])
+        XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["devbox", "ops@10.0.0.6"])
+
+        press(arrow(125), on: rows[0])
+        XCTAssertIdentical(window?.firstResponder, toggles(in: detail)[1], "the Off host is reached at its toggle")
+        press(arrow(125), on: toggles(in: detail)[1])
+        XCTAssertIdentical(window?.firstResponder, remove, "down from a control stays in the control column")
+        press(arrow(123), on: remove)
+        XCTAssertIdentical(window?.firstResponder, rows[2])
+        press(arrow(126), on: rows[2])
+        XCTAssertIdentical(window?.firstResponder, toggles(in: detail)[1])
+    }
+
+    private func escape() -> NSEvent {
+        NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+            characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53)!
     }
 }

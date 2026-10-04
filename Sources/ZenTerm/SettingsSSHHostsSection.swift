@@ -4,6 +4,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     var navTitle: String { "SSH Hosts" }
     var onExitToNav: (() -> Void)?
     var onAddHost: (() -> Void)?
+    var onEditHost: ((SSHHostEntry, _ address: String?) -> Void)?
     var hostToFocus: String?
     var hostSession: ((SSHHostID) -> SSHConnection.State?)?
     var presentConfirm: ((ConfirmCard) -> Void)?
@@ -31,7 +32,7 @@ final class SettingsSSHHostsSection: SettingsSection {
 
     private struct HostRow {
         let host: String
-        let row: LayoutRow
+        let row: SSHHostRow
         let control: HostControl
     }
 
@@ -43,7 +44,8 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private enum Stop: Equatable {
-        case host(String)
+        case row(String)
+        case control(String)
         case add
     }
 
@@ -71,7 +73,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 10
+        stack.spacing = 3
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
 
@@ -86,7 +88,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         return SettingsDetail.scroll(for: stack)
     }
 
-    func detailStops() -> [NSView] { hostRows.map(\.control.view) + [addButton] }
+    func detailStops() -> [NSView] { hostRows.flatMap(stops(of:)) + [addButton] }
 
     func reapplyTheme() {
         captions.forEach { $0.textColor = Theme.current.chrome.ink(.muted) }
@@ -123,7 +125,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     private func land(_ config: SSHConfigHosts.Listing, generation: Int) {
         let typed = GeneralConfig.current.sshHostAliases.filter { !config.aliases.contains($0) }
         listing = Listing(aliases: config.aliases, typed: typed, isConfigUnreadable: config.isUnreadable)
-        populate(focusing: hostToFocus.map { .host($0) })
+        populate(focusing: hostToFocus.map { .row($0) })
         hostToFocus = nil
         SSHHostResolver.destinations(of: config.aliases + typed) { [weak self] found in
             guard let self, generation == self.mountGeneration, !found.isEmpty else { return }
@@ -173,6 +175,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         let header = SettingsDetail.headerRow(caption: caption, hint: nil)
         stack.addArrangedSubview(header)
         header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        stack.setCustomSpacing(10, after: header)
     }
 
     private func addNote(_ text: String, to stack: NSStackView) {
@@ -206,47 +209,72 @@ final class SettingsSSHHostsSection: SettingsSection {
 
     private func makeToggleRow(_ host: String, isOn: Bool) -> HostRow {
         let toggle = SegmentedControl(options: ["On", "Off"], selectedIndex: isOn ? 0 : 1) { _ in }
-        let row = LayoutRow(
-            caption: label(of: host), description: description(of: host), control: toggle, controlNote: nil,
-            controlWidth: nil)
+        let row = makeRow(host, control: toggle, controlWidth: nil, isEditable: isOn)
         toggle.onChange = { [weak self, weak row, weak toggle] index in
             guard let row, let toggle else { return }
             self?.turn(host, on: index == 0, row: row, toggle: toggle)
         }
         toggle.onArrowUp = { [weak self, weak toggle] in self?.moveFocus(from: toggle, delta: -1) }
         toggle.onArrowDown = { [weak self, weak toggle] in self?.moveFocus(from: toggle, delta: 1) }
-        toggle.onArrowLeft = { [weak self] in self?.onExitToNav?() }
+        toggle.onArrowLeft = { [weak self, weak row] in self?.leaveControl(of: row) }
         toggle.onTab = { [weak self, weak toggle] in self?.moveTab(from: toggle, delta: 1) }
         toggle.onBacktab = { [weak self, weak toggle] in self?.moveTab(from: toggle, delta: -1) }
+        row.onArrowRight = { [weak toggle] in toggle.map { $0.window?.makeFirstResponder($0) } }
         return HostRow(host: host, row: row, control: .toggle(toggle))
     }
 
     private func makeRemoveRow(_ host: String) -> HostRow {
         let button = AppButton(title: "Remove", variant: .secondary)
         button.isKeyboardFocusable = true
-        let row = LayoutRow(
-            caption: label(of: host), description: description(of: host), control: button, controlNote: nil,
-            controlWidth: Self.removalButtonWidth)
+        let row = makeRow(
+            host, control: button, controlWidth: Self.removalButtonWidth, isEditable: !removed.contains(host))
         button.onTap = { [weak self, weak row, weak button] in
             guard let self, let row, let button, !Self.isKeyRepeat else { return }
             self.toggleRemoval(of: host, row: row, button: button)
         }
         button.onArrowUp = { [weak self, weak button] in self?.moveFocus(from: button, delta: -1) }
         button.onArrowDown = { [weak self, weak button] in self?.moveFocus(from: button, delta: 1) }
-        button.onArrowLeft = { [weak self] in self?.onExitToNav?() }
+        button.onArrowLeft = { [weak self, weak row] in self?.leaveControl(of: row) }
         button.onTab = { [weak self, weak button] in self?.moveTab(from: button, delta: 1) }
         button.onBacktab = { [weak self, weak button] in self?.moveTab(from: button, delta: -1) }
+        row.onArrowRight = { [weak button] in button.map { $0.window?.makeFirstResponder($0) } }
         showRemoval(removed.contains(host), of: host, row: row, button: button)
         return HostRow(host: host, row: row, control: .remove(button))
     }
 
-    private func turn(_ host: String, on: Bool, row: LayoutRow, toggle: SegmentedControl) {
+    private func makeRow(_ host: String, control: NSView, controlWidth: CGFloat?, isEditable: Bool) -> SSHHostRow {
+        let layout = LayoutRow(
+            caption: label(of: host), description: description(of: host), control: control, controlNote: nil,
+            controlWidth: controlWidth)
+        let row = SSHHostRow(host: host, layout: layout, isEditable: isEditable)
+        row.onActivate = { [weak self] in self?.edit(host) }
+        row.onArrowUp = { [weak self, weak row] in self?.moveFocus(from: row, delta: -1) }
+        row.onArrowDown = { [weak self, weak row] in self?.moveFocus(from: row, delta: 1) }
+        row.onTab = { [weak self, weak row] in self?.moveTab(from: row, delta: 1) }
+        row.onBacktab = { [weak self, weak row] in self?.moveTab(from: row, delta: -1) }
+        row.onExitToNav = { [weak self] in self?.onExitToNav?() }
+        return row
+    }
+
+    private func edit(_ host: String) {
+        onEditHost?(entry(of: host), destinations[host].flatMap { $0 == host ? nil : $0 })
+    }
+
+    private func leaveControl(of row: SSHHostRow?) {
+        guard let row, row.isEditable else {
+            onExitToNav?()
+            return
+        }
+        row.window?.makeFirstResponder(row)
+    }
+
+    private func turn(_ host: String, on: Bool, row: SSHHostRow, toggle: SegmentedControl) {
         let save = { [weak self] in
             guard let self else { return }
-            let saved = self.save(row: row) {
+            let saved = self.save(row: row.layout) {
                 on ? try SSHHostsWriter.add(self.restored(host)) : try self.drop(host)
             }
-            if !saved { toggle.setSelection(on ? 1 : 0) }
+            if saved { row.isEditable = on } else { toggle.setSelection(on ? 1 : 0) }
         }
         guard !on else { return save() }
         confirmDisconnect(
@@ -254,10 +282,10 @@ final class SettingsSSHHostsSection: SettingsSection {
             cancel: { toggle.setSelection(0) })
     }
 
-    private func toggleRemoval(of host: String, row: LayoutRow, button: AppButton) {
+    private func toggleRemoval(of host: String, row: SSHHostRow, button: AppButton) {
         guard !removed.contains(host) else {
             let index = restoredIndex(of: host)
-            guard save(row: row, { try SSHHostsWriter.add(restored(host), at: index) }) else { return }
+            guard save(row: row.layout, { try SSHHostsWriter.add(restored(host), at: index) }) else { return }
             removed.remove(host)
             return showRemoval(false, of: host, row: row, button: button)
         }
@@ -266,7 +294,7 @@ final class SettingsSSHHostsSection: SettingsSection {
             proceed: { [weak self] in
                 guard let self else { return }
                 let enabled = GeneralConfig.current.sshHostAliases
-                guard self.save(row: row, { try self.drop(host) }) else { return }
+                guard self.save(row: row.layout, { try self.drop(host) }) else { return }
                 if self.orderBeforeRemovals == nil { self.orderBeforeRemovals = enabled }
                 self.removed.insert(host)
                 self.showRemoval(true, of: host, row: row, button: button)
@@ -291,13 +319,13 @@ final class SettingsSSHHostsSection: SettingsSection {
                 onCancel: { [weak self] in
                     dismissConfirm {
                         cancel()
-                        self?.focus(.host(host))
+                        self?.focus(.control(host))
                     }
                 },
                 onConfirm: { [weak self] in
                     dismissConfirm {
                         proceed()
-                        self?.focus(.host(host))
+                        self?.focus(.control(host))
                     }
                 }))
     }
@@ -322,8 +350,9 @@ final class SettingsSSHHostsSection: SettingsSection {
             AppButton(title: $0, variant: .secondary).fittingSize.width
         }.max() ?? 0
 
-    private func showRemoval(_ isRemoved: Bool, of host: String, row: LayoutRow, button: AppButton) {
-        row.isDimmed = isRemoved
+    private func showRemoval(_ isRemoved: Bool, of host: String, row: SSHHostRow, button: AppButton) {
+        row.layout.isDimmed = isRemoved
+        row.isEditable = !isRemoved
         button.setTitle(isRemoved ? "Undo" : "Remove")
         button.setAccessibilityLabel(isRemoved ? "Undo removing \(label(of: host))" : "Remove \(label(of: host))")
     }
@@ -340,17 +369,26 @@ final class SettingsSSHHostsSection: SettingsSection {
         return true
     }
 
+    private func stops(of hostRow: HostRow) -> [NSView] {
+        (hostRow.row.isEditable ? [hostRow.row] : []) + [hostRow.control.view]
+    }
+
     private func focusedStop() -> Stop? {
         let window = rowsStack?.window
         if KeyboardFocus.isFocused(addButton, in: window) { return .add }
-        return hostRows.first { KeyboardFocus.isFocused($0.control.view, in: window) }.map { .host($0.host) }
+        for hostRow in hostRows {
+            if KeyboardFocus.isFocused(hostRow.row, in: window) { return .row(hostRow.host) }
+            if KeyboardFocus.isFocused(hostRow.control.view, in: window) { return .control(hostRow.host) }
+        }
+        return nil
     }
 
     private func focus(_ stop: Stop) {
         let target: NSView? =
             switch stop {
             case .add: addButton
-            case .host(let host): hostRows.first { $0.host == host }?.control.view
+            case .row(let host): hostRows.first { $0.host == host }.flatMap { stops(of: $0).first }
+            case .control(let host): hostRows.first { $0.host == host }?.control.view
             }
         guard let target = target ?? detailStops().first else { return }
         rowsStack?.window?.makeFirstResponder(target)
@@ -358,14 +396,15 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private func scrollTarget(_ stop: NSView) -> NSView {
-        hostRows.first { $0.control.view === stop }?.row ?? stop
+        hostRows.first { $0.control.view === stop || $0.row === stop }?.row ?? stop
     }
 
     private func moveFocus(from view: NSView?, delta: Int) {
         guard let view else { return }
-        let stops = detailStops()
-        guard let anchor = stops.firstIndex(where: { $0 === view }) else { return }
-        SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta) { [weak self] in
+        let onControl = hostRows.contains { $0.control.view === view }
+        let column = hostRows.map { onControl ? $0.control.view : stops(of: $0)[0] } + [addButton]
+        guard let anchor = column.firstIndex(where: { $0 === view }) else { return }
+        SettingsDetail.moveFocus(stops: column, from: anchor, delta: delta) { [weak self] in
             self?.scrollTarget($0) ?? $0
         }
     }

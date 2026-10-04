@@ -1766,7 +1766,12 @@ final class WindowController: NSObject {
             self?.reorderWorkspaces(moved, with: neighbour) ?? false
         }
         let sshHostsSection = SettingsSSHHostsSection()
-        sshHostsSection.onAddHost = { [weak self] in self?.openAddSSHHost() }
+        sshHostsSection.onAddHost = { [weak self] in
+            self?.openSSHHostForm(.add(taken: Set(GeneralConfig.current.sshHostAliases)))
+        }
+        sshHostsSection.onEditHost = { [weak self] host, address in
+            self?.openSSHHostForm(.edit(host, address: address))
+        }
         sshHostsSection.hostToFocus = host
         sshHostsSection.hostSession = { [weak self] host in
             guard let self else { return nil }
@@ -1982,12 +1987,17 @@ final class WindowController: NSObject {
         AppConfig.reload()
     }
 
-    private func openAddSSHHost() {
+    private func openSSHHostForm(_ mode: AddSSHHostOverlay.Mode) {
         closeModal()
+        let edited: String? =
+            switch mode {
+            case .add: nil
+            case .edit(let host, _): host.alias
+            }
         let overlay = AddSSHHostOverlay(
-            mode: .add(taken: Set(GeneralConfig.current.sshHostAliases)), background: Theme.current.chrome.background.nsColor,
-            onSubmit: { [weak self] host in self?.addSSHHost(host) },
-            onCancel: { [weak self] in self?.reopenSettingsOnSSHHosts() })
+            mode: mode, background: Theme.current.chrome.background.nsColor,
+            onSubmit: { [weak self] host in edited == nil ? self?.addSSHHost(host) : self?.renameSSHHost(host) },
+            onCancel: { [weak self] in self?.reopenSettingsOnSSHHosts(focusing: edited) })
         presentModal(overlay, kind: .sshHostForm)
     }
 
@@ -1998,6 +2008,20 @@ final class WindowController: NSObject {
             toasts.show(
                 ToastContent(
                     variant: .warning, title: "Couldn't Add SSH Host",
+                    message: "Couldn't save \(host.alias) to ZenTerm's config: \(error.localizedDescription)"))
+            return
+        }
+        AppConfig.reload()
+        reopenSettingsOnSSHHosts(focusing: host.alias)
+    }
+
+    private func renameSSHHost(_ host: SSHHostEntry) {
+        do {
+            try SSHHostsWriter.rename(host.alias, to: host.name)
+        } catch {
+            toasts.show(
+                ToastContent(
+                    variant: .warning, title: "Couldn't Save SSH Host",
                     message: "Couldn't save \(host.alias) to ZenTerm's config: \(error.localizedDescription)"))
             return
         }

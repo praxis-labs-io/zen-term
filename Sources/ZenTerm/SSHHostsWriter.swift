@@ -11,6 +11,12 @@ enum SSHHostsWriter {
         try write(next, over: current, configRoot: configRoot)
     }
 
+    static func rename(_ alias: String, to name: String?, configRoot: URL = ConfigLoader.defaultRoot) throws {
+        let current = GeneralConfig.current.sshHosts
+        let next = current.map { $0.alias == alias ? SSHHostEntry(alias: alias, name: name) : $0 }
+        try write(next, over: current, configRoot: configRoot)
+    }
+
     static func remove(_ alias: String, configRoot: URL = ConfigLoader.defaultRoot) throws {
         let current = GeneralConfig.current.sshHosts
         try write(current.filter { $0.alias != alias }, over: current, configRoot: configRoot)
