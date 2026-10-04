@@ -219,7 +219,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         toggle.onArrowLeft = { [weak self, weak row] in self?.leaveControl(of: row) }
         toggle.onTab = { [weak self, weak toggle] in self?.moveTab(from: toggle, delta: 1) }
         toggle.onBacktab = { [weak self, weak toggle] in self?.moveTab(from: toggle, delta: -1) }
-        row.onArrowRight = { [weak toggle] in toggle.map { $0.window?.makeFirstResponder($0) } }
+        row.onArrowRight = { [weak toggle] in if let toggle { toggle.window?.makeFirstResponder(toggle) } }
         return HostRow(host: host, row: row, control: .toggle(toggle))
     }
 
@@ -237,7 +237,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         button.onArrowLeft = { [weak self, weak row] in self?.leaveControl(of: row) }
         button.onTab = { [weak self, weak button] in self?.moveTab(from: button, delta: 1) }
         button.onBacktab = { [weak self, weak button] in self?.moveTab(from: button, delta: -1) }
-        row.onArrowRight = { [weak button] in button.map { $0.window?.makeFirstResponder($0) } }
+        row.onArrowRight = { [weak button] in if let button { button.window?.makeFirstResponder(button) } }
         showRemoval(removed.contains(host), of: host, row: row, button: button)
         return HostRow(host: host, row: row, control: .remove(button))
     }
