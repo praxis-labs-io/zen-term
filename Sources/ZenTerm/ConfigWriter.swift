@@ -184,9 +184,12 @@ enum ConfigWriter {
             let rendered = "\(key) = \(host.configValue)"
             return comments[host.alias].map { "\(rendered)  \($0)" } ?? rendered
         }
-        if let first = lines.firstIndex(where: { activeAssignmentKey($0) == key }) {
-            lines.removeAll { activeAssignmentKey($0) == key }
+        let isHostLine = { (line: String) in activeAssignmentKey(line) == key && sshHostAlias(of: line) != nil }
+        if let first = lines.firstIndex(where: isHostLine) {
+            lines.removeAll(where: isHostLine)
             lines.insert(contentsOf: block, at: first)
+        } else if let rejected = lines.lastIndex(where: { activeAssignmentKey($0) == key }) {
+            lines.insert(contentsOf: block, at: rejected + 1)
         } else if let example = lines.lastIndex(where: { commentedAssignmentKey($0) == key }) {
             lines.insert(contentsOf: block, at: example + 1)
         } else {

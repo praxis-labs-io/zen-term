@@ -458,6 +458,18 @@ final class ConfigWriterTests: XCTestCase {
             "theme = a\nssh-host = prod\nssh-host = devbox: Build box  # the build box\nfont-size = 14\n")
     }
 
+    func test_sshHosts_leaveALineTheParserRejected_whereItStood() throws {
+        let dir = tempDirPath()
+        try seed("ssh-host = devbox\nssh-host = -oProxyCommand=x\nssh-host = prod\n", in: dir)
+
+        try ConfigWriter.apply(sshHosts: [SSHHostEntry(alias: "devbox", name: "Build box")], configRoot: dir)
+        XCTAssertEqual(try read(dir), "ssh-host = devbox: Build box\nssh-host = -oProxyCommand=x\n")
+        try ConfigWriter.apply(sshHosts: [], configRoot: dir)
+        XCTAssertEqual(try read(dir), "ssh-host = -oProxyCommand=x\n")
+        try ConfigWriter.apply(sshHosts: [SSHHostEntry(alias: "prod")], configRoot: dir)
+        XCTAssertEqual(try read(dir), "ssh-host = -oProxyCommand=x\nssh-host = prod\n")
+    }
+
     func test_sshHosts_insertAfterTheCommentedExamples_andAnEmptyListRemovesEveryLine() throws {
         let dir = tempDirPath()
         try seed("# ssh-host = devbox\n# ssh-host = prod: Production\ntheme = a\n", in: dir)
