@@ -74,6 +74,7 @@ final class HostConnectView: NSView {
         stack.setVisibilityPriority(Self.routeVisibility, for: route)
         stack.setVisibilityPriority(Self.eyebrowVisibility, for: eyebrow)
         stack.setClippingResistancePriority(.defaultLow, for: .vertical)
+        stack.setClippingResistancePriority(.defaultLow, for: .horizontal)
         stack.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(grid)
         content.addSubview(stack)
