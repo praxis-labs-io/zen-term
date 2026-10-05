@@ -2631,12 +2631,12 @@ final class WindowController: NSObject {
         closeTabs(of: workspace, dismissingModal: dismissingModal)
     }
 
-    // Leaves an open card up, since a host is usually turned off from inside Settings.
+    // Leaves an open card up, since a host is usually removed from inside Settings.
     private func disconnectRemovedHosts() {
         let enabled = GeneralConfig.current.sshHostAliases
         for workspace in workspaces {
             guard let host = workspace.host, !enabled.contains(host.alias) else { continue }
-            Log.info("ssh host turned off, so it disconnects", category: .workspace)
+            Log.info("ssh host removed, so it disconnects", category: .workspace)
             disconnect(workspace, dismissingModal: false)
         }
     }
