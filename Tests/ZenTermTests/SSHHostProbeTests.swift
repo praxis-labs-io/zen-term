@@ -278,7 +278,7 @@ final class SSHHostProbeTests: XCTestCase {
 
     func test_aHostThatLeft_isResolvedAgainWhenItReturns() {
         probe.setHosts(["ghost"])
-        waitUntil(answers.askCount("ghost") == 1, "the first round")
+        waitUntil(destination("ghost") != nil, "the first round to land")
         probe.setHosts([])
 
         probe.setHosts(["ghost"])
