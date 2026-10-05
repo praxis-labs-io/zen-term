@@ -83,9 +83,9 @@ final class SSHConfigFilesTests: XCTestCase {
         XCTAssertEqual(SSHConfigFiles.paths(of: config), resolved(config, first, second))
     }
 
-    func test_skipsAnIncludeInAMatchBlock_untilTheNextHost() throws {
-        let hidden = try write("", to: "conditional")
-        let shown = try write("", to: "after")
+    func test_followsAnIncludeInAMatchBlock_sinceSSHMayReadIt() throws {
+        let conditional = try write("", to: "conditional")
+        let after = try write("", to: "after")
         let config = try write(
             """
             Match host foo exec "true"
@@ -94,8 +94,7 @@ final class SSHConfigFilesTests: XCTestCase {
                 Include after
             """)
 
-        XCTAssertEqual(SSHConfigFiles.paths(of: config), resolved(config, shown))
-        XCTAssertFalse(SSHConfigFiles.paths(of: config).contains(resolved(hidden)[0]))
+        XCTAssertEqual(SSHConfigFiles.paths(of: config), resolved(config, conditional, after))
     }
 
     func test_anIncludeCycle_endsWithoutRepeating() throws {

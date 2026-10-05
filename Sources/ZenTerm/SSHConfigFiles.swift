@@ -28,21 +28,10 @@ enum SSHConfigFiles {
             visited.insert(file.resolvingSymlinksInPath().standardizedFileURL.path).inserted,
             let data = try? Data(contentsOf: file)
         else { return }
-        var inMatch = false
         for line in String(decoding: data, as: UTF8.self).components(separatedBy: .newlines) {
-            guard let (keyword, args) = directive(line) else { continue }
-            switch keyword {
-            case "host":
-                inMatch = false
-            case "match":
-                inMatch = true
-            case "include" where !inMatch:
-                for path in args.flatMap({ includedPaths($0, base: includeBase) }) {
-                    collect(
-                        URL(fileURLWithPath: path), includeBase: includeBase, depth: depth + 1, visited: &visited)
-                }
-            default:
-                continue
+            guard let (keyword, args) = directive(line), keyword == "include" else { continue }
+            for path in args.flatMap({ includedPaths($0, base: includeBase) }) {
+                collect(URL(fileURLWithPath: path), includeBase: includeBase, depth: depth + 1, visited: &visited)
             }
         }
     }
