@@ -12,6 +12,13 @@ enum SSHHostsWriter {
         try write(on: next, off: config.sshHostsOff.filter { $0.alias != host.alias }, configRoot: configRoot)
     }
 
+    static func addOff(_ host: SSHHostEntry, at index: Int, configRoot: URL = ConfigLoader.defaultRoot) throws {
+        let config = GeneralConfig.current
+        var next = config.sshHostsOff.filter { $0.alias != host.alias }
+        next.insert(host, at: min(max(index, 0), next.count))
+        try write(on: config.sshHosts.filter { $0.alias != host.alias }, off: next, configRoot: configRoot)
+    }
+
     static func rename(_ alias: String, to name: String?, configRoot: URL = ConfigLoader.defaultRoot) throws {
         let config = GeneralConfig.current
         let renamed = { (hosts: [SSHHostEntry]) in
@@ -45,8 +52,6 @@ enum SSHHostsWriter {
     private static func write(on: [SSHHostEntry], off: [SSHHostEntry], configRoot: URL) throws {
         let config = GeneralConfig.current
         guard on != config.sshHosts || off != config.sshHostsOff else { return }
-        try ConfigWriter.apply(
-            sshHosts: on != config.sshHosts ? on : nil, sshHostsOff: off != config.sshHostsOff ? off : nil,
-            configRoot: configRoot)
+        try ConfigWriter.apply(sshHosts: on, sshHostsOff: off, configRoot: configRoot)
     }
 }

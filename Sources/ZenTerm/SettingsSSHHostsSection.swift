@@ -54,6 +54,8 @@ final class SettingsSSHHostsSection: SettingsSection {
     private var removed: Set<String> = []
     private var removedEntries: [String: SSHHostEntry] = [:]
     private var orderBeforeRemovals: [String]?
+    private var offOrderBeforeRemovals: [String]?
+    private var removedFromOff: Set<String> = []
     private var hostRows: [HostRow] = []
     private let addButton = AppButton(title: "＋ Add Host…", variant: .muted)
     private var captions: [NSTextField] = []
@@ -109,6 +111,8 @@ final class SettingsSSHHostsSection: SettingsSection {
         removed = []
         removedEntries = [:]
         orderBeforeRemovals = nil
+        offOrderBeforeRemovals = nil
+        removedFromOff = []
         populate()
         mountGeneration += 1
         let generation = mountGeneration
@@ -287,8 +291,7 @@ final class SettingsSSHHostsSection: SettingsSection {
 
     private func toggleRemoval(of host: String, row: SSHHostRow, button: AppButton) {
         guard !removed.contains(host) else {
-            let index = restoredIndex(of: host)
-            guard save(row: row.layout, { try SSHHostsWriter.add(restored(host), at: index) }) else { return }
+            guard save(row: row.layout, { try restore(host) }) else { return }
             removed.remove(host)
             return showRemoval(false, of: host, row: row, button: button)
         }
@@ -296,9 +299,10 @@ final class SettingsSSHHostsSection: SettingsSection {
             of: host, by: .removing,
             proceed: { [weak self] in
                 guard let self else { return }
-                let enabled = GeneralConfig.current.sshHostAliases
+                let config = GeneralConfig.current
                 guard self.save(row: row.layout, { try self.removeHost(host) }) else { return }
-                if self.orderBeforeRemovals == nil { self.orderBeforeRemovals = enabled }
+                if self.orderBeforeRemovals == nil { self.orderBeforeRemovals = config.sshHostAliases }
+                if self.offOrderBeforeRemovals == nil { self.offOrderBeforeRemovals = config.sshHostsOff.map(\.alias) }
                 self.removed.insert(host)
                 self.showRemoval(true, of: host, row: row, button: button)
             }, cancel: {})
@@ -335,14 +339,28 @@ final class SettingsSSHHostsSection: SettingsSection {
 
     private func removeHost(_ host: String) throws {
         removedEntries[host] = entry(of: host)
+        if GeneralConfig.current.sshHosts.contains(where: { $0.alias == host }) {
+            removedFromOff.remove(host)
+        } else {
+            removedFromOff.insert(host)
+        }
         try SSHHostsWriter.remove(host)
+    }
+
+    private func restore(_ host: String) throws {
+        let config = GeneralConfig.current
+        guard removedFromOff.contains(host) else {
+            let index = restoredIndex(of: host, order: orderBeforeRemovals, among: config.sshHostAliases)
+            return try SSHHostsWriter.add(restored(host), at: index)
+        }
+        let index = restoredIndex(of: host, order: offOrderBeforeRemovals, among: config.sshHostsOff.map(\.alias))
+        try SSHHostsWriter.addOff(restored(host), at: index)
     }
 
     private func restored(_ host: String) -> SSHHostEntry { removedEntries[host] ?? SSHHostEntry(alias: host) }
 
-    private func restoredIndex(of host: String) -> Int {
-        let enabled = GeneralConfig.current.sshHostAliases
-        guard let order = orderBeforeRemovals, let position = order.firstIndex(of: host) else { return enabled.count }
+    private func restoredIndex(of host: String, order: [String]?, among enabled: [String]) -> Int {
+        guard let order, let position = order.firstIndex(of: host) else { return enabled.count }
         let next = order[(position + 1)...].first { enabled.contains($0) }
         return next.flatMap { enabled.firstIndex(of: $0) } ?? enabled.count
     }

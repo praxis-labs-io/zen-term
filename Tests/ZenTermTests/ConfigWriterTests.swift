@@ -495,6 +495,26 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(try read(dir), "ssh-host-off = -oProxyCommand=x\n")
     }
 
+    func test_aHostMovedBetweenTheLists_keepsItsComment_bothWays() throws {
+        let dir = tempDirPath()
+        try seed("ssh-host = devbox  # the build box\nssh-host = prod\n", in: dir)
+        try ConfigWriter.apply(
+            sshHosts: [SSHHostEntry(alias: "prod")], sshHostsOff: [SSHHostEntry(alias: "devbox")], configRoot: dir)
+        XCTAssertEqual(try read(dir), "ssh-host = prod\nssh-host-off = devbox  # the build box\n")
+        try ConfigWriter.apply(
+            sshHosts: [SSHHostEntry(alias: "prod"), SSHHostEntry(alias: "devbox")], sshHostsOff: [], configRoot: dir)
+        XCTAssertEqual(try read(dir), "ssh-host = prod\nssh-host = devbox  # the build box\n")
+    }
+
+    func test_theOnlyHostMovedBetweenTheLists_staysWhereTheBlockWas() throws {
+        let dir = tempDirPath()
+        try seed("theme = a\nssh-host = devbox\nfont-size = 14\n", in: dir)
+        try ConfigWriter.apply(sshHosts: [], sshHostsOff: [SSHHostEntry(alias: "devbox")], configRoot: dir)
+        XCTAssertEqual(try read(dir), "theme = a\nssh-host-off = devbox\nfont-size = 14\n")
+        try ConfigWriter.apply(sshHosts: [SSHHostEntry(alias: "devbox")], sshHostsOff: [], configRoot: dir)
+        XCTAssertEqual(try read(dir), "theme = a\nssh-host = devbox\nfont-size = 14\n")
+    }
+
     func test_sshHosts_roundTripThroughTheParser_quotingANameWithAHash() throws {
         let dir = tempDirPath()
         let hosts = [

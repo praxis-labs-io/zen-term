@@ -289,6 +289,32 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         XCTAssertEqual(configText(), "ssh-host = devbox: Build box\n")
     }
 
+    func test_undoingTheRemovalOfAnOffHost_putsItBackOffAtItsPlace() throws {
+        try seed(ssh: nil, config: "ssh-host-off = alpha\nssh-host-off = beta: Beta\nssh-host-off = gamma\n")
+        let detail = mount()
+        let button = removeButtons(in: detail)[1]
+
+        press(key(36), on: button)
+        XCTAssertEqual(configText(), "ssh-host-off = alpha\nssh-host-off = gamma\n")
+        press(key(36), on: button)
+
+        XCTAssertEqual(configText(), "ssh-host-off = alpha\nssh-host-off = beta: Beta\nssh-host-off = gamma\n")
+        XCTAssertEqual(GeneralConfig.current.sshHostAliases, [])
+    }
+
+    func test_removingAHost_clearsAHandWrittenDuplicateOffLine_soTheNameCannotResurrect() throws {
+        try seed(ssh: nil, config: "ssh-host = a\nssh-host-off = a: Old\n")
+
+        try SSHHostsWriter.remove("a")
+        XCTAssertEqual(configText(), "")
+        AppConfig.reload()
+        try SSHHostsWriter.add(SSHHostEntry(alias: "a"))
+        AppConfig.reload()
+
+        XCTAssertEqual(GeneralConfig.current.sshHosts, [SSHHostEntry(alias: "a")])
+        XCTAssertEqual(configText(), "ssh-host = a\n")
+    }
+
     func test_anOffHostKeepsItsName_acrossARestart() throws {
         try seed(ssh: "Host devbox\n", config: "ssh-host = devbox: Build box\n")
         let detail = mount()
