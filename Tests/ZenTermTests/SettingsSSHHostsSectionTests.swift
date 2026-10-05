@@ -495,6 +495,16 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         XCTAssertEqual(edited, "drew@10.0.0.2")
     }
 
+    func test_mounting_asksTheProbeToResolveEveryListedHost() throws {
+        try seed(ssh: "Host devbox\nHost prod\n", config: "ssh-host = prod\nssh-host-off = ghost\n")
+        var asked: [[String]] = []
+        center.destinationRequestHandler = { asked.append($0) }
+
+        _ = mount()
+
+        XCTAssertEqual(asked, [["devbox", "prod", "ghost"]])
+    }
+
     func test_addButton_asksForAHost() throws {
         let detail = mount()
         var asked = 0

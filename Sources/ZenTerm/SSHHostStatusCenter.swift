@@ -32,6 +32,10 @@ final class SSHHostStatusCenter {
         }
     }
 
+    var destinationRequestHandler: (([String]) -> Void)?
+
+    func requestDestinations(of hosts: [String]) { destinationRequestHandler?(hosts) }
+
     func destination(of host: SSHHostID) -> String? { destinations[host] }
 
     func setDestination(_ destination: String?, host: SSHHostID) {

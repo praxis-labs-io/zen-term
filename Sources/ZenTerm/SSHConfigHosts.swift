@@ -23,20 +23,17 @@ enum SSHConfigHosts {
 
     private static let maxIncludeDepth = 16  // OpenSSH's own `Include` limit
 
-    static func listing(of file: URL) -> Listing {
+    static func listing(of file: URL) -> Listing { scan(file).listing }
+
+    // One pass: the listing, and every file the config reads through `Include`, resolved, whether or not it could be read.
+    static func scan(_ file: URL) -> (listing: Listing, files: [String]) {
         var aliases: [String] = []
         var visited: Set<String> = []
         let wasRead = collect(
             file, includeBase: file.deletingLastPathComponent(), depth: 0, visited: &visited, into: &aliases)
-        return Listing(aliases: aliases, isUnreadable: !wasRead && FileManager.default.fileExists(atPath: file.path))
-    }
-
-    // Every file the config reads through `Include`, resolved, whether or not it could be read.
-    static func files(of file: URL) -> [String] {
-        var aliases: [String] = []
-        var visited: Set<String> = []
-        collect(file, includeBase: file.deletingLastPathComponent(), depth: 0, visited: &visited, into: &aliases)
-        return visited.sorted()
+        let listing = Listing(
+            aliases: aliases, isUnreadable: !wasRead && FileManager.default.fileExists(atPath: file.path))
+        return (listing, visited.sorted())
     }
 
     @discardableResult

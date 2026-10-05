@@ -136,6 +136,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         let current = GeneralConfig.current
         let typed = (current.sshHostAliases + current.sshHostsOff.map(\.alias)).filter { !config.aliases.contains($0) }
         listing = Listing(aliases: config.aliases, typed: typed, isConfigUnreadable: config.isUnreadable)
+        statusCenter.requestDestinations(of: config.aliases + typed)
         populate(focusing: hostToFocus.map { .row($0) })
         hostToFocus = nil
     }

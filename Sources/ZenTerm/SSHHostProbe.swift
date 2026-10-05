@@ -44,6 +44,8 @@ final class SSHHostProbe {
     private var hosts: [String] = []
     private var offAliases: [String] = []
     private var configAliases: [String] = []
+    private var requestedOff: [String] = []
+    private var isOffResolutionRequested = false
     private var resolveOnly: [String] = []
     private var proxied: Set<String> = []
     // `ssh -G` reruns `Match exec`, which can prompt, so a host resolves once per config and network.
@@ -62,6 +64,7 @@ final class SSHHostProbe {
 
     init(center: SSHHostStatusCenter) {
         self.center = center
+        center.destinationRequestHandler = { [weak self] hosts in self?.requestOffResolution(for: hosts) }
     }
 
     func start(hosts: [String], off: [String]) {
@@ -74,7 +77,7 @@ final class SSHHostProbe {
         setHosts(hosts, off: off)
     }
 
-    func setHosts(_ next: [String], off: [String] = []) {
+    func setHosts(_ next: [String], off: [String]) {
         guard !isSeeded || next != hosts || off != offAliases else { return }
         isSeeded = true
         apply(hosts: next, off: off)
@@ -87,7 +90,6 @@ final class SSHHostProbe {
         let previousKnown = known
         hosts = next
         offAliases = off
-        resolutions = [:]
         for host in previousHosts where !next.contains(host) {
             proxied.remove(host)
             center.setReachable(false, host: SSHHostID(alias: host))
@@ -96,11 +98,24 @@ final class SSHHostProbe {
         probe(next.filter { !previousHosts.contains($0) })
     }
 
-    // A host that stays listed in Settings keeps its destination while its status goes away.
+    // Off hosts are resolved only once Settings has asked, since a `Match exec` can run on any of them.
+    private func requestOffResolution(for listed: [String]) {
+        let previousKnown = known
+        isOffResolutionRequested = true
+        requestedOff = listed
+        reconcileResolveOnly(from: previousKnown)
+        probe([])
+    }
+
+    // A host that stays listed keeps its destination while its status goes away.
     private func reconcileResolveOnly(from previousKnown: Set<String>) {
         var seen: Set<String> = []
-        resolveOnly = (configAliases + offAliases).filter { !hosts.contains($0) && seen.insert($0).inserted }
-        for host in previousKnown.subtracting(known) { center.setDestination(nil, host: SSHHostID(alias: host)) }
+        let wanted = isOffResolutionRequested ? configAliases + offAliases + requestedOff : []
+        resolveOnly = wanted.filter { !hosts.contains($0) && seen.insert($0).inserted }
+        for host in previousKnown.subtracting(known) {
+            resolutions[host] = nil
+            center.setDestination(nil, host: SSHHostID(alias: host))
+        }
         refreshWatching()
     }
 
@@ -194,8 +209,7 @@ final class SSHHostProbe {
     // A round first reads the ssh config off-main, since an edit there can move a host or add one.
     private func probe(_ targets: [String]) {
         Self.queue.addOperation { [weak self] in
-            let stamp = Self.readConfigStamp()
-            let aliases = SSHConfigHosts.listing(of: SSHConfigHosts.userConfig).aliases
+            let (stamp, aliases) = Self.readConfig()
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { self?.probe(targets, configStamp: stamp, configAliases: aliases) }
             }
@@ -256,10 +270,12 @@ final class SSHHostProbe {
     }
 
     private func publishOff(_ resolution: SSHHostResolver.Resolution?, for host: String, generation: Int) {
-        guard resolveOnly.contains(host) else { return }
+        let isOn = hosts.contains(host)
+        guard isOn || resolveOnly.contains(host) else { return }
         guard generation == self.generation else { return probe([host]) }
         resolutions[host] = resolution
         center.setDestination(resolution?.destination, host: SSHHostID(alias: host))
+        if isOn { probe([host]) }
     }
 
     // An answer from before a network change describes the old network, so the host is asked again.
@@ -290,12 +306,13 @@ final class SSHHostProbe {
         }
     }
 
-    nonisolated private static func readConfigStamp() -> [String: Date] {
+    nonisolated private static func readConfig() -> (stamp: [String: Date], aliases: [String]) {
+        let scan = SSHConfigHosts.scan(SSHConfigHosts.userConfig)
         var stamp: [String: Date] = [:]
-        for path in SSHConfigHosts.files(of: SSHConfigHosts.userConfig) {
+        for path in scan.files {
             stamp[path] = (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate] as? Date
         }
-        return stamp
+        return (stamp, scan.listing.aliases)
     }
 
     nonisolated private static func resolve(_ host: String) -> SSHHostResolver.Resolution? {
