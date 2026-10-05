@@ -192,8 +192,9 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let footer = NSStackView(
-            views: removal == nil ? [spacer, cancelButton, submitButton] : [removeButton, spacer, cancelButton, submitButton])
+        let trailing = [spacer, cancelButton, submitButton]
+        let footerViews = removal == nil ? trailing : [removeButton] + trailing
+        let footer = NSStackView(views: footerViews)
         footer.orientation = .horizontal
         footer.spacing = 8
         footer.translatesAutoresizingMaskIntoConstraints = false
