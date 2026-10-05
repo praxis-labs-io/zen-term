@@ -1755,7 +1755,9 @@ final class WindowController: NSObject {
         }
     #endif
 
-    private func openSettings(landing: SettingsLanding = .top, focusingSSHHost focus: SettingsSSHHostsSection.Focus? = nil) {
+    private func openSettings(
+        landing: SettingsLanding = .top, focusingSSHHost focus: SettingsSSHHostsSection.Focus? = nil
+    ) {
         if modal?.kind == .settings { closeModal(); return }
         let toolsSection = SettingsToolsSection()
         toolsSection.onEditFloat = { [weak self] float in self?.openToolFloatForm(editing: float) }
@@ -1773,10 +1775,6 @@ final class WindowController: NSObject {
             self?.openSSHHostForm(.edit(host, address: address))
         }
         sshHostsSection.initialFocus = focus
-        sshHostsSection.hostSession = { [weak self] host in
-            guard let self else { return nil }
-            return self.hostSessionInAnyWindow.map { $0(host) } ?? self.session(of: host)
-        }
         let sections: [SettingsSection] = [
             SettingsAppearanceSection(),
             SettingsGeneralSection(),
@@ -1796,8 +1794,6 @@ final class WindowController: NSObject {
             onClose: { [weak self] in self?.closeModal() }
         )
         overlay.onReportIssue = { [weak self] in self?.openReportIssue() }
-        sshHostsSection.presentConfirm = { [weak overlay] in overlay?.presentConfirm($0) }
-        sshHostsSection.dismissConfirm = { [weak overlay] then in overlay?.dismissConfirm(then: then) }
         presentModal(overlay, kind: .settings)
     }
 

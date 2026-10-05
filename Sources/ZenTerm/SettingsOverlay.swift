@@ -67,16 +67,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    private lazy var confirm = ConfirmSlot(over: self)
-
-    var isShowingOverlaidCard: Bool { confirm.isShowing }
-
-    func presentConfirm(_ card: ConfirmCard) { confirm.present(card) }
-
-    func dismissConfirm(then: @escaping () -> Void) { confirm.dismiss(then: then) }
-
     func focusInitialResponder() {
-        if let card = confirm.card { return card.focusInitialResponder() }
         guard navRows.indices.contains(selectedIndex) else { return }
         window?.makeFirstResponder(navRows[selectedIndex])
     }
@@ -93,7 +84,6 @@ final class SettingsOverlay: NSView, ModalOverlay {
 
     // Here, not `keyDown`, so Esc from a focused text field's field editor still closes the card.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if confirm.isShowing { return super.performKeyEquivalent(with: event) }
         if ModalEscape.handle(
             event, in: window, dismissing: dismiss.isDismissing, close: { self.onClose() }
         ) {
@@ -112,7 +102,6 @@ final class SettingsOverlay: NSView, ModalOverlay {
         reportButton.reapplyTheme()
         navRows.forEach { $0.reapplyTheme() }
         sections.forEach { $0.reapplyTheme() }
-        confirm.card?.reapplyTheme()
     }
 
     // The clip view goes in before `drawsBackground = false`, which only applies to the current clip view.
