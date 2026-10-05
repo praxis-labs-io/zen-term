@@ -134,11 +134,7 @@ final class SettingsTabTraversalTests: WindowTestCase {
         let sshConfig = tempRoot.appendingPathComponent("ssh_config")
         try "Host devbox\nHost prod\n".write(to: sshConfig, atomically: true, encoding: .utf8)
         SSHConfigHosts.userConfigOverrideForTesting = sshConfig
-        SSHHostResolver.destinationOverrideForTesting = { _ in nil }
-        addTeardownBlock {
-            SSHConfigHosts.userConfigOverrideForTesting = nil
-            SSHHostResolver.destinationOverrideForTesting = nil
-        }
+        addTeardownBlock { SSHConfigHosts.userConfigOverrideForTesting = nil }
         let section = SettingsSSHHostsSection()
         self.section = section
         var exitedToNav = 0

@@ -9,6 +9,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     private var sshConfig: URL!
     private var window: NSWindow?
     private var section: SettingsSSHHostsSection?
+    private let center = SSHHostStatusCenter()
 
     override func setUpWithError() throws {
         try super.setUpWithError()
@@ -16,7 +17,6 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         sshConfig = try makeTempDir().appendingPathComponent("config")
         ConfigLoader.defaultRootOverrideForTesting = configRoot
         SSHConfigHosts.userConfigOverrideForTesting = sshConfig
-        SSHHostResolver.destinationOverrideForTesting = { _ in nil }
         AppConfig.reload()
     }
 
@@ -24,7 +24,6 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         window = nil
         section = nil
         SSHConfigHosts.userConfigOverrideForTesting = nil
-        SSHHostResolver.destinationOverrideForTesting = nil
         ConfigReset.toBuiltIn()
         try super.tearDownWithError()
     }
@@ -91,6 +90,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     private func mount(waitingForLoad: Bool = true) -> NSView {
         let section = SettingsSSHHostsSection()
         self.section = section
+        section.statusCenter = center
         let detail = section.makeDetailView()
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 620, height: 500),
@@ -367,18 +367,12 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     }
 
     func test_aRemovedHost_staysRemovedWhenDestinationsResolve() throws {
-        let gate = DispatchSemaphore(value: 0)
-        SSHHostResolver.destinationOverrideForTesting = { host in
-            gate.wait()
-            return host == "ops" ? "drew@10.0.0.7" : nil
-        }
-        defer { (0..<8).forEach { _ in gate.signal() } }
         try seed(ssh: nil, config: "ssh-host = deploy@10.0.0.5\nssh-host = ops\n")
         let detail = mount()
         let button = removeButtons(in: detail)[0]
         press(key(36), on: button)
 
-        (0..<2).forEach { _ in gate.signal() }
+        center.setDestination("drew@10.0.0.7", host: SSHHostID(alias: "ops"))
         waitUntil(label("drew@10.0.0.7", in: detail) != nil, "the resolved destination to rebuild the rows")
 
         let rebuilt = removeButtons(in: detail)
@@ -427,8 +421,8 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     }
 
     func test_aResolvedDestination_showsUnderTheHost() throws {
-        SSHHostResolver.destinationOverrideForTesting = { $0 == "devbox" ? "drew@10.0.0.2" : nil }
         try seed(ssh: "Host devbox\nHost prod\n", config: nil)
+        center.setDestination("drew@10.0.0.2", host: SSHHostID(alias: "devbox"))
 
         let detail = mount()
         waitUntil(
@@ -439,8 +433,8 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     }
 
     func test_aNamedHost_describesItselfByAlias_thenItsAddressWhenTheyDiffer() throws {
-        SSHHostResolver.destinationOverrideForTesting = { host in
-            ["devbox": "drew@10.0.0.2", "prod": "prod", "ops": "drew@10.0.0.3"][host]
+        for (host, destination) in ["devbox": "drew@10.0.0.2", "prod": "prod", "ops": "drew@10.0.0.3"] {
+            center.setDestination(destination, host: SSHHostID(alias: host))
         }
         try seed(
             ssh: "Host devbox\nHost prod\nHost ops\n",
@@ -452,6 +446,53 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         XCTAssertEqual(captions(in: detail), ["Build box", "Production", "ops"])
         XCTAssertNotNil(label("devbox · drew@10.0.0.2", in: detail))
         XCTAssertNotNil(label("prod", in: detail), "an address that is the alias is not repeated")
+    }
+
+    func test_aHostTheProbeHasNotReached_showsNoAddressUntilItDoes() throws {
+        try seed(ssh: "Host devbox\n", config: nil)
+        let detail = mount()
+        XCTAssertEqual(rows(in: detail).count, 1)
+        XCTAssertNil(label("drew@10.0.0.2", in: detail))
+
+        center.setDestination("drew@10.0.0.2", host: SSHHostID(alias: "devbox"))
+
+        waitUntil(label("drew@10.0.0.2", in: detail) != nil, "the address to appear")
+    }
+
+    func test_anAddressTheProbeDropsOrChanges_followsLive() throws {
+        try seed(ssh: "Host devbox\n", config: nil)
+        let detail = mount()
+        center.setDestination("drew@10.0.0.2", host: SSHHostID(alias: "devbox"))
+        waitUntil(label("drew@10.0.0.2", in: detail) != nil, "the address to appear")
+
+        center.setDestination("drew@10.0.0.9", host: SSHHostID(alias: "devbox"))
+
+        waitUntil(label("drew@10.0.0.9", in: detail) != nil, "the new address to appear")
+        XCTAssertNil(label("drew@10.0.0.2", in: detail))
+    }
+
+    func test_aStatusChangeThatMovesNoAddress_doesNotRebuildTheRows() throws {
+        try seed(ssh: "Host devbox\n", config: nil)
+        let detail = mount()
+        let row = try XCTUnwrap(rows(in: detail).first)
+
+        center.setReachable(true, host: SSHHostID(alias: "devbox"))
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+
+        XCTAssertIdentical(rows(in: detail).first, row)
+    }
+
+    func test_editingAHost_passesTheCentersAddress() throws {
+        try seed(ssh: "Host devbox\n", config: nil)
+        center.setDestination("drew@10.0.0.2", host: SSHHostID(alias: "devbox"))
+        let detail = mount()
+        var edited: String?
+        section?.onEditHost = { _, address in edited = address }
+        let row = try XCTUnwrap(descendants(of: detail).compactMap { $0 as? SSHHostRow }.first)
+
+        row.onActivate?()
+
+        XCTAssertEqual(edited, "drew@10.0.0.2")
     }
 
     func test_addButton_asksForAHost() throws {

@@ -22,7 +22,6 @@ final class SSHHostTurnOffTests: WindowTestCase {
             .write(to: configRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         ConfigLoader.defaultRootOverrideForTesting = configRoot
         SSHConfigHosts.userConfigOverrideForTesting = sshConfig
-        SSHHostResolver.destinationOverrideForTesting = { _ in nil }
         AppConfig.reload()
         originalSurface = TerminalSurfaceFactory.makeOverride
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
@@ -43,7 +42,6 @@ final class SSHHostTurnOffTests: WindowTestCase {
         TerminalSurfaceFactory.makeOverride = originalSurface
         WindowController.isPresent = originalPresence
         SSHConfigHosts.userConfigOverrideForTesting = nil
-        SSHHostResolver.destinationOverrideForTesting = nil
         ConfigReset.toBuiltIn()
         try super.tearDownWithError()
     }
