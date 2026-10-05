@@ -609,8 +609,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   sends no prompt marks). With `-t` it runs `exec env COLORTERM=… TERM_PROGRAM=…
   TERM_PROGRAM_VERSION=… "$SHELL" -l` on the host, the values from `TerminalIdentity`: Claude
   reports progress only to a ghostty it recognises, and ssh forwards none of them without the
-  server's `AcceptEnv`.
-  `env`, because csh has no prefix assignment. A host whose ssh config sets its own
+  server's `AcceptEnv`. It goes through `env` because csh has no prefix assignment. A host whose ssh config sets its own
   `RemoteCommand`, or whose config can't be read, launches plain, since ssh refuses both; the
   connection reads that once with `ssh -G`, off-main, before its first login.
   Only the first surface, the login, starts until the socket appears;
