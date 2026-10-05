@@ -3,7 +3,6 @@ import AppKit
 struct ToastContent: Equatable {
     let variant: ToastVariant
     let title: String
-    /// Follows `title`; a long title gives way before it, and it truncates in the middle only once wider than the card.
     let titleTail: String?
     let message: String?
     let icon: String?
