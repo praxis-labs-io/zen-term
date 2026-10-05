@@ -84,7 +84,7 @@ final class SSHHostProbeTests: XCTestCase {
         try "Include extra\nHost devbox\n".write(
             to: configDir.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         try "Host other\n".write(to: configDir.appendingPathComponent("extra"), atomically: true, encoding: .utf8)
-        SSHConfigHosts.userConfigOverrideForTesting = configDir.appendingPathComponent("config")
+        SSHConfigFiles.userConfigOverrideForTesting = configDir.appendingPathComponent("config")
         let answers = self.answers
         SSHHostProbe.resolveOverrideForTesting = { answers.resolve($0) }
         SSHHostProbe.bannerOverrideForTesting = { host, _ in answers.banner(host) }
@@ -92,7 +92,7 @@ final class SSHHostProbeTests: XCTestCase {
     }
 
     override func tearDown() {
-        SSHConfigHosts.userConfigOverrideForTesting = nil
+        SSHConfigFiles.userConfigOverrideForTesting = nil
         try? FileManager.default.removeItem(at: configDir)
         SSHHostProbe.resolveOverrideForTesting = nil
         SSHHostProbe.bannerOverrideForTesting = nil
@@ -106,7 +106,7 @@ final class SSHHostProbeTests: XCTestCase {
         answers.queue([.offline], for: "down")
         answers.queue([.proxied], for: "inner")
 
-        probe.setHosts(["up", "down", "inner"], off: [])
+        probe.setHosts(["up", "down", "inner"])
 
         waitUntil(answers.askCount("down") == 1 && answers.askCount("inner") == 1, "the round")
         waitUntil(status("up") == .online && status("inner") == .online, "the answers to land")
@@ -117,7 +117,7 @@ final class SSHHostProbeTests: XCTestCase {
         center.setConnected(true, host: SSHHostID(alias: "live"))
         answers.queue([.offline], for: "other")
 
-        probe.setHosts(["live", "other"], off: [])
+        probe.setHosts(["live", "other"])
 
         waitUntil(status("other") == .offline, "the round to land")
         XCTAssertEqual(answers.askCount("live"), 0)
@@ -138,7 +138,7 @@ final class SSHHostProbeTests: XCTestCase {
         defer { NotificationCenter.default.removeObserver(observer) }
 
         let gate = answers.holdNextResolve(of: "devbox")
-        probe.setHosts(["devbox"], off: [])
+        probe.setHosts(["devbox"])
         waitUntil(answers.resolveCount("devbox") == 1, "the first round to start")
         probe.networkChanged(isUp: true)
         gate.signal()
@@ -151,7 +151,7 @@ final class SSHHostProbeTests: XCTestCase {
 
     func test_losingTheNetwork_takesDirectHostsOfflineAndLeavesJumpHostsOnline() {
         answers.queue([.proxied], for: "inner")
-        probe.setHosts(["devbox", "inner"], off: [])
+        probe.setHosts(["devbox", "inner"])
         waitUntil(answers.askCount("devbox") == 1 && answers.askCount("inner") == 1, "the first round")
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
 
@@ -162,7 +162,7 @@ final class SSHHostProbeTests: XCTestCase {
     }
 
     func test_noHostIsConnectedTo_whileTheNetworkIsDown() {
-        probe.setHosts(["devbox"], off: [])
+        probe.setHosts(["devbox"])
         waitUntil(answers.askCount("devbox") == 1, "the first round")
         probe.networkChanged(isUp: false)
 
@@ -173,26 +173,26 @@ final class SSHHostProbeTests: XCTestCase {
     }
 
     func test_aRemovedHost_forgetsItsReachability() {
-        probe.setHosts(["devbox"], off: [])
+        probe.setHosts(["devbox"])
         waitUntil(status("devbox") == .online, "the host to read Online")
 
-        probe.setHosts([], off: [])
+        probe.setHosts([])
 
         XCTAssertEqual(status("devbox"), .offline)
     }
 
     func test_aWatchStartedAfterTheNetworkWentDown_probesAgain() {
-        probe.setHosts(["first"], off: [])
+        probe.setHosts(["first"])
         probe.networkChanged(isUp: false)
-        probe.setHosts([], off: [])
+        probe.setHosts([])
 
-        probe.setHosts(["devbox"], off: [])
+        probe.setHosts(["devbox"])
 
         waitUntil(answers.askCount("devbox") == 1, "the new watch to probe")
     }
 
     func test_aNewMonitorsFirstReport_ofNoNetwork_takesHostsOffline() {
-        probe.setHosts(["devbox"], off: [])
+        probe.setHosts(["devbox"])
         waitUntil(answers.askCount("devbox") == 1, "the first round")
 
         probe.firstPathReported(isUp: false)
@@ -201,7 +201,7 @@ final class SSHHostProbeTests: XCTestCase {
     }
 
     func test_aNewMonitorsFirstReport_ofTheNetworkItAssumed_startsNoRound() {
-        probe.setHosts(["devbox"], off: [])
+        probe.setHosts(["devbox"])
         waitUntil(answers.askCount("devbox") == 1, "the first round")
 
         probe.firstPathReported(isUp: true)
@@ -211,7 +211,7 @@ final class SSHHostProbeTests: XCTestCase {
     }
 
     func test_aSecondRound_reusesTheResolvedEndpoint() {
-        probe.setHosts(["devbox"], off: [])
+        probe.setHosts(["devbox"])
         waitUntil(answers.askCount("devbox") == 1, "the first round")
 
         probe.probeAll()
@@ -221,7 +221,7 @@ final class SSHHostProbeTests: XCTestCase {
     }
 
     func test_aResolvedHost_publishesWhereSSHWillSignIn_fromTheSameResolution() {
-        probe.setHosts(["devbox"], off: [])
+        probe.setHosts(["devbox"])
         waitUntil(center.destination(of: SSHHostID(alias: "devbox")) == "drew@devbox.lan", "the destination to land")
 
         probe.probeAll()
@@ -231,95 +231,30 @@ final class SSHHostProbeTests: XCTestCase {
     }
 
     func test_aRemovedHost_forgetsItsDestination() {
-        probe.setHosts(["ghost"], off: [])
+        probe.setHosts(["ghost"])
         waitUntil(center.destination(of: SSHHostID(alias: "ghost")) != nil, "the destination to land")
 
-        probe.setHosts([], off: [])
+        probe.setHosts([])
 
         XCTAssertNil(center.destination(of: SSHHostID(alias: "ghost")))
     }
 
     private func destination(_ host: String) -> String? { center.destination(of: SSHHostID(alias: host)) }
 
-    func test_aConfigHostThatIsNotOn_isResolvedWithoutBeingProbed() {
-        probe.setHosts([], off: [])
-        center.requestDestinations(of: [])
+    func test_aConnectedHostWhoseResolutionFails_isNotRetriedUntilTheNextRound() {
+        let attempts = Attempts()
+        SSHHostProbe.resolveOverrideForTesting = { attempts.count($0) }
+        center.setConnected(true, host: SSHHostID(alias: "ghost"))
+        probe.setHosts(["ghost"])
+        waitUntil(attempts.value == 1, "the first attempt")
 
-        waitUntil(destination("devbox") == "drew@devbox.lan" && destination("other") == "drew@other.lan", "both")
+        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
 
-        XCTAssertEqual(answers.askCount("devbox"), 0)
-        XCTAssertEqual(status("devbox"), .offline)
-    }
-
-    func test_anOffAlias_isResolvedWithoutBeingProbed() {
-        probe.setHosts([], off: ["ghost"])
-        center.requestDestinations(of: [])
-
-        waitUntil(destination("ghost") == "drew@ghost.lan", "the destination to land")
-
-        XCTAssertEqual(answers.askCount("ghost"), 0)
-        XCTAssertEqual(status("ghost"), .offline)
-    }
-
-    func test_anOffHost_isResolvedOnceAcrossRounds() {
-        probe.setHosts([], off: ["ghost"])
-        center.requestDestinations(of: [])
-        waitUntil(destination("ghost") != nil, "the destination to land")
-
-        probe.probeAll()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
-
-        XCTAssertEqual(answers.resolveCount("ghost"), 1)
-    }
-
-    func test_aHostTurnedOff_keepsItsDestinationAndLosesItsStatus() {
-        probe.setHosts(["ghost"], off: [])
-        center.requestDestinations(of: ["ghost"])
-        waitUntil(status("ghost") == .online && destination("ghost") != nil, "the host to read Online")
-
-        probe.setHosts([], off: ["ghost"])
-
-        XCTAssertEqual(destination("ghost"), "drew@ghost.lan")
-        XCTAssertEqual(status("ghost"), .offline)
-        let asked = answers.askCount("ghost")
-        probe.probeAll()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
-        XCTAssertEqual(answers.askCount("ghost"), asked, "an Off host is never asked again")
-    }
-
-    func test_aHostTurnedBackOn_keepsItsDestinationUntilItIsProbed() {
-        probe.setHosts([], off: ["ghost"])
-        center.requestDestinations(of: [])
-        waitUntil(destination("ghost") != nil, "the destination to land")
-
-        probe.setHosts(["ghost"], off: [])
-
-        XCTAssertEqual(destination("ghost"), "drew@ghost.lan")
-        waitUntil(status("ghost") == .online, "the host to read Online")
-    }
-
-    func test_anOffAliasRemoved_forgetsItsDestination() {
-        probe.setHosts([], off: ["ghost"])
-        center.requestDestinations(of: [])
-        waitUntil(destination("ghost") != nil, "the destination to land")
-
-        probe.setHosts([], off: [])
-
-        XCTAssertNil(destination("ghost"))
-    }
-
-    func test_aConfigHostTurnedOff_keepsItsDestination() {
-        probe.setHosts(["devbox"], off: [])
-        center.requestDestinations(of: ["devbox"])
-        waitUntil(destination("devbox") != nil, "the destination to land")
-
-        probe.setHosts([], off: [])
-
-        XCTAssertEqual(destination("devbox"), "drew@devbox.lan")
+        XCTAssertEqual(attempts.value, 1)
     }
 
     func test_aNetworkChange_resolvesAgain() {
-        probe.setHosts(["devbox"], off: [])
+        probe.setHosts(["devbox"])
         waitUntil(answers.askCount("devbox") == 1, "the first round")
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
 
@@ -330,11 +265,11 @@ final class SSHHostProbeTests: XCTestCase {
     }
 
     func test_aHostsChange_keepsTheResolutionOfHostsStillListed() {
-        probe.setHosts(["devbox"], off: [])
+        probe.setHosts(["devbox"])
         waitUntil(answers.askCount("devbox") == 1, "the first round")
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
 
-        probe.setHosts(["devbox", "other"], off: [])
+        probe.setHosts(["devbox", "other"])
         probe.probeAll()
 
         waitUntil(answers.askCount("devbox") == 2, "the next round")
@@ -342,75 +277,19 @@ final class SSHHostProbeTests: XCTestCase {
     }
 
     func test_aHostThatLeft_isResolvedAgainWhenItReturns() {
-        probe.setHosts(["ghost"], off: [])
-        waitUntil(answers.askCount("ghost") == 1, "the first round")
-        probe.setHosts([], off: [])
+        probe.setHosts(["ghost"])
+        waitUntil(destination("ghost") != nil, "the first round to land")
+        probe.setHosts([])
 
-        probe.setHosts(["ghost"], off: [])
+        probe.setHosts(["ghost"])
 
         waitUntil(answers.askCount("ghost") == 2, "the second round")
         XCTAssertEqual(answers.resolveCount("ghost"), 2)
     }
 
-    func test_beforeSettingsAsks_noOffHostIsResolved() {
-        probe.setHosts([], off: ["ghost"])
-        probe.probeAll()
-
-        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
-
-        XCTAssertEqual(answers.resolveCount("ghost"), 0)
-        XCTAssertEqual(answers.resolveCount("devbox"), 0)
-        XCTAssertNil(destination("ghost"))
-    }
-
-    func test_aRequestedHostNoConfigNamesYet_isResolved() {
-        probe.setHosts([], off: [])
-
-        center.requestDestinations(of: ["ghost"])
-
-        waitUntil(destination("ghost") == "drew@ghost.lan", "the destination to land")
-    }
-
-    func test_askingAgain_resolvesNothingAlreadyResolved() {
-        probe.setHosts([], off: ["ghost"])
-        center.requestDestinations(of: ["ghost"])
-        waitUntil(destination("ghost") != nil, "the destination to land")
-
-        center.requestDestinations(of: ["ghost"])
-        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
-
-        XCTAssertEqual(answers.resolveCount("ghost"), 1)
-    }
-
-    func test_anOffHostWhoseResolutionFails_isNotAskedAgainEveryRound() {
-        let attempts = Attempts()
-        SSHHostProbe.resolveOverrideForTesting = { attempts.count($0) }
-        probe.setHosts([], off: ["ghost"])
-        center.requestDestinations(of: [])
-        waitUntil(attempts.value == 1, "the first attempt")
-
-        probe.probeAll()
-        probe.probeAll()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
-
-        XCTAssertEqual(attempts.value, 1)
-    }
-
-    func test_aFailedOffHost_isAskedAgainAfterANetworkChange() {
-        let attempts = Attempts()
-        SSHHostProbe.resolveOverrideForTesting = { attempts.count($0) }
-        probe.setHosts([], off: ["ghost"])
-        center.requestDestinations(of: [])
-        waitUntil(attempts.value == 1, "the first attempt")
-
-        probe.networkChanged(isUp: true)
-
-        waitUntil(attempts.value == 2, "the attempt after the change")
-    }
-
     func test_aConnectedHost_isResolvedAgainAfterAConfigEdit_withoutBeingProbed() throws {
         center.setConnected(true, host: SSHHostID(alias: "devbox"))
-        probe.setHosts(["devbox"], off: [])
+        probe.setHosts(["devbox"])
         waitUntil(destination("devbox") == "drew@devbox.lan", "the destination to land")
         SSHHostProbe.resolveOverrideForTesting = { _ in
             SSHHostResolver.Resolution(endpoint: nil, destination: "drew@moved.lan")
@@ -426,27 +305,12 @@ final class SSHHostProbeTests: XCTestCase {
         XCTAssertEqual(status("devbox"), .connected)
     }
 
-    func test_aHostTurnedOnWhileItsOffResolutionIsInFlight_isProbedWhenItLands() {
-        probe.setHosts([], off: ["ghost"])
-        let gate = answers.holdNextResolve(of: "ghost")
-        center.requestDestinations(of: [])
-        waitUntil(answers.resolveCount("ghost") == 1, "the Off resolution to start")
-
-        probe.setHosts(["ghost"], off: [])
-        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
-        XCTAssertEqual(status("ghost"), .offline)
-        gate.signal()
-
-        waitUntil(status("ghost") == .online, "the host to read Online")
-        XCTAssertEqual(answers.resolveCount("ghost"), 1)
-    }
-
     func test_theSameHostsAgain_keepTheirResolution() {
-        probe.setHosts(["devbox"], off: [])
+        probe.setHosts(["devbox"])
         waitUntil(answers.askCount("devbox") == 1, "the first round")
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
 
-        probe.setHosts(["devbox"], off: [])
+        probe.setHosts(["devbox"])
         probe.probeAll()
 
         waitUntil(answers.askCount("devbox") == 2, "the next round")
@@ -454,7 +318,7 @@ final class SSHHostProbeTests: XCTestCase {
     }
 
     func test_aWake_waitsForTheNetworkToSettleBeforeProbing() {
-        probe.setHosts(["devbox"], off: [])
+        probe.setHosts(["devbox"])
         waitUntil(answers.askCount("devbox") == 1, "the first round")
 
         probe.systemDidWake()
@@ -467,7 +331,7 @@ final class SSHHostProbeTests: XCTestCase {
     func test_aJumpHostResolvedAfterTheNetworkDrops_stillReadsOnline() {
         answers.queue([.proxied], for: "inner")
         let gate = answers.holdNextResolve(of: "inner")
-        probe.setHosts(["inner"], off: [])
+        probe.setHosts(["inner"])
         waitUntil(answers.resolveCount("inner") == 1, "the first resolution to start")
 
         probe.networkChanged(isUp: false)
@@ -479,7 +343,7 @@ final class SSHHostProbeTests: XCTestCase {
     }
 
     func test_anEditToAnIncludedConfigFile_resolvesAgain_andAnUntouchedConfigDoesNot() throws {
-        probe.setHosts(["devbox"], off: [])
+        probe.setHosts(["devbox"])
         waitUntil(answers.askCount("devbox") == 1, "the first round")
         probe.probeAll()
         waitUntil(answers.askCount("devbox") == 2, "a round with the config untouched")

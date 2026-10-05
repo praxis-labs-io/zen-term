@@ -121,24 +121,11 @@ final class GeneralConfigParserTests: XCTestCase {
         }
     }
 
-    func test_sshHostOff_usesTheSameGrammar_andLosesToAnOnLineForTheSameAlias() {
-        let config = parse(
-            """
-            ssh-host-off = devbox: Build box
-            ssh-host-off = prod
-            ssh-host = prod: Production
-            ssh-host-off = devbox: Later
-            ssh-host-off = -oProxyCommand=x
-            """)
-        XCTAssertEqual(config.sshHosts, [SSHHostEntry(alias: "prod", name: "Production")])
-        XCTAssertEqual(config.sshHostsOff, [SSHHostEntry(alias: "devbox", name: "Build box")])
-        XCTAssertEqual(
-            config.configDiagnostics,
-            [
-                ConfigDiagnostic(
-                    scope: .setting(key: "ssh-host-off"),
-                    problem: .invalidValue(got: "-oProxyCommand=x", expected: "host, or host: name"))
-            ])
+    func test_aLeftoverSSHHostOffLine_isAnOrdinaryUnknownKey() {
+        let config = parse("ssh-host-off = devbox: Build box\nssh-host = prod\n")
+
+        XCTAssertEqual(config.sshHosts, [SSHHostEntry(alias: "prod")])
+        XCTAssertEqual(config.configDiagnostics, [])
     }
 
     func test_sshHost_dropsALineThatWouldReadAsAnSSHOptionOrHasNoColon() {

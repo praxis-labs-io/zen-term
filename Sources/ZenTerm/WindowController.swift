@@ -1729,7 +1729,7 @@ final class WindowController: NSObject {
         case "agents", "agent-notifications", "attention-toast", "completion-toast", "toast-duration",
             "automatic-update-checks":
             return .general
-        case "ssh-host", "ssh-host-off":
+        case "ssh-host":
             return .sshHosts
         default:
             return .top
@@ -1769,8 +1769,8 @@ final class WindowController: NSObject {
         sshHostsSection.onAddHost = { [weak self] in
             self?.openSSHHostForm(.add(taken: Set(GeneralConfig.current.sshHostAliases)))
         }
-        sshHostsSection.onEditHost = { [weak self] host, address, isConfigHost in
-            self?.openSSHHostForm(.edit(host, address: address), isConfigHost: isConfigHost)
+        sshHostsSection.onEditHost = { [weak self] host, address in
+            self?.openSSHHostForm(.edit(host, address: address))
         }
         sshHostsSection.hostToFocus = host
         sshHostsSection.hostSession = { [weak self] host in
@@ -1987,7 +1987,7 @@ final class WindowController: NSObject {
         AppConfig.reload()
     }
 
-    private func openSSHHostForm(_ mode: AddSSHHostOverlay.Mode, isConfigHost: Bool = false) {
+    private func openSSHHostForm(_ mode: AddSSHHostOverlay.Mode) {
         closeModal()
         let edited: String? =
             switch mode {
@@ -1997,7 +1997,7 @@ final class WindowController: NSObject {
         let overlay = AddSSHHostOverlay(
             mode: mode, background: Theme.current.chrome.background.nsColor,
             onSubmit: { [weak self] host in
-                edited == nil ? self?.addSSHHost(host) : self?.renameSSHHost(host, isConfigHost: isConfigHost)
+                edited == nil ? self?.addSSHHost(host) : self?.renameSSHHost(host)
             },
             onCancel: { [weak self] in self?.reopenSettingsOnSSHHosts(focusing: edited) })
         presentModal(overlay, kind: .sshHostForm)
@@ -2007,8 +2007,8 @@ final class WindowController: NSObject {
         saveSSHHost(host) { try SSHHostsWriter.add(host) }
     }
 
-    private func renameSSHHost(_ host: SSHHostEntry, isConfigHost: Bool) -> String? {
-        saveSSHHost(host) { try SSHHostsWriter.rename(host.alias, to: host.name, isConfigHost: isConfigHost) }
+    private func renameSSHHost(_ host: SSHHostEntry) -> String? {
+        saveSSHHost(host) { try SSHHostsWriter.rename(host.alias, to: host.name) }
     }
 
     private func saveSSHHost(_ host: SSHHostEntry, _ write: () throws -> Void) -> String? {
@@ -2631,12 +2631,12 @@ final class WindowController: NSObject {
         closeTabs(of: workspace, dismissingModal: dismissingModal)
     }
 
-    // Leaves an open card up, since a host is usually turned off from inside Settings.
+    // Leaves an open card up, since a host is usually removed from inside Settings.
     private func disconnectRemovedHosts() {
         let enabled = GeneralConfig.current.sshHostAliases
         for workspace in workspaces {
             guard let host = workspace.host, !enabled.contains(host.alias) else { continue }
-            Log.info("ssh host turned off, so it disconnects", category: .workspace)
+            Log.info("ssh host removed, so it disconnects", category: .workspace)
             disconnect(workspace, dismissingModal: false)
         }
     }

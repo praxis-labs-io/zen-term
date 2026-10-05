@@ -130,23 +130,19 @@ final class SettingsTabTraversalTests: WindowTestCase {
         XCTAssertIdentical(tab(from: rows[0]), rows[1], "Tab advances to the next row")
     }
 
-    func test_tab_fromSSHHostToggle_advancesToTheNextRow_andShiftTabRetreats() throws {
-        let sshConfig = tempRoot.appendingPathComponent("ssh_config")
-        try "Host devbox\nHost prod\n".write(to: sshConfig, atomically: true, encoding: .utf8)
-        SSHConfigHosts.userConfigOverrideForTesting = sshConfig
-        addTeardownBlock { SSHConfigHosts.userConfigOverrideForTesting = nil }
+    func test_tab_fromSSHHostRemoveButton_advancesToTheNextRow_andShiftTabRetreats() throws {
+        try seed("ssh-host = devbox\nssh-host = prod\n")
         let section = SettingsSSHHostsSection()
         self.section = section
         var exitedToNav = 0
         section.onExitToNav = { exitedToNav += 1 }
         let detail = mount(section.makeDetailView())
-        waitUntil(
-            descendants(of: detail).compactMap { $0 as? SegmentedControl }.count == 2, "a row per Host entry")
-        let toggles = descendants(of: detail).compactMap { $0 as? SegmentedControl }
+        let buttons = descendants(of: detail).compactMap { $0 as? AppButton }.filter { $0.title == "Remove" }
         let rows = descendants(of: detail).compactMap { $0 as? SSHHostRow }
+        XCTAssertEqual(rows.count, 2)
 
-        XCTAssertIdentical(tab(from: toggles[0]), rows[1], "Tab advances to the next row")
-        XCTAssertIdentical(tab(from: rows[1], shift: true), toggles[0], "Shift-Tab retreats one stop")
+        XCTAssertIdentical(tab(from: buttons[0]), rows[1], "Tab advances to the next row")
+        XCTAssertIdentical(tab(from: rows[1], shift: true), buttons[0], "Shift-Tab retreats one stop")
         XCTAssertEqual(exitedToNav, 0)
         _ = tab(from: rows[0], shift: true)
         XCTAssertEqual(exitedToNav, 1, "Shift-Tab from the first stop exits to the nav")

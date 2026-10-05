@@ -4,7 +4,7 @@ import XCTest
 
 @testable import ZenTerm
 
-final class SSHHostTurnOffTests: WindowTestCase {
+final class SSHHostRemovalTests: WindowTestCase {
     private let devbox = SSHHostID(alias: "devbox")
     private let typed = SSHHostID(alias: "deploy@10.0.0.5")
     private var configRoot: URL!
@@ -16,12 +16,9 @@ final class SSHHostTurnOffTests: WindowTestCase {
     override func setUpWithError() throws {
         try super.setUpWithError()
         configRoot = try makeTempDir()
-        let sshConfig = try makeTempDir().appendingPathComponent("config")
-        try "Host devbox\nHost prod\n".write(to: sshConfig, atomically: true, encoding: .utf8)
         try "ssh-host = devbox\nssh-host = prod\nssh-host = deploy@10.0.0.5\n"
             .write(to: configRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         ConfigLoader.defaultRootOverrideForTesting = configRoot
-        SSHConfigHosts.userConfigOverrideForTesting = sshConfig
         AppConfig.reload()
         originalSurface = TerminalSurfaceFactory.makeOverride
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
@@ -41,7 +38,6 @@ final class SSHHostTurnOffTests: WindowTestCase {
         for host in [devbox, typed] { SSHHostStatusCenter.shared.setConnected(false, host: host) }
         TerminalSurfaceFactory.makeOverride = originalSurface
         WindowController.isPresent = originalPresence
-        SSHConfigHosts.userConfigOverrideForTesting = nil
         ConfigReset.toBuiltIn()
         try super.tearDownWithError()
     }
@@ -70,12 +66,12 @@ final class SSHHostTurnOffTests: WindowTestCase {
     private func openSettings(in c: WindowController) throws -> NSView {
         let content = try XCTUnwrap(c.window.contentView)
         c.openSettings(for: .setting(key: "ssh-host"))
-        waitUntil(toggles(in: content).count == 2, "Settings to land on SSH Hosts")
+        waitUntil(removeButtons(in: content).count == 3, "Settings to land on SSH Hosts")
         return content
     }
 
-    private func toggles(in view: NSView) -> [SegmentedControl] {
-        descendants(of: view).compactMap { $0 as? SegmentedControl }
+    private func removeButtons(in view: NSView) -> [AppButton] {
+        descendants(of: view).compactMap { $0 as? AppButton }.filter { $0.title == "Remove" }
     }
 
     private func settings(in view: NSView) -> SettingsOverlay? {
@@ -94,16 +90,16 @@ final class SSHHostTurnOffTests: WindowTestCase {
         try XCTUnwrap(descendants(of: view).compactMap { $0 as? AppButton }.first { $0.title == title })
     }
 
-    private func turnOff(_ toggle: SegmentedControl, in c: WindowController) throws {
+    private func remove(_ button: AppButton, in c: WindowController) throws {
         let event = try XCTUnwrap(
             NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: [.function, .numericPad], timestamp: 0,
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
                 windowNumber: c.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "",
-                isARepeat: false, keyCode: 124))
+                isARepeat: false, keyCode: 36))
         NSApp.postEvent(event, atStart: true)
         _ = NSApp.nextEvent(matching: .keyDown, until: nil, inMode: .default, dequeue: true)
-        c.window.makeFirstResponder(toggle)
-        toggle.keyDown(with: event)
+        c.window.makeFirstResponder(button)
+        button.keyDown(with: event)
     }
 
     private func drainMainQueue() {
@@ -112,35 +108,35 @@ final class SSHHostTurnOffTests: WindowTestCase {
         wait(for: [drained], timeout: 2)
     }
 
-    func test_turningOffAConnectedHost_warnsOverSettings_andChangesNothingUntilAnswered() throws {
+    func test_removingAConnectedHost_warnsOverSettings_andChangesNothingUntilAnswered() throws {
         let c = makeWindow()
         open(devbox, in: c)
         let content = try openSettings(in: c)
 
-        try turnOff(toggles(in: content)[0], in: c)
+        try remove(removeButtons(in: content)[0], in: c)
 
         let card = try XCTUnwrap(card(in: content), "an open host warns before it goes")
-        XCTAssertTrue(texts(in: card).contains("Turn Off devbox"))
+        XCTAssertTrue(texts(in: card).contains("Remove devbox"))
         XCTAssertTrue(
-            texts(in: card).contains("Turning off devbox will disconnect it and stop everything running in it."))
+            texts(in: card).contains("Removing devbox will disconnect it and stop everything running in it."))
         XCTAssertNotNil(settings(in: content), "the warning keeps Settings open")
         XCTAssertTrue(GeneralConfig.current.sshHostAliases.contains("devbox"))
         XCTAssertTrue(c.holdsHost(devbox))
     }
 
-    func test_cancellingTheWarning_putsTheToggleBack_andLeavesTheHostConnected() throws {
+    func test_cancellingTheWarning_keepsRemoveOnTheButton_andLeavesTheHostConnected() throws {
         let c = makeWindow()
         open(devbox, in: c)
         let content = try openSettings(in: c)
-        let toggle = toggles(in: content)[0]
-        try turnOff(toggle, in: c)
+        let removeButton = removeButtons(in: content)[0]
+        try remove(removeButton, in: c)
 
         try button("Cancel", in: XCTUnwrap(card(in: content))).onTap()
         drainMainQueue()
 
         XCTAssertNil(card(in: content))
-        XCTAssertEqual(toggle.selectedIndex, 0, "On again")
-        XCTAssertIdentical(c.window.firstResponder, toggle)
+        XCTAssertEqual(removeButton.title, "Remove")
+        XCTAssertIdentical(c.window.firstResponder, removeButton)
         XCTAssertTrue(GeneralConfig.current.sshHostAliases.contains("devbox"))
         XCTAssertTrue(c.holdsHost(devbox))
         XCTAssertEqual(fake.ended, [])
@@ -150,8 +146,8 @@ final class SSHHostTurnOffTests: WindowTestCase {
         let c = makeWindow()
         open(devbox, in: c)
         let content = try openSettings(in: c)
-        let toggle = toggles(in: content)[0]
-        try turnOff(toggle, in: c)
+        let removeButton = removeButtons(in: content)[0]
+        try remove(removeButton, in: c)
         let escape = try XCTUnwrap(
             NSEvent.keyEvent(
                 with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
@@ -163,16 +159,16 @@ final class SSHHostTurnOffTests: WindowTestCase {
 
         XCTAssertNil(card(in: content))
         XCTAssertNotNil(settings(in: content), "Esc answers the warning, not Settings")
-        XCTAssertEqual(toggle.selectedIndex, 0)
+        XCTAssertEqual(removeButton.title, "Remove")
     }
 
     func test_confirmingTheWarning_disconnects_andLandsOnTheNextRow_withSettingsStillOpen() throws {
         let c = makeWindow()
         open(devbox, in: c)
         let content = try openSettings(in: c)
-        try turnOff(toggles(in: content)[0], in: c)
+        try remove(removeButtons(in: content)[0], in: c)
 
-        try button("Turn Off", in: XCTUnwrap(card(in: content))).onTap()
+        try button("Remove", in: XCTUnwrap(card(in: content))).onTap()
         drainMainQueue()
 
         XCTAssertFalse(GeneralConfig.current.sshHostAliases.contains("devbox"))
@@ -183,42 +179,25 @@ final class SSHHostTurnOffTests: WindowTestCase {
         XCTAssertNil(card(in: content))
     }
 
-    func test_turningOffAHostWhileItConnects_saysItStopsConnecting() throws {
+    func test_removingAHostWhileItConnects_saysItStopsConnecting() throws {
         let c = makeWindow()
         open(devbox, in: c, connected: false)
         let content = try openSettings(in: c)
 
-        try turnOff(toggles(in: content)[0], in: c)
+        try remove(removeButtons(in: content)[0], in: c)
 
         let card = try XCTUnwrap(card(in: content))
-        XCTAssertTrue(texts(in: card).contains("Turning off devbox will stop connecting to it and close its tabs."))
+        XCTAssertTrue(texts(in: card).contains("Removing devbox will stop connecting to it and close its tabs."))
     }
 
-    func test_turningOffAHostThatIsNotOpen_savesWithoutAsking() throws {
+    func test_removingAHostThatIsNotOpen_savesWithoutAsking() throws {
         let c = makeWindow()
         let content = try openSettings(in: c)
 
-        try turnOff(toggles(in: content)[0], in: c)
+        try remove(removeButtons(in: content)[0], in: c)
 
         XCTAssertNil(card(in: content))
         XCTAssertFalse(GeneralConfig.current.sshHostAliases.contains("devbox"))
-    }
-
-    func test_removingAConnectedAddedHost_warnsWithRemove_thenDisconnects() throws {
-        let c = makeWindow()
-        open(typed, in: c)
-        let content = try openSettings(in: c)
-
-        try button("Remove", in: content).onTap()
-        let card = try XCTUnwrap(card(in: content))
-        XCTAssertTrue(texts(in: card).contains("Remove deploy@10.0.0.5"))
-        XCTAssertTrue(
-            texts(in: card).contains("Removing deploy@10.0.0.5 will disconnect it and stop everything running in it."))
-        try button("Remove", in: card).onTap()
-        drainMainQueue()
-
-        XCTAssertFalse(c.holdsHost(typed))
-        XCTAssertNoThrow(try button("Undo", in: content))
     }
 
     func test_aHostOpenInAnotherWindow_warnsHere_andDisconnectsThere() throws {
@@ -228,15 +207,15 @@ final class SSHHostTurnOffTests: WindowTestCase {
         open(devbox, in: hostWindow)
         let content = try openSettings(in: settingsWindow)
 
-        try turnOff(toggles(in: content)[0], in: settingsWindow)
-        try button("Turn Off", in: XCTUnwrap(card(in: content))).onTap()
+        try remove(removeButtons(in: content)[0], in: settingsWindow)
+        try button("Remove", in: XCTUnwrap(card(in: content))).onTap()
         drainMainQueue()
 
         XCTAssertFalse(hostWindow.holdsHost(devbox))
         XCTAssertEqual(fake.ended, [42])
     }
 
-    func test_aConnectedHostTurnedOff_landsOnTheNextHostConnectedHere_pastAnOnlineOne() throws {
+    func test_aConnectedHostRemoved_landsOnTheNextHostConnectedHere_pastAnOnlineOne() throws {
         let prod = SSHHostID(alias: "prod")
         SSHHostStatusCenter.shared.setReachable(true, host: prod)
         defer { SSHHostStatusCenter.shared.setReachable(false, host: prod) }
@@ -253,7 +232,7 @@ final class SSHHostTurnOffTests: WindowTestCase {
         XCTAssertNil(c.connectViewForTesting, "it lands on the connected host's panes")
     }
 
-    func test_aHostTurnedOffByEditingTheConfig_disconnects() throws {
+    func test_aHostRemovedByEditingTheConfig_disconnects() throws {
         let c = makeWindow()
         open(devbox, in: c)
 

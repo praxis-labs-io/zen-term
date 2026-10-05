@@ -53,8 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         AppConfig.loadAtLaunch()
         MotionConfig.apply(GeneralConfig.current.reduceMotion)
-        hostProbe.start(
-            hosts: GeneralConfig.current.sshHostAliases, off: GeneralConfig.current.sshHostsOff.map(\.alias))
+        hostProbe.start(hosts: GeneralConfig.current.sshHostAliases)
         SSHSocketSweep.start()
 
         if GeneralConfig.current.debug { Log.isVerbose = true }
@@ -111,8 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let change = ConfigChange.from(note)
                 self.configApplier.apply(change)
                 if change.contains(.sshHosts) {
-                    let hosts = GeneralConfig.current
-                    self.hostProbe.setHosts(hosts.sshHostAliases, off: hosts.sshHostsOff.map(\.alias))
+                    self.hostProbe.setHosts(GeneralConfig.current.sshHostAliases)
                 }
             }
         }

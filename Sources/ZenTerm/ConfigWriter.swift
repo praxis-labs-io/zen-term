@@ -9,7 +9,6 @@ enum ConfigWriter {
         floatUpserts: [ToolFloat] = [],
         floatRemovals: Set<String> = [],
         sshHosts: [SSHHostEntry]? = nil,
-        sshHostsOff: [SSHHostEntry]? = nil,
         configRoot: URL = ConfigLoader.defaultRoot
     ) throws {
         try FileManager.default.createDirectory(at: configRoot, withIntermediateDirectories: true)
@@ -23,7 +22,7 @@ enum ConfigWriter {
         if !floatUpserts.isEmpty || !floatRemovals.isEmpty {
             applyFloats(upserts: floatUpserts, removals: floatRemovals, in: &lines)
         }
-        if sshHosts != nil || sshHostsOff != nil { applySSHHosts(on: sshHosts, off: sshHostsOff, in: &lines) }
+        if let sshHosts { applySSHHosts(sshHosts, in: &lines) }
 
         var output = lines.joined(separator: "\n")
         if !output.isEmpty { output += "\n" }
@@ -172,27 +171,15 @@ enum ConfigWriter {
         return ToolFloatParser.identity(fields: ToolFloatParser.fields(value))
     }
 
-    private static func applySSHHosts(on: [SSHHostEntry]?, off: [SSHHostEntry]?, in lines: inout [String]) {
+    private static func applySSHHosts(_ hosts: [SSHHostEntry], in lines: inout [String]) {
+        let key = SSHHostsWriter.key
         var comments: [String: String] = [:]
-        for line in lines where [SSHHostsWriter.key, SSHHostsWriter.offKey].contains(activeAssignmentKey(line)) {
+        for line in lines where activeAssignmentKey(line) == key {
             guard let alias = sshHostAlias(of: line), let comment = ConfigText.trailingComment(of: line) else {
                 continue
             }
             if comments[alias] == nil { comments[alias] = comment }
         }
-        var vacated: Int?
-        let lists = [(on, SSHHostsWriter.key, SSHHostsWriter.offKey), (off, SSHHostsWriter.offKey, SSHHostsWriter.key)]
-        for case (let hosts?, let key, let neighbor) in lists {
-            let slot = applySSHHostBlock(
-                hosts, key: key, neighbor: neighbor, vacated: vacated, comments: comments, in: &lines)
-            vacated = vacated ?? slot
-        }
-    }
-
-    private static func applySSHHostBlock(
-        _ hosts: [SSHHostEntry], key: String, neighbor: String, vacated: Int?, comments: [String: String],
-        in lines: inout [String]
-    ) -> Int? {
         let block = hosts.map { host in
             let rendered = "\(key) = \(host.configValue)"
             return comments[host.alias].map { "\(rendered)  \($0)" } ?? rendered
@@ -201,20 +188,13 @@ enum ConfigWriter {
         if let first = lines.firstIndex(where: isHostLine) {
             lines.removeAll(where: isHostLine)
             lines.insert(contentsOf: block, at: first)
-            return block.isEmpty ? first : nil
-        }
-        if let rejected = lines.lastIndex(where: { activeAssignmentKey($0) == key }) {
+        } else if let rejected = lines.lastIndex(where: { activeAssignmentKey($0) == key }) {
             lines.insert(contentsOf: block, at: rejected + 1)
         } else if let example = lines.lastIndex(where: { commentedAssignmentKey($0) == key }) {
             lines.insert(contentsOf: block, at: example + 1)
-        } else if let last = lines.lastIndex(where: { activeAssignmentKey($0) == neighbor }) {
-            lines.insert(contentsOf: block, at: last + 1)
-        } else if let vacated, vacated <= lines.count {
-            lines.insert(contentsOf: block, at: vacated)
         } else {
             lines.append(contentsOf: block)
         }
-        return nil
     }
 
     private static func sshHostAlias(of line: String) -> String? {

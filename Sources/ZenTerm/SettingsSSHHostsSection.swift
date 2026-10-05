@@ -4,72 +4,43 @@ final class SettingsSSHHostsSection: SettingsSection {
     var navTitle: String { "SSH Hosts" }
     var onExitToNav: (() -> Void)?
     var onAddHost: (() -> Void)?
-    var onEditHost: ((SSHHostEntry, _ address: String?, _ isConfigHost: Bool) -> Void)?
+    var onEditHost: ((SSHHostEntry, _ address: String?) -> Void)?
     var hostToFocus: String?
     var hostSession: ((SSHHostID) -> SSHConnection.State?)?
     var presentConfirm: ((ConfirmCard) -> Void)?
     var dismissConfirm: ((@escaping () -> Void) -> Void)?
     var statusCenter = SSHHostStatusCenter.shared
 
-    private struct Listing {
-        let aliases: [String]
-        let typed: [String]
-        let isConfigUnreadable: Bool
-
-        var isEmpty: Bool { aliases.isEmpty && typed.isEmpty && !isConfigUnreadable }
-    }
-
-    private enum HostControl {
-        case toggle(SegmentedControl)
-        case remove(AppButton)
-
-        var view: NSView {
-            switch self {
-            case .toggle(let toggle): toggle
-            case .remove(let button): button
-            }
-        }
-    }
-
     private struct HostRow {
         let host: String
         let row: SSHHostRow
-        let control: HostControl
-    }
-
-    private enum Disconnecting {
-        case turningOff, removing
-
-        var action: String { self == .turningOff ? "Turn Off" : "Remove" }
-        var gerund: String { self == .turningOff ? "Turning off" : "Removing" }
+        let removeButton: AppButton
     }
 
     private enum Stop: Equatable {
         case row(String)
-        case control(String)
+        case remove(String)
         case add
     }
 
-    private var listing: Listing?
     private var shownAddresses: [String: String] = [:]
     private var statusObserver: NSObjectProtocol?
+    private var listed: [String] = []
     private var removed: Set<String> = []
     private var removedEntries: [String: SSHHostEntry] = [:]
+    private var removedAddresses: [String: String] = [:]
     private var orderBeforeRemovals: [String]?
-    private var offOrderBeforeRemovals: [String]?
-    private var removedFromOff: Set<String> = []
     private var hostRows: [HostRow] = []
     private let addButton = AppButton(title: "＋ Add Host…", variant: .muted)
-    private var captions: [NSTextField] = []
-    private var notes: [NSTextField] = []
+    private var caption: NSTextField?
+    private var emptyNote: NSTextField?
+    private var configObserver: NSObjectProtocol?
     private var rowsStack: NSStackView?
-    private var mountGeneration = 0
 
     deinit {
         statusObserver.map(NotificationCenter.default.removeObserver)
+        configObserver.map(NotificationCenter.default.removeObserver)
     }
-
-    private static let loadQueue = DispatchQueue(label: "com.zenterm.ssh-config-load", qos: .userInitiated)
 
     // Focus stays on Remove once it reads Undo, so a held Return would flip the host back and forth.
     private static var isKeyRepeat: Bool {
@@ -93,52 +64,29 @@ final class SettingsSSHHostsSection: SettingsSection {
         addButton.onTap = { [weak self] in self?.onAddHost?() }
 
         observeAddresses()
-        load()
+        observeHostList()
+        listed = GeneralConfig.current.sshHostAliases
+        populate()
+        focusPendingHost()
         return SettingsDetail.scroll(for: stack)
     }
 
     func detailStops() -> [NSView] { hostRows.flatMap(stops(of:)) + [addButton] }
 
     func reapplyTheme() {
-        captions.forEach { $0.textColor = Theme.current.chrome.ink(.muted) }
-        notes.forEach { $0.textColor = Theme.current.chrome.ink(.muted) }
+        caption?.textColor = Theme.current.chrome.ink(.muted)
+        emptyNote?.textColor = Theme.current.chrome.ink(.muted)
         for hostRow in hostRows {
             hostRow.row.reapplyTheme()
-            switch hostRow.control {
-            case .toggle(let toggle): toggle.reapplyTheme()
-            case .remove(let button): button.reapplyTheme()
-            }
+            hostRow.removeButton.reapplyTheme()
         }
         addButton.reapplyTheme()
     }
 
-    private func load() {
-        listing = nil
-        removed = []
-        removedEntries = [:]
-        orderBeforeRemovals = nil
-        offOrderBeforeRemovals = nil
-        removedFromOff = []
-        populate()
-        mountGeneration += 1
-        let generation = mountGeneration
-        let file = SSHConfigHosts.userConfig
-        Self.loadQueue.async { [weak self] in
-            let config = SSHConfigHosts.listing(of: file)
-            DispatchQueue.main.async {
-                guard let self, generation == self.mountGeneration else { return }
-                self.land(config)
-            }
-        }
-    }
-
-    private func land(_ config: SSHConfigHosts.Listing) {
-        let current = GeneralConfig.current
-        let typed = (current.sshHostAliases + current.sshHostsOff.map(\.alias)).filter { !config.aliases.contains($0) }
-        listing = Listing(aliases: config.aliases, typed: typed, isConfigUnreadable: config.isUnreadable)
-        statusCenter.requestDestinations(of: config.aliases + typed)
-        populate(focusing: hostToFocus.map { .row($0) })
+    private func focusPendingHost() {
+        guard let host = hostToFocus else { return }
         hostToFocus = nil
+        DispatchQueue.main.async { [weak self] in self?.focus(.row(host)) }
     }
 
     private func observeAddresses() {
@@ -153,8 +101,28 @@ final class SettingsSSHHostsSection: SettingsSection {
         }
     }
 
+    private func observeHostList() {
+        configObserver.map(NotificationCenter.default.removeObserver)
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .configDidChange, object: nil, queue: .main
+        ) { [weak self] note in
+            guard ConfigChange.from(note).contains(.sshHosts) else { return }
+            MainActor.assumeIsolated { self?.refreshHostList() }
+        }
+    }
+
+    private func refreshHostList() {
+        let current = GeneralConfig.current.sshHostAliases
+        let next =
+            listed.filter { current.contains($0) || removed.contains($0) } + current.filter { !listed.contains($0) }
+        guard next != listed else { return }
+        listed = next
+        populate()
+    }
+
     private func address(of host: String) -> String? {
-        statusCenter.destination(of: SSHHostID(alias: host)).flatMap { $0 == host ? nil : $0 }
+        let known = statusCenter.destination(of: SSHHostID(alias: host)) ?? removedAddresses[host]
+        return known.flatMap { $0 == host ? nil : $0 }
     }
 
     private func addresses() -> [String: String] {
@@ -166,26 +134,11 @@ final class SettingsSSHHostsSection: SettingsSection {
         let restore = target ?? focusedStop()
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         hostRows = []
-        captions = []
-        notes = []
+        emptyNote = nil
 
-        if let listing, !listing.isEmpty {
-            if !listing.aliases.isEmpty || listing.isConfigUnreadable {
-                addCaption("SSH config", to: stack)
-                if listing.isConfigUnreadable { addNote("Couldn't read ~/.ssh/config.", to: stack) }
-                let enabled = GeneralConfig.current.sshHostAliases
-                for alias in listing.aliases { add(makeToggleRow(alias, isOn: enabled.contains(alias)), to: stack) }
-            }
-            if !listing.typed.isEmpty {
-                addCaption("Added hosts", to: stack)
-                for host in listing.typed { add(makeRemoveRow(host), to: stack) }
-            }
-        } else {
-            addCaption("SSH Hosts", to: stack)
-            if listing != nil {
-                addNote("No SSH hosts yet. Add one, or add a Host entry to ~/.ssh/config.", to: stack)
-            }
-        }
+        addCaption("SSH Hosts", to: stack)
+        if listed.isEmpty { addNote("No SSH hosts yet. Add one below.", to: stack) }
+        for host in listed { add(makeRemoveRow(host), to: stack) }
 
         let addRow = SettingsDetail.trailingRow(addButton)
         stack.addArrangedSubview(addRow)
@@ -197,10 +150,9 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private func addCaption(_ title: String, to stack: NSStackView) {
-        if let previous = stack.arrangedSubviews.last { stack.setCustomSpacing(18, after: previous) }
-        let caption = SettingsDetail.groupCaption(title)
-        captions.append(caption)
-        let header = SettingsDetail.headerRow(caption: caption, hint: nil)
+        let label = SettingsDetail.groupCaption(title)
+        caption = label
+        let header = SettingsDetail.headerRow(caption: label, hint: nil)
         stack.addArrangedSubview(header)
         header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         stack.setCustomSpacing(10, after: header)
@@ -212,7 +164,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         note.textColor = Theme.current.chrome.ink(.muted)
         note.lineBreakMode = .byWordWrapping
         note.maximumNumberOfLines = 0
-        notes.append(note)
+        emptyNote = note
         stack.addArrangedSubview(note)
         note.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
@@ -224,8 +176,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private func entry(of host: String) -> SSHHostEntry {
-        let config = GeneralConfig.current
-        return (config.sshHosts + config.sshHostsOff).first { $0.alias == host } ?? restored(host)
+        GeneralConfig.current.sshHosts.first { $0.alias == host } ?? restored(host)
     }
 
     private func label(of host: String) -> String { entry(of: host).displayName }
@@ -236,28 +187,10 @@ final class SettingsSSHHostsSection: SettingsSection {
         return address.map { "\(host) · \($0)" } ?? host
     }
 
-    private func makeToggleRow(_ host: String, isOn: Bool) -> HostRow {
-        let toggle = SegmentedControl(options: ["On", "Off"], selectedIndex: isOn ? 0 : 1) { _ in }
-        let row = makeRow(host, control: toggle, controlWidth: nil, isEditable: true, isConfigHost: true)
-        toggle.onChange = { [weak self, weak row, weak toggle] index in
-            guard let row, let toggle else { return }
-            self?.turn(host, on: index == 0, row: row, toggle: toggle)
-        }
-        toggle.onArrowUp = { [weak self, weak toggle] in self?.moveFocus(from: toggle, delta: -1) }
-        toggle.onArrowDown = { [weak self, weak toggle] in self?.moveFocus(from: toggle, delta: 1) }
-        toggle.onArrowLeft = { [weak self, weak row] in self?.leaveControl(of: row) }
-        toggle.onTab = { [weak self, weak toggle] in self?.moveTab(from: toggle, delta: 1) }
-        toggle.onBacktab = { [weak self, weak toggle] in self?.moveTab(from: toggle, delta: -1) }
-        row.onArrowRight = { [weak toggle] in if let toggle { toggle.window?.makeFirstResponder(toggle) } }
-        return HostRow(host: host, row: row, control: .toggle(toggle))
-    }
-
     private func makeRemoveRow(_ host: String) -> HostRow {
         let button = AppButton(title: "Remove", variant: .secondary)
         button.isKeyboardFocusable = true
-        let row = makeRow(
-            host, control: button, controlWidth: Self.removalButtonWidth, isEditable: !removed.contains(host),
-            isConfigHost: false)
+        let row = makeRow(host, control: button, isEditable: !removed.contains(host))
         button.onTap = { [weak self, weak row, weak button] in
             guard let self, let row, let button, !Self.isKeyRepeat else { return }
             self.toggleRemoval(of: host, row: row, button: button)
@@ -269,18 +202,16 @@ final class SettingsSSHHostsSection: SettingsSection {
         button.onBacktab = { [weak self, weak button] in self?.moveTab(from: button, delta: -1) }
         row.onArrowRight = { [weak button] in if let button { button.window?.makeFirstResponder(button) } }
         showRemoval(removed.contains(host), of: host, row: row, button: button)
-        return HostRow(host: host, row: row, control: .remove(button))
+        return HostRow(host: host, row: row, removeButton: button)
     }
 
-    private func makeRow(
-        _ host: String, control: NSView, controlWidth: CGFloat?, isEditable: Bool, isConfigHost: Bool
-    ) -> SSHHostRow {
+    private func makeRow(_ host: String, control: NSView, isEditable: Bool) -> SSHHostRow {
         let layout = LayoutRow(
             caption: label(of: host), description: description(of: host), control: control, controlNote: nil,
-            controlWidth: controlWidth)
+            controlWidth: Self.removalButtonWidth)
         let row = SSHHostRow(host: host, layout: layout, isEditable: isEditable)
         row.setAccessibilityLabel("Edit \(label(of: host))")
-        row.onActivate = { [weak self] in self?.edit(host, isConfigHost: isConfigHost) }
+        row.onActivate = { [weak self] in self?.edit(host) }
         row.onArrowUp = { [weak self, weak row] in self?.moveFocus(from: row, delta: -1) }
         row.onArrowDown = { [weak self, weak row] in self?.moveFocus(from: row, delta: 1) }
         row.onTab = { [weak self, weak row] in self?.moveTab(from: row, delta: 1) }
@@ -289,8 +220,8 @@ final class SettingsSSHHostsSection: SettingsSection {
         return row
     }
 
-    private func edit(_ host: String, isConfigHost: Bool) {
-        onEditHost?(entry(of: host), address(of: host), isConfigHost)
+    private func edit(_ host: String) {
+        onEditHost?(entry(of: host), address(of: host))
     }
 
     private func leaveControl(of row: SSHHostRow?) {
@@ -301,20 +232,6 @@ final class SettingsSSHHostsSection: SettingsSection {
         row.window?.makeFirstResponder(row)
     }
 
-    private func turn(_ host: String, on: Bool, row: SSHHostRow, toggle: SegmentedControl) {
-        let save = { [weak self] in
-            guard let self else { return }
-            let saved = self.save(row: row.layout) {
-                on ? try SSHHostsWriter.add(self.entry(of: host)) : try SSHHostsWriter.turnOff(host)
-            }
-            if !saved { toggle.setSelection(on ? 1 : 0) }
-        }
-        guard !on else { return save() }
-        confirmDisconnect(
-            of: host, by: .turningOff, proceed: save,
-            cancel: { toggle.setSelection(0) })
-    }
-
     private func toggleRemoval(of host: String, row: SSHHostRow, button: AppButton) {
         guard !removed.contains(host) else {
             guard save(row: row.layout, { try restore(host) }) else { return }
@@ -322,7 +239,7 @@ final class SettingsSSHHostsSection: SettingsSection {
             return showRemoval(false, of: host, row: row, button: button)
         }
         confirmDisconnect(
-            of: host, by: .removing,
+            of: host,
             proceed: { [weak self] in
                 guard let self else { return }
                 let config = GeneralConfig.current
@@ -332,15 +249,11 @@ final class SettingsSSHHostsSection: SettingsSection {
                     return
                 }
                 if self.orderBeforeRemovals == nil { self.orderBeforeRemovals = config.sshHostAliases }
-                if self.offOrderBeforeRemovals == nil { self.offOrderBeforeRemovals = config.sshHostsOff.map(\.alias) }
                 self.showRemoval(true, of: host, row: row, button: button)
-            }, cancel: {})
+            })
     }
 
-    private func confirmDisconnect(
-        of host: String, by disconnecting: Disconnecting, proceed: @escaping () -> Void,
-        cancel: @escaping () -> Void
-    ) {
+    private func confirmDisconnect(of host: String, proceed: @escaping () -> Void) {
         guard let session = hostSession?(SSHHostID(alias: host)), session != .failed, let presentConfirm,
             let dismissConfirm
         else { return proceed() }
@@ -349,41 +262,30 @@ final class SettingsSSHHostsSection: SettingsSection {
             ? "disconnect it and stop everything running in it" : "stop connecting to it and close its tabs"
         presentConfirm(
             ConfirmCard(
-                title: "\(disconnecting.action) \(label(of: host))",
-                message: "\(disconnecting.gerund) \(label(of: host)) will \(consequence).",
-                confirmLabel: disconnecting.action, background: Theme.current.chrome.background.nsColor,
+                title: "Remove \(label(of: host))",
+                message: "Removing \(label(of: host)) will \(consequence).",
+                confirmLabel: "Remove", background: Theme.current.chrome.background.nsColor,
                 onCancel: { [weak self] in
-                    dismissConfirm {
-                        cancel()
-                        self?.focus(.control(host))
-                    }
+                    dismissConfirm { self?.focus(.remove(host)) }
                 },
                 onConfirm: { [weak self] in
                     dismissConfirm {
                         proceed()
-                        self?.focus(.control(host))
+                        self?.focus(.remove(host))
                     }
                 }))
     }
 
     private func removeHost(_ host: String) throws {
         removedEntries[host] = entry(of: host)
-        if GeneralConfig.current.sshHosts.contains(where: { $0.alias == host }) {
-            removedFromOff.remove(host)
-        } else {
-            removedFromOff.insert(host)
-        }
+        removedAddresses[host] = address(of: host)
         try SSHHostsWriter.remove(host)
     }
 
     private func restore(_ host: String) throws {
         let config = GeneralConfig.current
-        guard removedFromOff.contains(host) else {
-            let index = restoredIndex(of: host, order: orderBeforeRemovals, among: config.sshHostAliases)
-            return try SSHHostsWriter.add(restored(host), at: index)
-        }
-        let index = restoredIndex(of: host, order: offOrderBeforeRemovals, among: config.sshHostsOff.map(\.alias))
-        try SSHHostsWriter.addOff(restored(host), at: index)
+        let index = restoredIndex(of: host, order: orderBeforeRemovals, among: config.sshHostAliases)
+        try SSHHostsWriter.add(restored(host), at: index)
     }
 
     private func restored(_ host: String) -> SSHHostEntry { removedEntries[host] ?? SSHHostEntry(alias: host) }
@@ -420,7 +322,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private func stops(of hostRow: HostRow) -> [NSView] {
-        (hostRow.row.isEditable ? [hostRow.row] : []) + [hostRow.control.view]
+        (hostRow.row.isEditable ? [hostRow.row] : []) + [hostRow.removeButton]
     }
 
     private func focusedStop() -> Stop? {
@@ -428,7 +330,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         if KeyboardFocus.isFocused(addButton, in: window) { return .add }
         for hostRow in hostRows {
             if KeyboardFocus.isFocused(hostRow.row, in: window) { return .row(hostRow.host) }
-            if KeyboardFocus.isFocused(hostRow.control.view, in: window) { return .control(hostRow.host) }
+            if KeyboardFocus.isFocused(hostRow.removeButton, in: window) { return .remove(hostRow.host) }
         }
         return nil
     }
@@ -438,7 +340,7 @@ final class SettingsSSHHostsSection: SettingsSection {
             switch stop {
             case .add: addButton
             case .row(let host): hostRows.first { $0.host == host }.flatMap { stops(of: $0).first }
-            case .control(let host): hostRows.first { $0.host == host }?.control.view
+            case .remove(let host): hostRows.first { $0.host == host }?.removeButton
             }
         guard let target = target ?? detailStops().first else { return }
         rowsStack?.window?.makeFirstResponder(target)
@@ -446,12 +348,12 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private func scrollTarget(_ stop: NSView) -> NSView {
-        hostRows.first { $0.control.view === stop || $0.row === stop }?.row ?? stop
+        hostRows.first { $0.removeButton === stop || $0.row === stop }?.row ?? stop
     }
 
     private func arrowColumn(from view: NSView) -> [NSView] {
-        let onControl = hostRows.contains { $0.control.view === view }
-        return hostRows.compactMap { onControl ? $0.control.view : stops(of: $0).first } + [addButton]
+        let onControl = hostRows.contains { $0.removeButton === view }
+        return hostRows.compactMap { onControl ? $0.removeButton : stops(of: $0).first } + [addButton]
     }
 
     private func moveFocus(from view: NSView?, delta: Int) {
