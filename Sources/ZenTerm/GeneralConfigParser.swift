@@ -11,6 +11,7 @@ enum GeneralConfigParser {
         var floatLineIndex = 0
         var keybinds: [KeybindParser.Line] = []
         var sshHosts: [SSHHostEntry] = []
+        var sshHostsOff: [SSHHostEntry] = []
         var diagnostics: [ConfigDiagnostic] = []
 
         for rawLine in text.split(whereSeparator: \.isNewline) {
@@ -115,9 +116,17 @@ enum GeneralConfigParser {
                 if !value.isEmpty { config.ai = value }
             case "agents":
                 config.agents = parseAgents(value)
-            case "ssh-host":
-                if let host = parseSSHHost(value, &diagnostics), !sshHosts.contains(where: { $0.alias == host.alias }) {
+            case SSHHostsWriter.key:
+                if let host = parseSSHHost(value, key, &diagnostics),
+                    !sshHosts.contains(where: { $0.alias == host.alias })
+                {
                     sshHosts.append(host)
+                }
+            case SSHHostsWriter.offKey:
+                if let host = parseSSHHost(value, key, &diagnostics),
+                    !sshHostsOff.contains(where: { $0.alias == host.alias })
+                {
+                    sshHostsOff.append(host)
                 }
             case "float":
                 let (float, floatDiagnostics) = ToolFloatParser.parseLine(value, fallbackOrder: floatLineIndex)
@@ -147,6 +156,7 @@ enum GeneralConfigParser {
         }
 
         config.sshHosts = sshHosts
+        config.sshHostsOff = sshHostsOff.filter { off in !sshHosts.contains { $0.alias == off.alias } }
         let ordered = sortedByOrder(floats)
         config.floats = ordered
         let assembled = KeymapAssembler.assemble(floats: ordered, keybinds: keybinds)
@@ -285,10 +295,12 @@ enum GeneralConfigParser {
         return agents
     }
 
-    private static func parseSSHHost(_ value: String, _ diagnostics: inout [ConfigDiagnostic]) -> SSHHostEntry? {
+    private static func parseSSHHost(
+        _ value: String, _ key: String, _ diagnostics: inout [ConfigDiagnostic]
+    ) -> SSHHostEntry? {
         guard let host = SSHHostEntry(configValue: value) else {
-            Log.warning("GeneralConfig: unreadable `ssh-host` line `\(value)`: ignored", category: .config)
-            diagnostics.append(invalid("ssh-host", got: value, expected: "host, or host: name"))
+            Log.warning("GeneralConfig: unreadable `\(key)` line `\(value)`: ignored", category: .config)
+            diagnostics.append(invalid(key, got: value, expected: "host, or host: name"))
             return nil
         }
         return host

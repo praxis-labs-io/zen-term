@@ -576,9 +576,11 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
 - **`~/.ssh/config` is read, never written.** Settings > SSH Hosts lists its literal `Host`
   aliases (following `Include`, skipping `Match` blocks) off-main each time it mounts, and
   `ssh -G` resolves each one. The `ssh-host` lines hold which are on, plus typed hosts, each
-  with an optional name. A name is only a label, read through `GeneralConfig.displayName(of:)`
+  with an optional name; turning a host Off moves its line to `ssh-host-off` (same format,
+  parsed into `GeneralConfig.sshHostsOff`, not probed or listed in the sidebar) so the name
+  survives, and On moves it back. A name is only a label, read through `GeneralConfig.displayName(of:)`
   with the alias as fallback; ssh, control sockets and `SSHHostID` use the alias. A host row
-  that is on opens `AddSSHHostOverlay` in edit mode, which rewrites only that host's name; the
+  opens `AddSSHHostOverlay` in edit mode, which rewrites only that host's name on whichever line it is on; the
   row is a stop of its own, → reaches its toggle or Remove and ← comes back. The
   sidebar's SSH rows show their status as a dot (`SSHHostStatus.ink`): Offline takes the idle
   agent row's ink on the dot and the title, Online is positive, Connected is accent, and the

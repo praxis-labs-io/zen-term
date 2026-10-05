@@ -480,6 +480,21 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(try read(dir), "# ssh-host = devbox\n# ssh-host = prod: Production\ntheme = a\n")
     }
 
+    func test_sshHostsOff_sitBesideTheOnLines_keepingARejectedLineWhereItStood() throws {
+        let dir = tempDirPath()
+        try seed("theme = a\nssh-host = devbox: Build box\nssh-host = prod\nfont-size = 14\n", in: dir)
+        try ConfigWriter.apply(
+            sshHosts: [SSHHostEntry(alias: "prod")], sshHostsOff: [SSHHostEntry(alias: "devbox", name: "Build box")],
+            configRoot: dir)
+        XCTAssertEqual(
+            try read(dir), "theme = a\nssh-host = prod\nssh-host-off = devbox: Build box\nfont-size = 14\n")
+        try seed("ssh-host-off = devbox\nssh-host-off = -oProxyCommand=x\n", in: dir)
+        try ConfigWriter.apply(sshHostsOff: [SSHHostEntry(alias: "prod")], configRoot: dir)
+        XCTAssertEqual(try read(dir), "ssh-host-off = prod\nssh-host-off = -oProxyCommand=x\n")
+        try ConfigWriter.apply(sshHostsOff: [], configRoot: dir)
+        XCTAssertEqual(try read(dir), "ssh-host-off = -oProxyCommand=x\n")
+    }
+
     func test_sshHosts_roundTripThroughTheParser_quotingANameWithAHash() throws {
         let dir = tempDirPath()
         let hosts = [

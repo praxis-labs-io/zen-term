@@ -147,11 +147,12 @@ final class SettingsTabTraversalTests: WindowTestCase {
         waitUntil(
             descendants(of: detail).compactMap { $0 as? SegmentedControl }.count == 2, "a row per Host entry")
         let toggles = descendants(of: detail).compactMap { $0 as? SegmentedControl }
+        let rows = descendants(of: detail).compactMap { $0 as? SSHHostRow }
 
-        XCTAssertIdentical(tab(from: toggles[0]), toggles[1], "Tab advances to the next row")
-        XCTAssertIdentical(tab(from: toggles[1], shift: true), toggles[0], "Shift-Tab retreats one stop")
+        XCTAssertIdentical(tab(from: toggles[0]), rows[1], "Tab advances to the next row")
+        XCTAssertIdentical(tab(from: rows[1], shift: true), toggles[0], "Shift-Tab retreats one stop")
         XCTAssertEqual(exitedToNav, 0)
-        _ = tab(from: toggles[0], shift: true)
+        _ = tab(from: rows[0], shift: true)
         XCTAssertEqual(exitedToNav, 1, "Shift-Tab from the first stop exits to the nav")
     }
 

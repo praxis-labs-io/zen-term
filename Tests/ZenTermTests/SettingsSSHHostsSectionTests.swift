@@ -217,7 +217,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
 
         press(arrow(124), on: toggles(in: detail)[0])
 
-        XCTAssertFalse(configText().contains("ssh-host"), "got: \(configText())")
+        XCTAssertEqual(configText(), "ssh-host-off = devbox\n")
         XCTAssertEqual(GeneralConfig.current.sshHostAliases, [])
     }
 
@@ -282,9 +282,33 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
 
         press(arrow(124), on: toggle)
         XCTAssertEqual(GeneralConfig.current.sshHosts, [])
+        XCTAssertEqual(configText(), "ssh-host-off = devbox: Build box\n")
         press(arrow(123), on: toggle)
 
         XCTAssertEqual(GeneralConfig.current.sshHosts, [SSHHostEntry(alias: "devbox", name: "Build box")])
+        XCTAssertEqual(configText(), "ssh-host = devbox: Build box\n")
+    }
+
+    func test_anOffHostKeepsItsName_acrossARestart() throws {
+        try seed(ssh: "Host devbox\n", config: "ssh-host = devbox: Build box\n")
+        let detail = mount()
+        press(arrow(124), on: toggles(in: detail)[0])
+
+        GeneralConfig.setCurrentForTesting(.builtIn)
+        AppConfig.reload()
+        let reopened = mount()
+
+        XCTAssertEqual(captions(in: reopened), ["Build box"])
+        XCTAssertEqual(toggles(in: reopened).map(\.selectedIndex), [1])
+        press(arrow(123), on: toggles(in: reopened)[0])
+        XCTAssertEqual(GeneralConfig.current.sshHosts, [SSHHostEntry(alias: "devbox", name: "Build box")])
+    }
+
+    func test_anOffHostIsNotInTheSidebarList() throws {
+        try seed(ssh: "Host devbox\nHost prod\n", config: "ssh-host = prod\nssh-host-off = devbox: Build box\n")
+
+        XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["prod"])
+        XCTAssertEqual(GeneralConfig.current.sshHostsOff, [SSHHostEntry(alias: "devbox", name: "Build box")])
     }
 
     func test_undoingSeveralRemovals_inEitherOrder_restoresTheOriginalOrder() throws {
@@ -577,13 +601,26 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         }
     }
 
-    func test_anOffHostsRow_opensNoForm() throws {
-        try inSettings(ssh: "Host devbox\nHost prod\n", config: "ssh-host = devbox\n") { c, content in
+    func test_anOffHostsRow_opensItsEditForm_andRenamingWritesItsOffLine() throws {
+        try inSettings(ssh: "Host devbox\nHost prod\n", config: "ssh-host = devbox\nssh-host-off = prod: Old\n") {
+            c, content in
             let prod = try XCTUnwrap(rowCaption(rows(in: content)[1]))
 
             try click(prod, in: c)
 
-            XCTAssertNil(form(in: content))
+            let overlay = try XCTUnwrap(form(in: content))
+            XCTAssertEqual(formTitle(overlay), "Edit SSH Host")
+            let boxes = descendants(of: overlay).compactMap { $0 as? FieldBox }
+            XCTAssertEqual(boxes.map(\.text), ["prod", "Old"])
+            boxes[1].setText("Production")
+            let save = try XCTUnwrap(
+                descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Save" })
+            c.window.makeFirstResponder(save)
+            save.keyDown(with: key(36))
+
+            XCTAssertEqual(configText(), "ssh-host = devbox\nssh-host-off = prod: Production\n")
+            waitUntil(form(in: content) == nil && !captions(in: content).isEmpty, "Settings to come back")
+            XCTAssertEqual(captions(in: content), ["devbox", "Production"])
         }
     }
 
@@ -622,9 +659,8 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
 
         XCTAssertEqual(
             section?.detailStops().map(ObjectIdentifier.init),
-            [rows[0], toggle, toggles(in: detail)[1], rows[2], remove].map(ObjectIdentifier.init)
-                + (section?.detailStops().suffix(1).map(ObjectIdentifier.init) ?? []),
-            "an Off host's row is not a stop")
+            [rows[0], toggle, rows[1], toggles(in: detail)[1], rows[2], remove].map(ObjectIdentifier.init)
+                + (section?.detailStops().suffix(1).map(ObjectIdentifier.init) ?? []))
 
         press(key(36), on: rows[0])
         XCTAssertEqual(edited, [SSHHostEntry(alias: "devbox", name: "Build box")])
@@ -637,13 +673,15 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["devbox", "ops@10.0.0.6"])
 
         press(arrow(125), on: rows[0])
-        XCTAssertIdentical(window?.firstResponder, toggles(in: detail)[1], "the Off host is reached at its toggle")
+        XCTAssertIdentical(window?.firstResponder, rows[1], "the Off host's row is a stop")
+        press(arrow(124), on: rows[1])
+        XCTAssertIdentical(window?.firstResponder, toggles(in: detail)[1])
         press(arrow(125), on: toggles(in: detail)[1])
         XCTAssertIdentical(window?.firstResponder, remove, "down from a control stays in the control column")
         press(arrow(123), on: remove)
         XCTAssertIdentical(window?.firstResponder, rows[2])
         press(arrow(126), on: rows[2])
-        XCTAssertIdentical(window?.firstResponder, toggles(in: detail)[1])
+        XCTAssertIdentical(window?.firstResponder, rows[1])
     }
 
     private func escape() -> NSEvent {
