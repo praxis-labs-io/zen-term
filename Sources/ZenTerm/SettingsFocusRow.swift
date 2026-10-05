@@ -41,7 +41,7 @@ class SettingsFocusRow: NSView {
     override func resignFirstResponder() -> Bool { isFocused = false; return true }
     override func drawFocusRingMask() {}
 
-    /// `KeyboardFocus.key(for:)` decodes the keyCode alone, so ⌥ is checked here.
+    // KeyboardFocus.key(for:) decodes the keyCode alone, so ⌥ is checked here.
     override func keyDown(with event: NSEvent) {
         let key = KeyboardFocus.key(for: event)
         if KeyboardFocus.isOptionOnly(event) {

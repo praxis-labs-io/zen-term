@@ -422,7 +422,7 @@ final class SettingsSSHHostsSection: SettingsSection {
 
     private func arrowColumn(from view: NSView) -> [NSView] {
         let onControl = hostRows.contains { $0.control.view === view }
-        return hostRows.map { onControl ? $0.control.view : stops(of: $0)[0] } + [addButton]
+        return hostRows.compactMap { onControl ? $0.control.view : stops(of: $0).first } + [addButton]
     }
 
     private func moveFocus(from view: NSView?, delta: Int) {
