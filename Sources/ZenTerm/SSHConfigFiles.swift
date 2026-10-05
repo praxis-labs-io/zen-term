@@ -1,7 +1,6 @@
 import Darwin
 import Foundation
 
-// Every file an ssh config reads through `Include`, best-effort: a file it cannot read is still listed.
 enum SSHConfigFiles {
     #if DEBUG
         static var userConfigOverrideForTesting: URL?
