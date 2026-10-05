@@ -42,7 +42,7 @@ final class ToastView: ShadowCardView {
 
     // Exposed so copy can be measured against the real wrap budget.
     static let messageMaxWidth: CGFloat = 236
-    // A tail wider than the row truncates before a title up to this share of the row; a longer title yields first.
+    // A title up to this share of the row never gives way to its tail; a longer title yields first.
     private static let titleFloorShare: CGFloat = 0.55
     static let messageFont: NSFont = .systemFont(ofSize: 12)
     private static var titleColor: NSColor { Theme.current.chrome.foreground.nsColor }
@@ -265,7 +265,6 @@ final class ToastView: ShadowCardView {
     }
 
     private func updateTitleFloor() {
-        guard let tail = titleTailLabel, tail.intrinsicContentSize.width > Self.messageMaxWidth else { return }
         let width = titleLabel.intrinsicContentSize.width
         titleFloor?.constant = width <= Self.messageMaxWidth * Self.titleFloorShare ? width : 0
     }

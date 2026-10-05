@@ -674,7 +674,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "devbox")
     }
 
-    func test_theConnectFailure_keepsALongHostWhole_andLetsTheLeadGiveWay() throws {
+    func test_theConnectFailure_keepsItsTitleWhole_andTruncatesALongHostInTheMiddle() throws {
         let (c, long) = longHostWindow()
         spawned = []
         c.handle(.newTab)
@@ -689,8 +689,13 @@ final class HostConnectInteractionTests: WindowTestCase {
         let labels = descendants(of: toast).compactMap { $0 as? NSTextField }
         let tail = try XCTUnwrap(labels.first { $0.stringValue == " \(long.alias)" })
         let lead = try XCTUnwrap(labels.first { $0.stringValue == "Couldn't Connect to" })
-        XCTAssertGreaterThanOrEqual(tail.frame.width, tail.intrinsicContentSize.width, "the host name was cut")
-        XCTAssertLessThan(lead.frame.width, lead.intrinsicContentSize.width, "precondition: the title is crowded")
+        XCTAssertGreaterThan(
+            lead.intrinsicContentSize.width + tail.intrinsicContentSize.width, toast.frame.width - 60,
+            "precondition: the two do not fit")
+        XCTAssertGreaterThanOrEqual(lead.frame.width, lead.intrinsicContentSize.width, "the title was cut")
+        XCTAssertLessThan(tail.frame.width, tail.intrinsicContentSize.width, "the host name should give way")
+        XCTAssertEqual(tail.lineBreakMode, NSLineBreakMode.byTruncatingMiddle)
+        XCTAssertLessThanOrEqual(tail.convert(tail.bounds, to: toast).maxX, toast.bounds.width)
     }
 
     func test_aLoginThatEndsBeforeConnecting_inItsOnlyPane_stillWarns() throws {
