@@ -480,6 +480,15 @@ final class ConfigWriterTests: XCTestCase {
         XCTAssertEqual(try read(dir), "# ssh-host = devbox\n# ssh-host = prod: Production\ntheme = a\n")
     }
 
+    func test_sshHosts_aDuplicatedAlias_keepsTheFirstLinesComment() throws {
+        let dir = tempDirPath()
+        try seed("ssh-host = devbox  # first\nssh-host = devbox  # second\n", in: dir)
+
+        try ConfigWriter.apply(sshHosts: [SSHHostEntry(alias: "devbox", name: "Build box")], configRoot: dir)
+
+        XCTAssertEqual(try read(dir), "ssh-host = devbox: Build box  # first\n")
+    }
+
     func test_sshHosts_roundTripThroughTheParser_quotingANameWithAHash() throws {
         let dir = tempDirPath()
         let hosts = [

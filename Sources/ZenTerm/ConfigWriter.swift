@@ -178,7 +178,7 @@ enum ConfigWriter {
             guard let alias = sshHostAlias(of: line), let comment = ConfigText.trailingComment(of: line) else {
                 continue
             }
-            comments[alias] = comment
+            if comments[alias] == nil { comments[alias] = comment }
         }
         let block = hosts.map { host in
             let rendered = "\(key) = \(host.configValue)"
