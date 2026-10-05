@@ -16,14 +16,14 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         configRoot = try makeTempDir()
         sshConfig = try makeTempDir().appendingPathComponent("config")
         ConfigLoader.defaultRootOverrideForTesting = configRoot
-        SSHConfigHosts.userConfigOverrideForTesting = sshConfig
+        SSHConfigFiles.userConfigOverrideForTesting = sshConfig
         AppConfig.reload()
     }
 
     override func tearDownWithError() throws {
         window = nil
         section = nil
-        SSHConfigHosts.userConfigOverrideForTesting = nil
+        SSHConfigFiles.userConfigOverrideForTesting = nil
         ConfigReset.toBuiltIn()
         try super.tearDownWithError()
     }

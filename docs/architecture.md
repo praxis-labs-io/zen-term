@@ -588,18 +588,15 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   connected host's workspace waits, the dot takes the waiting ink a workspace row's does, from
   the same rollup, and the value reads `Connected, Agent waiting`.
 - **`SSHHostProbe` keeps each host's reachability in `SSHHostStatusCenter`, and never logs in.**
-  Off-main, at most four at a time, it resolves the host with `ssh -G`, once until the host list,
-  the network, or the date on `~/.ssh/config` or a file it includes changes, because
-  `Match exec` can prompt, and reads the greeting on a TCP
+  Off-main, at most four at a time, it resolves the host with `ssh -G`, once until the network or the date
+  on `~/.ssh/config` or a file it includes changes, because `Match exec` can prompt (a host that stays
+  listed keeps its resolution across list edits), and reads the greeting on a TCP
   connection to its port, with separate connect and greeting timeouts: an `SSH-` line, after
   any preamble lines RFC 4253 allows, is Online, anything else Offline. A
   `ProxyJump` or `ProxyCommand` host reads Online once `ssh -G` names its proxy, with no TCP check. It runs every minute while the app
   is active, and on activation, wake and network change (`NWPathMonitor`); an answer from before
-  a network change is dropped and asked again. Once Settings has asked, every host it lists as Off (the
-  `~/.ssh/config` aliases that are not On, plus `ssh-host-off`) is resolved the same way with no
-  reachability check and no status, and keeps its destination when it is turned On or Off. A failed attempt is
-  not repeated until the same invalidations. Before the first ask no Off host is resolved, and a
-  connected host is re-resolved the same way, without a probe. A host reads Offline until the probe reaches it,
+  a network change is dropped and asked again. A connected host is re-resolved the same way, without a
+  probe. A host reads Offline until the probe reaches it,
   and a connected host takes its status from the connection, not the probe.
 - **The Connect screen reads its host from `SSHHostStatusCenter`**: the status, and the
   destination the probe resolved from the same `ssh -G`, so it never runs ssh itself.

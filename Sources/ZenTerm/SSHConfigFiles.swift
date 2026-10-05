@@ -1,13 +1,8 @@
 import Darwin
 import Foundation
 
-// Lists the literal `Host` aliases of an ssh config, best-effort: an include it cannot read is skipped.
-enum SSHConfigHosts {
-    struct Listing: Equatable {
-        let aliases: [String]
-        let isUnreadable: Bool
-    }
-
+// Every file an ssh config reads through `Include`, best-effort: a file it cannot read is still listed.
+enum SSHConfigFiles {
     #if DEBUG
         static var userConfigOverrideForTesting: URL?
     #endif
@@ -23,47 +18,34 @@ enum SSHConfigHosts {
 
     private static let maxIncludeDepth = 16  // OpenSSH's own `Include` limit
 
-    static func listing(of file: URL) -> Listing { scan(file).listing }
-
-    // One pass: the listing, and every file the config reads through `Include`, resolved, whether or not it could be read.
-    static func scan(_ file: URL) -> (listing: Listing, files: [String]) {
-        var aliases: [String] = []
+    static func paths(of file: URL) -> [String] {
         var visited: Set<String> = []
-        let wasRead = collect(
-            file, includeBase: file.deletingLastPathComponent(), depth: 0, visited: &visited, into: &aliases)
-        let listing = Listing(
-            aliases: aliases, isUnreadable: !wasRead && FileManager.default.fileExists(atPath: file.path))
-        return (listing, visited.sorted())
+        collect(file, includeBase: file.deletingLastPathComponent(), depth: 0, visited: &visited)
+        return visited.sorted()
     }
 
-    @discardableResult
-    private static func collect(
-        _ file: URL, includeBase: URL, depth: Int, visited: inout Set<String>, into aliases: inout [String]
-    ) -> Bool {
+    private static func collect(_ file: URL, includeBase: URL, depth: Int, visited: inout Set<String>) {
         guard depth <= maxIncludeDepth,
             visited.insert(file.resolvingSymlinksInPath().standardizedFileURL.path).inserted,
             let data = try? Data(contentsOf: file)
-        else { return false }
+        else { return }
         var inMatch = false
         for line in String(decoding: data, as: UTF8.self).components(separatedBy: .newlines) {
             guard let (keyword, args) = directive(line) else { continue }
             switch keyword {
             case "host":
                 inMatch = false
-                for alias in args where isLiteral(alias) && !aliases.contains(alias) { aliases.append(alias) }
             case "match":
                 inMatch = true
             case "include" where !inMatch:
                 for path in args.flatMap({ includedPaths($0, base: includeBase) }) {
                     collect(
-                        URL(fileURLWithPath: path), includeBase: includeBase, depth: depth + 1, visited: &visited,
-                        into: &aliases)
+                        URL(fileURLWithPath: path), includeBase: includeBase, depth: depth + 1, visited: &visited)
                 }
             default:
                 continue
             }
         }
-        return true
     }
 
     private static func directive(_ line: String) -> (String, [String])? {
@@ -95,10 +77,6 @@ enum SSHConfigHosts {
         }
         if !token.isEmpty { args.append(token) }
         return args
-    }
-
-    private static func isLiteral(_ alias: String) -> Bool {
-        !alias.hasPrefix("!") && !alias.contains("*") && !alias.contains("?")
     }
 
     private static func includedPaths(_ pattern: String, base: URL) -> [String] {
