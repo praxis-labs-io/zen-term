@@ -3,6 +3,10 @@ import XCTest
 
 @testable import ZenTerm
 
+private func descendants(of view: NSView) -> [NSView] {
+    view.subviews.flatMap { [$0] + descendants(of: $0) }
+}
+
 @MainActor
 final class ToastPresenterTests: WindowTestCase {
     private func makeHost() -> NSView {
@@ -31,12 +35,10 @@ final class ToastPresenterTests: WindowTestCase {
     }
 
     private func buttons(in toast: ToastView) -> [AppButton] {
-        func descendants(of view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants(of: $0) } }
         return descendants(of: toast).compactMap { $0 as? AppButton }
     }
 
     private func arrangedToasts(in host: NSView) -> [ToastView] {
-        func descendants(of view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants(of: $0) } }
         return descendants(of: host).compactMap { $0 as? ToastView }
     }
 
@@ -48,7 +50,6 @@ final class ToastPresenterTests: WindowTestCase {
     }
 
     func test_aTitleOnlyToast_laysOutNoEmptyMessageLine() {
-        func descendants(of view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants(of: $0) } }
         let titled = ToastView(
             content: ToastContent(variant: .warning, title: "Couldn't Connect to devbox", message: nil))
         let withMessage = ToastView(
@@ -70,7 +71,6 @@ final class ToastPresenterTests: WindowTestCase {
             actions: [ToastAction(title: "Switch", kind: .primary, shortcut: { "⌘\\" }) {}],
             autoDismiss: false)
         host.layoutSubtreeIfNeeded()
-        func descendants(of view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants(of: $0) } }
         let labels = descendants(of: toast).compactMap { $0 as? NSTextField }
         let tabLabel = try XCTUnwrap(labels.first { $0.stringValue == tab })
         let tailLabel = try XCTUnwrap(labels.first { $0.stringValue == tail })
@@ -89,13 +89,13 @@ final class ToastPresenterTests: WindowTestCase {
             ToastContent(variant: .warning, title: "Couldn't Connect to", titleTail: tail, message: nil))
         host.layoutSubtreeIfNeeded()
         let toast = try XCTUnwrap(arrangedToasts(in: host).first)
-        func descendants(of view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants(of: $0) } }
         let tailLabel = try XCTUnwrap(
             descendants(of: toast).compactMap { $0 as? NSTextField }.first { $0.stringValue == tail })
 
-        XCTAssertGreaterThan(
-            tailLabel.intrinsicContentSize.width, toast.frame.width, "precondition: wider than the row")
-        XCTAssertEqual(toast.frame.width, 300, "the card keeps its width")
+        let badge = try XCTUnwrap(descendants(of: toast).first { $0 is IconBadge })
+        let rowWidth = toast.frame.width - 24 - 12 - badge.frame.width
+        XCTAssertGreaterThan(tailLabel.intrinsicContentSize.width, rowWidth, "precondition: wider than the row")
+        XCTAssertEqual(toast.frame.width, ToastView.width, "the card keeps its width")
         XCTAssertLessThanOrEqual(
             tailLabel.convert(tailLabel.bounds, to: toast).maxX, toast.bounds.width, "the tail stays inside the card")
         XCTAssertEqual(tailLabel.lineBreakMode, NSLineBreakMode.byTruncatingMiddle)

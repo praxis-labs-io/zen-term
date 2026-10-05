@@ -37,7 +37,7 @@ final class ToastView: ShadowCardView {
     private var actionButtons: [AppButton] = []
     private let badge: IconBadge
 
-    private static let width: CGFloat = 300
+    static let width: CGFloat = 300
 
     // Exposed so copy can be measured against the real wrap budget.
     static let messageMaxWidth: CGFloat = 236
@@ -83,7 +83,7 @@ final class ToastView: ShadowCardView {
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         titleTailLabel?.font = titleLabel.font
         titleTailLabel?.textColor = Self.titleColor
-        titleTailLabel?.setContentCompressionResistancePriority(.required, for: .horizontal)
+        titleTailLabel?.setContentCompressionResistancePriority(.init(rawValue: 999), for: .horizontal)
         titleTailLabel?.lineBreakMode = .byTruncatingMiddle
 
         messageLabel?.font = Self.messageFont
