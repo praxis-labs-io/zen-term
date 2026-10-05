@@ -710,6 +710,30 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         XCTAssertIdentical(window?.firstResponder, rows[1])
     }
 
+    func test_arrowColumn_followsTheStopYouLeave_andAddHostUsesTheRowColumn() throws {
+        try seed(ssh: "Host devbox\n", config: "ssh-host = devbox\nssh-host = ops@10.0.0.6\n")
+        let detail = mount()
+        let rows = hostRows(in: detail)
+        let remove = removeButtons(in: detail)[0]
+        let add = try XCTUnwrap(section?.detailStops().last)
+
+        press(arrow(125), on: toggles(in: detail)[0])
+        XCTAssertIdentical(window?.firstResponder, remove, "from a control, down steps through controls")
+        press(arrow(125), on: remove)
+        XCTAssertIdentical(window?.firstResponder, add)
+        press(arrow(126), on: add)
+        XCTAssertIdentical(window?.firstResponder, rows[1], "up from Add Host lands on the last row")
+
+        press(key(36), on: remove)
+        settle()
+        XCTAssertFalse(rows[1].isEditable)
+        press(arrow(125), on: remove)
+        press(arrow(126), on: add)
+        XCTAssertIdentical(window?.firstResponder, remove, "a removed host's only stop is its button")
+        press(arrow(126), on: remove)
+        XCTAssertIdentical(window?.firstResponder, toggles(in: detail)[0], "up from a button stays in controls")
+    }
+
     private func escape() -> NSEvent {
         NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,

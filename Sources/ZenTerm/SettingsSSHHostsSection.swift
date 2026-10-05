@@ -420,10 +420,14 @@ final class SettingsSSHHostsSection: SettingsSection {
         hostRows.first { $0.control.view === stop || $0.row === stop }?.row ?? stop
     }
 
+    private func arrowColumn(from view: NSView) -> [NSView] {
+        let onControl = hostRows.contains { $0.control.view === view }
+        return hostRows.map { onControl ? $0.control.view : stops(of: $0)[0] } + [addButton]
+    }
+
     private func moveFocus(from view: NSView?, delta: Int) {
         guard let view else { return }
-        let onControl = hostRows.contains { $0.control.view === view }
-        let column = hostRows.map { onControl ? $0.control.view : stops(of: $0)[0] } + [addButton]
+        let column = arrowColumn(from: view)
         guard let anchor = column.firstIndex(where: { $0 === view }) else { return }
         SettingsDetail.moveFocus(stops: column, from: anchor, delta: delta) { [weak self] in
             self?.scrollTarget($0) ?? $0
