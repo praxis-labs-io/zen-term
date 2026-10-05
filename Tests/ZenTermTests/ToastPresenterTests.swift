@@ -102,6 +102,23 @@ final class ToastPresenterTests: WindowTestCase {
         XCTAssertFalse(toast.hasAmbiguousLayout)
     }
 
+    func test_aTailWiderThanTheCard_leavesTheTitleReadable() throws {
+        let host = makeHost()
+        let presenter = ToastPresenter(host: host, topInset: 12, trailingInset: 12)
+        let title = "Couldn't Connect to"
+        let tail = " ec2-12-34-56-78.compute-1.amazonaws.com.internal.example-corp-network.net"
+        presenter.show(ToastContent(variant: .warning, title: title, titleTail: tail, message: nil))
+        host.layoutSubtreeIfNeeded()
+        let toast = try XCTUnwrap(arrangedToasts(in: host).first)
+        let labels = descendants(of: toast).compactMap { $0 as? NSTextField }
+        let titleLabel = try XCTUnwrap(labels.first { $0.stringValue == title })
+        let tailLabel = try XCTUnwrap(labels.first { $0.stringValue == tail })
+
+        XCTAssertGreaterThanOrEqual(
+            titleLabel.frame.width, titleLabel.intrinsicContentSize.width, "the title is not squeezed out by the name")
+        XCTAssertLessThan(tailLabel.frame.width, tailLabel.intrinsicContentSize.width, "the name gives way instead")
+    }
+
     func test_stickyToast_claimsNeitherReturnNorEsc() {
         let presenter = ToastPresenter(host: makeHost(), topInset: 12, trailingInset: 12)
         let toast = presenter.showSticky(content(), actions: actions())
