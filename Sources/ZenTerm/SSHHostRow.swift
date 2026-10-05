@@ -19,19 +19,24 @@ final class SSHHostRow: SettingsFocusRow {
         setAccessibilityLabel("Edit \(title)")
 
         titleLabel.font = .systemFont(ofSize: 13)
+        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         subtitleLabel.font = .systemFont(ofSize: 11)
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         subtitleLabel.lineBreakMode = .byTruncatingTail
+        subtitleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         subtitleLabel.isHidden = subtitle == nil
         let labels = NSStackView(views: [titleLabel, subtitleLabel])
         labels.orientation = .vertical
         labels.alignment = .leading
         labels.spacing = 1
         labels.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        labels.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         statusLabel.font = .systemFont(ofSize: 12)
         statusLabel.setContentHuggingPriority(.required, for: .horizontal)
+        statusLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let controls = NSStackView(views: [labels, spacer, statusLabel])
@@ -62,7 +67,13 @@ final class SSHHostRow: SettingsFocusRow {
         return true
     }
 
-    var renderedStatusForTesting: (word: String, ink: NSColor?) { (statusLabel.stringValue, statusLabel.textColor) }
+    #if DEBUG
+        var renderedStatusForTesting: (word: String, ink: NSColor?) {
+            (statusLabel.stringValue, statusLabel.textColor)
+        }
+
+        var statusFrameInRowForTesting: NSRect { statusLabel.convert(statusLabel.bounds, to: self) }
+    #endif
 
     private func showStatus() {
         statusLabel.stringValue = status.word

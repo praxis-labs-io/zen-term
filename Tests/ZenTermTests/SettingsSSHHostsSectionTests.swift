@@ -79,13 +79,13 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     }
 
     @discardableResult
-    private func mount() -> NSView {
+    private func mount(width: CGFloat = 620) -> NSView {
         let section = SettingsSSHHostsSection()
         self.section = section
         section.statusCenter = center
         let detail = section.makeDetailView()
         let win = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 500),
+            contentRect: NSRect(x: 0, y: 0, width: width, height: 500),
             styleMask: [.borderless], backing: .buffered, defer: false)
         win.contentView?.addSubview(detail)
         detail.frame = win.contentView!.bounds
@@ -234,6 +234,45 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         XCTAssertEqual(row.accessibilityValue() as? String, "Connected")
         XCTAssertEqual(rows(in: detail)[1].renderedStatusForTesting.word, "Offline", "only that host moved")
         XCTAssertIdentical(rows(in: detail).first, row, "the row is updated in place")
+    }
+
+    func test_aLongNameAndAddress_truncate_andLeaveTheStatusWordWholeInsideTheRow() throws {
+        let longName = String(repeating: "a very long host name ", count: 8)
+        let longAddress = "someone@" + String(repeating: "deeply.nested.", count: 12) + "example.com"
+        try seed(config: "ssh-host = devbox: \(longName)\n")
+        center.setDestination(longAddress, host: SSHHostID(alias: "devbox"))
+        center.setConnected(true, host: SSHHostID(alias: "devbox"))
+        let detail = mount(width: 260)
+        detail.layoutSubtreeIfNeeded()
+        let row = try XCTUnwrap(rows(in: detail).first)
+        row.layoutSubtreeIfNeeded()
+
+        let status = row.statusFrameInRowForTesting
+        XCTAssertEqual(row.renderedStatusForTesting.word, "Connected")
+        XCTAssertTrue(row.bounds.contains(status), "status \(status) inside row \(row.bounds)")
+        let wordWidth = ("Connected" as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12)]).width
+        XCTAssertGreaterThanOrEqual(status.width, wordWidth, "the word is not squeezed")
+        let labels = descendants(of: row).compactMap { $0 as? NSTextField }
+        XCTAssertTrue(labels.allSatisfy { $0.frame.maxX <= row.bounds.maxX }, "no label spills out of the row")
+        let hostLabels = labels.filter { $0.stringValue != "Connected" }
+        XCTAssertEqual(hostLabels.count, 2)
+        for label in hostLabels {
+            XCTAssertEqual(label.lineBreakMode, .byTruncatingTail)
+            XCTAssertLessThan(label.contentCompressionResistancePriority(for: .horizontal).rawValue, 500)
+        }
+        let word = try XCTUnwrap(labels.first { $0.stringValue == "Connected" })
+        XCTAssertEqual(word.contentCompressionResistancePriority(for: .horizontal), .required)
+    }
+
+    func test_aHandEditedName_refreshesTheOpenRow() throws {
+        try seed(config: "ssh-host = devbox: Build box\n")
+        let detail = mount()
+
+        try seed(config: "ssh-host = devbox: Builder\n")
+
+        waitUntil(captions(in: detail) == ["Builder"], "the row to follow the new name")
+        XCTAssertEqual(rows(in: detail).first?.accessibilityLabel(), "Edit Builder")
+        XCTAssertNotNil(label("devbox", in: detail))
     }
 
     func test_aRow_carriesNoButton() throws {

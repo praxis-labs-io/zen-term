@@ -19,6 +19,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private var shownAddresses: [String: String] = [:]
+    private var shownEntries: [SSHHostEntry] = []
     private var statusObserver: NSObjectProtocol?
     private var configObserver: NSObjectProtocol?
     private var hostRows: [SSHHostRow] = []
@@ -98,7 +99,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private func refreshHostList() {
-        guard GeneralConfig.current.sshHostAliases != hostRows.map(\.host) else { return }
+        guard GeneralConfig.current.sshHosts != shownEntries else { return }
         populate()
     }
 
@@ -120,9 +121,9 @@ final class SettingsSSHHostsSection: SettingsSection {
         emptyNote = nil
 
         addCaption("SSH Hosts", to: stack)
-        let hosts = GeneralConfig.current.sshHostAliases
-        if hosts.isEmpty { addNote("No SSH hosts yet. Add one below.", to: stack) }
-        for host in hosts { add(makeRow(host), to: stack) }
+        shownEntries = GeneralConfig.current.sshHosts
+        if shownEntries.isEmpty { addNote("No SSH hosts yet. Add one below.", to: stack) }
+        for host in shownEntries.map(\.alias) { add(makeRow(host), to: stack) }
 
         let addRow = SettingsDetail.trailingRow(addButton)
         stack.addArrangedSubview(addRow)
