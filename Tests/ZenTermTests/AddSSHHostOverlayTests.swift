@@ -7,6 +7,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
     private var window: NSWindow?
     private var submitted: [SSHHostEntry] = []
     private var cancelled = 0
+    private var submitFailure: String?
 
     override func tearDownWithError() throws {
         window = nil
@@ -22,7 +23,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
             mode: mode, background: Theme.current.chrome.background.nsColor,
             onSubmit: { [weak self] in
                 self?.submitted.append($0)
-                return nil
+                return self?.submitFailure
             },
             onCancel: { [weak self] in self?.cancelled += 1 })
         let win = NSWindow(
@@ -190,6 +191,28 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
             characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36)!
+    }
+
+    func test_aFailedSave_showsAFormLevelMessage_thatWraps_andFocusesTheName() throws {
+        submitFailure = "Couldn't save devbox to ZenTerm's config: the file is on a volume that is read-only right now"
+        let overlay = mount(.edit(SSHHostEntry(alias: "devbox"), address: nil))
+        nameField(in: overlay).setText("Build")
+
+        pressReturn(in: nameField(in: overlay))
+
+        let label = try XCTUnwrap(
+            descendants(of: overlay).compactMap { $0 as? NSTextField }.first { $0.stringValue == submitFailure })
+        overlay.layoutSubtreeIfNeeded()
+        XCTAssertFalse(label.isHidden)
+        XCTAssertEqual(label.textColor, Theme.current.chrome.destructive.nsColor)
+        XCTAssertGreaterThan(label.frame.height, label.font.map { $0.boundingRectForFont.height * 1.5 } ?? 0, "wraps")
+        let destructive = descendants(of: overlay).compactMap { $0 as? NSTextField }
+            .filter { !$0.isHidden && $0.textColor == Theme.current.chrome.destructive.nsColor }
+        XCTAssertEqual(destructive, [label], "no field carries it as a validation message")
+        XCTAssertIdentical(window?.firstResponder, nameField(in: overlay).field.currentEditor())
+
+        nameField(in: overlay).onChange?()
+        XCTAssertTrue(label.isHidden, "typing clears it")
     }
 
     func test_escape_cancels() {

@@ -238,7 +238,7 @@ final class SettingsSSHHostsSection: SettingsSection {
 
     private func makeToggleRow(_ host: String, isOn: Bool) -> HostRow {
         let toggle = SegmentedControl(options: ["On", "Off"], selectedIndex: isOn ? 0 : 1) { _ in }
-        let row = makeRow(host, control: toggle, controlWidth: nil, isEditable: true)
+        let row = makeRow(host, control: toggle, controlWidth: nil, isEditable: true, isConfigHost: true)
         toggle.onChange = { [weak self, weak row, weak toggle] index in
             guard let row, let toggle else { return }
             self?.turn(host, on: index == 0, row: row, toggle: toggle)
@@ -256,7 +256,8 @@ final class SettingsSSHHostsSection: SettingsSection {
         let button = AppButton(title: "Remove", variant: .secondary)
         button.isKeyboardFocusable = true
         let row = makeRow(
-            host, control: button, controlWidth: Self.removalButtonWidth, isEditable: !removed.contains(host))
+            host, control: button, controlWidth: Self.removalButtonWidth, isEditable: !removed.contains(host),
+            isConfigHost: false)
         button.onTap = { [weak self, weak row, weak button] in
             guard let self, let row, let button, !Self.isKeyRepeat else { return }
             self.toggleRemoval(of: host, row: row, button: button)
@@ -271,13 +272,15 @@ final class SettingsSSHHostsSection: SettingsSection {
         return HostRow(host: host, row: row, control: .remove(button))
     }
 
-    private func makeRow(_ host: String, control: NSView, controlWidth: CGFloat?, isEditable: Bool) -> SSHHostRow {
+    private func makeRow(
+        _ host: String, control: NSView, controlWidth: CGFloat?, isEditable: Bool, isConfigHost: Bool
+    ) -> SSHHostRow {
         let layout = LayoutRow(
             caption: label(of: host), description: description(of: host), control: control, controlNote: nil,
             controlWidth: controlWidth)
         let row = SSHHostRow(host: host, layout: layout, isEditable: isEditable)
         row.setAccessibilityLabel("Edit \(label(of: host))")
-        row.onActivate = { [weak self] in self?.edit(host) }
+        row.onActivate = { [weak self] in self?.edit(host, isConfigHost: isConfigHost) }
         row.onArrowUp = { [weak self, weak row] in self?.moveFocus(from: row, delta: -1) }
         row.onArrowDown = { [weak self, weak row] in self?.moveFocus(from: row, delta: 1) }
         row.onTab = { [weak self, weak row] in self?.moveTab(from: row, delta: 1) }
@@ -286,8 +289,8 @@ final class SettingsSSHHostsSection: SettingsSection {
         return row
     }
 
-    private func edit(_ host: String) {
-        onEditHost?(entry(of: host), address(of: host), listing?.aliases.contains(host) ?? false)
+    private func edit(_ host: String, isConfigHost: Bool) {
+        onEditHost?(entry(of: host), address(of: host), isConfigHost)
     }
 
     private func leaveControl(of row: SSHHostRow?) {

@@ -682,6 +682,25 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         }
     }
 
+    func test_renamingAHostThatTurnedOnWhileTheFormWasOpen_renamesItInPlace_andNeverMovesItOff() throws {
+        try seed(ssh: "Host prod\n", config: "ssh-host = prod\n")
+
+        try SSHHostsWriter.rename("prod", to: "Production", isConfigHost: true, configRoot: configRoot)
+
+        XCTAssertEqual(configText(), "ssh-host = prod: Production\n")
+    }
+
+    func test_editingARow_saysWhetherItIsAConfigHost() throws {
+        try seed(ssh: "Host devbox\n", config: "ssh-host = ops@10.0.0.6\n")
+        let detail = mount()
+        var flags: [Bool] = []
+        section?.onEditHost = { _, _, isConfigHost in flags.append(isConfigHost) }
+
+        hostRows(in: detail).forEach { $0.onActivate?() }
+
+        XCTAssertEqual(flags, [true, false])
+    }
+
     func test_aClickOnAHostsToggle_turnsItOff_withoutOpeningTheForm() throws {
         try inSettings(ssh: "Host devbox\n", config: "ssh-host = devbox: Build box\n") { c, content in
             let off = try XCTUnwrap(
