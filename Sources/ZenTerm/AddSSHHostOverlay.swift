@@ -224,7 +224,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
     }
 
     private func remove() {
-        guard let removal, let editing, !confirm.isShowing else { return }
+        guard let removal, let editing, confirm.card == nil else { return }
         errorLabel.clear()
         guard let consequence = removal.consequence() else { return performRemoval() }
         let name = editing.entry.displayName

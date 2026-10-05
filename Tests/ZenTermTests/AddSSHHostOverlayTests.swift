@@ -284,6 +284,23 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         XCTAssertTrue(isFocused(button("Remove", in: overlay)))
     }
 
+    func test_aFailedConfirmedRemove_canBeRetriedWhileTheCardLeaves() throws {
+        removalConsequence = "disconnect it and stop everything running in it"
+        removalFailure = "Couldn't remove devbox from ZenTerm's config: the file is read-only right now"
+        let overlay = mount(devbox, removable: true)
+        let remove = try XCTUnwrap(button("Remove", in: overlay))
+        remove.onTap()
+        let first = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first)
+
+        try XCTUnwrap(button("Remove", in: first)).onTap()
+        XCTAssertEqual(visibleMessage(in: overlay), removalFailure)
+        XCTAssertTrue(isFocused(remove))
+        remove.onTap()
+
+        let second = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first)
+        XCTAssertNotIdentical(second, first, "a new warning opens even while the old one is leaving")
+    }
+
     func test_aFailedRemove_showsInTheForm_andFocusReturnsToRemove() throws {
         removalFailure = "Couldn't remove devbox from ZenTerm's config: the file is read-only right now"
         let overlay = mount(devbox, removable: true)
