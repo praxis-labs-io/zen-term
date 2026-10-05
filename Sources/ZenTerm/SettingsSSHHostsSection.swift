@@ -323,10 +323,13 @@ final class SettingsSSHHostsSection: SettingsSection {
             proceed: { [weak self] in
                 guard let self else { return }
                 let config = GeneralConfig.current
-                guard self.save(row: row.layout, { try self.removeHost(host) }) else { return }
+                self.removed.insert(host)
+                guard self.save(row: row.layout, { try self.removeHost(host) }) else {
+                    self.removed.remove(host)
+                    return
+                }
                 if self.orderBeforeRemovals == nil { self.orderBeforeRemovals = config.sshHostAliases }
                 if self.offOrderBeforeRemovals == nil { self.offOrderBeforeRemovals = config.sshHostsOff.map(\.alias) }
-                self.removed.insert(host)
                 self.showRemoval(true, of: host, row: row, button: button)
             }, cancel: {})
     }

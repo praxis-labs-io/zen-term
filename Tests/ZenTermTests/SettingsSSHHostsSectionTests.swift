@@ -382,6 +382,23 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         XCTAssertIdentical(window?.firstResponder, rebuilt[0])
     }
 
+    func test_removingAHostWhoseAddressTheProbeClears_showsTheRemovedRow() throws {
+        try seed(ssh: nil, config: "ssh-host = deploy@10.0.0.5\nssh-host = ops\n")
+        center.setDestination("drew@10.0.0.7", host: SSHHostID(alias: "ops"))
+        let detail = mount()
+        let observer = NotificationCenter.default.addObserver(forName: .configDidChange, object: nil, queue: nil) {
+            [center] _ in
+            MainActor.assumeIsolated { center.setDestination(nil, host: SSHHostID(alias: "ops")) }
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+        press(key(36), on: removeButtons(in: detail)[0])
+
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+
+        XCTAssertEqual(removeButtons(in: detail).map(\.title), ["Undo", "Remove"])
+        XCTAssertTrue(rows(in: detail)[0].isDimmed)
+    }
+
     func test_aRemovedHost_isGoneNextTime() throws {
         try seed(ssh: nil, config: "ssh-host = deploy@10.0.0.5\nssh-host = ops@10.0.0.6\n")
         press(key(36), on: removeButtons(in: mount())[0])
