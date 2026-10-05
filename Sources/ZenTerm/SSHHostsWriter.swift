@@ -27,7 +27,6 @@ enum SSHHostsWriter {
         var errorDescription: String? { "it's no longer in the host list" }
     }
 
-    /// Moves `alias` from the on list to the off list, keeping its name. Does nothing if it is not on.
     static func turnOff(_ alias: String, configRoot: URL = ConfigLoader.defaultRoot) throws {
         let config = GeneralConfig.current
         guard let host = config.sshHosts.first(where: { $0.alias == alias }) else { return }
