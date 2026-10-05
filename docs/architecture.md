@@ -598,8 +598,9 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   is active, and on activation, wake and network change (`NWPathMonitor`); an answer from before
   a network change is dropped and asked again. Once Settings has asked, every host it lists as Off (the
   `~/.ssh/config` aliases that are not On, plus `ssh-host-off`) is resolved the same way with no
-  reachability check and no status, and keeps its destination when it is turned On or Off. Before
-  the first ask no Off host is resolved. A host reads Offline until the probe reaches it,
+  reachability check and no status, and keeps its destination when it is turned On or Off. A failed attempt is
+  not repeated until the same invalidations. Before the first ask no Off host is resolved, and a
+  connected host is re-resolved the same way, without a probe. A host reads Offline until the probe reaches it,
   and a connected host takes its status from the connection, not the probe.
 - **The Connect screen reads its host from `SSHHostStatusCenter`**: the status, and the
   destination the probe resolved from the same `ssh -G`, so it never runs ssh itself.

@@ -60,6 +60,17 @@ final class SSHHostProbeTests: XCTestCase {
         func resolveCount(_ host: String) -> Int { lock.withLock { resolved.filter { $0 == host }.count } }
     }
 
+    private final class Attempts: @unchecked Sendable {
+        private let lock = NSLock()
+        private var attempts = 0
+        var value: Int { lock.withLock { attempts } }
+
+        func count(_ host: String) -> SSHHostResolver.Resolution? {
+            if host == "ghost" { lock.withLock { attempts += 1 } }
+            return nil
+        }
+    }
+
     private let answers = Answers()
     private var configDir: URL!
     private let center = SSHHostStatusCenter()
@@ -369,6 +380,50 @@ final class SSHHostProbeTests: XCTestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(0.3))
 
         XCTAssertEqual(answers.resolveCount("ghost"), 1)
+    }
+
+    func test_anOffHostWhoseResolutionFails_isNotAskedAgainEveryRound() {
+        let attempts = Attempts()
+        SSHHostProbe.resolveOverrideForTesting = { attempts.count($0) }
+        probe.setHosts([], off: ["ghost"])
+        center.requestDestinations(of: [])
+        waitUntil(attempts.value == 1, "the first attempt")
+
+        probe.probeAll()
+        probe.probeAll()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+
+        XCTAssertEqual(attempts.value, 1)
+    }
+
+    func test_aFailedOffHost_isAskedAgainAfterANetworkChange() {
+        let attempts = Attempts()
+        SSHHostProbe.resolveOverrideForTesting = { attempts.count($0) }
+        probe.setHosts([], off: ["ghost"])
+        center.requestDestinations(of: [])
+        waitUntil(attempts.value == 1, "the first attempt")
+
+        probe.networkChanged(isUp: true)
+
+        waitUntil(attempts.value == 2, "the attempt after the change")
+    }
+
+    func test_aConnectedHost_isResolvedAgainAfterAConfigEdit_withoutBeingProbed() throws {
+        center.setConnected(true, host: SSHHostID(alias: "devbox"))
+        probe.setHosts(["devbox"], off: [])
+        waitUntil(destination("devbox") == "drew@devbox.lan", "the destination to land")
+        SSHHostProbe.resolveOverrideForTesting = { _ in
+            SSHHostResolver.Resolution(endpoint: nil, destination: "drew@moved.lan")
+        }
+
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date().addingTimeInterval(60)],
+            ofItemAtPath: configDir.appendingPathComponent("extra").path)
+        probe.probeAll()
+
+        waitUntil(destination("devbox") == "drew@moved.lan", "the new destination")
+        XCTAssertEqual(answers.askCount("devbox"), 0)
+        XCTAssertEqual(status("devbox"), .connected)
     }
 
     func test_aHostTurnedOnWhileItsOffResolutionIsInFlight_isProbedWhenItLands() {

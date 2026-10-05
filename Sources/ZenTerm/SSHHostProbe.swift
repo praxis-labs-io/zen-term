@@ -47,6 +47,7 @@ final class SSHHostProbe {
     private var requestedOff: [String] = []
     private var isOffResolutionRequested = false
     private var resolveOnly: [String] = []
+    private var failedOff: Set<String> = []
     private var proxied: Set<String> = []
     // `ssh -G` reruns `Match exec`, which can prompt, so a host resolves once per config and network.
     private var resolutions: [String: SSHHostResolver.Resolution] = [:]
@@ -114,6 +115,7 @@ final class SSHHostProbe {
         resolveOnly = wanted.filter { !hosts.contains($0) && seen.insert($0).inserted }
         for host in previousKnown.subtracting(known) {
             resolutions[host] = nil
+            failedOff.remove(host)
             center.setDestination(nil, host: SSHHostID(alias: host))
         }
         refreshWatching()
@@ -125,6 +127,7 @@ final class SSHHostProbe {
         generation += 1
         isNetworkUp = isUp
         resolutions = [:]
+        failedOff = []
         pendingSettle?.cancel()
         guard isUp else {
             for host in hosts where !proxied.contains(host) {
@@ -220,6 +223,7 @@ final class SSHHostProbe {
     private func probe(_ targets: [String], configStamp stamp: [String: Date], configAliases aliases: [String]) {
         if stamp != configStamp {
             resolutions = [:]
+            failedOff = []
             configStamp = stamp
         }
         if aliases != configAliases {
@@ -250,7 +254,9 @@ final class SSHHostProbe {
     }
 
     private func resolveOffHosts() {
-        for host in resolveOnly where !inFlight.contains(host) && resolutions[host] == nil {
+        let connected = hosts.filter { center.status(of: SSHHostID(alias: $0)) == .connected }
+        for host in resolveOnly + connected
+        where !inFlight.contains(host) && resolutions[host] == nil && !failedOff.contains(host) {
             inFlight.insert(host)
             let generation = self.generation
             Self.queue.addOperation { [weak self] in
@@ -274,6 +280,7 @@ final class SSHHostProbe {
         guard isOn || resolveOnly.contains(host) else { return }
         guard generation == self.generation else { return probe([host]) }
         resolutions[host] = resolution
+        if resolution == nil && !isOn { failedOff.insert(host) } else { failedOff.remove(host) }
         center.setDestination(resolution?.destination, host: SSHHostID(alias: host))
         if isOn { probe([host]) }
     }
