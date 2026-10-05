@@ -151,31 +151,18 @@ final class SettingsWorkspacesSection: SettingsSection {
     }
 }
 
-final class WorkspaceRow: NSView {
+final class WorkspaceRow: SettingsFocusRow {
     let workspace: Workspace
-    var onActivate: (() -> Void)?
-    var onArrowUp: (() -> Void)?
-    var onArrowDown: (() -> Void)?
-    var onMoveUp: (() -> Void)?
-    var onMoveDown: (() -> Void)?
-    var onTab: (() -> Void)?
-    var onBacktab: (() -> Void)?
-    var onExitToNav: (() -> Void)?
-
     private let titleLabel: NSTextField
     private let subtitleLabel: NSTextField
     private let gitBadge = NSImageView()
-    private var isFocused = false { didSet { restyle() } }
 
     init(workspace: Workspace) {
         self.workspace = workspace
         titleLabel = NSTextField(labelWithString: workspace.title)
         subtitleLabel = NSTextField(labelWithString: PathDisplay.abbreviatingHome(workspace.path.path))
 
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-        layer?.cornerRadius = 8
+        super.init()
 
         titleLabel.font = .systemFont(ofSize: 13)
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
@@ -199,67 +186,19 @@ final class WorkspaceRow: NSView {
         controls.orientation = .horizontal
         controls.alignment = .centerY
         controls.spacing = 10
-        controls.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(controls)
-        NSLayoutConstraint.activate([
-            controls.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
-            controls.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-            controls.topAnchor.constraint(equalTo: topAnchor, constant: 6),
-            controls.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
-        ])
-        restyle()
+        pin(controls)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    func reapplyTheme() {
+    override func reapplyTheme() {
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         gitBadge.contentTintColor = Theme.current.chrome.ink(.faint)
-        restyle()
+        super.reapplyTheme()
     }
 
     func applyGitStatus() {
         gitBadge.isHidden = GitRepoStatus.known(workspace.path) != true
-    }
-
-    override var acceptsFirstResponder: Bool { true }
-    override func becomeFirstResponder() -> Bool { isFocused = true; return true }
-    override func resignFirstResponder() -> Bool { isFocused = false; return true }
-    override func drawFocusRingMask() {}
-
-    /// `KeyboardFocus.key(for:)` decodes the keyCode alone, so ⌥ is checked here.
-    override func keyDown(with event: NSEvent) {
-        let key = KeyboardFocus.key(for: event)
-        if KeyboardFocus.isOptionOnly(event) {
-            switch key {
-            case .up: onMoveUp?(); return
-            case .down: onMoveDown?(); return
-            default: break
-            }
-        }
-        switch key {
-        case .activate: onActivate?()
-        case .up: onArrowUp?()
-        case .down: onArrowDown?()
-        case .left: onExitToNav?()
-        case .tab(let shift) where onTab != nil || onBacktab != nil:
-            shift ? onBacktab?() : onTab?()
-        default: super.keyDown(with: event)
-        }
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        window?.makeFirstResponder(self)
-        onActivate?()
-    }
-
-    override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
-
-    private func restyle() {
-        let chrome = Theme.current.chrome
-        layer?.backgroundColor = isFocused ? chrome.fill(.active).cgColor : nil
-        layer?.borderWidth = isFocused ? 1.5 : 0
-        layer?.borderColor = isFocused ? chrome.accent.nsColor.cgColor : nil
     }
 }
