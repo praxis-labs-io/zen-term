@@ -1729,7 +1729,7 @@ final class WindowController: NSObject {
         case "agents", "agent-notifications", "attention-toast", "completion-toast", "toast-duration",
             "automatic-update-checks":
             return .general
-        case "ssh-host", "ssh-host-off":
+        case "ssh-host":
             return .sshHosts
         default:
             return .top

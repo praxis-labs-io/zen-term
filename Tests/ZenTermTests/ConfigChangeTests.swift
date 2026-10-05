@@ -85,7 +85,6 @@ final class ConfigChangeTests: XCTestCase {
         XCTAssertEqual(change(from: { $0.hiddenToolbarButtons = [.focusMode] }), .toolbarButtons)
         XCTAssertEqual(change(from: { $0.toastDuration = 9 }), .toasts)
         XCTAssertEqual(change(from: { $0.sshHosts = [SSHHostEntry(alias: "devbox")] }), .sshHosts)
-        XCTAssertEqual(change(from: { $0.sshHostsOff = [SSHHostEntry(alias: "devbox")] }), .sshHosts)
         XCTAssertEqual(
             change(from: {
                 $0.configDiagnostics = [

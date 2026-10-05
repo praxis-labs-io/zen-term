@@ -190,11 +190,6 @@
 # of its alias. ssh still connects with the alias. Quote a name that holds #.
 # In Settings > SSH Hosts, click a host to set or clear its name.
 # ssh-host = prod: Production
-#
-# A host turned Off in Settings moves to ssh-host-off, with the same format and
-# its name. It stays in Settings > SSH Hosts and leaves the sidebar. Turning it
-# On moves the line back to ssh-host.
-# ssh-host-off = staging: Staging box
 
 # Each pane on a host opens your login shell there with the TERM_PROGRAM and
 # COLORTERM a local pane gets, so Claude reports its progress and programs use

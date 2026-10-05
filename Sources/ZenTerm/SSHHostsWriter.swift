@@ -2,27 +2,20 @@ import Foundation
 
 enum SSHHostsWriter {
     static let key = "ssh-host"
-    static let offKey = "ssh-host-off"
 
     static func add(_ host: SSHHostEntry, at index: Int? = nil, configRoot: URL = ConfigLoader.defaultRoot) throws {
-        let config = GeneralConfig.current
-        if index == nil, config.sshHosts.contains(where: { $0.alias == host.alias }) { return }
-        var next = config.sshHosts.filter { $0.alias != host.alias }
+        let current = GeneralConfig.current.sshHosts
+        if index == nil, current.contains(where: { $0.alias == host.alias }) { return }
+        var next = current.filter { $0.alias != host.alias }
         next.insert(host, at: min(max(index ?? next.count, 0), next.count))
-        try write(on: next, off: config.sshHostsOff.filter { $0.alias != host.alias }, configRoot: configRoot)
+        try write(next, over: current, configRoot: configRoot)
     }
 
-    static func rename(
-        _ alias: String, to name: String?, configRoot: URL = ConfigLoader.defaultRoot
-    ) throws {
-        let config = GeneralConfig.current
-        let renamed = { (hosts: [SSHHostEntry]) in
-            hosts.map { $0.alias == alias ? SSHHostEntry(alias: alias, name: name) : $0 }
-        }
-        guard (config.sshHosts + config.sshHostsOff).contains(where: { $0.alias == alias }) else {
-            throw NoLongerListed()
-        }
-        try write(on: renamed(config.sshHosts), off: renamed(config.sshHostsOff), configRoot: configRoot)
+    static func rename(_ alias: String, to name: String?, configRoot: URL = ConfigLoader.defaultRoot) throws {
+        let current = GeneralConfig.current.sshHosts
+        guard current.contains(where: { $0.alias == alias }) else { throw NoLongerListed() }
+        let next = current.map { $0.alias == alias ? SSHHostEntry(alias: alias, name: name) : $0 }
+        try write(next, over: current, configRoot: configRoot)
     }
 
     struct NoLongerListed: LocalizedError {
@@ -30,15 +23,12 @@ enum SSHHostsWriter {
     }
 
     static func remove(_ alias: String, configRoot: URL = ConfigLoader.defaultRoot) throws {
-        let config = GeneralConfig.current
-        try write(
-            on: config.sshHosts.filter { $0.alias != alias }, off: config.sshHostsOff.filter { $0.alias != alias },
-            configRoot: configRoot)
+        let current = GeneralConfig.current.sshHosts
+        try write(current.filter { $0.alias != alias }, over: current, configRoot: configRoot)
     }
 
-    private static func write(on: [SSHHostEntry], off: [SSHHostEntry], configRoot: URL) throws {
-        let config = GeneralConfig.current
-        guard on != config.sshHosts || off != config.sshHostsOff else { return }
-        try ConfigWriter.apply(sshHosts: on, sshHostsOff: off, configRoot: configRoot)
+    private static func write(_ next: [SSHHostEntry], over current: [SSHHostEntry], configRoot: URL) throws {
+        guard next != current else { return }
+        try ConfigWriter.apply(sshHosts: next, configRoot: configRoot)
     }
 }

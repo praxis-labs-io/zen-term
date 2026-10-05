@@ -198,26 +198,6 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
             [SSHHostEntry(alias: "alpha"), SSHHostEntry(alias: "deploy@10.0.0.5", name: "Deploy box")])
     }
 
-    func test_removingAHost_clearsAHandWrittenDuplicateOffLine_soTheNameCannotResurrect() throws {
-        try seed(config: "ssh-host = a\nssh-host-off = a: Old\n")
-
-        try SSHHostsWriter.remove("a")
-        XCTAssertEqual(configText(), "")
-        AppConfig.reload()
-        try SSHHostsWriter.add(SSHHostEntry(alias: "a"))
-        AppConfig.reload()
-
-        XCTAssertEqual(GeneralConfig.current.sshHosts, [SSHHostEntry(alias: "a")])
-        XCTAssertEqual(configText(), "ssh-host = a\n")
-    }
-
-    func test_anOffHostIsNotInTheSidebarList() throws {
-        try seed(config: "ssh-host = prod\nssh-host-off = devbox: Build box\n")
-
-        XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["prod"])
-        XCTAssertEqual(GeneralConfig.current.sshHostsOff, [SSHHostEntry(alias: "devbox", name: "Build box")])
-    }
-
     func test_undoingSeveralRemovals_inEitherOrder_restoresTheOriginalOrder() throws {
         for undoOrder in [[0, 1], [1, 0]] {
             try seed(config: "ssh-host = alpha\nssh-host = beta\nssh-host = gamma\n")
