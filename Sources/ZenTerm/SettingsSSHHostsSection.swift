@@ -4,7 +4,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     var navTitle: String { "SSH Hosts" }
     var onExitToNav: (() -> Void)?
     var onAddHost: (() -> Void)?
-    var onEditHost: ((SSHHostEntry, _ address: String?) -> Void)?
+    var onEditHost: ((SSHHostEntry, _ address: String?, _ isConfigHost: Bool) -> Void)?
     var hostToFocus: String?
     var hostSession: ((SSHHostID) -> SSHConnection.State?)?
     var presentConfirm: ((ConfirmCard) -> Void)?
@@ -287,7 +287,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private func edit(_ host: String) {
-        onEditHost?(entry(of: host), address(of: host))
+        onEditHost?(entry(of: host), address(of: host), listing?.aliases.contains(host) ?? false)
     }
 
     private func leaveControl(of row: SSHHostRow?) {

@@ -7,7 +7,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
     }
 
     private let mode: Mode
-    private let onSubmit: (SSHHostEntry) -> Void
+    private let onSubmit: (SSHHostEntry) -> String?
     private let onCancel: () -> Void
 
     private let card = CardView()
@@ -29,7 +29,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
     }
 
     init(
-        mode: Mode, background: NSColor, onSubmit: @escaping (SSHHostEntry) -> Void,
+        mode: Mode, background: NSColor, onSubmit: @escaping (SSHHostEntry) -> String?,
         onCancel: @escaping () -> Void
     ) {
         self.mode = mode
@@ -217,7 +217,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
             focus(nameField.field)
             return
         }
-        onSubmit(SSHHostEntry(alias: host, name: name.isEmpty ? nil : name))
+        onSubmit(SSHHostEntry(alias: host, name: name.isEmpty ? nil : name)).map(nameGroup.setMessage)
     }
 
     private func submittedHost() -> String? {

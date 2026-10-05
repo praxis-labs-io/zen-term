@@ -19,13 +19,18 @@ enum SSHHostsWriter {
         try write(on: config.sshHosts.filter { $0.alias != host.alias }, off: next, configRoot: configRoot)
     }
 
-    static func rename(_ alias: String, to name: String?, configRoot: URL = ConfigLoader.defaultRoot) throws {
+    static func rename(
+        _ alias: String, to name: String?, isConfigHost: Bool = false, configRoot: URL = ConfigLoader.defaultRoot
+    ) throws {
         let config = GeneralConfig.current
         let renamed = { (hosts: [SSHHostEntry]) in
             hosts.map { $0.alias == alias ? SSHHostEntry(alias: alias, name: name) : $0 }
         }
         guard (config.sshHosts + config.sshHostsOff).contains(where: { $0.alias == alias }) else {
-            throw NoLongerListed()
+            guard isConfigHost else { throw NoLongerListed() }
+            guard let name else { return }
+            return try addOff(
+                SSHHostEntry(alias: alias, name: name), at: config.sshHostsOff.count, configRoot: configRoot)
         }
         try write(on: renamed(config.sshHosts), off: renamed(config.sshHostsOff), configRoot: configRoot)
     }

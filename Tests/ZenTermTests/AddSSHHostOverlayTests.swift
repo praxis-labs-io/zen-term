@@ -20,7 +20,10 @@ final class AddSSHHostOverlayTests: WindowTestCase {
     private func mount(_ mode: AddSSHHostOverlay.Mode = .add(taken: [])) -> AddSSHHostOverlay {
         let overlay = AddSSHHostOverlay(
             mode: mode, background: Theme.current.chrome.background.nsColor,
-            onSubmit: { [weak self] in self?.submitted.append($0) },
+            onSubmit: { [weak self] in
+                self?.submitted.append($0)
+                return nil
+            },
             onCancel: { [weak self] in self?.cancelled += 1 })
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
