@@ -66,12 +66,23 @@ final class SSHHostRemovalTests: WindowTestCase {
     private func openSettings(in c: WindowController) throws -> NSView {
         let content = try XCTUnwrap(c.window.contentView)
         c.openSettings(for: .setting(key: "ssh-host"))
-        waitUntil(removeButtons(in: content).count == 3, "Settings to land on SSH Hosts")
+        waitUntil(hostRows(in: content).count == 3, "Settings to land on SSH Hosts")
         return content
     }
 
-    private func removeButtons(in view: NSView) -> [AppButton] {
-        descendants(of: view).compactMap { $0 as? AppButton }.filter { $0.title == "Remove" }
+    private func hostRows(in view: NSView) -> [SSHHostRow] {
+        descendants(of: view).compactMap { $0 as? SSHHostRow }
+    }
+
+    private func editForm(ofRow index: Int, in c: WindowController) throws -> AddSSHHostOverlay {
+        let content = try XCTUnwrap(c.window.contentView)
+        let row = try XCTUnwrap(hostRows(in: content)[index])
+        row.onActivate?()
+        return try XCTUnwrap(form(in: content))
+    }
+
+    private func form(in view: NSView) -> AddSSHHostOverlay? {
+        descendants(of: view).compactMap { $0 as? AddSSHHostOverlay }.first
     }
 
     private func settings(in view: NSView) -> SettingsOverlay? {
@@ -90,64 +101,53 @@ final class SSHHostRemovalTests: WindowTestCase {
         try XCTUnwrap(descendants(of: view).compactMap { $0 as? AppButton }.first { $0.title == title })
     }
 
-    private func remove(_ button: AppButton, in c: WindowController) throws {
-        let event = try XCTUnwrap(
-            NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: c.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "",
-                isARepeat: false, keyCode: 36))
-        NSApp.postEvent(event, atStart: true)
-        _ = NSApp.nextEvent(matching: .keyDown, until: nil, inMode: .default, dequeue: true)
-        c.window.makeFirstResponder(button)
-        button.keyDown(with: event)
-    }
-
     private func drainMainQueue() {
         let drained = expectation(description: "main queue drained")
         DispatchQueue.main.async { drained.fulfill() }
         wait(for: [drained], timeout: 2)
     }
 
-    func test_removingAConnectedHost_warnsOverSettings_andChangesNothingUntilAnswered() throws {
+    func test_removingAConnectedHost_warnsOverTheForm_andChangesNothingUntilAnswered() throws {
         let c = makeWindow()
         open(devbox, in: c)
         let content = try openSettings(in: c)
+        let form = try editForm(ofRow: 0, in: c)
 
-        try remove(removeButtons(in: content)[0], in: c)
+        try button("Remove", in: form).onTap()
 
         let card = try XCTUnwrap(card(in: content), "an open host warns before it goes")
         XCTAssertTrue(texts(in: card).contains("Remove devbox"))
         XCTAssertTrue(
             texts(in: card).contains("Removing devbox will disconnect it and stop everything running in it."))
-        XCTAssertNotNil(settings(in: content), "the warning keeps Settings open")
+        XCTAssertNotNil(self.form(in: content), "the warning keeps the form open")
         XCTAssertTrue(GeneralConfig.current.sshHostAliases.contains("devbox"))
         XCTAssertTrue(c.holdsHost(devbox))
     }
 
-    func test_cancellingTheWarning_keepsRemoveOnTheButton_andLeavesTheHostConnected() throws {
+    func test_cancellingTheWarning_keepsTheForm_focusesRemove_andLeavesTheHostConnected() throws {
         let c = makeWindow()
         open(devbox, in: c)
         let content = try openSettings(in: c)
-        let removeButton = removeButtons(in: content)[0]
-        try remove(removeButton, in: c)
+        let form = try editForm(ofRow: 0, in: c)
+        let remove = try button("Remove", in: form)
+        remove.onTap()
 
         try button("Cancel", in: XCTUnwrap(card(in: content))).onTap()
         drainMainQueue()
 
         XCTAssertNil(card(in: content))
-        XCTAssertEqual(removeButton.title, "Remove")
-        XCTAssertIdentical(c.window.firstResponder, removeButton)
+        XCTAssertNotNil(self.form(in: content))
+        XCTAssertIdentical(c.window.firstResponder, remove)
         XCTAssertTrue(GeneralConfig.current.sshHostAliases.contains("devbox"))
         XCTAssertTrue(c.holdsHost(devbox))
         XCTAssertEqual(fake.ended, [])
     }
 
-    func test_escapeOnTheWarning_cancelsIt_andKeepsSettingsOpen() throws {
+    func test_escapeOnTheWarning_cancelsIt_andKeepsTheFormOpen() throws {
         let c = makeWindow()
         open(devbox, in: c)
         let content = try openSettings(in: c)
-        let removeButton = removeButtons(in: content)[0]
-        try remove(removeButton, in: c)
+        try button("Remove", in: editForm(ofRow: 0, in: c)).onTap()
         let escape = try XCTUnwrap(
             NSEvent.keyEvent(
                 with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
@@ -158,25 +158,27 @@ final class SSHHostRemovalTests: WindowTestCase {
         drainMainQueue()
 
         XCTAssertNil(card(in: content))
-        XCTAssertNotNil(settings(in: content), "Esc answers the warning, not Settings")
-        XCTAssertEqual(removeButton.title, "Remove")
+        XCTAssertNotNil(form(in: content), "Esc answers the warning, not the form")
+        XCTAssertTrue(GeneralConfig.current.sshHostAliases.contains("devbox"))
     }
 
-    func test_confirmingTheWarning_disconnects_andLandsOnTheNextRow_withSettingsStillOpen() throws {
+    func test_confirmingTheWarning_disconnects_andReturnsToSettingsOnTheNextRow() throws {
         let c = makeWindow()
         open(devbox, in: c)
         let content = try openSettings(in: c)
-        try remove(removeButtons(in: content)[0], in: c)
+        try button("Remove", in: editForm(ofRow: 0, in: c)).onTap()
 
         try button("Remove", in: XCTUnwrap(card(in: content))).onTap()
+        waitUntil(settings(in: content) != nil && form(in: content) == nil, "Settings to come back")
         drainMainQueue()
 
         XCTAssertFalse(GeneralConfig.current.sshHostAliases.contains("devbox"))
         XCTAssertFalse(c.holdsHost(devbox))
         XCTAssertEqual(fake.ended, [42])
         XCTAssertNotEqual(c.selectedHostForTesting, devbox, "it lands where a removed host's Connect screen does")
-        XCTAssertNotNil(settings(in: content))
-        XCTAssertNil(card(in: content))
+        let rows = hostRows(in: content)
+        XCTAssertEqual(rows.map(\.host), ["prod", "deploy@10.0.0.5"])
+        XCTAssertIdentical(c.window.firstResponder, rows[0])
     }
 
     func test_removingAHostWhileItConnects_saysItStopsConnecting() throws {
@@ -184,20 +186,41 @@ final class SSHHostRemovalTests: WindowTestCase {
         open(devbox, in: c, connected: false)
         let content = try openSettings(in: c)
 
-        try remove(removeButtons(in: content)[0], in: c)
+        try button("Remove", in: editForm(ofRow: 0, in: c)).onTap()
 
         let card = try XCTUnwrap(card(in: content))
         XCTAssertTrue(texts(in: card).contains("Removing devbox will stop connecting to it and close its tabs."))
     }
 
-    func test_removingAHostThatIsNotOpen_savesWithoutAsking() throws {
+    func test_removingAHostThatIsNotOpen_removesWithoutAsking_andFocusesTheRowBeforeWhenLast() throws {
         let c = makeWindow()
         let content = try openSettings(in: c)
 
-        try remove(removeButtons(in: content)[0], in: c)
+        try button("Remove", in: editForm(ofRow: 2, in: c)).onTap()
+        waitUntil(settings(in: content) != nil && form(in: content) == nil, "Settings to come back")
+        drainMainQueue()
 
         XCTAssertNil(card(in: content))
-        XCTAssertFalse(GeneralConfig.current.sshHostAliases.contains("devbox"))
+        XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["devbox", "prod"])
+        XCTAssertIdentical(c.window.firstResponder, hostRows(in: content)[1])
+    }
+
+    func test_removingTheOnlyHost_focusesAddHost() throws {
+        try "ssh-host = devbox\n".write(
+            to: configRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+        AppConfig.reload()
+        let c = makeWindow()
+        let content = try XCTUnwrap(c.window.contentView)
+        c.openSettings(for: .setting(key: "ssh-host"))
+        waitUntil(hostRows(in: content).count == 1, "Settings to land on SSH Hosts")
+
+        try button("Remove", in: editForm(ofRow: 0, in: c)).onTap()
+        waitUntil(settings(in: content) != nil && form(in: content) == nil, "Settings to come back")
+        drainMainQueue()
+
+        XCTAssertEqual(hostRows(in: content).count, 0)
+        let add = try button("＋ Add Host…", in: content)
+        XCTAssertIdentical(c.window.firstResponder, add)
     }
 
     func test_aHostOpenInAnotherWindow_warnsHere_andDisconnectsThere() throws {
@@ -207,7 +230,7 @@ final class SSHHostRemovalTests: WindowTestCase {
         open(devbox, in: hostWindow)
         let content = try openSettings(in: settingsWindow)
 
-        try remove(removeButtons(in: content)[0], in: settingsWindow)
+        try button("Remove", in: editForm(ofRow: 0, in: settingsWindow)).onTap()
         try button("Remove", in: XCTUnwrap(card(in: content))).onTap()
         drainMainQueue()
 

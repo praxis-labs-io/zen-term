@@ -6,12 +6,19 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         case edit(SSHHostEntry, address: String?)
     }
 
+    struct Removal {
+        let consequence: () -> String?
+        let perform: () -> String?
+    }
+
     private let mode: Mode
+    private let removal: Removal?
     private let onSubmit: (SSHHostEntry) -> String?
     private let onCancel: () -> Void
 
     private let card = CardView()
     private var dismiss = DismissGate()
+    private lazy var confirm = ConfirmSlot(over: self)
 
     private let header = NSTextField(labelWithString: "")
     private let hostField = FieldBox(placeholder: "user@host or alias")
@@ -23,6 +30,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
     private let errorLabel = FormErrorLabel()
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private let submitButton = AppButton(title: "", variant: .primary, keyEquivalent: "\r")
+    private let removeButton = AppButton(title: "Remove", variant: .destructive)
 
     private var editing: (entry: SSHHostEntry, address: String?)? {
         guard case .edit(let entry, let address) = mode else { return nil }
@@ -30,10 +38,11 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
     }
 
     init(
-        mode: Mode, background: NSColor, onSubmit: @escaping (SSHHostEntry) -> String?,
+        mode: Mode, background: NSColor, removal: Removal? = nil, onSubmit: @escaping (SSHHostEntry) -> String?,
         onCancel: @escaping () -> Void
     ) {
         self.mode = mode
+        self.removal = removal
         self.onSubmit = onSubmit
         self.onCancel = onCancel
         super.init(frame: .zero)
@@ -87,7 +96,10 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         name.contains("\"") ? "Can't contain \"." : nil
     }
 
+    var isShowingOverlaidCard: Bool { confirm.isShowing }
+
     func focusInitialResponder() {
+        if let card = confirm.card { return card.focusInitialResponder() }
         let field = editing == nil ? hostField.field : nameField.field
         window?.makeFirstResponder(field)
         field.applyThemedCaret()
@@ -108,6 +120,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if confirm.isShowing { return super.performKeyEquivalent(with: event) }
         if ModalEscape.handle(
             event, in: window, dismissing: dismiss.isDismissing, close: { self.onCancel() })
         {
@@ -120,9 +133,10 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         CardChrome.reapplyTheme(to: card)
         header.textColor = Theme.current.chrome.foreground.nsColor
         errorLabel.reapplyTheme()
+        confirm.card?.reapplyTheme()
         hostGroup.reapplyTheme()
         nameGroup.reapplyTheme()
-        let controls: [ThemeReapplying] = [hostField, nameField, cancelButton, submitButton]
+        let controls: [ThemeReapplying] = [hostField, nameField, cancelButton, submitButton, removeButton]
         controls.forEach { $0.reapplyTheme() }
         if let editing { showFixedHost(editing.entry.alias, address: editing.address) }
     }
@@ -169,6 +183,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
             nameField.setText(editing.entry.name ?? "")
             nameField.onBacktab = { [weak self] in self?.focus(self?.submitButton) }
             submitButton.onTab = { [weak self] in self?.focus(self?.nameField.field) }
+            if removal != nil { wireRemove() }
         } else {
             nameField.onArrowUp = { [weak self] in self?.focus(self?.hostField.field) }
             nameField.onBacktab = { [weak self] in self?.focus(self?.hostField.field) }
@@ -177,7 +192,8 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let footer = NSStackView(views: [spacer, cancelButton, submitButton])
+        let footer = NSStackView(
+            views: removal == nil ? [spacer, cancelButton, submitButton] : [removeButton, spacer, cancelButton, submitButton])
         footer.orientation = .horizontal
         footer.spacing = 8
         footer.translatesAutoresizingMaskIntoConstraints = false
@@ -192,6 +208,37 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
             view.widthAnchor.constraint(equalTo: content.widthAnchor, constant: -40).isActive = true
         }
         return content
+    }
+
+    private func wireRemove() {
+        removeButton.isKeyboardFocusable = true
+        removeButton.onTap = { [weak self] in self?.remove() }
+        removeButton.onArrowUp = { [weak self] in self?.focus(self?.nameField.field) }
+        removeButton.onArrowRight = { [weak self] in self?.focus(self?.cancelButton) }
+        cancelButton.onArrowLeft = { [weak self] in self?.focus(self?.removeButton) }
+        removeButton.onTab = { [weak self] in self?.focus(self?.nameField.field) }
+        removeButton.onBacktab = { [weak self] in self?.focus(self?.submitButton) }
+        submitButton.onTab = { [weak self] in self?.focus(self?.removeButton) }
+        nameField.onBacktab = { [weak self] in self?.focus(self?.removeButton) }
+    }
+
+    private func remove() {
+        guard let removal, let editing, !confirm.isShowing else { return }
+        errorLabel.clear()
+        guard let consequence = removal.consequence() else { return performRemoval() }
+        let name = editing.entry.displayName
+        confirm.present(
+            ConfirmCard(
+                title: "Remove \(name)", message: "Removing \(name) will \(consequence).",
+                confirmLabel: "Remove", background: Theme.current.chrome.background.nsColor,
+                onCancel: { [weak self] in self?.confirm.dismiss { self?.focus(self?.removeButton) } },
+                onConfirm: { [weak self] in self?.confirm.dismiss { self?.performRemoval() } }))
+    }
+
+    private func performRemoval() {
+        guard let failure = removal?.perform() else { return }
+        errorLabel.show(failure)
+        focus(removeButton)
     }
 
     private func focus(_ view: NSView?) {

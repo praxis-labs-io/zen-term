@@ -5,11 +5,16 @@ final class SettingsSSHHostsSection: SettingsSection {
     var onExitToNav: (() -> Void)?
     var onAddHost: (() -> Void)?
     var onEditHost: ((SSHHostEntry, _ address: String?) -> Void)?
-    var hostToFocus: String?
+    var initialFocus: Focus?
     var hostSession: ((SSHHostID) -> SSHConnection.State?)?
     var presentConfirm: ((ConfirmCard) -> Void)?
     var dismissConfirm: ((@escaping () -> Void) -> Void)?
     var statusCenter = SSHHostStatusCenter.shared
+
+    enum Focus {
+        case host(String)
+        case addHost
+    }
 
     private struct HostRow {
         let host: String
@@ -84,9 +89,14 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private func focusPendingHost() {
-        guard let host = hostToFocus else { return }
-        hostToFocus = nil
-        DispatchQueue.main.async { [weak self] in self?.focus(.row(host)) }
+        guard let initialFocus else { return }
+        self.initialFocus = nil
+        let stop: Stop =
+            switch initialFocus {
+            case .host(let host): .row(host)
+            case .addHost: .add
+            }
+        DispatchQueue.main.async { [weak self] in self?.focus(stop) }
     }
 
     private func observeAddresses() {

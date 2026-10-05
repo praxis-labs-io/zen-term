@@ -8,6 +8,9 @@ final class AddSSHHostOverlayTests: WindowTestCase {
     private var submitted: [SSHHostEntry] = []
     private var cancelled = 0
     private var submitFailure: String?
+    private var removed = 0
+    private var removalFailure: String?
+    private var removalConsequence: String?
 
     override func tearDownWithError() throws {
         window = nil
@@ -18,9 +21,18 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
-    private func mount(_ mode: AddSSHHostOverlay.Mode = .add(taken: [])) -> AddSSHHostOverlay {
+    private func mount(
+        _ mode: AddSSHHostOverlay.Mode = .add(taken: []), removable: Bool = false
+    ) -> AddSSHHostOverlay {
         let overlay = AddSSHHostOverlay(
             mode: mode, background: Theme.current.chrome.background.nsColor,
+            removal: removable
+                ? AddSSHHostOverlay.Removal(
+                    consequence: { [weak self] in self?.removalConsequence },
+                    perform: { [weak self] in
+                        self?.removed += 1
+                        return self?.removalFailure
+                    }) : nil,
             onSubmit: { [weak self] in
                 self?.submitted.append($0)
                 return self?.submitFailure
@@ -213,6 +225,107 @@ final class AddSSHHostOverlayTests: WindowTestCase {
 
         nameField(in: overlay).onChange?()
         XCTAssertTrue(label.isHidden, "typing clears it")
+    }
+
+    private let devbox = AddSSHHostOverlay.Mode.edit(SSHHostEntry(alias: "devbox", name: "Build box"), address: nil)
+
+    private func isFocused(_ view: NSView?) -> Bool { view.map { KeyboardFocus.isFocused($0, in: window) } ?? false }
+
+    func test_editing_offersRemove_andAddingDoesNot() {
+        XCTAssertNotNil(button("Remove", in: mount(devbox, removable: true)))
+        XCTAssertNil(button("Remove", in: mount()))
+        XCTAssertNil(button("Remove", in: mount(devbox)))
+    }
+
+    func test_remove_leadsTheFooter() throws {
+        let overlay = mount(devbox, removable: true)
+        let remove = try XCTUnwrap(button("Remove", in: overlay))
+        let cancel = try XCTUnwrap(button("Cancel", in: overlay))
+        overlay.layoutSubtreeIfNeeded()
+
+        XCTAssertLessThan(remove.frame.minX, cancel.frame.minX)
+    }
+
+    func test_remove_withNothingToWarnAbout_removesAtOnce() throws {
+        let overlay = mount(devbox, removable: true)
+
+        try XCTUnwrap(button("Remove", in: overlay)).onTap()
+
+        XCTAssertEqual(removed, 1)
+        XCTAssertNil(descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first)
+    }
+
+    func test_remove_ofAnOpenHost_asksFirst_andOnlyConfirmingRemoves() throws {
+        removalConsequence = "disconnect it and stop everything running in it"
+        let overlay = mount(devbox, removable: true)
+        try XCTUnwrap(button("Remove", in: overlay)).onTap()
+
+        let card = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first)
+        let texts = descendants(of: card).compactMap { ($0 as? NSTextField)?.stringValue }
+        XCTAssertTrue(texts.contains("Remove Build box"))
+        XCTAssertTrue(
+            texts.contains("Removing Build box will disconnect it and stop everything running in it."), "\(texts)")
+        XCTAssertEqual(removed, 0)
+
+        try XCTUnwrap(button("Remove", in: card)).onTap()
+
+        XCTAssertEqual(removed, 1)
+    }
+
+    func test_cancellingTheWarning_removesNothing_andFocusReturnsToRemove() throws {
+        removalConsequence = "stop connecting to it and close its tabs"
+        let overlay = mount(devbox, removable: true)
+        try XCTUnwrap(button("Remove", in: overlay)).onTap()
+        let card = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first)
+
+        try XCTUnwrap(button("Cancel", in: card)).onTap()
+
+        XCTAssertEqual(removed, 0)
+        XCTAssertTrue(isFocused(button("Remove", in: overlay)))
+    }
+
+    func test_aFailedRemove_showsInTheForm_andFocusReturnsToRemove() throws {
+        removalFailure = "Couldn't remove devbox from ZenTerm's config: the file is read-only right now"
+        let overlay = mount(devbox, removable: true)
+
+        try XCTUnwrap(button("Remove", in: overlay)).onTap()
+
+        XCTAssertEqual(removed, 1)
+        XCTAssertEqual(visibleMessage(in: overlay), removalFailure)
+        XCTAssertTrue(isFocused(button("Remove", in: overlay)))
+        nameField(in: overlay).onChange?()
+        XCTAssertNil(visibleMessage(in: overlay), "typing clears it")
+    }
+
+    func test_footer_tabWalksNameCancelSaveRemove_andBacktabReverses() throws {
+        let overlay = mount(devbox, removable: true)
+        let cancel = try XCTUnwrap(button("Cancel", in: overlay))
+        let save = try XCTUnwrap(button("Save", in: overlay))
+        let remove = try XCTUnwrap(button("Remove", in: overlay))
+
+        nameField(in: overlay).onTab?()
+        XCTAssertTrue(isFocused(cancel))
+        cancel.onTab?()
+        XCTAssertTrue(isFocused(save))
+        save.onTab?()
+        XCTAssertTrue(isFocused(remove))
+        remove.onTab?()
+        XCTAssertIdentical(window?.firstResponder, nameField(in: overlay).field.currentEditor())
+        nameField(in: overlay).onBacktab?()
+        XCTAssertTrue(isFocused(remove))
+        remove.onBacktab?()
+        XCTAssertTrue(isFocused(save))
+    }
+
+    func test_arrows_walkBetweenRemoveAndCancel() throws {
+        let overlay = mount(devbox, removable: true)
+        let cancel = try XCTUnwrap(button("Cancel", in: overlay))
+        let remove = try XCTUnwrap(button("Remove", in: overlay))
+
+        remove.onArrowRight?()
+        XCTAssertTrue(isFocused(cancel))
+        cancel.onArrowLeft?()
+        XCTAssertTrue(isFocused(remove))
     }
 
     func test_escape_cancels() {
