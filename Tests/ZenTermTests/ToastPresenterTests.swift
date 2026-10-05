@@ -3,6 +3,10 @@ import XCTest
 
 @testable import ZenTerm
 
+private func descendants(of view: NSView) -> [NSView] {
+    view.subviews.flatMap { [$0] + descendants(of: $0) }
+}
+
 @MainActor
 final class ToastPresenterTests: WindowTestCase {
     private func makeHost() -> NSView {
@@ -31,12 +35,10 @@ final class ToastPresenterTests: WindowTestCase {
     }
 
     private func buttons(in toast: ToastView) -> [AppButton] {
-        func descendants(of view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants(of: $0) } }
         return descendants(of: toast).compactMap { $0 as? AppButton }
     }
 
     private func arrangedToasts(in host: NSView) -> [ToastView] {
-        func descendants(of view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants(of: $0) } }
         return descendants(of: host).compactMap { $0 as? ToastView }
     }
 
@@ -48,7 +50,6 @@ final class ToastPresenterTests: WindowTestCase {
     }
 
     func test_aTitleOnlyToast_laysOutNoEmptyMessageLine() {
-        func descendants(of view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants(of: $0) } }
         let titled = ToastView(
             content: ToastContent(variant: .warning, title: "Couldn't Connect to devbox", message: nil))
         let withMessage = ToastView(
@@ -70,7 +71,6 @@ final class ToastPresenterTests: WindowTestCase {
             actions: [ToastAction(title: "Switch", kind: .primary, shortcut: { "⌘\\" }) {}],
             autoDismiss: false)
         host.layoutSubtreeIfNeeded()
-        func descendants(of view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants(of: $0) } }
         let labels = descendants(of: toast).compactMap { $0 as? NSTextField }
         let tabLabel = try XCTUnwrap(labels.first { $0.stringValue == tab })
         let tailLabel = try XCTUnwrap(labels.first { $0.stringValue == tail })
@@ -79,6 +79,27 @@ final class ToastPresenterTests: WindowTestCase {
             tailLabel.frame.width, tailLabel.intrinsicContentSize.width,
             "the drawer name is why the title exists, so it is the part that never clips")
         XCTAssertLessThan(tabLabel.frame.width, tabLabel.intrinsicContentSize.width)
+    }
+
+    func test_aTailWiderThanTheCard_truncatesInTheMiddleWithinIt() throws {
+        let host = makeHost()
+        let presenter = ToastPresenter(host: host, topInset: 12, trailingInset: 12)
+        let tail = " ec2-12-34-56-78.compute-1.amazonaws.com.internal.example-corp-network.net"
+        presenter.show(
+            ToastContent(variant: .warning, title: "Couldn't Connect to", titleTail: tail, message: nil))
+        host.layoutSubtreeIfNeeded()
+        let toast = try XCTUnwrap(arrangedToasts(in: host).first)
+        let tailLabel = try XCTUnwrap(
+            descendants(of: toast).compactMap { $0 as? NSTextField }.first { $0.stringValue == tail })
+
+        let badge = try XCTUnwrap(descendants(of: toast).first { $0 is IconBadge })
+        let rowWidth = toast.frame.width - 24 - 12 - badge.frame.width
+        XCTAssertGreaterThan(tailLabel.intrinsicContentSize.width, rowWidth, "precondition: wider than the row")
+        XCTAssertEqual(toast.frame.width, ToastView.width, "the card keeps its width")
+        XCTAssertLessThanOrEqual(
+            tailLabel.convert(tailLabel.bounds, to: toast).maxX, toast.bounds.width, "the tail stays inside the card")
+        XCTAssertEqual(tailLabel.lineBreakMode, NSLineBreakMode.byTruncatingMiddle)
+        XCTAssertFalse(toast.hasAmbiguousLayout)
     }
 
     func test_stickyToast_claimsNeitherReturnNorEsc() {
