@@ -81,6 +81,27 @@ final class ToastPresenterTests: WindowTestCase {
         XCTAssertLessThan(tabLabel.frame.width, tabLabel.intrinsicContentSize.width)
     }
 
+    func test_aTailWiderThanTheCard_truncatesInTheMiddleWithinIt() throws {
+        let host = makeHost()
+        let presenter = ToastPresenter(host: host, topInset: 12, trailingInset: 12)
+        let tail = " ec2-12-34-56-78.compute-1.amazonaws.com.internal.example-corp-network.net"
+        presenter.show(
+            ToastContent(variant: .warning, title: "Couldn't Connect to", titleTail: tail, message: nil))
+        host.layoutSubtreeIfNeeded()
+        let toast = try XCTUnwrap(arrangedToasts(in: host).first)
+        func descendants(of view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants(of: $0) } }
+        let tailLabel = try XCTUnwrap(
+            descendants(of: toast).compactMap { $0 as? NSTextField }.first { $0.stringValue == tail })
+
+        XCTAssertGreaterThan(
+            tailLabel.intrinsicContentSize.width, toast.frame.width, "precondition: wider than the row")
+        XCTAssertEqual(toast.frame.width, 300, "the card keeps its width")
+        XCTAssertLessThanOrEqual(
+            tailLabel.convert(tailLabel.bounds, to: toast).maxX, toast.bounds.width, "the tail stays inside the card")
+        XCTAssertEqual(tailLabel.lineBreakMode, NSLineBreakMode.byTruncatingMiddle)
+        XCTAssertFalse(toast.hasAmbiguousLayout)
+    }
+
     func test_stickyToast_claimsNeitherReturnNorEsc() {
         let presenter = ToastPresenter(host: makeHost(), topInset: 12, trailingInset: 12)
         let toast = presenter.showSticky(content(), actions: actions())
