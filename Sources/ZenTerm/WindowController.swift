@@ -1938,7 +1938,7 @@ final class WindowController: NSObject {
         do {
             try ConfigWriter.apply(floatRemovals: [float.id])
         } catch {
-            return "Failed to update the config file: \(error.localizedDescription)"
+            return "Couldn't delete \(float.id) from ZenTerm's config: \(error.localizedDescription)"
         }
         AppConfig.reload()
         reopenSettingsOnTools()
@@ -1952,7 +1952,7 @@ final class WindowController: NSObject {
         do {
             try ConfigWriter.apply(floatUpserts: [float], floatRemovals: removals)
         } catch {
-            return "Failed to write \(float.id) to the config file: \(error.localizedDescription)"
+            return "Couldn't save \(float.id) to ZenTerm's config: \(error.localizedDescription)"
         }
         AppConfig.reload()
         finishToolFloatForm(returnTo)

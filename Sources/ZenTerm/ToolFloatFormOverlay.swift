@@ -47,7 +47,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private let submitButton = AppButton(
         title: "", variant: .primary, keyEquivalent: "\r", keyEquivalentModifierMask: .command)
     private let deleteButton = AppButton(title: "Delete", variant: .destructive)
-    private let errorLabel = FormErrorLabel()
+    private let errorLabel = FormErrorLabel(maximumLines: 3)
 
     init(
         editing: ToolFloat?, existingIDs: Set<String>, capturer: KeybindCapturing?, background: NSColor,
@@ -466,22 +466,27 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     }
 
     private func submit() {
+        errorLabel.clear()
         if let firstInvalid = validate(includeRequired: true) {
             window?.makeFirstResponder(firstInvalid)
             return
         }
         guard let float = buildFloat() else { return }
-        if let failure = onSubmit(float) { showFailure(failure) }
+        if let failure = onSubmit(float) {
+            showFailure(failure)
+            focusInitialResponder()
+        }
     }
 
     private func delete() {
-        if let failure = onDelete?() { showFailure(failure) }
+        errorLabel.clear()
+        if let failure = onDelete?() {
+            showFailure(failure)
+            focus(deleteButton)
+        }
     }
 
-    private func showFailure(_ message: String) {
-        errorLabel.show(message)
-        focusInitialResponder()
-    }
+    private func showFailure(_ message: String) { errorLabel.show(message) }
 
     private func buildFloat() -> ToolFloat? {
         let title = titleField.text.trimmingCharacters(in: .whitespaces)

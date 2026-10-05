@@ -4,7 +4,7 @@ final class FormErrorLabel: NSTextField, ThemeReapplying {
     init(maximumLines: Int = 0) {
         super.init(frame: .zero)
         isEditable = false
-        isSelectable = true
+        isSelectable = false
         isBordered = false
         drawsBackground = false
         lineBreakMode = .byWordWrapping
@@ -20,6 +20,9 @@ final class FormErrorLabel: NSTextField, ThemeReapplying {
     func show(_ message: String) {
         stringValue = message
         isHidden = false
+        NSAccessibility.post(
+            element: self, notification: .announcementRequested,
+            userInfo: [.announcement: message, .priority: NSAccessibilityPriorityLevel.high])
     }
 
     func clear() { isHidden = true }

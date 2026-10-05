@@ -359,7 +359,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
     }
 
     func test_aFailedSave_showsAWrappingMessageInTheForm_keepsItOpen_andClearsOnEdit() throws {
-        let message = "Failed to write dev to the config file: the file is on a volume that is read-only right now"
+        let message = "Couldn't save dev to ZenTerm's config: the file is on a volume that is read-only right now"
         let (overlay, capturer, sink) = mount()
         sink.failure = message
         field(in: overlay, placeholder: "Open GitDash").setText("dev")
@@ -379,7 +379,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
     }
 
     func test_aFailedDelete_showsAWrappingMessageInTheForm_andClearsOnASegmentChange() throws {
-        let message = "Failed to update the config file: the file is on a volume that is read-only right now"
+        let message = "Couldn't delete dev from ZenTerm's config: the file is on a volume that is read-only right now"
         let existing = existingFloat(title: "dev", icon: IconCatalog.defaultSymbol)
         let (overlay, _, sink) = mount(editing: existing, withDelete: true)
         sink.failure = message
@@ -389,9 +389,26 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         let label = try failureLabel(message, in: overlay)
         XCTAssertEqual(sink.deleted, 1)
         XCTAssertEqual(sink.cancelled, 0)
+        XCTAssertIdentical(window?.firstResponder, try XCTUnwrap(button(in: overlay, title: "Delete")))
+        XCTAssertFalse(label.isSelectable)
+        XCTAssertFalse(label.acceptsFirstResponder)
 
         segment(in: overlay, firstOption: "Shown").onChange(1)
         XCTAssertTrue(label.isHidden, "changing a segment clears it")
+    }
+
+    func test_aStaleSaveFailure_isGoneWhenDeleteSucceeds() throws {
+        let existing = existingFloat(title: "dev", icon: IconCatalog.defaultSymbol)
+        let (overlay, _, sink) = mount(editing: existing, withDelete: true)
+        sink.failure = "Couldn't save dev to ZenTerm's config: the file is on a volume that is read-only right now"
+        submit(in: overlay)
+        let label = try failureLabel(
+            "Couldn't save dev to ZenTerm's config: the file is on a volume that is read-only right now", in: overlay)
+        sink.failure = nil
+
+        try XCTUnwrap(button(in: overlay, title: "Delete")).onTap()
+
+        XCTAssertTrue(label.isHidden)
     }
 
     func test_addForm_hasNoDeleteButton() {
