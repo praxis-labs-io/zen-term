@@ -2,7 +2,7 @@ import AppKit
 import AppLog
 import Network
 
-// Keeps each SSH host's reachability current by connecting to its ssh port and reading the banner, never logging in.
+// Keeps each On SSH host's reachability current by connecting to its ssh port and reading the banner, never logging in. Off hosts are only resolved.
 @MainActor
 final class SSHHostProbe {
     enum Answer: String {
@@ -42,6 +42,9 @@ final class SSHHostProbe {
 
     private let center: SSHHostStatusCenter
     private var hosts: [String] = []
+    private var offAliases: [String] = []
+    private var configAliases: [String] = []
+    private var resolveOnly: [String] = []
     private var proxied: Set<String> = []
     // `ssh -G` reruns `Match exec`, which can prompt, so a host resolves once per config and network.
     private var resolutions: [String: SSHHostResolver.Resolution] = [:]
@@ -50,6 +53,7 @@ final class SSHHostProbe {
     private var generation = 0
     private var isNetworkUp = true
     private var isStarted = false
+    private var isSeeded = false
     private var isWatching = false
     private var timer: Timer?
     private var pathMonitor: NWPathMonitor?
@@ -60,28 +64,44 @@ final class SSHHostProbe {
         self.center = center
     }
 
-    func start(hosts: [String]) {
+    func start(hosts: [String], off: [String]) {
         isStarted = true
         let app = NotificationCenter.default
         let workspace = NSWorkspace.shared.notificationCenter
         observe(app, NSApplication.didBecomeActiveNotification) { $0.appDidBecomeActive() }
         observe(app, NSApplication.didResignActiveNotification) { $0.refreshTimer() }
         observe(workspace, NSWorkspace.didWakeNotification) { $0.systemDidWake() }
-        setHosts(hosts)
+        setHosts(hosts, off: off)
     }
 
-    func setHosts(_ next: [String]) {
-        guard next != hosts else { return }
-        for host in hosts where !next.contains(host) {
+    func setHosts(_ next: [String], off: [String] = []) {
+        guard !isSeeded || next != hosts || off != offAliases else { return }
+        isSeeded = true
+        apply(hosts: next, off: off)
+    }
+
+    private var known: Set<String> { Set(hosts).union(resolveOnly) }
+
+    private func apply(hosts next: [String], off: [String]) {
+        let previousHosts = hosts
+        let previousKnown = known
+        hosts = next
+        offAliases = off
+        resolutions = [:]
+        for host in previousHosts where !next.contains(host) {
             proxied.remove(host)
             center.setReachable(false, host: SSHHostID(alias: host))
-            center.setDestination(nil, host: SSHHostID(alias: host))
         }
-        let added = next.filter { !hosts.contains($0) }
-        hosts = next
-        resolutions = [:]
+        reconcileResolveOnly(from: previousKnown)
+        probe(next.filter { !previousHosts.contains($0) })
+    }
+
+    // A host that stays listed in Settings keeps its destination while its status goes away.
+    private func reconcileResolveOnly(from previousKnown: Set<String>) {
+        var seen: Set<String> = []
+        resolveOnly = (configAliases + offAliases).filter { !hosts.contains($0) && seen.insert($0).inserted }
+        for host in previousKnown.subtracting(known) { center.setDestination(nil, host: SSHHostID(alias: host)) }
         refreshWatching()
-        probe(added)
     }
 
     func probeAll() { probe(hosts) }
@@ -128,7 +148,7 @@ final class SSHHostProbe {
     // A watch that stopped knows nothing of the network since, so a new one starts up until its monitor says otherwise.
     private func refreshWatching() {
         refreshTimer()
-        let watches = !hosts.isEmpty
+        let watches = !known.isEmpty
         guard watches != isWatching else { return }
         isWatching = watches
         pathMonitor?.cancel()
@@ -159,7 +179,7 @@ final class SSHHostProbe {
     }
 
     private func refreshTimer() {
-        let runs = isStarted && !hosts.isEmpty && NSApp.isActive
+        let runs = isStarted && !known.isEmpty && NSApp.isActive
         guard runs != (timer != nil) else { return }
         timer?.invalidate()
         timer = nil
@@ -171,24 +191,34 @@ final class SSHHostProbe {
         self.timer = timer
     }
 
-    // A round first reads the ssh config's dates off-main, since an edit there can move a host.
+    // A round first reads the ssh config off-main, since an edit there can move a host or add one.
     private func probe(_ targets: [String]) {
         Self.queue.addOperation { [weak self] in
             let stamp = Self.readConfigStamp()
+            let aliases = SSHConfigHosts.listing(of: SSHConfigHosts.userConfig).aliases
             DispatchQueue.main.async {
-                MainActor.assumeIsolated { self?.probe(targets, configStamp: stamp) }
+                MainActor.assumeIsolated { self?.probe(targets, configStamp: stamp, configAliases: aliases) }
             }
         }
     }
 
     // Without a network only `ssh -G` runs, so a jump host still learns it is one.
-    private func probe(_ targets: [String], configStamp stamp: [String: Date]) {
+    private func probe(_ targets: [String], configStamp stamp: [String: Date], configAliases aliases: [String]) {
         if stamp != configStamp {
             resolutions = [:]
             configStamp = stamp
         }
+        if aliases != configAliases {
+            let previousKnown = known
+            configAliases = aliases
+            reconcileResolveOnly(from: previousKnown)
+        }
+        resolveOffHosts()
         let isNetworkUp = self.isNetworkUp
-        for host in targets where !inFlight.contains(host) && center.status(of: SSHHostID(alias: host)) != .connected {
+        for host in targets
+        where hosts.contains(host) && !inFlight.contains(host)
+            && center.status(of: SSHHostID(alias: host)) != .connected
+        {
             inFlight.insert(host)
             let generation = self.generation
             let cached = resolutions[host]
@@ -205,6 +235,33 @@ final class SSHHostProbe {
         }
     }
 
+    private func resolveOffHosts() {
+        for host in resolveOnly where !inFlight.contains(host) && resolutions[host] == nil {
+            inFlight.insert(host)
+            let generation = self.generation
+            Self.queue.addOperation { [weak self] in
+                let resolution = Self.resolve(host)
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        self?.land(resolution, forOff: host, generation: generation)
+                    }
+                }
+            }
+        }
+    }
+
+    private func land(_ resolution: SSHHostResolver.Resolution?, forOff host: String, generation: Int) {
+        inFlight.remove(host)
+        publishOff(resolution, for: host, generation: generation)
+    }
+
+    private func publishOff(_ resolution: SSHHostResolver.Resolution?, for host: String, generation: Int) {
+        guard resolveOnly.contains(host) else { return }
+        guard generation == self.generation else { return probe([host]) }
+        resolutions[host] = resolution
+        center.setDestination(resolution?.destination, host: SSHHostID(alias: host))
+    }
+
     // An answer from before a network change describes the old network, so the host is asked again.
     private func land(
         _ answer: Answer, from resolution: SSHHostResolver.Resolution?, for host: String, generation: Int,
@@ -217,7 +274,7 @@ final class SSHHostProbe {
             "ssh probe \(host) at \(Self.describe(endpoint)), network \(isNetworkUp ? "up" : "down"), "
                 + "generation \(generation): \(answer.rawValue)\(isStale ? ", stale, asking again" : "")",
             category: .workspace)
-        guard hosts.contains(host) else { return }
+        guard hosts.contains(host) else { return publishOff(resolution, for: host, generation: generation) }
         guard !isStale else { return probe([host]) }
         resolutions[host] = resolution
         if endpoint == .proxied { proxied.insert(host) } else { proxied.remove(host) }
