@@ -1769,8 +1769,8 @@ final class WindowController: NSObject {
         sshHostsSection.onAddHost = { [weak self] in
             self?.openSSHHostForm(.add(taken: Set(GeneralConfig.current.sshHostAliases)))
         }
-        sshHostsSection.onEditHost = { [weak self] host, address, isConfigHost in
-            self?.openSSHHostForm(.edit(host, address: address), isConfigHost: isConfigHost)
+        sshHostsSection.onEditHost = { [weak self] host, address in
+            self?.openSSHHostForm(.edit(host, address: address))
         }
         sshHostsSection.hostToFocus = host
         sshHostsSection.hostSession = { [weak self] host in
@@ -1987,7 +1987,7 @@ final class WindowController: NSObject {
         AppConfig.reload()
     }
 
-    private func openSSHHostForm(_ mode: AddSSHHostOverlay.Mode, isConfigHost: Bool = false) {
+    private func openSSHHostForm(_ mode: AddSSHHostOverlay.Mode) {
         closeModal()
         let edited: String? =
             switch mode {
@@ -1997,7 +1997,7 @@ final class WindowController: NSObject {
         let overlay = AddSSHHostOverlay(
             mode: mode, background: Theme.current.chrome.background.nsColor,
             onSubmit: { [weak self] host in
-                edited == nil ? self?.addSSHHost(host) : self?.renameSSHHost(host, isConfigHost: isConfigHost)
+                edited == nil ? self?.addSSHHost(host) : self?.renameSSHHost(host)
             },
             onCancel: { [weak self] in self?.reopenSettingsOnSSHHosts(focusing: edited) })
         presentModal(overlay, kind: .sshHostForm)
@@ -2007,8 +2007,8 @@ final class WindowController: NSObject {
         saveSSHHost(host) { try SSHHostsWriter.add(host) }
     }
 
-    private func renameSSHHost(_ host: SSHHostEntry, isConfigHost: Bool) -> String? {
-        saveSSHHost(host) { try SSHHostsWriter.rename(host.alias, to: host.name, isConfigHost: isConfigHost) }
+    private func renameSSHHost(_ host: SSHHostEntry) -> String? {
+        saveSSHHost(host) { try SSHHostsWriter.rename(host.alias, to: host.name) }
     }
 
     private func saveSSHHost(_ host: SSHHostEntry, _ write: () throws -> Void) -> String? {

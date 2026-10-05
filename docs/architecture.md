@@ -573,16 +573,15 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   `WindowController.deliverConfigDiagnosticsNotice`, and retracted by `ConfigApplier`
   only when problems clear.
 - **No file watcher.** Hand edits apply on ⌘⇧,.
-- **`~/.ssh/config` is read, never written.** Settings > SSH Hosts lists its literal `Host`
-  aliases (following `Include`, skipping `Match` blocks) off-main each time it mounts, and shows each
-  host's address from `SSHHostStatusCenter`, so it never runs ssh itself: on mount it asks the
-  center to have the probe resolve every host it lists. The `ssh-host` lines hold which are on, plus typed hosts, each
+- **Settings > SSH Hosts lists only the `ssh-host` lines.** `~/.ssh/config` is read by the probe and
+  never written. A row shows its host's address from `SSHHostStatusCenter`, so Settings never runs
+  ssh itself. A line holds a Host alias or a typed user@host, each
   with an optional name; turning a host Off moves its line to `ssh-host-off` (same format,
   parsed into `GeneralConfig.sshHostsOff`, not probed for reachability or listed in the sidebar) so the name
   survives, and On moves it back. A name is only a label, read through `GeneralConfig.displayName(of:)`
   with the alias as fallback; ssh, control sockets and `SSHHostID` use the alias. A host row
   opens `AddSSHHostOverlay` in edit mode, which rewrites only that host's name on whichever line it is on; the
-  row is a stop of its own, → reaches its toggle or Remove and ← comes back. The
+  row is a stop of its own, → reaches its Remove button and ← comes back. The
   sidebar's SSH rows show their status as a dot (`SSHHostStatus.ink`): Offline takes the idle
   agent row's ink on the dot and the title, Online is positive, Connected is accent, and the
   status word is the row's accessibility value rather than visible text. While an agent in a

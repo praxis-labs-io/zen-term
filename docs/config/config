@@ -181,8 +181,7 @@
 
 # An SSH host listed in the sidebar's SSH section, one per line, in sidebar
 # order. Each is a Host alias from ~/.ssh/config or a user@host. Settings >
-# SSH Hosts lists every Host entry in ~/.ssh/config to turn on or off, and adds
-# or removes others.
+# SSH Hosts lists these hosts, and adds or removes them.
 # In-app Settings edit: applies live.
 # ssh-host = devbox
 # ssh-host = deploy@10.0.0.5
