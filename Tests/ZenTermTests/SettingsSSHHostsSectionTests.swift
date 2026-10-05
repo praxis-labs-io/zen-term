@@ -504,7 +504,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         center.setDestination("drew@10.0.0.2", host: SSHHostID(alias: "devbox"))
         let detail = mount()
         var edited: String?
-        section?.onEditHost = { _, address in edited = address }
+        section?.onEditHost = { _, address, _ in edited = address }
         let row = try XCTUnwrap(descendants(of: detail).compactMap { $0 as? SSHHostRow }.first)
 
         row.onActivate?()
@@ -682,6 +682,25 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         }
     }
 
+    func test_renamingAHostThatTurnedOnWhileTheFormWasOpen_renamesItInPlace_andNeverMovesItOff() throws {
+        try seed(ssh: "Host prod\n", config: "ssh-host = prod\n")
+
+        try SSHHostsWriter.rename("prod", to: "Production", isConfigHost: true, configRoot: configRoot)
+
+        XCTAssertEqual(configText(), "ssh-host = prod: Production\n")
+    }
+
+    func test_editingARow_saysWhetherItIsAConfigHost() throws {
+        try seed(ssh: "Host devbox\n", config: "ssh-host = ops@10.0.0.6\n")
+        let detail = mount()
+        var flags: [Bool] = []
+        section?.onEditHost = { _, _, isConfigHost in flags.append(isConfigHost) }
+
+        hostRows(in: detail).forEach { $0.onActivate?() }
+
+        XCTAssertEqual(flags, [true, false])
+    }
+
     func test_aClickOnAHostsToggle_turnsItOff_withoutOpeningTheForm() throws {
         try inSettings(ssh: "Host devbox\n", config: "ssh-host = devbox: Build box\n") { c, content in
             let off = try XCTUnwrap(
@@ -718,6 +737,53 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         }
     }
 
+    func test_namingAConfigHostThatWasNeverOn_writesAnOffLine_andTheRowStaysOff() throws {
+        try inSettings(ssh: "Host devbox\nHost prod\n", config: "ssh-host = devbox\n") { c, content in
+            try saveEdit(ofRow: 1, typing: "Production", in: c, content)
+
+            XCTAssertEqual(configText(), "ssh-host = devbox\nssh-host-off = prod: Production\n")
+            waitUntil(form(in: content) == nil && !captions(in: content).isEmpty, "Settings to come back")
+            XCTAssertEqual(captions(in: content), ["devbox", "Production"])
+            XCTAssertEqual(toggles(in: content).map(\.selectedIndex), [0, 1])
+        }
+    }
+
+    func test_savingAnEmptyNameForAConfigHostThatWasNeverOn_writesNothing() throws {
+        try inSettings(ssh: "Host devbox\nHost prod\n", config: "ssh-host = devbox\n") { c, content in
+            try saveEdit(ofRow: 1, typing: "", in: c, content)
+
+            XCTAssertEqual(configText(), "ssh-host = devbox\n")
+            waitUntil(form(in: content) == nil && !captions(in: content).isEmpty, "Settings to come back")
+            XCTAssertEqual(toggles(in: content).map(\.selectedIndex), [0, 1])
+        }
+    }
+
+    func test_savingAHostThatIsGone_keepsTheFormOpen_andShowsTheErrorInIt() throws {
+        try inSettings(ssh: "", config: "ssh-host = ops@10.0.0.6\n") { c, content in
+            let row = hostRows(in: content)[0]
+            press(key(36), on: row)
+            try seed(ssh: nil, config: "")
+
+            try saveEdit(typing: "Ops", in: c, content)
+
+            let overlay = try XCTUnwrap(form(in: content))
+            let texts = descendants(of: overlay).compactMap { ($0 as? NSTextField)?.stringValue }
+            XCTAssertTrue(texts.contains { $0.contains("it's no longer in the host list") }, "\(texts)")
+        }
+    }
+
+    private func saveEdit(
+        ofRow index: Int? = nil, typing name: String, in c: WindowController, _ content: NSView
+    ) throws {
+        if let index { press(key(36), on: hostRows(in: content)[index]) }
+        let overlay = try XCTUnwrap(form(in: content))
+        descendants(of: overlay).compactMap { $0 as? FieldBox }[1].setText(name)
+        let save = try XCTUnwrap(
+            descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Save" })
+        c.window.makeFirstResponder(save)
+        save.keyDown(with: key(36))
+    }
+
     func test_saveWritesTheName_andClearingItRemovesTheName() throws {
         try inSettings(ssh: "Host devbox\n", config: "ssh-host = devbox  # the build box\n") { c, content in
             for (typed, line) in [
@@ -746,7 +812,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         try seed(ssh: "Host devbox\nHost prod\n", config: "ssh-host = devbox: Build box\nssh-host = ops@10.0.0.6\n")
         let detail = mount()
         var edited: [SSHHostEntry] = []
-        section?.onEditHost = { host, _ in edited.append(host) }
+        section?.onEditHost = { host, _, _ in edited.append(host) }
         let rows = hostRows(in: detail)
         let toggle = toggles(in: detail)[0]
         let remove = removeButtons(in: detail)[0]

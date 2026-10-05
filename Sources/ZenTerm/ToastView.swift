@@ -32,6 +32,7 @@ final class ToastView: ShadowCardView {
     private let variant: ToastVariant
     private let titleLabel: NSTextField
     private let titleTailLabel: NSTextField?
+    private var titleFloor: NSLayoutConstraint?
     private let messageLabel: NSTextField?
     private var closeButton: IconButton?
     private var actionButtons: [AppButton] = []
@@ -41,6 +42,8 @@ final class ToastView: ShadowCardView {
 
     // Exposed so copy can be measured against the real wrap budget.
     static let messageMaxWidth: CGFloat = 236
+    // A title up to this share of the row never gives way to its tail; a longer title yields first.
+    private static let titleFloorShare: CGFloat = 0.55
     static let messageFont: NSFont = .systemFont(ofSize: 12)
     private static var titleColor: NSColor { Theme.current.chrome.foreground.nsColor }
     private static var messageColor: NSColor { Theme.current.chrome.muted.nsColor }
@@ -85,6 +88,12 @@ final class ToastView: ShadowCardView {
         titleTailLabel?.textColor = Self.titleColor
         titleTailLabel?.setContentCompressionResistancePriority(.init(rawValue: 999), for: .horizontal)
         titleTailLabel?.lineBreakMode = .byTruncatingMiddle
+        if titleTailLabel != nil {
+            let floor = titleLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 0)
+            floor.isActive = true
+            titleFloor = floor
+            updateTitleFloor()
+        }
 
         messageLabel?.font = Self.messageFont
         messageLabel?.textColor = Self.messageColor
@@ -252,6 +261,12 @@ final class ToastView: ShadowCardView {
     func setTitle(_ title: String) {
         guard titleLabel.stringValue != title else { return }
         titleLabel.stringValue = title
+        updateTitleFloor()
+    }
+
+    private func updateTitleFloor() {
+        let width = titleLabel.intrinsicContentSize.width
+        titleFloor?.constant = width <= Self.messageMaxWidth * Self.titleFloorShare ? width : 0
     }
 
     func refreshShortcuts() {
