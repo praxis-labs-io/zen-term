@@ -28,15 +28,18 @@ final class SettingsSSHHostsSection: SettingsSection {
     private var listed: [String] = []
     private var removed: Set<String> = []
     private var removedEntries: [String: SSHHostEntry] = [:]
+    private var removedAddresses: [String: String] = [:]
     private var orderBeforeRemovals: [String]?
     private var hostRows: [HostRow] = []
     private let addButton = AppButton(title: "＋ Add Host…", variant: .muted)
-    private var captions: [NSTextField] = []
-    private var notes: [NSTextField] = []
+    private var caption: NSTextField?
+    private var emptyNote: NSTextField?
+    private var configObserver: NSObjectProtocol?
     private var rowsStack: NSStackView?
 
     deinit {
         statusObserver.map(NotificationCenter.default.removeObserver)
+        configObserver.map(NotificationCenter.default.removeObserver)
     }
 
     // Focus stays on Remove once it reads Undo, so a held Return would flip the host back and forth.
@@ -61,6 +64,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         addButton.onTap = { [weak self] in self?.onAddHost?() }
 
         observeAddresses()
+        observeHostList()
         listed = GeneralConfig.current.sshHostAliases
         populate()
         focusPendingHost()
@@ -70,8 +74,8 @@ final class SettingsSSHHostsSection: SettingsSection {
     func detailStops() -> [NSView] { hostRows.flatMap(stops(of:)) + [addButton] }
 
     func reapplyTheme() {
-        captions.forEach { $0.textColor = Theme.current.chrome.ink(.muted) }
-        notes.forEach { $0.textColor = Theme.current.chrome.ink(.muted) }
+        caption?.textColor = Theme.current.chrome.ink(.muted)
+        emptyNote?.textColor = Theme.current.chrome.ink(.muted)
         for hostRow in hostRows {
             hostRow.row.reapplyTheme()
             hostRow.removeButton.reapplyTheme()
@@ -97,8 +101,28 @@ final class SettingsSSHHostsSection: SettingsSection {
         }
     }
 
+    private func observeHostList() {
+        configObserver.map(NotificationCenter.default.removeObserver)
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .configDidChange, object: nil, queue: .main
+        ) { [weak self] note in
+            guard ConfigChange.from(note).contains(.sshHosts) else { return }
+            MainActor.assumeIsolated { self?.refreshHostList() }
+        }
+    }
+
+    private func refreshHostList() {
+        let current = GeneralConfig.current.sshHostAliases
+        let next =
+            listed.filter { current.contains($0) || removed.contains($0) } + current.filter { !listed.contains($0) }
+        guard next != listed else { return }
+        listed = next
+        populate()
+    }
+
     private func address(of host: String) -> String? {
-        statusCenter.destination(of: SSHHostID(alias: host)).flatMap { $0 == host ? nil : $0 }
+        let known = statusCenter.destination(of: SSHHostID(alias: host)) ?? removedAddresses[host]
+        return known.flatMap { $0 == host ? nil : $0 }
     }
 
     private func addresses() -> [String: String] {
@@ -110,8 +134,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         let restore = target ?? focusedStop()
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         hostRows = []
-        captions = []
-        notes = []
+        emptyNote = nil
 
         addCaption("SSH Hosts", to: stack)
         if listed.isEmpty { addNote("No SSH hosts yet. Add one below.", to: stack) }
@@ -127,10 +150,9 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private func addCaption(_ title: String, to stack: NSStackView) {
-        if let previous = stack.arrangedSubviews.last { stack.setCustomSpacing(18, after: previous) }
-        let caption = SettingsDetail.groupCaption(title)
-        captions.append(caption)
-        let header = SettingsDetail.headerRow(caption: caption, hint: nil)
+        let label = SettingsDetail.groupCaption(title)
+        caption = label
+        let header = SettingsDetail.headerRow(caption: label, hint: nil)
         stack.addArrangedSubview(header)
         header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         stack.setCustomSpacing(10, after: header)
@@ -142,7 +164,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         note.textColor = Theme.current.chrome.ink(.muted)
         note.lineBreakMode = .byWordWrapping
         note.maximumNumberOfLines = 0
-        notes.append(note)
+        emptyNote = note
         stack.addArrangedSubview(note)
         note.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
@@ -256,6 +278,7 @@ final class SettingsSSHHostsSection: SettingsSection {
 
     private func removeHost(_ host: String) throws {
         removedEntries[host] = entry(of: host)
+        removedAddresses[host] = address(of: host)
         try SSHHostsWriter.remove(host)
     }
 

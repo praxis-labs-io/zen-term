@@ -260,6 +260,44 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         XCTAssertTrue(rows(in: detail)[0].isDimmed)
     }
 
+    func test_aRemovedHost_keepsItsLastKnownAddress_untilTheCenterHasOneAgain() throws {
+        try seed(config: "ssh-host = ops\n")
+        center.setDestination("drew@10.0.0.7", host: SSHHostID(alias: "ops"))
+        let detail = mount()
+        let observer = NotificationCenter.default.addObserver(forName: .configDidChange, object: nil, queue: nil) {
+            [center] _ in
+            MainActor.assumeIsolated { center.setDestination(nil, host: SSHHostID(alias: "ops")) }
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+        press(key(36), on: removeButtons(in: detail)[0])
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+
+        XCTAssertNotNil(label("drew@10.0.0.7", in: detail), "the removed row still shows where it pointed")
+
+        center.setDestination("drew@10.0.0.8", host: SSHHostID(alias: "ops"))
+        waitUntil(label("drew@10.0.0.8", in: detail) != nil, "the center's address to replace it")
+    }
+
+    func test_aHandEditWhileOpen_addsNewHostsAndDropsDeletedOnes() throws {
+        try seed(config: "ssh-host = alpha\nssh-host = beta\n")
+        let detail = mount()
+
+        try seed(config: "ssh-host = beta\nssh-host = gamma\n")
+
+        waitUntil(captions(in: detail) == ["beta", "gamma"], "the rows to follow the config")
+    }
+
+    func test_aHandEditWhileOpen_keepsARemovedRowForUndo() throws {
+        try seed(config: "ssh-host = alpha\nssh-host = beta\n")
+        let detail = mount()
+        press(key(36), on: removeButtons(in: detail)[0])
+
+        try seed(config: "ssh-host = beta\nssh-host = gamma\n")
+
+        waitUntil(captions(in: detail) == ["alpha", "beta", "gamma"], "gamma to join the removed row")
+        XCTAssertEqual(removeButtons(in: detail).map(\.title), ["Undo", "Remove", "Remove"])
+    }
+
     func test_aRemovedHost_isGoneNextTime() throws {
         try seed(config: "ssh-host = deploy@10.0.0.5\nssh-host = ops@10.0.0.6\n")
         press(key(36), on: removeButtons(in: mount())[0])
