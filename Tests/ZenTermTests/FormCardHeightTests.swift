@@ -20,8 +20,33 @@ final class FormCardHeightTests: WindowTestCase {
         let overlay = ToolFloatFormOverlay(
             editing: nil, existingIDs: [], capturer: NoCapture(),
             background: Theme.current.chrome.background.nsColor,
-            onSubmit: { _ in }, onCancel: {})
+            onSubmit: { _ in nil }, onCancel: {})
         XCTAssertLessThanOrEqual(try cardHeight(of: overlay), FormCard.maxHeight)
+    }
+
+    func test_theToolFloatForm_staysUnderTheCapWithALongErrorShowing() throws {
+        let long = String(repeating: "the config file is on a volume that is read-only right now, ", count: 12)
+        let float = ToolFloat(
+            id: "dev", order: 1, title: "dev", icon: ToolFloatParser.defaultIcon, command: "vim", dir: nil,
+            widthFraction: 0.85, heightFraction: 0.85, requiresGitRepo: false, persist: .ephemeral,
+            toggle: Chord(command: true, shift: true, key: "l"))
+        let overlay = ToolFloatFormOverlay(
+            editing: float, existingIDs: [], capturer: NoCapture(),
+            background: Theme.current.chrome.background.nsColor,
+            onSubmit: { _ in long }, onCancel: {})
+        _ = try cardHeight(of: overlay)
+
+        func walk(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(walk) }
+        let box = try XCTUnwrap(walk(overlay).compactMap { $0 as? FieldBox }.first)
+        box.onSubmit?()
+        overlay.layoutSubtreeIfNeeded()
+
+        let label = try XCTUnwrap(walk(overlay).compactMap { $0 as? FormErrorLabel }.first)
+        XCTAssertFalse(label.isHidden)
+        let lineHeight = try XCTUnwrap(label.font).boundingRectForFont.height
+        XCTAssertLessThanOrEqual(label.frame.height, lineHeight * 3 + 4, "capped at three lines")
+        let card = try XCTUnwrap(walk(overlay).compactMap { $0 as? CardView }.first)
+        XCTAssertLessThanOrEqual(card.frame.height, FormCard.maxHeight)
     }
 
     func test_theCreateWorktreeCard_staysUnderTheCap() throws {

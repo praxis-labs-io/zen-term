@@ -16,6 +16,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         var submitted: [ToolFloat] = []
         var cancelled = 0
         var deleted = 0
+        var failure: String?
     }
 
     private var window: NSWindow?
@@ -62,9 +63,16 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         let overlay = ToolFloatFormOverlay(
             editing: editing, existingIDs: existingIDs, capturer: capturer,
             background: Theme.current.chrome.background.nsColor,
-            onSubmit: { sink.submitted.append($0) },
+            onSubmit: {
+                sink.submitted.append($0)
+                return sink.failure
+            },
             onCancel: { sink.cancelled += 1 },
-            onDelete: withDelete ? { sink.deleted += 1 } : nil)
+            onDelete: withDelete
+                ? {
+                    sink.deleted += 1
+                    return sink.failure
+                } : nil)
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 480, height: 640),
             styleMask: [.borderless], backing: .buffered, defer: false)
@@ -335,6 +343,72 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         delete?.onTap()
 
         XCTAssertEqual(sink.deleted, 1)
+    }
+
+    private func failureLabel(_ message: String, in overlay: NSView) throws -> NSTextField {
+        let label = try XCTUnwrap(
+            descendants(of: overlay).compactMap { $0 as? NSTextField }.first { $0.stringValue == message })
+        overlay.layoutSubtreeIfNeeded()
+        XCTAssertFalse(label.isHidden)
+        XCTAssertEqual(label.textColor, Theme.current.chrome.destructive.nsColor)
+        XCTAssertGreaterThan(label.frame.height, label.font.map { $0.boundingRectForFont.height * 1.5 } ?? 0, "wraps")
+        let card = try XCTUnwrap(descendants(of: overlay).first { $0 is CardView })
+        let frame = overlay.convert(label.bounds, from: label)
+        XCTAssertTrue(overlay.convert(card.bounds, from: card).contains(frame), "inside the form")
+        return label
+    }
+
+    func test_aFailedSave_showsAWrappingMessageInTheForm_keepsItOpen_andClearsOnEdit() throws {
+        let message = "Couldn't save dev to ZenTerm's config: the file is on a volume that is read-only right now"
+        let (overlay, capturer, sink) = mount()
+        sink.failure = message
+        field(in: overlay, placeholder: "Open GitDash").setText("dev")
+        field(in: overlay, placeholder: "npm run dev").setText("npm run dev")
+        capture(novelChord, in: overlay, capturer)
+
+        submit(in: overlay)
+
+        let label = try failureLabel(message, in: overlay)
+        XCTAssertEqual(sink.submitted.count, 1)
+        XCTAssertEqual(sink.cancelled, 0)
+        XCTAssertIdentical(
+            window?.firstResponder, field(in: overlay, placeholder: "Open GitDash").field.currentEditor())
+
+        field(in: overlay, placeholder: "npm run dev").onChange?()
+        XCTAssertTrue(label.isHidden, "typing clears it")
+    }
+
+    func test_aFailedDelete_showsAWrappingMessageInTheForm_andClearsOnASegmentChange() throws {
+        let message = "Couldn't delete dev from ZenTerm's config: the file is on a volume that is read-only right now"
+        let existing = existingFloat(title: "dev", icon: IconCatalog.defaultSymbol)
+        let (overlay, _, sink) = mount(editing: existing, withDelete: true)
+        sink.failure = message
+
+        try XCTUnwrap(button(in: overlay, title: "Delete")).onTap()
+
+        let label = try failureLabel(message, in: overlay)
+        XCTAssertEqual(sink.deleted, 1)
+        XCTAssertEqual(sink.cancelled, 0)
+        XCTAssertIdentical(window?.firstResponder, try XCTUnwrap(button(in: overlay, title: "Delete")))
+        XCTAssertFalse(label.isSelectable)
+        XCTAssertFalse(label.acceptsFirstResponder)
+
+        segment(in: overlay, firstOption: "Shown").onChange(1)
+        XCTAssertTrue(label.isHidden, "changing a segment clears it")
+    }
+
+    func test_aStaleSaveFailure_isGoneWhenDeleteSucceeds() throws {
+        let existing = existingFloat(title: "dev", icon: IconCatalog.defaultSymbol)
+        let (overlay, _, sink) = mount(editing: existing, withDelete: true)
+        sink.failure = "Couldn't save dev to ZenTerm's config: the file is on a volume that is read-only right now"
+        submit(in: overlay)
+        let label = try failureLabel(
+            "Couldn't save dev to ZenTerm's config: the file is on a volume that is read-only right now", in: overlay)
+        sink.failure = nil
+
+        try XCTUnwrap(button(in: overlay, title: "Delete")).onTap()
+
+        XCTAssertTrue(label.isHidden)
     }
 
     func test_addForm_hasNoDeleteButton() {

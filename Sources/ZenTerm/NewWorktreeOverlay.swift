@@ -25,7 +25,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
     private let branchCaption = NSTextField(labelWithString: "")
     private let carryLabel = NSTextField(labelWithString: "")
     private let carryLink = AppButton(title: "Choose what to copy", variant: .muted)
-    private let errorLabel = NSTextField(labelWithString: "")
+    private let errorLabel = FormErrorLabel(maximumLines: 3)
     private let spinner = Spinner()
     private let phaseLabel = NSTextField(labelWithString: "")
     private let phaseGroup = NSStackView()
@@ -131,7 +131,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         confirm.card?.reapplyTheme()
         carryLabel.textColor = chrome.ink(.muted)
         phaseLabel.textColor = chrome.ink(.muted)
-        errorLabel.textColor = chrome.destructive.nsColor
+        errorLabel.reapplyTheme()
         spinner.reapplyTheme()
         footerDivider?.reapplyTheme()
 
@@ -143,7 +143,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
 
     func beginWork(_ phase: String) {
         isWorking = true
-        errorLabel.isHidden = true
+        errorLabel.clear()
         phaseGroup.isHidden = false
         spinner.isSpinning = true
         setPhase(phase)
@@ -167,8 +167,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         carryLink.isEnabled = true
         cancelButton.isEnabled = true
         createButton.isEnabled = true
-        errorLabel.stringValue = message
-        errorLabel.isHidden = false
+        errorLabel.show(message)
         window?.makeFirstResponder(branchField.field)
     }
 
@@ -212,12 +211,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         let carryGroup = Self.vStack(
             [caption("COPY INTO THIS WORKTREE"), carryLabel, Self.leadingWrap(carryLink)],
             spacing: 6)
-
-        errorLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        errorLabel.textColor = Theme.current.chrome.destructive.nsColor
-        errorLabel.lineBreakMode = .byWordWrapping
-        errorLabel.maximumNumberOfLines = 3
-        errorLabel.isHidden = true
 
         phaseLabel.font = .systemFont(ofSize: 11)
         phaseLabel.textColor = Theme.current.chrome.ink(.muted)
@@ -454,7 +447,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
     }
 
     private func refreshValidity() {
-        errorLabel.isHidden = true
+        errorLabel.clear()
         validate(includeRequired: false)
     }
 

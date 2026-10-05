@@ -1934,35 +1934,29 @@ final class WindowController: NSObject {
         presentModal(form, kind: .toolFloatForm)
     }
 
-    private func deleteToolFloat(_ float: ToolFloat) {
+    private func deleteToolFloat(_ float: ToolFloat) -> String? {
         do {
             try ConfigWriter.apply(floatRemovals: [float.id])
         } catch {
-            toasts.show(
-                ToastContent(
-                    variant: .warning, title: "Couldn't Delete Tool Float",
-                    message: "Failed to update the config file: \(error.localizedDescription)"))
-            return
+            return "Couldn't delete \(float.id) from ZenTerm's config: \(error.localizedDescription)"
         }
         AppConfig.reload()
         reopenSettingsOnTools()
+        return nil
     }
 
     private func submitToolFloat(
         _ float: ToolFloat, replacing originalID: String?, returnTo: ToolFormReturn = .settings
-    ) {
+    ) -> String? {
         let removals: Set<String> = (originalID.map { $0 != float.id ? [$0] : [] }) ?? []
         do {
             try ConfigWriter.apply(floatUpserts: [float], floatRemovals: removals)
         } catch {
-            toasts.show(
-                ToastContent(
-                    variant: .warning, title: "Couldn't Save Tool Float",
-                    message: "Failed to write \(float.id) to the config file: \(error.localizedDescription)"))
-            return
+            return "Couldn't save \(float.id) to ZenTerm's config: \(error.localizedDescription)"
         }
         AppConfig.reload()
         finishToolFloatForm(returnTo)
+        return nil
     }
 
     private func finishToolFloatForm(_ returnTo: ToolFormReturn) {
