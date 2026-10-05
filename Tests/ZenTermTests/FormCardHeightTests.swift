@@ -20,7 +20,7 @@ final class FormCardHeightTests: WindowTestCase {
         let overlay = ToolFloatFormOverlay(
             editing: nil, existingIDs: [], capturer: NoCapture(),
             background: Theme.current.chrome.background.nsColor,
-            onSubmit: { _ in }, onCancel: {})
+            onSubmit: { _ in nil }, onCancel: {})
         XCTAssertLessThanOrEqual(try cardHeight(of: overlay), FormCard.maxHeight)
     }
 

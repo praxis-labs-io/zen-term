@@ -4,9 +4,9 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private let editingFloat: ToolFloat?
     private let existingIDs: Set<String>
     private let capturer: KeybindCapturing?
-    private let onSubmit: (ToolFloat) -> Void
+    private let onSubmit: (ToolFloat) -> String?
     private let onCancel: () -> Void
-    private let onDelete: (() -> Void)?
+    private let onDelete: (() -> String?)?
 
     private let card = CardView()
     private var footerDivider: ThemeReapplying?
@@ -47,11 +47,12 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     private let submitButton = AppButton(
         title: "", variant: .primary, keyEquivalent: "\r", keyEquivalentModifierMask: .command)
     private let deleteButton = AppButton(title: "Delete", variant: .destructive)
+    private let errorLabel = FormErrorLabel()
 
     init(
         editing: ToolFloat?, existingIDs: Set<String>, capturer: KeybindCapturing?, background: NSColor,
-        onSubmit: @escaping (ToolFloat) -> Void, onCancel: @escaping () -> Void,
-        onDelete: (() -> Void)? = nil
+        onSubmit: @escaping (ToolFloat) -> String?, onCancel: @escaping () -> Void,
+        onDelete: (() -> String?)? = nil
     ) {
         self.editingFloat = editing
         self.existingIDs = existingIDs
@@ -134,6 +135,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         CardChrome.reapplyTheme(to: card)
         header.textColor = Theme.current.chrome.foreground.nsColor
         footerDivider?.reapplyTheme()
+        errorLabel.reapplyTheme()
 
         let controls: [ThemeReapplying] = [
             titleField, commandField, dirPicker, widthField, heightField, gitSegment,
@@ -240,7 +242,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         var footerViews: [NSView] = [spacer, cancelButton, submitButton]
         if onDelete != nil {
             deleteButton.isKeyboardFocusable = true
-            deleteButton.onTap = { [weak self] in self?.onDelete?() }
+            deleteButton.onTap = { [weak self] in self?.delete() }
             deleteButton.onArrowUp = { [weak self] in self?.moveVertical(-1) }
             deleteButton.onArrowDown = { [weak self] in self?.moveVertical(1) }
             deleteButton.onTab = { [weak self] in self?.moveTab(1) }
@@ -257,7 +259,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         } else {
             cancelButton.onTab = { [weak self] in self?.moveTab(1) }
         }
-        let footer = Self.hStack(footerViews, spacing: 8)
+        let footer = Self.vStack([errorLabel, Self.hStack(footerViews, spacing: 8)], spacing: 10)
 
         let built = FormCard.content(
             rows: [
@@ -456,6 +458,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     }
 
     private func wireSegment(_ segment: SegmentedControl) {
+        segment.onChange = { [weak self] _ in self?.errorLabel.clear() }
         segment.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         segment.onArrowDown = { [weak self] in self?.moveVertical(1) }
         segment.onTab = { [weak self] in self?.moveTab(1) }
@@ -468,7 +471,16 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             return
         }
         guard let float = buildFloat() else { return }
-        onSubmit(float)
+        if let failure = onSubmit(float) { showFailure(failure) }
+    }
+
+    private func delete() {
+        if let failure = onDelete?() { showFailure(failure) }
+    }
+
+    private func showFailure(_ message: String) {
+        errorLabel.show(message)
+        focusInitialResponder()
     }
 
     private func buildFloat() -> ToolFloat? {
@@ -562,7 +574,10 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         return nil
     }
 
-    private func refreshValidity() { validate(includeRequired: false) }
+    private func refreshValidity() {
+        errorLabel.clear()
+        validate(includeRequired: false)
+    }
 
     private func fraction(_ box: FieldBox) -> CGFloat {
         let text = box.text.trimmingCharacters(in: .whitespaces)
