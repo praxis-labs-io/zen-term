@@ -122,6 +122,8 @@ final class SettingsConfigDiagnosticRenderTests: WindowTestCase {
         XCTAssertEqual(landing(.setting(key: "reduce-motion")), "Appearance")
         XCTAssertEqual(landing(.setting(key: "backdrop-alpha")), "Appearance")
         XCTAssertEqual(landing(.setting(key: "agent-notifications")), "General")
+        XCTAssertEqual(landing(.setting(key: "ssh-host")), "SSH Hosts")
+        XCTAssertEqual(landing(.setting(key: "ssh-host-off")), "SSH Hosts")
         XCTAssertEqual(landing(.keybind(.splitVertical)), "Shortcuts")
         XCTAssertEqual(landing(.keybindLine), "Shortcuts")
         XCTAssertEqual(landing(.toolFloat(label: "x")), "Tools")

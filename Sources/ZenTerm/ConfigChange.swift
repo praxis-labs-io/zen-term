@@ -53,7 +53,7 @@ struct ConfigChange: OptionSet {
         if old.automaticUpdateChecks != new.automaticUpdateChecks { change.insert(.updates) }
         if old.hiddenToolbarButtons != new.hiddenToolbarButtons { change.insert(.toolbarButtons) }
         if old.toastDuration != new.toastDuration { change.insert(.toasts) }
-        if old.sshHosts != new.sshHosts { change.insert(.sshHosts) }
+        if old.sshHosts != new.sshHosts || old.sshHostsOff != new.sshHostsOff { change.insert(.sshHosts) }
         return change
     }
 
