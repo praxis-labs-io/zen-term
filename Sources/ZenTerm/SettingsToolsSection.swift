@@ -166,23 +166,13 @@ final class SettingsToolsSection: SettingsSection {
     }
 }
 
-final class ToolFloatRow: NSView {
+final class ToolFloatRow: SettingsFocusRow {
     let float: ToolFloat
-    var onActivate: (() -> Void)?
-    var onArrowUp: (() -> Void)?
-    var onArrowDown: (() -> Void)?
-    var onMoveUp: (() -> Void)?
-    var onMoveDown: (() -> Void)?
-    var onTab: (() -> Void)?
-    var onBacktab: (() -> Void)?
-    var onExitToNav: (() -> Void)?
-
     private let iconView = NSImageView()
     private let titleLabel: NSTextField
     private let subtitleLabel: NSTextField
     private let shortcutView: NSView
     private let messageLabel = NSTextField(labelWithString: "")
-    private var isFocused = false { didSet { restyle() } }
 
     init(float: ToolFloat) {
         self.float = float
@@ -191,10 +181,7 @@ final class ToolFloatRow: NSView {
         let shortcut = CommandCatalog.spec(for: .toggleToolFloat(float.id)).shortcut
         shortcutView = shortcut.isEmpty ? Self.unsetLabel() : KeycapView(shortcut: shortcut)
 
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-        layer?.cornerRadius = 8
+        super.init()
 
         iconView.image = IconCatalog.image(float.icon)
         iconView.contentTintColor = Theme.current.chrome.ink(.subtle)
@@ -228,29 +215,23 @@ final class ToolFloatRow: NSView {
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 3
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
+        pin(stack)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 6),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
             controls.widthAnchor.constraint(equalTo: stack.widthAnchor),
             messageLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
-        restyle()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    func reapplyTheme() {
+    override func reapplyTheme() {
         iconView.contentTintColor = Theme.current.chrome.ink(.subtle)
         titleLabel.textColor = Theme.current.chrome.foreground.nsColor
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         messageLabel.textColor = Theme.current.chrome.warning.nsColor
         (shortcutView as? KeycapView)?.reapplyTheme()
         (shortcutView as? NSTextField)?.textColor = Self.unsetInk
-        restyle()
+        super.reapplyTheme()
     }
 
     private static var unsetInk: NSColor { Theme.current.chrome.ink(.muted) }
@@ -273,44 +254,5 @@ final class ToolFloatRow: NSView {
 
     var renderedShortcutForTesting: String {
         (shortcutView as? KeycapView)?.shortcut ?? (shortcutView as? NSTextField)?.stringValue ?? ""
-    }
-
-    override var acceptsFirstResponder: Bool { true }
-    override func becomeFirstResponder() -> Bool { isFocused = true; return true }
-    override func resignFirstResponder() -> Bool { isFocused = false; return true }
-    override func drawFocusRingMask() {}
-
-    override func keyDown(with event: NSEvent) {
-        let key = KeyboardFocus.key(for: event)
-        if KeyboardFocus.isOptionOnly(event) {
-            switch key {
-            case .up: onMoveUp?(); return
-            case .down: onMoveDown?(); return
-            default: break
-            }
-        }
-        switch key {
-        case .activate: onActivate?()
-        case .up: onArrowUp?()
-        case .down: onArrowDown?()
-        case .left: onExitToNav?()
-        case .tab(let shift) where onTab != nil || onBacktab != nil:
-            shift ? onBacktab?() : onTab?()
-        default: super.keyDown(with: event)
-        }
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        window?.makeFirstResponder(self)
-        onActivate?()
-    }
-
-    override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
-
-    private func restyle() {
-        let chrome = Theme.current.chrome
-        layer?.backgroundColor = isFocused ? chrome.fill(.active).cgColor : nil
-        layer?.borderWidth = isFocused ? 1.5 : 0
-        layer?.borderColor = isFocused ? chrome.accent.nsColor.cgColor : nil
     }
 }
