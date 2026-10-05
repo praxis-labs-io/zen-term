@@ -11,6 +11,7 @@ final class FormErrorLabel: NSTextField, ThemeReapplying {
         font = .systemFont(ofSize: 11, weight: .medium)
         maximumNumberOfLines = maximumLines
         isHidden = true
+        setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         translatesAutoresizingMaskIntoConstraints = false
         reapplyTheme()
     }

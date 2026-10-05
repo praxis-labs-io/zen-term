@@ -44,8 +44,8 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
-    private func rows(in view: NSView) -> [LayoutRow] {
-        descendants(of: view).compactMap { $0 as? LayoutRow }
+    private func rows(in view: NSView) -> [SSHHostRow] {
+        descendants(of: view).compactMap { $0 as? SSHHostRow }
     }
 
     private func captions(in view: NSView) -> [String] {
@@ -54,13 +54,13 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         }
     }
 
-    private func removeButtons(in view: NSView) -> [AppButton] {
-        rows(in: view).flatMap { row in descendants(of: row).compactMap { $0 as? AppButton } }
+    private func buttons(in row: NSView) -> [AppButton] {
+        descendants(of: row).compactMap { $0 as? AppButton }
     }
 
     private func groupCaptions(in view: NSView) -> [String] {
         view.subviews.flatMap { child -> [String] in
-            if child is LayoutRow { return [] }
+            if child is SSHHostRow { return [] }
             let own = (child as? NSTextField).flatMap { $0.font?.pointSize == 10 ? $0.stringValue : nil }
             return (own.map { [$0] } ?? []) + groupCaptions(in: child)
         }
@@ -74,18 +74,18 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         descendants(of: view).compactMap { $0 as? NSTextField }.first { $0.stringValue.hasPrefix("No SSH hosts yet") }
     }
 
-    private func rowCaption(_ row: LayoutRow) -> NSTextField? {
+    private func rowCaption(_ row: SSHHostRow) -> NSTextField? {
         descendants(of: row).compactMap { $0 as? NSTextField }.first { $0.font?.pointSize == 13 }
     }
 
     @discardableResult
-    private func mount() -> NSView {
+    private func mount(width: CGFloat = 620) -> NSView {
         let section = SettingsSSHHostsSection()
         self.section = section
         section.statusCenter = center
         let detail = section.makeDetailView()
         let win = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 500),
+            contentRect: NSRect(x: 0, y: 0, width: width, height: 500),
             styleMask: [.borderless], backing: .buffered, defer: false)
         win.contentView?.addSubview(detail)
         detail.frame = win.contentView!.bounds
@@ -122,7 +122,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
 
         XCTAssertEqual(groupCaptions(in: detail), ["SSH HOSTS"])
         XCTAssertEqual(captions(in: detail), ["deploy@10.0.0.5"])
-        XCTAssertEqual(removeButtons(in: detail).map(\.title), ["Remove"])
+        XCTAssertEqual(rows(in: detail).count, 1)
         XCTAssertNil(emptyHint(in: detail))
     }
 
@@ -134,7 +134,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         XCTAssertEqual(captions(in: detail), ["Build box", "Deploy"])
         XCTAssertNotNil(label("devbox", in: detail))
         XCTAssertNotNil(label("deploy@10.0.0.5", in: detail))
-        XCTAssertEqual(removeButtons(in: detail).last?.accessibilityLabel(), "Remove Deploy")
+        XCTAssertEqual(rows(in: detail).last?.accessibilityLabel(), "Edit Deploy")
     }
 
     func test_noHostsAnywhere_showsTheEmptyHint() {
@@ -145,139 +145,6 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         XCTAssertEqual(groupCaptions(in: detail), ["SSH HOSTS"])
     }
 
-    func test_remove_writesTheHostOut_andKeepsTheRowFaintWithUndoFocused() throws {
-        try seed(config: "ssh-host = devbox\nssh-host = deploy@10.0.0.5\nssh-host = ops@10.0.0.6\n")
-        let detail = mount()
-        let button = removeButtons(in: detail)[1]
-        let row = rows(in: detail)[1]
-
-        press(key(36), on: button)
-        settle()
-
-        XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["devbox", "ops@10.0.0.6"])
-        XCTAssertEqual(captions(in: detail), ["devbox", "deploy@10.0.0.5", "ops@10.0.0.6"])
-        XCTAssertEqual(button.title, "Undo")
-        XCTAssertTrue(row.isDimmed)
-        XCTAssertEqual(rowCaption(row)?.textColor, Theme.current.chrome.ink(.faint))
-        XCTAssertIdentical(window?.firstResponder, button)
-        XCTAssertIdentical(removeButtons(in: detail)[1], button, "the row is restyled in place, not rebuilt")
-    }
-
-    func test_undo_restoresTheHostAtItsOriginalPosition() throws {
-        try seed(config: "ssh-host = alpha\nssh-host = deploy@10.0.0.5\nssh-host = ops@10.0.0.6\n")
-        let detail = mount()
-        let button = removeButtons(in: detail)[1]
-        let row = rows(in: detail)[1]
-
-        press(key(36), on: button)
-        press(key(36), on: button)
-
-        XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["alpha", "deploy@10.0.0.5", "ops@10.0.0.6"])
-        XCTAssertTrue(
-            configText().contains("ssh-host = alpha\nssh-host = deploy@10.0.0.5\nssh-host = ops@10.0.0.6"), configText()
-        )
-        XCTAssertEqual(button.title, "Remove")
-        XCTAssertFalse(row.isDimmed)
-        XCTAssertEqual(rowCaption(row)?.textColor, Theme.current.chrome.foreground.nsColor)
-        XCTAssertIdentical(window?.firstResponder, button)
-        XCTAssertEqual(
-            removeButtons(in: detail).map(\.title), ["Remove", "Remove", "Remove"], "no other host was removed")
-    }
-
-    func test_undo_restoresTheHostsName() throws {
-        try seed(config: "ssh-host = alpha\nssh-host = deploy@10.0.0.5: Deploy box\n")
-        let detail = mount()
-        let button = removeButtons(in: detail)[1]
-
-        press(key(36), on: button)
-        XCTAssertEqual(GeneralConfig.current.sshHosts, [SSHHostEntry(alias: "alpha")])
-        press(key(36), on: button)
-
-        XCTAssertEqual(
-            GeneralConfig.current.sshHosts,
-            [SSHHostEntry(alias: "alpha"), SSHHostEntry(alias: "deploy@10.0.0.5", name: "Deploy box")])
-    }
-
-    func test_undoingSeveralRemovals_inEitherOrder_restoresTheOriginalOrder() throws {
-        for undoOrder in [[0, 1], [1, 0]] {
-            try seed(config: "ssh-host = alpha\nssh-host = beta\nssh-host = gamma\n")
-            let detail = mount()
-            let buttons = removeButtons(in: detail)
-
-            press(key(36), on: buttons[0])
-            press(key(36), on: buttons[1])
-            XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["gamma"])
-            for index in undoOrder { press(key(36), on: buttons[index]) }
-
-            XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["alpha", "beta", "gamma"], "undo order \(undoOrder)")
-        }
-    }
-
-    func test_aHeldReturn_doesNotFlipTheHostBack() throws {
-        try seed(config: "ssh-host = deploy@10.0.0.5\nssh-host = ops@10.0.0.6\n")
-        let detail = mount()
-        let button = removeButtons(in: detail)[0]
-
-        press(key(36), on: button)
-        for _ in 0..<2 {
-            press(key(36, isARepeat: true), on: button)
-
-            XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["ops@10.0.0.6"])
-            XCTAssertEqual(button.title, "Undo")
-        }
-    }
-
-    func test_aRemovedHost_staysRemovedWhenDestinationsResolve() throws {
-        try seed(config: "ssh-host = deploy@10.0.0.5\nssh-host = ops\n")
-        let detail = mount()
-        let button = removeButtons(in: detail)[0]
-        press(key(36), on: button)
-
-        center.setDestination("drew@10.0.0.7", host: SSHHostID(alias: "ops"))
-        waitUntil(label("drew@10.0.0.7", in: detail) != nil, "the resolved destination to rebuild the rows")
-
-        let rebuilt = removeButtons(in: detail)
-        XCTAssertFalse(rebuilt.contains { $0 === button }, "the rows were rebuilt")
-        XCTAssertEqual(rebuilt.map(\.title), ["Undo", "Remove"])
-        XCTAssertTrue(rows(in: detail)[0].isDimmed)
-        XCTAssertIdentical(window?.firstResponder, rebuilt[0])
-    }
-
-    func test_removingAHostWhoseAddressTheProbeClears_showsTheRemovedRow() throws {
-        try seed(config: "ssh-host = deploy@10.0.0.5\nssh-host = ops\n")
-        center.setDestination("drew@10.0.0.7", host: SSHHostID(alias: "ops"))
-        let detail = mount()
-        let observer = NotificationCenter.default.addObserver(forName: .configDidChange, object: nil, queue: nil) {
-            [center] _ in
-            MainActor.assumeIsolated { center.setDestination(nil, host: SSHHostID(alias: "ops")) }
-        }
-        defer { NotificationCenter.default.removeObserver(observer) }
-        press(key(36), on: removeButtons(in: detail)[0])
-
-        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
-
-        XCTAssertEqual(removeButtons(in: detail).map(\.title), ["Undo", "Remove"])
-        XCTAssertTrue(rows(in: detail)[0].isDimmed)
-    }
-
-    func test_aRemovedHost_keepsItsLastKnownAddress_untilTheCenterHasOneAgain() throws {
-        try seed(config: "ssh-host = ops\n")
-        center.setDestination("drew@10.0.0.7", host: SSHHostID(alias: "ops"))
-        let detail = mount()
-        let observer = NotificationCenter.default.addObserver(forName: .configDidChange, object: nil, queue: nil) {
-            [center] _ in
-            MainActor.assumeIsolated { center.setDestination(nil, host: SSHHostID(alias: "ops")) }
-        }
-        defer { NotificationCenter.default.removeObserver(observer) }
-        press(key(36), on: removeButtons(in: detail)[0])
-        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
-
-        XCTAssertNotNil(label("drew@10.0.0.7", in: detail), "the removed row still shows where it pointed")
-
-        center.setDestination("drew@10.0.0.8", host: SSHHostID(alias: "ops"))
-        waitUntil(label("drew@10.0.0.8", in: detail) != nil, "the center's address to replace it")
-    }
-
     func test_aHandEditWhileOpen_addsNewHostsAndDropsDeletedOnes() throws {
         try seed(config: "ssh-host = alpha\nssh-host = beta\n")
         let detail = mount()
@@ -285,55 +152,6 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         try seed(config: "ssh-host = beta\nssh-host = gamma\n")
 
         waitUntil(captions(in: detail) == ["beta", "gamma"], "the rows to follow the config")
-    }
-
-    func test_aHandEditWhileOpen_keepsARemovedRowForUndo() throws {
-        try seed(config: "ssh-host = alpha\nssh-host = beta\n")
-        let detail = mount()
-        press(key(36), on: removeButtons(in: detail)[0])
-
-        try seed(config: "ssh-host = beta\nssh-host = gamma\n")
-
-        waitUntil(captions(in: detail) == ["alpha", "beta", "gamma"], "gamma to join the removed row")
-        XCTAssertEqual(removeButtons(in: detail).map(\.title), ["Undo", "Remove", "Remove"])
-    }
-
-    func test_aRemovedHost_isGoneNextTime() throws {
-        try seed(config: "ssh-host = deploy@10.0.0.5\nssh-host = ops@10.0.0.6\n")
-        press(key(36), on: removeButtons(in: mount())[0])
-
-        let reopened = mount()
-
-        XCTAssertEqual(captions(in: reopened), ["ops@10.0.0.6"])
-        XCTAssertEqual(removeButtons(in: reopened).map(\.title), ["Remove"])
-    }
-
-    func test_removeButton_namesItsHostForAccessibility() throws {
-        try seed(config: "ssh-host = deploy@10.0.0.5\n")
-        let detail = mount()
-        let button = removeButtons(in: detail)[0]
-
-        XCTAssertEqual(button.accessibilityLabel(), "Remove deploy@10.0.0.5")
-        press(key(36), on: button)
-        XCTAssertEqual(button.accessibilityLabel(), "Undo removing deploy@10.0.0.5")
-    }
-
-    func test_aFailedRemove_saysSo_andLeavesTheRowAsItWas() throws {
-        try seed(config: "ssh-host = deploy@10.0.0.5\n")
-        let detail = mount()
-        let button = removeButtons(in: detail)[0]
-        let row = rows(in: detail)[0]
-        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: configRoot.path)
-        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: configRoot.path) }
-
-        press(key(36), on: button)
-
-        XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["deploy@10.0.0.5"])
-        XCTAssertEqual(button.title, "Remove")
-        XCTAssertFalse(row.isDimmed)
-        XCTAssertTrue(
-            row.renderedMessageForTesting?.hasPrefix("Couldn't save ZenTerm's config: ") == true,
-            "got: \(row.renderedMessageForTesting ?? "nil")")
     }
 
     func test_aResolvedDestination_showsUnderTheHost() throws {
@@ -395,6 +213,73 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
 
         XCTAssertIdentical(rows(in: detail).first, row)
+    }
+
+    func test_aRow_showsItsStatusWordInTheStatusInk_andFollowsChangesLive() throws {
+        try seed(config: "ssh-host = devbox\nssh-host = prod\n")
+        let detail = mount()
+        let devbox = SSHHostID(alias: "devbox")
+        let row = try XCTUnwrap(rows(in: detail).first)
+
+        XCTAssertEqual(row.renderedStatusForTesting.word, "Offline")
+        XCTAssertEqual(row.renderedStatusForTesting.ink, SSHHostStatus.offline.ink)
+
+        center.setReachable(true, host: devbox)
+        waitUntil(row.renderedStatusForTesting.word == "Online", "the row to read Online")
+        XCTAssertEqual(row.renderedStatusForTesting.ink, SSHHostStatus.online.ink)
+
+        center.setConnected(true, host: devbox)
+        waitUntil(row.renderedStatusForTesting.word == "Connected", "the row to read Connected")
+        XCTAssertEqual(row.renderedStatusForTesting.ink, SSHHostStatus.connected.ink)
+        XCTAssertEqual(row.accessibilityValue() as? String, "Connected")
+        XCTAssertEqual(rows(in: detail)[1].renderedStatusForTesting.word, "Offline", "only that host moved")
+        XCTAssertIdentical(rows(in: detail).first, row, "the row is updated in place")
+    }
+
+    func test_aLongNameAndAddress_truncate_andLeaveTheStatusWordWholeInsideTheRow() throws {
+        let longName = String(repeating: "a very long host name ", count: 8)
+        let longAddress = "someone@" + String(repeating: "deeply.nested.", count: 12) + "example.com"
+        try seed(config: "ssh-host = devbox: \(longName)\n")
+        center.setDestination(longAddress, host: SSHHostID(alias: "devbox"))
+        center.setConnected(true, host: SSHHostID(alias: "devbox"))
+        let detail = mount(width: 260)
+        detail.layoutSubtreeIfNeeded()
+        let row = try XCTUnwrap(rows(in: detail).first)
+        row.layoutSubtreeIfNeeded()
+
+        let status = row.statusFrameInRowForTesting
+        XCTAssertEqual(row.renderedStatusForTesting.word, "Connected")
+        XCTAssertTrue(row.bounds.contains(status), "status \(status) inside row \(row.bounds)")
+        let wordWidth = ("Connected" as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12)]).width
+        XCTAssertGreaterThanOrEqual(status.width, wordWidth, "the word is not squeezed")
+        let labels = descendants(of: row).compactMap { $0 as? NSTextField }
+        XCTAssertTrue(labels.allSatisfy { $0.frame.maxX <= row.bounds.maxX }, "no label spills out of the row")
+        let hostLabels = labels.filter { $0.stringValue != "Connected" }
+        XCTAssertEqual(hostLabels.count, 2)
+        for label in hostLabels {
+            XCTAssertEqual(label.lineBreakMode, .byTruncatingTail)
+            XCTAssertLessThan(label.contentCompressionResistancePriority(for: .horizontal).rawValue, 500)
+        }
+        let word = try XCTUnwrap(labels.first { $0.stringValue == "Connected" })
+        XCTAssertEqual(word.contentCompressionResistancePriority(for: .horizontal), .required)
+    }
+
+    func test_aHandEditedName_refreshesTheOpenRow() throws {
+        try seed(config: "ssh-host = devbox: Build box\n")
+        let detail = mount()
+
+        try seed(config: "ssh-host = devbox: Builder\n")
+
+        waitUntil(captions(in: detail) == ["Builder"], "the row to follow the new name")
+        XCTAssertEqual(rows(in: detail).first?.accessibilityLabel(), "Edit Builder")
+        XCTAssertNotNil(label("devbox", in: detail))
+    }
+
+    func test_aRow_carriesNoButton() throws {
+        try seed(config: "ssh-host = devbox\nssh-host = prod\n")
+        let detail = mount()
+
+        XCTAssertTrue(rows(in: detail).allSatisfy { buttons(in: $0).isEmpty })
     }
 
     func test_editingAHost_passesTheCentersAddress() throws {
@@ -495,10 +380,8 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
             XCTAssertTrue(configText().contains("ssh-host = deploy@10.0.0.5"), "got: \(configText())")
             waitUntil(
                 captions(in: content) == ["deploy@10.0.0.5"], "Settings to reopen listing the new host")
-            let remove = try XCTUnwrap(removeButtons(in: content).first)
             settle()
-            XCTAssertIdentical(c.window.firstResponder, hostRows(in: content)[0], "focus lands on the host just added")
-            XCTAssertNotNil(remove)
+            XCTAssertIdentical(c.window.firstResponder, rows(in: content)[0], "focus lands on the host just added")
             waitUntil(
                 c.sidebarForTesting.view.hostRowsForTesting.map(\.titleForTesting) == ["deploy@10.0.0.5"],
                 "the sidebar to list the new host")
@@ -540,7 +423,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
 
     func test_aHostRow_isAButtonNamedForItsHost_thatOpensTheEditFormWhenPressed() throws {
         try inSettings(config: "ssh-host = deploy@10.0.0.5: Deploy box\n") { _, content in
-            let row = try XCTUnwrap(hostRows(in: content).first)
+            let row = try XCTUnwrap(rows(in: content).first)
 
             XCTAssertEqual(row.accessibilityRole(), .button)
             XCTAssertEqual(row.accessibilityLabel(), "Edit Deploy box")
@@ -561,7 +444,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
 
     func test_savingAHostThatIsGone_keepsTheFormOpen_andShowsTheErrorInIt() throws {
         try inSettings(config: "ssh-host = ops@10.0.0.6\n") { c, content in
-            let row = hostRows(in: content)[0]
+            let row = rows(in: content)[0]
             press(key(36), on: row)
             try seed(config: "")
 
@@ -576,7 +459,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     private func saveEdit(
         ofRow index: Int? = nil, typing name: String, in c: WindowController, _ content: NSView
     ) throws {
-        if let index { press(key(36), on: hostRows(in: content)[index]) }
+        if let index { press(key(36), on: rows(in: content)[index]) }
         let overlay = try XCTUnwrap(form(in: content))
         descendants(of: overlay).compactMap { $0 as? FieldBox }[1].setText(name)
         let save = try XCTUnwrap(
@@ -591,7 +474,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
                 ("Builder", "ssh-host = devbox: Builder  # the build box\n"),
                 ("", "ssh-host = devbox  # the build box\n"),
             ] {
-                let row = try XCTUnwrap(hostRows(in: content).first)
+                let row = try XCTUnwrap(rows(in: content).first)
                 press(key(36), on: row)
                 let overlay = try XCTUnwrap(form(in: content))
                 descendants(of: overlay).compactMap { $0 as? FieldBox }[1].setText(typed)
@@ -604,62 +487,82 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
                 waitUntil(form(in: content) == nil && !captions(in: content).isEmpty, "Settings to come back")
                 XCTAssertEqual(captions(in: content), [typed.isEmpty ? "devbox" : typed])
                 settle()
-                XCTAssertIdentical(c.window.firstResponder, hostRows(in: content).first, "focus is back on the host")
+                XCTAssertIdentical(c.window.firstResponder, rows(in: content).first, "focus is back on the host")
             }
         }
     }
 
-    func test_keyboard_returnOpensTheForm_rightReachesTheButton_andLeftComesBack() throws {
+    func test_keyboard_returnOpensTheForm_andRightReachesNoControl() throws {
         try seed(config: "ssh-host = devbox: Build box\nssh-host = ops@10.0.0.6\n")
         let detail = mount()
         var edited: [SSHHostEntry] = []
         section?.onEditHost = { host, _ in edited.append(host) }
-        let rows = hostRows(in: detail)
-        let buttons = removeButtons(in: detail)
+        let rows = rows(in: detail)
         let add = try XCTUnwrap(section?.detailStops().last)
 
         XCTAssertEqual(
-            section?.detailStops().map(ObjectIdentifier.init),
-            [rows[0], buttons[0], rows[1], buttons[1], add].map(ObjectIdentifier.init))
+            section?.detailStops().map(ObjectIdentifier.init), [rows[0], rows[1], add].map(ObjectIdentifier.init))
 
         press(key(36), on: rows[0])
         XCTAssertEqual(edited, [SSHHostEntry(alias: "devbox", name: "Build box")])
 
-        press(arrow(124), on: rows[0])
-        XCTAssertIdentical(window?.firstResponder, buttons[0])
-        XCTAssertEqual(
-            GeneralConfig.current.sshHostAliases, ["devbox", "ops@10.0.0.6"], "reaching Remove removes nothing")
-        press(arrow(123), on: buttons[0])
-        XCTAssertIdentical(window?.firstResponder, rows[0])
+        XCTAssertNil(rows[0].onArrowRight, "there is no control for → to reach")
+    }
+
+    func test_arrows_moveBetweenRowsOnly_andAddHostIsTheLastStop() throws {
+        try seed(config: "ssh-host = devbox\nssh-host = ops@10.0.0.6\n")
+        let detail = mount()
+        let rows = rows(in: detail)
+        let add = try XCTUnwrap(section?.detailStops().last)
 
         press(arrow(125), on: rows[0])
+        XCTAssertIdentical(window?.firstResponder, rows[1])
+        press(arrow(125), on: rows[1])
+        XCTAssertIdentical(window?.firstResponder, add)
+        press(arrow(126), on: add)
         XCTAssertIdentical(window?.firstResponder, rows[1])
         press(arrow(126), on: rows[1])
         XCTAssertIdentical(window?.firstResponder, rows[0])
     }
 
-    func test_arrowColumn_followsTheStopYouLeave_andAddHostUsesTheRowColumn() throws {
-        try seed(config: "ssh-host = devbox\nssh-host = ops@10.0.0.6\n")
-        let detail = mount()
-        let rows = hostRows(in: detail)
-        let buttons = removeButtons(in: detail)
-        let add = try XCTUnwrap(section?.detailStops().last)
+    func test_removingFromTheForm_returnsToTheListWithoutTheHost_andFocusOnItsNeighbour() throws {
+        try inSettings(config: "ssh-host = alpha\nssh-host = beta\nssh-host = gamma\n") { c, content in
+            press(key(36), on: rows(in: content)[1])
+            let overlay = try XCTUnwrap(form(in: content))
+            let remove = try XCTUnwrap(
+                descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Remove" })
 
-        press(arrow(125), on: buttons[0])
-        XCTAssertIdentical(window?.firstResponder, buttons[1], "from a button, down steps through buttons")
-        press(arrow(125), on: buttons[1])
-        XCTAssertIdentical(window?.firstResponder, add)
-        press(arrow(126), on: add)
-        XCTAssertIdentical(window?.firstResponder, rows[1], "up from Add Host lands on the last row")
+            remove.onTap()
+            waitUntil(form(in: content) == nil && rows(in: content).count == 2, "Settings to come back")
+            settle()
 
-        press(key(36), on: buttons[1])
-        settle()
-        XCTAssertFalse(rows[1].isEditable)
-        press(arrow(125), on: buttons[1])
-        press(arrow(126), on: add)
-        XCTAssertIdentical(window?.firstResponder, buttons[1], "a removed host's only stop is its button")
-        press(arrow(126), on: buttons[1])
-        XCTAssertIdentical(window?.firstResponder, buttons[0], "up from a button stays in buttons")
+            XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["alpha", "gamma"])
+            XCTAssertFalse(configText().contains("beta"))
+            XCTAssertIdentical(c.window.firstResponder, rows(in: content)[1], "focus lands on the next host")
+        }
+    }
+
+    func test_aFailedRemove_staysInTheForm_withTheErrorAndFocusOnRemove() throws {
+        try inSettings(config: "ssh-host = alpha\n") { c, content in
+            press(key(36), on: rows(in: content)[0])
+            let overlay = try XCTUnwrap(form(in: content))
+            let remove = try XCTUnwrap(
+                descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Remove" })
+            try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: configRoot.path)
+            defer {
+                try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: configRoot.path)
+            }
+
+            remove.onTap()
+
+            XCTAssertNotNil(form(in: content))
+            XCTAssertEqual(GeneralConfig.current.sshHostAliases, ["alpha"])
+            let texts = descendants(of: overlay).compactMap { $0 as? NSTextField }.filter { !$0.isHidden }
+            XCTAssertTrue(
+                texts.contains { $0.stringValue.hasPrefix("Couldn't remove alpha from ZenTerm's config: ") },
+                "\(texts.map(\.stringValue))")
+            XCTAssertIdentical(c.window.firstResponder, remove)
+        }
     }
 
     private func escape() -> NSEvent {

@@ -233,7 +233,7 @@ final class SidebarView: NSView {
             row.setTitle(item.name)
             row.setSelected(item.isActive)
             let status = item.status
-            let word = Self.hostStatusWord(status)
+            let word = status.word
             if item.isWaiting {
                 row.setDot({ AttentionTone.waiting.ink }, accessibilityValue: "\(word), Agent waiting")
             } else {
@@ -255,14 +255,6 @@ final class SidebarView: NSView {
     private static func selectShortcut(_ number: Int?) -> String? {
         guard let number, number <= 9 else { return nil }
         return CommandCatalog.spec(for: .selectWorkspace(number)).shortcut
-    }
-
-    private static func hostStatusWord(_ status: SSHHostStatus) -> String {
-        switch status {
-        case .offline: return "Offline"
-        case .online: return "Online"
-        case .connected: return "Connected"
-        }
     }
 
     private func hostRow(for item: SidebarHostItem) -> SettingsNavRow {

@@ -1755,7 +1755,9 @@ final class WindowController: NSObject {
         }
     #endif
 
-    private func openSettings(landing: SettingsLanding = .top, focusingSSHHost host: String? = nil) {
+    private func openSettings(
+        landing: SettingsLanding = .top, focusingSSHHost focus: SettingsSSHHostsSection.Focus? = nil
+    ) {
         if modal?.kind == .settings { closeModal(); return }
         let toolsSection = SettingsToolsSection()
         toolsSection.onEditFloat = { [weak self] float in self?.openToolFloatForm(editing: float) }
@@ -1772,11 +1774,7 @@ final class WindowController: NSObject {
         sshHostsSection.onEditHost = { [weak self] host, address in
             self?.openSSHHostForm(.edit(host, address: address))
         }
-        sshHostsSection.hostToFocus = host
-        sshHostsSection.hostSession = { [weak self] host in
-            guard let self else { return nil }
-            return self.hostSessionInAnyWindow.map { $0(host) } ?? self.session(of: host)
-        }
+        sshHostsSection.initialFocus = focus
         let sections: [SettingsSection] = [
             SettingsAppearanceSection(),
             SettingsGeneralSection(),
@@ -1796,8 +1794,6 @@ final class WindowController: NSObject {
             onClose: { [weak self] in self?.closeModal() }
         )
         overlay.onReportIssue = { [weak self] in self?.openReportIssue() }
-        sshHostsSection.presentConfirm = { [weak overlay] in overlay?.presentConfirm($0) }
-        sshHostsSection.dismissConfirm = { [weak overlay] then in overlay?.dismissConfirm(then: then) }
         presentModal(overlay, kind: .settings)
     }
 
@@ -1990,10 +1986,15 @@ final class WindowController: NSObject {
             }
         let overlay = AddSSHHostOverlay(
             mode: mode, background: Theme.current.chrome.background.nsColor,
+            removal: edited.map { alias in
+                AddSSHHostOverlay.Removal(
+                    consequence: { [weak self] in self?.removalConsequence(of: alias) },
+                    perform: { [weak self] in self?.removeSSHHost(alias) })
+            },
             onSubmit: { [weak self] host in
                 edited == nil ? self?.addSSHHost(host) : self?.renameSSHHost(host)
             },
-            onCancel: { [weak self] in self?.reopenSettingsOnSSHHosts(focusing: edited) })
+            onCancel: { [weak self] in self?.reopenSettingsOnSSHHosts(focusing: edited.map { .host($0) }) })
         presentModal(overlay, kind: .sshHostForm)
     }
 
@@ -2012,13 +2013,38 @@ final class WindowController: NSObject {
             return "Couldn't save \(host.alias) to ZenTerm's config: \(error.localizedDescription)"
         }
         AppConfig.reload()
-        reopenSettingsOnSSHHosts(focusing: host.alias)
+        reopenSettingsOnSSHHosts(focusing: .host(host.alias))
         return nil
     }
 
-    private func reopenSettingsOnSSHHosts(focusing host: String? = nil) {
+    private func removalConsequence(of alias: String) -> String? {
+        let id = SSHHostID(alias: alias)
+        let state = hostSessionInAnyWindow.map { $0(id) } ?? session(of: id)
+        switch state {
+        case .connected: return "disconnect it and stop everything running in it"
+        case .connecting: return "stop connecting to it and close its tabs"
+        case .failed, nil: return nil
+        }
+    }
+
+    private func removeSSHHost(_ alias: String) -> String? {
+        let aliases = GeneralConfig.current.sshHostAliases
+        let neighbour = aliases.firstIndex(of: alias).flatMap { index in
+            aliases.indices.contains(index + 1) ? aliases[index + 1] : index > 0 ? aliases[index - 1] : nil
+        }
+        do {
+            try SSHHostsWriter.remove(alias)
+        } catch {
+            return "Couldn't remove \(alias) from ZenTerm's config: \(error.localizedDescription)"
+        }
+        AppConfig.reload()
+        reopenSettingsOnSSHHosts(focusing: neighbour.map { .host($0) } ?? .addHost)
+        return nil
+    }
+
+    private func reopenSettingsOnSSHHosts(focusing focus: SettingsSSHHostsSection.Focus? = nil) {
         closeModal()
-        openSettings(landing: .sshHosts, focusingSSHHost: host)
+        openSettings(landing: .sshHosts, focusingSSHHost: focus)
     }
 
     private func reopenSettingsOnTools() {

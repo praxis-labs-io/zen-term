@@ -578,8 +578,10 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   ssh itself. A line holds a Host alias or a typed user@host, each
   with an optional name. A name is only a label, read through `GeneralConfig.displayName(of:)`
   with the alias as fallback; ssh, control sockets and `SSHHostID` use the alias. A host row
-  opens `AddSSHHostOverlay` in edit mode, which rewrites only that host's name on its line; the
-  row is a stop of its own, → reaches its Remove button and ← comes back. The
+  is a plain row with the host's status word at its trailing edge, in `SSHHostStatus.ink` and
+  updated in place; ↩ or a click opens `AddSSHHostOverlay` in edit mode, which rewrites only that
+  host's name on its line and holds Remove. Remove asks first while the host is connecting or
+  connected, then returns to Settings with focus on the next host (Add Host when none is left). The
   sidebar's SSH rows show their status as a dot (`SSHHostStatus.ink`): Offline takes the idle
   agent row's ink on the dot and the title, Online is positive, Connected is accent, and the
   status word is the row's accessibility value rather than visible text. While an agent in a
