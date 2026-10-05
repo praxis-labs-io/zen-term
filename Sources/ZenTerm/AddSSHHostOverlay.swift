@@ -20,7 +20,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
     private let nameField = FieldBox(placeholder: "Shown in place of the host")
     private let nameCaption = FieldCaption("Name", required: false)
     private lazy var nameGroup = LabeledField(caption: nameCaption, control: nameField)
-    private let errorLabel = NSTextField(wrappingLabelWithString: "")
+    private let errorLabel = FormErrorLabel()
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private let submitButton = AppButton(title: "", variant: .primary, keyEquivalent: "\r")
 
@@ -119,7 +119,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
     func reapplyTheme() {
         CardChrome.reapplyTheme(to: card)
         header.textColor = Theme.current.chrome.foreground.nsColor
-        errorLabel.textColor = Theme.current.chrome.destructive.nsColor
+        errorLabel.reapplyTheme()
         hostGroup.reapplyTheme()
         nameGroup.reapplyTheme()
         let controls: [ThemeReapplying] = [hostField, nameField, cancelButton, submitButton]
@@ -138,7 +138,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         hostField.onSubmit = { [weak self] in self?.submit() }
         hostField.onChange = { [weak self] in
             self?.hostGroup.setMessage(nil)
-            self?.errorLabel.isHidden = true
+            self?.errorLabel.clear()
         }
         hostField.onTab = { [weak self] in self?.focus(self?.nameField.field) }
         hostField.onBacktab = { [weak self] in self?.focus(self?.submitButton) }
@@ -147,7 +147,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         nameField.onSubmit = { [weak self] in self?.submit() }
         nameField.onChange = { [weak self] in
             self?.nameGroup.setMessage(nil)
-            self?.errorLabel.isHidden = true
+            self?.errorLabel.clear()
         }
         nameField.onTab = { [weak self] in self?.focus(self?.cancelButton) }
 
@@ -174,11 +174,6 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
             nameField.onBacktab = { [weak self] in self?.focus(self?.hostField.field) }
             submitButton.onTab = { [weak self] in self?.focus(self?.hostField.field) }
         }
-
-        errorLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        errorLabel.textColor = Theme.current.chrome.destructive.nsColor
-        errorLabel.maximumNumberOfLines = 0
-        errorLabel.isHidden = true
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -231,8 +226,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
             return
         }
         if let failure = onSubmit(SSHHostEntry(alias: host, name: name.isEmpty ? nil : name)) {
-            errorLabel.stringValue = failure
-            errorLabel.isHidden = false
+            errorLabel.show(failure)
             focusInitialResponder()
         }
     }
