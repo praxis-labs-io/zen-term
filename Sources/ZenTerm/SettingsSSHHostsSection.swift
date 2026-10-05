@@ -9,6 +9,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     var hostSession: ((SSHHostID) -> SSHConnection.State?)?
     var presentConfirm: ((ConfirmCard) -> Void)?
     var dismissConfirm: ((@escaping () -> Void) -> Void)?
+    var statusCenter = SSHHostStatusCenter.shared
 
     private struct Listing {
         let aliases: [String]
@@ -50,7 +51,8 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private var listing: Listing?
-    private var destinations: [String: String] = [:]
+    private var shownAddresses: [String: String] = [:]
+    private var statusObserver: NSObjectProtocol?
     private var removed: Set<String> = []
     private var removedEntries: [String: SSHHostEntry] = [:]
     private var orderBeforeRemovals: [String]?
@@ -62,6 +64,10 @@ final class SettingsSSHHostsSection: SettingsSection {
     private var notes: [NSTextField] = []
     private var rowsStack: NSStackView?
     private var mountGeneration = 0
+
+    deinit {
+        statusObserver.map(NotificationCenter.default.removeObserver)
+    }
 
     private static let loadQueue = DispatchQueue(label: "com.zenterm.ssh-config-load", qos: .userInitiated)
 
@@ -86,6 +92,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         addButton.onBacktab = { [weak self] in self?.moveTab(from: self?.addButton, delta: -1) }
         addButton.onTap = { [weak self] in self?.onAddHost?() }
 
+        observeAddresses()
         load()
         return SettingsDetail.scroll(for: stack)
     }
@@ -107,7 +114,6 @@ final class SettingsSSHHostsSection: SettingsSection {
 
     private func load() {
         listing = nil
-        destinations = [:]
         removed = []
         removedEntries = [:]
         orderBeforeRemovals = nil
@@ -121,22 +127,38 @@ final class SettingsSSHHostsSection: SettingsSection {
             let config = SSHConfigHosts.listing(of: file)
             DispatchQueue.main.async {
                 guard let self, generation == self.mountGeneration else { return }
-                self.land(config, generation: generation)
+                self.land(config)
             }
         }
     }
 
-    private func land(_ config: SSHConfigHosts.Listing, generation: Int) {
+    private func land(_ config: SSHConfigHosts.Listing) {
         let current = GeneralConfig.current
         let typed = (current.sshHostAliases + current.sshHostsOff.map(\.alias)).filter { !config.aliases.contains($0) }
         listing = Listing(aliases: config.aliases, typed: typed, isConfigUnreadable: config.isUnreadable)
+        statusCenter.requestDestinations(of: config.aliases + typed)
         populate(focusing: hostToFocus.map { .row($0) })
         hostToFocus = nil
-        SSHHostResolver.destinations(of: config.aliases + typed) { [weak self] found in
-            guard let self, generation == self.mountGeneration, !found.isEmpty else { return }
-            self.destinations = found
-            self.populate()
+    }
+
+    private func observeAddresses() {
+        statusObserver.map(NotificationCenter.default.removeObserver)
+        statusObserver = NotificationCenter.default.addObserver(
+            forName: .sshHostStatusDidChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.addresses() != self.shownAddresses else { return }
+                self.populate()
+            }
         }
+    }
+
+    private func address(of host: String) -> String? {
+        statusCenter.destination(of: SSHHostID(alias: host)).flatMap { $0 == host ? nil : $0 }
+    }
+
+    private func addresses() -> [String: String] {
+        hostRows.reduce(into: [:]) { $0[$1.host] = address(of: $1.host) }
     }
 
     private func populate(focusing target: Stop? = nil) {
@@ -170,6 +192,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         addRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         stack.setCustomSpacing(18, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
 
+        shownAddresses = addresses()
         restore.map(focus)
     }
 
@@ -208,7 +231,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     private func label(of host: String) -> String { entry(of: host).displayName }
 
     private func description(of host: String) -> String? {
-        let address = destinations[host].flatMap { $0 == host ? nil : $0 }
+        let address = address(of: host)
         guard entry(of: host).name != nil else { return address }
         return address.map { "\(host) · \($0)" } ?? host
     }
@@ -264,7 +287,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private func edit(_ host: String) {
-        onEditHost?(entry(of: host), destinations[host].flatMap { $0 == host ? nil : $0 })
+        onEditHost?(entry(of: host), address(of: host))
     }
 
     private func leaveControl(of row: SSHHostRow?) {
@@ -300,10 +323,13 @@ final class SettingsSSHHostsSection: SettingsSection {
             proceed: { [weak self] in
                 guard let self else { return }
                 let config = GeneralConfig.current
-                guard self.save(row: row.layout, { try self.removeHost(host) }) else { return }
+                self.removed.insert(host)
+                guard self.save(row: row.layout, { try self.removeHost(host) }) else {
+                    self.removed.remove(host)
+                    return
+                }
                 if self.orderBeforeRemovals == nil { self.orderBeforeRemovals = config.sshHostAliases }
                 if self.offOrderBeforeRemovals == nil { self.offOrderBeforeRemovals = config.sshHostsOff.map(\.alias) }
-                self.removed.insert(host)
                 self.showRemoval(true, of: host, row: row, button: button)
             }, cancel: {})
     }

@@ -574,10 +574,11 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   only when problems clear.
 - **No file watcher.** Hand edits apply on ⌘⇧,.
 - **`~/.ssh/config` is read, never written.** Settings > SSH Hosts lists its literal `Host`
-  aliases (following `Include`, skipping `Match` blocks) off-main each time it mounts, and
-  `ssh -G` resolves each one. The `ssh-host` lines hold which are on, plus typed hosts, each
+  aliases (following `Include`, skipping `Match` blocks) off-main each time it mounts, and shows each
+  host's address from `SSHHostStatusCenter`, so it never runs ssh itself: on mount it asks the
+  center to have the probe resolve every host it lists. The `ssh-host` lines hold which are on, plus typed hosts, each
   with an optional name; turning a host Off moves its line to `ssh-host-off` (same format,
-  parsed into `GeneralConfig.sshHostsOff`, not probed or listed in the sidebar) so the name
+  parsed into `GeneralConfig.sshHostsOff`, not probed for reachability or listed in the sidebar) so the name
   survives, and On moves it back. A name is only a label, read through `GeneralConfig.displayName(of:)`
   with the alias as fallback; ssh, control sockets and `SSHHostID` use the alias. A host row
   opens `AddSSHHostOverlay` in edit mode, which rewrites only that host's name on whichever line it is on; the
@@ -595,7 +596,11 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   any preamble lines RFC 4253 allows, is Online, anything else Offline. A
   `ProxyJump` or `ProxyCommand` host reads Online once `ssh -G` names its proxy, with no TCP check. It runs every minute while the app
   is active, and on activation, wake and network change (`NWPathMonitor`); an answer from before
-  a network change is dropped and asked again. A host reads Offline until the probe reaches it,
+  a network change is dropped and asked again. Once Settings has asked, every host it lists as Off (the
+  `~/.ssh/config` aliases that are not On, plus `ssh-host-off`) is resolved the same way with no
+  reachability check and no status, and keeps its destination when it is turned On or Off. A failed attempt is
+  not repeated until the same invalidations. Before the first ask no Off host is resolved, and a
+  connected host is re-resolved the same way, without a probe. A host reads Offline until the probe reaches it,
   and a connected host takes its status from the connection, not the probe.
 - **The Connect screen reads its host from `SSHHostStatusCenter`**: the status, and the
   destination the probe resolved from the same `ssh -G`, so it never runs ssh itself.

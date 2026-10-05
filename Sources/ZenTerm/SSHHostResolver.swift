@@ -12,21 +12,9 @@ enum SSHHostResolver {
         let destination: String?
     }
 
-    #if DEBUG
-        nonisolated(unsafe) static var destinationOverrideForTesting: ((String) -> String?)?
-    #endif
-
     // A `Match exec` that never returns would otherwise hold a worker forever.
     private static let resolveTimeout: TimeInterval = 5
     private static let defaultPort: UInt16 = 22
-
-    // Blocking: callers own the hop off the main thread.
-    static func destination(of host: String) -> String? {
-        #if DEBUG
-            if let destinationOverrideForTesting { return destinationOverrideForTesting(host) }
-        #endif
-        return dump(of: host).flatMap(destination(inDump:))
-    }
 
     // Blocking: callers own the hop off the main thread.
     static func endpoint(of host: String) -> Endpoint? {
@@ -79,31 +67,5 @@ enum SSHHostResolver {
             fields[String(parts[0])] = String(parts[1])
         }
         return fields
-    }
-
-    // Bounded so a config whose `Match exec` stalls cannot take the app's worker threads with it.
-    private static let queue: OperationQueue = {
-        let queue = OperationQueue()
-        queue.maxConcurrentOperationCount = 4
-        queue.qualityOfService = .userInitiated
-        return queue
-    }()
-
-    static func destinations(of hosts: [String], completion: @escaping ([String: String]) -> Void) {
-        let lock = NSLock()
-        var found: [String: String] = [:]
-        let resolveAll = hosts.map { host in
-            BlockOperation {
-                guard let destination = destination(of: host) else { return }
-                lock.withLock { found[host] = destination }
-            }
-        }
-        let finish = BlockOperation {
-            let result = lock.withLock { found }
-            DispatchQueue.main.async { completion(result) }
-        }
-        resolveAll.forEach(finish.addDependency)
-        queue.addOperations(resolveAll, waitUntilFinished: false)
-        queue.addOperation(finish)
     }
 }
