@@ -58,6 +58,22 @@ final class SSHConnectionTests: XCTestCase {
         XCTAssertEqual(order, ["reported"])
     }
 
+    func test_eachSurfaceStartsAtTheBackingScaleItWasStartedWith_whetherItWaitedOrNot() {
+        let (login, loginID) = surface(1)
+        let (pane, paneID) = surface(2)
+        let (late, lateID) = surface(3)
+        connection.start(login, id: loginID, env: [:], backingScale: 2)
+        fake.ready?()
+        connection.start(pane, id: paneID, env: [:], backingScale: 1.5)
+        fake.connect()
+
+        connection.start(late, id: lateID, env: [:], backingScale: 3)
+
+        XCTAssertEqual(login.lastConfig?.backingScale, 2)
+        XCTAssertEqual(pane.lastConfig?.backingScale, 1.5)
+        XCTAssertEqual(late.lastConfig?.backingScale, 3)
+    }
+
     func test_aSurfaceStartedOnceConnected_startsAtOnce() {
         let (login, loginID) = surface(1)
         connection.start(login, id: loginID, env: [:])

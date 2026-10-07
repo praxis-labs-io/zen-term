@@ -630,7 +630,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   destination the probe resolved from the same `ssh -G`, so it never runs ssh itself.
 - **A connected host is a workspace whose tabs run ssh over one `SSHConnection`.** Every pane
   and drawer, and Scratch, starts through the tab's injected `SurfaceStart` (a user float
-  never does, since a host's start keeps only the launch's environment), which for a host runs
+  never does, since a host's start keeps only the launch's environment and backing scale), which for a host runs
   `/usr/bin/ssh` with `ControlMaster=auto`, a `ControlPath` under `Application Support/ZenTerm/ssh`
   (the temp folder when that path passes 86 bytes, since ssh binds a longer temporary name
   first) and `ControlPersist=60`, as `xterm-256color` with busy tracking off (a remote shell

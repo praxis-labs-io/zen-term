@@ -840,7 +840,9 @@ final class WindowController: NSObject {
 
     private static func surfaceStart(over connection: SSHConnection?) -> SurfaceStart {
         guard let connection else { return startSurfaceNow }
-        return { [weak connection] surface, id, launch in connection?.start(surface, id: id, env: launch.environment) }
+        return { [weak connection] surface, id, launch in
+            connection?.start(surface, id: id, env: launch.environment, backingScale: launch.backingScale)
+        }
     }
 
     private func mintTabID() -> TabID { defer { nextTabID += 1 }; return TabID(nextTabID) }
