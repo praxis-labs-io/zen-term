@@ -331,6 +331,40 @@ final class ControlSSHHostTests: WindowTestCase {
         XCTAssertEqual(refusal.message, "ssh:devbox is an SSH host. Worktrees are made from a configured workspace.")
     }
 
+    private func listedWorkspaces(_ c: WindowController) throws -> [ListResult.Workspace] {
+        let list = try result(send(.list), as: ListResult.self)
+        return try XCTUnwrap(list.windows.first { $0.id == ControlAddress.window(c.windowID) }).workspaces
+    }
+
+    func test_listPutsHostWorkspacesAfterTheLocalOnes_markedWithTheirHostAndState() throws {
+        let c = makeWindow()
+        _ = try loggingIn(c)
+        let later = c.openUnconfiguredWorkspace(at: FileManager.default.temporaryDirectory)
+
+        let connecting = try listedWorkspaces(c)
+        fake.connect()
+        let connected = try listedWorkspaces(c)
+
+        XCTAssertEqual(connecting.count, 3)
+        XCTAssertEqual(connecting.last?.title, "devbox")
+        XCTAssertNil(connecting.last?.folder)
+        XCTAssertEqual(connecting.last?.host, ListResult.Host(alias: "devbox", state: .connecting))
+        XCTAssertEqual(connected.last?.host, ListResult.Host(alias: "devbox", state: .connected))
+        XCTAssertEqual(connecting.dropLast().map(\.host), [nil, nil])
+        XCTAssertEqual(connecting[1].title, c.listing(of: later)?.title)
+        XCTAssertNotNil(connecting[1].folder)
+        XCTAssertEqual(connected.last?.tabs.first?.panes.map(\.busy), [false])
+    }
+
+    func test_aHostWhoseLoginFailed_isLeftOutOfTheList() throws {
+        let c = makeWindow()
+        _ = try loggingIn(c)
+
+        fake.unwatchable?()
+
+        XCTAssertEqual(try listedWorkspaces(c).compactMap(\.host), [])
+    }
+
     func test_tabNewOnAHost_startsOverSSHBehindTheView_atTheWindowsBackingScale() throws {
         let c = makeWindow()
         let login = try connected(c)

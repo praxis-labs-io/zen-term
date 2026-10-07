@@ -2243,10 +2243,21 @@ final class WindowController: NSObject {
     }
 
     func listing() -> ListResult.Window {
+        let order = order
         let byID = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
+        let hosts = order.hosts.compactMap { host in workspaces.first { $0.host == host.id } }
         return ListResult.Window(
             id: ControlAddress.window(windowID), key: window.isKeyWindow,
-            workspaces: order.navigableWorkspaces.compactMap { byID[$0] }.map(listing(of:)))
+            workspaces: (order.navigableWorkspaces.compactMap { byID[$0] } + hosts.filter(Self.isListed))
+                .map(listing(of:)))
+    }
+
+    // A failed login's workspace closes on the next main turn.
+    private static func isListed(_ host: WorkspaceController) -> Bool { host.connection?.state != .failed }
+
+    private static func hostListing(of workspace: WorkspaceController) -> ListResult.Host? {
+        guard let host = workspace.host, let connection = workspace.connection else { return nil }
+        return ListResult.Host(alias: host.alias, state: connection.state == .connected ? .connected : .connecting)
     }
 
     private func listing(of workspace: WorkspaceController) -> ListResult.Workspace {
@@ -2256,8 +2267,10 @@ final class WindowController: NSObject {
                 id: ControlAddress.tab(window: windowID, tab: id.raw), title: title(of: id),
                 active: id == workspace.activeID, panes: tab.paneHandles.map(listing(of:)))
         }
+        let host = Self.hostListing(of: workspace)
         return ListResult.Workspace(
-            title: workspace.name, folder: workspace.folder.path, configured: workspace.isConfigured,
+            title: workspace.name, folder: host == nil ? workspace.folder.path : nil, host: host,
+            configured: workspace.isConfigured,
             worktree: workspace.origin.map { ListResult.Worktree(name: $0.name, parent: $0.parent.path.path) },
             active: workspace === activeWorkspace, tabs: tabs)
     }

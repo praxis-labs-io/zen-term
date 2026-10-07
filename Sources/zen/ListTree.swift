@@ -14,10 +14,11 @@ enum ListTree {
 
     private static func lines(workspace: ListResult.Workspace) -> [String] {
         let origin = workspace.worktree.map { "worktree \($0.name) of \($0.parent)" }
+        let host = workspace.host.map { "\(ControlAddress.hostPrefix)\($0.alias) \($0.state.rawValue)" }
         let head = line(
             1,
             [
-                workspace.title, workspace.folder, workspace.active ? "active" : nil,
+                workspace.title, workspace.folder, host, workspace.active ? "active" : nil,
                 workspace.configured ? "configured" : nil, origin,
             ])
         return [head] + workspace.tabs.flatMap(lines(tab:))

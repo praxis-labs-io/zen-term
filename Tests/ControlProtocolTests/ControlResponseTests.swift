@@ -61,6 +61,16 @@ final class ControlResponseTests: XCTestCase {
         XCTAssertTrue(decoded.ok)
     }
 
+    func test_aHostWorkspaceListsItsHost_andOmitsItsFolder() throws {
+        let workspace = ListResult.Workspace(
+            title: "devbox", folder: nil, host: .init(alias: "devbox", state: .connected), configured: false,
+            worktree: nil, active: true, tabs: [])
+        let line = try ControlWire.line(workspace)
+        XCTAssertFalse(text(line).contains("folder"), text(line))
+        XCTAssertTrue(text(line).contains(#""host":{"alias":"devbox","state":"connected"}"#), text(line))
+        XCTAssertEqual(try JSONDecoder().decode(ListResult.Workspace.self, from: line), workspace)
+    }
+
     func test_aConnectScreenResultNamesTheHost_andOmitsTheWorkspace() throws {
         let shown = WorkspaceResult(window: "w1", workspace: nil, connect: "devbox")
         let line = try ControlWire.line(shown)

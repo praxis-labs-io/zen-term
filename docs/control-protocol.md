@@ -129,8 +129,8 @@ No arguments.
 
 ### `list`
 
-No arguments. Every window, its workspaces in sidebar order, each workspace's tabs
-in tab order, and each tab's panes in split order followed by its drawers. A drawer
+No arguments. Every window, its workspaces in sidebar order with SSH hosts' workspaces
+last in Settings order, each workspace's tabs in tab order, and each tab's panes in split order followed by its drawers. A drawer
 is listed from its first opening until it closes, shown or hidden.
 
 ```json
@@ -145,12 +145,16 @@ is listed from its first opening until it closes, shown or hidden.
 ```
 
 - `key`: the window is the key window.
+- `folder`: absent for an SSH host's workspace.
+- `host`: present for an SSH host's workspace, as `{"alias":"devbox","state":"connected"}`.
+  `state` is `connecting` or `connected`. A host whose login failed is left out.
 - `worktree`: present when the workspace was opened from a worktree. `parent` is
   the folder of the workspace it belongs to.
 - `drawer`: `bottom` or `right`, absent for a pane.
 - `title`: the title the program last set. A pane started with a command is titled with
   that command until its program sets one. Empty when nothing set one.
 - `cwd`: absent when it is not known.
+- `busy`: always false in a host's workspace, since a remote shell reports no prompts.
 - `agent`: present when the pane runs an agent. `state` is `working`, `waiting` or
   `idle`; `name` is absent for an agent that has not been named.
 
