@@ -50,14 +50,29 @@ struct ControlResponder {
         switch findOpenWorkspace(address) {
         case .success(let place): return reply(.success(present(place, focus: request.args.focus)))
         case .failure(let error) where error.code != .notFound: return reply(.failure(error))
-        case .failure: break
-        }
-        if case .host = ControlAddress.Workspace(address) {
-            return reply(.failure(ControlError(.notFound, "There is no workspace \(address).")))
+        case .failure(let error):
+            if case .host(let alias) = ControlAddress.Workspace(address) {
+                return reply(showConnect(alias, unconnected: error, for: request))
+            }
         }
         loadWorkspaces { entries in
             reply(openConfigured(address, from: entries, for: request))
         }
+    }
+
+    private func showConnect(_ alias: String, unconnected: ControlError, for request: ControlRequest) -> ControlReply {
+        guard GeneralConfig.current.sshHostAliases.contains(alias) else { return .failure(unconnected) }
+        let address = ControlAddress.hostPrefix + alias
+        guard request.args.focus == true else {
+            return .failure(
+                ControlError(.refused, "\(address) is not connected. Add --focus to show its Connect screen."))
+        }
+        guard let window = callerWindow(request) else {
+            return .failure(ControlError(.notFound, "No ZenTerm window is open."))
+        }
+        window.activate(SSHHostID(alias: alias))
+        raise(window)
+        return .success(WorkspaceResult(window: ControlAddress.window(window.windowID), workspace: nil, connect: alias))
     }
 
     private func openConfigured(_ address: String, from entries: [Workspace], for request: ControlRequest)
@@ -128,6 +143,13 @@ struct ControlResponder {
             return .failure(ControlError(.badRequest, "\(cwd) is not an absolute path."))
         }
         return workspace(request.args.workspace, for: request).flatMap { place in
+            if let host = place.window.host(of: place.id), request.args.cmd != nil || request.args.cwd != nil {
+                return .failure(
+                    ControlError(
+                        .refused,
+                        "A tab on \(ControlAddress.hostPrefix + host.alias) takes no cmd or cwd. "
+                            + "It starts the host's login shell."))
+            }
             let cwd =
                 request.args.cwd.map { URL(fileURLWithPath: $0, isDirectory: true) }
                 ?? callerCWD(in: place, for: request)

@@ -2309,6 +2309,10 @@ final class WindowController: NSObject {
 
     func workspaceID(of tab: TabID) -> WorkspaceID? { workspace(of: tab)?.id }
 
+    func workspaceID(of host: SSHHostID) -> WorkspaceID? { workspaces.first { $0.host == host }?.id }
+
+    func host(of id: WorkspaceID) -> SSHHostID? { workspaces.first { $0.id == id }?.host }
+
     func listing(of id: WorkspaceID) -> ListResult.Workspace? {
         workspaces.first { $0.id == id }.map(listing(of:))
     }

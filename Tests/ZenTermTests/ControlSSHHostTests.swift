@@ -193,6 +193,144 @@ final class ControlSSHHostTests: WindowTestCase {
         XCTAssertNotNil(responder.locate(pane: login))
     }
 
+    private let address = "ssh:devbox"
+
+    func test_anSSHAddressFindsTheHostsWorkspaceInAnotherWindow_andSwitchRaisesIt() throws {
+        _ = makeWindow()
+        let there = makeWindow()
+        let local = there.activeWorkspaceIDForTesting
+        _ = try connected(there)
+        let hostWorkspace = there.activeWorkspaceIDForTesting
+        there.activateWorkspace(local)
+
+        _ = try result(send(.workspaceSwitch, ControlArgs(workspace: address)), as: NoPayload.self)
+
+        XCTAssertEqual(there.activeWorkspaceIDForTesting, hostWorkspace)
+        XCTAssertTrue(raised.contains { $0 === there })
+    }
+
+    func test_anSSHAddressMatchesTheAliasNotTheName() throws {
+        var config = GeneralConfig.current
+        config.sshHosts = [SSHHostEntry(alias: host.alias, name: "Dev Box")]
+        GeneralConfig.setCurrentForTesting(config)
+        let c = makeWindow()
+        let local = c.activeWorkspaceIDForTesting
+        _ = try connected(c)
+        c.activateWorkspace(local)
+
+        for named in ["ssh:Dev Box", "Dev Box", "devbox"] {
+            let refusal = try error(send(.workspaceSwitch, ControlArgs(workspace: named)))
+            XCTAssertEqual(refusal.code, .notFound, named)
+        }
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, local)
+        _ = try result(send(.workspaceSwitch, ControlArgs(workspace: address)), as: NoPayload.self)
+        XCTAssertNotNil(c.activeConnectionForTesting)
+    }
+
+    func test_aHostNotInSettingsIsNotFound_inEveryWorkspaceCommand() throws {
+        let c = makeWindow()
+        _ = try connected(c)
+        let missing = ControlArgs(workspace: "ssh:nope", focus: true)
+
+        for cmd in [ControlCommand.workspaceOpen, .workspaceSwitch, .workspaceClose, .tabNew] {
+            let refusal = try error(send(cmd, missing))
+            XCTAssertEqual(refusal.code, .notFound, cmd.rawValue)
+            XCTAssertEqual(refusal.message, "There is no SSH host nope in Settings.", cmd.rawValue)
+        }
+        XCTAssertNotEqual(c.selectedHostForTesting, SSHHostID(alias: "nope"))
+    }
+
+    func test_aHostWithNoSession_isNotFound_forCommandsThatNeedItsWorkspace() throws {
+        let c = makeWindow()
+        let tabs = c.tabOrderForTesting
+
+        for cmd in [ControlCommand.workspaceSwitch, .workspaceClose, .tabNew] {
+            let refusal = try error(send(cmd, ControlArgs(workspace: address)))
+            XCTAssertEqual(refusal.code, .notFound, cmd.rawValue)
+            XCTAssertEqual(
+                refusal.message,
+                "ssh:devbox is not connected. workspace.open ssh:devbox --focus shows its Connect screen.")
+        }
+        XCTAssertEqual(c.tabOrderForTesting, tabs)
+        XCTAssertNil(c.selectedHostForTesting)
+    }
+
+    func test_workspaceOpenOfAConnectedHost_returnsItsWorkspace_withoutASecondConnection() throws {
+        let c = makeWindow()
+        _ = try connected(c)
+        let workspaces = c.workspaceIDsForTesting
+        let resolves = fake.launchResolves
+
+        let found = try result(send(.workspaceOpen, ControlArgs(workspace: address)), as: WorkspaceResult.self)
+        let focused = try result(
+            send(.workspaceOpen, ControlArgs(workspace: address, focus: true)), as: WorkspaceResult.self)
+
+        XCTAssertEqual(found.window, ControlAddress.window(c.windowID))
+        XCTAssertEqual(found.workspace?.title, "devbox")
+        XCTAssertNil(found.connect)
+        XCTAssertEqual(focused.workspace?.tabs.map(\.id), found.workspace?.tabs.map(\.id))
+        XCTAssertEqual(c.workspaceIDsForTesting, workspaces)
+        XCTAssertEqual(fake.launchResolves, resolves)
+    }
+
+    func test_workspaceOpenWithFocus_showsConnect_andNeverConnects() throws {
+        let c = makeWindow()
+        let surfaces = spawned.count
+
+        let opened = try result(
+            send(.workspaceOpen, ControlArgs(workspace: address, focus: true)), as: WorkspaceResult.self)
+
+        XCTAssertEqual(
+            opened, WorkspaceResult(window: ControlAddress.window(c.windowID), workspace: nil, connect: "devbox"))
+        XCTAssertEqual(c.selectedHostForTesting, host)
+        XCTAssertNotNil(c.connectViewForTesting)
+        XCTAssertNil(c.activeConnectionForTesting)
+        XCTAssertEqual(fake.launchResolves, 0)
+        XCTAssertEqual(spawned.count, surfaces)
+        XCTAssertTrue(raised.contains { $0 === c })
+    }
+
+    func test_workspaceOpenOfAnUnconnectedHost_withoutFocus_refusesAndLeavesTheViewAlone() throws {
+        let c = makeWindow()
+        let showing = c.activeWorkspaceIDForTesting
+
+        let refusal = try error(send(.workspaceOpen, ControlArgs(workspace: address)))
+
+        XCTAssertEqual(refusal.code, .refused)
+        XCTAssertEqual(refusal.message, "ssh:devbox is not connected. Add --focus to show its Connect screen.")
+        XCTAssertNil(c.selectedHostForTesting)
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, showing)
+        XCTAssertTrue(raised.isEmpty)
+    }
+
+    func test_aCommandOrFolderForAHostTabOrSplit_isRefused() throws {
+        let c = makeWindow()
+        let login = try token(of: connected(c))
+        let tabs = c.tabOrderForTesting
+        let surfaces = spawned.count
+
+        let refusals = try [
+            error(send(.tabNew, ControlArgs(workspace: address, cmd: "make"))),
+            error(send(.tabNew, ControlArgs(workspace: address, cwd: "/tmp"))),
+            error(send(.paneSplit, ControlArgs(cmd: "make", pane: login, dir: .right))),
+        ]
+
+        XCTAssertEqual(refusals.map(\.code), [.refused, .refused, .refused])
+        XCTAssertEqual(
+            refusals[0].message, "A tab on ssh:devbox takes no cmd or cwd. It starts the host's login shell.")
+        XCTAssertEqual(c.tabOrderForTesting, tabs)
+        XCTAssertEqual(spawned.count, surfaces)
+    }
+
+    func test_aWorktreeCommandAddressedToAHost_saysWorktreesComeFromAConfiguredWorkspace() throws {
+        let c = makeWindow()
+        _ = try connected(c)
+
+        let refusal = try error(send(.worktreeList, ControlArgs(workspace: address)))
+
+        XCTAssertEqual(refusal.message, "ssh:devbox is an SSH host. Worktrees are made from a configured workspace.")
+    }
+
     func test_tabNewOnAHost_startsOverSSHBehindTheView_atTheWindowsBackingScale() throws {
         let c = makeWindow()
         let login = try connected(c)

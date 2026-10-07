@@ -15,7 +15,7 @@ struct WorkspaceCommands: ParsableCommand {
         @Argument(help: "A folder (starting with /, ~ or .), ssh:<host>, or a title.")
         var workspace: String
 
-        @Flag(help: "Switch to it.")
+        @Flag(help: "Switch to it. For an SSH host with no session, show its Connect screen.")
         var focus = false
 
         func run() throws {

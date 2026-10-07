@@ -61,6 +61,13 @@ final class ControlResponseTests: XCTestCase {
         XCTAssertTrue(decoded.ok)
     }
 
+    func test_aConnectScreenResultNamesTheHost_andOmitsTheWorkspace() throws {
+        let shown = WorkspaceResult(window: "w1", workspace: nil, connect: "devbox")
+        let line = try ControlWire.line(shown)
+        XCTAssertEqual(text(line), "{\"connect\":\"devbox\",\"window\":\"w1\"}\n")
+        XCTAssertEqual(try JSONDecoder().decode(WorkspaceResult.self, from: line), shown)
+    }
+
     func test_tabAddressCarriesWindowAndTab() {
         XCTAssertEqual(ControlAddress.tab(window: 1, tab: 14), "w1.t14")
         XCTAssertEqual(ControlAddress.window(3), "w3")
