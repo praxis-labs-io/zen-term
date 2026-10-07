@@ -172,6 +172,7 @@ struct ControlResponder {
                 let address = ControlAddress.tab(window: place.window.windowID, tab: place.id.raw)
                 return .failure(Self.refusal(closing: "tab \(address)", stakes))
             }
+            if stakes.loginHost != nil { return Self.abandonLogin(holding: place.id, in: place.window) }
             place.window.removeTab(place.id)
             return .success(NoPayload())
         }
@@ -209,10 +210,19 @@ struct ControlResponder {
         var consequences: [String] = []
         if stakes.closesWindow { consequences.append("close the window") }
         if stakes.isRunning { consequences.append(stopping(stakes.panes, stakes.floats)) }
+        if let host = stakes.loginHost {
+            let tabs = stakes.loginTabs == 1 ? "tab" : "\(stakes.loginTabs) tabs"
+            consequences.append("stop connecting to \(host) and close its \(tabs)")
+        }
         return ControlError(
             .refused, "Closing \(name) would \(CloseWarning.list(consequences)).",
             details: ControlError.Details(panes: stakes.panes, floats: stakes.floats, closesWindow: stakes.closesWindow)
         )
+    }
+
+    static func abandonLogin(holding tab: TabID, in window: WindowController) -> ControlReply {
+        if let workspace = window.workspaceID(of: tab) { window.removeWorkspace(workspace) }
+        return .success(NoPayload())
     }
 
     static func stopping(_ panes: [ListResult.Pane], _ floats: [String]) -> String {

@@ -184,7 +184,9 @@ named the way a new workspace is named in the app. Returns it as `workspace.open
 ### `workspace.close`
 
 `args`: `workspace`, `force`. Closes each of its tabs. `refused` without `force` when
-anything in it is running, or when it is the window's last workspace.
+anything in it is running, or when it is the window's last workspace. A host's workspace
+is never refused: it disconnects, connecting or not, and its window shows the host's Connect
+screen when it was showing the workspace.
 
 ### `tab.new`
 
@@ -210,7 +212,10 @@ program sets.
 ### `tab.close`
 
 `args`: `tab`, `force`. `refused` without `force` when anything in it is running, or when
-it is the window's last tab.
+it is the window's last tab. A host tab holding the login while the host connects is
+`refused`, and the message names the host and how many of its tabs would close. With
+`force` the host stops connecting and its whole workspace closes, as `workspace.close`
+on it would.
 
 ### `pane.split`
 
@@ -231,7 +236,9 @@ is in Focus Mode, and `failed` when the pane is too small to split.
 ### `pane.close`
 
 `args`: `pane`, `force`. `refused` without `force` when the pane is running something. The
-last pane of a tab closes the tab, refused as `tab.close` would be. A drawer is not closed.
+last pane of a tab closes the tab, refused as `tab.close` would be. The login pane of a host
+that is connecting is refused, and closed with `force`, as `tab.close` on its tab is. A drawer
+is not closed.
 
 ### `pane.send`
 

@@ -2334,7 +2334,8 @@ final class WindowController: NSObject {
 
     func closeStakes(tab id: TabID) -> CloseStakes? {
         guard let workspace = workspace(of: id), let tab = controller(id) else { return nil }
-        let closesWindow = workspace.tabIDs.count == 1 && workspaces.count == 1
+        if holdsAwaitingLogin(tab: id) { return loginStakes(of: workspace) }
+        let closesWindow = workspace.tabIDs.count == 1 && closesWindow(closing: workspace)
         return CloseStakes(
             closesWindow: closesWindow, isRunning: isRunning(tab: id),
             panes: tab.paneHandles.filter(\.surface.isBusy).map(listing(of:)),
@@ -2343,7 +2344,8 @@ final class WindowController: NSObject {
 
     func closeStakes(workspace id: WorkspaceID) -> CloseStakes? {
         guard let workspace = workspaces.first(where: { $0.id == id }) else { return nil }
-        let closesWindow = workspaces.count == 1
+        if workspace.host != nil { return CloseStakes(closesWindow: false, isRunning: false, panes: [], floats: []) }
+        let closesWindow = closesWindow(closing: workspace)
         let tabs = workspace.tabIDs.compactMap(workspace.controller)
         return CloseStakes(
             closesWindow: closesWindow, isRunning: isRunning(workspace: workspace),
@@ -2362,10 +2364,17 @@ final class WindowController: NSObject {
     }
 
     func closeStakes(pane: PaneHandle, in tab: TabID) -> CloseStakes? {
-        guard let c = controller(tab) else { return nil }
+        guard let c = controller(tab), let workspace = workspace(of: tab) else { return nil }
+        if workspace.connection?.isAwaitingLogin(on: pane.surfaceID) == true { return loginStakes(of: workspace) }
         if c.isSinglePane { return closeStakes(tab: tab) }
         let busy = pane.surface.isBusy
         return CloseStakes(closesWindow: false, isRunning: busy, panes: busy ? [listing(of: pane)] : [], floats: [])
+    }
+
+    private func loginStakes(of workspace: WorkspaceController) -> CloseStakes {
+        CloseStakes(
+            closesWindow: false, isRunning: false, panes: [], floats: [],
+            loginHost: workspace.host.map(GeneralConfig.current.displayName(of:)), loginTabs: workspace.tabIDs.count)
     }
 
     func removePane(_ token: Int, in tab: TabID) {
@@ -2857,6 +2866,7 @@ final class WindowController: NSObject {
 
     func removeWorkspace(_ id: WorkspaceID) {
         guard let workspace = workspaces.first(where: { $0.id == id }) else { return }
+        workspace.connection?.shutdown()
         closeTabs(of: workspace) { removeTab($0) }
     }
 

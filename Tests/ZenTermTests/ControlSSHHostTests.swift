@@ -111,6 +111,88 @@ final class ControlSSHHostTests: WindowTestCase {
         return login
     }
 
+    private func drainMainQueue() {
+        let drained = expectation(description: "main queue drained")
+        DispatchQueue.main.async { drained.fulfill() }
+        wait(for: [drained], timeout: 2)
+    }
+
+    private func address(_ c: WindowController, _ tab: TabID) -> String {
+        ControlAddress.tab(window: c.windowID, tab: tab.raw)
+    }
+
+    private func showsFailureToast(_ c: WindowController) -> Bool {
+        toastTexts(in: c).contains("Couldn't Connect to")
+    }
+
+    private func holdingOnlyTheHost(_ c: WindowController, login: () throws -> RecordingSurface) throws
+        -> RecordingSurface
+    {
+        let local = c.activeWorkspaceIDForTesting
+        let surface = try login()
+        c.removeWorkspace(local)
+        XCTAssertEqual(c.workspaceIDsForTesting.count, 1)
+        return surface
+    }
+
+    func test_workspaceCloseOfAWindowsOnlyHost_disconnectsWithoutRefusing_andLandsOnConnect() throws {
+        let c = makeWindow()
+        let login = try holdingOnlyTheHost(c) { try connected(c) }
+
+        _ = try result(send(.workspaceClose, from: token(of: login)), as: NoPayload.self)
+
+        XCTAssertTrue(c.workspaceIDsForTesting.isEmpty)
+        XCTAssertEqual(c.selectedHostForTesting, host)
+        XCTAssertNotNil(c.connectViewForTesting)
+    }
+
+    func test_workspaceCloseWhileConnecting_returnsToConnectWithoutAFailureToast() throws {
+        let c = makeWindow()
+        let login = try loggingIn(c)
+
+        _ = try result(send(.workspaceClose, from: token(of: login)), as: NoPayload.self)
+        drainMainQueue()
+
+        XCTAssertNil(c.activeConnectionForTesting)
+        XCTAssertEqual(c.selectedHostForTesting, host)
+        XCTAssertFalse(showsFailureToast(c))
+    }
+
+    func test_tabCloseOfTheLoginWhileConnecting_refusesNamingTheHost_thenForceAbandonsQuietly() throws {
+        let c = makeWindow()
+        _ = try loggingIn(c)
+        let loginTab = try XCTUnwrap(c.activeTabIDForTesting)
+        c.handle(.newTab)
+        let tab = address(c, loginTab)
+
+        let refusal = try error(send(.tabClose, ControlArgs(tab: tab)))
+
+        XCTAssertEqual(refusal.code, .refused)
+        XCTAssertEqual(refusal.message, "Closing tab \(tab) would stop connecting to devbox and close its 2 tabs.")
+        XCTAssertEqual(refusal.details?.closesWindow, false)
+        XCTAssertNotNil(c.activeConnectionForTesting)
+
+        _ = try result(send(.tabClose, ControlArgs(tab: tab, force: true)), as: NoPayload.self)
+        drainMainQueue()
+
+        XCTAssertNil(c.activeConnectionForTesting)
+        XCTAssertEqual(c.selectedHostForTesting, host)
+        XCTAssertEqual(c.workspaceIDsForTesting.count, 1)
+        XCTAssertFalse(showsFailureToast(c))
+    }
+
+    func test_paneCloseOfTheLoginInASplitTab_refuses() throws {
+        let c = makeWindow()
+        let login = try token(of: loggingIn(c))
+        _ = try result(send(.paneSplit, ControlArgs(pane: login, dir: .right)), as: PaneResult.self)
+
+        let refusal = try error(send(.paneClose, ControlArgs(pane: login)))
+
+        XCTAssertEqual(refusal.code, .refused)
+        XCTAssertEqual(refusal.message, "Closing pane \(login) would stop connecting to devbox and close its tab.")
+        XCTAssertNotNil(responder.locate(pane: login))
+    }
+
     func test_tabNewOnAHost_startsOverSSHBehindTheView_atTheWindowsBackingScale() throws {
         let c = makeWindow()
         let login = try connected(c)
