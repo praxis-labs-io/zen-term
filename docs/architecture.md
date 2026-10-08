@@ -499,7 +499,9 @@ also claims Ctrl-nav and gets no `$ZEN_PANE`.
 **The control socket** backs `zen` (`docs/control-protocol.md`). `ControlServer` listens on
 `control.<pid>.sock` beside the nav socket, exported as `$ZEN_CONTROL_SOCK` by
 `PaneEnvironment` with the nav variables. Both servers sit on `SocketListener`, which owns
-bind, the per-pid path, the stale sweep, the `0600` mode and the `getpeereid` check. A
+bind, the per-pid path, the stale sweep, the `0600` mode and the `getpeereid` check. It
+binds and listens on `<prefix><pid>.bind`, then renames onto the `.sock` path, so a `.sock`
+that refuses a connect is always stale and a sibling's sweep never removes one mid-startup. A
 request decodes on the connection's thread, applies on main through `ControlResponder`,
 and is written back from the connection's thread, so a client that stops reading never
 stalls main. A command that reads off-main (`workspace.open` reading the workspaces file)
