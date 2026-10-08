@@ -97,10 +97,12 @@ extension ControlResponder {
         guard let text = request.args.text else {
             return .failure(ControlError(.badRequest, "pane.send needs text."))
         }
-        return pane(request.args.pane, for: request).map { place in
-            if !text.isEmpty { place.pane.surface.paste(text) }
-            if request.args.enter == true { place.pane.surface.submit() }
-            return NoPayload()
+        return pane(request.args.pane, for: request).flatMap { place in
+            let surface = place.pane.surface
+            guard surface.isStarted else { return .failure(Self.notStarted(place.pane.token)) }
+            if !text.isEmpty { surface.paste(text) }
+            if request.args.enter == true { surface.submit() }
+            return .success(NoPayload())
         }
     }
 
@@ -110,6 +112,7 @@ extension ControlResponder {
         }
         return pane(request.args.pane, for: request).flatMap { place in
             let surface = place.pane.surface
+            guard surface.isStarted else { return .failure(Self.notStarted(place.pane.token)) }
             let text: String?
             if let lines = request.args.lines {
                 text = surface.text(lastLines: lines)
@@ -121,6 +124,10 @@ extension ControlResponder {
             }
             return .success(PaneText(text: text))
         }
+    }
+
+    private static func notStarted(_ token: Int) -> ControlError {
+        ControlError(.failed, "Pane \(token) has not started yet.")
     }
 
     private static func viewport(of surface: TerminalSurface) -> String? {

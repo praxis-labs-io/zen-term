@@ -46,6 +46,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     public var title: String { lastTitle }
     public var isFocused: Bool { hostView.window?.firstResponder === hostView }
     public var currentDirectory: URL? { lastCwd }
+    public var isStarted: Bool { surfacePtr != nil }
 
     // Reads OSC 133 prompt marks: a shell without integration reads busy, a background job does not.
     public var isBusy: Bool {

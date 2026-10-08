@@ -23,9 +23,11 @@ final class RecordingSurface: NSObject, TerminalSurface {
     var terminated = false
     var failOnStart = false
     private(set) var startCount = 0
+    private(set) var isStarted = false
     func start(_ config: TerminalSurfaceConfig) {
         guard !terminated else { return }
         startCount += 1
+        isStarted = !failOnStart
         lastConfig = config
         if let theme = config.theme, let behavior = config.behavior {
             lastAppearance = (theme, behavior)
@@ -55,7 +57,10 @@ final class RecordingSurface: NSObject, TerminalSurface {
         focusCount += 1
         if moved { focusRenders.append(true) }
     }
-    func terminate() { terminated = true }
+    func terminate() {
+        terminated = true
+        isStarted = false
+    }
     private(set) var focusRenders: [Bool] = []
     func setFocused(_ focused: Bool) { focusRenders.append(focused) }
     private(set) var sizeSyncHolds = 0

@@ -261,14 +261,16 @@ is not closed.
 
 Pastes `text`, so several lines arrive as one block. `enter` then sends Return outside the
 paste, which runs the block once at a shell prompt. It delivers text, not keys: control
-characters become spaces.
+characters become spaces. `failed` when the pane has not started, such as a host's pane
+waiting for its connection. Nothing is sent.
 
 ### `pane.read`
 
 `args`: `pane`, `lines`.
 
 Returns the rows on screen, or with `lines` the last that many lines of the screen and its
-scrollback, a prompt included. Trailing blank lines are dropped.
+scrollback, a prompt included. Trailing blank lines are dropped. `failed` when the pane has
+not started or its screen cannot be read.
 
 ```json
 {"text":"$ seq 3\n1\n2\n3"}

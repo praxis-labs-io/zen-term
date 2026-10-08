@@ -193,6 +193,44 @@ final class ControlSSHHostTests: WindowTestCase {
         XCTAssertNotNil(responder.locate(pane: login))
     }
 
+    private func paneWaitingForTheHost(_ c: WindowController) throws -> (token: Int, surface: RecordingSurface) {
+        let login = try token(of: loggingIn(c))
+        let split = try result(send(.paneSplit, ControlArgs(pane: login, dir: .right)), as: PaneResult.self)
+        let surface = try XCTUnwrap(spawned.last)
+        XCTAssertFalse(surface.isStarted, "a pane on a host waits for the connection")
+        return (split.pane, surface)
+    }
+
+    func test_paneSendToAPaneWaitingForItsHost_failsSayingItHasNotStarted_thenLandsOnceConnected() throws {
+        let c = makeWindow()
+        let waiting = try paneWaitingForTheHost(c)
+
+        let refusals = try [
+            error(send(.paneSend, ControlArgs(pane: waiting.token, text: "ls"))),
+            error(send(.paneSend, ControlArgs(pane: waiting.token, text: "", enter: true))),
+        ]
+
+        XCTAssertEqual(refusals.map(\.code), [.failed, .failed])
+        let notStarted = "Pane \(waiting.token) has not started yet."
+        XCTAssertEqual(refusals.map(\.message), [notStarted, notStarted])
+        XCTAssertEqual(waiting.surface.inputs, [])
+
+        fake.connect()
+        _ = try result(send(.paneSend, ControlArgs(pane: waiting.token, text: "ls")), as: NoPayload.self)
+
+        XCTAssertEqual(waiting.surface.inputs, [.paste("ls")])
+    }
+
+    func test_paneReadOfAPaneWaitingForItsHost_failsSayingItHasNotStarted() throws {
+        let c = makeWindow()
+        let waiting = try paneWaitingForTheHost(c)
+
+        let refusal = try error(send(.paneRead, ControlArgs(pane: waiting.token)))
+
+        XCTAssertEqual(refusal.code, .failed)
+        XCTAssertEqual(refusal.message, "Pane \(waiting.token) has not started yet.")
+    }
+
     private let address = "ssh:devbox"
 
     func test_anSSHAddressFindsTheHostsWorkspaceInAnotherWindow_andSwitchRaisesIt() throws {

@@ -10,7 +10,8 @@ private final class FakeSurface: NSObject, TerminalSurface {
     var title = ""
     var isFocused = false
     private(set) var terminated = false
-    func start(_ config: TerminalSurfaceConfig) {}
+    private(set) var isStarted = false
+    func start(_ config: TerminalSurfaceConfig) { isStarted = true }
     func focus() {}
     func terminate() { terminated = true }
     func paste(_ text: String) {}

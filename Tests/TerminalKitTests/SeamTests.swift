@@ -9,6 +9,7 @@ private final class SpySurface: TerminalSurface {
     var title = "spy"
     var isFocused = false
     private(set) var started = false
+    var isStarted: Bool { started }
 
     func start(_ config: TerminalSurfaceConfig) {
         started = true
