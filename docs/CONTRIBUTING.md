@@ -161,6 +161,7 @@ rejected designs, or measurements. The why of a change goes in the pull request.
 | how a subsystem fits together | `docs/architecture.md` |
 | an AppKit trap you hit | `docs/swift-conventions.md`, add to it |
 | a dependency or bundled resource | `docs/third-party-notices.md` |
+| a `zen` command or a control socket reply | `docs/control-protocol.md` |
 
 ## Agents
 

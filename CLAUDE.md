@@ -17,6 +17,7 @@ or how something used to be.
 | `docs/swift-conventions.md` | AppKit and Swift traps past what a linter catches |
 | `docs/releasing.md` | `bin/release`, versioning guards, notarization, Sparkle |
 | `docs/third-party-notices.md` | re-probing the notices after a ghostty pin move |
+| `docs/control-protocol.md` | the control socket wire contract `zen` speaks |
 | `docs/nvim-navigator-protocol.md` | the nav socket wire contract |
 | `docs/nvim-theme-protocol.md` | the published theme contract |
 | `docs/config/*` | the reference config files users open |

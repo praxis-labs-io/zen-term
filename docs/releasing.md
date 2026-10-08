@@ -18,10 +18,11 @@ Sparkle and before the outer app. On the Developer ID path that signature carrie
 hardened runtime and a timestamp like every other Mach-O, so the app's notarization covers
 it and `codesign --verify --strict --deep` checks it.
 
-**The path is a contract.** Install is a symlink to
-`/Applications/ZenTerm.app/Contents/MacOS/zen`, and `zen --version` reads the version from
-the `Info.plist` two folders above wherever that symlink resolves. Moving or renaming the
-binary breaks every installed link.
+**The path is a contract.** libghostty appends the app binary's folder to every pane's
+`PATH`, so `zen` must sit beside `ZenTerm` to run in a pane with no install. Outside
+ZenTerm, install is a symlink to `/Applications/ZenTerm.app/Contents/MacOS/zen`, and
+`zen --version` reads the version from the `Info.plist` two folders above wherever that
+symlink resolves. Moving or renaming the binary breaks every installed link.
 
 ## zen-term-releases stays archived
 
