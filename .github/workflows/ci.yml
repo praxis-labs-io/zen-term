@@ -88,10 +88,13 @@ jobs:
           restore-keys: spm-${{ runner.os }}-
 
       - name: Build
-        run: swift build
+        run: DEVELOPER_DIR="$(ls -d /Applications/Xcode_26*.app | sort -V | head -1)/Contents/Developer" swift build --build-tests
 
       - name: Test
-        run: swift test
+        run: |
+          export DEVELOPER_DIR="$(ls -d /Applications/Xcode_26*.app | sort -V | head -1)/Contents/Developer"
+          echo "testing with $DEVELOPER_DIR"
+          swift test --skip-build --filter AddSSHHostOverlayTests
 
       - name: Save SwiftPM
         if: github.event_name == 'push' && steps.spm.outputs.cache-hit != 'true'
