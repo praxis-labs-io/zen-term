@@ -233,7 +233,7 @@ final class ControlWorkspaceTabTests: WindowTestCase {
             send(.workspaceOpen, ControlArgs(workspace: folder.path), from: caller), as: WorkspaceResult.self)
 
         XCTAssertEqual(found.window, ControlAddress.window(there.windowID))
-        XCTAssertEqual(found.workspace.title, "alpha")
+        XCTAssertEqual(found.workspace?.title, "alpha")
         XCTAssertEqual(here.workspaceIDsForTesting.count, 1)
         XCTAssertEqual(there.workspaceIDsForTesting.count, 2)
         XCTAssertEqual(configReads, 0, "an open workspace is found without reading the config")
@@ -246,13 +246,13 @@ final class ControlWorkspaceTabTests: WindowTestCase {
 
         let opened = try result(send(.workspaceOpen, ControlArgs(workspace: "alpha")), as: WorkspaceResult.self)
 
-        XCTAssertEqual(opened.workspace.tabs.map(\.title), ["one", "two"])
-        XCTAssertTrue(opened.workspace.configured)
-        XCTAssertFalse(opened.workspace.active)
+        XCTAssertEqual(opened.workspace?.tabs.map(\.title), ["one", "two"])
+        XCTAssertEqual(opened.workspace?.configured, true)
+        XCTAssertEqual(opened.workspace?.active, false)
         XCTAssertEqual(c.activeWorkspaceIDForTesting, showing)
 
         let again = try result(send(.workspaceOpen, ControlArgs(workspace: folder.path)), as: WorkspaceResult.self)
-        XCTAssertEqual(again.workspace.tabs.map(\.id), opened.workspace.tabs.map(\.id), "returned, not duplicated")
+        XCTAssertEqual(again.workspace?.tabs.map(\.id), opened.workspace?.tabs.map(\.id), "returned, not duplicated")
         XCTAssertEqual(c.workspaceIDsForTesting.count, 2)
     }
 
@@ -263,12 +263,12 @@ final class ControlWorkspaceTabTests: WindowTestCase {
         let opened = try result(
             send(.workspaceOpen, ControlArgs(workspace: "alpha", focus: true)), as: WorkspaceResult.self)
 
-        XCTAssertTrue(opened.workspace.active)
+        XCTAssertEqual(opened.workspace?.active, true)
         XCTAssertEqual(c.workspaceNamesForTesting.last, "alpha")
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting.last)
     }
 
-    func test_workspaceOpenOfAnSSHHostIsNotFoundWithoutReadingTheConfig() throws {
+    func test_workspaceOpenOfAnSSHHostNotInSettingsIsNotFoundWithoutReadingTheConfig() throws {
         _ = makeWindow()
 
         XCTAssertEqual(try error(send(.workspaceOpen, ControlArgs(workspace: "ssh:devbox"))).code, .notFound)
@@ -289,9 +289,9 @@ final class ControlWorkspaceTabTests: WindowTestCase {
 
         let made = try result(send(.workspaceNew, ControlArgs(path: folder.path)), as: WorkspaceResult.self)
 
-        XCTAssertEqual(made.workspace.title, "Workspace 2")
-        XCTAssertEqual(made.workspace.folder, folder.path)
-        XCTAssertFalse(made.workspace.configured)
+        XCTAssertEqual(made.workspace?.title, "Workspace 2")
+        XCTAssertEqual(made.workspace?.folder, folder.path)
+        XCTAssertEqual(made.workspace?.configured, false)
         XCTAssertEqual(c.activeWorkspaceIDForTesting, showing)
         XCTAssertEqual(try error(send(.workspaceNew, ControlArgs(path: "relative"))).code, .badRequest)
     }

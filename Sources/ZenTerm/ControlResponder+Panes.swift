@@ -35,6 +35,13 @@ extension ControlResponder {
                 return .failure(ControlError(.badRequest, "Pane \(token) is a drawer, and a drawer does not split."))
             }
             let command = request.args.cmd.flatMap { $0.isEmpty ? nil : $0 }
+            if command != nil, let host = place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) {
+                return .failure(
+                    ControlError(
+                        .refused,
+                        "Pane \(token) is on \(ControlAddress.hostPrefix + host.alias), and a split there takes no cmd. "
+                            + "It starts the host's login shell."))
+            }
             switch place.window.splitPane(token, in: place.tab, axis: Self.axis(direction), command: command) {
             case nil:
                 return .failure(ControlError(.notFound, "There is no pane \(token)."))
@@ -80,6 +87,7 @@ extension ControlResponder {
             if stakes.needsForce, request.args.force != true {
                 return .failure(Self.refusal(closing: "pane \(token)", stakes))
             }
+            if stakes.login != nil { return Self.abandonLogin(holding: place.tab, in: place.window) }
             place.window.removePane(token, in: place.tab)
             return .success(NoPayload())
         }

@@ -67,10 +67,9 @@ extension ControlResponder {
 
     private func open(_ created: WorktreeCreation.Created, for request: ControlRequest) -> ControlReply {
         let path = created.origin.path.path
-        let callerWindow = try? caller(request).get().window
         guard
             let window = windows().first(where: { $0.holdsWorkspace(at: created.origin.parent.path) })
-                ?? callerWindow ?? keyWindow()
+                ?? callerWindow(request)
         else { return .failure(ControlError(.failed, "The worktree is at \(path), but no window is open to show it.")) }
         let id = window.openConfiguredWorkspace(created.workspace, origin: created.origin)
         if request.args.focus == true {
@@ -167,7 +166,9 @@ extension ControlResponder {
         let open: WorkspacePlace
         if let address = request.args.workspace {
             if case .host = ControlAddress.Workspace(address) {
-                return .failure(ControlError(.notFound, "There is no workspace \(address)."))
+                return .failure(
+                    ControlError(
+                        .notFound, "\(address) is an SSH host. Worktrees are made from a configured workspace."))
             }
             switch findOpenWorkspace(address) {
             case .success(let place): open = place

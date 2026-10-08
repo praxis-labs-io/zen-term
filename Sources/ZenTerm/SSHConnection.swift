@@ -28,6 +28,7 @@ final class SSHConnection {
         let id: SurfaceID
         weak var surface: TerminalSurface?
         let env: [String: String]
+        let backingScale: CGFloat?
     }
 
     let host: SSHHostID
@@ -61,15 +62,16 @@ final class SSHConnection {
         #endif
     }
 
-    func start(_ surface: TerminalSurface, id: SurfaceID, env: [String: String]) {
+    func start(_ surface: TerminalSurface, id: SurfaceID, env: [String: String], backingScale: CGFloat? = nil) {
         guard !isShutDown, state != .failed else { return }
-        if state == .connected { return launch(surface, env: env) }
+        let entry = Waiting(id: id, surface: surface, env: env, backingScale: backingScale)
+        if state == .connected { return launch(surface, as: entry) }
         if let login {
-            guard login.id == id else { return waiting.append(Waiting(id: id, surface: surface, env: env)) }
-            if isLoginLaunched { launch(surface, env: env) }
+            guard login.id == id else { return waiting.append(entry) }
+            if isLoginLaunched { launch(surface, as: entry) }
             return
         }
-        login = Waiting(id: id, surface: surface, env: env)
+        login = entry
         isLoginLaunched = false
         guard form == nil else { return resolveMasterBeforeLogin() }
         watchers.resolveLaunch(host) { [weak self] form in self?.resolvedLaunch(form) }
@@ -143,7 +145,7 @@ final class SSHConnection {
     private func loginReady() {
         guard !isShutDown, state == .connecting, let login, !isLoginLaunched else { return }
         isLoginLaunched = true
-        if let surface = login.surface { launch(surface, env: login.env) }
+        if let surface = login.surface { launch(surface, as: login) }
     }
 
     private func socketUnwatchable() {
@@ -186,7 +188,7 @@ final class SSHConnection {
         stopWatching = watchers.awaitExit(pid) { [weak self] in self?.masterExited() }
         let flushing = (unlaunchedLogin.map { [$0] } ?? []) + waiting
         waiting = []
-        for entry in flushing { entry.surface.map { launch($0, env: entry.env) } }
+        for entry in flushing { entry.surface.map { launch($0, as: entry) } }
         onConnectedChange?(true)
     }
 
@@ -199,12 +201,14 @@ final class SSHConnection {
         onConnectedChange?(false)
     }
 
-    private func launch(_ surface: TerminalSurface, env: [String: String]) {
+    private func launch(_ surface: TerminalSurface, as entry: Waiting) {
         guard let form else {
             Log.error("ssh: a host surface launched before its config was read", category: .workspace)
             return assertionFailure("a host surface launched before its config was read")
         }
-        surface.start(SSHLaunch.config(host: host, controlPath: controlPath, form: form, env: env))
+        surface.start(
+            SSHLaunch.config(
+                host: host, controlPath: controlPath, form: form, env: entry.env, backingScale: entry.backingScale))
     }
 }
 

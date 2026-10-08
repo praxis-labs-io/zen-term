@@ -74,7 +74,7 @@ integer `id` that could be read. A command with nothing to return answers `{}`.
 | `unsupported_version` | `v` is newer than the app speaks; the response's `v` says which it does. |
 | `not_found`           | A target names nothing that exists.                      |
 | `ambiguous`           | A target names more than one thing.                      |
-| `refused`             | The command would end running work or lose it, or does not apply to its target: a split in Focus Mode, or a worktree command on a workspace with no entry. Carries `details` when `force` would go ahead. |
+| `refused`             | The command would end running work or lose it, or does not apply to its target: a split in Focus Mode, a worktree command on a workspace with no entry, or a `cmd` for an SSH host's tab or pane. Carries `details` when `force` would go ahead. |
 | `failed`              | The app could not do it.                                 |
 
 A `refused` error says what `force` would end:
@@ -99,7 +99,7 @@ Requests are decoded off the main thread, applied on it, and written back off it
 | Pane   | its `$ZEN_PANE` token, e.g. `31`  | Unique across the app and never reused. Drawers have tokens. |
 | Tab    | `w<window>.t<tab>`, e.g. `w1.t14` | Tab ids are minted per window, so the window is part of it. |
 | Workspace | its folder as an absolute path, or its title | Matched across every window. More than one match is `ambiguous`. |
-| SSH host workspace | `ssh:<host>`             | Reserved. Nothing answers to it yet, so it is `not_found`. |
+| SSH host workspace | `ssh:<host>`             | The host's alias in Settings, never its name. A host not in Settings is `not_found`, and so is one with no session or a failed login, except to `workspace.open`. A folder or title never names a host's workspace. |
 | Window | `w<window>`                       |                                               |
 
 A command with no target acts on the caller: `caller.pane`, its tab, its workspace.
@@ -129,8 +129,8 @@ No arguments.
 
 ### `list`
 
-No arguments. Every window, its workspaces in sidebar order, each workspace's tabs
-in tab order, and each tab's panes in split order followed by its drawers. A drawer
+No arguments. Every window, its workspaces in sidebar order with SSH hosts' workspaces
+last in Settings order, each workspace's tabs in tab order, and each tab's panes in split order followed by its drawers. A drawer
 is listed from its first opening until it closes, shown or hidden.
 
 ```json
@@ -145,12 +145,16 @@ is listed from its first opening until it closes, shown or hidden.
 ```
 
 - `key`: the window is the key window.
+- `folder`: absent for an SSH host's workspace.
+- `host`: present for an SSH host's workspace, as `{"alias":"devbox","state":"connected"}`.
+  `state` is `connecting` or `connected`. A host whose login failed is left out.
 - `worktree`: present when the workspace was opened from a worktree. `parent` is
   the folder of the workspace it belongs to.
 - `drawer`: `bottom` or `right`, absent for a pane.
 - `title`: the title the program last set. A pane started with a command is titled with
   that command until its program sets one. Empty when nothing set one.
 - `cwd`: absent when it is not known.
+- `busy`: always false in a host's workspace, since a remote shell reports no prompts.
 - `agent`: present when the pane runs an agent. `state` is `working`, `waiting` or
   `idle`; `name` is absent for an agent that has not been named.
 
@@ -162,6 +166,15 @@ Returns a workspace that is already open, in whichever window holds it, rather t
 opening a second copy. Otherwise opens the workspaces-file entry whose folder or title
 matches, with its tabs and launch focus, in the caller's window. When neither matches it is
 `not_found`.
+
+`ssh:<host>` returns the host's workspace when it has a session. Without one, `focus`
+shows the host's Connect screen in the caller's window and does not connect, and without
+`focus` it is `refused`. The Connect screen's result has no `workspace`, and `connect`
+names the host:
+
+```json
+{"window":"w1","connect":"devbox"}
+```
 
 ```json
 {"window":"w1","workspace":{"title":"zen-term","folder":"/Users/me/src/zen-term",
@@ -184,7 +197,9 @@ named the way a new workspace is named in the app. Returns it as `workspace.open
 ### `workspace.close`
 
 `args`: `workspace`, `force`. Closes each of its tabs. `refused` without `force` when
-anything in it is running, or when it is the window's last workspace.
+anything in it is running, or when it is the window's last workspace. A host's workspace
+is never refused: it disconnects, connecting or not, and its window shows the host's Connect
+screen when it was showing the workspace.
 
 ### `tab.new`
 
@@ -192,7 +207,8 @@ anything in it is running, or when it is the window's last workspace.
 
 Opens a tab in the workspace running `cmd` in a shell, or a shell. It starts in `cwd`,
 else in the caller's folder when the caller is in that workspace, else where a new tab
-in the app would.
+in the app would. A host's tab starts the host's login shell over its connection, so
+`cmd` or `cwd` for a host is `refused`.
 
 ```json
 {"tab":"w1.t14","pane":31}
@@ -210,7 +226,10 @@ program sets.
 ### `tab.close`
 
 `args`: `tab`, `force`. `refused` without `force` when anything in it is running, or when
-it is the window's last tab.
+it is the window's last tab. A host tab holding the login while the host connects is
+`refused`, and the message names the host and how many of its tabs would close. With
+`force` the host stops connecting and its whole workspace closes, as `workspace.close`
+on it would.
 
 ### `pane.split`
 
@@ -218,7 +237,8 @@ it is the window's last tab.
 
 Splits the pane, starting the new one in its folder, running `cmd` in a shell or a shell.
 Focus stays on the pane that had it. A drawer does not split. `refused` when the pane's tab
-is in Focus Mode, and `failed` when the pane is too small to split.
+is in Focus Mode or `cmd` is given for a host's pane, and `failed` when the pane is too small
+to split.
 
 ```json
 {"pane":32}
@@ -231,7 +251,9 @@ is in Focus Mode, and `failed` when the pane is too small to split.
 ### `pane.close`
 
 `args`: `pane`, `force`. `refused` without `force` when the pane is running something. The
-last pane of a tab closes the tab, refused as `tab.close` would be. A drawer is not closed.
+last pane of a tab closes the tab, refused as `tab.close` would be. The login pane of a host
+that is connecting is refused, and closed with `force`, as `tab.close` on its tab is. A drawer
+is not closed.
 
 ### `pane.send`
 
@@ -258,7 +280,8 @@ scrollback, a prompt included. Trailing blank lines are dropped.
 
 The worktrees of the workspace's repo, its main checkout left out. Every worktree command
 resolves the workspace to its entry in the workspaces file, read fresh, and a worktree
-workspace to the workspace it was made from. A workspace with no entry is `refused`.
+workspace to the workspace it was made from. A workspace with no entry is `refused`, and
+an `ssh:<host>` address is `not_found`.
 
 ```json
 {"worktrees":[{"path":"/Users/me/.zenterm/worktrees/zen-term-1a2b3c4d/feat-x","branch":"feat/x",
@@ -334,5 +357,5 @@ rest print nothing. `zen pane split` splits to the right unless `--dir down` say
 otherwise. `zen` sends
 folders as absolute paths, read against its own folder, and refuses a `--cwd` or
 `workspace new` folder that does not exist. A workspace argument is a folder when it
-starts with `/`, `~` or `.`, and a title otherwise. A refusal prints what it would stop,
+starts with `/`, `~` or `.`, a host when it starts with `ssh:`, and a title otherwise. A refusal prints what it would stop,
 one line each. A worktree refusal lists the files it would lose first.

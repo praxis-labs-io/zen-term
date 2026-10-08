@@ -504,7 +504,9 @@ request decodes on the connection's thread, applies on main through `ControlResp
 and is written back from the connection's thread, so a client that stops reading never
 stalls main. A command that reads off-main (`workspace.open` reading the workspaces file)
 replies when the read lands, holding only its own connection. A token resolves to its window, tab and surface by walking the windows
-(`ControlResponder.locate`), not through a second registry. `action` hands its keymap action
+(`ControlResponder.locate`), not through a second registry. An `ssh:<alias>` address resolves
+through each window's host workspaces, not `runningWorkspaces()`, which feeds the ⌘P picker
+and leaves hosts out. `action` hands its keymap action
 to `AppDelegate.route`, the path a reserved chord takes, so it meets the same app-global and
 modal gates a keystroke does; only the keystroke-level pass-through guards are skipped, since
 there is no key to pass through.
@@ -630,7 +632,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   destination the probe resolved from the same `ssh -G`, so it never runs ssh itself.
 - **A connected host is a workspace whose tabs run ssh over one `SSHConnection`.** Every pane
   and drawer, and Scratch, starts through the tab's injected `SurfaceStart` (a user float
-  never does, since a host's start keeps only the launch's environment), which for a host runs
+  never does, since a host's start keeps only the launch's environment and backing scale), which for a host runs
   `/usr/bin/ssh` with `ControlMaster=auto`, a `ControlPath` under `Application Support/ZenTerm/ssh`
   (the temp folder when that path passes 86 bytes, since ssh binds a longer temporary name
   first) and `ControlPersist=60`, as `xterm-256color` with busy tracking off (a remote shell

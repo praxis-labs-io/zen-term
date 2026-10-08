@@ -1,4 +1,4 @@
-/// Every window, its workspaces in sidebar order, their tabs in tab order, and each tab's panes then drawers.
+/// Every window, its workspaces in sidebar order with SSH hosts' last, their tabs in tab order, and each tab's panes then drawers.
 public struct ListResult: ControlPayload, Equatable {
     public let windows: [Window]
 
@@ -16,24 +16,43 @@ public struct ListResult: ControlPayload, Equatable {
         }
     }
 
+    /// `folder` is absent and `host` is set for an SSH host's workspace.
     public struct Workspace: Codable, Equatable, Sendable {
         public let title: String
-        public let folder: String
+        public let folder: String?
+        public let host: Host?
         public let configured: Bool
         public let worktree: Worktree?
         public let active: Bool
         public let tabs: [Tab]
 
         public init(
-            title: String, folder: String, configured: Bool, worktree: Worktree?, active: Bool, tabs: [Tab]
+            title: String, folder: String?, host: Host? = nil, configured: Bool, worktree: Worktree?, active: Bool,
+            tabs: [Tab]
         ) {
             self.title = title
             self.folder = folder
+            self.host = host
             self.configured = configured
             self.worktree = worktree
             self.active = active
             self.tabs = tabs
         }
+    }
+
+    /// The SSH host a workspace runs on, by its alias, and whether its connection is up yet.
+    public struct Host: Codable, Equatable, Sendable {
+        public let alias: String
+        public let state: HostState
+
+        public init(alias: String, state: HostState) {
+            self.alias = alias
+            self.state = state
+        }
+    }
+
+    public enum HostState: String, Codable, Sendable {
+        case connecting, connected
     }
 
     /// The worktree a workspace was opened from: its name and the folder of the workspace it belongs to.

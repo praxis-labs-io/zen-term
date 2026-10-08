@@ -840,7 +840,9 @@ final class WindowController: NSObject {
 
     private static func surfaceStart(over connection: SSHConnection?) -> SurfaceStart {
         guard let connection else { return startSurfaceNow }
-        return { [weak connection] surface, id, launch in connection?.start(surface, id: id, env: launch.environment) }
+        return { [weak connection] surface, id, launch in
+            connection?.start(surface, id: id, env: launch.environment, backingScale: launch.backingScale)
+        }
     }
 
     private func mintTabID() -> TabID { defer { nextTabID += 1 }; return TabID(nextTabID) }
@@ -2241,10 +2243,21 @@ final class WindowController: NSObject {
     }
 
     func listing() -> ListResult.Window {
+        let order = order
         let byID = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
+        let hosts = order.hosts.compactMap { host in workspaces.first { $0.host == host.id } }
         return ListResult.Window(
             id: ControlAddress.window(windowID), key: window.isKeyWindow,
-            workspaces: order.navigableWorkspaces.compactMap { byID[$0] }.map(listing(of:)))
+            workspaces: (order.navigableWorkspaces.compactMap { byID[$0] } + hosts.filter(Self.isListed))
+                .map(listing(of:)))
+    }
+
+    // A failed login's workspace closes on the next main turn.
+    private static func isListed(_ host: WorkspaceController) -> Bool { host.connection?.state != .failed }
+
+    private static func hostListing(of workspace: WorkspaceController) -> ListResult.Host? {
+        guard let host = workspace.host, let connection = workspace.connection else { return nil }
+        return ListResult.Host(alias: host.alias, state: connection.state == .connected ? .connected : .connecting)
     }
 
     private func listing(of workspace: WorkspaceController) -> ListResult.Workspace {
@@ -2254,8 +2267,10 @@ final class WindowController: NSObject {
                 id: ControlAddress.tab(window: windowID, tab: id.raw), title: title(of: id),
                 active: id == workspace.activeID, panes: tab.paneHandles.map(listing(of:)))
         }
+        let host = Self.hostListing(of: workspace)
         return ListResult.Workspace(
-            title: workspace.name, folder: workspace.folder.path, configured: workspace.isConfigured,
+            title: workspace.name, folder: host == nil ? workspace.folder.path : nil, host: host,
+            configured: workspace.isConfigured,
             worktree: workspace.origin.map { ListResult.Worktree(name: $0.name, parent: $0.parent.path.path) },
             active: workspace === activeWorkspace, tabs: tabs)
     }
@@ -2307,6 +2322,12 @@ final class WindowController: NSObject {
 
     func workspaceID(of tab: TabID) -> WorkspaceID? { workspace(of: tab)?.id }
 
+    func workspaceID(of host: SSHHostID) -> WorkspaceID? {
+        workspaces.first { $0.host == host && Self.isListed($0) }?.id
+    }
+
+    func host(of id: WorkspaceID) -> SSHHostID? { workspaces.first { $0.id == id }?.host }
+
     func listing(of id: WorkspaceID) -> ListResult.Workspace? {
         workspaces.first { $0.id == id }.map(listing(of:))
     }
@@ -2332,7 +2353,8 @@ final class WindowController: NSObject {
 
     func closeStakes(tab id: TabID) -> CloseStakes? {
         guard let workspace = workspace(of: id), let tab = controller(id) else { return nil }
-        let closesWindow = workspace.tabIDs.count == 1 && workspaces.count == 1
+        if holdsAwaitingLogin(tab: id) { return loginStakes(of: workspace) }
+        let closesWindow = workspace.tabIDs.count == 1 && closesWindow(closing: workspace)
         return CloseStakes(
             closesWindow: closesWindow, isRunning: isRunning(tab: id),
             panes: tab.paneHandles.filter(\.surface.isBusy).map(listing(of:)),
@@ -2341,7 +2363,8 @@ final class WindowController: NSObject {
 
     func closeStakes(workspace id: WorkspaceID) -> CloseStakes? {
         guard let workspace = workspaces.first(where: { $0.id == id }) else { return nil }
-        let closesWindow = workspaces.count == 1
+        if workspace.host != nil { return CloseStakes(closesWindow: false, isRunning: false, panes: [], floats: []) }
+        let closesWindow = closesWindow(closing: workspace)
         let tabs = workspace.tabIDs.compactMap(workspace.controller)
         return CloseStakes(
             closesWindow: closesWindow, isRunning: isRunning(workspace: workspace),
@@ -2360,10 +2383,19 @@ final class WindowController: NSObject {
     }
 
     func closeStakes(pane: PaneHandle, in tab: TabID) -> CloseStakes? {
-        guard let c = controller(tab) else { return nil }
+        guard let c = controller(tab), let workspace = workspace(of: tab) else { return nil }
+        if workspace.connection?.isAwaitingLogin(on: pane.surfaceID) == true { return loginStakes(of: workspace) }
         if c.isSinglePane { return closeStakes(tab: tab) }
         let busy = pane.surface.isBusy
         return CloseStakes(closesWindow: false, isRunning: busy, panes: busy ? [listing(of: pane)] : [], floats: [])
+    }
+
+    private func loginStakes(of workspace: WorkspaceController) -> CloseStakes {
+        CloseStakes(
+            closesWindow: false, isRunning: false, panes: [], floats: [],
+            login: workspace.host.map {
+                CloseStakes.Login(host: GeneralConfig.current.displayName(of: $0), tabs: workspace.tabIDs.count)
+            })
     }
 
     func removePane(_ token: Int, in tab: TabID) {
@@ -2855,6 +2887,7 @@ final class WindowController: NSObject {
 
     func removeWorkspace(_ id: WorkspaceID) {
         guard let workspace = workspaces.first(where: { $0.id == id }) else { return }
+        workspace.connection?.shutdown()
         closeTabs(of: workspace) { removeTab($0) }
     }
 

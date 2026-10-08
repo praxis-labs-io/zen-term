@@ -50,14 +50,29 @@ struct ControlResponder {
         switch findOpenWorkspace(address) {
         case .success(let place): return reply(.success(present(place, focus: request.args.focus)))
         case .failure(let error) where error.code != .notFound: return reply(.failure(error))
-        case .failure: break
-        }
-        if case .host = ControlAddress.Workspace(address) {
-            return reply(.failure(ControlError(.notFound, "There is no workspace \(address).")))
+        case .failure(let error):
+            if case .host(let alias) = ControlAddress.Workspace(address) {
+                return reply(showConnect(alias, unconnected: error, for: request))
+            }
         }
         loadWorkspaces { entries in
             reply(openConfigured(address, from: entries, for: request))
         }
+    }
+
+    private func showConnect(_ alias: String, unconnected: ControlError, for request: ControlRequest) -> ControlReply {
+        guard GeneralConfig.current.sshHostAliases.contains(alias) else { return .failure(unconnected) }
+        let address = ControlAddress.hostPrefix + alias
+        guard request.args.focus == true else {
+            return .failure(
+                ControlError(.refused, "\(address) is not connected. Add --focus to show its Connect screen."))
+        }
+        guard let window = callerWindow(request) else {
+            return .failure(ControlError(.notFound, "No ZenTerm window is open."))
+        }
+        window.activate(SSHHostID(alias: alias))
+        raise(window)
+        return .success(WorkspaceResult(window: ControlAddress.window(window.windowID), workspace: nil, connect: alias))
     }
 
     private func openConfigured(_ address: String, from entries: [Workspace], for request: ControlRequest)
@@ -128,11 +143,18 @@ struct ControlResponder {
             return .failure(ControlError(.badRequest, "\(cwd) is not an absolute path."))
         }
         return workspace(request.args.workspace, for: request).flatMap { place in
+            let command = request.args.cmd.flatMap { $0.isEmpty ? nil : $0 }
+            if let host = place.window.host(of: place.id), command != nil || request.args.cwd != nil {
+                return .failure(
+                    ControlError(
+                        .refused,
+                        "A tab on \(ControlAddress.hostPrefix + host.alias) takes no cmd or cwd. "
+                            + "It starts the host's login shell."))
+            }
             let cwd =
                 request.args.cwd.map { URL(fileURLWithPath: $0, isDirectory: true) }
                 ?? callerCWD(in: place, for: request)
                 ?? ShellLaunch.newSessionCWD(focused: place.window.sessionCWD(of: place.id))
-            let command = request.args.cmd.flatMap { $0.isEmpty ? nil : $0 }
             guard let tab = place.window.openTab(in: place.id, cwd: cwd, command: command),
                 let pane = place.window.firstPaneToken(of: tab)
             else { return .failure(ControlError(.failed, "The tab could not be opened.")) }
@@ -172,6 +194,7 @@ struct ControlResponder {
                 let address = ControlAddress.tab(window: place.window.windowID, tab: place.id.raw)
                 return .failure(Self.refusal(closing: "tab \(address)", stakes))
             }
+            if stakes.login != nil { return Self.abandonLogin(holding: place.id, in: place.window) }
             place.window.removeTab(place.id)
             return .success(NoPayload())
         }
@@ -209,10 +232,19 @@ struct ControlResponder {
         var consequences: [String] = []
         if stakes.closesWindow { consequences.append("close the window") }
         if stakes.isRunning { consequences.append(stopping(stakes.panes, stakes.floats)) }
+        if let login = stakes.login {
+            let tabs = login.tabs == 1 ? "tab" : "\(login.tabs) tabs"
+            consequences.append("stop connecting to \(login.host) and close its \(tabs)")
+        }
         return ControlError(
             .refused, "Closing \(name) would \(CloseWarning.list(consequences)).",
             details: ControlError.Details(panes: stakes.panes, floats: stakes.floats, closesWindow: stakes.closesWindow)
         )
+    }
+
+    static func abandonLogin(holding tab: TabID, in window: WindowController) -> ControlReply {
+        if let workspace = window.workspaceID(of: tab) { window.removeWorkspace(workspace) }
+        return .success(NoPayload())
     }
 
     static func stopping(_ panes: [ListResult.Pane], _ floats: [String]) -> String {

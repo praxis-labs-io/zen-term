@@ -43,7 +43,12 @@ extension ControlResponder {
         return findOpenWorkspace(address)
     }
 
+    func callerWindow(_ request: ControlRequest) -> WindowController? {
+        (try? caller(request).get().window) ?? keyWindow()
+    }
+
     func findOpenWorkspace(_ address: String) -> Result<WorkspacePlace, ControlError> {
+        if case .host(let alias) = ControlAddress.Workspace(address) { return findHostWorkspace(alias) }
         let matches = windows().flatMap { window in
             window.runningWorkspaces().compactMap { running -> WorkspacePlace? in
                 guard let id = running.id, Self.names(running, address) else { return nil }
@@ -55,6 +60,20 @@ extension ControlResponder {
         case 1: return .success(matches[0])
         default: return .failure(ControlError(.ambiguous, "\(address) names \(matches.count) open workspaces."))
         }
+    }
+
+    private func findHostWorkspace(_ alias: String) -> Result<WorkspacePlace, ControlError> {
+        guard GeneralConfig.current.sshHostAliases.contains(alias) else {
+            return .failure(ControlError(.notFound, "There is no SSH host \(alias) in Settings."))
+        }
+        let host = SSHHostID(alias: alias)
+        for window in windows() {
+            if let id = window.workspaceID(of: host) { return .success(WorkspacePlace(window: window, id: id)) }
+        }
+        let address = ControlAddress.hostPrefix + alias
+        return .failure(
+            ControlError(
+                .notFound, "\(address) is not connected. workspace.open \(address) --focus shows its Connect screen."))
     }
 
     private static func names(_ running: RunningWorkspace, _ address: String) -> Bool {
