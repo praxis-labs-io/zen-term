@@ -376,7 +376,24 @@ final class ControlSSHHostTests: WindowTestCase {
 
         let refusal = try error(send(.worktreeList, ControlArgs(workspace: address)))
 
+        XCTAssertEqual(refusal.code, .refused)
         XCTAssertEqual(refusal.message, "ssh:devbox is an SSH host. Worktrees are made from a configured workspace.")
+    }
+
+    func test_aWorktreeCommandDefaultingToAHostWorkspace_isRefusedLikeItsSSHAddress() throws {
+        let c = makeWindow()
+        let login = try token(of: connected(c))
+        XCTAssertEqual(c.host(of: c.activeWorkspaceIDForTesting), host)
+
+        for cmd in [ControlCommand.worktreeList, .worktreeCreate, .worktreeRemove] {
+            for caller in [login, nil] {
+                let refusal = try error(send(cmd, ControlArgs(branch: "x"), from: caller))
+                XCTAssertEqual(refusal.code, .refused, "\(cmd.rawValue) from \(String(describing: caller))")
+                XCTAssertEqual(
+                    refusal.message, "ssh:devbox is an SSH host. Worktrees are made from a configured workspace.",
+                    "\(cmd.rawValue) from \(String(describing: caller))")
+            }
+        }
     }
 
     private func listedWorkspaces(_ c: WindowController) throws -> [ListResult.Workspace] {
