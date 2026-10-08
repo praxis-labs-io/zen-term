@@ -7,17 +7,33 @@ final class ControlServerTests: XCTestCase {
     private var server: ControlServer?
     private var path = ""
     private var appliedOnMain: [Bool] = []
+    private var lateReplyLanded: XCTestExpectation?
+    private static let answerTimeout: TimeInterval = 1
+    private static let hugeReply = String(repeating: "x", count: 4 << 20)
 
     override func setUp() {
         super.setUp()
         path = "/tmp/zt-control-\(getpid())-\(name.hashValue & 0xFFFF).sock"
         appliedOnMain = []
-        let server = ControlServer(path: path) { [unowned self] request, reply in
+        let server = ControlServer(path: path, idleTimeout: 1, answerTimeout: Self.answerTimeout) {
+            [unowned self] request, reply in
             appliedOnMain.append(Thread.isMainThread)
-            guard request.cmd == .list else { return reply(.success(HelloResult(app: "test-\(request.id)"))) }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                reply(.success(HelloResult(app: "later-\(request.id)")))
-                reply(.success(HelloResult(app: "twice-\(request.id)")))
+            switch request.cmd {
+            case .list:
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    reply(.success(HelloResult(app: "later-\(request.id)")))
+                    reply(.success(HelloResult(app: "twice-\(request.id)")))
+                }
+            case .tabNew:
+                let landed = lateReplyLanded
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.answerTimeout + 0.5) {
+                    reply(.success(HelloResult(app: "too-late-\(request.id)")))
+                    landed?.fulfill()
+                }
+            case .paneRead:
+                reply(.success(HelloResult(app: Self.hugeReply)))
+            default:
+                reply(.success(HelloResult(app: "test-\(request.id)")))
             }
         }
         server.start()
@@ -76,6 +92,44 @@ final class ControlServerTests: XCTestCase {
             expecting: 3)
         let answered = try replies.map { try decode($0, as: HelloResult.self).result?.app }
         XCTAssertEqual(answered, ["later-1", "test-2", "test-3"])
+    }
+
+    func test_aRequestNobodyAnswersFailsAndTheConnectionStaysUsable() throws {
+        let landed = expectation(description: "the late reply lands")
+        lateReplyLanded = landed
+        let replies = try exchange(
+            [#"{"v":1,"id":1,"cmd":"tab.new"}"#, #"{"v":1,"id":2,"cmd":"hello"}"#], expecting: 2)
+        guard replies.count == 2 else { return XCTFail("expected two replies, got \(replies)") }
+        let unanswered = try decode(replies[0], as: NoPayload.self)
+        XCTAssertEqual(unanswered.id, 1)
+        XCTAssertEqual(unanswered.error?.code, .failed)
+        XCTAssertEqual(unanswered.error?.message, "ZenTerm did not answer.")
+        XCTAssertEqual(try decode(replies[1], as: HelloResult.self).result, HelloResult(app: "test-2"))
+        wait(for: [landed], timeout: 3)
+    }
+
+    func test_aClientThatStopsReadingIsDroppedMidReply() throws {
+        let fd = try UnixSocket.connect(to: path)
+        defer { close(fd) }
+        let done = expectation(description: "the stalled client drains what it was sent")
+        var received = 0
+        var last = 0
+        DispatchQueue.global().async {
+            defer { done.fulfill() }
+            _ = UnixSocket.writeAll(Data((#"{"v":1,"id":1,"cmd":"pane.read"}"# + "\n").utf8), to: fd)
+            Thread.sleep(forTimeInterval: 2.5)
+            var timeout = timeval(tv_sec: 3, tv_usec: 0)
+            setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+            var chunk = [UInt8](repeating: 0, count: 65536)
+            repeat {
+                last = read(fd, &chunk, chunk.count)
+                if last > 0 { received += last }
+            } while last > 0
+        }
+        wait(for: [done], timeout: 10)
+        XCTAssertEqual(last, 0, "the server closes the connection rather than blocking on the write")
+        XCTAssertGreaterThan(received, 0, "the reply started before the client stalled")
+        XCTAssertLessThan(received, Self.hugeReply.utf8.count, "the reply was cut off, not finished")
     }
 
     func test_malformedLineIsABadRequestAndTheConnectionStaysUsable() throws {

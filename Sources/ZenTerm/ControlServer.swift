@@ -8,18 +8,24 @@ typealias ControlReply = Result<any ControlPayload, ControlError>
 final class ControlServer {
     static var socketPath: String { SocketListener.path(prefix: ControlEndpoint.fileNamePrefix) }
 
+    // As long as `zen worktree` waits, the longest any client waits for a reply.
+    static let answerTimeout: TimeInterval = 300
+
     private let respond: @MainActor (ControlRequest, @escaping @MainActor (ControlReply) -> Void) -> Void
     private let idleTimeout: time_t
+    private let answerTimeout: TimeInterval
     private let connections = DispatchQueue(
         label: "com.zenterm.control-connections", qos: .userInitiated, attributes: .concurrent)
     private var listener: SocketListener?
 
     init(
         path: String = ControlServer.socketPath, idleTimeout: time_t = 30,
+        answerTimeout: TimeInterval = ControlServer.answerTimeout,
         respond: @escaping @MainActor (ControlRequest, @escaping @MainActor (ControlReply) -> Void) -> Void
     ) {
         self.respond = respond
         self.idleTimeout = idleTimeout
+        self.answerTimeout = answerTimeout
         listener = SocketListener(
             prefix: ControlEndpoint.fileNamePrefix, path: path, name: "ControlSocket", category: .control
         ) { [weak self] conn in self?.acceptOne(conn) }
@@ -32,6 +38,7 @@ final class ControlServer {
     private func acceptOne(_ conn: Int32) {
         var timeout = timeval(tv_sec: idleTimeout, tv_usec: 0)
         setsockopt(conn, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+        setsockopt(conn, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
         connections.async { [weak self] in
             guard let self else {
                 close(conn)
@@ -77,20 +84,31 @@ final class ControlServer {
     }
 
     private func applyOnMain(_ request: ControlRequest) -> ControlReply {
-        let answered = DispatchSemaphore(value: 0)
-        var reply: ControlReply = .failure(ControlError(.failed, "ZenTerm did not answer."))
-        DispatchQueue.main.async { [respond] in
-            MainActor.assumeIsolated {
-                var isAnswered = false
-                respond(request) { answer in
-                    guard !isAnswered else { return }
-                    isAnswered = true
+        final class Answer: @unchecked Sendable {
+            private let lock = NSLock()
+            private var reply: ControlReply?
+            var settled: ControlReply? { lock.withLock { reply } }
+            func settle(_ answer: ControlReply) -> Bool {
+                lock.withLock {
+                    guard reply == nil else { return false }
                     reply = answer
-                    answered.signal()
+                    return true
                 }
             }
         }
-        answered.wait()
+        let answer = Answer()
+        let answered = DispatchSemaphore(value: 0)
+        DispatchQueue.main.async { [respond] in
+            MainActor.assumeIsolated {
+                respond(request) { reply in
+                    if answer.settle(reply) { answered.signal() }
+                }
+            }
+        }
+        guard answered.wait(timeout: .now() + answerTimeout) == .success, let reply = answer.settled else {
+            Log.info("ControlSocket: \(request.cmd.rawValue) id=\(request.id) went unanswered", category: .control)
+            return .failure(ControlError(.failed, "ZenTerm did not answer."))
+        }
         return reply
     }
 
