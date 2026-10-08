@@ -252,7 +252,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         try XCTUnwrap(button("Remove", in: overlay)).onTap()
 
         XCTAssertEqual(removed, 1)
-        XCTAssertNil(descendants(of: overlay).compactMap { $0 as? ConfirmCard }.first)
+        XCTAssertFalse(descendants(of: overlay).contains { $0 is ConfirmCard })
     }
 
     func test_remove_ofAnOpenHost_asksFirst_andOnlyConfirmingRemoves() throws {
