@@ -5,7 +5,7 @@ import Foundation
 final class SocketListener {
     // Per pid: a shared path let a second instance bind over this one and delete it on quit.
     static func path(prefix: String) -> String {
-        ControlEndpoint.directory.appendingPathComponent("\(prefix)\(getpid())\(socketSuffix)").path
+        ControlEndpoint.directory.appendingPathComponent("\(prefix)\(getpid())\(ControlEndpoint.fileNameSuffix)").path
     }
 
     // Probes a socket with a connect rather than a pid check, which pid recycling could fool.
@@ -13,8 +13,8 @@ final class SocketListener {
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory) else { return }
         for name in names where name.hasPrefix(prefix) {
             let path = directory + "/" + name
-            if name.hasSuffix(socketSuffix) {
-                if pid(in: name, prefix: prefix, suffix: socketSuffix) == getpid() { continue }
+            if name.hasSuffix(ControlEndpoint.fileNameSuffix) {
+                if pid(in: name, prefix: prefix, suffix: ControlEndpoint.fileNameSuffix) == getpid() { continue }
                 if !hasListener(at: path) { unlink(path) }
             } else if name.hasSuffix(bindingSuffix), let pid = pid(in: name, prefix: prefix, suffix: bindingSuffix),
                 isGone(pid)
@@ -26,7 +26,8 @@ final class SocketListener {
 
     // Swaps the suffix rather than appending one, so a path that fits `sun_path` still fits while binding.
     static func bindingPath(for path: String) -> String {
-        let stem = path.hasSuffix(socketSuffix) ? String(path.dropLast(socketSuffix.count)) : path
+        let suffix = ControlEndpoint.fileNameSuffix
+        let stem = path.hasSuffix(suffix) ? String(path.dropLast(suffix.count)) : path
         return stem + bindingSuffix
     }
 
@@ -51,7 +52,6 @@ final class SocketListener {
         }
     }
 
-    private static let socketSuffix = ".sock"
     // The final name only ever exists while something listens on it, so a sibling's sweep never sees it refuse.
     private static let bindingSuffix = ".bind"
     private static let socketMode: mode_t = 0o600
