@@ -2,14 +2,13 @@ import AppLog
 import ControlProtocol
 import Foundation
 
-/// Listens on one per-pid `AF_UNIX` socket and hands each connection from this user to `accept`, off-main.
 final class SocketListener {
-    /// Per pid: a shared path let a second instance bind over this one and delete it on quit.
+    // Per pid: a shared path let a second instance bind over this one and delete it on quit.
     static func path(prefix: String) -> String {
         ControlEndpoint.directory.appendingPathComponent("\(prefix)\(getpid()).sock").path
     }
 
-    /// Probes liveness with a connect rather than a pid check, which pid recycling could fool.
+    // Probes liveness with a connect rather than a pid check, which pid recycling could fool.
     static func sweepStaleSockets(prefix: String, in directory: String) {
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory) else { return }
         for name in names where name.hasPrefix(prefix) && name.hasSuffix(".sock") {
@@ -19,7 +18,7 @@ final class SocketListener {
         }
     }
 
-    /// Answers live when the probe cannot run, so the sweep never deletes a file it did not check.
+    // Answers live when the probe cannot run, so the sweep never deletes a file it did not check.
     private static func hasListener(at path: String) -> Bool {
         do {
             close(try UnixSocket.connect(to: path))
