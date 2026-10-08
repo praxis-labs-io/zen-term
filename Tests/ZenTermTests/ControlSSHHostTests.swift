@@ -211,7 +211,7 @@ final class ControlSSHHostTests: WindowTestCase {
         ]
 
         XCTAssertEqual(refusals.map(\.code), [.failed, .failed])
-        let notStarted = "Pane \(waiting.token) has not started yet."
+        let notStarted = "Pane \(waiting.token) has not started."
         XCTAssertEqual(refusals.map(\.message), [notStarted, notStarted])
         XCTAssertEqual(waiting.surface.inputs, [])
 
@@ -228,7 +228,7 @@ final class ControlSSHHostTests: WindowTestCase {
         let refusal = try error(send(.paneRead, ControlArgs(pane: waiting.token)))
 
         XCTAssertEqual(refusal.code, .failed)
-        XCTAssertEqual(refusal.message, "Pane \(waiting.token) has not started yet.")
+        XCTAssertEqual(refusal.message, "Pane \(waiting.token) has not started.")
     }
 
     private let address = "ssh:devbox"

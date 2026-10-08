@@ -332,7 +332,7 @@ final class ControlPaneTests: WindowTestCase {
         let refusal = try error(send(.paneSend, ControlArgs(text: "ls", enter: true), from: pane))
 
         XCTAssertEqual(refusal.code, .failed)
-        XCTAssertEqual(refusal.message, "Pane \(pane) has not started yet.")
+        XCTAssertEqual(refusal.message, "Pane \(pane) has not started.")
         XCTAssertEqual(target.inputs, [])
     }
 

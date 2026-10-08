@@ -127,7 +127,7 @@ extension ControlResponder {
     }
 
     private static func notStarted(_ token: Int) -> ControlError {
-        ControlError(.failed, "Pane \(token) has not started yet.")
+        ControlError(.failed, "Pane \(token) has not started.")
     }
 
     private static func viewport(of surface: TerminalSurface) -> String? {
