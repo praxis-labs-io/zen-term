@@ -318,6 +318,24 @@ final class ControlPaneTests: WindowTestCase {
         XCTAssertEqual(try error(send(.paneRead, from: token(of: target))).code, .failed)
     }
 
+    func test_sendToAPaneWhoseShellFailedToStart_failsSayingItHasNotStarted() throws {
+        let failing = TerminalSurfaceFactory.makeOverride
+        TerminalSurfaceFactory.makeOverride = {
+            let surface = failing?() as? RecordingSurface
+            surface?.failOnStart = true
+            return surface ?? RecordingSurface()
+        }
+        _ = makeWindow()
+        let target = try XCTUnwrap(spawned.first)
+        let pane = try token(of: target)
+
+        let refusal = try error(send(.paneSend, ControlArgs(text: "ls", enter: true), from: pane))
+
+        XCTAssertEqual(refusal.code, .failed)
+        XCTAssertEqual(refusal.message, "Pane \(pane) has not started.")
+        XCTAssertEqual(target.inputs, [])
+    }
+
     func test_withoutACallerAPaneCommandActsOnTheKeyWindowsFocusedPane() throws {
         _ = makeWindow()
         let focused = try XCTUnwrap(spawned.first)

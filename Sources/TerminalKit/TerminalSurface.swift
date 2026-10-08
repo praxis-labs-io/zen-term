@@ -270,6 +270,9 @@ public protocol TerminalSurface: AnyObject {
     /// Whether the shell is running a foreground command.
     var isBusy: Bool { get }
 
+    /// False until `start(_:)` brings the terminal up, after a failed start, and after `terminate()`.
+    var isStarted: Bool { get }
+
     /// The background the terminal last reported (OSC 11), or nil if it never has.
     var backgroundOverride: TerminalColor? { get }
 
@@ -293,9 +296,11 @@ public protocol TerminalSurface: AnyObject {
     /// Calls nest; an unmatched release is ignored.
     func setSizeSyncSuspended(_ suspended: Bool)
 
+    /// Does nothing while `isStarted` is false.
     func paste(_ text: String)
 
     /// Sends Return to the program outside any paste, the way a keypress would end a line.
+    /// Does nothing while `isStarted` is false.
     func submit()
 
     func copySelection() -> String?

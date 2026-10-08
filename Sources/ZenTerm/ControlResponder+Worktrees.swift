@@ -165,10 +165,11 @@ extension ControlResponder {
     private func worktreeParent(_ request: ControlRequest) -> Result<String, ControlError> {
         let open: WorkspacePlace
         if let address = request.args.workspace {
-            if case .host = ControlAddress.Workspace(address) {
-                return .failure(
-                    ControlError(
-                        .notFound, "\(address) is an SSH host. Worktrees are made from a configured workspace."))
+            if case .host(let alias) = ControlAddress.Workspace(address) {
+                guard GeneralConfig.current.sshHostAliases.contains(alias) else {
+                    return .failure(ControlError(.notFound, "There is no SSH host \(alias) in Settings."))
+                }
+                return .failure(Self.hostRefusal(address))
             }
             switch findOpenWorkspace(address) {
             case .success(let place): open = place
@@ -181,10 +182,17 @@ extension ControlResponder {
             case .failure(let error): return .failure(error)
             }
         }
+        if let host = open.window.host(of: open.id) {
+            return .failure(Self.hostRefusal(ControlAddress.hostPrefix + host.alias))
+        }
         guard let folder = open.window.worktreeParentFolder(of: open.id) else {
             return .failure(ControlError(.notFound, "That workspace is gone."))
         }
         return .success(folder.standardizedFileURL.path)
+    }
+
+    private static func hostRefusal(_ address: String) -> ControlError {
+        ControlError(.refused, "\(address) is an SSH host. Worktrees are made from a configured workspace.")
     }
 
     private nonisolated static func find(_ target: WorktreeTarget, in entry: Workspace)

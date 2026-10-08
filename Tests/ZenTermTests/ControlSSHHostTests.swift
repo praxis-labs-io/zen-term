@@ -193,6 +193,44 @@ final class ControlSSHHostTests: WindowTestCase {
         XCTAssertNotNil(responder.locate(pane: login))
     }
 
+    private func paneWaitingForTheHost(_ c: WindowController) throws -> (token: Int, surface: RecordingSurface) {
+        let login = try token(of: loggingIn(c))
+        let split = try result(send(.paneSplit, ControlArgs(pane: login, dir: .right)), as: PaneResult.self)
+        let surface = try XCTUnwrap(spawned.last)
+        XCTAssertFalse(surface.isStarted, "a pane on a host waits for the connection")
+        return (split.pane, surface)
+    }
+
+    func test_paneSendToAPaneWaitingForItsHost_failsSayingItHasNotStarted_thenLandsOnceConnected() throws {
+        let c = makeWindow()
+        let waiting = try paneWaitingForTheHost(c)
+
+        let refusals = try [
+            error(send(.paneSend, ControlArgs(pane: waiting.token, text: "ls"))),
+            error(send(.paneSend, ControlArgs(pane: waiting.token, text: "", enter: true))),
+        ]
+
+        XCTAssertEqual(refusals.map(\.code), [.failed, .failed])
+        let notStarted = "Pane \(waiting.token) has not started."
+        XCTAssertEqual(refusals.map(\.message), [notStarted, notStarted])
+        XCTAssertEqual(waiting.surface.inputs, [])
+
+        fake.connect()
+        _ = try result(send(.paneSend, ControlArgs(pane: waiting.token, text: "ls")), as: NoPayload.self)
+
+        XCTAssertEqual(waiting.surface.inputs, [.paste("ls")])
+    }
+
+    func test_paneReadOfAPaneWaitingForItsHost_failsSayingItHasNotStarted() throws {
+        let c = makeWindow()
+        let waiting = try paneWaitingForTheHost(c)
+
+        let refusal = try error(send(.paneRead, ControlArgs(pane: waiting.token)))
+
+        XCTAssertEqual(refusal.code, .failed)
+        XCTAssertEqual(refusal.message, "Pane \(waiting.token) has not started.")
+    }
+
     private let address = "ssh:devbox"
 
     func test_anSSHAddressFindsTheHostsWorkspaceInAnotherWindow_andSwitchRaisesIt() throws {
@@ -338,7 +376,33 @@ final class ControlSSHHostTests: WindowTestCase {
 
         let refusal = try error(send(.worktreeList, ControlArgs(workspace: address)))
 
+        XCTAssertEqual(refusal.code, .refused)
         XCTAssertEqual(refusal.message, "ssh:devbox is an SSH host. Worktrees are made from a configured workspace.")
+    }
+
+    func test_aWorktreeCommandAddressedToAHostNotInSettings_isNotFound() throws {
+        _ = makeWindow()
+
+        let missing = try error(send(.worktreeList, ControlArgs(workspace: "ssh:nowhere")))
+
+        XCTAssertEqual(missing.code, .notFound)
+        XCTAssertEqual(missing.message, "There is no SSH host nowhere in Settings.")
+    }
+
+    func test_aWorktreeCommandDefaultingToAHostWorkspace_isRefusedLikeItsSSHAddress() throws {
+        let c = makeWindow()
+        let login = try token(of: connected(c))
+        XCTAssertEqual(c.host(of: c.activeWorkspaceIDForTesting), host)
+
+        for cmd in [ControlCommand.worktreeList, .worktreeCreate, .worktreeRemove] {
+            for caller in [login, nil] {
+                let refusal = try error(send(cmd, ControlArgs(branch: "x"), from: caller))
+                XCTAssertEqual(refusal.code, .refused, "\(cmd.rawValue) from \(String(describing: caller))")
+                XCTAssertEqual(
+                    refusal.message, "ssh:devbox is an SSH host. Worktrees are made from a configured workspace.",
+                    "\(cmd.rawValue) from \(String(describing: caller))")
+            }
+        }
     }
 
     private func listedWorkspaces(_ c: WindowController) throws -> [ListResult.Workspace] {

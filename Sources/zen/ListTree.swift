@@ -33,12 +33,12 @@ enum ListTree {
         return line(
             3,
             [
-                String(pane.token), pane.drawer.map { "\($0.rawValue) drawer" }, pane.title.isEmpty ? nil : pane.title,
+                String(pane.token), pane.drawer.map { "\($0.rawValue) drawer" }, pane.title,
                 pane.cwd, pane.busy ? "busy" : nil, agent,
             ])
     }
 
     private static func line(_ depth: Int, _ fields: [String?]) -> String {
-        String(repeating: gap, count: depth) + fields.compactMap { $0 }.joined(separator: gap)
+        String(repeating: gap, count: depth) + fields.compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: gap)
     }
 }

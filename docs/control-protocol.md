@@ -74,7 +74,7 @@ integer `id` that could be read. A command with nothing to return answers `{}`.
 | `unsupported_version` | `v` is newer than the app speaks; the response's `v` says which it does. |
 | `not_found`           | A target names nothing that exists.                      |
 | `ambiguous`           | A target names more than one thing.                      |
-| `refused`             | The command would end running work or lose it, or does not apply to its target: a split in Focus Mode, a worktree command on a workspace with no entry, or a `cmd` for an SSH host's tab or pane. Carries `details` when `force` would go ahead. |
+| `refused`             | The command would end running work or lose it, or does not apply to its target: a split in Focus Mode, a worktree command on a workspace with no entry or on an SSH host's workspace, or a `cmd` for an SSH host's tab or pane. Carries `details` when `force` would go ahead. |
 | `failed`              | The app could not do it.                                 |
 
 A `refused` error says what `force` would end:
@@ -99,7 +99,7 @@ Requests are decoded off the main thread, applied on it, and written back off it
 | Pane   | its `$ZEN_PANE` token, e.g. `31`  | Unique across the app and never reused. Drawers have tokens. |
 | Tab    | `w<window>.t<tab>`, e.g. `w1.t14` | Tab ids are minted per window, so the window is part of it. |
 | Workspace | its folder as an absolute path, or its title | Matched across every window. More than one match is `ambiguous`. |
-| SSH host workspace | `ssh:<host>`             | The host's alias in Settings, never its name. A host not in Settings is `not_found`, and so is one with no session or a failed login, except to `workspace.open`. A folder or title never names a host's workspace. |
+| SSH host workspace | `ssh:<host>`             | The host's alias in Settings, never its name. A host not in Settings is `not_found`, and so is one with no session or a failed login, except to `workspace.open` and the worktree commands, which refuse a host in Settings whether it has a session or not. A folder or title never names a host's workspace. |
 | Window | `w<window>`                       |                                               |
 
 A command with no target acts on the caller: `caller.pane`, its tab, its workspace.
@@ -261,14 +261,16 @@ is not closed.
 
 Pastes `text`, so several lines arrive as one block. `enter` then sends Return outside the
 paste, which runs the block once at a shell prompt. It delivers text, not keys: control
-characters become spaces.
+characters become spaces. `failed` when the pane has not started, such as a host's pane
+waiting for its connection. Nothing is sent.
 
 ### `pane.read`
 
 `args`: `pane`, `lines`.
 
 Returns the rows on screen, or with `lines` the last that many lines of the screen and its
-scrollback, a prompt included. Trailing blank lines are dropped.
+scrollback, a prompt included. Trailing blank lines are dropped. `failed` when the pane has
+not started or its screen cannot be read.
 
 ```json
 {"text":"$ seq 3\n1\n2\n3"}
@@ -280,8 +282,8 @@ scrollback, a prompt included. Trailing blank lines are dropped.
 
 The worktrees of the workspace's repo, its main checkout left out. Every worktree command
 resolves the workspace to its entry in the workspaces file, read fresh, and a worktree
-workspace to the workspace it was made from. A workspace with no entry is `refused`, and
-an `ssh:<host>` address is `not_found`.
+workspace to the workspace it was made from. A workspace with no entry is `refused`, and so
+is an SSH host's workspace, by its `ssh:<host>` address or as the caller's.
 
 ```json
 {"worktrees":[{"path":"/Users/me/.zenterm/worktrees/zen-term-1a2b3c4d/feat-x","branch":"feat/x",

@@ -6,10 +6,10 @@ history, rejected designs, measurements or copy reasoning. Shortcuts live in `do
 ## The seam (load-bearing)
 
 `TerminalSurface` (`Sources/TerminalKit/TerminalSurface.swift`) is the
-contract. A surface vends an `NSView`, a title, a cwd, a busy flag and the background
-its program last reported. It takes `start`, `focus`, `terminate`, `paste`, `submit`,
-`copySelection`, `applyAppearance`, `setFontSize` and `scroll`, reports its grid as
-`cellMetrics`, and reads its own screen back a row at a time (`text(viewportRow:)`,
+contract. A surface vends an `NSView`, a title, a cwd, a busy flag, whether it has
+started, and the background its program last reported. It takes `start`, `focus`,
+`terminate`, `paste`, `submit`, `copySelection`, `applyAppearance`, `setFontSize` and
+`scroll`, reports its grid as `cellMetrics`, and reads its own screen back a row at a time (`text(viewportRow:)`,
 wrapped rows split), a span at a time (`text(in:)`, wrapped rows joined), or as its last
 lines, scrollback included (`text(lastLines:)`).
 

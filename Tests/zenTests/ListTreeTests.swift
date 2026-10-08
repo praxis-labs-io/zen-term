@@ -31,4 +31,31 @@ final class ListTreeTests: XCTestCase {
                   9
             """)
     }
+
+    func test_anUntitledTabSkipsItsTitle_likeAnUntitledPane() {
+        let list = ListResult(windows: [
+            .init(
+                id: "w1", key: false,
+                workspaces: [
+                    .init(
+                        title: "app", folder: "/src/app", configured: false, worktree: nil, active: true,
+                        tabs: [
+                            .init(
+                                id: "w1.t4", title: "", active: true,
+                                panes: [
+                                    .init(token: 9, drawer: nil, title: "", cwd: "/src/app", busy: false, agent: nil)
+                                ])
+                        ])
+                ])
+        ])
+
+        XCTAssertEqual(
+            ListTree.text(list),
+            """
+            w1
+              app  /src/app  active
+                w1.t4  active
+                  9  /src/app
+            """)
+    }
 }
