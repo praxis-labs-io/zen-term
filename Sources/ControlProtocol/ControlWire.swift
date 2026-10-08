@@ -8,6 +8,9 @@ public enum ControlWire {
     /// The longest line either end accepts, newline excluded.
     public static let maxLineLength = 64 * 1024
 
+    /// The longest, in seconds, a client waits for a reply and the app waits for its own answer.
+    public static let longestReplyWait = 300
+
     /// One encoded line with its trailing newline.
     public static func line(_ value: some Encodable) throws -> Data {
         let encoder = JSONEncoder()

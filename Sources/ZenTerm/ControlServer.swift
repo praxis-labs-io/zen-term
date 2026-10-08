@@ -7,8 +7,7 @@ typealias ControlReply = Result<any ControlPayload, ControlError>
 final class ControlServer {
     static var socketPath: String { SocketListener.path(prefix: ControlEndpoint.fileNamePrefix) }
 
-    // As long as `zen worktree` waits, the longest any client waits for a reply.
-    static let answerTimeout: TimeInterval = 300
+    static let answerTimeout = TimeInterval(ControlWire.longestReplyWait)
 
     private let respond: @MainActor (ControlRequest, @escaping @MainActor (ControlReply) -> Void) -> Void
     private let idleTimeout: time_t
