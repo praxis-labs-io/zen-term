@@ -48,6 +48,7 @@ enum WorktreeStore {
         case mainCheckoutOnDefaultBranch(String)
         case destinationExists(URL, branch: String?)
         case isLocked(URL)
+        case alreadyRemoving(String)
         case gitFailed(GitCommand.Failure)
         case rollbackIncomplete(cause: String, leftBehind: [String])
 
@@ -86,6 +87,8 @@ enum WorktreeStore {
                 return "A worktree for \(branch) already uses that folder name."
             case .isLocked(let url):
                 return "\(url.lastPathComponent) is locked. Unlock it before removing it."
+            case .alreadyRemoving(let name):
+                return "\(name) is already being removed."
             case .gitFailed(let failure):
                 return failure.errorDescription
             case .rollbackIncomplete(let cause, let leftBehind):

@@ -8,7 +8,7 @@ struct WorktreeCommands: ParsableCommand {
         subcommands: [List.self, Create.self, Remove.self])
 
     // A create copies the carry and a remove deletes a folder, either of which outlasts the usual wait on a big checkout.
-    static let gitReplyTimeout: time_t = 300
+    static let gitReplyTimeout = time_t(ControlWire.longestReplyWait)
 
     enum Base: String, ExpressibleByArgument, CaseIterable {
         case defaultBranch = "default"

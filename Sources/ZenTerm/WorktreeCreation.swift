@@ -1,6 +1,5 @@
 import Foundation
 
-/// Creates a worktree for a workspaces-file entry, mirrors the entry into it and copies its carry, off-main.
 enum WorktreeCreation {
     struct Created {
         let workspace: Workspace
