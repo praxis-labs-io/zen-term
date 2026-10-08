@@ -322,6 +322,16 @@ final class ControlSSHHostTests: WindowTestCase {
         XCTAssertEqual(spawned.count, surfaces)
     }
 
+    func test_anEmptyCommandForAHostTabOrSplit_isNoCommand() throws {
+        let c = makeWindow()
+        let login = try token(of: connected(c))
+
+        _ = try result(send(.tabNew, ControlArgs(workspace: address, cmd: "")), as: TabResult.self)
+        _ = try result(send(.paneSplit, ControlArgs(cmd: "", pane: login, dir: .right)), as: PaneResult.self)
+
+        XCTAssertEqual(spawned.suffix(2).map { $0.lastConfig?.command }, ["/usr/bin/ssh", "/usr/bin/ssh"])
+    }
+
     func test_aWorktreeCommandAddressedToAHost_saysWorktreesComeFromAConfiguredWorkspace() throws {
         let c = makeWindow()
         _ = try connected(c)

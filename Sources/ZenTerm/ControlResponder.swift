@@ -143,7 +143,8 @@ struct ControlResponder {
             return .failure(ControlError(.badRequest, "\(cwd) is not an absolute path."))
         }
         return workspace(request.args.workspace, for: request).flatMap { place in
-            if let host = place.window.host(of: place.id), request.args.cmd != nil || request.args.cwd != nil {
+            let command = request.args.cmd.flatMap { $0.isEmpty ? nil : $0 }
+            if let host = place.window.host(of: place.id), command != nil || request.args.cwd != nil {
                 return .failure(
                     ControlError(
                         .refused,
@@ -154,7 +155,6 @@ struct ControlResponder {
                 request.args.cwd.map { URL(fileURLWithPath: $0, isDirectory: true) }
                 ?? callerCWD(in: place, for: request)
                 ?? ShellLaunch.newSessionCWD(focused: place.window.sessionCWD(of: place.id))
-            let command = request.args.cmd.flatMap { $0.isEmpty ? nil : $0 }
             guard let tab = place.window.openTab(in: place.id, cwd: cwd, command: command),
                 let pane = place.window.firstPaneToken(of: tab)
             else { return .failure(ControlError(.failed, "The tab could not be opened.")) }
