@@ -108,9 +108,10 @@ When no terminal window is key, because the app is in the background or a window
 About is in front, it acts on the frontmost terminal window. A `caller.pane` that names no
 pane is `not_found`.
 
-Without `focus`, no command moves what is on screen: a new tab joins its workspace's tab
-bar behind the active one, a new workspace joins the sidebar, and no modal card, confirm,
-tool float or scroll mode closes. `focus` switches to what was opened, as a click would,
+Without `focus`, a command that opens something leaves the screen as it is: a new tab joins
+its workspace's tab bar behind the active one, a new workspace joins the sidebar, and no
+modal card, confirm, tool float or scroll mode closes. `workspace.switch`, `tab.select`
+and `pane.focus` move the screen, since that is what they are for. `focus` switches to what was opened, as a click would,
 and brings its window forward when it is not the key window. Closing the tab on screen
 lands on its neighbour and closes a tool float or confirm over it, and leaves a modal card
 open.
