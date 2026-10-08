@@ -99,7 +99,7 @@ Requests are decoded off the main thread, applied on it, and written back off it
 | Pane   | its `$ZEN_PANE` token, e.g. `31`  | Unique across the app and never reused. Drawers have tokens. |
 | Tab    | `w<window>.t<tab>`, e.g. `w1.t14` | Tab ids are minted per window, so the window is part of it. |
 | Workspace | its folder as an absolute path, or its title | Matched across every window. More than one match is `ambiguous`. |
-| SSH host workspace | `ssh:<host>`             | The host's alias in Settings, never its name. A host not in Settings is `not_found`, and so is one with no session or a failed login, except to `workspace.open` and the worktree commands, which refuse any `ssh:` address. A folder or title never names a host's workspace. |
+| SSH host workspace | `ssh:<host>`             | The host's alias in Settings, never its name. A host not in Settings is `not_found`, and so is one with no session or a failed login, except to `workspace.open` and the worktree commands, which refuse a host in Settings whether it has a session or not. A folder or title never names a host's workspace. |
 | Window | `w<window>`                       |                                               |
 
 A command with no target acts on the caller: `caller.pane`, its tab, its workspace.

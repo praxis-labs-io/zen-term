@@ -380,6 +380,15 @@ final class ControlSSHHostTests: WindowTestCase {
         XCTAssertEqual(refusal.message, "ssh:devbox is an SSH host. Worktrees are made from a configured workspace.")
     }
 
+    func test_aWorktreeCommandAddressedToAHostNotInSettings_isNotFound() throws {
+        _ = makeWindow()
+
+        let missing = try error(send(.worktreeList, ControlArgs(workspace: "ssh:nowhere")))
+
+        XCTAssertEqual(missing.code, .notFound)
+        XCTAssertEqual(missing.message, "There is no SSH host nowhere in Settings.")
+    }
+
     func test_aWorktreeCommandDefaultingToAHostWorkspace_isRefusedLikeItsSSHAddress() throws {
         let c = makeWindow()
         let login = try token(of: connected(c))

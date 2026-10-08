@@ -165,7 +165,12 @@ extension ControlResponder {
     private func worktreeParent(_ request: ControlRequest) -> Result<String, ControlError> {
         let open: WorkspacePlace
         if let address = request.args.workspace {
-            if case .host = ControlAddress.Workspace(address) { return .failure(Self.hostRefusal(address)) }
+            if case .host(let alias) = ControlAddress.Workspace(address) {
+                guard GeneralConfig.current.sshHostAliases.contains(alias) else {
+                    return .failure(ControlError(.notFound, "There is no SSH host \(alias) in Settings."))
+                }
+                return .failure(Self.hostRefusal(address))
+            }
             switch findOpenWorkspace(address) {
             case .success(let place): open = place
             case .failure(let error) where error.code == .notFound: return .success(address)
