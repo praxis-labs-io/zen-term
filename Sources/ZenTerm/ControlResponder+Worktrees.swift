@@ -92,7 +92,8 @@ extension ControlResponder {
         reply: @escaping (ControlReply) -> Void
     ) {
         guard !worktreeRemovals.isRemoving(worktree.path) else {
-            return reply(.failure(ControlError(.failed, "\(worktree.name) is already being removed.")))
+            let removing = WorktreeStore.WorktreeError.alreadyRemoving(worktree.name).localizedDescription
+            return reply(.failure(ControlError(.failed, removing)))
         }
         guard !worktree.isLocked else {
             let locked = WorktreeStore.WorktreeError.isLocked(worktree.path).localizedDescription
