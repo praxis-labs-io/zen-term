@@ -64,4 +64,34 @@ final class SocketListenerTests: XCTestCase {
         XCTAssertEqual(read(fd, &byte, 1), 0, "the refused connection was not closed (errno \(errno))")
         wait(for: [accepted], timeout: 0.2)
     }
+
+    func test_finalPathAppearsOnlyOnceListening() throws {
+        let path = "/tmp/zt-listener-late-\(getpid()).sock"
+        let bindingPath = SocketListener.bindingPath(for: path)
+        try FileManager.default.createDirectory(atPath: bindingPath, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(atPath: bindingPath) }
+        let listener = SocketListener(prefix: "test.", path: path, name: "Test", category: .app) { close($0) }
+        defer { listener.stop() }
+
+        XCTAssertFalse(listener.start())
+        XCTAssertFalse(FileManager.default.fileExists(atPath: path))
+    }
+
+    func test_sweep_removesOnlyBindingsWhosePidIsGone() throws {
+        let dir = NSTemporaryDirectory() + "zt-listener-sweep-\(getpid())"
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let sibling = "\(dir)/test.\(getppid()).bind"
+        let crashed = "\(dir)/test.\(Self.unassignablePid).bind"
+        for path in [sibling, crashed] {
+            FileManager.default.createFile(atPath: path, contents: nil)
+        }
+
+        SocketListener.sweepStaleSockets(prefix: "test.", in: dir)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sibling))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: crashed))
+    }
+
+    private static let unassignablePid: pid_t = 99999  // xnu's PID_MAX: pids wrap one short of it
 }

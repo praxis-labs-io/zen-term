@@ -2,24 +2,45 @@ import AppLog
 import ControlProtocol
 import Foundation
 
-/// Listens on one per-pid `AF_UNIX` socket and hands each connection from this user to `accept`, off-main.
 final class SocketListener {
-    /// Per pid: a shared path let a second instance bind over this one and delete it on quit.
+    // Per pid: a shared path let a second instance bind over this one and delete it on quit.
     static func path(prefix: String) -> String {
-        ControlEndpoint.directory.appendingPathComponent("\(prefix)\(getpid()).sock").path
+        ControlEndpoint.directory.appendingPathComponent("\(prefix)\(getpid())\(ControlEndpoint.fileNameSuffix)").path
     }
 
-    /// Probes liveness with a connect rather than a pid check, which pid recycling could fool.
+    // Probes a socket with a connect rather than a pid check, which pid recycling could fool.
     static func sweepStaleSockets(prefix: String, in directory: String) {
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory) else { return }
-        for name in names where name.hasPrefix(prefix) && name.hasSuffix(".sock") {
-            if pid_t(name.dropFirst(prefix.count).dropLast(".sock".count)) == getpid() { continue }
+        for name in names where name.hasPrefix(prefix) {
             let path = directory + "/" + name
-            if !hasListener(at: path) { unlink(path) }
+            if name.hasSuffix(ControlEndpoint.fileNameSuffix) {
+                if pid(in: name, prefix: prefix, suffix: ControlEndpoint.fileNameSuffix) == getpid() { continue }
+                if !hasListener(at: path) { unlink(path) }
+            } else if name.hasSuffix(bindingSuffix), let pid = pid(in: name, prefix: prefix, suffix: bindingSuffix),
+                isGone(pid)
+            {
+                unlink(path)
+            }
         }
     }
 
-    /// Answers live when the probe cannot run, so the sweep never deletes a file it did not check.
+    // Swaps the suffix rather than appending one, so a path that fits `sun_path` still fits while binding.
+    static func bindingPath(for path: String) -> String {
+        let suffix = ControlEndpoint.fileNameSuffix
+        let stem = path.hasSuffix(suffix) ? String(path.dropLast(suffix.count)) : path
+        return stem + bindingSuffix
+    }
+
+    private static func pid(in name: String, prefix: String, suffix: String) -> pid_t? {
+        pid_t(name.dropFirst(prefix.count).dropLast(suffix.count))
+    }
+
+    // A recycled pid only keeps a crashed instance's half-bound file around, never removes a live one's.
+    private static func isGone(_ pid: pid_t) -> Bool {
+        kill(pid, 0) != 0 && errno == ESRCH
+    }
+
+    // Answers live when the probe cannot run, so the sweep never deletes a file it did not check.
     private static func hasListener(at path: String) -> Bool {
         do {
             close(try UnixSocket.connect(to: path))
@@ -31,6 +52,8 @@ final class SocketListener {
         }
     }
 
+    // The final name only ever exists while something listens on it, so a sibling's sweep never sees it refuse.
+    private static let bindingSuffix = ".bind"
     private static let socketMode: mode_t = 0o600
     private static let directoryMode = 0o700
 
@@ -70,7 +93,8 @@ final class SocketListener {
             queue.async { Self.sweepStaleSockets(prefix: prefix, in: directory.path) }
         }
 
-        unlink(path)
+        let bindingPath = Self.bindingPath(for: path)
+        unlink(bindingPath)
 
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else {
@@ -78,7 +102,7 @@ final class SocketListener {
             return false
         }
 
-        guard var addr = UnixSocket.address(for: path) else {
+        guard var addr = UnixSocket.address(for: bindingPath) else {
             Log.warning("\(name): socket path too long for sun_path: \(path), listener disabled", category: category)
             close(fd)
             return false
@@ -89,11 +113,12 @@ final class SocketListener {
                 bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
             }
         }
-        guard bound == 0, chmod(path, Self.socketMode) == 0, listen(fd, 8) == 0 else {
+        guard bound == 0, chmod(bindingPath, Self.socketMode) == 0, listen(fd, 8) == 0, rename(bindingPath, path) == 0
+        else {
             Log.warning(
                 "\(name): bind/listen on \(path) failed (\(errnoText())), listener disabled", category: category)
             close(fd)
-            unlink(path)
+            unlink(bindingPath)
             return false
         }
 
