@@ -1,5 +1,6 @@
 import AppKit
 import AppLog
+import ControlProtocol
 import PaneKit
 import TabKit
 import TerminalKit
@@ -821,12 +822,14 @@ final class WindowController: NSObject {
     deinit { titlePoll?.invalidate() }
 
     private func makeController(
-        cwd: URL?, config ws: Workspace? = nil, tab index: Int = 0, connection: SSHConnection? = nil
+        cwd: URL?, command: String? = nil, config ws: Workspace? = nil, tab index: Int = 0,
+        connection: SSHConnection? = nil
     ) -> TabController {
         let tab = ws?.tabs[index]
-        let mainCommand = tab?.main.flatMap { $0 == "shell" ? nil : $0 }
+        let mainCommand = command ?? tab?.main.flatMap { $0 == "shell" ? nil : $0 }
         let c = TabController(
             initialCWD: cwd, initialCommand: mainCommand, env: ws?.env ?? [:],
+            backingScale: window.backingScaleFactor,
             isToolFloatOpen: { [weak self] in self?.floats.isOpen ?? false },
             startSurface: Self.surfaceStart(over: connection))
         c.rightDrawerCommand = tab?.right
@@ -837,7 +840,9 @@ final class WindowController: NSObject {
 
     private static func surfaceStart(over connection: SSHConnection?) -> SurfaceStart {
         guard let connection else { return startSurfaceNow }
-        return { [weak connection] surface, id, launch in connection?.start(surface, id: id, env: launch.environment) }
+        return { [weak connection] surface, id, launch in
+            connection?.start(surface, id: id, env: launch.environment, backingScale: launch.backingScale)
+        }
     }
 
     private func mintTabID() -> TabID { defer { nextTabID += 1 }; return TabID(nextTabID) }
@@ -1088,27 +1093,40 @@ final class WindowController: NSObject {
 
     private func addTab(cwd: URL?) {
         guard let workspace = activeWorkspace else { return }
-        Log.info("tab opened", category: .tabs)
         closeModal()
         closeFloatForTabChange()
+        select(openTab(in: workspace, cwd: cwd, command: nil), slideFrom: .fromRight)
+    }
+
+    private func openTab(in workspace: WorkspaceController, cwd: URL?, command: String?) -> TabID {
+        Log.info("tab opened", category: .tabs)
         let id = mintTabID()
-        workspace.add(id)
-        installController(id: id, in: workspace, cwd: cwd, config: nil, transition: .slide(from: .fromRight))
+        workspace.append(id)
+        installController(id: id, in: workspace, cwd: cwd, command: command, config: nil)
+        return id
     }
 
     private func installController(
-        id: TabID, in workspace: WorkspaceController, cwd: URL?, config: Workspace?, tab index: Int = 0,
-        transition: MountTransition
+        id: TabID, in workspace: WorkspaceController, cwd: URL?, command: String? = nil, config: Workspace?,
+        tab index: Int = 0
     ) {
-        let c = makeController(cwd: cwd, config: config, tab: index, connection: workspace.connection)
+        let c = makeController(
+            cwd: cwd, command: command, config: config, tab: index, connection: workspace.connection)
         workspace.setController(c, for: id)
         wire(c, id: id)
-        mount(transition)
         c.start()
         if let config {
             c.applyRecipe(config.tabs[index], focus: config.focus.tab == index ? config.focus.region : .main)
         }
+        layOutUnmounted(c)
         renderTabBar()
+    }
+
+    // An unmounted tab gets no layout pass, so its programs would start on libghostty's default grid.
+    private func layOutUnmounted(_ c: TabController) {
+        guard c.view.window == nil, let frame = mountedCanvas?.frame else { return }
+        c.view.frame = frame
+        c.view.layoutSubtreeIfNeeded()
     }
 
     private func select(_ id: TabID, slideFrom: SlideEdge? = nil) {
@@ -1137,14 +1155,14 @@ final class WindowController: NSObject {
     }
 
     /// Swaps the whole canvas. An inactive workspace is detached and retained, the same as an inactive tab.
-    private func activate(_ id: WorkspaceID) {
+    private func activate(_ id: WorkspaceID, transition: MountTransition? = nil) {
         guard let workspace = workspaces.first(where: { $0.id == id }), workspace !== activeWorkspace
         else { return }
         Log.info("workspace switched", category: .tabs)
         closeModal()
         closeFloatForTabChange()
         cancelConfirm()
-        let transition = workspaceSlide(from: activeWorkspace?.id, to: id)
+        let transition = transition ?? workspaceSlide(from: activeWorkspace?.id, to: id)
         selection = .workspace(workspace)
         mount(transition)
         if let tab = workspace.activeID { visit(tab) }
@@ -1259,7 +1277,7 @@ final class WindowController: NSObject {
         presentModal(overlay, kind: .renameTab)
     }
 
-    private func renameTab(_ id: TabID, to name: String) {
+    func renameTab(_ id: TabID, to name: String) {
         guard let workspace = workspace(of: id), let controller = workspace.controller(id) else { return }
         controller.pinnedTitle = name.isEmpty ? nil : name
         workspace.setTitle(controller.title, for: id)
@@ -1267,7 +1285,6 @@ final class WindowController: NSObject {
     }
 
     private func closeTab(_ id: TabID, dismissingModal: Bool = true) {
-        Log.info("tab closed", category: .tabs)
         guard let workspace = workspace(of: id) else { return }
         // A background workspace's tab closes without touching what is on screen, or it answers the wrong tab.
         let isOnScreen = workspace === activeWorkspace
@@ -1276,6 +1293,22 @@ final class WindowController: NSObject {
             closeFloatForTabChange()
             cancelConfirm()
         }
+        removeTab(id, from: workspace, remounting: isOnScreen)
+    }
+
+    // Only the tab showing takes the float and the confirm with it, since both act on whatever tab is showing.
+    func removeTab(_ id: TabID) {
+        guard let workspace = workspace(of: id) else { return }
+        let isShowing = id == activeWorkspace?.activeID
+        if isShowing {
+            closeFloatForTabChange()
+            cancelConfirm()
+        }
+        removeTab(id, from: workspace, remounting: isShowing)
+    }
+
+    private func removeTab(_ id: TabID, from workspace: WorkspaceController, remounting: Bool) {
+        Log.info("tab closed", category: .tabs)
         let tabController = workspace.controller(id)
         if mountedCanvas === tabController?.view {
             tabController?.view.removeFromSuperview()
@@ -1290,7 +1323,7 @@ final class WindowController: NSObject {
         clearAttention(id)
         attention.dropTab(id)
         guard workspace.close(id) else { return closeWorkspace(workspace) }
-        if isOnScreen {
+        if remounting {
             if let active = activeWorkspace?.activeID { visit(active) }
             mount(.instant)
         }
@@ -1360,12 +1393,12 @@ final class WindowController: NSObject {
             DispatchQueue.main.async { self?.loginFailed(on: host, closing: workspace) }
         }
         workspaces.append(workspace)
-        activate(workspace.id)
-        installController(id: tab, in: workspace, cwd: nil, config: nil, transition: .instant)
+        installController(id: tab, in: workspace, cwd: nil, config: nil)
+        activate(workspace.id, transition: .instant)
     }
 
     private func loginFailed(on host: SSHHostID, closing workspace: WorkspaceController?) {
-        if let workspace, workspaces.contains(where: { $0 === workspace }) { closeTabs(of: workspace) }
+        if let workspace, workspaces.contains(where: { $0 === workspace }) { closeTabs(of: workspace) { closeTab($0) } }
         toasts.show(
             ToastContent(
                 variant: .warning, title: "Couldn't Connect to",
@@ -1548,43 +1581,22 @@ final class WindowController: NSObject {
     private func createWorktree(
         _ request: NewWorktreeOverlay.Request, from target: RepoPickerOverlay.CreateTarget
     ) {
-        let workspace = target.workspace
         let card = modal?.overlay as? NewWorktreeOverlay
         card?.beginWork("Creating \(Self.branchName(of: request))")
-        DispatchQueue.global(qos: .userInitiated).async { [weak self, weak card] in
-            let result: Result<(Workspace, WorktreeOrigin, CarryReport), Error>
-            do {
-                let worktree: Worktree
-                switch request {
-                case .newBranch(let branch, let base):
-                    worktree = try WorktreeStore.create(branch: branch, base: base, in: target.repo)
-                case .existingBranch(let branch):
-                    worktree = try WorktreeStore.create(existingBranch: branch, in: target.repo)
-                }
-                let repoRoot = GitRepo.repoRoot(for: workspace.path)
-                let opened = RepoPickerOverlay.workspace(
-                    for: worktree, parent: workspace, repoRoot: repoRoot)
-                let report = WorktreeCarry.copy(
-                    workspace.carry, from: workspace.path, intoCheckout: worktree.path,
-                    repoRoot: repoRoot,
-                    onEntry: { name in
-                        DispatchQueue.main.async { [weak self, weak card] in
-                            guard let card, self?.isPresenting(card) == true else { return }
-                            card.setPhase("Copying \(name)")
-                        }
-                    })
-                result = .success((opened, WorktreeOrigin(parent: workspace, worktree: worktree), report))
-            } catch {
-                result = .failure(error)
-            }
-            DispatchQueue.main.async { [weak self, weak card] in
+        WorktreeCreation.start(
+            request, from: target,
+            onPhase: { [weak self, weak card] phase in
+                guard let card, self?.isPresenting(card) == true else { return }
+                card.setPhase(phase)
+            },
+            completion: { [weak self, weak card] result in
                 guard let self else { return }
                 let stillUp = card.map(self.isPresenting) ?? false
                 switch result {
-                case .success(let (opened, origin, report)):
+                case .success(let created):
                     if stillUp { self.closeModal() }
-                    self.openWorkspace(opened, origin: origin)
-                    self.reportCarry(report)
+                    self.openWorkspace(created.workspace, origin: created.origin)
+                    self.reportCarry(created.carry)
                 case .failure(let error):
                     if stillUp {
                         card?.failWork(error.localizedDescription)
@@ -1595,8 +1607,7 @@ final class WindowController: NSObject {
                                 message: error.localizedDescription))
                     }
                 }
-            }
-        }
+            })
     }
 
     static func branchName(of request: NewWorktreeOverlay.Request) -> String {
@@ -1614,9 +1625,8 @@ final class WindowController: NSObject {
         func isPresentingForTesting(_ card: NewWorktreeOverlay) -> Bool { isPresenting(card) }
     #endif
 
-    // `.notThere` stays silent: one section covers a repo before and after its first install.
     private func reportCarry(_ report: CarryReport) {
-        let lost = report.skipped.filter { $0.reason != .notThere }
+        let lost = report.lost
         guard !lost.isEmpty else { return }
         let list = lost.map { "\($0.name) \($0.reason.explanation)" }.joined(separator: ", ")
         toasts.show(
@@ -2232,9 +2242,177 @@ final class WindowController: NSObject {
         }
     }
 
+    func listing() -> ListResult.Window {
+        let order = order
+        let byID = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
+        let hosts = order.hosts.compactMap { host in workspaces.first { $0.host == host.id } }
+        return ListResult.Window(
+            id: ControlAddress.window(windowID), key: window.isKeyWindow,
+            workspaces: (order.navigableWorkspaces.compactMap { byID[$0] } + hosts.filter(Self.isListed))
+                .map(listing(of:)))
+    }
+
+    // A failed login's workspace closes on the next main turn.
+    private static func isListed(_ host: WorkspaceController) -> Bool { host.connection?.state != .failed }
+
+    private static func hostListing(of workspace: WorkspaceController) -> ListResult.Host? {
+        guard let host = workspace.host, let connection = workspace.connection else { return nil }
+        return ListResult.Host(alias: host.alias, state: connection.state == .connected ? .connected : .connecting)
+    }
+
+    private func listing(of workspace: WorkspaceController) -> ListResult.Workspace {
+        let tabs = workspace.tabIDs.compactMap { id -> ListResult.Tab? in
+            guard let tab = workspace.controller(id) else { return nil }
+            return ListResult.Tab(
+                id: ControlAddress.tab(window: windowID, tab: id.raw), title: title(of: id),
+                active: id == workspace.activeID, panes: tab.paneHandles.map(listing(of:)))
+        }
+        let host = Self.hostListing(of: workspace)
+        return ListResult.Workspace(
+            title: workspace.name, folder: host == nil ? workspace.folder.path : nil, host: host,
+            configured: workspace.isConfigured,
+            worktree: workspace.origin.map { ListResult.Worktree(name: $0.name, parent: $0.parent.path.path) },
+            active: workspace === activeWorkspace, tabs: tabs)
+    }
+
+    private func listing(of pane: PaneHandle) -> ListResult.Pane {
+        let agent = agents.agents[pane.surfaceID].map { agent in
+            let tone = AttentionTone(
+                wait: attention.agentWait(of: pane.surfaceID), working: attention.isWorking(pane.surfaceID))
+            return ListResult.Agent(name: agent.name, state: Self.agentState(tone))
+        }
+        return ListResult.Pane(
+            token: pane.token, drawer: pane.drawer.map(Self.drawer), title: pane.surface.title,
+            cwd: pane.cwd?.path, busy: pane.surface.isBusy, agent: agent)
+    }
+
+    private static func agentState(_ tone: AttentionTone) -> ListResult.AgentState {
+        switch tone {
+        case .waiting: return .waiting
+        case .working: return .working
+        case .idle: return .idle
+        }
+    }
+
+    private static func drawer(_ edge: DrawerEdge) -> ListResult.Drawer {
+        switch edge {
+        case .bottom: return .bottom
+        case .right: return .right
+        }
+    }
+
+    func pane(token: Int) -> (tab: TabID, pane: PaneHandle)? {
+        for workspace in workspaces {
+            for id in workspace.tabIDs {
+                if let pane = workspace.controller(id)?.paneHandles.first(where: { $0.token == token }) {
+                    return (id, pane)
+                }
+            }
+        }
+        return nil
+    }
+
     func holdsWorkspace(_ id: WorkspaceID) -> Bool { workspaces.contains { $0.id == id } }
 
     func activateWorkspace(_ id: WorkspaceID) { activate(id) }
+
+    var activeWorkspaceID: WorkspaceID? { activeWorkspace?.id }
+
+    func activeTab(of id: WorkspaceID) -> TabID? { workspaces.first { $0.id == id }?.activeID }
+
+    func workspaceID(of tab: TabID) -> WorkspaceID? { workspace(of: tab)?.id }
+
+    func workspaceID(of host: SSHHostID) -> WorkspaceID? {
+        workspaces.first { $0.host == host && Self.isListed($0) }?.id
+    }
+
+    func host(of id: WorkspaceID) -> SSHHostID? { workspaces.first { $0.id == id }?.host }
+
+    func listing(of id: WorkspaceID) -> ListResult.Workspace? {
+        workspaces.first { $0.id == id }.map(listing(of:))
+    }
+
+    func sessionCWD(of id: WorkspaceID) -> URL? { workspaces.first { $0.id == id }?.activeController?.sessionCWD }
+
+    func firstPaneToken(of tab: TabID) -> Int? { controller(tab)?.paneHandles.first?.token }
+
+    func openTab(in id: WorkspaceID, cwd: URL?, command: String?) -> TabID? {
+        guard let workspace = workspaces.first(where: { $0.id == id }) else { return nil }
+        return openTab(in: workspace, cwd: cwd, command: command)
+    }
+
+    func openConfiguredWorkspace(_ ws: Workspace, origin: WorktreeOrigin? = nil) -> WorkspaceID {
+        appendWorkspace(named: ws.title, at: ws.path, config: ws, origin: origin).id
+    }
+
+    func worktreeParentFolder(of id: WorkspaceID) -> URL? {
+        workspaces.first { $0.id == id }.map { $0.origin?.parent.path ?? $0.folder }
+    }
+
+    func openUnconfiguredWorkspace(at folder: URL) -> WorkspaceID { appendUnconfiguredWorkspace(at: folder).id }
+
+    func closeStakes(tab id: TabID) -> CloseStakes? {
+        guard let workspace = workspace(of: id), let tab = controller(id) else { return nil }
+        if holdsAwaitingLogin(tab: id) { return loginStakes(of: workspace) }
+        let closesWindow = workspace.tabIDs.count == 1 && closesWindow(closing: workspace)
+        return CloseStakes(
+            closesWindow: closesWindow, isRunning: isRunning(tab: id),
+            panes: tab.paneHandles.filter(\.surface.isBusy).map(listing(of:)),
+            floats: floats.runningTitles(scope: id) + (closesWindow ? floats.runningTitles(scope: nil) : []))
+    }
+
+    func closeStakes(workspace id: WorkspaceID) -> CloseStakes? {
+        guard let workspace = workspaces.first(where: { $0.id == id }) else { return nil }
+        if workspace.host != nil { return CloseStakes(closesWindow: false, isRunning: false, panes: [], floats: []) }
+        let closesWindow = closesWindow(closing: workspace)
+        let tabs = workspace.tabIDs.compactMap(workspace.controller)
+        return CloseStakes(
+            closesWindow: closesWindow, isRunning: isRunning(workspace: workspace),
+            panes: tabs.flatMap(\.paneHandles).filter(\.surface.isBusy).map(listing(of:)),
+            floats: workspace.tabIDs.flatMap { floats.runningTitles(scope: $0) }
+                + (closesWindow ? floats.runningTitles(scope: nil) : []))
+    }
+
+    func focusedPane(of tab: TabID) -> PaneHandle? {
+        guard let c = controller(tab) else { return nil }
+        return c.paneHandles.first { $0.surfaceID == c.focusedSurfaceID }
+    }
+
+    func splitPane(_ token: Int, in tab: TabID, axis: SplitAxis, command: String?) -> PaneSplitResult? {
+        controller(tab)?.split(pane: token, axis: axis, command: command)
+    }
+
+    func closeStakes(pane: PaneHandle, in tab: TabID) -> CloseStakes? {
+        guard let c = controller(tab), let workspace = workspace(of: tab) else { return nil }
+        if workspace.connection?.isAwaitingLogin(on: pane.surfaceID) == true { return loginStakes(of: workspace) }
+        if c.isSinglePane { return closeStakes(tab: tab) }
+        let busy = pane.surface.isBusy
+        return CloseStakes(closesWindow: false, isRunning: busy, panes: busy ? [listing(of: pane)] : [], floats: [])
+    }
+
+    private func loginStakes(of workspace: WorkspaceController) -> CloseStakes {
+        CloseStakes(
+            closesWindow: false, isRunning: false, panes: [], floats: [],
+            login: workspace.host.map {
+                CloseStakes.Login(host: GeneralConfig.current.displayName(of: $0), tabs: workspace.tabIDs.count)
+            })
+    }
+
+    func removePane(_ token: Int, in tab: TabID) {
+        guard let c = controller(tab) else { return }
+        if c.isSinglePane { return removeTab(tab) }
+        c.close(pane: token)
+    }
+
+    func closeStakes(atPath path: URL) -> CloseStakes {
+        let tabs = allTabIDs.filter { isClosedByRemoval($0, atPath: path) }
+        let closesWindow = closedByRemoval(atPath: path).thisWindow
+        return CloseStakes(
+            closesWindow: closesWindow, isRunning: tabs.contains(where: isRunning(tab:)),
+            panes: tabs.compactMap(controller).flatMap(\.paneHandles).filter(\.surface.isBusy).map(listing(of:)),
+            floats: tabs.flatMap { floats.runningTitles(scope: $0) }
+                + (closesWindow ? floats.runningTitles(scope: nil) : []))
+    }
 
     private func workspaceOpenState(at path: URL) -> WorkspaceOpenState {
         if holdsWorkspace(at: path) { return .here }
@@ -2248,19 +2426,22 @@ final class WindowController: NSObject {
             return
         }
         if revealWorkspaceInAnotherWindow?(ws.path) == true { return }
-        appendWorkspace(named: ws.title, at: ws.path, config: ws, origin: origin)
+        activate(appendWorkspace(named: ws.title, at: ws.path, config: ws, origin: origin).id, transition: .instant)
     }
 
     // The home folder, not the focused pane's: a workspace is a place, and folder identity makes two on one folder collide.
     private func newWorkspace() {
         closeModal()
-        appendWorkspace(
-            named: Self.unconfiguredName(among: workspaces.map(\.name)), at: ShellLaunch.defaultCWD, config: nil)
+        activate(appendUnconfiguredWorkspace(at: ShellLaunch.defaultCWD).id, transition: .instant)
+    }
+
+    private func appendUnconfiguredWorkspace(at folder: URL) -> WorkspaceController {
+        appendWorkspace(named: Self.unconfiguredName(among: workspaces.map(\.name)), at: folder, config: nil)
     }
 
     private func appendWorkspace(
         named name: String, at folder: URL, config: Workspace?, origin: WorktreeOrigin? = nil
-    ) {
+    ) -> WorkspaceController {
         Log.info("workspace opened", category: .workspace)
         let tabs = (0..<(config?.tabs.count ?? 1)).map { _ in mintTabID() }
         let group = config.map { _ in (origin?.parent.path ?? folder).standardizedFileURL.path }
@@ -2269,15 +2450,13 @@ final class WindowController: NSObject {
             id: mintWorkspaceID(), isConfigured: config != nil, name: name, folder: folder, firstTab: tabs[0],
             origin: origin, seat: seat)
         workspaces.append(workspace)
-        activate(workspace.id)
         for (index, tab) in tabs.enumerated() {
-            if index > 0 { workspace.add(tab) }
-            installController(id: tab, in: workspace, cwd: folder, config: config, tab: index, transition: .instant)
+            if index > 0 { workspace.append(tab) }
+            installController(id: tab, in: workspace, cwd: folder, config: config, tab: index)
         }
-        guard let config, tabs[config.focus.tab] != workspace.activeID else { return }
-        workspace.select(tabs[config.focus.tab])
-        mount(.instant)
+        if let config { workspace.select(tabs[config.focus.tab]) }
         renderTabBar()
+        return workspace
     }
 
     func handle(_ chord: KeyInterceptor.ReservedChord) {
@@ -2648,7 +2827,7 @@ final class WindowController: NSObject {
 
     private func disconnect(_ workspace: WorkspaceController, dismissingModal: Bool = true) {
         workspace.connection?.shutdown()
-        closeTabs(of: workspace, dismissingModal: dismissingModal)
+        closeTabs(of: workspace) { closeTab($0, dismissingModal: dismissingModal) }
     }
 
     // Leaves an open card up, since a host is usually removed from inside Settings.
@@ -2688,7 +2867,7 @@ final class WindowController: NSObject {
         }
         let closesWindow = closesWindow(closing: workspace)
         guard closesWindow || isRunning(workspace: workspace) else {
-            closeTabs(of: workspace)
+            closeTabs(of: workspace) { closeTab($0) }
             return
         }
         let subject: CloseWarning.Subject =
@@ -2698,7 +2877,7 @@ final class WindowController: NSObject {
             variant: .warning, title: subject.title,
             message: CloseWarning.message(closing: subject, naming: names),
             confirmLabel: "Close"
-        ) { [weak self] in self?.closeTabs(of: workspace) }
+        ) { [weak self] in self?.closeTabs(of: workspace) { self?.closeTab($0) } }
     }
 
     // A host's workspace closes back to its Connect screen, so only a lone local workspace takes the window.
@@ -2706,11 +2885,15 @@ final class WindowController: NSObject {
         workspace?.host == nil && workspaces.count == 1
     }
 
-    private func closeTabs(of workspace: WorkspaceController, dismissingModal: Bool = true) {
+    func removeWorkspace(_ id: WorkspaceID) {
+        guard let workspace = workspaces.first(where: { $0.id == id }) else { return }
+        workspace.connection?.shutdown()
+        closeTabs(of: workspace) { removeTab($0) }
+    }
+
+    private func closeTabs(of workspace: WorkspaceController, closing close: (TabID) -> Void) {
         let background = workspace.tabIDs.filter { $0 != workspace.activeID }
-        for id in background + [workspace.activeID].compactMap({ $0 }) {
-            closeTab(id, dismissingModal: dismissingModal)
-        }
+        for id in background + [workspace.activeID].compactMap({ $0 }) { close(id) }
     }
 
     private func requestCloseWindow() {
@@ -2799,11 +2982,12 @@ final class WindowController: NSObject {
         c.onPaneStartFailed = { [weak self] retry, close in
             self?.presentSurfaceFailureToast(retry: retry, close: close)
         }
-        c.onFocusChanged = { [weak self] in
-            self?.cancelConfirm()
-            self?.endModes()
-            self?.answerFocusedAgent()
-            self?.syncWindowFocus()
+        c.onFocusChanged = { [weak self, weak c] in
+            guard let self, c === self.activeController else { return }
+            self.cancelConfirm()
+            self.endModes()
+            self.answerFocusedAgent()
+            self.syncWindowFocus()
         }
         c.focusPastLeftEdge = { [weak self, weak c] in
             guard let self, c === self.activeController else { return false }
@@ -3481,11 +3665,15 @@ final class WindowController: NSObject {
             pendingModal = nil
             floats.reveal(surface)
         } else if let tab = attention.tab(of: surface) {
-            reveal(tab)
-            if floats.isOpen { closeFloatForTabChange() }
-            controller(tab)?.focus(surface: surface)
+            focus(surface, in: tab)
         }
         answerFocusedAgent()
+    }
+
+    func focus(_ surface: SurfaceID, in tab: TabID) {
+        reveal(tab)
+        if floats.isOpen { closeFloatForTabChange() }
+        controller(tab)?.focus(surface: surface)
     }
 
     /// Answers whatever `surface` asked now that it is on screen, and takes down the card it raised.

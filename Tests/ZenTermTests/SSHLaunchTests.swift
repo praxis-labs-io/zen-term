@@ -75,6 +75,13 @@ final class SSHLaunchTests: XCTestCase {
         XCTAssertFalse(config.tracksBusy)
     }
 
+    func test_theConfigCarriesTheBackingScaleItIsGiven() {
+        let config = SSHLaunch.config(
+            host: host, controlPath: URL(fileURLWithPath: "/tmp/1-ab"), form: .plain, backingScale: 2)
+
+        XCTAssertEqual(config.backingScale, 2)
+    }
+
     func test_thePathNamesThePidAndEightHexOfTheHost() {
         let path = SSHLaunch.controlPath(
             for: host, in: URL(fileURLWithPath: "/tmp/zt", isDirectory: true), fallback: fallback, pid: 42)

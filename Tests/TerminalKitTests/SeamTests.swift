@@ -9,6 +9,7 @@ private final class SpySurface: TerminalSurface {
     var title = "spy"
     var isFocused = false
     private(set) var started = false
+    var isStarted: Bool { started }
 
     func start(_ config: TerminalSurfaceConfig) {
         started = true
@@ -17,8 +18,10 @@ private final class SpySurface: TerminalSurface {
     func focus() { isFocused = true }
     func terminate() {}
     func paste(_ text: String) {}
+    func submit() {}
     func copySelection() -> String? { nil }
     func scroll(_ command: TerminalScroll) {}
+    func text(lastLines count: Int) -> String? { nil }
 }
 
 private final class RecordingDelegate: TerminalSurfaceDelegate {

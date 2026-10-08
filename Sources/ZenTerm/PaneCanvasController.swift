@@ -17,6 +17,7 @@ final class PaneCanvasController: NSObject {
     /// Consumed on first start; a split never inherits it.
     private var startupCommandByLeaf: [PaneID: String] = [:]
     private let workspaceEnv: [String: String]
+    private let backingScale: CGFloat?
     private var nextID = 1
 
     private var zoomedLeaf: PaneID?
@@ -122,6 +123,7 @@ final class PaneCanvasController: NSObject {
 
     init(
         initialCWD: URL? = nil, initialCommand: String? = nil, env: [String: String] = [:],
+        backingScale: CGFloat? = nil,
         isToolFloatOpen: @escaping () -> Bool = { false },
         makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
         startSurface: @escaping SurfaceStart = startSurfaceNow
@@ -131,6 +133,7 @@ final class PaneCanvasController: NSObject {
         self.tree = PaneTree(singleLeaf: firstLeaf)
         self.registry = PaneSurfaceRegistry(makeSurface: makeSurface)
         self.workspaceEnv = env
+        self.backingScale = backingScale
         self.isToolFloatOpen = isToolFloatOpen
         super.init()
         nextID = 2
@@ -155,7 +158,7 @@ final class PaneCanvasController: NSObject {
     }
 
     private func navEnv(token: Int) -> [String: String] {
-        NavSocketServer.env(base: workspaceEnv, token: token)
+        PaneEnvironment.variables(base: workspaceEnv, token: token)
     }
 
     func start() {
@@ -173,13 +176,14 @@ final class PaneCanvasController: NSObject {
             surfaceIDByLeaf[id] = surfaceID
             registered.append((surfaceID, id))
             let token = registerNavToken(for: id)
-            let launch: TerminalSurfaceConfig
+            var launch: TerminalSurfaceConfig
             let launchedCommand = startupCommandByLeaf.removeValue(forKey: id)
             if let cmd = launchedCommand {
                 launch = ShellLaunch.program(cmd, cwd: cwdByLeaf[id], env: navEnv(token: token))
             } else {
                 launch = ShellLaunch.shell(cwd: cwdByLeaf[id], env: navEnv(token: token))
             }
+            launch.backingScale = backingScale
             launchByLeaf[id] = launch
             startSurface(surface, surfaceID, launch)
             if let cmd = launchedCommand { onProgramLaunched?(surfaceID, cmd) }
@@ -349,28 +353,51 @@ final class PaneCanvasController: NSObject {
     func focusLeaf(_ id: PaneID) { focus(id) }
 
     func split(_ axis: SplitAxis) {
-        guard let host = hostByLeaf[tree.focusedLeaf] else { return }
+        guard hostByLeaf[tree.focusedLeaf] != nil else { return }
+        guard split(tree.focusedLeaf, axis: axis, command: nil, focusing: true) != nil else { NSSound.beep(); return }
+    }
+
+    func split(token: Int, axis: SplitAxis, command: String?) -> Int? {
+        guard let leaf = leafID(token: token) else { return nil }
+        let keepsKeyFocus = holdsKeyFocusInCanvas
+        guard let opened = split(leaf, axis: axis, command: command, focusing: false) else { return nil }
+        if keepsKeyFocus { registry.surface(for: tree.focusedLeaf)?.focus() }
+        return tokenByLeaf[opened]
+    }
+
+    private func split(_ source: PaneID, axis: SplitAxis, command: String?, focusing: Bool) -> PaneID? {
+        guard let host = hostByLeaf[source] else { return nil }
         let size = host.bounds.size
         let extent = (axis == .vertical) ? size.width : size.height
-        guard extent >= Self.minSplitExtent else { NSSound.beep(); return }
+        guard extent >= Self.minSplitExtent else { return nil }
 
-        let source = tree.focusedLeaf
+        let focused = tree.focusedLeaf
         let newLeaf = mintPaneID()
         let newSplit = mintSplitID()
         let inherited = registry.surface(for: source)?.currentDirectory ?? cwdByLeaf[source]
         cwdByLeaf[newLeaf] = removedWorktree()?.relocating(inherited) ?? inherited
+        if let command { startupCommandByLeaf[newLeaf] = command }
         tree = tree.splitting(source, axis: axis, newLeaf: newLeaf, newSplit: newSplit)
+        if !focusing { tree.focusedLeaf = focused }
         reconcileAndRender()
-        focusActivePane()
+        canvasView.layoutSubtreeIfNeeded()
+        if focusing { focusActivePane() }
         if !Motion.isReduceMotionEnabled(), let split = splitViewByID[newSplit] {
-            canvasView.layoutSubtreeIfNeeded()
             split.animateSplitIn(
                 duration: Motion.pageSlideDuration, timing: Motion.landingTiming,
                 suspendGrids: { [weak self] suspended in
                     self?.allSurfaces.forEach { $0.setSizeSyncSuspended(suspended) }
                 })
         }
+        return newLeaf
     }
+
+    // A rebuild takes the canvas's views out of the window, which drops a pane's first responder.
+    private var holdsKeyFocusInCanvas: Bool {
+        (canvasView.window?.firstResponder as? NSView)?.isDescendant(of: canvasView) == true
+    }
+
+    private func leafID(token: Int) -> PaneID? { tokenByLeaf.first { $0.value == token }?.key }
 
     func resize(_ direction: Direction) {
         let axis: SplitAxis = (direction == .left || direction == .right) ? .vertical : .horizontal
@@ -399,15 +426,22 @@ final class PaneCanvasController: NSObject {
     }
 
     @discardableResult
-    func closeFocused() -> Bool {
-        let dying = tree.focusedLeaf
-        guard let next = tree.closing(dying) else { return false }
-        let closing = captureDyingPane(dying)
+    func closeFocused() -> Bool { close(tree.focusedLeaf, refocusing: true) }
+
+    @discardableResult
+    func close(token: Int) -> Bool {
+        guard let leaf = leafID(token: token) else { return false }
+        return close(leaf, refocusing: holdsKeyFocusInCanvas)
+    }
+
+    private func close(_ leaf: PaneID, refocusing: Bool) -> Bool {
+        guard let next = tree.closing(leaf) else { return false }
+        let closing = captureDyingPane(leaf)
         tree = next
         clearZoomIfLeafGone()
         reconcileAndRender()
         dissolveClosedPane(closing)
-        focusActivePane()
+        if refocusing { focusActivePane() }
         return true
     }
 
@@ -549,6 +583,17 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     var focusedSurfaceID: SurfaceID? { surfaceIDByLeaf[tree.focusedLeaf] }
 
     var liveSurfaceIDs: [SurfaceID] { tree.leafIDs.compactMap { surfaceIDByLeaf[$0] } }
+
+    var paneHandles: [PaneHandle] {
+        tree.leafIDs.compactMap { id in
+            guard let token = tokenByLeaf[id], let surfaceID = surfaceIDByLeaf[id],
+                let surface = registry.surface(for: id)
+            else { return nil }
+            return PaneHandle(
+                token: token, surfaceID: surfaceID, surface: surface, drawer: nil,
+                cwd: surface.currentDirectory ?? cwdByLeaf[id])
+        }
+    }
 
     private func leafID(of surface: SurfaceID) -> PaneID? {
         surfaceIDByLeaf.first { $0.value == surface }?.key

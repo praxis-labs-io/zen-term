@@ -87,7 +87,7 @@ enum SSHLaunch {
     static var clearedTitle: String { workingDirectory.path }
 
     static func config(
-        host: SSHHostID, controlPath: URL, form: Form, env: [String: String] = [:]
+        host: SSHHostID, controlPath: URL, form: Form, env: [String: String] = [:], backingScale: CGFloat? = nil
     ) -> TerminalSurfaceConfig {
         var environment = env
         environment["TERM"] = "xterm-256color"
@@ -95,7 +95,7 @@ enum SSHLaunch {
             command: executable, args: arguments(host: host, controlPath: controlPath, form: form),
             workingDirectory: workingDirectory, environment: environment,
             fontSize: SessionFontSize.points, theme: Theme.current.terminal,
-            behavior: GeneralConfig.current.terminalBehavior, tracksBusy: false)
+            behavior: GeneralConfig.current.terminalBehavior, tracksBusy: false, backingScale: backingScale)
     }
 
     private static func digest(of host: SSHHostID) -> String {

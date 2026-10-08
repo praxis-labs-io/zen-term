@@ -10,12 +10,15 @@ private final class FakeSurface: NSObject, TerminalSurface {
     var title = ""
     var isFocused = false
     private(set) var terminated = false
-    func start(_ config: TerminalSurfaceConfig) {}
+    private(set) var isStarted = false
+    func start(_ config: TerminalSurfaceConfig) { isStarted = true }
     func focus() {}
     func terminate() { terminated = true }
     func paste(_ text: String) {}
+    func submit() {}
     func copySelection() -> String? { nil }
     func scroll(_ command: TerminalScroll) {}
+    func text(lastLines count: Int) -> String? { nil }
 }
 
 final class PaneSurfaceRegistryTests: XCTestCase {

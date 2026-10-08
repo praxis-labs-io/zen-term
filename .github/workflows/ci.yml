@@ -45,9 +45,11 @@ jobs:
         id: pin
         run: echo "sha=$(git rev-parse HEAD:vendor/ghostty)" >> "$GITHUB_OUTPUT"
 
-      - name: Cache GhosttyKit artifacts
+      # Only main saves caches. A PR's caches are scoped to that PR, and a few multi-GiB
+      # SwiftPM entries push main's out of the repo's 10 GB quota, leaving every PR cold.
+      - name: Restore GhosttyKit artifacts
         id: ghosttykit
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             Frameworks/GhosttyKit.xcframework
@@ -58,17 +60,28 @@ jobs:
         if: steps.ghosttykit.outputs.cache-hit != 'true'
         run: |
           # Zig 0.15.2 can't link libSystem against the newest macOS SDK (undefined
-          # __availability_version_check et al.), so pin the oldest Xcode 26.x on the
-          # runner — the older SDK ghostty itself builds v1.3.1 against.
+          # __availability_version_check et al.), so this step alone uses the oldest
+          # Xcode 26.x on the runner, the older SDK ghostty itself builds v1.3.1 against.
+          # DEVELOPER_DIR rather than xcode-select, so Build and Test keep the default.
           echo "available xcodes:"; ls -d /Applications/Xcode_*.app 2>/dev/null || true
           XCODE="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | head -1)"
-          [ -n "$XCODE" ] && sudo xcode-select -s "$XCODE"
+          [ -n "$XCODE" ] && export DEVELOPER_DIR="$XCODE/Contents/Developer"
           echo "selected: $(xcode-select -p) — SDK $(xcrun --sdk macosx --show-sdk-version)"
           xcodebuild -downloadComponent MetalToolchain
           bin/build-ghosttykit
 
-      - name: Cache SwiftPM
-        uses: actions/cache@v4
+      - name: Save GhosttyKit artifacts
+        if: github.event_name == 'push' && steps.ghosttykit.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            Frameworks/GhosttyKit.xcframework
+            Sources/TerminalKit/Resources/ghostty-resources
+          key: ${{ steps.ghosttykit.outputs.cache-primary-key }}
+
+      - name: Restore SwiftPM
+        id: spm
+        uses: actions/cache/restore@v4
         with:
           path: .build
           key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
@@ -79,6 +92,13 @@ jobs:
 
       - name: Test
         run: swift test
+
+      - name: Save SwiftPM
+        if: github.event_name == 'push' && steps.spm.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .build
+          key: ${{ steps.spm.outputs.cache-primary-key }}
 
   lint:
     name: Lint

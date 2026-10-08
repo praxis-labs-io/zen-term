@@ -23,9 +23,11 @@ final class RecordingSurface: NSObject, TerminalSurface {
     var terminated = false
     var failOnStart = false
     private(set) var startCount = 0
+    private(set) var isStarted = false
     func start(_ config: TerminalSurfaceConfig) {
         guard !terminated else { return }
         startCount += 1
+        isStarted = !failOnStart
         lastConfig = config
         if let theme = config.theme, let behavior = config.behavior {
             lastAppearance = (theme, behavior)
@@ -55,13 +57,25 @@ final class RecordingSurface: NSObject, TerminalSurface {
         focusCount += 1
         if moved { focusRenders.append(true) }
     }
-    func terminate() { terminated = true }
+    func terminate() {
+        terminated = true
+        isStarted = false
+    }
     private(set) var focusRenders: [Bool] = []
     func setFocused(_ focused: Bool) { focusRenders.append(focused) }
     private(set) var sizeSyncHolds = 0
     func setSizeSyncSuspended(_ suspended: Bool) { sizeSyncHolds = max(0, sizeSyncHolds + (suspended ? 1 : -1)) }
+    enum Input: Equatable {
+        case paste(String)
+        case submit
+    }
+    private(set) var inputs: [Input] = []
     private(set) var pastes: [String] = []
-    func paste(_ text: String) { pastes.append(text) }
+    func paste(_ text: String) {
+        pastes.append(text)
+        inputs.append(.paste(text))
+    }
+    func submit() { inputs.append(.submit) }
     var selectionText: String?
     func copySelection() -> String? { selectionText }
     private(set) var scrolls: [TerminalScroll] = []
@@ -118,6 +132,16 @@ final class RecordingSurface: NSObject, TerminalSurface {
             in: TerminalViewportRange(
                 startRow: row, startColumn: 0, endRow: row,
                 endColumn: max((cellMetrics?.columns ?? rows[row].count) - 1, 0)))
+    }
+
+    var scrollback: [String] = []
+    var screenIsUnreadable = false
+
+    func text(lastLines count: Int) -> String? {
+        guard !screenIsUnreadable else { return nil }
+        var lines = scrollback + rows
+        while let last = lines.last, last.isEmpty { lines.removeLast() }
+        return lines.suffix(count).joined(separator: "\n")
     }
 
     static let unwritten: Character = "\0"

@@ -54,10 +54,15 @@ final class GhosttyHostView: NSView {
         if sizeSyncHolds == 0 { syncSizeAndScale() }
     }
 
+    var detachedScale: CGFloat?
+
+    var backingScale: CGFloat {
+        window?.backingScaleFactor ?? detachedScale ?? NSScreen.main?.backingScaleFactor ?? 2.0
+    }
+
     func syncSizeAndScale() {
         if let surfacePtr {
-            let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
-            ghostty_surface_set_content_scale(surfacePtr, scale, scale)
+            ghostty_surface_set_content_scale(surfacePtr, backingScale, backingScale)
         }
         guard !isSizeSyncSuspended else { return }
         scheduleSizePush()
@@ -86,17 +91,21 @@ final class GhosttyHostView: NSView {
         pushSize()
     }
 
-    // Skips a detached view, where `convertToBacking` is the identity and the size lands at half on Retina.
     private func pushSize() {
         guard !isSizeSyncSuspended else { return }
         sizePushesForTesting += 1
         lastPushedFrameForTesting = bounds.size
-        guard window != nil else { return }
-        let backing = convertToBacking(bounds).size
-        guard backing.width >= 1, backing.height >= 1 else { return }
+        guard let backing = backingSize, backing.width >= 1, backing.height >= 1 else { return }
         guard let surfacePtr else { return }
         ghostty_surface_set_size(surfacePtr, UInt32(backing.width), UInt32(backing.height))
         owner?.reportGridIfChanged()
+    }
+
+    // Detached, `convertToBacking` is the identity and the size lands at half on Retina, so it needs a known scale.
+    private var backingSize: NSSize? {
+        if window != nil { return convertToBacking(bounds).size }
+        guard let detachedScale else { return nil }
+        return NSSize(width: bounds.width * detachedScale, height: bounds.height * detachedScale)
     }
 
     override func setFrameSize(_ newSize: NSSize) {

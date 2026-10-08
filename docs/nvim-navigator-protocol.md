@@ -12,7 +12,7 @@ It is **opt-in**: default ⌘⌥ arrow pane nav is untouched. A user enables it 
 
 ## Environment
 
-ZenTerm injects two variables into every pane's shell:
+ZenTerm injects two navigator variables into every pane's shell:
 
 | Var        | Value                                                        |
 | ---------- | ----------------------------------------------------------- |

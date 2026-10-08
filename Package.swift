@@ -15,6 +15,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.0"),
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
     ],
     targets: [
         .binaryTarget(
@@ -63,10 +64,14 @@ let package = Package(
             name: "TabKit",
             swiftSettings: mainThreadEnforced
         ),
+        .target(
+            name: "ControlProtocol",
+            swiftSettings: mainThreadEnforced
+        ),
         .executableTarget(
             name: "ZenTerm",
             dependencies: [
-                "TerminalKit", "PaneKit", "TabKit", "AppLog",
+                "TerminalKit", "PaneKit", "TabKit", "AppLog", "ControlProtocol",
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
             resources: [
@@ -78,6 +83,14 @@ let package = Package(
             linkerSettings: [
                 .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
             ]
+        ),
+        .executableTarget(
+            name: "zen",
+            dependencies: [
+                "ControlProtocol",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            swiftSettings: mainThreadEnforced
         ),
         .testTarget(
             name: "TerminalKitTests",
@@ -95,13 +108,23 @@ let package = Package(
             swiftSettings: mainThreadEnforced
         ),
         .testTarget(
+            name: "ControlProtocolTests",
+            dependencies: ["ControlProtocol"],
+            swiftSettings: mainThreadEnforced
+        ),
+        .testTarget(
+            name: "zenTests",
+            dependencies: ["zen", "ControlProtocol"],
+            swiftSettings: mainThreadEnforced
+        ),
+        .testTarget(
             name: "AppLogTests",
             dependencies: ["AppLog"],
             swiftSettings: mainThreadEnforced
         ),
         .testTarget(
             name: "ZenTermTests",
-            dependencies: ["ZenTerm", "TabKit"],
+            dependencies: ["ZenTerm", "TabKit", "ControlProtocol"],
             swiftSettings: mainThreadEnforced + [.defaultIsolation(MainActor.self)]
         ),
     ]

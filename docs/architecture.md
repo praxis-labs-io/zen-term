@@ -6,11 +6,12 @@ history, rejected designs, measurements or copy reasoning. Shortcuts live in `do
 ## The seam (load-bearing)
 
 `TerminalSurface` (`Sources/TerminalKit/TerminalSurface.swift`) is the
-contract. A surface vends an `NSView`, a title, a cwd, a busy flag and the background
-its program last reported. It takes `start`, `focus`, `terminate`, `paste`,
-`copySelection`, `applyAppearance`, `setFontSize` and `scroll`, reports its grid as
-`cellMetrics`, and reads its own screen back a row at a time (`text(viewportRow:)`,
-wrapped rows split) or a span at a time (`text(in:)`, wrapped rows joined).
+contract. A surface vends an `NSView`, a title, a cwd, a busy flag, whether it has
+started, and the background its program last reported. It takes `start`, `focus`,
+`terminate`, `paste`, `submit`, `copySelection`, `applyAppearance`, `setFontSize` and
+`scroll`, reports its grid as `cellMetrics`, and reads its own screen back a row at a time (`text(viewportRow:)`,
+wrapped rows split), a span at a time (`text(in:)`, wrapped rows joined), or as its last
+lines, scrollback included (`text(lastLines:)`).
 
 Types that travel with it: `TerminalSurfaceConfig`, `TerminalSurfaceDelegate` (events
 out, defaulted to no-ops), `TerminalTheme`, `TerminalBehavior`.
@@ -62,6 +63,8 @@ TerminalKit          the ONLY target that may import GhosttyKit
 
   TabKit             pure leaf used by ZenTerm: imports nothing
   AppLog             Foundation + os leaf used by TerminalKit and ZenTerm
+  ControlProtocol    Foundation leaf: the control socket's wire types, used by ZenTerm and zen
+  zen                the control CLI: ControlProtocol + swift-argument-parser, nothing else
 ```
 
 The package graph enforces the seam: `ZenTerm` has no `GhosttyKit` dependency, so an
@@ -129,8 +132,9 @@ share `SystemReport`, and never carry the environment or config.
 ### What the backend will and won't do
 
 - **`paste` is the real bracketed paste path** (`ghostty_surface_text`). Multi-line text
-  arrives as one block and skips the unsafe-paste prompt. To submit, send `"\r"` as a
-  separate `paste`.
+  arrives as one block and skips the unsafe-paste prompt, and control bytes become spaces.
+  To submit, call `submit()`, which writes Return outside the paste: a `"\r"` paste lands
+  inside the brackets, where zsh inserts it as text.
 - **Links open on ⌘-click only**; ⌘-hover shows `LinkPreviewView`.
 - **No per-pane user variable.** `OSC 1337 SetUserVar` is unimplemented upstream. Pane
   signals ride the nav socket (`$ZEN_SOCK`, `$ZEN_PANE`).
@@ -215,10 +219,21 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   host's workspace carries the host and stays out of the workspace rows.
 - **`activate(_:)` is the single path a switch goes through**: a row click, the workspace
   chords, ⌘P, ⌘⌃T, and revealing a background tab. An open workspace slides in on the y axis, from
-  below when it sits lower in `navigable`; a new one has no canvas yet, so it mounts each
-  of its tabs without motion, applies each tab's recipe in the same turn, and lands on the
-  tab its launch focus names. A close's landing slides the same way. An SSH host's row selects
-  it through `activate(_ host:)`, which closes the open card, float and confirm the same way.
+  below when it sits lower in `navigable`; a new one mounts without motion, its tabs already
+  started with their recipes, on the tab its launch focus names. A close's landing slides the
+  same way. An SSH host's row selects it through `activate(_ host:)`, which closes the open card,
+  float and confirm the same way.
+- **Every tab and workspace verb is a headless operation the chrome wraps.** `openTab`,
+  `appendWorkspace` and `removeTab` create, start or end without moving the view, and the
+  chords and the control socket call the same one. The chrome's wrapper closes the modal and
+  the float, then selects, activates or remounts. A new tab is appended behind the active one
+  (`TabList.append`), started unmounted, and laid out at the mounted canvas's frame, with
+  `TerminalSurfaceConfig.backingScale` standing in for the window it does not have yet, so its
+  programs start on the grid they will mount into rather than libghostty's default. Focus
+  moving inside a tab that is not active is not the user's, so it cancels nothing.
+  Pane verbs take a token: `PaneCanvasController.split(token:axis:command:)` and
+  `close(token:)` leave focus on the pane that had it, and put back the keyboard focus the
+  rebuild drops.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
   workspace costs nothing beyond an inactive tab.
 - **Tab ids are minted by the window**, not by the workspace, so they stay unique across a
@@ -481,6 +496,23 @@ exported as `$ZEN_SOCK`; per-pid so a dev build cannot unlink the installed app'
 Failure is silent. `NavGuard.shouldPassThrough` passes Ctrl-nav only. An open tool float
 also claims Ctrl-nav and gets no `$ZEN_PANE`.
 
+**The control socket** backs `zen` (`docs/control-protocol.md`). `ControlServer` listens on
+`control.<pid>.sock` beside the nav socket, exported as `$ZEN_CONTROL_SOCK` by
+`PaneEnvironment` with the nav variables. Both servers sit on `SocketListener`, which owns
+bind, the per-pid path, the stale sweep, the `0600` mode and the `getpeereid` check. It
+binds and listens on `<prefix><pid>.bind`, then renames onto the `.sock` path, so a `.sock`
+that refuses a connect is always stale and a sibling's sweep never removes one mid-startup. A
+request decodes on the connection's thread, applies on main through `ControlResponder`,
+and is written back from the connection's thread, so a client that stops reading never
+stalls main. A command that reads off-main (`workspace.open` reading the workspaces file)
+replies when the read lands, holding only its own connection. A token resolves to its window, tab and surface by walking the windows
+(`ControlResponder.locate`), not through a second registry. An `ssh:<alias>` address resolves
+through each window's host workspaces, not `runningWorkspaces()`, which feeds the ⌘P picker
+and leaves hosts out. `action` hands its keymap action
+to `AppDelegate.route`, the path a reserved chord takes, so it meets the same app-global and
+modal gates a keystroke does; only the keystroke-level pass-through guards are skipped, since
+there is no key to pass through.
+
 **The theme state file** backs zen-theme.nvim (`docs/nvim-theme-protocol.md`).
 `ThemePublisher` writes `~/Library/Application Support/ZenTerm/theme.json` at launch and
 on every theme change. It is a fixed path because a float launches with no environment.
@@ -602,7 +634,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   destination the probe resolved from the same `ssh -G`, so it never runs ssh itself.
 - **A connected host is a workspace whose tabs run ssh over one `SSHConnection`.** Every pane
   and drawer, and Scratch, starts through the tab's injected `SurfaceStart` (a user float
-  never does, since a host's start keeps only the launch's environment), which for a host runs
+  never does, since a host's start keeps only the launch's environment and backing scale), which for a host runs
   `/usr/bin/ssh` with `ControlMaster=auto`, a `ControlPath` under `Application Support/ZenTerm/ssh`
   (the temp folder when that path passes 86 bytes, since ssh binds a longer temporary name
   first) and `ControlPersist=60`, as `xterm-256color` with busy tracking off (a remote shell
@@ -694,7 +726,9 @@ workspace's entry fresh for the card. Settings does not list them.
 
 The create card replaces the picker and reopens it on cancel. `BranchField` is a `FieldBox`
 plus `ListPopover`, Esc handled in its `doCommandBy`. `CreateTarget` carries the repo to
-branch in and the workspace to carry from.
+branch in and the workspace to carry from. `WorktreeCreation` is the one create pipeline
+(create, mirror the entry, carry), run off-main: the card passes its phase line and opens the
+result through the chrome, and the control socket passes nothing and opens it headless.
 
 ### Carry
 

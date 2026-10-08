@@ -45,11 +45,17 @@ final class GhosttyDeferredStartTests: XCTestCase {
         waiting.paste("text")
         XCTAssertFalse(waiting.isBusy)
         XCTAssertNil(waiting.cellMetrics)
+        XCTAssertFalse(waiting.isStarted)
 
         waiting.start(TerminalSurfaceConfig(command: "/bin/sh", args: ["-c", "sleep 100"]))
 
         XCTAssertNotNil(waiting.surfacePtr, "a surface laid out and typed into before it starts must still start")
         XCTAssertNotNil(waiting.cellMetrics, "a late start must size the grid to the view it is already in")
+        XCTAssertTrue(waiting.isStarted)
+
+        waiting.terminate()
+
+        XCTAssertFalse(waiting.isStarted)
     }
 
     func test_aSurfaceTerminatedBeforeItStarts_neverStarts() {
@@ -59,5 +65,6 @@ final class GhosttyDeferredStartTests: XCTestCase {
         surface.start(TerminalSurfaceConfig(command: "/bin/sh", args: ["-c", "sleep 100"]))
 
         XCTAssertNil(surface.surfacePtr, "a held-back start for a pane closed meanwhile would run an orphaned session")
+        XCTAssertFalse(surface.isStarted)
     }
 }

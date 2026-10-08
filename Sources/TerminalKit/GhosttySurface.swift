@@ -46,6 +46,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     public var title: String { lastTitle }
     public var isFocused: Bool { hostView.window?.firstResponder === hostView }
     public var currentDirectory: URL? { lastCwd }
+    public var isStarted: Bool { surfacePtr != nil }
 
     // Reads OSC 133 prompt marks: a shell without integration reads busy, a background job does not.
     public var isBusy: Bool {
@@ -67,8 +68,8 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         cfg.platform = ghostty_platform_u(
             macos: ghostty_platform_macos_s(nsview: Unmanaged.passUnretained(hostView).toOpaque()))
         cfg.userdata = Unmanaged.passUnretained(self).toOpaque()
-        cfg.scale_factor = Double(
-            hostView.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0)
+        hostView.detachedScale = config.backingScale
+        cfg.scale_factor = Double(hostView.backingScale)
         cfg.font_size = config.fontSize.map { Float($0) } ?? 0
 
         let command: String? = config.command.map { cmd in
@@ -417,6 +418,10 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         text.withCString { ghostty_surface_text(surfacePtr, $0, byteCount) }
     }
 
+    public func submit() {
+        performBindingAction("text:\\r")
+    }
+
     public func copySelection() -> String? {
         guard let surfacePtr, ghostty_surface_has_selection(surfacePtr) else { return nil }
         var text = ghostty_text_s()
@@ -447,7 +452,7 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         guard let surfacePtr else { return nil }
         let size = ghostty_surface_size(surfacePtr)
         guard size.cell_height_px > 0, size.cell_width_px > 0 else { return nil }
-        let scale = hostView.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
+        let scale = hostView.backingScale
         return TerminalCellMetrics(
             columns: Int(size.columns),
             rows: Int(size.rows),
@@ -469,6 +474,13 @@ public final class GhosttySurface: NSObject, TerminalSurface {
     public func text(in range: TerminalViewportRange) -> String? {
         guard let metrics = cellMetrics else { return nil }
         return text(in: range, metrics: metrics)
+    }
+
+    public func text(lastLines count: Int) -> String? {
+        guard count > 0, let screen = hostView.readScreenText() else { return nil }
+        var lines = screen.components(separatedBy: "\n")
+        while let last = lines.last, last.allSatisfy(\.isWhitespace) { lines.removeLast() }
+        return lines.suffix(count).joined(separator: "\n")
     }
 
     private func text(in range: TerminalViewportRange, metrics: TerminalCellMetrics) -> String? {

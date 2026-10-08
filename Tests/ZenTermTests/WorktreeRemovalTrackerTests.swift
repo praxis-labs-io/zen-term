@@ -62,16 +62,17 @@ final class WorktreeRemovalTrackerTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: treePath.path))
     }
 
-    func test_removeIgnoresAPathAlreadyInFlight() {
+    func test_removeRefusesAPathAlreadyInFlight() {
         let worktree = Worktree(path: path, branch: "probe", head: "abc1234", isLocked: false)
         tracker.begin(path)
         var changes = 0
         tracker.onChanged = { _ in changes += 1 }
+        var refusal: Error?
 
-        tracker.remove(worktree, in: path.deletingLastPathComponent()) { _ in
-            XCTFail("the second remove must not run")
-        }
+        tracker.remove(worktree, in: path.deletingLastPathComponent()) { refusal = $0 }
 
+        XCTAssertEqual(refusal as? WorktreeStore.WorktreeError, .alreadyRemoving("probe"))
+        XCTAssertTrue(tracker.isRemoving(path), "the first removal keeps its claim")
         XCTAssertEqual(changes, 0, "nothing to announce: the claim was already there")
     }
 

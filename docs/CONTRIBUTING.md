@@ -58,6 +58,8 @@ Sources/
   PaneKit/       the pane tree and spatial navigation
   TabKit/        the tab list
   AppLog/        the logging facade
+  ControlProtocol/  the control socket's wire types
+  zen/           the control CLI
 ```
 
 ## Boundaries

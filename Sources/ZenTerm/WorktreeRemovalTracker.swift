@@ -22,7 +22,9 @@ final class WorktreeRemovalTracker {
     private var waiters: [Waiter] = []
 
     func remove(_ worktree: Worktree, in parent: URL, completion: @escaping (Error?) -> Void) {
-        guard !isRemoving(worktree.path) else { return }
+        guard !isRemoving(worktree.path) else {
+            return completion(WorktreeStore.WorktreeError.alreadyRemoving(worktree.name))
+        }
         begin(worktree.path)
         onChanged?(.began(worktree.path))
         DispatchQueue.global(qos: .userInitiated).async {

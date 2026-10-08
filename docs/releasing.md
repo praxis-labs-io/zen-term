@@ -10,6 +10,19 @@ assemble and Developer ID sign (`bin/package-app`) → notarize and staple app a
 verify → appcast → tag `vX.Y.Z` → publish to this repo's Releases. arm64-only. The version's
 source of truth is the git tag.
 
+## The `zen` CLI ships inside the app
+
+`bin/package-app` copies `zen` out of the same `swift build -c release` into
+`Contents/MacOS/zen` and signs it, as `com.drucial.ZenTerm.zen` (or `.dev.zen`), after
+Sparkle and before the outer app. On the Developer ID path that signature carries the
+hardened runtime and a timestamp like every other Mach-O, so the app's notarization covers
+it and `codesign --verify --strict --deep` checks it.
+
+**The path is a contract.** Install is a symlink to
+`/Applications/ZenTerm.app/Contents/MacOS/zen`, and `zen --version` reads the version from
+the `Info.plist` two folders above wherever that symlink resolves. Moving or renaming the
+binary breaks every installed link.
+
 ## zen-term-releases stays archived
 
 Builds before v1.0.0 poll a frozen `SUFeedURL` in `zen-term/zen-term-releases`, which

@@ -78,6 +78,7 @@ BUILD="${BUILD_OVERRIDE:-$(git rev-list --count HEAD 2>/dev/null || echo 0)}"
 
 APP="$DEST/$APP_BASENAME"
 BIN=".build/release/ZenTerm"
+ZEN_BIN=".build/release/zen"
 
 # SwiftPM resource bundles (brand SVGs, ghostty runtime resources). They ride in
 # Contents/Resources, which is Bundle.main.resourceURL at runtime: the location
@@ -116,6 +117,11 @@ for bundle in "${EXPECTED_BUNDLES[@]}"; do
     }
 done
 
+[[ -x "$ZEN_BIN" ]] || {
+    echo "✗ $ZEN_BIN missing: swift build -c release should have built the zen CLI" >&2
+    exit 1
+}
+
 for path in .build/release/*.bundle; do
     found="$(basename "$path")"
     for expected in "${EXPECTED_BUNDLES[@]}"; do
@@ -150,6 +156,7 @@ STAGE="$DEST/.$APP_BASENAME.partial"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/Contents/MacOS" "$STAGE/Contents/Resources"
 cp "$BIN" "$STAGE/Contents/MacOS/ZenTerm"
+cp "$ZEN_BIN" "$STAGE/Contents/MacOS/zen"
 cp "$ICON_SRC" "$STAGE/Contents/Resources/AppIcon.icns"
 
 # Third-party license notices. The file is a SwiftPM resource, so it already rides
@@ -244,7 +251,7 @@ PLIST
 # must sign the nested Mach-O, or the daily-driver build won't launch on arm64.
 SIGN=(codesign --force --sign "$IDENTITY")
 if [[ "$IDENTITY" == "-" ]]; then
-    echo "▸ Ad-hoc signing (nested Sparkle + app)"
+    echo "▸ Ad-hoc signing (nested Sparkle and zen, then the app)"
 else
     echo "▸ Signing with hardened runtime: $IDENTITY"
     SIGN+=(--options runtime --timestamp)
@@ -252,6 +259,7 @@ fi
 "${SIGN[@]}" "$SPARKLE/Versions/B/Autoupdate"
 "${SIGN[@]}" "$SPARKLE/Versions/B/Updater.app"
 "${SIGN[@]}" "$SPARKLE"
+"${SIGN[@]}" --identifier "$BUNDLE_ID.zen" "$STAGE/Contents/MacOS/zen"
 "${SIGN[@]}" "$STAGE"
 
 # The only point where the installed app is at risk, and by now the replacement is
