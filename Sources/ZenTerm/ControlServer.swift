@@ -4,7 +4,6 @@ import Foundation
 
 typealias ControlReply = Result<any ControlPayload, ControlError>
 
-/// Each request line decodes off-main, applies on main, and its reply is written back off-main, in order.
 final class ControlServer {
     static var socketPath: String { SocketListener.path(prefix: ControlEndpoint.fileNamePrefix) }
 
