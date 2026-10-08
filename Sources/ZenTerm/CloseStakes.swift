@@ -6,8 +6,12 @@ struct CloseStakes: Equatable {
     let isRunning: Bool
     let panes: [ListResult.Pane]
     let floats: [String]
-    var loginHost: String?
-    var loginTabs = 0
+    var login: Login?
 
-    var needsForce: Bool { closesWindow || isRunning || loginHost != nil }
+    var needsForce: Bool { closesWindow || isRunning || login != nil }
+
+    struct Login: Equatable {
+        let host: String
+        let tabs: Int
+    }
 }

@@ -87,7 +87,7 @@ extension ControlResponder {
             if stakes.needsForce, request.args.force != true {
                 return .failure(Self.refusal(closing: "pane \(token)", stakes))
             }
-            if stakes.loginHost != nil { return Self.abandonLogin(holding: place.tab, in: place.window) }
+            if stakes.login != nil { return Self.abandonLogin(holding: place.tab, in: place.window) }
             place.window.removePane(token, in: place.tab)
             return .success(NoPayload())
         }

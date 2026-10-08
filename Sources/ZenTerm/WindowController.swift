@@ -2391,7 +2391,9 @@ final class WindowController: NSObject {
     private func loginStakes(of workspace: WorkspaceController) -> CloseStakes {
         CloseStakes(
             closesWindow: false, isRunning: false, panes: [], floats: [],
-            loginHost: workspace.host.map(GeneralConfig.current.displayName(of:)), loginTabs: workspace.tabIDs.count)
+            login: workspace.host.map {
+                CloseStakes.Login(host: GeneralConfig.current.displayName(of: $0), tabs: workspace.tabIDs.count)
+            })
     }
 
     func removePane(_ token: Int, in tab: TabID) {
