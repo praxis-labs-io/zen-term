@@ -365,6 +365,19 @@ final class ControlSSHHostTests: WindowTestCase {
         XCTAssertEqual(try listedWorkspaces(c).compactMap(\.host), [])
     }
 
+    func test_aHostWhoseLoginFailed_isNotFoundByItsAddress() throws {
+        let c = makeWindow()
+        _ = try loggingIn(c)
+        let tabs = c.tabOrderForTesting
+
+        fake.unwatchable?()
+
+        for cmd in [ControlCommand.workspaceSwitch, .tabNew] {
+            XCTAssertEqual(try error(send(cmd, ControlArgs(workspace: address))).code, .notFound, cmd.rawValue)
+        }
+        XCTAssertEqual(c.tabOrderForTesting, tabs)
+    }
+
     func test_tabNewOnAHost_startsOverSSHBehindTheView_atTheWindowsBackingScale() throws {
         let c = makeWindow()
         let login = try connected(c)
