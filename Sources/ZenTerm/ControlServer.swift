@@ -104,7 +104,8 @@ final class ControlServer {
                 }
             }
         }
-        guard answered.wait(timeout: .now() + answerTimeout) == .success, let reply = answer.settled else {
+        _ = answered.wait(timeout: .now() + answerTimeout)
+        guard let reply = answer.settled else {
             Log.info("ControlSocket: \(request.cmd.rawValue) id=\(request.id) went unanswered", category: .control)
             return .failure(ControlError(.failed, "ZenTerm did not answer."))
         }
