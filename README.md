@@ -42,6 +42,17 @@ brew install --cask font-jetbrains-mono-nerd-font
 ZenTerm updates itself from then on. The [docs](https://zenterm.io/docs) walk
 through the first hour.
 
+The `zen` CLI ships inside the app and is on the `PATH` in every pane, so there is
+nothing to install for it there. To run it from another terminal or a script, link
+it in:
+
+```sh
+sudo mkdir -p /usr/local/bin
+sudo ln -s /Applications/ZenTerm.app/Contents/MacOS/zen /usr/local/bin/zen
+```
+
+The [zen CLI Guide](https://zenterm.io/docs/cli) covers the rest.
+
 ## What it does
 
 - **Panes that tile.** Split right or down, and move between panes by direction
@@ -69,6 +80,10 @@ through the first hour.
 - **A notification when an agent needs you.** With ZenTerm in the background and
   an agent stopped for input, macOS posts a banner and the tab's number takes the
   theme's attention color until you visit it.
+- **Drive it from the command line.** `zen` opens workspaces, tabs and panes
+  behind the one you're looking at, sends text to a pane and reads what it
+  printed, and makes and removes worktrees. A script or an agent in one pane can
+  start a dev server in another tab and check its output.
 - **No telemetry, no analytics, no account.** The only request ZenTerm makes on its
   own is an update check, which asks GitHub for a version number and sends nothing
   about you.
@@ -170,6 +185,9 @@ Tools alone.
 
 - [zenterm.io/docs](https://zenterm.io/docs) walks through the app for someone
   opening it for the first time.
+- [zenterm.io/docs/cli](https://zenterm.io/docs/cli) is the guide to `zen`, and
+  [`docs/control-protocol.md`](docs/control-protocol.md) is the wire contract it
+  speaks, for writing your own client.
 - [`docs/config/config`](docs/config/config) and
   [`docs/config/workspaces`](docs/config/workspaces) are the reference files.
 - [`docs/architecture.md`](docs/architecture.md) is how the app fits together.
