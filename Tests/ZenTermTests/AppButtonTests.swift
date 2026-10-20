@@ -137,39 +137,114 @@ final class AppButtonTests: WindowTestCase {
         return AppTheme(terminal: terminal)
     }
 
-    private func inkiestPixel(of view: NSView) throws -> NSColor {
+    private func inkiestPixel(of view: NSView, in space: NSColorSpace = .sRGB) throws -> NSColor {
         let rep = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
         view.cacheDisplay(in: view.bounds, to: rep)
         var inkiest: NSColor?
         for x in 0..<rep.pixelsWide {
             for y in 0..<rep.pixelsHigh {
-                guard let pixel = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
+                guard let pixel = rep.colorAt(x: x, y: y)?.usingColorSpace(space) else { continue }
                 if pixel.alphaComponent > (inkiest?.alphaComponent ?? 0) { inkiest = pixel }
             }
         }
         return try XCTUnwrap(inkiest, "nothing was drawn")
     }
 
-    func test_aDisabledButton_drawsItsLabelInTheThemesFaintInk_onADarkModeMac() throws {
+    private func disabledButtons() -> [(name: String, button: AppButton)] {
+        let segmentOn = AppButton(title: "Create Worktree", variant: .segment)
+        segmentOn.isOn = true
+        let variants: [(String, AppButton.Variant)] = [
+            ("primary", .primary), ("secondary", .secondary), ("muted", .muted),
+            ("destructive", .destructive), ("segment off", .segment), ("link", .link),
+        ]
+        return variants.map { ($0.0, AppButton(title: "Create Worktree", variant: $0.1)) } + [("segment on", segmentOn)]
+    }
+
+    private func faintInk(over background: CGColor?, in space: NSColorSpace) throws -> NSColor {
+        let ink = try XCTUnwrap(Theme.current.chrome.ink(.faint).usingColorSpace(space))
+        let fill = try XCTUnwrap((background.flatMap { NSColor(cgColor: $0) } ?? .clear).usingColorSpace(space))
+        let inkAlpha = ink.alphaComponent
+        let fillAlpha = fill.alphaComponent * (1 - inkAlpha)
+        let alpha = inkAlpha + fillAlpha
+        func blend(_ i: CGFloat, _ f: CGFloat) -> CGFloat { (i * inkAlpha + f * fillAlpha) / alpha }
+        let components = [
+            blend(ink.redComponent, fill.redComponent), blend(ink.greenComponent, fill.greenComponent),
+            blend(ink.blueComponent, fill.blueComponent), alpha,
+        ]
+        return NSColor(colorSpace: space, components: components, count: components.count)
+    }
+
+    private func assertDisabledLabelsDrawInFaintInk(
+        theme: AppTheme, appearance: NSAppearance.Name, file: StaticString = #filePath, line: UInt = #line
+    ) throws {
         let original = Theme.current
         defer { Theme.setCurrentForTesting(original) }
-        Theme.setCurrentForTesting(try lightTheme())
-        let chrome = Theme.current.chrome
-        let faint = try XCTUnwrap(chrome.ink(.faint).usingColorSpace(.sRGB))
+        Theme.setCurrentForTesting(theme)
+        let space = try XCTUnwrap(
+            CGColorSpace(name: CGColorSpace.extendedLinearSRGB).flatMap(NSColorSpace.init(cgColorSpace:)))
 
-        for variant in [AppButton.Variant.primary, .secondary] {
-            let button = AppButton(title: "Create Worktree", variant: variant)
+        for (name, button) in disabledButtons() {
             let window = try mountFitted(button)
-            window.appearance = NSAppearance(named: .darkAqua)
+            window.appearance = NSAppearance(named: appearance)
             button.isEnabled = false
 
-            let ink = try inkiestPixel(of: button)
+            let ink = try inkiestPixel(of: button, in: space)
+            let expected = try faintInk(over: button.layer?.backgroundColor, in: space)
 
-            XCTAssertEqual(ink.redComponent, faint.redComponent, accuracy: 0.06, "\(variant): \(ink)")
-            XCTAssertEqual(ink.greenComponent, faint.greenComponent, accuracy: 0.06, "\(variant): \(ink)")
-            XCTAssertEqual(ink.blueComponent, faint.blueComponent, accuracy: 0.06, "\(variant): \(ink)")
-            XCTAssertLessThan(ink.redComponent, 0.5, "\(variant) drew its label in the system's white")
+            for (drawn, wanted) in [
+                (ink.redComponent, expected.redComponent), (ink.greenComponent, expected.greenComponent),
+                (ink.blueComponent, expected.blueComponent),
+            ] {
+                XCTAssertEqual(
+                    drawn, wanted, accuracy: 0.06, "\(name) drew \(ink), wanted \(expected)", file: file, line: line)
+            }
         }
+    }
+
+    func test_aDisabledButton_drawsItsLabelInTheThemesFaintInk_withALightThemeOnADarkModeMac() throws {
+        try assertDisabledLabelsDrawInFaintInk(theme: try lightTheme(), appearance: .darkAqua)
+    }
+
+    func test_aDisabledButton_drawsItsLabelInTheThemesFaintInk_withADarkThemeOnALightModeMac() throws {
+        try assertDisabledLabelsDrawInFaintInk(theme: Theme.builtIn, appearance: .aqua)
+    }
+
+    func test_aDisabledSegmentThatIsOn_staysSelected() throws {
+        let button = AppButton(title: "main", variant: .segment)
+        button.isOn = true
+        let window = try mountFitted(button)
+        let chrome = Theme.current.chrome
+
+        button.isEnabled = false
+
+        XCTAssertEqual(button.layer?.backgroundColor, chrome.fill(.active).cgColor, "the selection vanished")
+        XCTAssertEqual(titleColor(button), chrome.ink(.faint))
+        withExtendedLifetime(window) {}
+    }
+
+    func test_aTitleTooWideForItsButton_drawsNoInkOutsideIt() throws {
+        let button = AppButton(title: "A title far too long to fit inside this button", variant: .secondary)
+        button.frame = NSRect(x: 0, y: 0, width: 80, height: 26)
+        let cell = try XCTUnwrap(button.cell as? NSButtonCell)
+        let canvas = NSRect(x: 0, y: 0, width: 400, height: 26)
+        let frame = button.bounds.offsetBy(dx: 160, dy: 0)
+        let rep = try XCTUnwrap(
+            NSBitmapImageRep(
+                bitmapDataPlanes: nil, pixelsWide: Int(canvas.width), pixelsHigh: Int(canvas.height),
+                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                bytesPerRow: 0, bitsPerPixel: 0))
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        _ = cell.drawTitle(button.attributedTitle, withFrame: frame, in: button)
+        NSGraphicsContext.restoreGraphicsState()
+
+        let inkedColumns = (0..<rep.pixelsWide).filter { x in
+            (0..<rep.pixelsHigh).contains { y in (rep.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.02 }
+        }
+
+        XCTAssertFalse(inkedColumns.isEmpty, "nothing was drawn")
+        XCTAssertGreaterThanOrEqual(inkedColumns.first ?? 0, Int(frame.minX), "the title spilled left of the button")
+        XCTAssertLessThanOrEqual(inkedColumns.last ?? 0, Int(frame.maxX), "the title spilled right of the button")
     }
 
     func test_aDisabledSymbolButton_drawsItsSymbolAtFaintInk_notDimmedFurther() throws {

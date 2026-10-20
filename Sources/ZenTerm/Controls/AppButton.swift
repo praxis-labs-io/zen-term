@@ -235,7 +235,8 @@ final class AppButton: NSButton {
 
     private func disabledColors(_ chrome: ChromeTheme) -> (text: NSColor, background: NSColor) {
         switch variant {
-        case .primary, .muted, .destructive, .segment: return (chrome.ink(.faint), chrome.fill(.rest))
+        case .segment: return (chrome.ink(.faint), chrome.fill(isOn ? .active : .rest))
+        case .primary, .muted, .destructive: return (chrome.ink(.faint), chrome.fill(.rest))
         case .secondary, .link: return (chrome.ink(.faint), .clear)
         }
     }
@@ -257,11 +258,24 @@ private final class AppButtonCell: NSButtonCell {
     override func drawTitle(_ _: NSAttributedString, withFrame frame: NSRect, in controlView: NSView) -> NSRect {
         let title = attributedTitle
         let size = title.size()
+        let width = min(size.width, frame.width - trailingReserve)
         let rect = NSRect(
-            x: frame.minX + (frame.width - size.width) / 2 - trailingReserve / 2,
+            x: frame.minX + (frame.width - width) / 2 - trailingReserve / 2,
             y: frame.minY + (frame.height - size.height) / 2,
-            width: size.width, height: size.height)
-        title.draw(in: rect)
+            width: width, height: size.height)
+        if width < size.width {
+            truncatingTail(title).draw(with: rect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+        } else {
+            title.draw(in: rect)
+        }
         return rect
+    }
+
+    private func truncatingTail(_ title: NSAttributedString) -> NSAttributedString {
+        let truncated = NSMutableAttributedString(attributedString: title)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingTail
+        truncated.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: truncated.length))
+        return truncated
     }
 }
