@@ -113,16 +113,16 @@ config.
 
 ## A look around
 
-![Three panes tiled in one tab, the focused one carrying a colored halo](docs/images/panes.png)
+![Three panes tiled in one tab, the focused one outlined in its accent color](docs/images/panes.png)
 
-Three panes in one tab. The focused pane carries the halo, so you can see where
+Three panes in one tab. The focused pane carries an accent border, so you can see where
 the next keystroke lands without hunting for a cursor. The gap between panes and
 the padding around them are both yours to set.
 
 ![The same three panes on a light theme, with the theme picker open over them listing bundled themes marked Dark or Light](docs/images/themes-light.png)
 
 The same window on Catppuccin Latte. A theme colors the terminal, the tab bar,
-the toolbar, the focus halo, and Settings itself, so a light theme stays light
+the toolbar, the focus border, and Settings itself, so a light theme stays light
 through the whole app. 65 ship, each marked Dark or Light in the picker, and a
 `theme = ` line pointed at any Ghostty theme file works the same way.
 

@@ -35,19 +35,29 @@ final class PanelHostViewTests: WindowTestCase {
         return rep.colorAt(x: Int(point.x * scale), y: Int(point.y * scale))?.alphaComponent ?? -1
     }
 
-    func test_focus_raisesTheGlow_andBlurDropsIt() {
-        let panel = PanelHostView(content: NSView(), meta: nil, onFocusRequest: {})
-        mount(panel)
-        XCTAssertEqual(panel.haloOpacityForTesting, 0, "an unfocused panel casts no glow")
+    func test_focus_bordersThePaneInAccentAt2pt_andBlurRestoresTheRestEdge() throws {
+        let focused = PanelHostView(content: NSView(), meta: nil, onFocusRequest: {})
+        let unfocused = PanelHostView(content: NSView(), meta: nil, onFocusRequest: {})
+        mount(focused)
+        mount(unfocused)
+        let chrome = Theme.current.chrome
+        let rest = chrome.fill(alpha: ChromeTheme.hairline).cgColor
 
-        panel.isFocused = true
-        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0, "focus raises the glow")
+        focused.isFocused = true
 
-        panel.isFocused = false
-        XCTAssertEqual(panel.haloOpacityForTesting, 0, "blur drops it again")
+        XCTAssertEqual(focused.borderForTesting.color, chrome.accent.nsColor.cgColor)
+        XCTAssertEqual(focused.borderForTesting.width, ChromeMetrics.Border.paneFocus)
+        XCTAssertEqual(ChromeMetrics.Border.paneFocus, 2)
+        XCTAssertEqual(unfocused.borderForTesting.color, rest, "an unfocused pane keeps its hairline edge")
+        XCTAssertEqual(unfocused.borderForTesting.width, ChromeMetrics.Border.width)
+
+        focused.isFocused = false
+
+        XCTAssertEqual(focused.borderForTesting.color, rest, "blur restores the hairline edge")
+        XCTAssertEqual(focused.borderForTesting.width, ChromeMetrics.Border.width)
     }
 
-    func test_focus_paintsGlowOutsideTheCard() {
+    func test_focus_paintsNothingOutsideThePane() {
         let host = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
         host.wantsLayer = true
         let panel = PanelHostView(content: NSView(), meta: nil, onFocusRequest: {})
@@ -57,26 +67,12 @@ final class PanelHostViewTests: WindowTestCase {
         window.contentView?.addSubview(host)
         host.addSubview(panel)
         panel.frame = host.bounds.insetBy(dx: 40, dy: 40)
-        host.layoutSubtreeIfNeeded()
-
-        let justOutside = NSPoint(x: panel.frame.minX - 3, y: host.bounds.midY)
-        XCTAssertEqual(
-            paintedAlpha(of: host, at: justOutside), 0, accuracy: 0.001,
-            "an unfocused panel must cast no glow")
-
         panel.isFocused = true
         host.layoutSubtreeIfNeeded()
-        XCTAssertGreaterThan(
-            paintedAlpha(of: host, at: justOutside), 0,
-            "a focused panel's glow must reach the screen, not just set an opacity")
-    }
 
-    func test_glowSitsBeneathTheCard() {
-        let panel = PanelHostView(content: NSView(), meta: nil, onFocusRequest: {})
-        mount(panel)
-        XCTAssertTrue(
-            panel.haloGeometryForTesting.isBelowCard,
-            "the glow must sit under the card, not over the terminal")
+        XCTAssertEqual(
+            paintedAlpha(of: host, at: NSPoint(x: panel.frame.minX - 3, y: host.bounds.midY)), 0,
+            accuracy: 0.001, "focus shows on the pane's edge, with no glow around it")
     }
 
     func test_translucentBackground_stillPaintsThePaddingRing() {

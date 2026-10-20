@@ -49,7 +49,7 @@ enum CardChrome {
     }
 
     static func reapplyEdge(to card: NSView, halo: Bool) {
-        card.layer?.borderWidth = ChromeMetrics.Border.width
+        card.layer?.borderWidth = halo ? ChromeMetrics.Border.paneFocus : ChromeMetrics.Border.width
         card.layer?.borderColor = borderColor(halo: halo)
     }
 

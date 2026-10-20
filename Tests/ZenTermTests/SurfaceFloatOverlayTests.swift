@@ -64,6 +64,12 @@ final class SurfaceFloatOverlayTests: WindowTestCase {
         return rep.colorAt(x: Int(point.x * scale), y: Int(point.y * scale))?.alphaComponent ?? -1
     }
 
+    func test_cardEdge_matchesTheFocusedPaneBorder() throws {
+        let card = try card(of: mount())
+        XCTAssertEqual(card.layer?.borderWidth, ChromeMetrics.Border.paneFocus)
+        XCTAssertEqual(card.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor)
+    }
+
     func test_translucentBackground_paintsTheInsetRing() throws {
         var config = GeneralConfig.builtIn
         config.backgroundAlpha = 0.5

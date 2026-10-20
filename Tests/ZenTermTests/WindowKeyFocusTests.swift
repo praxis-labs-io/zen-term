@@ -82,15 +82,17 @@ final class WindowKeyFocusTests: WindowTestCase {
         c.handle(.toggleBottomDrawer)
         c.window.contentView?.layoutSubtreeIfNeeded()
         let panel = try XCTUnwrap(c.focusedPanelForTesting)
-        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0, "precondition: the drawer shows its halo")
+        XCTAssertEqual(
+            panel.borderForTesting.width, ChromeMetrics.Border.paneFocus,
+            "precondition: the drawer shows its focus border")
 
         resignKey(c)
 
-        XCTAssertEqual(panel.haloOpacityForTesting, 0)
+        XCTAssertEqual(panel.borderForTesting.width, ChromeMetrics.Border.width)
 
         becomeKey(c)
 
-        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0)
+        XCTAssertEqual(panel.borderForTesting.width, ChromeMetrics.Border.paneFocus)
     }
 
     func test_anOpenScratchFloat_losesFocusWithItsWindow() throws {

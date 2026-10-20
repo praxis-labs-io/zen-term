@@ -44,5 +44,6 @@ enum ChromeMetrics {
 
     enum Border {
         static let width: CGFloat = 1
+        static let paneFocus: CGFloat = 2
     }
 }

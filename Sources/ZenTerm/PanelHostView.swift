@@ -12,7 +12,6 @@ final class PanelHostView: NSView, TerminalModeHost {
     private let clip = NSView()
     private let content: NSView
     private let ring = RingFillView()
-    private let halo = OutsideShadowView()
     private let baseMeta: PanelMeta?
     private let zoomMeta: PanelMeta?
     // Content that isn't a terminal paints no background of its own, so a translucent panel fills it whole.
@@ -22,7 +21,7 @@ final class PanelHostView: NSView, TerminalModeHost {
         container: clip, content: content, padding: padding, header: baseMeta ?? zoomMeta,
         onStripsChanged: { [weak self] in self?.stripsMoved() })
 
-    var isFocused: Bool = false { didSet { if oldValue != isFocused { updateHalo() } } }
+    var isFocused: Bool = false { didSet { if oldValue != isFocused { updateBorder() } } }
 
     var isZoomed: Bool = false {
         didSet {
@@ -71,14 +70,6 @@ final class PanelHostView: NSView, TerminalModeHost {
     /// A pane far from the window corner still reads as a pane, so the concentric result has a floor.
     private static let minCornerRadius: CGFloat = 6
 
-    /// An `NSView` cannot paint outside its bounds, and the glow has to.
-    private static let haloOutset: CGFloat = 16
-
-    /// A CGContext shadow renders far weaker than a CALayer one.
-    private static let haloOpacity: Float = 0.45
-
-    private static let haloBlur: CGFloat = 8
-
     init(
         content: NSView, meta: PanelMeta?, zoomMeta: PanelMeta? = nil, fillsContent: Bool = false,
         onFocusRequest: @escaping () -> Void
@@ -94,15 +85,6 @@ final class PanelHostView: NSView, TerminalModeHost {
         pane.wantsLayer = true
         pane.layer?.cornerRadius = Self.cornerRadius
         pane.layer?.masksToBounds = false
-        pane.layer?.borderWidth = ChromeMetrics.Border.width
-        halo.wantsLayer = true
-        halo.layer?.opacity = 0
-        halo.color = Theme.current.chrome.accent.nsColor
-        halo.outset = Self.haloOutset
-        halo.cornerRadius = Self.cornerRadius
-        halo.blur = Self.haloBlur
-        halo.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(halo)
         addSubview(pane)
 
         content.translatesAutoresizingMaskIntoConstraints = false
@@ -124,10 +106,6 @@ final class PanelHostView: NSView, TerminalModeHost {
             pane.trailingAnchor.constraint(equalTo: trailingAnchor),
             pane.topAnchor.constraint(equalTo: topAnchor),
             pane.bottomAnchor.constraint(equalTo: bottomAnchor),
-            halo.leadingAnchor.constraint(equalTo: pane.leadingAnchor, constant: -Self.haloOutset),
-            halo.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: Self.haloOutset),
-            halo.topAnchor.constraint(equalTo: pane.topAnchor, constant: -Self.haloOutset),
-            halo.bottomAnchor.constraint(equalTo: pane.bottomAnchor, constant: Self.haloOutset),
             clip.leadingAnchor.constraint(equalTo: pane.leadingAnchor),
             clip.trailingAnchor.constraint(equalTo: pane.trailingAnchor),
             clip.topAnchor.constraint(equalTo: pane.topAnchor),
@@ -141,7 +119,7 @@ final class PanelHostView: NSView, TerminalModeHost {
         ])
 
         updateHeader()
-        updateHalo()
+        updateBorder()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -159,19 +137,14 @@ final class PanelHostView: NSView, TerminalModeHost {
         }
     }
 
-    var haloOpacityForTesting: Float { halo.layer?.opacity ?? -1 }
-
     var paintedBackgroundForTesting: (fill: CGColor?, ring: NSColor) {
         (clip.layer?.backgroundColor, ring.color)
     }
 
     var cornerRadiusForTesting: CGFloat { pane.layer?.cornerRadius ?? -1 }
 
-    var haloGeometryForTesting: (frame: NSRect, isBelowCard: Bool) {
-        let haloIndex = subviews.firstIndex(of: halo)
-        let paneIndex = subviews.firstIndex(of: pane)
-        guard let haloIndex, let paneIndex else { return (halo.frame, false) }
-        return (halo.frame, haloIndex < paneIndex)
+    var borderForTesting: (color: CGColor?, width: CGFloat) {
+        (pane.layer?.borderColor, pane.layer?.borderWidth ?? -1)
     }
 
     var isHeaderVisibleForTesting: Bool { chrome.isHeaderVisibleForTesting }
@@ -197,17 +170,15 @@ final class PanelHostView: NSView, TerminalModeHost {
     private static var idleBorder: NSColor { Theme.current.chrome.fill(alpha: ChromeTheme.hairline) }
 
     func reapplyTheme() {
-        halo.color = Theme.current.chrome.accent.nsColor
         applyBackground()
         chrome.reapplyTheme()
-        updateHalo()
+        updateBorder()
     }
 
     func reapplyChromeLayout() {
         let radius = Self.cornerRadius
         pane.layer?.cornerRadius = radius
         clip.layer?.cornerRadius = radius
-        halo.cornerRadius = radius
         ring.cornerRadius = radius
     }
 
@@ -223,11 +194,8 @@ final class PanelHostView: NSView, TerminalModeHost {
         chrome.findBarFill = isSolid ? background : ring.color
     }
 
-    private func updateHalo() {
-        guard let layer = pane.layer, let haloLayer = halo.layer else { return }
-        Motion.ease(
-            layer, keyPath: "borderColor",
-            to: (isFocused ? Theme.current.chrome.accent.nsColor : Self.idleBorder).cgColor)
-        Motion.ease(haloLayer, keyPath: "opacity", to: isFocused ? Self.haloOpacity : 0)
+    private func updateBorder() {
+        pane.layer?.borderColor = (isFocused ? Theme.current.chrome.accent.nsColor : Self.idleBorder).cgColor
+        pane.layer?.borderWidth = isFocused ? ChromeMetrics.Border.paneFocus : ChromeMetrics.Border.width
     }
 }

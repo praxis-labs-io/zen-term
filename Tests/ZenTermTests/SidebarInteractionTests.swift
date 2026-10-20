@@ -612,15 +612,17 @@ final class SidebarInteractionTests: WindowTestCase {
         controller.handle(.toggleBottomDrawer)
         let drawer = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
-        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0, "precondition: the drawer shows its halo")
+        XCTAssertEqual(
+            panel.borderForTesting.width, ChromeMetrics.Border.paneFocus,
+            "precondition: the drawer shows its focus border")
 
         try nav(.left, in: controller)
         XCTAssertTrue(controller.sidebarForTesting.hasFocus)
-        XCTAssertEqual(panel.haloOpacityForTesting, 0)
+        XCTAssertEqual(panel.borderForTesting.width, ChromeMetrics.Border.width)
         XCTAssertEqual(drawer.focusRenders.last, false)
 
         try nav(.right, in: controller)
-        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0)
+        XCTAssertEqual(panel.borderForTesting.width, ChromeMetrics.Border.paneFocus)
         XCTAssertEqual(drawer.focusRenders.last, true)
     }
 
@@ -631,7 +633,8 @@ final class SidebarInteractionTests: WindowTestCase {
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         pane.focus()
         controller.sidebarForTesting.focusActiveRow()
-        XCTAssertEqual(panel.haloOpacityForTesting, 0, "precondition: the sidebar took the halo")
+        XCTAssertEqual(
+            panel.borderForTesting.width, ChromeMetrics.Border.width, "precondition: the sidebar took the focus border")
 
         let event = try XCTUnwrap(
             NSEvent.mouseEvent(
@@ -641,7 +644,7 @@ final class SidebarInteractionTests: WindowTestCase {
         panel.mouseDown(with: event)
 
         XCTAssertFalse(controller.sidebarForTesting.hasFocus)
-        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0)
+        XCTAssertEqual(panel.borderForTesting.width, ChromeMetrics.Border.paneFocus)
         XCTAssertEqual(pane.focusRenders.last, true)
     }
 

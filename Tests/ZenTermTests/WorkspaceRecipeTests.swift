@@ -76,7 +76,7 @@ final class WorkspaceRecipeTests: WindowTestCase {
 
         XCTAssertEqual(
             revealedDrawerCount(in: controller), 2, "the recipe opens both drawers it names")
-        let focused = panels(in: controller).filter { $0.haloOpacityForTesting > 0 }
+        let focused = panels(in: controller).filter { $0.borderForTesting.width == ChromeMetrics.Border.paneFocus }
         XCTAssertEqual(focused.count, 1, "exactly one region holds the tab's focus")
         XCTAssertTrue(
             focused.first?.isHeaderVisibleForTesting == true,

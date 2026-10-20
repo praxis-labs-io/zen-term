@@ -314,13 +314,14 @@ final class SidebarRevealTests: WindowTestCase {
         let sidebar = controller.sidebarForTesting
         let panel = try pane(in: controller)
         sidebar.reveal()
-        XCTAssertEqual(panel.haloOpacityForTesting, 0)
+        XCTAssertEqual(panel.borderForTesting.width, ChromeMetrics.Border.width)
 
         try click(sidebar.liveToggleForTesting)
 
         XCTAssertTrue(sidebar.isDocked)
-        XCTAssertGreaterThan(
-            panel.haloOpacityForTesting, 0, "hover never took the keyboard, so nothing else hands the halo back")
+        XCTAssertEqual(
+            panel.borderForTesting.width, ChromeMetrics.Border.paneFocus,
+            "hover never took the keyboard, so nothing else hands the halo back")
     }
 
     func test_aLiveGutterChange_movesAllFourOfTheCardsEdges() throws {
@@ -707,16 +708,18 @@ final class SidebarRevealTests: WindowTestCase {
         let controller = try makeCollapsedController()
         let sidebar = controller.sidebarForTesting
         let panel = try pane(in: controller)
-        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0, "the focused pane glows before the card is up")
+        XCTAssertEqual(
+            panel.borderForTesting.width, ChromeMetrics.Border.paneFocus,
+            "the focused pane shows focus before the card is up")
 
         sidebar.reveal()
 
-        XCTAssertEqual(panel.haloOpacityForTesting, 0, "the card is what reads as active")
+        XCTAssertEqual(panel.borderForTesting.width, ChromeMetrics.Border.width, "the card is what reads as active")
         XCTAssertFalse(sidebar.hasFocus, "hover is a mouse gesture, so Esc still reaches the pane")
 
         sidebar.hideReveal()
 
-        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0, "and the pane takes it back")
+        XCTAssertEqual(panel.borderForTesting.width, ChromeMetrics.Border.paneFocus, "and the pane takes it back")
     }
 
     func test_revealing_dimsAFocusedDrawersHalo_likeThePanes() throws {
@@ -724,15 +727,17 @@ final class SidebarRevealTests: WindowTestCase {
         let sidebar = controller.sidebarForTesting
         controller.handle(.toggleBottomDrawer)
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
-        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0, "precondition: the drawer glows before the card is up")
+        XCTAssertEqual(
+            panel.borderForTesting.width, ChromeMetrics.Border.paneFocus,
+            "precondition: the drawer shows focus before the card is up")
 
         sidebar.reveal()
 
-        XCTAssertEqual(panel.haloOpacityForTesting, 0)
+        XCTAssertEqual(panel.borderForTesting.width, ChromeMetrics.Border.width)
 
         sidebar.hideReveal()
 
-        XCTAssertGreaterThan(panel.haloOpacityForTesting, 0)
+        XCTAssertEqual(panel.borderForTesting.width, ChromeMetrics.Border.paneFocus)
     }
 
     func test_aModalOnScreen_stopsTheEdgeArming() throws {

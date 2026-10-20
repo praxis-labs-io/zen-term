@@ -27,7 +27,7 @@
 # theme = rose-pine-zen
 
 # The chrome's accent: the color for focus, active state, and confirm. It paints
-# the focused pane's glow and border, focus rings, the active tab's underline, a
+# the focused pane's border, focus rings, the active tab's underline, a
 # tool's activity dot while nothing there needs you, primary buttons, and the
 # progress bar. A dot takes the theme's attention color when an agent there is
 # waiting on you, and its positive color when a long command there finished
