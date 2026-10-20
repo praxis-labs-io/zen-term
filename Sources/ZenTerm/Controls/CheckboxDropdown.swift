@@ -114,8 +114,7 @@ final class CheckboxDropdown: NSView {
 
     override var acceptsFirstResponder: Bool { true }
     override func becomeFirstResponder() -> Bool {
-        isFocusedStop = true
-        restyle()
+        showFocus()
         return true
     }
     override func resignFirstResponder() -> Bool {
@@ -131,6 +130,15 @@ final class CheckboxDropdown: NSView {
         super.viewDidMoveToWindow()
         if window == nil { closeList() }
     }
+
+    private func showFocus() {
+        isFocusedStop = true
+        restyle()
+    }
+
+    #if DEBUG
+        func forceFocusForGallery() { showFocus() }
+    #endif
 
     private func restyle() {
         PopoverButtonStyle.apply(to: self, isFocused: isFocusedStop, isOpen: popover.isOpen)

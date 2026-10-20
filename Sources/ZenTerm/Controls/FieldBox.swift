@@ -92,6 +92,10 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         layer?.borderWidth = focused ? 1.5 : 1
     }
 
+    #if DEBUG
+        func forceFocusForGallery() { setFocused(true) }
+    #endif
+
     func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
         switch selector {
         case #selector(NSResponder.moveUp(_:)):

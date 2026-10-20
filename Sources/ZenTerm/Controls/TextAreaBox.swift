@@ -105,6 +105,10 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         layer?.borderWidth = focused ? 1.5 : 1
     }
 
+    #if DEBUG
+        func forceFocusForGallery() { setFocused(true) }
+    #endif
+
     var scrollForTesting: FadingScrollView { scroll }
 
     func reapplyTheme() {

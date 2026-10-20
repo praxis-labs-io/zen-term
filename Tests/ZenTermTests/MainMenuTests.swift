@@ -49,4 +49,18 @@ final class MainMenuTests: XCTestCase {
             help?.items.first { $0.title == "Export Diagnostics…" }?.action,
             #selector(AppDelegate.exportDiagnostics(_:)))
     }
+
+    func test_debugMenu_opensTheComponentGallery() {
+        let app = NSApplication.shared
+        let saved = app.mainMenu
+        defer { app.mainMenu = saved }
+
+        MainMenu.install()
+
+        let debug = app.mainMenu?.items.first { $0.submenu?.title == "Debug" }?.submenu
+        XCTAssertNotNil(debug, "a debug build has a Debug menu")
+        XCTAssertEqual(
+            debug?.items.first { $0.title == "Component Gallery" }?.action,
+            #selector(AppDelegate.showComponentGallery(_:)))
+    }
 }

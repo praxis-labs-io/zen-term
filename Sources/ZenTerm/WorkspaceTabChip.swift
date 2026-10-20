@@ -181,12 +181,18 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
 
     override func becomeFirstResponder() -> Bool {
         let ok = super.becomeFirstResponder()
-        if ok {
-            hasFocus = true
-            restyle()
-        }
+        if ok { showFocus() }
         return ok
     }
+
+    private func showFocus() {
+        hasFocus = true
+        restyle()
+    }
+
+    #if DEBUG
+        func forceFocusForGallery() { showFocus() }
+    #endif
 
     override func resignFirstResponder() -> Bool {
         hasFocus = false

@@ -312,6 +312,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AcknowledgementsWindow.shared.show()
     }
 
+    #if DEBUG
+        @objc func showComponentGallery(_ sender: Any?) {
+            ComponentGalleryWindow.shared.show()
+        }
+    #endif
+
     @objc func exportDiagnostics(_ sender: Any?) {
         keyController()?.exportDiagnostics()
     }

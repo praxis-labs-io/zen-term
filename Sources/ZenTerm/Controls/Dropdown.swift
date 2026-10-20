@@ -177,8 +177,7 @@ final class Dropdown: NSView {
 
     override var acceptsFirstResponder: Bool { true }
     override func becomeFirstResponder() -> Bool {
-        isFocusedStop = true
-        restyle()
+        showFocus()
         return true
     }
     /// Handing focus to the query field on open is not losing focus, or opening would close the list.
@@ -195,6 +194,15 @@ final class Dropdown: NSView {
         super.viewDidMoveToWindow()
         if window == nil { closeList() }
     }
+
+    private func showFocus() {
+        isFocusedStop = true
+        restyle()
+    }
+
+    #if DEBUG
+        func forceFocusForGallery() { showFocus() }
+    #endif
 
     private func restyle() {
         PopoverButtonStyle.apply(to: self, isFocused: isFocusedStop, isOpen: popover.isOpen)

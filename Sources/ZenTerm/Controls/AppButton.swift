@@ -249,6 +249,10 @@ final class AppButton: NSButton {
     @objc private func fire() { onTap() }
 
     var keycapForTesting: KeycapView? { keycap }
+
+    #if DEBUG
+        func forceFocusForGallery() { isFocusedStop = true }
+    #endif
 }
 
 // AppKit hands `drawTitle` a disabled title already recolored in the system color, which follows the macOS appearance, not the theme.
