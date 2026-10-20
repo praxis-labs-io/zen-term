@@ -104,7 +104,7 @@ final class SettingsAppearanceSection: SettingsFormSection {
     private func addThemeRow() {
         themeEntries = ThemeCatalog.entries()
         let selected = currentThemeIndex()
-        let dropdown = Dropdown(items: themeItems(selected: selected), selectedIndex: selected) {
+        let dropdown = Dropdown(items: Self.themeItems(themeEntries, selected: selected), selectedIndex: selected) {
             [weak self] index in self?.selectTheme(index)
         }
         themeDropdown = dropdown
@@ -115,8 +115,8 @@ final class SettingsAppearanceSection: SettingsFormSection {
             refresh: { [weak self] in self?.refreshThemeRow() })
     }
 
-    private func themeItems(selected: Int) -> [DropdownItem] {
-        themeEntries.enumerated().map { index, entry in
+    static func themeItems(_ entries: [ThemeEntry], selected: Int) -> [DropdownItem] {
+        entries.enumerated().map { index, entry in
             DropdownItem(
                 title: entry.displayName,
                 group: entry.source == .user ? "Your themes" : "Bundled",
@@ -137,7 +137,7 @@ final class SettingsAppearanceSection: SettingsFormSection {
 
     private func refreshThemeRow() {
         let selected = currentThemeIndex()
-        themeDropdown?.setItems(themeItems(selected: selected), selectedIndex: selected)
+        themeDropdown?.setItems(Self.themeItems(themeEntries, selected: selected), selectedIndex: selected)
     }
 
     private func addAccentRow() {

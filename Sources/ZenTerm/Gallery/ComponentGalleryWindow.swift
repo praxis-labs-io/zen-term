@@ -152,13 +152,7 @@
             themeEntries = ThemeCatalog.entries()
             let name = pickedThemeName ?? GeneralConfig.current.themeName ?? ThemeCatalog.defaultThemeName
             let selected = themeEntries.firstIndex { $0.name == name } ?? 0
-            let items = themeEntries.enumerated().map { index, entry in
-                DropdownItem(
-                    title: entry.displayName,
-                    group: entry.source == .user ? "Your themes" : "Bundled",
-                    note: entry.isDark ? "Dark" : "Light",
-                    isSelected: index == selected)
-            }
+            let items = SettingsAppearanceSection.themeItems(themeEntries, selected: selected)
             let dropdown = Dropdown(items: items, selectedIndex: selected) { [weak self] index in
                 self?.pickTheme(index)
             }
