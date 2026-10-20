@@ -146,16 +146,12 @@ final class ChromeThemeDeriverTests: XCTestCase {
             0.299 * CGFloat(c.red) / 255 + 0.587 * CGFloat(c.green) / 255 + 0.114 * CGFloat(c.blue) / 255
         }
         var deltas: [(String, CGFloat)] = []
-        for entry in ThemeCatalog.bundled {
-            let url = try XCTUnwrap(ThemeCatalog.bundledURL(for: entry.token))
-            let terminal = GhosttyThemeParser.parse(
-                try String(contentsOf: url, encoding: .utf8), fontName: "Menlo", fontSize: 12,
-                fallback: Theme.rosePineZen)
+        for (token, terminal) in try bundledTerminals() {
             let chrome = ChromeThemeDeriver.derive(from: terminal)
             let alpha = chrome.fill(alpha: ChromeTheme.border).alphaComponent
             let background = perceived(terminal.background)
             let painted = perceived(terminal.foreground) * alpha + background * (1 - alpha)
-            deltas.append((entry.token, abs(painted - background)))
+            deltas.append((token, abs(painted - background)))
         }
         let target = ChromeTheme.border * ChromeTheme.inkBoost * 0.714
         for (token, delta) in deltas {
@@ -188,16 +184,12 @@ final class ChromeThemeDeriverTests: XCTestCase {
     }
 
     func test_everyBundledTheme_keepsTheFillLadderOrdered() throws {
-        for entry in ThemeCatalog.bundled {
-            let url = try XCTUnwrap(ThemeCatalog.bundledURL(for: entry.token))
-            let terminal = GhosttyThemeParser.parse(
-                try String(contentsOf: url, encoding: .utf8), fontName: "Menlo", fontSize: 12,
-                fallback: Theme.rosePineZen)
+        for (token, terminal) in try bundledTerminals() {
             let chrome = ChromeThemeDeriver.derive(from: terminal)
             let painted = ChromeTheme.FillLevel.allCases.map { chrome.fill($0).alphaComponent }
             XCTAssertEqual(
-                painted, painted.sorted(), "\(entry.token) paints the fill tiers out of order: \(painted)")
-            XCTAssertEqual(Set(painted).count, painted.count, "\(entry.token) collapses two fill tiers")
+                painted, painted.sorted(), "\(token) paints the fill tiers out of order: \(painted)")
+            XCTAssertEqual(Set(painted).count, painted.count, "\(token) collapses two fill tiers")
         }
     }
 
@@ -223,22 +215,18 @@ final class ChromeThemeDeriverTests: XCTestCase {
     }
 
     func test_everyBundledTheme_ordersItsShadowTiers() throws {
-        for entry in ThemeCatalog.bundled {
-            let url = try XCTUnwrap(ThemeCatalog.bundledURL(for: entry.token))
-            let terminal = GhosttyThemeParser.parse(
-                try String(contentsOf: url, encoding: .utf8), fontName: "Menlo", fontSize: 12,
-                fallback: Theme.rosePineZen)
+        for (token, terminal) in try bundledTerminals() {
             let chrome = ChromeThemeDeriver.derive(from: terminal)
             let tiers: [FloatShadow.Tier] = [.overlay, .float, .modal]
-            XCTAssertGreaterThan(chrome.shadowAlpha(.overlay), 0, "\(entry.token) drops the overlay shadow")
+            XCTAssertGreaterThan(chrome.shadowAlpha(.overlay), 0, "\(token) drops the overlay shadow")
             for (lower, upper) in zip(tiers, tiers.dropFirst()) {
                 XCTAssertLessThanOrEqual(
                     chrome.shadowAlpha(lower), chrome.shadowAlpha(upper),
-                    "\(entry.token) puts \(lower) above \(upper)")
+                    "\(token) puts \(lower) above \(upper)")
             }
             for tier in tiers {
                 XCTAssertLessThanOrEqual(
-                    chrome.shadowAlpha(tier), tier.maxAlpha, "\(entry.token) exceeds the \(tier) cap")
+                    chrome.shadowAlpha(tier), tier.maxAlpha, "\(token) exceeds the \(tier) cap")
             }
         }
     }
@@ -251,5 +239,15 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(
             chrome.tint(chrome.accent, alpha: 0.18).alphaComponent, 0.18 * ChromeTheme.inkBoost,
             accuracy: 0.001, "a tint has picked up fillScale")
+    }
+
+    private func bundledTerminals() throws -> [(token: String, terminal: TerminalTheme)] {
+        try ThemeCatalog.bundled.map { entry in
+            let url = try XCTUnwrap(ThemeCatalog.bundledURL(for: entry.token))
+            let terminal = GhosttyThemeParser.parse(
+                try String(contentsOf: url, encoding: .utf8), fontName: "Menlo", fontSize: 12,
+                fallback: Theme.rosePineZen)
+            return (entry.token, terminal)
+        }
     }
 }
