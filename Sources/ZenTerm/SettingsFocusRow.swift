@@ -75,7 +75,6 @@ class SettingsFocusRow: NSView {
 
     private func restyle() {
         let chrome = Theme.current.chrome
-        layer?.backgroundColor = isFocused ? chrome.fill(.active).cgColor : nil
         layer?.borderWidth = ChromeMetrics.Border.width
         layer?.borderColor = isFocused ? chrome.accent.nsColor.cgColor : NSColor.clear.cgColor
     }

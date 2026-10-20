@@ -262,8 +262,7 @@ final class CheckboxDropdown: NSView {
 
     private func renderTitle() {
         titleLabel.stringValue = query.isEmpty ? summary : query
-        titleLabel.textColor =
-            query.isEmpty ? Theme.current.chrome.ink(.normal) : Theme.current.chrome.accent.nsColor
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
     }
 
     private func moveHighlight(_ delta: Int) {

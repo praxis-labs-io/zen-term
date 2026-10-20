@@ -4,11 +4,11 @@ import XCTest
 @testable import ZenTerm
 
 final class SettingsNavRowTests: WindowTestCase {
-    func test_focus_showsHoverFillAndRing() {
+    func test_focus_showsTheRingWithoutAFill() {
         let (row, window) = mountedRow()
 
         window.makeFirstResponder(row)
-        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor)
+        XCTAssertEqual(row.layer?.backgroundColor, NSColor.clear.cgColor)
         XCTAssertEqual(row.layer?.borderWidth, ChromeMetrics.Border.width)
         XCTAssertEqual(row.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor)
 
@@ -19,14 +19,14 @@ final class SettingsNavRowTests: WindowTestCase {
         XCTAssertEqual(row.layer?.borderColor?.alpha, 0)
     }
 
-    func test_focusFillWinsOverSelectionFill() {
+    func test_focus_keepsTheCurrentFill() {
         let (row, window) = mountedRow()
 
         row.setSelected(true)
-        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.rest).cgColor)
+        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.active).cgColor)
 
         window.makeFirstResponder(row)
-        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor)
+        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.active).cgColor)
         XCTAssertEqual(row.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor)
     }
 
@@ -56,7 +56,7 @@ final class SettingsNavRowTests: WindowTestCase {
             "hiding delivers no mouseExited, so a row shown again would keep a hover the pointer left")
     }
 
-    func test_hoverFillSitsBetweenFocusAndSelection() {
+    func test_hoverFillWinsOverTheCurrentFill() {
         let (row, window) = mountedRow()
         row.setSelected(true)
 
@@ -70,7 +70,7 @@ final class SettingsNavRowTests: WindowTestCase {
         window.makeFirstResponder(nil)
         XCTAssertEqual(row.layer?.borderColor?.alpha, 0)
         row.mouseExited(with: crossing(.mouseExited, over: row))
-        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.rest).cgColor)
+        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.active).cgColor)
     }
 
     func test_detail_showsTrailingText_inMutedInk() throws {
@@ -114,7 +114,7 @@ final class SettingsNavRowTests: WindowTestCase {
         row.takeKeyboardFocus()
 
         XCTAssertTrue(window.firstResponder === row)
-        XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor)
+        XCTAssertEqual(row.layer?.backgroundColor, NSColor.clear.cgColor)
         XCTAssertEqual(row.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor)
     }
 

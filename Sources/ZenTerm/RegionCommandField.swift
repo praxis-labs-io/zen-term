@@ -97,7 +97,7 @@ final class RegionCommandField: NSView, NSTextFieldDelegate {
         field.applyThemedEditor()
         let placeholder = region == .main ? WorkspaceForm.shellLabel : ""
         field.placeholderAttributedString = NSAttributedString(
-            string: placeholder, attributes: [.font: Self.commandFont, .foregroundColor: chrome.ink(.faint)])
+            string: placeholder, attributes: [.font: Self.commandFont, .foregroundColor: chrome.ink(.muted)])
         cornerButton.reapplyTheme()
         refresh()
     }

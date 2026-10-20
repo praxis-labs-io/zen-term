@@ -161,7 +161,7 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
             ])
         renameField.textColor = chrome.ink(.normal)
         renameField.placeholderAttributedString = NSAttributedString(
-            string: defaultName, attributes: [.font: TabBarView.chipFont, .foregroundColor: chrome.ink(.faint)])
+            string: defaultName, attributes: [.font: TabBarView.chipFont, .foregroundColor: chrome.ink(.muted)])
         dot.layer?.backgroundColor = chrome.cursor.nsColor.cgColor
         underline.layer?.backgroundColor = chrome.accent.nsColor.cgColor
         underline.isHidden = !isSelected || isRenaming
