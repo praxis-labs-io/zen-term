@@ -46,6 +46,17 @@ enum MainMenu {
         editMenu.addItem(
             withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
 
+        #if DEBUG
+            let debugItem = NSMenuItem()
+            main.addItem(debugItem)
+            let debugMenu = NSMenu(title: "Debug")
+            debugItem.submenu = debugMenu
+            debugMenu.addItem(
+                withTitle: "Component Gallery",
+                action: #selector(AppDelegate.showComponentGallery(_:)),
+                keyEquivalent: "")
+        #endif
+
         let helpItem = NSMenuItem()
         main.addItem(helpItem)
         let helpMenu = NSMenu(title: "Help")
