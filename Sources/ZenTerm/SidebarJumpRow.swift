@@ -28,6 +28,7 @@ class SidebarJumpRow: NSView, HoverSuppressing {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     var fillForTesting: CGColor? { layer?.backgroundColor }
+    var ringForTesting: CGColor? { layer?.borderColor }
 
     func reapplyTheme() {
         refreshFill()
@@ -35,8 +36,10 @@ class SidebarJumpRow: NSView, HoverSuppressing {
 
     private func refreshFill() {
         let chrome = Theme.current.chrome
+        layer?.borderWidth = isFocusedStop ? 1.5 : 0
+        layer?.borderColor = isFocusedStop ? chrome.accent.nsColor.cgColor : nil
         if isFocusedStop {
-            layer?.backgroundColor = chrome.selectionFill.cgColor
+            layer?.backgroundColor = chrome.fill(.hover).cgColor
         } else if isHovered, !isHoverSuppressed {
             layer?.backgroundColor = chrome.fill(.hover).cgColor
         } else {

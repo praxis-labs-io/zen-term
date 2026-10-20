@@ -99,8 +99,8 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         CardChrome.reapplyTheme(to: card)
-        header.textColor = chrome.foreground.nsColor
-        envText.textColor = chrome.muted.nsColor
+        header.textColor = chrome.ink(.normal)
+        envText.textColor = chrome.ink(.muted)
         envNote.textColor = chrome.ink(.muted)
         let controls: [ThemeReapplying] = [titleField, whatHappened, exportButton, cancelButton, openButton]
         controls.forEach { $0.reapplyTheme() }
@@ -111,7 +111,7 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
 
     private func buildContent() -> NSStackView {
         header.font = .systemFont(ofSize: 15, weight: .semibold)
-        header.textColor = Theme.current.chrome.foreground.nsColor
+        header.textColor = Theme.current.chrome.ink(.normal)
         header.stringValue = "Report an Issue"
 
         wireField(titleField)
@@ -130,7 +130,7 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         self.whatGroup = whatGroup
 
         envText.font = .monospacedSystemFont(ofSize: 11.5, weight: .regular)
-        envText.textColor = Theme.current.chrome.muted.nsColor
+        envText.textColor = Theme.current.chrome.ink(.muted)
         envText.isSelectable = true
         envText.stringValue = report.plainText
         envNote.font = .systemFont(ofSize: 11)

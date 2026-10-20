@@ -165,7 +165,7 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         underline.isHidden = !isSelected || isRenaming
         let background: NSColor
         if isSelected {
-            background = chrome.selectionFill
+            background = chrome.fill(.active)
         } else if isHovered {
             background = chrome.fill(.hover)
         } else {

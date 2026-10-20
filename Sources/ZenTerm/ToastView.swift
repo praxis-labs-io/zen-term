@@ -45,8 +45,8 @@ final class ToastView: ShadowCardView {
     // A title up to this share of the row never gives way to its tail; a longer title yields first.
     private static let titleFloorShare: CGFloat = 0.55
     static let messageFont: NSFont = .systemFont(ofSize: 12)
-    private static var titleColor: NSColor { Theme.current.chrome.foreground.nsColor }
-    private static var messageColor: NSColor { Theme.current.chrome.muted.nsColor }
+    private static var titleColor: NSColor { Theme.current.chrome.ink(.normal) }
+    private static var messageColor: NSColor { Theme.current.chrome.ink(.muted) }
 
     convenience init(content: ToastContent) {
         self.init(content: content, actions: [])

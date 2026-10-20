@@ -20,7 +20,7 @@ final class KeybindRow: NSView {
 
         let label = NSTextField(labelWithString: title)
         label.font = .systemFont(ofSize: 13)
-        label.textColor = Theme.current.chrome.foreground.nsColor
+        label.textColor = Theme.current.chrome.ink(.normal)
         label.setContentHuggingPriority(.defaultLow, for: .horizontal)
         titleLabel = label
 
@@ -79,7 +79,7 @@ final class KeybindRow: NSView {
     func focusChip() { window?.makeFirstResponder(chip) }
 
     func reapplyTheme() {
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
         messageLabel.textColor = KeybindRow.ink(for: messageKind)
         chip.render(shortcut: lastShortcut)
         chip.reapplyTheme()

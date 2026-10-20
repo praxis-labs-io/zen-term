@@ -93,7 +93,7 @@ final class FindBarView: NSView {
 
     private func applyFill() {
         let chrome = Theme.current.chrome
-        let tint = chrome.tint(chrome.accent, alpha: Self.fillAlpha)
+        let tint = chrome.tint(chrome.accent, alpha: ChromeTheme.badgeTint)
         layer?.backgroundColor = ChromeTheme.surface(tint: tint, over: paneFill).cgColor
     }
 
@@ -104,7 +104,7 @@ final class FindBarView: NSView {
         applyFill()
         field.applyThemedCaret()
         glyph.contentTintColor = chrome.ink(.muted)
-        field.textColor = chrome.foreground.nsColor
+        field.textColor = chrome.ink(.normal)
         count.textColor = chrome.ink(.muted)
         applyPlaceholder()
     }
@@ -121,10 +121,9 @@ final class FindBarView: NSView {
 
     static let height: CGFloat = 26
     private static let cornerRadius: CGFloat = 6
-    private static let fillAlpha: CGFloat = 0.14
 
     static var tintAlphaForTesting: CGFloat {
-        Theme.current.chrome.tint(Theme.current.chrome.accent, alpha: fillAlpha).alphaComponent
+        Theme.current.chrome.tint(Theme.current.chrome.accent, alpha: ChromeTheme.badgeTint).alphaComponent
     }
 }
 

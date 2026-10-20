@@ -553,7 +553,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
             var ink: NSColor {
                 self == .listed
-                    ? Theme.current.chrome.foreground.nsColor : Theme.current.chrome.ink(.muted)
+                    ? Theme.current.chrome.ink(.normal) : Theme.current.chrome.ink(.muted)
             }
 
             var weight: NSFont.Weight { self == .listed ? .regular : .medium }
@@ -641,7 +641,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             var fontSize: CGFloat { self == .child ? 11 : 13 }
             var ink: NSColor {
                 self == .workspace
-                    ? Theme.current.chrome.foreground.nsColor : Theme.current.chrome.ink(.faint)
+                    ? Theme.current.chrome.ink(.normal) : Theme.current.chrome.ink(.faint)
             }
         }
 

@@ -168,7 +168,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         CardChrome.reapplyTheme(to: card)
-        header.textColor = chrome.foreground.nsColor
+        header.textColor = chrome.ink(.normal)
         envError.textColor = chrome.destructive.nsColor
         notice.textColor = chrome.ink(.subtle)
         escapeCap.reapplyTheme()
@@ -188,7 +188,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
 
     private func buildContent() -> NSStackView {
         header.font = .systemFont(ofSize: 15, weight: .semibold)
-        header.textColor = Theme.current.chrome.foreground.nsColor
+        header.textColor = Theme.current.chrome.ink(.normal)
         header.stringValue = editingWorkspace == nil ? "Add Workspace" : "Edit Workspace"
         let headerSpacer = NSView()
         headerSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)

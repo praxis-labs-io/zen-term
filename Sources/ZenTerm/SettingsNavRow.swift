@@ -208,7 +208,7 @@ final class SettingsNavRow: NSView, HoverSuppressing {
             return
         }
         switch variant {
-        case .standard: label.textColor = chrome.foreground.nsColor
+        case .standard: label.textColor = chrome.ink(.normal)
         case .nested: label.textColor = chrome.ink(isSelected ? .normal : .subtle)
         case .faint: label.textColor = chrome.ink(.faint)
         }
@@ -217,8 +217,10 @@ final class SettingsNavRow: NSView, HoverSuppressing {
     private var showsHover: Bool { isHovered && !isHoverSuppressed }
 
     private func refreshFill() {
+        layer?.borderWidth = isFocusedStop ? 1.5 : 0
+        layer?.borderColor = isFocusedStop ? Theme.current.chrome.accent.nsColor.cgColor : nil
         if isFocusedStop {
-            layer?.backgroundColor = Theme.current.chrome.selectionFill.cgColor
+            layer?.backgroundColor = Theme.current.chrome.fill(.hover).cgColor
         } else if showsHover {
             layer?.backgroundColor = Theme.current.chrome.fill(.hover).cgColor
         } else if isSelected {

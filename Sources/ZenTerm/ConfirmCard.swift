@@ -105,7 +105,7 @@ final class ConfirmCard: NSView {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         CardChrome.reapplyTheme(to: card)
-        header.textColor = chrome.foreground.nsColor
+        header.textColor = chrome.ink(.normal)
         messageLabel.textColor = chrome.ink(.muted)
         checklist?.reapplyTheme()
         cancelButton.reapplyTheme()
@@ -119,7 +119,7 @@ final class ConfirmCard: NSView {
 
     private func buildContent(title: String, message: String) -> NSStackView {
         header.font = .systemFont(ofSize: 15, weight: .semibold)
-        header.textColor = Theme.current.chrome.foreground.nsColor
+        header.textColor = Theme.current.chrome.ink(.normal)
         header.stringValue = title
 
         messageLabel.font = .systemFont(ofSize: 12)

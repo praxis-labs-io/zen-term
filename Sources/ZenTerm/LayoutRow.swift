@@ -13,7 +13,7 @@ final class LayoutRow: NSView {
     init(caption: String, description: String?, control: NSView, controlNote: String?, controlWidth: CGFloat?) {
         let label = NSTextField(labelWithString: caption)
         label.font = .systemFont(ofSize: 13)
-        label.textColor = Theme.current.chrome.foreground.nsColor
+        label.textColor = Theme.current.chrome.ink(.normal)
         label.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         control.setContentHuggingPriority(.defaultHigh, for: .horizontal)
@@ -95,7 +95,7 @@ final class LayoutRow: NSView {
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        captionLabel.textColor = isDimmed ? chrome.ink(.faint) : chrome.foreground.nsColor
+        captionLabel.textColor = isDimmed ? chrome.ink(.faint) : chrome.ink(.normal)
         descriptionLabel?.textColor = chrome.ink(isDimmed ? .faint : .muted)
         controlNoteLabel?.textColor = chrome.ink(.muted)
         messageLabel.textColor = LayoutRow.ink(for: messageKind)

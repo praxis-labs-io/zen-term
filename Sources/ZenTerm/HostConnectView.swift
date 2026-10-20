@@ -170,7 +170,7 @@ final class HostConnectView: NSView {
 
     private func applyName() {
         title.attributedStringValue = Self.line(
-            "Connect to \(name)", font: Self.titleFont, kern: 0, color: Theme.current.chrome.foreground.nsColor,
+            "Connect to \(name)", font: Self.titleFont, kern: 0, color: Theme.current.chrome.ink(.normal),
             breaking: .byTruncatingMiddle)
         connectButton.setAccessibilityLabel("Connect to \(name)")
     }

@@ -67,7 +67,7 @@ final class UpdateCardTests: WindowTestCase {
             actions: .init())
         let title = firstTextField(in: card) { $0.contains("9.9.9") }
         XCTAssertEqual(
-            title?.textColor, Theme.current.chrome.foreground.nsColor,
+            title?.textColor, Theme.current.chrome.ink(.normal),
             "the title must use the theme foreground, not a system color")
     }
 

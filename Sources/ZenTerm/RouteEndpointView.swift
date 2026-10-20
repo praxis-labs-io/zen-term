@@ -81,7 +81,7 @@ final class RouteEndpointView: NSView {
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        tile.layer?.backgroundColor = chrome.fill(alpha: ChromeTheme.tile).cgColor
+        tile.layer?.backgroundColor = chrome.fill(.rest).cgColor
         tile.layer?.borderColor = chrome.fill(alpha: ChromeTheme.border).cgColor
         symbol.contentTintColor = chrome.ink(.subtle)
         name.textColor = chrome.ink(.muted)

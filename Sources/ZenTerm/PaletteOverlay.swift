@@ -29,7 +29,7 @@ class SelectableRowView: NSView, PaletteRowView {
     }
 
     private func updateBackground() {
-        layer?.backgroundColor = (isSelected ? Theme.current.chrome.selectionFill : .clear).cgColor
+        layer?.backgroundColor = (isSelected ? Theme.current.chrome.fill(.hover) : .clear).cgColor
     }
 }
 
@@ -96,7 +96,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         searchField.isBordered = false
         searchField.drawsBackground = false
         searchField.focusRingType = .none
-        searchField.textColor = Theme.current.chrome.foreground.nsColor
+        searchField.textColor = Theme.current.chrome.ink(.normal)
         searchField.delegate = self
         searchField.translatesAutoresizingMaskIntoConstraints = false
         let searchRow = NSStackView(views: [searchGlyph, searchField])
@@ -227,7 +227,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         let chrome = Theme.current.chrome
         CardChrome.reapplyTheme(to: card)
         searchGlyph.textColor = chrome.ink(.muted)
-        searchField.textColor = chrome.foreground.nsColor
+        searchField.textColor = chrome.ink(.normal)
         searchField.applyThemedCaret()
         applyPlaceholder()
         for hairline in [divider, footerDivider] {

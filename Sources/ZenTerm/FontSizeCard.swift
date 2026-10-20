@@ -19,7 +19,7 @@ final class FontSizeCard: ShadowCardView {
         FloatShadow.applyShadow(to: self)
 
         label.font = Self.font
-        label.textColor = Theme.current.chrome.foreground.nsColor
+        label.textColor = Theme.current.chrome.ink(.normal)
         label.alignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
@@ -40,6 +40,6 @@ final class FontSizeCard: ShadowCardView {
     func reapplyTheme() {
         layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
         layer?.borderColor = FloatShadow.edge.cgColor
-        label.textColor = Theme.current.chrome.foreground.nsColor
+        label.textColor = Theme.current.chrome.ink(.normal)
     }
 }

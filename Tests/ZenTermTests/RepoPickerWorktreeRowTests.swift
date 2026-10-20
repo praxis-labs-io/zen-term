@@ -137,7 +137,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let child = try XCTUnwrap(rowViews(in: overlay)[3] as? RepoPickerOverlay.RowView)
         let name = try XCTUnwrap(label(in: parent, saying: "alpha"))
         let rail = try XCTUnwrap(label(in: child, saying: RepoPickerOverlay.RowView.typeRail))
-        XCTAssertEqual(name.textColor, Theme.current.chrome.foreground.nsColor)
+        XCTAssertEqual(name.textColor, Theme.current.chrome.ink(.normal))
         XCTAssertEqual(rail.textColor, Theme.current.chrome.ink(.faint))
         XCTAssertEqual(name.font?.pointSize, 13)
         XCTAssertEqual(rail.font?.pointSize, 11)

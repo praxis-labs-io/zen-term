@@ -92,9 +92,9 @@ final class RegionCommandField: NSView, NSTextFieldDelegate {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         label.textColor = chrome.ink(.muted)
-        opensFocusedLabel.textColor = chrome.cursor.nsColor
+        opensFocusedLabel.textColor = chrome.ink(.subtle)
         marker.layer?.backgroundColor = chrome.cursor.nsColor.cgColor
-        field.textColor = chrome.foreground.nsColor
+        field.textColor = chrome.ink(.normal)
         field.applyThemedCaret()
         let placeholder = region == .main ? WorkspaceForm.shellLabel : ""
         field.placeholderAttributedString = NSAttributedString(
@@ -105,7 +105,7 @@ final class RegionCommandField: NSView, NSTextFieldDelegate {
 
     private func refresh() {
         let chrome = Theme.current.chrome
-        layer?.backgroundColor = (isEditing ? chrome.selectionFill : chrome.fill(.rest)).cgColor
+        layer?.backgroundColor = chrome.fill(.rest).cgColor
         layer?.borderColor = (isEditing ? chrome.accent.nsColor : chrome.fill(alpha: ChromeTheme.border)).cgColor
         layer?.borderWidth = isEditing ? 1.5 : 1
         marker.isHidden = !opensFocused

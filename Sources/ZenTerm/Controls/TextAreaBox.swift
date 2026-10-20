@@ -13,7 +13,6 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
     private lazy var scroll = FadingScrollView(document: textView)
 
     private static var restFill: NSColor { Theme.current.chrome.fill(.rest) }
-    private static var focusFill: NSColor { Theme.current.chrome.selectionFill }
 
     var text: String { textView.string }
     func setText(_ value: String) {
@@ -36,8 +35,8 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         textView.allowsUndo = true
         textView.drawsBackground = false
         textView.font = .systemFont(ofSize: 13)
-        textView.textColor = Theme.current.chrome.foreground.nsColor
-        textView.insertionPointColor = Theme.current.chrome.foreground.nsColor
+        textView.textColor = Theme.current.chrome.ink(.normal)
+        textView.insertionPointColor = Theme.current.chrome.ink(.normal)
         textView.textContainerInset = NSSize(width: 5, height: 5)
         textView.textContainer?.lineFragmentPadding = 0
         textView.isVerticallyResizable = true
@@ -100,7 +99,7 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
 
     private func setFocused(_ focused: Bool) {
         let chrome = Theme.current.chrome
-        layer?.backgroundColor = (focused ? Self.focusFill : Self.restFill).cgColor
+        layer?.backgroundColor = Self.restFill.cgColor
         layer?.borderColor = (focused ? chrome.accent.nsColor : chrome.fill(alpha: ChromeTheme.border)).cgColor
         layer?.borderWidth = focused ? 1.5 : 1
     }
@@ -113,8 +112,8 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
 
     func reapplyTheme() {
         setFocused(window?.firstResponder === textView)
-        textView.textColor = Theme.current.chrome.foreground.nsColor
-        textView.insertionPointColor = Theme.current.chrome.foreground.nsColor
+        textView.textColor = Theme.current.chrome.ink(.normal)
+        textView.insertionPointColor = Theme.current.chrome.ink(.normal)
         textView.placeholderColor = Theme.current.chrome.ink(.muted)
     }
 

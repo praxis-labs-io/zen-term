@@ -144,11 +144,11 @@ final class UpdateCardView: ShadowCardView {
 
         switch state {
         case .available(_, let current, let notes, let notesURL):
-            addBodyLabel(current, color: Theme.current.chrome.muted.nsColor)
+            addBodyLabel(current, color: Theme.current.chrome.ink(.muted))
             if !notes.isEmpty {
                 addBodyLabel(
                     notes.map { "•  \($0)" }.joined(separator: "\n"),
-                    color: Theme.current.chrome.foreground.nsColor)
+                    color: Theme.current.chrome.ink(.normal))
             }
             if let notesURL {
                 let link = AppButton(title: "What's new", variant: .secondary) { [weak self] in
@@ -168,7 +168,7 @@ final class UpdateCardView: ShadowCardView {
         case .ready(let version):
             addBodyLabel(
                 "Relaunch to finish updating to \(version).",
-                color: Theme.current.chrome.muted.nsColor)
+                color: Theme.current.chrome.ink(.muted))
             addButton("Relaunch", variant: .primary) { [weak self] in self?.actions.relaunch() }
             addButton("Later", variant: .secondary) { [weak self] in self?.actions.later() }
         }
@@ -210,7 +210,7 @@ final class UpdateCardView: ShadowCardView {
     private func applyColors() {
         layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
         layer?.borderColor = FloatShadow.edge.cgColor
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
         let accent = Theme.current.chrome.accent.nsColor
         badgeFill.layer?.backgroundColor =
             Theme.current.chrome.tint(Theme.current.chrome.accent, alpha: ChromeTheme.badgeTint).cgColor

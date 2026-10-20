@@ -350,7 +350,7 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertEqual(rows[1].layer?.backgroundColor, Theme.current.chrome.fill(.rest).cgColor)
     }
 
-    func test_focusedRow_showsTheSelectionFill_andArrowsMoveItWithinTheRows() throws {
+    func test_focusedRow_showsTheFocusRing_andArrowsMoveItWithinTheRows() throws {
         let controller = makeController()
         _ = controller.addWorkspaceForTesting(name: "api", folder: root)
         _ = controller.addWorkspaceForTesting(name: "web", folder: root)
@@ -359,7 +359,8 @@ final class SidebarInteractionTests: WindowTestCase {
 
         controller.sidebarForTesting.focusActiveRow()
         XCTAssertTrue(controller.window.firstResponder === rows[0], "entry lands on the active workspace")
-        XCTAssertEqual(rows[0].layer?.backgroundColor, Theme.current.chrome.selectionFill.cgColor)
+        XCTAssertEqual(rows[0].layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor)
+        XCTAssertEqual(rows[0].layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor)
 
         for expected in [1, 2, 2] {
             controller.window.sendEvent(key(.down, in: controller))

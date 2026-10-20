@@ -125,7 +125,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         CardChrome.reapplyTheme(to: card)
-        header.textColor = chrome.foreground.nsColor
+        header.textColor = chrome.ink(.normal)
         baseCaption.textColor = chrome.ink(.muted)
         branchCaption.textColor = chrome.ink(.muted)
         confirm.card?.reapplyTheme()
@@ -173,7 +173,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
 
     private func buildContent() -> NSStackView {
         header.font = .systemFont(ofSize: 15, weight: .semibold)
-        header.textColor = Theme.current.chrome.foreground.nsColor
+        header.textColor = Theme.current.chrome.ink(.normal)
         header.stringValue = "New Worktree"
 
         wireBranchField()

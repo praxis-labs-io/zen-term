@@ -131,7 +131,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
 
     func reapplyTheme() {
         CardChrome.reapplyTheme(to: card)
-        header.textColor = Theme.current.chrome.foreground.nsColor
+        header.textColor = Theme.current.chrome.ink(.normal)
         errorLabel.reapplyTheme()
         confirm.card?.reapplyTheme()
         hostGroup.reapplyTheme()
@@ -144,7 +144,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
     private func buildContent() -> NSStackView {
         header.stringValue = editing == nil ? "Add SSH Host" : "Edit SSH Host"
         header.font = .systemFont(ofSize: 15, weight: .semibold)
-        header.textColor = Theme.current.chrome.foreground.nsColor
+        header.textColor = Theme.current.chrome.ink(.normal)
         submitButton.setTitle(editing == nil ? "Add" : "Save")
 
         hostField.onEnter = { [weak self] in self?.focus(self?.nameField.field) }
@@ -254,7 +254,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         let font = hostField.field.font ?? .systemFont(ofSize: 13)
         let text = NSMutableAttributedString(
             string: alias,
-            attributes: [.font: font, .foregroundColor: chrome.foreground.nsColor, .paragraphStyle: line])
+            attributes: [.font: font, .foregroundColor: chrome.ink(.normal), .paragraphStyle: line])
         if let address {
             text.append(
                 NSAttributedString(

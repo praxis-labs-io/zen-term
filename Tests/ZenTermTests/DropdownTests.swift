@@ -376,7 +376,7 @@ final class DropdownTests: WindowTestCase {
         XCTAssertNotEqual(
             dropdown.queryFieldTextColorForTesting, before, "the query stayed in the old theme")
         XCTAssertEqual(
-            dropdown.queryFieldTextColorForTesting, Theme.current.chrome.foreground.nsColor)
+            dropdown.queryFieldTextColorForTesting, Theme.current.chrome.ink(.normal))
     }
 
     @MainActor

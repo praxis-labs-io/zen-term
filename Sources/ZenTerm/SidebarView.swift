@@ -239,7 +239,7 @@ final class SidebarView: NSView {
             } else {
                 row.setDot({ status.ink }, accessibilityValue: word)
             }
-            row.setTitleInk(status == .connected ? nil : { AttentionTone.idle.ink })
+            row.setTitleInk(status == .connected ? nil : { Theme.current.chrome.ink(.subtle) })
             guard hostStack.arrangedSubviews.firstIndex(of: row) != index else { continue }
             let isNew = row.superview == nil
             if !isNew { hostStack.removeArrangedSubview(row) }

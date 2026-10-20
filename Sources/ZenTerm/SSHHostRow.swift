@@ -21,7 +21,7 @@ final class SSHHostRow: SettingsFocusRow {
         titleLabel.font = .systemFont(ofSize: 13)
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
         subtitleLabel.font = .systemFont(ofSize: 11)
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         subtitleLabel.lineBreakMode = .byTruncatingTail
@@ -56,7 +56,7 @@ final class SSHHostRow: SettingsFocusRow {
     }
 
     override func reapplyTheme() {
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         statusLabel.textColor = status.ink
         super.reapplyTheme()

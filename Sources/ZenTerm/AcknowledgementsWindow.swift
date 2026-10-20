@@ -60,7 +60,7 @@ final class AcknowledgementsWindow {
         scrollView?.drawsBackground = true
         textView?.backgroundColor = background
         textView?.drawsBackground = true
-        textView?.textColor = chrome.foreground.nsColor
+        textView?.textColor = chrome.ink(.normal)
     }
 
     private static func notices() -> String {

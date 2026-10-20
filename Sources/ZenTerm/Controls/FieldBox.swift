@@ -16,7 +16,6 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     var onEscape: (() -> Bool)?
 
     private static var restFill: NSColor { Theme.current.chrome.fill(.rest) }
-    private static var focusFill: NSColor { Theme.current.chrome.selectionFill }
 
     var text: String { field.stringValue }
     func setText(_ value: String) { field.stringValue = value }
@@ -44,7 +43,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         field.focusRingType = .none
         field.font = .systemFont(ofSize: 13)
         applyPlaceholder()
-        field.textColor = Theme.current.chrome.foreground.nsColor
+        field.textColor = Theme.current.chrome.ink(.normal)
         field.delegate = self
         field.onGainedFocus = { [weak self] in self?.setFocused(true) }
         field.translatesAutoresizingMaskIntoConstraints = false
@@ -69,7 +68,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
 
     func reapplyTheme() {
         setFocused(field.currentEditor() != nil)
-        field.textColor = Theme.current.chrome.foreground.nsColor
+        field.textColor = Theme.current.chrome.ink(.normal)
         field.applyThemedCaret()
         applyPlaceholder()
     }
@@ -87,7 +86,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
 
     private func setFocused(_ focused: Bool) {
         let chrome = Theme.current.chrome
-        layer?.backgroundColor = (focused ? Self.focusFill : Self.restFill).cgColor
+        layer?.backgroundColor = Self.restFill.cgColor
         layer?.borderColor = (focused ? chrome.accent.nsColor : chrome.fill(alpha: ChromeTheme.border)).cgColor
         layer?.borderWidth = focused ? 1.5 : 1
     }

@@ -92,14 +92,14 @@ final class RenameTabOverlay: NSView, ModalOverlay {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         CardChrome.reapplyTheme(to: card)
-        header.textColor = chrome.foreground.nsColor
+        header.textColor = chrome.ink(.normal)
         let controls: [ThemeReapplying] = [nameField, cancelButton, renameButton]
         controls.forEach { $0.reapplyTheme() }
     }
 
     private func buildContent() -> NSStackView {
         header.font = .systemFont(ofSize: 15, weight: .semibold)
-        header.textColor = Theme.current.chrome.foreground.nsColor
+        header.textColor = Theme.current.chrome.ink(.normal)
         header.stringValue = "Rename Tab"
 
         nameField.onEnter = { [weak self] in self?.submit() }

@@ -133,7 +133,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     /// Recolors in place, because a rebuild would lose typed values.
     func reapplyTheme() {
         CardChrome.reapplyTheme(to: card)
-        header.textColor = Theme.current.chrome.foreground.nsColor
+        header.textColor = Theme.current.chrome.ink(.normal)
         footerDivider?.reapplyTheme()
         errorLabel.reapplyTheme()
 
@@ -152,7 +152,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
 
     private func buildContent() -> NSStackView {
         header.font = .systemFont(ofSize: 15, weight: .semibold)
-        header.textColor = Theme.current.chrome.foreground.nsColor
+        header.textColor = Theme.current.chrome.ink(.normal)
         header.stringValue = editingFloat == nil ? "New Tool Float" : "Edit Tool Float"
 
         wireField(titleField)

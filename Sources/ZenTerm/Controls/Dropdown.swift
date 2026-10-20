@@ -83,7 +83,7 @@ final class Dropdown: NSView {
         layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
 
         queryField.font = .systemFont(ofSize: 13)
-        queryField.textColor = Theme.current.chrome.foreground.nsColor
+        queryField.textColor = Theme.current.chrome.ink(.normal)
         queryField.isBordered = false
         queryField.drawsBackground = false
         queryField.focusRingType = .none
@@ -92,7 +92,7 @@ final class Dropdown: NSView {
         queryField.translatesAutoresizingMaskIntoConstraints = false
 
         titleLabel.font = .systemFont(ofSize: 13)
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.lineBreakMode = .byTruncatingTail
 
@@ -164,10 +164,10 @@ final class Dropdown: NSView {
     /// Rebuilds an open list too: its rows bake in the theme at build time.
     func reapplyTheme() {
         restyle()
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
         chevron.contentTintColor = Theme.current.chrome.ink(.muted)
         swatch.layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.swatchRing).cgColor
-        queryField.textColor = Theme.current.chrome.foreground.nsColor
+        queryField.textColor = Theme.current.chrome.ink(.normal)
         if !queryField.isHidden {
             renderQueryPlaceholder()
             queryField.applyThemedCaret()
@@ -447,7 +447,7 @@ private final class DropdownRowView: NSView {
 
         let title = NSTextField(labelWithString: item.title)
         title.font = .systemFont(ofSize: 13)
-        title.textColor = chrome.foreground.nsColor
+        title.textColor = chrome.ink(.normal)
         title.lineBreakMode = .byTruncatingTail
         title.translatesAutoresizingMaskIntoConstraints = false
         addSubview(title)

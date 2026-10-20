@@ -46,7 +46,7 @@ final class KeybindHintBubble: ShadowCardView {
 
         let title = NSTextField(labelWithString: "Record a shortcut")
         title.font = .systemFont(ofSize: 13, weight: .semibold)
-        title.textColor = Theme.current.chrome.foreground.nsColor
+        title.textColor = Theme.current.chrome.ink(.normal)
 
         let header = NSStackView(views: [badge, title])
         header.orientation = .horizontal

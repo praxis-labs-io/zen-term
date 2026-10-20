@@ -33,7 +33,6 @@ final class IconPickerField: NSView {
     private static let scrollerGutter: CGFloat = 16
     private var cardNaturalSize: NSSize = .zero
     private static var restFill: NSColor { Theme.current.chrome.fill(.rest) }
-    private static var focusFill: NSColor { Theme.current.chrome.selectionFill }
 
     func openForTesting() { openPopover() }
     var highlightedSymbolForTesting: String? {
@@ -109,15 +108,15 @@ final class IconPickerField: NSView {
 
     private func renderClosed() {
         glyph.image = IconCatalog.image(selected)
-        glyph.contentTintColor = Theme.current.chrome.foreground.nsColor
+        glyph.contentTintColor = Theme.current.chrome.ink(.normal)
         nameLabel.stringValue = IconCatalog.displayName(selected)
-        nameLabel.textColor = Theme.current.chrome.foreground.nsColor
+        nameLabel.textColor = Theme.current.chrome.ink(.normal)
     }
 
     private func restyle() {
         let chrome = Theme.current.chrome
         let active = isFocusedStop || popover != nil
-        layer?.backgroundColor = (active ? Self.focusFill : Self.restFill).cgColor
+        layer?.backgroundColor = Self.restFill.cgColor
         layer?.borderColor = (active ? chrome.accent.nsColor : chrome.fill(alpha: ChromeTheme.border)).cgColor
         layer?.borderWidth = active ? 1.5 : 1
     }

@@ -52,9 +52,9 @@ final class SidebarRowMenuItemView: NSView {
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        label.textColor = chrome.foreground.nsColor
+        label.textColor = chrome.ink(.normal)
         keycap?.reapplyTheme()
-        layer?.backgroundColor = isHovered ? chrome.selectionFill.cgColor : NSColor.clear.cgColor
+        layer?.backgroundColor = isHovered ? chrome.fill(.hover).cgColor : NSColor.clear.cgColor
     }
 
     override func updateTrackingAreas() {

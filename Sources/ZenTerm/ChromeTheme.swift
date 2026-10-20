@@ -9,7 +9,6 @@ struct ChromeTheme: Equatable {
     let destructive: TerminalColor
     let accent: TerminalColor
     let attention: TerminalColor
-    let muted: TerminalColor
     let positive: TerminalColor
     let cursor: TerminalColor
     /// Per theme: foreground to background separation runs 0.40 to 0.94, so a constant alpha is not a constant border.
@@ -52,24 +51,20 @@ struct ChromeTheme: Equatable {
     }
 
     func fill(_ level: FillLevel) -> NSColor {
-        fill(level == .active ? accent : nil, alpha: level.alpha)
+        fill(alpha: level.alpha)
     }
 
     static let hairline: CGFloat = 0.08
     static let border: CGFloat = 0.10
     /// Heavier than `border`: it has to contain an arbitrary color, and a black slot vanishes on the list card.
     static let swatchRing: CGFloat = 0.15
-    static let gridDot: CGFloat = 0.08
-    static let tile: CGFloat = 0.043
 
-    func fill(_ tint: TerminalColor? = nil, alpha: CGFloat) -> NSColor {
-        (tint ?? foreground).nsColor.withAlphaComponent(min(1, alpha * Self.inkBoost * fillScale))
+    func fill(alpha: CGFloat) -> NSColor {
+        foreground.nsColor.withAlphaComponent(min(1, alpha * Self.inkBoost * fillScale))
     }
 
     static let badgeTint: CGFloat = 0.15
-    static let selectionTint: CGFloat = 0.18
-
-    var selectionFill: NSColor { tint(accent, alpha: Self.selectionTint) }
+    static let flashTint: CGFloat = 0.5
 
     /// Outside `fillScale` because these sit behind text; anything with a sibling fill takes `fill(_:)`, or the pair inverts.
     func tint(_ role: TerminalColor, alpha: CGFloat) -> NSColor {
@@ -97,6 +92,6 @@ struct ChromeTheme: Equatable {
 extension NSTextField {
     /// AppKit defaults the caret to the macOS accent, and the field editor is shared per window, so call on every focus.
     func applyThemedCaret() {
-        (currentEditor() as? NSTextView)?.insertionPointColor = Theme.current.chrome.foreground.nsColor
+        (currentEditor() as? NSTextView)?.insertionPointColor = Theme.current.chrome.ink(.normal)
     }
 }

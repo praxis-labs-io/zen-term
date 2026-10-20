@@ -673,16 +673,14 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
 ### Theming
 
 `ChromeThemeDeriver` maps ANSI slots onto chrome roles (info ansi[4], warning ansi[3],
-destructive ansi[1], accent ansi[4], attention ansi[6], positive ansi[2], cursor the terminal cursor,
-muted a fg/bg blend). Sixty-five themes ship; a user file shadows a bundled one. `accent-color` repoints
+destructive ansi[1], accent ansi[4], attention ansi[6], positive ansi[2], cursor the terminal cursor).
+Sixty-five themes ship; a user file shadows a bundled one. `accent-color` repoints
 `accent`, and the search highlight when the theme sets no search colors. The usage rules are CLAUDE.md's Colors section.
 
 - **Ink levels** `faint` 0.35, `muted` 0.5, `subtle` 0.7, `normal` 1.0, lifted by
   `inkBoost`. Check `1 / inkBoost` before raising it: a level above it clamps to 1.
 - **`fillScale` normalizes fills per theme** against a fixed reference separation, never
   scaling down. Text is not normalized.
-- `selectionFill` over `fill(.rest)` is the one pair mixing scaled and unscaled fills, and
-  has its own test.
 - **A strip inside a pane paints on the pane's fill** (`ChromeTheme.surface(tint:over:)`),
   because below `background-alpha` 1 a tint alone composites over the window backdrop.
   Showing a strip must mark the padding ring for redisplay.

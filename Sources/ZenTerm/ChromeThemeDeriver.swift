@@ -3,19 +3,15 @@ import TerminalKit
 
 enum ChromeThemeDeriver {
     static func derive(from terminal: TerminalTheme, accent: AccentSlot? = nil) -> ChromeTheme {
-        func slot(_ index: Int) -> TerminalColor {
-            terminal.ansi.indices.contains(index) ? terminal.ansi[index] : terminal.foreground
-        }
-        return ChromeTheme(
+        ChromeTheme(
             background: terminal.background,
             foreground: terminal.foreground,
-            info: slot(4),
-            warning: slot(3),
-            destructive: slot(1),
+            info: AccentSlot.blue.color(in: terminal),
+            warning: AccentSlot.yellow.color(in: terminal),
+            destructive: AccentSlot.red.color(in: terminal),
             accent: (accent ?? .themeDefault).color(in: terminal),
-            attention: slot(6),
-            muted: blend(terminal.foreground, terminal.background, 0.55),
-            positive: slot(2),
+            attention: AccentSlot.cyan.color(in: terminal),
+            positive: AccentSlot.green.color(in: terminal),
             cursor: terminal.cursor,
             fillScale: fillScale(for: terminal))
     }

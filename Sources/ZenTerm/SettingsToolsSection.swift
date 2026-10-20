@@ -188,7 +188,7 @@ final class ToolFloatRow: SettingsFocusRow {
         iconView.setContentHuggingPriority(.required, for: .horizontal)
 
         titleLabel.font = .systemFont(ofSize: 13)
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
         subtitleLabel.font = .systemFont(ofSize: 11)
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         subtitleLabel.lineBreakMode = .byTruncatingTail
@@ -226,7 +226,7 @@ final class ToolFloatRow: SettingsFocusRow {
 
     override func reapplyTheme() {
         iconView.contentTintColor = Theme.current.chrome.ink(.subtle)
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         messageLabel.textColor = Theme.current.chrome.warning.nsColor
         (shortcutView as? KeycapView)?.reapplyTheme()

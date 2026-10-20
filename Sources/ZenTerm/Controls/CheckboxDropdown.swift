@@ -75,7 +75,7 @@ final class CheckboxDropdown: NSView {
         layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
 
         titleLabel.font = .systemFont(ofSize: 13)
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
         titleLabel.stringValue = title
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.lineBreakMode = .byTruncatingTail
@@ -262,7 +262,7 @@ final class CheckboxDropdown: NSView {
     private func renderTitle() {
         titleLabel.stringValue = query.isEmpty ? summary : query
         titleLabel.textColor =
-            query.isEmpty ? Theme.current.chrome.foreground.nsColor : Theme.current.chrome.accent.nsColor
+            query.isEmpty ? Theme.current.chrome.ink(.normal) : Theme.current.chrome.accent.nsColor
     }
 
     private func moveHighlight(_ delta: Int) {
@@ -372,7 +372,7 @@ final class CheckboxDropdown: NSView {
 
         func render(item: CheckboxDropdownItem, isHighlighted: Bool, chrome: ChromeTheme) {
             title.stringValue = item.title
-            title.textColor = item.isChecked ? chrome.foreground.nsColor : chrome.ink(.muted)
+            title.textColor = item.isChecked ? chrome.ink(.normal) : chrome.ink(.muted)
             note.stringValue = item.note ?? ""
             note.textColor = chrome.ink(.faint)
             note.isHidden = item.note == nil

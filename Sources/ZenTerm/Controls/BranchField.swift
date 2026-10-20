@@ -244,7 +244,7 @@ final class BranchField: NSView, ThemeReapplying {
 
         func render(branch: String, note text: String?, isHighlighted: Bool, chrome: ChromeTheme) {
             title.stringValue = branch
-            title.textColor = chrome.foreground.nsColor
+            title.textColor = chrome.ink(.normal)
             note.stringValue = text ?? ""
             note.textColor = chrome.ink(.faint)
             note.isHidden = text == nil

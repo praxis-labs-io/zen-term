@@ -165,7 +165,7 @@ final class TextAreaBoxTests: WindowTestCase {
 
         let editor = try XCTUnwrap(box.field.currentEditor() as? NSTextView, "the field has to be editing")
         XCTAssertEqual(
-            editor.insertionPointColor, Theme.current.chrome.foreground.nsColor,
+            editor.insertionPointColor, Theme.current.chrome.ink(.normal),
             "the caret is the theme's ink, not whatever accent the OS is set to")
     }
 }

@@ -215,20 +215,18 @@ final class AppButton: NSButton {
         case .primary:
             return (chrome.accent.nsColor, chrome.fill(isHovered ? .hover : .rest))
         case .secondary:
-            return (focusTinted(chrome.muted.nsColor, chrome), isHovered ? chrome.fill(.hover) : .clear)
+            return (focusTinted(chrome.ink(.subtle), chrome), isHovered ? chrome.fill(.hover) : .clear)
         case .muted:
-            return (focusTinted(chrome.muted.nsColor, chrome), chrome.fill(isHovered ? .hover : .rest))
+            return (focusTinted(chrome.ink(.subtle), chrome), chrome.fill(isHovered ? .hover : .rest))
         case .destructive:
             return (chrome.destructive.nsColor, chrome.fill(isHovered ? .hover : .rest))
         case .segment:
             return (
-                isOn ? chrome.accent.nsColor : chrome.muted.nsColor,
+                isOn ? chrome.accent.nsColor : chrome.ink(.subtle),
                 isOn ? chrome.fill(.active) : chrome.fill(isHovered ? .hover : .rest)
             )
         case .link:
-            let text =
-                isFocusedStop
-                ? chrome.accent.nsColor : (isHovered ? chrome.foreground.nsColor : chrome.muted.nsColor)
+            let text = isFocusedStop ? chrome.accent.nsColor : chrome.ink(isHovered ? .normal : .subtle)
             return (text, .clear)
         }
     }

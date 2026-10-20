@@ -151,8 +151,7 @@ bring-your-own theme and washes out on light themes. Everything resolves from
 
 - **Terminal surfaces:** build `TerminalSurfaceConfig(theme: Theme.current.terminal)`.
 - **Chrome UI:** use `Theme.current.chrome` roles (`background`, `foreground`,
-  `info`, `warning`, `destructive`, `accent`, `attention`, `muted`, `positive`,
-  `cursor`).
+  `info`, `warning`, `destructive`, `accent`, `attention`, `positive`, `cursor`).
 - **Text and icons take `chrome.ink(.faint / .muted / .subtle / .normal)`, never an
   alpha.** Four weights, no fifth: `faint` is quieter than what it sits beside (a
   disabled label, a hint opposite a caption), `muted` recedes (captions, hints,
@@ -164,11 +163,12 @@ bring-your-own theme and washes out on light themes. Everything resolves from
   never a number, or its states invert on a narrow-separation theme. Structural fills
   (a divider, a border, a swatch ring) take `chrome.fill(alpha:)` with one of the
   named constants `ChromeTheme.hairline / .border / .swatchRing`. A standalone
-  role-toned surface behind text (a selected row, a card's icon badge) takes
+  role-toned surface behind text (a card's icon badge) takes
   `chrome.tint(_:alpha:)`, which is deliberately outside `fillScale`.
 - **Never `accent.withAlphaComponent`.** That escapes the per-theme `fillScale` and
-  stops the fill being comparable to the others in the same control. Reach for
-  `chrome.selectionFill` before defining a new focus or selection fill.
+  stops the fill being comparable to the others in the same control. State takes the
+  neutral ladder: the keyboard cursor `fill(.hover)`, current `fill(.active)`, and
+  focus an accent ring, never an accent fill.
 
 **Banned in the chrome:** `NSColor(white:…)`, `.white` / `.black`, raw hex, literal
 palette values, and AppKit system/semantic colors (`.secondaryLabelColor`,

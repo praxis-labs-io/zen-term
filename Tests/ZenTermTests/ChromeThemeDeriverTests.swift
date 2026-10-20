@@ -15,7 +15,6 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(chrome.accent, TerminalColor(hex: "#9ccfd8"))
         XCTAssertEqual(chrome.attention, TerminalColor(hex: "#ea9a97"))
         XCTAssertEqual(chrome.positive, TerminalColor(hex: "#3e8fb0"))
-        XCTAssertEqual(chrome.muted, TerminalColor(red: 134, green: 132, blue: 150))
         XCTAssertEqual(chrome.cursor, TerminalColor(hex: "#6b6790"))
     }
 
@@ -47,7 +46,6 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(overridden.attention, base.attention)
         XCTAssertEqual(overridden.positive, base.positive)
         XCTAssertEqual(overridden.cursor, base.cursor)
-        XCTAssertEqual(overridden.muted, base.muted)
         XCTAssertEqual(overridden.background, base.background)
         XCTAssertEqual(overridden.foreground, base.foreground)
     }
@@ -178,19 +176,15 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(ChromeThemeDeriver.fillScale(for: flat), 1.8, accuracy: 0.0001)
     }
 
-    func test_aRoleTintedFill_isScaledLikeAForegroundOne() {
+    func test_activeFill_isNeutral() {
         var narrow = Theme.rosePineZen
         narrow.foreground = TerminalColor(red: 0x70, green: 0x70, blue: 0x70)
         let chrome = ChromeThemeDeriver.derive(from: narrow)
         XCTAssertGreaterThan(ChromeThemeDeriver.fillScale(for: narrow), 1, "precondition: it scales")
 
-        let hover = chrome.fill(.hover).alphaComponent
-        let active = chrome.fill(.active).alphaComponent
-        let unscaled = chrome.tint(chrome.accent, alpha: ChromeTheme.FillLevel.active.alpha).alphaComponent
-
-        XCTAssertGreaterThan(active, hover, "the active state must out-weigh hover")
-        XCTAssertGreaterThan(unscaled, 0)
-        XCTAssertLessThan(unscaled, hover, "and off the scaled path it would not, which is the bug")
+        let active = chrome.fill(.active)
+        XCTAssertEqual(active.withAlphaComponent(1), chrome.foreground.nsColor, "current is neutral, never accent")
+        XCTAssertGreaterThan(active.alphaComponent, chrome.fill(.hover).alphaComponent)
     }
 
     func test_everyBundledTheme_keepsTheFillLadderOrdered() throws {
@@ -204,18 +198,6 @@ final class ChromeThemeDeriverTests: XCTestCase {
             XCTAssertEqual(
                 painted, painted.sorted(), "\(entry.token) paints the fill tiers out of order: \(painted)")
             XCTAssertEqual(Set(painted).count, painted.count, "\(entry.token) collapses two fill tiers")
-        }
-    }
-
-    func test_theSelectionFill_staysAboveTheRestFill_atEveryScale() {
-        var flat = Theme.rosePineZen
-        flat.foreground = flat.background
-        for theme in [Theme.rosePineZen, flat] {
-            let chrome = ChromeThemeDeriver.derive(from: theme)
-            XCTAssertGreaterThan(
-                chrome.selectionFill.alphaComponent, chrome.fill(.rest).alphaComponent,
-                "a focused input reads quieter than an unfocused one at scale "
-                    + "\(ChromeThemeDeriver.fillScale(for: theme))")
         }
     }
 

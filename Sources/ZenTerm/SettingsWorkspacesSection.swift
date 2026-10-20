@@ -165,7 +165,7 @@ final class WorkspaceRow: SettingsFocusRow {
         super.init()
 
         titleLabel.font = .systemFont(ofSize: 13)
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
         subtitleLabel.font = .systemFont(ofSize: 11)
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         subtitleLabel.lineBreakMode = .byTruncatingMiddle
@@ -192,7 +192,7 @@ final class WorkspaceRow: SettingsFocusRow {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     override func reapplyTheme() {
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         gitBadge.contentTintColor = Theme.current.chrome.ink(.faint)
         super.reapplyTheme()
