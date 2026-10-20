@@ -4,7 +4,7 @@ final class LinkPreviewPresenter {
     static let shared = LinkPreviewPresenter()
     private init() {}
 
-    private static let gap: CGFloat = 14
+    private static let gap: CGFloat = ChromeMetrics.Spacing.s12
 
     private var preview: LinkPreviewView?
     private var shownURL: String?

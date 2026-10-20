@@ -23,7 +23,7 @@ final class CheckboxDropdownTests: WindowTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 400),
             styleMask: [.borderless], backing: .buffered, defer: false)
         win.contentView?.addSubview(dropdown)
-        dropdown.frame = NSRect(x: 20, y: 320, width: 220, height: 30)
+        dropdown.frame = NSRect(x: 20, y: 320, width: 220, height: ChromeMetrics.Height.control)
         win.layoutIfNeeded()
         window = win
         win.makeFirstResponder(dropdown)

@@ -13,7 +13,7 @@ final class IconPickerFieldTests: WindowTestCase {
         let host = NSView(frame: window.contentView!.bounds)
         window.contentView?.addSubview(host)
         host.addSubview(field)
-        field.frame = NSRect(x: 20, y: 300, width: 220, height: 30)
+        field.frame = NSRect(x: 20, y: 300, width: 220, height: ChromeMetrics.Height.control)
         window.makeFirstResponder(field)
         field.openForTesting()
         XCTAssertTrue(field.isPopoverOpen)
@@ -173,7 +173,7 @@ final class IconPickerFieldTests: WindowTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 500, height: windowHeight),
             styleMask: [.borderless], backing: .buffered, defer: false)
         window.contentView?.addSubview(field)
-        field.frame = NSRect(x: 20, y: windowHeight - 100, width: 220, height: 30)
+        field.frame = NSRect(x: 20, y: windowHeight - 100, width: 220, height: ChromeMetrics.Height.control)
         window.makeFirstResponder(field)
         field.openForTesting()
         return (field, window)

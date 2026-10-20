@@ -15,7 +15,7 @@ final class LabeledField: NSView {
         let stack = NSStackView(views: [caption, control, messageLabel])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 5
+        stack.spacing = ChromeMetrics.Spacing.s4
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         NSLayoutConstraint.activate([

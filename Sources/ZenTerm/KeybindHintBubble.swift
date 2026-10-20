@@ -2,7 +2,7 @@ import AppKit
 
 final class KeybindHintBubble: ShadowCardView {
     private static let width: CGFloat = 220
-    private static let insets: CGFloat = 28
+    private static let insets = ChromeMetrics.Spacing.s12 * 2
     private static let resetSlot: CGFloat = 34 + 8
 
     static func inputWidth(withReset: Bool) -> CGFloat {
@@ -51,7 +51,7 @@ final class KeybindHintBubble: ShadowCardView {
         let header = NSStackView(views: [badge, title])
         header.orientation = .horizontal
         header.alignment = .centerY
-        header.spacing = 10
+        header.spacing = ChromeMetrics.Spacing.s10
 
         let previewBox = NSView()
         previewBox.wantsLayer = true
@@ -74,20 +74,20 @@ final class KeybindHintBubble: ShadowCardView {
         let inputRow = NSStackView(views: [previewBox, resetButton])
         inputRow.orientation = .horizontal
         inputRow.alignment = .centerY
-        inputRow.spacing = 8
+        inputRow.spacing = ChromeMetrics.Spacing.s8
         inputRow.distribution = .fill
 
         let previewGroup = NSStackView(views: [inputRow, errorLabel])
         previewGroup.orientation = .vertical
         previewGroup.alignment = .leading
-        previewGroup.spacing = 4
+        previewGroup.spacing = ChromeMetrics.Spacing.s4
 
         statusHost.translatesAutoresizingMaskIntoConstraints = false
 
         let col = NSStackView(views: [header, previewGroup, statusHost])
         col.orientation = .vertical
         col.alignment = .leading
-        col.spacing = 14
+        col.spacing = ChromeMetrics.Spacing.s12
         col.translatesAutoresizingMaskIntoConstraints = false
         addSubview(col)
 
@@ -99,17 +99,19 @@ final class KeybindHintBubble: ShadowCardView {
             icon.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
             previewGroup.widthAnchor.constraint(equalTo: col.widthAnchor),
             inputRow.widthAnchor.constraint(equalTo: previewGroup.widthAnchor),
-            previewBox.heightAnchor.constraint(equalToConstant: 34),
+            previewBox.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.lg),
             errorLabel.widthAnchor.constraint(equalTo: previewBox.widthAnchor),
             previewHost.centerXAnchor.constraint(equalTo: previewBox.centerXAnchor),
             previewHost.centerYAnchor.constraint(equalTo: previewBox.centerYAnchor),
-            previewHost.leadingAnchor.constraint(greaterThanOrEqualTo: previewBox.leadingAnchor, constant: 10),
-            previewHost.trailingAnchor.constraint(lessThanOrEqualTo: previewBox.trailingAnchor, constant: -10),
+            previewHost.leadingAnchor.constraint(
+                greaterThanOrEqualTo: previewBox.leadingAnchor, constant: ChromeMetrics.Spacing.s10),
+            previewHost.trailingAnchor.constraint(
+                lessThanOrEqualTo: previewBox.trailingAnchor, constant: -ChromeMetrics.Spacing.s10),
             statusHost.widthAnchor.constraint(equalTo: col.widthAnchor),
-            col.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
-            col.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-            col.topAnchor.constraint(equalTo: topAnchor, constant: 14),
-            col.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -14),
+            col.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.s12),
+            col.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.s12),
+            col.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.Spacing.s12),
+            col.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -ChromeMetrics.Spacing.s12),
         ])
 
         resetButton.isHidden = true
@@ -163,8 +165,8 @@ final class KeybindHintBubble: ShadowCardView {
         ])
         keys.orientation = .horizontal
         keys.alignment = .centerY
-        keys.spacing = 5
-        keys.setCustomSpacing(12, after: cancel)
+        keys.spacing = ChromeMetrics.Spacing.s4
+        keys.setCustomSpacing(ChromeMetrics.Spacing.s12, after: cancel)
         setStatus(keys)
     }
 
@@ -199,10 +201,10 @@ final class KeybindHintBubble: ShadowCardView {
         box.translatesAutoresizingMaskIntoConstraints = false
         box.addSubview(label)
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: 5),
-            label.trailingAnchor.constraint(equalTo: box.trailingAnchor, constant: -5),
-            label.topAnchor.constraint(equalTo: box.topAnchor, constant: 2),
-            label.bottomAnchor.constraint(equalTo: box.bottomAnchor, constant: -2),
+            label.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: ChromeMetrics.Spacing.s4),
+            label.trailingAnchor.constraint(equalTo: box.trailingAnchor, constant: -ChromeMetrics.Spacing.s4),
+            label.topAnchor.constraint(equalTo: box.topAnchor, constant: ChromeMetrics.Spacing.s2),
+            label.bottomAnchor.constraint(equalTo: box.bottomAnchor, constant: -ChromeMetrics.Spacing.s2),
         ])
         return box
     }

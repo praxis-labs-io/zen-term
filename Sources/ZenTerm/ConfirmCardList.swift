@@ -17,7 +17,7 @@ final class ConfirmCardList: NSView, ThemeReapplying {
         case note(String)
     }
 
-    static let rowHeight: CGFloat = 20
+    static let rowHeight: CGFloat = ChromeMetrics.Height.xs
     static let pathFont = ChromeType.font(.caption, face: .mono)
 
     private let rowViews: [RowView]
@@ -38,8 +38,8 @@ final class ConfirmCardList: NSView, ThemeReapplying {
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor),
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 6),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.Spacing.s6),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -ChromeMetrics.Spacing.s6),
         ])
         for row in rowViews {
             row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -81,11 +81,13 @@ final class ConfirmCardList: NSView, ThemeReapplying {
             trailing.setContentCompressionResistancePriority(.required, for: .horizontal)
             trailing.setContentHuggingPriority(.required, for: .horizontal)
             NSLayoutConstraint.activate([
-                leading.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+                leading.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
                 leading.centerYAnchor.constraint(equalTo: centerYAnchor),
-                trailing.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+                trailing.trailingAnchor.constraint(
+                    equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
                 trailing.centerYAnchor.constraint(equalTo: centerYAnchor),
-                trailing.leadingAnchor.constraint(greaterThanOrEqualTo: leading.trailingAnchor, constant: 8),
+                trailing.leadingAnchor.constraint(
+                    greaterThanOrEqualTo: leading.trailingAnchor, constant: ChromeMetrics.Spacing.s8),
             ])
         }
 

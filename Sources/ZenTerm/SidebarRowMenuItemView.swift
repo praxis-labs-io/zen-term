@@ -8,8 +8,8 @@ final class SidebarRowMenuItemView: NSView {
     private var trackingArea: NSTrackingArea?
     private var isHovered = false
 
-    private static let inset: CGFloat = 9
-    private static let gap: CGFloat = 12
+    private static let inset: CGFloat = ChromeMetrics.Spacing.controlInset
+    private static let gap: CGFloat = ChromeMetrics.Spacing.s12
 
     init(_ item: SidebarRowMenu.Item, onChoose: @escaping () -> Void) {
         title = item.title

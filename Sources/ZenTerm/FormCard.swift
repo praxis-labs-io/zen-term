@@ -20,8 +20,13 @@ enum FormCard {
         }
 
         let scroll = SettingsDetail.scroll(for: body)
-        scroll.heightAnchor.constraint(lessThanOrEqualTo: body.heightAnchor, constant: 36).isActive = true
-        let fits = scroll.heightAnchor.constraint(equalTo: body.heightAnchor, constant: 36)
+        scroll.heightAnchor.constraint(
+            lessThanOrEqualTo: body.heightAnchor,
+            constant: ChromeMetrics.Spacing.modalInsets.top + ChromeMetrics.Spacing.modalInsets.bottom
+        ).isActive = true
+        let fits = scroll.heightAnchor.constraint(
+            equalTo: body.heightAnchor,
+            constant: ChromeMetrics.Spacing.modalInsets.top + ChromeMetrics.Spacing.modalInsets.bottom)
         fits.priority = .defaultLow
         fits.isActive = true
         body.setContentCompressionResistancePriority(.required, for: .vertical)
@@ -30,10 +35,13 @@ enum FormCard {
         footerRow.translatesAutoresizingMaskIntoConstraints = false
         footerRow.addSubview(footer)
         NSLayoutConstraint.activate([
-            footer.leadingAnchor.constraint(equalTo: footerRow.leadingAnchor, constant: 20),
-            footer.trailingAnchor.constraint(equalTo: footerRow.trailingAnchor, constant: -20),
-            footer.topAnchor.constraint(equalTo: footerRow.topAnchor, constant: 14),
-            footer.bottomAnchor.constraint(equalTo: footerRow.bottomAnchor, constant: -16),
+            footer.leadingAnchor.constraint(
+                equalTo: footerRow.leadingAnchor, constant: ChromeMetrics.Spacing.modalInsets.left),
+            footer.trailingAnchor.constraint(
+                equalTo: footerRow.trailingAnchor, constant: -ChromeMetrics.Spacing.modalInsets.right),
+            footer.topAnchor.constraint(equalTo: footerRow.topAnchor, constant: ChromeMetrics.Spacing.modalInsets.top),
+            footer.bottomAnchor.constraint(
+                equalTo: footerRow.bottomAnchor, constant: -ChromeMetrics.Spacing.modalInsets.bottom),
         ])
 
         let divider = Hairline()

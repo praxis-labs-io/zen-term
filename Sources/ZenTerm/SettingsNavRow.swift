@@ -39,12 +39,12 @@ final class SettingsNavRow: NSView, HoverSuppressing {
 
     private static let detailMaxWidth: CGFloat = 96
     private static let nestedIndent: CGFloat = 24
-    private static let nestedGlyphGap: CGFloat = 6
+    private static let nestedGlyphGap: CGFloat = ChromeMetrics.Spacing.s6
     private static let nestedGlyphSize: CGFloat = 11
     // The frame pulls a 20pt accessory 5pt past the detail's inset, so its glyph sits where the detail ends.
     private static let accessoryInset: CGFloat = 5
     private static let attentionDotDiameter: CGFloat = 6
-    private static let attentionDotGapToDetail: CGFloat = 6
+    private static let attentionDotGapToDetail: CGFloat = ChromeMetrics.Spacing.s6
 
     init(
         title: String, variant: Variant = .standard, focusesOnClick: Bool = true,
@@ -85,9 +85,11 @@ final class SettingsNavRow: NSView, HoverSuppressing {
             dotGap,
             attentionDot.heightAnchor.constraint(equalToConstant: Self.attentionDotDiameter),
             attentionDot.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: attentionDot.leadingAnchor, constant: -8),
+            label.trailingAnchor.constraint(
+                lessThanOrEqualTo: attentionDot.leadingAnchor, constant: -ChromeMetrics.Spacing.s8),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            detailLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+            detailLabel.trailingAnchor.constraint(
+                equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
             detailLabel.widthAnchor.constraint(lessThanOrEqualToConstant: Self.detailMaxWidth),
             detailLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
@@ -95,8 +97,8 @@ final class SettingsNavRow: NSView, HoverSuppressing {
             installGlyph(symbol)
         } else {
             NSLayoutConstraint.activate([
-                label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-                heightAnchor.constraint(equalToConstant: 30),
+                label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
+                heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
             ])
         }
         reapplyTheme()
@@ -112,7 +114,7 @@ final class SettingsNavRow: NSView, HoverSuppressing {
             glyph.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.nestedIndent),
             glyph.centerYAnchor.constraint(equalTo: centerYAnchor),
             label.leadingAnchor.constraint(equalTo: glyph.trailingAnchor, constant: Self.nestedGlyphGap),
-            heightAnchor.constraint(equalToConstant: 28),
+            heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
         ])
     }
 

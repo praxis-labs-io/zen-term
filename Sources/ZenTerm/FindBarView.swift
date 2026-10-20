@@ -41,8 +41,9 @@ final class FindBarView: NSView {
 
         let row = NSStackView(views: [glyph, field, count])
         row.orientation = .horizontal
-        row.spacing = 8
-        row.edgeInsets = NSEdgeInsets(top: 0, left: 10, bottom: 0, right: 10)
+        row.spacing = ChromeMetrics.Spacing.s8
+        row.edgeInsets = NSEdgeInsets(
+            top: 0, left: ChromeMetrics.Spacing.controlInset, bottom: 0, right: ChromeMetrics.Spacing.controlInset)
         row.translatesAutoresizingMaskIntoConstraints = false
         addSubview(row)
 
@@ -119,7 +120,7 @@ final class FindBarView: NSView {
         )
     }
 
-    static let height: CGFloat = 26
+    static let height: CGFloat = ChromeMetrics.Height.control
 
     static var tintAlphaForTesting: CGFloat {
         Theme.current.chrome.tint(Theme.current.chrome.accent, alpha: ChromeTheme.badgeTint).alphaComponent

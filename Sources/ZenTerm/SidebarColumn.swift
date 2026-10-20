@@ -2,8 +2,7 @@ import AppKit
 
 // Everything a reveal brings on screen: the rows and footer, and the card chrome they float behind.
 final class SidebarColumn: ShadowCardView {
-    // 8 of sidebar padding plus the footer's 6 inset, so palette and Settings follow at the footer's rhythm.
-    static let toggleInset: CGFloat = 14
+    static let toggleInset: CGFloat = ChromeMetrics.Spacing.s12
 
     let rows: SidebarView
     let footer: SidebarFooter

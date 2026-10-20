@@ -49,7 +49,7 @@ final class CheckboxDropdown: NSView {
     var restingIndices: [Int]?
     private var isFocusedStop = false
 
-    private static let rowHeight: CGFloat = 28
+    private static let rowHeight: CGFloat = ChromeMetrics.Height.control
 
     var buttonTitleForTesting: String { titleLabel.stringValue }
     var itemsForTesting: [CheckboxDropdownItem] { items }
@@ -88,11 +88,12 @@ final class CheckboxDropdown: NSView {
         addSubview(titleLabel)
         addSubview(chevron)
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 30),
-            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
+            heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
             titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            chevron.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 6),
-            chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -9),
+            chevron.leadingAnchor.constraint(
+                greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
+            chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
             chevron.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
     }
@@ -318,7 +319,7 @@ final class CheckboxDropdown: NSView {
         host.translatesAutoresizingMaskIntoConstraints = false
         host.addSubview(label)
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 8),
+            label.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
             label.centerYAnchor.constraint(equalTo: host.centerYAnchor),
         ])
         return host
@@ -354,16 +355,17 @@ final class CheckboxDropdown: NSView {
             addSubview(title)
             addSubview(note)
             NSLayoutConstraint.activate([
-                check.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+                check.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
                 check.widthAnchor.constraint(equalToConstant: 14),
                 check.centerYAnchor.constraint(equalTo: centerYAnchor),
-                icon.leadingAnchor.constraint(equalTo: check.trailingAnchor, constant: 6),
+                icon.leadingAnchor.constraint(equalTo: check.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
                 icon.widthAnchor.constraint(equalToConstant: 14),
                 icon.centerYAnchor.constraint(equalTo: centerYAnchor),
-                title.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
-                title.trailingAnchor.constraint(lessThanOrEqualTo: note.leadingAnchor, constant: -8),
+                title.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
+                title.trailingAnchor.constraint(
+                    lessThanOrEqualTo: note.leadingAnchor, constant: -ChromeMetrics.Spacing.s8),
                 title.centerYAnchor.constraint(equalTo: centerYAnchor),
-                note.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+                note.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
                 note.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
         }

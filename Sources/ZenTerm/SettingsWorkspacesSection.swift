@@ -17,7 +17,7 @@ final class SettingsWorkspacesSection: SettingsSection {
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 3
+        stack.spacing = ChromeMetrics.Spacing.s2
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
 
@@ -98,12 +98,13 @@ final class SettingsWorkspacesSection: SettingsSection {
                 self?.rows.forEach { $0.applyGitStatus() }
             }
         }
-        stack.setCustomSpacing(10, after: header)
+        stack.setCustomSpacing(ChromeMetrics.Spacing.s10, after: header)
 
         let addRow = SettingsDetail.trailingRow(addButton)
         stack.addArrangedSubview(addRow)
         addRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        stack.setCustomSpacing(18, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
+        stack.setCustomSpacing(
+            ChromeMetrics.Spacing.s16, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
 
         if let title, let moved = rows.first(where: { $0.workspace.title == title }) {
             stack.window?.makeFirstResponder(moved)
@@ -172,7 +173,7 @@ final class WorkspaceRow: SettingsFocusRow {
         let labels = NSStackView(views: [titleLabel, subtitleLabel])
         labels.orientation = .vertical
         labels.alignment = .leading
-        labels.spacing = 1
+        labels.spacing = ChromeMetrics.Spacing.s2
         labels.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         let spacer = NSView()
@@ -185,7 +186,7 @@ final class WorkspaceRow: SettingsFocusRow {
         let controls = NSStackView(views: [labels, spacer, gitBadge])
         controls.orientation = .horizontal
         controls.alignment = .centerY
-        controls.spacing = 10
+        controls.spacing = ChromeMetrics.Spacing.s10
         pin(controls)
     }
 

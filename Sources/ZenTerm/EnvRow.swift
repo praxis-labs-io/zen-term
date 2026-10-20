@@ -25,7 +25,7 @@ final class EnvRow: NSView {
         let stack = NSStackView(views: [keyBox, equals, valueBox, removeButton])
         stack.orientation = .horizontal
         stack.alignment = .centerY
-        stack.spacing = 6
+        stack.spacing = ChromeMetrics.Spacing.s6
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         NSLayoutConstraint.activate([

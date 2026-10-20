@@ -32,7 +32,7 @@ final class KeybindRow: NSView {
         let controls = NSStackView(views: [label, spacer, chip])
         controls.orientation = .horizontal
         controls.alignment = .centerY
-        controls.spacing = 8
+        controls.spacing = ChromeMetrics.Spacing.s8
 
         messageLabel.font = ChromeType.font(.caption, weight: .medium)
         messageLabel.textColor = Theme.current.chrome.destructive.nsColor
@@ -41,7 +41,7 @@ final class KeybindRow: NSView {
         let stack = NSStackView(views: [controls, messageLabel])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 3
+        stack.spacing = ChromeMetrics.Spacing.s2
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         NSLayoutConstraint.activate([

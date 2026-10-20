@@ -217,7 +217,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         phaseLabel.lineBreakMode = .byTruncatingTail
         phaseGroup.orientation = .horizontal
         phaseGroup.alignment = .centerY
-        phaseGroup.spacing = 7
+        phaseGroup.spacing = ChromeMetrics.Spacing.s6
         phaseGroup.setViews([spinner, phaseLabel], in: .leading)
         phaseGroup.isHidden = true
 

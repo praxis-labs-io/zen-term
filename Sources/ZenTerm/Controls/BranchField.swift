@@ -20,7 +20,7 @@ final class BranchField: NSView, ThemeReapplying {
     private lazy var popover = ListPopover(anchor: box)
     private var rowViews: [BranchRowView] = []
 
-    private static let rowHeight: CGFloat = 26
+    private static let rowHeight: CGFloat = ChromeMetrics.Height.control
 
     var text: String { box.text }
     var isListOpen: Bool { popover.isOpen }
@@ -229,13 +229,14 @@ final class BranchField: NSView, ThemeReapplying {
             addSubview(title)
             addSubview(note)
             NSLayoutConstraint.activate([
-                icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+                icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
                 icon.widthAnchor.constraint(equalToConstant: 14),
                 icon.centerYAnchor.constraint(equalTo: centerYAnchor),
-                title.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
-                title.trailingAnchor.constraint(lessThanOrEqualTo: note.leadingAnchor, constant: -8),
+                title.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
+                title.trailingAnchor.constraint(
+                    lessThanOrEqualTo: note.leadingAnchor, constant: -ChromeMetrics.Spacing.s8),
                 title.centerYAnchor.constraint(equalTo: centerYAnchor),
-                note.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+                note.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
                 note.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
         }

@@ -50,9 +50,9 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         addSubview(field)
 
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 30),
-            field.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
-            field.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -9),
+            heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
+            field.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
+            field.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
             field.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
     }

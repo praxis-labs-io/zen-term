@@ -12,7 +12,7 @@ final class AppButtonTests: WindowTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
             styleMask: [.borderless], backing: .buffered, defer: false)
         window.contentView?.addSubview(button)
-        button.frame = NSRect(x: 0, y: 0, width: 120, height: 26)
+        button.frame = NSRect(x: 0, y: 0, width: 120, height: ChromeMetrics.Height.control)
         return (button, window)
     }
 
@@ -73,15 +73,15 @@ final class AppButtonTests: WindowTestCase {
         button.attributedTitle.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
     }
 
-    func test_aLargeButton_laysOutTallerWithALargerLabel_andTheStandardSizeIsUnchanged() throws {
+    func test_aLargeButton_keepsTheControlHeightWithALargerLabel() throws {
         let large = AppButton(title: "Connect", variant: .primary, size: .large)
         let standard = AppButton(title: "Connect", variant: .primary)
         let windows = [try mountFitted(large), try mountFitted(standard)]
 
-        XCTAssertEqual(large.frame.height, 32)
+        XCTAssertEqual(large.frame.height, ChromeMetrics.Height.control)
         XCTAssertEqual(titleFont(large)?.pointSize, 13)
         XCTAssertEqual(large.layer?.cornerRadius, ChromeMetrics.Radius.control)
-        XCTAssertEqual(standard.frame.height, 26)
+        XCTAssertEqual(standard.frame.height, ChromeMetrics.Height.control)
         XCTAssertEqual(titleFont(standard)?.pointSize, 12)
         XCTAssertEqual(standard.layer?.cornerRadius, ChromeMetrics.Radius.control)
         withExtendedLifetime(windows) {}
@@ -224,9 +224,9 @@ final class AppButtonTests: WindowTestCase {
 
     func test_aTitleTooWideForItsButton_drawsNoInkOutsideIt() throws {
         let button = AppButton(title: "A title far too long to fit inside this button", variant: .secondary)
-        button.frame = NSRect(x: 0, y: 0, width: 80, height: 26)
+        button.frame = NSRect(x: 0, y: 0, width: 80, height: ChromeMetrics.Height.control)
         let cell = try XCTUnwrap(button.cell as? NSButtonCell)
-        let canvas = NSRect(x: 0, y: 0, width: 400, height: 26)
+        let canvas = NSRect(x: 0, y: 0, width: 400, height: ChromeMetrics.Height.control)
         let frame = button.bounds.offsetBy(dx: 160, dy: 0)
         let rep = try XCTUnwrap(
             NSBitmapImageRep(

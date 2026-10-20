@@ -69,7 +69,7 @@ final class CarryPicker: NSView, ThemeReapplying {
         let column = NSStackView(views: [slot, detail])
         column.orientation = .vertical
         column.alignment = .leading
-        column.spacing = 6
+        column.spacing = ChromeMetrics.Spacing.s6
         column.translatesAutoresizingMaskIntoConstraints = false
         addSubview(column)
         NSLayoutConstraint.activate([
@@ -314,11 +314,13 @@ final class CarryPicker: NSView, ThemeReapplying {
             addSubview(label)
             addSubview(spinner)
             NSLayoutConstraint.activate([
-                heightAnchor.constraint(equalToConstant: 30),
-                label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
+                heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
+                label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
                 label.centerYAnchor.constraint(equalTo: centerYAnchor),
-                spinner.leadingAnchor.constraint(greaterThanOrEqualTo: label.trailingAnchor, constant: 6),
-                spinner.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -9),
+                spinner.leadingAnchor.constraint(
+                    greaterThanOrEqualTo: label.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
+                spinner.trailingAnchor.constraint(
+                    equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
                 spinner.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
             applyColors()

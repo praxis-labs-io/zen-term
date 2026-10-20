@@ -21,7 +21,7 @@ final class ModeChrome {
     private var contentBottomToFindBar: NSLayoutConstraint?
     private let contentBottomToContainer: NSLayoutConstraint
 
-    private static let stripInset: CGFloat = 8
+    private static let stripInset: CGFloat = ChromeMetrics.Spacing.s8
 
     init(
         container: NSView, content: NSView, padding: CGFloat, header: PanelMeta?,
@@ -176,7 +176,7 @@ private final class PanelHeader: NSView {
         NSLayoutConstraint.activate([
             titleField.leadingAnchor.constraint(equalTo: leadingAnchor),
             titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
-            heightAnchor.constraint(equalToConstant: 20),
+            heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.xs),
         ])
         activateKeycapConstraints()
         applyTitle()
@@ -209,7 +209,8 @@ private final class PanelHeader: NSView {
         NSLayoutConstraint.activate([
             keycap.trailingAnchor.constraint(equalTo: trailingAnchor),
             keycap.centerYAnchor.constraint(equalTo: centerYAnchor),
-            keycap.leadingAnchor.constraint(greaterThanOrEqualTo: titleField.trailingAnchor, constant: 8),
+            keycap.leadingAnchor.constraint(
+                greaterThanOrEqualTo: titleField.trailingAnchor, constant: ChromeMetrics.Spacing.s8),
         ])
     }
 

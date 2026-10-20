@@ -142,11 +142,14 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         let content = NSStackView(views: [header, titleGroup, whatGroup, envGroup, footer])
         content.orientation = .vertical
         content.alignment = .leading
-        content.spacing = 14
-        content.edgeInsets = NSEdgeInsets(top: 18, left: 20, bottom: 16, right: 20)
+        content.spacing = ChromeMetrics.Spacing.modalSectionGap
+        content.edgeInsets = ChromeMetrics.Spacing.modalInsets
         content.translatesAutoresizingMaskIntoConstraints = false
         for view in content.arrangedSubviews {
-            view.widthAnchor.constraint(equalTo: content.widthAnchor, constant: -40).isActive = true
+            view.widthAnchor.constraint(
+                equalTo: content.widthAnchor,
+                constant: -(ChromeMetrics.Spacing.modalInsets.left + ChromeMetrics.Spacing.modalInsets.right)
+            ).isActive = true
         }
         return content
     }

@@ -9,15 +9,15 @@ final class AppButton: NSButton {
 
         var height: CGFloat {
             switch self {
-            case .standard: return 26
-            case .large: return 32
+            case .standard: return ChromeMetrics.Height.control
+            case .large: return ChromeMetrics.Height.control
             }
         }
 
         var horizontalPadding: CGFloat {
             switch self {
-            case .standard: return 8
-            case .large: return 12
+            case .standard: return ChromeMetrics.Spacing.s8
+            case .large: return ChromeMetrics.Spacing.s12
             }
         }
 
@@ -30,8 +30,8 @@ final class AppButton: NSButton {
 
         var keycapGap: CGFloat {
             switch self {
-            case .standard: return 6
-            case .large: return 8
+            case .standard: return ChromeMetrics.Spacing.s6
+            case .large: return ChromeMetrics.Spacing.s8
             }
         }
     }

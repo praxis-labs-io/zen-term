@@ -3,7 +3,7 @@ import AppKit
 // A bounds mask would clip the pane focus halo for the length of a slide.
 enum SlideClip {
     // Covers the focus glow (shadow radius 6 plus the pane border), far short of any slide travel.
-    static let margin: CGFloat = 10
+    static let margin: CGFloat = ChromeMetrics.Spacing.s10
 
     static func apply(to view: NSView) {
         view.wantsLayer = true

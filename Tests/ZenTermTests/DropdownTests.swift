@@ -38,7 +38,7 @@ final class DropdownTests: WindowTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
             styleMask: [.borderless], backing: .buffered, defer: false)
         window.contentView?.addSubview(dropdown)
-        dropdown.frame = NSRect(x: 20, y: 200, width: 220, height: 30)
+        dropdown.frame = NSRect(x: 20, y: 200, width: 220, height: ChromeMetrics.Height.control)
 
         dropdown.openListForTesting()
 
@@ -58,7 +58,7 @@ final class DropdownTests: WindowTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
             styleMask: [.borderless], backing: .buffered, defer: false)
         window.contentView?.addSubview(dropdown)
-        dropdown.frame = NSRect(x: 20, y: 200, width: 220, height: 30)
+        dropdown.frame = NSRect(x: 20, y: 200, width: 220, height: ChromeMetrics.Height.control)
         window.makeFirstResponder(dropdown)
         dropdown.openListForTesting()
         XCTAssertTrue(dropdown.isPopoverOpen)
@@ -85,7 +85,7 @@ final class DropdownTests: WindowTestCase {
         let host = NSView(frame: window.contentView!.bounds)
         window.contentView?.addSubview(host)
         host.addSubview(dropdown)
-        dropdown.frame = NSRect(x: 20, y: 200, width: 220, height: 30)
+        dropdown.frame = NSRect(x: 20, y: 200, width: 220, height: ChromeMetrics.Height.control)
         window.makeFirstResponder(dropdown)
         dropdown.openListForTesting()
         XCTAssertTrue(dropdown.isPopoverOpen)
@@ -110,7 +110,7 @@ final class DropdownTests: WindowTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 500),
             styleMask: [.borderless], backing: .buffered, defer: false)
         window.contentView?.addSubview(dropdown)
-        dropdown.frame = NSRect(x: 20, y: 400, width: 220, height: 30)
+        dropdown.frame = NSRect(x: 20, y: 400, width: 220, height: ChromeMetrics.Height.control)
         window.makeFirstResponder(dropdown)
         dropdown.openListForTesting()
         return dropdown
@@ -230,7 +230,7 @@ final class DropdownTests: WindowTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 500),
             styleMask: [.borderless], backing: .buffered, defer: false)
         window.contentView?.addSubview(dropdown)
-        dropdown.frame = NSRect(x: 20, y: 400, width: 220, height: 30)
+        dropdown.frame = NSRect(x: 20, y: 400, width: 220, height: ChromeMetrics.Height.control)
 
         dropdown.openListForTesting()
         for _ in 0..<(items.count - 1) { dropdown.moveHighlightForTesting(1) }
@@ -248,7 +248,7 @@ final class DropdownTests: WindowTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 500),
             styleMask: [.borderless], backing: .buffered, defer: false)
         window.contentView?.addSubview(dropdown)
-        dropdown.frame = NSRect(x: 20, y: 400, width: 220, height: 30)
+        dropdown.frame = NSRect(x: 20, y: 400, width: 220, height: ChromeMetrics.Height.control)
 
         dropdown.openListForTesting()
         for _ in 0..<9 { dropdown.moveHighlightForTesting(1) }
@@ -266,7 +266,7 @@ final class DropdownTests: WindowTestCase {
         let dropdown = Self.dropdown(rows: 3)
         let window = Self.window(height: 400)
         window.contentView?.addSubview(dropdown)
-        dropdown.frame = NSRect(x: 20, y: 320, width: 220, height: 30)
+        dropdown.frame = NSRect(x: 20, y: 320, width: 220, height: ChromeMetrics.Height.control)
 
         dropdown.openListForTesting()
 
@@ -279,7 +279,7 @@ final class DropdownTests: WindowTestCase {
         let dropdown = Self.dropdown(rows: 8)
         let window = Self.window(height: 400)
         window.contentView?.addSubview(dropdown)
-        dropdown.frame = NSRect(x: 20, y: 24, width: 220, height: 30)
+        dropdown.frame = NSRect(x: 20, y: 24, width: 220, height: ChromeMetrics.Height.control)
 
         dropdown.openListForTesting()
 
@@ -295,7 +295,7 @@ final class DropdownTests: WindowTestCase {
         let dropdown = Self.dropdown(rows: 4)
         let window = Self.window(height: 400)
         window.contentView?.addSubview(dropdown)
-        dropdown.frame = NSRect(x: 20, y: 300, width: 220, height: 30)
+        dropdown.frame = NSRect(x: 20, y: 300, width: 220, height: ChromeMetrics.Height.control)
         dropdown.openListForTesting()
         XCTAssertTrue(dropdown.isPopoverOpen, "precondition: the list is up before the resize")
         XCTAssertEqual(

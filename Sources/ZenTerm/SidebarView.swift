@@ -34,13 +34,13 @@ struct SidebarRowItem: Equatable {
 
 final class SidebarView: NSView {
     static let width: CGFloat = 240
-    static let padding: CGFloat = 8
+    static let padding: CGFloat = ChromeMetrics.Spacing.s8
     private static let captionHeight: CGFloat = 28
-    private static let captionInset: CGFloat = 10
-    private static let addInset: CGFloat = 4
+    private static let captionInset: CGFloat = ChromeMetrics.Spacing.controlInset
+    private static let addInset: CGFloat = ChromeMetrics.Spacing.s4
     private static let newWorktreeSize = NSSize(width: 20, height: 20)
-    private static let sectionGap: CGFloat = 14
-    private static let contentBottomGap: CGFloat = 8
+    private static let sectionGap: CGFloat = ChromeMetrics.Spacing.s12
+    private static let contentBottomGap: CGFloat = ChromeMetrics.Spacing.s8
 
     private let caption = FieldCaption("Workspaces", required: false)
     private let addButton: IconButton

@@ -2,7 +2,7 @@ import AppKit
 
 // On the window beside the toggle, not in the sidebar, so these fade instead of sliding with it.
 final class SidebarFooter: NSStackView {
-    static let spacing: CGFloat = 2
+    static let spacing: CGFloat = ChromeMetrics.Spacing.s2
     static let buttonSize = NSSize(width: 22, height: 22)
     private static let iconPointSize: CGFloat = 11
 

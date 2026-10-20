@@ -26,11 +26,11 @@ final class KeybindChip: NSView {
         addSubview(host)
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: Self.width),
-            heightAnchor.constraint(equalToConstant: 32),
+            heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.lg),
             host.centerXAnchor.constraint(equalTo: centerXAnchor),
             host.centerYAnchor.constraint(equalTo: centerYAnchor),
-            host.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 4),
-            host.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -4),
+            host.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: ChromeMetrics.Spacing.s4),
+            host.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -ChromeMetrics.Spacing.s4),
         ])
         restyle()
     }

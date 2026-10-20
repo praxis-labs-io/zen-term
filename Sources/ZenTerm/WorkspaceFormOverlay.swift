@@ -199,7 +199,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
 
         envStack.orientation = .vertical
         envStack.alignment = .leading
-        envStack.spacing = 6
+        envStack.spacing = ChromeMetrics.Spacing.s6
         addVarButton.onTap = { [weak self] in self?.addEnvRow() }
         envError.font = ChromeType.font(.caption, weight: .medium)
         envError.textColor = Theme.current.chrome.destructive.nsColor
@@ -245,7 +245,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
         row.orientation = .horizontal
         row.alignment = .top
         row.distribution = .fill
-        row.spacing = 12
+        row.spacing = ChromeMetrics.Spacing.s12
         return row
     }
 

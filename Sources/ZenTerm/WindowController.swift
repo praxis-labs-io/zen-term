@@ -618,9 +618,9 @@ final class WindowController: NSObject {
             canvasHost.bottomAnchor.constraint(equalTo: tabBar.topAnchor),
             tabBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             tabBar.heightAnchor.constraint(equalToConstant: TabBarView.height),
-            dock.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
+            dock.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -ChromeMetrics.Spacing.s12),
             dock.centerYAnchor.constraint(equalTo: tabBar.chipBandCenterYAnchor),
-            tabBar.trailingAnchor.constraint(equalTo: dock.leadingAnchor, constant: -8),
+            tabBar.trailingAnchor.constraint(equalTo: dock.leadingAnchor, constant: -ChromeMetrics.Spacing.s8),
         ])
     }
 

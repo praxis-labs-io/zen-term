@@ -4,8 +4,8 @@ import AppKit
 final class WorkspaceTabDrawing: NSView {
     static let height: CGFloat = 232
     static let launchFocusShortcut = "⌘L"
-    private static let inset: CGFloat = 8
-    private static let gap: CGFloat = 8
+    private static let inset: CGFloat = ChromeMetrics.Spacing.s8
+    private static let gap: CGFloat = ChromeMetrics.Spacing.s8
     private static let railThickness: CGFloat = 28
     private static let bottomHeight: CGFloat = 72
     private static let rightWidth: CGFloat = 216

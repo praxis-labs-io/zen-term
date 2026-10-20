@@ -108,8 +108,10 @@ final class SettingsOverlay: NSView, ModalOverlay {
     private func buildContent() -> NSView {
         navStack.orientation = .vertical
         navStack.alignment = .leading
-        navStack.spacing = 2
-        navStack.edgeInsets = NSEdgeInsets(top: 18, left: 12, bottom: 16, right: 12)
+        navStack.spacing = ChromeMetrics.Spacing.s2
+        navStack.edgeInsets = NSEdgeInsets(
+            top: ChromeMetrics.Spacing.s16, left: ChromeMetrics.Spacing.s12, bottom: ChromeMetrics.Spacing.s16,
+            right: ChromeMetrics.Spacing.s12)
 
         heading.font = ChromeType.sectionLabel
         heading.textColor = Theme.current.chrome.ink(.muted)
@@ -118,13 +120,14 @@ final class SettingsOverlay: NSView, ModalOverlay {
         headingRow.translatesAutoresizingMaskIntoConstraints = false
         headingRow.addSubview(heading)
         NSLayoutConstraint.activate([
-            heading.leadingAnchor.constraint(equalTo: headingRow.leadingAnchor, constant: 10),
+            heading.leadingAnchor.constraint(
+                equalTo: headingRow.leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
             heading.trailingAnchor.constraint(equalTo: headingRow.trailingAnchor),
             heading.topAnchor.constraint(equalTo: headingRow.topAnchor),
             heading.bottomAnchor.constraint(equalTo: headingRow.bottomAnchor),
         ])
         navStack.addArrangedSubview(headingRow)
-        navStack.setCustomSpacing(10, after: headingRow)
+        navStack.setCustomSpacing(ChromeMetrics.Spacing.s10, after: headingRow)
 
         for (index, section) in sections.enumerated() {
             section.onExitToNav = { [weak self] in self?.focusNav() }
@@ -135,7 +138,9 @@ final class SettingsOverlay: NSView, ModalOverlay {
             row.onEnterDetail = { [weak self] in self?.enterDetail() }
             navRows.append(row)
             navStack.addArrangedSubview(row)
-            row.widthAnchor.constraint(equalTo: navStack.widthAnchor, constant: -24).isActive = true
+            row.widthAnchor.constraint(
+                equalTo: navStack.widthAnchor, constant: -(navStack.edgeInsets.left + navStack.edgeInsets.right)
+            ).isActive = true
         }
 
         detailContainer.translatesAutoresizingMaskIntoConstraints = false
@@ -174,14 +179,14 @@ final class SettingsOverlay: NSView, ModalOverlay {
             navScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             navScroll.topAnchor.constraint(equalTo: root.topAnchor),
             navScroll.widthAnchor.constraint(equalToConstant: Self.navWidth),
-            navScroll.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -8),
+            navScroll.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -ChromeMetrics.Spacing.s8),
 
             reportButton.centerXAnchor.constraint(equalTo: navScroll.centerXAnchor),
             reportButton.leadingAnchor.constraint(
                 greaterThanOrEqualTo: root.leadingAnchor, constant: Self.footerTrailingInset),
             reportButton.trailingAnchor.constraint(
                 lessThanOrEqualTo: navScroll.trailingAnchor, constant: -Self.footerTrailingInset),
-            reportButton.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -14),
+            reportButton.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -ChromeMetrics.Spacing.s12),
 
             navStack.topAnchor.constraint(equalTo: navScroll.contentView.topAnchor),
             navStack.leadingAnchor.constraint(equalTo: navScroll.contentView.leadingAnchor),
@@ -192,7 +197,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
                 greaterThanOrEqualTo: root.leadingAnchor, constant: Self.footerTrailingInset),
             footer.trailingAnchor.constraint(
                 lessThanOrEqualTo: navScroll.trailingAnchor, constant: -Self.footerTrailingInset),
-            footer.bottomAnchor.constraint(equalTo: reportButton.topAnchor, constant: -6),
+            footer.bottomAnchor.constraint(equalTo: reportButton.topAnchor, constant: -ChromeMetrics.Spacing.s6),
 
             divider.leadingAnchor.constraint(equalTo: navScroll.trailingAnchor),
             divider.topAnchor.constraint(equalTo: root.topAnchor),
@@ -234,9 +239,9 @@ final class SettingsOverlay: NSView, ModalOverlay {
     static var versionText: String { "v\(AppVersion.current)" }
     static let versionFont: NSFont = ChromeType.font(.body, weight: .medium)
     private static let brandMarkSize: CGFloat = 16
-    private static let footerSpacing: CGFloat = 7
+    private static let footerSpacing: CGFloat = ChromeMetrics.Spacing.s6
     private static let navWidth: CGFloat = 168
-    private static let footerTrailingInset: CGFloat = 12
+    private static let footerTrailingInset: CGFloat = ChromeMetrics.Spacing.s12
     static var versionMaxWidth: CGFloat {
         navWidth - footerTrailingInset * 2 - brandMarkSize - footerSpacing
     }

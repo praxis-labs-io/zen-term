@@ -52,7 +52,7 @@ class PaletteOverlay: NSView, ModalOverlay {
     private let defaultRowHeight: CGFloat
     private let maxListHeight: CGFloat
     private let emptyListHeight: CGFloat
-    private let listVerticalInset: CGFloat = 8
+    private let listVerticalInset: CGFloat = ChromeMetrics.Spacing.s8
     private var listHeight: NSLayoutConstraint!
     private struct LaidOutRow {
         let id: AnyHashable?
@@ -101,8 +101,10 @@ class PaletteOverlay: NSView, ModalOverlay {
         searchField.translatesAutoresizingMaskIntoConstraints = false
         let searchRow = NSStackView(views: [searchGlyph, searchField])
         searchRow.orientation = .horizontal
-        searchRow.spacing = 8
-        searchRow.edgeInsets = NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
+        searchRow.spacing = ChromeMetrics.Spacing.s8
+        searchRow.edgeInsets = NSEdgeInsets(
+            top: ChromeMetrics.Spacing.s12, left: ChromeMetrics.Spacing.s12, bottom: ChromeMetrics.Spacing.s12,
+            right: ChromeMetrics.Spacing.s12)
 
         for hairline in [divider, footerDivider] {
             hairline.wantsLayer = true
@@ -167,7 +169,7 @@ class PaletteOverlay: NSView, ModalOverlay {
             footerDivider.widthAnchor.constraint(equalTo: stack.widthAnchor),
             scrollView.widthAnchor.constraint(equalTo: stack.widthAnchor),
             footerRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            footerRow.heightAnchor.constraint(equalToConstant: 34),
+            footerRow.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.lg),
             footer.centerXAnchor.constraint(equalTo: footerRow.centerXAnchor),
             footer.centerYAnchor.constraint(equalTo: footerRow.centerYAnchor),
             listHeight,
@@ -176,12 +178,13 @@ class PaletteOverlay: NSView, ModalOverlay {
             doc.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
             doc.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
             rowsStack.topAnchor.constraint(equalTo: doc.topAnchor, constant: listVerticalInset),
-            rowsStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor, constant: 8),
-            rowsStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -8),
+            rowsStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor, constant: ChromeMetrics.Spacing.s8),
+            rowsStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -ChromeMetrics.Spacing.s8),
             rowsStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -listVerticalInset),
 
             emptyLabel.centerXAnchor.constraint(equalTo: scrollView.contentView.centerXAnchor),
-            emptyLabel.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor, constant: 24),
+            emptyLabel.topAnchor.constraint(
+                equalTo: scrollView.contentView.topAnchor, constant: ChromeMetrics.Spacing.s20),
         ])
 
         reloadRows()
@@ -418,14 +421,14 @@ class PaletteOverlay: NSView, ModalOverlay {
             labels.append(label)
             let item = NSStackView(views: [keycap, label])
             item.orientation = .horizontal
-            item.spacing = 5
+            item.spacing = ChromeMetrics.Spacing.s4
             item.alignment = .centerY
             byLabel[hint.label] = item
             return item
         }
         let stack = NSStackView(views: items)
         stack.orientation = .horizontal
-        stack.spacing = 16
+        stack.spacing = ChromeMetrics.Spacing.s16
         stack.alignment = .centerY
         return (stack, labels, keycaps, byLabel)
     }

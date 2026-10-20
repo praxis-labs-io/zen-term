@@ -20,7 +20,7 @@ final class ToastPresenter {
         self.isPresent = isPresent
         stack.orientation = .vertical
         stack.alignment = .trailing
-        stack.spacing = 8
+        stack.spacing = ChromeMetrics.Spacing.s8
         stack.translatesAutoresizingMaskIntoConstraints = false
         host.addSubview(stack, positioned: below == nil ? .above : .below, relativeTo: below)
         topConstraint = stack.topAnchor.constraint(equalTo: host.topAnchor, constant: topInset)

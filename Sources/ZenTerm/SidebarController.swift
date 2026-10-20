@@ -20,7 +20,7 @@ final class SidebarController {
         let isWorktreeRemoved: Bool
     }
 
-    private static let leadNameGap: CGFloat = 6
+    private static let leadNameGap: CGFloat = ChromeMetrics.Spacing.s6
     // Docking below this would leave the panes less than the window's own minimum, so the sidebar floats instead.
     static let minimumDockableWidth = HostWindow.minimumContentSize.width + SidebarView.width
 

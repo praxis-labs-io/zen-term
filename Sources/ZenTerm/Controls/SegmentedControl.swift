@@ -43,7 +43,7 @@ final class SegmentedControl: NSView {
         let stack = NSStackView(views: segments)
         stack.orientation = .horizontal
         stack.alignment = .centerY
-        stack.spacing = 4
+        stack.spacing = ChromeMetrics.Spacing.s4
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         segmentsStack = stack

@@ -210,7 +210,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         let field = BranchField()
         let window = makeWindow()
         window.contentView?.addSubview(field)
-        field.frame = NSRect(x: 20, y: 200, width: 400, height: 30)
+        field.frame = NSRect(x: 20, y: 200, width: 400, height: ChromeMetrics.Height.control)
         field.setBranches(["feature/zen-454"], holders: [:])
         field.box.setText("zen")
         field.box.controlTextDidChange(

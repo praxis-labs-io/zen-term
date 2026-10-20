@@ -5,11 +5,11 @@ final class RegionCommandField: NSView, NSTextFieldDelegate {
     enum Edge { case left, right, up, down }
 
     static let commandFont = ChromeType.font(.body, face: .mono)
-    private static let horizontalInset: CGFloat = 11
-    private static let topInset: CGFloat = 9
-    private static let rowSpacing: CGFloat = 9
+    private static let horizontalInset: CGFloat = ChromeMetrics.Spacing.controlInset
+    private static let topInset: CGFloat = ChromeMetrics.Spacing.controlInset
+    private static let rowSpacing: CGFloat = ChromeMetrics.Spacing.s10
     private static let markerSize = NSSize(width: 8, height: 16)
-    private static let markerSpacing: CGFloat = 7
+    private static let markerSpacing: CGFloat = ChromeMetrics.Spacing.s6
     private static let cornerSize: CGFloat = 24
     private static let cornerInset: CGFloat = 6
 

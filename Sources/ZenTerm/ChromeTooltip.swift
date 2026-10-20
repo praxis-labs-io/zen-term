@@ -15,20 +15,22 @@ final class ChromeTooltip: HoverCardView {
         labelField = style == .paragraph ? Self.makeParagraphLabel(label) : Self.makeLabel(label)
         super.init(frame: .zero)
         var views: [NSView] = [labelField]
+        var trailingInset = ChromeMetrics.Spacing.controlInset
         if let shortcut, !shortcut.isEmpty {
             views.append(KeycapView(shortcut: shortcut))
+            trailingInset = ChromeMetrics.Spacing.s4
         }
         let stack = NSStackView(views: views)
         stack.orientation = .horizontal
         stack.alignment = .centerY
-        stack.spacing = 6
+        stack.spacing = ChromeMetrics.Spacing.s6
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -9),
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 5),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -trailingInset),
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.Spacing.s4),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -ChromeMetrics.Spacing.s4),
         ])
     }
 

@@ -1,11 +1,11 @@
 import AppKit
 
 final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
-    static let height: CGFloat = 26
-    private static let inset: CGFloat = 10
+    static let height: CGFloat = ChromeMetrics.Height.sm
+    private static let inset: CGFloat = ChromeMetrics.Spacing.controlInset
     private static let dotDiameter: CGFloat = 6
     private static let underlineThickness: CGFloat = 2
-    private static let accessorySpacing: CGFloat = 6
+    private static let accessorySpacing: CGFloat = ChromeMetrics.Spacing.s6
     private static let closeSize: CGFloat = 16
 
     var onSelect: (() -> Void)?

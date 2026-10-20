@@ -26,9 +26,9 @@ final class UpdateCardView: ShadowCardView {
     }
 
     static let width: CGFloat = 360
-    private static let inset: CGFloat = 12
+    private static let inset: CGFloat = ChromeMetrics.Spacing.s12
     private static let badgeSize: CGFloat = 28
-    private static let rootSpacing: CGFloat = 12
+    private static let rootSpacing: CGFloat = ChromeMetrics.Spacing.s12
 
     // Exposed so the notes are measured against the real wrap budget (`UpdateCardTests`).
     static let notesMaxWidth: CGFloat = width - inset * 2 - badgeSize - rootSpacing
@@ -74,23 +74,23 @@ final class UpdateCardView: ShadowCardView {
         headerSpacer.setContentCompressionResistancePriority(.init(rawValue: 1), for: .horizontal)
         header.orientation = .horizontal
         header.alignment = .centerY
-        header.spacing = 6
+        header.spacing = ChromeMetrics.Spacing.s6
         header.addArrangedSubview(titleLabel)
         header.addArrangedSubview(headerSpacer)
         refreshKeycap()
 
         bodyColumn.orientation = .vertical
         bodyColumn.alignment = .leading
-        bodyColumn.spacing = 6
+        bodyColumn.spacing = ChromeMetrics.Spacing.s6
 
         buttonRow.orientation = .horizontal
         buttonRow.alignment = .centerY
-        buttonRow.spacing = 6
+        buttonRow.spacing = ChromeMetrics.Spacing.s6
 
         let col = NSStackView(views: [header, bodyColumn, buttonRow])
         col.orientation = .vertical
         col.alignment = .leading
-        col.spacing = 9
+        col.spacing = ChromeMetrics.Spacing.s10
         header.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
         bodyColumn.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
         buttonRow.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true

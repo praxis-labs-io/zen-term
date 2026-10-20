@@ -30,7 +30,7 @@ final class SSHHostRow: SettingsFocusRow {
         let labels = NSStackView(views: [titleLabel, subtitleLabel])
         labels.orientation = .vertical
         labels.alignment = .leading
-        labels.spacing = 1
+        labels.spacing = ChromeMetrics.Spacing.s2
         labels.setContentHuggingPriority(.defaultLow, for: .horizontal)
         labels.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
@@ -42,7 +42,7 @@ final class SSHHostRow: SettingsFocusRow {
         let controls = NSStackView(views: [labels, spacer, statusLabel])
         controls.orientation = .horizontal
         controls.alignment = .centerY
-        controls.spacing = 10
+        controls.spacing = ChromeMetrics.Spacing.s10
         pin(controls)
         showStatus()
     }

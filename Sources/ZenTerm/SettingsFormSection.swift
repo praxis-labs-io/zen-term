@@ -44,7 +44,7 @@ class SettingsFormSection: SettingsSection {
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 10
+        stack.spacing = ChromeMetrics.Spacing.s10
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
 
@@ -59,13 +59,13 @@ class SettingsFormSection: SettingsSection {
         let resetRow = SettingsDetail.trailingRow(resetAllButton)
         stack.addArrangedSubview(resetRow)
         resetRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        if let lastArranged { stack.setCustomSpacing(20, after: lastArranged) }
+        if let lastArranged { stack.setCustomSpacing(ChromeMetrics.Spacing.s20, after: lastArranged) }
         stops.append(resetAllButton)
 
         let messageRow = SettingsDetail.trailingRow(resetAllMessage)
         stack.addArrangedSubview(messageRow)
         messageRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        stack.setCustomSpacing(6, after: resetRow)
+        stack.setCustomSpacing(ChromeMetrics.Spacing.s6, after: resetRow)
 
         let scroll = SettingsDetail.scroll(for: stack)
         refreshRows()
@@ -89,7 +89,7 @@ class SettingsFormSection: SettingsSection {
         let caption = SettingsDetail.groupCaption(title)
         stack.addArrangedSubview(caption)
         groupCaptions.append(caption)
-        if let lastArranged { stack.setCustomSpacing(20, after: lastArranged) }
+        if let lastArranged { stack.setCustomSpacing(ChromeMetrics.Spacing.s20, after: lastArranged) }
         build()
         lastArranged = stack.arrangedSubviews.last
     }

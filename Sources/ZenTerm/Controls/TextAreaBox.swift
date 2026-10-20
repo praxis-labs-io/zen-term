@@ -37,7 +37,8 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         textView.font = ChromeType.font(.body)
         textView.textColor = Theme.current.chrome.ink(.normal)
         textView.insertionPointColor = Theme.current.chrome.ink(.normal)
-        textView.textContainerInset = NSSize(width: 5, height: 5)
+        textView.textContainerInset = NSSize(
+            width: ChromeMetrics.Spacing.controlInset - 2 * ChromeMetrics.Spacing.s2, height: ChromeMetrics.Spacing.s4)
         textView.textContainer?.lineFragmentPadding = 0
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
@@ -55,10 +56,10 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
 
         NSLayoutConstraint.activate([
             heightAnchor.constraint(greaterThanOrEqualToConstant: minHeight),
-            scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
-            scroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
-            scroll.topAnchor.constraint(equalTo: topAnchor, constant: 2),
-            scroll.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
+            scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.s2),
+            scroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.s2),
+            scroll.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.Spacing.s2),
+            scroll.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -ChromeMetrics.Spacing.s2),
         ])
     }
 

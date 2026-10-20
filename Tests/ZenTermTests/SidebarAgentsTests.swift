@@ -1031,7 +1031,7 @@ final class SidebarAgentsTests: WindowTestCase {
             let size = tooltip.fittingSize
 
             XCTAssertLessThanOrEqual(
-                size.width, ChromeTooltip.paragraphMaxWidth + 18,
+                size.width, ChromeTooltip.paragraphMaxWidth + 2 * ChromeMetrics.Spacing.controlInset,
                 "runs \(Int(size.width))pt past the \(Int(ChromeTooltip.paragraphMaxWidth))pt column: \(body)")
             XCTAssertGreaterThan(size.height, line, "the whole message needs more than one line: \(body)")
             try unhover(row, in: c)

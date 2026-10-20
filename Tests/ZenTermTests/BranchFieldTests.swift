@@ -13,7 +13,7 @@ final class BranchFieldTests: XCTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 460, height: 400),
             styleMask: [.borderless], backing: .buffered, defer: false)
         window.contentView?.addSubview(field)
-        field.frame = NSRect(x: 20, y: 300, width: 420, height: 30)
+        field.frame = NSRect(x: 20, y: 300, width: 420, height: ChromeMetrics.Height.control)
         window.contentView?.layoutSubtreeIfNeeded()
         field.setBranches(
             ["main", "feature/zen-454", "feature/zen-481", "refactor/flags"], holders: [:])

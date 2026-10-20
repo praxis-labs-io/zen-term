@@ -22,7 +22,7 @@ final class DirectoryPickerField: NSView, ThemeReapplying {
 
         let row = NSStackView(views: [field, chooseButton])
         row.orientation = .horizontal
-        row.spacing = 8
+        row.spacing = ChromeMetrics.Spacing.s8
         row.alignment = .centerY
         row.translatesAutoresizingMaskIntoConstraints = false
         addSubview(row)

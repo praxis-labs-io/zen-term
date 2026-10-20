@@ -23,8 +23,8 @@ final class SidebarRowMenu {
         }
     }
 
-    private static let rowHeight: CGFloat = 28
-    private static let separatorHeight: CGFloat = 7
+    private static let rowHeight: CGFloat = ChromeMetrics.Height.control
+    private static let separatorHeight: CGFloat = ChromeMetrics.Spacing.s6
 
     private static func separator() -> NSView {
         let row = NSView()

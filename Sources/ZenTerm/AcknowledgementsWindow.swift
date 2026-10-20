@@ -36,7 +36,7 @@ final class AcknowledgementsWindow {
         text.isSelectable = true
         text.isRichText = false
         text.font = ChromeType.font(.small, face: .mono)
-        text.textContainerInset = NSSize(width: 20, height: 20)
+        text.textContainerInset = NSSize(width: ChromeMetrics.Spacing.s20, height: ChromeMetrics.Spacing.s20)
         text.string = Self.notices()
         text.isVerticallyResizable = true
         text.isHorizontallyResizable = false

@@ -12,10 +12,13 @@ enum SettingsDetail {
             doc.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
             doc.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
             doc.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
-            rowsStack.topAnchor.constraint(equalTo: doc.topAnchor, constant: 18),
-            rowsStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor, constant: 20),
-            rowsStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -20),
-            rowsStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -18),
+            rowsStack.topAnchor.constraint(equalTo: doc.topAnchor, constant: ChromeMetrics.Spacing.modalInsets.top),
+            rowsStack.leadingAnchor.constraint(
+                equalTo: doc.leadingAnchor, constant: ChromeMetrics.Spacing.modalInsets.left),
+            rowsStack.trailingAnchor.constraint(
+                equalTo: doc.trailingAnchor, constant: -ChromeMetrics.Spacing.modalInsets.right),
+            rowsStack.bottomAnchor.constraint(
+                equalTo: doc.bottomAnchor, constant: -ChromeMetrics.Spacing.modalInsets.bottom),
         ])
         return scroll
     }
@@ -41,7 +44,7 @@ enum SettingsDetail {
         let row = NSStackView(views: [caption, spacer] + (hint.map { [$0] } ?? []))
         row.orientation = .horizontal
         row.alignment = .centerY
-        row.spacing = 8
+        row.spacing = ChromeMetrics.Spacing.s8
         row.translatesAutoresizingMaskIntoConstraints = false
         return row
     }

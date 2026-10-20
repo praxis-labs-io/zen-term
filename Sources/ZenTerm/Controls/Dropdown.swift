@@ -51,8 +51,8 @@ final class Dropdown: NSView {
     private var isFocusedStop = false
 
     static let swatchSize: CGFloat = 10
-    private static let rowHeight: CGFloat = 28
-    private static let headerHeight: CGFloat = 20
+    private static let rowHeight: CGFloat = ChromeMetrics.Height.control
+    private static let headerHeight: CGFloat = ChromeMetrics.Height.xs
 
     var buttonTitleForTesting: String { titleLabel.stringValue }
     var itemsForTesting: [DropdownItem] { items }
@@ -113,22 +113,24 @@ final class Dropdown: NSView {
         addSubview(queryField)
         addSubview(chevron)
         titleAfterSwatch = titleLabel.leadingAnchor.constraint(
-            equalTo: swatch.trailingAnchor, constant: 7)
-        titleAtLeading = titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9)
+            equalTo: swatch.trailingAnchor, constant: ChromeMetrics.Spacing.s6)
+        titleAtLeading = titleLabel.leadingAnchor.constraint(
+            equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset)
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 30),
-            swatch.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
+            heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
+            swatch.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
             swatch.centerYAnchor.constraint(equalTo: centerYAnchor),
             swatch.widthAnchor.constraint(equalToConstant: Self.swatchSize),
             swatch.heightAnchor.constraint(equalToConstant: Self.swatchSize),
             titleAtLeading,
             titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            chevron.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 6),
-            chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -9),
+            chevron.leadingAnchor.constraint(
+                greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
+            chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
             chevron.centerYAnchor.constraint(equalTo: centerYAnchor),
             queryField.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             queryField.centerYAnchor.constraint(equalTo: centerYAnchor),
-            queryField.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -6),
+            queryField.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -ChromeMetrics.Spacing.s6),
         ])
         renderTitle()
     }
@@ -426,7 +428,7 @@ final class Dropdown: NSView {
         host.translatesAutoresizingMaskIntoConstraints = false
         host.addSubview(label)
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 8),
+            label.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
             label.centerYAnchor.constraint(equalTo: host.centerYAnchor),
         ])
         return host
@@ -462,14 +464,15 @@ private final class DropdownRowView: NSView {
             dot.translatesAutoresizingMaskIntoConstraints = false
             addSubview(dot)
             NSLayoutConstraint.activate([
-                dot.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+                dot.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
                 dot.centerYAnchor.constraint(equalTo: centerYAnchor),
                 dot.widthAnchor.constraint(equalToConstant: Dropdown.swatchSize),
                 dot.heightAnchor.constraint(equalToConstant: Dropdown.swatchSize),
-                title.leadingAnchor.constraint(equalTo: dot.trailingAnchor, constant: 7),
+                title.leadingAnchor.constraint(equalTo: dot.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
             ])
         } else {
-            title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8).isActive = true
+            title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset)
+                .isActive = true
         }
 
         var trailing: [NSView] = []
@@ -487,16 +490,19 @@ private final class DropdownRowView: NSView {
             trailing.append(check)
         }
         if trailing.isEmpty {
-            title.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -8).isActive = true
+            title.trailingAnchor.constraint(
+                lessThanOrEqualTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset
+            ).isActive = true
         } else {
             let group = NSStackView(views: trailing)
             group.orientation = .horizontal
-            group.spacing = 6
+            group.spacing = ChromeMetrics.Spacing.s6
             group.translatesAutoresizingMaskIntoConstraints = false
             addSubview(group)
             NSLayoutConstraint.activate([
-                group.leadingAnchor.constraint(greaterThanOrEqualTo: title.trailingAnchor, constant: 8),
-                group.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+                group.leadingAnchor.constraint(
+                    greaterThanOrEqualTo: title.trailingAnchor, constant: ChromeMetrics.Spacing.s8),
+                group.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
                 group.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
         }

@@ -25,10 +25,10 @@ final class IconPickerField: NSView {
     private static let columns = 8
     static var columnsForTesting: Int { columns }
     private static let cellSize: CGFloat = 34
-    private static let cellSpacing: CGFloat = 4
-    private static let headerHeight: CGFloat = 16
-    private static let sectionGap: CGFloat = 12
-    private static let windowMargin: CGFloat = 8
+    private static let cellSpacing: CGFloat = ChromeMetrics.Spacing.s4
+    private static let headerHeight: CGFloat = ChromeMetrics.Height.xs
+    private static let sectionGap: CGFloat = ChromeMetrics.Spacing.s12
+    private static let windowMargin: CGFloat = ChromeMetrics.Spacing.s8
     /// Overlay scrollers draw over content, so without this lane the bar covers the last column.
     private static let scrollerGutter: CGFloat = 16
     private var cardNaturalSize: NSSize = .zero
@@ -81,14 +81,15 @@ final class IconPickerField: NSView {
         addSubview(nameLabel)
         addSubview(chevron)
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 30),
-            glyph.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
+            heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
+            glyph.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
             glyph.centerYAnchor.constraint(equalTo: centerYAnchor),
             glyph.widthAnchor.constraint(equalToConstant: 18),
-            nameLabel.leadingAnchor.constraint(equalTo: glyph.trailingAnchor, constant: 8),
+            nameLabel.leadingAnchor.constraint(equalTo: glyph.trailingAnchor, constant: ChromeMetrics.Spacing.s8),
             nameLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            chevron.leadingAnchor.constraint(greaterThanOrEqualTo: nameLabel.trailingAnchor, constant: 6),
-            chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -9),
+            chevron.leadingAnchor.constraint(
+                greaterThanOrEqualTo: nameLabel.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
+            chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
             chevron.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
         renderClosed()
@@ -257,7 +258,7 @@ final class IconPickerField: NSView {
         FloatShadow.applyShadow(to: card)
         card.addSubview(scroll)
 
-        let inset: CGFloat = 8
+        let inset = ChromeMetrics.Spacing.s8
         let gridWidth = CGFloat(Self.columns) * Self.cellSize + CGFloat(Self.columns - 1) * Self.cellSpacing
         NSLayoutConstraint.activate([
             scroll.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: inset),

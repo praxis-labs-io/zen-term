@@ -27,10 +27,10 @@ class SettingsFocusRow: NSView {
         content.translatesAutoresizingMaskIntoConstraints = false
         addSubview(content)
         NSLayoutConstraint.activate([
-            content.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
-            content.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-            content.topAnchor.constraint(equalTo: topAnchor, constant: 6),
-            content.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            content.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.s6),
+            content.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.s6),
+            content.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.Spacing.s6),
+            content.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -ChromeMetrics.Spacing.s6),
         ])
     }
 

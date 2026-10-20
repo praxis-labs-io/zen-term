@@ -2,7 +2,7 @@ import AppKit
 import TerminalKit
 
 final class KeycapView: NSView {
-    private static let height: CGFloat = 20
+    private static let height: CGFloat = ChromeMetrics.Height.xs
     private static let horizontalInset: CGFloat = 7
     private static let tokenSpacing: CGFloat = 3
     private static let symbolPointSize: CGFloat = 10

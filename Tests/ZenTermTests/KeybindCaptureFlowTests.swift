@@ -369,7 +369,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
     func test_theInputFillsTheCard() throws {
         let capturer = FakeCapturer()
         _ = mountSection(capturer)
-        let insets: CGFloat = 28
+        let insets = ChromeMetrics.Spacing.s12 * 2
 
         row(for: .newTab).chip.onActivate?()
         try hintBubble().layoutSubtreeIfNeeded()

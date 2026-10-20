@@ -34,7 +34,7 @@ final class LayoutRow: NSView {
         let controls = NSStackView(views: [captionColumn, spacer, controlColumn])
         controls.orientation = .horizontal
         controls.alignment = .centerY
-        controls.spacing = 8
+        controls.spacing = ChromeMetrics.Spacing.s8
 
         messageLabel.font = ChromeType.font(.caption, weight: .medium)
         messageLabel.textColor = Theme.current.chrome.destructive.nsColor
@@ -43,7 +43,7 @@ final class LayoutRow: NSView {
         let stack = NSStackView(views: [controls, messageLabel])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 3
+        stack.spacing = ChromeMetrics.Spacing.s2
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         var constraints = [
@@ -70,7 +70,7 @@ final class LayoutRow: NSView {
         noteLabel.textColor = Theme.current.chrome.ink(.muted)
         let stack = NSStackView(views: [primary, noteLabel])
         stack.orientation = .vertical
-        stack.spacing = 2
+        stack.spacing = ChromeMetrics.Spacing.s2
         stack.alignment = alignment
         return (stack, noteLabel)
     }

@@ -2,7 +2,7 @@ import AppKit
 
 // The canvas for an SSH host that isn't connected: the route from this Mac to the host, and Connect on ↵.
 final class HostConnectView: NSView {
-    private static let edgeSpacing: CGFloat = 12
+    private static let edgeSpacing: CGFloat = ChromeMetrics.Spacing.s12
     private static let routeToEyebrow: CGFloat = 34
     private static let eyebrowToTitle: CGFloat = 12
     private static let titleToDestination: CGFloat = 10

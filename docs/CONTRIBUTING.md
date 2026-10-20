@@ -90,6 +90,9 @@ never a literal.
   `systemFont(ofSize:)` outside `ChromeType`.
 - Corner radii come from `ChromeMetrics.Radius` and border widths from
   `ChromeMetrics.Border.width`. Focus changes a border's color, never its width.
+- Spacing, insets, gaps and control or row heights come from
+  `ChromeMetrics.Spacing` and `ChromeMetrics.Height`. Icon, glyph and width geometry
+  are not spacing. A value off the scale is a signal to fix the layout, not to add a step.
 
 **Never block the main thread.** No `waitUntilExit`, no filesystem walk, no
 blocking I/O on the main queue. The chrome is the product and a stalled main

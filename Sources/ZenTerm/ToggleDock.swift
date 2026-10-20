@@ -60,7 +60,7 @@ final class ToggleDock: NSView {
 
         stack.orientation = .horizontal
         stack.alignment = .centerY
-        stack.spacing = 4
+        stack.spacing = ChromeMetrics.Spacing.s4
         stack.translatesAutoresizingMaskIntoConstraints = false
         for (index, group) in ToolbarButton.groups.enumerated() {
             for view in group.compactMap({ fixedButtons[$0] }) {

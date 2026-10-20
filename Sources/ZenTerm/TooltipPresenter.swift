@@ -6,7 +6,7 @@ final class TooltipPresenter {
     private init() {}
 
     private static let delay: TimeInterval = 0.45
-    private static let gap: CGFloat = 6
+    private static let gap: CGFloat = ChromeMetrics.Spacing.s6
 
     private var tooltip: ChromeTooltip?
     // Guards against a stale `mouseExited` from a previous button tearing down a newer tooltip.

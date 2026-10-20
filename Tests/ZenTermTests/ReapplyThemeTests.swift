@@ -57,7 +57,7 @@ final class ReapplyThemeTests: WindowTestCase {
         button.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(button)
-        button.frame = NSRect(x: 0, y: 0, width: 80, height: 26)
+        button.frame = NSRect(x: 0, y: 0, width: 80, height: ChromeMetrics.Height.control)
 
         let colorBefore = attributedTitleColor(button)
         XCTAssertNotNil(colorBefore)
@@ -129,7 +129,7 @@ final class ReapplyThemeTests: WindowTestCase {
         field.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(field)
-        field.frame = NSRect(x: 0, y: 0, width: 200, height: 30)
+        field.frame = NSRect(x: 0, y: 0, width: 200, height: ChromeMetrics.Height.control)
 
         let colorBefore = field.field.textColor
 
@@ -151,7 +151,7 @@ final class ReapplyThemeTests: WindowTestCase {
         field.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(field)
-        field.frame = NSRect(x: 0, y: 0, width: 200, height: 30)
+        field.frame = NSRect(x: 0, y: 0, width: 200, height: ChromeMetrics.Height.control)
 
         let colorBefore = placeholderColor(field.field)
         XCTAssertNotNil(colorBefore)
@@ -171,7 +171,7 @@ final class ReapplyThemeTests: WindowTestCase {
         dropdown.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(dropdown)
-        dropdown.frame = NSRect(x: 0, y: 0, width: 200, height: 30)
+        dropdown.frame = NSRect(x: 0, y: 0, width: 200, height: ChromeMetrics.Height.control)
 
         let colorBefore = dropdown.layer?.backgroundColor
 
@@ -186,7 +186,7 @@ final class ReapplyThemeTests: WindowTestCase {
         control.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(control)
-        control.frame = NSRect(x: 0, y: 0, width: 100, height: 26)
+        control.frame = NSRect(x: 0, y: 0, width: 100, height: ChromeMetrics.Height.control)
 
         guard
             let firstSegment = control.subviews.compactMap({ $0 as? NSStackView }).first?.arrangedSubviews
@@ -208,7 +208,7 @@ final class ReapplyThemeTests: WindowTestCase {
         row.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(row)
-        row.frame = NSRect(x: 0, y: 0, width: 150, height: 30)
+        row.frame = NSRect(x: 0, y: 0, width: 150, height: ChromeMetrics.Height.control)
 
         guard let label = row.subviews.compactMap({ $0 as? NSTextField }).first else {
             return XCTFail("expected the row's label")

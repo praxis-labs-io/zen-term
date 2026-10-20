@@ -108,12 +108,12 @@ final class ToastView: ShadowCardView {
         let header = NSStackView(views: [titleRow, headerSpacer])
         header.orientation = .horizontal
         header.alignment = .centerY
-        header.spacing = 6
+        header.spacing = ChromeMetrics.Spacing.s6
         let lines = [header] + (messageLabel.map { [$0] } ?? [])
         let col = NSStackView(views: lines)
         col.orientation = .vertical
         col.alignment = .leading
-        col.spacing = 3
+        col.spacing = ChromeMetrics.Spacing.s2
         for line in lines { line.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true }
 
         for resolve in actions.compactMap(\.shortcut) {
@@ -138,9 +138,9 @@ final class ToastView: ShadowCardView {
             let row = NSStackView(views: actionButtons + [spacer])
             row.orientation = .horizontal
             row.alignment = .centerY
-            row.spacing = 6
+            row.spacing = ChromeMetrics.Spacing.s6
             col.addArrangedSubview(row)
-            col.setCustomSpacing(9, after: lines[lines.count - 1])
+            col.setCustomSpacing(ChromeMetrics.Spacing.s10, after: lines[lines.count - 1])
             row.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
         }
 
@@ -148,16 +148,16 @@ final class ToastView: ShadowCardView {
         root.orientation = .horizontal
         root.alignment = col.arrangedSubviews.count > 1 ? .top : .centerY
         root.distribution = .fill
-        root.spacing = 12
+        root.spacing = ChromeMetrics.Spacing.s12
         root.translatesAutoresizingMaskIntoConstraints = false
         addSubview(root)
 
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: Self.width),
-            root.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            root.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            root.topAnchor.constraint(equalTo: topAnchor, constant: 12),
-            root.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
+            root.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.s12),
+            root.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.s12),
+            root.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.Spacing.s12),
+            root.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -ChromeMetrics.Spacing.s12),
         ])
     }
 
