@@ -65,11 +65,19 @@ final class AppButton: NSButton {
         }
     }
 
+    // SF Symbol baseline metadata would otherwise pad the frame past `size.height`.
+    override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets() }
+
     override var intrinsicContentSize: NSSize {
+        guard !isSymbolOnly else { return NSSize(width: size.height, height: size.height) }
         var fitted = super.intrinsicContentSize
         fitted.width += size.horizontalPadding * 2 + keycapReserve
         fitted.height = size.height
         return fitted
+    }
+
+    private var isSymbolOnly: Bool {
+        symbolName != nil && labelText.isEmpty && keycap == nil
     }
 
     private var keycapReserve: CGFloat {

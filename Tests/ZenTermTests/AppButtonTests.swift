@@ -156,6 +156,17 @@ final class AppButtonTests: WindowTestCase {
         XCTAssertEqual(button.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor)
     }
 
+    func test_aSymbolOnlyButton_isSquare() throws {
+        for variant: AppButton.Variant in [.primary, .secondary, .muted] {
+            let button = AppButton(variant: variant, symbol: "plus")
+            let window = try mountFitted(button)
+            XCTAssertEqual(
+                button.frame.size, NSSize(width: ChromeMetrics.Height.control, height: ChromeMetrics.Height.control),
+                "\(variant)")
+            withExtendedLifetime(window) {}
+        }
+    }
+
     private func mountFitted(_ button: AppButton) throws -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
