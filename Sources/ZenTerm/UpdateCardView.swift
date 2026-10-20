@@ -32,7 +32,6 @@ final class UpdateCardView: ShadowCardView {
 
     // Exposed so the notes are measured against the real wrap budget (`UpdateCardTests`).
     static let notesMaxWidth: CGFloat = width - inset * 2 - badgeSize - rootSpacing
-    static let notesFont: NSFont = .systemFont(ofSize: 12)
 
     private var state: State
     private var actions: Actions
@@ -66,7 +65,7 @@ final class UpdateCardView: ShadowCardView {
         iconView.translatesAutoresizingMaskIntoConstraints = false
         badgeFill.addSubview(iconView)
 
-        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        titleLabel.font = ChromeType.font(.body, weight: .semibold)
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
@@ -192,7 +191,7 @@ final class UpdateCardView: ShadowCardView {
 
     private func addBodyLabel(_ text: String, color: NSColor) {
         let label = NSTextField(wrappingLabelWithString: text)
-        label.font = Self.notesFont
+        label.font = ChromeType.font(.small)
         label.textColor = color
         label.preferredMaxLayoutWidth = Self.notesMaxWidth
         bodyColumn.addArrangedSubview(label)

@@ -4,7 +4,7 @@ import AppKit
 final class FontSizeCard: ShadowCardView {
     private let label: NSTextField
 
-    private static let font: NSFont = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
+    private static let font: NSFont = ChromeType.font(.body, weight: .semibold, face: .digits)
 
     init(text: String) {
         label = NSTextField(labelWithString: text)

@@ -12,7 +12,7 @@ final class LayoutRow: NSView {
 
     init(caption: String, description: String?, control: NSView, controlNote: String?, controlWidth: CGFloat?) {
         let label = NSTextField(labelWithString: caption)
-        label.font = .systemFont(ofSize: 13)
+        label.font = ChromeType.font(.body)
         label.textColor = Theme.current.chrome.ink(.normal)
         label.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
@@ -36,7 +36,7 @@ final class LayoutRow: NSView {
         controls.alignment = .centerY
         controls.spacing = 8
 
-        messageLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        messageLabel.font = ChromeType.font(.caption, weight: .medium)
         messageLabel.textColor = Theme.current.chrome.destructive.nsColor
         messageLabel.isHidden = true
 
@@ -66,7 +66,7 @@ final class LayoutRow: NSView {
     ) -> (NSView, NSTextField?) {
         guard let note else { return (primary, nil) }
         let noteLabel = NSTextField(labelWithString: note)
-        noteLabel.font = .systemFont(ofSize: 10)
+        noteLabel.font = ChromeType.font(.caption)
         noteLabel.textColor = Theme.current.chrome.ink(.muted)
         let stack = NSStackView(views: [primary, noteLabel])
         stack.orientation = .vertical

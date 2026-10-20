@@ -4,7 +4,7 @@ import AppKit
 final class RegionCommandField: NSView, NSTextFieldDelegate {
     enum Edge { case left, right, up, down }
 
-    static let commandFont = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+    static let commandFont = ChromeType.font(.body, face: .mono)
     private static let horizontalInset: CGFloat = 11
     private static let topInset: CGFloat = 9
     private static let rowSpacing: CGFloat = 9
@@ -46,8 +46,8 @@ final class RegionCommandField: NSView, NSTextFieldDelegate {
         layer?.borderWidth = 1
 
         label.stringValue = WorkspaceForm.label(for: region)
-        label.font = .systemFont(ofSize: 11, weight: .medium)
-        opensFocusedLabel.font = .systemFont(ofSize: 10.5, weight: .medium)
+        label.font = ChromeType.font(.caption, weight: .medium)
+        opensFocusedLabel.font = ChromeType.font(.caption, weight: .medium)
 
         marker.wantsLayer = true
         marker.layer?.cornerRadius = 1

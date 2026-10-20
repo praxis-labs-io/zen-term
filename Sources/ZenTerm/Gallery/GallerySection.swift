@@ -14,7 +14,7 @@
             translatesAutoresizingMaskIntoConstraints = false
 
             let heading = NSTextField(labelWithString: title)
-            heading.font = .systemFont(ofSize: 13, weight: .semibold)
+            heading.font = ChromeType.font(.body, weight: .semibold)
             heading.textColor = Theme.current.chrome.ink(.normal)
 
             let stack = NSStackView(views: [heading] + rows.map(Self.line))

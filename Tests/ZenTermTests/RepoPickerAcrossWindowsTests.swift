@@ -193,7 +193,7 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
         let (one, two) = makeWindows()
         pressReturn(in: try openPicker(in: two, on: "Alpha"))
 
-        XCTAssertEqual(section(of: "Alpha", in: try openPicker(in: one)), "Open Elsewhere")
+        XCTAssertEqual(section(of: "Alpha", in: try openPicker(in: one)), "Open elsewhere")
     }
 
     func test_aWorkspaceOpenInThisWindow_isListedUnderOpen() throws {
@@ -226,7 +226,7 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
         }
 
         XCTAssertEqual(
-            section(at: index, in: picker), "Open Elsewhere",
+            section(at: index, in: picker), "Open elsewhere",
             "the other window's unconfigured workspace has no config entry to be found through")
 
         picker.activateRow(at: index)

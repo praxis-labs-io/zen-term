@@ -16,7 +16,7 @@ final class SidebarWaitingElsewhereRow: SidebarJumpRow {
     init(onActivate: @escaping () -> Void) {
         super.init(tooltip: "Jump to the agent waiting longest", onActivate: onActivate)
 
-        label.font = .systemFont(ofSize: 12)
+        label.font = ChromeType.font(.small)
         label.lineBreakMode = .byTruncatingTail
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         label.translatesAutoresizingMaskIntoConstraints = false

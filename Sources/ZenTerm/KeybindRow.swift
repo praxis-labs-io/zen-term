@@ -19,7 +19,7 @@ final class KeybindRow: NSView {
         self.action = action
 
         let label = NSTextField(labelWithString: title)
-        label.font = .systemFont(ofSize: 13)
+        label.font = ChromeType.font(.body)
         label.textColor = Theme.current.chrome.ink(.normal)
         label.setContentHuggingPriority(.defaultLow, for: .horizontal)
         titleLabel = label
@@ -34,7 +34,7 @@ final class KeybindRow: NSView {
         controls.alignment = .centerY
         controls.spacing = 8
 
-        messageLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        messageLabel.font = ChromeType.font(.caption, weight: .medium)
         messageLabel.textColor = Theme.current.chrome.destructive.nsColor
         messageLabel.isHidden = true
 

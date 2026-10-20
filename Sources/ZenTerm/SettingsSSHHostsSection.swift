@@ -1,7 +1,7 @@
 import AppKit
 
 final class SettingsSSHHostsSection: SettingsSection {
-    var navTitle: String { "SSH Hosts" }
+    var navTitle: String { "SSH hosts" }
     var onExitToNav: (() -> Void)?
     var onAddHost: (() -> Void)?
     var onEditHost: ((SSHHostEntry, _ address: String?) -> Void)?
@@ -120,7 +120,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         hostRows = []
         emptyNote = nil
 
-        addCaption("SSH Hosts", to: stack)
+        addCaption("SSH hosts", to: stack)
         shownEntries = GeneralConfig.current.sshHosts
         if shownEntries.isEmpty { addNote("No SSH hosts yet. Add one below.", to: stack) }
         for host in shownEntries.map(\.alias) { add(makeRow(host), to: stack) }
@@ -145,7 +145,7 @@ final class SettingsSSHHostsSection: SettingsSection {
 
     private func addNote(_ text: String, to stack: NSStackView) {
         let note = NSTextField(labelWithString: text)
-        note.font = .systemFont(ofSize: 12)
+        note.font = ChromeType.font(.small)
         note.textColor = Theme.current.chrome.ink(.muted)
         note.lineBreakMode = .byWordWrapping
         note.maximumNumberOfLines = 0

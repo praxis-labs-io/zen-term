@@ -143,7 +143,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
 
     private func buildContent() -> NSStackView {
         header.stringValue = editing == nil ? "Add SSH Host" : "Edit SSH Host"
-        header.font = .systemFont(ofSize: 15, weight: .semibold)
+        header.font = ChromeType.font(.title)
         header.textColor = Theme.current.chrome.ink(.normal)
         submitButton.setTitle(editing == nil ? "Add" : "Save")
 
@@ -251,7 +251,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         let chrome = Theme.current.chrome
         let line = NSMutableParagraphStyle()
         line.lineBreakMode = .byTruncatingTail
-        let font = hostField.field.font ?? .systemFont(ofSize: 13)
+        let font = hostField.field.font ?? ChromeType.font(.body)
         let text = NSMutableAttributedString(
             string: alias,
             attributes: [.font: font, .foregroundColor: chrome.ink(.normal), .paragraphStyle: line])

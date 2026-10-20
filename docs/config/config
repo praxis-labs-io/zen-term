@@ -181,14 +181,14 @@
 
 # An SSH host listed in the sidebar's SSH section, one per line, in sidebar
 # order. Each is a Host alias from ~/.ssh/config or a user@host. Settings >
-# SSH Hosts lists these hosts, and adds or removes them.
+# SSH hosts lists these hosts, and adds or removes them.
 # In-app Settings edit: applies live.
 # ssh-host = devbox
 # ssh-host = deploy@10.0.0.5
 #
 # A name after a colon and a space is what ZenTerm shows for the host in place
 # of its alias. ssh still connects with the alias. Quote a name that holds #.
-# In Settings > SSH Hosts, click a host to set or clear its name.
+# In Settings > SSH hosts, click a host to set or clear its name.
 # ssh-host = prod: Production
 
 # Each pane on a host opens your login shell there with the TERM_PROGRAM and

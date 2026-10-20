@@ -82,7 +82,7 @@ final class Dropdown: NSView {
         layer?.borderWidth = 1
         layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
 
-        queryField.font = .systemFont(ofSize: 13)
+        queryField.font = ChromeType.font(.body)
         queryField.textColor = Theme.current.chrome.ink(.normal)
         queryField.isBordered = false
         queryField.drawsBackground = false
@@ -91,7 +91,7 @@ final class Dropdown: NSView {
         queryField.delegate = self
         queryField.translatesAutoresizingMaskIntoConstraints = false
 
-        titleLabel.font = .systemFont(ofSize: 13)
+        titleLabel.font = ChromeType.font(.body)
         titleLabel.textColor = Theme.current.chrome.ink(.normal)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.lineBreakMode = .byTruncatingTail
@@ -323,7 +323,7 @@ final class Dropdown: NSView {
             string: title,
             attributes: [
                 .foregroundColor: Theme.current.chrome.ink(.muted),
-                .font: NSFont.systemFont(ofSize: 13),
+                .font: ChromeType.font(.body),
             ])
     }
 
@@ -419,7 +419,7 @@ final class Dropdown: NSView {
 
     private static func groupHeaderView(_ text: String, chrome: ChromeTheme) -> NSView {
         let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: 10, weight: .semibold)
+        label.font = ChromeType.sectionLabel
         label.textColor = chrome.ink(.muted)
         label.translatesAutoresizingMaskIntoConstraints = false
         let host = NSView()
@@ -446,7 +446,7 @@ private final class DropdownRowView: NSView {
         translatesAutoresizingMaskIntoConstraints = false
 
         let title = NSTextField(labelWithString: item.title)
-        title.font = .systemFont(ofSize: 13)
+        title.font = ChromeType.font(.body)
         title.textColor = chrome.ink(.normal)
         title.lineBreakMode = .byTruncatingTail
         title.translatesAutoresizingMaskIntoConstraints = false
@@ -475,7 +475,7 @@ private final class DropdownRowView: NSView {
         var trailing: [NSView] = []
         if let note = item.note {
             let noteLabel = NSTextField(labelWithString: note)
-            noteLabel.font = .systemFont(ofSize: 11)
+            noteLabel.font = ChromeType.font(.caption)
             noteLabel.textColor = chrome.ink(.muted)
             trailing.append(noteLabel)
         }

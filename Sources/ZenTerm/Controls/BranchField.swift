@@ -219,10 +219,10 @@ final class BranchField: NSView, ThemeReapplying {
             icon.image = NSImage(systemSymbolName: "arrow.branch", accessibilityDescription: nil)
             icon.symbolConfiguration = .init(pointSize: 11, weight: .regular)
             icon.translatesAutoresizingMaskIntoConstraints = false
-            title.font = .systemFont(ofSize: 13)
+            title.font = ChromeType.font(.body)
             title.lineBreakMode = .byTruncatingTail
             title.translatesAutoresizingMaskIntoConstraints = false
-            note.font = .systemFont(ofSize: 11)
+            note.font = ChromeType.font(.caption)
             note.translatesAutoresizingMaskIntoConstraints = false
             note.setContentCompressionResistancePriority(.required, for: .horizontal)
             addSubview(icon)

@@ -61,8 +61,8 @@ final class SidebarAgentRow: SidebarJumpRow {
     init(onActivate: @escaping () -> Void) {
         super.init(tooltip: Self.jumpHint, onActivate: onActivate)
 
-        summaryLabel.font = .systemFont(ofSize: 12)
-        detailLabel.font = .systemFont(ofSize: 11)
+        summaryLabel.font = ChromeType.font(.small)
+        detailLabel.font = ChromeType.font(.caption)
         for label in [summaryLabel, detailLabel] {
             label.lineBreakMode = .byTruncatingTail
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)

@@ -15,7 +15,7 @@ final class EnvRow: NSView {
         keyBox.setContentHuggingPriority(.defaultLow, for: .horizontal)
         valueBox.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        equals.font = .systemFont(ofSize: 13)
+        equals.font = ChromeType.font(.body)
         equals.textColor = Theme.current.chrome.ink(.muted)
         equals.setContentHuggingPriority(.required, for: .horizontal)
 

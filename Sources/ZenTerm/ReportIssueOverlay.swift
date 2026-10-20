@@ -14,7 +14,7 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
     private let whatHappened = TextAreaBox(placeholder: "What went wrong, and what you expected instead")
     private var titleGroup: LabeledField?
     private var whatGroup: LabeledField?
-    private let envCaption = FieldCaption("ENVIRONMENT", required: false)
+    private let envCaption = FieldCaption("Environment", required: false)
     private let envText = NSTextField(wrappingLabelWithString: "")
     private let envNote = NSTextField(labelWithString: "Sent with your report")
 
@@ -110,13 +110,13 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
     }
 
     private func buildContent() -> NSStackView {
-        header.font = .systemFont(ofSize: 15, weight: .semibold)
+        header.font = ChromeType.font(.title)
         header.textColor = Theme.current.chrome.ink(.normal)
         header.stringValue = "Report an Issue"
 
         wireField(titleField)
         titleField.onEnter = { [weak self] in self?.moveVertical(1) }
-        let titleGroup = LabeledField(caption: FieldCaption("TITLE", required: true), control: titleField)
+        let titleGroup = LabeledField(caption: FieldCaption("Title", required: true), control: titleField)
         self.titleGroup = titleGroup
 
         whatHappened.onChange = { [weak self] in self?.refreshValidity() }
@@ -126,14 +126,14 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         whatHappened.onBacktab = { [weak self] in self?.moveTab(-1) }
         whatHappened.onSubmit = { [weak self] in self?.submit() }
         let whatGroup = LabeledField(
-            caption: FieldCaption("WHAT HAPPENED", required: true), control: whatHappened)
+            caption: FieldCaption("What happened", required: true), control: whatHappened)
         self.whatGroup = whatGroup
 
-        envText.font = .monospacedSystemFont(ofSize: 11.5, weight: .regular)
+        envText.font = ChromeType.font(.caption, face: .mono)
         envText.textColor = Theme.current.chrome.ink(.muted)
         envText.isSelectable = true
         envText.stringValue = report.plainText
-        envNote.font = .systemFont(ofSize: 11)
+        envNote.font = ChromeType.font(.caption)
         envNote.textColor = Theme.current.chrome.ink(.muted)
         let envGroup = Self.vStack([envCaption, envText, envNote], spacing: 5)
 

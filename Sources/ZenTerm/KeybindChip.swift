@@ -61,7 +61,7 @@ final class KeybindChip: NSView {
 
     private func placeholder(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: 12)
+        label.font = ChromeType.font(.small)
         label.textColor = Theme.current.chrome.ink(.muted)
         return label
     }

@@ -82,7 +82,7 @@ final class SettingsAppearanceSection: SettingsFormSection {
         toolbarList = list
         addCustomRow(
             key: "hide-toolbar-buttons", caption: "Toolbar buttons",
-            description: "Shortcuts stay active when hidden",
+            description: "Shortcuts still work when hidden",
             control: list, focusStop: list, controlNote: nil, width: 220,
             refresh: { [weak self] in
                 self?.toolbarList?.setItems(Self.toolbarItems(), title: Self.toolbarSummary())

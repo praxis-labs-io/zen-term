@@ -89,9 +89,9 @@ class PaletteOverlay: NSView, ModalOverlay {
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
 
-        searchGlyph.font = .systemFont(ofSize: 16)
+        searchGlyph.font = ChromeType.font(.title, weight: .regular)
         searchGlyph.textColor = Theme.current.chrome.ink(.muted)
-        searchField.font = .systemFont(ofSize: 15)
+        searchField.font = ChromeType.font(.title, weight: .regular)
         applyPlaceholder()
         searchField.isBordered = false
         searchField.drawsBackground = false
@@ -118,7 +118,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         doc.translatesAutoresizingMaskIntoConstraints = false
         doc.addSubview(rowsStack)
 
-        emptyLabel.font = .systemFont(ofSize: 13)
+        emptyLabel.font = ChromeType.font(.body)
         emptyLabel.textColor = Theme.current.chrome.ink(.muted)
         emptyLabel.alignment = .center
         emptyLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -248,7 +248,7 @@ class PaletteOverlay: NSView, ModalOverlay {
             string: searchPlaceholder,
             attributes: [
                 .foregroundColor: Theme.current.chrome.ink(.muted),
-                .font: searchField.font ?? .systemFont(ofSize: 15),
+                .font: searchField.font ?? ChromeType.font(.title, weight: .regular),
             ]
         )
     }
@@ -412,7 +412,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         let items = hints.map { hint -> NSView in
             let keycap = KeycapView(shortcut: hint.keys)
             let label = NSTextField(labelWithString: hint.label)
-            label.font = .systemFont(ofSize: 11, weight: .medium)
+            label.font = ChromeType.font(.caption, weight: .medium)
             label.textColor = Theme.current.chrome.ink(.muted)
             keycaps.append(keycap)
             labels.append(label)

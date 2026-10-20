@@ -157,7 +157,7 @@ private final class PanelHeader: NSView {
     private var action: KeyInterceptor.ReservedChord
     private let titleField = NSTextField(labelWithString: "")
     private var keycap: KeycapView
-    private static let font = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
+    private static let font = ChromeType.font(.small, weight: .medium, face: .digits)
 
     var contentForTesting: (title: String, shortcut: String) {
         (titleField.stringValue, CommandCatalog.spec(for: action).shortcut)
@@ -215,11 +215,10 @@ private final class PanelHeader: NSView {
 
     private func applyTitle() {
         titleField.attributedStringValue = NSAttributedString(
-            string: title.uppercased(),
+            string: title,
             attributes: [
                 .font: Self.font,
                 .foregroundColor: Theme.current.chrome.ink(.muted),
-                .kern: 1.2,
             ])
     }
 }

@@ -9,12 +9,6 @@ final class HostConnectView: NSView {
     private static let destinationToDetail: CGFloat = 14
     private static let detailToButton: CGFloat = 30
     private static let detailMaxWidth: CGFloat = 420
-    private static let eyebrowFont = NSFont.monospacedSystemFont(ofSize: 10, weight: .medium)
-    private static let eyebrowKern: CGFloat = 1
-    static let titlePointSize: CGFloat = 22
-    private static let titleFont = NSFont.systemFont(ofSize: titlePointSize, weight: .semibold)
-    private static let destinationFont = NSFont.monospacedSystemFont(ofSize: 12.5, weight: .regular)
-    private static let detailFont = NSFont.systemFont(ofSize: 13)
 
     // A short window drops the diagram first, then the eyebrow, so the action never leaves the screen.
     private static let routeVisibility = NSStackView.VisibilityPriority(rawValue: 500)
@@ -54,11 +48,11 @@ final class HostConnectView: NSView {
         eyebrow.maximumNumberOfLines = 1
         title.maximumNumberOfLines = 1
         title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        destinationLine.font = Self.destinationFont
+        destinationLine.font = ChromeType.font(.small, face: .mono)
         destinationLine.alignment = .center
         destinationLine.lineBreakMode = .byTruncatingMiddle
         destinationLine.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        detail.font = Self.detailFont
+        detail.font = ChromeType.font(.body)
         detail.alignment = .center
         detail.preferredMaxLayoutWidth = Self.detailMaxWidth
         detail.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -145,7 +139,7 @@ final class HostConnectView: NSView {
         grid.reapplyTheme()
         route.reapplyTheme()
         eyebrow.attributedStringValue = Self.line(
-            "SSH HOST", font: Self.eyebrowFont, kern: Self.eyebrowKern, color: chrome.ink(.faint),
+            "SSH host", font: ChromeType.sectionLabel, color: chrome.ink(.muted),
             breaking: .byClipping)
         applyName()
         destinationLine.textColor = chrome.ink(.muted)
@@ -170,7 +164,7 @@ final class HostConnectView: NSView {
 
     private func applyName() {
         title.attributedStringValue = Self.line(
-            "Connect to \(name)", font: Self.titleFont, kern: 0, color: Theme.current.chrome.ink(.normal),
+            "Connect to \(name)", font: ChromeType.font(.display), color: Theme.current.chrome.ink(.normal),
             breaking: .byTruncatingMiddle)
         connectButton.setAccessibilityLabel("Connect to \(name)")
     }
@@ -182,14 +176,14 @@ final class HostConnectView: NSView {
     }
 
     private static func line(
-        _ text: String, font: NSFont, kern: CGFloat, color: NSColor, breaking: NSLineBreakMode
+        _ text: String, font: NSFont, color: NSColor, breaking: NSLineBreakMode
     ) -> NSAttributedString {
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
         paragraph.lineBreakMode = breaking
         return NSAttributedString(
             string: text,
-            attributes: [.font: font, .kern: kern, .foregroundColor: color, .paragraphStyle: paragraph])
+            attributes: [.font: font, .foregroundColor: color, .paragraphStyle: paragraph])
     }
 
     var titleForTesting: String { title.stringValue }

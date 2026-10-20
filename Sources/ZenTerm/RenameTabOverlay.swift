@@ -98,7 +98,7 @@ final class RenameTabOverlay: NSView, ModalOverlay {
     }
 
     private func buildContent() -> NSStackView {
-        header.font = .systemFont(ofSize: 15, weight: .semibold)
+        header.font = ChromeType.font(.title)
         header.textColor = Theme.current.chrome.ink(.normal)
         header.stringValue = "Rename Tab"
 

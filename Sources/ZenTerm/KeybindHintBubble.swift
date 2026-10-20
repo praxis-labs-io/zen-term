@@ -45,7 +45,7 @@ final class KeybindHintBubble: ShadowCardView {
         badge.addSubview(icon)
 
         let title = NSTextField(labelWithString: "Record a shortcut")
-        title.font = .systemFont(ofSize: 13, weight: .semibold)
+        title.font = ChromeType.font(.body, weight: .semibold)
         title.textColor = Theme.current.chrome.ink(.normal)
 
         let header = NSStackView(views: [badge, title])
@@ -63,7 +63,7 @@ final class KeybindHintBubble: ShadowCardView {
         previewHost.translatesAutoresizingMaskIntoConstraints = false
         previewBox.addSubview(previewHost)
 
-        errorLabel.font = .systemFont(ofSize: 10, weight: .medium)
+        errorLabel.font = ChromeType.font(.caption, weight: .medium)
         errorLabel.textColor = Theme.current.chrome.destructive.nsColor
         errorLabel.alignment = .center
         errorLabel.preferredMaxLayoutWidth = Self.inputWidth(withReset: true)
@@ -124,7 +124,7 @@ final class KeybindHintBubble: ShadowCardView {
         let content: NSView
         if glyph.isEmpty {
             let label = NSTextField(labelWithString: "Press keys…")
-            label.font = .systemFont(ofSize: 12)
+            label.font = ChromeType.font(.small)
             label.textColor = Theme.current.chrome.ink(.muted)
             content = label
         } else {
@@ -170,7 +170,7 @@ final class KeybindHintBubble: ShadowCardView {
 
     func showSuccess(_ text: String) {
         let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.font = ChromeType.font(.small, weight: .medium)
         label.textColor = Theme.current.chrome.accent.nsColor
         setStatus(label)
     }
@@ -189,7 +189,7 @@ final class KeybindHintBubble: ShadowCardView {
 
     private static func keyCap(_ text: String) -> NSView {
         let label = NSTextField(labelWithString: text)
-        label.font = .monospacedSystemFont(ofSize: 10, weight: .medium)
+        label.font = ChromeType.font(.caption, weight: .medium, face: .mono)
         label.textColor = Theme.current.chrome.ink(.subtle)
         label.translatesAutoresizingMaskIntoConstraints = false
         let box = NSView()
@@ -209,7 +209,7 @@ final class KeybindHintBubble: ShadowCardView {
 
     private static func muted(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: 11)
+        label.font = ChromeType.font(.caption)
         label.textColor = Theme.current.chrome.ink(.muted)
         return label
     }

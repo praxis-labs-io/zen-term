@@ -180,6 +180,15 @@ theme-independent value (the black drop shadow in `FloatShadow`), and it must be
 commented as such. If the chrome needs a role `ChromeTheme` does not expose, add the
 role and derive it in `ChromeThemeDeriver`. Never reach for a literal.
 
+## Chrome tokens
+
+Sizes, weights and type in the chrome come from named tokens, never a literal.
+
+- **Type:** fonts come from `ChromeType` roles (`display`, `title`, `body`, `small`,
+  `caption`, with a weight and a mono face where needed); a section heading takes
+  `ChromeType.sectionLabel` in sentence case. `swiftlint` rejects `systemFont(ofSize:)`
+  outside `ChromeType`.
+
 ## Designs
 
 **Every ZenTerm design lives on one canvas: [ZenTerm Designs](https://claude.ai/artifact/GJiTtwXDjTu1qw9cWFoTo5).**

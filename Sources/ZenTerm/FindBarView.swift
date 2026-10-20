@@ -24,7 +24,7 @@ final class FindBarView: NSView {
         glyph.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "Find")
         glyph.symbolConfiguration = .init(pointSize: 12, weight: .regular)
         glyph.setContentHuggingPriority(.required, for: .horizontal)
-        field.font = .systemFont(ofSize: 13)
+        field.font = ChromeType.font(.body)
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
@@ -34,7 +34,7 @@ final class FindBarView: NSView {
         field.delegate = self
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        count.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        count.font = ChromeType.font(.small, face: .digits)
         count.alignment = .right
         count.setContentHuggingPriority(.required, for: .horizontal)
         count.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -114,7 +114,7 @@ final class FindBarView: NSView {
             string: "Find in scrollback",
             attributes: [
                 .foregroundColor: Theme.current.chrome.ink(.muted),
-                .font: field.font ?? .systemFont(ofSize: 13),
+                .font: field.font ?? ChromeType.font(.body),
             ]
         )
     }

@@ -72,7 +72,7 @@ final class SettingsWorkspacesSection: SettingsSection {
         if let workspaces, workspaces.isEmpty {
             let hint = NSTextField(
                 labelWithString: "No workspaces yet. Add one to launch a folder with its own layout from ⌘P.")
-            hint.font = .systemFont(ofSize: 12)
+            hint.font = ChromeType.font(.small)
             hint.textColor = Theme.current.chrome.ink(.muted)
             hint.lineBreakMode = .byWordWrapping
             hint.maximumNumberOfLines = 0
@@ -164,9 +164,9 @@ final class WorkspaceRow: SettingsFocusRow {
 
         super.init()
 
-        titleLabel.font = .systemFont(ofSize: 13)
+        titleLabel.font = ChromeType.font(.body)
         titleLabel.textColor = Theme.current.chrome.ink(.normal)
-        subtitleLabel.font = .systemFont(ofSize: 11)
+        subtitleLabel.font = ChromeType.font(.caption)
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         subtitleLabel.lineBreakMode = .byTruncatingMiddle
         let labels = NSStackView(views: [titleLabel, subtitleLabel])

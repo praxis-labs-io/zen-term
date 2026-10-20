@@ -67,7 +67,7 @@ final class IconPickerField: NSView {
 
         glyph.translatesAutoresizingMaskIntoConstraints = false
         glyph.setContentHuggingPriority(.required, for: .horizontal)
-        nameLabel.font = .systemFont(ofSize: 13)
+        nameLabel.font = ChromeType.font(.body)
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
 
@@ -279,9 +279,9 @@ final class IconPickerField: NSView {
     }
 
     private static func sectionHeader(_ title: String) -> NSTextField {
-        let label = NSTextField(labelWithString: title.uppercased())
-        label.font = .systemFont(ofSize: 9, weight: .semibold)
-        label.textColor = Theme.current.chrome.ink(.faint)
+        let label = NSTextField(labelWithString: title)
+        label.font = ChromeType.sectionLabel
+        label.textColor = Theme.current.chrome.ink(.muted)
         label.translatesAutoresizingMaskIntoConstraints = false
         label.heightAnchor.constraint(equalToConstant: headerHeight).isActive = true
         return label

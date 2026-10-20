@@ -169,7 +169,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         }
         guard
             let caption = descendants(of: overlay).compactMap({ $0 as? FieldCaption })
-                .first(where: { $0.stringValue.hasPrefix("COPY INTO") })
+                .first(where: { $0.stringValue.hasPrefix("Copy into") })
         else {
             return XCTFail("expected the copy-into caption")
         }
@@ -364,9 +364,9 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
         guard
             let caption = descendants(of: overlay).compactMap({ $0 as? NSTextField })
-                .first(where: { $0.attributedStringValue.string == "WORKSPACE NAME ✳" })
+                .first(where: { $0.attributedStringValue.string == "Workspace name ✳" })
         else {
-            return XCTFail("expected the WORKSPACE NAME caption")
+            return XCTFail("expected the Workspace name caption")
         }
         let colorBefore =
             caption.attributedStringValue.attribute(.foregroundColor, at: 0, effectiveRange: nil)
@@ -393,9 +393,9 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
         guard
             let caption = descendants(of: overlay).compactMap({ $0 as? NSTextField })
-                .first(where: { $0.attributedStringValue.string == "ENVIRONMENT" })
+                .first(where: { $0.attributedStringValue.string == "Environment" })
         else {
-            return XCTFail("expected the ENVIRONMENT caption")
+            return XCTFail("expected the Environment caption")
         }
         let colorBefore =
             caption.attributedStringValue.attribute(.foregroundColor, at: 0, effectiveRange: nil)

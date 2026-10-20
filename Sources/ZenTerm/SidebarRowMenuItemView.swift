@@ -24,7 +24,7 @@ final class SidebarRowMenuItemView: NSView {
         setAccessibilityElement(true)
         setAccessibilityRole(.menuItem)
         setAccessibilityLabel(item.title)
-        label.font = .systemFont(ofSize: 13)
+        label.font = ChromeType.font(.body)
         label.lineBreakMode = .byTruncatingTail
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         label.translatesAutoresizingMaskIntoConstraints = false

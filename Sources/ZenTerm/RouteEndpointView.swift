@@ -42,7 +42,7 @@ final class RouteEndpointView: NSView {
             transform: nil)
         badge.layer?.addSublayer(statusMark)
 
-        self.name.font = .systemFont(ofSize: 12)
+        self.name.font = ChromeType.font(.small)
         self.name.alignment = .center
         self.name.lineBreakMode = .byTruncatingMiddle
         self.name.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)

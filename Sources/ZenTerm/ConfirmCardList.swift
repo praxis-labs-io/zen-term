@@ -18,8 +18,7 @@ final class ConfirmCardList: NSView, ThemeReapplying {
     }
 
     static let rowHeight: CGFloat = 20
-    static let pathFont = NSFont.monospacedSystemFont(ofSize: 11.5, weight: .regular)
-    static let noteFont = NSFont.systemFont(ofSize: 12)
+    static let pathFont = ChromeType.font(.caption, face: .mono)
 
     private let rowViews: [RowView]
 
@@ -104,7 +103,7 @@ final class ConfirmCardList: NSView, ThemeReapplying {
                 trailing.attributedStringValue = StatusTokens.joined(groups)
             case .note(let text):
                 leading.attributedStringValue = Self.text(
-                    [Run(text: text, tone: .ink(.muted))], font: ConfirmCardList.noteFont,
+                    [Run(text: text, tone: .ink(.muted))], font: ChromeType.font(.small),
                     truncation: .byTruncatingTail, chrome: chrome)
                 trailing.attributedStringValue = NSAttributedString()
             }

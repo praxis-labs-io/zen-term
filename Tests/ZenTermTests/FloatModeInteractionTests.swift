@@ -89,7 +89,7 @@ final class FloatModeInteractionTests: WindowTestCase {
 
         XCTAssertTrue(c.scrollMode.isActive, "the gate swallowed the chord")
         XCTAssertTrue(overlay.isHeaderVisibleForTesting, "the card wears the mode's header")
-        XCTAssertEqual(overlay.headerContentForTesting?.title, "SCROLL")
+        XCTAssertEqual(overlay.headerContentForTesting?.title, "Scroll")
         XCTAssertFalse(panel.isHeaderVisibleForTesting, "the pane behind is not what is being read")
     }
 
@@ -113,12 +113,12 @@ final class FloatModeInteractionTests: WindowTestCase {
         let surface = try openScratch(c)
         c.handle(.toggleScrollMode)
         let overlay = try card(c)
-        XCTAssertEqual(overlay.headerContentForTesting?.title, "SCROLL", "premise: nothing reported yet")
+        XCTAssertEqual(overlay.headerContentForTesting?.title, "Scroll", "premise: nothing reported yet")
 
         surface.delegate?.surface(
             surface, scrollPositionDidChange: TerminalScrollPosition(total: 200, offset: 100, viewport: 24))
 
-        XCTAssertEqual(overlay.headerContentForTesting?.title, "SCROLL: 76 BELOW")
+        XCTAssertEqual(overlay.headerContentForTesting?.title, "Scroll: 76 below")
     }
 
     func test_closingTheCardEndsTheMode() throws {
@@ -144,7 +144,7 @@ final class FloatModeInteractionTests: WindowTestCase {
         c.handle(.toggleSearch)
 
         let bar = try XCTUnwrap(overlay.findBarForTesting, "the gate swallowed the chord")
-        XCTAssertEqual(overlay.headerContentForTesting?.title, "FIND")
+        XCTAssertEqual(overlay.headerContentForTesting?.title, "Find")
         let stack = try XCTUnwrap(bar.superview)
         let barIndex = try XCTUnwrap(stack.subviews.firstIndex(of: bar))
         let gridIndex = try XCTUnwrap(stack.subviews.firstIndex(of: surface.view))

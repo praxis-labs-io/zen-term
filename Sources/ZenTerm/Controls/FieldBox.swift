@@ -41,7 +41,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
-        field.font = .systemFont(ofSize: 13)
+        field.font = ChromeType.font(.body)
         applyPlaceholder()
         field.textColor = Theme.current.chrome.ink(.normal)
         field.delegate = self
@@ -79,7 +79,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
             string: placeholder,
             attributes: [
                 .foregroundColor: Theme.current.chrome.ink(.muted),
-                .font: field.font ?? .systemFont(ofSize: 13),
+                .font: field.font ?? ChromeType.font(.body),
             ]
         )
     }

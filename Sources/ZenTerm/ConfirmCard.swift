@@ -118,11 +118,11 @@ final class ConfirmCard: NSView {
     }
 
     private func buildContent(title: String, message: String) -> NSStackView {
-        header.font = .systemFont(ofSize: 15, weight: .semibold)
+        header.font = ChromeType.font(.title)
         header.textColor = Theme.current.chrome.ink(.normal)
         header.stringValue = title
 
-        messageLabel.font = .systemFont(ofSize: 12)
+        messageLabel.font = ChromeType.font(.small)
         messageLabel.textColor = Theme.current.chrome.ink(.muted)
         messageLabel.lineBreakMode = .byWordWrapping
         messageLabel.maximumNumberOfLines = 0

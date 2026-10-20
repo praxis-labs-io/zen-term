@@ -61,12 +61,12 @@ final class SettingsNavRow: NSView, HoverSuppressing {
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
         setAccessibilityLabel(title)
-        label.font = .systemFont(ofSize: 13)
+        label.font = ChromeType.font(.body)
         label.lineBreakMode = .byTruncatingTail
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
-        detailLabel.font = .systemFont(ofSize: 11)
+        detailLabel.font = ChromeType.font(.caption)
         detailLabel.lineBreakMode = .byTruncatingTail
         detailLabel.alignment = .right
         detailLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -107,7 +107,7 @@ final class SettingsNavRow: NSView, HoverSuppressing {
         glyph.symbolConfiguration = .init(pointSize: Self.nestedGlyphSize, weight: .regular)
         glyph.translatesAutoresizingMaskIntoConstraints = false
         addSubview(glyph)
-        label.font = .systemFont(ofSize: 12)
+        label.font = ChromeType.font(.small)
         NSLayoutConstraint.activate([
             glyph.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.nestedIndent),
             glyph.centerYAnchor.constraint(equalTo: centerYAnchor),

@@ -35,7 +35,7 @@ final class AcknowledgementsWindow {
         text.isEditable = false
         text.isSelectable = true
         text.isRichText = false
-        text.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        text.font = ChromeType.font(.small, face: .mono)
         text.textContainerInset = NSSize(width: 20, height: 20)
         text.string = Self.notices()
         text.isVerticallyResizable = true

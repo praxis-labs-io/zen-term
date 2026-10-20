@@ -14,11 +14,10 @@ final class PaletteSectionHeader: NSView, PaletteRowView {
 
         let label = NSTextField(
             labelWithAttributedString: NSAttributedString(
-                string: title.uppercased(),
+                string: title,
                 attributes: [
-                    .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
+                    .font: ChromeType.sectionLabel,
                     .foregroundColor: Theme.current.chrome.ink(.muted),
-                    .kern: 0.6,
                 ]))
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)

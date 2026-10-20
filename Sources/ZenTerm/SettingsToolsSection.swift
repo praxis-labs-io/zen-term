@@ -84,7 +84,7 @@ final class SettingsToolsSection: SettingsSection {
         let dropped = droppedFloatMessages()
         if !dropped.isEmpty {
             let notice = NSTextField(wrappingLabelWithString: dropped.joined(separator: "\n"))
-            notice.font = .systemFont(ofSize: 11, weight: .medium)
+            notice.font = ChromeType.font(.caption, weight: .medium)
             notice.textColor = Theme.current.chrome.warning.nsColor
             droppedFloatNotice = notice
             stack.addArrangedSubview(notice)
@@ -95,7 +95,7 @@ final class SettingsToolsSection: SettingsSection {
         if floats.isEmpty {
             let hint = NSTextField(
                 labelWithString: "No tool floats yet. Add one to get a toolbar button and a shortcut.")
-            hint.font = .systemFont(ofSize: 12)
+            hint.font = ChromeType.font(.small)
             hint.textColor = Theme.current.chrome.ink(.muted)
             hint.lineBreakMode = .byWordWrapping
             hint.maximumNumberOfLines = 0
@@ -187,9 +187,9 @@ final class ToolFloatRow: SettingsFocusRow {
         iconView.contentTintColor = Theme.current.chrome.ink(.subtle)
         iconView.setContentHuggingPriority(.required, for: .horizontal)
 
-        titleLabel.font = .systemFont(ofSize: 13)
+        titleLabel.font = ChromeType.font(.body)
         titleLabel.textColor = Theme.current.chrome.ink(.normal)
-        subtitleLabel.font = .systemFont(ofSize: 11)
+        subtitleLabel.font = ChromeType.font(.caption)
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         subtitleLabel.lineBreakMode = .byTruncatingTail
         let labels = NSStackView(views: [titleLabel, subtitleLabel])
@@ -205,7 +205,7 @@ final class ToolFloatRow: SettingsFocusRow {
         controls.alignment = .centerY
         controls.spacing = 10
 
-        messageLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        messageLabel.font = ChromeType.font(.caption, weight: .medium)
         messageLabel.textColor = Theme.current.chrome.warning.nsColor
         messageLabel.lineBreakMode = .byWordWrapping
         messageLabel.maximumNumberOfLines = 0
@@ -238,7 +238,7 @@ final class ToolFloatRow: SettingsFocusRow {
 
     private static func unsetLabel() -> NSTextField {
         let label = NSTextField(labelWithString: "Not set")
-        label.font = .systemFont(ofSize: 12)
+        label.font = ChromeType.font(.small)
         label.textColor = unsetInk
         return label
     }

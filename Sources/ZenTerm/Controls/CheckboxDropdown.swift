@@ -74,7 +74,7 @@ final class CheckboxDropdown: NSView {
         layer?.borderWidth = 1
         layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
 
-        titleLabel.font = .systemFont(ofSize: 13)
+        titleLabel.font = ChromeType.font(.body)
         titleLabel.textColor = Theme.current.chrome.ink(.normal)
         titleLabel.stringValue = title
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -311,7 +311,7 @@ final class CheckboxDropdown: NSView {
 
     private static func emptyRowView() -> NSView {
         let label = NSTextField(labelWithString: "No matches")
-        label.font = .systemFont(ofSize: 10, weight: .semibold)
+        label.font = ChromeType.sectionLabel
         label.textColor = Theme.current.chrome.ink(.muted)
         label.translatesAutoresizingMaskIntoConstraints = false
         let host = NSView()
@@ -341,10 +341,10 @@ final class CheckboxDropdown: NSView {
             check.image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)
             check.symbolConfiguration = .init(pointSize: 11, weight: .semibold)
             check.translatesAutoresizingMaskIntoConstraints = false
-            title.font = .systemFont(ofSize: 13)
+            title.font = ChromeType.font(.body)
             title.lineBreakMode = .byTruncatingTail
             title.translatesAutoresizingMaskIntoConstraints = false
-            note.font = .systemFont(ofSize: 11)
+            note.font = ChromeType.font(.caption)
             note.translatesAutoresizingMaskIntoConstraints = false
             note.setContentCompressionResistancePriority(.required, for: .horizontal)
             icon.symbolConfiguration = .init(pointSize: 11, weight: .regular)

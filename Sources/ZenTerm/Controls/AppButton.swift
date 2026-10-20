@@ -28,10 +28,10 @@ final class AppButton: NSButton {
             }
         }
 
-        var fontSize: CGFloat {
+        var role: ChromeType.Role {
             switch self {
-            case .standard: return 12
-            case .large: return 13
+            case .standard: return .small
+            case .large: return .body
             }
         }
 
@@ -203,7 +203,7 @@ final class AppButton: NSButton {
             let isLink = variant == .link
             var attributes: [NSAttributedString.Key: Any] = [
                 .foregroundColor: textColor,
-                .font: NSFont.systemFont(ofSize: isLink ? 13 : size.fontSize, weight: isLink ? .regular : .semibold),
+                .font: isLink ? ChromeType.font(.body) : ChromeType.font(size.role, weight: .semibold),
             ]
             if isLink, isEnabled, isFocusedStop { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
             attributedTitle = NSAttributedString(string: labelText, attributes: attributes)

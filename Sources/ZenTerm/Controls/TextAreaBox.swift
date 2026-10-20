@@ -34,7 +34,7 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         textView.isEditable = true
         textView.allowsUndo = true
         textView.drawsBackground = false
-        textView.font = .systemFont(ofSize: 13)
+        textView.font = ChromeType.font(.body)
         textView.textColor = Theme.current.chrome.ink(.normal)
         textView.insertionPointColor = Theme.current.chrome.ink(.normal)
         textView.textContainerInset = NSSize(width: 5, height: 5)
@@ -144,7 +144,7 @@ final class FocusReportingTextView: NSTextView {
         guard string.isEmpty, !placeholder.isEmpty else { return }
         (placeholder as NSString).draw(
             at: placeholderOrigin,
-            withAttributes: [.font: font ?? .systemFont(ofSize: 13), .foregroundColor: placeholderColor])
+            withAttributes: [.font: font ?? ChromeType.font(.body), .foregroundColor: placeholderColor])
     }
 
     override func becomeFirstResponder() -> Bool {

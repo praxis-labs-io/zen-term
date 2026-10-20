@@ -8,7 +8,7 @@ final class FormErrorLabel: NSTextField, ThemeReapplying {
         isBordered = false
         drawsBackground = false
         lineBreakMode = .byWordWrapping
-        font = .systemFont(ofSize: 11, weight: .medium)
+        font = ChromeType.font(.caption, weight: .medium)
         maximumNumberOfLines = maximumLines
         isHidden = true
         setContentCompressionResistancePriority(.defaultLow, for: .horizontal)

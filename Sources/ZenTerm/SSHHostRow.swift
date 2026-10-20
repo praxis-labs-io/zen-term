@@ -18,11 +18,11 @@ final class SSHHostRow: SettingsFocusRow {
         setAccessibilityRole(.button)
         setAccessibilityLabel("Edit \(title)")
 
-        titleLabel.font = .systemFont(ofSize: 13)
+        titleLabel.font = ChromeType.font(.body)
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         titleLabel.textColor = Theme.current.chrome.ink(.normal)
-        subtitleLabel.font = .systemFont(ofSize: 11)
+        subtitleLabel.font = ChromeType.font(.caption)
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         subtitleLabel.lineBreakMode = .byTruncatingTail
         subtitleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -34,7 +34,7 @@ final class SSHHostRow: SettingsFocusRow {
         labels.setContentHuggingPriority(.defaultLow, for: .horizontal)
         labels.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        statusLabel.font = .systemFont(ofSize: 12)
+        statusLabel.font = ChromeType.font(.small)
         statusLabel.setContentHuggingPriority(.required, for: .horizontal)
         statusLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         let spacer = NSView()

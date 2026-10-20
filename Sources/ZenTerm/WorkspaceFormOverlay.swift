@@ -187,7 +187,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
     }
 
     private func buildContent() -> NSStackView {
-        header.font = .systemFont(ofSize: 15, weight: .semibold)
+        header.font = ChromeType.font(.title)
         header.textColor = Theme.current.chrome.ink(.normal)
         header.stringValue = editingWorkspace == nil ? "Add Workspace" : "Edit Workspace"
         let headerSpacer = NSView()
@@ -201,7 +201,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
         envStack.alignment = .leading
         envStack.spacing = 6
         addVarButton.onTap = { [weak self] in self?.addEnvRow() }
-        envError.font = .systemFont(ofSize: 11, weight: .medium)
+        envError.font = ChromeType.font(.caption, weight: .medium)
         envError.textColor = Theme.current.chrome.destructive.nsColor
         envError.isHidden = true
         let envControls = Self.vStack([envStack, Self.leadingWrap(addVarButton), envError], spacing: 8)
@@ -294,7 +294,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
     }
 
     private func buildFooter() -> NSView {
-        notice.font = .systemFont(ofSize: 12)
+        notice.font = ChromeType.font(.small)
         notice.textColor = Theme.current.chrome.ink(.subtle)
         notice.lineBreakMode = .byTruncatingTail
         notice.maximumNumberOfLines = 1

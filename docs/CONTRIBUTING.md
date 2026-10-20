@@ -64,7 +64,7 @@ Sources/
 
 ## Boundaries
 
-Three rules the codebase will not bend on. Each has a failure behind it.
+Four rules the codebase will not bend on. Each has a failure behind it.
 
 **The seam.** `TerminalKit` is the only target allowed to `import GhosttyKit`.
 `ZenTerm` has no backend dependency, and `Package.swift` enforces it by not
@@ -81,6 +81,13 @@ takes `chrome.fill(alpha:)` with a named constant. `NSColor(white:)`, `.white`, 
 `effectiveAppearance` rather than the theme, so they wash out on a light theme and
 ignore a bring-your-own one. If a role is missing, add it to `ChromeTheme` and
 derive it in `ChromeThemeDeriver`.
+
+**Chrome tokens.** Sizes, weights and type in the chrome come from named tokens,
+never a literal.
+
+- Fonts come from `ChromeType` roles; a section heading takes
+  `ChromeType.sectionLabel` in sentence case. `swiftlint` rejects
+  `systemFont(ofSize:)` outside `ChromeType`.
 
 **Never block the main thread.** No `waitUntilExit`, no filesystem walk, no
 blocking I/O on the main queue. The chrome is the product and a stalled main

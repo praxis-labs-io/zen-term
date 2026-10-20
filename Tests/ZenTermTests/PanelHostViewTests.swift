@@ -161,17 +161,17 @@ final class PanelHostViewTests: WindowTestCase {
         mount(panel)
 
         XCTAssertTrue(panel.isHeaderVisibleForTesting, "a drawer's header is always shown")
-        XCTAssertEqual(panel.headerContentForTesting?.title, "BOTTOM DRAWER")
+        XCTAssertEqual(panel.headerContentForTesting?.title, "Bottom drawer")
         let restingShortcut = panel.headerContentForTesting?.shortcut
         XCTAssertEqual(restingShortcut, CommandCatalog.spec(for: .toggleBottomDrawer).shortcut)
 
         panel.isZoomed = true
         XCTAssertTrue(panel.isHeaderVisibleForTesting, "a zoomed drawer keeps its header")
-        XCTAssertEqual(panel.headerContentForTesting?.title, "BOTTOM DRAWER: FOCUS MODE")
+        XCTAssertEqual(panel.headerContentForTesting?.title, "Bottom drawer: Focus Mode")
         XCTAssertEqual(panel.headerContentForTesting?.shortcut, CommandCatalog.spec(for: .toggleZoom).shortcut)
 
         panel.isZoomed = false
-        XCTAssertEqual(panel.headerContentForTesting?.title, "BOTTOM DRAWER")
+        XCTAssertEqual(panel.headerContentForTesting?.title, "Bottom drawer")
         XCTAssertEqual(panel.headerContentForTesting?.shortcut, restingShortcut)
     }
 

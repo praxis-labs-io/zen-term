@@ -60,7 +60,7 @@ final class CarryPicker: NSView, ThemeReapplying {
         status.onTab = { [weak self] in self?.onTab?() }
         status.onBacktab = { [weak self] in self?.onBacktab?() }
 
-        detail.font = .systemFont(ofSize: 11)
+        detail.font = ChromeType.font(.caption)
         detail.textColor = Theme.current.chrome.ink(.muted)
         detail.maximumNumberOfLines = 0
         detail.lineBreakMode = .byWordWrapping
@@ -307,7 +307,7 @@ final class CarryPicker: NSView, ThemeReapplying {
             PopoverButtonStyle.applyRestFill(to: self)
             layer?.borderWidth = 1
 
-            label.font = .systemFont(ofSize: 13)
+            label.font = ChromeType.font(.body)
             label.lineBreakMode = .byTruncatingTail
             label.translatesAutoresizingMaskIntoConstraints = false
             spinner.translatesAutoresizingMaskIntoConstraints = false

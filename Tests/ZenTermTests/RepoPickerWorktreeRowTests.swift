@@ -139,8 +139,8 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         let rail = try XCTUnwrap(label(in: child, saying: RepoPickerOverlay.RowView.typeRail))
         XCTAssertEqual(name.textColor, Theme.current.chrome.ink(.normal))
         XCTAssertEqual(rail.textColor, Theme.current.chrome.ink(.faint))
-        XCTAssertEqual(name.font?.pointSize, 13)
-        XCTAssertEqual(rail.font?.pointSize, 11)
+        XCTAssertEqual(name.font?.pointSize, ChromeType.Role.body.pointSize)
+        XCTAssertEqual(rail.font?.pointSize, ChromeType.Role.caption.pointSize)
     }
 
     func test_detachedWorktree_showsItsShortHeadInTheBranchColumn() throws {
@@ -778,7 +778,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(
             shape(of: overlay),
             [
-                "new", "header:Open Elsewhere", "ghost:alpha", "open:alpha: one", "header:Configured",
+                "new", "header:Open elsewhere", "ghost:alpha", "open:alpha: one", "header:Configured",
                 "workspace:alpha",
                 "add",
             ])

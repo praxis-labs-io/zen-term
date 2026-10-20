@@ -276,7 +276,7 @@ final class WorkspaceTabStrip: NSView {
                 hint.addArrangedSubview(cap)
             case .text(let text):
                 let label = NSTextField(labelWithString: text)
-                label.font = .systemFont(ofSize: 11)
+                label.font = ChromeType.font(.caption)
                 label.textColor = Theme.current.chrome.ink(.muted)
                 hintLabels.append(label)
                 hint.addArrangedSubview(label)

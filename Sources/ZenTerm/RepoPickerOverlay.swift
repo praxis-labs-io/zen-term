@@ -16,7 +16,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     private enum Section {
         static let open = "Open"
-        static let elsewhere = "Open Elsewhere"
+        static let elsewhere = "Open elsewhere"
         static let configured = "Configured"
     }
 
@@ -556,7 +556,7 @@ final class RepoPickerOverlay: PaletteOverlay {
                     ? Theme.current.chrome.ink(.normal) : Theme.current.chrome.ink(.muted)
             }
 
-            var weight: NSFont.Weight { self == .listed ? .regular : .medium }
+            var weight: ChromeType.Weight { self == .listed ? .regular : .medium }
         }
 
         let title: String
@@ -574,7 +574,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             addSubview(icon)
 
             let label = NSTextField(labelWithString: title)
-            label.font = .systemFont(ofSize: 13, weight: emphasis.weight)
+            label.font = ChromeType.font(.body, weight: emphasis.weight)
             label.textColor = emphasis.ink
             label.translatesAutoresizingMaskIntoConstraints = false
             addSubview(label)
@@ -612,7 +612,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             addSubview(spinner)
 
             let label = NSTextField(labelWithString: "Removing \(name)…")
-            label.font = .systemFont(ofSize: 11)
+            label.font = ChromeType.font(.caption)
             label.textColor = Theme.current.chrome.ink(.faint)
             label.translatesAutoresizingMaskIntoConstraints = false
             addSubview(label)
@@ -638,7 +638,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             case ghost
 
             var indent: CGFloat { self == .child ? RowView.childIndent : 0 }
-            var fontSize: CGFloat { self == .child ? 11 : 13 }
+            var role: ChromeType.Role { self == .child ? .caption : .body }
             var ink: NSColor {
                 self == .workspace
                     ? Theme.current.chrome.ink(.normal) : Theme.current.chrome.ink(.faint)
@@ -722,13 +722,13 @@ final class RepoPickerOverlay: PaletteOverlay {
             super.init()
 
             let name = NSTextField(labelWithString: label)
-            name.font = .systemFont(ofSize: style.fontSize)
+            name.font = ChromeType.font(style.role)
             name.textColor = style.ink
             name.lineBreakMode = .byTruncatingTail
             name.translatesAutoresizingMaskIntoConstraints = false
             addSubview(name)
 
-            branchLabel.font = .systemFont(ofSize: 11)
+            branchLabel.font = ChromeType.font(.caption)
             branchLabel.textColor = Theme.current.chrome.ink(.muted)
             branchLabel.alignment = .right
             branchLabel.lineBreakMode = .byTruncatingTail

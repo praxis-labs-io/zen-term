@@ -402,13 +402,13 @@ final class SearchLifecycleTests: WindowTestCase {
 
         XCTAssertTrue(panel.isHeaderVisibleForTesting, "the header goes up with the bar")
         XCTAssertEqual(
-            panel.headerContentForTesting?.title, "FIND",
+            panel.headerContentForTesting?.title, "Find",
             "and names the phase whose keys are actually live")
 
         controller.search.commit()
 
         XCTAssertTrue(panel.isHeaderVisibleForTesting, "still up, so the grid never changed height")
-        XCTAssertEqual(panel.headerContentForTesting?.title, "SCROLL")
+        XCTAssertEqual(panel.headerContentForTesting?.title, "Scroll")
     }
 
     func test_aReaderOwnedScrollModeKeepsItsHeaderWhenTheBarCloses() throws {
@@ -421,7 +421,7 @@ final class SearchLifecycleTests: WindowTestCase {
 
         XCTAssertTrue(controller.scrollMode.isActive)
         XCTAssertEqual(
-            panel.headerContentForTesting?.title, "SCROLL",
+            panel.headerContentForTesting?.title, "Scroll",
             "stripping the indicator off a live mode would leave it running unmarked")
     }
 

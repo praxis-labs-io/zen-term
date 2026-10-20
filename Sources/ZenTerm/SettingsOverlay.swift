@@ -13,7 +13,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
     private var navRows: [SettingsNavRow] = []
     private let detailContainer = NSView()
     private var selectedIndex = 0
-    private let heading = NSTextField(labelWithString: "Settings".uppercased())
+    private let heading = NSTextField(labelWithString: "Settings")
     private let divider = NSView()
     private let brandMark = NSImageView()
     private let versionLabel = NSTextField(labelWithString: "")
@@ -111,7 +111,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
         navStack.spacing = 2
         navStack.edgeInsets = NSEdgeInsets(top: 18, left: 12, bottom: 16, right: 12)
 
-        heading.font = .systemFont(ofSize: 10, weight: .semibold)
+        heading.font = ChromeType.sectionLabel
         heading.textColor = Theme.current.chrome.ink(.muted)
         heading.translatesAutoresizingMaskIntoConstraints = false
         let headingRow = NSView()
@@ -232,7 +232,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
     }
 
     static var versionText: String { "v\(AppVersion.current)" }
-    static let versionFont: NSFont = .systemFont(ofSize: 13, weight: .medium)
+    static let versionFont: NSFont = ChromeType.font(.body, weight: .medium)
     private static let brandMarkSize: CGFloat = 16
     private static let footerSpacing: CGFloat = 7
     private static let navWidth: CGFloat = 168

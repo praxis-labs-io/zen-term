@@ -23,7 +23,7 @@ class HoverCardView: ShadowCardView {
 
     static func makeLabel(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: 11, weight: .medium)
+        label.font = ChromeType.font(.caption, weight: .medium)
         label.textColor = Theme.current.chrome.ink(.normal)
         return label
     }

@@ -61,7 +61,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     private func groupCaptions(in view: NSView) -> [String] {
         view.subviews.flatMap { child -> [String] in
             if child is SSHHostRow { return [] }
-            let own = (child as? NSTextField).flatMap { $0.font?.pointSize == 10 ? $0.stringValue : nil }
+            let own = (child as? NSTextField).flatMap { $0.font == ChromeType.sectionLabel ? $0.stringValue : nil }
             return (own.map { [$0] } ?? []) + groupCaptions(in: child)
         }
     }
@@ -120,7 +120,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
 
         let detail = mount()
 
-        XCTAssertEqual(groupCaptions(in: detail), ["SSH HOSTS"])
+        XCTAssertEqual(groupCaptions(in: detail), ["SSH hosts"])
         XCTAssertEqual(captions(in: detail), ["deploy@10.0.0.5"])
         XCTAssertEqual(rows(in: detail).count, 1)
         XCTAssertNil(emptyHint(in: detail))
@@ -142,7 +142,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
 
         XCTAssertNotNil(emptyHint(in: detail))
         XCTAssertTrue(rows(in: detail).isEmpty)
-        XCTAssertEqual(groupCaptions(in: detail), ["SSH HOSTS"])
+        XCTAssertEqual(groupCaptions(in: detail), ["SSH hosts"])
     }
 
     func test_aHandEditWhileOpen_addsNewHostsAndDropsDeletedOnes() throws {

@@ -49,7 +49,7 @@ final class SettingsRowDescriptionTests: WindowTestCase {
     private func notes(in detail: NSView) -> [NSTextField] {
         descendants(of: detail)
             .compactMap { $0 as? NSTextField }
-            .filter { $0.font == .systemFont(ofSize: 10) }
+            .filter { $0.font == ChromeType.font(.caption) }
     }
 
     /// Measures the plain string: a truncating paragraph style reports one line at any width.

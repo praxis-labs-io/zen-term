@@ -33,7 +33,6 @@ final class ConfirmCardChecklist: NSView, ThemeReapplying {
         let rows: [ConfirmCardList.Row]
     }
 
-    static let textFont = NSFont.systemFont(ofSize: 12)
     static let iconSize = NSSize(width: 14, height: 15)
     static let listIndent: CGFloat = 22
 
@@ -123,7 +122,7 @@ final class ConfirmCardChecklist: NSView, ThemeReapplying {
                     NSAttributedString(
                         string: run.text,
                         attributes: [
-                            .font: ConfirmCardChecklist.textFont, .paragraphStyle: paragraph,
+                            .font: ChromeType.font(.small), .paragraphStyle: paragraph,
                             .foregroundColor: ConfirmCardList.color(run.tone, chrome),
                         ]))
             }

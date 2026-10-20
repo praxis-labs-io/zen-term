@@ -21,15 +21,15 @@ enum SettingsDetail {
     }
 
     static func groupCaption(_ title: String) -> NSTextField {
-        let caption = NSTextField(labelWithString: title.uppercased())
-        caption.font = .systemFont(ofSize: 10, weight: .semibold)
+        let caption = NSTextField(labelWithString: title)
+        caption.font = ChromeType.sectionLabel
         caption.textColor = Theme.current.chrome.ink(.muted)
         return caption
     }
 
     static func reorderHint() -> NSTextField {
         let hint = NSTextField(labelWithString: "⌥↑ ⌥↓ to reorder")
-        hint.font = .systemFont(ofSize: 10, weight: .medium)
+        hint.font = ChromeType.font(.caption, weight: .medium)
         hint.textColor = Theme.current.chrome.ink(.faint)
         hint.setContentHuggingPriority(.required, for: .horizontal)
         return hint
@@ -83,7 +83,7 @@ final class ResetFlashLabel: NSTextField {
         isSelectable = false
         isBordered = false
         drawsBackground = false
-        font = .systemFont(ofSize: 11, weight: .medium)
+        font = ChromeType.font(.caption, weight: .medium)
         textColor = Theme.current.chrome.accent.nsColor
         isHidden = true
     }

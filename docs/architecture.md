@@ -194,9 +194,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   `isWorkspaceOpenInAnotherWindow` and `revealWorkspaceInAnotherWindow`, which `AppDelegate`
   folds over its windows, skipping the asking one. A `WindowController` never raises its own
   window, so the ordering stays in `AppDelegate`.
-- **The ⌘P picker groups into Open, Open Elsewhere and Configured**, and a workspace is
+- **The ⌘P picker groups into Open, Open elsewhere and Configured**, and a workspace is
   listed once, in the strongest section that claims it. Open is this window's
-  `WorkspaceOrder`, ghosts included and unselectable; Open Elsewhere is what the other
+  `WorkspaceOrder`, ghosts included and unselectable; Open elsewhere is what the other
   windows report through `openWorkspacesElsewhere`, so an unconfigured workspace running
   elsewhere is listed too; Configured is what the workspaces file holds that no window has
   open. A worktree sits below its parent in whichever section the worktree itself belongs
@@ -605,7 +605,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   `WindowController.deliverConfigDiagnosticsNotice`, and retracted by `ConfigApplier`
   only when problems clear.
 - **No file watcher.** Hand edits apply on ⌘⇧,.
-- **Settings > SSH Hosts lists only the `ssh-host` lines.** `~/.ssh/config` is read by the probe and
+- **Settings > SSH hosts lists only the `ssh-host` lines.** `~/.ssh/config` is read by the probe and
   never written. A row shows its host's address from `SSHHostStatusCenter`, so Settings never runs
   ssh itself. A line holds a Host alias or a typed user@host, each
   with an optional name. A name is only a label, read through `GeneralConfig.displayName(of:)`
@@ -763,7 +763,7 @@ The workspace `carry` key names ignored files to copy into a new worktree.
   by the workspace's `WorktreeOrigin`, and closing them leaves the card up. The finish re-lists.
 - **An open worktree row removes like a Configured one.** It reads `Removing <name>…` while
   the tracker holds it, and the finish rebuilds Open from `runningWorkspaces()` and drops
-  Open Elsewhere rows inside the path, with a closed parent's ghost once it has none.
+  Open elsewhere rows inside the path, with a closed parent's ghost once it has none.
 - **A worktree removed outside ZenTerm stays open, marked `removed`.** The title poll checks
   `<worktree>/.git` off-main, skipping a path the tracker is removing and an unmounted volume.
   The sidebar and picker read `WorkspaceController.isWorktreeRemoved`, and an open picker in

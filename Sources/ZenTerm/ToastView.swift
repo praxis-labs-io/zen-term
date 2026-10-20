@@ -44,7 +44,7 @@ final class ToastView: ShadowCardView {
     static let messageMaxWidth: CGFloat = 236
     // A title up to this share of the row never gives way to its tail; a longer title yields first.
     private static let titleFloorShare: CGFloat = 0.55
-    static let messageFont: NSFont = .systemFont(ofSize: 12)
+    static let messageFont: NSFont = ChromeType.font(.small)
     private static var titleColor: NSColor { Theme.current.chrome.ink(.normal) }
     private static var messageColor: NSColor { Theme.current.chrome.ink(.muted) }
 
@@ -80,7 +80,7 @@ final class ToastView: ShadowCardView {
         layer?.borderColor = FloatShadow.edge.cgColor
         FloatShadow.applyShadow(to: self)
 
-        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        titleLabel.font = ChromeType.font(.body, weight: .semibold)
         titleLabel.textColor = Self.titleColor
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
