@@ -58,13 +58,21 @@
                 ],
                 selectedIndex: 0
             ) { _ in }
+            let focused = Dropdown(
+                items: [DropdownItem(title: "Rosé Pine", group: nil, note: nil, isSelected: true)], selectedIndex: 0
+            ) { _ in }
+            focused.forceFocusForGallery()
             let checkbox = CheckboxDropdown(title: "3 of 5 shown", items: checkboxItems()) { _ in }
+            let focusedCheckbox = CheckboxDropdown(title: "3 of 5 shown", items: checkboxItems()) { _ in }
+            focusedCheckbox.forceFocusForGallery()
             return GallerySection(
                 title: "Dropdown and CheckboxDropdown",
                 rows: [
                     GallerySection.Row(label: "Dropdown rest", samples: [sized(plain)]),
                     GallerySection.Row(label: "Dropdown swatch", samples: [sized(swatch)]),
+                    GallerySection.Row(label: "Dropdown focused", samples: [sized(focused)]),
                     GallerySection.Row(label: "Checkbox rest", samples: [sized(checkbox)]),
+                    GallerySection.Row(label: "Checkbox focused", samples: [sized(focusedCheckbox)]),
                 ])
         }
 
@@ -72,6 +80,8 @@
             let options = ["Off", "Auto", "On"]
             let middle = SegmentedControl(options: options) { _ in }
             middle.setSelection(1)
+            let focused = SegmentedControl(options: options) { _ in }
+            focused.forceFocusForGallery()
             let disabled = SegmentedControl(options: options) { _ in }
             disabled.isEnabled = false
             return GallerySection(
@@ -79,6 +89,7 @@
                 rows: [
                     GallerySection.Row(label: "First selected", samples: [SegmentedControl(options: options) { _ in }]),
                     GallerySection.Row(label: "Middle selected", samples: [middle]),
+                    GallerySection.Row(label: "Focused", samples: [focused]),
                     GallerySection.Row(label: "Disabled", samples: [disabled]),
                 ])
         }

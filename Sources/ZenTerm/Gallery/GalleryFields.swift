@@ -14,6 +14,10 @@
             let field = FieldBox(placeholder: "Workspace name")
             let filledField = FieldBox(placeholder: "Workspace name")
             filledField.setText("api-server")
+            let focusedField = FieldBox(placeholder: "Workspace name")
+            focusedField.forceFocusForGallery()
+            let focusedArea = TextAreaBox(placeholder: "Describe what happened", minHeight: 72)
+            focusedArea.forceFocusForGallery()
             let area = TextAreaBox(placeholder: "Describe what happened", minHeight: 72)
             let filledArea = TextAreaBox(placeholder: "Describe what happened", minHeight: 72)
             filledArea.setText("The sidebar stopped updating after I closed the last pane in a tab.")
@@ -22,8 +26,10 @@
                 rows: [
                     GallerySection.Row(label: "Field placeholder", samples: [sized(field)]),
                     GallerySection.Row(label: "Field filled", samples: [sized(filledField)]),
+                    GallerySection.Row(label: "Field focused", samples: [sized(focusedField)]),
                     GallerySection.Row(label: "Area placeholder", samples: [sized(area)]),
                     GallerySection.Row(label: "Area filled", samples: [sized(filledArea)]),
+                    GallerySection.Row(label: "Area focused", samples: [sized(focusedArea)]),
                 ])
         }
 

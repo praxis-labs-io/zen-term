@@ -36,12 +36,14 @@
         private static func states(of variant: AppButton.Variant, size: AppButton.Size) -> [NSView] {
             let rest = AppButton(title: "Rest", variant: variant, size: size)
             let hover = hovered(AppButton(title: "Hover", variant: variant, size: size))
+            let focused = AppButton(title: "Focused", variant: variant, size: size)
+            focused.forceFocusForGallery()
             let disabled = AppButton(title: "Disabled", variant: variant, size: size)
             disabled.isEnabled = false
-            guard variant == .segment else { return [rest, hover, disabled] }
+            guard variant == .segment else { return [rest, hover, focused, disabled] }
             let selected = AppButton(title: "Selected", variant: variant, size: size)
             selected.isOn = true
-            return [rest, hover, disabled, selected]
+            return [rest, hover, focused, disabled, selected]
         }
 
         private static func symbolButtons() -> [NSView] {
@@ -71,6 +73,8 @@
         }
 
         private static func iconButtons() -> GallerySection {
+            let hovered = iconButton()
+            hovered.forceHoverForGallery()
             let active = iconButton()
             active.isActive = true
             let activity = SurfaceAttention.allCases.map { state -> NSView in
@@ -83,6 +87,7 @@
                 title: "IconButton",
                 rows: [
                     GallerySection.Row(label: "Rest", samples: [iconButton()]),
+                    GallerySection.Row(label: "Hover", samples: [hovered]),
                     GallerySection.Row(label: "Active", samples: [active]),
                     GallerySection.Row(label: "Rests filled", samples: [iconButton(restsFilled: true)]),
                     GallerySection.Row(label: "Activity: idle, working, done, waiting", samples: activity),
