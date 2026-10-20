@@ -331,6 +331,8 @@ final class CheckboxDropdown: NSView {
         private let title = NSTextField(labelWithString: "")
         private let note = NSTextField(labelWithString: "")
         private let icon = NSImageView()
+        private lazy var iconWidth = icon.widthAnchor.constraint(equalToConstant: 0)
+        private lazy var titleGap = title.leadingAnchor.constraint(equalTo: icon.trailingAnchor)
 
         init(onClick: @escaping () -> Void) {
             self.onClick = onClick
@@ -359,9 +361,9 @@ final class CheckboxDropdown: NSView {
                 check.widthAnchor.constraint(equalToConstant: 14),
                 check.centerYAnchor.constraint(equalTo: centerYAnchor),
                 icon.leadingAnchor.constraint(equalTo: check.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
-                icon.widthAnchor.constraint(equalToConstant: 14),
+                iconWidth,
                 icon.centerYAnchor.constraint(equalTo: centerYAnchor),
-                title.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
+                titleGap,
                 title.trailingAnchor.constraint(
                     lessThanOrEqualTo: note.leadingAnchor, constant: -ChromeMetrics.Spacing.s8),
                 title.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -383,6 +385,8 @@ final class CheckboxDropdown: NSView {
             }
             icon.contentTintColor = item.isChecked ? chrome.accent.nsColor : chrome.ink(.subtle)
             icon.isHidden = item.symbol == nil
+            iconWidth.constant = icon.isHidden ? 0 : 14
+            titleGap.constant = icon.isHidden ? 0 : ChromeMetrics.Spacing.s6
             check.isHidden = !item.isChecked
             check.contentTintColor = chrome.accent.nsColor
             layer?.backgroundColor = (isHighlighted ? chrome.fill(.hover) : NSColor.clear).cgColor
