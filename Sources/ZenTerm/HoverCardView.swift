@@ -1,7 +1,6 @@
 import AppKit
 
 class HoverCardView: ShadowCardView {
-    // Black shadow is theme-independent (the FloatShadow exception); `NSView.shadow` survives AppKit's layer re-sync.
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
@@ -9,12 +8,7 @@ class HoverCardView: ShadowCardView {
         layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
         layer?.borderWidth = ChromeMetrics.Border.width
         layer?.borderColor = FloatShadow.edge.cgColor
-        layer?.masksToBounds = false
-        let elevation = NSShadow()
-        elevation.shadowColor = NSColor.black.withAlphaComponent(0.35)
-        elevation.shadowBlurRadius = 8
-        elevation.shadowOffset = NSSize(width: 0, height: -3)
-        shadow = elevation
+        FloatShadow.apply(.overlay, to: self)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }

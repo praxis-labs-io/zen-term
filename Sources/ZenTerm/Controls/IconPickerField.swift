@@ -255,7 +255,7 @@ final class IconPickerField: NSView {
         card.layer?.borderWidth = ChromeMetrics.Border.width
         card.layer?.borderColor = FloatShadow.edge.cgColor
         card.translatesAutoresizingMaskIntoConstraints = true
-        FloatShadow.applyShadow(to: card)
+        FloatShadow.apply(.overlay, to: card)
         card.addSubview(scroll)
 
         let inset = ChromeMetrics.Spacing.s8

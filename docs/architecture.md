@@ -681,6 +681,9 @@ Sixty-five themes ship; a user file shadows a bundled one. `accent-color` repoin
   `inkBoost`. Check `1 / inkBoost` before raising it: a level above it clamps to 1.
 - **`fillScale` normalizes fills per theme** against a fixed reference separation, never
   scaling down. Text is not normalized.
+- **Shadow strength is solved per theme:** each `FloatShadow` tier's (`overlay`, `float`,
+  `modal`) black alpha hits a target CIELAB darkening of the background, capped at the
+  tier's `maxAlpha`.
 - **A strip inside a pane paints on the pane's fill** (`ChromeTheme.surface(tint:over:)`),
   because below `background-alpha` 1 a tint alone composites over the window backdrop.
   Showing a strip must mark the padding ring for redisplay.

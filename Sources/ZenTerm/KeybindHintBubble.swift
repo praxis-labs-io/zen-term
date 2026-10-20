@@ -27,7 +27,7 @@ final class KeybindHintBubble: ShadowCardView {
         layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
         layer?.borderWidth = ChromeMetrics.Border.width
         layer?.borderColor = FloatShadow.edge.cgColor
-        FloatShadow.applyShadow(to: self)
+        FloatShadow.apply(.overlay, to: self)
 
         let accent = Theme.current.chrome.accent.nsColor
 

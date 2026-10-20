@@ -5,16 +5,19 @@ import XCTest
 
 final class SurfaceFloatOverlayTests: WindowTestCase {
     private var originalConfig: GeneralConfig!
+    private var originalTheme = Theme.builtIn
     private var window: NSWindow!
 
     override func setUp() {
         super.setUp()
         originalConfig = GeneralConfig.current
+        originalTheme = Theme.current
         GeneralConfig.setCurrentForTesting(.builtIn)
     }
 
     override func tearDown() {
         GeneralConfig.setCurrentForTesting(originalConfig)
+        Theme.setCurrentForTesting(originalTheme)
         window = nil
         super.tearDown()
     }
@@ -127,21 +130,82 @@ final class SurfaceFloatOverlayTests: WindowTestCase {
         XCTAssertLessThan(frostIndex, ringIndex, "the frost must sit under the ring, not over it")
     }
 
-    func test_elevationShadow_reachesOutsideTheCard_andPaintsNothingInside() throws {
+    func test_elevationShadow_darkensBelowTheCardLikeTheFloatTier_andPaintsNothingInside() throws {
+        let url = try XCTUnwrap(ThemeCatalog.bundledURL(for: "nord"))
+        let terminal = GhosttyThemeParser.parse(
+            try String(contentsOf: url, encoding: .utf8), fontName: "Menlo", fontSize: 12,
+            fallback: Theme.rosePineZen)
+        Theme.setCurrentForTesting(AppTheme(terminal: terminal))
         let overlay = mount()
         let card = try card(of: overlay)
         let shadow = try XCTUnwrap(
             card.subviews.first(where: { $0 is OutsideShadowView }),
             "the card must host an outside-only shadow view")
+        let floatCard = card.convert(card.bounds, to: nil)
+        let floatDarkening = darkeningBelow(floatCard, in: window)
 
-        let cardBottom = shadow.convert(NSPoint(x: card.bounds.midX, y: 0), from: card)
-        XCTAssertGreaterThan(
-            paintedAlpha(of: shadow, at: NSPoint(x: cardBottom.x, y: cardBottom.y - 4)), 0,
-            "the elevation shadow must actually reach the screen outside the card")
+        let reference = NSView(frame: floatCard)
+        reference.wantsLayer = true
+        reference.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
+        reference.layer?.cornerRadius = cornerRadius
+        FloatShadow.apply(.float, to: reference)
+        let referenceWindow = solidWindow()
+        referenceWindow.contentView!.addSubview(reference)
+        let referenceDarkening = darkeningBelow(floatCard, in: referenceWindow)
+
+        XCTAssertEqual(floatDarkening.count, 2, "the float must render")
+        XCTAssertEqual(referenceDarkening.count, 2, "the reference must render")
+        for (float, expected) in zip(floatDarkening, referenceDarkening) {
+            XCTAssertGreaterThan(expected, 2, "the reference float tier must darken the backdrop")
+            XCTAssertEqual(
+                float, expected, accuracy: 1,
+                "the tool float must darken the backdrop as much as the float tier does")
+        }
 
         XCTAssertEqual(
             paintedAlpha(of: shadow, at: NSPoint(x: shadow.bounds.midX, y: shadow.bounds.midY)), 0,
             accuracy: 0.001,
-            "the shadow must paint nothing inside the card — that black is the interior wash")
+            "the shadow must paint nothing inside the card: that black is the interior wash")
+    }
+
+    private func solidWindow() -> NSWindow {
+        let solid = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        solid.isReleasedWhenClosed = false
+        return solid
+    }
+
+    private func darkeningBelow(_ card: NSRect, in window: NSWindow) -> [CGFloat] {
+        let host = window.contentView!
+        host.wantsLayer = true
+        host.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
+        window.orderFrontRegardless()
+        host.layoutSubtreeIfNeeded()
+        window.displayIfNeeded()
+        CATransaction.flush()
+        let width = Int(host.bounds.width)
+        let height = Int(host.bounds.height)
+        guard
+            let rep = NSBitmapImageRep(
+                bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
+                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+            let context = NSGraphicsContext(bitmapImageRep: rep),
+            let layer = host.layer
+        else { return [] }
+        context.cgContext.translateBy(x: 0, y: host.bounds.height)
+        context.cgContext.scaleBy(x: 1, y: -1)
+        layer.render(in: context.cgContext)
+
+        func luminance(at point: NSPoint) -> CGFloat {
+            guard
+                let color = rep.colorAt(x: Int(point.x), y: Int(host.bounds.height - point.y))?
+                    .usingColorSpace(.sRGB)
+            else { return -1 }
+            return (color.redComponent + color.greenComponent + color.blueComponent) / 3 * 255
+        }
+        let backdrop = luminance(at: NSPoint(x: 5, y: 5))
+        return [4, 10].map { backdrop - luminance(at: NSPoint(x: card.midX, y: card.minY - $0)) }
     }
 }

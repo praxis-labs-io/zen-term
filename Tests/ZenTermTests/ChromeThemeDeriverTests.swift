@@ -201,6 +201,48 @@ final class ChromeThemeDeriverTests: XCTestCase {
         }
     }
 
+    func test_theShadowSolve_matchesTheCalibration() throws {
+        let calibration: [(hex: String, overlay: CGFloat, float: CGFloat, modal: CGFloat)] = [
+            ("#faf4ed", 0.0816, 0.1391, 0.2071),
+            ("#8c8fa1", 0.1254, 0.2130, 0.3158),
+            ("#2e3440", 0.18, 0.30, 0.38),
+            ("#080808", 0.18, 0.30, 0.38),
+        ]
+        for row in calibration {
+            let background = try XCTUnwrap(TerminalColor(hex: row.hex))
+            XCTAssertEqual(
+                ChromeThemeDeriver.shadowAlpha(on: background, tier: .overlay),
+                row.overlay, accuracy: 0.0005, "\(row.hex) overlay")
+            XCTAssertEqual(
+                ChromeThemeDeriver.shadowAlpha(on: background, tier: .float),
+                row.float, accuracy: 0.0005, "\(row.hex) float")
+            XCTAssertEqual(
+                ChromeThemeDeriver.shadowAlpha(on: background, tier: .modal),
+                row.modal, accuracy: 0.0005, "\(row.hex) modal")
+        }
+    }
+
+    func test_everyBundledTheme_ordersItsShadowTiers() throws {
+        for entry in ThemeCatalog.bundled {
+            let url = try XCTUnwrap(ThemeCatalog.bundledURL(for: entry.token))
+            let terminal = GhosttyThemeParser.parse(
+                try String(contentsOf: url, encoding: .utf8), fontName: "Menlo", fontSize: 12,
+                fallback: Theme.rosePineZen)
+            let chrome = ChromeThemeDeriver.derive(from: terminal)
+            let tiers: [FloatShadow.Tier] = [.overlay, .float, .modal]
+            XCTAssertGreaterThan(chrome.shadowAlpha(.overlay), 0, "\(entry.token) drops the overlay shadow")
+            for (lower, upper) in zip(tiers, tiers.dropFirst()) {
+                XCTAssertLessThanOrEqual(
+                    chrome.shadowAlpha(lower), chrome.shadowAlpha(upper),
+                    "\(entry.token) puts \(lower) above \(upper)")
+            }
+            for tier in tiers {
+                XCTAssertLessThanOrEqual(
+                    chrome.shadowAlpha(tier), tier.maxAlpha, "\(entry.token) exceeds the \(tier) cap")
+            }
+        }
+    }
+
     func test_aTint_isNotScaled() {
         var narrow = Theme.rosePineZen
         narrow.foreground = TerminalColor(red: 0x70, green: 0x70, blue: 0x70)

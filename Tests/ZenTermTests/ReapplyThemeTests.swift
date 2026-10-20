@@ -1,4 +1,5 @@
 import AppKit
+import TerminalKit
 import XCTest
 
 @testable import ZenTerm
@@ -38,6 +39,12 @@ final class ReapplyThemeTests: WindowTestCase {
         palette = \(AccentSlot.themeDefault.ansiIndex)=#00ffff
         """.write(to: dir.appendingPathComponent("theme"), atomically: true, encoding: .utf8)
         return ConfigLoader.loadAppTheme(configRoot: dir, general: .builtIn)
+    }
+
+    private func makeLightTheme() throws -> AppTheme {
+        var terminal = Theme.rosePineZen
+        terminal.background = try XCTUnwrap(TerminalColor(hex: "#faf4ed"))
+        return AppTheme(terminal: terminal)
     }
 
     private func makeWindow() -> NSWindow {
@@ -256,15 +263,38 @@ final class ReapplyThemeTests: WindowTestCase {
         }
         let card = overlay.subviews[1]
 
-        Theme.setCurrentForTesting(try makeAlternateTheme())
+        guard let elevation = card.subviews.first(where: { $0 is OutsideShadowView }) as? OutsideShadowView
+        else {
+            return XCTFail("expected the float's elevation view")
+        }
+
+        Theme.setCurrentForTesting(try makeLightTheme())
         overlay.reapplyTheme()
 
+        XCTAssertEqual(
+            elevation.color.alphaComponent, Theme.current.chrome.shadowAlpha(.float), accuracy: 0.001,
+            "the float's shadow must re-solve for the new theme")
         XCTAssertEqual(
             card.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor,
             "the float's focus halo must survive a theme swap as the accent role")
         XCTAssertNotEqual(
             card.layer?.borderColor, FloatShadow.edge.cgColor,
             "a float that reverts to the neutral hairline no longer signals it holds focus")
+    }
+
+    func test_reapplyTheme_resolvesTheCardShadow() throws {
+        let card = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 120))
+        CardChrome.apply(to: card, background: Theme.current.chrome.background.nsColor)
+        let before = Theme.current.chrome.shadowAlpha(.modal)
+
+        Theme.setCurrentForTesting(try makeLightTheme())
+        CardChrome.reapplyTheme(to: card)
+
+        let after = Theme.current.chrome.shadowAlpha(.modal)
+        XCTAssertNotEqual(before, after, accuracy: 0.01, "the swap must change the solved strength")
+        XCTAssertEqual(
+            card.shadow?.shadowColor?.alphaComponent ?? 0, after, accuracy: 0.001,
+            "an open card must re-solve its shadow on a theme swap")
     }
 
     private final class FakeSettingsSection: SettingsSection {

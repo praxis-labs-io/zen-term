@@ -13,7 +13,10 @@ enum ChromeThemeDeriver {
             attention: AccentSlot.cyan.color(in: terminal),
             positive: AccentSlot.green.color(in: terminal),
             cursor: terminal.cursor,
-            fillScale: fillScale(for: terminal))
+            fillScale: fillScale(for: terminal),
+            overlayShadowAlpha: shadowAlpha(on: terminal.background, tier: .overlay),
+            floatShadowAlpha: shadowAlpha(on: terminal.background, tier: .float),
+            modalShadowAlpha: shadowAlpha(on: terminal.background, tier: .modal))
     }
 
     /// A fixed anchor, not the catalog's median, so adding a theme doesn't re-weight the others.
@@ -29,6 +32,38 @@ enum ChromeThemeDeriver {
     private static func perceivedLuminance(_ color: TerminalColor) -> CGFloat {
         0.299 * CGFloat(color.red) / 255 + 0.587 * CGFloat(color.green) / 255
             + 0.114 * CGFloat(color.blue) / 255
+    }
+
+    static func shadowAlpha(on background: TerminalColor, tier: FloatShadow.Tier) -> CGFloat {
+        let cap = Double(tier.maxAlpha)
+        let goal = Double(tier.darkening)
+        guard darkening(of: background, alpha: cap) >= goal else { return tier.maxAlpha }
+        var low = 0.0
+        var high = cap
+        for _ in 0..<60 {
+            let mid = (low + high) / 2
+            if darkening(of: background, alpha: mid) < goal { low = mid } else { high = mid }
+        }
+        return CGFloat(high)
+    }
+
+    private static func darkening(of background: TerminalColor, alpha: Double) -> Double {
+        let channels = [background.red, background.green, background.blue].map(Double.init)
+        return lightness(relativeLuminance(channels))
+            - lightness(relativeLuminance(channels.map { $0 * (1 - alpha) }))
+    }
+
+    private static func relativeLuminance(_ channels: [Double]) -> Double {
+        let linear = channels.map { value -> Double in
+            let c = value / 255
+            return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    }
+
+    private static func lightness(_ luminance: Double) -> Double {
+        let f = luminance > 216.0 / 24389 ? cbrt(luminance) : (24389.0 / 27 * luminance + 16) / 116
+        return 116 * f - 16
     }
 
     static func withHighlightColors(_ terminal: TerminalTheme, chrome: ChromeTheme) -> TerminalTheme {

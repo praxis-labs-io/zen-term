@@ -41,9 +41,9 @@ final class FloatShadowTests: WindowTestCase {
         window.contentView!.addSubview(container)
         window.displayIfNeeded()
 
-        XCTAssertGreaterThan(
-            effectiveShadowAlpha(card), 0.4,
-            "the card chrome's elevation shadow must survive subtree insertion")
+        XCTAssertEqual(
+            effectiveShadowAlpha(card), Theme.current.chrome.shadowAlpha(.modal), accuracy: 0.001,
+            "the card chrome's modal shadow must survive subtree insertion")
     }
 
     func test_surfaceFloatCard_drawsItsShadow_ratherThanCastingALayerOne() {
@@ -83,8 +83,8 @@ final class FloatShadowTests: WindowTestCase {
         window.contentView!.addSubview(tooltip)
         window.displayIfNeeded()
 
-        XCTAssertGreaterThan(
-            effectiveShadowAlpha(tooltip), 0.3,
-            "the tooltip's lighter elevation shadow must survive presentation")
+        XCTAssertEqual(
+            effectiveShadowAlpha(tooltip), Theme.current.chrome.shadowAlpha(.overlay), accuracy: 0.001,
+            "the tooltip's overlay shadow must survive presentation")
     }
 }

@@ -29,11 +29,11 @@ final class CardView: ShadowCardView {
 enum CardChrome {
     static func apply(
         to card: NSView, background: NSColor, cornerRadius: CGFloat = ChromeMetrics.Radius.surface,
-        halo: Bool = false
+        halo: Bool = false, tier: FloatShadow.Tier = .modal
     ) {
         applyEdge(to: card, cornerRadius: cornerRadius, halo: halo)
         card.layer?.backgroundColor = background.cgColor
-        FloatShadow.applyShadow(to: card)
+        FloatShadow.apply(tier, to: card)
     }
 
     /// Leaves fill and shadow to the host: an opaque fill cancels `background-alpha`, and CA fills `shadowPath`.
@@ -42,9 +42,10 @@ enum CardChrome {
         card.layer?.masksToBounds = false
     }
 
-    static func reapplyTheme(to card: NSView, halo: Bool = false) {
+    static func reapplyTheme(to card: NSView, halo: Bool = false, tier: FloatShadow.Tier = .modal) {
         card.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
         card.layer?.borderColor = borderColor(halo: halo)
+        FloatShadow.apply(tier, to: card)
     }
 
     static func reapplyEdge(to card: NSView, halo: Bool) {

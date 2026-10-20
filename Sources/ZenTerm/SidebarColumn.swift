@@ -65,7 +65,8 @@ final class SidebarColumn: ShadowCardView {
             return
         }
         CardChrome.apply(
-            to: self, background: Theme.current.chrome.background.nsColor, cornerRadius: Self.cornerRadius)
+            to: self, background: Theme.current.chrome.background.nsColor, cornerRadius: Self.cornerRadius,
+            tier: .float)
     }
 
     // The card's own fill at zero alpha, so docking fades it out without crossing another color on the way.
@@ -95,6 +96,6 @@ final class SidebarColumn: ShadowCardView {
         rows.reapplyTheme()
         footer.reapplyTheme()
         toggle.reapplyTheme()
-        if isFloating { CardChrome.reapplyTheme(to: self) }
+        if isFloating { CardChrome.reapplyTheme(to: self, tier: .float) }
     }
 }

@@ -5,7 +5,6 @@ final class OutsideShadowView: NSView {
     var color: NSColor = .clear { didSet { needsDisplay = true } }
     var outset: CGFloat = 0 { didSet { needsDisplay = true } }
     var cornerRadius: CGFloat = 0 { didSet { needsDisplay = true } }
-    // `CGContext` blur renders at a different scale from `CALayer.shadowRadius`; values don't carry across.
     var blur: CGFloat = 8 { didSet { needsDisplay = true } }
     var offset: NSSize = .zero { didSet { needsDisplay = true } }
 
@@ -24,7 +23,7 @@ final class OutsideShadowView: NSView {
         context.addPath(path)
         context.clip(using: .evenOdd)
         context.setShadow(offset: offset, blur: blur, color: color.cgColor)
-        context.setFillColor(color.cgColor)
+        context.setFillColor(color.withAlphaComponent(1).cgColor)
         context.addPath(path)
         context.fillPath()
         context.restoreGState()

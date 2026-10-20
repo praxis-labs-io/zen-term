@@ -13,6 +13,9 @@ struct ChromeTheme: Equatable {
     let cursor: TerminalColor
     /// Per theme: foreground to background separation runs 0.40 to 0.94, so a constant alpha is not a constant border.
     let fillScale: CGFloat
+    let overlayShadowAlpha: CGFloat
+    let floatShadowAlpha: CGFloat
+    let modalShadowAlpha: CGFloat
     /// Check `1 / inkBoost` before raising it: above that a level clamps to opaque.
     static let inkBoost: CGFloat = 1.15
 
@@ -61,6 +64,14 @@ struct ChromeTheme: Equatable {
 
     func fill(alpha: CGFloat) -> NSColor {
         foreground.nsColor.withAlphaComponent(min(1, alpha * Self.inkBoost * fillScale))
+    }
+
+    func shadowAlpha(_ tier: FloatShadow.Tier) -> CGFloat {
+        switch tier {
+        case .overlay: return overlayShadowAlpha
+        case .float: return floatShadowAlpha
+        case .modal: return modalShadowAlpha
+        }
     }
 
     static let badgeTint: CGFloat = 0.15

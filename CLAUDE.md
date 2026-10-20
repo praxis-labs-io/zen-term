@@ -175,8 +175,9 @@ palette values, and AppKit system/semantic colors (`.secondaryLabelColor`,
 `.placeholderTextColor`, a text field's default `placeholderString` tint, and a field
 editor's insertion point, which defaults to the *macOS* accent: call
 `applyThemedCaret()` when a field takes focus). Those
-follow `effectiveAppearance`, not `Theme.current`. The only exception is a genuinely
-theme-independent value (the black drop shadow in `FloatShadow`), and it must be
+follow `effectiveAppearance`, not `Theme.current`. The only exception is the drop
+shadow's black in `FloatShadow`: the color is theme-independent, but its strength is
+solved per theme in `ChromeThemeDeriver`. Any other theme-independent value must be
 commented as such. If the chrome needs a role `ChromeTheme` does not expose, add the
 role and derive it in `ChromeThemeDeriver`. Never reach for a literal.
 
@@ -196,6 +197,11 @@ Sizes, weights and type in the chrome come from named tokens, never a literal.
   `modalSectionGap`) and `ChromeMetrics.Height` (`xs`, `sm`, `control`, `lg`). Icon, glyph
   and width geometry are not spacing. A value off the scale is a signal to fix the layout,
   not to add a step.
+- **Elevation:** shadows come from `FloatShadow.apply(_:to:)` with a tier: `overlay` for
+  anything anchored (popovers, dropdowns, tooltips, hover cards), `float` for toasts,
+  cards and the floating sidebar, `modal` for modals (the `CardChrome` default). A drawn
+  shadow reads `FloatShadow.color(_:)` and the tier's `contextBlur` and `offset`. Never
+  build an `NSShadow` by hand.
 
 ## Designs
 

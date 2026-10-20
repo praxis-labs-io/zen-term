@@ -78,7 +78,7 @@ final class ToastView: ShadowCardView {
         layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
         layer?.borderWidth = ChromeMetrics.Border.width
         layer?.borderColor = FloatShadow.edge.cgColor
-        FloatShadow.applyShadow(to: self)
+        FloatShadow.apply(.float, to: self)
 
         titleLabel.font = ChromeType.font(.body, weight: .semibold)
         titleLabel.textColor = Self.titleColor
@@ -238,6 +238,7 @@ final class ToastView: ShadowCardView {
     func reapplyTheme() {
         layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
         layer?.borderColor = FloatShadow.edge.cgColor
+        FloatShadow.apply(.float, to: self)
         titleLabel.textColor = Self.titleColor
         titleTailLabel?.textColor = Self.titleColor
         messageLabel?.textColor = Self.messageColor

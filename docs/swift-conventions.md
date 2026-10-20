@@ -167,7 +167,8 @@ shadow disappears. Direct `layer.shadow*` writes are safe only after insertion.
 
 **A drop shadow cannot be made outside-only by reshaping `shadowPath`.** Core Animation fills the
 path, so a ring path ramps the glow up outward. Clip to outside the card at draw time, set the shadow,
-fill the card path. `OutsideShadowView` is the shared implementation.
+fill the card path at full alpha. A context shadow takes its alpha from the fill, so a translucent fill
+multiplies into the shadow color and the shadow all but vanishes. `OutsideShadowView` does this.
 
 **`CGContext` blur and `CALayer.shadowRadius` use different scales.** A context blur of 28 tracks a
 layer radius of 14. Measure alpha profiles when converting one to the other.

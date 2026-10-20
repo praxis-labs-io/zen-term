@@ -93,6 +93,9 @@ never a literal.
 - Spacing, insets, gaps and control or row heights come from
   `ChromeMetrics.Spacing` and `ChromeMetrics.Height`. Icon, glyph and width geometry
   are not spacing. A value off the scale is a signal to fix the layout, not to add a step.
+- Shadows come from `FloatShadow.apply(_:to:)` with a tier: `overlay` for anything
+  anchored, `float` for toasts, cards and the floating sidebar, `modal` for modals.
+  Never build an `NSShadow` by hand.
 
 **Never block the main thread.** No `waitUntilExit`, no filesystem walk, no
 blocking I/O on the main queue. The chrome is the product and a stalled main

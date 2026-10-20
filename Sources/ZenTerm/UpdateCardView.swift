@@ -55,7 +55,7 @@ final class UpdateCardView: ShadowCardView {
         wantsLayer = true
         layer?.cornerRadius = ChromeMetrics.Radius.surface
         layer?.borderWidth = ChromeMetrics.Border.width
-        FloatShadow.applyShadow(to: self)
+        FloatShadow.apply(.float, to: self)
 
         badgeFill.wantsLayer = true
         badgeFill.layer?.cornerRadius = ChromeMetrics.Radius.control
@@ -219,6 +219,7 @@ final class UpdateCardView: ShadowCardView {
 
     func reapplyTheme() {
         applyColors()
+        FloatShadow.apply(.float, to: self)
         refreshKeycap()
         checkKeycap?.reapplyTheme()
         render()
