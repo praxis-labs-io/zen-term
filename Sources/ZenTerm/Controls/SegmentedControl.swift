@@ -34,7 +34,7 @@ final class SegmentedControl: NSView {
         self.onChange = onChange
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 7
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         translatesAutoresizingMaskIntoConstraints = false
 
         segments = options.enumerated().map { index, title in

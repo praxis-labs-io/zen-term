@@ -110,9 +110,9 @@ final class ListPopover {
 
         let card = ShadowCardView()
         card.wantsLayer = true
-        card.layer?.cornerRadius = 8
+        card.layer?.cornerRadius = ChromeMetrics.Radius.surface
         card.layer?.backgroundColor = chrome.background.nsColor.cgColor
-        card.layer?.borderWidth = 1
+        card.layer?.borderWidth = ChromeMetrics.Border.width
         card.layer?.borderColor = FloatShadow.edge.cgColor
         card.translatesAutoresizingMaskIntoConstraints = true
         FloatShadow.applyShadow(to: card)

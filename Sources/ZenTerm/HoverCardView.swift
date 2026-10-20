@@ -5,9 +5,9 @@ class HoverCardView: ShadowCardView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.cornerRadius = 6
+        layer?.cornerRadius = ChromeMetrics.Radius.surface
         layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
-        layer?.borderWidth = 1
+        layer?.borderWidth = ChromeMetrics.Border.width
         layer?.borderColor = FloatShadow.edge.cgColor
         layer?.masksToBounds = false
         let elevation = NSShadow()

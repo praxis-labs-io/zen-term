@@ -27,10 +27,8 @@ final class CardView: ShadowCardView {
 }
 
 enum CardChrome {
-    static let cornerRadius: CGFloat = 12
-
     static func apply(
-        to card: NSView, background: NSColor, cornerRadius: CGFloat = CardChrome.cornerRadius,
+        to card: NSView, background: NSColor, cornerRadius: CGFloat = ChromeMetrics.Radius.surface,
         halo: Bool = false
     ) {
         applyEdge(to: card, cornerRadius: cornerRadius, halo: halo)
@@ -50,7 +48,7 @@ enum CardChrome {
     }
 
     static func reapplyEdge(to card: NSView, halo: Bool) {
-        card.layer?.borderWidth = halo ? 1.5 : 1
+        card.layer?.borderWidth = ChromeMetrics.Border.width
         card.layer?.borderColor = borderColor(halo: halo)
     }
 

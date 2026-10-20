@@ -32,9 +32,9 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         self.placeholder = placeholder
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 6
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         layer?.backgroundColor = Self.restFill.cgColor
-        layer?.borderWidth = 1
+        layer?.borderWidth = ChromeMetrics.Border.width
         layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
         translatesAutoresizingMaskIntoConstraints = false
 
@@ -88,7 +88,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         let chrome = Theme.current.chrome
         layer?.backgroundColor = Self.restFill.cgColor
         layer?.borderColor = (focused ? chrome.accent.nsColor : chrome.fill(alpha: ChromeTheme.border)).cgColor
-        layer?.borderWidth = focused ? 1.5 : 1
+        layer?.borderWidth = ChromeMetrics.Border.width
     }
 
     #if DEBUG

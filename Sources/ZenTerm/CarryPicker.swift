@@ -303,9 +303,9 @@ final class CarryPicker: NSView, ThemeReapplying {
             super.init(frame: .zero)
             translatesAutoresizingMaskIntoConstraints = false
             wantsLayer = true
-            layer?.cornerRadius = 6
+            layer?.cornerRadius = ChromeMetrics.Radius.control
             PopoverButtonStyle.applyRestFill(to: self)
-            layer?.borderWidth = 1
+            layer?.borderWidth = ChromeMetrics.Border.width
 
             label.font = ChromeType.font(.body)
             label.lineBreakMode = .byTruncatingTail

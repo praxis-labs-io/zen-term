@@ -213,7 +213,7 @@ final class BranchField: NSView, ThemeReapplying {
             self.onClick = onClick
             super.init(frame: .zero)
             wantsLayer = true
-            layer?.cornerRadius = 5
+            layer?.cornerRadius = ChromeMetrics.Radius.control
             translatesAutoresizingMaskIntoConstraints = false
 
             icon.image = NSImage(systemSymbolName: "arrow.branch", accessibilityDescription: nil)

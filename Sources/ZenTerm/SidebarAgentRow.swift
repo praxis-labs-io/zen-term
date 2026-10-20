@@ -71,7 +71,7 @@ final class SidebarAgentRow: SidebarJumpRow {
         }
 
         dot.wantsLayer = true
-        dot.layer?.cornerRadius = Self.dotDiameter / 2
+        dot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.dotDiameter)
         glyphSlot.translatesAutoresizingMaskIntoConstraints = false
         addSubview(glyphSlot)
         for glyph in [dot, spinner] {

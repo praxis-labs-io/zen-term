@@ -9,13 +9,14 @@ final class SettingsNavRowTests: WindowTestCase {
 
         window.makeFirstResponder(row)
         XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor)
-        XCTAssertGreaterThan(row.layer?.borderWidth ?? 0, 0)
+        XCTAssertEqual(row.layer?.borderWidth, ChromeMetrics.Border.width)
         XCTAssertEqual(row.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor)
 
         window.makeFirstResponder(nil)
         XCTAssertEqual(row.layer?.backgroundColor, NSColor.clear.cgColor)
-        XCTAssertEqual(row.layer?.borderWidth, 0)
-        XCTAssertNil(row.layer?.borderColor)
+        XCTAssertEqual(
+            row.layer?.borderWidth, ChromeMetrics.Border.width, "focus changes the ring's color, not its width")
+        XCTAssertEqual(row.layer?.borderColor?.alpha, 0)
     }
 
     func test_focusFillWinsOverSelectionFill() {
@@ -34,7 +35,7 @@ final class SettingsNavRowTests: WindowTestCase {
 
         row.mouseEntered(with: crossing(.mouseEntered, over: row))
         XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor)
-        XCTAssertNil(row.layer?.borderColor, "hover shares focus's fill, so only focus draws the ring")
+        XCTAssertEqual(row.layer?.borderColor?.alpha, 0, "hover shares focus's fill, so only focus draws the ring")
 
         row.mouseExited(with: crossing(.mouseExited, over: row))
         XCTAssertEqual(row.layer?.backgroundColor, NSColor.clear.cgColor)
@@ -67,7 +68,7 @@ final class SettingsNavRowTests: WindowTestCase {
         XCTAssertEqual(row.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor)
 
         window.makeFirstResponder(nil)
-        XCTAssertNil(row.layer?.borderColor)
+        XCTAssertEqual(row.layer?.borderColor?.alpha, 0)
         row.mouseExited(with: crossing(.mouseExited, over: row))
         XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.rest).cgColor)
     }

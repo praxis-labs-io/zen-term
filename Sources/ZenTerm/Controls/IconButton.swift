@@ -39,7 +39,7 @@ final class IconButton: NSView {
         tooltip = TooltipHost(label: label, shortcut: shortcut)
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 6
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         icon.image = IconCatalog.image(symbol, pointSize: pointSize, weight: weight)
         icon.imageScaling = .scaleNone
         icon.translatesAutoresizingMaskIntoConstraints = false
@@ -51,7 +51,7 @@ final class IconButton: NSView {
         setAccessibilityLabel(label)
 
         activityDot.wantsLayer = true
-        activityDot.layer?.cornerRadius = Self.dotDiameter / 2
+        activityDot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.dotDiameter)
         activityDot.isHidden = true
         activityDot.translatesAutoresizingMaskIntoConstraints = false
         addSubview(activityDot)

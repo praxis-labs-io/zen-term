@@ -53,6 +53,7 @@ final class TabBarView: NSView {
     private var activeTabIndex: Int?
     private var lastItems: [TabBarItem] = []
     // Matches the canvas page-slide so the two land together.
+    private static let tracerThickness: CGFloat = 2
     private static let tracerDuration: CFTimeInterval = 0.28
 
     init(
@@ -88,7 +89,7 @@ final class TabBarView: NSView {
             name: NSView.boundsDidChangeNotification, object: clip)
 
         tracer.backgroundColor = Theme.current.chrome.accent.nsColor.cgColor
-        tracer.cornerRadius = 1
+        tracer.cornerRadius = ChromeMetrics.Radius.capsule(Self.tracerThickness)
         tracer.anchorPoint = CGPoint(x: 0, y: 0.5)
         tracer.zPosition = 1
         tracer.isHidden = true
@@ -246,7 +247,7 @@ final class TabBarView: NSView {
     }
 
     private func tracerFrame(for chip: NSView) -> CGRect {
-        CGRect(x: chip.frame.minX + 9, y: 0, width: chip.frame.width - 18, height: 2)
+        CGRect(x: chip.frame.minX + 9, y: 0, width: chip.frame.width - 18, height: Self.tracerThickness)
     }
 
     private func setTracerFrame(_ frame: CGRect) {
@@ -358,7 +359,7 @@ final class TabBarView: NSView {
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             super.init(frame: .zero)
             wantsLayer = true
-            layer?.cornerRadius = 6
+            layer?.cornerRadius = ChromeMetrics.Radius.control
 
             label.translatesAutoresizingMaskIntoConstraints = false
             addSubview(label)

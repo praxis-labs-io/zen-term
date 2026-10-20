@@ -19,7 +19,7 @@ final class FindBarView: NSView {
         super.init(frame: .zero)
 
         wantsLayer = true
-        layer?.cornerRadius = Self.cornerRadius
+        layer?.cornerRadius = ChromeMetrics.Radius.control
 
         glyph.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "Find")
         glyph.symbolConfiguration = .init(pointSize: 12, weight: .regular)
@@ -120,7 +120,6 @@ final class FindBarView: NSView {
     }
 
     static let height: CGFloat = 26
-    private static let cornerRadius: CGFloat = 6
 
     static var tintAlphaForTesting: CGFloat {
         Theme.current.chrome.tint(Theme.current.chrome.accent, alpha: ChromeTheme.badgeTint).alphaComponent

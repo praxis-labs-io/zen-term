@@ -53,12 +53,12 @@ final class UpdateCardView: ShadowCardView {
 
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 12
-        layer?.borderWidth = 1
+        layer?.cornerRadius = ChromeMetrics.Radius.surface
+        layer?.borderWidth = ChromeMetrics.Border.width
         FloatShadow.applyShadow(to: self)
 
         badgeFill.wantsLayer = true
-        badgeFill.layer?.cornerRadius = 7
+        badgeFill.layer?.cornerRadius = ChromeMetrics.Radius.control
         badgeFill.translatesAutoresizingMaskIntoConstraints = false
         iconView.image = BrandMark.image("origami")
         iconView.imageScaling = .scaleProportionallyUpOrDown

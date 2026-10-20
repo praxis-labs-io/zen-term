@@ -23,9 +23,9 @@ final class KeybindHintBubble: ShadowCardView {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 12
+        layer?.cornerRadius = ChromeMetrics.Radius.surface
         layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
-        layer?.borderWidth = 1
+        layer?.borderWidth = ChromeMetrics.Border.width
         layer?.borderColor = FloatShadow.edge.cgColor
         FloatShadow.applyShadow(to: self)
 
@@ -33,7 +33,7 @@ final class KeybindHintBubble: ShadowCardView {
 
         let badge = NSView()
         badge.wantsLayer = true
-        badge.layer?.cornerRadius = 7
+        badge.layer?.cornerRadius = ChromeMetrics.Radius.control
         badge.layer?.backgroundColor =
             Theme.current.chrome.tint(Theme.current.chrome.accent, alpha: ChromeTheme.badgeTint).cgColor
         badge.translatesAutoresizingMaskIntoConstraints = false
@@ -55,9 +55,9 @@ final class KeybindHintBubble: ShadowCardView {
 
         let previewBox = NSView()
         previewBox.wantsLayer = true
-        previewBox.layer?.cornerRadius = 6
+        previewBox.layer?.cornerRadius = ChromeMetrics.Radius.control
         previewBox.layer?.backgroundColor = Theme.current.chrome.fill(.rest).cgColor
-        previewBox.layer?.borderWidth = 1.5
+        previewBox.layer?.borderWidth = ChromeMetrics.Border.width
         previewBox.layer?.borderColor = Theme.current.chrome.accent.nsColor.cgColor
         previewBox.translatesAutoresizingMaskIntoConstraints = false
         previewHost.translatesAutoresizingMaskIntoConstraints = false
@@ -194,7 +194,7 @@ final class KeybindHintBubble: ShadowCardView {
         label.translatesAutoresizingMaskIntoConstraints = false
         let box = NSView()
         box.wantsLayer = true
-        box.layer?.cornerRadius = 4
+        box.layer?.cornerRadius = ChromeMetrics.Radius.control
         box.layer?.backgroundColor = Theme.current.chrome.fill(.rest).cgColor
         box.translatesAutoresizingMaskIntoConstraints = false
         box.addSubview(label)

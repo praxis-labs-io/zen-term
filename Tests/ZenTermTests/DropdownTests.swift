@@ -298,7 +298,9 @@ final class DropdownTests: WindowTestCase {
         dropdown.frame = NSRect(x: 20, y: 300, width: 220, height: 30)
         dropdown.openListForTesting()
         XCTAssertTrue(dropdown.isPopoverOpen, "precondition: the list is up before the resize")
-        XCTAssertEqual(dropdown.layer?.borderWidth, 1.5, "precondition: the button is lit while open")
+        XCTAssertEqual(
+            dropdown.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor,
+            "precondition: the button is lit while open")
 
         window.setFrame(NSRect(x: 0, y: 0, width: 520, height: 300), display: false)
 

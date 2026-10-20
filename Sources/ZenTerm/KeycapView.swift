@@ -4,7 +4,6 @@ import TerminalKit
 final class KeycapView: NSView {
     private static let height: CGFloat = 20
     private static let horizontalInset: CGFloat = 7
-    private static let cornerRadius: CGFloat = 6
     private static let tokenSpacing: CGFloat = 3
     private static let symbolPointSize: CGFloat = 10
 
@@ -38,7 +37,7 @@ final class KeycapView: NSView {
         tokenStack = stack
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = Self.cornerRadius
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         layer?.backgroundColor = Self.background(style)?.cgColor
         translatesAutoresizingMaskIntoConstraints = false
 

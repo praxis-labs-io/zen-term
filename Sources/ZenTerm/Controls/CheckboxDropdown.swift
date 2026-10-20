@@ -69,9 +69,9 @@ final class CheckboxDropdown: NSView {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 6
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         PopoverButtonStyle.applyRestFill(to: self)
-        layer?.borderWidth = 1
+        layer?.borderWidth = ChromeMetrics.Border.width
         layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
 
         titleLabel.font = ChromeType.font(.body)
@@ -335,7 +335,7 @@ final class CheckboxDropdown: NSView {
             self.onClick = onClick
             super.init(frame: .zero)
             wantsLayer = true
-            layer?.cornerRadius = 5
+            layer?.cornerRadius = ChromeMetrics.Radius.control
             translatesAutoresizingMaskIntoConstraints = false
 
             check.image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)

@@ -77,9 +77,9 @@ final class Dropdown: NSView {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 6
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         PopoverButtonStyle.applyRestFill(to: self)
-        layer?.borderWidth = 1
+        layer?.borderWidth = ChromeMetrics.Border.width
         layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
 
         queryField.font = ChromeType.font(.body)
@@ -102,8 +102,8 @@ final class Dropdown: NSView {
         chevron.translatesAutoresizingMaskIntoConstraints = false
 
         swatch.wantsLayer = true
-        swatch.layer?.cornerRadius = Self.swatchSize / 2
-        swatch.layer?.borderWidth = 1
+        swatch.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.swatchSize)
+        swatch.layer?.borderWidth = ChromeMetrics.Border.width
         swatch.layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.swatchRing).cgColor
         swatch.isHidden = true
         swatch.translatesAutoresizingMaskIntoConstraints = false
@@ -442,7 +442,7 @@ private final class DropdownRowView: NSView {
         self.onSelect = onSelect
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 5
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         translatesAutoresizingMaskIntoConstraints = false
 
         let title = NSTextField(labelWithString: item.title)
@@ -455,9 +455,9 @@ private final class DropdownRowView: NSView {
         if let swatchColor = item.swatch {
             let dot = NSView()
             dot.wantsLayer = true
-            dot.layer?.cornerRadius = Dropdown.swatchSize / 2
+            dot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Dropdown.swatchSize)
             dot.layer?.backgroundColor = swatchColor.cgColor
-            dot.layer?.borderWidth = 1
+            dot.layer?.borderWidth = ChromeMetrics.Border.width
             dot.layer?.borderColor = chrome.fill(alpha: ChromeTheme.swatchRing).cgColor
             dot.translatesAutoresizingMaskIntoConstraints = false
             addSubview(dot)

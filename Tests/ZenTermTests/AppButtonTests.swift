@@ -47,11 +47,11 @@ final class AppButtonTests: WindowTestCase {
 
     func test_focus_stillDrawsTheAccentRing() {
         let (button, window) = mount(.muted)
-        XCTAssertEqual(button.layer?.borderWidth, 0)
+        XCTAssertEqual(button.layer?.borderColor?.alpha, 0)
 
         XCTAssertTrue(window.makeFirstResponder(button))
 
-        XCTAssertEqual(button.layer?.borderWidth, 1.5)
+        XCTAssertEqual(button.layer?.borderWidth, ChromeMetrics.Border.width)
         XCTAssertEqual(button.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor)
     }
 
@@ -80,10 +80,10 @@ final class AppButtonTests: WindowTestCase {
 
         XCTAssertEqual(large.frame.height, 32)
         XCTAssertEqual(titleFont(large)?.pointSize, 13)
-        XCTAssertEqual(large.layer?.cornerRadius, 8)
+        XCTAssertEqual(large.layer?.cornerRadius, ChromeMetrics.Radius.control)
         XCTAssertEqual(standard.frame.height, 26)
         XCTAssertEqual(titleFont(standard)?.pointSize, 12)
-        XCTAssertEqual(standard.layer?.cornerRadius, 6)
+        XCTAssertEqual(standard.layer?.cornerRadius, ChromeMetrics.Radius.control)
         withExtendedLifetime(windows) {}
     }
 

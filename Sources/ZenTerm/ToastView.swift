@@ -74,9 +74,9 @@ final class ToastView: ShadowCardView {
 
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 12
+        layer?.cornerRadius = ChromeMetrics.Radius.surface
         layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
-        layer?.borderWidth = 1
+        layer?.borderWidth = ChromeMetrics.Border.width
         layer?.borderColor = FloatShadow.edge.cgColor
         FloatShadow.applyShadow(to: self)
 

@@ -22,7 +22,7 @@ final class DrawerRail: NSView {
         tooltip = TooltipHost(label: "Add a \(name) command")
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 7
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         border.fillColor = nil
         border.lineDashPattern = [4, 3]
         layer?.addSublayer(border)
@@ -45,7 +45,8 @@ final class DrawerRail: NSView {
         CATransaction.setDisableActions(true)
         border.frame = bounds
         border.path = CGPath(
-            roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), cornerWidth: 7, cornerHeight: 7, transform: nil)
+            roundedRect: bounds.insetBy(dx: ChromeMetrics.Border.width / 2, dy: ChromeMetrics.Border.width / 2),
+            cornerWidth: ChromeMetrics.Radius.control, cornerHeight: ChromeMetrics.Radius.control, transform: nil)
         CATransaction.commit()
     }
 
@@ -54,7 +55,7 @@ final class DrawerRail: NSView {
     private func restyle() {
         let chrome = Theme.current.chrome
         border.strokeColor = (hasFocus ? chrome.accent.nsColor : chrome.ink(.faint)).cgColor
-        border.lineWidth = hasFocus ? 1.5 : 1
+        border.lineWidth = ChromeMetrics.Border.width
         layer?.backgroundColor = (isHovered ? chrome.fill(.hover) : .clear).cgColor
         glyph.contentTintColor = chrome.ink(isHovered || hasFocus ? .normal : .muted)
     }

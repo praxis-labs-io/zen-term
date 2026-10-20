@@ -56,7 +56,7 @@ final class SettingsNavRow: NSView, HoverSuppressing {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 6
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         label.stringValue = title
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
@@ -72,7 +72,7 @@ final class SettingsNavRow: NSView, HoverSuppressing {
         detailLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(detailLabel)
         attentionDot.wantsLayer = true
-        attentionDot.layer?.cornerRadius = Self.attentionDotDiameter / 2
+        attentionDot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.attentionDotDiameter)
         attentionDot.isHidden = true
         attentionDot.translatesAutoresizingMaskIntoConstraints = false
         addSubview(attentionDot)
@@ -217,8 +217,8 @@ final class SettingsNavRow: NSView, HoverSuppressing {
     private var showsHover: Bool { isHovered && !isHoverSuppressed }
 
     private func refreshFill() {
-        layer?.borderWidth = isFocusedStop ? 1.5 : 0
-        layer?.borderColor = isFocusedStop ? Theme.current.chrome.accent.nsColor.cgColor : nil
+        layer?.borderWidth = ChromeMetrics.Border.width
+        layer?.borderColor = isFocusedStop ? Theme.current.chrome.accent.nsColor.cgColor : NSColor.clear.cgColor
         if isFocusedStop {
             layer?.backgroundColor = Theme.current.chrome.fill(.hover).cgColor
         } else if showsHover {

@@ -20,7 +20,7 @@ final class SidebarRowMenuItemView: NSView {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 6
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         setAccessibilityElement(true)
         setAccessibilityRole(.menuItem)
         setAccessibilityLabel(item.title)

@@ -21,13 +21,6 @@ final class AppButton: NSButton {
             }
         }
 
-        var cornerRadius: CGFloat {
-            switch self {
-            case .standard: return 6
-            case .large: return 8
-            }
-        }
-
         var role: ChromeType.Role {
             switch self {
             case .standard: return .small
@@ -108,7 +101,7 @@ final class AppButton: NSButton {
         translatesAutoresizingMaskIntoConstraints = false
         isBordered = false
         wantsLayer = true
-        layer?.cornerRadius = size.cornerRadius
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         setButtonType(.momentaryChange)
         cell.imageDimsWhenDisabled = false
         if let symbol {
@@ -195,8 +188,8 @@ final class AppButton: NSButton {
         let (textColor, background) = isEnabled ? enabledColors(chrome) : disabledColors(chrome)
         layer?.backgroundColor = background.cgColor
         let outlined = isEnabled && (isFocusedStop || showsFocusOutline) && variant != .link
-        layer?.borderWidth = outlined ? 1.5 : 0
-        layer?.borderColor = outlined ? chrome.accent.nsColor.cgColor : nil
+        layer?.borderWidth = ChromeMetrics.Border.width
+        layer?.borderColor = outlined ? chrome.accent.nsColor.cgColor : NSColor.clear.cgColor
         if symbolName != nil {
             contentTintColor = textColor
         } else {

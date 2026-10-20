@@ -21,7 +21,7 @@ final class KeybindChip: NSView {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 8
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         host.translatesAutoresizingMaskIntoConstraints = false
         addSubview(host)
         NSLayoutConstraint.activate([
@@ -115,7 +115,7 @@ final class KeybindChip: NSView {
         }
         layer?.backgroundColor = fill.cgColor
         let outlined = isFocused || isCapturing
-        layer?.borderWidth = outlined ? 1.5 : 0
-        layer?.borderColor = outlined ? chrome.accent.nsColor.cgColor : nil
+        layer?.borderWidth = ChromeMetrics.Border.width
+        layer?.borderColor = outlined ? chrome.accent.nsColor.cgColor : NSColor.clear.cgColor
     }
 }

@@ -88,6 +88,8 @@ never a literal.
 - Fonts come from `ChromeType` roles; a section heading takes
   `ChromeType.sectionLabel` in sentence case. `swiftlint` rejects
   `systemFont(ofSize:)` outside `ChromeType`.
+- Corner radii come from `ChromeMetrics.Radius` and border widths from
+  `ChromeMetrics.Border.width`. Focus changes a border's color, never its width.
 
 **Never block the main thread.** No `waitUntilExit`, no filesystem walk, no
 blocking I/O on the main queue. The chrome is the product and a stalled main

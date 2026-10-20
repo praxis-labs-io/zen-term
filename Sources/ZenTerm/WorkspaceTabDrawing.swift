@@ -36,8 +36,8 @@ final class WorkspaceTabDrawing: NSView {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 10
-        layer?.borderWidth = 1
+        layer?.cornerRadius = ChromeMetrics.Radius.surface
+        layer?.borderWidth = ChromeMetrics.Border.width
         heightAnchor.constraint(equalToConstant: Self.height).isActive = true
         for field in regions.values { wire(field) }
         for rail in rails.values { wire(rail) }

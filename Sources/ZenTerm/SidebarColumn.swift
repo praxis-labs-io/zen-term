@@ -61,7 +61,7 @@ final class SidebarColumn: ShadowCardView {
         rows.layer?.masksToBounds = floating
         guard floating else {
             layer?.backgroundColor = nil
-            layer?.borderWidth = 0
+            layer?.borderColor = NSColor.clear.cgColor
             shadow = nil
             return
         }

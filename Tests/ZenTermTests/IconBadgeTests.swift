@@ -17,7 +17,7 @@ final class IconBadgeTests: XCTestCase {
         badge.layoutSubtreeIfNeeded()
 
         XCTAssertEqual(badge.fittingSize, NSSize(width: 28, height: 28))
-        XCTAssertEqual(badge.layer?.cornerRadius, 7)
+        XCTAssertEqual(badge.layer?.cornerRadius, ChromeMetrics.Radius.control)
         XCTAssertEqual(toast.badgeFillForTesting, chrome.tint(role, alpha: ChromeTheme.badgeTint).cgColor)
         XCTAssertEqual(toast.badgeIconTintForTesting, role.nsColor)
     }

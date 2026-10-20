@@ -188,6 +188,9 @@ Sizes, weights and type in the chrome come from named tokens, never a literal.
   `caption`, with a weight and a mono face where needed); a section heading takes
   `ChromeType.sectionLabel` in sentence case. `swiftlint` rejects `systemFont(ofSize:)`
   outside `ChromeType`.
+- **Radius and border:** corner radii come from `ChromeMetrics.Radius` (`control`,
+  `surface`, `capsule(_:)`) and border widths from `ChromeMetrics.Border.width`. Focus
+  changes a border's color, never its width.
 
 ## Designs
 

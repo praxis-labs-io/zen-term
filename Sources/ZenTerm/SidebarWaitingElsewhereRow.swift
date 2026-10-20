@@ -23,7 +23,7 @@ final class SidebarWaitingElsewhereRow: SidebarJumpRow {
         addSubview(label)
 
         dot.wantsLayer = true
-        dot.layer?.cornerRadius = Self.dotDiameter / 2
+        dot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.dotDiameter)
         dot.translatesAutoresizingMaskIntoConstraints = false
         addSubview(dot)
 

@@ -62,8 +62,8 @@ final class IconPickerField: NSView {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 6
-        layer?.borderWidth = 1
+        layer?.cornerRadius = ChromeMetrics.Radius.control
+        layer?.borderWidth = ChromeMetrics.Border.width
 
         glyph.translatesAutoresizingMaskIntoConstraints = false
         glyph.setContentHuggingPriority(.required, for: .horizontal)
@@ -118,7 +118,7 @@ final class IconPickerField: NSView {
         let active = isFocusedStop || popover != nil
         layer?.backgroundColor = Self.restFill.cgColor
         layer?.borderColor = (active ? chrome.accent.nsColor : chrome.fill(alpha: ChromeTheme.border)).cgColor
-        layer?.borderWidth = active ? 1.5 : 1
+        layer?.borderWidth = ChromeMetrics.Border.width
     }
 
     override var acceptsFirstResponder: Bool { true }
@@ -249,9 +249,9 @@ final class IconPickerField: NSView {
 
         let card = ShadowCardView()
         card.wantsLayer = true
-        card.layer?.cornerRadius = 8
+        card.layer?.cornerRadius = ChromeMetrics.Radius.surface
         card.layer?.backgroundColor = chrome.background.nsColor.cgColor
-        card.layer?.borderWidth = 1
+        card.layer?.borderWidth = ChromeMetrics.Border.width
         card.layer?.borderColor = FloatShadow.edge.cgColor
         card.translatesAutoresizingMaskIntoConstraints = true
         FloatShadow.applyShadow(to: card)
@@ -308,9 +308,9 @@ final class IconPickerField: NSView {
         let accent = Theme.current.chrome.accent.nsColor.cgColor
         for (index, cell) in cells.enumerated() {
             cell.isActive = index == highlighted
-            cell.layer?.cornerRadius = 6
-            cell.layer?.borderWidth = index == highlighted ? 1.5 : 0
-            cell.layer?.borderColor = index == highlighted ? accent : nil
+            cell.layer?.cornerRadius = ChromeMetrics.Radius.control
+            cell.layer?.borderWidth = ChromeMetrics.Border.width
+            cell.layer?.borderColor = index == highlighted ? accent : NSColor.clear.cgColor
         }
     }
 

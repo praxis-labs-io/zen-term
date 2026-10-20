@@ -27,8 +27,8 @@ final class ConfirmCardList: NSView, ThemeReapplying {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 6
-        layer?.borderWidth = 1
+        layer?.cornerRadius = ChromeMetrics.Radius.control
+        layer?.borderWidth = ChromeMetrics.Border.width
 
         let stack = NSStackView(views: rowViews)
         stack.orientation = .vertical

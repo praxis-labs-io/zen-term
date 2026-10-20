@@ -42,15 +42,14 @@ final class RegionCommandField: NSView, NSTextFieldDelegate {
         self.region = region
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 8
-        layer?.borderWidth = 1
+        layer?.cornerRadius = ChromeMetrics.Radius.control
+        layer?.borderWidth = ChromeMetrics.Border.width
 
         label.stringValue = WorkspaceForm.label(for: region)
         label.font = ChromeType.font(.caption, weight: .medium)
         opensFocusedLabel.font = ChromeType.font(.caption, weight: .medium)
 
         marker.wantsLayer = true
-        marker.layer?.cornerRadius = 1
 
         field.isBordered = false
         field.drawsBackground = false
@@ -107,7 +106,7 @@ final class RegionCommandField: NSView, NSTextFieldDelegate {
         let chrome = Theme.current.chrome
         layer?.backgroundColor = chrome.fill(.rest).cgColor
         layer?.borderColor = (isEditing ? chrome.accent.nsColor : chrome.fill(alpha: ChromeTheme.border)).cgColor
-        layer?.borderWidth = isEditing ? 1.5 : 1
+        layer?.borderWidth = ChromeMetrics.Border.width
         marker.isHidden = !opensFocused
         opensFocusedLabel.isHidden = !opensFocused
         cornerButton.isHidden = !(isHovered || isEditing)

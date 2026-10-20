@@ -94,7 +94,7 @@ final class PanelHostView: NSView, TerminalModeHost {
         pane.wantsLayer = true
         pane.layer?.cornerRadius = Self.cornerRadius
         pane.layer?.masksToBounds = false
-        pane.layer?.borderWidth = 1
+        pane.layer?.borderWidth = ChromeMetrics.Border.width
         halo.wantsLayer = true
         halo.layer?.opacity = 0
         halo.color = Theme.current.chrome.accent.nsColor

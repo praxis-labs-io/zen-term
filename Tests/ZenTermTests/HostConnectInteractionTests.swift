@@ -1085,7 +1085,7 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         XCTAssertFalse(button.showsFocusOutline)
         XCTAssertFalse(button.acceptsFirstResponder, "the panel takes ↵, so the button never draws a focus ring")
-        XCTAssertEqual(button.layer?.borderWidth, 0)
+        XCTAssertEqual(button.layer?.borderColor?.alpha, 0)
         XCTAssertNotNil(button.layer?.backgroundColor)
     }
 

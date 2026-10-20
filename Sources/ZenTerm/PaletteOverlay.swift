@@ -17,7 +17,7 @@ class SelectableRowView: NSView, PaletteRowView {
     init() {
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 6
+        layer?.cornerRadius = ChromeMetrics.Radius.control
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
