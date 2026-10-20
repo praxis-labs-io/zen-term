@@ -94,8 +94,7 @@ final class SegmentedControl: NSView {
     override var acceptsFirstResponder: Bool { isEnabled }
 
     override func becomeFirstResponder() -> Bool {
-        isControlFocused = true
-        refreshOutline()
+        showFocus()
         return true
     }
 
@@ -120,6 +119,15 @@ final class SegmentedControl: NSView {
         default: super.keyDown(with: event)
         }
     }
+
+    private func showFocus() {
+        isControlFocused = true
+        refreshOutline()
+    }
+
+    #if DEBUG
+        func forceFocusForGallery() { showFocus() }
+    #endif
 
     private func refreshOutline() {
         for (index, segment) in segments.enumerated() {

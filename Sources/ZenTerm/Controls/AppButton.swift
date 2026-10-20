@@ -240,6 +240,10 @@ final class AppButton: NSButton {
     @objc private func fire() { onTap() }
 
     var keycapForTesting: KeycapView? { keycap }
+
+    #if DEBUG
+        func forceFocusForGallery() { isFocusedStop = true }
+    #endif
 }
 
 private final class KeycapClearingCell: NSButtonCell {

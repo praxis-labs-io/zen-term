@@ -111,6 +111,10 @@ final class IconButton: NSView {
 
     func reapplyTheme() { update() }
 
+    #if DEBUG
+        func forceHoverForGallery() { isHovered = true }
+    #endif
+
     private var activityColor: NSColor {
         let chrome = Theme.current.chrome
         switch activityState {
