@@ -601,7 +601,7 @@ final class SidebarAgentsTests: WindowTestCase {
 
         c.window.sendEvent(arrow(125, in: c))
         XCTAssertTrue(c.window.firstResponder === agentRows[0], "↓ leaves Workspaces for Agents")
-        XCTAssertEqual(agentRows[0].fillForTesting, Theme.current.chrome.fill(.hover).cgColor)
+        XCTAssertEqual(agentRows[0].fillForTesting, NSColor.clear.cgColor)
         XCTAssertEqual(agentRows[0].ringForTesting, Theme.current.chrome.accent.nsColor.cgColor)
         c.window.sendEvent(arrow(125, in: c))
         XCTAssertTrue(c.window.firstResponder === agentRows[1])
@@ -937,7 +937,7 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertTrue(a.window.firstResponder === workspaceRows[0])
         a.window.sendEvent(arrow(125, in: a))
         XCTAssertTrue(a.window.firstResponder === row, "↓ reaches the row where it sits, not last")
-        XCTAssertEqual(row.fillForTesting, Theme.current.chrome.fill(.hover).cgColor)
+        XCTAssertEqual(row.fillForTesting, NSColor.clear.cgColor)
         XCTAssertEqual(row.ringForTesting, Theme.current.chrome.accent.nsColor.cgColor)
         a.window.sendEvent(arrow(125, in: a))
         XCTAssertTrue(a.window.firstResponder === rows(a)[0], "↓ carries on into the agent below it")
