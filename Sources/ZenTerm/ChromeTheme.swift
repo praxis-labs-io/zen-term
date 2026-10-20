@@ -8,6 +8,7 @@ struct ChromeTheme: Equatable {
     let warning: TerminalColor
     let destructive: TerminalColor
     let accent: TerminalColor
+    let onAccent: TerminalColor
     let attention: TerminalColor
     let positive: TerminalColor
     let cursor: TerminalColor
@@ -76,6 +77,8 @@ struct ChromeTheme: Equatable {
 
     static let badgeTint: CGFloat = 0.15
     static let flashTint: CGFloat = 0.5
+    // Above the hover level: blended into an opaque accent, that level steps half as far as a neutral hover.
+    static let primaryHoverBlend: CGFloat = 0.20
 
     /// Outside `fillScale` because these sit behind text; anything with a sibling fill takes `fill(_:)`, or the pair inverts.
     func tint(_ role: TerminalColor, alpha: CGFloat) -> NSColor {

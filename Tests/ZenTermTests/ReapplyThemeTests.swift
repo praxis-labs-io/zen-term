@@ -86,7 +86,7 @@ final class ReapplyThemeTests: WindowTestCase {
         button.reapplyTheme()
 
         XCTAssertNotEqual(inkBefore, keycap.inkForTesting)
-        XCTAssertEqual(keycap.inkForTesting, Theme.current.chrome.accent.nsColor)
+        XCTAssertEqual(keycap.inkForTesting, Theme.current.chrome.onAccent.nsColor)
         XCTAssertNil(keycap.layer?.backgroundColor, "a primary button's keycap is a bare glyph")
     }
 

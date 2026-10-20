@@ -178,6 +178,10 @@ top-left, which is invisible only while the layer is opaque. Below `background-a
 region shows as a hard-edged see-through block during resize. `GhosttySurface` switches
 `contentsGravity` to `.resize` when translucent.
 
+**A `CALayer` border with no `borderColor` draws opaque black.** Give a ringed sublayer `.clear`
+at creation, never nil, and write its color changes inside a `CATransaction` with actions disabled,
+or the ring fades in on its implicit animation.
+
 **A layer-hosting view owns its own `contentsScale`.** AppKit syncs scale only for layer-backed views,
 and `GhosttyHostView` is layer-hosting. Set it in `viewDidChangeBackingProperties` inside a
 `CATransaction` with actions disabled, and also observe `NSWindow.didChangeScreenNotification`,

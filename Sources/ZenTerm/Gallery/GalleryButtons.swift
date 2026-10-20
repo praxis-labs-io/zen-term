@@ -43,7 +43,10 @@
             guard variant == .segment else { return [rest, hover, focused, disabled] }
             let selected = AppButton(title: "Selected", variant: variant, size: size)
             selected.isOn = true
-            return [rest, hover, focused, disabled, selected]
+            let selectedFocused = AppButton(title: "Selected focused", variant: variant, size: size)
+            selectedFocused.isOn = true
+            selectedFocused.forceFocusForGallery()
+            return [rest, hover, focused, disabled, selected, selectedFocused]
         }
 
         private static func symbolButtons() -> [NSView] {
@@ -55,9 +58,13 @@
         private static func shortcutButtons() -> [NSView] {
             let disabled = AppButton(title: "Disabled", variant: .primary, shortcut: "⏎")
             disabled.isEnabled = false
+            let focused = AppButton(title: "Focused", variant: .primary, shortcut: "⏎")
+            focused.forceFocusForGallery()
             return [
                 AppButton(title: "Connect", variant: .primary, shortcut: "⏎"),
                 AppButton(title: "Connect", variant: .primary, size: .large, shortcut: "⏎"),
+                hovered(AppButton(title: "Hover", variant: .primary, shortcut: "⏎")),
+                focused,
                 AppButton(title: "Cancel", variant: .secondary, shortcut: "esc"),
                 AppButton(title: "Open", variant: .muted, shortcut: "⌘O"),
                 disabled,
@@ -107,9 +114,6 @@
                 rows: [
                     GallerySection.Row(label: "Chip", samples: [KeycapView(shortcut: shortcut, style: .chip)]),
                     GallerySection.Row(label: "Plain", samples: [KeycapView(shortcut: shortcut, style: .plain)]),
-                    GallerySection.Row(
-                        label: "Glyph accent",
-                        samples: [KeycapView(shortcut: shortcut, style: .glyph { $0.accent.nsColor })]),
                     GallerySection.Row(
                         label: "Glyph faint",
                         samples: [KeycapView(shortcut: shortcut, style: .glyph { $0.ink(.faint) })]),

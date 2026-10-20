@@ -151,7 +151,9 @@ bring-your-own theme and washes out on light themes. Everything resolves from
 
 - **Terminal surfaces:** build `TerminalSurfaceConfig(theme: Theme.current.terminal)`.
 - **Chrome UI:** use `Theme.current.chrome` roles (`background`, `foreground`,
-  `info`, `warning`, `destructive`, `accent`, `attention`, `positive`, `cursor`).
+  `info`, `warning`, `destructive`, `accent`, `onAccent`, `attention`, `positive`,
+  `cursor`). `onAccent` is the background or foreground, whichever contrasts more with
+  `accent`, and only goes on an accent fill.
 - **Text and icons take `chrome.ink(.faint / .muted / .subtle / .normal)`, never an
   alpha.** Four weights, no fifth: `faint` is quieter than what it sits beside (a
   disabled label, a hint opposite a caption), `muted` recedes (captions, hints,
@@ -168,7 +170,8 @@ bring-your-own theme and washes out on light themes. Everything resolves from
 - **Never `accent.withAlphaComponent`.** That escapes the per-theme `fillScale` and
   stops the fill being comparable to the others in the same control. State takes the
   neutral ladder: the keyboard cursor `fill(.hover)`, current `fill(.active)`, and
-  focus an accent ring, never an accent fill.
+  focus an accent ring. The one accent fill is the primary button: labeled in
+  `onAccent`, and focused with an `onAccent` ring inset 1pt.
 
 **Banned in the chrome:** `NSColor(white:…)`, `.white` / `.black`, raw hex, literal
 palette values, and AppKit system/semantic colors (`.secondaryLabelColor`,

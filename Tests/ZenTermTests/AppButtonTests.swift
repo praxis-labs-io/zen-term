@@ -21,17 +21,118 @@ final class AppButtonTests: WindowTestCase {
         return button.attributedTitle.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
     }
 
-    func test_focus_tintsAQuietPillsTextAccent() {
+    func test_focus_leavesAQuietPillsLabelInSubtleInk() {
+        let chrome = Theme.current.chrome
         for variant in [AppButton.Variant.muted, .secondary] {
             let (button, window) = mount(variant)
-            XCTAssertNotEqual(
-                titleColor(button), Theme.current.chrome.accent.nsColor, "\(variant) starts accent")
 
             XCTAssertTrue(window.makeFirstResponder(button), "\(variant) refused focus")
 
-            XCTAssertEqual(
-                titleColor(button), Theme.current.chrome.accent.nsColor,
-                "\(variant) shows focus with the ring alone")
+            XCTAssertEqual(titleColor(button), chrome.ink(.subtle), "\(variant) shows focus with the ring alone")
+            XCTAssertEqual(button.layer?.borderColor, chrome.accent.nsColor.cgColor, "\(variant) lost its ring")
+        }
+    }
+
+    private func srgb(_ color: NSColor) throws -> [CGFloat] {
+        let converted = try XCTUnwrap(color.usingColorSpace(.sRGB))
+        return [converted.redComponent, converted.greenComponent, converted.blueComponent]
+    }
+
+    private func distance(_ lhs: NSColor, _ rhs: NSColor) throws -> CGFloat {
+        zip(try srgb(lhs), try srgb(rhs)).map { ($0 - $1) * ($0 - $1) }.reduce(0, +).squareRoot()
+    }
+
+    private func crossing(_ type: NSEvent.EventType, in window: NSWindow) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.enterExitEvent(
+                with: type, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
+                context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
+    }
+
+    func test_aPrimaryButton_fillsWithAccent_andLabelsItAndItsGlyphInOnAccent() throws {
+        let button = AppButton(title: "Connect", variant: .primary, shortcut: "⏎")
+        let window = try mountFitted(button)
+        let chrome = Theme.current.chrome
+
+        XCTAssertEqual(button.layer?.backgroundColor, chrome.accent.nsColor.cgColor)
+        XCTAssertEqual(titleColor(button), chrome.onAccent.nsColor)
+        XCTAssertEqual(button.keycapForTesting?.inkForTesting, chrome.onAccent.nsColor)
+        withExtendedLifetime(window) {}
+    }
+
+    func test_hoveringAPrimaryButton_blendsItsFillAwayFromOnAccent() throws {
+        let button = AppButton(title: "Connect", variant: .primary)
+        let window = try mountFitted(button)
+        let chrome = Theme.current.chrome
+        let accent = chrome.accent.nsColor
+        let onAccent = chrome.onAccent.nsColor
+
+        button.mouseEntered(with: try crossing(.mouseEntered, in: window))
+
+        let hovered = try XCTUnwrap(button.layer?.backgroundColor.flatMap(NSColor.init(cgColor:)))
+        XCTAssertNotEqual(button.layer?.backgroundColor, accent.cgColor, "hover left the fill unchanged")
+        XCTAssertGreaterThan(
+            try distance(hovered, onAccent), try distance(accent, onAccent), "hover narrowed the label's contrast")
+        XCTAssertEqual(titleColor(button), onAccent)
+
+        button.mouseExited(with: try crossing(.mouseExited, in: window))
+
+        XCTAssertEqual(button.layer?.backgroundColor, accent.cgColor)
+    }
+
+    func test_focusingAPrimaryButton_ringsItInOnAccent_insetFromItsEdge() throws {
+        let button = AppButton(title: "Connect", variant: .primary)
+        button.isKeyboardFocusable = true
+        let window = try mountFitted(button)
+        let chrome = Theme.current.chrome
+        let ring = button.insetRingForTesting
+        XCTAssertEqual(ring.borderColor?.alpha, 0, "the ring shows at rest")
+
+        XCTAssertTrue(window.makeFirstResponder(button))
+
+        XCTAssertEqual(ring.borderColor, chrome.onAccent.nsColor.cgColor)
+        XCTAssertEqual(ring.borderWidth, ChromeMetrics.Border.width)
+        XCTAssertEqual(
+            ring.frame, button.bounds.insetBy(dx: ChromeMetrics.Border.width, dy: ChromeMetrics.Border.width))
+        XCTAssertEqual(button.layer?.borderColor?.alpha, 0, "an accent ring on an accent fill vanishes")
+    }
+
+    func test_aSegmentThatIsOn_labelsInNormalInk() {
+        let (button, window) = mount(.segment)
+        let chrome = Theme.current.chrome
+
+        button.isOn = true
+
+        XCTAssertEqual(titleColor(button), chrome.ink(.normal))
+        XCTAssertEqual(button.layer?.backgroundColor, chrome.fill(.active).cgColor)
+        withExtendedLifetime(window) {}
+    }
+
+    func test_noAppButtonLabelDrawsInAccent_exceptAFocusedLink() throws {
+        let accent = Theme.current.chrome.accent.nsColor
+        for variant in GalleryButtons.variants {
+            for segmentOn in variant == .segment ? [false, true] : [false] {
+                for state in ["rest", "hovered", "focused", "disabled"] {
+                    let button = AppButton(
+                        title: "Open", variant: variant, shortcut: variant == .primary ? "⏎" : nil)
+                    button.isKeyboardFocusable = true
+                    button.isOn = segmentOn
+                    let window = try mountFitted(button)
+                    switch state {
+                    case "hovered": button.mouseEntered(with: try crossing(.mouseEntered, in: window))
+                    case "focused": XCTAssertTrue(window.makeFirstResponder(button))
+                    case "disabled": button.isEnabled = false
+                    default: break
+                    }
+                    let name = "\(variant)\(segmentOn ? " on" : "") \(state)"
+                    if variant == .link, state == "focused" {
+                        XCTAssertEqual(titleColor(button), accent, "\(name) lost its accent")
+                    } else {
+                        XCTAssertNotEqual(titleColor(button), accent, "\(name) labels in accent")
+                    }
+                    XCTAssertNotEqual(button.keycapForTesting?.inkForTesting, accent, "\(name) draws an accent glyph")
+                }
+            }
         }
     }
 
@@ -118,14 +219,14 @@ final class AppButtonTests: WindowTestCase {
         let window = try mountFitted(button)
         let keycap = try XCTUnwrap(button.keycapForTesting)
         let chrome = Theme.current.chrome
-        XCTAssertEqual(keycap.inkForTesting, chrome.accent.nsColor, "precondition: enabled reads accent")
+        XCTAssertEqual(keycap.inkForTesting, chrome.onAccent.nsColor, "precondition: enabled reads onAccent")
 
         button.isEnabled = false
 
         XCTAssertEqual(titleColor(button), chrome.ink(.faint))
-        XCTAssertEqual(keycap.inkForTesting, chrome.ink(.faint), "the glyph stayed accent beside a faint label")
+        XCTAssertEqual(keycap.inkForTesting, chrome.ink(.faint), "the glyph stayed onAccent beside a faint label")
         button.isEnabled = true
-        XCTAssertEqual(keycap.inkForTesting, chrome.accent.nsColor)
+        XCTAssertEqual(keycap.inkForTesting, chrome.onAccent.nsColor)
         withExtendedLifetime(window) {}
     }
 

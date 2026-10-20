@@ -12,7 +12,7 @@ final class GallerySeamTests: WindowTestCase {
         let background: [CGFloat]?
         let borderWidth: CGFloat
         let border: [CGFloat]?
-        let looseSublayers: Int
+        let looseSublayers: [[CGFloat]?]
         let title: NSAttributedString?
         let tint: [CGFloat]?
         let text: NSAttributedString?
@@ -156,7 +156,9 @@ final class GallerySeamTests: WindowTestCase {
         func walk(_ view: NSView, _ path: String) {
             let layer = view.layer
             let backing = Set(view.subviews.compactMap(\.layer).map(ObjectIdentifier.init))
-            let loose = layer?.sublayers?.filter { !backing.contains(ObjectIdentifier($0)) }.count ?? 0
+            let loose = (layer?.sublayers ?? []).filter { !backing.contains(ObjectIdentifier($0)) }.map {
+                $0.borderColor?.components
+            }
             let button = view as? NSButton
             let field = view as? NSTextField
             out.append(

@@ -56,6 +56,7 @@ final class AppButton: NSButton {
     private var isHovered = false { didSet { restyle() } }
     private var isFocusedStop = false { didSet { restyle() } }
     private var trackingAreaRef: NSTrackingArea?
+    private let insetRing = CALayer()
 
     override var isEnabled: Bool {
         didSet {
@@ -102,6 +103,10 @@ final class AppButton: NSButton {
         isBordered = false
         wantsLayer = true
         layer?.cornerRadius = ChromeMetrics.Radius.control
+        insetRing.borderColor = NSColor.clear.cgColor
+        insetRing.borderWidth = ChromeMetrics.Border.width
+        insetRing.cornerRadius = ChromeMetrics.Radius.control - ChromeMetrics.Border.width
+        layer?.addSublayer(insetRing)
         setButtonType(.momentaryChange)
         cell.imageDimsWhenDisabled = false
         if let symbol {
@@ -126,7 +131,7 @@ final class AppButton: NSButton {
 
     private static func keycapStyle(for variant: Variant, isEnabled: Bool) -> KeycapView.Style {
         guard variant == .primary else { return .chip }
-        return .glyph { isEnabled ? $0.accent.nsColor : $0.ink(.faint) }
+        return .glyph { isEnabled ? $0.onAccent.nsColor : $0.ink(.faint) }
     }
 
     func reapplyTheme() {
@@ -147,7 +152,7 @@ final class AppButton: NSButton {
         return super.resignFirstResponder()
     }
 
-    // The accent ring is drawn on the layer border instead.
+    // The focus ring is drawn on a layer border instead.
     override func drawFocusRingMask() {}
 
     override func keyDown(with event: NSEvent) {
@@ -177,6 +182,14 @@ final class AppButton: NSButton {
         trackingAreaRef = area
     }
 
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        insetRing.frame = bounds.insetBy(dx: ChromeMetrics.Border.width, dy: ChromeMetrics.Border.width)
+        CATransaction.commit()
+    }
+
     override func mouseEntered(with event: NSEvent) { isHovered = true }
     override func mouseExited(with event: NSEvent) { isHovered = false }
     override func resetCursorRects() {
@@ -188,8 +201,13 @@ final class AppButton: NSButton {
         let (textColor, background) = isEnabled ? enabledColors(chrome) : disabledColors(chrome)
         layer?.backgroundColor = background.cgColor
         let outlined = isEnabled && (isFocusedStop || showsFocusOutline) && variant != .link
+        let insetOutlined = outlined && variant == .primary
         layer?.borderWidth = ChromeMetrics.Border.width
-        layer?.borderColor = outlined ? chrome.accent.nsColor.cgColor : NSColor.clear.cgColor
+        layer?.borderColor = (outlined && !insetOutlined ? chrome.accent.nsColor : .clear).cgColor
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        insetRing.borderColor = (insetOutlined ? chrome.onAccent.nsColor : .clear).cgColor
+        CATransaction.commit()
         if symbolName != nil {
             contentTintColor = textColor
         } else {
@@ -206,16 +224,16 @@ final class AppButton: NSButton {
     private func enabledColors(_ chrome: ChromeTheme) -> (text: NSColor, background: NSColor) {
         switch variant {
         case .primary:
-            return (chrome.accent.nsColor, chrome.fill(isHovered ? .hover : .rest))
+            return (chrome.onAccent.nsColor, isHovered ? Self.primaryHoverFill(chrome) : chrome.accent.nsColor)
         case .secondary:
-            return (focusTinted(chrome.ink(.subtle), chrome), isHovered ? chrome.fill(.hover) : .clear)
+            return (chrome.ink(.subtle), isHovered ? chrome.fill(.hover) : .clear)
         case .muted:
-            return (focusTinted(chrome.ink(.subtle), chrome), chrome.fill(isHovered ? .hover : .rest))
+            return (chrome.ink(.subtle), chrome.fill(isHovered ? .hover : .rest))
         case .destructive:
             return (chrome.destructive.nsColor, chrome.fill(isHovered ? .hover : .rest))
         case .segment:
             return (
-                isOn ? chrome.accent.nsColor : chrome.ink(.subtle),
+                chrome.ink(isOn ? .normal : .subtle),
                 isOn ? chrome.fill(.active) : chrome.fill(isHovered ? .hover : .rest)
             )
         case .link:
@@ -232,14 +250,17 @@ final class AppButton: NSButton {
         }
     }
 
-    // `.destructive` opts out: losing the warning tone right before the press costs more than consistency.
-    private func focusTinted(_ resting: NSColor, _ chrome: ChromeTheme) -> NSColor {
-        isFocusedStop ? chrome.accent.nsColor : resting
+    // Away from `onAccent`: blending toward it narrows the label's contrast.
+    private static func primaryHoverFill(_ chrome: ChromeTheme) -> NSColor {
+        let away = chrome.onAccent == chrome.background ? chrome.foreground : chrome.background
+        return ChromeTheme.surface(
+            tint: chrome.tint(away, alpha: ChromeTheme.primaryHoverBlend), over: chrome.accent.nsColor)
     }
 
     @objc private func fire() { onTap() }
 
     var keycapForTesting: KeycapView? { keycap }
+    var insetRingForTesting: CALayer { insetRing }
 
     #if DEBUG
         func forceFocusForGallery() { isFocusedStop = true }

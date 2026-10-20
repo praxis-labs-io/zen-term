@@ -464,8 +464,8 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
         XCTAssertNotEqual(before, toast.actionTitleColorsForTesting, "the action buttons stayed stale")
         XCTAssertTrue(
-            toast.actionTitleColorsForTesting.contains(Theme.current.chrome.accent.nsColor),
-            "the primary action must carry the new accent")
+            toast.actionTitleColorsForTesting.contains(Theme.current.chrome.onAccent.nsColor),
+            "the primary action must carry the new onAccent")
     }
 
     func test_toastBadge_carriesTheVariantTone_notTheChromeAccent() throws {

@@ -3,13 +3,15 @@ import TerminalKit
 
 enum ChromeThemeDeriver {
     static func derive(from terminal: TerminalTheme, accent: AccentSlot? = nil) -> ChromeTheme {
-        ChromeTheme(
+        let accent = (accent ?? .themeDefault).color(in: terminal)
+        return ChromeTheme(
             background: terminal.background,
             foreground: terminal.foreground,
             info: AccentSlot.blue.color(in: terminal),
             warning: AccentSlot.yellow.color(in: terminal),
             destructive: AccentSlot.red.color(in: terminal),
-            accent: (accent ?? .themeDefault).color(in: terminal),
+            accent: accent,
+            onAccent: onAccent(for: accent, in: terminal),
             attention: AccentSlot.cyan.color(in: terminal),
             positive: AccentSlot.green.color(in: terminal),
             cursor: terminal.cursor,
@@ -17,6 +19,20 @@ enum ChromeThemeDeriver {
             overlayShadowAlpha: shadowAlpha(on: terminal.background, tier: .overlay),
             floatShadowAlpha: shadowAlpha(on: terminal.background, tier: .float),
             modalShadowAlpha: shadowAlpha(on: terminal.background, tier: .modal))
+    }
+
+    private static func onAccent(for accent: TerminalColor, in terminal: TerminalTheme) -> TerminalColor {
+        contrastRatio(terminal.background, accent) >= contrastRatio(terminal.foreground, accent)
+            ? terminal.background : terminal.foreground
+    }
+
+    static func contrastRatio(_ first: TerminalColor, _ second: TerminalColor) -> Double {
+        let (a, b) = (relativeLuminance(of: first), relativeLuminance(of: second))
+        return (max(a, b) + 0.05) / (min(a, b) + 0.05)
+    }
+
+    private static func relativeLuminance(of color: TerminalColor) -> Double {
+        relativeLuminance([color.red, color.green, color.blue].map(Double.init))
     }
 
     /// A fixed anchor, not the catalog's median, so adding a theme doesn't re-weight the others.

@@ -679,6 +679,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
 destructive ansi[1], accent ansi[4], attention ansi[6], positive ansi[2], cursor the terminal cursor).
 Sixty-five themes ship; a user file shadows a bundled one. `accent-color` repoints
 `accent`, and the search highlight when the theme sets no search colors. The usage rules are CLAUDE.md's Colors section.
+`onAccent` is whichever of background and foreground has the higher WCAG contrast with `accent`.
 
 - **Ink levels** `faint` 0.35, `muted` 0.5, `subtle` 0.7, `normal` 1.0, lifted by
   `inkBoost`. Check `1 / inkBoost` before raising it: a level above it clamps to 1.

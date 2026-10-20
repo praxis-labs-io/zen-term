@@ -162,6 +162,54 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(deltas.count, ThemeCatalog.bundled.count)
     }
 
+    func test_everyBundledTheme_labelsItsAccentInTheHigherContrastInk_onRestAndHover() throws {
+        var rest: [(token: String, ratio: Double)] = []
+        var hover: [(token: String, ratio: Double)] = []
+        for (token, terminal) in try bundledTerminals() {
+            let chrome = ChromeThemeDeriver.derive(from: terminal)
+            let other = chrome.onAccent == terminal.background ? terminal.foreground : terminal.background
+            XCTAssertTrue(
+                [terminal.background, terminal.foreground].contains(chrome.onAccent),
+                "\(token) labels its accent in neither background nor foreground")
+            let ratio = ChromeThemeDeriver.contrastRatio(chrome.onAccent, chrome.accent)
+            XCTAssertGreaterThanOrEqual(
+                ratio, ChromeThemeDeriver.contrastRatio(other, chrome.accent),
+                "\(token) picked the lower-contrast ink for onAccent")
+            rest.append((token, ratio))
+            hover.append((token, ChromeThemeDeriver.contrastRatio(chrome.onAccent, try hoverFill(chrome, away: other))))
+        }
+        for (name, pairs) in [("rest", rest), ("hover", hover)] {
+            let lowest = pairs.sorted { $0.ratio < $1.ratio }.prefix(5)
+                .map { "\($0.token) \(String(format: "%.2f", $0.ratio))" }.joined(separator: ", ")
+            XCTContext.runActivity(named: "lowest onAccent contrast, \(name)") { activity in
+                activity.add(XCTAttachment(string: lowest))
+            }
+            XCTAssertGreaterThanOrEqual(
+                pairs.map(\.ratio).min() ?? 0, 2.5, "\(name) onAccent contrast fell under the floor: \(lowest)")
+            XCTAssertEqual(pairs.count, ThemeCatalog.bundled.count)
+        }
+    }
+
+    private func hoverFill(_ chrome: ChromeTheme, away: TerminalColor) throws -> TerminalColor {
+        let blended = try XCTUnwrap(
+            ChromeTheme.surface(
+                tint: chrome.tint(away, alpha: ChromeTheme.primaryHoverBlend), over: chrome.accent.nsColor
+            ).usingColorSpace(.sRGB))
+        func byte(_ component: CGFloat) -> UInt8 { UInt8((component * 255).rounded()) }
+        return TerminalColor(
+            red: byte(blended.redComponent), green: byte(blended.greenComponent), blue: byte(blended.blueComponent))
+    }
+
+    func test_contrastRatio_matchesWCAG() throws {
+        let black = try XCTUnwrap(TerminalColor(hex: "#000000"))
+        let white = try XCTUnwrap(TerminalColor(hex: "#ffffff"))
+        let gray = try XCTUnwrap(TerminalColor(hex: "#777777"))
+        XCTAssertEqual(ChromeThemeDeriver.contrastRatio(black, white), 21, accuracy: 0.001)
+        XCTAssertEqual(ChromeThemeDeriver.contrastRatio(white, black), 21, accuracy: 0.001)
+        XCTAssertEqual(ChromeThemeDeriver.contrastRatio(gray, gray), 1, accuracy: 0.001)
+        XCTAssertEqual(ChromeThemeDeriver.contrastRatio(gray, white), 4.48, accuracy: 0.01)
+    }
+
     func test_aWellSeparatedTheme_isNotScaled() {
         XCTAssertEqual(ChromeThemeDeriver.fillScale(for: Theme.rosePineZen), 1, accuracy: 0.0001)
     }
