@@ -564,13 +564,13 @@ final class TabController: NSObject {
         onFocusChanged?()
     }
 
-    func setHaloVisible(_ visible: Bool) {
-        haloIsVisible = visible
-        paneCanvas.setHaloVisible(visible)
+    func setFocusBorderVisible(_ visible: Bool) {
+        focusBorderIsVisible = visible
+        paneCanvas.setFocusBorderVisible(visible)
         syncDrawerFocus()
     }
 
-    private var haloIsVisible = true
+    private var focusBorderIsVisible = true
 
     func setHoldsKeyFocus(_ holds: Bool) {
         holdsKeyFocus = holds
@@ -593,8 +593,8 @@ final class TabController: NSObject {
     private func syncDrawerFocus() {
         let focused = isYieldedToFloat ? nil : focusedPanel
         let renders = focusedSurfaceRendersFocused && holdsKeyFocus
-        bottomDrawerPanel?.isFocused = haloIsVisible && focused == .bottomDrawer
-        rightDrawerPanel?.isFocused = haloIsVisible && focused == .rightDrawer
+        bottomDrawerPanel?.isFocused = focusBorderIsVisible && focused == .bottomDrawer
+        rightDrawerPanel?.isFocused = focusBorderIsVisible && focused == .rightDrawer
         bottomDrawerSurface?.setFocused(renders && focused == .bottomDrawer)
         rightDrawerSurface?.setFocused(renders && focused == .rightDrawer)
     }

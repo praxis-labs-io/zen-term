@@ -606,7 +606,7 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertEqual(pane.focusRenders.last, true)
     }
 
-    func test_navLeftIntoTheSidebar_fromTheBottomDrawer_dropsItsHaloAndBlursIt() throws {
+    func test_navLeftIntoTheSidebar_fromTheBottomDrawer_dropsItsFocusBorderAndBlursIt() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
         controller.handle(.toggleBottomDrawer)
@@ -626,7 +626,7 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertEqual(drawer.focusRenders.last, true)
     }
 
-    func test_clickingAPane_fromTheSidebar_givesItBackItsHaloAndCursor() throws {
+    func test_clickingAPane_fromTheSidebar_givesItBackItsFocusBorderAndCursor() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
         let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
@@ -663,7 +663,7 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertFalse(
             float.focusRenders[tookResponder...].contains(false),
             "a same-turn blur between two focuses leaves libghostty's blink timer stopped")
-        XCTAssertEqual(controller.floatsForTesting.shownOverlayForTesting?.isHaloVisible, true)
+        XCTAssertEqual(controller.floatsForTesting.shownOverlayForTesting?.isFocusBorderVisible, true)
     }
 
     func test_clickingAnOpenFloat_fromTheSidebar_givesItBackItsEdgeAndCursor() throws {
@@ -673,13 +673,13 @@ final class SidebarInteractionTests: WindowTestCase {
         let float = try XCTUnwrap(controller.floatsForTesting.shownSurface as? RecordingSurface)
         let overlay = try XCTUnwrap(controller.floatsForTesting.shownOverlayForTesting)
         controller.sidebarForTesting.focusActiveRow()
-        XCTAssertFalse(overlay.isHaloVisible, "precondition: the sidebar took the float's edge")
+        XCTAssertFalse(overlay.isFocusBorderVisible, "precondition: the sidebar took the float's edge")
 
         controller.window.makeFirstResponder(float.view)
         float.delegate?.surfaceWantsFocus(float)
 
         XCTAssertFalse(controller.sidebarForTesting.hasFocus)
-        XCTAssertTrue(overlay.isHaloVisible)
+        XCTAssertTrue(overlay.isFocusBorderVisible)
         XCTAssertEqual(float.focusRenders.last, true)
     }
 
@@ -1068,27 +1068,27 @@ final class SidebarInteractionTests: WindowTestCase {
         return (frame.minY - visible.minY, visible.maxY - frame.maxY)
     }
 
-    func test_whileTheSidebarHoldsFocus_noPaneShowsTheHalo() throws {
+    func test_whileTheSidebarHoldsFocus_noPaneShowsTheFocusBorder() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
         let pane = try XCTUnwrap(controller.focusedPanelForTesting)
-        XCTAssertTrue(pane.isFocused, "precondition: the focused pane wears the halo")
+        XCTAssertTrue(pane.isFocused, "precondition: the focused pane wears the focus border")
 
         controller.sidebarForTesting.focusActiveRow()
-        XCTAssertFalse(pane.isFocused, "the halo answers where the keyboard is")
+        XCTAssertFalse(pane.isFocused, "the focus border answers where the keyboard is")
 
         controller.window.sendEvent(key(.escape, in: controller))
         XCTAssertTrue(pane.isFocused, "and comes back with focus")
     }
 
-    func test_whileTheWindowIsNotKey_noPaneShowsTheHalo() throws {
+    func test_whileTheWindowIsNotKey_noPaneShowsTheFocusBorder() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
         let pane = try XCTUnwrap(controller.focusedPanelForTesting)
         XCTAssertTrue(pane.isFocused)
 
         controller.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification))
-        XCTAssertFalse(pane.isFocused, "an unfocused window shows no halo")
+        XCTAssertFalse(pane.isFocused, "an unfocused window shows no focus border")
 
         controller.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
         XCTAssertTrue(pane.isFocused, "and it comes back when the window does")
@@ -1103,7 +1103,7 @@ final class SidebarInteractionTests: WindowTestCase {
         controller.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification))
         controller.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
 
-        XCTAssertFalse(pane.isFocused, "the sidebar still holds focus, so the halo stays out")
+        XCTAssertFalse(pane.isFocused, "the sidebar still holds focus, so the focus border stays out")
     }
 
     func test_aPickerOpenedFromTheSidebar_handsFocusBackToItsRow() throws {

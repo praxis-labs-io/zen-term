@@ -309,7 +309,7 @@ final class SidebarRevealTests: WindowTestCase {
         XCTAssertNil(layer.backgroundColor, "docked, the column carries no fill of its own")
     }
 
-    func test_dockingARevealedCard_handsThePaneItsHaloBack() throws {
+    func test_dockingARevealedCard_handsThePaneItsFocusBorderBack() throws {
         let controller = try makeCollapsedController()
         let sidebar = controller.sidebarForTesting
         let panel = try pane(in: controller)
@@ -321,7 +321,7 @@ final class SidebarRevealTests: WindowTestCase {
         XCTAssertTrue(sidebar.isDocked)
         XCTAssertEqual(
             panel.borderForTesting.width, ChromeMetrics.Border.paneFocus,
-            "hover never took the keyboard, so nothing else hands the halo back")
+            "hover never took the keyboard, so nothing else hands the focus border back")
     }
 
     func test_aLiveGutterChange_movesAllFourOfTheCardsEdges() throws {
@@ -704,7 +704,7 @@ final class SidebarRevealTests: WindowTestCase {
         XCTAssertFalse(sidebar.isRevealed)
     }
 
-    func test_revealing_dimsThePanesHalo_withoutTakingItsKeyboard() throws {
+    func test_revealing_dimsThePanesFocusBorder_withoutTakingItsKeyboard() throws {
         let controller = try makeCollapsedController()
         let sidebar = controller.sidebarForTesting
         let panel = try pane(in: controller)
@@ -722,7 +722,7 @@ final class SidebarRevealTests: WindowTestCase {
         XCTAssertEqual(panel.borderForTesting.width, ChromeMetrics.Border.paneFocus, "and the pane takes it back")
     }
 
-    func test_revealing_dimsAFocusedDrawersHalo_likeThePanes() throws {
+    func test_revealing_dimsAFocusedDrawersFocusBorder_likeThePanes() throws {
         let controller = try makeCollapsedController()
         let sidebar = controller.sidebarForTesting
         controller.handle(.toggleBottomDrawer)

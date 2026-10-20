@@ -29,38 +29,38 @@ final class CardView: ShadowCardView {
 enum CardChrome {
     static func apply(
         to card: NSView, background: NSColor, cornerRadius: CGFloat = ChromeMetrics.Radius.surface,
-        halo: Bool = false, tier: FloatShadow.Tier = .modal
+        focusBorder: Bool = false, tier: FloatShadow.Tier = .modal
     ) {
-        applyEdge(to: card, cornerRadius: cornerRadius, halo: halo)
+        applyEdge(to: card, cornerRadius: cornerRadius, focusBorder: focusBorder)
         card.layer?.backgroundColor = background.cgColor
         FloatShadow.apply(tier, to: card)
     }
 
     /// Leaves fill and shadow to the host: an opaque fill cancels `background-alpha`, and CA fills `shadowPath`.
-    static func applyTerminalHost(to card: NSView, cornerRadius: CGFloat, halo: Bool) {
-        applyEdge(to: card, cornerRadius: cornerRadius, halo: halo)
+    static func applyTerminalHost(to card: NSView, cornerRadius: CGFloat, focusBorder: Bool) {
+        applyEdge(to: card, cornerRadius: cornerRadius, focusBorder: focusBorder)
         card.layer?.masksToBounds = false
     }
 
-    static func reapplyTheme(to card: NSView, halo: Bool = false, tier: FloatShadow.Tier = .modal) {
+    static func reapplyTheme(to card: NSView, focusBorder: Bool = false, tier: FloatShadow.Tier = .modal) {
         card.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
-        card.layer?.borderColor = borderColor(halo: halo)
+        card.layer?.borderColor = borderColor(focusBorder: focusBorder)
         FloatShadow.apply(tier, to: card)
     }
 
-    static func reapplyEdge(to card: NSView, halo: Bool) {
-        card.layer?.borderWidth = halo ? ChromeMetrics.Border.paneFocus : ChromeMetrics.Border.width
-        card.layer?.borderColor = borderColor(halo: halo)
+    static func reapplyEdge(to card: NSView, focusBorder: Bool) {
+        card.layer?.borderWidth = focusBorder ? ChromeMetrics.Border.paneFocus : ChromeMetrics.Border.width
+        card.layer?.borderColor = borderColor(focusBorder: focusBorder)
     }
 
-    private static func applyEdge(to card: NSView, cornerRadius: CGFloat, halo: Bool) {
+    private static func applyEdge(to card: NSView, cornerRadius: CGFloat, focusBorder: Bool) {
         card.wantsLayer = true
         card.layer?.cornerRadius = cornerRadius
-        reapplyEdge(to: card, halo: halo)
+        reapplyEdge(to: card, focusBorder: focusBorder)
     }
 
-    private static func borderColor(halo: Bool) -> CGColor {
-        halo ? Theme.current.chrome.accent.nsColor.cgColor : FloatShadow.edge.cgColor
+    private static func borderColor(focusBorder: Bool) -> CGColor {
+        focusBorder ? Theme.current.chrome.accent.nsColor.cgColor : FloatShadow.edge.cgColor
     }
 }
 

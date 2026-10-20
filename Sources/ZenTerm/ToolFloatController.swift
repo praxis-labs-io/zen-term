@@ -168,7 +168,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     private func syncFocus() {
         guard let active = activeFloat else { return }
         active.surface.setFocused(holdsKeyFocus && focusedSurfaceRendersFocused)
-        active.overlay.isHaloVisible = holdsKeyFocus
+        active.overlay.isFocusBorderVisible = holdsKeyFocus
     }
 
     func reapplyTheme() { activeFloat?.overlay.reapplyTheme() }

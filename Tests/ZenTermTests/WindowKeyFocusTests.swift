@@ -77,7 +77,7 @@ final class WindowKeyFocusTests: WindowTestCase {
         XCTAssertEqual(drawer.focusRenders.last, true)
     }
 
-    func test_aFocusedDrawer_dropsItsHaloWithItsWindow() throws {
+    func test_aFocusedDrawer_dropsItsFocusBorderWithItsWindow() throws {
         let c = makeWindow()
         c.handle(.toggleBottomDrawer)
         c.window.contentView?.layoutSubtreeIfNeeded()
@@ -101,17 +101,17 @@ final class WindowKeyFocusTests: WindowTestCase {
         c.window.contentView?.layoutSubtreeIfNeeded()
         let float = try XCTUnwrap(c.floatsForTesting.shownSurface as? RecordingSurface)
         let overlay = try XCTUnwrap(c.floatsForTesting.shownOverlayForTesting)
-        XCTAssertTrue(overlay.isHaloVisible, "precondition: the float shows its accent edge")
+        XCTAssertTrue(overlay.isFocusBorderVisible, "precondition: the float shows its accent edge")
 
         resignKey(c)
 
         XCTAssertEqual(float.focusRenders.last, false)
-        XCTAssertFalse(overlay.isHaloVisible)
+        XCTAssertFalse(overlay.isFocusBorderVisible)
 
         becomeKey(c)
 
         XCTAssertEqual(float.focusRenders.last, true)
-        XCTAssertTrue(overlay.isHaloVisible)
+        XCTAssertTrue(overlay.isFocusBorderVisible)
     }
 
     func test_aModeInAnOpenFloat_rendersItUnfocused_likeAPane() throws {
@@ -132,7 +132,8 @@ final class WindowKeyFocusTests: WindowTestCase {
 
         XCTAssertEqual(float.focusRenders.last, true)
         XCTAssertEqual(
-            c.floatsForTesting.shownOverlayForTesting?.isHaloVisible, true, "a mode dims the cursor, not the edge")
+            c.floatsForTesting.shownOverlayForTesting?.isFocusBorderVisible, true,
+            "a mode dims the cursor, not the edge")
     }
 
     func test_aFloatSearchingWhenItsWindowLosesKey_endsUnfocused() throws {
@@ -159,7 +160,7 @@ final class WindowKeyFocusTests: WindowTestCase {
 
         let float = try XCTUnwrap(c.floatsForTesting.shownSurface as? RecordingSurface)
         XCTAssertEqual(float.focusRenders.last, false)
-        XCTAssertEqual(c.floatsForTesting.shownOverlayForTesting?.isHaloVisible, false)
+        XCTAssertEqual(c.floatsForTesting.shownOverlayForTesting?.isFocusBorderVisible, false)
     }
 
     func test_aTabLeftBehind_readsUnfocused_andComesBackWhenItIsActiveAgain() throws {

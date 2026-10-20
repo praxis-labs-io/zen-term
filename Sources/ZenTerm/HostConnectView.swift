@@ -113,7 +113,7 @@ final class HostConnectView: NSView {
         onConnect()
     }
 
-    func setHaloVisible(_ visible: Bool) { panel.isFocused = visible }
+    func setFocusBorderVisible(_ visible: Bool) { panel.isFocused = visible }
 
     func setStatus(_ status: SSHHostStatus) {
         guard status != self.status else { return }

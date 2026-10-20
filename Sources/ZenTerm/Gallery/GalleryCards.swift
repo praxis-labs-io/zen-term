@@ -14,15 +14,15 @@
             GallerySection(
                 title: "CardChrome",
                 rows: [
-                    GallerySection.Row(label: "Plain edge", samples: [card(halo: false)]),
-                    GallerySection.Row(label: "Halo edge", samples: [card(halo: true)]),
+                    GallerySection.Row(label: "Plain edge", samples: [card(focusBorder: false)]),
+                    GallerySection.Row(label: "Focus border", samples: [card(focusBorder: true)]),
                 ])
         }
 
-        private static func card(halo: Bool) -> NSView {
+        private static func card(focusBorder: Bool) -> NSView {
             let card = CardView()
             card.translatesAutoresizingMaskIntoConstraints = false
-            CardChrome.apply(to: card, background: Theme.current.chrome.background.nsColor, halo: halo)
+            CardChrome.apply(to: card, background: Theme.current.chrome.background.nsColor, focusBorder: focusBorder)
             NSLayoutConstraint.activate([
                 card.widthAnchor.constraint(equalToConstant: 220),
                 card.heightAnchor.constraint(equalToConstant: 80),

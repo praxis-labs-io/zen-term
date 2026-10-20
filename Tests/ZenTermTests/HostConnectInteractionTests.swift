@@ -1014,14 +1014,14 @@ final class HostConnectInteractionTests: WindowTestCase {
         drainMainQueue()
     }
 
-    func test_connect_isFocusedAndHaloed_likeAPane() throws {
+    func test_connect_isFocusedAndBordered_likeAPane() throws {
         let c = onConnectScreen()
 
         XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
         XCTAssertTrue(try showsFocus(c))
     }
 
-    func test_connectsHalo_followsTheWindowsKeyState() throws {
+    func test_connectsFocusBorder_followsTheWindowsKeyState() throws {
         let c = onConnectScreen()
 
         c.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification))
@@ -1032,7 +1032,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
     }
 
-    func test_clickingConnect_fromTheSidebar_takesFocusAndTheHaloBack() throws {
+    func test_clickingConnect_fromTheSidebar_takesFocusAndTheFocusBorderBack() throws {
         let c = onConnectScreen()
         c.handle(.focusSidebar)
         XCTAssertFalse(try showsFocus(c), "precondition: the sidebar holds focus")
@@ -1049,7 +1049,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertTrue(try showsFocus(c))
     }
 
-    func test_aRevealedFloatingSidebar_takesConnectsHalo() throws {
+    func test_aRevealedFloatingSidebar_takesConnectsFocusBorder() throws {
         let c = onConnectScreen()
         c.window.setContentSize(c.window.contentMinSize)
         c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
@@ -1089,7 +1089,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertNotNil(button.layer?.backgroundColor)
     }
 
-    func test_leftFromConnect_movesToTheSidebar_andRightComesBack_withTheHalo() throws {
+    func test_leftFromConnect_movesToTheSidebar_andRightComesBack_withTheFocusBorder() throws {
         let c = onConnectScreen()
 
         c.handle(.navLeft)
@@ -1101,7 +1101,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertTrue(try showsFocus(c))
     }
 
-    func test_focusSidebarFromConnect_dropsTheHalo_andRightBringsItBack() throws {
+    func test_focusSidebarFromConnect_dropsTheFocusBorder_andRightBringsItBack() throws {
         let c = onConnectScreen()
 
         c.handle(.focusSidebar)

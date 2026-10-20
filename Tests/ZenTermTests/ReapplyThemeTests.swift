@@ -249,7 +249,7 @@ final class ReapplyThemeTests: WindowTestCase {
         XCTAssertNotEqual(colorBefore, card.layer?.borderColor)
     }
 
-    func test_reapplyTheme_keepsTheAccentHaloOnSurfaceFloatOverlay() throws {
+    func test_reapplyTheme_keepsTheAccentFocusBorderOnSurfaceFloatOverlay() throws {
         let overlay = SurfaceFloatOverlay(
             content: NSView(), widthFraction: 0.6, heightFraction: 0.6, contentInset: 12,
             cornerRadius: 12, onDismiss: {})
@@ -276,7 +276,7 @@ final class ReapplyThemeTests: WindowTestCase {
             "the float's shadow must re-solve for the new theme")
         XCTAssertEqual(
             card.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor,
-            "the float's focus halo must survive a theme swap as the accent role")
+            "the float's focus focus border must survive a theme swap as the accent role")
         XCTAssertNotEqual(
             card.layer?.borderColor, FloatShadow.edge.cgColor,
             "a float that reverts to the neutral hairline no longer signals it holds focus")
