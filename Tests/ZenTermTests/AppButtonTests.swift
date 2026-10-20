@@ -128,4 +128,63 @@ final class AppButtonTests: WindowTestCase {
         XCTAssertEqual(keycap.inkForTesting, chrome.accent.nsColor)
         withExtendedLifetime(window) {}
     }
+
+    private func lightTheme() throws -> AppTheme {
+        let url = try XCTUnwrap(ThemeCatalog.bundledURL(for: "github-light-default"))
+        let terminal = GhosttyThemeParser.parse(
+            try String(contentsOf: url, encoding: .utf8), fontName: "Menlo", fontSize: 12,
+            fallback: Theme.rosePineZen)
+        return AppTheme(terminal: terminal)
+    }
+
+    private func inkiestPixel(of view: NSView) throws -> NSColor {
+        let rep = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+        view.cacheDisplay(in: view.bounds, to: rep)
+        var inkiest: NSColor?
+        for x in 0..<rep.pixelsWide {
+            for y in 0..<rep.pixelsHigh {
+                guard let pixel = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
+                if pixel.alphaComponent > (inkiest?.alphaComponent ?? 0) { inkiest = pixel }
+            }
+        }
+        return try XCTUnwrap(inkiest, "nothing was drawn")
+    }
+
+    func test_aDisabledButton_drawsItsLabelInTheThemesFaintInk_onADarkModeMac() throws {
+        let original = Theme.current
+        defer { Theme.setCurrentForTesting(original) }
+        Theme.setCurrentForTesting(try lightTheme())
+        let chrome = Theme.current.chrome
+        let faint = try XCTUnwrap(chrome.ink(.faint).usingColorSpace(.sRGB))
+
+        for variant in [AppButton.Variant.primary, .secondary] {
+            let button = AppButton(title: "Create Worktree", variant: variant)
+            let window = try mountFitted(button)
+            window.appearance = NSAppearance(named: .darkAqua)
+            button.isEnabled = false
+
+            let ink = try inkiestPixel(of: button)
+
+            XCTAssertEqual(ink.redComponent, faint.redComponent, accuracy: 0.06, "\(variant): \(ink)")
+            XCTAssertEqual(ink.greenComponent, faint.greenComponent, accuracy: 0.06, "\(variant): \(ink)")
+            XCTAssertEqual(ink.blueComponent, faint.blueComponent, accuracy: 0.06, "\(variant): \(ink)")
+            XCTAssertLessThan(ink.redComponent, 0.5, "\(variant) drew its label in the system's white")
+        }
+    }
+
+    func test_aDisabledSymbolButton_drawsItsSymbolAtFaintInk_notDimmedFurther() throws {
+        let original = Theme.current
+        defer { Theme.setCurrentForTesting(original) }
+        Theme.setCurrentForTesting(try lightTheme())
+        let faint = Theme.current.chrome.ink(.faint)
+        let button = AppButton(variant: .secondary, symbol: "plus")
+        let window = try mountFitted(button)
+        window.appearance = NSAppearance(named: .darkAqua)
+        button.isEnabled = false
+
+        let ink = try inkiestPixel(of: button)
+
+        XCTAssertEqual(
+            ink.alphaComponent, faint.alphaComponent, accuracy: 0.03, "the symbol was dimmed on top of faint")
+    }
 }
