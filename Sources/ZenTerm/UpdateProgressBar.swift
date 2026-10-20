@@ -5,6 +5,7 @@ final class UpdateProgressBar: NSView {
     private let fill = CALayer()
     private static let height: CGFloat = 4
     private static let sweepFraction: CGFloat = 0.3
+    private static let sweepDuration: CFTimeInterval = 0.9
 
     var fraction: Double? {
         didSet {
@@ -63,7 +64,7 @@ final class UpdateProgressBar: NSView {
         let sweep = CABasicAnimation(keyPath: "position.x")
         sweep.fromValue = segment / 2
         sweep.toValue = bounds.width - segment / 2
-        sweep.duration = 0.9
+        sweep.duration = Self.sweepDuration
         sweep.autoreverses = true
         sweep.repeatCount = .infinity
         sweep.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)

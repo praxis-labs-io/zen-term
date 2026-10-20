@@ -14,7 +14,7 @@ final class ToastPresenter {
 
     init(
         host: NSView, below: NSView? = nil, topInset: CGFloat, trailingInset: CGFloat,
-        dismissAfter: TimeInterval = 4, isPresent: @escaping () -> Bool = { true }
+        dismissAfter: TimeInterval = Motion.Linger.toast, isPresent: @escaping () -> Bool = { true }
     ) {
         self.dismissAfter = dismissAfter
         self.isPresent = isPresent
@@ -173,7 +173,7 @@ final class ToastPresenter {
             return
         }
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.16
+            context.duration = Motion.fadeDuration
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             context.allowsImplicitAnimation = true
             stack.removeArrangedSubview(toast)

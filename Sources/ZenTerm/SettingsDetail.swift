@@ -99,7 +99,7 @@ final class ResetFlashLabel: NSTextField {
         let hide = DispatchWorkItem { [weak self] in self?.isHidden = true }
         hideTimer?.cancel()
         hideTimer = hide
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: hide)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Motion.Linger.notice, execute: hide)
     }
 
     func reapplyTheme() {

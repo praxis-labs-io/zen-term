@@ -249,7 +249,7 @@ final class SettingsKeybindsSection: SettingsSection {
             row?.setCapturing(false)
         }
         captureCloseTimer = close
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: close)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Motion.Linger.ack, execute: close)
     }
 
     private func endCapture(_ row: KeybindRow) {

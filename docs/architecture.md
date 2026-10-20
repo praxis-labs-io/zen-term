@@ -431,6 +431,9 @@ New modal surfaces compose the existing primitives.
   horizontal `contentInsets`. `KeyboardFocus.reveal(_:among:)` scrolls to the selection,
   unanimated, padding only the arriving edge.
 - **`Motion.swift` constants are an approved baseline.** Do not re-tune them quietly.
+  Animation durations, on-screen lingers and hover intent live on `Motion`. Behavior
+  debounces, polls, timeouts and a gesture's tuned delay stay with their owner, and a
+  control's own loop period (a spinner step, a progress sweep) stays local to it.
 
 ## Key handling
 

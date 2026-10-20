@@ -53,7 +53,6 @@ final class WindowController: NSObject {
     private var fontSizeDismissal: DispatchWorkItem?
     // The poll can see an agent exit before its result arrives, and only the result can tell a crash.
     private var exitsAwaitingResult: Set<SurfaceID> = []
-    private static let fontSizeCardLinger: TimeInterval = 1.2
 
     func showFontSize(_ text: String) {
         if let card = fontSizeCard {
@@ -66,7 +65,7 @@ final class WindowController: NSObject {
         fontSizeDismissal?.cancel()
         let dismissal = DispatchWorkItem { [weak self] in self?.dismissFontSizeCard() }
         fontSizeDismissal = dismissal
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.fontSizeCardLinger, execute: dismissal)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Motion.Linger.readout, execute: dismissal)
     }
 
     private func dismissFontSizeCard() {

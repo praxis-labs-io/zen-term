@@ -202,6 +202,9 @@ Sizes, weights and type in the chrome come from named tokens, never a literal.
   cards and the floating sidebar, `modal` for modals (the `CardChrome` default). A drawn
   shadow reads `FloatShadow.color(_:)` and the tier's `contextBlur` and `offset`. Never
   build an `NSShadow` by hand.
+- **Motion:** animation durations, on-screen lingers and hover intent come from `Motion`
+  (`fadeDuration`, `pageSlideDuration`, `entranceFadeDuration`, `hoverIntent`,
+  `Motion.Linger`). Debounces, polls and timeouts stay with their owner.
 
 ## Designs
 

@@ -279,7 +279,7 @@ report unconditionally invents a push production never makes; recording nothing 
 **A render tears down a tooltip that has not appeared yet.** `SidebarView.refreshRowHover` suppresses
 and then calls `row.refreshHover()`, which reads `pointerIsInside`; that is false whenever the window
 is not key, and a test window is not key. So the first render after a synthesized `mouseEntered`
-clears `isHovered`, hides the tooltip, and cancels `TooltipPresenter`'s 0.45s work item. It follows
+clears `isHovered`, hides the tooltip, and cancels `TooltipPresenter`'s `Motion.hoverIntent` work item. It follows
 hover order, not row kind, and a workspace open renders several times while it settles. Hover once the
 window is quiet, or assert the row's own hover state rather than a presented tooltip.
 

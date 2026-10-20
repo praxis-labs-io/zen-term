@@ -355,7 +355,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
             self?.chordChip.setCapturing(false)
         }
         captureCloseTimer = close
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: close)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Motion.Linger.ack, execute: close)
         refreshValidity()
     }
 

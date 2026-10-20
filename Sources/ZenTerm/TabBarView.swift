@@ -52,9 +52,7 @@ final class TabBarView: NSView {
     // A move changes the slot but not the active tab; only this separates it from a title poll.
     private var activeTabIndex: Int?
     private var lastItems: [TabBarItem] = []
-    // Matches the canvas page-slide so the two land together.
     private static let tracerThickness: CGFloat = 2
-    private static let tracerDuration: CFTimeInterval = 0.28
 
     init(
         onSelect: @escaping (TabID) -> Void,
@@ -280,7 +278,7 @@ final class TabBarView: NSView {
         width.values = widthValues.map { $0 as NSNumber }
         for anim in [left, width] {
             anim.keyTimes = [0, 0.5, 1]
-            anim.duration = Self.tracerDuration
+            anim.duration = Motion.pageSlideDuration
             anim.timingFunctions = [
                 CAMediaTimingFunction(name: .easeOut),
                 CAMediaTimingFunction(name: .easeInEaseOut),

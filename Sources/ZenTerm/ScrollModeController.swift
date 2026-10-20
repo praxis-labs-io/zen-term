@@ -584,12 +584,12 @@ final class ScrollModeController {
         flashLevel = 1
         refreshCursor()
         guard !Motion.isReduceMotionEnabled() else {
-            flashTimer = Timer.scheduledTimer(withTimeInterval: Self.flashDuration, repeats: false) {
+            flashTimer = Timer.scheduledTimer(withTimeInterval: Motion.fadeDuration, repeats: false) {
                 [weak self] _ in MainActor.assumeIsolated { self?.cancelFlash() }
             }
             return
         }
-        let step = CGFloat(Self.flashFrame / Self.flashDuration)
+        let step = CGFloat(Self.flashFrame / Motion.fadeDuration)
         flashTimer = Timer.scheduledTimer(withTimeInterval: Self.flashFrame, repeats: true) {
             [weak self] _ in
             MainActor.assumeIsolated {
@@ -611,7 +611,6 @@ final class ScrollModeController {
 
     var isFlashingForTesting: Bool { flashLevel > 0 }
 
-    private static let flashDuration: TimeInterval = 0.22
     private static let flashFrame: TimeInterval = 1.0 / 60
 
     private func refreshCursor(remembersLine: Bool = true) {

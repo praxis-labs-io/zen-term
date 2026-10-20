@@ -96,6 +96,8 @@ never a literal.
 - Shadows come from `FloatShadow.apply(_:to:)` with a tier: `overlay` for anything
   anchored, `float` for toasts, cards and the floating sidebar, `modal` for modals.
   Never build an `NSShadow` by hand.
+- Animation durations, on-screen lingers and hover intent come from `Motion`.
+  Debounces, polls and timeouts stay with their owner.
 
 **Never block the main thread.** No `waitUntilExit`, no filesystem walk, no
 blocking I/O on the main queue. The chrome is the product and a stalled main

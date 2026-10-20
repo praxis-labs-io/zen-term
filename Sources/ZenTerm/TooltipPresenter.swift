@@ -5,7 +5,6 @@ final class TooltipPresenter {
     static let shared = TooltipPresenter()
     private init() {}
 
-    private static let delay: TimeInterval = 0.45
     private static let gap: CGFloat = ChromeMetrics.Spacing.s6
 
     private var tooltip: ChromeTooltip?
@@ -25,7 +24,7 @@ final class TooltipPresenter {
             self.present(for: source, label: label, shortcut: shortcut, style: style)
         }
         pending = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.delay, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Motion.hoverIntent, execute: work)
     }
 
     // A row whose copy changes under a live tooltip: replace it in place, since re-scheduling would blank it for the delay.
