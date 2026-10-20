@@ -31,7 +31,7 @@ final class AcknowledgementsWindow {
         scroll.translatesAutoresizingMaskIntoConstraints = true
         scroll.autoresizingMask = [.width, .height]
 
-        let text = NSTextView()
+        let text = ChromeTextView()
         text.isEditable = false
         text.isSelectable = true
         text.isRichText = false
@@ -61,6 +61,7 @@ final class AcknowledgementsWindow {
         textView?.backgroundColor = background
         textView?.drawsBackground = true
         textView?.textColor = chrome.ink(.normal)
+        textView?.applyThemedEditing()
     }
 
     private static func notices() -> String {

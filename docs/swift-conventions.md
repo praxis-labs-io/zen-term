@@ -159,6 +159,13 @@ a leading/trailing cross-axis stretches every row to the widest child. Give fixe
 width, make the one flexible view the lowest-hugging, and use `setCustomSpacing(_:after:)` rather than
 padding a view.
 
+**A chrome text view is a `ChromeTextView`, never `NSTextView()`.** `NSTextView()` and the window's
+default field editor are TextKit 2, which ignores `selectedTextAttributes` once the view loses focus or
+its window stops being key and paints the system's appearance-driven gray, with no API to change it.
+`ChromeTextView` is TextKit 1, whose layout manager swaps that fill in `fillBackgroundRectArray`, and
+it must `setFill()` the replacement before calling super, which fills with the current color, not
+`color`. `HostWindow` vends one as the field editor for every `NSTextField`, selectable labels included.
+
 ## Layers and shadows
 
 **Static shadows go on `NSView.shadow`, not `layer.shadowOpacity`.** Inserting a subtree re-realizes
@@ -295,6 +302,9 @@ Code reading `currentEvent` for modifiers needs the event pinned first (`sendRet
 
 **A run-loop wait also lands work dispatched from the block it waited on.** Assert pre-async state
 before anything turns the run loop, usually by building the view without mounting it.
+
+**A test window is never key, so pin key status with an `isKeyWindow` override.** TextKit 1 honors
+it and draws a focused selection; TextKit 2 does not (`TextSelectionThemeTests`).
 
 **`RunLoop.run(mode:before:)` returns at once when nothing is attached.** Loop to a deadline, like
 `waitUntil`.

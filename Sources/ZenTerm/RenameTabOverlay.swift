@@ -62,7 +62,7 @@ final class RenameTabOverlay: NSView, ModalOverlay {
 
     func focusInitialResponder() {
         window?.makeFirstResponder(nameField.field)
-        nameField.field.applyThemedCaret()
+        nameField.field.applyThemedEditor()
         nameField.field.currentEditor()?.selectAll(nil)
     }
 

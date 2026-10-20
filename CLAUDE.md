@@ -176,8 +176,9 @@ bring-your-own theme and washes out on light themes. Everything resolves from
 **Banned in the chrome:** `NSColor(white:…)`, `.white` / `.black`, raw hex, literal
 palette values, and AppKit system/semantic colors (`.secondaryLabelColor`,
 `.placeholderTextColor`, a text field's default `placeholderString` tint, and a field
-editor's insertion point, which defaults to the *macOS* accent: call
-`applyThemedCaret()` when a field takes focus). Those
+editor's insertion point and selection, which default to the *macOS* accent and the
+system's unfocused gray: `HostWindow` vends a themed `ChromeTextView` editor, and
+`applyThemedEditor()` reapplies it on a theme change). Those
 follow `effectiveAppearance`, not `Theme.current`. The only exception is the drop
 shadow's black in `FloatShadow`: the color is theme-independent, but its strength is
 solved per theme in `ChromeThemeDeriver`. Any other theme-independent value must be

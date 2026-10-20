@@ -94,7 +94,7 @@ final class RegionCommandField: NSView, NSTextFieldDelegate {
         opensFocusedLabel.textColor = chrome.ink(.subtle)
         marker.layer?.backgroundColor = chrome.cursor.nsColor.cgColor
         field.textColor = chrome.ink(.normal)
-        field.applyThemedCaret()
+        field.applyThemedEditor()
         let placeholder = region == .main ? WorkspaceForm.shellLabel : ""
         field.placeholderAttributedString = NSAttributedString(
             string: placeholder, attributes: [.font: Self.commandFont, .foregroundColor: chrome.ink(.faint)])
@@ -209,7 +209,7 @@ final class RegionCommandField: NSView, NSTextFieldDelegate {
         override func becomeFirstResponder() -> Bool {
             let ok = super.becomeFirstResponder()
             if ok {
-                applyThemedCaret()
+                applyThemedEditor()
                 onGainedFocus?()
             }
             return ok

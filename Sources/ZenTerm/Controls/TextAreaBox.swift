@@ -36,7 +36,7 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         textView.drawsBackground = false
         textView.font = ChromeType.font(.body)
         textView.textColor = Theme.current.chrome.ink(.normal)
-        textView.insertionPointColor = Theme.current.chrome.ink(.normal)
+        textView.applyThemedEditing()
         textView.textContainerInset = NSSize(
             width: ChromeMetrics.Spacing.controlInset - 2 * ChromeMetrics.Spacing.s2, height: ChromeMetrics.Spacing.s4)
         textView.textContainer?.lineFragmentPadding = 0
@@ -114,8 +114,9 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
     func reapplyTheme() {
         setFocused(window?.firstResponder === textView)
         textView.textColor = Theme.current.chrome.ink(.normal)
-        textView.insertionPointColor = Theme.current.chrome.ink(.normal)
+        textView.applyThemedEditing()
         textView.placeholderColor = Theme.current.chrome.ink(.muted)
+        textView.needsDisplay = true
     }
 
     private func updatePlaceholderVisibility() {
@@ -123,7 +124,7 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
     }
 }
 
-final class FocusReportingTextView: NSTextView {
+final class FocusReportingTextView: ChromeTextView {
     var onFocusChange: ((Bool) -> Void)?
 
     var placeholder = "" {

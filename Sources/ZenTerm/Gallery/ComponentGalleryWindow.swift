@@ -22,6 +22,7 @@
         private var liveCheckbox: CheckboxDropdown?
         private var renameChip: WorkspaceTabChip?
         private var observers: [NSObjectProtocol] = []
+        private lazy var fieldEditor = ChromeTextView.makeFieldEditor()
 
         func show() {
             let window = window ?? build()
@@ -36,6 +37,10 @@
             observers = []
             window?.makeFirstResponder(nil)
             theme.restore()
+        }
+
+        func windowWillReturnFieldEditor(_ sender: NSWindow, to client: Any?) -> Any? {
+            client is NSTextField ? fieldEditor : nil
         }
 
         private func build() -> NSWindow {

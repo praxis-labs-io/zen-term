@@ -283,7 +283,7 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         onWidthChanged?()
         needsLayout = true
         window?.makeFirstResponder(renameField)
-        renameField.applyThemedCaret()
+        renameField.applyThemedEditor()
         renameField.currentEditor()?.selectAll(nil)
     }
 
@@ -336,7 +336,7 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
     private final class RenameField: NSTextField {
         override func becomeFirstResponder() -> Bool {
             let ok = super.becomeFirstResponder()
-            if ok { applyThemedCaret() }
+            if ok { applyThemedEditor() }
             return ok
         }
     }

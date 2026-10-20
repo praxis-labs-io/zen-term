@@ -196,7 +196,7 @@ class PaletteOverlay: NSView, ModalOverlay {
 
     func focusQuery() {
         window?.makeFirstResponder(searchField)
-        searchField.applyThemedCaret()
+        searchField.applyThemedEditor()
     }
 
     func animateIn() {
@@ -231,7 +231,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         CardChrome.reapplyTheme(to: card)
         searchGlyph.textColor = chrome.ink(.muted)
         searchField.textColor = chrome.ink(.normal)
-        searchField.applyThemedCaret()
+        searchField.applyThemedEditor()
         applyPlaceholder()
         for hairline in [divider, footerDivider] {
             hairline.layer?.backgroundColor = chrome.fill(alpha: ChromeTheme.hairline).cgColor
@@ -438,7 +438,7 @@ class PaletteOverlay: NSView, ModalOverlay {
 extension PaletteOverlay: NSTextFieldDelegate {
     /// A click focuses the field past `focusInitialResponder`, and the shared field editor keeps the last field's tint.
     func controlTextDidBeginEditing(_ obj: Notification) {
-        searchField.applyThemedCaret()
+        searchField.applyThemedEditor()
     }
 
     func controlTextDidChange(_ obj: Notification) {

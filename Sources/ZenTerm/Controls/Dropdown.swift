@@ -172,7 +172,7 @@ final class Dropdown: NSView {
         queryField.textColor = Theme.current.chrome.ink(.normal)
         if !queryField.isHidden {
             renderQueryPlaceholder()
-            queryField.applyThemedCaret()
+            queryField.applyThemedEditor()
         }
         rebuildOpenList()
     }
@@ -306,7 +306,7 @@ final class Dropdown: NSView {
         queryField.isHidden = false
         isEditing = true
         window?.makeFirstResponder(queryField)
-        queryField.applyThemedCaret()
+        queryField.applyThemedEditor()
     }
 
     /// Restores focus before hiding the field: hiding a first responder dumps focus to the window.

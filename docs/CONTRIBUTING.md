@@ -77,7 +77,7 @@ do stays below the seam. The protocol grows to hold what the chrome needs from
 icons take `chrome.ink(.faint / .muted / .subtle / .normal)`, never a raw alpha; a control's
 interactive fills take a tier, `chrome.fill(.rest / .hover / .active)`, and a divider or border
 takes `chrome.fill(alpha:)` with a named constant. `NSColor(white:)`, `.white`, raw hex, and AppKit's semantic colors
-(`.secondaryLabelColor`, a field editor's default insertion point) all follow
+(`.secondaryLabelColor`, a field editor's default insertion point and selection) all follow
 `effectiveAppearance` rather than the theme, so they wash out on a light theme and
 ignore a bring-your-own one. If a role is missing, add it to `ChromeTheme` and
 derive it in `ChromeThemeDeriver`.

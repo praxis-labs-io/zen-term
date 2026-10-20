@@ -103,9 +103,18 @@ struct ChromeTheme: Equatable {
     }
 }
 
+extension NSTextView {
+    /// AppKit defaults the caret and the selection to the macOS accent.
+    func applyThemedEditing() {
+        let chrome = Theme.current.chrome
+        insertionPointColor = chrome.ink(.normal)
+        selectedTextAttributes = [.backgroundColor: chrome.tint(chrome.accent, alpha: ChromeTheme.badgeTint)]
+    }
+}
+
 extension NSTextField {
-    /// AppKit defaults the caret to the macOS accent, and the field editor is shared per window, so call on every focus.
-    func applyThemedCaret() {
-        (currentEditor() as? NSTextView)?.insertionPointColor = Theme.current.chrome.ink(.normal)
+    /// The field editor is shared per window, so a theme change has to reach the one this field is editing with.
+    func applyThemedEditor() {
+        (currentEditor() as? NSTextView)?.applyThemedEditing()
     }
 }

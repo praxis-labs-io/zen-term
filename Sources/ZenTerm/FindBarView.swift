@@ -78,7 +78,7 @@ final class FindBarView: NSView {
 
     func focusField() {
         window?.makeFirstResponder(field)
-        field.applyThemedCaret()
+        field.applyThemedEditor()
     }
 
     var countTextForTesting: String { count.stringValue }
@@ -103,7 +103,7 @@ final class FindBarView: NSView {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         applyFill()
-        field.applyThemedCaret()
+        field.applyThemedEditor()
         glyph.contentTintColor = chrome.ink(.muted)
         field.textColor = chrome.ink(.normal)
         count.textColor = chrome.ink(.muted)
@@ -130,7 +130,7 @@ final class FindBarView: NSView {
 extension FindBarView: NSTextFieldDelegate {
     /// The field editor is shared per window, so a click-focus arrives with another field's caret tint.
     func controlTextDidBeginEditing(_ obj: Notification) {
-        field.applyThemedCaret()
+        field.applyThemedEditor()
     }
 
     func controlTextDidChange(_ obj: Notification) {
