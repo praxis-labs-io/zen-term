@@ -217,9 +217,14 @@ final class ConfirmCardTests: WindowTestCase {
 
     private func visibleText(in card: NSView) -> [String] {
         descendants(of: card)
-            .compactMap { $0 as? NSTextField }
-            .filter { !$0.isEditable && !$0.isHiddenOrHasHiddenAncestor }
-            .map(\.stringValue)
+            .filter { !$0.isHiddenOrHasHiddenAncestor }
+            .compactMap { view in
+                switch view {
+                case let button as AppButton: return button.title
+                case let label as NSTextField where !label.isEditable: return label.stringValue
+                default: return nil
+                }
+            }
     }
 
     private func returnKey() throws -> NSEvent {

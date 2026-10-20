@@ -95,10 +95,10 @@ final class AppButton: NSButton {
         self.labelText = title
         self.keycap = shortcut.map { KeycapView(shortcut: $0, style: Self.keycapStyle(for: variant, isEnabled: true)) }
         super.init(frame: .zero)
+        let cell = AppButtonCell()
+        cell.trailingReserve = keycapReserve
+        self.cell = cell
         if let keycap {
-            let cell = KeycapClearingCell()
-            cell.trailingReserve = keycapReserve
-            self.cell = cell
             addSubview(keycap)
             NSLayoutConstraint.activate([
                 keycap.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -size.horizontalPadding),
@@ -110,6 +110,7 @@ final class AppButton: NSButton {
         wantsLayer = true
         layer?.cornerRadius = size.cornerRadius
         setButtonType(.momentaryChange)
+        cell.imageDimsWhenDisabled = false
         if let symbol {
             let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
             image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
@@ -191,32 +192,9 @@ final class AppButton: NSButton {
 
     private func restyle() {
         let chrome = Theme.current.chrome
-        let textColor: NSColor
-        var background: NSColor
-        switch variant {
-        case .primary:
-            textColor = isEnabled ? chrome.accent.nsColor : chrome.ink(.faint)
-            background = chrome.fill(isHovered && isEnabled ? .hover : .rest)
-        case .secondary:
-            textColor = focusTinted(chrome.muted.nsColor, chrome)
-            background = isHovered ? chrome.fill(.hover) : .clear
-        case .muted:
-            textColor = focusTinted(chrome.muted.nsColor, chrome)
-            background = chrome.fill(isHovered ? .hover : .rest)
-        case .destructive:
-            textColor = chrome.destructive.nsColor
-            background = chrome.fill(isHovered ? .hover : .rest)
-        case .segment:
-            textColor = isOn ? chrome.accent.nsColor : chrome.muted.nsColor
-            background = isOn ? chrome.fill(.active) : chrome.fill(isHovered ? .hover : .rest)
-        case .link:
-            textColor =
-                isFocusedStop
-                ? chrome.accent.nsColor : (isHovered ? chrome.foreground.nsColor : chrome.muted.nsColor)
-            background = .clear
-        }
+        let (textColor, background) = isEnabled ? enabledColors(chrome) : disabledColors(chrome)
         layer?.backgroundColor = background.cgColor
-        let outlined = (isFocusedStop || showsFocusOutline) && variant != .link
+        let outlined = isEnabled && (isFocusedStop || showsFocusOutline) && variant != .link
         layer?.borderWidth = outlined ? 1.5 : 0
         layer?.borderColor = outlined ? chrome.accent.nsColor.cgColor : nil
         if symbolName != nil {
@@ -227,8 +205,39 @@ final class AppButton: NSButton {
                 .foregroundColor: textColor,
                 .font: NSFont.systemFont(ofSize: isLink ? 13 : size.fontSize, weight: isLink ? .regular : .semibold),
             ]
-            if isLink, isFocusedStop { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+            if isLink, isEnabled, isFocusedStop { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
             attributedTitle = NSAttributedString(string: labelText, attributes: attributes)
+        }
+    }
+
+    private func enabledColors(_ chrome: ChromeTheme) -> (text: NSColor, background: NSColor) {
+        switch variant {
+        case .primary:
+            return (chrome.accent.nsColor, chrome.fill(isHovered ? .hover : .rest))
+        case .secondary:
+            return (focusTinted(chrome.muted.nsColor, chrome), isHovered ? chrome.fill(.hover) : .clear)
+        case .muted:
+            return (focusTinted(chrome.muted.nsColor, chrome), chrome.fill(isHovered ? .hover : .rest))
+        case .destructive:
+            return (chrome.destructive.nsColor, chrome.fill(isHovered ? .hover : .rest))
+        case .segment:
+            return (
+                isOn ? chrome.accent.nsColor : chrome.muted.nsColor,
+                isOn ? chrome.fill(.active) : chrome.fill(isHovered ? .hover : .rest)
+            )
+        case .link:
+            let text =
+                isFocusedStop
+                ? chrome.accent.nsColor : (isHovered ? chrome.foreground.nsColor : chrome.muted.nsColor)
+            return (text, .clear)
+        }
+    }
+
+    private func disabledColors(_ chrome: ChromeTheme) -> (text: NSColor, background: NSColor) {
+        switch variant {
+        case .segment: return (chrome.ink(.faint), chrome.fill(isOn ? .active : .rest))
+        case .primary, .muted, .destructive: return (chrome.ink(.faint), chrome.fill(.rest))
+        case .secondary, .link: return (chrome.ink(.faint), .clear)
         }
     }
 
@@ -242,10 +251,31 @@ final class AppButton: NSButton {
     var keycapForTesting: KeycapView? { keycap }
 }
 
-private final class KeycapClearingCell: NSButtonCell {
+// AppKit hands `drawTitle` a disabled title already recolored in the system color, which follows the macOS appearance, not the theme.
+private final class AppButtonCell: NSButtonCell {
     var trailingReserve: CGFloat = 0
 
-    override func drawTitle(_ title: NSAttributedString, withFrame frame: NSRect, in controlView: NSView) -> NSRect {
-        super.drawTitle(title, withFrame: frame.offsetBy(dx: -trailingReserve / 2, dy: 0), in: controlView)
+    override func drawTitle(_ _: NSAttributedString, withFrame frame: NSRect, in controlView: NSView) -> NSRect {
+        let title = attributedTitle
+        let size = title.size()
+        let width = min(size.width, frame.width - trailingReserve)
+        let rect = NSRect(
+            x: frame.minX + (frame.width - width) / 2 - trailingReserve / 2,
+            y: frame.minY + (frame.height - size.height) / 2,
+            width: width, height: size.height)
+        if width < size.width {
+            truncatingTail(title).draw(with: rect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+        } else {
+            title.draw(in: rect)
+        }
+        return rect
+    }
+
+    private func truncatingTail(_ title: NSAttributedString) -> NSAttributedString {
+        let truncated = NSMutableAttributedString(attributedString: title)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingTail
+        truncated.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: truncated.length))
+        return truncated
     }
 }
