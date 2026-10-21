@@ -27,6 +27,20 @@ final class IconPickerFieldTests: WindowTestCase {
             "no orphaned grid card left drawn on the content view")
     }
 
+    func test_aThemeChangeWhileOpen_keepsTheHighlight() {
+        let original = Theme.current
+        defer { Theme.setCurrentForTesting(original) }
+        let (field, _) = openedField(selected: IconCatalog.defaultSymbol)
+        field.moveHighlightForTesting(3)
+        let arrowedTo = field.highlightedSymbolForTesting
+
+        Theme.setCurrentForTesting(AppTheme(terminal: Theme.builtIn.terminal, accent: .magenta))
+        field.reapplyTheme()
+
+        XCTAssertTrue(field.isPopoverOpen)
+        XCTAssertEqual(field.highlightedSymbolForTesting, arrowedTo, "the rebuild must not undo the arrowing")
+    }
+
     func test_arrowNav_neverLandsOnASectionHeading() {
         let (field, _) = openedField(selected: IconCatalog.defaultSymbol)
         XCTAssertEqual(

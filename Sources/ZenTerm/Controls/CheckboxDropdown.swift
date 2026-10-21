@@ -56,6 +56,7 @@ final class CheckboxDropdown: NSView {
 
     var buttonTitleForTesting: String { titleLabel.stringValue }
     var isEditingForTesting: Bool { !queryField.isHidden }
+    var shownSummaryForTesting: String? { titleLabel.isHidden ? nil : titleLabel.stringValue }
     var itemsForTesting: [CheckboxDropdownItem] { items }
     var isPopoverOpen: Bool { popover.isOpen }
     var highlightedIndexForTesting: Int { highlighted }
@@ -130,10 +131,7 @@ final class CheckboxDropdown: NSView {
         renderTitle()
         chevron.contentTintColor = Theme.current.chrome.ink(.muted)
         queryField.textColor = Theme.current.chrome.ink(.normal)
-        if isEditing {
-            renderQueryPlaceholder()
-            queryField.applyThemedEditor()
-        }
+        if isEditing { queryField.applyThemedEditor() }
         rebuildOpenList()
     }
 
@@ -193,9 +191,13 @@ final class CheckboxDropdown: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        let wasOpen = popover.isOpen
-        window?.makeFirstResponder(self)
-        wasOpen ? closeList() : openList()
+        if popover.isOpen {
+            closeList()
+            window?.makeFirstResponder(self)
+        } else {
+            window?.makeFirstResponder(self)
+            openList()
+        }
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -242,11 +244,10 @@ final class CheckboxDropdown: NSView {
 
     private func beginEditing() {
         queryField.stringValue = ""
-        renderQueryPlaceholder()
-        titleLabel.isHidden = true
         queryField.isHidden = false
         isEditing = true
-        window?.makeFirstResponder(queryField)
+        renderTitle()
+        guard window?.makeFirstResponder(queryField) == true else { return endEditing() }
     }
 
     /// Restores focus before hiding the field: hiding a first responder dumps focus to the window.
@@ -255,14 +256,7 @@ final class CheckboxDropdown: NSView {
         isEditing = false
         if wasEditing, window?.firstResponder === queryField.currentEditor() { window?.makeFirstResponder(self) }
         queryField.isHidden = true
-        titleLabel.isHidden = false
-    }
-
-    /// `placeholderString` draws in `placeholderTextColor`, which follows `effectiveAppearance`, not `Theme.current`.
-    private func renderQueryPlaceholder() {
-        queryField.placeholderAttributedString = NSAttributedString(
-            string: summary,
-            attributes: [.foregroundColor: Theme.current.chrome.ink(.muted), .font: ChromeType.font(.body)])
+        renderTitle()
     }
 
     private func refilter() {
@@ -285,6 +279,9 @@ final class CheckboxDropdown: NSView {
         popover.close()
         popover.open(rows: buildRows())
         refreshRows()
+        if let position = visible.firstIndex(of: highlighted), rowViews.indices.contains(position) {
+            popover.reveal(rowViews[position])
+        }
     }
 
     private func rerenderList() {
@@ -294,14 +291,14 @@ final class CheckboxDropdown: NSView {
         refilter()
         guard visible != before else { return }
         highlighted = visible.first ?? highlighted
-        popover.close()
-        popover.open(rows: buildRows())
-        refreshRows()
+        rebuildOpenList()
     }
 
+    /// Stands in for the query field's placeholder while editing: setting a placeholder mid-edit ends the edit.
     private func renderTitle() {
         titleLabel.stringValue = summary
-        titleLabel.textColor = Theme.current.chrome.ink(.normal)
+        titleLabel.textColor = Theme.current.chrome.ink(isEditing ? .muted : .normal)
+        titleLabel.isHidden = isEditing && !query.isEmpty
     }
 
     private func moveHighlight(_ delta: Int) {

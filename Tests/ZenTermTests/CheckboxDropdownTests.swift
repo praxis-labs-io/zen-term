@@ -61,6 +61,21 @@ final class CheckboxDropdownTests: WindowTestCase {
         XCTAssertFalse(dropdown.rowViewsForTesting.first === staleRow, "the list is still painted in the old theme")
     }
 
+    func test_togglingWhileOpen_updatesTheSummaryInTheQueryField() {
+        let dropdown = makeDropdown()
+        press(dropdown, " ", code: 49)
+        XCTAssertEqual(dropdown.shownSummaryForTesting, "All shown")
+
+        dropdown.setItems(
+            [CheckboxDropdownItem(title: "One", isChecked: false)] + [
+                CheckboxDropdownItem(title: "Two", isChecked: true),
+                CheckboxDropdownItem(title: "Three", isChecked: true),
+            ], title: "2 of 3 shown")
+
+        XCTAssertEqual(dropdown.shownSummaryForTesting, "2 of 3 shown", "the open field still shows the old count")
+        XCTAssertTrue(dropdown.isPopoverOpen, "a toggle must not end the edit")
+    }
+
     func test_typing_narrowsTheListAndShowsTheQuery() {
         let dropdown = makeDropdown([".env", "node_modules", "config/credentials/development.key"])
         press(dropdown, " ", code: 49)

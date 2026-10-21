@@ -146,6 +146,7 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
     func reapplyTheme() {
         closeButton.reapplyTheme()
         restyle()
+        renameField.applyThemedEditor()
     }
 
     private func restyle() {
@@ -160,7 +161,6 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
                 .paragraphStyle: paragraph,
             ])
         renameField.textColor = chrome.ink(.normal)
-        renameField.applyThemedEditor()
         renameField.placeholderAttributedString = NSAttributedString(
             string: defaultName, attributes: [.font: TabBarView.chipFont, .foregroundColor: chrome.ink(.muted)])
         dot.layer?.backgroundColor = chrome.cursor.nsColor.cgColor

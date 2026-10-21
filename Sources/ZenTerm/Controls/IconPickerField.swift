@@ -106,8 +106,12 @@ final class IconPickerField: NSView {
         restyle()
         renderClosed()
         guard isPopoverOpen else { return }
+        let kept = highlighted
         closePopover()
         openPopover()
+        highlighted = kept
+        refreshHighlight()
+        if cells.indices.contains(kept) { gridScroll?.reveal(cells[kept]) }
     }
 
     private func renderClosed() {
