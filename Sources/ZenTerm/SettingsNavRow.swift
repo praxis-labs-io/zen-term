@@ -24,6 +24,7 @@ final class SettingsNavRow: NSView, HoverSuppressing {
     private var attentionDotWidth: NSLayoutConstraint?
     private var attentionDotGap: NSLayoutConstraint?
     private var labelGap: NSLayoutConstraint?
+    private var accessoryGap: NSLayoutConstraint?
     private var dotInk: (() -> NSColor)?
     private var dotAccessibilityValue: String?
     private var titleInk: (() -> NSColor)?
@@ -131,6 +132,7 @@ final class SettingsNavRow: NSView, HoverSuppressing {
         guard accessory !== hoverAccessory else { return }
         hoverAccessory?.removeFromSuperview()
         hoverAccessory = accessory
+        accessoryGap = nil
         if let accessory {
             accessory.translatesAutoresizingMaskIntoConstraints = false
             addSubview(accessory)
@@ -138,6 +140,8 @@ final class SettingsNavRow: NSView, HoverSuppressing {
                 accessory.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.accessoryInset),
                 accessory.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
+            accessoryGap = label.trailingAnchor.constraint(
+                lessThanOrEqualTo: accessory.leadingAnchor, constant: -ChromeMetrics.Spacing.s4)
         }
         refreshAccessory()
     }
@@ -145,6 +149,7 @@ final class SettingsNavRow: NSView, HoverSuppressing {
     private func refreshAccessory() {
         hoverAccessory?.isHidden = !showsHover
         detailLabel.isHidden = showsHover && hoverAccessory != nil
+        accessoryGap?.isActive = showsHover && hoverAccessory != nil
     }
 
     func setTitle(_ title: String) {
