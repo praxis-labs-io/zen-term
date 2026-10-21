@@ -101,6 +101,7 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         CardChrome.reapplyTheme(to: card)
         header.textColor = chrome.ink(.normal)
         envText.textColor = chrome.ink(.muted)
+        envText.applyThemedEditor()
         envNote.textColor = chrome.ink(.muted)
         let controls: [ThemeReapplying] = [titleField, whatHappened, exportButton, cancelButton, openButton]
         controls.forEach { $0.reapplyTheme() }

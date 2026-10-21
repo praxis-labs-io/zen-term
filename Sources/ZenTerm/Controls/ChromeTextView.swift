@@ -34,9 +34,9 @@ private final class SelectionLayoutManager: NSLayoutManager {
     }
 
     private func isUnfocusedSelection(_ charRange: NSRange, color: NSColor) -> Bool {
-        guard let view = firstTextView, color != view.selectedTextAttributes[.backgroundColor] as? NSColor else {
-            return false
-        }
+        guard let view = firstTextView, !(view.window?.isKeyWindow == true && view.window?.firstResponder === view),
+            color != view.selectedTextAttributes[.backgroundColor] as? NSColor
+        else { return false }
         return view.selectedRanges.contains { NSIntersectionRange($0.rangeValue, charRange).length > 0 }
     }
 }

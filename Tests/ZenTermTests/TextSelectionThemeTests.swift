@@ -232,6 +232,24 @@ final class TextSelectionThemeTests: WindowTestCase {
         XCTAssertEqual(editor.selectedTextAttributes[.backgroundColor] as? NSColor, focusedTint)
     }
 
+    func test_themeSwitch_whileRenamingATab_retintsTheEditor() throws {
+        Theme.setCurrentForTesting(Theme.builtIn)
+        let window = makeWindow(appearance: .darkAqua)
+        let chip = WorkspaceTabChip()
+        try mount([chip], in: window)
+        window.makeKeyAndOrderFront(nil)
+        chip.beginRename()
+        let editor = try XCTUnwrap(
+            chip.renameFieldForTesting.currentEditor() as? NSTextView, "the rename has to be editing")
+
+        Theme.setCurrentForTesting(try lightTheme(accent: .magenta))
+        chip.reapplyTheme()
+
+        XCTAssertEqual(editor.selectedTextAttributes[.backgroundColor] as? NSColor, focusedTint)
+        XCTAssertEqual(editor.insertionPointColor, Theme.current.chrome.ink(.normal))
+        window.orderOut(nil)
+    }
+
     func test_themeSwitch_whileEditing_retintsTheSelection() throws {
         Theme.setCurrentForTesting(Theme.builtIn)
         let window = makeWindow(appearance: .darkAqua)
