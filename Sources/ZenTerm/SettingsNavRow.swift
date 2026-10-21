@@ -40,8 +40,8 @@ final class SettingsNavRow: NSView, HoverSuppressing {
     private static let detailMaxWidth: CGFloat = 96
     private static let nestedIndent: CGFloat = ChromeMetrics.Spacing.s24
     private static let nestedGlyphGap: CGFloat = ChromeMetrics.Spacing.s6
-    // The frame pulls a 20pt accessory 5pt past the detail's inset, so its glyph sits where the detail ends.
-    private static let accessoryInset: CGFloat = 5
+    private static let accessoryInset =
+        ChromeMetrics.Spacing.controlInset - (ChromeMetrics.Height.xs - ChromeMetrics.Icon.sm) / 2
     private static let attentionDotDiameter: CGFloat = 6
     private static let attentionDotGapToDetail: CGFloat = ChromeMetrics.Spacing.s6
 
