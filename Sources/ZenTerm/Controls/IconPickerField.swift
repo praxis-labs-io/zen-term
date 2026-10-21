@@ -24,7 +24,7 @@ final class IconPickerField: NSView {
 
     private static let columns = 8
     static var columnsForTesting: Int { columns }
-    private static let cellSize: CGFloat = 34
+    private static let cellSize = ChromeMetrics.Height.lg
     private static let cellSpacing: CGFloat = ChromeMetrics.Spacing.s4
     private static let headerHeight: CGFloat = ChromeMetrics.Height.xs
     private static let sectionGap: CGFloat = ChromeMetrics.Spacing.s12

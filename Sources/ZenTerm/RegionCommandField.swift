@@ -10,7 +10,7 @@ final class RegionCommandField: NSView, NSTextFieldDelegate {
     private static let rowSpacing: CGFloat = ChromeMetrics.Spacing.s10
     private static let markerSize = NSSize(width: 8, height: 16)
     private static let markerSpacing: CGFloat = ChromeMetrics.Spacing.s6
-    private static let cornerSize: CGFloat = 24
+    private static let cornerSize: CGFloat = ChromeMetrics.Height.sm
     private static let cornerInset: CGFloat = ChromeMetrics.Spacing.s6
 
     let region: Workspace.Region

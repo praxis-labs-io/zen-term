@@ -28,7 +28,7 @@ final class IconButton: NSView {
     private let restsFilled: Bool
 
     init(
-        symbol: String, size: NSSize = NSSize(width: 24, height: 24),
+        symbol: String, size: NSSize = NSSize(width: ChromeMetrics.Height.sm, height: ChromeMetrics.Height.sm),
         pointSize: CGFloat = ChromeMetrics.Icon.sm, weight: NSFont.Weight = .medium,
         accessibilityLabel label: String, shortcut: (() -> String?)? = nil,
         restsFilled: Bool = false,

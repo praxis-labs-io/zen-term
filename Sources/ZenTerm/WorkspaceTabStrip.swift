@@ -3,7 +3,7 @@ import AppKit
 // Chips are framed by hand so a dragged chip can leave its slot while the others close the gap.
 final class WorkspaceTabStrip: NSView {
     private static let chipSpacing: CGFloat = ChromeMetrics.Spacing.s4
-    private static let addSize: CGFloat = 26
+    private static let addSize: CGFloat = ChromeMetrics.Height.sm
     private static let hintGap: CGFloat = ChromeMetrics.Spacing.s8
     private static let hintHeight: CGFloat = ChromeMetrics.Height.xs
 

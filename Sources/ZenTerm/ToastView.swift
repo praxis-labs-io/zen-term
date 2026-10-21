@@ -124,7 +124,8 @@ final class ToastView: ShadowCardView {
 
         if showsClose {
             let close = IconButton(
-                symbol: "xmark", size: NSSize(width: 20, height: 20), pointSize: ChromeMetrics.Icon.xs,
+                symbol: "xmark", size: NSSize(width: ChromeMetrics.Height.xs, height: ChromeMetrics.Height.xs),
+                pointSize: ChromeMetrics.Icon.xs,
                 accessibilityLabel: "Dismiss"
             ) { [weak self] in self?.onClose?() }
             header.addArrangedSubview(close)

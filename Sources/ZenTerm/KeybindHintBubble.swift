@@ -2,11 +2,11 @@ import AppKit
 
 final class KeybindHintBubble: ShadowCardView {
     private static let width: CGFloat = 220
-    private static let insets = ChromeMetrics.Spacing.s12 * 2
-    private static let resetSlot = ChromeMetrics.Height.lg + ChromeMetrics.Spacing.s8
+    private static let padding = ChromeMetrics.Spacing.s12
+    private static let resetSlot = ChromeMetrics.Height.control + ChromeMetrics.Spacing.s8
 
     static func inputWidth(withReset: Bool) -> CGFloat {
-        width - insets - (withReset ? resetSlot : 0)
+        width - padding - padding - (withReset ? resetSlot : 0)
     }
 
     private let previewHost = NSView()
@@ -20,7 +20,8 @@ final class KeybindHintBubble: ShadowCardView {
     private let errorLabel = NSTextField(wrappingLabelWithString: "")
     /// Hidden until a host asks: the tool-float form shares this popover and has no defaults.
     private lazy var resetButton = IconButton(
-        symbol: "arrow.uturn.backward", size: NSSize(width: ChromeMetrics.Height.lg, height: ChromeMetrics.Height.lg),
+        symbol: "arrow.uturn.backward",
+        size: NSSize(width: ChromeMetrics.Height.control, height: ChromeMetrics.Height.control),
         pointSize: ChromeMetrics.Icon.sm,
         accessibilityLabel: "Reset to default", restsFilled: true
     ) { [weak self] in self?.onResetToDefault?() }
@@ -88,7 +89,7 @@ final class KeybindHintBubble: ShadowCardView {
             icon.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
             previewGroup.widthAnchor.constraint(equalTo: col.widthAnchor),
             inputRow.widthAnchor.constraint(equalTo: previewGroup.widthAnchor),
-            previewBox.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.lg),
+            previewBox.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
             errorLabel.widthAnchor.constraint(equalTo: previewBox.widthAnchor),
             previewHost.centerXAnchor.constraint(equalTo: previewBox.centerXAnchor),
             previewHost.centerYAnchor.constraint(equalTo: previewBox.centerYAnchor),
