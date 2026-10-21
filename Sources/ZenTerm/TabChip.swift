@@ -111,6 +111,7 @@ class TabChip: NSView {
         let chrome = Theme.current.chrome
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byTruncatingTail
+        paragraph.alignment = .center
         let styled = NSAttributedString(
             string: title,
             attributes: [
