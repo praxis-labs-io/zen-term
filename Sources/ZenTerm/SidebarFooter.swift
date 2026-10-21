@@ -12,7 +12,7 @@ final class SidebarFooter: NSStackView {
         _ symbol: String, _ label: String, _ action: KeyInterceptor.ReservedChord, _ onClick: @escaping () -> Void
     ) -> IconButton {
         IconButton(
-            symbol: symbol, size: buttonSize, pointSize: ChromeMetrics.Icon.sm,
+            symbol: symbol, size: buttonSize, pointSize: ChromeMetrics.Icon.xs,
             accessibilityLabel: label, shortcut: { CommandCatalog.spec(for: action).shortcut }, onClick: onClick)
     }
 
