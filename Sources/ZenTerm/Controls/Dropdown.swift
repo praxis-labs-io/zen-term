@@ -306,7 +306,6 @@ final class Dropdown: NSView {
         queryField.isHidden = false
         isEditing = true
         window?.makeFirstResponder(queryField)
-        queryField.applyThemedEditor()
     }
 
     /// Restores focus before hiding the field: hiding a first responder dumps focus to the window.

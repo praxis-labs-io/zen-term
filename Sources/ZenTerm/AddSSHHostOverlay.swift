@@ -102,7 +102,6 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         if let card = confirm.card { return card.focusInitialResponder() }
         let field = editing == nil ? hostField.field : nameField.field
         window?.makeFirstResponder(field)
-        field.applyThemedEditor()
     }
 
     func animateIn() {

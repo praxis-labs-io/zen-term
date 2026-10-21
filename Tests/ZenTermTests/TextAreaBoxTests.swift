@@ -149,9 +149,7 @@ final class TextAreaBoxTests: WindowTestCase {
 
     func test_aFocusedFieldsCaret_comesFromTheThemeNotTheSystemAccent() throws {
         let box = FieldBox(placeholder: "Title")
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 80),
-            styleMask: [.borderless], backing: .buffered, defer: false)
+        let window = HostWindow(contentRect: NSRect(x: 0, y: 0, width: 320, height: 80))
         let content = try XCTUnwrap(window.contentView)
         content.addSubview(box)
         NSLayoutConstraint.activate([

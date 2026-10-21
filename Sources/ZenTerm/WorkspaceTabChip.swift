@@ -41,7 +41,7 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         symbol: "xmark", size: NSSize(width: Self.closeSize, height: Self.closeSize), pointSize: 8,
         weight: .semibold, accessibilityLabel: "Remove tab", shortcut: { CommandCatalog.spec(for: .closeTab).shortcut }
     ) { [weak self] in self?.onRemove?() }
-    private let renameField = RenameField()
+    private let renameField = NSTextField()
 
     var isRenaming: Bool { !renameField.isHidden }
     var renameFieldForTesting: NSTextField { renameField }
@@ -283,7 +283,6 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         onWidthChanged?()
         needsLayout = true
         window?.makeFirstResponder(renameField)
-        renameField.applyThemedEditor()
         renameField.currentEditor()?.selectAll(nil)
     }
 
@@ -331,13 +330,5 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
             return false
         }
         return true
-    }
-
-    private final class RenameField: NSTextField {
-        override func becomeFirstResponder() -> Bool {
-            let ok = super.becomeFirstResponder()
-            if ok { applyThemedEditor() }
-            return ok
-        }
     }
 }

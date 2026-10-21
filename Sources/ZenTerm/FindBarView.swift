@@ -78,7 +78,6 @@ final class FindBarView: NSView {
 
     func focusField() {
         window?.makeFirstResponder(field)
-        field.applyThemedEditor()
     }
 
     var countTextForTesting: String { count.stringValue }
@@ -128,11 +127,6 @@ final class FindBarView: NSView {
 }
 
 extension FindBarView: NSTextFieldDelegate {
-    /// The field editor is shared per window, so a click-focus arrives with another field's caret tint.
-    func controlTextDidBeginEditing(_ obj: Notification) {
-        field.applyThemedEditor()
-    }
-
     func controlTextDidChange(_ obj: Notification) {
         onChange?(field.stringValue)
     }

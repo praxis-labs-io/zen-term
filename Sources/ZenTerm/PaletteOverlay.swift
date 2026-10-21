@@ -196,7 +196,6 @@ class PaletteOverlay: NSView, ModalOverlay {
 
     func focusQuery() {
         window?.makeFirstResponder(searchField)
-        searchField.applyThemedEditor()
     }
 
     func animateIn() {
@@ -436,11 +435,6 @@ class PaletteOverlay: NSView, ModalOverlay {
 }
 
 extension PaletteOverlay: NSTextFieldDelegate {
-    /// A click focuses the field past `focusInitialResponder`, and the shared field editor keeps the last field's tint.
-    func controlTextDidBeginEditing(_ obj: Notification) {
-        searchField.applyThemedEditor()
-    }
-
     func controlTextDidChange(_ obj: Notification) {
         applyFilter(query: searchField.stringValue)
         reloadRows()
