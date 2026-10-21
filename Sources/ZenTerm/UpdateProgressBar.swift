@@ -3,7 +3,7 @@ import AppKit
 /// Not `NSProgressIndicator`, which tints from `effectiveAppearance` rather than the theme.
 final class UpdateProgressBar: NSView {
     private let fill = CALayer()
-    private static let height: CGFloat = 4
+    private static let thickness: CGFloat = 4
     private static let sweepFraction: CGFloat = 0.3
     private static let sweepDuration: CFTimeInterval = 0.9
 
@@ -17,9 +17,9 @@ final class UpdateProgressBar: NSView {
     init() {
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.height)
+        layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.thickness)
         layer?.masksToBounds = true
-        fill.cornerRadius = ChromeMetrics.Radius.capsule(Self.height)
+        fill.cornerRadius = ChromeMetrics.Radius.capsule(Self.thickness)
         layer?.addSublayer(fill)
         reapplyTheme()
     }
@@ -27,7 +27,7 @@ final class UpdateProgressBar: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// Intrinsic, because a height constraint would be re-added on every card rebuild.
-    override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: Self.height) }
+    override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: Self.thickness) }
 
     override func layout() {
         super.layout()

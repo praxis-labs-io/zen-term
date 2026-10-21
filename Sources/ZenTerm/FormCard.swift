@@ -62,7 +62,7 @@ enum FormCard {
             super.init(frame: .zero)
             wantsLayer = true
             translatesAutoresizingMaskIntoConstraints = false
-            heightAnchor.constraint(equalToConstant: 1).isActive = true
+            heightAnchor.constraint(equalToConstant: ChromeMetrics.Border.width).isActive = true
             reapplyTheme()
         }
 

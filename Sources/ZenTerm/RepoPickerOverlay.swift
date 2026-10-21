@@ -72,7 +72,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             placeholder: "Search workspaces…",
             emptyText: "",
             footerHints: Self.footerHints(),
-            rowHeight: 32,
+            rowHeight: ChromeMetrics.Height.lg,
             onDismiss: onDismiss)
 
         let probes = configuredPaths.union((open + elsewhere).map { $0.folder.standardizedFileURL })

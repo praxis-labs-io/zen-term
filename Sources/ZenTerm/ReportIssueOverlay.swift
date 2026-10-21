@@ -178,7 +178,7 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        return Self.hStack([spacer, exportButton, cancelButton, openButton], spacing: 8)
+        return Self.hStack([spacer, exportButton, cancelButton, openButton], spacing: ChromeMetrics.Spacing.s8)
     }
 
     private func verticalStops() -> [NSView] {

@@ -246,8 +246,8 @@ final class ToggleDock: NSView {
         v.wantsLayer = true
         v.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
         v.translatesAutoresizingMaskIntoConstraints = false
-        v.widthAnchor.constraint(equalToConstant: 1).isActive = true
-        v.heightAnchor.constraint(equalToConstant: 12).isActive = true
+        v.widthAnchor.constraint(equalToConstant: ChromeMetrics.Border.width).isActive = true
+        v.heightAnchor.constraint(equalToConstant: ChromeMetrics.Spacing.s12).isActive = true
         return v
     }
 }

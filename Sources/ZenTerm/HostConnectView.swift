@@ -4,8 +4,8 @@ import AppKit
 final class HostConnectView: NSView {
     private static let edgeSpacing: CGFloat = ChromeMetrics.Spacing.s12
     private static let routeToEyebrow: CGFloat = 34
-    private static let eyebrowToTitle: CGFloat = 12
-    private static let titleToDestination: CGFloat = 10
+    private static let eyebrowToTitle: CGFloat = ChromeMetrics.Spacing.s12
+    private static let titleToDestination: CGFloat = ChromeMetrics.Spacing.s10
     private static let destinationToDetail: CGFloat = 14
     private static let detailToButton: CGFloat = 30
     private static let detailMaxWidth: CGFloat = 420

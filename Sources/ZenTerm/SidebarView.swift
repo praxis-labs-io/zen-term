@@ -35,7 +35,7 @@ struct SidebarRowItem: Equatable {
 final class SidebarView: NSView {
     static let width: CGFloat = 240
     static let padding: CGFloat = ChromeMetrics.Spacing.s8
-    private static let captionHeight: CGFloat = 28
+    private static let captionHeight: CGFloat = ChromeMetrics.Height.control
     private static let captionInset: CGFloat = ChromeMetrics.Spacing.controlInset
     private static let addInset: CGFloat = ChromeMetrics.Spacing.s4
     private static let newWorktreeSize = NSSize(width: 20, height: 20)

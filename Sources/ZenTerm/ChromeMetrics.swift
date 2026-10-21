@@ -23,6 +23,8 @@ enum ChromeMetrics {
         static let s12: CGFloat = 12
         static let s16: CGFloat = 16
         static let s20: CGFloat = 20
+        static let s24: CGFloat = 24
+        static let s32: CGFloat = 32
         static let controlInset = s10
         static let modalSectionGap = s12
         static let modalInsets = NSEdgeInsets(top: s16, left: s20, bottom: s16, right: s20)
@@ -33,6 +35,7 @@ enum ChromeMetrics {
         static let sm: CGFloat = 24
         static let control: CGFloat = 28
         static let lg: CGFloat = 32
+        static let xl: CGFloat = 48
     }
 
     enum Icon {
@@ -45,6 +48,7 @@ enum ChromeMetrics {
     enum Radius {
         static let control: CGFloat = 6
         static let surface: CGFloat = 8
+        static let tile: CGFloat = 12
 
         static func capsule(_ height: CGFloat) -> CGFloat { height / 2 }
     }

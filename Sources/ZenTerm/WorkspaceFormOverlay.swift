@@ -192,7 +192,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
         header.stringValue = editingWorkspace == nil ? "Add Workspace" : "Edit Workspace"
         let headerSpacer = NSView()
         headerSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let headerRow = Self.hStack([header, headerSpacer, escapeCap], spacing: 8)
+        let headerRow = Self.hStack([header, headerSpacer, escapeCap], spacing: ChromeMetrics.Spacing.s8)
 
         let nameRow = buildNameRow()
         let tabsGroup = buildTabsGroup()
@@ -204,8 +204,10 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
         envError.font = ChromeType.font(.caption, weight: .medium)
         envError.textColor = Theme.current.chrome.destructive.nsColor
         envError.isHidden = true
-        let envControls = Self.vStack([envStack, Self.leadingWrap(addVarButton), envError], spacing: 8)
-        let envGroup = Self.vStack([caption("Environment", required: false), envControls], spacing: 6)
+        let envControls = Self.vStack(
+            [envStack, Self.leadingWrap(addVarButton), envError], spacing: ChromeMetrics.Spacing.s8)
+        let envGroup = Self.vStack(
+            [caption("Environment", required: false), envControls], spacing: ChromeMetrics.Spacing.s6)
 
         carryPicker.onChanged = { [weak self] in self?.refreshValidity() }
         carryPicker.onArrowUp = { [weak self] in self?.moveVertical(-1) }
@@ -214,7 +216,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
         carryPicker.onBacktab = { [weak self] in self?.moveTab(-1) }
         carryPicker.onFocusLost = { [weak self] in self?.focus(self?.addVarButton) }
         let carryGroup = Self.vStack(
-            [caption("Copy into new worktrees", required: false), carryPicker], spacing: 6)
+            [caption("Copy into new worktrees", required: false), carryPicker], spacing: ChromeMetrics.Spacing.s6)
 
         let built = FormCard.content(
             rows: [headerRow, nameRow, tabsGroup, envGroup, carryGroup], footer: buildFooter(), spacing: 14)
@@ -287,7 +289,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
         drawing.onTab = { [weak self] in self?.moveTab(1) }
         drawing.onBacktab = { [weak self] in self?.moveTab(-1) }
 
-        let stack = Self.vStack([drawing, tabStrip], spacing: 10)
+        let stack = Self.vStack([drawing, tabStrip], spacing: ChromeMetrics.Spacing.s10)
         let group = LabeledField(caption: caption("Tabs", required: false), control: stack)
         tabsGroup = group
         return group
@@ -321,7 +323,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
             button.onBacktab = { [weak self] in self?.moveTab(-1) }
         }
         wireFooterArrows()
-        return Self.hStack(views, spacing: 8)
+        return Self.hStack(views, spacing: ChromeMetrics.Spacing.s8)
     }
 
     private func wireFooterArrows() {

@@ -6,7 +6,7 @@ final class WorkspaceTabDrawing: NSView {
     static let launchFocusShortcut = "⌘L"
     private static let inset: CGFloat = ChromeMetrics.Spacing.s8
     private static let gap: CGFloat = ChromeMetrics.Spacing.s8
-    private static let railThickness: CGFloat = 28
+    private static let railThickness: CGFloat = ChromeMetrics.Height.control
     private static let bottomHeight: CGFloat = 72
     private static let rightWidth: CGFloat = 216
     private static let focusedRightWidth: CGFloat = 240
