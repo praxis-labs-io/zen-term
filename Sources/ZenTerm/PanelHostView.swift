@@ -65,6 +65,8 @@ final class PanelHostView: NSView, TerminalModeHost {
         return max(minCornerRadius, WindowCorner.radius - ChromeMetrics.windowGutter)
     }
 
+    // The window's own corner under window chrome, which AppKit does not expose.
+    // swiftlint:disable:next untokened_radius
     private static let chromeCornerRadius: CGFloat = 12
 
     /// A pane far from the window corner still reads as a pane, so the concentric result has a floor.

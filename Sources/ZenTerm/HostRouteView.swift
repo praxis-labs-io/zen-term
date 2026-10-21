@@ -2,12 +2,12 @@ import AppKit
 
 final class HostRouteView: NSView {
     static let preferredLineLength: CGFloat = 120
-    private static let lineHeight: CGFloat = 24
-    private static let minimumLineWidth: CGFloat = 24
+    private static let lineHeight: CGFloat = ChromeMetrics.Height.sm
+    private static let minimumLineLength: CGFloat = 24
     // Under the window's own sizing priorities, so a narrow canvas shortens the line rather than widening the window.
     private static let lineWidthPreference = NSLayoutConstraint.Priority(rawValue: 490)
-    private static let lineInset: CGFloat = 2
-    private static let lineWidth: CGFloat = 1.6
+    private static let lineInset: CGFloat = ChromeMetrics.Spacing.s2
+    private static let lineWidth: CGFloat = ChromeMetrics.Border.paneFocus
     private static let idleDash: [NSNumber] = [2, 7]
 
     private let mac = RouteEndpointView(symbol: "laptopcomputer", name: "Client")
@@ -39,7 +39,7 @@ final class HostRouteView: NSView {
             lineHost.leadingAnchor.constraint(equalTo: mac.trailingAnchor),
             preferredWidth,
             lineHost.widthAnchor.constraint(lessThanOrEqualToConstant: Self.preferredLineLength),
-            lineHost.widthAnchor.constraint(greaterThanOrEqualToConstant: Self.minimumLineWidth),
+            lineHost.widthAnchor.constraint(greaterThanOrEqualToConstant: Self.minimumLineLength),
             lineHost.heightAnchor.constraint(equalToConstant: Self.lineHeight),
             lineHost.centerYAnchor.constraint(
                 equalTo: topAnchor, constant: RouteEndpointView.tileSide / 2),

@@ -2,11 +2,14 @@ import AppKit
 
 // A tab drawn as its main pane and two drawers, not to scale: the region being edited grows to fit its command.
 final class WorkspaceTabDrawing: NSView {
+    // Drawing proportions, not chrome heights.
+    // swiftlint:disable:next untokened_spacing_constant
     static let height: CGFloat = 232
     static let launchFocusShortcut = "⌘L"
     private static let inset: CGFloat = ChromeMetrics.Spacing.s8
     private static let gap: CGFloat = ChromeMetrics.Spacing.s8
     private static let railThickness: CGFloat = ChromeMetrics.Height.control
+    // swiftlint:disable:next untokened_spacing_constant
     private static let bottomHeight: CGFloat = 72
     private static let rightWidth: CGFloat = 216
     private static let focusedRightWidth: CGFloat = 240

@@ -58,7 +58,7 @@ final class ScrollCursorView: NSView {
             metrics.cellFrame(row: row, columns: Self.columns(0, metrics.columns - 1, metrics)))
         guard !band.isEmpty else { return }
         Theme.current.chrome.fill(.hover).setFill()
-        NSBezierPath(roundedRect: band, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius).fill()
+        NSBezierPath(rect: band).fill()
     }
 
     // Outlined, not inverted: above libghostty's Metal layer an overlay has no pixels to blend against.
@@ -68,9 +68,7 @@ final class ScrollCursorView: NSView {
                 row: row, columns: Self.columns(cells.lowerBound, cells.upperBound, metrics)))
         guard !cell.isEmpty else { return }
         Self.lifted(Theme.current.chrome.cursor.nsColor).setStroke()
-        let path = NSBezierPath(
-            roundedRect: cell.insetBy(dx: Self.cursorStroke / 2, dy: Self.cursorStroke / 2),
-            xRadius: Self.cursorRadius, yRadius: Self.cursorRadius)
+        let path = NSBezierPath(rect: cell.insetBy(dx: Self.cursorStroke / 2, dy: Self.cursorStroke / 2))
         path.lineWidth = Self.cursorStroke
         path.stroke()
     }
@@ -83,20 +81,10 @@ final class ScrollCursorView: NSView {
     }
 
     private func fill(_ rects: [CGRect]) {
-        for (index, rect) in rects.enumerated() {
+        for rect in rects {
             let clipped = bounds.intersection(rect)
             guard !clipped.isEmpty else { continue }
-            var grown = clipped
-            if index > 0 {
-                grown.origin.y -= Self.cornerRadius
-                grown.size.height += Self.cornerRadius
-            }
-            if index < rects.count - 1 { grown.size.height += Self.cornerRadius }
-            NSGraphicsContext.saveGraphicsState()
-            NSBezierPath(rect: clipped).setClip()
-            NSBezierPath(roundedRect: grown, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius)
-                .fill()
-            NSGraphicsContext.restoreGraphicsState()
+            NSBezierPath(rect: clipped).fill()
         }
     }
 
@@ -131,8 +119,6 @@ final class ScrollCursorView: NSView {
         return low...high
     }
 
-    private static let cursorStroke: CGFloat = 1.5
+    private static let cursorStroke: CGFloat = ChromeMetrics.Border.width
     private static let cursorBrightnessFloor: CGFloat = 0.92
-    private static let cornerRadius: CGFloat = 3
-    private static let cursorRadius: CGFloat = 2
 }
