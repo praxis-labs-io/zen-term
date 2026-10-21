@@ -271,7 +271,7 @@ enum Motion {
         }
     }
 
-    /// Moves `layer` to `target`, its leading edge leading and its trailing edge following. Needs `anchorPoint` (0, 0.5); snaps under Reduce Motion.
+    // The keyframes drive position.x as the leading edge, so the layer's anchorPoint must be (0, 0.5).
     static func stretch(_ layer: CALayer, to target: CGRect, animated: Bool) {
         let start = layer.presentation()?.frame ?? layer.frame
         CATransaction.begin()

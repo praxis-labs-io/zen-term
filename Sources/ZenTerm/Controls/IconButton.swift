@@ -11,7 +11,6 @@ final class IconButton: NSView {
     private var trackingArea: NSTrackingArea?
     private var isHovered = false { didSet { update() } }
 
-    /// Fires on mouse-up inside the button instead of on press. A second press of a multi-click does not arm it.
     var firesOnRelease = false
     private var isPressed = false
 
