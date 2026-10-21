@@ -29,6 +29,8 @@ final class CheckboxDropdown: NSView {
 
     private var summary: String
     private let titleLabel = NSTextField(labelWithString: "")
+    private let queryField = NSTextField()
+    private var isEditing = false
     private let chevron = NSImageView()
     /// A window resize closes the card without `closeList`, so the self-close hook repeats that cleanup.
     private lazy var popover: ListPopover = {
@@ -36,6 +38,7 @@ final class CheckboxDropdown: NSView {
         popover.onSelfClose = { [weak self] in
             self?.rowViews = []
             self?.query = ""
+            self?.endEditing()
             self?.renderTitle()
             self?.restyle()
             self?.fireClosed()
@@ -52,6 +55,7 @@ final class CheckboxDropdown: NSView {
     private static let rowHeight: CGFloat = ChromeMetrics.Height.control
 
     var buttonTitleForTesting: String { titleLabel.stringValue }
+    var isEditingForTesting: Bool { !queryField.isHidden }
     var itemsForTesting: [CheckboxDropdownItem] { items }
     var isPopoverOpen: Bool { popover.isOpen }
     var highlightedIndexForTesting: Int { highlighted }
@@ -80,17 +84,31 @@ final class CheckboxDropdown: NSView {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.lineBreakMode = .byTruncatingTail
 
+        queryField.font = ChromeType.font(.body)
+        queryField.textColor = Theme.current.chrome.ink(.normal)
+        queryField.isBordered = false
+        queryField.makeSingleLine()
+        queryField.drawsBackground = false
+        queryField.focusRingType = .none
+        queryField.isHidden = true
+        queryField.delegate = self
+        queryField.translatesAutoresizingMaskIntoConstraints = false
+
         chevron.image = NSImage(systemSymbolName: "chevron.up.chevron.down", accessibilityDescription: nil)
         chevron.symbolConfiguration = .init(pointSize: 10, weight: .semibold)
         chevron.contentTintColor = Theme.current.chrome.ink(.muted)
         chevron.translatesAutoresizingMaskIntoConstraints = false
 
         addSubview(titleLabel)
+        addSubview(queryField)
         addSubview(chevron)
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
             titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            queryField.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            queryField.centerYAnchor.constraint(equalTo: centerYAnchor),
+            queryField.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -ChromeMetrics.Spacing.s6),
             chevron.leadingAnchor.constraint(
                 greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
             chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
@@ -111,6 +129,11 @@ final class CheckboxDropdown: NSView {
         restyle()
         renderTitle()
         chevron.contentTintColor = Theme.current.chrome.ink(.muted)
+        queryField.textColor = Theme.current.chrome.ink(.normal)
+        if isEditing {
+            renderQueryPlaceholder()
+            queryField.applyThemedEditor()
+        }
         rebuildOpenList()
     }
 
@@ -119,9 +142,10 @@ final class CheckboxDropdown: NSView {
         showFocus()
         return true
     }
+    /// Handing focus to the query field on open is not losing focus, or opening would close the list.
     override func resignFirstResponder() -> Bool {
         isFocusedStop = false
-        closeList()
+        if !isEditing { closeList() }
         restyle()
         return super.resignFirstResponder()
     }
@@ -146,6 +170,7 @@ final class CheckboxDropdown: NSView {
         PopoverButtonStyle.apply(to: self, isFocused: isFocusedStop, isOpen: popover.isOpen)
     }
 
+    /// Fallback only: an open list normally holds focus in the query field, whose delegate routes its keys.
     override func keyDown(with event: NSEvent) {
         if popover.isOpen {
             switch KeyboardFocus.key(for: event) {
@@ -153,8 +178,7 @@ final class CheckboxDropdown: NSView {
             case .down: moveHighlight(1)
             case .activate: toggleHighlight()
             case .escape: escapePressed()
-            case .delete: backspace()
-            default: typed(event)
+            default: break
             }
             return
         }
@@ -169,8 +193,9 @@ final class CheckboxDropdown: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        let wasOpen = popover.isOpen
         window?.makeFirstResponder(self)
-        popover.isOpen ? closeList() : openList()
+        wasOpen ? closeList() : openList()
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -186,6 +211,7 @@ final class CheckboxDropdown: NSView {
         highlighted = visible.first ?? 0
         popover.open(rows: buildRows())
         refreshRows()
+        beginEditing()
         restyle()
     }
 
@@ -194,6 +220,7 @@ final class CheckboxDropdown: NSView {
         popover.close()
         rowViews = []
         query = ""
+        endEditing()
         renderTitle()
         restyle()
         guard wasOpen else { return }
@@ -209,29 +236,33 @@ final class CheckboxDropdown: NSView {
     private func escapePressed() {
         guard !query.isEmpty else { return closeList() }
         query = ""
+        queryField.stringValue = ""
         rerenderList()
     }
 
-    private func backspace() {
-        guard !query.isEmpty else { return }
-        query.removeLast()
-        rerenderList()
+    private func beginEditing() {
+        queryField.stringValue = ""
+        renderQueryPlaceholder()
+        titleLabel.isHidden = true
+        queryField.isHidden = false
+        isEditing = true
+        window?.makeFirstResponder(queryField)
     }
 
-    private func typed(_ event: NSEvent) {
-        guard event.modifierFlags.isDisjoint(with: [.command, .control, .option]),
-            let characters = event.charactersIgnoringModifiers, !characters.isEmpty,
-            characters.unicodeScalars.allSatisfy(Self.isTypable)
-        else { return }
-        query += characters
-        rerenderList()
+    /// Restores focus before hiding the field: hiding a first responder dumps focus to the window.
+    private func endEditing() {
+        let wasEditing = isEditing
+        isEditing = false
+        if wasEditing, window?.firstResponder === queryField.currentEditor() { window?.makeFirstResponder(self) }
+        queryField.isHidden = true
+        titleLabel.isHidden = false
     }
 
-    /// AppKit encodes Home, End, the page keys and F-keys as private-use scalars `Character` calls printable.
-    private static func isTypable(_ scalar: Unicode.Scalar) -> Bool {
-        !CharacterSet.whitespacesAndNewlines.contains(scalar)
-            && !CharacterSet.controlCharacters.contains(scalar)
-            && !(0xF700...0xF8FF).contains(scalar.value)
+    /// `placeholderString` draws in `placeholderTextColor`, which follows `effectiveAppearance`, not `Theme.current`.
+    private func renderQueryPlaceholder() {
+        queryField.placeholderAttributedString = NSAttributedString(
+            string: summary,
+            attributes: [.foregroundColor: Theme.current.chrome.ink(.muted), .font: ChromeType.font(.body)])
     }
 
     private func refilter() {
@@ -269,7 +300,7 @@ final class CheckboxDropdown: NSView {
     }
 
     private func renderTitle() {
-        titleLabel.stringValue = query.isEmpty ? summary : query
+        titleLabel.stringValue = summary
         titleLabel.textColor = Theme.current.chrome.ink(.normal)
     }
 
@@ -400,5 +431,36 @@ final class CheckboxDropdown: NSView {
         }
 
         override func mouseDown(with event: NSEvent) { onClick() }
+    }
+}
+
+extension CheckboxDropdown: NSTextFieldDelegate {
+    func controlTextDidEndEditing(_ obj: Notification) {
+        guard isEditing, window?.firstResponder !== self else { return }
+        closeList()
+    }
+
+    func controlTextDidChange(_ obj: Notification) {
+        query = queryField.stringValue
+        rerenderList()
+    }
+
+    /// Takes Tab back from the field editor: `selectNextKeyView` would land focus on the hidden field.
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        switch selector {
+        case #selector(NSResponder.moveUp(_:)): moveHighlight(-1)
+        case #selector(NSResponder.moveDown(_:)): moveHighlight(1)
+        case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertLineBreak(_:)):
+            toggleHighlight()
+        case #selector(NSResponder.cancelOperation(_:)): escapePressed()
+        case #selector(NSResponder.insertTab(_:)):
+            closeList()
+            onTab?()
+        case #selector(NSResponder.insertBacktab(_:)):
+            closeList()
+            onBacktab?()
+        default: return false
+        }
+        return true
     }
 }
