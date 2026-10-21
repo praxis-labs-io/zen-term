@@ -89,7 +89,8 @@ never a literal.
   `ChromeType.sectionLabel` in sentence case. `swiftlint` rejects
   `systemFont(ofSize:)` outside `ChromeType`.
 - Corner radii come from `ChromeMetrics.Radius` and border widths from
-  `ChromeMetrics.Border.width`. Focus changes a border's color, never its width.
+  `ChromeMetrics.Border`. Focus changes a control's border color, never its width. A
+  focused pane or tool float also steps up to `Border.paneFocus`.
 - Spacing, insets, gaps and control or row heights come from
   `ChromeMetrics.Spacing` and `ChromeMetrics.Height`. Icon, glyph and width geometry
   are not spacing. A value off the scale is a signal to fix the layout, not to add a step.

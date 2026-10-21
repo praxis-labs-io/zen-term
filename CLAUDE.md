@@ -194,8 +194,9 @@ Sizes, weights and type in the chrome come from named tokens, never a literal.
   `ChromeType.sectionLabel` in sentence case. `swiftlint` rejects `systemFont(ofSize:)`
   outside `ChromeType`.
 - **Radius and border:** corner radii come from `ChromeMetrics.Radius` (`control`,
-  `surface`, `capsule(_:)`) and border widths from `ChromeMetrics.Border.width`. Focus
-  changes a border's color, never its width.
+  `surface`, `capsule(_:)`) and border widths from `ChromeMetrics.Border`. Focus
+  changes a control's border color, never its width. A focused pane or tool float also
+  steps up to `Border.paneFocus`.
 - **Spacing and height:** spacing, insets, gaps and control or row heights come from
   `ChromeMetrics.Spacing` (`s2` to `s20`, `controlInset`, `modalInsets`,
   `modalSectionGap`) and `ChromeMetrics.Height` (`xs`, `sm`, `control`, `lg`). Icon, glyph
