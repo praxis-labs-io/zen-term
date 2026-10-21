@@ -5,8 +5,8 @@ final class RouteEndpointView: NSView {
     static let columnWidth: CGFloat = 96
     private static let tileCornerRadius: CGFloat = ChromeMetrics.Radius.tile
     private static let tileToName: CGFloat = ChromeMetrics.Spacing.s12
-    private static let badgeSide: CGFloat = 16
-    private static let badgeOverhang: CGFloat = ChromeMetrics.Spacing.s4
+    private static let badgeSide: CGFloat = 12
+    private static let badgeOverhang: CGFloat = ChromeMetrics.Spacing.s2
     private static let statusMarkSide: CGFloat = 6.2
 
     private let tile = NSView()
