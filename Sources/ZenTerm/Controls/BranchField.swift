@@ -217,7 +217,7 @@ final class BranchField: NSView, ThemeReapplying {
             translatesAutoresizingMaskIntoConstraints = false
 
             icon.image = NSImage(systemSymbolName: "arrow.branch", accessibilityDescription: nil)
-            icon.symbolConfiguration = .init(pointSize: 11, weight: .regular)
+            icon.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.sm, weight: .regular)
             icon.translatesAutoresizingMaskIntoConstraints = false
             title.font = ChromeType.font(.body)
             title.lineBreakMode = .byTruncatingTail

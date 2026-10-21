@@ -566,7 +566,7 @@ final class RepoPickerOverlay: PaletteOverlay {
             super.init()
 
             let icon = NSImageView()
-            let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .semibold)
+            let config = NSImage.SymbolConfiguration(pointSize: ChromeMetrics.Icon.sm, weight: .semibold)
             icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)?
                 .withSymbolConfiguration(config)
             icon.contentTintColor = emphasis.ink

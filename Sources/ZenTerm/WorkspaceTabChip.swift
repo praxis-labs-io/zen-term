@@ -38,7 +38,7 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
     private let dot = NSView()
     private let underline = NSView()
     private lazy var closeButton = IconButton(
-        symbol: "xmark", size: NSSize(width: Self.closeSize, height: Self.closeSize), pointSize: 8,
+        symbol: "xmark", size: NSSize(width: Self.closeSize, height: Self.closeSize), pointSize: ChromeMetrics.Icon.xs,
         weight: .semibold, accessibilityLabel: "Remove tab", shortcut: { CommandCatalog.spec(for: .closeTab).shortcut }
     ) { [weak self] in self?.onRemove?() }
     private let renameField = NSTextField()

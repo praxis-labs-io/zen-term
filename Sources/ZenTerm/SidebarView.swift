@@ -442,7 +442,8 @@ final class SidebarView: NSView {
         guard row.hoverAccessory == nil else { return }
         row.setHoverAccessory(
             IconButton(
-                symbol: "plus", size: Self.newWorktreeSize, pointSize: 11, accessibilityLabel: "New worktree",
+                symbol: "plus", size: Self.newWorktreeSize, pointSize: ChromeMetrics.Icon.sm,
+                accessibilityLabel: "New worktree",
                 shortcut: { CommandCatalog.spec(for: .createWorktree).shortcut }
             ) { [weak self] in self?.onNewWorktree(id) })
     }

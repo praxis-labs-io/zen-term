@@ -241,7 +241,7 @@ final class IconPickerField: NSView {
                 }
                 let cell = IconButton(
                     symbol: symbol, size: NSSize(width: Self.cellSize, height: Self.cellSize),
-                    pointSize: 15, accessibilityLabel: IconCatalog.displayName(symbol)
+                    pointSize: ChromeMetrics.Icon.md, accessibilityLabel: IconCatalog.displayName(symbol)
                 ) { [weak self] in self?.commit(symbol) }
                 row?.addArrangedSubview(cell)
                 cells.append(cell)

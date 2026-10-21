@@ -4,7 +4,6 @@ import AppKit
 final class SidebarFooter: NSStackView {
     static let spacing: CGFloat = ChromeMetrics.Spacing.s2
     static let buttonSize = NSSize(width: 22, height: 22)
-    private static let iconPointSize: CGFloat = 11
 
     private let paletteButton: IconButton
     private let settingsButton: IconButton
@@ -13,7 +12,7 @@ final class SidebarFooter: NSStackView {
         _ symbol: String, _ label: String, _ action: KeyInterceptor.ReservedChord, _ onClick: @escaping () -> Void
     ) -> IconButton {
         IconButton(
-            symbol: symbol, size: buttonSize, pointSize: iconPointSize,
+            symbol: symbol, size: buttonSize, pointSize: ChromeMetrics.Icon.sm,
             accessibilityLabel: label, shortcut: { CommandCatalog.spec(for: action).shortcut }, onClick: onClick)
     }
 

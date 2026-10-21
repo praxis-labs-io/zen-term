@@ -377,7 +377,7 @@ final class CheckboxDropdown: NSView {
             translatesAutoresizingMaskIntoConstraints = false
 
             check.image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)
-            check.symbolConfiguration = .init(pointSize: 11, weight: .semibold)
+            check.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.sm, weight: .semibold)
             check.translatesAutoresizingMaskIntoConstraints = false
             title.font = ChromeType.font(.body)
             title.lineBreakMode = .byTruncatingTail
@@ -385,7 +385,7 @@ final class CheckboxDropdown: NSView {
             note.font = ChromeType.font(.caption)
             note.translatesAutoresizingMaskIntoConstraints = false
             note.setContentCompressionResistancePriority(.required, for: .horizontal)
-            icon.symbolConfiguration = .init(pointSize: 11, weight: .regular)
+            icon.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.sm, weight: .regular)
             icon.translatesAutoresizingMaskIntoConstraints = false
             addSubview(check)
             addSubview(icon)

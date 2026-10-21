@@ -21,7 +21,7 @@ final class KeybindHintBubble: ShadowCardView {
     /// Hidden until a host asks: the tool-float form shares this popover and has no defaults.
     private lazy var resetButton = IconButton(
         symbol: "arrow.uturn.backward", size: NSSize(width: ChromeMetrics.Height.lg, height: ChromeMetrics.Height.lg),
-        pointSize: 13,
+        pointSize: ChromeMetrics.Icon.sm,
         accessibilityLabel: "Reset to default", restsFilled: true
     ) { [weak self] in self?.onResetToDefault?() }
     var onResetToDefault: (() -> Void)?
@@ -35,7 +35,7 @@ final class KeybindHintBubble: ShadowCardView {
         badge.layer?.cornerRadius = ChromeMetrics.Radius.control
         badge.translatesAutoresizingMaskIntoConstraints = false
         icon.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Record a shortcut")
-        icon.symbolConfiguration = .init(pointSize: 13, weight: .semibold)
+        icon.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.md, weight: .semibold)
         icon.translatesAutoresizingMaskIntoConstraints = false
         badge.addSubview(icon)
 

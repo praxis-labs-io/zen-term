@@ -40,7 +40,6 @@ final class SettingsNavRow: NSView, HoverSuppressing {
     private static let detailMaxWidth: CGFloat = 96
     private static let nestedIndent: CGFloat = 24
     private static let nestedGlyphGap: CGFloat = ChromeMetrics.Spacing.s6
-    private static let nestedGlyphSize: CGFloat = 11
     // The frame pulls a 20pt accessory 5pt past the detail's inset, so its glyph sits where the detail ends.
     private static let accessoryInset: CGFloat = 5
     private static let attentionDotDiameter: CGFloat = 6
@@ -106,7 +105,7 @@ final class SettingsNavRow: NSView, HoverSuppressing {
 
     private func installGlyph(_ symbol: String) {
         glyph.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
-        glyph.symbolConfiguration = .init(pointSize: Self.nestedGlyphSize, weight: .regular)
+        glyph.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.sm, weight: .regular)
         glyph.translatesAutoresizingMaskIntoConstraints = false
         addSubview(glyph)
         label.font = ChromeType.font(.small)
