@@ -3,7 +3,31 @@ import XCTest
 
 @testable import ZenTerm
 
-final class IconButtonTests: XCTestCase {
+final class IconButtonTests: WindowTestCase {
+    func test_hiddenWhileHovered_clearsHoverAndItsFill() throws {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 100, height: 60),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        let button = IconButton(symbol: "plus", accessibilityLabel: "New tab", onClick: {})
+        window.contentView?.addSubview(button)
+        button.translatesAutoresizingMaskIntoConstraints = true
+        button.frame = NSRect(x: 10, y: 10, width: 24, height: 24)
+        let hover = try XCTUnwrap(
+            NSEvent.enterExitEvent(
+                with: .mouseEntered, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0,
+                userData: nil))
+        button.mouseEntered(with: hover)
+        XCTAssertTrue(button.isHoveredForTesting)
+
+        button.isHidden = true
+        button.isHidden = false
+
+        XCTAssertFalse(button.isHoveredForTesting, "a hidden button gets no mouseExited, so hiding clears hover")
+        let fill = button.layer?.backgroundColor.flatMap { NSColor(cgColor: $0) }
+        XCTAssertEqual(fill?.alphaComponent, 0, "and the fill is gone when it comes back")
+    }
+
     func test_tooltip_labelAndLiveShortcut() {
         let withShortcut = IconButton(
             symbol: "plus", accessibilityLabel: "New tab", shortcut: { "⌘T" }, onClick: {})

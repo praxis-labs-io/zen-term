@@ -104,6 +104,13 @@ final class IconButton: NSView {
         if window == nil { tooltip.hide(from: self) }
     }
 
+    override func viewDidHide() {
+        super.viewDidHide()
+        isHovered = false
+        tooltip.hide(from: self)
+    }
+
+    var isHoveredForTesting: Bool { isHovered }
     var iconTintForTesting: NSColor? { icon.contentTintColor }
 
     var tooltipLabelForTesting: String { tooltip.label }
