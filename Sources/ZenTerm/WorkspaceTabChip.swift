@@ -57,6 +57,7 @@ final class WorkspaceTabChip: TabChip, NSTextFieldDelegate {
         isRemovable = removable
         setAccessibilityLabel(title)
         setAccessibilitySelected(selected)
+        setAccessibilityValue(opensFocused ? "Opens focused" : nil)
         apply(title: title, isCurrent: selected, isClosable: removable, dotColor: openFocusedDotColor)
     }
 
