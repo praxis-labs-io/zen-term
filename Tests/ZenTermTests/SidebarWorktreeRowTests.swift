@@ -611,7 +611,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         let name = lead.workspaceNameLabelForTesting
         XCTAssertTrue(lead.workspaceNameForTesting.hasPrefix("Alpha / feature/zen-532"))
         XCTAssertTrue(lead.workspaceNameForTesting.hasSuffix("…"))
-        XCTAssertLessThanOrEqual(name.alignmentRect(forFrame: name.frame).width, TabBarView.maxChipWidth)
+        XCTAssertLessThanOrEqual(name.alignmentRect(forFrame: name.frame).width, TabChip.maxChipWidth)
         XCTAssertEqual(
             name.alignmentRect(forFrame: name.frame).width, name.intrinsicContentSize.width, accuracy: 0.5,
             "the label draws all it holds, so no truncation slack sits before the divider")

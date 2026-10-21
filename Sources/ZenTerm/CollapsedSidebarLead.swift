@@ -16,10 +16,10 @@ final class CollapsedSidebarLead: NSView {
         wantsLayer = true
         layer?.masksToBounds = true
 
-        nameLabel.font = TabBarView.chipFont
+        nameLabel.font = TabChip.chipFont
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        nameLabel.widthAnchor.constraint(lessThanOrEqualToConstant: TabBarView.maxChipWidth).isActive = true
+        nameLabel.widthAnchor.constraint(lessThanOrEqualToConstant: TabChip.maxChipWidth).isActive = true
         content.orientation = .horizontal
         content.alignment = .centerY
         content.spacing = Self.dividerGap
@@ -50,7 +50,7 @@ final class CollapsedSidebarLead: NSView {
             NSAttributedString(
                 string: text,
                 attributes: [
-                    .font: TabBarView.chipFont, .kern: TabBarView.titleKern, .foregroundColor: chrome.ink(ink),
+                    .font: TabChip.chipFont, .kern: TabChip.titleKern, .foregroundColor: chrome.ink(ink),
                     .paragraphStyle: paragraph,
                 ])
         }
@@ -65,9 +65,9 @@ final class CollapsedSidebarLead: NSView {
     // Cut by count: AppKit's tail truncation stops short of the width and widens the divider's gap.
     private static let maxCharacters: Int = {
         let cell = NSAttributedString(
-            string: "0", attributes: [.font: TabBarView.chipFont, .kern: TabBarView.titleKern]
+            string: "0", attributes: [.font: TabChip.chipFont, .kern: TabChip.titleKern]
         ).size().width
-        return Int(TabBarView.maxChipWidth / cell)
+        return Int(TabChip.maxChipWidth / cell)
     }()
 
     private static func fitted(_ label: NSAttributedString) -> NSAttributedString {

@@ -35,7 +35,7 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertTrue(before[0] === after[0], "the chip for tab 1 is the same view")
         XCTAssertTrue(before[1] === after[1], "and so is tab 2's")
         XCTAssertEqual(
-            tabBar.chipLabelsForTesting.first?.string, "1 renamed", "the kept chip shows the new title")
+            tabBar.chipLabelsForTesting.first?.string, "renamed", "the kept chip shows the new title")
     }
 
     func test_render_capsAChipsWidthAndTruncatesTheTitle() throws {
@@ -48,7 +48,7 @@ final class TabBarViewTests: WindowTestCase {
         tabBar.layoutSubtreeIfNeeded()
         let widths = tabBar.chipsForTesting.map(\.frame.width)
         XCTAssertLessThanOrEqual(
-            try XCTUnwrap(widths.last), TabBarView.maxChipWidth, "the chip stops at the cap")
+            try XCTUnwrap(widths.last), TabChip.maxChipWidth, "the chip stops at the cap")
         XCTAssertGreaterThan(
             try XCTUnwrap(widths.last), try XCTUnwrap(widths.first),
             "a long title still takes more room than a short one, up to the cap")
@@ -135,14 +135,14 @@ final class TabBarViewTests: WindowTestCase {
         try super.tearDownWithError()
     }
 
-    func test_reapplyTheme_resetsTracerColor() {
+    func test_reapplyTheme_resetsPillColor() {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         let items = [TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle)]
         tabBar.render(items)
 
         tabBar.reapplyTheme()
 
-        XCTAssertEqual(tabBar.tracerColorForTesting, Theme.current.chrome.accent.nsColor)
+        XCTAssertEqual(tabBar.pillColorForTesting, Theme.current.chrome.fill(.active))
     }
 
     func test_reapplyTheme_beforeAnyRender_doesNotCrash() {
@@ -151,16 +151,12 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertTrue(tabBar.chipsForTesting.isEmpty)
     }
 
-    func test_tabLabel_isBareNumberWithNoCommandGlyph() {
-        let one = TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle)
-        let nine = TabBarItem(id: TabID(9), index: 9, title: "nine", isActive: false, attentionState: .idle)
-        let ten = TabBarItem(id: TabID(10), index: 10, title: "ten", isActive: false, attentionState: .idle)
-        XCTAssertTrue(TabBarView.tabLabelStringForTesting(one).hasPrefix("1 "))
-        XCTAssertTrue(TabBarView.tabLabelStringForTesting(nine).hasPrefix("9 "))
-        XCTAssertTrue(TabBarView.tabLabelStringForTesting(ten).hasPrefix("10 "))
-        for item in [one, nine, ten] {
-            XCTAssertFalse(TabBarView.tabLabelStringForTesting(item).contains("⌘"))
-        }
+    func test_chipLabel_isTheTitleAlone() {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
+        mount(tabBar)
+        tabBar.render([item(1, "one", index: 1, active: true), item(10, "ten", index: 10)])
+
+        XCTAssertEqual(tabBar.chipLabelsForTesting.map(\.string), ["one", "ten"], "no number, no command glyph")
     }
 
     func test_chipTooltip_namesThatTabsDirectoryWithCommandShortcut() {
@@ -283,49 +279,26 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertTrue(tabBar.isLeadingFadedForTesting, "scrolling tabs off the left must fade that edge")
     }
 
-    @MainActor
-    func test_theNumberAndTitle_shareOneColorPerState() throws {
-        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
-        mount(tabBar)
-        tabBar.render([item(1, "active", index: 1, active: true), item(2, "idle", index: 2)])
-        let labels = tabBar.chipLabelsForTesting
-        XCTAssertEqual(labels.count, 2)
-
-        for (position, label) in labels.enumerated() {
-            let numberColor = try XCTUnwrap(
-                label.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor)
-            let titleColor = try XCTUnwrap(
-                label.attribute(.foregroundColor, at: label.length - 1, effectiveRange: nil) as? NSColor)
-            XCTAssertEqual(
-                numberColor, titleColor,
-                "chip \(position): the number and the title are one label, at one weight")
-        }
-
-        let activeColor = try XCTUnwrap(
-            labels[0].attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor)
-        let idleColor = try XCTUnwrap(
-            labels[1].attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor)
-        XCTAssertEqual(activeColor, TabBarView.activeInkForTesting)
-        XCTAssertEqual(idleColor, TabBarView.idleInkForTesting)
-        XCTAssertGreaterThan(
-            activeColor.alphaComponent, idleColor.alphaComponent, "the active tab still stands out")
+    private func labelColor(_ chip: TabChip) throws -> NSColor {
+        let label = chip.attributedLabelForTesting
+        return try XCTUnwrap(label.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor)
     }
 
     @MainActor
-    func test_aWaitingTab_stillMarksItsNumberWithTheAttentionColor() throws {
+    func test_theTitleInk_isSubtleAtRest_andNormalWhenCurrentOrHovered() throws {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
-        mount(tabBar)
-        tabBar.render([
-            TabBarItem(id: TabID(1), index: 1, title: "waiting", isActive: false, attentionState: .waiting)
-        ])
-        let label = try XCTUnwrap(tabBar.chipLabelsForTesting.first)
-        let numberColor = try XCTUnwrap(
-            label.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor)
-        let titleColor = try XCTUnwrap(
-            label.attribute(.foregroundColor, at: label.length - 1, effectiveRange: nil) as? NSColor)
+        _ = mountKeyed(tabBar)
+        tabBar.render([item(1, "active", index: 1, active: true), item(2, "idle", index: 2)])
+        let chrome = Theme.current.chrome
+        let chips = tabBar.chipsForTesting
 
-        XCTAssertEqual(numberColor, Theme.current.chrome.attention.nsColor)
-        XCTAssertEqual(titleColor, TabBarView.idleInkForTesting)
+        XCTAssertEqual(try labelColor(chips[0]), chrome.ink(.normal))
+        XCTAssertEqual(try labelColor(chips[1]), chrome.ink(.subtle))
+
+        chips[1].setHover(true)
+        XCTAssertEqual(try labelColor(chips[1]), chrome.ink(.normal), "hover restyles the title")
+        chips[1].setHover(false)
+        XCTAssertEqual(try labelColor(chips[1]), chrome.ink(.subtle))
     }
 
     private func mountKeyed(_ tabBar: TabBarView) -> NSWindow {
@@ -355,6 +328,7 @@ final class TabBarViewTests: WindowTestCase {
         _ = mountKeyed(tabBar)
         tabBar.render([item(1, "zen-term", index: 1, active: true), item(2, "api", index: 2)])
 
+        try click(tabBar.chipsForTesting[1], count: 1)
         try click(tabBar.chipsForTesting[1], count: 2)
 
         XCTAssertEqual(renamed, [TabID(2)], "the chip that was double-clicked, not the active tab")
@@ -422,5 +396,271 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertEqual(
             tabBar.visibleStripRectForTesting.origin.x, scrolled, accuracy: 0.5,
             "a title poll must leave the scroll position alone")
+    }
+
+    private func windowEvent(
+        _ type: NSEvent.EventType, in window: NSWindow, at point: CGPoint, clicks: Int = 1
+    ) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: type, location: point, modifierFlags: [], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: clicks,
+                pressure: 1))
+    }
+
+    private func windowPoint(_ view: NSView) -> CGPoint {
+        view.convert(CGPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
+    }
+
+    private var pressed: NSView?
+
+    private func down(_ window: NSWindow, at point: CGPoint, clicks: Int = 1) throws {
+        let target = window.contentView?.superview?.hitTest(point)
+        pressed = target
+        target?.mouseDown(with: try windowEvent(.leftMouseDown, in: window, at: point, clicks: clicks))
+    }
+
+    private func up(_ window: NSWindow, at point: CGPoint, clicks: Int = 1) throws {
+        pressed?.mouseUp(with: try windowEvent(.leftMouseUp, in: window, at: point, clicks: clicks))
+        pressed = nil
+    }
+
+    private func press(_ window: NSWindow, at point: CGPoint, release releasePoint: CGPoint? = nil, clicks: Int = 1)
+        throws
+    {
+        try down(window, at: point, clicks: clicks)
+        try up(window, at: releasePoint ?? point, clicks: clicks)
+    }
+
+    private func settledBar(
+        _ items: [TabBarItem], onSelect: @escaping (TabID) -> Void = { _ in },
+        onClose: @escaping (TabID) -> Void = { _ in }, onRename: @escaping (TabID) -> Void = { _ in }
+    ) -> (bar: TabBarView, window: NSWindow) {
+        let bar = TabBarView(onSelect: onSelect, onClose: onClose, onRename: onRename)
+        let window = mountKeyed(bar)
+        bar.render(items)
+        bar.layoutSubtreeIfNeeded()
+        return (bar, window)
+    }
+
+    func test_theCloseButton_closesOnMouseUp_andNotOnPress() throws {
+        var closed: [TabID] = []
+        var selected: [TabID] = []
+        let (bar, window) = settledBar(
+            [item(1, "one", index: 1, active: true), item(2, "two", index: 2)],
+            onSelect: { selected.append($0) }, onClose: { closed.append($0) })
+        let chip = bar.chipsForTesting[1]
+        try hover(chip)
+        bar.layoutSubtreeIfNeeded()
+        let target = windowPoint(chip.closeButtonForTesting)
+
+        try down(window, at: target)
+        XCTAssertTrue(closed.isEmpty, "a press alone closes nothing")
+        try up(window, at: target)
+
+        XCTAssertEqual(closed, [TabID(2)])
+        XCTAssertTrue(selected.isEmpty, "the x never selects the tab it closes")
+    }
+
+    func test_aPressOnTheCloseButtonDraggedOut_closesNothing_andReordersNothing() throws {
+        var closed: [TabID] = []
+        let (bar, window) = settledBar(
+            [item(1, "one", index: 1, active: true), item(2, "two", index: 2)], onClose: { closed.append($0) })
+        let chip = bar.chipsForTesting[1]
+        try hover(chip)
+        bar.layoutSubtreeIfNeeded()
+        let before = bar.chipsForTesting.map(\.frame)
+
+        try press(window, at: windowPoint(chip.closeButtonForTesting), release: CGPoint(x: 390, y: 40))
+
+        XCTAssertTrue(closed.isEmpty)
+        XCTAssertEqual(bar.chipsForTesting.map(\.frame), before)
+    }
+
+    func test_doubleClickingTheCloseButton_closesOneTab_andRenamesNone() throws {
+        var items = [
+            item(1, "one", index: 1, active: true), item(2, "two", index: 2), item(3, "three", index: 3),
+        ]
+        var closed: [TabID] = []
+        var renamed: [TabID] = []
+        var barRef: TabBarView?
+        let (bar, window) = settledBar(
+            items,
+            onClose: { id in
+                closed.append(id)
+                items.removeAll { $0.id == id }
+                barRef?.render(items)
+                barRef?.layoutSubtreeIfNeeded()
+            },
+            onRename: { renamed.append($0) })
+        barRef = bar
+        let chip = bar.chipsForTesting[1]
+        try hover(chip)
+        bar.layoutSubtreeIfNeeded()
+        let target = windowPoint(chip.closeButtonForTesting)
+
+        try press(window, at: target, clicks: 1)
+        try press(window, at: target, clicks: 2)
+
+        XCTAssertEqual(closed, [TabID(2)], "one tab closes, not the one that slid under the pointer")
+        XCTAssertTrue(renamed.isEmpty, "and the second click of the pair renames nothing")
+    }
+
+    func test_theCloseButton_isAbsentAtRest_soTheSlotClicksThroughToTheChip() throws {
+        var closed: [TabID] = []
+        var selected: [TabID] = []
+        let (bar, window) = settledBar(
+            [item(1, "one", index: 1, active: true), item(2, "two", index: 2)],
+            onSelect: { selected.append($0) }, onClose: { closed.append($0) })
+        let chip = bar.chipsForTesting[1]
+        let slotCenter = CGPoint(x: chip.closeFrameForTesting.midX, y: chip.closeFrameForTesting.midY)
+
+        XCTAssertFalse(chip.isCloseVisibleForTesting)
+        XCTAssertTrue(chip.hitTest(chip.convert(slotCenter, to: chip.superview)) === chip)
+
+        try press(window, at: chip.convert(slotCenter, to: nil))
+
+        XCTAssertEqual(selected, [TabID(2)])
+        XCTAssertTrue(closed.isEmpty)
+    }
+
+    func test_hover_neverChangesAnyChipWidthOrAnyNeighborsPosition() throws {
+        let states: [TabAttentionState] = [.idle, .completed, .waiting]
+        for state in states {
+            for currentIndex in [1, 2] {
+                let items = (1...3).map {
+                    TabBarItem(
+                        id: TabID($0), index: $0, title: "tab \($0)", isActive: $0 == currentIndex,
+                        attentionState: state)
+                }
+                let (bar, _) = settledBar(items)
+                let before = bar.chipsForTesting.map(\.frame)
+
+                for chip in bar.chipsForTesting {
+                    let widthAtRest = chip.fittingWidth
+                    bar.forceHoverForGallery(tab: chip.id)
+                    XCTAssertTrue(chip.isHoveredForTesting)
+                    bar.render(items)
+                    bar.layoutSubtreeIfNeeded()
+                    XCTAssertEqual(
+                        chip.fittingWidth, widthAtRest, "\(state), current \(currentIndex): hover resized a chip")
+                    XCTAssertEqual(
+                        bar.chipsForTesting.map(\.frame), before,
+                        "\(state), current \(currentIndex): hover moved a chip")
+                }
+            }
+        }
+    }
+
+    @MainActor
+    func test_theDot_followsAttention_andHoverSwapsItForTheCloseButtonInTheSameSlot() throws {
+        let chrome = Theme.current.chrome
+        let (bar, _) = settledBar([
+            TabBarItem(id: TabID(1), index: 1, title: "idle", isActive: true, attentionState: .idle),
+            TabBarItem(
+                id: TabID(2), index: 2, title: "working", isActive: false,
+                attentionState: SurfaceAttention.working.tabState),
+            TabBarItem(id: TabID(3), index: 3, title: "done", isActive: false, attentionState: .completed),
+            TabBarItem(id: TabID(4), index: 4, title: "asks", isActive: false, attentionState: .waiting),
+        ])
+        let chips = bar.chipsForTesting
+
+        XCTAssertEqual(chips.map(\.isDotVisibleForTesting), [false, false, true, true], "idle and working show none")
+        XCTAssertEqual(chips[2].dotColorForTesting, chrome.positive.nsColor)
+        XCTAssertEqual(chips[3].dotColorForTesting, chrome.attention.nsColor)
+
+        let dotCenter = CGPoint(x: chips[3].dotFrameForTesting.midX, y: chips[3].dotFrameForTesting.midY)
+        try hover(chips[3])
+        bar.layoutSubtreeIfNeeded()
+
+        XCTAssertFalse(chips[3].isDotVisibleForTesting, "the x replaces the dot")
+        XCTAssertTrue(chips[3].isCloseVisibleForTesting)
+        let slot = chips[3].closeFrameForTesting
+        XCTAssertEqual(slot.size, CGSize(width: ChromeMetrics.Height.xs, height: ChromeMetrics.Height.xs))
+        XCTAssertEqual(chips[3].bounds.width - slot.maxX, ChromeMetrics.Spacing.s2, "inset from the trailing edge")
+        XCTAssertEqual(slot.midY, chips[3].bounds.midY, accuracy: 0.01, "centered in the chip")
+        XCTAssertEqual(chips[3].closeFrameForTesting.midX, dotCenter.x, accuracy: 0.01)
+        XCTAssertEqual(chips[3].closeFrameForTesting.midY, dotCenter.y, accuracy: 0.01)
+    }
+
+    func test_theLabelFades_onlyWhileTheCloseButtonShows() throws {
+        let (bar, _) = settledBar([item(1, "one", index: 1, active: true), item(2, "two", index: 2)])
+        let chip = bar.chipsForTesting[1]
+        XCTAssertFalse(chip.isLabelFadedForTesting)
+
+        try hover(chip)
+        XCTAssertTrue(chip.isLabelFadedForTesting)
+
+        try unhover(chip)
+        XCTAssertFalse(chip.isLabelFadedForTesting)
+    }
+
+    func test_aShortTitle_stillGetsTheMinimumWidth() {
+        let (bar, _) = settledBar([item(1, "a", index: 1, active: true)])
+        XCTAssertEqual(bar.chipsForTesting[0].frame.width, TabChip.minWidth)
+    }
+
+    func test_thePill_sitsOnTheCurrentChip_afterASelectAndAfterAReorder() throws {
+        let (bar, _) = settledBar([
+            item(1, "one", index: 1, active: true), item(2, "two-is-longer", index: 2), item(3, "three", index: 3),
+        ])
+        XCTAssertEqual(bar.pillFrameForTesting, bar.chipsForTesting[0].frame)
+        XCTAssertEqual(bar.pillColorForTesting, Theme.current.chrome.fill(.active))
+
+        bar.render([
+            item(1, "one", index: 1), item(2, "two-is-longer", index: 2, active: true), item(3, "three", index: 3),
+        ])
+        bar.layoutSubtreeIfNeeded()
+        XCTAssertEqual(bar.pillFrameForTesting, bar.chipsForTesting[1].frame, "after select")
+
+        bar.render([
+            item(3, "three", index: 1), item(2, "two-is-longer", index: 2, active: true), item(1, "one", index: 3),
+        ])
+        bar.layoutSubtreeIfNeeded()
+        XCTAssertEqual(bar.pillFrameForTesting, bar.chipsForTesting[1].frame, "after a reorder that keeps the slot")
+
+        bar.render([
+            item(2, "two-is-longer", index: 1, active: true), item(3, "three", index: 2), item(1, "one", index: 3),
+        ])
+        bar.layoutSubtreeIfNeeded()
+        XCTAssertEqual(bar.pillFrameForTesting, bar.chipsForTesting[0].frame, "after the current tab moves")
+    }
+
+    func test_aMiddleClick_closesTheTab_includingOverItsCloseButton() throws {
+        var closed: [TabID] = []
+        let (bar, window) = settledBar(
+            [item(1, "one", index: 1, active: true), item(2, "two", index: 2)], onClose: { closed.append($0) })
+        let chip = bar.chipsForTesting[1]
+        try hover(chip)
+        bar.layoutSubtreeIfNeeded()
+        let middle = try middleMouseDown(in: window)
+
+        let overLabel = try XCTUnwrap(
+            window.contentView?.superview?.hitTest(
+                chip.convert(CGPoint(x: chip.labelFrameForTesting.midX, y: chip.labelFrameForTesting.midY), to: nil)))
+        overLabel.otherMouseDown(with: middle)
+        let overClose = try XCTUnwrap(
+            window.contentView?.superview?.hitTest(windowPoint(chip.closeButtonForTesting)))
+        XCTAssertTrue(overClose.isDescendant(of: chip.closeButtonForTesting), "the x is what the pointer is over")
+        overClose.otherMouseDown(with: middle)
+
+        XCTAssertEqual(closed, [TabID(2), TabID(2)])
+    }
+
+    func test_onlyTheMiddleButtonCloses() {
+        XCTAssertTrue(TerminalTabChip.closesOn(mouseButton: 2))
+        XCTAssertFalse(TerminalTabChip.closesOn(mouseButton: 0))
+        XCTAssertFalse(TerminalTabChip.closesOn(mouseButton: 1))
+        XCTAssertFalse(TerminalTabChip.closesOn(mouseButton: 3))
+    }
+
+    private func middleMouseDown(in window: NSWindow) throws -> NSEvent {
+        let cg = try XCTUnwrap(
+            CGEvent(
+                mouseEventSource: nil, mouseType: .otherMouseDown, mouseCursorPosition: .zero,
+                mouseButton: .center))
+        let event = try XCTUnwrap(NSEvent(cgEvent: cg))
+        XCTAssertEqual(event.buttonNumber, 2, "the event is a real middle press")
+        return event
     }
 }

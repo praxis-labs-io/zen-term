@@ -34,7 +34,7 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
     }
 
     private struct ChromeFingerprint: Equatable {
-        var tracer: String?
+        var pill: String?
         var headerKeycaps: [String]
         var keycaps: [String]
         var panelFrames: [String]
@@ -53,7 +53,7 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
                 guard lhs != rhs else { return }
                 diffs.append("\(label) (gated: \(lhs), ungated: \(rhs))")
             }
-            note("tab bar tracer", tracer, other.tracer)
+            note("tab bar pill", pill, other.pill)
             note("panel header keycaps", headerKeycaps, other.headerKeycaps)
             note("mounted keycaps", keycaps, other.keycaps)
             note("panel frames", panelFrames, other.panelFrames)
@@ -111,7 +111,7 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
         let stable = views.filter { !hoverDriven.contains(ObjectIdentifier($0)) }
         let hosts = views.compactMap { $0 as? PanelHostView }
         return ChromeFingerprint(
-            tracer: views.compactMap { ($0 as? TabBarView)?.tracerColorForTesting }.first?.description,
+            pill: views.compactMap { ($0 as? TabBarView)?.pillColorForTesting }.first?.description,
             headerKeycaps: hosts.compactMap(\.builtHeaderKeycapForTesting),
             keycaps: views.compactMap { ($0 as? KeycapView)?.shortcut },
             panelFrames: hosts.map { describe($0.convert($0.bounds, to: root)) }.sorted(),

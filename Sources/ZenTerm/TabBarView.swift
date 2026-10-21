@@ -24,34 +24,20 @@ final class TabBarView: NSView {
 
     private static let leadingInset: CGFloat = ChromeMetrics.Spacing.s12
     private static let chipSpacing: CGFloat = ChromeMetrics.Spacing.s4
-    private static let chipHeight: CGFloat = ChromeMetrics.Height.sm
     // The floating sidebar keeps its own toggle this far above the card's bottom, matching the docked one's band.
     static let chipBandInset: CGFloat = (height + ChromeMetrics.footerGap) / 2
 
-    static let chipFont = ChromeType.font(.caption, weight: .medium, face: .mono)
-    // The rename editor matches it, or the text reflows on open.
-    static let titleKern: CGFloat = 0.4
-    fileprivate static let labelInset: CGFloat = ChromeMetrics.Spacing.controlInset
-    static let titleInset: CGFloat = leadingInset + labelInset
-    static let maxChipWidth: CGFloat = 220
-
-    fileprivate static var activeInk: NSColor { Theme.current.chrome.ink(.normal) }
-    fileprivate static var idleInk: NSColor {
-        Theme.current.chrome.ink(.subtle)
-    }
-    static var activeInkForTesting: NSColor { activeInk }
-    static var idleInkForTesting: NSColor { idleInk }
+    static let titleInset: CGFloat = leadingInset + TabChip.labelInset
 
     private let scrollView = FadingScrollView(axis: .horizontal)
     private let docView = NSView()
     // Kept per tab across renders: rebuilding blinked the hovered chip's tooltip on every title poll.
-    private var chips: [Chip] = []
-    private let tracer = CALayer()
+    private var chips: [TerminalTabChip] = []
+    private let pill = CALayer()
     private var activeTabID: TabID?
     // A move changes the slot but not the active tab; only this separates it from a title poll.
     private var activeTabIndex: Int?
     private var lastItems: [TabBarItem] = []
-    private static let tracerThickness: CGFloat = 2
 
     init(
         onSelect: @escaping (TabID) -> Void,
@@ -67,7 +53,7 @@ final class TabBarView: NSView {
         wantsLayer = true
 
         docView.wantsLayer = true
-        docView.layer?.addSublayer(tracer)
+        docView.layer?.insertSublayer(pill, at: 0)
 
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
@@ -85,16 +71,16 @@ final class TabBarView: NSView {
             self, selector: #selector(clipBoundsChanged),
             name: NSView.boundsDidChangeNotification, object: clip)
 
-        tracer.backgroundColor = Theme.current.chrome.accent.nsColor.cgColor
-        tracer.cornerRadius = ChromeMetrics.Radius.capsule(Self.tracerThickness)
-        tracer.anchorPoint = CGPoint(x: 0, y: 0.5)
-        tracer.zPosition = 1
-        tracer.isHidden = true
+        pill.backgroundColor = Theme.current.chrome.fill(.active).cgColor
+        pill.cornerRadius = ChromeMetrics.Radius.control
+        pill.anchorPoint = CGPoint(x: 0, y: 0.5)
+        pill.zPosition = -1
+        pill.isHidden = true
 
         NSLayoutConstraint.activate([
             scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            scrollView.heightAnchor.constraint(equalToConstant: Self.chipHeight),
+            scrollView.heightAnchor.constraint(equalToConstant: TabChip.height),
             scrollView.centerYAnchor.constraint(equalTo: bottomAnchor, constant: -Self.chipBandInset),
         ])
     }
@@ -108,23 +94,25 @@ final class TabBarView: NSView {
     func render(_ items: [TabBarItem]) {
         lastItems = items
         var reusable = Dictionary(uniqueKeysWithValues: chips.map { ($0.id, $0) })
-        var next: [Chip] = []
-        var activeChip: Chip?
+        var next: [TerminalTabChip] = []
+        var activeChip: TerminalTabChip?
         for item in items {
             let id = item.id
             let chip =
                 reusable.removeValue(forKey: id)
                 ?? {
-                    let fresh = Chip(
-                        id: id, attributed: Self.tabLabel(item), index: item.index,
+                    let fresh = TerminalTabChip(
+                        id: id, index: item.index,
                         onClick: { [weak self] in self?.onSelect(id) },
-                        onMiddleClick: { [weak self] in self?.onClose(id) },
+                        onClose: { [weak self] in self?.onClose(id) },
                         onDoubleClick: { [weak self] in self?.onRename(id) },
                         directory: { [weak self] in self?.directory(id) })
                     docView.addSubview(fresh)
                     return fresh
                 }()
-            chip.update(attributed: Self.tabLabel(item), index: item.index)
+            chip.update(
+                index: item.index, title: item.title, isCurrent: item.isActive,
+                dotColor: Self.dotColor(for: item.attentionState))
             next.append(chip)
             if item.isActive { activeChip = chip }
         }
@@ -137,14 +125,14 @@ final class TabBarView: NSView {
             let selectionChanged = activeTabID != newActive
             let newIndex = items.first(where: \.isActive)?.index
             let slotChanged = activeTabIndex != nil && activeTabIndex != newIndex
-            Motion.stretch(tracer, to: tracerFrame(for: activeChip), animated: activeTabID != nil && selectionChanged)
-            tracer.isHidden = false
+            Motion.stretch(pill, to: activeChip.frame, animated: activeTabID != nil && selectionChanged)
+            pill.isHidden = false
             if selectionChanged || slotChanged {
                 scrollView.reveal(activeChip)
             }
             activeTabIndex = newIndex
         } else {
-            tracer.isHidden = true
+            pill.isHidden = true
             activeTabIndex = nil
         }
         activeTabID = newActive
@@ -152,22 +140,22 @@ final class TabBarView: NSView {
     }
 
     func reapplyTheme() {
-        tracer.backgroundColor = Theme.current.chrome.accent.nsColor.cgColor
+        pill.backgroundColor = Theme.current.chrome.fill(.active).cgColor
         chips.forEach { $0.reapplyTheme() }
         render(lastItems)
     }
 
-    var chipsForTesting: [NSView] { chips }
+    var chipsForTesting: [TerminalTabChip] { chips }
 
     var chipLabelsForTesting: [NSAttributedString] { chips.map(\.attributedLabelForTesting) }
 
-    var tracerColorForTesting: NSColor? { tracer.backgroundColor.flatMap { NSColor(cgColor: $0) } }
+    var pillColorForTesting: NSColor? { pill.backgroundColor.flatMap { NSColor(cgColor: $0) } }
+
+    var pillFrameForTesting: CGRect { pill.frame }
 
     var isOverflowFadedForTesting: Bool { scrollView.fadedEdgesForTesting.end }
 
     var isLeadingFadedForTesting: Bool { scrollView.fadedEdgesForTesting.start }
-
-    static func tabLabelStringForTesting(_ item: TabBarItem) -> String { tabLabel(item).string }
 
     var chipTooltipsForTesting: [(label: String?, shortcut: String?)] {
         chips.map { ($0.tooltipLabelForTesting, $0.tooltipShortcutForTesting) }
@@ -188,12 +176,12 @@ final class TabBarView: NSView {
     }
 
     private func layoutChips() {
-        let h = scrollView.contentView.bounds.height > 0 ? scrollView.contentView.bounds.height : Self.chipHeight
-        let chipY = (h - Self.chipHeight) / 2
+        let h = scrollView.contentView.bounds.height > 0 ? scrollView.contentView.bounds.height : TabChip.height
+        let chipY = (h - TabChip.height) / 2
         var x = Self.leadingInset
         for chip in chips {
             let width = chip.fittingWidth
-            chip.frame = CGRect(x: x, y: chipY, width: width, height: Self.chipHeight)
+            chip.frame = CGRect(x: x, y: chipY, width: width, height: TabChip.height)
             x += width + Self.chipSpacing
         }
         let contentWidth = chips.isEmpty ? 0 : x - Self.chipSpacing
@@ -243,145 +231,12 @@ final class TabBarView: NSView {
         #endif
     }
 
-    private func tracerFrame(for chip: NSView) -> CGRect {
-        CGRect(x: chip.frame.minX + 9, y: 0, width: chip.frame.width - 18, height: Self.tracerThickness)
-    }
-
-    private static func tabLabel(_ item: TabBarItem) -> NSAttributedString {
-        let font = chipFont
-        let ink = item.isActive ? activeInk : idleInk
-        let numberColor: NSColor
-        switch item.attentionState {
-        case .idle: numberColor = ink
-        case .completed: numberColor = Theme.current.chrome.positive.nsColor
-        case .waiting: numberColor = Theme.current.chrome.attention.nsColor
-        }
-        let prefix = "\(item.index) "
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.lineBreakMode = .byTruncatingTail
-        let s = NSMutableAttributedString(
-            string: prefix,
-            attributes: [
-                .font: font, .foregroundColor: numberColor, .paragraphStyle: paragraph,
-            ])
-        s.append(
-            NSAttributedString(
-                string: item.title,
-                attributes: [
-                    .font: font, .foregroundColor: ink, .kern: titleKern,
-                    .paragraphStyle: paragraph,
-                ]))
-        return s
-    }
-
-    private final class Chip: NSView {
-        let id: TabID
-        private var tabIndex: Int
-        private let onClick: () -> Void
-        private let onMiddleClick: (() -> Void)?
-        private let onDoubleClick: (() -> Void)?
-        private let directory: () -> URL?
-        private var isHovered = false
-        private let label: NSTextField
-        private lazy var tooltip = TooltipHost(label: "") { [weak self] in
-            guard let self, self.tabIndex <= 9 else { return nil }
-            return CommandCatalog.spec(for: .selectTab(self.tabIndex)).shortcut
-        }
-
-        var fittingWidth: CGFloat {
-            min(
-                label.intrinsicContentSize.width + 2 * TabBarView.labelInset,
-                TabBarView.maxChipWidth)
-        }
-
-        var attributedLabelForTesting: NSAttributedString { label.attributedStringValue }
-
-        var tooltipLabelForTesting: String? { directoryLabel }
-        var tooltipShortcutForTesting: String? { tooltip.shortcutForTesting }
-
-        init(
-            id: TabID, attributed: NSAttributedString, index: Int,
-            onClick: @escaping () -> Void, onMiddleClick: (() -> Void)?,
-            onDoubleClick: (() -> Void)?, directory: @escaping () -> URL?
-        ) {
-            self.id = id
-            self.tabIndex = index
-            self.onClick = onClick
-            self.onMiddleClick = onMiddleClick
-            self.onDoubleClick = onDoubleClick
-            self.directory = directory
-            label = NSTextField(labelWithAttributedString: attributed)
-            label.lineBreakMode = .byTruncatingTail
-            label.maximumNumberOfLines = 1
-            label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            super.init(frame: .zero)
-            wantsLayer = true
-            layer?.cornerRadius = ChromeMetrics.Radius.control
-
-            label.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(label)
-
-            NSLayoutConstraint.activate([
-                label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: TabBarView.labelInset),
-                label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -TabBarView.labelInset),
-                label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            ])
-        }
-
-        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-        func update(attributed: NSAttributedString, index: Int) {
-            tabIndex = index
-            guard label.attributedStringValue != attributed else { return }
-            label.attributedStringValue = attributed
-            needsLayout = true
-        }
-
-        override func updateTrackingAreas() {
-            super.updateTrackingAreas()
-            trackingAreas.forEach(removeTrackingArea)
-            addTrackingArea(
-                NSTrackingArea(
-                    rect: bounds,
-                    options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
-                    owner: self))
-        }
-
-        override func mouseEntered(with event: NSEvent) { setHover(true) }
-        override func mouseExited(with event: NSEvent) { setHover(false) }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            if window == nil { tooltip.hide(from: self) }
-        }
-
-        func setHover(_ on: Bool) {
-            guard isHovered != on else { return }
-            isHovered = on
-            updateBackground()
-            guard on, let path = directoryLabel else { return tooltip.hide(from: self) }
-            tooltip.label = path
-            tooltip.show(from: self)
-        }
-
-        private var directoryLabel: String? { directory().map { PathDisplay.abbreviatingHome($0.path) } }
-        override func mouseDown(with event: NSEvent) {
-            tooltip.hide(from: self)
-            if event.clickCount == 2 { onDoubleClick?() } else { onClick() }
-        }
-        override func otherMouseDown(with event: NSEvent) {
-            if event.buttonNumber == 2 { onMiddleClick?() }
-        }
-
-        func reapplyTheme() {
-            updateBackground()
-        }
-
-        private func updateBackground() {
-            guard let layer else { return }
-            Motion.ease(
-                layer, keyPath: "backgroundColor",
-                to: (isHovered ? Theme.current.chrome.fill(.hover) : .clear).cgColor)
+    private static func dotColor(for state: TabAttentionState) -> NSColor? {
+        let chrome = Theme.current.chrome
+        switch state {
+        case .idle: return nil
+        case .completed: return chrome.positive.nsColor
+        case .waiting: return chrome.attention.nsColor
         }
     }
 }

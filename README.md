@@ -20,7 +20,7 @@ Release notes, documentation, and guides live at
 One tab, three shells. ⌘B opens the drawer along the bottom, ⌘\ opens the one
 down the right side, and each runs its own shell with its chord printed in the
 corner. Hiding a drawer doesn't stop its process. The dev server here keeps
-running while the drawer is hidden. The numbered tabs along the bottom are ⌘1
+running while the drawer is hidden. The tabs along the bottom are ⌘1
 through ⌘9.
 
 ## Install
@@ -78,7 +78,7 @@ The [zen CLI Guide](https://zenterm.io/docs/cli) covers the rest.
   [zen-theme.nvim](https://github.com/praxis-labs-io/zen-theme.nvim) and switching
   theme in ZenTerm switches your editor's colorscheme to match, live.
 - **A notification when an agent needs you.** With ZenTerm in the background and
-  an agent stopped for input, macOS posts a banner and the tab's number takes the
+  an agent stopped for input, macOS posts a banner and the tab gets a dot in the
   theme's attention color until you visit it.
 - **Drive it from the command line.** `zen` opens workspaces, tabs and panes
   behind the one you're looking at, sends text to a pane and reads what it

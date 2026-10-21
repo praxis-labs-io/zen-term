@@ -74,7 +74,7 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         renameField.isBordered = false
         renameField.drawsBackground = false
         renameField.focusRingType = .none
-        renameField.font = TabBarView.chipFont
+        renameField.font = TabChip.chipFont
         renameField.makeSingleLine()
         renameField.delegate = self
         renameField.isHidden = true
@@ -105,12 +105,12 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         var width = Self.inset * 2 + text
         if opensFocused { width += Self.accessorySpacing + Self.dotDiameter }
         if showsClose { width += Self.accessorySpacing / 2 + Self.closeSize }
-        return min(width, TabBarView.maxChipWidth)
+        return min(width, TabChip.maxChipWidth)
     }
 
     private var renameWidth: CGFloat {
         let typed = renameField.stringValue.isEmpty ? defaultName : renameField.stringValue
-        let measured = (typed as NSString).size(withAttributes: [.font: TabBarView.chipFont]).width
+        let measured = (typed as NSString).size(withAttributes: [.font: TabChip.chipFont]).width
         return max(ceil(measured) + 12, 72)
     }
 
@@ -157,12 +157,12 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         label.attributedStringValue = NSAttributedString(
             string: title,
             attributes: [
-                .font: TabBarView.chipFont, .kern: TabBarView.titleKern, .foregroundColor: ink,
+                .font: TabChip.chipFont, .kern: TabChip.titleKern, .foregroundColor: ink,
                 .paragraphStyle: paragraph,
             ])
         renameField.textColor = chrome.ink(.normal)
         renameField.placeholderAttributedString = NSAttributedString(
-            string: defaultName, attributes: [.font: TabBarView.chipFont, .foregroundColor: chrome.ink(.muted)])
+            string: defaultName, attributes: [.font: TabChip.chipFont, .foregroundColor: chrome.ink(.muted)])
         dot.layer?.backgroundColor = chrome.cursor.nsColor.cgColor
         underline.layer?.backgroundColor = chrome.accent.nsColor.cgColor
         underline.isHidden = !isSelected || isRenaming

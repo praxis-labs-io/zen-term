@@ -3934,7 +3934,7 @@ final class WindowController: NSObject {
         AgentNotifier.shared.clear(windowID: windowID, tabID: id)
     }
 
-    /// The tab number and the dock's dots are the same signal at two altitudes, so they move together.
+    /// The tab's dot and the dock's dots are the same signal at two altitudes, so they move together.
     private func renderAttention() {
         renderTabBar()
         renderDock()

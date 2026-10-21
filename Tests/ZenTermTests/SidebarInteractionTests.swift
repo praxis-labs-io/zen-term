@@ -238,10 +238,10 @@ final class SidebarInteractionTests: WindowTestCase {
         controller.containerForTesting.layoutSubtreeIfNeeded()
         let name = controller.sidebarForTesting.lead.workspaceNameLabelForTesting
         XCTAssertLessThanOrEqual(
-            name.alignmentRect(forFrame: name.frame).width, TabBarView.maxChipWidth,
+            name.alignmentRect(forFrame: name.frame).width, TabChip.maxChipWidth,
             "a long name truncates instead of pushing the tabs off the bar")
         let oneLine = NSTextField(labelWithString: "Home")
-        oneLine.font = TabBarView.chipFont
+        oneLine.font = TabChip.chipFont
         XCTAssertEqual(
             name.frame.height, oneLine.fittingSize.height, accuracy: 0.5, "a long name truncates instead of wrapping")
     }
