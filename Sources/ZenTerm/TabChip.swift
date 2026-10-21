@@ -5,7 +5,7 @@ class TabChip: NSView {
     static let chipFont = ChromeType.font(.caption, weight: .medium, face: .mono)
     // The rename editor matches it, or the text reflows on open.
     static let titleKern: CGFloat = 0.4
-    static let labelInset: CGFloat = ChromeMetrics.Spacing.controlInset
+    static let labelInset: CGFloat = ChromeMetrics.Spacing.s8
     static let minWidth: CGFloat = 64
     static let maxChipWidth: CGFloat = 220
 
