@@ -27,8 +27,6 @@ final class TabBarView: NSView {
     // The floating sidebar keeps its own toggle this far above the card's bottom, matching the docked one's band.
     static let chipBandInset: CGFloat = (height + ChromeMetrics.footerGap) / 2
 
-    static let titleInset: CGFloat = leadingInset + TabChip.labelInset
-
     private let scrollView = FadingScrollView(axis: .horizontal)
     private let docView = NSView()
     // Kept per tab across renders: rebuilding blinked the hovered chip's tooltip on every title poll.
