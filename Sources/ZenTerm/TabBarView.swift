@@ -137,7 +137,7 @@ final class TabBarView: NSView {
             let selectionChanged = activeTabID != newActive
             let newIndex = items.first(where: \.isActive)?.index
             let slotChanged = activeTabIndex != nil && activeTabIndex != newIndex
-            moveTracer(to: tracerFrame(for: activeChip), animated: activeTabID != nil && selectionChanged)
+            Motion.stretch(tracer, to: tracerFrame(for: activeChip), animated: activeTabID != nil && selectionChanged)
             tracer.isHidden = false
             if selectionChanged || slotChanged {
                 scrollView.reveal(activeChip)
@@ -245,46 +245,6 @@ final class TabBarView: NSView {
 
     private func tracerFrame(for chip: NSView) -> CGRect {
         CGRect(x: chip.frame.minX + 9, y: 0, width: chip.frame.width - 18, height: Self.tracerThickness)
-    }
-
-    private func setTracerFrame(_ frame: CGRect) {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        tracer.frame = frame
-        CATransaction.commit()
-    }
-
-    private func moveTracer(to target: CGRect, animated: Bool) {
-        guard animated, !Motion.isReduceMotionEnabled() else {
-            setTracerFrame(target)
-            return
-        }
-        let start = tracer.presentation()?.frame ?? tracer.frame
-        setTracerFrame(target)
-
-        let movingRight = target.midX >= start.midX
-        let leftValues: [CGFloat] =
-            movingRight
-            ? [start.minX, start.minX, target.minX] : [start.minX, target.minX, target.minX]
-        let widthValues: [CGFloat] =
-            movingRight
-            ? [start.width, target.maxX - start.minX, target.width]
-            : [start.width, start.maxX - target.minX, target.width]
-
-        let left = CAKeyframeAnimation(keyPath: "position.x")
-        left.values = leftValues.map { $0 as NSNumber }
-        let width = CAKeyframeAnimation(keyPath: "bounds.size.width")
-        width.values = widthValues.map { $0 as NSNumber }
-        for anim in [left, width] {
-            anim.keyTimes = [0, 0.5, 1]
-            anim.duration = Motion.pageSlideDuration
-            anim.timingFunctions = [
-                CAMediaTimingFunction(name: .easeOut),
-                CAMediaTimingFunction(name: .easeInEaseOut),
-            ]
-        }
-        tracer.add(left, forKey: "tracer.left")
-        tracer.add(width, forKey: "tracer.width")
     }
 
     private static func tabLabel(_ item: TabBarItem) -> NSAttributedString {
