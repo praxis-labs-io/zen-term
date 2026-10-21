@@ -307,6 +307,25 @@ final class WorkspaceTabStripTests: WindowTestCase {
         XCTAssertEqual(strip.chips.map(\.title), ["a", "c"])
     }
 
+    func test_doubleClickingTheRemoveButton_downToOneTab_removesOne_andRenamesNothing() throws {
+        mount([Workspace.Tab(main: "a"), Workspace.Tab(main: "b")])
+        let chip = strip.chips[0]
+        chip.mouseEntered(with: try mouse(.mouseMoved, at: chip))
+        let target = windowPoint(chip.closeButtonForTesting)
+
+        try pressDown(at: target)
+        try pressUp(at: target)
+        let survivor = try XCTUnwrap(hitTest(at: target))
+        survivor.mouseDown(
+            with: try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .leftMouseDown, location: target, modifierFlags: [], timestamp: 0,
+                    windowNumber: window!.windowNumber, context: nil, eventNumber: 0, clickCount: 2, pressure: 1)))
+
+        XCTAssertEqual(form.tabs.map(\.main), ["b"])
+        XCTAssertFalse(strip.chips[0].isRenaming, "the second press lands on the survivor, which never took the first")
+    }
+
     func test_aRemovePressDraggedOffTheButton_removesNothing() throws {
         mount([Workspace.Tab(main: "a"), Workspace.Tab(main: "b"), Workspace.Tab(main: "c")])
         let chip = strip.chips[1]
@@ -378,6 +397,8 @@ final class WorkspaceTabStripTests: WindowTestCase {
         mount([Workspace.Tab(main: "nvim"), Workspace.Tab(main: "bin/check")])
         let chip = strip.chips[1]
 
+        chip.mouseDown(with: try mouse(.leftMouseDown, at: chip))
+        chip.mouseUp(with: try mouse(.leftMouseUp, at: chip))
         chip.mouseDown(with: try mouse(.leftMouseDown, at: chip, clicks: 2))
 
         XCTAssertTrue(strip.isIdleHintVisibleForTesting == false && strip.isRenameHintVisibleForTesting)

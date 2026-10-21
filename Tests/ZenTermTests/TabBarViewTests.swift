@@ -399,11 +399,11 @@ final class TabBarViewTests: WindowTestCase {
     }
 
     private func windowEvent(
-        _ type: NSEvent.EventType, in window: NSWindow, at point: CGPoint, clicks: Int = 1
+        _ type: NSEvent.EventType, in window: NSWindow, at point: CGPoint, clicks: Int = 1, at time: TimeInterval = 0
     ) throws -> NSEvent {
         try XCTUnwrap(
             NSEvent.mouseEvent(
-                with: type, location: point, modifierFlags: [], timestamp: 0,
+                with: type, location: point, modifierFlags: [], timestamp: time,
                 windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: clicks,
                 pressure: 1))
     }
@@ -414,22 +414,23 @@ final class TabBarViewTests: WindowTestCase {
 
     private var pressed: NSView?
 
-    private func down(_ window: NSWindow, at point: CGPoint, clicks: Int = 1) throws {
+    private func down(_ window: NSWindow, at point: CGPoint, clicks: Int = 1, time: TimeInterval = 0) throws {
         let target = window.contentView?.superview?.hitTest(point)
         pressed = target
-        target?.mouseDown(with: try windowEvent(.leftMouseDown, in: window, at: point, clicks: clicks))
+        target?.mouseDown(with: try windowEvent(.leftMouseDown, in: window, at: point, clicks: clicks, at: time))
     }
 
-    private func up(_ window: NSWindow, at point: CGPoint, clicks: Int = 1) throws {
-        pressed?.mouseUp(with: try windowEvent(.leftMouseUp, in: window, at: point, clicks: clicks))
+    private func up(_ window: NSWindow, at point: CGPoint, clicks: Int = 1, time: TimeInterval = 0) throws {
+        pressed?.mouseUp(with: try windowEvent(.leftMouseUp, in: window, at: point, clicks: clicks, at: time))
         pressed = nil
     }
 
-    private func press(_ window: NSWindow, at point: CGPoint, release releasePoint: CGPoint? = nil, clicks: Int = 1)
-        throws
-    {
-        try down(window, at: point, clicks: clicks)
-        try up(window, at: releasePoint ?? point, clicks: clicks)
+    private func press(
+        _ window: NSWindow, at point: CGPoint, release releasePoint: CGPoint? = nil, clicks: Int = 1,
+        time: TimeInterval = 0
+    ) throws {
+        try down(window, at: point, clicks: clicks, time: time)
+        try up(window, at: releasePoint ?? point, clicks: clicks, time: time)
     }
 
     private func settledBar(
@@ -494,13 +495,14 @@ final class TabBarViewTests: WindowTestCase {
             },
             onRename: { renamed.append($0) })
         barRef = bar
+        try press(window, at: windowPoint(bar.chipsForTesting[2]), clicks: 1, time: 1)
         let chip = bar.chipsForTesting[1]
         try hover(chip)
         bar.layoutSubtreeIfNeeded()
         let target = windowPoint(chip.closeButtonForTesting)
 
-        try press(window, at: target, clicks: 1)
-        try press(window, at: target, clicks: 2)
+        try press(window, at: target, clicks: 1, time: 10)
+        try press(window, at: target, clicks: 2, time: 10.2)
 
         XCTAssertEqual(closed, [TabID(2)], "one tab closes, not the one that slid under the pointer")
         XCTAssertTrue(renamed.isEmpty, "and the second click of the pair renames nothing")

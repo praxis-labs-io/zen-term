@@ -19,6 +19,7 @@ class TabChip: NSView {
     private(set) var isClosable = false
     private(set) var dotColor: NSColor?
     private(set) var isHovered = false
+    private var firstClickTime: TimeInterval?
     private(set) var labelFrame = CGRect.zero
 
     let label = NSTextField(labelWithString: "")
@@ -129,6 +130,13 @@ class TabChip: NSView {
             Motion.ease(layer, keyPath: "backgroundColor", to: background.cgColor)
         }
         updateAccessories()
+    }
+
+    // The second press of a double-click lands on whichever chip slid under the pointer, so only the chip that took the first press owns the pair.
+    func isSecondClickOfOwnPair(_ event: NSEvent) -> Bool {
+        defer { firstClickTime = event.clickCount == 1 ? event.timestamp : nil }
+        guard event.clickCount == 2, let firstClickTime else { return false }
+        return event.timestamp - firstClickTime <= NSEvent.doubleClickInterval
     }
 
     func setHover(_ on: Bool) {

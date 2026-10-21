@@ -132,7 +132,7 @@ final class WorkspaceTabChip: TabChip, NSTextFieldDelegate {
 
     override func mouseDown(with event: NSEvent) {
         guard !isRenaming else { return super.mouseDown(with: event) }
-        if event.clickCount == 2 {
+        if isSecondClickOfOwnPair(event) {
             beginRename()
             return
         }

@@ -8,7 +8,6 @@ final class TerminalTabChip: TabChip {
     private let onClose: () -> Void
     private let onDoubleClick: () -> Void
     private let directory: () -> URL?
-    private var isFirstClickOfPair = false
     private lazy var tooltip = TooltipHost(label: "") { [weak self] in
         guard let self, self.tabIndex <= 9 else { return nil }
         return CommandCatalog.spec(for: .selectTab(self.tabIndex)).shortcut
@@ -55,11 +54,9 @@ final class TerminalTabChip: TabChip {
 
     override func mouseDown(with event: NSEvent) {
         tooltip.hide(from: self)
-        if event.clickCount == 2, isFirstClickOfPair {
-            isFirstClickOfPair = false
+        if isSecondClickOfOwnPair(event) {
             onDoubleClick()
         } else {
-            isFirstClickOfPair = event.clickCount == 1
             onClick()
         }
     }
