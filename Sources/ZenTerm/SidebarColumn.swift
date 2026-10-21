@@ -2,13 +2,12 @@ import AppKit
 
 // Everything a reveal brings on screen: the rows and footer, and the card chrome they float behind.
 final class SidebarColumn: ShadowCardView {
-    static let toggleInset: CGFloat = ChromeMetrics.Spacing.s12
-
     let rows: SidebarView
     let footer: SidebarFooter
     let toggle: IconButton
     // Every other side moved inward with the card and took the window's gutter along; the top edge stays put.
     private(set) var contentTop: NSLayoutConstraint?
+    private var toggleLeading: NSLayoutConstraint?
     private(set) var isFloating = false
 
     init(
@@ -25,12 +24,14 @@ final class SidebarColumn: ShadowCardView {
         for child in [rows, footer, toggle] as [NSView] { addSubview(child) }
         let contentTop = rows.topAnchor.constraint(equalTo: topAnchor)
         self.contentTop = contentTop
+        let toggleLeading = toggle.leadingAnchor.constraint(equalTo: leadingAnchor, constant: toggleInset)
+        self.toggleLeading = toggleLeading
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: SidebarView.width),
             rows.leadingAnchor.constraint(equalTo: leadingAnchor),
             contentTop,
             rows.bottomAnchor.constraint(equalTo: bottomAnchor),
-            toggle.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.toggleInset),
+            toggleLeading,
             toggle.centerYAnchor.constraint(equalTo: bottomAnchor, constant: -TabBarView.chipBandInset),
             footer.leadingAnchor.constraint(equalTo: toggle.trailingAnchor, constant: SidebarFooter.spacing),
             footer.centerYAnchor.constraint(equalTo: toggle.centerYAnchor),
@@ -54,6 +55,7 @@ final class SidebarColumn: ShadowCardView {
     func setFloating(_ floating: Bool) {
         isFloating = floating
         contentTop?.constant = floatingContentTop
+        reapplyToggleInset()
         // The shadow needs an unclipped layer, so the radius has to be clipped on the content instead.
         rows.wantsLayer = true
         rows.layer?.cornerRadius = floating ? Self.cornerRadius : 0
@@ -75,6 +77,15 @@ final class SidebarColumn: ShadowCardView {
     }
 
     var floatingContentTop: CGFloat { isFloating ? ChromeMetrics.windowGutter : 0 }
+
+    // Docked, it lines up with the panes' gutter; floating, it sits as far from the card's side as from its bottom.
+    private var toggleInset: CGFloat {
+        isFloating ? TabBarView.chipBandInset - SidebarFooter.buttonSize.height / 2 : ChromeMetrics.windowGutter
+    }
+
+    func reapplyToggleInset() {
+        toggleLeading?.constant = toggleInset
+    }
 
     func reapplyCornerRadius() {
         guard isFloating else { return }

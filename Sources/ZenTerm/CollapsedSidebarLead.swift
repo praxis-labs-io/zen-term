@@ -23,7 +23,7 @@ final class CollapsedSidebarLead: NSView {
         content.orientation = .horizontal
         content.alignment = .centerY
         content.spacing = Self.dividerGap
-        content.edgeInsets = NSEdgeInsets(top: 0, left: leadingInset, bottom: 0, right: 0)
+        setLeadingInset(leadingInset)
         content.translatesAutoresizingMaskIntoConstraints = false
         content.addArrangedSubview(nameLabel)
         content.addArrangedSubview(divider)
@@ -39,6 +39,10 @@ final class CollapsedSidebarLead: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     var contentWidth: CGFloat { content.fittingSize.width }
+
+    func setLeadingInset(_ inset: CGFloat) {
+        content.edgeInsets = NSEdgeInsets(top: 0, left: inset, bottom: 0, right: 0)
+    }
 
     func setWorkspaceName(_ name: String, worktree: String? = nil) {
         workspaceName = name

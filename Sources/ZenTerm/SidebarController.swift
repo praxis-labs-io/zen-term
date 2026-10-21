@@ -21,6 +21,9 @@ final class SidebarController {
     }
 
     private static let leadNameGap: CGFloat = ChromeMetrics.Spacing.s6
+    private static var leadInset: CGFloat {
+        ChromeMetrics.windowGutter + SidebarFooter.buttonSize.width + leadNameGap
+    }
     // Docking below this would leave the panes less than the window's own minimum, so the sidebar floats instead.
     static let minimumDockableWidth = HostWindow.minimumContentSize.width + SidebarView.width
 
@@ -38,6 +41,7 @@ final class SidebarController {
     private var leadWidth: NSLayoutConstraint?
     private var tabBarLeading: NSLayoutConstraint?
     private var sidebarTop: NSLayoutConstraint?
+    private var collapsedToggleLeading: NSLayoutConstraint?
     private var columnLeading: NSLayoutConstraint?
     private var columnBottom: NSLayoutConstraint?
     private var slideID = 0
@@ -65,8 +69,7 @@ final class SidebarController {
             onPalette: onPalette, onSettings: onSettings, onToggle: onToggle, onActivate: onActivate,
             onNewWorktree: onNewWorktree, onCloseWorkspace: onCloseWorkspace, onAdd: onAdd)
         collapsedToggle = SidebarFooter.button("sidebar.left", "Toggle sidebar", .toggleSidebar, onToggle)
-        lead = CollapsedSidebarLead(
-            leadingInset: SidebarColumn.toggleInset + SidebarFooter.buttonSize.width + Self.leadNameGap)
+        lead = CollapsedSidebarLead(leadingInset: Self.leadInset)
         edgeReveal.onReveal = { [weak self] in self?.reveal() }
         edgeReveal.onHide = { [weak self] in self?.hideReveal() }
         edgeReveal.isPinned = { [weak self] in self?.isRevealPinned() ?? false }
@@ -107,6 +110,9 @@ final class SidebarController {
         let leadWidth = lead.widthAnchor.constraint(equalToConstant: leadOffset)
         let tabBarLeading = tabBar.leadingAnchor.constraint(equalTo: lead.trailingAnchor, constant: tabBarPull)
         let sidebarTop = column.topAnchor.constraint(equalTo: container.topAnchor, constant: ChromeMetrics.topInset)
+        let collapsedToggleLeading = collapsedToggle.leadingAnchor.constraint(
+            equalTo: container.leadingAnchor, constant: ChromeMetrics.windowGutter)
+        self.collapsedToggleLeading = collapsedToggleLeading
         let columnLeading = column.leadingAnchor.constraint(equalTo: container.leadingAnchor)
         let columnBottom = column.bottomAnchor.constraint(equalTo: container.bottomAnchor)
         self.columnLeading = columnLeading
@@ -128,8 +134,7 @@ final class SidebarController {
             columnLeading,
             sidebarTop,
             columnBottom,
-            collapsedToggle.leadingAnchor.constraint(
-                equalTo: container.leadingAnchor, constant: SidebarColumn.toggleInset),
+            collapsedToggleLeading,
             collapsedToggle.centerYAnchor.constraint(equalTo: tabBar.chipBandCenterYAnchor),
             lead.leadingAnchor.constraint(equalTo: edge.leadingAnchor),
             lead.centerYAnchor.constraint(equalTo: tabBar.chipBandCenterYAnchor),
@@ -514,6 +519,10 @@ final class SidebarController {
 
     func reapplyChromeLayout() {
         sidebarTop?.constant = ChromeMetrics.topInset
+        collapsedToggleLeading?.constant = ChromeMetrics.windowGutter
+        column.reapplyToggleInset()
+        lead.setLeadingInset(Self.leadInset)
+        applyLeadWidth()
         canvasOffset?.constant = canvasGap
         if isRevealed { applyRevealInsets() }
         edgeReveal.reapplyLiveRegion()
