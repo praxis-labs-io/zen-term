@@ -172,7 +172,7 @@
             let stack = NSStackView(views: sections)
             stack.orientation = .vertical
             stack.alignment = .leading
-            stack.spacing = ChromeMetrics.Spacing.s20 * 2
+            stack.spacing = ChromeMetrics.Spacing.s32
             stack.translatesAutoresizingMaskIntoConstraints = false
 
             let document = FlippedView()

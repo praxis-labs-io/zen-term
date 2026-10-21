@@ -65,7 +65,7 @@ class PaletteOverlay: NSView, ModalOverlay {
 
     init(
         background: NSColor, placeholder: String, emptyText: String, footerHints: [PaletteHint],
-        rowHeight: CGFloat, maxListHeight: CGFloat = 320, emptyListHeight: CGFloat = 56,
+        rowHeight: CGFloat, maxListHeight: CGFloat = 320, emptyListHeight: CGFloat = ChromeMetrics.Height.xl,
         onDismiss: @escaping () -> Void
     ) {
         self.onDismiss = onDismiss

@@ -20,7 +20,7 @@ final class TabBarView: NSView {
     private let onRename: (TabID) -> Void
     private let directory: (TabID) -> URL?
 
-    static let height: CGFloat = 30
+    static let height: CGFloat = ChromeMetrics.Height.lg
 
     private static let leadingInset: CGFloat = ChromeMetrics.Spacing.s12
     private static let chipSpacing: CGFloat = ChromeMetrics.Spacing.s4

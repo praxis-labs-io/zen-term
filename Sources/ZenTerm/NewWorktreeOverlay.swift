@@ -240,7 +240,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
 
         let built = FormCard.content(
             rows: [header, branchStack, baseGroup, carryGroup, errorLabel],
-            footer: footer, spacing: 14)
+            footer: footer, spacing: ChromeMetrics.Spacing.modalSectionGap)
         footerDivider = built.divider
         return built.view
     }

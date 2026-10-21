@@ -3,11 +3,11 @@ import AppKit
 // The canvas for an SSH host that isn't connected: the route from this Mac to the host, and Connect on ↵.
 final class HostConnectView: NSView {
     private static let edgeSpacing: CGFloat = ChromeMetrics.Spacing.s12
-    private static let routeToEyebrow: CGFloat = 34
+    private static let routeToEyebrow: CGFloat = ChromeMetrics.Spacing.s32
     private static let eyebrowToTitle: CGFloat = ChromeMetrics.Spacing.s12
     private static let titleToDestination: CGFloat = ChromeMetrics.Spacing.s10
-    private static let destinationToDetail: CGFloat = 14
-    private static let detailToButton: CGFloat = 30
+    private static let destinationToDetail: CGFloat = ChromeMetrics.Spacing.s12
+    private static let detailToButton: CGFloat = ChromeMetrics.Spacing.s32
     private static let detailMaxWidth: CGFloat = 420
 
     // A short window drops the diagram first, then the eyebrow, so the action never leaves the screen.

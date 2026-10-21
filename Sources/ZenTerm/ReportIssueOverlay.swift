@@ -136,7 +136,7 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         envText.stringValue = report.plainText
         envNote.font = ChromeType.font(.caption)
         envNote.textColor = Theme.current.chrome.ink(.muted)
-        let envGroup = Self.vStack([envCaption, envText, envNote], spacing: 5)
+        let envGroup = Self.vStack([envCaption, envText, envNote], spacing: ChromeMetrics.Spacing.s6)
 
         let footer = buildFooter()
 

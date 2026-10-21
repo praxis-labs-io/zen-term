@@ -219,7 +219,8 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
             [caption("Copy into new worktrees", required: false), carryPicker], spacing: ChromeMetrics.Spacing.s6)
 
         let built = FormCard.content(
-            rows: [headerRow, nameRow, tabsGroup, envGroup, carryGroup], footer: buildFooter(), spacing: 14)
+            rows: [headerRow, nameRow, tabsGroup, envGroup, carryGroup], footer: buildFooter(),
+            spacing: ChromeMetrics.Spacing.modalSectionGap)
         footerDivider = built.divider
         return built.view
     }
