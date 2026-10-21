@@ -322,7 +322,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         c.mountAndStart()
         let content = try XCTUnwrap(c.window.contentView)
         c.openSettings(for: .setting(key: "ssh-host"))
-        waitUntil(emptyHint(in: content) != nil || !captions(in: content).isEmpty, "Settings to land on SSH Hosts")
+        waitUntil(emptyHint(in: content) != nil || !captions(in: content).isEmpty, "Settings to land on SSH hosts")
         content.layoutSubtreeIfNeeded()
         try body(c, content)
     }
