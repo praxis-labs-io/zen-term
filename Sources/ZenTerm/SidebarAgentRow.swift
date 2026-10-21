@@ -96,7 +96,7 @@ final class SidebarAgentRow: SidebarJumpRow {
                 lessThanOrEqualTo: glyphSlot.leadingAnchor, constant: -Self.glyphGap),
             summaryLabel.centerYAnchor.constraint(equalTo: glyphSlot.centerYAnchor),
             detailLabel.leadingAnchor.constraint(equalTo: summaryLabel.leadingAnchor),
-            detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: glyphSlot.leadingAnchor, constant: -Self.glyphGap),
+            detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -Self.inset),
             detailLabel.topAnchor.constraint(equalTo: glyphSlot.bottomAnchor, constant: Self.lineGap),
         ])
     }
