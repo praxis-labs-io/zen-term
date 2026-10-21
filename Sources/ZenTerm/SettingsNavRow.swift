@@ -23,6 +23,7 @@ final class SettingsNavRow: NSView, HoverSuppressing {
     private let attentionDot = NSView()
     private var attentionDotWidth: NSLayoutConstraint?
     private var attentionDotGap: NSLayoutConstraint?
+    private var labelGap: NSLayoutConstraint?
     private var dotInk: (() -> NSColor)?
     private var dotAccessibilityValue: String?
     private var titleInk: (() -> NSColor)?
@@ -77,15 +78,16 @@ final class SettingsNavRow: NSView, HoverSuppressing {
         addSubview(attentionDot)
         let dotWidth = attentionDot.widthAnchor.constraint(equalToConstant: 0)
         let dotGap = attentionDot.trailingAnchor.constraint(equalTo: detailLabel.leadingAnchor)
+        let labelGap = label.trailingAnchor.constraint(lessThanOrEqualTo: attentionDot.leadingAnchor)
         attentionDotWidth = dotWidth
         attentionDotGap = dotGap
+        self.labelGap = labelGap
         NSLayoutConstraint.activate([
             dotWidth,
             dotGap,
+            labelGap,
             attentionDot.heightAnchor.constraint(equalToConstant: Self.attentionDotDiameter),
             attentionDot.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.trailingAnchor.constraint(
-                lessThanOrEqualTo: attentionDot.leadingAnchor, constant: -ChromeMetrics.Spacing.s8),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
             detailLabel.trailingAnchor.constraint(
                 equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
@@ -176,6 +178,7 @@ final class SettingsNavRow: NSView, HoverSuppressing {
         let shows = !attentionDot.isHidden
         attentionDotWidth?.constant = shows ? Self.attentionDotDiameter : 0
         attentionDotGap?.constant = shows && !detailLabel.stringValue.isEmpty ? -Self.attentionDotGapToDetail : 0
+        labelGap?.constant = shows || !detailLabel.stringValue.isEmpty ? -ChromeMetrics.Spacing.s8 : 0
     }
 
     private func refreshAccessibilityValue() {
