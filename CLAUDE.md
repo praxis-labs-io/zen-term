@@ -197,6 +197,8 @@ Sizes, weights and type in the chrome come from named tokens, never a literal.
   `modalSectionGap`) and `ChromeMetrics.Height` (`xs`, `sm`, `control`, `lg`). Icon, glyph
   and width geometry are not spacing. A value off the scale is a signal to fix the layout,
   not to add a step.
+- **Icon:** symbol point sizes come from `ChromeMetrics.Icon` (`xs`, `sm`, `md`, `xl`);
+  `swiftlint` rejects a literal point size outside `ChromeMetrics`.
 - **Elevation:** shadows come from `FloatShadow.apply(_:to:)` with a tier: `overlay` for
   anything anchored (popovers, dropdowns, tooltips, hover cards), `float` for toasts,
   cards and the floating sidebar, `modal` for modals (the `CardChrome` default). A drawn

@@ -94,6 +94,8 @@ never a literal.
 - Spacing, insets, gaps and control or row heights come from
   `ChromeMetrics.Spacing` and `ChromeMetrics.Height`. Icon, glyph and width geometry
   are not spacing. A value off the scale is a signal to fix the layout, not to add a step.
+- Symbol point sizes come from `ChromeMetrics.Icon` (`xs`, `sm`, `md`, `xl`);
+  `swiftlint` rejects a literal point size outside `ChromeMetrics`.
 - Shadows come from `FloatShadow.apply(_:to:)` with a tier: `overlay` for anything
   anchored, `float` for toasts, cards and the floating sidebar, `modal` for modals.
   Never build an `NSShadow` by hand.

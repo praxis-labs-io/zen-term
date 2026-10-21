@@ -30,6 +30,13 @@ custom_rules:
     regex: "(s|S)ystemFont\\(ofSize:"
     message: "Take fonts from ChromeType roles."
     severity: warning
+  untokened_icon_size:
+    name: "Untokened icon size"
+    included: "Sources/ZenTerm/.*\\.swift"
+    excluded: "Sources/ZenTerm/ChromeMetrics\\.swift"
+    regex: "(p|P)ointSize: (CGFloat = )?[0-9]|GlyphSize: CGFloat = [0-9]"
+    message: "Take symbol point sizes from ChromeMetrics.Icon."
+    severity: warning
 
 identifier_name:
   # The pane tree uses deliberate short names (a, b, id, dx, dy, v, …).
