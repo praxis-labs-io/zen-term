@@ -21,7 +21,7 @@ final class ModeChrome {
     private var contentBottomToFindBar: NSLayoutConstraint?
     private let contentBottomToContainer: NSLayoutConstraint
 
-    private static let stripInset: CGFloat = 8
+    private static let stripInset: CGFloat = ChromeMetrics.Spacing.s8
 
     init(
         container: NSView, content: NSView, padding: CGFloat, header: PanelMeta?,
@@ -157,7 +157,7 @@ private final class PanelHeader: NSView {
     private var action: KeyInterceptor.ReservedChord
     private let titleField = NSTextField(labelWithString: "")
     private var keycap: KeycapView
-    private static let font = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
+    private static let font = ChromeType.font(.small, weight: .medium, face: .digits)
 
     var contentForTesting: (title: String, shortcut: String) {
         (titleField.stringValue, CommandCatalog.spec(for: action).shortcut)
@@ -176,7 +176,7 @@ private final class PanelHeader: NSView {
         NSLayoutConstraint.activate([
             titleField.leadingAnchor.constraint(equalTo: leadingAnchor),
             titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
-            heightAnchor.constraint(equalToConstant: 20),
+            heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.xs),
         ])
         activateKeycapConstraints()
         applyTitle()
@@ -209,17 +209,17 @@ private final class PanelHeader: NSView {
         NSLayoutConstraint.activate([
             keycap.trailingAnchor.constraint(equalTo: trailingAnchor),
             keycap.centerYAnchor.constraint(equalTo: centerYAnchor),
-            keycap.leadingAnchor.constraint(greaterThanOrEqualTo: titleField.trailingAnchor, constant: 8),
+            keycap.leadingAnchor.constraint(
+                greaterThanOrEqualTo: titleField.trailingAnchor, constant: ChromeMetrics.Spacing.s8),
         ])
     }
 
     private func applyTitle() {
         titleField.attributedStringValue = NSAttributedString(
-            string: title.uppercased(),
+            string: title,
             attributes: [
                 .font: Self.font,
                 .foregroundColor: Theme.current.chrome.ink(.muted),
-                .kern: 1.2,
             ])
     }
 }

@@ -3,7 +3,9 @@ import AppKit
 /// Not `NSProgressIndicator`, which tints from `effectiveAppearance` rather than the theme.
 final class UpdateProgressBar: NSView {
     private let fill = CALayer()
+    private static let height: CGFloat = 4
     private static let sweepFraction: CGFloat = 0.3
+    private static let sweepDuration: CFTimeInterval = 0.9
 
     var fraction: Double? {
         didSet {
@@ -15,9 +17,9 @@ final class UpdateProgressBar: NSView {
     init() {
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 2
+        layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.height)
         layer?.masksToBounds = true
-        fill.cornerRadius = 2
+        fill.cornerRadius = ChromeMetrics.Radius.capsule(Self.height)
         layer?.addSublayer(fill)
         reapplyTheme()
     }
@@ -25,7 +27,7 @@ final class UpdateProgressBar: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// Intrinsic, because a height constraint would be re-added on every card rebuild.
-    override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: 4) }
+    override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: Self.height) }
 
     override func layout() {
         super.layout()
@@ -62,7 +64,7 @@ final class UpdateProgressBar: NSView {
         let sweep = CABasicAnimation(keyPath: "position.x")
         sweep.fromValue = segment / 2
         sweep.toValue = bounds.width - segment / 2
-        sweep.duration = 0.9
+        sweep.duration = Self.sweepDuration
         sweep.autoreverses = true
         sweep.repeatCount = .infinity
         sweep.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)

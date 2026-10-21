@@ -2,10 +2,10 @@ import AppKit
 
 // Chips are framed by hand so a dragged chip can leave its slot while the others close the gap.
 final class WorkspaceTabStrip: NSView {
-    private static let chipSpacing: CGFloat = 4
+    private static let chipSpacing: CGFloat = ChromeMetrics.Spacing.s4
     private static let addSize: CGFloat = 26
-    private static let hintGap: CGFloat = 8
-    private static let hintHeight: CGFloat = 20
+    private static let hintGap: CGFloat = ChromeMetrics.Spacing.s8
+    private static let hintHeight: CGFloat = ChromeMetrics.Height.xs
 
     var onSelect: ((Int) -> Void)?
     var onAdd: (() -> Void)?
@@ -267,7 +267,7 @@ final class WorkspaceTabStrip: NSView {
     private func fill(_ hint: NSStackView, with parts: [HintPart]) {
         hint.orientation = .horizontal
         hint.alignment = .centerY
-        hint.spacing = 6
+        hint.spacing = ChromeMetrics.Spacing.s6
         for part in parts {
             switch part {
             case .key(let key):
@@ -276,12 +276,14 @@ final class WorkspaceTabStrip: NSView {
                 hint.addArrangedSubview(cap)
             case .text(let text):
                 let label = NSTextField(labelWithString: text)
-                label.font = .systemFont(ofSize: 11)
+                label.font = ChromeType.font(.caption)
                 label.textColor = Theme.current.chrome.ink(.muted)
                 hintLabels.append(label)
                 hint.addArrangedSubview(label)
             case .gap:
-                if let last = hint.arrangedSubviews.last { hint.setCustomSpacing(12, after: last) }
+                if let last = hint.arrangedSubviews.last {
+                    hint.setCustomSpacing(ChromeMetrics.Spacing.s12, after: last)
+                }
             }
         }
         hint.translatesAutoresizingMaskIntoConstraints = true

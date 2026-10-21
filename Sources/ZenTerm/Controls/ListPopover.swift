@@ -17,11 +17,11 @@ final class ListPopover {
 
     private static let minWidth: CGFloat = 180
     private static let maxHeight: CGFloat = 260
-    private static let verticalInset: CGFloat = 6
-    private static let horizontalInset: CGFloat = 8
-    private static let rowSpacing: CGFloat = 2
-    private static let gap: CGFloat = 4
-    private static let margin: CGFloat = 8
+    private static let verticalInset: CGFloat = ChromeMetrics.Spacing.s6
+    private static let horizontalInset: CGFloat = ChromeMetrics.Spacing.s8
+    private static let rowSpacing: CGFloat = ChromeMetrics.Spacing.s2
+    private static let gap: CGFloat = ChromeMetrics.Spacing.s4
+    private static let margin: CGFloat = ChromeMetrics.Spacing.s8
 
     init(anchor: NSView) {
         self.anchor = anchor
@@ -110,12 +110,12 @@ final class ListPopover {
 
         let card = ShadowCardView()
         card.wantsLayer = true
-        card.layer?.cornerRadius = 8
+        card.layer?.cornerRadius = ChromeMetrics.Radius.surface
         card.layer?.backgroundColor = chrome.background.nsColor.cgColor
-        card.layer?.borderWidth = 1
+        card.layer?.borderWidth = ChromeMetrics.Border.width
         card.layer?.borderColor = FloatShadow.edge.cgColor
         card.translatesAutoresizingMaskIntoConstraints = true
-        FloatShadow.applyShadow(to: card)
+        FloatShadow.apply(.overlay, to: card)
         card.addSubview(scroll)
 
         let inset = Self.verticalInset

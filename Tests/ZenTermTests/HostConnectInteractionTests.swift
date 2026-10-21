@@ -1004,8 +1004,8 @@ final class HostConnectInteractionTests: WindowTestCase {
         }
     }
 
-    private func halo(_ c: WindowController) throws -> Float {
-        try XCTUnwrap(c.connectViewForTesting).panelForTesting.haloOpacityForTesting
+    private func showsFocus(_ c: WindowController) throws -> Bool {
+        try XCTUnwrap(c.connectViewForTesting).panelForTesting.borderForTesting.width == ChromeMetrics.Border.paneFocus
     }
 
     private func postConfigChange(_ change: ConfigChange) {
@@ -1014,28 +1014,28 @@ final class HostConnectInteractionTests: WindowTestCase {
         drainMainQueue()
     }
 
-    func test_connect_isFocusedAndHaloed_likeAPane() throws {
+    func test_connect_isFocusedAndBordered_likeAPane() throws {
         let c = onConnectScreen()
 
         XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
-        XCTAssertGreaterThan(try halo(c), 0)
+        XCTAssertTrue(try showsFocus(c))
     }
 
-    func test_connectsHalo_followsTheWindowsKeyState() throws {
+    func test_connectsFocusBorder_followsTheWindowsKeyState() throws {
         let c = onConnectScreen()
 
         c.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification))
-        XCTAssertEqual(try halo(c), 0)
+        XCTAssertFalse(try showsFocus(c))
         c.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
 
-        XCTAssertGreaterThan(try halo(c), 0)
+        XCTAssertTrue(try showsFocus(c))
         XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
     }
 
-    func test_clickingConnect_fromTheSidebar_takesFocusAndTheHaloBack() throws {
+    func test_clickingConnect_fromTheSidebar_takesFocusAndTheFocusBorderBack() throws {
         let c = onConnectScreen()
         c.handle(.focusSidebar)
-        XCTAssertEqual(try halo(c), 0, "precondition: the sidebar holds focus")
+        XCTAssertFalse(try showsFocus(c), "precondition: the sidebar holds focus")
         let panel = try XCTUnwrap(c.connectViewForTesting).panelForTesting
         let event = try XCTUnwrap(
             NSEvent.mouseEvent(
@@ -1046,20 +1046,20 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
         XCTAssertFalse(c.sidebarForTesting.hasFocus)
-        XCTAssertGreaterThan(try halo(c), 0)
+        XCTAssertTrue(try showsFocus(c))
     }
 
-    func test_aRevealedFloatingSidebar_takesConnectsHalo() throws {
+    func test_aRevealedFloatingSidebar_takesConnectsFocusBorder() throws {
         let c = onConnectScreen()
         c.window.setContentSize(c.window.contentMinSize)
         c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
 
         c.handle(.toggleSidebar)
         XCTAssertTrue(c.sidebarForTesting.isRevealed, "precondition: too narrow to dock, so it floats")
-        XCTAssertEqual(try halo(c), 0)
+        XCTAssertFalse(try showsFocus(c))
         c.handle(.toggleSidebar)
 
-        XCTAssertGreaterThan(try halo(c), 0)
+        XCTAssertTrue(try showsFocus(c))
     }
 
     func test_connect_paintsTheTerminalBackground_andFollowsATranslucentOne() throws {
@@ -1080,35 +1080,35 @@ final class HostConnectInteractionTests: WindowTestCase {
         let c = onConnectScreen()
         let button = try XCTUnwrap(c.connectViewForTesting).connectButtonForTesting
 
-        XCTAssertEqual(button.frame.height, AppButton.Size.large.height)
+        XCTAssertEqual(button.frame.height, ChromeMetrics.Height.control)
         XCTAssertEqual(button.keycapForTesting?.shortcut, "⏎")
 
         XCTAssertFalse(button.showsFocusOutline)
         XCTAssertFalse(button.acceptsFirstResponder, "the panel takes ↵, so the button never draws a focus ring")
-        XCTAssertEqual(button.layer?.borderWidth, 0)
+        XCTAssertEqual(button.layer?.borderColor?.alpha, 0)
         XCTAssertNotNil(button.layer?.backgroundColor)
     }
 
-    func test_leftFromConnect_movesToTheSidebar_andRightComesBack_withTheHalo() throws {
+    func test_leftFromConnect_movesToTheSidebar_andRightComesBack_withTheFocusBorder() throws {
         let c = onConnectScreen()
 
         c.handle(.navLeft)
         XCTAssertTrue(c.sidebarForTesting.hasFocus, "Connect's left edge leads into the sidebar, as a pane's does")
-        XCTAssertEqual(try halo(c), 0)
+        XCTAssertFalse(try showsFocus(c))
         c.handle(.navRight)
 
         XCTAssertTrue(c.window.firstResponder === c.connectViewForTesting)
-        XCTAssertGreaterThan(try halo(c), 0)
+        XCTAssertTrue(try showsFocus(c))
     }
 
-    func test_focusSidebarFromConnect_dropsTheHalo_andRightBringsItBack() throws {
+    func test_focusSidebarFromConnect_dropsTheFocusBorder_andRightBringsItBack() throws {
         let c = onConnectScreen()
 
         c.handle(.focusSidebar)
-        XCTAssertEqual(try halo(c), 0)
+        XCTAssertFalse(try showsFocus(c))
         c.handle(.navRight)
 
-        XCTAssertGreaterThan(try halo(c), 0)
+        XCTAssertTrue(try showsFocus(c))
     }
 
     func test_upDownAndRightOnConnect_doNothing() throws {

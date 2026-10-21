@@ -8,14 +8,14 @@ final class LabeledField: NSView {
         self.caption = caption
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        messageLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        messageLabel.font = ChromeType.font(.caption, weight: .medium)
         messageLabel.textColor = Theme.current.chrome.destructive.nsColor
         messageLabel.isHidden = true
 
         let stack = NSStackView(views: [caption, control, messageLabel])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 5
+        stack.spacing = ChromeMetrics.Spacing.s4
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         NSLayoutConstraint.activate([

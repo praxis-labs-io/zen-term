@@ -19,8 +19,8 @@ final class KeybindRow: NSView {
         self.action = action
 
         let label = NSTextField(labelWithString: title)
-        label.font = .systemFont(ofSize: 13)
-        label.textColor = Theme.current.chrome.foreground.nsColor
+        label.font = ChromeType.font(.body)
+        label.textColor = Theme.current.chrome.ink(.normal)
         label.setContentHuggingPriority(.defaultLow, for: .horizontal)
         titleLabel = label
 
@@ -32,16 +32,16 @@ final class KeybindRow: NSView {
         let controls = NSStackView(views: [label, spacer, chip])
         controls.orientation = .horizontal
         controls.alignment = .centerY
-        controls.spacing = 8
+        controls.spacing = ChromeMetrics.Spacing.s8
 
-        messageLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        messageLabel.font = ChromeType.font(.caption, weight: .medium)
         messageLabel.textColor = Theme.current.chrome.destructive.nsColor
         messageLabel.isHidden = true
 
         let stack = NSStackView(views: [controls, messageLabel])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 3
+        stack.spacing = ChromeMetrics.Spacing.s2
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         NSLayoutConstraint.activate([
@@ -79,7 +79,7 @@ final class KeybindRow: NSView {
     func focusChip() { window?.makeFirstResponder(chip) }
 
     func reapplyTheme() {
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
         messageLabel.textColor = KeybindRow.ink(for: messageKind)
         chip.render(shortcut: lastShortcut)
         chip.reapplyTheme()

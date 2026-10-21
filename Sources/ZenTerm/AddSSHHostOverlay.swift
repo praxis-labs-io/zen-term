@@ -102,7 +102,6 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         if let card = confirm.card { return card.focusInitialResponder() }
         let field = editing == nil ? hostField.field : nameField.field
         window?.makeFirstResponder(field)
-        field.applyThemedCaret()
     }
 
     func animateIn() {
@@ -131,7 +130,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
 
     func reapplyTheme() {
         CardChrome.reapplyTheme(to: card)
-        header.textColor = Theme.current.chrome.foreground.nsColor
+        header.textColor = Theme.current.chrome.ink(.normal)
         errorLabel.reapplyTheme()
         confirm.card?.reapplyTheme()
         hostGroup.reapplyTheme()
@@ -142,9 +141,9 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
     }
 
     private func buildContent() -> NSStackView {
-        header.stringValue = editing == nil ? "Add SSH Host" : "Edit SSH Host"
-        header.font = .systemFont(ofSize: 15, weight: .semibold)
-        header.textColor = Theme.current.chrome.foreground.nsColor
+        header.stringValue = editing == nil ? "Add remote host" : "Edit remote host"
+        header.font = ChromeType.font(.title)
+        header.textColor = Theme.current.chrome.ink(.normal)
         submitButton.setTitle(editing == nil ? "Add" : "Save")
 
         hostField.onEnter = { [weak self] in self?.focus(self?.nameField.field) }
@@ -196,17 +195,20 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         let footerViews = removal == nil ? trailing : [removeButton] + trailing
         let footer = NSStackView(views: footerViews)
         footer.orientation = .horizontal
-        footer.spacing = 8
+        footer.spacing = ChromeMetrics.Spacing.s8
         footer.translatesAutoresizingMaskIntoConstraints = false
 
         let content = NSStackView(views: [header, hostGroup, nameGroup, errorLabel, footer])
         content.orientation = .vertical
         content.alignment = .leading
-        content.spacing = 12
-        content.edgeInsets = NSEdgeInsets(top: 18, left: 20, bottom: 16, right: 20)
+        content.spacing = ChromeMetrics.Spacing.modalSectionGap
+        content.edgeInsets = ChromeMetrics.Spacing.modalInsets
         content.translatesAutoresizingMaskIntoConstraints = false
         for view in content.arrangedSubviews {
-            view.widthAnchor.constraint(equalTo: content.widthAnchor, constant: -40).isActive = true
+            view.widthAnchor.constraint(
+                equalTo: content.widthAnchor,
+                constant: -(ChromeMetrics.Spacing.modalInsets.left + ChromeMetrics.Spacing.modalInsets.right)
+            ).isActive = true
         }
         return content
     }
@@ -251,10 +253,10 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         let chrome = Theme.current.chrome
         let line = NSMutableParagraphStyle()
         line.lineBreakMode = .byTruncatingTail
-        let font = hostField.field.font ?? .systemFont(ofSize: 13)
+        let font = hostField.field.font ?? ChromeType.font(.body)
         let text = NSMutableAttributedString(
             string: alias,
-            attributes: [.font: font, .foregroundColor: chrome.foreground.nsColor, .paragraphStyle: line])
+            attributes: [.font: font, .foregroundColor: chrome.ink(.normal), .paragraphStyle: line])
         if let address {
             text.append(
                 NSAttributedString(

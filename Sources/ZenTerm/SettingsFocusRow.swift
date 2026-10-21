@@ -17,7 +17,7 @@ class SettingsFocusRow: NSView {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 8
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         restyle()
     }
 
@@ -27,10 +27,10 @@ class SettingsFocusRow: NSView {
         content.translatesAutoresizingMaskIntoConstraints = false
         addSubview(content)
         NSLayoutConstraint.activate([
-            content.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
-            content.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
-            content.topAnchor.constraint(equalTo: topAnchor, constant: 6),
-            content.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            content.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.s6),
+            content.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.s6),
+            content.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.Spacing.s6),
+            content.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -ChromeMetrics.Spacing.s6),
         ])
     }
 
@@ -75,8 +75,7 @@ class SettingsFocusRow: NSView {
 
     private func restyle() {
         let chrome = Theme.current.chrome
-        layer?.backgroundColor = isFocused ? chrome.fill(.active).cgColor : nil
-        layer?.borderWidth = isFocused ? 1.5 : 0
-        layer?.borderColor = isFocused ? chrome.accent.nsColor.cgColor : nil
+        layer?.borderWidth = ChromeMetrics.Border.width
+        layer?.borderColor = isFocused ? chrome.accent.nsColor.cgColor : NSColor.clear.cgColor
     }
 }

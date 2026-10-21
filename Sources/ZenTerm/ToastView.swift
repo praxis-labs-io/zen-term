@@ -44,9 +44,9 @@ final class ToastView: ShadowCardView {
     static let messageMaxWidth: CGFloat = 236
     // A title up to this share of the row never gives way to its tail; a longer title yields first.
     private static let titleFloorShare: CGFloat = 0.55
-    static let messageFont: NSFont = .systemFont(ofSize: 12)
-    private static var titleColor: NSColor { Theme.current.chrome.foreground.nsColor }
-    private static var messageColor: NSColor { Theme.current.chrome.muted.nsColor }
+    static let messageFont: NSFont = ChromeType.font(.small)
+    private static var titleColor: NSColor { Theme.current.chrome.ink(.normal) }
+    private static var messageColor: NSColor { Theme.current.chrome.ink(.muted) }
 
     convenience init(content: ToastContent) {
         self.init(content: content, actions: [])
@@ -74,13 +74,13 @@ final class ToastView: ShadowCardView {
 
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 12
+        layer?.cornerRadius = ChromeMetrics.Radius.surface
         layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
-        layer?.borderWidth = 1
+        layer?.borderWidth = ChromeMetrics.Border.width
         layer?.borderColor = FloatShadow.edge.cgColor
-        FloatShadow.applyShadow(to: self)
+        FloatShadow.apply(.float, to: self)
 
-        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        titleLabel.font = ChromeType.font(.body, weight: .semibold)
         titleLabel.textColor = Self.titleColor
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -108,12 +108,12 @@ final class ToastView: ShadowCardView {
         let header = NSStackView(views: [titleRow, headerSpacer])
         header.orientation = .horizontal
         header.alignment = .centerY
-        header.spacing = 6
+        header.spacing = ChromeMetrics.Spacing.s6
         let lines = [header] + (messageLabel.map { [$0] } ?? [])
         let col = NSStackView(views: lines)
         col.orientation = .vertical
         col.alignment = .leading
-        col.spacing = 3
+        col.spacing = ChromeMetrics.Spacing.s2
         for line in lines { line.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true }
 
         for resolve in actions.compactMap(\.shortcut) {
@@ -138,9 +138,9 @@ final class ToastView: ShadowCardView {
             let row = NSStackView(views: actionButtons + [spacer])
             row.orientation = .horizontal
             row.alignment = .centerY
-            row.spacing = 6
+            row.spacing = ChromeMetrics.Spacing.s6
             col.addArrangedSubview(row)
-            col.setCustomSpacing(9, after: lines[lines.count - 1])
+            col.setCustomSpacing(ChromeMetrics.Spacing.s10, after: lines[lines.count - 1])
             row.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
         }
 
@@ -148,16 +148,16 @@ final class ToastView: ShadowCardView {
         root.orientation = .horizontal
         root.alignment = col.arrangedSubviews.count > 1 ? .top : .centerY
         root.distribution = .fill
-        root.spacing = 12
+        root.spacing = ChromeMetrics.Spacing.s12
         root.translatesAutoresizingMaskIntoConstraints = false
         addSubview(root)
 
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: Self.width),
-            root.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            root.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
-            root.topAnchor.constraint(equalTo: topAnchor, constant: 12),
-            root.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
+            root.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.s12),
+            root.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.s12),
+            root.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.Spacing.s12),
+            root.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -ChromeMetrics.Spacing.s12),
         ])
     }
 
@@ -238,6 +238,7 @@ final class ToastView: ShadowCardView {
     func reapplyTheme() {
         layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
         layer?.borderColor = FloatShadow.edge.cgColor
+        FloatShadow.apply(.float, to: self)
         titleLabel.textColor = Self.titleColor
         titleTailLabel?.textColor = Self.titleColor
         messageLabel?.textColor = Self.messageColor

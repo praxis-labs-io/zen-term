@@ -21,16 +21,16 @@ final class KeybindChip: NSView {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 8
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         host.translatesAutoresizingMaskIntoConstraints = false
         addSubview(host)
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: Self.width),
-            heightAnchor.constraint(equalToConstant: 32),
+            heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.lg),
             host.centerXAnchor.constraint(equalTo: centerXAnchor),
             host.centerYAnchor.constraint(equalTo: centerYAnchor),
-            host.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 4),
-            host.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -4),
+            host.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: ChromeMetrics.Spacing.s4),
+            host.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -ChromeMetrics.Spacing.s4),
         ])
         restyle()
     }
@@ -61,7 +61,7 @@ final class KeybindChip: NSView {
 
     private func placeholder(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: 12)
+        label.font = ChromeType.font(.small)
         label.textColor = Theme.current.chrome.ink(.muted)
         return label
     }
@@ -115,7 +115,7 @@ final class KeybindChip: NSView {
         }
         layer?.backgroundColor = fill.cgColor
         let outlined = isFocused || isCapturing
-        layer?.borderWidth = outlined ? 1.5 : 0
-        layer?.borderColor = outlined ? chrome.accent.nsColor.cgColor : nil
+        layer?.borderWidth = ChromeMetrics.Border.width
+        layer?.borderColor = outlined ? chrome.accent.nsColor.cgColor : NSColor.clear.cgColor
     }
 }

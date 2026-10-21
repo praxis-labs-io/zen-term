@@ -155,7 +155,7 @@ final class ConfirmCardTests: WindowTestCase {
         let label = try XCTUnwrap(
             descendants(of: card).compactMap { $0 as? NSTextField }.first { $0.stringValue == sentence })
 
-        XCTAssertGreaterThan(label.frame.height, ConfirmCardChecklist.textFont.boundingRectForFont.height * 1.5)
+        XCTAssertGreaterThan(label.frame.height, ChromeType.font(.small).boundingRectForFont.height * 1.5)
         XCTAssertLessThanOrEqual(
             label.alignmentRect(forFrame: label.frame).maxX, try XCTUnwrap(label.superview).bounds.maxX)
     }

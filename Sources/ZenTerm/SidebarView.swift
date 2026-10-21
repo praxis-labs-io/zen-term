@@ -34,13 +34,13 @@ struct SidebarRowItem: Equatable {
 
 final class SidebarView: NSView {
     static let width: CGFloat = 240
-    static let padding: CGFloat = 8
+    static let padding: CGFloat = ChromeMetrics.Spacing.s8
     private static let captionHeight: CGFloat = 28
-    private static let captionInset: CGFloat = 10
-    private static let addInset: CGFloat = 4
+    private static let captionInset: CGFloat = ChromeMetrics.Spacing.controlInset
+    private static let addInset: CGFloat = ChromeMetrics.Spacing.s4
     private static let newWorktreeSize = NSSize(width: 20, height: 20)
-    private static let sectionGap: CGFloat = 14
-    private static let contentBottomGap: CGFloat = 8
+    private static let sectionGap: CGFloat = ChromeMetrics.Spacing.s12
+    private static let contentBottomGap: CGFloat = ChromeMetrics.Spacing.s8
 
     private let caption = FieldCaption("Workspaces", required: false)
     private let addButton: IconButton
@@ -52,7 +52,7 @@ final class SidebarView: NSView {
     private var hoverCovers = 0
     private weak var hoverExempt: NSView?
     let rowMenu = SidebarRowMenu()
-    private let hostsCaption = FieldCaption("SSH", required: false)
+    private let hostsCaption = FieldCaption("Remote hosts", required: false)
     private let hostStack = NSStackView()
     private var hostRows: [String: SettingsNavRow] = [:]
     private var hostNumbers: [String: Int] = [:]
@@ -239,7 +239,7 @@ final class SidebarView: NSView {
             } else {
                 row.setDot({ status.ink }, accessibilityValue: word)
             }
-            row.setTitleInk(status == .connected ? nil : { AttentionTone.idle.ink })
+            row.setTitleInk(status == .connected ? nil : { Theme.current.chrome.ink(.subtle) })
             guard hostStack.arrangedSubviews.firstIndex(of: row) != index else { continue }
             let isNew = row.superview == nil
             if !isNew { hostStack.removeArrangedSubview(row) }

@@ -20,7 +20,7 @@ final class BranchField: NSView, ThemeReapplying {
     private lazy var popover = ListPopover(anchor: box)
     private var rowViews: [BranchRowView] = []
 
-    private static let rowHeight: CGFloat = 26
+    private static let rowHeight: CGFloat = ChromeMetrics.Height.control
 
     var text: String { box.text }
     var isListOpen: Bool { popover.isOpen }
@@ -213,29 +213,30 @@ final class BranchField: NSView, ThemeReapplying {
             self.onClick = onClick
             super.init(frame: .zero)
             wantsLayer = true
-            layer?.cornerRadius = 5
+            layer?.cornerRadius = ChromeMetrics.Radius.control
             translatesAutoresizingMaskIntoConstraints = false
 
             icon.image = NSImage(systemSymbolName: "arrow.branch", accessibilityDescription: nil)
             icon.symbolConfiguration = .init(pointSize: 11, weight: .regular)
             icon.translatesAutoresizingMaskIntoConstraints = false
-            title.font = .systemFont(ofSize: 13)
+            title.font = ChromeType.font(.body)
             title.lineBreakMode = .byTruncatingTail
             title.translatesAutoresizingMaskIntoConstraints = false
-            note.font = .systemFont(ofSize: 11)
+            note.font = ChromeType.font(.caption)
             note.translatesAutoresizingMaskIntoConstraints = false
             note.setContentCompressionResistancePriority(.required, for: .horizontal)
             addSubview(icon)
             addSubview(title)
             addSubview(note)
             NSLayoutConstraint.activate([
-                icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+                icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
                 icon.widthAnchor.constraint(equalToConstant: 14),
                 icon.centerYAnchor.constraint(equalTo: centerYAnchor),
-                title.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
-                title.trailingAnchor.constraint(lessThanOrEqualTo: note.leadingAnchor, constant: -8),
+                title.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
+                title.trailingAnchor.constraint(
+                    lessThanOrEqualTo: note.leadingAnchor, constant: -ChromeMetrics.Spacing.s8),
                 title.centerYAnchor.constraint(equalTo: centerYAnchor),
-                note.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+                note.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
                 note.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
         }
@@ -244,7 +245,7 @@ final class BranchField: NSView, ThemeReapplying {
 
         func render(branch: String, note text: String?, isHighlighted: Bool, chrome: ChromeTheme) {
             title.stringValue = branch
-            title.textColor = chrome.foreground.nsColor
+            title.textColor = chrome.ink(.normal)
             note.stringValue = text ?? ""
             note.textColor = chrome.ink(.faint)
             note.isHidden = text == nil

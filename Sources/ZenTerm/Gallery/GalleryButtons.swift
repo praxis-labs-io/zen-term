@@ -22,28 +22,27 @@
         private static func appButtons() -> GallerySection {
             var rows: [GallerySection.Row] = []
             for variant in variants {
-                for (size, sizeName) in [(AppButton.Size.standard, "standard"), (.large, "large")] {
-                    rows.append(
-                        GallerySection.Row(
-                            label: "\(title(for: variant)) · \(sizeName)", samples: states(of: variant, size: size)))
-                }
+                rows.append(GallerySection.Row(label: title(for: variant), samples: states(of: variant)))
             }
             rows.append(GallerySection.Row(label: "Symbol only", samples: symbolButtons()))
             rows.append(GallerySection.Row(label: "With shortcut", samples: shortcutButtons()))
             return GallerySection(title: "AppButton", rows: rows)
         }
 
-        private static func states(of variant: AppButton.Variant, size: AppButton.Size) -> [NSView] {
-            let rest = AppButton(title: "Rest", variant: variant, size: size)
-            let hover = hovered(AppButton(title: "Hover", variant: variant, size: size))
-            let focused = AppButton(title: "Focused", variant: variant, size: size)
+        private static func states(of variant: AppButton.Variant) -> [NSView] {
+            let rest = AppButton(title: "Rest", variant: variant)
+            let hover = hovered(AppButton(title: "Hover", variant: variant))
+            let focused = AppButton(title: "Focused", variant: variant)
             focused.forceFocusForGallery()
-            let disabled = AppButton(title: "Disabled", variant: variant, size: size)
+            let disabled = AppButton(title: "Disabled", variant: variant)
             disabled.isEnabled = false
             guard variant == .segment else { return [rest, hover, focused, disabled] }
-            let selected = AppButton(title: "Selected", variant: variant, size: size)
+            let selected = AppButton(title: "Selected", variant: variant)
             selected.isOn = true
-            return [rest, hover, focused, disabled, selected]
+            let selectedFocused = AppButton(title: "Selected focused", variant: variant)
+            selectedFocused.isOn = true
+            selectedFocused.forceFocusForGallery()
+            return [rest, hover, focused, disabled, selected, selectedFocused]
         }
 
         private static func symbolButtons() -> [NSView] {
@@ -55,9 +54,12 @@
         private static func shortcutButtons() -> [NSView] {
             let disabled = AppButton(title: "Disabled", variant: .primary, shortcut: "⏎")
             disabled.isEnabled = false
+            let focused = AppButton(title: "Focused", variant: .primary, shortcut: "⏎")
+            focused.forceFocusForGallery()
             return [
                 AppButton(title: "Connect", variant: .primary, shortcut: "⏎"),
-                AppButton(title: "Connect", variant: .primary, size: .large, shortcut: "⏎"),
+                hovered(AppButton(title: "Hover", variant: .primary, shortcut: "⏎")),
+                focused,
                 AppButton(title: "Cancel", variant: .secondary, shortcut: "esc"),
                 AppButton(title: "Open", variant: .muted, shortcut: "⌘O"),
                 disabled,
@@ -107,9 +109,6 @@
                 rows: [
                     GallerySection.Row(label: "Chip", samples: [KeycapView(shortcut: shortcut, style: .chip)]),
                     GallerySection.Row(label: "Plain", samples: [KeycapView(shortcut: shortcut, style: .plain)]),
-                    GallerySection.Row(
-                        label: "Glyph accent",
-                        samples: [KeycapView(shortcut: shortcut, style: .glyph { $0.accent.nsColor })]),
                     GallerySection.Row(
                         label: "Glyph faint",
                         samples: [KeycapView(shortcut: shortcut, style: .glyph { $0.ink(.faint) })]),

@@ -14,13 +14,13 @@ final class ToastPresenter {
 
     init(
         host: NSView, below: NSView? = nil, topInset: CGFloat, trailingInset: CGFloat,
-        dismissAfter: TimeInterval = 4, isPresent: @escaping () -> Bool = { true }
+        dismissAfter: TimeInterval = Motion.Linger.toast, isPresent: @escaping () -> Bool = { true }
     ) {
         self.dismissAfter = dismissAfter
         self.isPresent = isPresent
         stack.orientation = .vertical
         stack.alignment = .trailing
-        stack.spacing = 8
+        stack.spacing = ChromeMetrics.Spacing.s8
         stack.translatesAutoresizingMaskIntoConstraints = false
         host.addSubview(stack, positioned: below == nil ? .above : .below, relativeTo: below)
         topConstraint = stack.topAnchor.constraint(equalTo: host.topAnchor, constant: topInset)
@@ -173,7 +173,7 @@ final class ToastPresenter {
             return
         }
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.16
+            context.duration = Motion.fadeDuration
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             context.allowsImplicitAnimation = true
             stack.removeArrangedSubview(toast)

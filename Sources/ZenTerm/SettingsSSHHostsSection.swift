@@ -1,7 +1,7 @@
 import AppKit
 
 final class SettingsSSHHostsSection: SettingsSection {
-    var navTitle: String { "SSH Hosts" }
+    var navTitle: String { "Remote hosts" }
     var onExitToNav: (() -> Void)?
     var onAddHost: (() -> Void)?
     var onEditHost: ((SSHHostEntry, _ address: String?) -> Void)?
@@ -37,7 +37,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 3
+        stack.spacing = ChromeMetrics.Spacing.s2
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
 
@@ -120,15 +120,16 @@ final class SettingsSSHHostsSection: SettingsSection {
         hostRows = []
         emptyNote = nil
 
-        addCaption("SSH Hosts", to: stack)
+        addCaption("Remote hosts", to: stack)
         shownEntries = GeneralConfig.current.sshHosts
-        if shownEntries.isEmpty { addNote("No SSH hosts yet. Add one below.", to: stack) }
+        if shownEntries.isEmpty { addNote("No remote hosts yet. Add one below.", to: stack) }
         for host in shownEntries.map(\.alias) { add(makeRow(host), to: stack) }
 
         let addRow = SettingsDetail.trailingRow(addButton)
         stack.addArrangedSubview(addRow)
         addRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        stack.setCustomSpacing(18, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
+        stack.setCustomSpacing(
+            ChromeMetrics.Spacing.s16, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
 
         shownAddresses = addresses()
         restore.map(focus)
@@ -140,12 +141,12 @@ final class SettingsSSHHostsSection: SettingsSection {
         let header = SettingsDetail.headerRow(caption: label, hint: nil)
         stack.addArrangedSubview(header)
         header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        stack.setCustomSpacing(10, after: header)
+        stack.setCustomSpacing(ChromeMetrics.Spacing.s10, after: header)
     }
 
     private func addNote(_ text: String, to stack: NSStackView) {
         let note = NSTextField(labelWithString: text)
-        note.font = .systemFont(ofSize: 12)
+        note.font = ChromeType.font(.small)
         note.textColor = Theme.current.chrome.ink(.muted)
         note.lineBreakMode = .byWordWrapping
         note.maximumNumberOfLines = 0

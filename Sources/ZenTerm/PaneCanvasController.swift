@@ -230,7 +230,7 @@ final class PaneCanvasController: NSObject {
             root.bottomAnchor.constraint(equalTo: canvasView.bottomAnchor),
         ])
         dissolvingHosts.forEach { canvasView.addSubview($0) }
-        updateHalo()
+        updateFocusBorder()
     }
 
     private func hostView(for id: PaneID) -> NSView {
@@ -250,35 +250,35 @@ final class PaneCanvasController: NSObject {
     var hostsForTesting: [PaneID: PanelHostView] { hostByLeaf }
 
     /// Sets cursor focus explicitly: the responder chain alone leaves stale blinking cursors after rapid splits.
-    private func updateHalo() {
+    private func updateFocusBorder() {
         for (id, host) in hostByLeaf {
             let focused = panesHoldFocus && (id == tree.focusedLeaf)
-            host.isFocused = focused && haloIsVisible
+            host.isFocused = focused && focusBorderIsVisible
             host.isZoomed = (id == zoomedLeaf)
             registry.surface(for: id)?.setFocused(focused && focusedSurfaceRendersFocused && holdsKeyFocus)
         }
     }
 
-    /// Stored, because `updateHalo` rewrites the same state on every restructure.
+    /// Stored, because `updateFocusBorder` rewrites the same state on every restructure.
     private var focusedSurfaceRendersFocused = true
-    // Separate from `panesHoldFocus`: the window hides the halo without moving focus.
-    private var haloIsVisible = true
+    // Separate from `panesHoldFocus`: the window hides the focus border without moving focus.
+    private var focusBorderIsVisible = true
     // A sibling window or the sidebar taking the keyboard leaves libghostty holding the pane focused unless this says otherwise.
     private var holdsKeyFocus = true
 
     func setHoldsKeyFocus(_ holds: Bool) {
         holdsKeyFocus = holds
-        updateHalo()
+        updateFocusBorder()
     }
 
-    func setHaloVisible(_ visible: Bool) {
-        haloIsVisible = visible
-        updateHalo()
+    func setFocusBorderVisible(_ visible: Bool) {
+        focusBorderIsVisible = visible
+        updateFocusBorder()
     }
 
     func setFocusedSurfaceRendersFocused(_ focused: Bool) {
         focusedSurfaceRendersFocused = focused
-        updateHalo()
+        updateFocusBorder()
     }
 
     func reapplyChromeColors() {
@@ -318,7 +318,7 @@ final class PaneCanvasController: NSObject {
 
     func setPanesFocused(_ on: Bool) {
         panesHoldFocus = on
-        updateHalo()
+        updateFocusBorder()
     }
 
     func focus(_ id: PaneID) { focus(id, announces: true) }
@@ -330,7 +330,7 @@ final class PaneCanvasController: NSObject {
         onTitleChanged?()
         panesHoldFocus = true
         registry.surface(for: id)?.focus()
-        updateHalo()
+        updateFocusBorder()
         if announces { onFocusChanged?() }
     }
 

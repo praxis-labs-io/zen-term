@@ -17,13 +17,20 @@ enum Motion {
         }
     }
 
-    static let haloDuration: CFTimeInterval = 0.18
     static let pageSlideDuration: CFTimeInterval = 0.28
     static let landingTiming = CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)
     static let fadeDuration: CFTimeInterval = 0.18
     static let entranceFadeDuration: CFTimeInterval = 0.11
+    static let hoverIntent: TimeInterval = 0.45
     static let entranceScale: CGFloat = 0.97
     static let zoomScale: CGFloat = 0.9
+
+    enum Linger {
+        static let ack: TimeInterval = 0.7
+        static let readout: TimeInterval = 1.2
+        static let notice: TimeInterval = 2.5
+        static let toast: TimeInterval = 4
+    }
 
     static var isReduceMotionEnabled: () -> Bool = {
         NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
@@ -242,7 +249,7 @@ enum Motion {
         _ layer: CALayer,
         keyPath: String,
         to value: Any?,
-        duration: CFTimeInterval = haloDuration,
+        duration: CFTimeInterval = fadeDuration,
         completion: (() -> Void)? = nil
     ) {
         let from = layer.presentation()?.value(forKeyPath: keyPath) ?? layer.value(forKeyPath: keyPath)

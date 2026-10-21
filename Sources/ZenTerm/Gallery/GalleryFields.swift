@@ -21,6 +21,9 @@
             let area = TextAreaBox(placeholder: "Describe what happened", minHeight: 72)
             let filledArea = TextAreaBox(placeholder: "Describe what happened", minHeight: 72)
             filledArea.setText("The sidebar stopped updating after I closed the last pane in a tab.")
+            let selectedArea = TextAreaBox(placeholder: "Describe what happened", minHeight: 72)
+            selectedArea.setText("The sidebar stopped updating after I closed the last pane in a tab.")
+            selectedArea.textView.setSelectedRange(NSRange(location: 4, length: 7))
             return GallerySection(
                 title: "FieldBox and TextAreaBox",
                 rows: [
@@ -30,6 +33,7 @@
                     GallerySection.Row(label: "Area placeholder", samples: [sized(area)]),
                     GallerySection.Row(label: "Area filled", samples: [sized(filledArea)]),
                     GallerySection.Row(label: "Area focused", samples: [sized(focusedArea)]),
+                    GallerySection.Row(label: "Area selected", samples: [sized(selectedArea)]),
                 ])
         }
 

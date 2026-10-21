@@ -17,7 +17,7 @@ final class SettingsWorkspacesSection: SettingsSection {
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 3
+        stack.spacing = ChromeMetrics.Spacing.s2
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
 
@@ -72,7 +72,7 @@ final class SettingsWorkspacesSection: SettingsSection {
         if let workspaces, workspaces.isEmpty {
             let hint = NSTextField(
                 labelWithString: "No workspaces yet. Add one to launch a folder with its own layout from ⌘P.")
-            hint.font = .systemFont(ofSize: 12)
+            hint.font = ChromeType.font(.small)
             hint.textColor = Theme.current.chrome.ink(.muted)
             hint.lineBreakMode = .byWordWrapping
             hint.maximumNumberOfLines = 0
@@ -98,12 +98,13 @@ final class SettingsWorkspacesSection: SettingsSection {
                 self?.rows.forEach { $0.applyGitStatus() }
             }
         }
-        stack.setCustomSpacing(10, after: header)
+        stack.setCustomSpacing(ChromeMetrics.Spacing.s10, after: header)
 
         let addRow = SettingsDetail.trailingRow(addButton)
         stack.addArrangedSubview(addRow)
         addRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        stack.setCustomSpacing(18, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
+        stack.setCustomSpacing(
+            ChromeMetrics.Spacing.s16, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
 
         if let title, let moved = rows.first(where: { $0.workspace.title == title }) {
             stack.window?.makeFirstResponder(moved)
@@ -164,15 +165,15 @@ final class WorkspaceRow: SettingsFocusRow {
 
         super.init()
 
-        titleLabel.font = .systemFont(ofSize: 13)
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
-        subtitleLabel.font = .systemFont(ofSize: 11)
+        titleLabel.font = ChromeType.font(.body)
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
+        subtitleLabel.font = ChromeType.font(.caption)
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         subtitleLabel.lineBreakMode = .byTruncatingMiddle
         let labels = NSStackView(views: [titleLabel, subtitleLabel])
         labels.orientation = .vertical
         labels.alignment = .leading
-        labels.spacing = 1
+        labels.spacing = ChromeMetrics.Spacing.s2
         labels.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         let spacer = NSView()
@@ -185,14 +186,14 @@ final class WorkspaceRow: SettingsFocusRow {
         let controls = NSStackView(views: [labels, spacer, gitBadge])
         controls.orientation = .horizontal
         controls.alignment = .centerY
-        controls.spacing = 10
+        controls.spacing = ChromeMetrics.Spacing.s10
         pin(controls)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     override func reapplyTheme() {
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         gitBadge.contentTintColor = Theme.current.chrome.ink(.faint)
         super.reapplyTheme()

@@ -17,9 +17,8 @@ final class ConfirmCardList: NSView, ThemeReapplying {
         case note(String)
     }
 
-    static let rowHeight: CGFloat = 20
-    static let pathFont = NSFont.monospacedSystemFont(ofSize: 11.5, weight: .regular)
-    static let noteFont = NSFont.systemFont(ofSize: 12)
+    static let rowHeight: CGFloat = ChromeMetrics.Height.xs
+    static let pathFont = ChromeType.font(.caption, face: .mono)
 
     private let rowViews: [RowView]
 
@@ -28,8 +27,8 @@ final class ConfirmCardList: NSView, ThemeReapplying {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 6
-        layer?.borderWidth = 1
+        layer?.cornerRadius = ChromeMetrics.Radius.control
+        layer?.borderWidth = ChromeMetrics.Border.width
 
         let stack = NSStackView(views: rowViews)
         stack.orientation = .vertical
@@ -39,8 +38,8 @@ final class ConfirmCardList: NSView, ThemeReapplying {
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor),
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 6),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.Spacing.s6),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -ChromeMetrics.Spacing.s6),
         ])
         for row in rowViews {
             row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -82,11 +81,13 @@ final class ConfirmCardList: NSView, ThemeReapplying {
             trailing.setContentCompressionResistancePriority(.required, for: .horizontal)
             trailing.setContentHuggingPriority(.required, for: .horizontal)
             NSLayoutConstraint.activate([
-                leading.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+                leading.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
                 leading.centerYAnchor.constraint(equalTo: centerYAnchor),
-                trailing.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+                trailing.trailingAnchor.constraint(
+                    equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
                 trailing.centerYAnchor.constraint(equalTo: centerYAnchor),
-                trailing.leadingAnchor.constraint(greaterThanOrEqualTo: leading.trailingAnchor, constant: 8),
+                trailing.leadingAnchor.constraint(
+                    greaterThanOrEqualTo: leading.trailingAnchor, constant: ChromeMetrics.Spacing.s8),
             ])
         }
 
@@ -104,7 +105,7 @@ final class ConfirmCardList: NSView, ThemeReapplying {
                 trailing.attributedStringValue = StatusTokens.joined(groups)
             case .note(let text):
                 leading.attributedStringValue = Self.text(
-                    [Run(text: text, tone: .ink(.muted))], font: ConfirmCardList.noteFont,
+                    [Run(text: text, tone: .ink(.muted))], font: ChromeType.font(.small),
                     truncation: .byTruncatingTail, chrome: chrome)
                 trailing.attributedStringValue = NSAttributedString()
             }

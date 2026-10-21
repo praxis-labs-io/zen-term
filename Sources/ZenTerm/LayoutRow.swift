@@ -12,8 +12,8 @@ final class LayoutRow: NSView {
 
     init(caption: String, description: String?, control: NSView, controlNote: String?, controlWidth: CGFloat?) {
         let label = NSTextField(labelWithString: caption)
-        label.font = .systemFont(ofSize: 13)
-        label.textColor = Theme.current.chrome.foreground.nsColor
+        label.font = ChromeType.font(.body)
+        label.textColor = Theme.current.chrome.ink(.normal)
         label.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         control.setContentHuggingPriority(.defaultHigh, for: .horizontal)
@@ -34,16 +34,16 @@ final class LayoutRow: NSView {
         let controls = NSStackView(views: [captionColumn, spacer, controlColumn])
         controls.orientation = .horizontal
         controls.alignment = .centerY
-        controls.spacing = 8
+        controls.spacing = ChromeMetrics.Spacing.s8
 
-        messageLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        messageLabel.font = ChromeType.font(.caption, weight: .medium)
         messageLabel.textColor = Theme.current.chrome.destructive.nsColor
         messageLabel.isHidden = true
 
         let stack = NSStackView(views: [controls, messageLabel])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 3
+        stack.spacing = ChromeMetrics.Spacing.s2
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         var constraints = [
@@ -66,11 +66,11 @@ final class LayoutRow: NSView {
     ) -> (NSView, NSTextField?) {
         guard let note else { return (primary, nil) }
         let noteLabel = NSTextField(labelWithString: note)
-        noteLabel.font = .systemFont(ofSize: 10)
+        noteLabel.font = ChromeType.font(.caption)
         noteLabel.textColor = Theme.current.chrome.ink(.muted)
         let stack = NSStackView(views: [primary, noteLabel])
         stack.orientation = .vertical
-        stack.spacing = 2
+        stack.spacing = ChromeMetrics.Spacing.s2
         stack.alignment = alignment
         return (stack, noteLabel)
     }
@@ -95,7 +95,7 @@ final class LayoutRow: NSView {
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        captionLabel.textColor = isDimmed ? chrome.ink(.faint) : chrome.foreground.nsColor
+        captionLabel.textColor = isDimmed ? chrome.ink(.faint) : chrome.ink(.normal)
         descriptionLabel?.textColor = chrome.ink(isDimmed ? .faint : .muted)
         controlNoteLabel?.textColor = chrome.ink(.muted)
         messageLabel.textColor = LayoutRow.ink(for: messageKind)

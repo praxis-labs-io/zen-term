@@ -18,7 +18,7 @@ final class SettingsToolsSection: SettingsSection {
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 3
+        stack.spacing = ChromeMetrics.Spacing.s2
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
 
@@ -84,18 +84,18 @@ final class SettingsToolsSection: SettingsSection {
         let dropped = droppedFloatMessages()
         if !dropped.isEmpty {
             let notice = NSTextField(wrappingLabelWithString: dropped.joined(separator: "\n"))
-            notice.font = .systemFont(ofSize: 11, weight: .medium)
+            notice.font = ChromeType.font(.caption, weight: .medium)
             notice.textColor = Theme.current.chrome.warning.nsColor
             droppedFloatNotice = notice
             stack.addArrangedSubview(notice)
             notice.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-            stack.setCustomSpacing(10, after: notice)
+            stack.setCustomSpacing(ChromeMetrics.Spacing.s10, after: notice)
         }
 
         if floats.isEmpty {
             let hint = NSTextField(
                 labelWithString: "No tool floats yet. Add one to get a toolbar button and a shortcut.")
-            hint.font = .systemFont(ofSize: 12)
+            hint.font = ChromeType.font(.small)
             hint.textColor = Theme.current.chrome.ink(.muted)
             hint.lineBreakMode = .byWordWrapping
             hint.maximumNumberOfLines = 0
@@ -119,12 +119,13 @@ final class SettingsToolsSection: SettingsSection {
                 row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
             }
         }
-        stack.setCustomSpacing(10, after: header)
+        stack.setCustomSpacing(ChromeMetrics.Spacing.s10, after: header)
 
         let addRow = SettingsDetail.trailingRow(addButton)
         stack.addArrangedSubview(addRow)
         addRow.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        stack.setCustomSpacing(18, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
+        stack.setCustomSpacing(
+            ChromeMetrics.Spacing.s16, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
     }
 
     // Deferred a runloop turn: the rebuild frees this row while its `keyDown` is still on the stack.
@@ -187,15 +188,15 @@ final class ToolFloatRow: SettingsFocusRow {
         iconView.contentTintColor = Theme.current.chrome.ink(.subtle)
         iconView.setContentHuggingPriority(.required, for: .horizontal)
 
-        titleLabel.font = .systemFont(ofSize: 13)
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
-        subtitleLabel.font = .systemFont(ofSize: 11)
+        titleLabel.font = ChromeType.font(.body)
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
+        subtitleLabel.font = ChromeType.font(.caption)
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         subtitleLabel.lineBreakMode = .byTruncatingTail
         let labels = NSStackView(views: [titleLabel, subtitleLabel])
         labels.orientation = .vertical
         labels.alignment = .leading
-        labels.spacing = 1
+        labels.spacing = ChromeMetrics.Spacing.s2
         labels.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         let spacer = NSView()
@@ -203,9 +204,9 @@ final class ToolFloatRow: SettingsFocusRow {
         let controls = NSStackView(views: [iconView, labels, spacer, shortcutView])
         controls.orientation = .horizontal
         controls.alignment = .centerY
-        controls.spacing = 10
+        controls.spacing = ChromeMetrics.Spacing.s10
 
-        messageLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        messageLabel.font = ChromeType.font(.caption, weight: .medium)
         messageLabel.textColor = Theme.current.chrome.warning.nsColor
         messageLabel.lineBreakMode = .byWordWrapping
         messageLabel.maximumNumberOfLines = 0
@@ -214,7 +215,7 @@ final class ToolFloatRow: SettingsFocusRow {
         let stack = NSStackView(views: [controls, messageLabel])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 3
+        stack.spacing = ChromeMetrics.Spacing.s2
         pin(stack)
         NSLayoutConstraint.activate([
             controls.widthAnchor.constraint(equalTo: stack.widthAnchor),
@@ -226,7 +227,7 @@ final class ToolFloatRow: SettingsFocusRow {
 
     override func reapplyTheme() {
         iconView.contentTintColor = Theme.current.chrome.ink(.subtle)
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         messageLabel.textColor = Theme.current.chrome.warning.nsColor
         (shortcutView as? KeycapView)?.reapplyTheme()
@@ -238,7 +239,7 @@ final class ToolFloatRow: SettingsFocusRow {
 
     private static func unsetLabel() -> NSTextField {
         let label = NSTextField(labelWithString: "Not set")
-        label.font = .systemFont(ofSize: 12)
+        label.font = ChromeType.font(.small)
         label.textColor = unsetInk
         return label
     }

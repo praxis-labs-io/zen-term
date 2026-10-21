@@ -164,7 +164,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
     func test_editing_showsTheHostFixed_andFocusesItsName() throws {
         let overlay = mount(.edit(SSHHostEntry(alias: "devbox", name: "Build box"), address: "drew@10.0.1.12"))
 
-        XCTAssertEqual(header(in: overlay), "Edit SSH Host")
+        XCTAssertEqual(header(in: overlay), "Edit remote host")
         XCTAssertNotNil(button("Save", in: overlay))
         XCTAssertNil(button("Add", in: overlay))
         XCTAssertEqual(field(in: overlay).field.stringValue, "devbox  drew@10.0.1.12")
@@ -172,7 +172,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         XCTAssertFalse(field(in: overlay).field.acceptsFirstResponder)
         XCTAssertEqual(nameField(in: overlay).text, "Build box")
         XCTAssertIdentical(window?.firstResponder, nameField(in: overlay).field.currentEditor())
-        XCTAssertEqual(header(in: mount()), "Add SSH Host")
+        XCTAssertEqual(header(in: mount()), "Add remote host")
     }
 
     func test_editing_saveSubmitsTheAliasWithTheNewName_andAnEmptyNameClearsIt() throws {

@@ -105,7 +105,7 @@ final class ConfirmCard: NSView {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         CardChrome.reapplyTheme(to: card)
-        header.textColor = chrome.foreground.nsColor
+        header.textColor = chrome.ink(.normal)
         messageLabel.textColor = chrome.ink(.muted)
         checklist?.reapplyTheme()
         cancelButton.reapplyTheme()
@@ -118,11 +118,11 @@ final class ConfirmCard: NSView {
     }
 
     private func buildContent(title: String, message: String) -> NSStackView {
-        header.font = .systemFont(ofSize: 15, weight: .semibold)
-        header.textColor = Theme.current.chrome.foreground.nsColor
+        header.font = ChromeType.font(.title)
+        header.textColor = Theme.current.chrome.ink(.normal)
         header.stringValue = title
 
-        messageLabel.font = .systemFont(ofSize: 12)
+        messageLabel.font = ChromeType.font(.small)
         messageLabel.textColor = Theme.current.chrome.ink(.muted)
         messageLabel.lineBreakMode = .byWordWrapping
         messageLabel.maximumNumberOfLines = 0
@@ -148,16 +148,19 @@ final class ConfirmCard: NSView {
         let footer = NSStackView(views: [spacer, cancelButton, confirmButton])
         footer.orientation = .horizontal
         footer.alignment = .centerY
-        footer.spacing = 8
+        footer.spacing = ChromeMetrics.Spacing.s8
 
         let content = NSStackView(views: [header, checklist ?? messageLabel, footer])
         content.orientation = .vertical
         content.alignment = .leading
-        content.spacing = 14
-        content.edgeInsets = NSEdgeInsets(top: 18, left: 20, bottom: 16, right: 20)
+        content.spacing = ChromeMetrics.Spacing.modalSectionGap
+        content.edgeInsets = ChromeMetrics.Spacing.modalInsets
         content.translatesAutoresizingMaskIntoConstraints = false
         for view in content.arrangedSubviews {
-            view.widthAnchor.constraint(equalTo: content.widthAnchor, constant: -40).isActive = true
+            view.widthAnchor.constraint(
+                equalTo: content.widthAnchor,
+                constant: -(ChromeMetrics.Spacing.modalInsets.left + ChromeMetrics.Spacing.modalInsets.right)
+            ).isActive = true
         }
         return content
     }

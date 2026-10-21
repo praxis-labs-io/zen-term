@@ -21,18 +21,17 @@ final class FieldCaption: NSTextField, ThemeReapplying {
 
     func reapplyTheme() {
         let string = NSMutableAttributedString(
-            string: text.uppercased(),
+            string: text,
             attributes: [
-                .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
+                .font: ChromeType.sectionLabel,
                 .foregroundColor: Theme.current.chrome.ink(.muted),
-                .kern: 0.6,
             ])
         if isRequired {
             string.append(
                 NSAttributedString(
                     string: " ✳",
                     attributes: [
-                        .font: NSFont.systemFont(ofSize: 8, weight: .bold),
+                        .font: ChromeType.font(.caption, weight: .medium),
                         .foregroundColor: Theme.current.chrome.accent.nsColor,
                     ]))
         }

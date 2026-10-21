@@ -1,4 +1,5 @@
 import AppKit
+import TerminalKit
 import XCTest
 
 @testable import ZenTerm
@@ -40,6 +41,12 @@ final class ReapplyThemeTests: WindowTestCase {
         return ConfigLoader.loadAppTheme(configRoot: dir, general: .builtIn)
     }
 
+    private func makeLightTheme() throws -> AppTheme {
+        var terminal = Theme.rosePineZen
+        terminal.background = try XCTUnwrap(TerminalColor(hex: "#faf4ed"))
+        return AppTheme(terminal: terminal)
+    }
+
     private func makeWindow() -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
@@ -57,7 +64,7 @@ final class ReapplyThemeTests: WindowTestCase {
         button.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(button)
-        button.frame = NSRect(x: 0, y: 0, width: 80, height: 26)
+        button.frame = NSRect(x: 0, y: 0, width: 80, height: ChromeMetrics.Height.control)
 
         let colorBefore = attributedTitleColor(button)
         XCTAssertNotNil(colorBefore)
@@ -79,7 +86,7 @@ final class ReapplyThemeTests: WindowTestCase {
         button.reapplyTheme()
 
         XCTAssertNotEqual(inkBefore, keycap.inkForTesting)
-        XCTAssertEqual(keycap.inkForTesting, Theme.current.chrome.accent.nsColor)
+        XCTAssertEqual(keycap.inkForTesting, Theme.current.chrome.onAccent.nsColor)
         XCTAssertNil(keycap.layer?.backgroundColor, "a primary button's keycap is a bare glyph")
     }
 
@@ -129,7 +136,7 @@ final class ReapplyThemeTests: WindowTestCase {
         field.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(field)
-        field.frame = NSRect(x: 0, y: 0, width: 200, height: 30)
+        field.frame = NSRect(x: 0, y: 0, width: 200, height: ChromeMetrics.Height.control)
 
         let colorBefore = field.field.textColor
 
@@ -151,7 +158,7 @@ final class ReapplyThemeTests: WindowTestCase {
         field.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(field)
-        field.frame = NSRect(x: 0, y: 0, width: 200, height: 30)
+        field.frame = NSRect(x: 0, y: 0, width: 200, height: ChromeMetrics.Height.control)
 
         let colorBefore = placeholderColor(field.field)
         XCTAssertNotNil(colorBefore)
@@ -171,7 +178,7 @@ final class ReapplyThemeTests: WindowTestCase {
         dropdown.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(dropdown)
-        dropdown.frame = NSRect(x: 0, y: 0, width: 200, height: 30)
+        dropdown.frame = NSRect(x: 0, y: 0, width: 200, height: ChromeMetrics.Height.control)
 
         let colorBefore = dropdown.layer?.backgroundColor
 
@@ -186,7 +193,7 @@ final class ReapplyThemeTests: WindowTestCase {
         control.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(control)
-        control.frame = NSRect(x: 0, y: 0, width: 100, height: 26)
+        control.frame = NSRect(x: 0, y: 0, width: 100, height: ChromeMetrics.Height.control)
 
         guard
             let firstSegment = control.subviews.compactMap({ $0 as? NSStackView }).first?.arrangedSubviews
@@ -208,7 +215,7 @@ final class ReapplyThemeTests: WindowTestCase {
         row.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(row)
-        row.frame = NSRect(x: 0, y: 0, width: 150, height: 30)
+        row.frame = NSRect(x: 0, y: 0, width: 150, height: ChromeMetrics.Height.control)
 
         guard let label = row.subviews.compactMap({ $0 as? NSTextField }).first else {
             return XCTFail("expected the row's label")
@@ -242,7 +249,7 @@ final class ReapplyThemeTests: WindowTestCase {
         XCTAssertNotEqual(colorBefore, card.layer?.borderColor)
     }
 
-    func test_reapplyTheme_keepsTheAccentHaloOnSurfaceFloatOverlay() throws {
+    func test_reapplyTheme_keepsTheAccentFocusBorderOnSurfaceFloatOverlay() throws {
         let overlay = SurfaceFloatOverlay(
             content: NSView(), widthFraction: 0.6, heightFraction: 0.6, contentInset: 12,
             cornerRadius: 12, onDismiss: {})
@@ -256,15 +263,38 @@ final class ReapplyThemeTests: WindowTestCase {
         }
         let card = overlay.subviews[1]
 
-        Theme.setCurrentForTesting(try makeAlternateTheme())
+        guard let elevation = card.subviews.first(where: { $0 is OutsideShadowView }) as? OutsideShadowView
+        else {
+            return XCTFail("expected the float's elevation view")
+        }
+
+        Theme.setCurrentForTesting(try makeLightTheme())
         overlay.reapplyTheme()
 
         XCTAssertEqual(
+            elevation.color.alphaComponent, Theme.current.chrome.shadowAlpha(.float), accuracy: 0.001,
+            "the float's shadow must re-solve for the new theme")
+        XCTAssertEqual(
             card.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor,
-            "the float's focus halo must survive a theme swap as the accent role")
+            "the float's focus focus border must survive a theme swap as the accent role")
         XCTAssertNotEqual(
             card.layer?.borderColor, FloatShadow.edge.cgColor,
             "a float that reverts to the neutral hairline no longer signals it holds focus")
+    }
+
+    func test_reapplyTheme_resolvesTheCardShadow() throws {
+        let card = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 120))
+        CardChrome.apply(to: card, background: Theme.current.chrome.background.nsColor)
+        let before = Theme.current.chrome.shadowAlpha(.modal)
+
+        Theme.setCurrentForTesting(try makeLightTheme())
+        CardChrome.reapplyTheme(to: card)
+
+        let after = Theme.current.chrome.shadowAlpha(.modal)
+        XCTAssertNotEqual(before, after, accuracy: 0.01, "the swap must change the solved strength")
+        XCTAssertEqual(
+            card.shadow?.shadowColor?.alphaComponent ?? 0, after, accuracy: 0.001,
+            "an open card must re-solve its shadow on a theme swap")
     }
 
     private final class FakeSettingsSection: SettingsSection {

@@ -23,6 +23,13 @@ custom_rules:
     regex: "\\bNSScrollView\\("
     message: "Build scroll areas with FadingScrollView so content fades at the edges it continues past."
     severity: warning
+  untokened_font:
+    name: "Untokened font"
+    included: "Sources/ZenTerm/.*\\.swift"
+    excluded: "Sources/ZenTerm/ChromeType\\.swift"
+    regex: "(s|S)ystemFont\\(ofSize:"
+    message: "Take fonts from ChromeType roles."
+    severity: warning
 
 identifier_name:
   # The pane tree uses deliberate short names (a, b, id, dx, dy, v, …).

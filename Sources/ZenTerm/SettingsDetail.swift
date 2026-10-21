@@ -12,24 +12,27 @@ enum SettingsDetail {
             doc.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
             doc.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
             doc.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
-            rowsStack.topAnchor.constraint(equalTo: doc.topAnchor, constant: 18),
-            rowsStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor, constant: 20),
-            rowsStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -20),
-            rowsStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -18),
+            rowsStack.topAnchor.constraint(equalTo: doc.topAnchor, constant: ChromeMetrics.Spacing.modalInsets.top),
+            rowsStack.leadingAnchor.constraint(
+                equalTo: doc.leadingAnchor, constant: ChromeMetrics.Spacing.modalInsets.left),
+            rowsStack.trailingAnchor.constraint(
+                equalTo: doc.trailingAnchor, constant: -ChromeMetrics.Spacing.modalInsets.right),
+            rowsStack.bottomAnchor.constraint(
+                equalTo: doc.bottomAnchor, constant: -ChromeMetrics.Spacing.modalInsets.bottom),
         ])
         return scroll
     }
 
     static func groupCaption(_ title: String) -> NSTextField {
-        let caption = NSTextField(labelWithString: title.uppercased())
-        caption.font = .systemFont(ofSize: 10, weight: .semibold)
+        let caption = NSTextField(labelWithString: title)
+        caption.font = ChromeType.sectionLabel
         caption.textColor = Theme.current.chrome.ink(.muted)
         return caption
     }
 
     static func reorderHint() -> NSTextField {
         let hint = NSTextField(labelWithString: "⌥↑ ⌥↓ to reorder")
-        hint.font = .systemFont(ofSize: 10, weight: .medium)
+        hint.font = ChromeType.font(.caption, weight: .medium)
         hint.textColor = Theme.current.chrome.ink(.faint)
         hint.setContentHuggingPriority(.required, for: .horizontal)
         return hint
@@ -41,7 +44,7 @@ enum SettingsDetail {
         let row = NSStackView(views: [caption, spacer] + (hint.map { [$0] } ?? []))
         row.orientation = .horizontal
         row.alignment = .centerY
-        row.spacing = 8
+        row.spacing = ChromeMetrics.Spacing.s8
         row.translatesAutoresizingMaskIntoConstraints = false
         return row
     }
@@ -83,7 +86,7 @@ final class ResetFlashLabel: NSTextField {
         isSelectable = false
         isBordered = false
         drawsBackground = false
-        font = .systemFont(ofSize: 11, weight: .medium)
+        font = ChromeType.font(.caption, weight: .medium)
         textColor = Theme.current.chrome.accent.nsColor
         isHidden = true
     }
@@ -96,7 +99,7 @@ final class ResetFlashLabel: NSTextField {
         let hide = DispatchWorkItem { [weak self] in self?.isHidden = true }
         hideTimer?.cancel()
         hideTimer = hide
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: hide)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Motion.Linger.notice, execute: hide)
     }
 
     func reapplyTheme() {

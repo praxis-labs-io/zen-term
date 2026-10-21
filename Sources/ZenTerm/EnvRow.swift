@@ -15,7 +15,7 @@ final class EnvRow: NSView {
         keyBox.setContentHuggingPriority(.defaultLow, for: .horizontal)
         valueBox.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        equals.font = .systemFont(ofSize: 13)
+        equals.font = ChromeType.font(.body)
         equals.textColor = Theme.current.chrome.ink(.muted)
         equals.setContentHuggingPriority(.required, for: .horizontal)
 
@@ -25,7 +25,7 @@ final class EnvRow: NSView {
         let stack = NSStackView(views: [keyBox, equals, valueBox, removeButton])
         stack.orientation = .horizontal
         stack.alignment = .centerY
-        stack.spacing = 6
+        stack.spacing = ChromeMetrics.Spacing.s6
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         NSLayoutConstraint.activate([

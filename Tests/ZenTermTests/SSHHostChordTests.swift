@@ -158,21 +158,21 @@ final class SSHHostChordTests: WindowTestCase {
         XCTAssertEqual(try row("live", in: c).dotColorForTesting, SSHHostStatus.connected.ink.cgColor)
     }
 
-    func test_aHostNotConnected_paintsItsTitleLikeAnIdleAgent_andConnectingRepaintsItInPlace() throws {
+    func test_aHostNotConnected_paintsItsTitleSubtle_andConnectingRepaintsItInPlace() throws {
         let c = makeWindow(hosts: ["devbox"], offline: ["devbox"])
         let row = try row("devbox", in: c)
-        XCTAssertEqual(row.titleInkForTesting, AttentionTone.idle.ink)
+        XCTAssertEqual(row.titleInkForTesting, Theme.current.chrome.ink(.subtle))
 
         SSHHostStatusCenter.shared.setReachable(true, host: SSHHostID(alias: "devbox"))
 
         XCTAssertTrue(try self.row("devbox", in: c) === row, "the row is repainted, not rebuilt")
         XCTAssertEqual(try status("devbox", in: c), "Online")
-        XCTAssertEqual(row.titleInkForTesting, AttentionTone.idle.ink)
+        XCTAssertEqual(row.titleInkForTesting, Theme.current.chrome.ink(.subtle))
 
         SSHHostStatusCenter.shared.setConnected(true, host: SSHHostID(alias: "devbox"))
 
         XCTAssertEqual(try status("devbox", in: c), "Connected")
-        XCTAssertEqual(row.titleInkForTesting, Theme.current.chrome.foreground.nsColor)
+        XCTAssertEqual(row.titleInkForTesting, Theme.current.chrome.ink(.normal))
     }
 
     func test_aHostConnecting_repaintsItsDotInPlace() throws {

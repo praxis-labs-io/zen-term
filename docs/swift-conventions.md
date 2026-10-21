@@ -159,6 +159,13 @@ a leading/trailing cross-axis stretches every row to the widest child. Give fixe
 width, make the one flexible view the lowest-hugging, and use `setCustomSpacing(_:after:)` rather than
 padding a view.
 
+**A chrome text view is a `ChromeTextView`, never `NSTextView()`.** `NSTextView()` and the window's
+default field editor are TextKit 2, which ignores `selectedTextAttributes` once the view loses focus or
+its window stops being key and paints the system's appearance-driven gray, with no API to change it.
+`ChromeTextView` is TextKit 1, whose layout manager swaps that fill in `fillBackgroundRectArray`, and
+it must `setFill()` the replacement before calling super, which fills with the current color, not
+`color`. `HostWindow` vends one as the field editor for every `NSTextField`, selectable labels included.
+
 ## Layers and shadows
 
 **Static shadows go on `NSView.shadow`, not `layer.shadowOpacity`.** Inserting a subtree re-realizes
@@ -167,7 +174,8 @@ shadow disappears. Direct `layer.shadow*` writes are safe only after insertion.
 
 **A drop shadow cannot be made outside-only by reshaping `shadowPath`.** Core Animation fills the
 path, so a ring path ramps the glow up outward. Clip to outside the card at draw time, set the shadow,
-fill the card path. `OutsideShadowView` is the shared implementation.
+fill the card path at full alpha. A context shadow takes its alpha from the fill, so a translucent fill
+multiplies into the shadow color and the shadow all but vanishes. `OutsideShadowView` does this.
 
 **`CGContext` blur and `CALayer.shadowRadius` use different scales.** A context blur of 28 tracks a
 layer radius of 14. Measure alpha profiles when converting one to the other.
@@ -176,6 +184,10 @@ layer radius of 14. Measure alpha profiles when converting one to the other.
 top-left, which is invisible only while the layer is opaque. Below `background-alpha` 1 the uncovered
 region shows as a hard-edged see-through block during resize. `GhosttySurface` switches
 `contentsGravity` to `.resize` when translucent.
+
+**A `CALayer` border with no `borderColor` draws opaque black.** Give a ringed sublayer `.clear`
+at creation, never nil, and write its color changes inside a `CATransaction` with actions disabled,
+or the ring fades in on its implicit animation.
 
 **A layer-hosting view owns its own `contentsScale`.** AppKit syncs scale only for layer-backed views,
 and `GhosttyHostView` is layer-hosting. Set it in `viewDidChangeBackingProperties` inside a
@@ -278,7 +290,7 @@ report unconditionally invents a push production never makes; recording nothing 
 **A render tears down a tooltip that has not appeared yet.** `SidebarView.refreshRowHover` suppresses
 and then calls `row.refreshHover()`, which reads `pointerIsInside`; that is false whenever the window
 is not key, and a test window is not key. So the first render after a synthesized `mouseEntered`
-clears `isHovered`, hides the tooltip, and cancels `TooltipPresenter`'s 0.45s work item. It follows
+clears `isHovered`, hides the tooltip, and cancels `TooltipPresenter`'s `Motion.hoverIntent` work item. It follows
 hover order, not row kind, and a workspace open renders several times while it settles. Hover once the
 window is quiet, or assert the row's own hover state rather than a presented tooltip.
 
@@ -290,6 +302,9 @@ Code reading `currentEvent` for modifiers needs the event pinned first (`sendRet
 
 **A run-loop wait also lands work dispatched from the block it waited on.** Assert pre-async state
 before anything turns the run loop, usually by building the view without mounting it.
+
+**A test window is never key, so pin key status with an `isKeyWindow` override.** TextKit 1 honors
+it and draws a focused selection; TextKit 2 does not (`TextSelectionThemeTests`).
 
 **`RunLoop.run(mode:before:)` returns at once when nothing is attached.** Loop to a deadline, like
 `waitUntil`.

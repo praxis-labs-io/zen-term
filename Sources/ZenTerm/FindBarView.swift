@@ -19,30 +19,29 @@ final class FindBarView: NSView {
         super.init(frame: .zero)
 
         wantsLayer = true
-        layer?.cornerRadius = Self.cornerRadius
+        layer?.cornerRadius = ChromeMetrics.Radius.control
 
         glyph.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "Find")
         glyph.symbolConfiguration = .init(pointSize: 12, weight: .regular)
         glyph.setContentHuggingPriority(.required, for: .horizontal)
-        field.font = .systemFont(ofSize: 13)
+        field.font = ChromeType.font(.body)
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
-        field.usesSingleLineMode = true
-        field.cell?.wraps = false
-        field.cell?.isScrollable = true
+        field.makeSingleLine()
         field.delegate = self
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        count.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        count.font = ChromeType.font(.small, face: .digits)
         count.alignment = .right
         count.setContentHuggingPriority(.required, for: .horizontal)
         count.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         let row = NSStackView(views: [glyph, field, count])
         row.orientation = .horizontal
-        row.spacing = 8
-        row.edgeInsets = NSEdgeInsets(top: 0, left: 10, bottom: 0, right: 10)
+        row.spacing = ChromeMetrics.Spacing.s8
+        row.edgeInsets = NSEdgeInsets(
+            top: 0, left: ChromeMetrics.Spacing.controlInset, bottom: 0, right: ChromeMetrics.Spacing.controlInset)
         row.translatesAutoresizingMaskIntoConstraints = false
         addSubview(row)
 
@@ -77,7 +76,6 @@ final class FindBarView: NSView {
 
     func focusField() {
         window?.makeFirstResponder(field)
-        field.applyThemedCaret()
     }
 
     var countTextForTesting: String { count.stringValue }
@@ -93,7 +91,7 @@ final class FindBarView: NSView {
 
     private func applyFill() {
         let chrome = Theme.current.chrome
-        let tint = chrome.tint(chrome.accent, alpha: Self.fillAlpha)
+        let tint = chrome.tint(chrome.accent, alpha: ChromeTheme.badgeTint)
         layer?.backgroundColor = ChromeTheme.surface(tint: tint, over: paneFill).cgColor
     }
 
@@ -102,9 +100,9 @@ final class FindBarView: NSView {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         applyFill()
-        field.applyThemedCaret()
+        field.applyThemedEditor()
         glyph.contentTintColor = chrome.ink(.muted)
-        field.textColor = chrome.foreground.nsColor
+        field.textColor = chrome.ink(.normal)
         count.textColor = chrome.ink(.muted)
         applyPlaceholder()
     }
@@ -114,26 +112,19 @@ final class FindBarView: NSView {
             string: "Find in scrollback",
             attributes: [
                 .foregroundColor: Theme.current.chrome.ink(.muted),
-                .font: field.font ?? .systemFont(ofSize: 13),
+                .font: field.font ?? ChromeType.font(.body),
             ]
         )
     }
 
-    static let height: CGFloat = 26
-    private static let cornerRadius: CGFloat = 6
-    private static let fillAlpha: CGFloat = 0.14
+    static let height: CGFloat = ChromeMetrics.Height.control
 
     static var tintAlphaForTesting: CGFloat {
-        Theme.current.chrome.tint(Theme.current.chrome.accent, alpha: fillAlpha).alphaComponent
+        Theme.current.chrome.tint(Theme.current.chrome.accent, alpha: ChromeTheme.badgeTint).alphaComponent
     }
 }
 
 extension FindBarView: NSTextFieldDelegate {
-    /// The field editor is shared per window, so a click-focus arrives with another field's caret tint.
-    func controlTextDidBeginEditing(_ obj: Notification) {
-        field.applyThemedCaret()
-    }
-
     func controlTextDidChange(_ obj: Notification) {
         onChange?(field.stringValue)
     }

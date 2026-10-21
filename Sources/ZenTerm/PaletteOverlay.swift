@@ -17,7 +17,7 @@ class SelectableRowView: NSView, PaletteRowView {
     init() {
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 6
+        layer?.cornerRadius = ChromeMetrics.Radius.control
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -29,7 +29,7 @@ class SelectableRowView: NSView, PaletteRowView {
     }
 
     private func updateBackground() {
-        layer?.backgroundColor = (isSelected ? Theme.current.chrome.selectionFill : .clear).cgColor
+        layer?.backgroundColor = (isSelected ? Theme.current.chrome.fill(.hover) : .clear).cgColor
     }
 }
 
@@ -52,7 +52,7 @@ class PaletteOverlay: NSView, ModalOverlay {
     private let defaultRowHeight: CGFloat
     private let maxListHeight: CGFloat
     private let emptyListHeight: CGFloat
-    private let listVerticalInset: CGFloat = 8
+    private let listVerticalInset: CGFloat = ChromeMetrics.Spacing.s8
     private var listHeight: NSLayoutConstraint!
     private struct LaidOutRow {
         let id: AnyHashable?
@@ -89,20 +89,23 @@ class PaletteOverlay: NSView, ModalOverlay {
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
 
-        searchGlyph.font = .systemFont(ofSize: 16)
+        searchGlyph.font = ChromeType.font(.title, weight: .regular)
         searchGlyph.textColor = Theme.current.chrome.ink(.muted)
-        searchField.font = .systemFont(ofSize: 15)
+        searchField.font = ChromeType.font(.title, weight: .regular)
         applyPlaceholder()
         searchField.isBordered = false
+        searchField.makeSingleLine()
         searchField.drawsBackground = false
         searchField.focusRingType = .none
-        searchField.textColor = Theme.current.chrome.foreground.nsColor
+        searchField.textColor = Theme.current.chrome.ink(.normal)
         searchField.delegate = self
         searchField.translatesAutoresizingMaskIntoConstraints = false
         let searchRow = NSStackView(views: [searchGlyph, searchField])
         searchRow.orientation = .horizontal
-        searchRow.spacing = 8
-        searchRow.edgeInsets = NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
+        searchRow.spacing = ChromeMetrics.Spacing.s8
+        searchRow.edgeInsets = NSEdgeInsets(
+            top: ChromeMetrics.Spacing.s12, left: ChromeMetrics.Spacing.s12, bottom: ChromeMetrics.Spacing.s12,
+            right: ChromeMetrics.Spacing.s12)
 
         for hairline in [divider, footerDivider] {
             hairline.wantsLayer = true
@@ -118,7 +121,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         doc.translatesAutoresizingMaskIntoConstraints = false
         doc.addSubview(rowsStack)
 
-        emptyLabel.font = .systemFont(ofSize: 13)
+        emptyLabel.font = ChromeType.font(.body)
         emptyLabel.textColor = Theme.current.chrome.ink(.muted)
         emptyLabel.alignment = .center
         emptyLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -167,7 +170,7 @@ class PaletteOverlay: NSView, ModalOverlay {
             footerDivider.widthAnchor.constraint(equalTo: stack.widthAnchor),
             scrollView.widthAnchor.constraint(equalTo: stack.widthAnchor),
             footerRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            footerRow.heightAnchor.constraint(equalToConstant: 34),
+            footerRow.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.lg),
             footer.centerXAnchor.constraint(equalTo: footerRow.centerXAnchor),
             footer.centerYAnchor.constraint(equalTo: footerRow.centerYAnchor),
             listHeight,
@@ -176,12 +179,13 @@ class PaletteOverlay: NSView, ModalOverlay {
             doc.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
             doc.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
             rowsStack.topAnchor.constraint(equalTo: doc.topAnchor, constant: listVerticalInset),
-            rowsStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor, constant: 8),
-            rowsStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -8),
+            rowsStack.leadingAnchor.constraint(equalTo: doc.leadingAnchor, constant: ChromeMetrics.Spacing.s8),
+            rowsStack.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -ChromeMetrics.Spacing.s8),
             rowsStack.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -listVerticalInset),
 
             emptyLabel.centerXAnchor.constraint(equalTo: scrollView.contentView.centerXAnchor),
-            emptyLabel.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor, constant: 24),
+            emptyLabel.topAnchor.constraint(
+                equalTo: scrollView.contentView.topAnchor, constant: ChromeMetrics.Spacing.s20),
         ])
 
         reloadRows()
@@ -193,7 +197,6 @@ class PaletteOverlay: NSView, ModalOverlay {
 
     func focusQuery() {
         window?.makeFirstResponder(searchField)
-        searchField.applyThemedCaret()
     }
 
     func animateIn() {
@@ -227,8 +230,8 @@ class PaletteOverlay: NSView, ModalOverlay {
         let chrome = Theme.current.chrome
         CardChrome.reapplyTheme(to: card)
         searchGlyph.textColor = chrome.ink(.muted)
-        searchField.textColor = chrome.foreground.nsColor
-        searchField.applyThemedCaret()
+        searchField.textColor = chrome.ink(.normal)
+        searchField.applyThemedEditor()
         applyPlaceholder()
         for hairline in [divider, footerDivider] {
             hairline.layer?.backgroundColor = chrome.fill(alpha: ChromeTheme.hairline).cgColor
@@ -248,7 +251,7 @@ class PaletteOverlay: NSView, ModalOverlay {
             string: searchPlaceholder,
             attributes: [
                 .foregroundColor: Theme.current.chrome.ink(.muted),
-                .font: searchField.font ?? .systemFont(ofSize: 15),
+                .font: searchField.font ?? ChromeType.font(.title, weight: .regular),
             ]
         )
     }
@@ -412,20 +415,20 @@ class PaletteOverlay: NSView, ModalOverlay {
         let items = hints.map { hint -> NSView in
             let keycap = KeycapView(shortcut: hint.keys)
             let label = NSTextField(labelWithString: hint.label)
-            label.font = .systemFont(ofSize: 11, weight: .medium)
+            label.font = ChromeType.font(.caption, weight: .medium)
             label.textColor = Theme.current.chrome.ink(.muted)
             keycaps.append(keycap)
             labels.append(label)
             let item = NSStackView(views: [keycap, label])
             item.orientation = .horizontal
-            item.spacing = 5
+            item.spacing = ChromeMetrics.Spacing.s4
             item.alignment = .centerY
             byLabel[hint.label] = item
             return item
         }
         let stack = NSStackView(views: items)
         stack.orientation = .horizontal
-        stack.spacing = 16
+        stack.spacing = ChromeMetrics.Spacing.s16
         stack.alignment = .centerY
         return (stack, labels, keycaps, byLabel)
     }
@@ -433,11 +436,6 @@ class PaletteOverlay: NSView, ModalOverlay {
 }
 
 extension PaletteOverlay: NSTextFieldDelegate {
-    /// A click focuses the field past `focusInitialResponder`, and the shared field editor keeps the last field's tint.
-    func controlTextDidBeginEditing(_ obj: Notification) {
-        searchField.applyThemedCaret()
-    }
-
     func controlTextDidChange(_ obj: Notification) {
         applyFilter(query: searchField.stringValue)
         reloadRows()

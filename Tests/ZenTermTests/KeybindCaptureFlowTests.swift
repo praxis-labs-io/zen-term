@@ -369,7 +369,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
     func test_theInputFillsTheCard() throws {
         let capturer = FakeCapturer()
         _ = mountSection(capturer)
-        let insets: CGFloat = 28
+        let insets = ChromeMetrics.Spacing.s12 * 2
 
         row(for: .newTab).chip.onActivate?()
         try hintBubble().layoutSubtreeIfNeeded()
@@ -382,7 +382,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         try hintBubble().layoutSubtreeIfNeeded()
         XCTAssertEqual(
             try hintBubble().inputWidthForTesting,
-            KeybindHintBubble.widthForTesting - insets - 34 - 8,
+            KeybindHintBubble.widthForTesting - insets - ChromeMetrics.Height.lg - ChromeMetrics.Spacing.s8,
             accuracy: 0.5, "and gives up exactly the icon's width when one appears")
     }
 

@@ -33,9 +33,8 @@ final class ConfirmCardChecklist: NSView, ThemeReapplying {
         let rows: [ConfirmCardList.Row]
     }
 
-    static let textFont = NSFont.systemFont(ofSize: 12)
     static let iconSize = NSSize(width: 14, height: 15)
-    static let listIndent: CGFloat = 22
+    static let listIndent = iconSize.width + ChromeMetrics.Spacing.s8
 
     private let itemViews: [ItemView]
 
@@ -47,7 +46,7 @@ final class ConfirmCardChecklist: NSView, ThemeReapplying {
         let stack = NSStackView(views: itemViews)
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 10
+        stack.spacing = ChromeMetrics.Spacing.s10
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         NSLayoutConstraint.activate([
@@ -94,7 +93,7 @@ final class ConfirmCardChecklist: NSView, ThemeReapplying {
                 icon.topAnchor.constraint(equalTo: topAnchor),
                 icon.widthAnchor.constraint(equalToConstant: ConfirmCardChecklist.iconSize.width),
                 icon.heightAnchor.constraint(equalToConstant: ConfirmCardChecklist.iconSize.height),
-                label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
+                label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: ChromeMetrics.Spacing.s8),
                 label.trailingAnchor.constraint(equalTo: trailingAnchor),
                 label.topAnchor.constraint(equalTo: topAnchor),
             ])
@@ -104,7 +103,7 @@ final class ConfirmCardChecklist: NSView, ThemeReapplying {
             }
             addSubview(list)
             NSLayoutConstraint.activate([
-                list.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 6),
+                list.topAnchor.constraint(equalTo: label.bottomAnchor, constant: ChromeMetrics.Spacing.s6),
                 list.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ConfirmCardChecklist.listIndent),
                 list.trailingAnchor.constraint(equalTo: trailingAnchor),
                 list.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -123,7 +122,7 @@ final class ConfirmCardChecklist: NSView, ThemeReapplying {
                     NSAttributedString(
                         string: run.text,
                         attributes: [
-                            .font: ConfirmCardChecklist.textFont, .paragraphStyle: paragraph,
+                            .font: ChromeType.font(.small), .paragraphStyle: paragraph,
                             .foregroundColor: ConfirmCardList.color(run.tone, chrome),
                         ]))
             }

@@ -11,7 +11,7 @@
 
         // ListPopover caps a card at 260pt; the open lists drop into this room instead of over the body.
         private static let listRoom: CGFloat = 272
-        private static let inset: CGFloat = 24
+        private static let inset: CGFloat = ChromeMetrics.Spacing.s20
 
         private let theme = GalleryTheme()
         private var window: NSWindow?
@@ -22,6 +22,7 @@
         private var liveCheckbox: CheckboxDropdown?
         private var renameChip: WorkspaceTabChip?
         private var observers: [NSObjectProtocol] = []
+        private lazy var fieldEditor = ChromeTextView.makeFieldEditor()
 
         func show() {
             let window = window ?? build()
@@ -36,6 +37,10 @@
             observers = []
             window?.makeFirstResponder(nil)
             theme.restore()
+        }
+
+        func windowWillReturnFieldEditor(_ sender: NSWindow, to client: Any?) -> Any? {
+            client is NSTextField ? fieldEditor : nil
         }
 
         private func build() -> NSWindow {
@@ -122,7 +127,7 @@
             ])
             controls.orientation = .horizontal
             controls.alignment = .centerY
-            controls.spacing = 10
+            controls.spacing = ChromeMetrics.Spacing.s10
             controls.setCustomSpacing(Self.inset, after: controls.arrangedSubviews[1])
 
             let dropdown = GalleryPickers.liveDropdown()
@@ -143,7 +148,7 @@
             let pane = NSStackView(views: [controls, samples, room])
             pane.orientation = .vertical
             pane.alignment = .leading
-            pane.spacing = 16
+            pane.spacing = ChromeMetrics.Spacing.s16
             pane.translatesAutoresizingMaskIntoConstraints = false
             return pane
         }
@@ -163,11 +168,11 @@
         private func makeBody() -> NSView {
             let sections =
                 GalleryButtons.sections() + GalleryFields.sections() + GalleryPickers.sections()
-                + GalleryCards.sections() + GalleryTabs.sections()
+                + GalleryCards.sections() + GalleryTabs.sections() + GalleryType.sections()
             let stack = NSStackView(views: sections)
             stack.orientation = .vertical
             stack.alignment = .leading
-            stack.spacing = 40
+            stack.spacing = ChromeMetrics.Spacing.s20 * 2
             stack.translatesAutoresizingMaskIntoConstraints = false
 
             let document = FlippedView()

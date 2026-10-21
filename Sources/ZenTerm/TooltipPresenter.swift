@@ -5,8 +5,7 @@ final class TooltipPresenter {
     static let shared = TooltipPresenter()
     private init() {}
 
-    private static let delay: TimeInterval = 0.45
-    private static let gap: CGFloat = 6
+    private static let gap: CGFloat = ChromeMetrics.Spacing.s6
 
     private var tooltip: ChromeTooltip?
     // Guards against a stale `mouseExited` from a previous button tearing down a newer tooltip.
@@ -25,7 +24,7 @@ final class TooltipPresenter {
             self.present(for: source, label: label, shortcut: shortcut, style: style)
         }
         pending = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.delay, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Motion.hoverIntent, execute: work)
     }
 
     // A row whose copy changes under a live tooltip: replace it in place, since re-scheduling would blank it for the delay.
@@ -70,7 +69,7 @@ final class TooltipPresenter {
 
     var tooltipForTesting: ChromeTooltip? { tooltip }
 
-    func dismissForTesting() { teardown() }
+    func dismiss() { teardown() }
 
     private func installDismissTriggers(in window: NSWindow) {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in

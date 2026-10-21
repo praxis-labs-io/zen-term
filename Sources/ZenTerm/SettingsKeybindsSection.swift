@@ -102,7 +102,7 @@ final class SettingsKeybindsSection: SettingsSection {
         let rowsStack = NSStackView()
         rowsStack.orientation = .vertical
         rowsStack.alignment = .leading
-        rowsStack.spacing = 3
+        rowsStack.spacing = ChromeMetrics.Spacing.s2
         rowsStack.translatesAutoresizingMaskIntoConstraints = false
 
         var previous: NSView?
@@ -110,7 +110,7 @@ final class SettingsKeybindsSection: SettingsSection {
             let caption = SettingsDetail.groupCaption(category)
             rowsStack.addArrangedSubview(caption)
             groupCaptions.append(caption)
-            if let previous { rowsStack.setCustomSpacing(18, after: previous) }
+            if let previous { rowsStack.setCustomSpacing(ChromeMetrics.Spacing.s16, after: previous) }
             for action in actions {
                 let row = KeybindRow(action: action, title: CommandCatalog.spec(for: action).title)
                 row.chip.onActivate = { [weak self, weak row] in row.map { self?.beginCapture(for: $0) } }
@@ -145,12 +145,12 @@ final class SettingsKeybindsSection: SettingsSection {
         let resetRow = SettingsDetail.trailingRow(resetAllButton)
         rowsStack.addArrangedSubview(resetRow)
         resetRow.widthAnchor.constraint(equalTo: rowsStack.widthAnchor).isActive = true
-        if let previous { rowsStack.setCustomSpacing(18, after: previous) }
+        if let previous { rowsStack.setCustomSpacing(ChromeMetrics.Spacing.s16, after: previous) }
 
         let messageRow = SettingsDetail.trailingRow(resetAllMessage)
         rowsStack.addArrangedSubview(messageRow)
         messageRow.widthAnchor.constraint(equalTo: rowsStack.widthAnchor).isActive = true
-        rowsStack.setCustomSpacing(6, after: resetRow)
+        rowsStack.setCustomSpacing(ChromeMetrics.Spacing.s6, after: resetRow)
 
         let scroll = SettingsDetail.scroll(for: rowsStack)
         detailScroll = scroll
@@ -165,6 +165,7 @@ final class SettingsKeybindsSection: SettingsSection {
     }
 
     func reapplyTheme() {
+        hintBubble?.reapplyTheme()
         groupCaptions.forEach { $0.textColor = Theme.current.chrome.ink(.muted) }
         rows.forEach { $0.reapplyTheme() }
         resetAllButton.reapplyTheme()
@@ -249,7 +250,7 @@ final class SettingsKeybindsSection: SettingsSection {
             row?.setCapturing(false)
         }
         captureCloseTimer = close
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7, execute: close)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Motion.Linger.ack, execute: close)
     }
 
     private func endCapture(_ row: KeybindRow) {

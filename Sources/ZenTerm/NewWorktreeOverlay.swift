@@ -125,7 +125,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         CardChrome.reapplyTheme(to: card)
-        header.textColor = chrome.foreground.nsColor
+        header.textColor = chrome.ink(.normal)
         baseCaption.textColor = chrome.ink(.muted)
         branchCaption.textColor = chrome.ink(.muted)
         confirm.card?.reapplyTheme()
@@ -172,15 +172,15 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
     }
 
     private func buildContent() -> NSStackView {
-        header.font = .systemFont(ofSize: 15, weight: .semibold)
-        header.textColor = Theme.current.chrome.foreground.nsColor
+        header.font = ChromeType.font(.title)
+        header.textColor = Theme.current.chrome.ink(.normal)
         header.stringValue = "New Worktree"
 
         wireBranchField()
         let branchGroup = LabeledField(
-            caption: FieldCaption("BRANCH", required: true), control: branchField)
+            caption: FieldCaption("Branch", required: true), control: branchField)
         self.branchGroup = branchGroup
-        branchCaption.font = .systemFont(ofSize: 11)
+        branchCaption.font = ChromeType.font(.caption)
         branchCaption.textColor = Theme.current.chrome.ink(.muted)
         branchCaption.lineBreakMode = .byWordWrapping
         branchCaption.maximumNumberOfLines = 2
@@ -189,13 +189,13 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
 
         baseSegment.onChange = { [weak self] index in self?.baseChanged(index) }
         wireSegment(baseSegment)
-        baseCaption.font = .systemFont(ofSize: 11)
+        baseCaption.font = ChromeType.font(.caption)
         baseCaption.textColor = Theme.current.chrome.ink(.muted)
         let baseGroup = Self.vStack(
-            [caption("BASE"), baseSegment, baseCaption], spacing: 6)
+            [caption("Base"), baseSegment, baseCaption], spacing: 6)
         self.baseGroup = baseGroup
 
-        carryLabel.font = .systemFont(ofSize: 11)
+        carryLabel.font = ChromeType.font(.caption)
         carryLabel.textColor = Theme.current.chrome.ink(.muted)
         carryLabel.lineBreakMode = .byTruncatingTail
         carryLabel.stringValue = workspace.carry.joined(separator: ", ")
@@ -209,15 +209,15 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         carryLink.onTab = { [weak self] in self?.moveTab(1) }
         carryLink.onBacktab = { [weak self] in self?.moveTab(-1) }
         let carryGroup = Self.vStack(
-            [caption("COPY INTO THIS WORKTREE"), carryLabel, Self.leadingWrap(carryLink)],
+            [caption("Copy into this worktree"), carryLabel, Self.leadingWrap(carryLink)],
             spacing: 6)
 
-        phaseLabel.font = .systemFont(ofSize: 11)
+        phaseLabel.font = ChromeType.font(.caption)
         phaseLabel.textColor = Theme.current.chrome.ink(.muted)
         phaseLabel.lineBreakMode = .byTruncatingTail
         phaseGroup.orientation = .horizontal
         phaseGroup.alignment = .centerY
-        phaseGroup.spacing = 7
+        phaseGroup.spacing = ChromeMetrics.Spacing.s6
         phaseGroup.setViews([spinner, phaseLabel], in: .leading)
         phaseGroup.isHidden = true
 

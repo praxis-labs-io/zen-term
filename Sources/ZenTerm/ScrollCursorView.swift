@@ -39,7 +39,7 @@ final class ScrollCursorView: NSView {
         let chrome = Theme.current.chrome
 
         if let selection = state.selection {
-            chrome.tint(chrome.accent, alpha: Self.selectionAlpha).setFill()
+            chrome.fill(.active).setFill()
             fill(Self.rects(for: selection, metrics: metrics))
         } else {
             drawBand(metrics: metrics, row: state.cursorRow)
@@ -48,8 +48,7 @@ final class ScrollCursorView: NSView {
         drawCursorCell(metrics: metrics, row: state.cursorRow, cells: state.cursorCells)
 
         if let flash = state.flash, state.flashLevel > 0 {
-            chrome.tint(chrome.accent, alpha: Self.flashPeakAlpha * min(1, state.flashLevel))
-                .setFill()
+            chrome.tint(chrome.accent, alpha: ChromeTheme.flashTint * min(1, state.flashLevel)).setFill()
             fill(Self.rects(for: flash, metrics: metrics))
         }
     }
@@ -58,7 +57,7 @@ final class ScrollCursorView: NSView {
         let band = bounds.intersection(
             metrics.cellFrame(row: row, columns: Self.columns(0, metrics.columns - 1, metrics)))
         guard !band.isEmpty else { return }
-        Theme.current.chrome.fill(alpha: Self.bandAlpha).setFill()
+        Theme.current.chrome.fill(.hover).setFill()
         NSBezierPath(roundedRect: band, xRadius: Self.cornerRadius, yRadius: Self.cornerRadius).fill()
     }
 
@@ -68,7 +67,7 @@ final class ScrollCursorView: NSView {
             metrics.cellFrame(
                 row: row, columns: Self.columns(cells.lowerBound, cells.upperBound, metrics)))
         guard !cell.isEmpty else { return }
-        Self.lifted(Theme.current.terminal.cursor.nsColor).setStroke()
+        Self.lifted(Theme.current.chrome.cursor.nsColor).setStroke()
         let path = NSBezierPath(
             roundedRect: cell.insetBy(dx: Self.cursorStroke / 2, dy: Self.cursorStroke / 2),
             xRadius: Self.cursorRadius, yRadius: Self.cursorRadius)
@@ -132,11 +131,8 @@ final class ScrollCursorView: NSView {
         return low...high
     }
 
-    private static let bandAlpha: CGFloat = 0.08
-    private static let selectionAlpha: CGFloat = 0.28
     private static let cursorStroke: CGFloat = 1.5
     private static let cursorBrightnessFloor: CGFloat = 0.92
-    private static let flashPeakAlpha: CGFloat = 0.5
     private static let cornerRadius: CGFloat = 3
     private static let cursorRadius: CGFloat = 2
 }

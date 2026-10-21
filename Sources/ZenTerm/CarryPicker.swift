@@ -60,7 +60,7 @@ final class CarryPicker: NSView, ThemeReapplying {
         status.onTab = { [weak self] in self?.onTab?() }
         status.onBacktab = { [weak self] in self?.onBacktab?() }
 
-        detail.font = .systemFont(ofSize: 11)
+        detail.font = ChromeType.font(.caption)
         detail.textColor = Theme.current.chrome.ink(.muted)
         detail.maximumNumberOfLines = 0
         detail.lineBreakMode = .byWordWrapping
@@ -69,7 +69,7 @@ final class CarryPicker: NSView, ThemeReapplying {
         let column = NSStackView(views: [slot, detail])
         column.orientation = .vertical
         column.alignment = .leading
-        column.spacing = 6
+        column.spacing = ChromeMetrics.Spacing.s6
         column.translatesAutoresizingMaskIntoConstraints = false
         addSubview(column)
         NSLayoutConstraint.activate([
@@ -303,22 +303,24 @@ final class CarryPicker: NSView, ThemeReapplying {
             super.init(frame: .zero)
             translatesAutoresizingMaskIntoConstraints = false
             wantsLayer = true
-            layer?.cornerRadius = 6
+            layer?.cornerRadius = ChromeMetrics.Radius.control
             PopoverButtonStyle.applyRestFill(to: self)
-            layer?.borderWidth = 1
+            layer?.borderWidth = ChromeMetrics.Border.width
 
-            label.font = .systemFont(ofSize: 13)
+            label.font = ChromeType.font(.body)
             label.lineBreakMode = .byTruncatingTail
             label.translatesAutoresizingMaskIntoConstraints = false
             spinner.translatesAutoresizingMaskIntoConstraints = false
             addSubview(label)
             addSubview(spinner)
             NSLayoutConstraint.activate([
-                heightAnchor.constraint(equalToConstant: 30),
-                label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
+                heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
+                label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
                 label.centerYAnchor.constraint(equalTo: centerYAnchor),
-                spinner.leadingAnchor.constraint(greaterThanOrEqualTo: label.trailingAnchor, constant: 6),
-                spinner.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -9),
+                spinner.leadingAnchor.constraint(
+                    greaterThanOrEqualTo: label.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
+                spinner.trailingAnchor.constraint(
+                    equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
                 spinner.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
             applyColors()

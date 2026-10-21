@@ -87,7 +87,7 @@ struct GeneralConfig: Equatable {
         agentNotifications: true,
         attentionToast: .sticky,
         completionToast: .sticky,
-        toastDuration: 4,
+        toastDuration: Motion.Linger.toast,
         automaticUpdateChecks: true,
         debug: false,
         shell: nil,

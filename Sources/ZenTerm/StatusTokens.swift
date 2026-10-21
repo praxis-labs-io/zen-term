@@ -1,8 +1,8 @@
 import AppKit
 
 enum StatusTokens {
-    static let font = NSFont.systemFont(ofSize: 11)
-    static let groupGap: CGFloat = 4
+    static let font = ChromeType.font(.caption)
+    static let groupGap: CGFloat = ChromeMetrics.Spacing.s4
 
     static func joined(_ groups: [NSAttributedString]) -> NSAttributedString {
         let out = NSMutableAttributedString()

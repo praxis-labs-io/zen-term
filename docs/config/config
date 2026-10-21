@@ -27,7 +27,7 @@
 # theme = rose-pine-zen
 
 # The chrome's accent: the color for focus, active state, and confirm. It paints
-# the focused pane's glow and border, focus rings, the active tab's underline, a
+# the focused pane's border, focus rings, the active tab's underline, a
 # tool's activity dot while nothing there needs you, primary buttons, and the
 # progress bar. A dot takes the theme's attention color when an agent there is
 # waiting on you, and its positive color when a long command there finished
@@ -177,18 +177,18 @@
 # Not in Settings.
 # ai = pi
 
-# ─── SSH ─────────────────────────────────────────────────────────────────────
+# ─── Remote hosts ────────────────────────────────────────────────────────────
 
-# An SSH host listed in the sidebar's SSH section, one per line, in sidebar
-# order. Each is a Host alias from ~/.ssh/config or a user@host. Settings >
-# SSH Hosts lists these hosts, and adds or removes them.
+# A host listed in the sidebar's Remote hosts section, one per line, in
+# sidebar order. Each is a Host alias from ~/.ssh/config or a user@host.
+# Settings > Remote hosts lists these hosts, and adds or removes them.
 # In-app Settings edit: applies live.
 # ssh-host = devbox
 # ssh-host = deploy@10.0.0.5
 #
 # A name after a colon and a space is what ZenTerm shows for the host in place
 # of its alias. ssh still connects with the alias. Quote a name that holds #.
-# In Settings > SSH Hosts, click a host to set or clear its name.
+# In Settings > Remote hosts, click a host to set or clear its name.
 # ssh-host = prod: Production
 
 # Each pane on a host opens your login shell there with the TERM_PROGRAM and
@@ -453,7 +453,7 @@
 # keybind = next_workspace=cmd+ctrl+]
 # keybind = select_workspace_1=cmd+ctrl+1         # … through select_workspace_9=cmd+ctrl+9
 # keybind = close_workspace=cmd+ctrl+w           # asks first if something runs, or if it is the last
-#                                                # one; on an SSH host, disconnects without asking
+#                                                # one; on a remote host, disconnects without asking
 # keybind = next_waiting_agent=cmd+shift+a       # the agent in this window that has waited longest
 #
 # ─── Coming from Ghostty ─────────────────────────────────────────────────────

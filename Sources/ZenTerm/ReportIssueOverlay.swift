@@ -14,7 +14,7 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
     private let whatHappened = TextAreaBox(placeholder: "What went wrong, and what you expected instead")
     private var titleGroup: LabeledField?
     private var whatGroup: LabeledField?
-    private let envCaption = FieldCaption("ENVIRONMENT", required: false)
+    private let envCaption = FieldCaption("Environment", required: false)
     private let envText = NSTextField(wrappingLabelWithString: "")
     private let envNote = NSTextField(labelWithString: "Sent with your report")
 
@@ -99,8 +99,9 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         CardChrome.reapplyTheme(to: card)
-        header.textColor = chrome.foreground.nsColor
-        envText.textColor = chrome.muted.nsColor
+        header.textColor = chrome.ink(.normal)
+        envText.textColor = chrome.ink(.muted)
+        envText.applyThemedEditor()
         envNote.textColor = chrome.ink(.muted)
         let controls: [ThemeReapplying] = [titleField, whatHappened, exportButton, cancelButton, openButton]
         controls.forEach { $0.reapplyTheme() }
@@ -110,13 +111,13 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
     }
 
     private func buildContent() -> NSStackView {
-        header.font = .systemFont(ofSize: 15, weight: .semibold)
-        header.textColor = Theme.current.chrome.foreground.nsColor
+        header.font = ChromeType.font(.title)
+        header.textColor = Theme.current.chrome.ink(.normal)
         header.stringValue = "Report an Issue"
 
         wireField(titleField)
         titleField.onEnter = { [weak self] in self?.moveVertical(1) }
-        let titleGroup = LabeledField(caption: FieldCaption("TITLE", required: true), control: titleField)
+        let titleGroup = LabeledField(caption: FieldCaption("Title", required: true), control: titleField)
         self.titleGroup = titleGroup
 
         whatHappened.onChange = { [weak self] in self?.refreshValidity() }
@@ -126,14 +127,14 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         whatHappened.onBacktab = { [weak self] in self?.moveTab(-1) }
         whatHappened.onSubmit = { [weak self] in self?.submit() }
         let whatGroup = LabeledField(
-            caption: FieldCaption("WHAT HAPPENED", required: true), control: whatHappened)
+            caption: FieldCaption("What happened", required: true), control: whatHappened)
         self.whatGroup = whatGroup
 
-        envText.font = .monospacedSystemFont(ofSize: 11.5, weight: .regular)
-        envText.textColor = Theme.current.chrome.muted.nsColor
+        envText.font = ChromeType.font(.caption, face: .mono)
+        envText.textColor = Theme.current.chrome.ink(.muted)
         envText.isSelectable = true
         envText.stringValue = report.plainText
-        envNote.font = .systemFont(ofSize: 11)
+        envNote.font = ChromeType.font(.caption)
         envNote.textColor = Theme.current.chrome.ink(.muted)
         let envGroup = Self.vStack([envCaption, envText, envNote], spacing: 5)
 
@@ -142,11 +143,14 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         let content = NSStackView(views: [header, titleGroup, whatGroup, envGroup, footer])
         content.orientation = .vertical
         content.alignment = .leading
-        content.spacing = 14
-        content.edgeInsets = NSEdgeInsets(top: 18, left: 20, bottom: 16, right: 20)
+        content.spacing = ChromeMetrics.Spacing.modalSectionGap
+        content.edgeInsets = ChromeMetrics.Spacing.modalInsets
         content.translatesAutoresizingMaskIntoConstraints = false
         for view in content.arrangedSubviews {
-            view.widthAnchor.constraint(equalTo: content.widthAnchor, constant: -40).isActive = true
+            view.widthAnchor.constraint(
+                equalTo: content.widthAnchor,
+                constant: -(ChromeMetrics.Spacing.modalInsets.left + ChromeMetrics.Spacing.modalInsets.right)
+            ).isActive = true
         }
         return content
     }

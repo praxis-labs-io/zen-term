@@ -14,14 +14,14 @@
             translatesAutoresizingMaskIntoConstraints = false
 
             let heading = NSTextField(labelWithString: title)
-            heading.font = .systemFont(ofSize: 13, weight: .semibold)
+            heading.font = ChromeType.font(.body, weight: .semibold)
             heading.textColor = Theme.current.chrome.ink(.normal)
 
             let stack = NSStackView(views: [heading] + rows.map(Self.line))
             stack.orientation = .vertical
             stack.alignment = .leading
-            stack.spacing = 14
-            stack.setCustomSpacing(18, after: heading)
+            stack.spacing = ChromeMetrics.Spacing.s12
+            stack.setCustomSpacing(ChromeMetrics.Spacing.s16, after: heading)
             stack.translatesAutoresizingMaskIntoConstraints = false
             addSubview(stack)
             NSLayoutConstraint.activate([
@@ -41,7 +41,7 @@
             let samples = NSStackView(views: row.samples)
             samples.orientation = .horizontal
             samples.alignment = .centerY
-            samples.spacing = 16
+            samples.spacing = ChromeMetrics.Spacing.s16
 
             let line = NSStackView(views: [caption, samples])
             line.orientation = .horizontal

@@ -23,19 +23,57 @@ final class CheckboxDropdownTests: WindowTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 400),
             styleMask: [.borderless], backing: .buffered, defer: false)
         win.contentView?.addSubview(dropdown)
-        dropdown.frame = NSRect(x: 20, y: 320, width: 220, height: 30)
+        dropdown.frame = NSRect(x: 20, y: 320, width: 220, height: ChromeMetrics.Height.control)
         win.layoutIfNeeded()
         window = win
         win.makeFirstResponder(dropdown)
         return dropdown
     }
 
+    private static let unprinted: [UInt16: String] = [
+        36: "\r", 51: "\u{7f}", 53: "\u{1b}", 125: "\u{F701}", 126: "\u{F700}",
+    ]
+
+    /// Sends the key to whatever holds focus, the query field's editor while the list is open.
     private func press(_ dropdown: CheckboxDropdown, _ chars: String, code: UInt16, shift: Bool = false) {
-        dropdown.keyDown(
+        let characters = chars.isEmpty ? Self.unprinted[code] ?? "" : chars
+        var flags: NSEvent.ModifierFlags = shift ? [.shift] : []
+        if code == 125 || code == 126 { flags.formUnion([.function, .numericPad]) }
+        let target: NSResponder = window?.firstResponder ?? dropdown
+        target.keyDown(
             with: NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: shift ? [.shift] : [], timestamp: 0,
-                windowNumber: 0, context: nil, characters: chars, charactersIgnoringModifiers: chars,
-                isARepeat: false, keyCode: code)!)
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
+                windowNumber: window?.windowNumber ?? 0, context: nil, characters: characters,
+                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)!)
+    }
+
+    func test_reapplyTheme_rebuildsTheOpenListSoItIsNotStale() throws {
+        let original = Theme.current
+        defer { Theme.setCurrentForTesting(original) }
+        let dropdown = makeDropdown()
+        dropdown.openListForTesting()
+        let staleRow = try XCTUnwrap(dropdown.rowViewsForTesting.first)
+
+        Theme.setCurrentForTesting(AppTheme(terminal: Theme.builtIn.terminal, accent: .magenta))
+        dropdown.reapplyTheme()
+
+        XCTAssertTrue(dropdown.isPopoverOpen, "the list has to survive the recolour")
+        XCTAssertFalse(dropdown.rowViewsForTesting.first === staleRow, "the list is still painted in the old theme")
+    }
+
+    func test_togglingWhileOpen_updatesTheSummaryInTheQueryField() {
+        let dropdown = makeDropdown()
+        press(dropdown, " ", code: 49)
+        XCTAssertEqual(dropdown.shownSummaryForTesting, "All shown")
+
+        dropdown.setItems(
+            [CheckboxDropdownItem(title: "One", isChecked: false)] + [
+                CheckboxDropdownItem(title: "Two", isChecked: true),
+                CheckboxDropdownItem(title: "Three", isChecked: true),
+            ], title: "2 of 3 shown")
+
+        XCTAssertEqual(dropdown.shownSummaryForTesting, "2 of 3 shown", "the open field still shows the old count")
+        XCTAssertTrue(dropdown.isPopoverOpen, "a toggle must not end the edit")
     }
 
     func test_typing_narrowsTheListAndShowsTheQuery() {
@@ -47,10 +85,10 @@ final class CheckboxDropdownTests: WindowTestCase {
 
         XCTAssertEqual(dropdown.queryForTesting, "cr")
         XCTAssertEqual(dropdown.visibleIndicesForTesting, [2], "fuzzy, the way the palette matches")
-        XCTAssertEqual(dropdown.buttonTitleForTesting, "cr", "the button shows what is being typed")
+        XCTAssertTrue(dropdown.isEditingForTesting, "the query types into a real field, caret and all")
     }
 
-    func test_space_stillTogglesRatherThanTypingIntoTheQuery() {
+    func test_spaceTypesIntoTheQuery_andReturnToggles() {
         var toggled: [Int] = []
         let dropdown = makeDropdown([".env", "node_modules"], onToggle: { toggled.append($0) })
         press(dropdown, " ", code: 49)
@@ -59,9 +97,12 @@ final class CheckboxDropdownTests: WindowTestCase {
         press(dropdown, "d", code: 2)
 
         press(dropdown, " ", code: 49)
+        XCTAssertEqual(dropdown.queryForTesting, "mod ", "an open list's field takes Space like any field")
+        XCTAssertEqual(toggled, [])
 
-        XCTAssertEqual(dropdown.queryForTesting, "mod", "Space never enters the query")
-        XCTAssertEqual(toggled, [1], "it toggles the highlighted row, by catalog index")
+        press(dropdown, "", code: 51)
+        press(dropdown, "\r", code: 36)
+        XCTAssertEqual(toggled, [1], "Return toggles the highlighted row, by catalog index")
     }
 
     func test_backspace_widensTheListAgain() {
@@ -131,13 +172,12 @@ final class CheckboxDropdownTests: WindowTestCase {
         XCTAssertGreaterThan(dropdown.listCardSizeForTesting.height, 20, "the card has to hold a line")
     }
 
-    func test_spaceWithNothingMatching_togglesNothing() {
+    func test_returnWithNothingMatching_togglesNothing() {
         var toggled: [Int] = []
         let dropdown = makeDropdown([".env", "node_modules"], onToggle: { toggled.append($0) })
         press(dropdown, " ", code: 49)
         press(dropdown, "z", code: 6)
 
-        press(dropdown, " ", code: 49)
         press(dropdown, "\r", code: 36)
 
         XCTAssertEqual(toggled, [], "a filtered-out row is not committable")
@@ -198,12 +238,12 @@ final class CheckboxDropdownTests: WindowTestCase {
         XCTAssertEqual(bubbledDown, 1, "an open list owns its arrows")
     }
 
-    func test_spaceTogglesTheHighlightedRow_andKeepsTheListOpen() {
+    func test_returnTogglesTheHighlightedRow_andKeepsTheListOpen() {
         var toggled: [Int] = []
         let dropdown = makeDropdown(onToggle: { toggled.append($0) })
         press(dropdown, " ", code: 49)
         press(dropdown, "", code: 125)
-        press(dropdown, " ", code: 49)
+        press(dropdown, "\r", code: 36)
         XCTAssertEqual(toggled, [1])
         XCTAssertTrue(dropdown.isPopoverOpen, "a toggle must not close a multi-select")
     }

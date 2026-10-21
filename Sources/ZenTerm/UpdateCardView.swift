@@ -26,13 +26,12 @@ final class UpdateCardView: ShadowCardView {
     }
 
     static let width: CGFloat = 360
-    private static let inset: CGFloat = 12
+    private static let inset: CGFloat = ChromeMetrics.Spacing.s12
     private static let badgeSize: CGFloat = 28
-    private static let rootSpacing: CGFloat = 12
+    private static let rootSpacing: CGFloat = ChromeMetrics.Spacing.s12
 
     // Exposed so the notes are measured against the real wrap budget (`UpdateCardTests`).
     static let notesMaxWidth: CGFloat = width - inset * 2 - badgeSize - rootSpacing
-    static let notesFont: NSFont = .systemFont(ofSize: 12)
 
     private var state: State
     private var actions: Actions
@@ -54,19 +53,19 @@ final class UpdateCardView: ShadowCardView {
 
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 12
-        layer?.borderWidth = 1
-        FloatShadow.applyShadow(to: self)
+        layer?.cornerRadius = ChromeMetrics.Radius.surface
+        layer?.borderWidth = ChromeMetrics.Border.width
+        FloatShadow.apply(.float, to: self)
 
         badgeFill.wantsLayer = true
-        badgeFill.layer?.cornerRadius = 7
+        badgeFill.layer?.cornerRadius = ChromeMetrics.Radius.control
         badgeFill.translatesAutoresizingMaskIntoConstraints = false
         iconView.image = BrandMark.image("origami")
         iconView.imageScaling = .scaleProportionallyUpOrDown
         iconView.translatesAutoresizingMaskIntoConstraints = false
         badgeFill.addSubview(iconView)
 
-        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        titleLabel.font = ChromeType.font(.body, weight: .semibold)
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
@@ -75,23 +74,23 @@ final class UpdateCardView: ShadowCardView {
         headerSpacer.setContentCompressionResistancePriority(.init(rawValue: 1), for: .horizontal)
         header.orientation = .horizontal
         header.alignment = .centerY
-        header.spacing = 6
+        header.spacing = ChromeMetrics.Spacing.s6
         header.addArrangedSubview(titleLabel)
         header.addArrangedSubview(headerSpacer)
         refreshKeycap()
 
         bodyColumn.orientation = .vertical
         bodyColumn.alignment = .leading
-        bodyColumn.spacing = 6
+        bodyColumn.spacing = ChromeMetrics.Spacing.s6
 
         buttonRow.orientation = .horizontal
         buttonRow.alignment = .centerY
-        buttonRow.spacing = 6
+        buttonRow.spacing = ChromeMetrics.Spacing.s6
 
         let col = NSStackView(views: [header, bodyColumn, buttonRow])
         col.orientation = .vertical
         col.alignment = .leading
-        col.spacing = 9
+        col.spacing = ChromeMetrics.Spacing.s10
         header.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
         bodyColumn.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
         buttonRow.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
@@ -144,11 +143,11 @@ final class UpdateCardView: ShadowCardView {
 
         switch state {
         case .available(_, let current, let notes, let notesURL):
-            addBodyLabel(current, color: Theme.current.chrome.muted.nsColor)
+            addBodyLabel(current, color: Theme.current.chrome.ink(.muted))
             if !notes.isEmpty {
                 addBodyLabel(
                     notes.map { "•  \($0)" }.joined(separator: "\n"),
-                    color: Theme.current.chrome.foreground.nsColor)
+                    color: Theme.current.chrome.ink(.normal))
             }
             if let notesURL {
                 let link = AppButton(title: "What's new", variant: .secondary) { [weak self] in
@@ -168,7 +167,7 @@ final class UpdateCardView: ShadowCardView {
         case .ready(let version):
             addBodyLabel(
                 "Relaunch to finish updating to \(version).",
-                color: Theme.current.chrome.muted.nsColor)
+                color: Theme.current.chrome.ink(.muted))
             addButton("Relaunch", variant: .primary) { [weak self] in self?.actions.relaunch() }
             addButton("Later", variant: .secondary) { [weak self] in self?.actions.later() }
         }
@@ -192,7 +191,7 @@ final class UpdateCardView: ShadowCardView {
 
     private func addBodyLabel(_ text: String, color: NSColor) {
         let label = NSTextField(wrappingLabelWithString: text)
-        label.font = Self.notesFont
+        label.font = ChromeType.font(.small)
         label.textColor = color
         label.preferredMaxLayoutWidth = Self.notesMaxWidth
         bodyColumn.addArrangedSubview(label)
@@ -210,7 +209,7 @@ final class UpdateCardView: ShadowCardView {
     private func applyColors() {
         layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
         layer?.borderColor = FloatShadow.edge.cgColor
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
         let accent = Theme.current.chrome.accent.nsColor
         badgeFill.layer?.backgroundColor =
             Theme.current.chrome.tint(Theme.current.chrome.accent, alpha: ChromeTheme.badgeTint).cgColor
@@ -220,6 +219,7 @@ final class UpdateCardView: ShadowCardView {
 
     func reapplyTheme() {
         applyColors()
+        FloatShadow.apply(.float, to: self)
         refreshKeycap()
         checkKeycap?.reapplyTheme()
         render()

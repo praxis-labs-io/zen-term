@@ -168,7 +168,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
     private func syncFocus() {
         guard let active = activeFloat else { return }
         active.surface.setFocused(holdsKeyFocus && focusedSurfaceRendersFocused)
-        active.overlay.isHaloVisible = holdsKeyFocus
+        active.overlay.isFocusBorderVisible = holdsKeyFocus
     }
 
     func reapplyTheme() { activeFloat?.overlay.reapplyTheme() }
@@ -245,7 +245,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
             widthFraction: spec.widthFraction,
             heightFraction: spec.heightFraction,
             contentInset: 10,
-            cornerRadius: 14,
+            cornerRadius: ChromeMetrics.Radius.surface,
             onDismiss: { [weak self] in self?.close() })
         overlay.backgroundOverride = surface.backgroundOverride
         presentOverlay(overlay)

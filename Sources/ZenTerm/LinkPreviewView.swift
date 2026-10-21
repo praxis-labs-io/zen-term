@@ -16,10 +16,10 @@ final class LinkPreviewView: HoverCardView {
         addSubview(text)
         NSLayoutConstraint.activate([
             text.widthAnchor.constraint(lessThanOrEqualToConstant: Self.maxTextWidth),
-            text.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
-            text.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -9),
-            text.topAnchor.constraint(equalTo: topAnchor, constant: 5),
-            text.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
+            text.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
+            text.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
+            text.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.Spacing.s4),
+            text.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -ChromeMetrics.Spacing.s4),
         ])
     }
 

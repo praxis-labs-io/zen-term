@@ -51,8 +51,8 @@ final class Dropdown: NSView {
     private var isFocusedStop = false
 
     static let swatchSize: CGFloat = 10
-    private static let rowHeight: CGFloat = 28
-    private static let headerHeight: CGFloat = 20
+    private static let rowHeight: CGFloat = ChromeMetrics.Height.control
+    private static let headerHeight: CGFloat = ChromeMetrics.Height.xs
 
     var buttonTitleForTesting: String { titleLabel.stringValue }
     var itemsForTesting: [DropdownItem] { items }
@@ -77,22 +77,23 @@ final class Dropdown: NSView {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 6
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         PopoverButtonStyle.applyRestFill(to: self)
-        layer?.borderWidth = 1
+        layer?.borderWidth = ChromeMetrics.Border.width
         layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
 
-        queryField.font = .systemFont(ofSize: 13)
-        queryField.textColor = Theme.current.chrome.foreground.nsColor
+        queryField.font = ChromeType.font(.body)
+        queryField.textColor = Theme.current.chrome.ink(.normal)
         queryField.isBordered = false
+        queryField.makeSingleLine()
         queryField.drawsBackground = false
         queryField.focusRingType = .none
         queryField.isHidden = true
         queryField.delegate = self
         queryField.translatesAutoresizingMaskIntoConstraints = false
 
-        titleLabel.font = .systemFont(ofSize: 13)
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        titleLabel.font = ChromeType.font(.body)
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.lineBreakMode = .byTruncatingTail
 
@@ -102,8 +103,8 @@ final class Dropdown: NSView {
         chevron.translatesAutoresizingMaskIntoConstraints = false
 
         swatch.wantsLayer = true
-        swatch.layer?.cornerRadius = Self.swatchSize / 2
-        swatch.layer?.borderWidth = 1
+        swatch.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.swatchSize)
+        swatch.layer?.borderWidth = ChromeMetrics.Border.width
         swatch.layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.swatchRing).cgColor
         swatch.isHidden = true
         swatch.translatesAutoresizingMaskIntoConstraints = false
@@ -113,22 +114,24 @@ final class Dropdown: NSView {
         addSubview(queryField)
         addSubview(chevron)
         titleAfterSwatch = titleLabel.leadingAnchor.constraint(
-            equalTo: swatch.trailingAnchor, constant: 7)
-        titleAtLeading = titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9)
+            equalTo: swatch.trailingAnchor, constant: ChromeMetrics.Spacing.s6)
+        titleAtLeading = titleLabel.leadingAnchor.constraint(
+            equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset)
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 30),
-            swatch.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
+            heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
+            swatch.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
             swatch.centerYAnchor.constraint(equalTo: centerYAnchor),
             swatch.widthAnchor.constraint(equalToConstant: Self.swatchSize),
             swatch.heightAnchor.constraint(equalToConstant: Self.swatchSize),
             titleAtLeading,
             titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            chevron.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 6),
-            chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -9),
+            chevron.leadingAnchor.constraint(
+                greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
+            chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
             chevron.centerYAnchor.constraint(equalTo: centerYAnchor),
             queryField.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             queryField.centerYAnchor.constraint(equalTo: centerYAnchor),
-            queryField.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -6),
+            queryField.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -ChromeMetrics.Spacing.s6),
         ])
         renderTitle()
     }
@@ -164,13 +167,13 @@ final class Dropdown: NSView {
     /// Rebuilds an open list too: its rows bake in the theme at build time.
     func reapplyTheme() {
         restyle()
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
         chevron.contentTintColor = Theme.current.chrome.ink(.muted)
         swatch.layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.swatchRing).cgColor
-        queryField.textColor = Theme.current.chrome.foreground.nsColor
+        queryField.textColor = Theme.current.chrome.ink(.normal)
         if !queryField.isHidden {
             renderQueryPlaceholder()
-            queryField.applyThemedCaret()
+            queryField.applyThemedEditor()
         }
         rebuildOpenList()
     }
@@ -303,8 +306,7 @@ final class Dropdown: NSView {
         titleLabel.isHidden = true
         queryField.isHidden = false
         isEditing = true
-        window?.makeFirstResponder(queryField)
-        queryField.applyThemedCaret()
+        guard window?.makeFirstResponder(queryField) == true else { return endEditing() }
     }
 
     /// Restores focus before hiding the field: hiding a first responder dumps focus to the window.
@@ -323,7 +325,7 @@ final class Dropdown: NSView {
             string: title,
             attributes: [
                 .foregroundColor: Theme.current.chrome.ink(.muted),
-                .font: NSFont.systemFont(ofSize: 13),
+                .font: ChromeType.font(.body),
             ])
     }
 
@@ -419,14 +421,14 @@ final class Dropdown: NSView {
 
     private static func groupHeaderView(_ text: String, chrome: ChromeTheme) -> NSView {
         let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: 10, weight: .semibold)
+        label.font = ChromeType.sectionLabel
         label.textColor = chrome.ink(.muted)
         label.translatesAutoresizingMaskIntoConstraints = false
         let host = NSView()
         host.translatesAutoresizingMaskIntoConstraints = false
         host.addSubview(label)
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 8),
+            label.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
             label.centerYAnchor.constraint(equalTo: host.centerYAnchor),
         ])
         return host
@@ -442,12 +444,12 @@ private final class DropdownRowView: NSView {
         self.onSelect = onSelect
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 5
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         translatesAutoresizingMaskIntoConstraints = false
 
         let title = NSTextField(labelWithString: item.title)
-        title.font = .systemFont(ofSize: 13)
-        title.textColor = chrome.foreground.nsColor
+        title.font = ChromeType.font(.body)
+        title.textColor = chrome.ink(.normal)
         title.lineBreakMode = .byTruncatingTail
         title.translatesAutoresizingMaskIntoConstraints = false
         addSubview(title)
@@ -455,27 +457,28 @@ private final class DropdownRowView: NSView {
         if let swatchColor = item.swatch {
             let dot = NSView()
             dot.wantsLayer = true
-            dot.layer?.cornerRadius = Dropdown.swatchSize / 2
+            dot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Dropdown.swatchSize)
             dot.layer?.backgroundColor = swatchColor.cgColor
-            dot.layer?.borderWidth = 1
+            dot.layer?.borderWidth = ChromeMetrics.Border.width
             dot.layer?.borderColor = chrome.fill(alpha: ChromeTheme.swatchRing).cgColor
             dot.translatesAutoresizingMaskIntoConstraints = false
             addSubview(dot)
             NSLayoutConstraint.activate([
-                dot.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+                dot.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
                 dot.centerYAnchor.constraint(equalTo: centerYAnchor),
                 dot.widthAnchor.constraint(equalToConstant: Dropdown.swatchSize),
                 dot.heightAnchor.constraint(equalToConstant: Dropdown.swatchSize),
-                title.leadingAnchor.constraint(equalTo: dot.trailingAnchor, constant: 7),
+                title.leadingAnchor.constraint(equalTo: dot.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
             ])
         } else {
-            title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8).isActive = true
+            title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset)
+                .isActive = true
         }
 
         var trailing: [NSView] = []
         if let note = item.note {
             let noteLabel = NSTextField(labelWithString: note)
-            noteLabel.font = .systemFont(ofSize: 11)
+            noteLabel.font = ChromeType.font(.caption)
             noteLabel.textColor = chrome.ink(.muted)
             trailing.append(noteLabel)
         }
@@ -487,16 +490,19 @@ private final class DropdownRowView: NSView {
             trailing.append(check)
         }
         if trailing.isEmpty {
-            title.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -8).isActive = true
+            title.trailingAnchor.constraint(
+                lessThanOrEqualTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset
+            ).isActive = true
         } else {
             let group = NSStackView(views: trailing)
             group.orientation = .horizontal
-            group.spacing = 6
+            group.spacing = ChromeMetrics.Spacing.s6
             group.translatesAutoresizingMaskIntoConstraints = false
             addSubview(group)
             NSLayoutConstraint.activate([
-                group.leadingAnchor.constraint(greaterThanOrEqualTo: title.trailingAnchor, constant: 8),
-                group.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+                group.leadingAnchor.constraint(
+                    greaterThanOrEqualTo: title.trailingAnchor, constant: ChromeMetrics.Spacing.s8),
+                group.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
                 group.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
         }

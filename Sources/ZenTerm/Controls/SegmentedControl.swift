@@ -34,7 +34,7 @@ final class SegmentedControl: NSView {
         self.onChange = onChange
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 7
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         translatesAutoresizingMaskIntoConstraints = false
 
         segments = options.enumerated().map { index, title in
@@ -43,7 +43,7 @@ final class SegmentedControl: NSView {
         let stack = NSStackView(views: segments)
         stack.orientation = .horizontal
         stack.alignment = .centerY
-        stack.spacing = 4
+        stack.spacing = ChromeMetrics.Spacing.s4
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         segmentsStack = stack

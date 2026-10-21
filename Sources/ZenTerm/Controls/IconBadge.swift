@@ -17,12 +17,6 @@ final class IconBadge: NSView {
             case .regular: return 13
             }
         }
-
-        var cornerRadius: CGFloat {
-            switch self {
-            case .regular: return 7
-            }
-        }
     }
 
     private let icon = NSImageView()
@@ -33,7 +27,7 @@ final class IconBadge: NSView {
         self.role = role
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = size.cornerRadius
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         translatesAutoresizingMaskIntoConstraints = false
         icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: accessibilityDescription)
         icon.symbolConfiguration = .init(pointSize: size.pointSize, weight: .semibold)

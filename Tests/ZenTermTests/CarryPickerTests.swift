@@ -29,7 +29,7 @@ final class CarryPickerTests: WindowTestCase {
             contentRect: NSRect(x: 0, y: 0, width: 460, height: 400),
             styleMask: [.borderless], backing: .buffered, defer: false)
         win.contentView?.addSubview(picker)
-        picker.frame = NSRect(x: 20, y: 320, width: 300, height: 30)
+        picker.frame = NSRect(x: 20, y: 320, width: 300, height: ChromeMetrics.Height.control)
         window = win
         return picker
     }

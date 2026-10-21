@@ -1,7 +1,7 @@
 import AppKit
 
 final class PaletteSectionHeader: NSView, PaletteRowView {
-    static let height: CGFloat = 26
+    static let height: CGFloat = ChromeMetrics.Height.sm
 
     var isSelected = false
     var onActivate: (() -> Void)?
@@ -14,17 +14,16 @@ final class PaletteSectionHeader: NSView, PaletteRowView {
 
         let label = NSTextField(
             labelWithAttributedString: NSAttributedString(
-                string: title.uppercased(),
+                string: title,
                 attributes: [
-                    .font: NSFont.systemFont(ofSize: 10, weight: .semibold),
+                    .font: ChromeType.sectionLabel,
                     .foregroundColor: Theme.current.chrome.ink(.muted),
-                    .kern: 0.6,
                 ]))
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
+            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -ChromeMetrics.Spacing.s4),
         ])
     }
 

@@ -273,7 +273,7 @@ final class ControlSSHHostTests: WindowTestCase {
         for cmd in [ControlCommand.workspaceOpen, .workspaceSwitch, .workspaceClose, .tabNew] {
             let refusal = try error(send(cmd, missing))
             XCTAssertEqual(refusal.code, .notFound, cmd.rawValue)
-            XCTAssertEqual(refusal.message, "There is no SSH host nope in Settings.", cmd.rawValue)
+            XCTAssertEqual(refusal.message, "There is no remote host nope in Settings.", cmd.rawValue)
         }
         XCTAssertNotEqual(c.selectedHostForTesting, SSHHostID(alias: "nope"))
     }
@@ -377,7 +377,7 @@ final class ControlSSHHostTests: WindowTestCase {
         let refusal = try error(send(.worktreeList, ControlArgs(workspace: address)))
 
         XCTAssertEqual(refusal.code, .refused)
-        XCTAssertEqual(refusal.message, "ssh:devbox is an SSH host. Worktrees are made from a configured workspace.")
+        XCTAssertEqual(refusal.message, "ssh:devbox is a remote host. Worktrees are made from a configured workspace.")
     }
 
     func test_aWorktreeCommandAddressedToAHostNotInSettings_isNotFound() throws {
@@ -386,7 +386,7 @@ final class ControlSSHHostTests: WindowTestCase {
         let missing = try error(send(.worktreeList, ControlArgs(workspace: "ssh:nowhere")))
 
         XCTAssertEqual(missing.code, .notFound)
-        XCTAssertEqual(missing.message, "There is no SSH host nowhere in Settings.")
+        XCTAssertEqual(missing.message, "There is no remote host nowhere in Settings.")
     }
 
     func test_aWorktreeCommandDefaultingToAHostWorkspace_isRefusedLikeItsSSHAddress() throws {
@@ -399,7 +399,7 @@ final class ControlSSHHostTests: WindowTestCase {
                 let refusal = try error(send(cmd, ControlArgs(branch: "x"), from: caller))
                 XCTAssertEqual(refusal.code, .refused, "\(cmd.rawValue) from \(String(describing: caller))")
                 XCTAssertEqual(
-                    refusal.message, "ssh:devbox is an SSH host. Worktrees are made from a configured workspace.",
+                    refusal.message, "ssh:devbox is a remote host. Worktrees are made from a configured workspace.",
                     "\(cmd.rawValue) from \(String(describing: caller))")
             }
         }

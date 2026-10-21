@@ -4,8 +4,8 @@ import AppKit
 final class WorkspaceTabDrawing: NSView {
     static let height: CGFloat = 232
     static let launchFocusShortcut = "⌘L"
-    private static let inset: CGFloat = 8
-    private static let gap: CGFloat = 8
+    private static let inset: CGFloat = ChromeMetrics.Spacing.s8
+    private static let gap: CGFloat = ChromeMetrics.Spacing.s8
     private static let railThickness: CGFloat = 28
     private static let bottomHeight: CGFloat = 72
     private static let rightWidth: CGFloat = 216
@@ -36,8 +36,8 @@ final class WorkspaceTabDrawing: NSView {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 10
-        layer?.borderWidth = 1
+        layer?.cornerRadius = ChromeMetrics.Radius.surface
+        layer?.borderWidth = ChromeMetrics.Border.width
         heightAnchor.constraint(equalToConstant: Self.height).isActive = true
         for field in regions.values { wire(field) }
         for rail in rails.values { wire(rail) }

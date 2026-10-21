@@ -66,7 +66,7 @@ enum KeyboardFocus {
         let viewport = scroll.contentView.bounds.height
         guard viewport > 0 else { return }
         let frame = stop.convert(stop.bounds, to: document)
-        let padded = frame.insetBy(dx: 0, dy: -12)
+        let padded = frame.insetBy(dx: 0, dy: -ChromeMetrics.Spacing.s12)
         let previousBottom =
             stops
             .map { $0.convert($0.bounds, to: document).maxY }

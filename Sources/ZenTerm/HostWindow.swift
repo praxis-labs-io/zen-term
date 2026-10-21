@@ -5,6 +5,8 @@ final class HostWindow: NSWindow {
 
     var contentWidth: CGFloat { contentRect(forFrameRect: frame).width }
 
+    private lazy var chromeFieldEditor = ChromeTextView.makeFieldEditor()
+
     /// Sets `contentMinSize` because a mounted overlay otherwise collapses the size AppKit derives from constraints.
     init(contentRect: NSRect) {
         super.init(
@@ -37,6 +39,11 @@ final class HostWindow: NSWindow {
             target.origin.y = min(max(target.minY, visible.minY), visible.maxY - target.height)
         }
         setFrame(target, display: true, animate: animate)
+    }
+
+    override func fieldEditor(_ createFlag: Bool, for object: Any?) -> NSText? {
+        guard object is NSTextField else { return super.fieldEditor(createFlag, for: object) }
+        return chromeFieldEditor
     }
 
     func setWindowChromeVisible(_ shown: Bool) {

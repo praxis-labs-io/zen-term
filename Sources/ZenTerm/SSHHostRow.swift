@@ -18,11 +18,11 @@ final class SSHHostRow: SettingsFocusRow {
         setAccessibilityRole(.button)
         setAccessibilityLabel("Edit \(title)")
 
-        titleLabel.font = .systemFont(ofSize: 13)
+        titleLabel.font = ChromeType.font(.body)
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
-        subtitleLabel.font = .systemFont(ofSize: 11)
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
+        subtitleLabel.font = ChromeType.font(.caption)
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         subtitleLabel.lineBreakMode = .byTruncatingTail
         subtitleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -30,11 +30,11 @@ final class SSHHostRow: SettingsFocusRow {
         let labels = NSStackView(views: [titleLabel, subtitleLabel])
         labels.orientation = .vertical
         labels.alignment = .leading
-        labels.spacing = 1
+        labels.spacing = ChromeMetrics.Spacing.s2
         labels.setContentHuggingPriority(.defaultLow, for: .horizontal)
         labels.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        statusLabel.font = .systemFont(ofSize: 12)
+        statusLabel.font = ChromeType.font(.small)
         statusLabel.setContentHuggingPriority(.required, for: .horizontal)
         statusLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         let spacer = NSView()
@@ -42,7 +42,7 @@ final class SSHHostRow: SettingsFocusRow {
         let controls = NSStackView(views: [labels, spacer, statusLabel])
         controls.orientation = .horizontal
         controls.alignment = .centerY
-        controls.spacing = 10
+        controls.spacing = ChromeMetrics.Spacing.s10
         pin(controls)
         showStatus()
     }
@@ -56,7 +56,7 @@ final class SSHHostRow: SettingsFocusRow {
     }
 
     override func reapplyTheme() {
-        titleLabel.textColor = Theme.current.chrome.foreground.nsColor
+        titleLabel.textColor = Theme.current.chrome.ink(.normal)
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         statusLabel.textColor = status.ink
         super.reapplyTheme()

@@ -6,7 +6,7 @@ final class CommandPaletteOverlay: PaletteOverlay {
         case command(PaletteCommand)
     }
 
-    private static let commandHeight: CGFloat = 34
+    private static let commandHeight: CGFloat = ChromeMetrics.Height.lg
 
     private let onRun: (KeyInterceptor.ReservedChord) -> Void
 
@@ -130,13 +130,13 @@ final class CommandPaletteOverlay: PaletteOverlay {
             super.init()
 
             let title = NSTextField(labelWithString: command.title)
-            title.font = .systemFont(ofSize: 13)
-            title.textColor = Theme.current.chrome.foreground.nsColor
+            title.font = ChromeType.font(.body)
+            title.textColor = Theme.current.chrome.ink(.normal)
             title.translatesAutoresizingMaskIntoConstraints = false
             addSubview(title)
 
             NSLayoutConstraint.activate([
-                title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+                title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
                 title.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
 
@@ -144,9 +144,11 @@ final class CommandPaletteOverlay: PaletteOverlay {
             let keycap = KeycapView(shortcut: command.shortcut)
             addSubview(keycap)
             NSLayoutConstraint.activate([
-                keycap.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+                keycap.trailingAnchor.constraint(
+                    equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
                 keycap.centerYAnchor.constraint(equalTo: centerYAnchor),
-                title.trailingAnchor.constraint(lessThanOrEqualTo: keycap.leadingAnchor, constant: -8),
+                title.trailingAnchor.constraint(
+                    lessThanOrEqualTo: keycap.leadingAnchor, constant: -ChromeMetrics.Spacing.s8),
             ])
         }
 

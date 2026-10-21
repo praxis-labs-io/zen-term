@@ -349,7 +349,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(ghost.detailForTesting, "")
         XCTAssertNil(ghost.tooltip, "a ghost takes no ⌘⌃ number")
         XCTAssertEqual(rows(of: c)[2].variant, .nested(symbol: "arrow.triangle.branch"))
-        XCTAssertEqual(rows(of: c)[2].layer?.backgroundColor, Theme.current.chrome.fill(.rest).cgColor)
+        XCTAssertEqual(rows(of: c)[2].layer?.backgroundColor, Theme.current.chrome.fill(.active).cgColor)
     }
 
     func test_clickingTheGhost_opensItsWorkspaceInThatPlace() throws {

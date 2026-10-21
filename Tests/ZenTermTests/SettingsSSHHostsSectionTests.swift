@@ -61,7 +61,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     private func groupCaptions(in view: NSView) -> [String] {
         view.subviews.flatMap { child -> [String] in
             if child is SSHHostRow { return [] }
-            let own = (child as? NSTextField).flatMap { $0.font?.pointSize == 10 ? $0.stringValue : nil }
+            let own = (child as? NSTextField).flatMap { $0.font == ChromeType.sectionLabel ? $0.stringValue : nil }
             return (own.map { [$0] } ?? []) + groupCaptions(in: child)
         }
     }
@@ -71,7 +71,9 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     }
 
     private func emptyHint(in view: NSView) -> NSTextField? {
-        descendants(of: view).compactMap { $0 as? NSTextField }.first { $0.stringValue.hasPrefix("No SSH hosts yet") }
+        descendants(of: view).compactMap { $0 as? NSTextField }.first {
+            $0.stringValue.hasPrefix("No remote hosts yet")
+        }
     }
 
     private func rowCaption(_ row: SSHHostRow) -> NSTextField? {
@@ -120,7 +122,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
 
         let detail = mount()
 
-        XCTAssertEqual(groupCaptions(in: detail), ["SSH HOSTS"])
+        XCTAssertEqual(groupCaptions(in: detail), ["Remote hosts"])
         XCTAssertEqual(captions(in: detail), ["deploy@10.0.0.5"])
         XCTAssertEqual(rows(in: detail).count, 1)
         XCTAssertNil(emptyHint(in: detail))
@@ -142,7 +144,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
 
         XCTAssertNotNil(emptyHint(in: detail))
         XCTAssertTrue(rows(in: detail).isEmpty)
-        XCTAssertEqual(groupCaptions(in: detail), ["SSH HOSTS"])
+        XCTAssertEqual(groupCaptions(in: detail), ["Remote hosts"])
     }
 
     func test_aHandEditWhileOpen_addsNewHostsAndDropsDeletedOnes() throws {
@@ -322,7 +324,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         c.mountAndStart()
         let content = try XCTUnwrap(c.window.contentView)
         c.openSettings(for: .setting(key: "ssh-host"))
-        waitUntil(emptyHint(in: content) != nil || !captions(in: content).isEmpty, "Settings to land on SSH Hosts")
+        waitUntil(emptyHint(in: content) != nil || !captions(in: content).isEmpty, "Settings to land on Remote hosts")
         content.layoutSubtreeIfNeeded()
         try body(c, content)
     }
@@ -406,7 +408,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
             try click(devbox, in: c)
 
             let overlay = try XCTUnwrap(form(in: content))
-            XCTAssertEqual(formTitle(overlay), "Edit SSH Host")
+            XCTAssertEqual(formTitle(overlay), "Edit remote host")
             let boxes = descendants(of: overlay).compactMap { $0 as? FieldBox }
             XCTAssertEqual(boxes.map(\.text), ["devbox", "Build box"])
 
@@ -429,7 +431,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
             XCTAssertEqual(row.accessibilityLabel(), "Edit Deploy box")
             XCTAssertTrue(row.accessibilityPerformPress())
 
-            XCTAssertEqual(formTitle(try XCTUnwrap(form(in: content))), "Edit SSH Host")
+            XCTAssertEqual(formTitle(try XCTUnwrap(form(in: content))), "Edit remote host")
         }
     }
 

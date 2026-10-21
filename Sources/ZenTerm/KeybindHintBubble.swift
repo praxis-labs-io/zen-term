@@ -2,19 +2,26 @@ import AppKit
 
 final class KeybindHintBubble: ShadowCardView {
     private static let width: CGFloat = 220
-    private static let insets: CGFloat = 28
-    private static let resetSlot: CGFloat = 34 + 8
+    private static let insets = ChromeMetrics.Spacing.s12 * 2
+    private static let resetSlot = ChromeMetrics.Height.lg + ChromeMetrics.Spacing.s8
 
     static func inputWidth(withReset: Bool) -> CGFloat {
         width - insets - (withReset ? resetSlot : 0)
     }
 
     private let previewHost = NSView()
+    private let previewBox = NSView()
+    private let badge = NSView()
+    private let icon = NSImageView()
+    private let title = NSTextField(labelWithString: "Record a shortcut")
+    private var previewGlyph = ""
+    private var successText: String?
     private let statusHost = NSView()
     private let errorLabel = NSTextField(wrappingLabelWithString: "")
     /// Hidden until a host asks: the tool-float form shares this popover and has no defaults.
     private lazy var resetButton = IconButton(
-        symbol: "arrow.uturn.backward", size: NSSize(width: 34, height: 34), pointSize: 13,
+        symbol: "arrow.uturn.backward", size: NSSize(width: ChromeMetrics.Height.lg, height: ChromeMetrics.Height.lg),
+        pointSize: 13,
         accessibilityLabel: "Reset to default", restsFilled: true
     ) { [weak self] in self?.onResetToDefault?() }
     var onResetToDefault: (() -> Void)?
@@ -22,49 +29,31 @@ final class KeybindHintBubble: ShadowCardView {
     init() {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-        layer?.cornerRadius = 12
-        layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
-        layer?.borderWidth = 1
-        layer?.borderColor = FloatShadow.edge.cgColor
-        FloatShadow.applyShadow(to: self)
+        CardChrome.apply(to: self, background: Theme.current.chrome.background.nsColor, tier: .overlay)
 
-        let accent = Theme.current.chrome.accent.nsColor
-
-        let badge = NSView()
         badge.wantsLayer = true
-        badge.layer?.cornerRadius = 7
-        badge.layer?.backgroundColor =
-            Theme.current.chrome.tint(Theme.current.chrome.accent, alpha: ChromeTheme.badgeTint).cgColor
+        badge.layer?.cornerRadius = ChromeMetrics.Radius.control
         badge.translatesAutoresizingMaskIntoConstraints = false
-        let icon = NSImageView()
         icon.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Record a shortcut")
         icon.symbolConfiguration = .init(pointSize: 13, weight: .semibold)
-        icon.contentTintColor = accent
         icon.translatesAutoresizingMaskIntoConstraints = false
         badge.addSubview(icon)
 
-        let title = NSTextField(labelWithString: "Record a shortcut")
-        title.font = .systemFont(ofSize: 13, weight: .semibold)
-        title.textColor = Theme.current.chrome.foreground.nsColor
+        title.font = ChromeType.font(.body, weight: .semibold)
 
         let header = NSStackView(views: [badge, title])
         header.orientation = .horizontal
         header.alignment = .centerY
-        header.spacing = 10
+        header.spacing = ChromeMetrics.Spacing.s10
 
-        let previewBox = NSView()
         previewBox.wantsLayer = true
-        previewBox.layer?.cornerRadius = 6
-        previewBox.layer?.backgroundColor = Theme.current.chrome.fill(.rest).cgColor
-        previewBox.layer?.borderWidth = 1.5
-        previewBox.layer?.borderColor = Theme.current.chrome.accent.nsColor.cgColor
+        previewBox.layer?.cornerRadius = ChromeMetrics.Radius.control
+        previewBox.layer?.borderWidth = ChromeMetrics.Border.width
         previewBox.translatesAutoresizingMaskIntoConstraints = false
         previewHost.translatesAutoresizingMaskIntoConstraints = false
         previewBox.addSubview(previewHost)
 
-        errorLabel.font = .systemFont(ofSize: 10, weight: .medium)
-        errorLabel.textColor = Theme.current.chrome.destructive.nsColor
+        errorLabel.font = ChromeType.font(.caption, weight: .medium)
         errorLabel.alignment = .center
         errorLabel.preferredMaxLayoutWidth = Self.inputWidth(withReset: true)
         errorLabel.isHidden = true
@@ -74,57 +63,78 @@ final class KeybindHintBubble: ShadowCardView {
         let inputRow = NSStackView(views: [previewBox, resetButton])
         inputRow.orientation = .horizontal
         inputRow.alignment = .centerY
-        inputRow.spacing = 8
+        inputRow.spacing = ChromeMetrics.Spacing.s8
         inputRow.distribution = .fill
 
         let previewGroup = NSStackView(views: [inputRow, errorLabel])
         previewGroup.orientation = .vertical
         previewGroup.alignment = .leading
-        previewGroup.spacing = 4
+        previewGroup.spacing = ChromeMetrics.Spacing.s4
 
         statusHost.translatesAutoresizingMaskIntoConstraints = false
 
         let col = NSStackView(views: [header, previewGroup, statusHost])
         col.orientation = .vertical
         col.alignment = .leading
-        col.spacing = 14
+        col.spacing = ChromeMetrics.Spacing.s12
         col.translatesAutoresizingMaskIntoConstraints = false
         addSubview(col)
 
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: Self.width),
-            badge.widthAnchor.constraint(equalToConstant: 28),
-            badge.heightAnchor.constraint(equalToConstant: 28),
+            badge.widthAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
+            badge.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
             icon.centerXAnchor.constraint(equalTo: badge.centerXAnchor),
             icon.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
             previewGroup.widthAnchor.constraint(equalTo: col.widthAnchor),
             inputRow.widthAnchor.constraint(equalTo: previewGroup.widthAnchor),
-            previewBox.heightAnchor.constraint(equalToConstant: 34),
+            previewBox.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.lg),
             errorLabel.widthAnchor.constraint(equalTo: previewBox.widthAnchor),
             previewHost.centerXAnchor.constraint(equalTo: previewBox.centerXAnchor),
             previewHost.centerYAnchor.constraint(equalTo: previewBox.centerYAnchor),
-            previewHost.leadingAnchor.constraint(greaterThanOrEqualTo: previewBox.leadingAnchor, constant: 10),
-            previewHost.trailingAnchor.constraint(lessThanOrEqualTo: previewBox.trailingAnchor, constant: -10),
+            previewHost.leadingAnchor.constraint(
+                greaterThanOrEqualTo: previewBox.leadingAnchor, constant: ChromeMetrics.Spacing.s10),
+            previewHost.trailingAnchor.constraint(
+                lessThanOrEqualTo: previewBox.trailingAnchor, constant: -ChromeMetrics.Spacing.s10),
             statusHost.widthAnchor.constraint(equalTo: col.widthAnchor),
-            col.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
-            col.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-            col.topAnchor.constraint(equalTo: topAnchor, constant: 14),
-            col.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -14),
+            col.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.s12),
+            col.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.s12),
+            col.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.Spacing.s12),
+            col.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -ChromeMetrics.Spacing.s12),
         ])
 
         resetButton.isHidden = true
         setPreview("")
+        paintColors()
         showInstructions()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    func reapplyTheme() {
+        CardChrome.reapplyTheme(to: self, tier: .overlay)
+        paintColors()
+        setPreview(previewGlyph)
+        if let successText { showSuccess(successText) } else { showInstructions() }
+    }
+
+    private func paintColors() {
+        let chrome = Theme.current.chrome
+        badge.layer?.backgroundColor = chrome.tint(chrome.accent, alpha: ChromeTheme.badgeTint).cgColor
+        icon.contentTintColor = chrome.accent.nsColor
+        title.textColor = chrome.ink(.normal)
+        previewBox.layer?.backgroundColor = chrome.fill(.rest).cgColor
+        previewBox.layer?.borderColor = chrome.accent.nsColor.cgColor
+        errorLabel.textColor = chrome.destructive.nsColor
+    }
+
     func setPreview(_ glyph: String) {
+        previewGlyph = glyph
         previewHost.subviews.forEach { $0.removeFromSuperview() }
         let content: NSView
         if glyph.isEmpty {
             let label = NSTextField(labelWithString: "Press keys…")
-            label.font = .systemFont(ofSize: 12)
+            label.font = ChromeType.font(.small)
             label.textColor = Theme.current.chrome.ink(.muted)
             content = label
         } else {
@@ -157,20 +167,22 @@ final class KeybindHintBubble: ShadowCardView {
     func setCanResetToDefault(_ canReset: Bool) { resetButton.isHidden = !canReset }
 
     func showInstructions() {
+        successText = nil
         let cancel = Self.muted("to cancel")
         let keys = NSStackView(views: [
             Self.keyCap("esc"), cancel, Self.keyCap("del"), Self.muted("to remove"),
         ])
         keys.orientation = .horizontal
         keys.alignment = .centerY
-        keys.spacing = 5
-        keys.setCustomSpacing(12, after: cancel)
+        keys.spacing = ChromeMetrics.Spacing.s4
+        keys.setCustomSpacing(ChromeMetrics.Spacing.s12, after: cancel)
         setStatus(keys)
     }
 
     func showSuccess(_ text: String) {
+        successText = text
         let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: 12, weight: .medium)
+        label.font = ChromeType.font(.small, weight: .medium)
         label.textColor = Theme.current.chrome.accent.nsColor
         setStatus(label)
     }
@@ -189,27 +201,27 @@ final class KeybindHintBubble: ShadowCardView {
 
     private static func keyCap(_ text: String) -> NSView {
         let label = NSTextField(labelWithString: text)
-        label.font = .monospacedSystemFont(ofSize: 10, weight: .medium)
+        label.font = ChromeType.font(.caption, weight: .medium, face: .mono)
         label.textColor = Theme.current.chrome.ink(.subtle)
         label.translatesAutoresizingMaskIntoConstraints = false
         let box = NSView()
         box.wantsLayer = true
-        box.layer?.cornerRadius = 4
+        box.layer?.cornerRadius = ChromeMetrics.Radius.control
         box.layer?.backgroundColor = Theme.current.chrome.fill(.rest).cgColor
         box.translatesAutoresizingMaskIntoConstraints = false
         box.addSubview(label)
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: 5),
-            label.trailingAnchor.constraint(equalTo: box.trailingAnchor, constant: -5),
-            label.topAnchor.constraint(equalTo: box.topAnchor, constant: 2),
-            label.bottomAnchor.constraint(equalTo: box.bottomAnchor, constant: -2),
+            label.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: ChromeMetrics.Spacing.s4),
+            label.trailingAnchor.constraint(equalTo: box.trailingAnchor, constant: -ChromeMetrics.Spacing.s4),
+            label.topAnchor.constraint(equalTo: box.topAnchor, constant: ChromeMetrics.Spacing.s2),
+            label.bottomAnchor.constraint(equalTo: box.bottomAnchor, constant: -ChromeMetrics.Spacing.s2),
         ])
         return box
     }
 
     private static func muted(_ text: String) -> NSTextField {
         let label = NSTextField(labelWithString: text)
-        label.font = .systemFont(ofSize: 11)
+        label.font = ChromeType.font(.caption)
         label.textColor = Theme.current.chrome.ink(.muted)
         return label
     }

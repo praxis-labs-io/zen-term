@@ -25,15 +25,14 @@ final class IconPickerField: NSView {
     private static let columns = 8
     static var columnsForTesting: Int { columns }
     private static let cellSize: CGFloat = 34
-    private static let cellSpacing: CGFloat = 4
-    private static let headerHeight: CGFloat = 16
-    private static let sectionGap: CGFloat = 12
-    private static let windowMargin: CGFloat = 8
+    private static let cellSpacing: CGFloat = ChromeMetrics.Spacing.s4
+    private static let headerHeight: CGFloat = ChromeMetrics.Height.xs
+    private static let sectionGap: CGFloat = ChromeMetrics.Spacing.s12
+    private static let windowMargin: CGFloat = ChromeMetrics.Spacing.s8
     /// Overlay scrollers draw over content, so without this lane the bar covers the last column.
     private static let scrollerGutter: CGFloat = 16
     private var cardNaturalSize: NSSize = .zero
     private static var restFill: NSColor { Theme.current.chrome.fill(.rest) }
-    private static var focusFill: NSColor { Theme.current.chrome.selectionFill }
 
     func openForTesting() { openPopover() }
     var highlightedSymbolForTesting: String? {
@@ -63,12 +62,12 @@ final class IconPickerField: NSView {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 6
-        layer?.borderWidth = 1
+        layer?.cornerRadius = ChromeMetrics.Radius.control
+        layer?.borderWidth = ChromeMetrics.Border.width
 
         glyph.translatesAutoresizingMaskIntoConstraints = false
         glyph.setContentHuggingPriority(.required, for: .horizontal)
-        nameLabel.font = .systemFont(ofSize: 13)
+        nameLabel.font = ChromeType.font(.body)
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
 
@@ -82,14 +81,15 @@ final class IconPickerField: NSView {
         addSubview(nameLabel)
         addSubview(chevron)
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 30),
-            glyph.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
+            heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
+            glyph.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
             glyph.centerYAnchor.constraint(equalTo: centerYAnchor),
             glyph.widthAnchor.constraint(equalToConstant: 18),
-            nameLabel.leadingAnchor.constraint(equalTo: glyph.trailingAnchor, constant: 8),
+            nameLabel.leadingAnchor.constraint(equalTo: glyph.trailingAnchor, constant: ChromeMetrics.Spacing.s8),
             nameLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            chevron.leadingAnchor.constraint(greaterThanOrEqualTo: nameLabel.trailingAnchor, constant: 6),
-            chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -9),
+            chevron.leadingAnchor.constraint(
+                greaterThanOrEqualTo: nameLabel.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
+            chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
             chevron.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
         renderClosed()
@@ -105,21 +105,28 @@ final class IconPickerField: NSView {
     func reapplyTheme() {
         restyle()
         renderClosed()
+        guard isPopoverOpen else { return }
+        let kept = highlighted
+        closePopover()
+        openPopover()
+        highlighted = kept
+        refreshHighlight()
+        if cells.indices.contains(kept) { gridScroll?.reveal(cells[kept]) }
     }
 
     private func renderClosed() {
         glyph.image = IconCatalog.image(selected)
-        glyph.contentTintColor = Theme.current.chrome.foreground.nsColor
+        glyph.contentTintColor = Theme.current.chrome.ink(.normal)
         nameLabel.stringValue = IconCatalog.displayName(selected)
-        nameLabel.textColor = Theme.current.chrome.foreground.nsColor
+        nameLabel.textColor = Theme.current.chrome.ink(.normal)
     }
 
     private func restyle() {
         let chrome = Theme.current.chrome
         let active = isFocusedStop || popover != nil
-        layer?.backgroundColor = (active ? Self.focusFill : Self.restFill).cgColor
+        layer?.backgroundColor = Self.restFill.cgColor
         layer?.borderColor = (active ? chrome.accent.nsColor : chrome.fill(alpha: ChromeTheme.border)).cgColor
-        layer?.borderWidth = active ? 1.5 : 1
+        layer?.borderWidth = ChromeMetrics.Border.width
     }
 
     override var acceptsFirstResponder: Bool { true }
@@ -250,15 +257,15 @@ final class IconPickerField: NSView {
 
         let card = ShadowCardView()
         card.wantsLayer = true
-        card.layer?.cornerRadius = 8
+        card.layer?.cornerRadius = ChromeMetrics.Radius.surface
         card.layer?.backgroundColor = chrome.background.nsColor.cgColor
-        card.layer?.borderWidth = 1
+        card.layer?.borderWidth = ChromeMetrics.Border.width
         card.layer?.borderColor = FloatShadow.edge.cgColor
         card.translatesAutoresizingMaskIntoConstraints = true
-        FloatShadow.applyShadow(to: card)
+        FloatShadow.apply(.overlay, to: card)
         card.addSubview(scroll)
 
-        let inset: CGFloat = 8
+        let inset = ChromeMetrics.Spacing.s8
         let gridWidth = CGFloat(Self.columns) * Self.cellSize + CGFloat(Self.columns - 1) * Self.cellSpacing
         NSLayoutConstraint.activate([
             scroll.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: inset),
@@ -280,9 +287,9 @@ final class IconPickerField: NSView {
     }
 
     private static func sectionHeader(_ title: String) -> NSTextField {
-        let label = NSTextField(labelWithString: title.uppercased())
-        label.font = .systemFont(ofSize: 9, weight: .semibold)
-        label.textColor = Theme.current.chrome.ink(.faint)
+        let label = NSTextField(labelWithString: title)
+        label.font = ChromeType.sectionLabel
+        label.textColor = Theme.current.chrome.ink(.muted)
         label.translatesAutoresizingMaskIntoConstraints = false
         label.heightAnchor.constraint(equalToConstant: headerHeight).isActive = true
         return label
@@ -309,9 +316,9 @@ final class IconPickerField: NSView {
         let accent = Theme.current.chrome.accent.nsColor.cgColor
         for (index, cell) in cells.enumerated() {
             cell.isActive = index == highlighted
-            cell.layer?.cornerRadius = 6
-            cell.layer?.borderWidth = index == highlighted ? 1.5 : 0
-            cell.layer?.borderColor = index == highlighted ? accent : nil
+            cell.layer?.cornerRadius = ChromeMetrics.Radius.control
+            cell.layer?.borderWidth = ChromeMetrics.Border.width
+            cell.layer?.borderColor = index == highlighted ? accent : NSColor.clear.cgColor
         }
     }
 

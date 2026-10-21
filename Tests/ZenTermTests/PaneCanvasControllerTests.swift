@@ -250,7 +250,7 @@ final class PaneCanvasControllerTests: WindowTestCase {
             lastPaneClosed, "closing the only (dead) pane routes through the normal last-pane path")
     }
 
-    func test_aHaloRefreshDoesNotUndoTheUnfocusedRender() throws {
+    func test_aFocusBorderRefreshDoesNotUndoTheUnfocusedRender() throws {
         let surface = try XCTUnwrap(controller.surface(for: controller.focusedLeafID) as? RecordingSurface)
 
         controller.setFocusedSurfaceRendersFocused(false)

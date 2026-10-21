@@ -2,8 +2,7 @@ import AppKit
 
 // Everything a reveal brings on screen: the rows and footer, and the card chrome they float behind.
 final class SidebarColumn: ShadowCardView {
-    // 8 of sidebar padding plus the footer's 6 inset, so palette and Settings follow at the footer's rhythm.
-    static let toggleInset: CGFloat = 14
+    static let toggleInset: CGFloat = ChromeMetrics.Spacing.s12
 
     let rows: SidebarView
     let footer: SidebarFooter
@@ -61,12 +60,13 @@ final class SidebarColumn: ShadowCardView {
         rows.layer?.masksToBounds = floating
         guard floating else {
             layer?.backgroundColor = nil
-            layer?.borderWidth = 0
+            layer?.borderColor = NSColor.clear.cgColor
             shadow = nil
             return
         }
         CardChrome.apply(
-            to: self, background: Theme.current.chrome.background.nsColor, cornerRadius: Self.cornerRadius)
+            to: self, background: Theme.current.chrome.background.nsColor, cornerRadius: Self.cornerRadius,
+            tier: .float)
     }
 
     // The card's own fill at zero alpha, so docking fades it out without crossing another color on the way.
@@ -96,6 +96,6 @@ final class SidebarColumn: ShadowCardView {
         rows.reapplyTheme()
         footer.reapplyTheme()
         toggle.reapplyTheme()
-        if isFloating { CardChrome.reapplyTheme(to: self) }
+        if isFloating { CardChrome.reapplyTheme(to: self, tier: .float) }
     }
 }

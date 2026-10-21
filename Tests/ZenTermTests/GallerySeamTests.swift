@@ -12,7 +12,7 @@ final class GallerySeamTests: WindowTestCase {
         let background: [CGFloat]?
         let borderWidth: CGFloat
         let border: [CGFloat]?
-        let looseSublayers: Int
+        let looseSublayers: [[CGFloat]?]
         let title: NSAttributedString?
         let tint: [CGFloat]?
         let text: NSAttributedString?
@@ -36,7 +36,7 @@ final class GallerySeamTests: WindowTestCase {
     }
 
     override func tearDownWithError() throws {
-        TooltipPresenter.shared.dismissForTesting()
+        TooltipPresenter.shared.dismiss()
         window = nil
         GeneralConfig.setCurrentForTesting(originalConfig)
         Theme.setCurrentForTesting(originalTheme)
@@ -117,7 +117,7 @@ final class GallerySeamTests: WindowTestCase {
 
         settle()
         XCTAssertNotNil(TooltipPresenter.shared.tooltipForTesting, "the real hover's tooltip never appeared")
-        TooltipPresenter.shared.dismissForTesting()
+        TooltipPresenter.shared.dismiss()
         seam.forceHoverForGallery()
         settle()
         XCTAssertNil(TooltipPresenter.shared.tooltipForTesting, "the gallery's forced hover popped a real tooltip")
@@ -156,7 +156,9 @@ final class GallerySeamTests: WindowTestCase {
         func walk(_ view: NSView, _ path: String) {
             let layer = view.layer
             let backing = Set(view.subviews.compactMap(\.layer).map(ObjectIdentifier.init))
-            let loose = layer?.sublayers?.filter { !backing.contains(ObjectIdentifier($0)) }.count ?? 0
+            let loose = (layer?.sublayers ?? []).filter { !backing.contains(ObjectIdentifier($0)) }.map {
+                $0.borderColor?.components
+            }
             let button = view as? NSButton
             let field = view as? NSTextField
             out.append(

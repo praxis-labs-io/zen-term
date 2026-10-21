@@ -9,7 +9,6 @@ final class RouteEndpointView: NSView {
     private static let badgeSide: CGFloat = 16
     private static let badgeOverhang: CGFloat = 4
     private static let statusMarkSide: CGFloat = 6.2
-    private static let statusRingWidth: CGFloat = 1.1
 
     private let tile = NSView()
     private let symbol = NSImageView()
@@ -25,7 +24,7 @@ final class RouteEndpointView: NSView {
 
         tile.wantsLayer = true
         tile.layer?.cornerRadius = Self.tileCornerRadius
-        tile.layer?.borderWidth = 1
+        tile.layer?.borderWidth = ChromeMetrics.Border.width
         tile.translatesAutoresizingMaskIntoConstraints = false
         symbol.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
         symbol.symbolConfiguration = .init(pointSize: Self.symbolPointSize, weight: .light)
@@ -33,7 +32,7 @@ final class RouteEndpointView: NSView {
         tile.addSubview(symbol)
 
         badge.wantsLayer = true
-        badge.layer?.cornerRadius = Self.badgeSide / 2
+        badge.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.badgeSide)
         badge.isHidden = true
         badge.translatesAutoresizingMaskIntoConstraints = false
         let inset = (Self.badgeSide - Self.statusMarkSide) / 2
@@ -42,7 +41,7 @@ final class RouteEndpointView: NSView {
             transform: nil)
         badge.layer?.addSublayer(statusMark)
 
-        self.name.font = .systemFont(ofSize: 12)
+        self.name.font = ChromeType.font(.small)
         self.name.alignment = .center
         self.name.lineBreakMode = .byTruncatingMiddle
         self.name.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -81,7 +80,7 @@ final class RouteEndpointView: NSView {
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        tile.layer?.backgroundColor = chrome.fill(alpha: ChromeTheme.tile).cgColor
+        tile.layer?.backgroundColor = chrome.fill(.rest).cgColor
         tile.layer?.borderColor = chrome.fill(alpha: ChromeTheme.border).cgColor
         symbol.contentTintColor = chrome.ink(.subtle)
         name.textColor = chrome.ink(.muted)
@@ -90,7 +89,7 @@ final class RouteEndpointView: NSView {
         let isHollow = status == .offline
         statusMark.fillColor = isHollow ? nil : ink
         statusMark.strokeColor = isHollow ? ink : nil
-        statusMark.lineWidth = isHollow ? Self.statusRingWidth : 0
+        statusMark.lineWidth = ChromeMetrics.Border.width
     }
 
     var statusMarkForTesting: (fill: CGColor?, stroke: CGColor?) { (statusMark.fillColor, statusMark.strokeColor) }

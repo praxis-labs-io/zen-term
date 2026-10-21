@@ -8,8 +8,8 @@ final class SidebarRowMenuItemView: NSView {
     private var trackingArea: NSTrackingArea?
     private var isHovered = false
 
-    private static let inset: CGFloat = 9
-    private static let gap: CGFloat = 12
+    private static let inset: CGFloat = ChromeMetrics.Spacing.controlInset
+    private static let gap: CGFloat = ChromeMetrics.Spacing.s12
 
     init(_ item: SidebarRowMenu.Item, onChoose: @escaping () -> Void) {
         title = item.title
@@ -20,11 +20,11 @@ final class SidebarRowMenuItemView: NSView {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 6
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         setAccessibilityElement(true)
         setAccessibilityRole(.menuItem)
         setAccessibilityLabel(item.title)
-        label.font = .systemFont(ofSize: 13)
+        label.font = ChromeType.font(.body)
         label.lineBreakMode = .byTruncatingTail
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -52,9 +52,9 @@ final class SidebarRowMenuItemView: NSView {
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        label.textColor = chrome.foreground.nsColor
+        label.textColor = chrome.ink(.normal)
         keycap?.reapplyTheme()
-        layer?.backgroundColor = isHovered ? chrome.selectionFill.cgColor : NSColor.clear.cgColor
+        layer?.backgroundColor = isHovered ? chrome.fill(.hover).cgColor : NSColor.clear.cgColor
     }
 
     override func updateTrackingAreas() {

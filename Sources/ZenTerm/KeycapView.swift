@@ -2,12 +2,10 @@ import AppKit
 import TerminalKit
 
 final class KeycapView: NSView {
-    private static let height: CGFloat = 20
+    private static let height: CGFloat = ChromeMetrics.Height.xs
     private static let horizontalInset: CGFloat = 7
-    private static let cornerRadius: CGFloat = 6
     private static let tokenSpacing: CGFloat = 3
     private static let symbolPointSize: CGFloat = 10
-    private static let labelFontSize: CGFloat = 11
 
     private static let glyphSymbols: [Character: String] = [
         "⌘": "command", "⇧": "shift", "⌥": "option", "⌃": "control",
@@ -39,7 +37,7 @@ final class KeycapView: NSView {
         tokenStack = stack
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = Self.cornerRadius
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         layer?.backgroundColor = Self.background(style)?.cgColor
         translatesAutoresizingMaskIntoConstraints = false
 
@@ -150,7 +148,7 @@ final class KeycapView: NSView {
 
     private static func keyLabel(_ text: String, ink: NSColor) -> NSTextField {
         let label = NSTextField(labelWithString: text)
-        label.font = .monospacedSystemFont(ofSize: Self.labelFontSize, weight: .medium)
+        label.font = ChromeType.font(.caption, weight: .medium, face: .mono)
         label.textColor = ink
         label.translatesAutoresizingMaskIntoConstraints = false
         return label

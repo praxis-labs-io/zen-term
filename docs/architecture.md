@@ -194,9 +194,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   `isWorkspaceOpenInAnotherWindow` and `revealWorkspaceInAnotherWindow`, which `AppDelegate`
   folds over its windows, skipping the asking one. A `WindowController` never raises its own
   window, so the ordering stays in `AppDelegate`.
-- **The ⌘P picker groups into Open, Open Elsewhere and Configured**, and a workspace is
+- **The ⌘P picker groups into Open, Open elsewhere and Configured**, and a workspace is
   listed once, in the strongest section that claims it. Open is this window's
-  `WorkspaceOrder`, ghosts included and unselectable; Open Elsewhere is what the other
+  `WorkspaceOrder`, ghosts included and unselectable; Open elsewhere is what the other
   windows report through `openWorkspacesElsewhere`, so an unconfigured workspace running
   elsewhere is listed too; Configured is what the workspaces file holds that no window has
   open. A worktree sits below its parent in whichever section the worktree itself belongs
@@ -419,7 +419,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 New modal surfaces compose the existing primitives.
 
 - **Primitives:** `AppButton` (variants `primary`, `secondary`, `muted`, `destructive`,
-  `segment`, `link`; sizes `standard` and `large`; an optional shortcut keycap inside),
+  `segment`, `link`; an optional shortcut keycap inside),
   `SegmentedControl`, `FieldBox` + `LabeledField`, `ModalCard.swift`
   for card chrome and scrolling, `FormCard` for forms (body scrolls, footer pinned,
   capped at `FormCard.maxHeight`; the workspace form takes its own taller cap).
@@ -431,6 +431,9 @@ New modal surfaces compose the existing primitives.
   horizontal `contentInsets`. `KeyboardFocus.reveal(_:among:)` scrolls to the selection,
   unanimated, padding only the arriving edge.
 - **`Motion.swift` constants are an approved baseline.** Do not re-tune them quietly.
+  Animation durations, on-screen lingers and hover intent live on `Motion`. Behavior
+  debounces, polls, timeouts and a gesture's tuned delay stay with their owner, and a
+  control's own loop period (a spinner step, a progress sweep) stays local to it.
 
 ## Key handling
 
@@ -471,7 +474,7 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   loses it gets Revert only. Settings rows show the conflict but do not resolve it.
 - **The modal gate** in `WindowController.handle(_:)` runs confirm, modal card, tool
   float, then dispatch. A window's `WindowSelection` is a workspace or an SSH host's Connect
-  screen (`HostConnectView`), one `PanelHostView` that takes ↵ and is focused, haloed and themed
+  screen (`HostConnectView`), one `PanelHostView` that takes ↵ and is focused, bordered and themed
   like a pane through the same `syncWindowFocus` and live-apply paths. Its left edge leads into the
   sidebar (or shows the same hint a pane does when the sidebar is hidden); up, down and right do
   nothing. It has no tab, so dispatch drops any chord that is not `worksWithoutTab`, except ⌘T,
@@ -605,7 +608,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   `WindowController.deliverConfigDiagnosticsNotice`, and retracted by `ConfigApplier`
   only when problems clear.
 - **No file watcher.** Hand edits apply on ⌘⇧,.
-- **Settings > SSH Hosts lists only the `ssh-host` lines.** `~/.ssh/config` is read by the probe and
+- **Settings > Remote hosts lists only the `ssh-host` lines.** `~/.ssh/config` is read by the probe and
   never written. A row shows its host's address from `SSHHostStatusCenter`, so Settings never runs
   ssh itself. A line holds a Host alias or a typed user@host, each
   with an optional name. A name is only a label, read through `GeneralConfig.displayName(of:)`
@@ -614,7 +617,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   updated in place; ↩ or a click opens `AddSSHHostOverlay` in edit mode, which rewrites only that
   host's name on its line and holds Remove. Remove asks first while the host is connecting or
   connected, then returns to Settings with focus on the next host (Add Host when none is left). The
-  sidebar's SSH rows show their status as a dot (`SSHHostStatus.ink`): Offline takes the idle
+  sidebar's Remote hosts rows show their status as a dot (`SSHHostStatus.ink`): Offline takes the idle
   agent row's ink on the dot and the title, Online is positive, Connected is accent, and the
   status word is the row's accessibility value rather than visible text. While an agent in a
   connected host's workspace waits, the dot takes the waiting ink a workspace row's does, from
@@ -673,16 +676,18 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
 ### Theming
 
 `ChromeThemeDeriver` maps ANSI slots onto chrome roles (info ansi[4], warning ansi[3],
-destructive ansi[1], accent ansi[4], attention ansi[6], positive ansi[2], cursor the terminal cursor,
-muted a fg/bg blend). Sixty-five themes ship; a user file shadows a bundled one. `accent-color` repoints
+destructive ansi[1], accent ansi[4], attention ansi[6], positive ansi[2], cursor the terminal cursor).
+Sixty-five themes ship; a user file shadows a bundled one. `accent-color` repoints
 `accent`, and the search highlight when the theme sets no search colors. The usage rules are CLAUDE.md's Colors section.
+`onAccent` is whichever of background and foreground has the higher WCAG contrast with `accent`.
 
 - **Ink levels** `faint` 0.35, `muted` 0.5, `subtle` 0.7, `normal` 1.0, lifted by
   `inkBoost`. Check `1 / inkBoost` before raising it: a level above it clamps to 1.
 - **`fillScale` normalizes fills per theme** against a fixed reference separation, never
   scaling down. Text is not normalized.
-- `selectionFill` over `fill(.rest)` is the one pair mixing scaled and unscaled fills, and
-  has its own test.
+- **Shadow strength is solved per theme:** each `FloatShadow` tier's (`overlay`, `float`,
+  `modal`) black alpha hits a target CIELAB darkening of the background, capped at the
+  tier's `maxAlpha`.
 - **A strip inside a pane paints on the pane's fill** (`ChromeTheme.surface(tint:over:)`),
   because below `background-alpha` 1 a tint alone composites over the window backdrop.
   Showing a strip must mark the padding ring for redisplay.
@@ -765,7 +770,7 @@ The workspace `carry` key names ignored files to copy into a new worktree.
   by the workspace's `WorktreeOrigin`, and closing them leaves the card up. The finish re-lists.
 - **An open worktree row removes like a Configured one.** It reads `Removing <name>…` while
   the tracker holds it, and the finish rebuilds Open from `runningWorkspaces()` and drops
-  Open Elsewhere rows inside the path, with a closed parent's ghost once it has none.
+  Open elsewhere rows inside the path, with a closed parent's ghost once it has none.
 - **A worktree removed outside ZenTerm stays open, marked `removed`.** The title poll checks
   `<worktree>/.git` off-main, skipping a path the tracker is removing and an unmounted volume.
   The sidebar and picker read `WorkspaceController.isWorktreeRemoved`, and an open picker in

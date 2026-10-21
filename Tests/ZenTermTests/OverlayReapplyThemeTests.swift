@@ -169,7 +169,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         }
         guard
             let caption = descendants(of: overlay).compactMap({ $0 as? FieldCaption })
-                .first(where: { $0.stringValue.hasPrefix("COPY INTO") })
+                .first(where: { $0.stringValue.hasPrefix("Copy into") })
         else {
             return XCTFail("expected the copy-into caption")
         }
@@ -210,7 +210,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         let field = BranchField()
         let window = makeWindow()
         window.contentView?.addSubview(field)
-        field.frame = NSRect(x: 20, y: 200, width: 400, height: 30)
+        field.frame = NSRect(x: 20, y: 200, width: 400, height: ChromeMetrics.Height.control)
         field.setBranches(["feature/zen-454"], holders: [:])
         field.box.setText("zen")
         field.box.controlTextDidChange(
@@ -364,9 +364,9 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
         guard
             let caption = descendants(of: overlay).compactMap({ $0 as? NSTextField })
-                .first(where: { $0.attributedStringValue.string == "WORKSPACE NAME ✳" })
+                .first(where: { $0.attributedStringValue.string == "Workspace name ✳" })
         else {
-            return XCTFail("expected the WORKSPACE NAME caption")
+            return XCTFail("expected the Workspace name caption")
         }
         let colorBefore =
             caption.attributedStringValue.attribute(.foregroundColor, at: 0, effectiveRange: nil)
@@ -393,9 +393,9 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
         guard
             let caption = descendants(of: overlay).compactMap({ $0 as? NSTextField })
-                .first(where: { $0.attributedStringValue.string == "ENVIRONMENT" })
+                .first(where: { $0.attributedStringValue.string == "Environment" })
         else {
-            return XCTFail("expected the ENVIRONMENT caption")
+            return XCTFail("expected the Environment caption")
         }
         let colorBefore =
             caption.attributedStringValue.attribute(.foregroundColor, at: 0, effectiveRange: nil)
@@ -464,8 +464,8 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
         XCTAssertNotEqual(before, toast.actionTitleColorsForTesting, "the action buttons stayed stale")
         XCTAssertTrue(
-            toast.actionTitleColorsForTesting.contains(Theme.current.chrome.accent.nsColor),
-            "the primary action must carry the new accent")
+            toast.actionTitleColorsForTesting.contains(Theme.current.chrome.onAccent.nsColor),
+            "the primary action must carry the new onAccent")
     }
 
     func test_toastBadge_carriesTheVariantTone_notTheChromeAccent() throws {

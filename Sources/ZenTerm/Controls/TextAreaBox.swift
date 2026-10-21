@@ -13,7 +13,6 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
     private lazy var scroll = FadingScrollView(document: textView)
 
     private static var restFill: NSColor { Theme.current.chrome.fill(.rest) }
-    private static var focusFill: NSColor { Theme.current.chrome.selectionFill }
 
     var text: String { textView.string }
     func setText(_ value: String) {
@@ -25,9 +24,9 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         self.placeholder = placeholder
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 6
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         layer?.backgroundColor = Self.restFill.cgColor
-        layer?.borderWidth = 1
+        layer?.borderWidth = ChromeMetrics.Border.width
         layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
         translatesAutoresizingMaskIntoConstraints = false
 
@@ -35,10 +34,11 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         textView.isEditable = true
         textView.allowsUndo = true
         textView.drawsBackground = false
-        textView.font = .systemFont(ofSize: 13)
-        textView.textColor = Theme.current.chrome.foreground.nsColor
-        textView.insertionPointColor = Theme.current.chrome.foreground.nsColor
-        textView.textContainerInset = NSSize(width: 5, height: 5)
+        textView.font = ChromeType.font(.body)
+        textView.textColor = Theme.current.chrome.ink(.normal)
+        textView.applyThemedEditing()
+        textView.textContainerInset = NSSize(
+            width: ChromeMetrics.Spacing.controlInset - 2 * ChromeMetrics.Spacing.s2, height: ChromeMetrics.Spacing.s4)
         textView.textContainer?.lineFragmentPadding = 0
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
@@ -56,10 +56,10 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
 
         NSLayoutConstraint.activate([
             heightAnchor.constraint(greaterThanOrEqualToConstant: minHeight),
-            scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
-            scroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
-            scroll.topAnchor.constraint(equalTo: topAnchor, constant: 2),
-            scroll.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
+            scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.s2),
+            scroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.s2),
+            scroll.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.Spacing.s2),
+            scroll.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -ChromeMetrics.Spacing.s2),
         ])
     }
 
@@ -100,9 +100,9 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
 
     private func setFocused(_ focused: Bool) {
         let chrome = Theme.current.chrome
-        layer?.backgroundColor = (focused ? Self.focusFill : Self.restFill).cgColor
+        layer?.backgroundColor = Self.restFill.cgColor
         layer?.borderColor = (focused ? chrome.accent.nsColor : chrome.fill(alpha: ChromeTheme.border)).cgColor
-        layer?.borderWidth = focused ? 1.5 : 1
+        layer?.borderWidth = ChromeMetrics.Border.width
     }
 
     #if DEBUG
@@ -113,9 +113,10 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
 
     func reapplyTheme() {
         setFocused(window?.firstResponder === textView)
-        textView.textColor = Theme.current.chrome.foreground.nsColor
-        textView.insertionPointColor = Theme.current.chrome.foreground.nsColor
+        textView.textColor = Theme.current.chrome.ink(.normal)
+        textView.applyThemedEditing()
         textView.placeholderColor = Theme.current.chrome.ink(.muted)
+        textView.needsDisplay = true
     }
 
     private func updatePlaceholderVisibility() {
@@ -123,7 +124,7 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
     }
 }
 
-final class FocusReportingTextView: NSTextView {
+final class FocusReportingTextView: ChromeTextView {
     var onFocusChange: ((Bool) -> Void)?
 
     var placeholder = "" {
@@ -145,7 +146,7 @@ final class FocusReportingTextView: NSTextView {
         guard string.isEmpty, !placeholder.isEmpty else { return }
         (placeholder as NSString).draw(
             at: placeholderOrigin,
-            withAttributes: [.font: font ?? .systemFont(ofSize: 13), .foregroundColor: placeholderColor])
+            withAttributes: [.font: font ?? ChromeType.font(.body), .foregroundColor: placeholderColor])
     }
 
     override func becomeFirstResponder() -> Bool {

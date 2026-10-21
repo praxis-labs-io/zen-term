@@ -31,12 +31,12 @@ final class AcknowledgementsWindow {
         scroll.translatesAutoresizingMaskIntoConstraints = true
         scroll.autoresizingMask = [.width, .height]
 
-        let text = NSTextView()
+        let text = ChromeTextView()
         text.isEditable = false
         text.isSelectable = true
         text.isRichText = false
-        text.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
-        text.textContainerInset = NSSize(width: 20, height: 20)
+        text.font = ChromeType.font(.small, face: .mono)
+        text.textContainerInset = NSSize(width: ChromeMetrics.Spacing.s20, height: ChromeMetrics.Spacing.s20)
         text.string = Self.notices()
         text.isVerticallyResizable = true
         text.isHorizontallyResizable = false
@@ -60,7 +60,8 @@ final class AcknowledgementsWindow {
         scrollView?.drawsBackground = true
         textView?.backgroundColor = background
         textView?.drawsBackground = true
-        textView?.textColor = chrome.foreground.nsColor
+        textView?.textColor = chrome.ink(.normal)
+        textView?.applyThemedEditing()
     }
 
     private static func notices() -> String {

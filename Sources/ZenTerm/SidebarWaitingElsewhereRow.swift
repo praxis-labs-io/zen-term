@@ -4,9 +4,9 @@ final class SidebarWaitingElsewhereRow: SidebarJumpRow {
     private let label = NSTextField(labelWithString: "")
     private let dot = NSView()
 
-    static let height: CGFloat = 30
-    private static let inset: CGFloat = 10
-    private static let gap: CGFloat = 8
+    static let height: CGFloat = ChromeMetrics.Height.control
+    private static let inset: CGFloat = ChromeMetrics.Spacing.controlInset
+    private static let gap: CGFloat = ChromeMetrics.Spacing.s8
     private static let dotDiameter: CGFloat = 7
 
     static func text(agents: Int, windows: Int) -> String {
@@ -16,14 +16,14 @@ final class SidebarWaitingElsewhereRow: SidebarJumpRow {
     init(onActivate: @escaping () -> Void) {
         super.init(tooltip: "Jump to the agent waiting longest", onActivate: onActivate)
 
-        label.font = .systemFont(ofSize: 12)
+        label.font = ChromeType.font(.small)
         label.lineBreakMode = .byTruncatingTail
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
 
         dot.wantsLayer = true
-        dot.layer?.cornerRadius = Self.dotDiameter / 2
+        dot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.dotDiameter)
         dot.translatesAutoresizingMaskIntoConstraints = false
         addSubview(dot)
 

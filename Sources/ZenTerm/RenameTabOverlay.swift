@@ -62,7 +62,6 @@ final class RenameTabOverlay: NSView, ModalOverlay {
 
     func focusInitialResponder() {
         window?.makeFirstResponder(nameField.field)
-        nameField.field.applyThemedCaret()
         nameField.field.currentEditor()?.selectAll(nil)
     }
 
@@ -92,14 +91,14 @@ final class RenameTabOverlay: NSView, ModalOverlay {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         CardChrome.reapplyTheme(to: card)
-        header.textColor = chrome.foreground.nsColor
+        header.textColor = chrome.ink(.normal)
         let controls: [ThemeReapplying] = [nameField, cancelButton, renameButton]
         controls.forEach { $0.reapplyTheme() }
     }
 
     private func buildContent() -> NSStackView {
-        header.font = .systemFont(ofSize: 15, weight: .semibold)
-        header.textColor = Theme.current.chrome.foreground.nsColor
+        header.font = ChromeType.font(.title)
+        header.textColor = Theme.current.chrome.ink(.normal)
         header.stringValue = "Rename Tab"
 
         nameField.onEnter = { [weak self] in self?.submit() }
@@ -121,17 +120,20 @@ final class RenameTabOverlay: NSView, ModalOverlay {
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let footer = NSStackView(views: [spacer, cancelButton, renameButton])
         footer.orientation = .horizontal
-        footer.spacing = 8
+        footer.spacing = ChromeMetrics.Spacing.s8
         footer.translatesAutoresizingMaskIntoConstraints = false
 
         let content = NSStackView(views: [header, nameField, footer])
         content.orientation = .vertical
         content.alignment = .leading
-        content.spacing = 12
-        content.edgeInsets = NSEdgeInsets(top: 18, left: 20, bottom: 16, right: 20)
+        content.spacing = ChromeMetrics.Spacing.modalSectionGap
+        content.edgeInsets = ChromeMetrics.Spacing.modalInsets
         content.translatesAutoresizingMaskIntoConstraints = false
         for view in content.arrangedSubviews {
-            view.widthAnchor.constraint(equalTo: content.widthAnchor, constant: -40).isActive = true
+            view.widthAnchor.constraint(
+                equalTo: content.widthAnchor,
+                constant: -(ChromeMetrics.Spacing.modalInsets.left + ChromeMetrics.Spacing.modalInsets.right)
+            ).isActive = true
         }
         return content
     }

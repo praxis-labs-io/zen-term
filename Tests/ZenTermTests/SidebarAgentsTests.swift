@@ -49,7 +49,7 @@ final class SidebarAgentsTests: WindowTestCase {
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
         WindowController.isPresent = originalPresence
-        TooltipPresenter.shared.dismissForTesting()
+        TooltipPresenter.shared.dismiss()
         SidebarController.resetLastChoiceForTesting()
         try? FileManager.default.removeItem(at: root)
         try super.tearDownWithError()
@@ -143,7 +143,7 @@ final class SidebarAgentsTests: WindowTestCase {
     }
 
     private func hover(_ row: SidebarAgentRow, in c: WindowController) throws {
-        TooltipPresenter.shared.dismissForTesting()
+        TooltipPresenter.shared.dismiss()
         row.mouseEntered(
             with: try XCTUnwrap(
                 NSEvent.mouseEvent(
@@ -601,7 +601,8 @@ final class SidebarAgentsTests: WindowTestCase {
 
         c.window.sendEvent(arrow(125, in: c))
         XCTAssertTrue(c.window.firstResponder === agentRows[0], "↓ leaves Workspaces for Agents")
-        XCTAssertEqual(agentRows[0].fillForTesting, Theme.current.chrome.selectionFill.cgColor)
+        XCTAssertEqual(agentRows[0].fillForTesting, NSColor.clear.cgColor)
+        XCTAssertEqual(agentRows[0].ringForTesting, Theme.current.chrome.accent.nsColor.cgColor)
         c.window.sendEvent(arrow(125, in: c))
         XCTAssertTrue(c.window.firstResponder === agentRows[1])
         c.window.sendEvent(arrow(125, in: c))
@@ -936,7 +937,8 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertTrue(a.window.firstResponder === workspaceRows[0])
         a.window.sendEvent(arrow(125, in: a))
         XCTAssertTrue(a.window.firstResponder === row, "↓ reaches the row where it sits, not last")
-        XCTAssertEqual(row.fillForTesting, Theme.current.chrome.selectionFill.cgColor)
+        XCTAssertEqual(row.fillForTesting, NSColor.clear.cgColor)
+        XCTAssertEqual(row.ringForTesting, Theme.current.chrome.accent.nsColor.cgColor)
         a.window.sendEvent(arrow(125, in: a))
         XCTAssertTrue(a.window.firstResponder === rows(a)[0], "↓ carries on into the agent below it")
         a.window.sendEvent(arrow(126, in: a))
@@ -1029,7 +1031,7 @@ final class SidebarAgentsTests: WindowTestCase {
             let size = tooltip.fittingSize
 
             XCTAssertLessThanOrEqual(
-                size.width, ChromeTooltip.paragraphMaxWidth + 18,
+                size.width, ChromeTooltip.paragraphMaxWidth + 2 * ChromeMetrics.Spacing.controlInset,
                 "runs \(Int(size.width))pt past the \(Int(ChromeTooltip.paragraphMaxWidth))pt column: \(body)")
             XCTAssertGreaterThan(size.height, line, "the whole message needs more than one line: \(body)")
             try unhover(row, in: c)

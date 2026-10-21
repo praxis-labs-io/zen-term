@@ -94,7 +94,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
         controller.handle(.toggleScrollMode)
         XCTAssertTrue(panel.isHeaderVisibleForTesting)
-        XCTAssertEqual(panel.headerContentForTesting?.title, "SCROLL")
+        XCTAssertEqual(panel.headerContentForTesting?.title, "Scroll")
 
         controller.handle(.toggleScrollMode)
         XCTAssertFalse(panel.isHeaderVisibleForTesting, "the header must come down with the mode")
@@ -1184,11 +1184,11 @@ final class ScrollModeLifecycleTests: WindowTestCase {
             surface, scrollPositionDidChange: TerminalScrollPosition(total: 5000, offset: 1200, viewport: 40))
         XCTAssertEqual(
             panel.headerContentForTesting?.title,
-            "SCROLL: \(ScrollModeController.groupedCount(3760)) BELOW")
+            "Scroll: \(ScrollModeController.groupedCount(3760)) below")
 
         surface.delegate?.surface(
             surface, scrollPositionDidChange: TerminalScrollPosition(total: 5000, offset: 4960, viewport: 40))
-        XCTAssertEqual(panel.headerContentForTesting?.title, "SCROLL: AT BOTTOM")
+        XCTAssertEqual(panel.headerContentForTesting?.title, "Scroll: at bottom")
     }
 
     func test_aReportFromAnotherPaneDoesNotMoveTheHeader() throws {
@@ -1203,7 +1203,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
             other, scrollPositionDidChange: TerminalScrollPosition(total: 5000, offset: 1200, viewport: 40))
 
         XCTAssertEqual(
-            panel.headerContentForTesting?.title, "SCROLL",
+            panel.headerContentForTesting?.title, "Scroll",
             "a busy sibling pane must not rewrite the header of the pane being read")
     }
 
@@ -1466,12 +1466,12 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 100))
 
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
-        XCTAssertEqual(panel.headerContentForTesting?.title, "VISUAL: 1 LINE")
+        XCTAssertEqual(panel.headerContentForTesting?.title, "Visual: 1 line")
 
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 130))
 
         XCTAssertEqual(
-            panel.headerContentForTesting?.title, "SCROLL: 46 BELOW",
+            panel.headerContentForTesting?.title, "Scroll: 46 below",
             "the header still reading Visual means a span nothing on screen backs")
         _ = handler(try keyDown("y"))
         XCTAssertNil(board.string(forType: .string))
@@ -1518,11 +1518,11 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
         for _ in 0..<5 { _ = handler(try keyDown("k")) }
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
-        XCTAssertEqual(panel.headerContentForTesting?.title, "VISUAL: 1 LINE")
+        XCTAssertEqual(panel.headerContentForTesting?.title, "Visual: 1 line")
 
         controller.applySessionFontSize()
 
-        XCTAssertEqual(panel.headerContentForTesting?.title, "SCROLL")
+        XCTAssertEqual(panel.headerContentForTesting?.title, "Scroll")
         _ = handler(try keyDown("y"))
         XCTAssertNil(board.string(forType: .string))
     }
@@ -1629,11 +1629,11 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
 
         _ = handler(try keyDown("V", unshifted: "v", flags: .shift))
-        XCTAssertEqual(panel.headerContentForTesting?.title, "VISUAL: 1 LINE")
+        XCTAssertEqual(panel.headerContentForTesting?.title, "Visual: 1 line")
         _ = handler(try keyDown("k"))
-        XCTAssertEqual(panel.headerContentForTesting?.title, "VISUAL: 2 LINES")
+        XCTAssertEqual(panel.headerContentForTesting?.title, "Visual: 2 lines")
         _ = handler(try keyDown("\u{1b}", keyCode: 53))
-        XCTAssertEqual(panel.headerContentForTesting?.title, "SCROLL")
+        XCTAssertEqual(panel.headerContentForTesting?.title, "Scroll")
     }
 
     func test_endingTheModeDropsTheSelectionWithIt() throws {
@@ -1751,7 +1751,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
 
         XCTAssertNotNil(
             panel.scrollCursorForTesting.state?.selection, "the highlight blinked off mid-resize")
-        XCTAssertEqual(panel.headerContentForTesting?.title, "VISUAL: 1 LINE")
+        XCTAssertEqual(panel.headerContentForTesting?.title, "Visual: 1 line")
     }
 
     func test_anUnresolvedSpanIsNotReadableUntilSomethingResolvesIt() throws {
@@ -1809,7 +1809,7 @@ final class ScrollModeLifecycleTests: WindowTestCase {
         surface.delegate?.surface(surface, scrollPositionDidChange: Self.position(offset: 176))
 
         XCTAssertEqual(
-            panel.headerContentForTesting?.title, "SCROLL: AT BOTTOM",
+            panel.headerContentForTesting?.title, "Scroll: at bottom",
             "a crossed pair left up would paint a span the reader never dragged")
         _ = handler(try keyDown("y"))
         XCTAssertNil(board.string(forType: .string))

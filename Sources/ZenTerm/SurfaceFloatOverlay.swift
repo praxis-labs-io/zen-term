@@ -8,7 +8,6 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost {
     /// Not `CardView`, so the hosted terminal receives `mouseDown`.
     private let card = ShadowCardView()
     private let ring = RingFillView()
-    /// Drawn in theme-independent black, like `FloatShadow`.
     private let elevation = OutsideShadowView()
     private let blur = NSVisualEffectView()
     private var dismiss = DismissGate()
@@ -28,12 +27,8 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost {
         (card.layer?.backgroundColor, ring.color)
     }
 
-    /// Measured: at `shadowBlur` the shadow dies out 38pt below the card.
+    /// Clears the float tier's blur and offset.
     private static let shadowOutset: CGFloat = 40
-
-    /// Measured to match `CALayer.shadowRadius` 14; the `CGContext` blur is not the same scale.
-    private static let shadowBlur: CGFloat = 28
-    private static let shadowOffset = NSSize(width: 0, height: -12)
 
     init(
         content: NSView,
@@ -55,15 +50,15 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost {
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
-        CardChrome.applyTerminalHost(to: card, cornerRadius: cornerRadius, halo: true)
+        CardChrome.applyTerminalHost(to: card, cornerRadius: cornerRadius, focusBorder: true)
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
 
-        elevation.color = NSColor.black.withAlphaComponent(0.5)
+        elevation.color = FloatShadow.color(.float)
         elevation.outset = Self.shadowOutset
         elevation.cornerRadius = cornerRadius
-        elevation.blur = Self.shadowBlur
-        elevation.offset = Self.shadowOffset
+        elevation.blur = FloatShadow.Tier.float.contextBlur
+        elevation.offset = FloatShadow.Tier.float.offset
         elevation.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(elevation)
 
@@ -138,12 +133,15 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost {
         chrome.findBarFill = isSolid ? background : ring.color
     }
 
-    var isHaloVisible = true {
-        didSet { if oldValue != isHaloVisible { CardChrome.reapplyEdge(to: card, halo: isHaloVisible) } }
+    var isFocusBorderVisible = true {
+        didSet {
+            if oldValue != isFocusBorderVisible { CardChrome.reapplyEdge(to: card, focusBorder: isFocusBorderVisible) }
+        }
     }
 
     func reapplyTheme() {
-        CardChrome.reapplyEdge(to: card, halo: isHaloVisible)
+        CardChrome.reapplyEdge(to: card, focusBorder: isFocusBorderVisible)
+        elevation.color = FloatShadow.color(.float)
         applyBackground()
         chrome.reapplyTheme()
     }

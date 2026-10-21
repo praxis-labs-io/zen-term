@@ -118,7 +118,7 @@ final class LinkPreviewTests: WindowTestCase {
         let preview = try XCTUnwrap(shownPreviews().first)
         XCTAssertEqual(preview.urlForTesting, longURL)
         XCTAssertLessThanOrEqual(
-            preview.frame.width, LinkPreviewView.maxTextWidth + 18,
-            "a long URL grew the card past the text budget plus its 9pt insets")
+            preview.frame.width, LinkPreviewView.maxTextWidth + 2 * ChromeMetrics.Spacing.controlInset,
+            "a long URL grew the card past the text budget plus its insets")
     }
 }

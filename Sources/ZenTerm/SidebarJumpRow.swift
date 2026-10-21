@@ -20,7 +20,7 @@ class SidebarJumpRow: NSView, HoverSuppressing {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
-        layer?.cornerRadius = 6
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
     }
@@ -28,6 +28,7 @@ class SidebarJumpRow: NSView, HoverSuppressing {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     var fillForTesting: CGColor? { layer?.backgroundColor }
+    var ringForTesting: CGColor? { layer?.borderColor }
 
     func reapplyTheme() {
         refreshFill()
@@ -35,9 +36,9 @@ class SidebarJumpRow: NSView, HoverSuppressing {
 
     private func refreshFill() {
         let chrome = Theme.current.chrome
-        if isFocusedStop {
-            layer?.backgroundColor = chrome.selectionFill.cgColor
-        } else if isHovered, !isHoverSuppressed {
+        layer?.borderWidth = ChromeMetrics.Border.width
+        layer?.borderColor = isFocusedStop ? chrome.accent.nsColor.cgColor : NSColor.clear.cgColor
+        if isHovered, !isHoverSuppressed {
             layer?.backgroundColor = chrome.fill(.hover).cgColor
         } else {
             layer?.backgroundColor = NSColor.clear.cgColor

@@ -128,17 +128,12 @@ view-level test covers that.
 
 **These rules govern any word a person outside the project reads:** in-app copy
 (toasts, empty states, button labels, Settings captions, errors), `docs/config/*`, the
-README, and release notes (curated for the person downloading, not a git log). The
-full standard is `docs/brand-voice.md` in `zen-term-website`.
+README, and release notes (curated for the person downloading, not a git log).
 
 - **No em-dashes. Anywhere**, including inside quotes. The test is a grep, not a
   judgment call. Titles take a colon.
 - **No hype words, no adverbs.** The app's copy currently contains zero instances
   of "seamless", "powerful", "beautiful", or "just works". Keep it that way.
-- **Positioning:** ZenTerm is "a dev-first terminal", on a libghostty core, for
-  terminal devs of all kinds. The core is the engine, not the identity: credit it
-  plainly in a spec line or the docs, never the headline. The agentic bent is a
-  lean, never the frame. Never write "the terminal for the agentic era".
 - **One word per concept** (pane not split, workspace not project/repo, shortcut not
   keybind, copy not carry).
 - Confirmations state the consequence and never ask "Are you sure?".
@@ -151,8 +146,9 @@ bring-your-own theme and washes out on light themes. Everything resolves from
 
 - **Terminal surfaces:** build `TerminalSurfaceConfig(theme: Theme.current.terminal)`.
 - **Chrome UI:** use `Theme.current.chrome` roles (`background`, `foreground`,
-  `info`, `warning`, `destructive`, `accent`, `attention`, `muted`, `positive`,
-  `cursor`).
+  `info`, `warning`, `destructive`, `accent`, `onAccent`, `attention`, `positive`,
+  `cursor`). `onAccent` is the background or foreground, whichever contrasts more with
+  `accent`, and only goes on an accent fill.
 - **Text and icons take `chrome.ink(.faint / .muted / .subtle / .normal)`, never an
   alpha.** Four weights, no fifth: `faint` is quieter than what it sits beside (a
   disabled label, a hint opposite a caption), `muted` recedes (captions, hints,
@@ -164,21 +160,51 @@ bring-your-own theme and washes out on light themes. Everything resolves from
   never a number, or its states invert on a narrow-separation theme. Structural fills
   (a divider, a border, a swatch ring) take `chrome.fill(alpha:)` with one of the
   named constants `ChromeTheme.hairline / .border / .swatchRing`. A standalone
-  role-toned surface behind text (a selected row, a card's icon badge) takes
+  role-toned surface behind text (a card's icon badge) takes
   `chrome.tint(_:alpha:)`, which is deliberately outside `fillScale`.
 - **Never `accent.withAlphaComponent`.** That escapes the per-theme `fillScale` and
-  stops the fill being comparable to the others in the same control. Reach for
-  `chrome.selectionFill` before defining a new focus or selection fill.
+  stops the fill being comparable to the others in the same control. State takes the
+  neutral ladder: the keyboard cursor `fill(.hover)`, current `fill(.active)`, and
+  focus an accent ring. The one accent fill is the primary button: labeled in
+  `onAccent`, and focused with an `onAccent` ring inset 1pt.
 
 **Banned in the chrome:** `NSColor(white:…)`, `.white` / `.black`, raw hex, literal
 palette values, and AppKit system/semantic colors (`.secondaryLabelColor`,
 `.placeholderTextColor`, a text field's default `placeholderString` tint, and a field
-editor's insertion point, which defaults to the *macOS* accent: call
-`applyThemedCaret()` when a field takes focus). Those
-follow `effectiveAppearance`, not `Theme.current`. The only exception is a genuinely
-theme-independent value (the black drop shadow in `FloatShadow`), and it must be
+editor's insertion point and selection, which default to the *macOS* accent and the
+system's unfocused gray: `HostWindow` vends a themed `ChromeTextView` editor, and
+`applyThemedEditor()` reapplies it on a theme change). Those
+follow `effectiveAppearance`, not `Theme.current`. The only exception is the drop
+shadow's black in `FloatShadow`: the color is theme-independent, but its strength is
+solved per theme in `ChromeThemeDeriver`. Any other theme-independent value must be
 commented as such. If the chrome needs a role `ChromeTheme` does not expose, add the
 role and derive it in `ChromeThemeDeriver`. Never reach for a literal.
+
+## Chrome tokens
+
+Sizes, weights and type in the chrome come from named tokens, never a literal.
+
+- **Type:** fonts come from `ChromeType` roles (`display`, `title`, `body`, `small`,
+  `caption`, with a weight and a mono face where needed); a section heading takes
+  `ChromeType.sectionLabel` in sentence case. `swiftlint` rejects `systemFont(ofSize:)`
+  outside `ChromeType`.
+- **Radius and border:** corner radii come from `ChromeMetrics.Radius` (`control`,
+  `surface`, `capsule(_:)`) and border widths from `ChromeMetrics.Border`. Focus
+  changes a control's border color, never its width. A focused pane or tool float also
+  steps up to `Border.paneFocus`.
+- **Spacing and height:** spacing, insets, gaps and control or row heights come from
+  `ChromeMetrics.Spacing` (`s2` to `s20`, `controlInset`, `modalInsets`,
+  `modalSectionGap`) and `ChromeMetrics.Height` (`xs`, `sm`, `control`, `lg`). Icon, glyph
+  and width geometry are not spacing. A value off the scale is a signal to fix the layout,
+  not to add a step.
+- **Elevation:** shadows come from `FloatShadow.apply(_:to:)` with a tier: `overlay` for
+  anything anchored (popovers, dropdowns, tooltips, hover cards), `float` for toasts,
+  cards and the floating sidebar, `modal` for modals (the `CardChrome` default). A drawn
+  shadow reads `FloatShadow.color(_:)` and the tier's `contextBlur` and `offset`. Never
+  build an `NSShadow` by hand.
+- **Motion:** animation durations, on-screen lingers and hover intent come from `Motion`
+  (`fadeDuration`, `pageSlideDuration`, `entranceFadeDuration`, `hoverIntent`,
+  `Motion.Linger`). Debounces, polls and timeouts stay with their owner.
 
 ## Designs
 

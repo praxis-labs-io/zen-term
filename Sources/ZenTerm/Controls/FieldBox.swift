@@ -16,7 +16,6 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     var onEscape: (() -> Bool)?
 
     private static var restFill: NSColor { Theme.current.chrome.fill(.rest) }
-    private static var focusFill: NSColor { Theme.current.chrome.selectionFill }
 
     var text: String { field.stringValue }
     func setText(_ value: String) { field.stringValue = value }
@@ -33,27 +32,28 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         self.placeholder = placeholder
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 6
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         layer?.backgroundColor = Self.restFill.cgColor
-        layer?.borderWidth = 1
+        layer?.borderWidth = ChromeMetrics.Border.width
         layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
         translatesAutoresizingMaskIntoConstraints = false
 
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
-        field.font = .systemFont(ofSize: 13)
+        field.font = ChromeType.font(.body)
+        field.makeSingleLine()
         applyPlaceholder()
-        field.textColor = Theme.current.chrome.foreground.nsColor
+        field.textColor = Theme.current.chrome.ink(.normal)
         field.delegate = self
         field.onGainedFocus = { [weak self] in self?.setFocused(true) }
         field.translatesAutoresizingMaskIntoConstraints = false
         addSubview(field)
 
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 30),
-            field.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 9),
-            field.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -9),
+            heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
+            field.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
+            field.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
             field.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
     }
@@ -69,8 +69,8 @@ final class FieldBox: NSView, NSTextFieldDelegate {
 
     func reapplyTheme() {
         setFocused(field.currentEditor() != nil)
-        field.textColor = Theme.current.chrome.foreground.nsColor
-        field.applyThemedCaret()
+        field.textColor = Theme.current.chrome.ink(.normal)
+        field.applyThemedEditor()
         applyPlaceholder()
     }
 
@@ -80,16 +80,16 @@ final class FieldBox: NSView, NSTextFieldDelegate {
             string: placeholder,
             attributes: [
                 .foregroundColor: Theme.current.chrome.ink(.muted),
-                .font: field.font ?? .systemFont(ofSize: 13),
+                .font: field.font ?? ChromeType.font(.body),
             ]
         )
     }
 
     private func setFocused(_ focused: Bool) {
         let chrome = Theme.current.chrome
-        layer?.backgroundColor = (focused ? Self.focusFill : Self.restFill).cgColor
+        layer?.backgroundColor = Self.restFill.cgColor
         layer?.borderColor = (focused ? chrome.accent.nsColor : chrome.fill(alpha: ChromeTheme.border)).cgColor
-        layer?.borderWidth = focused ? 1.5 : 1
+        layer?.borderWidth = ChromeMetrics.Border.width
     }
 
     #if DEBUG
@@ -144,10 +144,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
 
         override func becomeFirstResponder() -> Bool {
             let ok = super.becomeFirstResponder()
-            if ok {
-                applyThemedCaret()
-                onGainedFocus?()
-            }
+            if ok { onGainedFocus?() }
             return ok
         }
     }

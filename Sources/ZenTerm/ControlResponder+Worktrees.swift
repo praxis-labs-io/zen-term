@@ -168,7 +168,7 @@ extension ControlResponder {
         if let address = request.args.workspace {
             if case .host(let alias) = ControlAddress.Workspace(address) {
                 guard GeneralConfig.current.sshHostAliases.contains(alias) else {
-                    return .failure(ControlError(.notFound, "There is no SSH host \(alias) in Settings."))
+                    return .failure(ControlError(.notFound, "There is no remote host \(alias) in Settings."))
                 }
                 return .failure(Self.hostRefusal(address))
             }
@@ -193,7 +193,7 @@ extension ControlResponder {
     }
 
     private static func hostRefusal(_ address: String) -> ControlError {
-        ControlError(.refused, "\(address) is an SSH host. Worktrees are made from a configured workspace.")
+        ControlError(.refused, "\(address) is a remote host. Worktrees are made from a configured workspace.")
     }
 
     private nonisolated static func find(_ target: WorktreeTarget, in entry: Workspace)

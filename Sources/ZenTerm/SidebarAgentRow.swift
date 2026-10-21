@@ -51,18 +51,18 @@ final class SidebarAgentRow: SidebarJumpRow {
 
     static let height: CGFloat = 47
     private static let jumpHint = "Jump to agent"
-    private static let inset: CGFloat = 10
+    private static let inset: CGFloat = ChromeMetrics.Spacing.controlInset
     private static let top: CGFloat = 7
     private static let glyphSize = NSSize(width: 14, height: 16)
-    private static let glyphGap: CGFloat = 8
-    private static let lineGap: CGFloat = 3
+    private static let glyphGap: CGFloat = ChromeMetrics.Spacing.s8
+    private static let lineGap: CGFloat = ChromeMetrics.Spacing.s2
     private static let dotDiameter: CGFloat = 7
 
     init(onActivate: @escaping () -> Void) {
         super.init(tooltip: Self.jumpHint, onActivate: onActivate)
 
-        summaryLabel.font = .systemFont(ofSize: 12)
-        detailLabel.font = .systemFont(ofSize: 11)
+        summaryLabel.font = ChromeType.font(.small)
+        detailLabel.font = ChromeType.font(.caption)
         for label in [summaryLabel, detailLabel] {
             label.lineBreakMode = .byTruncatingTail
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -71,7 +71,7 @@ final class SidebarAgentRow: SidebarJumpRow {
         }
 
         dot.wantsLayer = true
-        dot.layer?.cornerRadius = Self.dotDiameter / 2
+        dot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.dotDiameter)
         glyphSlot.translatesAutoresizingMaskIntoConstraints = false
         addSubview(glyphSlot)
         for glyph in [dot, spinner] {

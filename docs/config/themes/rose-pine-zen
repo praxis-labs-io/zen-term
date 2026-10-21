@@ -67,7 +67,6 @@ palette = 15=#e0def4
 #   warning      ← palette 3  (#f6c177, gold)
 #   destructive  ← palette 1  (#eb6f92, love)
 #   attention    ← palette 6  (#ea9a97, rose)
-#   muted        ← a foreground/background blend, not a palette entry
 #
 # `accent` is the one you can repoint without editing this file: `accent-color`
 # in `config` sends it to any palette entry by ANSI hue name.

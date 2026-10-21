@@ -16,7 +16,7 @@ final class DotGridView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func draw(_ dirtyRect: NSRect) {
-        Theme.current.chrome.fill(alpha: ChromeTheme.gridDot).setFill()
+        Theme.current.chrome.fill(alpha: ChromeTheme.hairline).setFill()
         let pitch = Self.pitch
         let side = Self.dotRadius * 2
         let firstColumn = Int((dirtyRect.minX / pitch).rounded(.down))

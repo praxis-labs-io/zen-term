@@ -4,12 +4,12 @@ import AppKit
 final class RegionCommandField: NSView, NSTextFieldDelegate {
     enum Edge { case left, right, up, down }
 
-    static let commandFont = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
-    private static let horizontalInset: CGFloat = 11
-    private static let topInset: CGFloat = 9
-    private static let rowSpacing: CGFloat = 9
+    static let commandFont = ChromeType.font(.body, face: .mono)
+    private static let horizontalInset: CGFloat = ChromeMetrics.Spacing.controlInset
+    private static let topInset: CGFloat = ChromeMetrics.Spacing.controlInset
+    private static let rowSpacing: CGFloat = ChromeMetrics.Spacing.s10
     private static let markerSize = NSSize(width: 8, height: 16)
-    private static let markerSpacing: CGFloat = 7
+    private static let markerSpacing: CGFloat = ChromeMetrics.Spacing.s6
     private static let cornerSize: CGFloat = 24
     private static let cornerInset: CGFloat = 6
 
@@ -42,21 +42,20 @@ final class RegionCommandField: NSView, NSTextFieldDelegate {
         self.region = region
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 8
-        layer?.borderWidth = 1
+        layer?.cornerRadius = ChromeMetrics.Radius.control
+        layer?.borderWidth = ChromeMetrics.Border.width
 
         label.stringValue = WorkspaceForm.label(for: region)
-        label.font = .systemFont(ofSize: 11, weight: .medium)
-        opensFocusedLabel.font = .systemFont(ofSize: 10.5, weight: .medium)
+        label.font = ChromeType.font(.caption, weight: .medium)
+        opensFocusedLabel.font = ChromeType.font(.caption, weight: .medium)
 
         marker.wantsLayer = true
-        marker.layer?.cornerRadius = 1
 
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = Self.commandFont
-        field.cell?.isScrollable = true
+        field.makeSingleLine()
         field.cell?.lineBreakMode = .byClipping
         field.delegate = self
         field.onGainedFocus = { [weak self] in self?.setEditing(true) }
@@ -92,22 +91,22 @@ final class RegionCommandField: NSView, NSTextFieldDelegate {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         label.textColor = chrome.ink(.muted)
-        opensFocusedLabel.textColor = chrome.cursor.nsColor
+        opensFocusedLabel.textColor = chrome.ink(.subtle)
         marker.layer?.backgroundColor = chrome.cursor.nsColor.cgColor
-        field.textColor = chrome.foreground.nsColor
-        field.applyThemedCaret()
+        field.textColor = chrome.ink(.normal)
+        field.applyThemedEditor()
         let placeholder = region == .main ? WorkspaceForm.shellLabel : ""
         field.placeholderAttributedString = NSAttributedString(
-            string: placeholder, attributes: [.font: Self.commandFont, .foregroundColor: chrome.ink(.faint)])
+            string: placeholder, attributes: [.font: Self.commandFont, .foregroundColor: chrome.ink(.muted)])
         cornerButton.reapplyTheme()
         refresh()
     }
 
     private func refresh() {
         let chrome = Theme.current.chrome
-        layer?.backgroundColor = (isEditing ? chrome.selectionFill : chrome.fill(.rest)).cgColor
+        layer?.backgroundColor = chrome.fill(.rest).cgColor
         layer?.borderColor = (isEditing ? chrome.accent.nsColor : chrome.fill(alpha: ChromeTheme.border)).cgColor
-        layer?.borderWidth = isEditing ? 1.5 : 1
+        layer?.borderWidth = ChromeMetrics.Border.width
         marker.isHidden = !opensFocused
         opensFocusedLabel.isHidden = !opensFocused
         cornerButton.isHidden = !(isHovered || isEditing)
@@ -209,10 +208,7 @@ final class RegionCommandField: NSView, NSTextFieldDelegate {
 
         override func becomeFirstResponder() -> Bool {
             let ok = super.becomeFirstResponder()
-            if ok {
-                applyThemedCaret()
-                onGainedFocus?()
-            }
+            if ok { onGainedFocus?() }
             return ok
         }
     }

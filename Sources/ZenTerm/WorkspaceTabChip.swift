@@ -1,10 +1,11 @@
 import AppKit
 
 final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
-    static let height: CGFloat = 26
-    private static let inset: CGFloat = 10
+    static let height: CGFloat = ChromeMetrics.Height.sm
+    private static let inset: CGFloat = ChromeMetrics.Spacing.controlInset
     private static let dotDiameter: CGFloat = 6
-    private static let accessorySpacing: CGFloat = 6
+    private static let underlineThickness: CGFloat = 2
+    private static let accessorySpacing: CGFloat = ChromeMetrics.Spacing.s6
     private static let closeSize: CGFloat = 16
 
     var onSelect: (() -> Void)?
@@ -40,7 +41,7 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         symbol: "xmark", size: NSSize(width: Self.closeSize, height: Self.closeSize), pointSize: 8,
         weight: .semibold, accessibilityLabel: "Remove tab", shortcut: { CommandCatalog.spec(for: .closeTab).shortcut }
     ) { [weak self] in self?.onRemove?() }
-    private let renameField = RenameField()
+    private let renameField = NSTextField()
 
     var isRenaming: Bool { !renameField.isHidden }
     var renameFieldForTesting: NSTextField { renameField }
@@ -55,7 +56,7 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
     init() {
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = 6
+        layer?.cornerRadius = ChromeMetrics.Radius.control
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
 
@@ -64,17 +65,17 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         dot.wantsLayer = true
-        dot.layer?.cornerRadius = Self.dotDiameter / 2
+        dot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.dotDiameter)
         dot.setAccessibilityLabel("Opens focused")
 
         underline.wantsLayer = true
-        underline.layer?.cornerRadius = 1
+        underline.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.underlineThickness)
 
         renameField.isBordered = false
         renameField.drawsBackground = false
         renameField.focusRingType = .none
         renameField.font = TabBarView.chipFont
-        renameField.cell?.isScrollable = true
+        renameField.makeSingleLine()
         renameField.delegate = self
         renameField.isHidden = true
 
@@ -138,12 +139,14 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         label.frame = textFrame.insetBy(dx: 0, dy: (bounds.height - labelHeight) / 2)
         let fieldHeight = renameField.intrinsicContentSize.height
         renameField.frame = textFrame.insetBy(dx: 0, dy: (bounds.height - fieldHeight) / 2)
-        underline.frame = CGRect(x: Self.inset, y: 0, width: max(0, bounds.width - 2 * Self.inset), height: 2)
+        underline.frame = CGRect(
+            x: Self.inset, y: 0, width: max(0, bounds.width - 2 * Self.inset), height: Self.underlineThickness)
     }
 
     func reapplyTheme() {
         closeButton.reapplyTheme()
         restyle()
+        renameField.applyThemedEditor()
     }
 
     private func restyle() {
@@ -159,13 +162,13 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
             ])
         renameField.textColor = chrome.ink(.normal)
         renameField.placeholderAttributedString = NSAttributedString(
-            string: defaultName, attributes: [.font: TabBarView.chipFont, .foregroundColor: chrome.ink(.faint)])
+            string: defaultName, attributes: [.font: TabBarView.chipFont, .foregroundColor: chrome.ink(.muted)])
         dot.layer?.backgroundColor = chrome.cursor.nsColor.cgColor
         underline.layer?.backgroundColor = chrome.accent.nsColor.cgColor
         underline.isHidden = !isSelected || isRenaming
         let background: NSColor
         if isSelected {
-            background = chrome.selectionFill
+            background = chrome.fill(.active)
         } else if isHovered {
             background = chrome.fill(.hover)
         } else {
@@ -173,8 +176,8 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         }
         layer?.backgroundColor = background.cgColor
         let ringed = hasFocus || isRenaming
-        layer?.borderWidth = ringed ? 1.5 : 0
-        layer?.borderColor = ringed ? chrome.accent.nsColor.cgColor : nil
+        layer?.borderWidth = ChromeMetrics.Border.width
+        layer?.borderColor = ringed ? chrome.accent.nsColor.cgColor : NSColor.clear.cgColor
     }
 
     override var acceptsFirstResponder: Bool { true }
@@ -281,7 +284,6 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         onWidthChanged?()
         needsLayout = true
         window?.makeFirstResponder(renameField)
-        renameField.applyThemedCaret()
         renameField.currentEditor()?.selectAll(nil)
     }
 
@@ -329,13 +331,5 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
             return false
         }
         return true
-    }
-
-    private final class RenameField: NSTextField {
-        override func becomeFirstResponder() -> Bool {
-            let ok = super.becomeFirstResponder()
-            if ok { applyThemedCaret() }
-            return ok
-        }
     }
 }

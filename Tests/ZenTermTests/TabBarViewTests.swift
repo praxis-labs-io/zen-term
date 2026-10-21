@@ -185,7 +185,7 @@ final class TabBarViewTests: WindowTestCase {
         mount(tabBar)
         tabBar.render([item(1, "one", index: 1, active: true)])
         let chip = try XCTUnwrap(tabBar.chipsForTesting.first)
-        defer { TooltipPresenter.shared.dismissForTesting() }
+        defer { TooltipPresenter.shared.dismiss() }
 
         try hover(chip)
         XCTAssertEqual(try presentedTooltip().labelForTesting, "/tmp/before")
@@ -200,7 +200,7 @@ final class TabBarViewTests: WindowTestCase {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         mount(tabBar)
         tabBar.render([item(1, "one", index: 1, active: true)])
-        TooltipPresenter.shared.dismissForTesting()
+        TooltipPresenter.shared.dismiss()
 
         try hover(try XCTUnwrap(tabBar.chipsForTesting.first))
         RunLoop.current.run(until: Date().addingTimeInterval(1))
@@ -216,7 +216,7 @@ final class TabBarViewTests: WindowTestCase {
     }
 
     private func hover(_ chip: NSView) throws {
-        TooltipPresenter.shared.dismissForTesting()
+        TooltipPresenter.shared.dismiss()
         chip.mouseEntered(with: try mouseEvent())
     }
 
