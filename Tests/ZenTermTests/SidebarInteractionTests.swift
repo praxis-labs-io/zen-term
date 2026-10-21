@@ -111,8 +111,9 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertFalse(sidebar.view.isHidden)
         XCTAssertTrue(sidebar.lead.isHidden)
         XCTAssertEqual(
-            frame(of: try tabBar(in: controller), in: controller).minX, SidebarView.width - SidebarView.padding,
-            "the bar moves in with the canvas, so the first title keeps its place against the pane")
+            frame(of: try tabBar(in: controller), in: controller).minX + TabBarView.leadingInset,
+            frame(of: try pane(in: controller), in: controller).minX,
+            "docked, the first tab lines up with the pane's leading edge")
         XCTAssertEqual(
             frame(of: try pane(in: controller), in: controller).minX,
             try rowFillEdge(in: controller) + Self.paneGap,
@@ -146,8 +147,9 @@ final class SidebarInteractionTests: WindowTestCase {
             try rowFillEdge(in: controller) + Self.paneGap,
             "docked, the panes sit one pane-gap from the sidebar's rows, as from a drawer")
         XCTAssertEqual(
-            frame(of: try tabBar(in: controller), in: controller).minX, SidebarView.width - SidebarView.padding,
-            "docking again lands the bar back beside the canvas")
+            frame(of: try tabBar(in: controller), in: controller).minX + TabBarView.leadingInset,
+            frame(of: try pane(in: controller), in: controller).minX,
+            "docking again lines the first tab back up with the pane")
     }
 
     func test_toggle_holdsItsWindowPosition_dockedAndCollapsed() throws {

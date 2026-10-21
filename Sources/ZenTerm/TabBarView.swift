@@ -22,7 +22,7 @@ final class TabBarView: NSView {
 
     static let height: CGFloat = ChromeMetrics.Height.lg
 
-    private static let leadingInset: CGFloat = ChromeMetrics.Spacing.s12
+    static let leadingInset: CGFloat = ChromeMetrics.Spacing.s12
     private static let chipSpacing: CGFloat = ChromeMetrics.Spacing.s4
     // The floating sidebar keeps its own toggle this far above the card's bottom, matching the docked one's band.
     static let chipBandInset: CGFloat = (height + ChromeMetrics.footerGap) / 2
