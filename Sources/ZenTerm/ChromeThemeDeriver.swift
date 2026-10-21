@@ -32,7 +32,11 @@ enum ChromeThemeDeriver {
     }
 
     private static func relativeLuminance(of color: TerminalColor) -> Double {
-        relativeLuminance([color.red, color.green, color.blue].map(Double.init))
+        relativeLuminance(channels(of: color))
+    }
+
+    private static func channels(of color: TerminalColor) -> [Double] {
+        [color.red, color.green, color.blue].map(Double.init)
     }
 
     /// A fixed anchor, not the catalog's median, so adding a theme doesn't re-weight the others.
@@ -64,9 +68,8 @@ enum ChromeThemeDeriver {
     }
 
     private static func darkening(of background: TerminalColor, alpha: Double) -> Double {
-        let channels = [background.red, background.green, background.blue].map(Double.init)
-        return lightness(relativeLuminance(channels))
-            - lightness(relativeLuminance(channels.map { $0 * (1 - alpha) }))
+        lightness(relativeLuminance(of: background))
+            - lightness(relativeLuminance(channels(of: background).map { $0 * (1 - alpha) }))
     }
 
     private static func relativeLuminance(_ channels: [Double]) -> Double {
