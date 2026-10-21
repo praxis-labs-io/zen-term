@@ -3,7 +3,7 @@ import AppKit
 final class KeybindHintBubble: ShadowCardView {
     private static let width: CGFloat = 220
     private static let insets = ChromeMetrics.Spacing.s12 * 2
-    private static let resetSlot: CGFloat = 34 + 8
+    private static let resetSlot = ChromeMetrics.Height.lg + ChromeMetrics.Spacing.s8
 
     static func inputWidth(withReset: Bool) -> CGFloat {
         width - insets - (withReset ? resetSlot : 0)
@@ -14,7 +14,8 @@ final class KeybindHintBubble: ShadowCardView {
     private let errorLabel = NSTextField(wrappingLabelWithString: "")
     /// Hidden until a host asks: the tool-float form shares this popover and has no defaults.
     private lazy var resetButton = IconButton(
-        symbol: "arrow.uturn.backward", size: NSSize(width: 34, height: 34), pointSize: 13,
+        symbol: "arrow.uturn.backward", size: NSSize(width: ChromeMetrics.Height.lg, height: ChromeMetrics.Height.lg),
+        pointSize: 13,
         accessibilityLabel: "Reset to default", restsFilled: true
     ) { [weak self] in self?.onResetToDefault?() }
     var onResetToDefault: (() -> Void)?
@@ -93,8 +94,8 @@ final class KeybindHintBubble: ShadowCardView {
 
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: Self.width),
-            badge.widthAnchor.constraint(equalToConstant: 28),
-            badge.heightAnchor.constraint(equalToConstant: 28),
+            badge.widthAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
+            badge.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
             icon.centerXAnchor.constraint(equalTo: badge.centerXAnchor),
             icon.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
             previewGroup.widthAnchor.constraint(equalTo: col.widthAnchor),

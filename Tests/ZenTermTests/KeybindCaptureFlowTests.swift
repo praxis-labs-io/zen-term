@@ -382,7 +382,7 @@ final class KeybindCaptureFlowTests: WindowTestCase {
         try hintBubble().layoutSubtreeIfNeeded()
         XCTAssertEqual(
             try hintBubble().inputWidthForTesting,
-            KeybindHintBubble.widthForTesting - insets - 34 - 8,
+            KeybindHintBubble.widthForTesting - insets - ChromeMetrics.Height.lg - ChromeMetrics.Spacing.s8,
             accuracy: 0.5, "and gives up exactly the icon's width when one appears")
     }
 
