@@ -92,8 +92,12 @@ never a literal.
   `ChromeMetrics.Border`. Focus changes a control's border color, never its width. A
   focused pane or tool float also steps up to `Border.paneFocus`.
 - Spacing, insets, gaps and control or row heights come from
-  `ChromeMetrics.Spacing` and `ChromeMetrics.Height`. Icon, glyph and width geometry
-  are not spacing. A value off the scale is a signal to fix the layout, not to add a step.
+  `ChromeMetrics.Spacing` and `ChromeMetrics.Height`, one token per size and no
+  arithmetic to build one. Icon, glyph and width geometry are not spacing. A value off
+  the scale is a signal to fix the layout, not to add a step.
+- `swiftlint` rejects a literal radius, border width, spacing, inset or height outside
+  `ChromeMetrics`. A drawing proportion that is not chrome takes
+  `// swiftlint:disable:next <rule>`.
 - Symbol point sizes come from `ChromeMetrics.Icon` (`xs`, `sm`, `md`, `xl`);
   `swiftlint` rejects a literal point size outside `ChromeMetrics`.
 - Shadows come from `FloatShadow.apply(_:to:)` with a tier: `overlay` for anything
