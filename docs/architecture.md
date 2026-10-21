@@ -608,7 +608,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   `WindowController.deliverConfigDiagnosticsNotice`, and retracted by `ConfigApplier`
   only when problems clear.
 - **No file watcher.** Hand edits apply on ⌘⇧,.
-- **Settings > SSH hosts lists only the `ssh-host` lines.** `~/.ssh/config` is read by the probe and
+- **Settings > Remote hosts lists only the `ssh-host` lines.** `~/.ssh/config` is read by the probe and
   never written. A row shows its host's address from `SSHHostStatusCenter`, so Settings never runs
   ssh itself. A line holds a Host alias or a typed user@host, each
   with an optional name. A name is only a label, read through `GeneralConfig.displayName(of:)`
@@ -617,7 +617,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   updated in place; ↩ or a click opens `AddSSHHostOverlay` in edit mode, which rewrites only that
   host's name on its line and holds Remove. Remove asks first while the host is connecting or
   connected, then returns to Settings with focus on the next host (Add Host when none is left). The
-  sidebar's SSH rows show their status as a dot (`SSHHostStatus.ink`): Offline takes the idle
+  sidebar's Remote hosts rows show their status as a dot (`SSHHostStatus.ink`): Offline takes the idle
   agent row's ink on the dot and the title, Online is positive, Connected is accent, and the
   status word is the row's accessibility value rather than visible text. While an agent in a
   connected host's workspace waits, the dot takes the waiting ink a workspace row's does, from

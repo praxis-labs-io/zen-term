@@ -392,7 +392,7 @@ final class SidebarController {
             case .unconfigured: return "This workspace isn't configured.\nSet one up with Add Workspace… in \(picker)."
             case .notARepo: return "This workspace isn't a git repository.\nWorktrees need a git repository."
             case .agent: return "Agents don't start worktrees.\nPress \(chord) on a workspace row."
-            case .host: return "SSH hosts don't start worktrees.\nPress \(chord) on a workspace row."
+            case .host: return "Remote hosts don't start worktrees.\nPress \(chord) on a workspace row."
             }
         }
     }

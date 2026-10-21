@@ -141,7 +141,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
     }
 
     private func buildContent() -> NSStackView {
-        header.stringValue = editing == nil ? "Add SSH Host" : "Edit SSH Host"
+        header.stringValue = editing == nil ? "Add remote host" : "Edit remote host"
         header.font = ChromeType.font(.title)
         header.textColor = Theme.current.chrome.ink(.normal)
         submitButton.setTitle(editing == nil ? "Add" : "Save")

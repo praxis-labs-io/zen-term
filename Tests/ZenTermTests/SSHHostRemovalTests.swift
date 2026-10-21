@@ -66,7 +66,7 @@ final class SSHHostRemovalTests: WindowTestCase {
     private func openSettings(in c: WindowController) throws -> NSView {
         let content = try XCTUnwrap(c.window.contentView)
         c.openSettings(for: .setting(key: "ssh-host"))
-        waitUntil(hostRows(in: content).count == 3, "Settings to land on SSH hosts")
+        waitUntil(hostRows(in: content).count == 3, "Settings to land on Remote hosts")
         return content
     }
 
@@ -212,7 +212,7 @@ final class SSHHostRemovalTests: WindowTestCase {
         let c = makeWindow()
         let content = try XCTUnwrap(c.window.contentView)
         c.openSettings(for: .setting(key: "ssh-host"))
-        waitUntil(hostRows(in: content).count == 1, "Settings to land on SSH hosts")
+        waitUntil(hostRows(in: content).count == 1, "Settings to land on Remote hosts")
 
         try button("Remove", in: editForm(ofRow: 0, in: c)).onTap()
         waitUntil(settings(in: content) != nil && form(in: content) == nil, "Settings to come back")

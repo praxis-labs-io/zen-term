@@ -1754,7 +1754,7 @@ final class WindowController: NSObject {
         case .appearance: return "Appearance"
         case .general: return "General"
         case .shortcuts: return "Shortcuts"
-        case .sshHosts: return "SSH hosts"
+        case .sshHosts: return "Remote hosts"
         }
     }
 

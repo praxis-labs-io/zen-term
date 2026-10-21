@@ -64,7 +64,7 @@ extension ControlResponder {
 
     private func findHostWorkspace(_ alias: String) -> Result<WorkspacePlace, ControlError> {
         guard GeneralConfig.current.sshHostAliases.contains(alias) else {
-            return .failure(ControlError(.notFound, "There is no SSH host \(alias) in Settings."))
+            return .failure(ControlError(.notFound, "There is no remote host \(alias) in Settings."))
         }
         let host = SSHHostID(alias: alias)
         for window in windows() {

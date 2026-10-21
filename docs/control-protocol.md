@@ -74,7 +74,7 @@ integer `id` that could be read. A command with nothing to return answers `{}`.
 | `unsupported_version` | `v` is newer than the app speaks; the response's `v` says which it does. |
 | `not_found`           | A target names nothing that exists.                      |
 | `ambiguous`           | A target names more than one thing.                      |
-| `refused`             | The command would end running work or lose it, or does not apply to its target: a split in Focus Mode, a worktree command on a workspace with no entry or on an SSH host's workspace, or a `cmd` for an SSH host's tab or pane. Carries `details` when `force` would go ahead. |
+| `refused`             | The command would end running work or lose it, or does not apply to its target: a split in Focus Mode, a worktree command on a workspace with no entry or on a remote host's workspace, or a `cmd` for a remote host's tab or pane. Carries `details` when `force` would go ahead. |
 | `failed`              | The app could not do it.                                 |
 
 A `refused` error says what `force` would end:
@@ -99,7 +99,7 @@ Requests are decoded off the main thread, applied on it, and written back off it
 | Pane   | its `$ZEN_PANE` token, e.g. `31`  | Unique across the app and never reused. Drawers have tokens. |
 | Tab    | `w<window>.t<tab>`, e.g. `w1.t14` | Tab ids are minted per window, so the window is part of it. |
 | Workspace | its folder as an absolute path, or its title | Matched across every window. More than one match is `ambiguous`. |
-| SSH host workspace | `ssh:<host>`             | The host's alias in Settings, never its name. A host not in Settings is `not_found`, and so is one with no session or a failed login, except to `workspace.open` and the worktree commands, which refuse a host in Settings whether it has a session or not. A folder or title never names a host's workspace. |
+| Remote host workspace | `ssh:<host>`             | The host's alias in Settings, never its name. A host not in Settings is `not_found`, and so is one with no session or a failed login, except to `workspace.open` and the worktree commands, which refuse a host in Settings whether it has a session or not. A folder or title never names a host's workspace. |
 | Window | `w<window>`                       |                                               |
 
 A command with no target acts on the caller: `caller.pane`, its tab, its workspace.
@@ -130,7 +130,7 @@ No arguments.
 
 ### `list`
 
-No arguments. Every window, its workspaces in sidebar order with SSH hosts' workspaces
+No arguments. Every window, its workspaces in sidebar order with remote hosts' workspaces
 last in Settings order, each workspace's tabs in tab order, and each tab's panes in split order followed by its drawers. A drawer
 is listed from its first opening until it closes, shown or hidden.
 
@@ -146,8 +146,8 @@ is listed from its first opening until it closes, shown or hidden.
 ```
 
 - `key`: the window is the key window.
-- `folder`: absent for an SSH host's workspace.
-- `host`: present for an SSH host's workspace, as `{"alias":"devbox","state":"connected"}`.
+- `folder`: absent for a remote host's workspace.
+- `host`: present for a remote host's workspace, as `{"alias":"devbox","state":"connected"}`.
   `state` is `connecting` or `connected`. A host whose login failed is left out.
 - `worktree`: present when the workspace was opened from a worktree. `parent` is
   the folder of the workspace it belongs to.
@@ -284,7 +284,7 @@ not started or its screen cannot be read.
 The worktrees of the workspace's repo, its main checkout left out. Every worktree command
 resolves the workspace to its entry in the workspaces file, read fresh, and a worktree
 workspace to the workspace it was made from. A workspace with no entry is `refused`, and so
-is an SSH host's workspace, by its `ssh:<host>` address or as the caller's.
+is a remote host's workspace, by its `ssh:<host>` address or as the caller's.
 
 ```json
 {"worktrees":[{"path":"/Users/me/.zenterm/worktrees/zen-term-1a2b3c4d/feat-x","branch":"feat/x",

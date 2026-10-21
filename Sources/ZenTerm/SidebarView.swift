@@ -52,7 +52,7 @@ final class SidebarView: NSView {
     private var hoverCovers = 0
     private weak var hoverExempt: NSView?
     let rowMenu = SidebarRowMenu()
-    private let hostsCaption = FieldCaption("SSH", required: false)
+    private let hostsCaption = FieldCaption("Remote hosts", required: false)
     private let hostStack = NSStackView()
     private var hostRows: [String: SettingsNavRow] = [:]
     private var hostNumbers: [String: Int] = [:]

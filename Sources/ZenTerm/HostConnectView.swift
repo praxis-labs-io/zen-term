@@ -139,7 +139,7 @@ final class HostConnectView: NSView {
         grid.reapplyTheme()
         route.reapplyTheme()
         eyebrow.attributedStringValue = Self.line(
-            "SSH host", font: ChromeType.sectionLabel, color: chrome.ink(.muted),
+            "Remote host", font: ChromeType.sectionLabel, color: chrome.ink(.muted),
             breaking: .byClipping)
         applyName()
         destinationLine.textColor = chrome.ink(.muted)

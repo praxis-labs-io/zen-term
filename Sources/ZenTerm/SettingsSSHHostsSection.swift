@@ -1,7 +1,7 @@
 import AppKit
 
 final class SettingsSSHHostsSection: SettingsSection {
-    var navTitle: String { "SSH hosts" }
+    var navTitle: String { "Remote hosts" }
     var onExitToNav: (() -> Void)?
     var onAddHost: (() -> Void)?
     var onEditHost: ((SSHHostEntry, _ address: String?) -> Void)?
@@ -120,9 +120,9 @@ final class SettingsSSHHostsSection: SettingsSection {
         hostRows = []
         emptyNote = nil
 
-        addCaption("SSH hosts", to: stack)
+        addCaption("Remote hosts", to: stack)
         shownEntries = GeneralConfig.current.sshHosts
-        if shownEntries.isEmpty { addNote("No SSH hosts yet. Add one below.", to: stack) }
+        if shownEntries.isEmpty { addNote("No remote hosts yet. Add one below.", to: stack) }
         for host in shownEntries.map(\.alias) { add(makeRow(host), to: stack) }
 
         let addRow = SettingsDetail.trailingRow(addButton)
