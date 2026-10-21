@@ -537,6 +537,8 @@ final class WindowController: NSObject {
                     self.connectView?.reapplyTheme()
                 }
                 if change.contains(.theme) {
+                    TooltipPresenter.shared.dismiss()
+                    LinkPreviewPresenter.shared.dismiss()
                     self.tabBar.reapplyTheme()
                     self.dock.reapplyTheme()
                     self.sidebar.reapplyTheme()

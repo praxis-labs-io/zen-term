@@ -49,7 +49,7 @@ final class SidebarAgentsTests: WindowTestCase {
         TerminalSurfaceFactory.makeOverride = originalOverride
         GeneralConfig.setCurrentForTesting(originalConfig)
         WindowController.isPresent = originalPresence
-        TooltipPresenter.shared.dismissForTesting()
+        TooltipPresenter.shared.dismiss()
         SidebarController.resetLastChoiceForTesting()
         try? FileManager.default.removeItem(at: root)
         try super.tearDownWithError()
@@ -143,7 +143,7 @@ final class SidebarAgentsTests: WindowTestCase {
     }
 
     private func hover(_ row: SidebarAgentRow, in c: WindowController) throws {
-        TooltipPresenter.shared.dismissForTesting()
+        TooltipPresenter.shared.dismiss()
         row.mouseEntered(
             with: try XCTUnwrap(
                 NSEvent.mouseEvent(

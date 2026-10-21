@@ -69,7 +69,7 @@ final class TooltipPresenter {
 
     var tooltipForTesting: ChromeTooltip? { tooltip }
 
-    func dismissForTesting() { teardown() }
+    func dismiss() { teardown() }
 
     private func installDismissTriggers(in window: NSWindow) {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in

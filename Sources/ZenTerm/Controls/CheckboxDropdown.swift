@@ -111,6 +111,7 @@ final class CheckboxDropdown: NSView {
         restyle()
         renderTitle()
         chevron.contentTintColor = Theme.current.chrome.ink(.muted)
+        rebuildOpenList()
     }
 
     override var acceptsFirstResponder: Bool { true }
@@ -246,6 +247,13 @@ final class CheckboxDropdown: NSView {
             }
             .sorted { $0.score == $1.score ? $0.index < $1.index : $0.score > $1.score }
             .map(\.index)
+    }
+
+    private func rebuildOpenList() {
+        guard popover.isOpen else { return }
+        popover.close()
+        popover.open(rows: buildRows())
+        refreshRows()
     }
 
     private func rerenderList() {

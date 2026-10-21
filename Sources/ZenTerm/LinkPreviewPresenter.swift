@@ -39,6 +39,8 @@ final class LinkPreviewPresenter {
         installDismissTriggers(in: window)
     }
 
+    func dismiss() { teardown() }
+
     func dismissIfOwnerDetached() {
         guard let preview else { return }
         let ownerIsLive =

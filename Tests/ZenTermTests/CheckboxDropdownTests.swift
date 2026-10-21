@@ -38,6 +38,20 @@ final class CheckboxDropdownTests: WindowTestCase {
                 isARepeat: false, keyCode: code)!)
     }
 
+    func test_reapplyTheme_rebuildsTheOpenListSoItIsNotStale() throws {
+        let original = Theme.current
+        defer { Theme.setCurrentForTesting(original) }
+        let dropdown = makeDropdown()
+        dropdown.openListForTesting()
+        let staleRow = try XCTUnwrap(dropdown.rowViewsForTesting.first)
+
+        Theme.setCurrentForTesting(AppTheme(terminal: Theme.builtIn.terminal, accent: .magenta))
+        dropdown.reapplyTheme()
+
+        XCTAssertTrue(dropdown.isPopoverOpen, "the list has to survive the recolour")
+        XCTAssertFalse(dropdown.rowViewsForTesting.first === staleRow, "the list is still painted in the old theme")
+    }
+
     func test_typing_narrowsTheListAndShowsTheQuery() {
         let dropdown = makeDropdown([".env", "node_modules", "config/credentials/development.key"])
         press(dropdown, " ", code: 49)

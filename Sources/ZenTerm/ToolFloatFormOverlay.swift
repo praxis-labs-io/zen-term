@@ -132,6 +132,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
 
     /// Recolors in place, because a rebuild would lose typed values.
     func reapplyTheme() {
+        hintBubble?.reapplyTheme()
         CardChrome.reapplyTheme(to: card)
         header.textColor = Theme.current.chrome.ink(.normal)
         footerDivider?.reapplyTheme()

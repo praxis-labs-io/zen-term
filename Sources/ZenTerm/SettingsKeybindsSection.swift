@@ -165,6 +165,7 @@ final class SettingsKeybindsSection: SettingsSection {
     }
 
     func reapplyTheme() {
+        hintBubble?.reapplyTheme()
         groupCaptions.forEach { $0.textColor = Theme.current.chrome.ink(.muted) }
         rows.forEach { $0.reapplyTheme() }
         resetAllButton.reapplyTheme()

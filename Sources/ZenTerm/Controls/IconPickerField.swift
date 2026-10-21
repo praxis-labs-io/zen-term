@@ -105,6 +105,9 @@ final class IconPickerField: NSView {
     func reapplyTheme() {
         restyle()
         renderClosed()
+        guard isPopoverOpen else { return }
+        closePopover()
+        openPopover()
     }
 
     private func renderClosed() {

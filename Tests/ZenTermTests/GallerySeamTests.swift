@@ -36,7 +36,7 @@ final class GallerySeamTests: WindowTestCase {
     }
 
     override func tearDownWithError() throws {
-        TooltipPresenter.shared.dismissForTesting()
+        TooltipPresenter.shared.dismiss()
         window = nil
         GeneralConfig.setCurrentForTesting(originalConfig)
         Theme.setCurrentForTesting(originalTheme)
@@ -117,7 +117,7 @@ final class GallerySeamTests: WindowTestCase {
 
         settle()
         XCTAssertNotNil(TooltipPresenter.shared.tooltipForTesting, "the real hover's tooltip never appeared")
-        TooltipPresenter.shared.dismissForTesting()
+        TooltipPresenter.shared.dismiss()
         seam.forceHoverForGallery()
         settle()
         XCTAssertNil(TooltipPresenter.shared.tooltipForTesting, "the gallery's forced hover popped a real tooltip")

@@ -10,6 +10,12 @@ final class KeybindHintBubble: ShadowCardView {
     }
 
     private let previewHost = NSView()
+    private let previewBox = NSView()
+    private let badge = NSView()
+    private let icon = NSImageView()
+    private let title = NSTextField(labelWithString: "Record a shortcut")
+    private var previewGlyph = ""
+    private var successText: String?
     private let statusHost = NSView()
     private let errorLabel = NSTextField(wrappingLabelWithString: "")
     /// Hidden until a host asks: the tool-float form shares this popover and has no defaults.
@@ -23,49 +29,31 @@ final class KeybindHintBubble: ShadowCardView {
     init() {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-        layer?.cornerRadius = ChromeMetrics.Radius.surface
-        layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
-        layer?.borderWidth = ChromeMetrics.Border.width
-        layer?.borderColor = FloatShadow.edge.cgColor
-        FloatShadow.apply(.overlay, to: self)
+        CardChrome.apply(to: self, background: Theme.current.chrome.background.nsColor, tier: .overlay)
 
-        let accent = Theme.current.chrome.accent.nsColor
-
-        let badge = NSView()
         badge.wantsLayer = true
         badge.layer?.cornerRadius = ChromeMetrics.Radius.control
-        badge.layer?.backgroundColor =
-            Theme.current.chrome.tint(Theme.current.chrome.accent, alpha: ChromeTheme.badgeTint).cgColor
         badge.translatesAutoresizingMaskIntoConstraints = false
-        let icon = NSImageView()
         icon.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Record a shortcut")
         icon.symbolConfiguration = .init(pointSize: 13, weight: .semibold)
-        icon.contentTintColor = accent
         icon.translatesAutoresizingMaskIntoConstraints = false
         badge.addSubview(icon)
 
-        let title = NSTextField(labelWithString: "Record a shortcut")
         title.font = ChromeType.font(.body, weight: .semibold)
-        title.textColor = Theme.current.chrome.ink(.normal)
 
         let header = NSStackView(views: [badge, title])
         header.orientation = .horizontal
         header.alignment = .centerY
         header.spacing = ChromeMetrics.Spacing.s10
 
-        let previewBox = NSView()
         previewBox.wantsLayer = true
         previewBox.layer?.cornerRadius = ChromeMetrics.Radius.control
-        previewBox.layer?.backgroundColor = Theme.current.chrome.fill(.rest).cgColor
         previewBox.layer?.borderWidth = ChromeMetrics.Border.width
-        previewBox.layer?.borderColor = Theme.current.chrome.accent.nsColor.cgColor
         previewBox.translatesAutoresizingMaskIntoConstraints = false
         previewHost.translatesAutoresizingMaskIntoConstraints = false
         previewBox.addSubview(previewHost)
 
         errorLabel.font = ChromeType.font(.caption, weight: .medium)
-        errorLabel.textColor = Theme.current.chrome.destructive.nsColor
         errorLabel.alignment = .center
         errorLabel.preferredMaxLayoutWidth = Self.inputWidth(withReset: true)
         errorLabel.isHidden = true
@@ -117,12 +105,31 @@ final class KeybindHintBubble: ShadowCardView {
 
         resetButton.isHidden = true
         setPreview("")
+        paintColors()
         showInstructions()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    func reapplyTheme() {
+        CardChrome.reapplyTheme(to: self, tier: .overlay)
+        paintColors()
+        setPreview(previewGlyph)
+        if let successText { showSuccess(successText) } else { showInstructions() }
+    }
+
+    private func paintColors() {
+        let chrome = Theme.current.chrome
+        badge.layer?.backgroundColor = chrome.tint(chrome.accent, alpha: ChromeTheme.badgeTint).cgColor
+        icon.contentTintColor = chrome.accent.nsColor
+        title.textColor = chrome.ink(.normal)
+        previewBox.layer?.backgroundColor = chrome.fill(.rest).cgColor
+        previewBox.layer?.borderColor = chrome.accent.nsColor.cgColor
+        errorLabel.textColor = chrome.destructive.nsColor
+    }
+
     func setPreview(_ glyph: String) {
+        previewGlyph = glyph
         previewHost.subviews.forEach { $0.removeFromSuperview() }
         let content: NSView
         if glyph.isEmpty {
@@ -160,6 +167,7 @@ final class KeybindHintBubble: ShadowCardView {
     func setCanResetToDefault(_ canReset: Bool) { resetButton.isHidden = !canReset }
 
     func showInstructions() {
+        successText = nil
         let cancel = Self.muted("to cancel")
         let keys = NSStackView(views: [
             Self.keyCap("esc"), cancel, Self.keyCap("del"), Self.muted("to remove"),
@@ -172,6 +180,7 @@ final class KeybindHintBubble: ShadowCardView {
     }
 
     func showSuccess(_ text: String) {
+        successText = text
         let label = NSTextField(labelWithString: text)
         label.font = ChromeType.font(.small, weight: .medium)
         label.textColor = Theme.current.chrome.accent.nsColor
