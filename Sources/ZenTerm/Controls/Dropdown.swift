@@ -85,6 +85,7 @@ final class Dropdown: NSView {
         queryField.font = ChromeType.font(.body)
         queryField.textColor = Theme.current.chrome.ink(.normal)
         queryField.isBordered = false
+        queryField.makeSingleLine()
         queryField.drawsBackground = false
         queryField.focusRingType = .none
         queryField.isHidden = true

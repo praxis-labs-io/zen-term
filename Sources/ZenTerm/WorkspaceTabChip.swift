@@ -75,7 +75,7 @@ final class WorkspaceTabChip: NSView, NSTextFieldDelegate {
         renameField.drawsBackground = false
         renameField.focusRingType = .none
         renameField.font = TabBarView.chipFont
-        renameField.cell?.isScrollable = true
+        renameField.makeSingleLine()
         renameField.delegate = self
         renameField.isHidden = true
 

@@ -42,6 +42,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = ChromeType.font(.body)
+        field.makeSingleLine()
         applyPlaceholder()
         field.textColor = Theme.current.chrome.ink(.normal)
         field.delegate = self

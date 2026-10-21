@@ -28,9 +28,7 @@ final class FindBarView: NSView {
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
-        field.usesSingleLineMode = true
-        field.cell?.wraps = false
-        field.cell?.isScrollable = true
+        field.makeSingleLine()
         field.delegate = self
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
 

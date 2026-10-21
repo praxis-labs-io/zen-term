@@ -55,7 +55,7 @@ final class RegionCommandField: NSView, NSTextFieldDelegate {
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = Self.commandFont
-        field.cell?.isScrollable = true
+        field.makeSingleLine()
         field.cell?.lineBreakMode = .byClipping
         field.delegate = self
         field.onGainedFocus = { [weak self] in self?.setEditing(true) }

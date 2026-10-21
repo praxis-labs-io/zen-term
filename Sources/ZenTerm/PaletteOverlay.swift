@@ -94,6 +94,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         searchField.font = ChromeType.font(.title, weight: .regular)
         applyPlaceholder()
         searchField.isBordered = false
+        searchField.makeSingleLine()
         searchField.drawsBackground = false
         searchField.focusRingType = .none
         searchField.textColor = Theme.current.chrome.ink(.normal)
