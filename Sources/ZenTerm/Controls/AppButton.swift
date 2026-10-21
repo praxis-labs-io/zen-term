@@ -3,38 +3,9 @@ import AppKit
 final class AppButton: NSButton {
     enum Variant { case primary, secondary, muted, destructive, segment, link }
 
-    enum Size {
-        case standard
-        case large
-
-        var height: CGFloat {
-            switch self {
-            case .standard: return ChromeMetrics.Height.control
-            case .large: return ChromeMetrics.Height.control
-            }
-        }
-
-        var horizontalPadding: CGFloat {
-            switch self {
-            case .standard: return ChromeMetrics.Spacing.s8
-            case .large: return ChromeMetrics.Spacing.s12
-            }
-        }
-
-        var role: ChromeType.Role {
-            switch self {
-            case .standard: return .small
-            case .large: return .body
-            }
-        }
-
-        var keycapGap: CGFloat {
-            switch self {
-            case .standard: return ChromeMetrics.Spacing.s6
-            case .large: return ChromeMetrics.Spacing.s8
-            }
-        }
-    }
+    private static let height = ChromeMetrics.Height.control
+    private static let horizontalPadding = ChromeMetrics.Spacing.s8
+    private static let keycapGap = ChromeMetrics.Spacing.s6
 
     var onTap: () -> Void
     var isOn = false { didSet { restyle() } }
@@ -49,7 +20,6 @@ final class AppButton: NSButton {
     var showsFocusOutline = false { didSet { restyle() } }
 
     private let variant: Variant
-    private let size: Size
     private let keycap: KeycapView?
     private let symbolName: String?
     private var labelText: String
@@ -65,14 +35,14 @@ final class AppButton: NSButton {
         }
     }
 
-    // SF Symbol baseline metadata would otherwise pad the frame past `size.height`.
+    // SF Symbol baseline metadata would otherwise pad the frame past `height`.
     override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets() }
 
     override var intrinsicContentSize: NSSize {
-        guard !isSymbolOnly else { return NSSize(width: size.height, height: size.height) }
+        guard !isSymbolOnly else { return NSSize(width: Self.height, height: Self.height) }
         var fitted = super.intrinsicContentSize
-        fitted.width += size.horizontalPadding * 2 + keycapReserve
-        fitted.height = size.height
+        fitted.width += Self.horizontalPadding * 2 + keycapReserve
+        fitted.height = Self.height
         return fitted
     }
 
@@ -82,17 +52,16 @@ final class AppButton: NSButton {
 
     private var keycapReserve: CGFloat {
         guard let keycap else { return 0 }
-        return size.keycapGap + keycap.intrinsicContentSize.width
+        return Self.keycapGap + keycap.intrinsicContentSize.width
     }
 
     init(
-        title: String = "", variant: Variant, size: Size = .standard, symbol: String? = nil,
+        title: String = "", variant: Variant, symbol: String? = nil,
         shortcut: String? = nil, keyEquivalent: String = "", keyEquivalentModifierMask: NSEvent.ModifierFlags = [],
         onTap: @escaping () -> Void = {}
     ) {
         self.onTap = onTap
         self.variant = variant
-        self.size = size
         self.symbolName = symbol
         self.labelText = title
         self.keycap = shortcut.map { KeycapView(shortcut: $0, style: Self.keycapStyle(for: variant, isEnabled: true)) }
@@ -103,7 +72,7 @@ final class AppButton: NSButton {
         if let keycap {
             addSubview(keycap)
             NSLayoutConstraint.activate([
-                keycap.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -size.horizontalPadding),
+                keycap.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.horizontalPadding),
                 keycap.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
         }
@@ -222,7 +191,7 @@ final class AppButton: NSButton {
             let isLink = variant == .link
             var attributes: [NSAttributedString.Key: Any] = [
                 .foregroundColor: textColor,
-                .font: isLink ? ChromeType.font(.body) : ChromeType.font(size.role, weight: .semibold),
+                .font: isLink ? ChromeType.font(.body) : ChromeType.font(.small, weight: .semibold),
             ]
             if isLink, isEnabled, isFocusedStop { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
             attributedTitle = NSAttributedString(string: labelText, attributes: attributes)

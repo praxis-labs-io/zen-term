@@ -185,23 +185,19 @@ final class AppButtonTests: WindowTestCase {
         button.attributedTitle.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
     }
 
-    func test_aLargeButton_keepsTheControlHeightWithALargerLabel() throws {
-        let large = AppButton(title: "Connect", variant: .primary, size: .large)
-        let standard = AppButton(title: "Connect", variant: .primary)
-        let windows = [try mountFitted(large), try mountFitted(standard)]
+    func test_aButton_takesTheControlHeightAndRadius() throws {
+        let button = AppButton(title: "Connect", variant: .primary)
+        let window = try mountFitted(button)
 
-        XCTAssertEqual(large.frame.height, ChromeMetrics.Height.control)
-        XCTAssertEqual(titleFont(large)?.pointSize, 13)
-        XCTAssertEqual(large.layer?.cornerRadius, ChromeMetrics.Radius.control)
-        XCTAssertEqual(standard.frame.height, ChromeMetrics.Height.control)
-        XCTAssertEqual(titleFont(standard)?.pointSize, 12)
-        XCTAssertEqual(standard.layer?.cornerRadius, ChromeMetrics.Radius.control)
-        withExtendedLifetime(windows) {}
+        XCTAssertEqual(button.frame.height, ChromeMetrics.Height.control)
+        XCTAssertEqual(titleFont(button)?.pointSize, 12)
+        XCTAssertEqual(button.layer?.cornerRadius, ChromeMetrics.Radius.control)
+        withExtendedLifetime(window) {}
     }
 
     func test_aClickOnAButtonsKeycap_reachesTheButton() throws {
         var taps = 0
-        let button = AppButton(title: "Connect", variant: .primary, size: .large, shortcut: "⏎") { taps += 1 }
+        let button = AppButton(title: "Connect", variant: .primary, shortcut: "⏎") { taps += 1 }
         let window = try mountFitted(button)
         let content = try XCTUnwrap(window.contentView)
         let keycap = try XCTUnwrap(button.keycapForTesting)
@@ -226,7 +222,7 @@ final class AppButtonTests: WindowTestCase {
     }
 
     func test_disablingAPrimaryButton_fadesItsKeycapGlyphWithItsLabel() throws {
-        let button = AppButton(title: "Connect", variant: .primary, size: .large, shortcut: "⏎")
+        let button = AppButton(title: "Connect", variant: .primary, shortcut: "⏎")
         let window = try mountFitted(button)
         let keycap = try XCTUnwrap(button.keycapForTesting)
         let chrome = Theme.current.chrome

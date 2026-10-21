@@ -22,28 +22,24 @@
         private static func appButtons() -> GallerySection {
             var rows: [GallerySection.Row] = []
             for variant in variants {
-                for (size, sizeName) in [(AppButton.Size.standard, "standard"), (.large, "large")] {
-                    rows.append(
-                        GallerySection.Row(
-                            label: "\(title(for: variant)) · \(sizeName)", samples: states(of: variant, size: size)))
-                }
+                rows.append(GallerySection.Row(label: title(for: variant), samples: states(of: variant)))
             }
             rows.append(GallerySection.Row(label: "Symbol only", samples: symbolButtons()))
             rows.append(GallerySection.Row(label: "With shortcut", samples: shortcutButtons()))
             return GallerySection(title: "AppButton", rows: rows)
         }
 
-        private static func states(of variant: AppButton.Variant, size: AppButton.Size) -> [NSView] {
-            let rest = AppButton(title: "Rest", variant: variant, size: size)
-            let hover = hovered(AppButton(title: "Hover", variant: variant, size: size))
-            let focused = AppButton(title: "Focused", variant: variant, size: size)
+        private static func states(of variant: AppButton.Variant) -> [NSView] {
+            let rest = AppButton(title: "Rest", variant: variant)
+            let hover = hovered(AppButton(title: "Hover", variant: variant))
+            let focused = AppButton(title: "Focused", variant: variant)
             focused.forceFocusForGallery()
-            let disabled = AppButton(title: "Disabled", variant: variant, size: size)
+            let disabled = AppButton(title: "Disabled", variant: variant)
             disabled.isEnabled = false
             guard variant == .segment else { return [rest, hover, focused, disabled] }
-            let selected = AppButton(title: "Selected", variant: variant, size: size)
+            let selected = AppButton(title: "Selected", variant: variant)
             selected.isOn = true
-            let selectedFocused = AppButton(title: "Selected focused", variant: variant, size: size)
+            let selectedFocused = AppButton(title: "Selected focused", variant: variant)
             selectedFocused.isOn = true
             selectedFocused.forceFocusForGallery()
             return [rest, hover, focused, disabled, selected, selectedFocused]
@@ -62,7 +58,6 @@
             focused.forceFocusForGallery()
             return [
                 AppButton(title: "Connect", variant: .primary, shortcut: "⏎"),
-                AppButton(title: "Connect", variant: .primary, size: .large, shortcut: "⏎"),
                 hovered(AppButton(title: "Hover", variant: .primary, shortcut: "⏎")),
                 focused,
                 AppButton(title: "Cancel", variant: .secondary, shortcut: "esc"),

@@ -40,7 +40,7 @@ final class HostConnectView: NSView {
         self.onConnect = onConnect
         route = HostRouteView()
         connectButton = AppButton(
-            title: "Connect", variant: .primary, size: .large, shortcut: "⏎", onTap: onConnect)
+            title: "Connect", variant: .primary, shortcut: "⏎", onTap: onConnect)
         panel = PanelHostView(content: content, meta: nil, fillsContent: true, onFocusRequest: onFocusRequest)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false

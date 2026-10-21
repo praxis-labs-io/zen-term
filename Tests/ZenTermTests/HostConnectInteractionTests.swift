@@ -1080,7 +1080,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         let c = onConnectScreen()
         let button = try XCTUnwrap(c.connectViewForTesting).connectButtonForTesting
 
-        XCTAssertEqual(button.frame.height, AppButton.Size.large.height)
+        XCTAssertEqual(button.frame.height, ChromeMetrics.Height.control)
         XCTAssertEqual(button.keycapForTesting?.shortcut, "⏎")
 
         XCTAssertFalse(button.showsFocusOutline)
