@@ -128,17 +128,12 @@ view-level test covers that.
 
 **These rules govern any word a person outside the project reads:** in-app copy
 (toasts, empty states, button labels, Settings captions, errors), `docs/config/*`, the
-README, and release notes (curated for the person downloading, not a git log). The
-full standard is `docs/brand-voice.md` in `zen-term-website`.
+README, and release notes (curated for the person downloading, not a git log).
 
 - **No em-dashes. Anywhere**, including inside quotes. The test is a grep, not a
   judgment call. Titles take a colon.
 - **No hype words, no adverbs.** The app's copy currently contains zero instances
   of "seamless", "powerful", "beautiful", or "just works". Keep it that way.
-- **Positioning:** ZenTerm is "a dev-first terminal", on a libghostty core, for
-  terminal devs of all kinds. The core is the engine, not the identity: credit it
-  plainly in a spec line or the docs, never the headline. The agentic bent is a
-  lean, never the frame. Never write "the terminal for the agentic era".
 - **One word per concept** (pane not split, workspace not project/repo, shortcut not
   keybind, copy not carry).
 - Confirmations state the consequence and never ask "Are you sure?".

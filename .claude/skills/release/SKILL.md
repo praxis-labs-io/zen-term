@@ -82,7 +82,7 @@ releases before ZEN-211). Put it right under the opening line:
     -->
 
 These are glanceable, not the prose: a few words each, no trailing period, the
-change not the section name. Brand voice still governs them.
+change not the section name. The Copy rules in CLAUDE.md still govern them.
 
 Check `## Install` against current reality rather than copying the last file
 forward. It has already gone stale once: the pre-v0.2.0 notes say "re-download to
