@@ -120,6 +120,21 @@ final class SidebarInteractionTests: WindowTestCase {
             "docked, the panes sit one pane-gap from the sidebar's rows, as from a drawer")
     }
 
+    func test_docked_aLiveGutterEdit_keepsTheFirstTabOnThePaneEdge() throws {
+        let controller = makeController()
+        var config = GeneralConfig.current
+        config.windowGutter = Self.gutter + 12
+        GeneralConfig.setCurrentForTesting(config)
+        NotificationCenter.default.post(
+            name: .configDidChange, object: nil,
+            userInfo: [ConfigChange.userInfoKey: ConfigChange.chromeLayout])
+
+        XCTAssertEqual(
+            frame(of: try tabBar(in: controller), in: controller).minX + TabBarView.leadingInset,
+            frame(of: try pane(in: controller), in: controller).minX,
+            "a new gutter moves the pane, so the first tab has to follow it")
+    }
+
     func test_toggle_collapses_andDocksAgain() throws {
         let controller = makeController()
         let sidebar = controller.sidebarForTesting

@@ -523,6 +523,7 @@ final class SidebarController {
         column.reapplyToggleInset()
         lead.setLeadingInset(Self.leadInset)
         applyLeadWidth()
+        if !isSliding { tabBarLeading?.constant = tabBarPull }
         canvasOffset?.constant = canvasGap
         if isRevealed { applyRevealInsets() }
         edgeReveal.reapplyLiveRegion()
