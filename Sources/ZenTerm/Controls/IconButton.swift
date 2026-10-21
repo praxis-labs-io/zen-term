@@ -122,6 +122,7 @@ final class IconButton: NSView {
     // A button that moves or hides under a still pointer never gets `mouseExited`.
     private func clearHover() {
         isHovered = false
+        isPressed = false
         tooltip.hide(from: self)
     }
 
