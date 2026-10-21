@@ -35,6 +35,13 @@ enum ChromeMetrics {
         static let lg: CGFloat = 32
     }
 
+    enum Icon {
+        static let xs: CGFloat = 10
+        static let sm: CGFloat = 12
+        static let md: CGFloat = 14
+        static let xl: CGFloat = 24
+    }
+
     enum Radius {
         static let control: CGFloat = 6
         static let surface: CGFloat = 8

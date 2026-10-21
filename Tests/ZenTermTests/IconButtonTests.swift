@@ -50,7 +50,7 @@ final class IconButtonTests: XCTestCase {
 
 final class IconGlyphSizeTests: XCTestCase {
     private func glyphCentreOffset(_ symbol: String) throws -> CGFloat {
-        let button = IconButton(symbol: symbol, pointSize: 12, accessibilityLabel: symbol) {}
+        let button = IconButton(symbol: symbol, pointSize: ChromeMetrics.Icon.sm, accessibilityLabel: symbol) {}
         button.translatesAutoresizingMaskIntoConstraints = true
         button.frame = NSRect(x: 0, y: 0, width: 24, height: 24)
         button.layoutSubtreeIfNeeded()

@@ -29,7 +29,7 @@ final class IconButton: NSView {
 
     init(
         symbol: String, size: NSSize = NSSize(width: 24, height: 24),
-        pointSize: CGFloat = 12, weight: NSFont.Weight = .medium,
+        pointSize: CGFloat = ChromeMetrics.Icon.sm, weight: NSFont.Weight = .medium,
         accessibilityLabel label: String, shortcut: (() -> String?)? = nil,
         restsFilled: Bool = false,
         onClick: @escaping () -> Void

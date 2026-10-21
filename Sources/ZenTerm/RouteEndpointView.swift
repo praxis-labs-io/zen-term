@@ -4,7 +4,6 @@ final class RouteEndpointView: NSView {
     static let tileSide: CGFloat = 72
     static let columnWidth: CGFloat = 96
     private static let tileCornerRadius: CGFloat = 20
-    private static let symbolPointSize: CGFloat = 24
     private static let tileToName: CGFloat = 12
     private static let badgeSide: CGFloat = 16
     private static let badgeOverhang: CGFloat = 4
@@ -27,7 +26,7 @@ final class RouteEndpointView: NSView {
         tile.layer?.borderWidth = ChromeMetrics.Border.width
         tile.translatesAutoresizingMaskIntoConstraints = false
         symbol.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
-        symbol.symbolConfiguration = .init(pointSize: Self.symbolPointSize, weight: .light)
+        symbol.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.xl, weight: .light)
         symbol.translatesAutoresizingMaskIntoConstraints = false
         tile.addSubview(symbol)
 

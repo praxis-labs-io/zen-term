@@ -87,7 +87,7 @@ final class AppButton: NSButton {
         setButtonType(.momentaryChange)
         cell.imageDimsWhenDisabled = false
         if let symbol {
-            let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
+            let config = NSImage.SymbolConfiguration(pointSize: ChromeMetrics.Icon.sm, weight: .semibold)
             image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
                 .withSymbolConfiguration(config)
             imagePosition = .imageOnly

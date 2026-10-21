@@ -98,7 +98,7 @@ final class Dropdown: NSView {
         titleLabel.lineBreakMode = .byTruncatingTail
 
         chevron.image = NSImage(systemSymbolName: "chevron.up.chevron.down", accessibilityDescription: nil)
-        chevron.symbolConfiguration = .init(pointSize: 10, weight: .semibold)
+        chevron.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.xs, weight: .semibold)
         chevron.contentTintColor = Theme.current.chrome.ink(.muted)
         chevron.translatesAutoresizingMaskIntoConstraints = false
 

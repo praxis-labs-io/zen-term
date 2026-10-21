@@ -128,7 +128,7 @@ enum IconCatalog {
 
     // SF Symbols resolve first, so a brand mark name must never collide with a real symbol.
     static func image(
-        _ symbol: String, pointSize: CGFloat = 14, weight: NSFont.Weight = .medium
+        _ symbol: String, pointSize: CGFloat = ChromeMetrics.Icon.md, weight: NSFont.Weight = .medium
     ) -> NSImage? {
         let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: weight)
         if let image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) {
@@ -143,7 +143,7 @@ enum IconCatalog {
     // Marks carry no internal padding, so they need a slightly larger box to match the symbols.
     static let brandNudge: CGFloat = 1.5
 
-    static func gitBadge(pointSize: CGFloat = 12) -> NSImage? {
+    static func gitBadge(pointSize: CGFloat = ChromeMetrics.Icon.sm) -> NSImage? {
         guard let image = BrandMark.image("git") else { return nil }
         image.size = NSSize(width: pointSize, height: pointSize)
         return image
