@@ -4,6 +4,10 @@ import XCTest
 @testable import ZenTerm
 
 final class IconButtonTests: WindowTestCase {
+    private final class KeyedWindow: NSWindow {
+        override var isKeyWindow: Bool { true }
+    }
+
     private func releaseButton() -> (button: IconButton, window: NSWindow, fired: () -> Int) {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 100, height: 60),
@@ -66,6 +70,31 @@ final class IconButtonTests: WindowTestCase {
 
         button.mouseDown(with: try mouse(.leftMouseDown, in: window, at: .zero))
         XCTAssertEqual(count, 1)
+    }
+
+    func test_movedOutFromUnderAStillPointer_clearsHover() throws {
+        let window = KeyedWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 100, height: 60),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        let button = IconButton(symbol: "sidebar.left", accessibilityLabel: "Toggle sidebar", onClick: {})
+        window.contentView?.addSubview(button)
+        button.translatesAutoresizingMaskIntoConstraints = true
+        button.frame = NSRect(x: 10, y: 10, width: 24, height: 24)
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        let hover = try XCTUnwrap(
+            NSEvent.enterExitEvent(
+                with: .mouseEntered, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0,
+                userData: nil))
+        button.mouseEntered(with: hover)
+        XCTAssertTrue(button.isHoveredForTesting)
+
+        button.setFrameOrigin(NSPoint(x: 60, y: 10))
+        window.displayIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+
+        XCTAssertFalse(button.isHoveredForTesting, "a button moved from under a still pointer gets no mouseExited")
     }
 
     func test_hiddenWhileHovered_clearsHoverAndItsFill() throws {

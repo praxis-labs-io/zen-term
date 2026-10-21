@@ -85,6 +85,7 @@ final class IconButton: NSView {
             owner: self)
         addTrackingArea(area)
         trackingArea = area
+        if isHovered, window?.isKeyWindow == true, !pointerIsInside { clearHover() }
     }
 
     override func mouseEntered(with event: NSEvent) {
@@ -115,6 +116,11 @@ final class IconButton: NSView {
 
     override func viewDidHide() {
         super.viewDidHide()
+        clearHover()
+    }
+
+    // A button that moves or hides under a still pointer never gets `mouseExited`.
+    private func clearHover() {
         isHovered = false
         tooltip.hide(from: self)
     }
