@@ -50,6 +50,19 @@ final class MotionTests: XCTestCase {
         XCTAssertNil(still.animation(forKey: "stretch.left"))
     }
 
+    func test_stretch_withoutAnimation_cancelsASlideStillRunning() {
+        Motion.isReduceMotionEnabled = { false }
+        let layer = stretchLayer()
+        Motion.stretch(layer, to: CGRect(x: 100, y: 0, width: 60, height: 24), animated: true)
+
+        let settled = CGRect(x: 120, y: 0, width: 70, height: 24)
+        Motion.stretch(layer, to: settled, animated: false)
+
+        XCTAssertEqual(layer.frame, settled)
+        XCTAssertNil(layer.animation(forKey: "stretch.left"), "a slide left running would pull the pill off its tab")
+        XCTAssertNil(layer.animation(forKey: "stretch.width"))
+    }
+
     func test_reduceMotion_springScaleFadeAppearing_appliesFinalStateSynchronously() {
         Motion.isReduceMotionEnabled = { true }
         let view = NSView(frame: NSRect(x: 0, y: 0, width: 100, height: 100))
