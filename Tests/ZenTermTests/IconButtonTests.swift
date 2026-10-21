@@ -4,6 +4,70 @@ import XCTest
 @testable import ZenTerm
 
 final class IconButtonTests: WindowTestCase {
+    private func releaseButton() -> (button: IconButton, window: NSWindow, fired: () -> Int) {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 100, height: 60),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        var count = 0
+        let button = IconButton(symbol: "xmark", accessibilityLabel: "Close") { count += 1 }
+        button.firesOnRelease = true
+        window.contentView?.addSubview(button)
+        button.translatesAutoresizingMaskIntoConstraints = true
+        button.frame = NSRect(x: 10, y: 10, width: 24, height: 24)
+        return (button, window, { count })
+    }
+
+    private func mouse(
+        _ type: NSEvent.EventType, in window: NSWindow, at point: CGPoint, clicks: Int = 1
+    ) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: type, location: point, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
+                context: nil, eventNumber: 0, clickCount: clicks, pressure: 1))
+    }
+
+    func test_firesOnRelease_firesOnceOnMouseUpInside_notOnPress() throws {
+        let (button, window, fired) = releaseButton()
+        let inside = button.convert(CGPoint(x: button.bounds.midX, y: button.bounds.midY), to: nil)
+
+        button.mouseDown(with: try mouse(.leftMouseDown, in: window, at: inside))
+        XCTAssertEqual(fired(), 0, "a press alone does not fire")
+        button.mouseUp(with: try mouse(.leftMouseUp, in: window, at: inside))
+        XCTAssertEqual(fired(), 1)
+    }
+
+    func test_firesOnRelease_doesNotFireWhenReleasedOutside() throws {
+        let (button, window, fired) = releaseButton()
+        let inside = button.convert(CGPoint(x: button.bounds.midX, y: button.bounds.midY), to: nil)
+
+        button.mouseDown(with: try mouse(.leftMouseDown, in: window, at: inside))
+        button.mouseUp(with: try mouse(.leftMouseUp, in: window, at: CGPoint(x: 90, y: 50)))
+        XCTAssertEqual(fired(), 0, "a press dragged out cancels")
+    }
+
+    func test_firesOnRelease_firesOncePerDoubleClick() throws {
+        let (button, window, fired) = releaseButton()
+        let inside = button.convert(CGPoint(x: button.bounds.midX, y: button.bounds.midY), to: nil)
+
+        button.mouseDown(with: try mouse(.leftMouseDown, in: window, at: inside))
+        button.mouseUp(with: try mouse(.leftMouseUp, in: window, at: inside))
+        button.mouseDown(with: try mouse(.leftMouseDown, in: window, at: inside, clicks: 2))
+        button.mouseUp(with: try mouse(.leftMouseUp, in: window, at: inside, clicks: 2))
+        XCTAssertEqual(fired(), 1)
+    }
+
+    func test_pressOnDefaultButton_stillFiresOnMouseDown() throws {
+        var count = 0
+        let button = IconButton(symbol: "plus", accessibilityLabel: "New tab") { count += 1 }
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 100, height: 60),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView?.addSubview(button)
+
+        button.mouseDown(with: try mouse(.leftMouseDown, in: window, at: .zero))
+        XCTAssertEqual(count, 1)
+    }
+
     func test_hiddenWhileHovered_clearsHoverAndItsFill() throws {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 100, height: 60),

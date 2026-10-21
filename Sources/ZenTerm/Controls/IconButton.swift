@@ -11,6 +11,10 @@ final class IconButton: NSView {
     private var trackingArea: NSTrackingArea?
     private var isHovered = false { didSet { update() } }
 
+    /// Fires on mouse-up inside the button instead of on press. A second press of a multi-click does not arm it.
+    var firesOnRelease = false
+    private var isPressed = false
+
     var isActive = false { didSet { update() } }
 
     var showsActivity = false { didSet { activityDot.isHidden = !showsActivity } }
@@ -94,7 +98,13 @@ final class IconButton: NSView {
     }
     override func mouseDown(with event: NSEvent) {
         tooltip.hide(from: self)
-        onClick()
+        guard firesOnRelease else { return onClick() }
+        isPressed = event.clickCount == 1
+    }
+    override func mouseUp(with event: NSEvent) {
+        guard firesOnRelease, isPressed else { return super.mouseUp(with: event) }
+        isPressed = false
+        if bounds.contains(convert(event.locationInWindow, from: nil)) { onClick() }
     }
     override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
     override func accessibilityPerformPress() -> Bool { onClick(); return true }
