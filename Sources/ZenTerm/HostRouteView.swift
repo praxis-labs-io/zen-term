@@ -55,15 +55,26 @@ final class HostRouteView: NSView {
 
     override func layout() {
         super.layout()
-        let width = lineHost.bounds.width
+        let span = Self.evenDashSpan(within: lineHost.bounds.width)
         let midY = Self.lineHeight / 2
         let path = CGMutablePath()
-        path.move(to: CGPoint(x: Self.lineInset, y: midY))
-        path.addLine(to: CGPoint(x: max(Self.lineInset, width - Self.lineInset), y: midY))
+        path.move(to: CGPoint(x: span.lowerBound, y: midY))
+        path.addLine(to: CGPoint(x: span.upperBound, y: midY))
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         line.path = path
         CATransaction.commit()
+    }
+
+    // Ends the line on a whole dash and splits the remainder, so both ends sit the same distance from their tile.
+    private static func evenDashSpan(within width: CGFloat) -> ClosedRange<CGFloat> {
+        let available = max(0, width - 2 * lineInset)
+        let dash = CGFloat(truncating: idleDash[0])
+        let space = CGFloat(truncating: idleDash[1])
+        let dashes = max(1, ((available + space) / (dash + space)).rounded(.down))
+        let drawn = min(available, dashes * (dash + space) - space)
+        let start = lineInset + (available - drawn) / 2
+        return start...(start + drawn)
     }
 
     func setStatus(_ status: SSHHostStatus) { destination.setStatus(status) }
