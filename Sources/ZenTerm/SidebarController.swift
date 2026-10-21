@@ -147,11 +147,11 @@ final class SidebarController {
 
     private var edgeOffset: CGFloat { isDocked ? SidebarView.width : 0 }
     private var leadOffset: CGFloat { isDocked ? 0 : lead.contentWidth }
-    // Docked, the first tab lines up with the pane edge; collapsed, the divider sits as far from the first tab as from the name.
+    // Docked, the first tab lines up with the pane edge; collapsed, it sits a small gap after the workspace name.
     private var tabBarPull: CGFloat {
         isDocked
             ? canvasGap + ChromeMetrics.windowGutter - TabBarView.leadingInset
-            : CollapsedSidebarLead.dividerGap - TabBarView.leadingInset
+            : CollapsedSidebarLead.tabGap - TabBarView.leadingInset
     }
     // The canvas insets itself by window-gutter; docked, it sits one pane-gap from the rows' fill, as from a drawer.
     private var canvasGap: CGFloat {

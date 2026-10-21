@@ -96,7 +96,7 @@ final class SSHHostNameTests: WindowTestCase {
         let screen = try XCTUnwrap(c.connectViewForTesting)
 
         XCTAssertEqual(c.sidebarForTesting.view.hostRowsForTesting.map(\.titleForTesting), ["Build box"])
-        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Build box")
+        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Build box:")
         XCTAssertEqual(screen.titleForTesting, "Connect to Build box")
         XCTAssertEqual(screen.connectButtonForTesting.accessibilityLabel(), "Connect to Build box")
         XCTAssertEqual(screen.detailForTesting, "Build box appears offline. Connect anyway?")
@@ -107,7 +107,7 @@ final class SSHHostNameTests: WindowTestCase {
 
         XCTAssertEqual(spawned.first?.lastConfig?.args.suffix(2), ["devbox", SSHLaunch.loginShellCommand])
         XCTAssertEqual(c.window.title, "Build box")
-        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Build box")
+        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Build box:")
     }
 
     func test_renamingAHost_relabelsTheConnectScreenLive_andClearingTheNameShowsTheAlias() throws {
@@ -121,7 +121,7 @@ final class SSHHostNameTests: WindowTestCase {
         XCTAssertEqual(screen.connectButtonForTesting.accessibilityLabel(), "Connect to Builder")
         XCTAssertEqual(screen.detailForTesting, "Builder appears offline. Connect anyway?")
         XCTAssertEqual(c.sidebarForTesting.view.hostRowsForTesting.map(\.titleForTesting), ["Builder"])
-        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Builder")
+        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Builder:")
         XCTAssertEqual(c.window.title, "Builder")
 
         rename(nil)
@@ -138,7 +138,7 @@ final class SSHHostNameTests: WindowTestCase {
         rename("Builder")
 
         XCTAssertEqual(c.window.title, "Builder")
-        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Builder")
+        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Builder:")
     }
 
     func test_toastsNameTheHost() throws {

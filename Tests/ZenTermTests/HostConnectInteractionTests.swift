@@ -671,7 +671,7 @@ final class HostConnectInteractionTests: WindowTestCase {
     func test_theCollapsedLead_namesTheHost() {
         let c = onConnectScreen()
 
-        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "devbox")
+        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "devbox:")
     }
 
     func test_theConnectFailure_keepsItsTitleWhole_andTruncatesALongHostInTheMiddle() throws {
