@@ -663,4 +663,13 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertEqual(event.buttonNumber, 2, "the event is a real middle press")
         return event
     }
+
+    func test_everyTitle_showsWhole_withOrWithoutADot() {
+        let (bar, _) = settledBar([
+            TabBarItem(id: TabID(1), index: 1, title: "shell", isActive: true, attentionState: .idle),
+            TabBarItem(id: TabID(2), index: 2, title: "shell", isActive: false, attentionState: .waiting),
+            TabBarItem(id: TabID(3), index: 3, title: "~/Dev/zen-term", isActive: false, attentionState: .completed),
+        ])
+        XCTAssertEqual(bar.chipsForTesting.map(\.isTitleTruncatedForTesting), [false, false, false])
+    }
 }

@@ -134,7 +134,8 @@ Pushing those into libghostty rewrapped scrollback into one or two columns and d
 (`setSizeSyncSuspended`) when it runs, and skips sizes under 1px.
 
 **A label sized to its exact glyph advances truncates to `…`.** Labels inset their text, so pad a
-content-fit width or measure with the label's own attributes and pad.
+content-fit width or measure with the label's own attributes and pad. A kerned label's `intrinsicContentSize.width` also
+runs under `cell.cellSize.width`, so size a chip from `cellSize`.
 
 **Measure a wrapping label's text width from its alignment rect.** A wrapping `NSTextField` is about
 2pt wider per side than its usable text width (`UpdateCardTests` reads `alignmentRect(forFrame:)`).

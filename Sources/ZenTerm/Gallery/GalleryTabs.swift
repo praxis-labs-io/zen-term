@@ -51,6 +51,8 @@
         private static func workspaceChips() -> GallerySection {
             let hovered = chip(title: "hover", removable: true)
             hovered.setHover(true)
+            let hoveredOverDot = chip(title: "hover", opensFocused: true, removable: true)
+            hoveredOverDot.setHover(true)
             let focused = chip(title: "focused")
             focused.forceFocusForGallery()
             return GallerySection(
@@ -58,15 +60,26 @@
                 rows: [
                     GallerySection.Row(label: "Rest", samples: [host(chip(title: "rest"))]),
                     GallerySection.Row(label: "Hover, removable", samples: [host(hovered)]),
+                    GallerySection.Row(label: "Hover over the dot", samples: [host(hoveredOverDot)]),
                     GallerySection.Row(label: "Focused", samples: [host(focused)]),
-                    GallerySection.Row(label: "Selected", samples: [host(chip(title: "selected", selected: true))]),
-                    GallerySection.Row(
-                        label: "Selected, removable",
-                        samples: [host(chip(title: "selected", selected: true, removable: true))]),
                     GallerySection.Row(
                         label: "Opens focused", samples: [host(chip(title: "focused", opensFocused: true))]),
                     GallerySection.Row(label: "Long title", samples: [host(chip(title: longTitle))]),
+                    GallerySection.Row(label: "Strip, selected tab on the pill", samples: [strip()]),
                 ])
+        }
+
+        private static func strip() -> WorkspaceTabStrip {
+            var form = WorkspaceForm(
+                editing: Workspace(
+                    title: "api", path: URL(fileURLWithPath: "/tmp"),
+                    tabs: [Workspace.Tab(main: "nvim"), Workspace.Tab(name: "gate"), Workspace.Tab()],
+                    focus: .start, env: [:]))
+            form.select(1)
+            let strip = WorkspaceTabStrip()
+            strip.render(form)
+            strip.widthAnchor.constraint(equalToConstant: 420).isActive = true
+            return strip
         }
 
         private static func chip(

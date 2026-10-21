@@ -81,7 +81,7 @@ final class CloseCommandTests: WindowTestCase {
         let content = try XCTUnwrap(c.window.contentView)
         content.layoutSubtreeIfNeeded()
         let chips = descendants(of: content)
-            .filter { String(describing: type(of: $0)) == "Chip" }
+            .filter { $0 is TerminalTabChip }
             .sorted { $0.convert($0.bounds, to: nil).minX < $1.convert($1.bounds, to: nil).minX }
         let chip = try XCTUnwrap(chips.indices.contains(index) ? chips[index] : nil, "no tab \(index)")
         let cg = try XCTUnwrap(

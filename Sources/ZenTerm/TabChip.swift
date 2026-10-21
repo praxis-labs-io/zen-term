@@ -93,7 +93,7 @@ class TabChip: NSView {
         needsLayout = true
     }
 
-    var textWidth: CGFloat { ceil(label.intrinsicContentSize.width) }
+    var textWidth: CGFloat { ceil(label.cell?.cellSize.width ?? label.intrinsicContentSize.width) }
 
     var fittingWidth: CGFloat {
         let trailing = dotColor == nil ? Self.labelInset : Self.closeSlotSize + Self.closeSlotInset
