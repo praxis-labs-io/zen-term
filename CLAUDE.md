@@ -217,10 +217,8 @@ Sizes, weights and type in the chrome come from named tokens, never a literal.
 ## Designs
 
 **Every ZenTerm design lives on one canvas: [ZenTerm Designs](https://claude.ai/artifact/GJiTtwXDjTu1qw9cWFoTo5).**
-It has one page per feature (Workspace Sidebar, Worktrees, Tool Float Icons). When
-`/design` runs, it works on that canvas, never a separate artifact: new artboards go on
-the feature's page, in a titled section, and a new feature gets a new page. Read
-`project/canvas.json` first and keep what is already there.
+When `/design` runs, it works on that canvas, never a separate artifact. Its pages are
+ephemeral. Read `project/canvas.json` first and keep what is already there.
 
 **A board is a sketch, never the source of truth.** It communicates an idea. The
 component library (the primitives, shown in the dev build's Component Gallery) and the
