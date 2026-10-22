@@ -64,6 +64,7 @@ echo "▸ staging Frameworks/GhosttyKit.xcframework"
 rm -rf "$ROOT/Frameworks/GhosttyKit.xcframework"
 mkdir -p "$ROOT/Frameworks"
 cp -R "$GHOSTTY/macos/GhosttyKit.xcframework" "$ROOT/Frameworks/"
+rm -rf "$ROOT"/Frameworks/GhosttyKit.xcframework/*/Headers/ghostty
 
 # 5. Stage libghostty's runtime resources (shell-integration, themes, terminfo) from the
 #    same build, as a TerminalKit SwiftPM resource so Bundle.module resolves them at
