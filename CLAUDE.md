@@ -222,6 +222,12 @@ It has one page per feature (Workspace Sidebar, Worktrees, Tool Float Icons). Wh
 the feature's page, in a titled section, and a new feature gets a new page. Read
 `project/canvas.json` first and keep what is already there.
 
+**A board is a sketch, never the source of truth.** It communicates an idea. The
+component library (the primitives, shown in the dev build's Component Gallery) and the
+chrome tokens are the truth. Build from them: map a board onto existing tokens and
+primitives, never copy a value off it, and flag where a board asks for something the
+system does not have.
+
 ## Linear: ZenTerm workspace
 
 The Linear MCP (`linear-zen-term`) is connected to the **ZenTerm** workspace. Every
