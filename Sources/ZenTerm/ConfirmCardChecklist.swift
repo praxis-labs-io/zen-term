@@ -80,7 +80,7 @@ final class ConfirmCardChecklist: NSView, ThemeReapplying {
             translatesAutoresizingMaskIntoConstraints = false
 
             icon.image = NSImage(systemSymbolName: item.mark.symbol, accessibilityDescription: nil)?
-                .withSymbolConfiguration(.init(pointSize: 11, weight: .semibold))
+                .withSymbolConfiguration(.init(pointSize: ChromeMetrics.Icon.sm, weight: .semibold))
             icon.imageScaling = .scaleProportionallyDown
             for view in [icon, label] {
                 view.translatesAutoresizingMaskIntoConstraints = false

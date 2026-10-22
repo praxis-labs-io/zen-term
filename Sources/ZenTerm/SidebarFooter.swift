@@ -2,9 +2,8 @@ import AppKit
 
 // On the window beside the toggle, not in the sidebar, so these fade instead of sliding with it.
 final class SidebarFooter: NSStackView {
-    static let spacing: CGFloat = ChromeMetrics.Spacing.s2
-    static let buttonSize = NSSize(width: 22, height: 22)
-    private static let iconPointSize: CGFloat = 11
+    static let spacing: CGFloat = ChromeMetrics.Spacing.s4
+    static let buttonSize = NSSize(width: ChromeMetrics.Height.sm, height: ChromeMetrics.Height.sm)
 
     private let paletteButton: IconButton
     private let settingsButton: IconButton
@@ -13,7 +12,7 @@ final class SidebarFooter: NSStackView {
         _ symbol: String, _ label: String, _ action: KeyInterceptor.ReservedChord, _ onClick: @escaping () -> Void
     ) -> IconButton {
         IconButton(
-            symbol: symbol, size: buttonSize, pointSize: iconPointSize,
+            symbol: symbol, size: buttonSize, pointSize: ChromeMetrics.Icon.xs,
             accessibilityLabel: label, shortcut: { CommandCatalog.spec(for: action).shortcut }, onClick: onClick)
     }
 

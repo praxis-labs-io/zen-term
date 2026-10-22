@@ -28,6 +28,7 @@ final class UpdateCardView: ShadowCardView {
     static let width: CGFloat = 360
     private static let inset: CGFloat = ChromeMetrics.Spacing.s12
     private static let badgeSize: CGFloat = 28
+    private static let iconSide: CGFloat = 16
     private static let rootSpacing: CGFloat = ChromeMetrics.Spacing.s12
 
     // Exposed so the notes are measured against the real wrap budget (`UpdateCardTests`).
@@ -108,8 +109,8 @@ final class UpdateCardView: ShadowCardView {
             widthAnchor.constraint(equalToConstant: Self.width),
             badgeFill.widthAnchor.constraint(equalToConstant: Self.badgeSize),
             badgeFill.heightAnchor.constraint(equalToConstant: Self.badgeSize),
-            iconView.widthAnchor.constraint(equalToConstant: 16),
-            iconView.heightAnchor.constraint(equalToConstant: 16),
+            iconView.widthAnchor.constraint(equalToConstant: Self.iconSide),
+            iconView.heightAnchor.constraint(equalToConstant: Self.iconSide),
             iconView.centerXAnchor.constraint(equalTo: badgeFill.centerXAnchor),
             iconView.centerYAnchor.constraint(equalTo: badgeFill.centerYAnchor),
             root.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),

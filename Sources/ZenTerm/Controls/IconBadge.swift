@@ -14,7 +14,7 @@ final class IconBadge: NSView {
 
         var pointSize: CGFloat {
             switch self {
-            case .regular: return 13
+            case .regular: return ChromeMetrics.Icon.md
             }
         }
     }

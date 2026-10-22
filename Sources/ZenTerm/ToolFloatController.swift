@@ -244,7 +244,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
             content: surface.view,
             widthFraction: spec.widthFraction,
             heightFraction: spec.heightFraction,
-            contentInset: 10,
+            contentInset: ChromeMetrics.Spacing.s10,
             cornerRadius: ChromeMetrics.Radius.surface,
             onDismiss: { [weak self] in self?.close() })
         overlay.backgroundOverride = surface.backgroundOverride

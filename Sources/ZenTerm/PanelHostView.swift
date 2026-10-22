@@ -57,7 +57,7 @@ final class PanelHostView: NSView, TerminalModeHost {
     /// `cacheDisplay` draws regardless of `needsDisplay`, so a rendered check cannot stand in for this.
     var ringNeedsDisplayForTesting: Bool { ring.needsDisplay }
 
-    private let padding: CGFloat = 10
+    private let padding: CGFloat = ChromeMetrics.Spacing.s10
 
     /// Concentric with the window only when nothing sits between them: window chrome puts the top corners 28pt clear of it.
     @MainActor static var cornerRadius: CGFloat {
@@ -65,10 +65,12 @@ final class PanelHostView: NSView, TerminalModeHost {
         return max(minCornerRadius, WindowCorner.radius - ChromeMetrics.windowGutter)
     }
 
+    // The window's own corner under window chrome, which AppKit does not expose.
+    // swiftlint:disable:next untokened_radius
     private static let chromeCornerRadius: CGFloat = 12
 
     /// A pane far from the window corner still reads as a pane, so the concentric result has a floor.
-    private static let minCornerRadius: CGFloat = 6
+    private static let minCornerRadius: CGFloat = ChromeMetrics.Radius.control
 
     init(
         content: NSView, meta: PanelMeta?, zoomMeta: PanelMeta? = nil, fillsContent: Bool = false,

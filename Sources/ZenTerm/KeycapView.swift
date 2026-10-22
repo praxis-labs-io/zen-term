@@ -3,9 +3,8 @@ import TerminalKit
 
 final class KeycapView: NSView {
     private static let height: CGFloat = ChromeMetrics.Height.xs
-    private static let horizontalInset: CGFloat = 7
-    private static let tokenSpacing: CGFloat = 3
-    private static let symbolPointSize: CGFloat = 10
+    private static let horizontalInset: CGFloat = ChromeMetrics.Spacing.s6
+    private static let tokenSpacing: CGFloat = ChromeMetrics.Spacing.s4
 
     private static let glyphSymbols: [Character: String] = [
         "⌘": "command", "⇧": "shift", "⌥": "option", "⌃": "control",
@@ -121,7 +120,7 @@ final class KeycapView: NSView {
 
     private static func modifierIcon(_ symbol: String, ink: NSColor) -> NSView {
         let view = NSImageView()
-        view.image = glyphImage(symbol, pointSize: Self.symbolPointSize)
+        view.image = glyphImage(symbol, pointSize: ChromeMetrics.Icon.xs)
         view.contentTintColor = ink
         view.translatesAutoresizingMaskIntoConstraints = false
         return view

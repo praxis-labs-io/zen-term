@@ -107,7 +107,7 @@
                 divider.topAnchor.constraint(equalTo: pinned.bottomAnchor),
                 divider.leadingAnchor.constraint(equalTo: root.leadingAnchor),
                 divider.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-                divider.heightAnchor.constraint(equalToConstant: 1),
+                divider.heightAnchor.constraint(equalToConstant: ChromeMetrics.Border.width),
                 body.topAnchor.constraint(equalTo: divider.bottomAnchor),
                 body.leadingAnchor.constraint(equalTo: root.leadingAnchor),
                 body.trailingAnchor.constraint(equalTo: root.trailingAnchor),
@@ -172,7 +172,7 @@
             let stack = NSStackView(views: sections)
             stack.orientation = .vertical
             stack.alignment = .leading
-            stack.spacing = ChromeMetrics.Spacing.s20 * 2
+            stack.spacing = ChromeMetrics.Spacing.s32
             stack.translatesAutoresizingMaskIntoConstraints = false
 
             let document = FlippedView()

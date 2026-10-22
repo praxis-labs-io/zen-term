@@ -2,12 +2,12 @@ import AppKit
 
 final class HostRouteView: NSView {
     static let preferredLineLength: CGFloat = 120
-    private static let lineHeight: CGFloat = 24
-    private static let minimumLineWidth: CGFloat = 24
+    private static let lineHeight: CGFloat = ChromeMetrics.Height.sm
+    private static let minimumLineLength: CGFloat = 24
     // Under the window's own sizing priorities, so a narrow canvas shortens the line rather than widening the window.
     private static let lineWidthPreference = NSLayoutConstraint.Priority(rawValue: 490)
-    private static let lineInset: CGFloat = 2
-    private static let lineWidth: CGFloat = 1.6
+    private static let lineInset: CGFloat = ChromeMetrics.Spacing.s2
+    private static let lineWidth: CGFloat = ChromeMetrics.Border.paneFocus
     private static let idleDash: [NSNumber] = [2, 7]
 
     private let mac = RouteEndpointView(symbol: "laptopcomputer", name: "Client")
@@ -39,7 +39,7 @@ final class HostRouteView: NSView {
             lineHost.leadingAnchor.constraint(equalTo: mac.trailingAnchor),
             preferredWidth,
             lineHost.widthAnchor.constraint(lessThanOrEqualToConstant: Self.preferredLineLength),
-            lineHost.widthAnchor.constraint(greaterThanOrEqualToConstant: Self.minimumLineWidth),
+            lineHost.widthAnchor.constraint(greaterThanOrEqualToConstant: Self.minimumLineLength),
             lineHost.heightAnchor.constraint(equalToConstant: Self.lineHeight),
             lineHost.centerYAnchor.constraint(
                 equalTo: topAnchor, constant: RouteEndpointView.tileSide / 2),
@@ -55,15 +55,26 @@ final class HostRouteView: NSView {
 
     override func layout() {
         super.layout()
-        let width = lineHost.bounds.width
+        let span = Self.evenDashSpan(within: lineHost.bounds.width)
         let midY = Self.lineHeight / 2
         let path = CGMutablePath()
-        path.move(to: CGPoint(x: Self.lineInset, y: midY))
-        path.addLine(to: CGPoint(x: max(Self.lineInset, width - Self.lineInset), y: midY))
+        path.move(to: CGPoint(x: span.lowerBound, y: midY))
+        path.addLine(to: CGPoint(x: span.upperBound, y: midY))
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         line.path = path
         CATransaction.commit()
+    }
+
+    // Ends the line on a whole dash and splits the remainder, so both ends sit the same distance from their tile.
+    private static func evenDashSpan(within width: CGFloat) -> ClosedRange<CGFloat> {
+        let available = max(0, width - 2 * lineInset)
+        let dash = CGFloat(truncating: idleDash[0])
+        let space = CGFloat(truncating: idleDash[1])
+        let dashes = max(1, ((available + space) / (dash + space)).rounded(.down))
+        let drawn = min(available, dashes * (dash + space) - space)
+        let start = lineInset + (available - drawn) / 2
+        return start...(start + drawn)
     }
 
     func setStatus(_ status: SSHHostStatus) { destination.setStatus(status) }

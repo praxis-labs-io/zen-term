@@ -24,7 +24,7 @@ final class IconPickerField: NSView {
 
     private static let columns = 8
     static var columnsForTesting: Int { columns }
-    private static let cellSize: CGFloat = 34
+    private static let cellSize = ChromeMetrics.Height.lg
     private static let cellSpacing: CGFloat = ChromeMetrics.Spacing.s4
     private static let headerHeight: CGFloat = ChromeMetrics.Height.xs
     private static let sectionGap: CGFloat = ChromeMetrics.Spacing.s12
@@ -73,7 +73,7 @@ final class IconPickerField: NSView {
 
         let chevron = NSImageView()
         chevron.image = NSImage(systemSymbolName: "chevron.up.chevron.down", accessibilityDescription: nil)
-        chevron.symbolConfiguration = .init(pointSize: 10, weight: .semibold)
+        chevron.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.xs, weight: .semibold)
         chevron.contentTintColor = Theme.current.chrome.ink(.muted)
         chevron.translatesAutoresizingMaskIntoConstraints = false
 
@@ -241,7 +241,7 @@ final class IconPickerField: NSView {
                 }
                 let cell = IconButton(
                     symbol: symbol, size: NSSize(width: Self.cellSize, height: Self.cellSize),
-                    pointSize: 15, accessibilityLabel: IconCatalog.displayName(symbol)
+                    pointSize: ChromeMetrics.Icon.md, accessibilityLabel: IconCatalog.displayName(symbol)
                 ) { [weak self] in self?.commit(symbol) }
                 row?.addArrangedSubview(cell)
                 cells.append(cell)

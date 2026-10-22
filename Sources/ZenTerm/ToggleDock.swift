@@ -19,8 +19,6 @@ final class ToggleDock: NSView {
     private let stack = NSStackView()
     private let onToolFloat: (ToolFloat) -> Void
 
-    private static let iconPointSize: CGFloat = 11
-
     init(
         onNewTab: @escaping () -> Void,
         onSplitH: @escaping () -> Void, onSplitV: @escaping () -> Void,
@@ -36,7 +34,7 @@ final class ToggleDock: NSView {
             _ onClick: @escaping () -> Void
         ) -> IconButton {
             IconButton(
-                symbol: symbol, pointSize: Self.iconPointSize, accessibilityLabel: label,
+                symbol: symbol, pointSize: ChromeMetrics.Icon.xs, accessibilityLabel: label,
                 shortcut: { CommandCatalog.spec(for: action).shortcut }, onClick: onClick)
         }
         let newTab = button("plus", "New tab", .newTab, onNewTab)
@@ -124,7 +122,7 @@ final class ToggleDock: NSView {
         toolbarHiddenFloatIDs = Set(toolFloats.filter { !$0.showsInToolbar }.map(\.id))
         for spec in toolFloats {
             let btn = IconButton(
-                symbol: spec.icon, pointSize: Self.iconPointSize, accessibilityLabel: spec.title,
+                symbol: spec.icon, pointSize: ChromeMetrics.Icon.xs, accessibilityLabel: spec.title,
                 shortcut: { CommandCatalog.spec(for: .toggleToolFloat(spec.id)).shortcut }
             ) { [weak self] in self?.onToolFloat(spec) }
             btn.isHidden = !spec.showsInToolbar
@@ -248,8 +246,8 @@ final class ToggleDock: NSView {
         v.wantsLayer = true
         v.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
         v.translatesAutoresizingMaskIntoConstraints = false
-        v.widthAnchor.constraint(equalToConstant: 1).isActive = true
-        v.heightAnchor.constraint(equalToConstant: 12).isActive = true
+        v.widthAnchor.constraint(equalToConstant: ChromeMetrics.Border.width).isActive = true
+        v.heightAnchor.constraint(equalToConstant: ChromeMetrics.Spacing.s12).isActive = true
         return v
     }
 }

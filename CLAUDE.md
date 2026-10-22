@@ -189,14 +189,22 @@ Sizes, weights and type in the chrome come from named tokens, never a literal.
   `ChromeType.sectionLabel` in sentence case. `swiftlint` rejects `systemFont(ofSize:)`
   outside `ChromeType`.
 - **Radius and border:** corner radii come from `ChromeMetrics.Radius` (`control`,
-  `surface`, `capsule(_:)`) and border widths from `ChromeMetrics.Border`. Focus
+  `surface`, `tile`, `capsule(_:)`) and border widths from `ChromeMetrics.Border`. Focus
   changes a control's border color, never its width. A focused pane or tool float also
   steps up to `Border.paneFocus`.
 - **Spacing and height:** spacing, insets, gaps and control or row heights come from
-  `ChromeMetrics.Spacing` (`s2` to `s20`, `controlInset`, `modalInsets`,
-  `modalSectionGap`) and `ChromeMetrics.Height` (`xs`, `sm`, `control`, `lg`). Icon, glyph
-  and width geometry are not spacing. A value off the scale is a signal to fix the layout,
-  not to add a step.
+  `ChromeMetrics.Spacing` (`s2` to `s32`, `controlInset`, `modalInsets`,
+  `modalSectionGap`) and `ChromeMetrics.Height` (`xs`, `sm`, `control`, `lg`, `xl`). A
+  size is one token, never arithmetic on tokens (`s16 * 2`); layout math that combines
+  measurements stays, with each term named. Icon, glyph and width geometry are not
+  spacing: a `Width`, `Size`, `Side`, `Thickness`, `Length` or `Diameter` name is for a
+  true shape dimension only. A value off the scale is a signal to fix the layout, not to
+  add a step.
+- **Lint:** `swiftlint` rejects a literal radius, border width, spacing, inset or height
+  outside `ChromeMetrics`. A drawing proportion that is not chrome takes
+  `// swiftlint:disable:next <rule>`.
+- **Icon:** symbol point sizes come from `ChromeMetrics.Icon` (`xs`, `sm`, `md`, `xl`);
+  `swiftlint` rejects a literal point size outside `ChromeMetrics`.
 - **Elevation:** shadows come from `FloatShadow.apply(_:to:)` with a tier: `overlay` for
   anything anchored (popovers, dropdowns, tooltips, hover cards), `float` for toasts,
   cards and the floating sidebar, `modal` for modals (the `CardChrome` default). A drawn

@@ -185,14 +185,14 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         branchCaption.lineBreakMode = .byWordWrapping
         branchCaption.maximumNumberOfLines = 2
         branchCaption.isHidden = true
-        let branchStack = Self.vStack([branchGroup, branchCaption], spacing: 6)
+        let branchStack = Self.vStack([branchGroup, branchCaption], spacing: ChromeMetrics.Spacing.s6)
 
         baseSegment.onChange = { [weak self] index in self?.baseChanged(index) }
         wireSegment(baseSegment)
         baseCaption.font = ChromeType.font(.caption)
         baseCaption.textColor = Theme.current.chrome.ink(.muted)
         let baseGroup = Self.vStack(
-            [caption("Base"), baseSegment, baseCaption], spacing: 6)
+            [caption("Base"), baseSegment, baseCaption], spacing: ChromeMetrics.Spacing.s6)
         self.baseGroup = baseGroup
 
         carryLabel.font = ChromeType.font(.caption)
@@ -210,7 +210,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         carryLink.onBacktab = { [weak self] in self?.moveTab(-1) }
         let carryGroup = Self.vStack(
             [caption("Copy into this worktree"), carryLabel, Self.leadingWrap(carryLink)],
-            spacing: 6)
+            spacing: ChromeMetrics.Spacing.s6)
 
         phaseLabel.font = ChromeType.font(.caption)
         phaseLabel.textColor = Theme.current.chrome.ink(.muted)
@@ -236,11 +236,11 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         createButton.onBacktab = { [weak self] in self?.moveTab(-1) }
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let footer = Self.hStack([phaseGroup, spacer, cancelButton, createButton], spacing: 8)
+        let footer = Self.hStack([phaseGroup, spacer, cancelButton, createButton], spacing: ChromeMetrics.Spacing.s8)
 
         let built = FormCard.content(
             rows: [header, branchStack, baseGroup, carryGroup, errorLabel],
-            footer: footer, spacing: 14)
+            footer: footer, spacing: ChromeMetrics.Spacing.modalSectionGap)
         footerDivider = built.divider
         return built.view
     }

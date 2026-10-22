@@ -123,6 +123,22 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertFalse(descendants(of: row).contains { $0 is NSTextField && $0.isHidden })
     }
 
+    func test_hoveringARowWithALongTitle_keepsTheTitleClearOfThePlus() throws {
+        let c = makeWindow()
+        let row = try openRepoWorkspace(in: c)
+        let long = String(repeating: "a-very-long-workspace-name-", count: 4)
+        row.setTitle(long)
+        row.setDetail(nil)
+        let plus = try XCTUnwrap(row.hoverAccessory)
+        let title = try XCTUnwrap(
+            descendants(of: row).compactMap { $0 as? NSTextField }.first { $0.stringValue == long })
+
+        row.mouseEntered(with: crossing(.mouseEntered, over: row))
+        row.layoutSubtreeIfNeeded()
+
+        XCTAssertLessThanOrEqual(title.frame.maxX, plus.frame.minX, "the title truncates before the plus, not under it")
+    }
+
     func test_clickingThePlus_opensTheNewWorktreeCard_andDoesNotSwitch() throws {
         let c = makeWindow()
         let home = c.activeWorkspaceIDForTesting

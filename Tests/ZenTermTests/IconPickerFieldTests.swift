@@ -117,9 +117,14 @@ final class IconPickerFieldTests: WindowTestCase {
         let (field, window) = openedField(selected: IconCatalog.defaultSymbol, windowHeight: 900)
         let card = try XCTUnwrap(
             window.contentView?.subviews.first { $0 is ShadowCardView }, "no grid card")
+        let scroll = try XCTUnwrap(card.firstDescendant { $0 is FadingScrollView } as? FadingScrollView)
+        let grid = try XCTUnwrap(scroll.documentView)
         _ = field
+        scroll.layoutSubtreeIfNeeded()
 
-        XCTAssertGreaterThan(card.frame.height, 400, "the grid is being cut short in a tall window")
+        XCTAssertEqual(
+            scroll.documentVisibleRect.height, grid.frame.height, accuracy: 0.5,
+            "the grid is being cut short in a tall window")
         XCTAssertLessThan(
             card.frame.maxY, window.contentView!.bounds.height,
             "the card runs past the top of the window")

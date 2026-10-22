@@ -5,6 +5,8 @@ final class SettingsOverlay: NSView, ModalOverlay {
     private let capturer: KeybindCapturing?
     private let onClose: () -> Void
 
+    private static let cardSize = NSSize(width: 620, height: 460)
+
     private let card = CardView()
     private var dismiss = DismissGate()
 
@@ -51,8 +53,8 @@ final class SettingsOverlay: NSView, ModalOverlay {
 
             card.centerXAnchor.constraint(equalTo: centerXAnchor),
             card.centerYAnchor.constraint(equalTo: centerYAnchor),
-            card.widthAnchor.constraint(equalToConstant: 620),
-            card.heightAnchor.constraint(equalToConstant: 460),
+            card.widthAnchor.constraint(equalToConstant: Self.cardSize.width),
+            card.heightAnchor.constraint(equalToConstant: Self.cardSize.height),
             card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.92),
             card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.92),
 
@@ -202,7 +204,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
             divider.leadingAnchor.constraint(equalTo: navScroll.trailingAnchor),
             divider.topAnchor.constraint(equalTo: root.topAnchor),
             divider.bottomAnchor.constraint(equalTo: root.bottomAnchor),
-            divider.widthAnchor.constraint(equalToConstant: 1),
+            divider.widthAnchor.constraint(equalToConstant: ChromeMetrics.Border.width),
 
             detailContainer.leadingAnchor.constraint(equalTo: divider.trailingAnchor),
             detailContainer.trailingAnchor.constraint(equalTo: root.trailingAnchor),

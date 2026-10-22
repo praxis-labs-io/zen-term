@@ -22,7 +22,7 @@ final class FindBarView: NSView {
         layer?.cornerRadius = ChromeMetrics.Radius.control
 
         glyph.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "Find")
-        glyph.symbolConfiguration = .init(pointSize: 12, weight: .regular)
+        glyph.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.sm, weight: .regular)
         glyph.setContentHuggingPriority(.required, for: .horizontal)
         field.font = ChromeType.font(.body)
         field.isBordered = false

@@ -10,8 +10,8 @@ final class RegionCommandField: NSView, NSTextFieldDelegate {
     private static let rowSpacing: CGFloat = ChromeMetrics.Spacing.s10
     private static let markerSize = NSSize(width: 8, height: 16)
     private static let markerSpacing: CGFloat = ChromeMetrics.Spacing.s6
-    private static let cornerSize: CGFloat = 24
-    private static let cornerInset: CGFloat = 6
+    private static let cornerSize: CGFloat = ChromeMetrics.Height.sm
+    private static let cornerInset: CGFloat = ChromeMetrics.Spacing.s6
 
     let region: Workspace.Region
     let field = CommandField()
@@ -27,7 +27,8 @@ final class RegionCommandField: NSView, NSTextFieldDelegate {
     private let opensFocusedLabel = NSTextField(labelWithString: "Opens focused")
     private let marker = NSView()
     private lazy var cornerButton = IconButton(
-        symbol: "viewfinder", size: NSSize(width: Self.cornerSize, height: Self.cornerSize), pointSize: 12,
+        symbol: "viewfinder", size: NSSize(width: Self.cornerSize, height: Self.cornerSize),
+        pointSize: ChromeMetrics.Icon.sm,
         accessibilityLabel: "Open with focus here", shortcut: { WorkspaceTabDrawing.launchFocusShortcut }
     ) { [weak self] in self?.onOpenFocusedHere?() }
     private(set) var opensFocused = false

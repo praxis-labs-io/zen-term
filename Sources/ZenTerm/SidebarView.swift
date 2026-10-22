@@ -35,10 +35,10 @@ struct SidebarRowItem: Equatable {
 final class SidebarView: NSView {
     static let width: CGFloat = 240
     static let padding: CGFloat = ChromeMetrics.Spacing.s8
-    private static let captionHeight: CGFloat = 28
+    private static let captionHeight: CGFloat = ChromeMetrics.Height.control
     private static let captionInset: CGFloat = ChromeMetrics.Spacing.controlInset
     private static let addInset: CGFloat = ChromeMetrics.Spacing.s4
-    private static let newWorktreeSize = NSSize(width: 20, height: 20)
+    private static let newWorktreeSize = NSSize(width: ChromeMetrics.Height.xs, height: ChromeMetrics.Height.xs)
     private static let sectionGap: CGFloat = ChromeMetrics.Spacing.s12
     private static let contentBottomGap: CGFloat = ChromeMetrics.Spacing.s8
 
@@ -442,7 +442,8 @@ final class SidebarView: NSView {
         guard row.hoverAccessory == nil else { return }
         row.setHoverAccessory(
             IconButton(
-                symbol: "plus", size: Self.newWorktreeSize, pointSize: 11, accessibilityLabel: "New worktree",
+                symbol: "plus", size: Self.newWorktreeSize, pointSize: ChromeMetrics.Icon.sm,
+                accessibilityLabel: "New worktree",
                 shortcut: { CommandCatalog.spec(for: .createWorktree).shortcut }
             ) { [weak self] in self?.onNewWorktree(id) })
     }

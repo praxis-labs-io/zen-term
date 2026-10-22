@@ -5,6 +5,8 @@ final class Spinner: NSView {
     private let pixels: [CALayer] = (0..<6).map { _ in CALayer() }
     private static let size: CGFloat = 13
     private static let pixelSize: CGFloat = 3
+    // Pixel art of the spinner, not chrome spacing.
+    // swiftlint:disable:next untokened_spacing_constant
     private static let pixelGap: CGFloat = 2
     private static let frameDuration: CFTimeInterval = 1.0 / 6
     private static let trail: [Float] = [1, 0.7, 0.45, 0.25, 0.1, 0]

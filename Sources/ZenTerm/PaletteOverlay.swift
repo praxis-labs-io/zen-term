@@ -65,7 +65,7 @@ class PaletteOverlay: NSView, ModalOverlay {
 
     init(
         background: NSColor, placeholder: String, emptyText: String, footerHints: [PaletteHint],
-        rowHeight: CGFloat, maxListHeight: CGFloat = 320, emptyListHeight: CGFloat = 56,
+        rowHeight: CGFloat, maxListHeight: CGFloat = 320, emptyListHeight: CGFloat = ChromeMetrics.Height.xl,
         onDismiss: @escaping () -> Void
     ) {
         self.onDismiss = onDismiss
@@ -111,7 +111,7 @@ class PaletteOverlay: NSView, ModalOverlay {
             hairline.wantsLayer = true
             hairline.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor
             hairline.translatesAutoresizingMaskIntoConstraints = false
-            hairline.heightAnchor.constraint(equalToConstant: 1).isActive = true
+            hairline.heightAnchor.constraint(equalToConstant: ChromeMetrics.Border.width).isActive = true
         }
 
         rowsStack.orientation = .vertical

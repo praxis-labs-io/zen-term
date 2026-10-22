@@ -37,7 +37,7 @@ final class SidebarRowMenu {
             line.leadingAnchor.constraint(equalTo: row.leadingAnchor),
             line.trailingAnchor.constraint(equalTo: row.trailingAnchor),
             line.centerYAnchor.constraint(equalTo: row.centerYAnchor),
-            line.heightAnchor.constraint(equalToConstant: 1),
+            line.heightAnchor.constraint(equalToConstant: ChromeMetrics.Border.width),
         ])
         return row
     }

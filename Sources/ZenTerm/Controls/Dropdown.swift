@@ -98,7 +98,7 @@ final class Dropdown: NSView {
         titleLabel.lineBreakMode = .byTruncatingTail
 
         chevron.image = NSImage(systemSymbolName: "chevron.up.chevron.down", accessibilityDescription: nil)
-        chevron.symbolConfiguration = .init(pointSize: 10, weight: .semibold)
+        chevron.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.xs, weight: .semibold)
         chevron.contentTintColor = Theme.current.chrome.ink(.muted)
         chevron.translatesAutoresizingMaskIntoConstraints = false
 
@@ -485,7 +485,7 @@ private final class DropdownRowView: NSView {
         if item.isSelected {
             let check = NSImageView()
             check.image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)
-            check.symbolConfiguration = .init(pointSize: 11, weight: .semibold)
+            check.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.sm, weight: .semibold)
             check.contentTintColor = chrome.accent.nsColor
             trailing.append(check)
         }

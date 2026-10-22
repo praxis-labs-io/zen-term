@@ -19,13 +19,15 @@
                 ])
         }
 
+        private static let sampleSize = NSSize(width: 220, height: 80)
+
         private static func card(focusBorder: Bool) -> NSView {
             let card = CardView()
             card.translatesAutoresizingMaskIntoConstraints = false
             CardChrome.apply(to: card, background: Theme.current.chrome.background.nsColor, focusBorder: focusBorder)
             NSLayoutConstraint.activate([
-                card.widthAnchor.constraint(equalToConstant: 220),
-                card.heightAnchor.constraint(equalToConstant: 80),
+                card.widthAnchor.constraint(equalToConstant: Self.sampleSize.width),
+                card.heightAnchor.constraint(equalToConstant: Self.sampleSize.height),
             ])
             return card
         }

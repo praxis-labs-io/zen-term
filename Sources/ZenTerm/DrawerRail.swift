@@ -26,7 +26,7 @@ final class DrawerRail: NSView {
         border.fillColor = nil
         border.lineDashPattern = [4, 3]
         layer?.addSublayer(border)
-        glyph.image = IconCatalog.image("plus", pointSize: 12)
+        glyph.image = IconCatalog.image("plus", pointSize: ChromeMetrics.Icon.sm)
         glyph.imageScaling = .scaleNone
         glyph.translatesAutoresizingMaskIntoConstraints = true
         addSubview(glyph)

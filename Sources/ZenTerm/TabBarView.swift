@@ -20,14 +20,13 @@ final class TabBarView: NSView {
     private let onRename: (TabID) -> Void
     private let directory: (TabID) -> URL?
 
-    static let height: CGFloat = 30
+    static let height: CGFloat = ChromeMetrics.Height.lg
 
     private static let leadingInset: CGFloat = ChromeMetrics.Spacing.s12
     private static let chipSpacing: CGFloat = ChromeMetrics.Spacing.s4
     private static let chipHeight: CGFloat = ChromeMetrics.Height.sm
-    private static let bandNudge: CGFloat = ChromeMetrics.Spacing.s6
     // The floating sidebar keeps its own toggle this far above the card's bottom, matching the docked one's band.
-    static let chipBandInset: CGFloat = height / 2 + bandNudge
+    static let chipBandInset: CGFloat = (height + ChromeMetrics.footerGap) / 2
 
     static let chipFont = ChromeType.font(.caption, weight: .medium, face: .mono)
     // The rename editor matches it, or the text reflows on open.

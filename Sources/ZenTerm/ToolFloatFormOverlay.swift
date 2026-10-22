@@ -211,20 +211,23 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         times.setContentHuggingPriority(.required, for: .horizontal)
         let sizeSpacer = NSView()
         sizeSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let sizeRow = Self.hStack([widthField, times, heightField, sizeSpacer], spacing: 8)
+        let sizeRow = Self.hStack([widthField, times, heightField, sizeSpacer], spacing: ChromeMetrics.Spacing.s8)
         widthField.widthAnchor.constraint(equalToConstant: 72).isActive = true
         heightField.widthAnchor.constraint(equalTo: widthField.widthAnchor).isActive = true
         let sizeGroup = LabeledField(caption: caption("Size (fraction of tile)", required: false), control: sizeRow)
         self.sizeGroup = sizeGroup
 
         wireSegment(gitSegment)
-        let gitGroup = Self.vStack([caption("Open in", required: false), gitSegment], spacing: 6)
+        let gitGroup = Self.vStack(
+            [caption("Open in", required: false), gitSegment], spacing: ChromeMetrics.Spacing.s6)
 
         wireSegment(persistSegment)
-        let persistGroup = Self.vStack([caption("Keep running", required: false), persistSegment], spacing: 6)
+        let persistGroup = Self.vStack(
+            [caption("Keep running", required: false), persistSegment], spacing: ChromeMetrics.Spacing.s6)
 
         wireSegment(toolbarSegment)
-        let toolbarGroup = Self.vStack([caption("Toolbar button", required: false), toolbarSegment], spacing: 6)
+        let toolbarGroup = Self.vStack(
+            [caption("Toolbar button", required: false), toolbarSegment], spacing: ChromeMetrics.Spacing.s6)
 
         cancelButton.onTap = { [weak self] in self?.onCancel() }
         submitButton.setTitle(editingFloat == nil ? "Add Tool Float" : "Save")
@@ -260,13 +263,15 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         } else {
             cancelButton.onTab = { [weak self] in self?.moveTab(1) }
         }
-        let footer = Self.vStack([errorLabel, Self.hStack(footerViews, spacing: 8)], spacing: 10)
+        let footer = Self.vStack(
+            [errorLabel, Self.hStack(footerViews, spacing: ChromeMetrics.Spacing.s8)],
+            spacing: ChromeMetrics.Spacing.s10)
 
         let built = FormCard.content(
             rows: [
                 header, titleGroup, iconGroup, chordGroup, commandGroup, dirGroup, sizeGroup,
                 gitGroup, persistGroup, toolbarGroup,
-            ], footer: footer, spacing: 12)
+            ], footer: footer, spacing: ChromeMetrics.Spacing.modalSectionGap)
         footerDivider = built.divider
         return built.view
     }

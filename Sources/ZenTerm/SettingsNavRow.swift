@@ -23,6 +23,8 @@ final class SettingsNavRow: NSView, HoverSuppressing {
     private let attentionDot = NSView()
     private var attentionDotWidth: NSLayoutConstraint?
     private var attentionDotGap: NSLayoutConstraint?
+    private var labelGap: NSLayoutConstraint?
+    private var accessoryGap: NSLayoutConstraint?
     private var dotInk: (() -> NSColor)?
     private var dotAccessibilityValue: String?
     private var titleInk: (() -> NSColor)?
@@ -38,11 +40,9 @@ final class SettingsNavRow: NSView, HoverSuppressing {
     private(set) var hoverAccessory: NSView?
 
     private static let detailMaxWidth: CGFloat = 96
-    private static let nestedIndent: CGFloat = 24
+    private static let nestedIndent: CGFloat = ChromeMetrics.Spacing.s24
     private static let nestedGlyphGap: CGFloat = ChromeMetrics.Spacing.s6
-    private static let nestedGlyphSize: CGFloat = 11
-    // The frame pulls a 20pt accessory 5pt past the detail's inset, so its glyph sits where the detail ends.
-    private static let accessoryInset: CGFloat = 5
+    private static let accessoryInset: CGFloat = ChromeMetrics.Spacing.s4
     private static let attentionDotDiameter: CGFloat = 6
     private static let attentionDotGapToDetail: CGFloat = ChromeMetrics.Spacing.s6
 
@@ -78,15 +78,16 @@ final class SettingsNavRow: NSView, HoverSuppressing {
         addSubview(attentionDot)
         let dotWidth = attentionDot.widthAnchor.constraint(equalToConstant: 0)
         let dotGap = attentionDot.trailingAnchor.constraint(equalTo: detailLabel.leadingAnchor)
+        let labelGap = label.trailingAnchor.constraint(lessThanOrEqualTo: attentionDot.leadingAnchor)
         attentionDotWidth = dotWidth
         attentionDotGap = dotGap
+        self.labelGap = labelGap
         NSLayoutConstraint.activate([
             dotWidth,
             dotGap,
+            labelGap,
             attentionDot.heightAnchor.constraint(equalToConstant: Self.attentionDotDiameter),
             attentionDot.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.trailingAnchor.constraint(
-                lessThanOrEqualTo: attentionDot.leadingAnchor, constant: -ChromeMetrics.Spacing.s8),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
             detailLabel.trailingAnchor.constraint(
                 equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
@@ -106,7 +107,7 @@ final class SettingsNavRow: NSView, HoverSuppressing {
 
     private func installGlyph(_ symbol: String) {
         glyph.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
-        glyph.symbolConfiguration = .init(pointSize: Self.nestedGlyphSize, weight: .regular)
+        glyph.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.sm, weight: .regular)
         glyph.translatesAutoresizingMaskIntoConstraints = false
         addSubview(glyph)
         label.font = ChromeType.font(.small)
@@ -131,6 +132,7 @@ final class SettingsNavRow: NSView, HoverSuppressing {
         guard accessory !== hoverAccessory else { return }
         hoverAccessory?.removeFromSuperview()
         hoverAccessory = accessory
+        accessoryGap = nil
         if let accessory {
             accessory.translatesAutoresizingMaskIntoConstraints = false
             addSubview(accessory)
@@ -138,6 +140,8 @@ final class SettingsNavRow: NSView, HoverSuppressing {
                 accessory.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.accessoryInset),
                 accessory.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
+            accessoryGap = label.trailingAnchor.constraint(
+                lessThanOrEqualTo: accessory.leadingAnchor, constant: -ChromeMetrics.Spacing.s4)
         }
         refreshAccessory()
     }
@@ -145,6 +149,7 @@ final class SettingsNavRow: NSView, HoverSuppressing {
     private func refreshAccessory() {
         hoverAccessory?.isHidden = !showsHover
         detailLabel.isHidden = showsHover && hoverAccessory != nil
+        accessoryGap?.isActive = showsHover && hoverAccessory != nil
     }
 
     func setTitle(_ title: String) {
@@ -177,6 +182,7 @@ final class SettingsNavRow: NSView, HoverSuppressing {
         let shows = !attentionDot.isHidden
         attentionDotWidth?.constant = shows ? Self.attentionDotDiameter : 0
         attentionDotGap?.constant = shows && !detailLabel.stringValue.isEmpty ? -Self.attentionDotGapToDetail : 0
+        labelGap?.constant = shows || !detailLabel.stringValue.isEmpty ? -ChromeMetrics.Spacing.s8 : 0
     }
 
     private func refreshAccessibilityValue() {

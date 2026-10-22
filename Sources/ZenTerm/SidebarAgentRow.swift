@@ -49,10 +49,10 @@ final class SidebarAgentRow: SidebarJumpRow {
     private let spinner = Spinner()
     private var item: SidebarAgentItem?
 
-    static let height: CGFloat = 47
+    static let height: CGFloat = ChromeMetrics.Height.xl
     private static let jumpHint = "Jump to agent"
     private static let inset: CGFloat = ChromeMetrics.Spacing.controlInset
-    private static let top: CGFloat = 7
+    private static let top: CGFloat = ChromeMetrics.Spacing.s8
     private static let glyphSize = NSSize(width: 14, height: 16)
     private static let glyphGap: CGFloat = ChromeMetrics.Spacing.s8
     private static let lineGap: CGFloat = ChromeMetrics.Spacing.s2
@@ -96,7 +96,7 @@ final class SidebarAgentRow: SidebarJumpRow {
                 lessThanOrEqualTo: glyphSlot.leadingAnchor, constant: -Self.glyphGap),
             summaryLabel.centerYAnchor.constraint(equalTo: glyphSlot.centerYAnchor),
             detailLabel.leadingAnchor.constraint(equalTo: summaryLabel.leadingAnchor),
-            detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: glyphSlot.leadingAnchor, constant: -Self.glyphGap),
+            detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -Self.inset),
             detailLabel.topAnchor.constraint(equalTo: glyphSlot.bottomAnchor, constant: Self.lineGap),
         ])
     }
