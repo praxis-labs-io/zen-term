@@ -2,12 +2,11 @@ import AppKit
 
 // Leads the tab bar with the active workspace's name while the sidebar is collapsed.
 final class CollapsedSidebarLead: NSView {
-    static let dividerGap: CGFloat = ChromeMetrics.Spacing.s12
+    static let tabGap: CGFloat = ChromeMetrics.Spacing.s4
 
     private let nameLabel = NSTextField(labelWithString: "")
     private var workspaceName = ""
     private var worktreeName: String?
-    private let divider = ToggleDock.divider()
     private let content = NSStackView()
 
     init(leadingInset: CGFloat) {
@@ -16,17 +15,15 @@ final class CollapsedSidebarLead: NSView {
         wantsLayer = true
         layer?.masksToBounds = true
 
-        nameLabel.font = TabBarView.chipFont
+        nameLabel.font = TabChip.chipFont
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        nameLabel.widthAnchor.constraint(lessThanOrEqualToConstant: TabBarView.maxChipWidth).isActive = true
+        nameLabel.widthAnchor.constraint(lessThanOrEqualToConstant: TabChip.maxChipWidth).isActive = true
         content.orientation = .horizontal
         content.alignment = .centerY
-        content.spacing = Self.dividerGap
-        content.edgeInsets = NSEdgeInsets(top: 0, left: leadingInset, bottom: 0, right: 0)
+        setLeadingInset(leadingInset)
         content.translatesAutoresizingMaskIntoConstraints = false
         content.addArrangedSubview(nameLabel)
-        content.addArrangedSubview(divider)
         addSubview(content)
         NSLayoutConstraint.activate([
             content.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -40,6 +37,10 @@ final class CollapsedSidebarLead: NSView {
 
     var contentWidth: CGFloat { content.fittingSize.width }
 
+    func setLeadingInset(_ inset: CGFloat) {
+        content.edgeInsets = NSEdgeInsets(top: 0, left: inset, bottom: 0, right: 0)
+    }
+
     func setWorkspaceName(_ name: String, worktree: String? = nil) {
         workspaceName = name
         worktreeName = worktree
@@ -50,7 +51,7 @@ final class CollapsedSidebarLead: NSView {
             NSAttributedString(
                 string: text,
                 attributes: [
-                    .font: TabBarView.chipFont, .kern: TabBarView.titleKern, .foregroundColor: chrome.ink(ink),
+                    .font: TabChip.chipFont, .kern: TabChip.titleKern, .foregroundColor: chrome.ink(ink),
                     .paragraphStyle: paragraph,
                 ])
         }
@@ -59,15 +60,17 @@ final class CollapsedSidebarLead: NSView {
             label.append(run(" / ", .faint))
             label.append(run(worktree, .subtle))
         }
-        nameLabel.attributedStringValue = Self.fitted(label)
+        let shown = NSMutableAttributedString(attributedString: Self.fitted(label))
+        shown.append(run(":", worktree == nil ? .muted : .subtle))
+        nameLabel.attributedStringValue = shown
     }
 
-    // Cut by count: AppKit's tail truncation stops short of the width and widens the divider's gap.
+    // Cut by count, one short for the colon: AppKit's tail truncation stops short of the width and widens the gap.
     private static let maxCharacters: Int = {
         let cell = NSAttributedString(
-            string: "0", attributes: [.font: TabBarView.chipFont, .kern: TabBarView.titleKern]
+            string: "0", attributes: [.font: TabChip.chipFont, .kern: TabChip.titleKern]
         ).size().width
-        return Int(TabBarView.maxChipWidth / cell)
+        return Int(TabChip.maxChipWidth / cell) - 1
     }()
 
     private static func fitted(_ label: NSAttributedString) -> NSAttributedString {
@@ -82,7 +85,6 @@ final class CollapsedSidebarLead: NSView {
 
     func reapplyTheme() {
         setWorkspaceName(workspaceName, worktree: worktreeName)
-        divider.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
     }
 
     var workspaceNameForTesting: String { nameLabel.stringValue }

@@ -11,6 +11,58 @@ final class MotionTests: XCTestCase {
         super.tearDown()
     }
 
+    private func stretchLayer() -> CALayer {
+        let layer = CALayer()
+        layer.anchorPoint = CGPoint(x: 0, y: 0.5)
+        layer.frame = CGRect(x: 10, y: 0, width: 40, height: 24)
+        return layer
+    }
+
+    func test_stretch_animatesLeadingEdgeFirst_easeOutThenLanding() throws {
+        Motion.isReduceMotionEnabled = { false }
+        let layer = stretchLayer()
+        let target = CGRect(x: 100, y: 0, width: 60, height: 24)
+
+        Motion.stretch(layer, to: target, animated: true)
+
+        XCTAssertEqual(layer.frame, target, "the model lands on the target at once")
+        let left = try XCTUnwrap(layer.animation(forKey: "stretch.left") as? CAKeyframeAnimation)
+        let width = try XCTUnwrap(layer.animation(forKey: "stretch.width") as? CAKeyframeAnimation)
+        XCTAssertEqual(left.values as? [CGFloat], [10, 10, 100], "moving right, the trailing edge leaves first")
+        XCTAssertEqual(width.values as? [CGFloat], [40, 150, 60], "stretching to the target's far edge midway")
+        XCTAssertEqual(left.duration, Motion.pageSlideDuration)
+        XCTAssertEqual(left.timingFunctions?.count, 2)
+        XCTAssertTrue(left.timingFunctions?.last === Motion.landingTiming, "the second half is the landing curve")
+    }
+
+    func test_stretch_snapsUnderReduceMotion_andWhenNotAnimated() {
+        let target = CGRect(x: 100, y: 0, width: 60, height: 24)
+        Motion.isReduceMotionEnabled = { true }
+        let reduced = stretchLayer()
+        Motion.stretch(reduced, to: target, animated: true)
+        XCTAssertEqual(reduced.frame, target)
+        XCTAssertNil(reduced.animation(forKey: "stretch.left"))
+
+        Motion.isReduceMotionEnabled = { false }
+        let still = stretchLayer()
+        Motion.stretch(still, to: target, animated: false)
+        XCTAssertEqual(still.frame, target)
+        XCTAssertNil(still.animation(forKey: "stretch.left"))
+    }
+
+    func test_stretch_withoutAnimation_cancelsASlideStillRunning() {
+        Motion.isReduceMotionEnabled = { false }
+        let layer = stretchLayer()
+        Motion.stretch(layer, to: CGRect(x: 100, y: 0, width: 60, height: 24), animated: true)
+
+        let settled = CGRect(x: 120, y: 0, width: 70, height: 24)
+        Motion.stretch(layer, to: settled, animated: false)
+
+        XCTAssertEqual(layer.frame, settled)
+        XCTAssertNil(layer.animation(forKey: "stretch.left"), "a slide left running would pull the pill off its tab")
+        XCTAssertNil(layer.animation(forKey: "stretch.width"))
+    }
+
     func test_reduceMotion_springScaleFadeAppearing_appliesFinalStateSynchronously() {
         Motion.isReduceMotionEnabled = { true }
         let view = NSView(frame: NSRect(x: 0, y: 0, width: 100, height: 100))

@@ -2,13 +2,12 @@ import AppKit
 
 // Everything a reveal brings on screen: the rows and footer, and the card chrome they float behind.
 final class SidebarColumn: ShadowCardView {
-    static let toggleInset: CGFloat = ChromeMetrics.Spacing.s12
-
     let rows: SidebarView
     let footer: SidebarFooter
     let toggle: IconButton
     // Every other side moved inward with the card and took the window's gutter along; the top edge stays put.
     private(set) var contentTop: NSLayoutConstraint?
+    private var toggleLeading: NSLayoutConstraint?
     private(set) var isFloating = false
 
     init(
@@ -25,12 +24,15 @@ final class SidebarColumn: ShadowCardView {
         for child in [rows, footer, toggle] as [NSView] { addSubview(child) }
         let contentTop = rows.topAnchor.constraint(equalTo: topAnchor)
         self.contentTop = contentTop
+        let toggleLeading = toggle.leadingAnchor.constraint(
+            equalTo: leadingAnchor, constant: ChromeMetrics.windowGutter)
+        self.toggleLeading = toggleLeading
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: SidebarView.width),
             rows.leadingAnchor.constraint(equalTo: leadingAnchor),
             contentTop,
             rows.bottomAnchor.constraint(equalTo: bottomAnchor),
-            toggle.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.toggleInset),
+            toggleLeading,
             toggle.centerYAnchor.constraint(equalTo: bottomAnchor, constant: -TabBarView.chipBandInset),
             footer.leadingAnchor.constraint(equalTo: toggle.trailingAnchor, constant: SidebarFooter.spacing),
             footer.centerYAnchor.constraint(equalTo: toggle.centerYAnchor),
@@ -75,6 +77,10 @@ final class SidebarColumn: ShadowCardView {
     }
 
     var floatingContentTop: CGFloat { isFloating ? ChromeMetrics.windowGutter : 0 }
+
+    func reapplyToggleInset() {
+        toggleLeading?.constant = ChromeMetrics.windowGutter
+    }
 
     func reapplyCornerRadius() {
         guard isFloating else { return }

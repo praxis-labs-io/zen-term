@@ -195,6 +195,7 @@ final class WindowController: NSObject {
 
     private let tabBar: TabBarView
     private let dock: ToggleDock
+    private var dockTrailing: NSLayoutConstraint?
     private let sidebar: SidebarController
     private var mountedCanvas: NSView?
     private var connectView: HostConnectView?
@@ -520,6 +521,7 @@ final class WindowController: NSObject {
                 if change.contains(.chromeLayout) {
                     self.window.setWindowChromeVisible(GeneralConfig.current.windowChrome)
                     self.sidebar.reapplyChromeLayout()
+                    self.dockTrailing?.constant = -ChromeMetrics.windowGutter
                     for controller in self.allTabControllers { controller.reapplyChromeLayout() }
                     self.connectView?.reapplyChromeLayout()
                     self.reapplyFloatLayout()
@@ -612,6 +614,9 @@ final class WindowController: NSObject {
         container.addSubview(dock)
         sidebar.install(in: container, besideTabBar: tabBar)
         sidebar.setHiddenButtons(GeneralConfig.current.hiddenToolbarButtons)
+        let dockTrailing = dock.trailingAnchor.constraint(
+            equalTo: container.trailingAnchor, constant: -ChromeMetrics.windowGutter)
+        self.dockTrailing = dockTrailing
         NSLayoutConstraint.activate([
             canvasHost.leadingAnchor.constraint(equalTo: sidebar.edgeAnchor),
             canvasHost.trailingAnchor.constraint(equalTo: container.trailingAnchor),
@@ -619,7 +624,7 @@ final class WindowController: NSObject {
             canvasHost.bottomAnchor.constraint(equalTo: tabBar.topAnchor),
             tabBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             tabBar.heightAnchor.constraint(equalToConstant: TabBarView.height),
-            dock.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -ChromeMetrics.Spacing.s12),
+            dockTrailing,
             dock.centerYAnchor.constraint(equalTo: tabBar.chipBandCenterYAnchor),
             tabBar.trailingAnchor.constraint(equalTo: dock.leadingAnchor, constant: -ChromeMetrics.Spacing.s8),
         ])
@@ -3934,7 +3939,7 @@ final class WindowController: NSObject {
         AgentNotifier.shared.clear(windowID: windowID, tabID: id)
     }
 
-    /// The tab number and the dock's dots are the same signal at two altitudes, so they move together.
+    /// The tab's dot and the dock's dots are the same signal at two altitudes, so they move together.
     private func renderAttention() {
         renderTabBar()
         renderDock()

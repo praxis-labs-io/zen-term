@@ -671,7 +671,7 @@ final class HostConnectInteractionTests: WindowTestCase {
     func test_theCollapsedLead_namesTheHost() {
         let c = onConnectScreen()
 
-        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "devbox")
+        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "devbox:")
     }
 
     func test_theConnectFailure_keepsItsTitleWhole_andTruncatesALongHostInTheMiddle() throws {
@@ -898,7 +898,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         let content = try XCTUnwrap(c.window.contentView)
         content.layoutSubtreeIfNeeded()
         let chip = try XCTUnwrap(
-            descendants(of: content).first { String(describing: type(of: $0)) == "Chip" }, "no tab chip")
+            descendants(of: content).first { $0 is TerminalTabChip }, "no tab chip")
         let cg = try XCTUnwrap(
             CGEvent(
                 mouseEventSource: nil, mouseType: .otherMouseDown, mouseCursorPosition: .zero,

@@ -63,8 +63,8 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         guard let tabBar = descendants(of: root).compactMap({ $0 as? TabBarView }).first else {
             return XCTFail("expected the tab bar mounted in the window")
         }
-        let accentBefore = tabBar.tracerColorForTesting
-        XCTAssertNotNil(accentBefore)
+        let pillBefore = tabBar.pillColorForTesting
+        XCTAssertNotNil(pillBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
         NotificationCenter.default.post(name: .configDidChange, object: nil)
@@ -73,7 +73,7 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         OperationQueue.main.addOperation { drained.fulfill() }
         wait(for: [drained], timeout: 5)
 
-        XCTAssertNotEqual(accentBefore, tabBar.tracerColorForTesting)
+        XCTAssertNotEqual(pillBefore, tabBar.pillColorForTesting)
     }
 
     func test_toolbarButtonsChange_hidesTheButtonThroughTheFanOut() throws {
@@ -139,14 +139,14 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         else {
             return XCTFail("expected the tab bar mounted in the window")
         }
-        let accentBefore = tabBar.tracerColorForTesting
-        XCTAssertNotNil(accentBefore)
+        let pillBefore = tabBar.pillColorForTesting
+        XCTAssertNotNil(pillBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
         post(.keymap)
 
         XCTAssertEqual(
-            accentBefore, tabBar.tracerColorForTesting,
+            pillBefore, tabBar.pillColorForTesting,
             "a keymap-only change re-themed the tab bar — the gate isn't holding")
     }
 
@@ -161,12 +161,12 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         else {
             return XCTFail("expected the tab bar mounted in the window")
         }
-        let accentBefore = tabBar.tracerColorForTesting
+        let pillBefore = tabBar.pillColorForTesting
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
         post(.theme)
 
-        XCTAssertNotEqual(accentBefore, tabBar.tracerColorForTesting)
+        XCTAssertNotEqual(pillBefore, tabBar.pillColorForTesting)
     }
 
     func test_keymapChange_rebuildsThePanelHeaderKeycap() throws {

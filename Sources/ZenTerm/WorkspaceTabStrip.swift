@@ -22,6 +22,8 @@ final class WorkspaceTabStrip: NSView {
     private var revealsSelection = false
     private let scrollView = FadingScrollView(axis: .horizontal)
     private let docView = FlippedView()
+    private let pill = CALayer()
+    private var pillSlides = false
     private var drag: (index: Int, offset: CGFloat)?
     private lazy var addButton = AppButton(variant: .muted, symbol: "plus") { [weak self] in self?.onAdd?() }
     private let idleHint = NSStackView()
@@ -34,6 +36,8 @@ final class WorkspaceTabStrip: NSView {
     var isIdleHintVisibleForTesting: Bool { !idleHint.isHidden }
     var visibleChipsRectForTesting: CGRect { scrollView.contentView.documentVisibleRect }
     var chipsScrollForTesting: FadingScrollView { scrollView }
+    var pillFrameForTesting: CGRect { pill.frame }
+    var pillColorForTesting: NSColor? { pill.backgroundColor.flatMap { NSColor(cgColor: $0) } }
 
     init() {
         super.init(frame: .zero)
@@ -45,6 +49,13 @@ final class WorkspaceTabStrip: NSView {
         scrollView.horizontalScrollElasticity = .allowed
         scrollView.verticalScrollElasticity = .none
         scrollView.documentView = docView
+        docView.wantsLayer = true
+        docView.layer?.insertSublayer(pill, at: 0)
+        pill.backgroundColor = Theme.current.chrome.fill(.active).cgColor
+        pill.cornerRadius = ChromeMetrics.Radius.control
+        pill.anchorPoint = CGPoint(x: 0, y: 0.5)
+        pill.zPosition = -1
+        pill.isHidden = true
         addSubview(scrollView)
         scrollView.contentView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(
@@ -80,7 +91,10 @@ final class WorkspaceTabStrip: NSView {
         if chips.count != form.tabs.count { revealsSelection = true }
         while chips.count < form.tabs.count { chips.append(makeChip()) }
         while chips.count > form.tabs.count { chips.removeLast().removeFromSuperview() }
-        if selected != form.selected { revealsSelection = true }
+        if selected != form.selected {
+            revealsSelection = true
+            pillSlides = !chips.isEmpty
+        }
         selected = form.selected
         for (index, chip) in chips.enumerated() {
             let fallback = form.tabs[index].main ?? WorkspaceForm.shellLabel
@@ -108,6 +122,7 @@ final class WorkspaceTabStrip: NSView {
     func cancelRename() -> Bool { chips.contains { $0.cancelRename() } }
 
     func reapplyTheme() {
+        pill.backgroundColor = Theme.current.chrome.fill(.active).cgColor
         chips.forEach { $0.reapplyTheme() }
         addButton.reapplyTheme()
         hintCaps.forEach { $0.reapplyTheme() }
@@ -130,6 +145,13 @@ final class WorkspaceTabStrip: NSView {
         scrollView.frame = CGRect(x: 0, y: 0, width: visibleWidth, height: WorkspaceTabChip.height)
         docView.frame = CGRect(x: 0, y: 0, width: contentWidth, height: WorkspaceTabChip.height)
         addButton.frame = CGRect(x: addX, y: 0, width: Self.addSize, height: Self.addSize)
+        if let chip = selectedChip {
+            Motion.stretch(pill, to: chip.frame, animated: pillSlides)
+            pill.isHidden = false
+        } else {
+            pill.isHidden = true
+        }
+        pillSlides = false
         renameHint.isHidden = !isRenaming
         idleHint.isHidden = isRenaming
         for hint in [idleHint, renameHint] {

@@ -172,7 +172,7 @@ root. Resize swaps one constraint in place and clamps against the rendered exten
 ## Windows, workspaces and tabs
 
 `TabList` (TabKit) holds `order` and `activeIndex` for one workspace and always holds at
-least one tab: `close` returns false when it removes the last tab. Tab numbers, tooltips
+least one tab: `close` returns false when it removes the last tab. Tab shortcuts, tooltips
 and keycaps derive from `order` at render time. A label is `pinnedTitle ?? liveTitle`.
 
 `WindowController` owns one window: its workspaces, the toast presenter, tool floats, the
@@ -295,7 +295,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   an `ask` or a `turnEnd`, and what answers it is the difference.
   - An **ask** (a notification, Codex's Action Required title, a crash) latches whatever
     the pane's focus, since the notification behind it comes only once, so a split asking
-    in the active tab reads waiting while its tab number stays quiet. Looking at a prompt
+    in the active tab reads waiting while its tab dot stays quiet. Looking at a prompt
     is not answering it. Claude and Codex answer their own ask: Claude when a spinner
     title follows its `✳` prompt title, Codex when its title leaves the prompt, and either
     when a turn starts. A key at their prompt answers nothing, since an arrow key sends
@@ -337,10 +337,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   end still unseen, and changes nothing once the turn was seen. It asks only from a Claude
   that reports no progress, since Claude clears its progress at launch and none means
   progress is off. Every other agent notification asks.
-- **A state only the chrome can act on never reaches the tab number.** `working`
-  says an agent is mid-turn, not that it wants you, so it stops at the dock's dot. The dot
-  and the tab number are one signal at two altitudes; a hidden drawer or float asks
-  through its dot because it has no number.
+- **A state only the chrome can act on never reaches the tab dot.** `working`
+  says an agent is mid-turn, not that it wants you, so it stops at the dock's dot. The dock's
+  dot and the tab dot are one signal at two altitudes; a hidden drawer or float has
+  no tab, so it asks through its own dot.
 - **Background command completion:** OSC 133 `COMMAND_FINISHED` over a threshold in a
   background tab raises one sticky toast; the rank keeps it under a waiting agent. A
   notification no agent sent raises the same card, with its own words.

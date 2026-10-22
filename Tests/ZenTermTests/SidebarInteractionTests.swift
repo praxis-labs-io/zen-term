@@ -111,12 +111,28 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertFalse(sidebar.view.isHidden)
         XCTAssertTrue(sidebar.lead.isHidden)
         XCTAssertEqual(
-            frame(of: try tabBar(in: controller), in: controller).minX, SidebarView.width - SidebarView.padding,
-            "the bar moves in with the canvas, so the first title keeps its place against the pane")
+            frame(of: try tabBar(in: controller), in: controller).minX + TabBarView.leadingInset,
+            frame(of: try pane(in: controller), in: controller).minX,
+            "docked, the first tab lines up with the pane's leading edge")
         XCTAssertEqual(
             frame(of: try pane(in: controller), in: controller).minX,
             try rowFillEdge(in: controller) + Self.paneGap,
             "docked, the panes sit one pane-gap from the sidebar's rows, as from a drawer")
+    }
+
+    func test_docked_aLiveGutterEdit_keepsTheFirstTabOnThePaneEdge() throws {
+        let controller = makeController()
+        var config = GeneralConfig.current
+        config.windowGutter = Self.gutter + 12
+        GeneralConfig.setCurrentForTesting(config)
+        NotificationCenter.default.post(
+            name: .configDidChange, object: nil,
+            userInfo: [ConfigChange.userInfoKey: ConfigChange.chromeLayout])
+
+        XCTAssertEqual(
+            frame(of: try tabBar(in: controller), in: controller).minX + TabBarView.leadingInset,
+            frame(of: try pane(in: controller), in: controller).minX,
+            "a new gutter moves the pane, so the first tab has to follow it")
     }
 
     func test_toggle_collapses_andDocksAgain() throws {
@@ -131,9 +147,9 @@ final class SidebarInteractionTests: WindowTestCase {
         XCTAssertFalse(sidebar.lead.isHidden)
         XCTAssertEqual(frame(of: try pane(in: controller), in: controller).minX, Self.gutter)
         XCTAssertEqual(
-            frame(of: try tabBar(in: controller), in: controller).minX + TabBarView.titleInset,
-            frame(of: sidebar.lead, in: controller).maxX + CollapsedSidebarLead.dividerGap,
-            "the toggle and workspace name lead the tab bar, the divider one gap from the first title")
+            frame(of: try tabBar(in: controller), in: controller).minX + TabBarView.leadingInset,
+            frame(of: sidebar.lead, in: controller).maxX + CollapsedSidebarLead.tabGap,
+            "the toggle and workspace name lead the tab bar, one small gap from the first tab")
         XCTAssertGreaterThan(frame(of: sidebar.lead, in: controller).width, 0)
 
         try click(sidebar.liveToggleForTesting)
@@ -146,8 +162,9 @@ final class SidebarInteractionTests: WindowTestCase {
             try rowFillEdge(in: controller) + Self.paneGap,
             "docked, the panes sit one pane-gap from the sidebar's rows, as from a drawer")
         XCTAssertEqual(
-            frame(of: try tabBar(in: controller), in: controller).minX, SidebarView.width - SidebarView.padding,
-            "docking again lands the bar back beside the canvas")
+            frame(of: try tabBar(in: controller), in: controller).minX + TabBarView.leadingInset,
+            frame(of: try pane(in: controller), in: controller).minX,
+            "docking again lines the first tab back up with the pane")
     }
 
     func test_toggle_holdsItsWindowPosition_dockedAndCollapsed() throws {
@@ -225,7 +242,7 @@ final class SidebarInteractionTests: WindowTestCase {
         let controller = makeController()
         controller.handle(.toggleSidebar)
 
-        XCTAssertEqual(controller.sidebarForTesting.lead.workspaceNameForTesting, "Workspace 1")
+        XCTAssertEqual(controller.sidebarForTesting.lead.workspaceNameForTesting, "Workspace 1:")
     }
 
     func test_collapsedLead_truncatesALongWorkspaceNameAtATabTitlesWidth() throws {
@@ -238,10 +255,10 @@ final class SidebarInteractionTests: WindowTestCase {
         controller.containerForTesting.layoutSubtreeIfNeeded()
         let name = controller.sidebarForTesting.lead.workspaceNameLabelForTesting
         XCTAssertLessThanOrEqual(
-            name.alignmentRect(forFrame: name.frame).width, TabBarView.maxChipWidth,
+            name.alignmentRect(forFrame: name.frame).width, TabChip.maxChipWidth,
             "a long name truncates instead of pushing the tabs off the bar")
         let oneLine = NSTextField(labelWithString: "Home")
-        oneLine.font = TabBarView.chipFont
+        oneLine.font = TabChip.chipFont
         XCTAssertEqual(
             name.frame.height, oneLine.fittingSize.height, accuracy: 0.5, "a long name truncates instead of wrapping")
     }

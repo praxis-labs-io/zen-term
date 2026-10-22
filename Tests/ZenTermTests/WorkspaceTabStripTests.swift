@@ -189,24 +189,198 @@ final class WorkspaceTabStripTests: WindowTestCase {
         XCTAssertEqual(strip.chips.map(\.isDotVisibleForTesting), [false, true])
     }
 
-    func test_aSoleTab_hasNoRemoveButton_andASelectedOneAmongSeveralDoes() {
+    func test_aSoleTab_showsNoRemoveButton_evenOnHover() throws {
         mount([Workspace.Tab(main: "nvim")])
-        XCTAssertFalse(strip.chips[0].isCloseVisibleForTesting)
+        let chip = strip.chips[0]
 
-        form.addTab()
-        rerender()
-        XCTAssertEqual(strip.chips.map(\.isCloseVisibleForTesting), [false, true])
+        chip.mouseEntered(with: try mouse(.mouseMoved, at: chip))
+
+        XCTAssertTrue(chip.isHoveredForTesting)
+        XCTAssertFalse(chip.isCloseVisibleForTesting)
     }
 
-    func test_theRemoveButton_removesItsTab() throws {
+    func test_amongSeveralTabs_theRemoveButtonShowsOnHoverOnly_selectedOrNot() throws {
         mount([Workspace.Tab(main: "nvim"), Workspace.Tab(name: "gate")])
         form.select(1)
         rerender()
-        let close = strip.chips[1].closeButtonForTesting
+        XCTAssertEqual(
+            strip.chips.map(\.isCloseVisibleForTesting), [false, false], "none at rest, not even the selected")
 
-        close.mouseDown(with: try mouse(.leftMouseDown, at: close))
+        for chip in strip.chips {
+            chip.mouseEntered(with: try mouse(.mouseMoved, at: chip))
+            XCTAssertTrue(chip.isCloseVisibleForTesting)
+            chip.mouseExited(with: try mouse(.mouseMoved, at: chip))
+            XCTAssertFalse(chip.isCloseVisibleForTesting)
+        }
+    }
+
+    func test_hover_neverChangesAChipsWidth() throws {
+        mount(
+            [Workspace.Tab(main: "nvim"), Workspace.Tab(name: "gate"), Workspace.Tab()],
+            focus: Workspace.LaunchFocus(tab: 1, region: .main))
+        for chip in strip.chips {
+            let atRest = chip.fittingWidth
+
+            chip.mouseEntered(with: try mouse(.mouseMoved, at: chip))
+            XCTAssertEqual(chip.fittingWidth, atRest, "\(chip.title): hover resized the chip")
+            chip.mouseExited(with: try mouse(.mouseMoved, at: chip))
+        }
+    }
+
+    func test_onHover_theRemoveButtonReplacesTheDot_inTheSameSlot() throws {
+        mount(
+            [Workspace.Tab(main: "nvim"), Workspace.Tab(name: "gate")],
+            focus: Workspace.LaunchFocus(tab: 1, region: .main))
+        let chip = strip.chips[1]
+        let dotFrame = chip.dotFrameForTesting
+        XCTAssertEqual(chip.dotColorForTesting, Theme.current.chrome.cursor.nsColor)
+
+        chip.mouseEntered(with: try mouse(.mouseMoved, at: chip))
+
+        XCTAssertFalse(chip.isDotVisibleForTesting)
+        XCTAssertTrue(chip.isCloseVisibleForTesting)
+        XCTAssertEqual(chip.closeFrameForTesting.midX, dotFrame.midX, accuracy: 0.01)
+        XCTAssertEqual(chip.closeFrameForTesting.midY, dotFrame.midY, accuracy: 0.01)
+    }
+
+    private var pressed: NSView?
+
+    private func hitTest(at point: CGPoint) -> NSView? { window?.contentView?.superview?.hitTest(point) }
+
+    private func windowPoint(_ view: NSView, dx: CGFloat = 0) -> CGPoint {
+        view.convert(CGPoint(x: view.bounds.midX + dx, y: view.bounds.midY), to: nil)
+    }
+
+    private func pressDown(at point: CGPoint) throws {
+        pressed = hitTest(at: point)
+        pressed?.mouseDown(
+            with: try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
+                    windowNumber: window!.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
+    }
+
+    private func pressDrag(to point: CGPoint) throws {
+        pressed?.mouseDragged(
+            with: try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .leftMouseDragged, location: point, modifierFlags: [], timestamp: 0,
+                    windowNumber: window!.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
+    }
+
+    private func pressUp(at point: CGPoint) throws {
+        pressed?.mouseUp(
+            with: try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .leftMouseUp, location: point, modifierFlags: [], timestamp: 0,
+                    windowNumber: window!.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
+        pressed = nil
+    }
+
+    func test_theRemoveButton_removesItsTab_onMouseUp() throws {
+        mount([Workspace.Tab(main: "nvim"), Workspace.Tab(name: "gate")])
+        form.select(1)
+        rerender()
+        let chip = strip.chips[1]
+        chip.mouseEntered(with: try mouse(.mouseMoved, at: chip))
+        let target = windowPoint(chip.closeButtonForTesting)
+
+        try pressDown(at: target)
+        XCTAssertEqual(strip.chips.map(\.title), ["nvim", "gate"], "a press alone removes nothing")
+        try pressUp(at: target)
 
         XCTAssertEqual(strip.chips.map(\.title), ["nvim"])
+    }
+
+    func test_pressingTheRemoveButton_thenDragging_removesOnce_andNeverReorders() throws {
+        mount([Workspace.Tab(main: "a"), Workspace.Tab(main: "b"), Workspace.Tab(main: "c")])
+        let chip = strip.chips[1]
+        chip.mouseEntered(with: try mouse(.mouseMoved, at: chip))
+        let target = windowPoint(chip.closeButtonForTesting)
+
+        try pressDown(at: target)
+        try pressDrag(to: CGPoint(x: target.x + 40, y: target.y))
+        try pressDrag(to: CGPoint(x: target.x + 120, y: target.y))
+        try pressUp(at: target)
+
+        XCTAssertEqual(form.tabs.map(\.main), ["a", "c"], "b is gone and nothing else moved")
+        XCTAssertEqual(strip.chips.map(\.title), ["a", "c"])
+    }
+
+    func test_doubleClickingTheRemoveButton_downToOneTab_removesOne_andRenamesNothing() throws {
+        mount([Workspace.Tab(main: "a"), Workspace.Tab(main: "b")])
+        let chip = strip.chips[0]
+        chip.mouseEntered(with: try mouse(.mouseMoved, at: chip))
+        let target = windowPoint(chip.closeButtonForTesting)
+
+        try pressDown(at: target)
+        try pressUp(at: target)
+        let survivor = try XCTUnwrap(hitTest(at: target))
+        survivor.mouseDown(
+            with: try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .leftMouseDown, location: target, modifierFlags: [], timestamp: 0,
+                    windowNumber: window!.windowNumber, context: nil, eventNumber: 0, clickCount: 2, pressure: 1)))
+
+        XCTAssertEqual(form.tabs.map(\.main), ["b"])
+        XCTAssertFalse(strip.chips[0].isRenaming, "the second press lands on the survivor, which never took the first")
+    }
+
+    func test_aRemovePressDraggedOffTheButton_removesNothing() throws {
+        mount([Workspace.Tab(main: "a"), Workspace.Tab(main: "b"), Workspace.Tab(main: "c")])
+        let chip = strip.chips[1]
+        chip.mouseEntered(with: try mouse(.mouseMoved, at: chip))
+        let target = windowPoint(chip.closeButtonForTesting)
+
+        try pressDown(at: target)
+        try pressDrag(to: CGPoint(x: target.x + 90, y: target.y))
+        try pressUp(at: CGPoint(x: target.x + 90, y: target.y))
+
+        XCTAssertEqual(form.tabs.map(\.main), ["a", "b", "c"])
+    }
+
+    func test_thePill_sitsOnTheSelectedChip_throughSelectReorderAndDrag() throws {
+        mount([Workspace.Tab(main: "a"), Workspace.Tab(main: "bb"), Workspace.Tab(main: "ccc")])
+        XCTAssertEqual(strip.pillColorForTesting, Theme.current.chrome.fill(.active))
+        XCTAssertEqual(strip.pillFrameForTesting, strip.chips[0].frame)
+
+        form.select(2)
+        rerender()
+        XCTAssertEqual(strip.pillFrameForTesting, strip.chips[2].frame, "after select")
+
+        form.moveTab(at: 2, to: 0)
+        rerender()
+        XCTAssertEqual(form.selected, 0)
+        XCTAssertEqual(strip.pillFrameForTesting, strip.chips[0].frame, "after a reorder")
+
+        let chip = strip.chips[0]
+        chip.mouseDown(with: try mouse(.leftMouseDown, at: chip))
+        chip.mouseDragged(with: try mouse(.leftMouseDragged, at: chip, dx: 30))
+        chip.mouseDragged(with: try mouse(.leftMouseDragged, at: chip, dx: 60))
+        window?.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertEqual(strip.pillFrameForTesting, chip.frame, "the pill follows the dragged chip")
+        chip.mouseUp(with: try mouse(.leftMouseUp, at: chip))
+    }
+
+    func test_renaming_hidesTheRemoveButton_andFloorsTheChipAtTheMinimumWidth() throws {
+        mount([Workspace.Tab(main: "nvim"), Workspace.Tab(name: "gate")])
+        let chip = strip.chips[1]
+
+        chip.beginRename()
+        chip.mouseEntered(with: try mouse(.mouseMoved, at: chip))
+        chip.renameFieldForTesting.stringValue = "a"
+
+        XCTAssertTrue(chip.isHoveredForTesting)
+
+        XCTAssertFalse(chip.isCloseVisibleForTesting, "no x while the field is open")
+        XCTAssertEqual(chip.fittingWidth, TabChip.minWidth, "a short name still gets the floor")
+
+        chip.renameFieldForTesting.stringValue = String(repeating: "m", count: 12)
+        let measured = ceil(
+            (String(repeating: "m", count: 12) as NSString).size(withAttributes: [.font: TabChip.chipFont]).width)
+        XCTAssertEqual(
+            chip.fittingWidth, 2 * TabChip.labelInset + measured + ChromeMetrics.Spacing.s12, accuracy: 0.01,
+            "the typed text plus the pad")
     }
 
     func test_rightArrowOnAFocusedChip_selectsAndFocusesTheNextOne() throws {
@@ -223,6 +397,8 @@ final class WorkspaceTabStripTests: WindowTestCase {
         mount([Workspace.Tab(main: "nvim"), Workspace.Tab(main: "bin/check")])
         let chip = strip.chips[1]
 
+        chip.mouseDown(with: try mouse(.leftMouseDown, at: chip))
+        chip.mouseUp(with: try mouse(.leftMouseUp, at: chip))
         chip.mouseDown(with: try mouse(.leftMouseDown, at: chip, clicks: 2))
 
         XCTAssertTrue(strip.isIdleHintVisibleForTesting == false && strip.isRenameHintVisibleForTesting)

@@ -594,11 +594,11 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         try openAlphaWorktree(branch: "feature/one", in: c)
         c.handle(.toggleSidebar)
 
-        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Alpha / feature/one")
+        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Alpha / feature/one:")
 
         try press("1", typing: "1", keyCode: 18, in: c)
 
-        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Workspace 1")
+        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Workspace 1:")
     }
 
     func test_collapsedLead_cutsALongWorktreeAtAWholeCharacter_soTheDividerKeepsItsGap() throws {
@@ -610,8 +610,8 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         let lead = c.sidebarForTesting.lead
         let name = lead.workspaceNameLabelForTesting
         XCTAssertTrue(lead.workspaceNameForTesting.hasPrefix("Alpha / feature/zen-532"))
-        XCTAssertTrue(lead.workspaceNameForTesting.hasSuffix("…"))
-        XCTAssertLessThanOrEqual(name.alignmentRect(forFrame: name.frame).width, TabBarView.maxChipWidth)
+        XCTAssertTrue(lead.workspaceNameForTesting.hasSuffix("…:"))
+        XCTAssertLessThanOrEqual(name.alignmentRect(forFrame: name.frame).width, TabChip.maxChipWidth)
         XCTAssertEqual(
             name.alignmentRect(forFrame: name.frame).width, name.intrinsicContentSize.width, accuracy: 0.5,
             "the label draws all it holds, so no truncation slack sits before the divider")

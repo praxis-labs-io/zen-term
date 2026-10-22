@@ -27,11 +27,10 @@
 # theme = rose-pine-zen
 
 # The chrome's accent: the color for focus, active state, and confirm. It paints
-# the focused pane's border, focus rings, the active tab's underline, a
-# tool's activity dot while nothing there needs you, primary buttons, and the
-# progress bar. A dot takes the theme's attention color when an agent there is
+# the focused pane's border, focus rings, a tool's activity dot while nothing
+# there needs you, primary buttons, and the progress bar. A dot takes the theme's attention color when an agent there is
 # waiting on you, and its positive color when a long command there finished
-# unseen, the same colors a tab's number takes. Pick any slot of the
+# unseen, the same colors a tab's dot takes. Pick any slot of the
 # theme's palette and the whole chrome follows; the terminal is untouched, so a
 # program printing in that color is unaffected.
 #

@@ -271,6 +271,39 @@ enum Motion {
         }
     }
 
+    // The keyframes drive position.x as the leading edge, so the layer's anchorPoint must be (0, 0.5).
+    static func stretch(_ layer: CALayer, to target: CGRect, animated: Bool) {
+        let start = layer.presentation()?.frame ?? layer.frame
+        layer.removeAnimation(forKey: "stretch.left")
+        layer.removeAnimation(forKey: "stretch.width")
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.frame = target
+        CATransaction.commit()
+        guard animated, !isReduceMotionEnabled() else { return }
+
+        let movingRight = target.midX >= start.midX
+        let leftValues: [CGFloat] =
+            movingRight
+            ? [start.minX, start.minX, target.minX] : [start.minX, target.minX, target.minX]
+        let widthValues: [CGFloat] =
+            movingRight
+            ? [start.width, target.maxX - start.minX, target.width]
+            : [start.width, start.maxX - target.minX, target.width]
+
+        let left = CAKeyframeAnimation(keyPath: "position.x")
+        left.values = leftValues.map { $0 as NSNumber }
+        let width = CAKeyframeAnimation(keyPath: "bounds.size.width")
+        width.values = widthValues.map { $0 as NSNumber }
+        for anim in [left, width] {
+            anim.keyTimes = [0, 0.5, 1]
+            anim.duration = pageSlideDuration
+            anim.timingFunctions = [CAMediaTimingFunction(name: .easeOut), landingTiming]
+        }
+        layer.add(left, forKey: "stretch.left")
+        layer.add(width, forKey: "stretch.width")
+    }
+
     /// Independent of `anchorPoint`, which AppKit may put at the center or a corner.
     static func centeredScale(_ scale: CGFloat, in bounds: CGRect) -> CATransform3D {
         let cx = bounds.midX

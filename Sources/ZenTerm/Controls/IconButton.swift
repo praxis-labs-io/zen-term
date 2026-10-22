@@ -11,6 +11,9 @@ final class IconButton: NSView {
     private var trackingArea: NSTrackingArea?
     private var isHovered = false { didSet { update() } }
 
+    var firesOnRelease = false
+    private var isPressed = false
+
     var isActive = false { didSet { update() } }
 
     var showsActivity = false { didSet { activityDot.isHidden = !showsActivity } }
@@ -82,6 +85,7 @@ final class IconButton: NSView {
             owner: self)
         addTrackingArea(area)
         trackingArea = area
+        if isHovered, window?.isKeyWindow == true, !pointerIsInside { clearHover() }
     }
 
     override func mouseEntered(with event: NSEvent) {
@@ -94,7 +98,13 @@ final class IconButton: NSView {
     }
     override func mouseDown(with event: NSEvent) {
         tooltip.hide(from: self)
-        onClick()
+        guard firesOnRelease else { return onClick() }
+        isPressed = event.clickCount == 1
+    }
+    override func mouseUp(with event: NSEvent) {
+        guard firesOnRelease, isPressed else { return super.mouseUp(with: event) }
+        isPressed = false
+        if bounds.contains(convert(event.locationInWindow, from: nil)) { onClick() }
     }
     override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
     override func accessibilityPerformPress() -> Bool { onClick(); return true }
@@ -104,6 +114,19 @@ final class IconButton: NSView {
         if window == nil { tooltip.hide(from: self) }
     }
 
+    override func viewDidHide() {
+        super.viewDidHide()
+        clearHover()
+    }
+
+    // A button that moves or hides under a still pointer never gets `mouseExited`.
+    private func clearHover() {
+        isHovered = false
+        isPressed = false
+        tooltip.hide(from: self)
+    }
+
+    var isHoveredForTesting: Bool { isHovered }
     var iconTintForTesting: NSColor? { icon.contentTintColor }
 
     var tooltipLabelForTesting: String { tooltip.label }
