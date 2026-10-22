@@ -151,6 +151,8 @@ final class TabBarView: NSView {
 
     var pillFrameForTesting: CGRect { pill.frame }
 
+    var isPillSlidingForTesting: Bool { pill.animation(forKey: "stretch.left") != nil }
+
     var isOverflowFadedForTesting: Bool { scrollView.fadedEdgesForTesting.end }
 
     var isLeadingFadedForTesting: Bool { scrollView.fadedEdgesForTesting.start }

@@ -273,6 +273,7 @@ enum Motion {
 
     // The keyframes drive position.x as the leading edge, so the layer's anchorPoint must be (0, 0.5).
     static func stretch(_ layer: CALayer, to target: CGRect, animated: Bool) {
+        guard animated || layer.frame != target else { return }
         let start = layer.presentation()?.frame ?? layer.frame
         layer.removeAnimation(forKey: "stretch.left")
         layer.removeAnimation(forKey: "stretch.width")

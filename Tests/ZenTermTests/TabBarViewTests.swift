@@ -628,6 +628,21 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertEqual(bar.pillFrameForTesting, bar.chipsForTesting[0].frame, "after the current tab moves")
     }
 
+    func test_thePillsSlide_survivesARerenderThatKeepsTheSelection() {
+        let saved = Motion.isReduceMotionEnabled
+        Motion.isReduceMotionEnabled = { false }
+        defer { Motion.isReduceMotionEnabled = saved }
+        let (bar, _) = settledBar([item(1, "one", index: 1, active: true), item(2, "two", index: 2)])
+        let switched = [item(1, "one", index: 1), item(2, "two", index: 2, active: true)]
+
+        bar.render(switched)
+        XCTAssertTrue(bar.isPillSlidingForTesting, "a selection change slides the pill")
+
+        bar.render(switched)
+        bar.layoutSubtreeIfNeeded()
+        XCTAssertTrue(bar.isPillSlidingForTesting, "a rerender that leaves the pill in place keeps the slide")
+    }
+
     func test_aMiddleClick_closesTheTab_includingOverItsCloseButton() throws {
         var closed: [TabID] = []
         let (bar, window) = settledBar(
