@@ -2,7 +2,7 @@
 
 AppKit and Swift traps past what a linter or the type checker catches. Read this before touching
 window sizing, event routing, layers, config live-apply, or interaction tests. The testing rules
-themselves live in `CLAUDE.md`; colors live in its Colors section. Add a trap when one bites: the
+themselves live in `CLAUDE.md`; colors and tokens live in `docs/design-system.md`. Add a trap when one bites: the
 rule and the symptom.
 
 ## Windows and modals
