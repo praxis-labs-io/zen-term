@@ -90,7 +90,7 @@ final class WorkspaceTabChip: TabChip, NSTextFieldDelegate {
             string: defaultName, attributes: [.font: Self.chipFont, .foregroundColor: chrome.ink(.muted)])
         let ringed = hasFocus || isRenaming
         layer?.borderWidth = ChromeMetrics.Border.width
-        layer?.borderColor = ringed ? chrome.accent.nsColor.cgColor : NSColor.clear.cgColor
+        layer?.borderColor = ringed ? chrome.focusRing.cgColor : NSColor.clear.cgColor
     }
 
     override var acceptsFirstResponder: Bool { true }

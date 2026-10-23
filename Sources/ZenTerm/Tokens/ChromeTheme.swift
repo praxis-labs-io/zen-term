@@ -40,6 +40,8 @@ struct ChromeTheme: Equatable {
         foreground.nsColor.withAlphaComponent(min(1, level.alpha * Self.inkBoost))
     }
 
+    var focusRing: NSColor { ink(.subtle) }
+
     enum FillLevel: CaseIterable {
         case rest
         case hover

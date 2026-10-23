@@ -104,7 +104,7 @@ final class SegmentedControl: NSView {
         return true
     }
 
-    override func drawFocusRingMask() {}  // the selected segment's accent outline marks focus
+    override func drawFocusRingMask() {}  // the selected segment's outline marks focus
 
     override func keyDown(with event: NSEvent) {
         guard isEnabled else { return super.keyDown(with: event) }

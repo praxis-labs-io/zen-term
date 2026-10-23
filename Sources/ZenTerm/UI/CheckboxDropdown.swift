@@ -418,12 +418,12 @@ final class CheckboxDropdown: NSView {
             icon.image = item.symbol.flatMap {
                 NSImage(systemSymbolName: $0, accessibilityDescription: nil)
             }
-            icon.contentTintColor = item.isChecked ? chrome.accent.nsColor : chrome.ink(.subtle)
+            icon.contentTintColor = item.isChecked ? chrome.ink(.normal) : chrome.ink(.subtle)
             icon.isHidden = item.symbol == nil
             iconWidth.constant = icon.isHidden ? 0 : 14
             titleGap.constant = icon.isHidden ? 0 : ChromeMetrics.Spacing.s6
             check.isHidden = !item.isChecked
-            check.contentTintColor = chrome.accent.nsColor
+            check.contentTintColor = chrome.ink(.normal)
             layer?.backgroundColor = (isHighlighted ? chrome.fill(.hover) : NSColor.clear).cgColor
         }
 

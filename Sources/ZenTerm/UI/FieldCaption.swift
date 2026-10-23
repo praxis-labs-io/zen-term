@@ -32,7 +32,7 @@ final class FieldCaption: NSTextField, ThemeReapplying {
                     string: " ✳",
                     attributes: [
                         .font: ChromeType.font(.caption, weight: .medium),
-                        .foregroundColor: Theme.current.chrome.accent.nsColor,
+                        .foregroundColor: Theme.current.chrome.ink(.muted),
                     ]))
         }
         attributedStringValue = string

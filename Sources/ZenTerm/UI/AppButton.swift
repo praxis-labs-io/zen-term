@@ -177,10 +177,10 @@ final class AppButton: NSButton {
         let chrome = Theme.current.chrome
         let (textColor, background) = isEnabled ? enabledColors(chrome) : disabledColors(chrome)
         layer?.backgroundColor = background.cgColor
-        let outlined = isEnabled && (isFocusedStop || showsFocusOutline) && variant != .link
+        let outlined = isEnabled && (isFocusedStop || showsFocusOutline)
         let insetOutlined = outlined && variant == .primary
         layer?.borderWidth = ChromeMetrics.Border.width
-        layer?.borderColor = (outlined && !insetOutlined ? chrome.accent.nsColor : .clear).cgColor
+        layer?.borderColor = (outlined && !insetOutlined ? chrome.focusRing : .clear).cgColor
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         insetRing.borderColor = (insetOutlined ? chrome.onAccent.nsColor : .clear).cgColor
@@ -189,11 +189,10 @@ final class AppButton: NSButton {
             contentTintColor = textColor
         } else {
             let isLink = variant == .link
-            var attributes: [NSAttributedString.Key: Any] = [
+            let attributes: [NSAttributedString.Key: Any] = [
                 .foregroundColor: textColor,
                 .font: isLink ? ChromeType.font(.body) : ChromeType.font(.small, weight: .semibold),
             ]
-            if isLink, isEnabled, isFocusedStop { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
             attributedTitle = NSAttributedString(string: labelText, attributes: attributes)
         }
     }
@@ -214,8 +213,7 @@ final class AppButton: NSButton {
                 isOn ? chrome.fill(.active) : chrome.fill(isHovered ? .hover : .rest)
             )
         case .link:
-            let text = isFocusedStop ? chrome.accent.nsColor : chrome.ink(isHovered ? .normal : .subtle)
-            return (text, .clear)
+            return (chrome.ink(isHovered ? .normal : .subtle), .clear)
         }
     }
 

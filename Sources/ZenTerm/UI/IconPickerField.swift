@@ -125,7 +125,7 @@ final class IconPickerField: NSView {
         let chrome = Theme.current.chrome
         let active = isFocusedStop || popover != nil
         layer?.backgroundColor = Self.restFill.cgColor
-        layer?.borderColor = (active ? chrome.accent.nsColor : chrome.fill(alpha: ChromeTheme.border)).cgColor
+        layer?.borderColor = (active ? chrome.focusRing : chrome.fill(alpha: ChromeTheme.border)).cgColor
         layer?.borderWidth = ChromeMetrics.Border.width
     }
 
@@ -313,12 +313,9 @@ final class IconPickerField: NSView {
     }
 
     private func refreshHighlight() {
-        let accent = Theme.current.chrome.accent.nsColor.cgColor
         for (index, cell) in cells.enumerated() {
             cell.isActive = index == highlighted
             cell.layer?.cornerRadius = ChromeMetrics.Radius.control
-            cell.layer?.borderWidth = ChromeMetrics.Border.width
-            cell.layer?.borderColor = index == highlighted ? accent : NSColor.clear.cgColor
         }
     }
 

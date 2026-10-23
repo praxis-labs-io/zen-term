@@ -50,7 +50,7 @@ enum GitStatusCategory: CaseIterable {
         case .untracked: return \.attention
         case .renamed: return \.info
         case .deleted: return \.destructive
-        case .conflicted: return \.accent
+        case .conflicted: return \.attention
         }
     }
 }

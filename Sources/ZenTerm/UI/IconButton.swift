@@ -152,7 +152,7 @@ final class IconButton: NSView {
         let bg: NSColor
         let tint: NSColor
         if isActive {
-            bg = chrome.fill(.active); tint = chrome.accent.nsColor
+            bg = chrome.fill(.active); tint = chrome.ink(.normal)
         } else if isHovered {
             bg = chrome.fill(.hover); tint = chrome.ink(.normal)
         } else {

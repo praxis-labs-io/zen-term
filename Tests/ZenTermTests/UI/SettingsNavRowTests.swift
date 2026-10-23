@@ -10,7 +10,7 @@ final class SettingsNavRowTests: WindowTestCase {
         window.makeFirstResponder(row)
         XCTAssertEqual(row.layer?.backgroundColor, NSColor.clear.cgColor)
         XCTAssertEqual(row.layer?.borderWidth, ChromeMetrics.Border.width)
-        XCTAssertEqual(row.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor)
+        XCTAssertEqual(row.layer?.borderColor, Theme.current.chrome.focusRing.cgColor)
 
         window.makeFirstResponder(nil)
         XCTAssertEqual(row.layer?.backgroundColor, NSColor.clear.cgColor)
@@ -27,7 +27,7 @@ final class SettingsNavRowTests: WindowTestCase {
 
         window.makeFirstResponder(row)
         XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.active).cgColor)
-        XCTAssertEqual(row.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor)
+        XCTAssertEqual(row.layer?.borderColor, Theme.current.chrome.focusRing.cgColor)
     }
 
     func test_hover_showsHoverFill_andClearsOnExit() {
@@ -65,7 +65,7 @@ final class SettingsNavRowTests: WindowTestCase {
 
         window.makeFirstResponder(row)
         XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor)
-        XCTAssertEqual(row.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor)
+        XCTAssertEqual(row.layer?.borderColor, Theme.current.chrome.focusRing.cgColor)
 
         window.makeFirstResponder(nil)
         XCTAssertEqual(row.layer?.borderColor?.alpha, 0)
@@ -115,7 +115,7 @@ final class SettingsNavRowTests: WindowTestCase {
 
         XCTAssertTrue(window.firstResponder === row)
         XCTAssertEqual(row.layer?.backgroundColor, NSColor.clear.cgColor)
-        XCTAssertEqual(row.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor)
+        XCTAssertEqual(row.layer?.borderColor, Theme.current.chrome.focusRing.cgColor)
     }
 
     private final class FocusHolder: NSView {

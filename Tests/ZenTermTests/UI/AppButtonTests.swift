@@ -29,7 +29,7 @@ final class AppButtonTests: WindowTestCase {
             XCTAssertTrue(window.makeFirstResponder(button), "\(variant) refused focus")
 
             XCTAssertEqual(titleColor(button), chrome.ink(.subtle), "\(variant) shows focus with the ring alone")
-            XCTAssertEqual(button.layer?.borderColor, chrome.accent.nsColor.cgColor, "\(variant) lost its ring")
+            XCTAssertEqual(button.layer?.borderColor, chrome.focusRing.cgColor, "\(variant) lost its ring")
         }
     }
 
@@ -108,7 +108,7 @@ final class AppButtonTests: WindowTestCase {
         withExtendedLifetime(window) {}
     }
 
-    func test_noAppButtonLabelDrawsInAccent_exceptAFocusedLink() throws {
+    func test_noAppButtonLabelDrawsInAccent() throws {
         let accent = Theme.current.chrome.accent.nsColor
         for variant in GalleryButtons.variants {
             for segmentOn in variant == .segment ? [false, true] : [false] {
@@ -125,11 +125,7 @@ final class AppButtonTests: WindowTestCase {
                     default: break
                     }
                     let name = "\(variant)\(segmentOn ? " on" : "") \(state)"
-                    if variant == .link, state == "focused" {
-                        XCTAssertEqual(titleColor(button), accent, "\(name) lost its accent")
-                    } else {
-                        XCTAssertNotEqual(titleColor(button), accent, "\(name) labels in accent")
-                    }
+                    XCTAssertNotEqual(titleColor(button), accent, "\(name) labels in accent")
                     XCTAssertNotEqual(button.keycapForTesting?.inkForTesting, accent, "\(name) draws an accent glyph")
                 }
             }
@@ -146,14 +142,28 @@ final class AppButtonTests: WindowTestCase {
             "the warning tone is the message; focus must not take it")
     }
 
-    func test_focus_stillDrawsTheAccentRing() {
+    func test_focus_drawsTheFocusRing() {
         let (button, window) = mount(.muted)
         XCTAssertEqual(button.layer?.borderColor?.alpha, 0)
 
         XCTAssertTrue(window.makeFirstResponder(button))
 
         XCTAssertEqual(button.layer?.borderWidth, ChromeMetrics.Border.width)
-        XCTAssertEqual(button.layer?.borderColor, Theme.current.chrome.accent.nsColor.cgColor)
+        XCTAssertEqual(button.layer?.borderColor, Theme.current.chrome.focusRing.cgColor)
+    }
+
+    func test_focus_ringsAFocusedLinkWithoutUnderlining() {
+        let chrome = Theme.current.chrome
+        let (button, window) = mount(.link)
+        XCTAssertEqual(button.layer?.borderColor?.alpha, 0)
+
+        XCTAssertTrue(window.makeFirstResponder(button))
+
+        XCTAssertEqual(button.layer?.borderWidth, ChromeMetrics.Border.width)
+        XCTAssertEqual(button.layer?.borderColor, chrome.focusRing.cgColor)
+        XCTAssertEqual(titleColor(button), chrome.ink(.subtle))
+        let underline = button.attributedTitle.attribute(.underlineStyle, at: 0, effectiveRange: nil)
+        XCTAssertNil(underline, "focus on a link is the ring alone")
     }
 
     func test_aSymbolOnlyButton_isSquare() throws {

@@ -87,7 +87,7 @@ final class ResetFlashLabel: NSTextField {
         isBordered = false
         drawsBackground = false
         font = ChromeType.font(.caption, weight: .medium)
-        textColor = Theme.current.chrome.accent.nsColor
+        textColor = Theme.current.chrome.positive.nsColor
         isHidden = true
     }
 
@@ -103,6 +103,6 @@ final class ResetFlashLabel: NSTextField {
     }
 
     func reapplyTheme() {
-        textColor = Theme.current.chrome.accent.nsColor
+        textColor = Theme.current.chrome.positive.nsColor
     }
 }
