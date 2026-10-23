@@ -9,6 +9,8 @@ final class ReferenceConfigTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
             .appendingPathComponent("docs/config", isDirectory: true)
     }
 

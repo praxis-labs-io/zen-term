@@ -164,7 +164,7 @@ Read the default from source, then check Drew's config for an override, because 
 user keybind **moves** the action and unbinds the default:
 
 ```bash
-grep -n 'map\[Chord' Sources/ZenTerm/Keybinds.swift        # defaults
+grep -n 'map\[Chord' Sources/ZenTerm/Core/Keyboard/Keybinds.swift        # defaults
 grep -n 'keybind' ~/.config/zen-term/config                # overrides
 ```
 

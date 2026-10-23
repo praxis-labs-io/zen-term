@@ -26,35 +26,35 @@ custom_rules:
   untokened_font:
     name: "Untokened font"
     included: "Sources/ZenTerm/.*\\.swift"
-    excluded: "Sources/ZenTerm/ChromeType\\.swift"
+    excluded: "Sources/ZenTerm/Tokens/ChromeType\\.swift"
     regex: "(s|S)ystemFont\\(ofSize:"
     message: "Take fonts from ChromeType roles."
     severity: warning
   untokened_icon_size:
     name: "Untokened icon size"
     included: "Sources/ZenTerm/.*\\.swift"
-    excluded: "Sources/ZenTerm/ChromeMetrics\\.swift"
+    excluded: "Sources/ZenTerm/Tokens/ChromeMetrics\\.swift"
     regex: "(p|P)ointSize: (CGFloat = )?[0-9]|GlyphSize: CGFloat = [0-9]"
     message: "Take symbol point sizes from ChromeMetrics.Icon."
     severity: warning
   untokened_radius:
     name: "Untokened radius"
     included: "Sources/ZenTerm/.*\\.swift"
-    excluded: "Sources/ZenTerm/(ChromeMetrics|GeneralConfig)\\.swift"
+    excluded: "Sources/ZenTerm/(Tokens/ChromeMetrics|Core/Config/GeneralConfig)\\.swift"
     regex: "\\b(?:cornerRadius|xRadius|yRadius|borderWidth|lineWidth)\\s*[:=]\\s*-?(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]+)(?![\\w.])|\\b\\w*(?:[Rr]adius|[Ss]troke|[Bb]orderWidth|[Ll]ineWidth)\\s*:\\s*CGFloat\\s*=\\s*-?(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]+)(?![\\w.])|\\b(?:width|height)Anchor\\.constraint\\(equalToConstant:\\s*1\\)"
     message: "Take corner radii and border widths from ChromeMetrics.Radius and ChromeMetrics.Border."
     severity: warning
   untokened_spacing:
     name: "Untokened spacing"
     included: "Sources/ZenTerm/.*\\.swift"
-    excluded: "Sources/ZenTerm/(ChromeMetrics|GeneralConfig)\\.swift"
+    excluded: "Sources/ZenTerm/(Tokens/ChromeMetrics|Core/Config/GeneralConfig)\\.swift"
     regex: "(?:\\.spacing\\s*=\\s*|\\bspacing:\\s*|setCustomSpacing\\(\\s*|\\bconstant:\\s*|insetBy\\(dx:\\s*|insetBy\\(dx:[^,)]*,\\s*dy:\\s*|NSEdgeInsets\\([^)]*?\\b(?:top|left|bottom|right):\\s*|heightAnchor\\.constraint\\((?:\\w+:\\s*)?equalToConstant:\\s*(?!1\\))|\\b(?!max|min)[a-z]\\w*(?:Height|Spacing|Gap|Inset|Padding):\\s*)-?(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]+)(?![\\w.])"
     message: "Take spacing, insets and heights from ChromeMetrics.Spacing and ChromeMetrics.Height."
     severity: warning
   untokened_spacing_constant:
     name: "Untokened spacing constant"
     included: "Sources/ZenTerm/.*\\.swift"
-    excluded: "Sources/ZenTerm/(ChromeMetrics|GeneralConfig)\\.swift"
+    excluded: "Sources/ZenTerm/(Tokens/ChromeMetrics|Core/Config/GeneralConfig)\\.swift"
     regex: "\\b(?:let|var)\\s+(?!max|min)(?:\\w*(?:[Ii]nset|[Gg]ap|[Ss]pacing|[Pp]adding|[Mm]argin|[Hh]eight|[Ii]ndent)|top|bottom|leading|trailing|[a-z]\\w*To[A-Z]\\w*)\\s*:\\s*CGFloat\\s*=\\s*-?(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]+)(?![\\w.])|\\b(?!max|min)[a-z]\\w*(?:Height|Spacing|Gap|Inset|Padding)\\s*:\\s*CGFloat\\s*=\\s*-?(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]+)(?![\\w.])"
     message: "Take spacing, insets and heights from ChromeMetrics.Spacing and ChromeMetrics.Height."
     severity: warning

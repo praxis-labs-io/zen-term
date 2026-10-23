@@ -41,6 +41,7 @@ final class AcknowledgementsTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+            .deletingLastPathComponent()
         let notices = repoRoot.appendingPathComponent("Sources/ZenTerm/Resources/THIRD-PARTY-NOTICES.md")
         let markdown = try String(contentsOf: notices, encoding: .utf8)
         let outLines = Set(Acknowledgements.plainText(fromMarkdown: markdown).components(separatedBy: "\n"))
@@ -78,6 +79,7 @@ final class AcknowledgementsTests: XCTestCase {
     }
 
     private static let repoRoot = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
         .deletingLastPathComponent()
