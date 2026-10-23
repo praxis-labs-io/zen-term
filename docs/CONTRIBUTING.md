@@ -64,7 +64,7 @@ Sources/
 
 ## Boundaries
 
-Four rules the codebase will not bend on. Each has a failure behind it.
+Three rules the codebase will not bend on. Each has a failure behind it.
 
 **The seam.** `TerminalKit` is the only target allowed to `import GhosttyKit`.
 `ZenTerm` has no backend dependency, and `Package.swift` enforces it by not
@@ -72,39 +72,11 @@ giving the app target a backend to import. Anything only one terminal backend ca
 do stays below the seam. The protocol grows to hold what the chrome needs from
 *any* terminal, not what libghostty happens to offer.
 
-**No hardcoded colors in the chrome.** Everything resolves from `Theme.current`:
-`chrome.background`, `chrome.foreground`, `chrome.accent`, and the rest. Text and
-icons take `chrome.ink(.faint / .muted / .subtle / .normal)`, never a raw alpha; a control's
-interactive fills take a tier, `chrome.fill(.rest / .hover / .active)`, and a divider or border
-takes `chrome.fill(alpha:)` with a named constant. `NSColor(white:)`, `.white`, raw hex, and AppKit's semantic colors
-(`.secondaryLabelColor`, a field editor's default insertion point and selection) all follow
-`effectiveAppearance` rather than the theme, so they wash out on a light theme and
-ignore a bring-your-own one. If a role is missing, add it to `ChromeTheme` and
-derive it in `ChromeThemeDeriver`.
-
-**Chrome tokens.** Sizes, weights and type in the chrome come from named tokens,
-never a literal.
-
-- Fonts come from `ChromeType` roles; a section heading takes
-  `ChromeType.sectionLabel` in sentence case. `swiftlint` rejects
-  `systemFont(ofSize:)` outside `ChromeType`.
-- Corner radii come from `ChromeMetrics.Radius` and border widths from
-  `ChromeMetrics.Border`. Focus changes a control's border color, never its width. A
-  focused pane or tool float also steps up to `Border.paneFocus`.
-- Spacing, insets, gaps and control or row heights come from
-  `ChromeMetrics.Spacing` and `ChromeMetrics.Height`, one token per size and no
-  arithmetic to build one. Icon, glyph and width geometry are not spacing. A value off
-  the scale is a signal to fix the layout, not to add a step.
-- `swiftlint` rejects a literal radius, border width, spacing, inset or height outside
-  `ChromeMetrics`. A drawing proportion that is not chrome takes
-  `// swiftlint:disable:next <rule>`.
-- Symbol point sizes come from `ChromeMetrics.Icon` (`xs`, `sm`, `md`, `xl`);
-  `swiftlint` rejects a literal point size outside `ChromeMetrics`.
-- Shadows come from `FloatShadow.apply(_:to:)` with a tier: `overlay` for anything
-  anchored, `float` for toasts, cards and the floating sidebar, `modal` for modals.
-  Never build an `NSShadow` by hand.
-- Animation durations, on-screen lingers and hover intent come from `Motion`.
-  Debounces, polls and timeouts stay with their owner.
+**The design system.** The chrome never hardcodes a color: everything resolves from
+`Theme.current`, or it ignores a bring-your-own theme and washes out on a light one.
+Fonts, sizes, radii, shadows and durations come from named tokens, never a literal, and
+`swiftlint` rejects most literals. `docs/design-system.md` has the roles, the tokens and
+the rules for using them.
 
 **Never block the main thread.** No `waitUntilExit`, no filesystem walk, no
 blocking I/O on the main queue. The chrome is the product and a stalled main
