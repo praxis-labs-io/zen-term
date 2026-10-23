@@ -486,7 +486,7 @@ private final class DropdownRowView: NSView {
             let check = NSImageView()
             check.image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)
             check.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.sm, weight: .semibold)
-            check.contentTintColor = chrome.accent.nsColor
+            check.contentTintColor = chrome.ink(.normal)
             trailing.append(check)
         }
         if trailing.isEmpty {

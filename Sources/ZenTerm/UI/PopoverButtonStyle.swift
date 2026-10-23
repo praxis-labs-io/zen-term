@@ -11,7 +11,7 @@ enum PopoverButtonStyle {
         let chrome = Theme.current.chrome
         let lit = isFocused || isOpen
         view.layer?.backgroundColor = restFill.cgColor
-        view.layer?.borderColor = (lit ? chrome.accent.nsColor : chrome.fill(alpha: ChromeTheme.border)).cgColor
+        view.layer?.borderColor = (lit ? chrome.focusRing : chrome.fill(alpha: ChromeTheme.border)).cgColor
         view.layer?.borderWidth = ChromeMetrics.Border.width
     }
 }

@@ -106,7 +106,7 @@ final class RegionCommandField: NSView, NSTextFieldDelegate {
     private func refresh() {
         let chrome = Theme.current.chrome
         layer?.backgroundColor = chrome.fill(.rest).cgColor
-        layer?.borderColor = (isEditing ? chrome.accent.nsColor : chrome.fill(alpha: ChromeTheme.border)).cgColor
+        layer?.borderColor = (isEditing ? chrome.focusRing : chrome.fill(alpha: ChromeTheme.border)).cgColor
         layer?.borderWidth = ChromeMetrics.Border.width
         marker.isHidden = !opensFocused
         opensFocusedLabel.isHidden = !opensFocused

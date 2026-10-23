@@ -114,8 +114,15 @@ final class KeybindChip: NSView {
             fill = chrome.fill(.rest)
         }
         layer?.backgroundColor = fill.cgColor
-        let outlined = isFocused || isCapturing
+        let ring: NSColor
+        if isCapturing {
+            ring = chrome.accent.nsColor
+        } else if isFocused {
+            ring = chrome.focusRing
+        } else {
+            ring = .clear
+        }
         layer?.borderWidth = ChromeMetrics.Border.width
-        layer?.borderColor = outlined ? chrome.accent.nsColor.cgColor : NSColor.clear.cgColor
+        layer?.borderColor = ring.cgColor
     }
 }

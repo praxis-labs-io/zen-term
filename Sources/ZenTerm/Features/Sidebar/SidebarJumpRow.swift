@@ -37,7 +37,7 @@ class SidebarJumpRow: NSView, HoverSuppressing {
     private func refreshFill() {
         let chrome = Theme.current.chrome
         layer?.borderWidth = ChromeMetrics.Border.width
-        layer?.borderColor = isFocusedStop ? chrome.accent.nsColor.cgColor : NSColor.clear.cgColor
+        layer?.borderColor = isFocusedStop ? chrome.focusRing.cgColor : NSColor.clear.cgColor
         if isHovered, !isHoverSuppressed {
             layer?.backgroundColor = chrome.fill(.hover).cgColor
         } else {

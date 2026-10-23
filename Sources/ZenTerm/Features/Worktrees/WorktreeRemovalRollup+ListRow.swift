@@ -7,14 +7,14 @@ extension WorktreeRemovalRollup.Row {
             let slash = file.path.lastIndex(of: "/").map { file.path.index(after: $0) } ?? file.path.startIndex
             let folder = String(file.path[..<slash])
             let name = String(file.path[slash...])
-            let glyphs = file.categories.map { ConfirmCardList.Run(text: $0.glyph, tone: .role($0.role)) }
+            let glyphs = file.categories.map { ConfirmCardList.Run(text: $0.glyph, tone: $0.tone) }
             return .entry(
                 path: [.init(text: folder, tone: .ink(.muted)), .init(text: name, tone: .ink(.subtle))],
                 status: [glyphs])
         case .folder(let path, let files):
             let counts = GitStatusCategory.tokens { category in
                 files.filter { $0.categories.contains(category) }.count
-            }.map { [ConfirmCardList.Run(text: $0.text, tone: .role($0.category.role))] }
+            }.map { [ConfirmCardList.Run(text: $0.text, tone: $0.category.tone)] }
             return .entry(path: [.init(text: "\(path)/", tone: .ink(.subtle))], status: counts)
         case .more(let hiddenFiles):
             return .note("and \(hiddenFiles) more")

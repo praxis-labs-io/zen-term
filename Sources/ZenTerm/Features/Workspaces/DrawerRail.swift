@@ -54,7 +54,7 @@ final class DrawerRail: NSView {
 
     private func restyle() {
         let chrome = Theme.current.chrome
-        border.strokeColor = (hasFocus ? chrome.accent.nsColor : chrome.ink(.faint)).cgColor
+        border.strokeColor = (hasFocus ? chrome.focusRing : chrome.ink(.faint)).cgColor
         border.lineWidth = ChromeMetrics.Border.width
         layer?.backgroundColor = (isHovered ? chrome.fill(.hover) : .clear).cgColor
         glyph.contentTintColor = chrome.ink(isHovered || hasFocus ? .normal : .muted)

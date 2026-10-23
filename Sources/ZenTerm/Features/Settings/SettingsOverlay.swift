@@ -99,7 +99,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
         CardChrome.reapplyTheme(to: card)
         heading.textColor = Theme.current.chrome.ink(.muted)
         divider.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor
-        brandMark.contentTintColor = Theme.current.chrome.accent.nsColor
+        brandMark.contentTintColor = Theme.current.chrome.ink(.muted)
         versionLabel.textColor = Theme.current.chrome.ink(.muted)
         reportButton.reapplyTheme()
         navRows.forEach { $0.reapplyTheme() }
@@ -216,7 +216,7 @@ final class SettingsOverlay: NSView, ModalOverlay {
 
     private func makeNavFooter() -> NSView {
         brandMark.image = BrandMark.image("origami")
-        brandMark.contentTintColor = Theme.current.chrome.accent.nsColor
+        brandMark.contentTintColor = Theme.current.chrome.ink(.muted)
         brandMark.imageScaling = .scaleProportionallyUpOrDown
         brandMark.translatesAutoresizingMaskIntoConstraints = false
 

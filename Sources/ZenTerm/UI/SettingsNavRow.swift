@@ -226,7 +226,7 @@ final class SettingsNavRow: NSView, HoverSuppressing {
 
     private func refreshFill() {
         layer?.borderWidth = ChromeMetrics.Border.width
-        layer?.borderColor = isFocusedStop ? Theme.current.chrome.accent.nsColor.cgColor : NSColor.clear.cgColor
+        layer?.borderColor = isFocusedStop ? Theme.current.chrome.focusRing.cgColor : NSColor.clear.cgColor
         if showsHover {
             layer?.backgroundColor = Theme.current.chrome.fill(.hover).cgColor
         } else if isSelected {

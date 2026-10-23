@@ -665,15 +665,16 @@ final class RepoPickerOverlay: PaletteOverlay {
 
         static func churnText(_ churn: GitChurn) -> NSAttributedString {
             let chrome = Theme.current.chrome
-            func token(_ text: String, _ role: TerminalColor) -> NSAttributedString {
+            func token(_ text: String, _ tone: ConfirmCardList.Tone) -> NSAttributedString {
                 NSAttributedString(
-                    string: text, attributes: [.foregroundColor: role.nsColor, .font: StatusTokens.font])
+                    string: text,
+                    attributes: [.foregroundColor: ConfirmCardList.color(tone, chrome), .font: StatusTokens.font])
             }
             var groups: [NSAttributedString] = []
-            if churn.ahead > 0 { groups.append(token("⇡\(churn.ahead)", chrome.info)) }
-            if churn.behind > 0 { groups.append(token("⇣\(churn.behind)", chrome.destructive)) }
+            if churn.ahead > 0 { groups.append(token("⇡\(churn.ahead)", .role(\.info))) }
+            if churn.behind > 0 { groups.append(token("⇣\(churn.behind)", .role(\.destructive))) }
             groups += GitStatusCategory.tokens(counting: churn.count(of:)).map {
-                token($0.text, chrome[keyPath: $0.category.role])
+                token($0.text, $0.category.tone)
             }
             return StatusTokens.joined(groups)
         }

@@ -18,7 +18,7 @@ Everything in the chrome resolves from `Theme.current`. Chrome UI takes
 |---|---|
 | `background` | The window and every surface on it |
 | `foreground` | The base every ink and fill is derived from |
-| `accent` | Focus, the primary action, work in progress. See [Accent](#accent) |
+| `accent` | Pane focus, the primary action, work in progress. See [Accent](#accent) |
 | `onAccent` | Text and rings on an accent fill, and nowhere else. The background or the foreground, whichever contrasts more with `accent` |
 | `attention` | Something is waiting on the user |
 | `positive` | Success, completed, kept |
@@ -58,14 +58,14 @@ Three ways in, never a raw alpha:
 
 Accent is rare. It goes in these places only:
 
-- Focus and edit rings.
+- The focus border of a pane or tool float, and a shortcut being recorded.
 - The primary button's fill, labeled and ringed in `onAccent`.
 - Work in progress: the working dot, `Spinner`, the update progress bar.
 - Role-toned `tint` surfaces: icon badges, focused text selection, the find bar, the
   scroll flash.
 
-Never accent text, an accent check mark, an accent selection or state fill, or
-`accent.withAlphaComponent`.
+A control's focus or edit ring takes `chrome.focusRing`, a neutral. Never accent text, an
+accent check mark, an accent selection or state fill, or `accent.withAlphaComponent`.
 
 ### Banned
 
@@ -88,7 +88,7 @@ One ladder for every control and row:
 | Rest | Rows clear. Fields, keycaps and filled buttons `fill(.rest)`. Text `ink(.normal)`, controls `ink(.subtle)` |
 | Hover | `fill(.hover)` |
 | Keyboard cursor | `fill(.hover)`. In a transient list (palette, dropdown, menu) the cursor is the focus |
-| Focused | An accent ring at `Border.width`. Fill and ink unchanged. On the primary button the ring is `onAccent`, inset by `Border.width` |
+| Focused | A `focusRing` ring at `Border.width`. Fill and ink unchanged. On the primary button the ring is `onAccent`, inset by `Border.width` |
 | Current | Pick lists: a check mark only. Persistent nav, tabs and segments: `fill(.active)` |
 | Pressed | Looks like hover |
 | Disabled | `ink(.faint)` on every variant. Controls keep `fill(.rest)`; no hover, no ring |

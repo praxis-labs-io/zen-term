@@ -88,7 +88,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     private func setFocused(_ focused: Bool) {
         let chrome = Theme.current.chrome
         layer?.backgroundColor = Self.restFill.cgColor
-        layer?.borderColor = (focused ? chrome.accent.nsColor : chrome.fill(alpha: ChromeTheme.border)).cgColor
+        layer?.borderColor = (focused ? chrome.focusRing : chrome.fill(alpha: ChromeTheme.border)).cgColor
         layer?.borderWidth = ChromeMetrics.Border.width
     }
 
