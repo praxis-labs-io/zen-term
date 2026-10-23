@@ -27,9 +27,9 @@
 # theme = rose-pine-zen
 
 # The chrome's accent: the color for the focused pane, work in progress, and the
-# primary action. It paints the focused pane's border, a shortcut while you record it, a
-# tool's activity dot while nothing there needs you, primary buttons, and the
-# progress bar. A dot takes the theme's attention color when an agent there is
+# primary action. It paints the focused pane's border, a shortcut while you
+# record it, a tool's activity dot while nothing there needs you, primary
+# buttons, and the progress bar. A dot takes the theme's attention color when an agent there is
 # waiting on you, and its positive color when a long command there finished
 # unseen, the same colors a tab's dot takes. Pick any slot of the
 # theme's palette and the whole chrome follows; the terminal is untouched, so a
