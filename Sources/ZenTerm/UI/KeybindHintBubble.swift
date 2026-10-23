@@ -125,7 +125,7 @@ final class KeybindHintBubble: ShadowCardView {
         icon.contentTintColor = chrome.accent.nsColor
         title.textColor = chrome.ink(.normal)
         previewBox.layer?.backgroundColor = chrome.fill(.rest).cgColor
-        previewBox.layer?.borderColor = chrome.fill(alpha: ChromeTheme.border).cgColor
+        previewBox.layer?.borderColor = chrome.accent.nsColor.cgColor
         errorLabel.textColor = chrome.destructive.nsColor
     }
 

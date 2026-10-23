@@ -159,7 +159,7 @@ final class WorktreeRemovalConfirmTests: XCTestCase {
                 path: [.init(text: "build/cache/", tone: .ink(.subtle))],
                 status: [
                     [.init(text: "+1", tone: .role(\.positive))], [.init(text: "~1", tone: .role(\.warning))],
-                    [.init(text: "?2", tone: .role(\.attention))],
+                    [.init(text: "?2", tone: .ink(.muted))],
                 ]))
     }
 

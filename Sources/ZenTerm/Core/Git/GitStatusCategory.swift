@@ -43,14 +43,14 @@ enum GitStatusCategory: CaseIterable {
         }
     }
 
-    var role: KeyPath<ChromeTheme, TerminalColor> {
+    var tone: ConfirmCardList.Tone {
         switch self {
-        case .staged: return \.positive
-        case .modified: return \.warning
-        case .untracked: return \.attention
-        case .renamed: return \.info
-        case .deleted: return \.destructive
-        case .conflicted: return \.attention
+        case .staged: return .role(\.positive)
+        case .modified: return .role(\.warning)
+        case .untracked: return .ink(.muted)
+        case .renamed: return .role(\.info)
+        case .deleted: return .role(\.destructive)
+        case .conflicted: return .role(\.attention)
         }
     }
 }
