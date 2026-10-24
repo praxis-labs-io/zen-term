@@ -11,12 +11,7 @@ final class FontSizeCard: ShadowCardView {
         super.init(frame: .zero)
 
         translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-        layer?.cornerRadius = ChromeMetrics.Radius.surface
-        layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
-        layer?.borderWidth = ChromeMetrics.Border.width
-        layer?.borderColor = FloatShadow.edge.cgColor
-        FloatShadow.apply(.float, to: self)
+        CardChrome.apply(to: self, tier: .float)
 
         label.font = Self.font
         label.textColor = Theme.current.chrome.ink(.normal)
@@ -38,9 +33,7 @@ final class FontSizeCard: ShadowCardView {
     func update(text: String) { label.stringValue = text }
 
     func reapplyTheme() {
-        layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
-        layer?.borderColor = FloatShadow.edge.cgColor
-        FloatShadow.apply(.float, to: self)
+        CardChrome.reapplyTheme(to: self, tier: .float)
         label.textColor = Theme.current.chrome.ink(.normal)
     }
 }

@@ -27,18 +27,18 @@ final class UpdateCardView: ShadowCardView {
 
     static let width: CGFloat = 360
     private static let inset: CGFloat = ChromeMetrics.Spacing.s12
-    private static let badgeSize: CGFloat = 28
-    private static let iconSide: CGFloat = 16
     private static let rootSpacing: CGFloat = ChromeMetrics.Spacing.s12
+    private static let badgeSize = IconBadge.Size.regular
 
     // Exposed so the notes are measured against the real wrap budget (`UpdateCardTests`).
-    static let notesMaxWidth: CGFloat = width - inset * 2 - badgeSize - rootSpacing
+    static let notesMaxWidth: CGFloat = width - inset * 2 - badgeSize.side - rootSpacing
 
     private var state: State
     private var actions: Actions
 
-    private let badgeFill = NSView()
-    private let iconView = NSImageView()
+    private let badge = IconBadge(
+        image: BrandMark.image("origami"), accessibilityDescription: nil, size: UpdateCardView.badgeSize,
+        role: { $0.accent })
     private let titleLabel = NSTextField(labelWithString: "")
     private let header = NSStackView()
     // Nil while unbound, the default, so the slot never shows a glyph that does nothing.
@@ -53,18 +53,7 @@ final class UpdateCardView: ShadowCardView {
         super.init(frame: .zero)
 
         translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-        layer?.cornerRadius = ChromeMetrics.Radius.surface
-        layer?.borderWidth = ChromeMetrics.Border.width
-        FloatShadow.apply(.float, to: self)
-
-        badgeFill.wantsLayer = true
-        badgeFill.layer?.cornerRadius = ChromeMetrics.Radius.control
-        badgeFill.translatesAutoresizingMaskIntoConstraints = false
-        iconView.image = BrandMark.image("origami")
-        iconView.imageScaling = .scaleProportionallyUpOrDown
-        iconView.translatesAutoresizingMaskIntoConstraints = false
-        badgeFill.addSubview(iconView)
+        CardChrome.apply(to: self, tier: .float)
 
         titleLabel.font = ChromeType.font(.body, weight: .semibold)
         titleLabel.lineBreakMode = .byTruncatingTail
@@ -95,9 +84,9 @@ final class UpdateCardView: ShadowCardView {
         header.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
         bodyColumn.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
         buttonRow.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
-        header.heightAnchor.constraint(equalToConstant: Self.badgeSize).isActive = true
+        header.heightAnchor.constraint(equalToConstant: Self.badgeSize.side).isActive = true
 
-        let root = NSStackView(views: [badgeFill, col])
+        let root = NSStackView(views: [badge, col])
         root.orientation = .horizontal
         root.alignment = .top
         root.distribution = .fill
@@ -107,12 +96,6 @@ final class UpdateCardView: ShadowCardView {
 
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: Self.width),
-            badgeFill.widthAnchor.constraint(equalToConstant: Self.badgeSize),
-            badgeFill.heightAnchor.constraint(equalToConstant: Self.badgeSize),
-            iconView.widthAnchor.constraint(equalToConstant: Self.iconSide),
-            iconView.heightAnchor.constraint(equalToConstant: Self.iconSide),
-            iconView.centerXAnchor.constraint(equalTo: badgeFill.centerXAnchor),
-            iconView.centerYAnchor.constraint(equalTo: badgeFill.centerYAnchor),
             root.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),
             root.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset),
             root.topAnchor.constraint(equalTo: topAnchor, constant: Self.inset),
@@ -208,19 +191,18 @@ final class UpdateCardView: ShadowCardView {
     }
 
     private func applyColors() {
-        layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
-        layer?.borderColor = FloatShadow.edge.cgColor
         titleLabel.textColor = Theme.current.chrome.ink(.normal)
-        let accent = Theme.current.chrome.accent.nsColor
-        badgeFill.layer?.backgroundColor =
-            Theme.current.chrome.tint(Theme.current.chrome.accent, alpha: ChromeTheme.badgeTint).cgColor
-        iconView.contentTintColor = accent
+        badge.reapplyTheme()
         progressBar.reapplyTheme()
     }
 
+    var badgeFillForTesting: CGColor? { badge.fillForTesting }
+    var badgeIconTintForTesting: NSColor? { badge.iconTintForTesting }
+    var badgeForTesting: IconBadge { badge }
+
     func reapplyTheme() {
         applyColors()
-        FloatShadow.apply(.float, to: self)
+        CardChrome.reapplyTheme(to: self, tier: .float)
         refreshKeycap()
         checkKeycap?.reapplyTheme()
         render()

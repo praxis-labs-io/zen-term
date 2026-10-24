@@ -23,6 +23,23 @@ final class ListPopoverTests: WindowTestCase {
         XCTAssertEqual(row.frame.height, 28, "a row collapsed instead of taking its height")
     }
 
+    func test_openCard_takesTheOverlayTier() {
+        let anchor = NSView(frame: NSRect(x: 20, y: 300, width: 220, height: 30))
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 400),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView?.addSubview(anchor)
+        let popover = ListPopover(anchor: anchor)
+
+        popover.open(rows: [ListPopover.Row(view: NSView(), height: 28)])
+        window.displayIfNeeded()
+
+        let card = popover.cardForTesting
+        XCTAssertEqual(CGFloat(card?.layer?.shadowRadius ?? -1), FloatShadow.Tier.overlay.blur)
+        XCTAssertEqual(card?.layer?.backgroundColor, CardChrome.fill.cgColor)
+        XCTAssertEqual(card?.layer?.borderColor, FloatShadow.edge.cgColor)
+    }
+
     func test_openWithoutAWindowDoesNothing() {
         let anchor = NSView(frame: NSRect(x: 0, y: 0, width: 220, height: 30))
         let popover = ListPopover(anchor: anchor)

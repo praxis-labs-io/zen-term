@@ -35,6 +35,8 @@ final class ListPopover {
 
     var cardFrame: NSRect { card?.frame ?? .zero }
 
+    var cardForTesting: NSView? { card }
+
     /// Observes resize with `queue: nil`, which runs synchronously; a queue would leave the card stranded for a turn.
     func open(rows: [Row]) {
         guard card == nil, let window = anchor.window, let contentView = window.contentView else {
@@ -83,7 +85,6 @@ final class ListPopover {
 
     /// Each row joins the stack before its width constraint, which throws without a common ancestor.
     private func buildCard(rows: [Row]) -> NSView {
-        let chrome = Theme.current.chrome
         let width = max(anchor.bounds.width, Self.minWidth)
 
         let stack = NSStackView()
@@ -109,13 +110,8 @@ final class ListPopover {
         self.scroll = scroll
 
         let card = ShadowCardView()
-        card.wantsLayer = true
-        card.layer?.cornerRadius = ChromeMetrics.Radius.surface
-        card.layer?.backgroundColor = chrome.background.nsColor.cgColor
-        card.layer?.borderWidth = ChromeMetrics.Border.width
-        card.layer?.borderColor = FloatShadow.edge.cgColor
+        CardChrome.apply(to: card, tier: .overlay)
         card.translatesAutoresizingMaskIntoConstraints = true
-        FloatShadow.apply(.overlay, to: card)
         card.addSubview(scroll)
 
         let inset = Self.verticalInset
