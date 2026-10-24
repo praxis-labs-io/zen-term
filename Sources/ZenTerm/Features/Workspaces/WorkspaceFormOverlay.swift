@@ -259,7 +259,10 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         var views: [NSView] = [notice, undoButton, spacer, cancelButton, addButton]
         if onDelete != nil {
-            deleteButton.onTap = { [weak self] in self?.onDelete?() }
+            deleteButton.onTap = { [weak self] in
+                guard let self, !self.isDismissing else { return }
+                self.onDelete?()
+            }
             views.insert(deleteButton, at: 0)
         }
         for button in [addVarButton, undoButton, cancelButton, addButton, deleteButton] {
@@ -501,6 +504,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     }
 
     private func submit() {
+        guard !isDismissing else { return }
         if let problem = validate(includeRequired: true) {
             reveal(problem)
             return

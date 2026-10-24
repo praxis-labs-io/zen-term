@@ -61,6 +61,14 @@ final class ReportIssueOverlayTests: WindowTestCase {
         return window!.contentView!.performKeyEquivalent(with: esc)
     }
 
+    private func commandReturnKey() throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: 0, windowNumber: 0,
+                context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false,
+                keyCode: 36))
+    }
+
     private func query(_ url: URL, _ name: String) -> String? {
         URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == name }?.value
     }
@@ -111,6 +119,17 @@ final class ReportIssueOverlayTests: WindowTestCase {
         XCTAssertTrue(KeyboardFocus.isFocused(titleField(overlay).field, in: window), "the offender is focused")
     }
 
+    func test_commandReturnWhileDismissing_doesNotOpen() throws {
+        let (overlay, sink) = mount()
+        titleField(overlay).setText("Split closes the pane")
+        whatHappened(overlay).setText("It closed the whole pane")
+        overlay.animateOut {}
+
+        _ = window!.contentView!.performKeyEquivalent(with: try commandReturnKey())
+
+        XCTAssertTrue(sink.opened.isEmpty)
+    }
+
     func test_exportDiagnostics_firesCallbackAndLeavesTheCardUp() {
         let (overlay, sink) = mount()
 
@@ -128,6 +147,16 @@ final class ReportIssueOverlayTests: WindowTestCase {
         pressEscape()
 
         XCTAssertEqual(sink.cancelled, 1)
+    }
+
+    func test_exportWhileDismissing_doesNotExport() throws {
+        let (overlay, sink) = mount()
+        let export = try XCTUnwrap(button(overlay, "Export Diagnostics…"))
+        overlay.animateOut {}
+
+        export.onTap()
+
+        XCTAssertEqual(sink.exported, 0)
     }
 
     func test_downArrow_walksTitleToWhatHappenedToOpen() {

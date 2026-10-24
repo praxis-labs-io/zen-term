@@ -169,6 +169,7 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
     }
 
     private func remove() {
+        guard !isDismissing else { return }
         guard let removal, let editing, confirm.card == nil else { return }
         errorLabel.clear()
         guard let consequence = removal.consequence() else { return performRemoval() }
@@ -206,6 +207,7 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
     }
 
     private func submit() {
+        guard !isDismissing else { return }
         guard let host = submittedHost() else { return }
         let name = nameField.text.trimmingCharacters(in: .whitespacesAndNewlines)
         if let problem = Self.problem(withName: name) {

@@ -413,6 +413,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     }
 
     private func submit() {
+        guard !isDismissing else { return }
         errorLabel.clear()
         if let firstInvalid = validate(includeRequired: true) {
             window?.makeFirstResponder(firstInvalid)
@@ -426,6 +427,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     }
 
     private func delete() {
+        guard !isDismissing else { return }
         errorLabel.clear()
         if let failure = onDelete?() {
             showFailure(failure)

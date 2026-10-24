@@ -55,6 +55,14 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         return keyDown(chord.key, code: 0, flags: flags)
     }
 
+    private func commandReturnKey() throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: 0, windowNumber: 0,
+                context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false,
+                keyCode: 36))
+    }
+
     private func descendants(of view: NSView) -> [NSView] {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
@@ -132,6 +140,18 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
 
     private func submit(in overlay: NSView) {
         field(in: overlay, placeholder: "npm run dev").onSubmit?()
+    }
+
+    func test_commandReturnWhileDismissing_doesNotSubmit() throws {
+        let (overlay, capturer, sink) = mount()
+        field(in: overlay, placeholder: "Open GitDash").setText("dev")
+        field(in: overlay, placeholder: "npm run dev").setText("npm run dev")
+        capture(novelChord, in: overlay, capturer)
+        overlay.animateOut {}
+
+        _ = window!.contentView!.performKeyEquivalent(with: try commandReturnKey())
+
+        XCTAssertTrue(sink.submitted.isEmpty)
     }
 
     func test_cardFillsAvailableWidth() {
@@ -306,6 +326,17 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
 
         submit(in: overlay)
         XCTAssertEqual(sink.submitted.first?.icon, IconCatalog.all[1])
+    }
+
+    func test_deleteWhileDismissing_doesNotDelete() throws {
+        let (overlay, _, sink) = mount(editing: existingFloat(title: "dev"), withDelete: true)
+        let delete = try XCTUnwrap(
+            descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Delete" })
+        overlay.animateOut {}
+
+        delete.onTap()
+
+        XCTAssertEqual(sink.deleted, 0)
     }
 
     func test_footer_tabWalksSubmitCancelDelete() {

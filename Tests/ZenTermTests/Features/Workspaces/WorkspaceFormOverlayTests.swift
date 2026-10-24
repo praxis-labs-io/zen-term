@@ -97,6 +97,21 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         try XCTUnwrap(button(in: overlay, title: editing ? "Save" : "Add Workspace")).onTap()
     }
 
+    func test_commandReturnWhileDismissing_doesNotSubmit() throws {
+        let (overlay, sink) = mount()
+        typeFolder(try makeRealDir().path, in: overlay)
+        overlay.animateOut {}
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: 0, windowNumber: 0,
+                context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false,
+                keyCode: 36))
+
+        _ = window?.contentView?.performKeyEquivalent(with: event)
+
+        XCTAssertTrue(sink.submitted.isEmpty)
+    }
+
     func test_theAddCard_opensWithOneShellTab_focusedOnItsMainPane() throws {
         let (overlay, _) = mount()
 
@@ -117,6 +132,17 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         XCTAssertNil(button(in: overlay, title: "Add Workspace"))
         try XCTUnwrap(button(in: overlay, title: "Delete")).onTap()
         XCTAssertEqual(sink.deleted, 1)
+    }
+
+    func test_deleteWhileDismissing_doesNotDelete() throws {
+        let ws = Workspace(title: "Alpha", path: try makeRealDir(), tabs: [], env: [:])
+        let (overlay, sink) = mount(editing: ws, withDelete: true)
+        let delete = try XCTUnwrap(button(in: overlay, title: "Delete"))
+        overlay.animateOut {}
+
+        delete.onTap()
+
+        XCTAssertEqual(sink.deleted, 0)
     }
 
     func test_editingAFlatWorkspace_roundTripsUnchanged() throws {

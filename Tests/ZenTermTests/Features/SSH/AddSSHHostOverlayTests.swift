@@ -257,6 +257,26 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         XCTAssertFalse(descendants(of: overlay).contains { $0 is ConfirmCard })
     }
 
+    func test_returnWhileDismissing_doesNotSubmit() {
+        let overlay = mount()
+        field(in: overlay).setText("deploy@10.0.0.5")
+        overlay.animateOut {}
+
+        pressReturn(in: nameField(in: overlay))
+
+        XCTAssertEqual(submitted, [])
+    }
+
+    func test_removeWhileDismissing_doesNotRemove() throws {
+        let overlay = mount(devbox, removable: true)
+        let remove = try XCTUnwrap(button("Remove", in: overlay))
+        overlay.animateOut {}
+
+        remove.onTap()
+
+        XCTAssertEqual(removed, 0)
+    }
+
     func test_remove_ofAnOpenHost_asksFirst_andOnlyConfirmingRemoves() throws {
         removalConsequence = "disconnect it and stop everything running in it"
         let overlay = mount(devbox, removable: true)
