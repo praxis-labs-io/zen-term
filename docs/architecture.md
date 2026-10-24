@@ -421,7 +421,8 @@ New modal surfaces compose the existing primitives.
 - **Primitives:** `AppButton` (variants `primary`, `secondary`, `muted`, `destructive`,
   `segment`, `link`; an optional shortcut keycap inside),
   `SegmentedControl`, `FieldBox` + `LabeledField`, `ModalCard.swift`
-  for card chrome and scrolling, `FormCard` for forms (body scrolls, footer pinned,
+  for card chrome and scrolling, `ModalShell` for a centred card over a backdrop (Esc goes
+  back one step, a click outside closes the stack), `FormCard` for forms (body scrolls, footer pinned,
   capped at `FormCard.maxHeight`; the workspace form takes its own taller cap).
 - **Keyboard model:** ↑/↓ between rows, ←/→ within a row, Return advances, ⌘Return
   submits, Esc cancels. Every card is fully operable without a mouse.
