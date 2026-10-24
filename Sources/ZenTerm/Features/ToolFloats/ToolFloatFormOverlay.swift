@@ -427,6 +427,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     }
 
     private func delete() {
+        guard !isDismissing else { return }
         errorLabel.clear()
         if let failure = onDelete?() {
             showFailure(failure)

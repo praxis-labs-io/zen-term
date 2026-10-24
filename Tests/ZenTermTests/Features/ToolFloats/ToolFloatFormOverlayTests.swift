@@ -328,6 +328,17 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         XCTAssertEqual(sink.submitted.first?.icon, IconCatalog.all[1])
     }
 
+    func test_deleteWhileDismissing_doesNotDelete() throws {
+        let (overlay, _, sink) = mount(editing: existingFloat(title: "dev"), withDelete: true)
+        let delete = try XCTUnwrap(
+            descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == "Delete" })
+        overlay.animateOut {}
+
+        delete.onTap()
+
+        XCTAssertEqual(sink.deleted, 0)
+    }
+
     func test_footer_tabWalksSubmitCancelDelete() {
         let existing = existingFloat(title: "dev", icon: IconCatalog.defaultSymbol)
         let (overlay, _, _) = mount(editing: existing, withDelete: true)

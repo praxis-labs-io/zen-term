@@ -134,6 +134,17 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         XCTAssertEqual(sink.deleted, 1)
     }
 
+    func test_deleteWhileDismissing_doesNotDelete() throws {
+        let ws = Workspace(title: "Alpha", path: try makeRealDir(), tabs: [], env: [:])
+        let (overlay, sink) = mount(editing: ws, withDelete: true)
+        let delete = try XCTUnwrap(button(in: overlay, title: "Delete"))
+        overlay.animateOut {}
+
+        delete.onTap()
+
+        XCTAssertEqual(sink.deleted, 0)
+    }
+
     func test_editingAFlatWorkspace_roundTripsUnchanged() throws {
         let ws = Workspace(
             title: "ZenTerm", path: try makeRealDir(),

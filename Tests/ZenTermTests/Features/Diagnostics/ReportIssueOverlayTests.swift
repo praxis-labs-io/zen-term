@@ -149,6 +149,16 @@ final class ReportIssueOverlayTests: WindowTestCase {
         XCTAssertEqual(sink.cancelled, 1)
     }
 
+    func test_exportWhileDismissing_doesNotExport() throws {
+        let (overlay, sink) = mount()
+        let export = try XCTUnwrap(button(overlay, "Export Diagnostics…"))
+        overlay.animateOut {}
+
+        export.onTap()
+
+        XCTAssertEqual(sink.exported, 0)
+    }
+
     func test_downArrow_walksTitleToWhatHappenedToOpen() {
         let (overlay, _) = mount()
         let title = titleField(overlay)

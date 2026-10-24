@@ -97,7 +97,10 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
     }
 
     private func buildFooter() -> NSStackView {
-        exportButton.onTap = { [weak self] in self?.onExportDiagnostics() }
+        exportButton.onTap = { [weak self] in
+            guard let self, !self.isDismissing else { return }
+            self.onExportDiagnostics()
+        }
         cancelButton.onTap = { [weak self] in self?.cancel() }
         openButton.onTap = { [weak self] in self?.submit() }
 
