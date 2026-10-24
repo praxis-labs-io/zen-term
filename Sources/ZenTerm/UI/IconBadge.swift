@@ -1,7 +1,7 @@
 import AppKit
 import TerminalKit
 
-// A symbol on a rounded chip tinted by one chrome role, as a toast leads with.
+// A symbol or brand mark on a rounded chip tinted by one chrome role.
 final class IconBadge: NSView {
     enum Size {
         case regular
@@ -9,6 +9,12 @@ final class IconBadge: NSView {
         var side: CGFloat {
             switch self {
             case .regular: return 28
+            }
+        }
+
+        var imageSide: CGFloat {
+            switch self {
+            case .regular: return 16
             }
         }
 
@@ -22,15 +28,34 @@ final class IconBadge: NSView {
     private let icon = NSImageView()
     private let role: (ChromeTheme) -> TerminalColor
 
-    init(symbol: String, accessibilityDescription: String?, size: Size, role: @escaping (ChromeTheme) -> TerminalColor)
-    {
+    convenience init(
+        symbol: String, accessibilityDescription: String?, size: Size, role: @escaping (ChromeTheme) -> TerminalColor
+    ) {
+        self.init(size: size, role: role)
+        icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: accessibilityDescription)
+        icon.symbolConfiguration = .init(pointSize: size.pointSize, weight: .semibold)
+    }
+
+    /// `image` must be a template, or the role tint does not reach it.
+    convenience init(
+        image: NSImage?, accessibilityDescription: String?, size: Size, role: @escaping (ChromeTheme) -> TerminalColor
+    ) {
+        self.init(size: size, role: role)
+        icon.image = image
+        icon.setAccessibilityLabel(accessibilityDescription)
+        icon.imageScaling = .scaleProportionallyUpOrDown
+        NSLayoutConstraint.activate([
+            icon.widthAnchor.constraint(equalToConstant: size.imageSide),
+            icon.heightAnchor.constraint(equalToConstant: size.imageSide),
+        ])
+    }
+
+    private init(size: Size, role: @escaping (ChromeTheme) -> TerminalColor) {
         self.role = role
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = ChromeMetrics.Radius.control
         translatesAutoresizingMaskIntoConstraints = false
-        icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: accessibilityDescription)
-        icon.symbolConfiguration = .init(pointSize: size.pointSize, weight: .semibold)
         icon.translatesAutoresizingMaskIntoConstraints = false
         addSubview(icon)
         NSLayoutConstraint.activate([
@@ -53,4 +78,6 @@ final class IconBadge: NSView {
 
     var fillForTesting: CGColor? { layer?.backgroundColor }
     var iconTintForTesting: NSColor? { icon.contentTintColor }
+    var iconImageForTesting: NSImage? { icon.image }
+    var iconFrameForTesting: NSRect { icon.frame }
 }

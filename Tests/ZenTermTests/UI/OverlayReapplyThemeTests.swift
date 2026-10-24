@@ -483,6 +483,11 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
         XCTAssertNotEqual(fillBefore, card.layer?.backgroundColor)
         assertRestyledAsCard(card, tier: .float)
+        let chrome = Theme.current.chrome
+        XCTAssertEqual(
+            card.badgeFillForTesting, chrome.tint(chrome.accent, alpha: ChromeTheme.badgeTint).cgColor,
+            "the badge fill stayed stale")
+        XCTAssertEqual(card.badgeIconTintForTesting, chrome.accent.nsColor, "the badge glyph stayed stale")
     }
 
     func test_reapplyTheme_restylesFontSizeCard() throws {
