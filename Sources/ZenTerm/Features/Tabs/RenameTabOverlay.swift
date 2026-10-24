@@ -13,7 +13,7 @@ final class RenameTabOverlay: NSView, ModalOverlay {
     private let renameButton = AppButton(title: "Rename", variant: .primary, keyEquivalent: "\r")
 
     init(
-        current: String, liveTitle: String, background: NSColor,
+        current: String, liveTitle: String,
         onSubmit: @escaping (String) -> Void, onCancel: @escaping () -> Void
     ) {
         self.onSubmit = onSubmit
@@ -27,7 +27,7 @@ final class RenameTabOverlay: NSView, ModalOverlay {
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
-        CardChrome.apply(to: card, background: background)
+        CardChrome.apply(to: card)
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
 

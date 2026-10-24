@@ -50,7 +50,7 @@ final class WorkspaceFormWindowTests: WindowTestCase {
 
     private func presentForm(in c: WindowController, sink: Sink) -> WorkspaceFormOverlay {
         let form = WorkspaceFormOverlay(
-            existingTitles: [], background: Theme.current.chrome.background.nsColor,
+            existingTitles: [],
             onSubmit: { sink.submitted.append($0) }, onCancel: {})
         c.presentModalForTesting(form)
         c.window.contentView?.layoutSubtreeIfNeeded()

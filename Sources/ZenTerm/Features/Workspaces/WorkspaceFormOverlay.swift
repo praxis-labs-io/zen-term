@@ -57,7 +57,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
     private let deleteButton = AppButton(title: "Delete", variant: .destructive)
 
     init(
-        editing: Workspace? = nil, existingTitles: Set<String>, background: NSColor,
+        editing: Workspace? = nil, existingTitles: Set<String>,
         onSubmit: @escaping (Workspace) -> Void, onCancel: @escaping () -> Void,
         onDelete: (() -> Void)? = nil
     ) {
@@ -75,7 +75,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
-        CardChrome.apply(to: card, background: background)
+        CardChrome.apply(to: card)
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
 

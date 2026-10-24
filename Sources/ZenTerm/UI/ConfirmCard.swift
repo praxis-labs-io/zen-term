@@ -14,26 +14,26 @@ final class ConfirmCard: NSView {
     private let confirmButton: AppButton
 
     convenience init(
-        title: String, message: String, confirmLabel: String, background: NSColor,
+        title: String, message: String, confirmLabel: String,
         onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
     ) {
         self.init(
             title: title, message: message, checklist: nil, confirmLabel: confirmLabel,
-            background: background, onCancel: onCancel, onConfirm: onConfirm)
+            onCancel: onCancel, onConfirm: onConfirm)
     }
 
     convenience init(
-        title: String, items: [ConfirmCardChecklist.Item], confirmLabel: String, background: NSColor,
+        title: String, items: [ConfirmCardChecklist.Item], confirmLabel: String,
         onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
     ) {
         self.init(
             title: title, message: "", checklist: ConfirmCardChecklist(items: items), confirmLabel: confirmLabel,
-            background: background, onCancel: onCancel, onConfirm: onConfirm)
+            onCancel: onCancel, onConfirm: onConfirm)
     }
 
     private init(
         title: String, message: String, checklist: ConfirmCardChecklist?, confirmLabel: String,
-        background: NSColor, onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
+        onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
     ) {
         self.checklist = checklist
         self.onCancel = onCancel
@@ -47,7 +47,7 @@ final class ConfirmCard: NSView {
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
-        CardChrome.apply(to: card, background: background)
+        CardChrome.apply(to: card)
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
 

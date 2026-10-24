@@ -19,7 +19,6 @@ final class FormCardHeightTests: WindowTestCase {
     func test_theToolFloatForm_staysUnderTheCap() throws {
         let overlay = ToolFloatFormOverlay(
             editing: nil, existingIDs: [], capturer: NoCapture(),
-            background: Theme.current.chrome.background.nsColor,
             onSubmit: { _ in nil }, onCancel: {})
         XCTAssertLessThanOrEqual(try cardHeight(of: overlay), FormCard.maxHeight)
     }
@@ -32,7 +31,6 @@ final class FormCardHeightTests: WindowTestCase {
             toggle: Chord(command: true, shift: true, key: "l"))
         let overlay = ToolFloatFormOverlay(
             editing: float, existingIDs: [], capturer: NoCapture(),
-            background: Theme.current.chrome.background.nsColor,
             onSubmit: { _ in long }, onCancel: {})
         _ = try cardHeight(of: overlay)
 
@@ -58,7 +56,6 @@ final class FormCardHeightTests: WindowTestCase {
             workspace: workspace,
             options: WorktreeStore.CreateOptions(
                 branches: [], defaultBase: "origin/main", currentBranch: "main", holders: [:]),
-            background: Theme.current.chrome.background.nsColor,
             onSubmit: { _ in }, onCancel: {}, onDismiss: {})
         XCTAssertLessThanOrEqual(try cardHeight(of: overlay), FormCard.maxHeight)
     }
@@ -74,7 +71,6 @@ final class FormCardHeightTests: WindowTestCase {
             options: WorktreeStore.CreateOptions(
                 branches: [branch], defaultBase: "origin/main", currentBranch: "main",
                 holders: [branch: .mainCheckout(URL(fileURLWithPath: "/tmp/repo"))]),
-            background: Theme.current.chrome.background.nsColor,
             onSubmit: { _ in }, onCancel: {}, onDismiss: {})
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 1400),
@@ -94,7 +90,7 @@ final class FormCardHeightTests: WindowTestCase {
             env: Dictionary(uniqueKeysWithValues: (0..<10).map { ("KEY\($0)", "v") }),
             carry: [".env"])
         let overlay = WorkspaceFormOverlay(
-            editing: ws, existingTitles: [], background: Theme.current.chrome.background.nsColor,
+            editing: ws, existingTitles: [],
             onSubmit: { _ in }, onCancel: {})
         _ = try cardHeight(of: overlay)
 

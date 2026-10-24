@@ -519,7 +519,6 @@ final class NewWorktreeOverlayTests: WindowTestCase {
             options: WorktreeStore.CreateOptions(
                 branches: branches, defaultBase: defaultBase, currentBranch: currentBranch,
                 holders: holders),
-            background: Theme.current.chrome.background.nsColor,
             onSubmit: { sink.submitted.append($0) },
             onCancel: { sink.cancelled += 1 },
             onDismiss: { sink.dismissed += 1 },

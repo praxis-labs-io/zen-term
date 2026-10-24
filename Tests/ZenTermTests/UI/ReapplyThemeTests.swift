@@ -284,7 +284,7 @@ final class ReapplyThemeTests: WindowTestCase {
 
     func test_reapplyTheme_resolvesTheCardShadow() throws {
         let card = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 120))
-        CardChrome.apply(to: card, background: Theme.current.chrome.background.nsColor)
+        CardChrome.apply(to: card)
         let before = Theme.current.chrome.shadowAlpha(.modal)
 
         Theme.setCurrentForTesting(try makeLightTheme())
@@ -318,7 +318,7 @@ final class ReapplyThemeTests: WindowTestCase {
         let section = FakeSettingsSection()
         let overlay = SettingsOverlay(
             sections: [section], capturer: nil,
-            background: Theme.current.chrome.background.nsColor, onClose: {})
+            onClose: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(overlay)
@@ -342,7 +342,7 @@ final class ReapplyThemeTests: WindowTestCase {
         let section = FakeSettingsSection()
         let overlay = SettingsOverlay(
             sections: [section], capturer: nil,
-            background: Theme.current.chrome.background.nsColor, onClose: {})
+            onClose: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(overlay)
@@ -381,7 +381,7 @@ final class ReapplyThemeTests: WindowTestCase {
         let hidden = FakeSettingsSection()
         let overlay = SettingsOverlay(
             sections: [visible, hidden], capturer: nil,
-            background: Theme.current.chrome.background.nsColor, onClose: {})
+            onClose: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(overlay)

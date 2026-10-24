@@ -67,7 +67,7 @@ final class SidebarColumn: ShadowCardView {
             return
         }
         CardChrome.apply(
-            to: self, background: Theme.current.chrome.background.nsColor, cornerRadius: Self.cornerRadius,
+            to: self, cornerRadius: Self.cornerRadius,
             tier: .float)
     }
 

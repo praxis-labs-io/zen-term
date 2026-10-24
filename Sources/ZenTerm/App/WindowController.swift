@@ -1274,7 +1274,6 @@ final class WindowController: NSObject {
         if modal != nil { closeModal() }
         let overlay = RenameTabOverlay(
             current: controller.title, liveTitle: controller.liveTitle,
-            background: Theme.current.chrome.background.nsColor,
             onSubmit: { [weak self] name in
                 self?.renameTab(id, to: name)
                 self?.closeModal()
@@ -1475,7 +1474,6 @@ final class WindowController: NSObject {
                 entries: workspaces,
                 open: self.runningWorkspaces(),
                 elsewhere: self.openWorkspacesElsewhere?() ?? [],
-                background: Theme.current.chrome.background.nsColor,
                 removals: self.worktreeRemovals,
                 openState: { [weak self] path in self?.workspaceOpenState(at: path) ?? .closed },
                 onChoose: { [weak self] ws, origin in self?.openWorkspace(ws, origin: origin) },
@@ -1505,7 +1503,6 @@ final class WindowController: NSObject {
                     workspaceCount: self?.workspaces.count ?? 0,
                     onHost: self?.selection.host != nil)
             },
-            background: Theme.current.chrome.background.nsColor,
             onRun: { [weak self] chord in self?.runCommand(chord) },
             onDismiss: { [weak self] in self?.closeModal() }
         )
@@ -1570,7 +1567,6 @@ final class WindowController: NSObject {
             self.pendingModal = nil
             let form = NewWorktreeOverlay(
                 workspace: target.workspace, options: options,
-                background: Theme.current.chrome.background.nsColor,
                 onSubmit: { [weak self] request in
                     self?.createWorktree(request, from: target)
                 },
@@ -1685,7 +1681,6 @@ final class WindowController: NSObject {
         let name = worktree.name
         let card = ConfirmCard(
             title: "Remove Worktree", items: items, confirmLabel: "Remove",
-            background: Theme.current.chrome.background.nsColor,
             onCancel: { [weak picker] in picker?.dismissConfirm() },
             onConfirm: { [weak self, weak picker] in
                 picker?.dismissConfirm()
@@ -1711,7 +1706,6 @@ final class WindowController: NSObject {
         if modal != nil { closeModal() }
         let overlay = ReportIssueOverlay(
             report: .current(),
-            background: Theme.current.chrome.background.nsColor,
             onOpenURL: { [weak self] url in
                 NSWorkspace.shared.open(url)
                 self?.closeModal()
@@ -1806,7 +1800,6 @@ final class WindowController: NSObject {
             initialSection: Self.navTitle(for: landing).flatMap { title in
                 sections.firstIndex { $0.navTitle == title }
             } ?? 0,
-            background: Theme.current.chrome.background.nsColor,
             onClose: { [weak self] in self?.closeModal() }
         )
         overlay.onReportIssue = { [weak self] in self?.openReportIssue() }
@@ -1935,7 +1928,6 @@ final class WindowController: NSObject {
             editing: float,
             existingIDs: existingIDs,
             capturer: keybindCapturer,
-            background: Theme.current.chrome.background.nsColor,
             onSubmit: { [weak self] built in
                 self?.submitToolFloat(built, replacing: originalID, returnTo: returnTo)
             },
@@ -2001,7 +1993,7 @@ final class WindowController: NSObject {
             case .edit(let host, _): host.alias
             }
         let overlay = AddSSHHostOverlay(
-            mode: mode, background: Theme.current.chrome.background.nsColor,
+            mode: mode,
             removal: edited.map { alias in
                 AddSSHHostOverlay.Removal(
                     consequence: { [weak self] in self?.removalConsequence(of: alias) },
@@ -2084,7 +2076,6 @@ final class WindowController: NSObject {
             let form = WorkspaceFormOverlay(
                 editing: workspace,
                 existingTitles: existingTitles,
-                background: Theme.current.chrome.background.nsColor,
                 onSubmit: { [weak self] built in
                     if let originalTitle {
                         self?.submitWorkspace(

@@ -24,7 +24,7 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         title: "Open on GitHub", variant: .primary, keyEquivalent: "\r", keyEquivalentModifierMask: .command)
 
     init(
-        report: SystemReport, background: NSColor,
+        report: SystemReport,
         onOpenURL: @escaping (URL) -> Void, onExportDiagnostics: @escaping () -> Void,
         onCancel: @escaping () -> Void
     ) {
@@ -40,7 +40,7 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
-        CardChrome.apply(to: card, background: background)
+        CardChrome.apply(to: card)
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
 

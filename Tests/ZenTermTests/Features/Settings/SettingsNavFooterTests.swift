@@ -74,7 +74,7 @@ final class SettingsNavFooterTests: WindowTestCase {
     private func mountedOverlay() -> SettingsOverlay {
         let overlay = SettingsOverlay(
             sections: [], capturer: nil,
-            background: Theme.current.chrome.background.nsColor, onClose: {})
+            onClose: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 620, height: 460),

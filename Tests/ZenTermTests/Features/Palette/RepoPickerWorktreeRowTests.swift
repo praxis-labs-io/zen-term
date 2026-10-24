@@ -1045,7 +1045,6 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
     ) -> RepoPickerOverlay {
         RepoPickerOverlay(
             entries: entries, open: open, elsewhere: elsewhere,
-            background: Theme.current.chrome.background.nsColor,
             removals: removals, openState: openState, onChoose: onChoose, onSwitch: onSwitch, onReveal: onReveal,
             onAddWorkspace: {}, onDismiss: {})
     }

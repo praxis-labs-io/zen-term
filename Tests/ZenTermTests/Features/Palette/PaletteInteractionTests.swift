@@ -133,7 +133,7 @@ final class PaletteInteractionTests: WindowTestCase {
             PaletteCommand(title: "New Tab", shortcut: "⌘T", category: "Tabs", chord: .newTab),
         ]
         return CommandPaletteOverlay(
-            commands: { commands }, background: Theme.current.chrome.background.nsColor,
+            commands: { commands },
             onRun: onRun, onDismiss: onDismiss)
     }
 
@@ -197,7 +197,7 @@ final class PaletteInteractionTests: WindowTestCase {
             PaletteCommand(title: "Close Pane", shortcut: "⌘W", category: "Panes", chord: .closePane),
         ]
         let overlay = CommandPaletteOverlay(
-            commands: { commands }, background: Theme.current.chrome.background.nsColor,
+            commands: { commands },
             onRun: { ran = $0 }, onDismiss: {})
         mount(overlay)
         type("con", into: overlay)
@@ -217,7 +217,7 @@ final class PaletteInteractionTests: WindowTestCase {
                     title: "Tab action \($0)", shortcut: "⌥\($0)", category: "Tabs", chord: .newTab)
             }
         return CommandPaletteOverlay(
-            commands: { commands }, background: Theme.current.chrome.background.nsColor,
+            commands: { commands },
             onRun: { _ in }, onDismiss: {})
     }
 
@@ -305,7 +305,7 @@ final class PaletteInteractionTests: WindowTestCase {
         onDismiss: @escaping () -> Void = {}
     ) -> RepoPickerOverlay {
         RepoPickerOverlay(
-            entries: entries, background: Theme.current.chrome.background.nsColor,
+            entries: entries,
             onChoose: onChoose, onAddWorkspace: onAddWorkspace, onNewWorkspace: onNewWorkspace,
             onDismiss: onDismiss)
     }
@@ -403,7 +403,7 @@ final class PaletteInteractionTests: WindowTestCase {
                         chord: .toggleToolFloat("nt")),
                 ]
             },
-            background: Theme.current.chrome.background.nsColor, onRun: { ran = $0 }, onDismiss: {})
+            onRun: { ran = $0 }, onDismiss: {})
         let window = mount(overlay)
         window.layoutIfNeeded()
 

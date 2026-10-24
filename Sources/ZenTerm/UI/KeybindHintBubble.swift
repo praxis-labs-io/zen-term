@@ -30,7 +30,7 @@ final class KeybindHintBubble: ShadowCardView {
     init() {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        CardChrome.apply(to: self, background: Theme.current.chrome.background.nsColor, tier: .overlay)
+        CardChrome.apply(to: self, tier: .overlay)
 
         badge.wantsLayer = true
         badge.layer?.cornerRadius = ChromeMetrics.Radius.control

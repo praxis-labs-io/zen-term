@@ -64,7 +64,7 @@ class PaletteOverlay: NSView, ModalOverlay {
     private var animatesNextReload = false
 
     init(
-        background: NSColor, placeholder: String, emptyText: String, footerHints: [PaletteHint],
+        placeholder: String, emptyText: String, footerHints: [PaletteHint],
         rowHeight: CGFloat, maxListHeight: CGFloat = 320, emptyListHeight: CGFloat = ChromeMetrics.Height.xl,
         onDismiss: @escaping () -> Void
     ) {
@@ -85,7 +85,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
-        CardChrome.apply(to: card, background: background)
+        CardChrome.apply(to: card)
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
 

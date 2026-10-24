@@ -38,7 +38,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
     }
 
     init(
-        mode: Mode, background: NSColor, removal: Removal? = nil, onSubmit: @escaping (SSHHostEntry) -> String?,
+        mode: Mode, removal: Removal? = nil, onSubmit: @escaping (SSHHostEntry) -> String?,
         onCancel: @escaping () -> Void
     ) {
         self.mode = mode
@@ -53,7 +53,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
-        CardChrome.apply(to: card, background: background)
+        CardChrome.apply(to: card)
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
 
@@ -233,7 +233,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         confirm.present(
             ConfirmCard(
                 title: "Remove \(name)", message: "Removing \(name) will \(consequence).",
-                confirmLabel: "Remove", background: Theme.current.chrome.background.nsColor,
+                confirmLabel: "Remove",
                 onCancel: { [weak self] in self?.confirm.dismiss { self?.focus(self?.removeButton) } },
                 onConfirm: { [weak self] in self?.confirm.dismiss { self?.performRemoval() } }))
     }
