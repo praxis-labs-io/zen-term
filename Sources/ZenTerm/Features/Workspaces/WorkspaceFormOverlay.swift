@@ -501,6 +501,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     }
 
     private func submit() {
+        guard !isDismissing else { return }
         if let problem = validate(includeRequired: true) {
             reveal(problem)
             return

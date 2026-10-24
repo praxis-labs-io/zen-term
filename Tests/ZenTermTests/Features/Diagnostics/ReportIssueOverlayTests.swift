@@ -61,6 +61,14 @@ final class ReportIssueOverlayTests: WindowTestCase {
         return window!.contentView!.performKeyEquivalent(with: esc)
     }
 
+    private func commandReturnKey() throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: 0, windowNumber: 0,
+                context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false,
+                keyCode: 36))
+    }
+
     private func query(_ url: URL, _ name: String) -> String? {
         URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == name }?.value
     }
@@ -109,6 +117,17 @@ final class ReportIssueOverlayTests: WindowTestCase {
 
         XCTAssertTrue(sink.opened.isEmpty, "an empty required field blocks opening the issue")
         XCTAssertTrue(KeyboardFocus.isFocused(titleField(overlay).field, in: window), "the offender is focused")
+    }
+
+    func test_commandReturnWhileDismissing_doesNotOpen() throws {
+        let (overlay, sink) = mount()
+        titleField(overlay).setText("Split closes the pane")
+        whatHappened(overlay).setText("It closed the whole pane")
+        overlay.animateOut {}
+
+        _ = window!.contentView!.performKeyEquivalent(with: try commandReturnKey())
+
+        XCTAssertTrue(sink.opened.isEmpty)
     }
 
     func test_exportDiagnostics_firesCallbackAndLeavesTheCardUp() {

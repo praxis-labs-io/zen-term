@@ -159,6 +159,7 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
     }
 
     private func submit() {
+        guard !isDismissing else { return }
         if let firstInvalid = validate(includeRequired: true) {
             window?.makeFirstResponder(firstInvalid)
             return

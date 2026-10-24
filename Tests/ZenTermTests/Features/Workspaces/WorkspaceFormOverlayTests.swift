@@ -97,6 +97,21 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         try XCTUnwrap(button(in: overlay, title: editing ? "Save" : "Add Workspace")).onTap()
     }
 
+    func test_commandReturnWhileDismissing_doesNotSubmit() throws {
+        let (overlay, sink) = mount()
+        typeFolder(try makeRealDir().path, in: overlay)
+        overlay.animateOut {}
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: 0, windowNumber: 0,
+                context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false,
+                keyCode: 36))
+
+        _ = window?.contentView?.performKeyEquivalent(with: event)
+
+        XCTAssertTrue(sink.submitted.isEmpty)
+    }
+
     func test_theAddCard_opensWithOneShellTab_focusedOnItsMainPane() throws {
         let (overlay, _) = mount()
 
