@@ -42,6 +42,30 @@ final class OverlayReapplyThemeTests: WindowTestCase {
             styleMask: [.borderless], backing: .buffered, defer: false)
     }
 
+    private func present(_ card: NSView, size: NSSize) -> NSWindow {
+        let window = makeWindow()
+        card.translatesAutoresizingMaskIntoConstraints = true
+        window.contentView?.addSubview(card)
+        card.frame = NSRect(origin: .zero, size: size)
+        window.displayIfNeeded()
+        return window
+    }
+
+    private func shadowRadius(of card: NSView) -> CGFloat {
+        CGFloat(card.layer?.shadowRadius ?? -1)
+    }
+
+    private func assertRestyledAsCard(
+        _ card: NSView, tier: FloatShadow.Tier, file: StaticString = #filePath, line: UInt = #line
+    ) {
+        XCTAssertEqual(
+            card.layer?.backgroundColor, CardChrome.fill.cgColor, "the fill stayed stale", file: file, line: line)
+        XCTAssertEqual(
+            card.layer?.borderColor, FloatShadow.edge.cgColor, "the border stayed stale", file: file, line: line)
+        XCTAssertEqual(
+            shadowRadius(of: card), tier.blur, "the shadow is not the \(tier) tier", file: file, line: line)
+    }
+
     private func descendants(of view: NSView) -> [NSView] {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
@@ -441,6 +465,38 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertEqual(
             toast.badgeIconTintForTesting, Theme.current.chrome.destructive.nsColor,
             "a destructive toast's badge must carry the destructive role, not the chrome accent")
+        window.displayIfNeeded()
+        assertRestyledAsCard(toast, tier: .float)
+    }
+
+    func test_reapplyTheme_restylesUpdateCard() throws {
+        let card = UpdateCardView(
+            state: .available(version: "9.9.9", current: "You're on 1.0", notes: [], notesURL: nil),
+            actions: .init())
+        let window = present(card, size: NSSize(width: UpdateCardView.width, height: 160))
+        assertRestyledAsCard(card, tier: .float)
+        let fillBefore = card.layer?.backgroundColor
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        card.reapplyTheme()
+        window.displayIfNeeded()
+
+        XCTAssertNotEqual(fillBefore, card.layer?.backgroundColor)
+        assertRestyledAsCard(card, tier: .float)
+    }
+
+    func test_reapplyTheme_restylesFontSizeCard() throws {
+        let card = FontSizeCard(text: "14")
+        let window = present(card, size: NSSize(width: 80, height: 40))
+        assertRestyledAsCard(card, tier: .float)
+        let fillBefore = card.layer?.backgroundColor
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        card.reapplyTheme()
+        window.displayIfNeeded()
+
+        XCTAssertNotEqual(fillBefore, card.layer?.backgroundColor)
+        assertRestyledAsCard(card, tier: .float)
     }
 
     func test_reapplyTheme_recolorsToastActionButtons() throws {
