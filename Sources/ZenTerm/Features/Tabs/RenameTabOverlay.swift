@@ -7,14 +7,10 @@ final class RenameTabOverlay: ModalShell, ModalOverlay {
 
     private let header = NSTextField(labelWithString: "")
     private let nameField: FieldBox
-    private lazy var cancelButton = IconButton(
-        symbol: "xmark", size: NSSize(width: ChromeMetrics.Height.control, height: ChromeMetrics.Height.control),
-        accessibilityLabel: "Cancel"
-    ) { [weak self] in self?.cancel() }
-    private lazy var renameButton = IconButton(
-        symbol: "checkmark", size: NSSize(width: ChromeMetrics.Height.control, height: ChromeMetrics.Height.control),
-        accessibilityLabel: "Rename"
-    ) { [weak self] in self?.submit() }
+    private lazy var cancelButton = AppButton(variant: .secondary, symbol: "xmark") { [weak self] in self?.cancel() }
+    private lazy var renameButton = AppButton(variant: .primary, symbol: "checkmark") { [weak self] in
+        self?.submit()
+    }
 
     init(
         current: String, liveTitle: String,
@@ -30,8 +26,8 @@ final class RenameTabOverlay: ModalShell, ModalOverlay {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     var nameFieldForTesting: FieldBox { nameField }
-    var renameButtonForTesting: IconButton { renameButton }
-    var cancelButtonForTesting: IconButton { cancelButton }
+    var renameButtonForTesting: AppButton { renameButton }
+    var cancelButtonForTesting: AppButton { cancelButton }
 
     func focusInitialResponder() {
         window?.makeFirstResponder(nameField.field)
@@ -55,7 +51,17 @@ final class RenameTabOverlay: ModalShell, ModalOverlay {
         nameField.onEnter = { [weak self] in self?.submit() }
         nameField.onSubmit = { [weak self] in self?.submit() }
 
-        for button in [cancelButton, renameButton] { button.firesOnRelease = true }
+        cancelButton.setAccessibilityLabel("Cancel")
+        renameButton.setAccessibilityLabel("Rename")
+        for button in [cancelButton, renameButton] { button.isKeyboardFocusable = true }
+        cancelButton.onArrowRight = { [weak self] in self?.focus(self?.renameButton) }
+        renameButton.onArrowLeft = { [weak self] in self?.focus(self?.cancelButton) }
+        cancelButton.onTab = { [weak self] in self?.focus(self?.renameButton) }
+        renameButton.onTab = { [weak self] in self?.focus(self?.nameField.field) }
+        renameButton.onBacktab = { [weak self] in self?.focus(self?.cancelButton) }
+        cancelButton.onBacktab = { [weak self] in self?.focus(self?.nameField.field) }
+        nameField.onTab = { [weak self] in self?.focus(self?.cancelButton) }
+        nameField.onBacktab = { [weak self] in self?.focus(self?.renameButton) }
 
         nameField.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let inputRow = NSStackView(views: [nameField, cancelButton, renameButton])
@@ -77,6 +83,11 @@ final class RenameTabOverlay: ModalShell, ModalOverlay {
             ).isActive = true
         }
         return content
+    }
+
+    private func focus(_ view: NSView?) {
+        guard let view else { return }
+        window?.makeFirstResponder(view)
     }
 
     private func submit() {
