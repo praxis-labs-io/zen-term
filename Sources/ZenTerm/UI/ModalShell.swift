@@ -8,6 +8,7 @@ class ModalShell: NSView {
     private var gate = DismissGate()
 
     var isDismissing: Bool { gate.isDismissing }
+    // Declared on the class: a protocol-extension default would bind statically in `performKeyEquivalent`.
     var isShowingOverlaidCard: Bool { false }
     var isBusy: Bool { false }
 
@@ -53,6 +54,11 @@ class ModalShell: NSView {
             content.topAnchor.constraint(equalTo: card.topAnchor),
             content.bottomAnchor.constraint(equalTo: card.bottomAnchor),
         ])
+    }
+
+    func focus(_ view: NSView?) {
+        guard let view else { return }
+        window?.makeFirstResponder(view)
     }
 
     func cancel() {

@@ -101,9 +101,4 @@ final class ConfirmCard: ModalShell, ModalOverlay {
         }
         return content
     }
-
-    private func focus(_ view: NSView?) {
-        guard let view else { return }
-        window?.makeFirstResponder(view)
-    }
 }
