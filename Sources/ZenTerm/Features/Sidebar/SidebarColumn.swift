@@ -73,7 +73,7 @@ final class SidebarColumn: ShadowCardView {
 
     // The card's own fill at zero alpha, so docking fades it out without crossing another color on the way.
     static var fadedFill: CGColor {
-        Theme.current.chrome.background.nsColor.withAlphaComponent(0).cgColor
+        CardChrome.fill.withAlphaComponent(0).cgColor
     }
 
     var floatingContentTop: CGFloat { isFloating ? ChromeMetrics.windowGutter : 0 }
