@@ -41,114 +41,70 @@ final class RenameTabOverlayTests: WindowTestCase {
         XCTAssertEqual(submitted, [])
     }
 
-    func test_clickingRename_submitsTheTrimmedText() throws {
+    func test_return_submitsTheTrimmedText() throws {
         let host = try mount()
         let overlay = try overlay(in: host)
         overlay.nameFieldForTesting.setText("  api  ")
 
-        try click(overlay.renameButtonForTesting, in: host)
+        try sendReturnThroughField(of: overlay)
 
         XCTAssertEqual(submitted, ["api"])
         XCTAssertEqual(cancelCount, 0)
     }
 
-    func test_clickingCancel_cancelsWithoutSubmitting() throws {
+    func test_escape_cancelsWithoutSubmitting() throws {
         let host = try mount()
         let overlay = try overlay(in: host)
+        let win = try XCTUnwrap(window)
+        XCTAssertTrue(win.makeFirstResponder(overlay.nameFieldForTesting.field))
 
-        try click(overlay.cancelButtonForTesting, in: host)
+        XCTAssertTrue(overlay.performKeyEquivalent(with: try escapeKey()))
 
         XCTAssertEqual(cancelCount, 1)
         XCTAssertEqual(submitted, [])
     }
 
-    func test_buttons_areLabelledAndSitAtTheFieldHeight() throws {
+    func test_footer_isTheLastSection_andNamesReturnAndEscape() throws {
         let overlay = try overlay(in: try mount())
 
-        XCTAssertEqual(overlay.renameButtonForTesting.accessibilityLabel(), "Rename")
-        XCTAssertEqual(overlay.cancelButtonForTesting.accessibilityLabel(), "Cancel")
-        XCTAssertEqual(overlay.renameButtonForTesting.frame.height, overlay.nameFieldForTesting.frame.height)
-        XCTAssertEqual(overlay.cancelButtonForTesting.frame.height, overlay.nameFieldForTesting.frame.height)
+        let footer = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? HintFooter }.first)
+
+        XCTAssertEqual(
+            descendants(of: footer).compactMap { ($0 as? NSTextField)?.stringValue }, ["Save", "Cancel"])
+        XCTAssertEqual(
+            descendants(of: footer).compactMap { $0 as? KeycapView }.map(\.shortcut), ["⏎", "⎋"])
+        let inCard = overlay.card.convert(footer.bounds, from: footer)
+        XCTAssertEqual(inCard.minX, overlay.card.bounds.minX, "the hairline spans the card edge to edge")
+        XCTAssertEqual(inCard.width, overlay.card.bounds.width)
+        XCTAssertEqual(inCard.minY, overlay.card.bounds.minY, "nothing sits under it")
+        XCTAssertTrue(descendants(of: overlay).compactMap { $0 as? AppButton }.isEmpty, "no buttons")
     }
 
-    func test_tab_fromTheField_reachesCancelThenRename_andBackTabReverses() throws {
-        let host = try mount()
-        let overlay = try overlay(in: host)
-        let win = try XCTUnwrap(window)
-        overlay.focusInitialResponder()
-        let box = overlay.nameFieldForTesting
+    func test_reapplyTheme_reachesTheFooter() throws {
+        let overlay = try overlay(in: try mount())
+        let footer = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? HintFooter }.first)
+        let label = try XCTUnwrap(descendants(of: footer).compactMap { $0 as? NSTextField }.first)
+        label.textColor = .red
 
-        _ = box.control(box.field, textView: NSTextView(), doCommandBy: #selector(NSResponder.insertTab(_:)))
-        XCTAssertTrue(win.firstResponder === overlay.cancelButtonForTesting)
+        overlay.reapplyTheme()
 
-        try pressKey(keyCode: 48, characters: "\t", in: win)
-        XCTAssertTrue(win.firstResponder === overlay.renameButtonForTesting)
-
-        try pressKey(keyCode: 48, characters: "\t", in: win)
-        XCTAssertTrue(win.firstResponder === overlay.nameFieldForTesting.field.currentEditor())
-
-        _ = box.control(box.field, textView: NSTextView(), doCommandBy: #selector(NSResponder.insertBacktab(_:)))
-        XCTAssertTrue(win.firstResponder === overlay.renameButtonForTesting)
-
-        try pressKey(keyCode: 123, characters: "\u{F702}", modifiers: [.function, .numericPad], in: win)
-        XCTAssertTrue(win.firstResponder === overlay.cancelButtonForTesting)
-
-        try pressKey(keyCode: 124, characters: "\u{F703}", modifiers: [.function, .numericPad], in: win)
-        XCTAssertTrue(win.firstResponder === overlay.renameButtonForTesting)
-
-        try pressKey(keyCode: 48, characters: "\u{19}", modifiers: [.shift], in: win)
-        XCTAssertTrue(win.firstResponder === overlay.cancelButtonForTesting)
-    }
-
-    func test_return_onFocusedCancel_cancels() throws {
-        let host = try mount()
-        let overlay = try overlay(in: host)
-        let win = try XCTUnwrap(window)
-        XCTAssertTrue(win.makeFirstResponder(overlay.cancelButtonForTesting))
-
-        XCTAssertFalse(host.performKeyEquivalent(with: try returnKey()))
-        try pressKey(keyCode: 36, characters: "\r", in: win)
-
-        XCTAssertEqual(cancelCount, 1)
-        XCTAssertEqual(submitted, [])
-    }
-
-    func test_return_onFocusedRename_submits() throws {
-        let host = try mount()
-        let overlay = try overlay(in: host)
-        let win = try XCTUnwrap(window)
-        XCTAssertTrue(win.makeFirstResponder(overlay.renameButtonForTesting))
-
-        try pressKey(keyCode: 36, characters: "\r", in: win)
-
-        XCTAssertEqual(submitted, ["build"])
-        XCTAssertEqual(cancelCount, 0)
+        XCTAssertEqual(label.textColor, Theme.current.chrome.ink(.muted))
     }
 
     private func overlay(in host: NSView) throws -> RenameTabOverlay {
         try XCTUnwrap(host.subviews.compactMap { $0 as? RenameTabOverlay }.first)
     }
 
-    private func center(of button: AppButton) -> CGPoint {
-        button.convert(CGPoint(x: button.bounds.midX, y: button.bounds.midY), to: nil)
+    private func descendants(of view: NSView) -> [NSView] {
+        view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
-    private func click(_ button: AppButton, in host: NSView) throws {
-        let point = center(of: button)
-        let target = try XCTUnwrap(host.hitTest(host.convert(point, from: nil)))
-        XCTAssertTrue(target.isDescendant(of: button), "the click lands on the button")
-        try XCTUnwrap(target as? AppButton).performClick(nil)
-    }
-
-    private func pressKey(
-        keyCode: UInt16, characters: String, modifiers: NSEvent.ModifierFlags = [], in win: NSWindow
-    ) throws {
-        let event = try XCTUnwrap(
+    private func escapeKey() throws -> NSEvent {
+        try XCTUnwrap(
             NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 0,
-                windowNumber: win.windowNumber, context: nil, characters: characters,
-                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode))
-        try XCTUnwrap(win.firstResponder as? NSResponder).keyDown(with: event)
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                context: nil, characters: "\u{1B}", charactersIgnoringModifiers: "\u{1B}",
+                isARepeat: false, keyCode: 53))
     }
 
     private func sendReturnThroughField(of overlay: RenameTabOverlay) throws {

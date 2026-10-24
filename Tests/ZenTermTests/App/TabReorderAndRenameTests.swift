@@ -96,7 +96,7 @@ final class TabReorderAndRenameTests: WindowTestCase {
         controller.handle(.renameTab)
         let card = try renameCard(controller)
         card.nameFieldForTesting.setText(name)
-        card.renameButtonForTesting.onTap()
+        try XCTUnwrap(card.nameFieldForTesting.onEnter)()
     }
 
     func test_renameTab_commitsThroughToTheBar() throws {
@@ -139,7 +139,7 @@ final class TabReorderAndRenameTests: WindowTestCase {
         controller.renameTabForTesting(index: 1)
         let card = try renameCard(controller)
         card.nameFieldForTesting.setText("second")
-        card.renameButtonForTesting.onTap()
+        try XCTUnwrap(card.nameFieldForTesting.onEnter)()
 
         XCTAssertEqual(controller.tabTitlesForTesting.last, "second", "the clicked tab, not the active one")
     }
