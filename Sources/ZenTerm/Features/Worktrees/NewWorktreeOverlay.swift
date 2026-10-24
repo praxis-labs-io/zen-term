@@ -53,7 +53,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// `WorktreeStore.create` can't be cancelled, so Esc and the backdrop lock while it runs.
+    // `WorktreeStore.create` can't be cancelled, so Esc and the backdrop lock while it runs.
     override var isBusy: Bool { isWorking }
 
     override var isShowingOverlaidCard: Bool { confirm.isShowing }

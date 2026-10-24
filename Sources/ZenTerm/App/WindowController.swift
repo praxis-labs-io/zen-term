@@ -1932,7 +1932,10 @@ final class WindowController: NSObject {
                 self?.submitToolFloat(built, replacing: originalID, returnTo: returnTo)
             },
             onCancel: { [weak self] in self?.finishToolFloatForm(returnTo) },
-            onDismiss: { [weak self] in self?.closeModal() },
+            onDismiss: { [weak self] in
+                self?.toolFormReturn = nil
+                self?.closeModal()
+            },
             onDelete: float.map { existing in { [weak self] in self?.deleteToolFloat(existing) } }
         )
         toolFormReturn = returnTo
