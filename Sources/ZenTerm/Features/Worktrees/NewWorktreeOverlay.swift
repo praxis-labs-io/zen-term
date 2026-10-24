@@ -1,16 +1,14 @@
 import AppKit
 
-final class NewWorktreeOverlay: NSView, ModalOverlay {
+final class NewWorktreeOverlay: ModalShell, ModalOverlay {
+    static let width: CGFloat = 460
+
     private let workspace: Workspace
     private let options: WorktreeStore.CreateOptions
     private let onSubmit: (Request) -> Void
-    private let onCancel: () -> Void
-    private let onDismiss: () -> Void
     private let onEditWorkspace: (() -> Void)?
 
-    private let card = CardView()
     private var footerDivider: ThemeReapplying?
-    private var dismiss = DismissGate()
     private lazy var confirm = ConfirmSlot(over: self)
     private let header = NSTextField(labelWithString: "")
 
@@ -36,7 +34,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         title: "Create Worktree", variant: .primary, keyEquivalent: "\r",
         keyEquivalentModifierMask: .command)
 
-    /// `WorktreeStore.create` can't be cancelled, so Esc and the backdrop lock while it runs.
     private var isWorking = false
 
     init(
@@ -47,84 +44,27 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         self.workspace = workspace
         self.options = options
         self.onSubmit = onSubmit
-        self.onCancel = onCancel
-        self.onDismiss = onDismiss
         self.onEditWorkspace = onEditWorkspace
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-
-        let backdrop = BackdropView(onClick: { [weak self] in self?.dismissToTerminal() })
-        backdrop.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(backdrop)
-
-        CardChrome.apply(to: card)
-        card.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(card)
-
-        let content = buildContent()
-        card.addSubview(content)
-
-        let cardWidth = card.widthAnchor.constraint(equalToConstant: 460)
-        cardWidth.priority = .defaultHigh
-        NSLayoutConstraint.activate([
-            backdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
-            backdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
-            backdrop.topAnchor.constraint(equalTo: topAnchor),
-            backdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
-
-            card.centerXAnchor.constraint(equalTo: centerXAnchor),
-            card.centerYAnchor.constraint(equalTo: centerYAnchor),
-            cardWidth,
-            card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.92),
-            card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.92),
-            card.heightAnchor.constraint(lessThanOrEqualToConstant: FormCard.maxHeight),
-
-            content.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            content.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            content.topAnchor.constraint(equalTo: card.topAnchor),
-            content.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-        ])
-
+        super.init(width: Self.width, onCancel: onCancel, onDismiss: onDismiss)
+        card.heightAnchor.constraint(lessThanOrEqualToConstant: FormCard.maxHeight).isActive = true
+        embed(buildContent())
         baseChanged(baseSegment.selectedIndex)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    var isShowingOverlaidCard: Bool { confirm.isShowing }
+    /// `WorktreeStore.create` can't be cancelled, so Esc and the backdrop lock while it runs.
+    override var isBusy: Bool { isWorking }
+
+    override var isShowingOverlaidCard: Bool { confirm.isShowing }
 
     func focusInitialResponder() {
         if let card = confirm.card { card.focusInitialResponder() } else { focus(branchField.field) }
     }
 
-    func animateIn() {
-        superview?.layoutSubtreeIfNeeded()
-        Motion.springScaleFade(card, appearing: true)
-    }
-
-    func animateOut(completion: @escaping () -> Void) {
-        guard dismiss.begin() else { return }
-        Motion.springScaleFade(card, appearing: false, completion: completion)
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        dismiss.isDismissing ? nil : super.hitTest(point)
-    }
-
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if confirm.isShowing { return super.performKeyEquivalent(with: event) }
-        if ModalEscape.handle(
-            event, in: window, dismissing: dismiss.isDismissing || isWorking,
-            close: { self.onCancel() })
-        {
-            return true
-        }
-        return super.performKeyEquivalent(with: event)
-    }
-
-    func reapplyTheme() {
+    override func reapplyTheme() {
+        super.reapplyTheme()
         let chrome = Theme.current.chrome
-        CardChrome.reapplyTheme(to: card)
         header.textColor = chrome.ink(.normal)
         baseCaption.textColor = chrome.ink(.muted)
         branchCaption.textColor = chrome.ink(.muted)
@@ -278,11 +218,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
 
     private func isFocused(_ view: NSView) -> Bool { KeyboardFocus.isFocused(view, in: window) }
 
-    private func focus(_ view: NSView?) {
-        guard let view else { return }
-        window?.makeFirstResponder(view)
-    }
-
     private func wireBranchField() {
         branchField.onChange = { [weak self] in self?.refreshValidity() }
         branchField.onArrowUp = { [weak self] in self?.moveVertical(-1) }
@@ -310,16 +245,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
 
     private static func startsFrom(_ ref: String?, _ fallback: String) -> String {
         "Starts from \(ref ?? fallback)."
-    }
-
-    private func cancel() {
-        guard !isWorking else { return }
-        onCancel()
-    }
-
-    private func dismissToTerminal() {
-        guard !isWorking else { return }
-        onDismiss()
     }
 
     private func submit() {
