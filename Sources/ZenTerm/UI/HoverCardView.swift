@@ -3,12 +3,7 @@ import AppKit
 class HoverCardView: ShadowCardView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        wantsLayer = true
-        layer?.cornerRadius = ChromeMetrics.Radius.surface
-        layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
-        layer?.borderWidth = ChromeMetrics.Border.width
-        layer?.borderColor = FloatShadow.edge.cgColor
-        FloatShadow.apply(.overlay, to: self)
+        CardChrome.apply(to: self, tier: .overlay)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
