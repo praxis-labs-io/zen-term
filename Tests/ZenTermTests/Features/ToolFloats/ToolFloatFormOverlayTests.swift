@@ -8,7 +8,11 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         private(set) var handler: ((NSEvent) -> Void)?
         var isArmed: Bool { handler != nil }
         func beginCapture(_ handler: @escaping (NSEvent) -> Void) { self.handler = handler }
-        func endCapture() { handler = nil }
+        private(set) var endCount = 0
+        func endCapture() {
+            handler = nil
+            endCount += 1
+        }
         func feed(_ event: NSEvent) { handler?(event) }
     }
 
@@ -67,6 +71,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
                 return sink.failure
             },
             onCancel: { sink.cancelled += 1 },
+            onDismiss: {},
             onDelete: withDelete
                 ? {
                     sink.deleted += 1
@@ -702,5 +707,18 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         XCTAssertFalse(pressEscape(), "a dismissing card must let Esc pass to the card behind it")
 
         XCTAssertEqual(sink.cancelled, 0, "and must not re-run its own cancel")
+    }
+
+    func test_dismissing_endsAnArmedCaptureOnce_andClearsTheHint() {
+        let (overlay, capturer, _) = mount()
+        chip(in: overlay).onActivate?()
+        XCTAssertTrue(capturer.isArmed)
+
+        overlay.animateOut {}
+        overlay.animateOut {}
+
+        XCTAssertEqual(capturer.endCount, 1)
+        XCTAssertFalse(capturer.isArmed)
+        XCTAssertFalse(descendants(of: overlay).contains { $0 is KeybindHintBubble })
     }
 }

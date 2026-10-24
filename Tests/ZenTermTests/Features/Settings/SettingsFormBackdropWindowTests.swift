@@ -95,4 +95,26 @@ final class SettingsFormBackdropWindowTests: WindowTestCase {
         waitUntil(
             overlay(SettingsOverlay.self, in: c).map { !$0.isDismissing } == true, "Settings to return")
     }
+
+    func test_toolFloatForm_backdropClickClosesTheWholeStack() throws {
+        let c = makeWindow()
+        try openSettingsSection(titled: "Tools", button: "＋ Add tool float", in: c)
+        waitUntil(overlay(ToolFloatFormOverlay.self, in: c) != nil, "the tool float form to open")
+
+        try clickBackdrop(of: try XCTUnwrap(overlay(ToolFloatFormOverlay.self, in: c)))
+
+        XCTAssertFalse(c.isModalOverlayOpen)
+    }
+
+    func test_toolFloatForm_escapeReturnsToSettings() throws {
+        let c = makeWindow()
+        try openSettingsSection(titled: "Tools", button: "＋ Add tool float", in: c)
+        waitUntil(overlay(ToolFloatFormOverlay.self, in: c) != nil, "the tool float form to open")
+
+        _ = try XCTUnwrap(overlay(ToolFloatFormOverlay.self, in: c)).performKeyEquivalent(with: escape)
+
+        XCTAssertTrue(c.isModalOverlayOpen)
+        waitUntil(
+            overlay(SettingsOverlay.self, in: c).map { !$0.isDismissing } == true, "Settings to return")
+    }
 }

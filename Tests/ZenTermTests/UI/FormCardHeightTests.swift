@@ -19,7 +19,7 @@ final class FormCardHeightTests: WindowTestCase {
     func test_theToolFloatForm_staysUnderTheCap() throws {
         let overlay = ToolFloatFormOverlay(
             editing: nil, existingIDs: [], capturer: NoCapture(),
-            onSubmit: { _ in nil }, onCancel: {})
+            onSubmit: { _ in nil }, onCancel: {}, onDismiss: {})
         XCTAssertLessThanOrEqual(try cardHeight(of: overlay), FormCard.maxHeight)
     }
 
@@ -31,7 +31,7 @@ final class FormCardHeightTests: WindowTestCase {
             toggle: Chord(command: true, shift: true, key: "l"))
         let overlay = ToolFloatFormOverlay(
             editing: float, existingIDs: [], capturer: NoCapture(),
-            onSubmit: { _ in long }, onCancel: {})
+            onSubmit: { _ in long }, onCancel: {}, onDismiss: {})
         _ = try cardHeight(of: overlay)
 
         func walk(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(walk) }
