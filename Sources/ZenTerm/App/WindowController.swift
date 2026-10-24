@@ -2002,7 +2002,8 @@ final class WindowController: NSObject {
             onSubmit: { [weak self] host in
                 edited == nil ? self?.addSSHHost(host) : self?.renameSSHHost(host)
             },
-            onCancel: { [weak self] in self?.reopenSettingsOnSSHHosts(focusing: edited.map { .host($0) }) })
+            onCancel: { [weak self] in self?.reopenSettingsOnSSHHosts(focusing: edited.map { .host($0) }) },
+            onDismiss: { [weak self] in self?.closeModal() })
         presentModal(overlay, kind: .sshHostForm)
     }
 
