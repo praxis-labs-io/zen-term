@@ -7,8 +7,14 @@ final class RenameTabOverlay: ModalShell, ModalOverlay {
 
     private let header = NSTextField(labelWithString: "")
     private let nameField: FieldBox
-    private let cancelButton: IconButton
-    private let saveButton: IconButton
+    private lazy var cancelButton = IconButton(
+        symbol: "xmark", size: NSSize(width: ChromeMetrics.Height.control, height: ChromeMetrics.Height.control),
+        accessibilityLabel: "Cancel"
+    ) { [weak self] in self?.cancel() }
+    private lazy var renameButton = IconButton(
+        symbol: "checkmark", size: NSSize(width: ChromeMetrics.Height.control, height: ChromeMetrics.Height.control),
+        accessibilityLabel: "Rename"
+    ) { [weak self] in self?.submit() }
 
     init(
         current: String, liveTitle: String,
@@ -16,20 +22,15 @@ final class RenameTabOverlay: ModalShell, ModalOverlay {
     ) {
         self.onSubmit = onSubmit
         nameField = FieldBox(placeholder: liveTitle)
-        let buttonSize = NSSize(width: ChromeMetrics.Height.control, height: ChromeMetrics.Height.control)
-        cancelButton = IconButton(symbol: "xmark", size: buttonSize, accessibilityLabel: "Cancel", onClick: {})
-        saveButton = IconButton(symbol: "checkmark", size: buttonSize, accessibilityLabel: "Rename", onClick: {})
         super.init(width: Self.width, onCancel: onCancel)
         nameField.setText(current)
-        cancelButton.onClick = { [weak self] in self?.cancel() }
-        saveButton.onClick = { [weak self] in self?.submit() }
         embed(buildContent())
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     var nameFieldForTesting: FieldBox { nameField }
-    var saveButtonForTesting: IconButton { saveButton }
+    var renameButtonForTesting: IconButton { renameButton }
     var cancelButtonForTesting: IconButton { cancelButton }
 
     func focusInitialResponder() {
@@ -43,7 +44,7 @@ final class RenameTabOverlay: ModalShell, ModalOverlay {
         header.textColor = chrome.ink(.normal)
         nameField.reapplyTheme()
         cancelButton.reapplyTheme()
-        saveButton.reapplyTheme()
+        renameButton.reapplyTheme()
     }
 
     private func buildContent() -> NSStackView {
@@ -54,10 +55,10 @@ final class RenameTabOverlay: ModalShell, ModalOverlay {
         nameField.onEnter = { [weak self] in self?.submit() }
         nameField.onSubmit = { [weak self] in self?.submit() }
 
-        for button in [cancelButton, saveButton] { button.firesOnRelease = true }
+        for button in [cancelButton, renameButton] { button.firesOnRelease = true }
 
         nameField.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let inputRow = NSStackView(views: [nameField, cancelButton, saveButton])
+        let inputRow = NSStackView(views: [nameField, cancelButton, renameButton])
         inputRow.orientation = .horizontal
         inputRow.alignment = .centerY
         inputRow.spacing = ChromeMetrics.Spacing.s8

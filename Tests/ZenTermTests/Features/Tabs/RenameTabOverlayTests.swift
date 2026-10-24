@@ -46,7 +46,7 @@ final class RenameTabOverlayTests: WindowTestCase {
         let overlay = try overlay(in: host)
         overlay.nameFieldForTesting.setText("  api  ")
 
-        try click(overlay.saveButtonForTesting, in: host)
+        try click(overlay.renameButtonForTesting, in: host)
 
         XCTAssertEqual(submitted, ["api"])
         XCTAssertEqual(cancelCount, 0)
@@ -65,7 +65,7 @@ final class RenameTabOverlayTests: WindowTestCase {
     func test_pressOnRename_releasedOutside_doesNothing() throws {
         let host = try mount()
         let overlay = try overlay(in: host)
-        let button = overlay.saveButtonForTesting
+        let button = overlay.renameButtonForTesting
         let inside = center(of: button)
 
         button.mouseDown(with: try mouse(.leftMouseDown, at: inside))
@@ -78,10 +78,10 @@ final class RenameTabOverlayTests: WindowTestCase {
     func test_buttons_areLabelledAndSquareAtTheFieldHeight() throws {
         let overlay = try overlay(in: try mount())
 
-        XCTAssertEqual(overlay.saveButtonForTesting.tooltipLabelForTesting, "Rename")
+        XCTAssertEqual(overlay.renameButtonForTesting.tooltipLabelForTesting, "Rename")
         XCTAssertEqual(overlay.cancelButtonForTesting.tooltipLabelForTesting, "Cancel")
-        XCTAssertEqual(overlay.saveButtonForTesting.frame.size, overlay.cancelButtonForTesting.frame.size)
-        XCTAssertEqual(overlay.saveButtonForTesting.frame.height, overlay.nameFieldForTesting.frame.height)
+        XCTAssertEqual(overlay.renameButtonForTesting.frame.size, overlay.cancelButtonForTesting.frame.size)
+        XCTAssertEqual(overlay.renameButtonForTesting.frame.height, overlay.nameFieldForTesting.frame.height)
     }
 
     private func overlay(in host: NSView) throws -> RenameTabOverlay {
