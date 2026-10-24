@@ -7,7 +7,7 @@ final class RenameTabOverlay: ModalShell, ModalOverlay {
 
     private let header = NSTextField(labelWithString: "")
     private let nameField: FieldBox
-    private lazy var cancelButton = AppButton(variant: .secondary, symbol: "xmark") { [weak self] in self?.cancel() }
+    private lazy var cancelButton = AppButton(variant: .muted, symbol: "xmark") { [weak self] in self?.cancel() }
     private lazy var renameButton = AppButton(variant: .primary, symbol: "checkmark") { [weak self] in
         self?.submit()
     }
