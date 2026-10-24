@@ -87,6 +87,7 @@ final class RenameTabOverlay: ModalShell, ModalOverlay {
     }
 
     private func submit() {
+        guard !isDismissing else { return }
         onSubmit(nameField.text.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 }
