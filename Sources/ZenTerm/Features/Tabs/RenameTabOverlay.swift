@@ -1,11 +1,9 @@
 import AppKit
 
-final class RenameTabOverlay: NSView, ModalOverlay {
-    private let onSubmit: (String) -> Void
-    private let onCancel: () -> Void
+final class RenameTabOverlay: ModalShell, ModalOverlay {
+    static let width: CGFloat = 380
 
-    private let card = CardView()
-    private var dismiss = DismissGate()
+    private let onSubmit: (String) -> Void
 
     private let header = NSTextField(labelWithString: "")
     private let nameField: FieldBox
@@ -17,42 +15,10 @@ final class RenameTabOverlay: NSView, ModalOverlay {
         onSubmit: @escaping (String) -> Void, onCancel: @escaping () -> Void
     ) {
         self.onSubmit = onSubmit
-        self.onCancel = onCancel
         nameField = FieldBox(placeholder: liveTitle)
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-
-        let backdrop = BackdropView(onClick: onCancel)
-        backdrop.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(backdrop)
-
-        CardChrome.apply(to: card)
-        card.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(card)
-
+        super.init(width: Self.width, onCancel: onCancel)
         nameField.setText(current)
-        let content = buildContent()
-        card.addSubview(content)
-
-        let cardWidth = card.widthAnchor.constraint(equalToConstant: 380)
-        cardWidth.priority = .defaultHigh
-        NSLayoutConstraint.activate([
-            backdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
-            backdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
-            backdrop.topAnchor.constraint(equalTo: topAnchor),
-            backdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
-
-            card.centerXAnchor.constraint(equalTo: centerXAnchor),
-            card.centerYAnchor.constraint(equalTo: centerYAnchor),
-            cardWidth,
-            card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.92),
-
-            content.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            content.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            content.topAnchor.constraint(equalTo: card.topAnchor),
-            content.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-        ])
+        embed(buildContent())
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -65,32 +31,9 @@ final class RenameTabOverlay: NSView, ModalOverlay {
         nameField.field.currentEditor()?.selectAll(nil)
     }
 
-    func animateIn() {
-        superview?.layoutSubtreeIfNeeded()
-        Motion.springScaleFade(card, appearing: true)
-    }
-
-    func animateOut(completion: @escaping () -> Void) {
-        guard dismiss.begin() else { return }
-        Motion.springScaleFade(card, appearing: false, completion: completion)
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        dismiss.isDismissing ? nil : super.hitTest(point)
-    }
-
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if ModalEscape.handle(
-            event, in: window, dismissing: dismiss.isDismissing, close: { self.onCancel() })
-        {
-            return true
-        }
-        return super.performKeyEquivalent(with: event)
-    }
-
-    func reapplyTheme() {
+    override func reapplyTheme() {
+        super.reapplyTheme()
         let chrome = Theme.current.chrome
-        CardChrome.reapplyTheme(to: card)
         header.textColor = chrome.ink(.normal)
         let controls: [ThemeReapplying] = [nameField, cancelButton, renameButton]
         controls.forEach { $0.reapplyTheme() }
@@ -104,7 +47,7 @@ final class RenameTabOverlay: NSView, ModalOverlay {
         nameField.onEnter = { [weak self] in self?.submit() }
         nameField.onSubmit = { [weak self] in self?.submit() }
 
-        cancelButton.onTap = { [weak self] in self?.onCancel() }
+        cancelButton.onTap = { [weak self] in self?.cancel() }
         renameButton.onTap = { [weak self] in self?.submit() }
         for button in [cancelButton, renameButton] {
             button.isKeyboardFocusable = true
