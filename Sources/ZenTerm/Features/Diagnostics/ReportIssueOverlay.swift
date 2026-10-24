@@ -1,13 +1,11 @@
 import AppKit
 
-final class ReportIssueOverlay: NSView, ModalOverlay {
+final class ReportIssueOverlay: ModalShell, ModalOverlay {
+    static let width: CGFloat = 460
+
     private let report: SystemReport
     private let onOpenURL: (URL) -> Void
     private let onExportDiagnostics: () -> Void
-    private let onCancel: () -> Void
-
-    private let card = CardView()
-    private var dismiss = DismissGate()
 
     private let header = NSTextField(labelWithString: "")
     private let titleField = FieldBox(placeholder: "A short summary")
@@ -31,74 +29,17 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         self.report = report
         self.onOpenURL = onOpenURL
         self.onExportDiagnostics = onExportDiagnostics
-        self.onCancel = onCancel
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-
-        let backdrop = BackdropView(onClick: onCancel)
-        backdrop.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(backdrop)
-
-        CardChrome.apply(to: card)
-        card.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(card)
-
-        let content = buildContent()
-        card.addSubview(content)
-
-        let cardWidth = card.widthAnchor.constraint(equalToConstant: 460)
-        cardWidth.priority = .defaultHigh
-        NSLayoutConstraint.activate([
-            backdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
-            backdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
-            backdrop.topAnchor.constraint(equalTo: topAnchor),
-            backdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
-
-            card.centerXAnchor.constraint(equalTo: centerXAnchor),
-            card.centerYAnchor.constraint(equalTo: centerYAnchor),
-            cardWidth,
-            card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.92),
-            card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.92),
-
-            content.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            content.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            content.topAnchor.constraint(equalTo: card.topAnchor),
-            content.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-        ])
+        super.init(width: Self.width, onCancel: onCancel)
+        embed(buildContent())
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func focusInitialResponder() { window?.makeFirstResponder(titleField.field) }
 
-    func animateIn() {
-        superview?.layoutSubtreeIfNeeded()
-        Motion.springScaleFade(card, appearing: true)
-    }
-
-    func animateOut(completion: @escaping () -> Void) {
-        guard dismiss.begin() else { return }
-        Motion.springScaleFade(card, appearing: false, completion: completion)
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        dismiss.isDismissing ? nil : super.hitTest(point)
-    }
-
-    /// Esc is claimed here because a focused text field's editor consumes it before `keyDown`.
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if ModalEscape.handle(
-            event, in: window, dismissing: dismiss.isDismissing, close: { self.onCancel() }
-        ) {
-            return true
-        }
-        return super.performKeyEquivalent(with: event)
-    }
-
-    func reapplyTheme() {
+    override func reapplyTheme() {
+        super.reapplyTheme()
         let chrome = Theme.current.chrome
-        CardChrome.reapplyTheme(to: card)
         header.textColor = chrome.ink(.normal)
         envText.textColor = chrome.ink(.muted)
         envText.applyThemedEditor()
@@ -157,7 +98,7 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
 
     private func buildFooter() -> NSStackView {
         exportButton.onTap = { [weak self] in self?.onExportDiagnostics() }
-        cancelButton.onTap = { [weak self] in self?.onCancel() }
+        cancelButton.onTap = { [weak self] in self?.cancel() }
         openButton.onTap = { [weak self] in self?.submit() }
 
         for button in [exportButton, cancelButton, openButton] {
@@ -215,11 +156,6 @@ final class ReportIssueOverlay: NSView, ModalOverlay {
         box.onTab = { [weak self] in self?.moveTab(1) }
         box.onBacktab = { [weak self] in self?.moveTab(-1) }
         box.onSubmit = { [weak self] in self?.submit() }
-    }
-
-    private func focus(_ view: NSView?) {
-        guard let view else { return }
-        window?.makeFirstResponder(view)
     }
 
     private func submit() {
