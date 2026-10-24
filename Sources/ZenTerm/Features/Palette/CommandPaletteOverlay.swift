@@ -28,9 +28,9 @@ final class CommandPaletteOverlay: PaletteOverlay {
             placeholder: "Search commands…",
             emptyText: "No matching commands",
             footerHints: [
-                PaletteHint(keys: "⏎", label: "run"),
-                PaletteHint(keys: "↑↓", label: "move"),
-                PaletteHint(keys: "⎋", label: "close"),
+                HintFooter.Hint(keys: "⏎", label: "run"),
+                HintFooter.Hint(keys: "↑↓", label: "move"),
+                HintFooter.Hint(keys: "⎋", label: "close"),
             ],
             rowHeight: Self.commandHeight,
             onDismiss: onDismiss)

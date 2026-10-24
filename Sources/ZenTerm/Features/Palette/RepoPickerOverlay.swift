@@ -435,17 +435,17 @@ final class RepoPickerOverlay: PaletteOverlay {
         return candidates.compactMap { FuzzyMatch.score(query, $0) }.max()
     }
 
-    static func footerHints() -> [PaletteHint] {
+    static func footerHints() -> [HintFooter.Hint] {
         var hints = [
-            PaletteHint(keys: "⏎", label: "new workspace"), PaletteHint(keys: "⏎", label: "open"),
-            PaletteHint(keys: "⏎", label: "switch"),
+            HintFooter.Hint(keys: "⏎", label: "new workspace"), HintFooter.Hint(keys: "⏎", label: "open"),
+            HintFooter.Hint(keys: "⏎", label: "switch"),
         ]
         if let chord = Chord.displayed(.createWorktree, in: GeneralConfig.current.keymap) {
-            hints.append(PaletteHint(keys: chord.displayGlyph, label: "new worktree"))
+            hints.append(HintFooter.Hint(keys: chord.displayGlyph, label: "new worktree"))
         }
         if let chord = Chord.displayed(.removeWorktree, in: GeneralConfig.current.keymap) {
-            hints.append(PaletteHint(keys: chord.displayGlyph, label: "remove worktree"))
-            hints.append(PaletteHint(keys: chord.displayGlyph, label: "close workspace"))
+            hints.append(HintFooter.Hint(keys: chord.displayGlyph, label: "remove worktree"))
+            hints.append(HintFooter.Hint(keys: chord.displayGlyph, label: "close workspace"))
         }
         return hints
     }

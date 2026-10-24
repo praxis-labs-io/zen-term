@@ -7,8 +7,7 @@ final class RenameTabOverlay: ModalShell, ModalOverlay {
 
     private let header = NSTextField(labelWithString: "")
     private let nameField: FieldBox
-    private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
-    private let renameButton = AppButton(title: "Rename", variant: .primary, keyEquivalent: "\r")
+    private let footer = HintFooter([.init(keys: "⏎", label: "Save"), .init(keys: "⎋", label: "Cancel")])
 
     init(
         current: String, liveTitle: String,
@@ -24,7 +23,6 @@ final class RenameTabOverlay: ModalShell, ModalOverlay {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     var nameFieldForTesting: FieldBox { nameField }
-    var renameButtonForTesting: AppButton { renameButton }
 
     func focusInitialResponder() {
         window?.makeFirstResponder(nameField.field)
@@ -35,8 +33,8 @@ final class RenameTabOverlay: ModalShell, ModalOverlay {
         super.reapplyTheme()
         let chrome = Theme.current.chrome
         header.textColor = chrome.ink(.normal)
-        let controls: [ThemeReapplying] = [nameField, cancelButton, renameButton]
-        controls.forEach { $0.reapplyTheme() }
+        nameField.reapplyTheme()
+        footer.reapplyTheme()
     }
 
     private func buildContent() -> NSStackView {
@@ -47,26 +45,7 @@ final class RenameTabOverlay: ModalShell, ModalOverlay {
         nameField.onEnter = { [weak self] in self?.submit() }
         nameField.onSubmit = { [weak self] in self?.submit() }
 
-        cancelButton.onTap = { [weak self] in self?.cancel() }
-        renameButton.onTap = { [weak self] in self?.submit() }
-        for button in [cancelButton, renameButton] {
-            button.isKeyboardFocusable = true
-        }
-        cancelButton.onArrowRight = { [weak self] in self?.focus(self?.renameButton) }
-        renameButton.onArrowLeft = { [weak self] in self?.focus(self?.cancelButton) }
-        cancelButton.onTab = { [weak self] in self?.focus(self?.renameButton) }
-        renameButton.onTab = { [weak self] in self?.focus(self?.nameField.field) }
-        renameButton.onBacktab = { [weak self] in self?.focus(self?.cancelButton) }
-        cancelButton.onBacktab = { [weak self] in self?.focus(self?.nameField.field) }
-
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let footer = NSStackView(views: [spacer, cancelButton, renameButton])
-        footer.orientation = .horizontal
-        footer.spacing = ChromeMetrics.Spacing.s8
-        footer.translatesAutoresizingMaskIntoConstraints = false
-
-        let content = NSStackView(views: [header, nameField, footer])
+        let content = NSStackView(views: [header, nameField])
         content.orientation = .vertical
         content.alignment = .leading
         content.spacing = ChromeMetrics.Spacing.modalSectionGap
@@ -78,12 +57,17 @@ final class RenameTabOverlay: ModalShell, ModalOverlay {
                 constant: -(ChromeMetrics.Spacing.modalInsets.left + ChromeMetrics.Spacing.modalInsets.right)
             ).isActive = true
         }
-        return content
-    }
 
-    private func focus(_ view: NSView?) {
-        guard let view else { return }
-        window?.makeFirstResponder(view)
+        let card = NSStackView(views: [content, footer])
+        card.translatesAutoresizingMaskIntoConstraints = false
+        card.orientation = .vertical
+        card.alignment = .leading
+        card.spacing = 0
+        NSLayoutConstraint.activate([
+            content.widthAnchor.constraint(equalTo: card.widthAnchor),
+            footer.widthAnchor.constraint(equalTo: card.widthAnchor),
+        ])
+        return card
     }
 
     private func submit() {

@@ -5,11 +5,6 @@ protocol PaletteRowView: NSView {
     var onActivate: (() -> Void)? { get set }
 }
 
-struct PaletteHint {
-    let keys: String
-    let label: String
-}
-
 class SelectableRowView: NSView, PaletteRowView {
     var onActivate: (() -> Void)?
     var isSelected = false { didSet { updateBackground() } }
@@ -42,13 +37,10 @@ class PaletteOverlay: NSView, ModalOverlay {
     private let searchField = NSTextField()
     private let searchPlaceholder: String
     private let divider = NSView()
-    private let footerDivider = NSView()
     private let rowsStack = NSStackView()
     private let scrollView: FadingScrollView
     private let emptyLabel: NSTextField
-    private var footerHintLabels: [NSTextField] = []
-    private var footerHintItems: [String: NSView] = [:]
-    private var footerKeycaps: [KeycapView] = []
+    private let footer: HintFooter
     private let defaultRowHeight: CGFloat
     private let maxListHeight: CGFloat
     private let emptyListHeight: CGFloat
@@ -64,7 +56,7 @@ class PaletteOverlay: NSView, ModalOverlay {
     private var animatesNextReload = false
 
     init(
-        placeholder: String, emptyText: String, footerHints: [PaletteHint],
+        placeholder: String, emptyText: String, footerHints: [HintFooter.Hint],
         rowHeight: CGFloat, maxListHeight: CGFloat = 320, emptyListHeight: CGFloat = ChromeMetrics.Height.xl,
         onDismiss: @escaping () -> Void
     ) {
@@ -74,6 +66,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         self.emptyListHeight = emptyListHeight
         self.emptyLabel = NSTextField(labelWithString: emptyText)
         self.searchPlaceholder = placeholder
+        self.footer = HintFooter(footerHints)
         let doc = FlippedView()
         self.scrollView = FadingScrollView(document: doc)
         super.init(frame: .zero)
@@ -107,7 +100,7 @@ class PaletteOverlay: NSView, ModalOverlay {
             top: ChromeMetrics.Spacing.s12, left: ChromeMetrics.Spacing.s12, bottom: ChromeMetrics.Spacing.s12,
             right: ChromeMetrics.Spacing.s12)
 
-        for hairline in [divider, footerDivider] {
+        for hairline in [divider] {
             hairline.wantsLayer = true
             hairline.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor
             hairline.translatesAutoresizingMaskIntoConstraints = false
@@ -128,16 +121,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         emptyLabel.isHidden = true
         scrollView.contentView.addSubview(emptyLabel)
 
-        let (footer, footerLabels, footerKeycaps, footerItems) = Self.makeFooter(footerHints)
-        self.footerHintLabels = footerLabels
-        self.footerKeycaps = footerKeycaps
-        self.footerHintItems = footerItems
-        footer.translatesAutoresizingMaskIntoConstraints = false
-        let footerRow = NSView()
-        footerRow.translatesAutoresizingMaskIntoConstraints = false
-        footerRow.addSubview(footer)
-
-        let stack = NSStackView(views: [searchRow, divider, scrollView, footerDivider, footerRow])
+        let stack = NSStackView(views: [searchRow, divider, scrollView, footer])
         stack.orientation = .vertical
         stack.spacing = 0
         stack.alignment = .leading
@@ -167,12 +151,8 @@ class PaletteOverlay: NSView, ModalOverlay {
 
             searchRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             divider.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            footerDivider.widthAnchor.constraint(equalTo: stack.widthAnchor),
             scrollView.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            footerRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            footerRow.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.lg),
-            footer.centerXAnchor.constraint(equalTo: footerRow.centerXAnchor),
-            footer.centerYAnchor.constraint(equalTo: footerRow.centerYAnchor),
+            footer.widthAnchor.constraint(equalTo: stack.widthAnchor),
             listHeight,
 
             doc.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
@@ -233,12 +213,11 @@ class PaletteOverlay: NSView, ModalOverlay {
         searchField.textColor = chrome.ink(.normal)
         searchField.applyThemedEditor()
         applyPlaceholder()
-        for hairline in [divider, footerDivider] {
+        for hairline in [divider] {
             hairline.layer?.backgroundColor = chrome.fill(alpha: ChromeTheme.hairline).cgColor
         }
         emptyLabel.textColor = chrome.ink(.muted)
-        footerHintLabels.forEach { $0.textColor = chrome.ink(.muted) }
-        footerKeycaps.forEach { $0.reapplyTheme() }
+        footer.reapplyTheme()
         laidOutRows.forEach { $0.view.removeFromSuperview() }
         laidOutRows = []
         applyFilter(query: searchField.stringValue)
@@ -397,7 +376,7 @@ class PaletteOverlay: NSView, ModalOverlay {
     func selectionChanged() {}
 
     func setFooterHint(_ label: String, isShown: Bool) {
-        footerHintItems[label]?.isHidden = !isShown
+        footer.setHint(label, isShown: isShown)
     }
 
     private func scrollSelectedToVisible(travelling: KeyboardFocus.Travel = .unknown) {
@@ -405,34 +384,6 @@ class PaletteOverlay: NSView, ModalOverlay {
         let stops = laidOutRows.indices.filter { isSelectable(at: $0) }.map { laidOutRows[$0].view }
         KeyboardFocus.reveal(laidOutRows[selected].view, among: stops, travelling: travelling)
     }
-
-    private static func makeFooter(_ hints: [PaletteHint]) -> (
-        view: NSStackView, labels: [NSTextField], keycaps: [KeycapView], items: [String: NSView]
-    ) {
-        var labels: [NSTextField] = []
-        var keycaps: [KeycapView] = []
-        var byLabel: [String: NSView] = [:]
-        let items = hints.map { hint -> NSView in
-            let keycap = KeycapView(shortcut: hint.keys)
-            let label = NSTextField(labelWithString: hint.label)
-            label.font = ChromeType.font(.caption, weight: .medium)
-            label.textColor = Theme.current.chrome.ink(.muted)
-            keycaps.append(keycap)
-            labels.append(label)
-            let item = NSStackView(views: [keycap, label])
-            item.orientation = .horizontal
-            item.spacing = ChromeMetrics.Spacing.s4
-            item.alignment = .centerY
-            byLabel[hint.label] = item
-            return item
-        }
-        let stack = NSStackView(views: items)
-        stack.orientation = .horizontal
-        stack.spacing = ChromeMetrics.Spacing.s16
-        stack.alignment = .centerY
-        return (stack, labels, keycaps, byLabel)
-    }
-
 }
 
 extension PaletteOverlay: NSTextFieldDelegate {
