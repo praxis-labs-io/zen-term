@@ -11,8 +11,9 @@ final class KeybindHintBubble: ShadowCardView {
 
     private let previewHost = NSView()
     private let previewBox = NSView()
-    private let badge = NSView()
-    private let icon = NSImageView()
+    private let badge = IconBadge(
+        symbol: "keyboard", accessibilityDescription: "Record a shortcut", size: .regular,
+        role: { $0.accent })
     private let title = NSTextField(labelWithString: "Record a shortcut")
     private var previewGlyph = ""
     private var successText: String?
@@ -31,14 +32,6 @@ final class KeybindHintBubble: ShadowCardView {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         CardChrome.apply(to: self, tier: .overlay)
-
-        badge.wantsLayer = true
-        badge.layer?.cornerRadius = ChromeMetrics.Radius.control
-        badge.translatesAutoresizingMaskIntoConstraints = false
-        icon.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Record a shortcut")
-        icon.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.md, weight: .semibold)
-        icon.translatesAutoresizingMaskIntoConstraints = false
-        badge.addSubview(icon)
 
         title.font = ChromeType.font(.body, weight: .semibold)
 
@@ -83,10 +76,6 @@ final class KeybindHintBubble: ShadowCardView {
 
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: Self.width),
-            badge.widthAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
-            badge.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
-            icon.centerXAnchor.constraint(equalTo: badge.centerXAnchor),
-            icon.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
             previewGroup.widthAnchor.constraint(equalTo: col.widthAnchor),
             inputRow.widthAnchor.constraint(equalTo: previewGroup.widthAnchor),
             previewBox.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
@@ -112,6 +101,9 @@ final class KeybindHintBubble: ShadowCardView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    var badgeFillForTesting: CGColor? { badge.fillForTesting }
+    var badgeIconTintForTesting: NSColor? { badge.iconTintForTesting }
+
     func reapplyTheme() {
         CardChrome.reapplyTheme(to: self, tier: .overlay)
         paintColors()
@@ -121,8 +113,7 @@ final class KeybindHintBubble: ShadowCardView {
 
     private func paintColors() {
         let chrome = Theme.current.chrome
-        badge.layer?.backgroundColor = chrome.tint(chrome.accent, alpha: ChromeTheme.badgeTint).cgColor
-        icon.contentTintColor = chrome.accent.nsColor
+        badge.reapplyTheme()
         title.textColor = chrome.ink(.normal)
         previewBox.layer?.backgroundColor = chrome.fill(.rest).cgColor
         previewBox.layer?.borderColor = chrome.accent.nsColor.cgColor

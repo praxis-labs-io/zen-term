@@ -490,6 +490,22 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertEqual(card.badgeIconTintForTesting, chrome.accent.nsColor, "the badge glyph stayed stale")
     }
 
+    func test_reapplyTheme_recolorsTheRecordBadge() throws {
+        let bubble = KeybindHintBubble()
+        _ = present(bubble, size: NSSize(width: 220, height: 120))
+        let fillBefore = bubble.badgeFillForTesting
+        let tintBefore = bubble.badgeIconTintForTesting
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        bubble.reapplyTheme()
+
+        let chrome = Theme.current.chrome
+        XCTAssertNotEqual(fillBefore, bubble.badgeFillForTesting, "the badge fill stayed stale")
+        XCTAssertNotEqual(tintBefore, bubble.badgeIconTintForTesting, "the badge glyph stayed stale")
+        XCTAssertEqual(bubble.badgeFillForTesting, chrome.tint(chrome.accent, alpha: ChromeTheme.badgeTint).cgColor)
+        XCTAssertEqual(bubble.badgeIconTintForTesting, chrome.accent.nsColor)
+    }
+
     func test_reapplyTheme_restylesFontSizeCard() throws {
         let card = FontSizeCard(text: "14")
         let window = present(card, size: NSSize(width: 80, height: 40))
