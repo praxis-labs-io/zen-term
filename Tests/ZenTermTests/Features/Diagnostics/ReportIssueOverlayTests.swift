@@ -24,7 +24,6 @@ final class ReportIssueOverlayTests: WindowTestCase {
         let sink = Sink()
         let overlay = ReportIssueOverlay(
             report: Self.sampleReport,
-            background: Theme.current.chrome.background.nsColor,
             onOpenURL: { sink.opened.append($0) },
             onExportDiagnostics: { sink.exported += 1 },
             onCancel: { sink.cancelled += 1 })

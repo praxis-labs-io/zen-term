@@ -23,7 +23,6 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         let sink = Sink()
         let overlay = WorkspaceFormOverlay(
             editing: editing, existingTitles: existingTitles,
-            background: Theme.current.chrome.background.nsColor,
             onSubmit: { sink.submitted.append($0) },
             onCancel: { sink.cancelled += 1 },
             onDelete: withDelete ? { sink.deleted += 1 } : nil)

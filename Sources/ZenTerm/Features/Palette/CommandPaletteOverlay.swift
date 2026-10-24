@@ -16,7 +16,7 @@ final class CommandPaletteOverlay: PaletteOverlay {
     private var rows: [Row]
 
     init(
-        commands: @escaping () -> [PaletteCommand], background: NSColor,
+        commands: @escaping () -> [PaletteCommand],
         onRun: @escaping (KeyInterceptor.ReservedChord) -> Void, onDismiss: @escaping () -> Void
     ) {
         self.resolveCommands = commands
@@ -25,7 +25,6 @@ final class CommandPaletteOverlay: PaletteOverlay {
         self.rows = Self.grouped(resolved)
         self.onRun = onRun
         super.init(
-            background: background,
             placeholder: "Search commands…",
             emptyText: "No matching commands",
             footerHints: [

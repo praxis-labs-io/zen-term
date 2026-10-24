@@ -35,7 +35,6 @@ final class RepoPickerWorktreeChurnTests: WindowTestCase {
                     title: "work", path: repo, tabs: [],
                     env: [:])
             ],
-            background: Theme.current.chrome.background.nsColor,
             onChoose: { _, _ in }, onAddWorkspace: {}, onDismiss: {})
         mount(overlay)
 

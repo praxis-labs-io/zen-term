@@ -25,7 +25,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         _ mode: AddSSHHostOverlay.Mode = .add(taken: []), removable: Bool = false
     ) -> AddSSHHostOverlay {
         let overlay = AddSSHHostOverlay(
-            mode: mode, background: Theme.current.chrome.background.nsColor,
+            mode: mode,
             removal: removable
                 ? AddSSHHostOverlay.Removal(
                     consequence: { [weak self] in self?.removalConsequence },

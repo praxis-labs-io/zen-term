@@ -1,12 +1,10 @@
 import AppKit
 
-// Full-bleed so its backdrop swallows clicks on the list underneath.
-final class ConfirmCard: NSView {
-    private let onCancel: () -> Void
+final class ConfirmCard: ModalShell, ModalOverlay {
+    static let width: CGFloat = 420
+
     private let onConfirm: () -> Void
 
-    private let card = CardView()
-    private var dismiss = DismissGate()
     private let header = NSTextField(labelWithString: "")
     private let messageLabel = NSTextField(labelWithString: "")
     private let checklist: ConfirmCardChecklist?
@@ -14,107 +12,46 @@ final class ConfirmCard: NSView {
     private let confirmButton: AppButton
 
     convenience init(
-        title: String, message: String, confirmLabel: String, background: NSColor,
+        title: String, message: String, confirmLabel: String,
         onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
     ) {
         self.init(
             title: title, message: message, checklist: nil, confirmLabel: confirmLabel,
-            background: background, onCancel: onCancel, onConfirm: onConfirm)
+            onCancel: onCancel, onConfirm: onConfirm)
     }
 
     convenience init(
-        title: String, items: [ConfirmCardChecklist.Item], confirmLabel: String, background: NSColor,
+        title: String, items: [ConfirmCardChecklist.Item], confirmLabel: String,
         onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
     ) {
         self.init(
             title: title, message: "", checklist: ConfirmCardChecklist(items: items), confirmLabel: confirmLabel,
-            background: background, onCancel: onCancel, onConfirm: onConfirm)
+            onCancel: onCancel, onConfirm: onConfirm)
     }
 
     private init(
         title: String, message: String, checklist: ConfirmCardChecklist?, confirmLabel: String,
-        background: NSColor, onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
+        onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void
     ) {
         self.checklist = checklist
-        self.onCancel = onCancel
         self.onConfirm = onConfirm
         confirmButton = AppButton(title: confirmLabel, variant: .destructive)
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-
-        let backdrop = BackdropView(onClick: { [weak self] in self?.cancel() })
-        backdrop.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(backdrop)
-
-        CardChrome.apply(to: card, background: background)
-        card.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(card)
-
-        let content = buildContent(title: title, message: message)
-        card.addSubview(content)
-
-        let cardWidth = card.widthAnchor.constraint(equalToConstant: 420)
-        cardWidth.priority = .defaultHigh
-        NSLayoutConstraint.activate([
-            backdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
-            backdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
-            backdrop.topAnchor.constraint(equalTo: topAnchor),
-            backdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
-
-            card.centerXAnchor.constraint(equalTo: centerXAnchor),
-            card.centerYAnchor.constraint(equalTo: centerYAnchor),
-            cardWidth,
-            card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.92),
-            card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.92),
-
-            content.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            content.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            content.topAnchor.constraint(equalTo: card.topAnchor),
-            content.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-        ])
+        super.init(width: Self.width, onCancel: onCancel)
+        embed(buildContent(title: title, message: message))
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func focusInitialResponder() { window?.makeFirstResponder(confirmButton) }
 
-    func animateIn() {
-        superview?.layoutSubtreeIfNeeded()
-        Motion.springScaleFade(card, appearing: true)
-    }
-
-    func animateOut(completion: @escaping () -> Void) {
-        guard dismiss.begin() else { return }
-        Motion.springScaleFade(card, appearing: false, completion: completion)
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        dismiss.isDismissing ? nil : super.hitTest(point)
-    }
-
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if ModalEscape.handle(
-            event, in: window, dismissing: dismiss.isDismissing, close: { self.cancel() })
-        {
-            return true
-        }
-        return super.performKeyEquivalent(with: event)
-    }
-
-    func reapplyTheme() {
+    override func reapplyTheme() {
+        super.reapplyTheme()
         let chrome = Theme.current.chrome
-        CardChrome.reapplyTheme(to: card)
         header.textColor = chrome.ink(.normal)
         messageLabel.textColor = chrome.ink(.muted)
         checklist?.reapplyTheme()
         cancelButton.reapplyTheme()
         confirmButton.reapplyTheme()
-    }
-
-    private func cancel() {
-        guard !dismiss.isDismissing else { return }
-        onCancel()
     }
 
     private func buildContent(title: String, message: String) -> NSStackView {
@@ -130,7 +67,7 @@ final class ConfirmCard: NSView {
 
         cancelButton.onTap = { [weak self] in self?.cancel() }
         confirmButton.onTap = { [weak self] in
-            guard let self, !self.dismiss.isDismissing else { return }
+            guard let self, !self.isDismissing else { return }
             self.onConfirm()
         }
         for button in [cancelButton, confirmButton] {

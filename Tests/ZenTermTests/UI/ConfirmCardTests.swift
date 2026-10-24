@@ -166,7 +166,6 @@ final class ConfirmCardTests: WindowTestCase {
         let sink = Sink()
         let card = ConfirmCard(
             title: "Remove Worktree", message: message, confirmLabel: "Remove",
-            background: Theme.current.chrome.background.nsColor,
             onCancel: { sink.cancelled += 1 },
             onConfirm: { sink.confirmed += 1 })
         let win = NSWindow(
@@ -182,7 +181,7 @@ final class ConfirmCardTests: WindowTestCase {
     private func mountChecklist(_ items: [ConfirmCardChecklist.Item]) -> ConfirmCard {
         let card = ConfirmCard(
             title: "Remove Worktree", items: items, confirmLabel: "Remove",
-            background: Theme.current.chrome.background.nsColor, onCancel: {}, onConfirm: {})
+            onCancel: {}, onConfirm: {})
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 400),
             styleMask: [.borderless], backing: .buffered, defer: false)

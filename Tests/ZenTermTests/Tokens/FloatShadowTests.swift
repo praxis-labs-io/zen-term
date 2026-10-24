@@ -35,7 +35,7 @@ final class FloatShadowTests: WindowTestCase {
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 500, height: 400))
         container.wantsLayer = true
         let card = NSView(frame: NSRect(x: 100, y: 100, width: 300, height: 200))
-        CardChrome.apply(to: card, background: .black)
+        CardChrome.apply(to: card)
         container.addSubview(card)
 
         window.contentView!.addSubview(container)

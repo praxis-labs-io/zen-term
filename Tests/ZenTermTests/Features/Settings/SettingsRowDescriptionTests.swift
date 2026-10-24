@@ -33,7 +33,7 @@ final class SettingsRowDescriptionTests: WindowTestCase {
     private func mount(_ section: any SettingsSection) -> NSView {
         let card = SettingsOverlay(
             sections: [section], capturer: nil,
-            background: Theme.current.chrome.background.nsColor, onClose: {})
+            onClose: {})
         card.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 700),

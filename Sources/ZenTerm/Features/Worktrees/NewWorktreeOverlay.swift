@@ -40,7 +40,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
     private var isWorking = false
 
     init(
-        workspace: Workspace, options: WorktreeStore.CreateOptions, background: NSColor,
+        workspace: Workspace, options: WorktreeStore.CreateOptions,
         onSubmit: @escaping (Request) -> Void, onCancel: @escaping () -> Void,
         onDismiss: @escaping () -> Void, onEditWorkspace: (() -> Void)? = nil
     ) {
@@ -58,7 +58,7 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         addSubview(backdrop)
 
-        CardChrome.apply(to: card, background: background)
+        CardChrome.apply(to: card)
         card.translatesAutoresizingMaskIntoConstraints = false
         addSubview(card)
 
@@ -339,7 +339,6 @@ final class NewWorktreeOverlay: NSView, ModalOverlay {
                 message: Self.moveMainCheckoutMessage(
                     branchName, to: options.defaultBase ?? "the default branch"),
                 confirmLabel: "Create Worktree",
-                background: Theme.current.chrome.background.nsColor,
                 onCancel: { [weak self] in
                     self?.confirm.dismiss { self?.focus(self?.branchField.field) }
                 },

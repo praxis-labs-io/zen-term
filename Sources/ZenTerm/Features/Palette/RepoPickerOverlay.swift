@@ -43,7 +43,6 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     init(
         entries: [Workspace], open: [RunningWorkspace] = [], elsewhere: [RunningWorkspace] = [],
-        background: NSColor,
         removals: WorktreeRemovalTracker = WorktreeRemovalTracker(),
         openState: @escaping (URL) -> WorkspaceOpenState = { _ in .closed },
         onChoose: @escaping (Workspace, WorktreeOrigin?) -> Void,
@@ -68,7 +67,6 @@ final class RepoPickerOverlay: PaletteOverlay {
         self.onAddWorkspace = onAddWorkspace
         self.onNewWorkspace = onNewWorkspace
         super.init(
-            background: background,
             placeholder: "Search workspaces…",
             emptyText: "",
             footerHints: Self.footerHints(),

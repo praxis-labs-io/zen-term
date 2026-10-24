@@ -62,7 +62,6 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         let sink = Sink()
         let overlay = ToolFloatFormOverlay(
             editing: editing, existingIDs: existingIDs, capturer: capturer,
-            background: Theme.current.chrome.background.nsColor,
             onSubmit: {
                 sink.submitted.append($0)
                 return sink.failure

@@ -27,12 +27,14 @@ final class CardView: ShadowCardView {
 }
 
 enum CardChrome {
+    static var fill: NSColor { Theme.current.chrome.background.nsColor }
+
     static func apply(
-        to card: NSView, background: NSColor, cornerRadius: CGFloat = ChromeMetrics.Radius.surface,
+        to card: NSView, cornerRadius: CGFloat = ChromeMetrics.Radius.surface,
         focusBorder: Bool = false, tier: FloatShadow.Tier = .modal
     ) {
         applyEdge(to: card, cornerRadius: cornerRadius, focusBorder: focusBorder)
-        card.layer?.backgroundColor = background.cgColor
+        card.layer?.backgroundColor = fill.cgColor
         FloatShadow.apply(tier, to: card)
     }
 
@@ -43,7 +45,7 @@ enum CardChrome {
     }
 
     static func reapplyTheme(to card: NSView, focusBorder: Bool = false, tier: FloatShadow.Tier = .modal) {
-        card.layer?.backgroundColor = Theme.current.chrome.background.nsColor.cgColor
+        card.layer?.backgroundColor = fill.cgColor
         card.layer?.borderColor = borderColor(focusBorder: focusBorder)
         FloatShadow.apply(tier, to: card)
     }

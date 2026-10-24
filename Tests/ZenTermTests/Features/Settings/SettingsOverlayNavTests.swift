@@ -44,7 +44,7 @@ final class SettingsOverlayNavTests: WindowTestCase {
     func test_navScroll_keepsTheCardBackground_notAnOpaqueClipViewWash() {
         let overlay = SettingsOverlay(
             sections: [BareSection()], capturer: nil,
-            background: Theme.current.chrome.background.nsColor, onClose: {})
+            onClose: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 620, height: 460),
@@ -69,7 +69,7 @@ final class SettingsOverlayNavTests: WindowTestCase {
     private func mountNav(onReportIssue: @escaping () -> Void) -> (overlay: SettingsOverlay, window: NSWindow) {
         let overlay = SettingsOverlay(
             sections: [BareSection()], capturer: nil,
-            background: Theme.current.chrome.background.nsColor, onClose: {})
+            onClose: {})
         overlay.onReportIssue = onReportIssue
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 620, height: 460),
@@ -108,7 +108,7 @@ final class SettingsOverlayNavTests: WindowTestCase {
     private func mount(_ section: SettingsSection, onClose: @escaping () -> Void) -> NSWindow {
         let overlay = SettingsOverlay(
             sections: [section], capturer: nil,
-            background: Theme.current.chrome.background.nsColor, onClose: onClose)
+            onClose: onClose)
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 620, height: 460),

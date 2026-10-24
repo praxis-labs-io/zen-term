@@ -48,7 +48,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
     func test_reapplyTheme_recolorsPaletteOverlayAndPreservesSearchQuery() throws {
         let overlay = RepoPickerOverlay(
-            entries: [], background: Theme.current.chrome.background.nsColor,
+            entries: [],
             onChoose: { _, _ in }, onAddWorkspace: {}, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
@@ -75,7 +75,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
     func test_reapplyTheme_recolorsPaletteOverlayCardShell() throws {
         let overlay = CommandPaletteOverlay(
-            commands: { [] }, background: Theme.current.chrome.background.nsColor,
+            commands: { [] },
             onRun: { _ in }, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
@@ -95,7 +95,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
     func test_reapplyTheme_recolorsWorkspaceFormOverlayAndPreservesTypedTitle() throws {
         let overlay = WorkspaceFormOverlay(
-            existingTitles: [], background: Theme.current.chrome.background.nsColor,
+            existingTitles: [],
             onSubmit: { _ in }, onCancel: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
@@ -131,7 +131,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
     func test_reapplyTheme_recolorsAddWorkspaceCardShell() throws {
         let overlay = WorkspaceFormOverlay(
-            existingTitles: [], background: Theme.current.chrome.background.nsColor,
+            existingTitles: [],
             onSubmit: { _ in }, onCancel: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
@@ -249,7 +249,6 @@ final class OverlayReapplyThemeTests: WindowTestCase {
             workspace: workspace,
             options: WorktreeStore.CreateOptions(
                 branches: [], defaultBase: "origin/main", currentBranch: "main", holders: [:]),
-            background: Theme.current.chrome.background.nsColor,
             onSubmit: { _ in }, onCancel: {}, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         return overlay
@@ -257,7 +256,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
     func test_reapplyTheme_recolorsTheFormCardsFooterHairline() throws {
         let overlay = WorkspaceFormOverlay(
-            existingTitles: [], background: Theme.current.chrome.background.nsColor,
+            existingTitles: [],
             onSubmit: { _ in }, onCancel: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
@@ -279,7 +278,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
     func test_reapplyTheme_recolorsTheCarryListAndKeepsWhatIsPicked() throws {
         let overlay = WorkspaceFormOverlay(
-            existingTitles: [], background: Theme.current.chrome.background.nsColor,
+            existingTitles: [],
             onSubmit: { _ in }, onCancel: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
@@ -310,7 +309,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
     func test_reapplyTheme_recolorsEnvRowAndPreservesTypedKey() throws {
         let overlay = WorkspaceFormOverlay(
-            existingTitles: [], background: Theme.current.chrome.background.nsColor,
+            existingTitles: [],
             onSubmit: { _ in }, onCancel: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
@@ -355,7 +354,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
     func test_reapplyTheme_recolorsFieldGroupCaption() throws {
         let overlay = WorkspaceFormOverlay(
-            existingTitles: [], background: Theme.current.chrome.background.nsColor,
+            existingTitles: [],
             onSubmit: { _ in }, onCancel: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
@@ -384,7 +383,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
 
     func test_reapplyTheme_recolorsBareGroupCaption() throws {
         let overlay = WorkspaceFormOverlay(
-            existingTitles: [], background: Theme.current.chrome.background.nsColor,
+            existingTitles: [],
             onSubmit: { _ in }, onCancel: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
