@@ -28,15 +28,16 @@ final class UpdateCardView: ShadowCardView {
     static let width: CGFloat = 360
     private static let inset: CGFloat = ChromeMetrics.Spacing.s12
     private static let rootSpacing: CGFloat = ChromeMetrics.Spacing.s12
+    private static let badgeSize = IconBadge.Size.regular
 
     // Exposed so the notes are measured against the real wrap budget (`UpdateCardTests`).
-    static let notesMaxWidth: CGFloat = width - inset * 2 - IconBadge.Size.regular.side - rootSpacing
+    static let notesMaxWidth: CGFloat = width - inset * 2 - badgeSize.side - rootSpacing
 
     private var state: State
     private var actions: Actions
 
     private let badge = IconBadge(
-        image: BrandMark.image("origami"), accessibilityDescription: nil, size: .regular,
+        image: BrandMark.image("origami"), accessibilityDescription: nil, size: UpdateCardView.badgeSize,
         role: { $0.accent })
     private let titleLabel = NSTextField(labelWithString: "")
     private let header = NSStackView()
@@ -83,7 +84,7 @@ final class UpdateCardView: ShadowCardView {
         header.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
         bodyColumn.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
         buttonRow.widthAnchor.constraint(equalTo: col.widthAnchor).isActive = true
-        header.heightAnchor.constraint(equalToConstant: IconBadge.Size.regular.side).isActive = true
+        header.heightAnchor.constraint(equalToConstant: Self.badgeSize.side).isActive = true
 
         let root = NSStackView(views: [badge, col])
         root.orientation = .horizontal

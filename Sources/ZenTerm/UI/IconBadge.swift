@@ -36,7 +36,6 @@ final class IconBadge: NSView {
         icon.symbolConfiguration = .init(pointSize: size.pointSize, weight: .semibold)
     }
 
-    /// `image` must be a template, or the role tint does not reach it.
     convenience init(
         image: NSImage?, accessibilityDescription: String?, size: Size, role: @escaping (ChromeTheme) -> TerminalColor
     ) {
