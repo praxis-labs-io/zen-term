@@ -2087,6 +2087,7 @@ final class WindowController: NSObject {
                     }
                 },
                 onCancel: done,
+                onDismiss: { [weak self] in self?.closeModal() },
                 onDelete: workspace.map { existing in
                     { [weak self] in self?.deleteWorkspace(existing, then: done) }
                 }

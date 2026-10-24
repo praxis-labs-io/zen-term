@@ -51,7 +51,7 @@ final class WorkspaceFormWindowTests: WindowTestCase {
     private func presentForm(in c: WindowController, sink: Sink) -> WorkspaceFormOverlay {
         let form = WorkspaceFormOverlay(
             existingTitles: [],
-            onSubmit: { sink.submitted.append($0) }, onCancel: {})
+            onSubmit: { sink.submitted.append($0) }, onCancel: {}, onDismiss: {})
         c.presentModalForTesting(form)
         c.window.contentView?.layoutSubtreeIfNeeded()
         return form
@@ -173,5 +173,47 @@ final class WorkspaceFormWindowTests: WindowTestCase {
         let index = try XCTUnwrap(c.workspaceNamesForTesting.firstIndex(of: "zen-term"))
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting[index])
         XCTAssertFalse(c.isModalOverlayOpen)
+    }
+
+    private func openFormFromSettings(in c: WindowController) throws -> WorkspaceFormOverlay {
+        c.handle(.openSettings)
+        let settings = try XCTUnwrap(
+            descendants(of: c.window.contentView!).compactMap { $0 as? SettingsOverlay }.first)
+        let nav = try XCTUnwrap(
+            descendants(of: settings).compactMap { $0 as? SettingsNavRow }.first { $0.titleForTesting == "Workspaces" })
+        _ = nav.accessibilityPerformPress()
+        waitUntil(
+            descendants(of: settings).contains { ($0 as? AppButton)?.title == "＋ Add workspace" },
+            "the workspaces section to load")
+        try XCTUnwrap(descendants(of: settings).compactMap { $0 as? AppButton }.first { $0.title == "＋ Add workspace" })
+            .onTap()
+        waitUntil(
+            descendants(of: c.window.contentView!).contains { $0 is WorkspaceFormOverlay },
+            "the workspace form to open")
+        return try XCTUnwrap(
+            descendants(of: c.window.contentView!).compactMap { $0 as? WorkspaceFormOverlay }.first)
+    }
+
+    func test_clickOutsideAFormOpenedFromSettings_closesTheWholeStack() throws {
+        let c = makeWindow()
+        let form = try openFormFromSettings(in: c)
+
+        try XCTUnwrap(form.subviews.compactMap { $0 as? BackdropView }.first).mouseDown(with: NSEvent())
+
+        XCTAssertFalse(c.isModalOverlayOpen)
+    }
+
+    func test_escapeInAFormOpenedFromSettings_returnsToSettings() throws {
+        let c = makeWindow()
+        let form = try openFormFromSettings(in: c)
+        let escape = try key(53, "\u{1b}", flags: [], in: c)
+
+        XCTAssertTrue(form.performKeyEquivalent(with: escape))
+
+        XCTAssertTrue(c.isModalOverlayOpen)
+        waitUntil(
+            descendants(of: c.window.contentView!).compactMap { $0 as? SettingsOverlay }.contains {
+                !$0.isDismissing
+            }, "Settings to return")
     }
 }

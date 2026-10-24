@@ -91,7 +91,7 @@ final class FormCardHeightTests: WindowTestCase {
             carry: [".env"])
         let overlay = WorkspaceFormOverlay(
             editing: ws, existingTitles: [],
-            onSubmit: { _ in }, onCancel: {})
+            onSubmit: { _ in }, onCancel: {}, onDismiss: {})
         _ = try cardHeight(of: overlay)
 
         func walk(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(walk) }

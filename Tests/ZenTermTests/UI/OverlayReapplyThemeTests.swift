@@ -120,7 +120,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
     func test_reapplyTheme_recolorsWorkspaceFormOverlayAndPreservesTypedTitle() throws {
         let overlay = WorkspaceFormOverlay(
             existingTitles: [],
-            onSubmit: { _ in }, onCancel: {})
+            onSubmit: { _ in }, onCancel: {}, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(overlay)
@@ -156,7 +156,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
     func test_reapplyTheme_recolorsAddWorkspaceCardShell() throws {
         let overlay = WorkspaceFormOverlay(
             existingTitles: [],
-            onSubmit: { _ in }, onCancel: {})
+            onSubmit: { _ in }, onCancel: {}, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(overlay)
@@ -281,7 +281,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
     func test_reapplyTheme_recolorsTheFormCardsFooterHairline() throws {
         let overlay = WorkspaceFormOverlay(
             existingTitles: [],
-            onSubmit: { _ in }, onCancel: {})
+            onSubmit: { _ in }, onCancel: {}, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(overlay)
@@ -303,7 +303,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
     func test_reapplyTheme_recolorsTheCarryListAndKeepsWhatIsPicked() throws {
         let overlay = WorkspaceFormOverlay(
             existingTitles: [],
-            onSubmit: { _ in }, onCancel: {})
+            onSubmit: { _ in }, onCancel: {}, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(overlay)
@@ -334,7 +334,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
     func test_reapplyTheme_recolorsEnvRowAndPreservesTypedKey() throws {
         let overlay = WorkspaceFormOverlay(
             existingTitles: [],
-            onSubmit: { _ in }, onCancel: {})
+            onSubmit: { _ in }, onCancel: {}, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(overlay)
@@ -379,7 +379,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
     func test_reapplyTheme_recolorsFieldGroupCaption() throws {
         let overlay = WorkspaceFormOverlay(
             existingTitles: [],
-            onSubmit: { _ in }, onCancel: {})
+            onSubmit: { _ in }, onCancel: {}, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(overlay)
@@ -408,7 +408,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
     func test_reapplyTheme_recolorsBareGroupCaption() throws {
         let overlay = WorkspaceFormOverlay(
             existingTitles: [],
-            onSubmit: { _ in }, onCancel: {})
+            onSubmit: { _ in }, onCancel: {}, onDismiss: {})
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(overlay)

@@ -25,6 +25,7 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
             editing: editing, existingTitles: existingTitles,
             onSubmit: { sink.submitted.append($0) },
             onCancel: { sink.cancelled += 1 },
+            onDismiss: {},
             onDelete: withDelete ? { sink.deleted += 1 } : nil)
         overlay.translatesAutoresizingMaskIntoConstraints = true
         let win = NSWindow(
@@ -544,6 +545,15 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
 
         XCTAssertEqual(sink.cancelled, 0)
         XCTAssertFalse(overlay.tabStripForTesting.isRenaming)
+    }
+
+    func test_cancelButton_whileRenamingATab_closesTheForm() throws {
+        let (overlay, sink) = mount()
+        overlay.tabStripForTesting.beginRenamingSelected()
+
+        try XCTUnwrap(button(in: overlay, title: "Cancel")).onTap()
+
+        XCTAssertEqual(sink.cancelled, 1)
     }
 
     func test_folderChooseButton_opensThePicker_andIsArrowReachable() throws {
