@@ -7,6 +7,7 @@ final class AddSSHHostOverlayTests: WindowTestCase {
     private var window: NSWindow?
     private var submitted: [SSHHostEntry] = []
     private var cancelled = 0
+    private var dismissed = 0
     private var submitFailure: String?
     private var removed = 0
     private var removalFailure: String?
@@ -37,7 +38,8 @@ final class AddSSHHostOverlayTests: WindowTestCase {
                 self?.submitted.append($0)
                 return self?.submitFailure
             },
-            onCancel: { [weak self] in self?.cancelled += 1 })
+            onCancel: { [weak self] in self?.cancelled += 1 },
+            onDismiss: { [weak self] in self?.dismissed += 1 })
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
             styleMask: [.borderless], backing: .buffered, defer: false)
@@ -345,14 +347,39 @@ final class AddSSHHostOverlayTests: WindowTestCase {
         XCTAssertTrue(isFocused(remove))
     }
 
-    func test_escape_cancels() {
-        let overlay = mount()
-        let escape = NSEvent.keyEvent(
+    private var escape: NSEvent {
+        NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
             characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53)!
+    }
+
+    func test_escape_cancels() {
+        let overlay = mount()
 
         _ = overlay.performKeyEquivalent(with: escape)
 
         XCTAssertEqual(cancelled, 1)
+    }
+
+    func test_escape_withTheRemoveWarningUp_closesTheWarningAndLeavesTheForm() throws {
+        removalConsequence = "disconnect it and stop everything running in it"
+        let overlay = mount(devbox, removable: true)
+        try XCTUnwrap(button("Remove", in: overlay)).onTap()
+        XCTAssertTrue(overlay.isShowingOverlaidCard)
+
+        _ = overlay.performKeyEquivalent(with: escape)
+
+        XCTAssertEqual(cancelled, 0)
+        waitUntil(!overlay.isShowingOverlaidCard, "the warning to leave")
+    }
+
+    func test_backdropClick_dismissesRatherThanCancels() throws {
+        let overlay = mount()
+        let backdrop = try XCTUnwrap(overlay.subviews.compactMap { $0 as? BackdropView }.first)
+
+        backdrop.mouseDown(with: NSEvent())
+
+        XCTAssertEqual(dismissed, 1)
+        XCTAssertEqual(cancelled, 0)
     }
 }

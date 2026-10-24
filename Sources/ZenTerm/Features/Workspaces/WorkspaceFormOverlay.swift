@@ -1,6 +1,6 @@
 import AppKit
 
-final class WorkspaceFormOverlay: NSView, ModalOverlay {
+final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     // Taller than `FormCard.maxHeight` so the tab drawing and a few env rows fit before the body scrolls.
     static let maxHeight: CGFloat = 580
     static let width: CGFloat = 640
@@ -24,13 +24,10 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
     private let editingWorkspace: Workspace?
     private let existingTitles: Set<String>
     private let onSubmit: (Workspace) -> Void
-    private let onCancel: () -> Void
     private let onDelete: (() -> Void)?
     private var form: WorkspaceForm
 
-    private let card = CardView()
     private var footerDivider: ThemeReapplying?
-    private var dismiss = DismissGate()
     private let header = NSTextField(labelWithString: "")
     private let escapeCap = KeycapView(shortcut: "esc")
 
@@ -59,50 +56,16 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
     init(
         editing: Workspace? = nil, existingTitles: Set<String>,
         onSubmit: @escaping (Workspace) -> Void, onCancel: @escaping () -> Void,
-        onDelete: (() -> Void)? = nil
+        onDismiss: @escaping () -> Void, onDelete: (() -> Void)? = nil
     ) {
         self.editingWorkspace = editing
         self.existingTitles = existingTitles
         self.onSubmit = onSubmit
-        self.onCancel = onCancel
         self.onDelete = onDelete
         self.form = WorkspaceForm(editing: editing)
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-
-        let backdrop = BackdropView(onClick: onCancel)
-        backdrop.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(backdrop)
-
-        CardChrome.apply(to: card)
-        card.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(card)
-
-        let content = buildContent()
-        card.addSubview(content)
-
-        let cardWidth = card.widthAnchor.constraint(equalToConstant: Self.width)
-        cardWidth.priority = .defaultHigh
-        NSLayoutConstraint.activate([
-            backdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
-            backdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
-            backdrop.topAnchor.constraint(equalTo: topAnchor),
-            backdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
-
-            card.centerXAnchor.constraint(equalTo: centerXAnchor),
-            card.centerYAnchor.constraint(equalTo: centerYAnchor),
-            cardWidth,
-            card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.92),
-            card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.92),
-            card.heightAnchor.constraint(lessThanOrEqualToConstant: Self.maxHeight),
-
-            content.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            content.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            content.topAnchor.constraint(equalTo: card.topAnchor),
-            content.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-        ])
-
+        super.init(width: Self.width, onCancel: onCancel, onDismiss: onDismiss)
+        card.heightAnchor.constraint(lessThanOrEqualToConstant: Self.maxHeight).isActive = true
+        embed(buildContent())
         prefill()
         renderTabs()
         refreshValidity()
@@ -120,28 +83,11 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
 
     func focusInitialResponder() { window?.makeFirstResponder(titleField.field) }
 
-    func animateIn() {
-        superview?.layoutSubtreeIfNeeded()
-        Motion.springScaleFade(card, appearing: true)
+    override func cancel() {
+        if !tabStrip.cancelRename() { super.cancel() }
     }
 
-    func animateOut(completion: @escaping () -> Void) {
-        guard dismiss.begin() else { return }
-        Motion.springScaleFade(card, appearing: false, completion: completion)
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        dismiss.isDismissing ? nil : super.hitTest(point)
-    }
-
-    /// Claims Esc here because a focused field routes it through its field editor, which never bubbles.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if ModalEscape.handle(
-            event, in: window, dismissing: dismiss.isDismissing,
-            close: { if !self.tabStrip.cancelRename() { self.onCancel() } }
-        ) {
-            return true
-        }
         if Chord(event: event) == Self.launchFocusChord { return drawing.openFocusedAtFocusedRegion() }
         return super.performKeyEquivalent(with: event)
     }
@@ -165,9 +111,9 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
     }
 
     /// Recolors in place rather than rebuilding, which would lose uncommitted typed values.
-    func reapplyTheme() {
+    override func reapplyTheme() {
+        super.reapplyTheme()
         let chrome = Theme.current.chrome
-        CardChrome.reapplyTheme(to: card)
         header.textColor = chrome.ink(.normal)
         envError.textColor = chrome.destructive.nsColor
         notice.textColor = chrome.ink(.subtle)
@@ -306,7 +252,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
         undoButton.isHidden = true
         undoButton.onTap = { [weak self] in self?.undoRemoval() }
 
-        cancelButton.onTap = { [weak self] in self?.onCancel() }
+        cancelButton.onTap = { [weak self] in self?.closeForm() }
         addButton.setTitle(editingWorkspace == nil ? "Add Workspace" : "Save")
         addButton.onTap = { [weak self] in self?.submit() }
         let spacer = NSView()
@@ -527,10 +473,7 @@ final class WorkspaceFormOverlay: NSView, ModalOverlay {
         carryPicker.workspaceFolder = ws.path
     }
 
-    private func focus(_ view: NSView?) {
-        guard let view else { return }
-        window?.makeFirstResponder(view)
-    }
+    private func closeForm() { super.cancel() }
 
     private var folderName: String { WorkspaceForm.folderName(folderPicker.text) }
 

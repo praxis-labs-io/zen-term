@@ -1,16 +1,15 @@
 import AppKit
 
-final class ToolFloatFormOverlay: NSView, ModalOverlay {
+final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
+    static let width: CGFloat = 460
+
     private let editingFloat: ToolFloat?
     private let existingIDs: Set<String>
     private let capturer: KeybindCapturing?
     private let onSubmit: (ToolFloat) -> String?
-    private let onCancel: () -> Void
     private let onDelete: (() -> String?)?
 
-    private let card = CardView()
     private var footerDivider: ThemeReapplying?
-    private var dismiss = DismissGate()
     private let header = NSTextField(labelWithString: "")
 
     private let titleField = FieldBox(placeholder: "Open GitDash")
@@ -52,50 +51,16 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     init(
         editing: ToolFloat?, existingIDs: Set<String>, capturer: KeybindCapturing?,
         onSubmit: @escaping (ToolFloat) -> String?, onCancel: @escaping () -> Void,
-        onDelete: (() -> String?)? = nil
+        onDismiss: @escaping () -> Void, onDelete: (() -> String?)? = nil
     ) {
         self.editingFloat = editing
         self.existingIDs = existingIDs
         self.capturer = capturer
         self.onDelete = onDelete
         self.onSubmit = onSubmit
-        self.onCancel = onCancel
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-
-        let backdrop = BackdropView(onClick: onCancel)
-        backdrop.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(backdrop)
-
-        CardChrome.apply(to: card)
-        card.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(card)
-
-        let content = buildContent()
-        card.addSubview(content)
-
-        let cardWidth = card.widthAnchor.constraint(equalToConstant: 460)
-        cardWidth.priority = .defaultHigh
-        NSLayoutConstraint.activate([
-            backdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
-            backdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
-            backdrop.topAnchor.constraint(equalTo: topAnchor),
-            backdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
-
-            card.centerXAnchor.constraint(equalTo: centerXAnchor),
-            card.centerYAnchor.constraint(equalTo: centerYAnchor),
-            cardWidth,
-            card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.92),
-            card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.92),
-            card.heightAnchor.constraint(lessThanOrEqualToConstant: FormCard.maxHeight),
-
-            content.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            content.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            content.topAnchor.constraint(equalTo: card.topAnchor),
-            content.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-        ])
-
+        super.init(width: Self.width, onCancel: onCancel, onDismiss: onDismiss)
+        card.heightAnchor.constraint(lessThanOrEqualToConstant: FormCard.maxHeight).isActive = true
+        embed(buildContent())
         prefill()
     }
 
@@ -103,37 +68,18 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
 
     func focusInitialResponder() { window?.makeFirstResponder(titleField.field) }
 
-    func animateIn() {
-        superview?.layoutSubtreeIfNeeded()
-        Motion.springScaleFade(card, appearing: true)
-    }
-
-    func animateOut(completion: @escaping () -> Void) {
-        guard dismiss.begin() else { return }
+    override func animateOut(completion: @escaping () -> Void) {
+        guard !isDismissing else { return }
         captureCloseTimer?.cancel()
         capturer?.endCapture()
         hideHint()
-        Motion.springScaleFade(card, appearing: false, completion: completion)
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        dismiss.isDismissing ? nil : super.hitTest(point)
-    }
-
-    /// Esc is claimed here because a focused text field's editor consumes it before `keyDown`.
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if ModalEscape.handle(
-            event, in: window, dismissing: dismiss.isDismissing, close: { self.onCancel() }
-        ) {
-            return true
-        }
-        return super.performKeyEquivalent(with: event)
+        super.animateOut(completion: completion)
     }
 
     /// Recolors in place, because a rebuild would lose typed values.
-    func reapplyTheme() {
+    override func reapplyTheme() {
+        super.reapplyTheme()
         hintBubble?.reapplyTheme()
-        CardChrome.reapplyTheme(to: card)
         header.textColor = Theme.current.chrome.ink(.normal)
         footerDivider?.reapplyTheme()
         errorLabel.reapplyTheme()
@@ -229,7 +175,7 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
         let toolbarGroup = Self.vStack(
             [caption("Toolbar button", required: false), toolbarSegment], spacing: ChromeMetrics.Spacing.s6)
 
-        cancelButton.onTap = { [weak self] in self?.onCancel() }
+        cancelButton.onTap = { [weak self] in self?.cancel() }
         submitButton.setTitle(editingFloat == nil ? "Add Tool Float" : "Save")
         submitButton.onTap = { [weak self] in self?.submit() }
         for button in [cancelButton, submitButton] {
@@ -448,11 +394,6 @@ final class ToolFloatFormOverlay: NSView, ModalOverlay {
     }
 
     private func isFocused(_ view: NSView) -> Bool { KeyboardFocus.isFocused(view, in: window) }
-
-    private func focus(_ view: NSView?) {
-        guard let view else { return }
-        window?.makeFirstResponder(view)
-    }
 
     /// Height is not wired here: it isn't a vertical stop, so `moveVertical` would skip it.
     private func wireField(_ box: FieldBox) {

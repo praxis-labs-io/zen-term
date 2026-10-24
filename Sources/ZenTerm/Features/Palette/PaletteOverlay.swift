@@ -28,11 +28,12 @@ class SelectableRowView: NSView, PaletteRowView {
     }
 }
 
-class PaletteOverlay: NSView, ModalOverlay {
-    private let onDismiss: () -> Void
+class PaletteOverlay: ModalShell, ModalOverlay {
+    static let width: CGFloat = 560
+    // NSStackView holds the search row's vertical insets at 250, so the list yields first only from below that.
+    private static let listHeightPriority = NSLayoutConstraint.Priority(
+        NSLayoutConstraint.Priority.defaultLow.rawValue - 1)
 
-    private let card = CardView()
-    private var dismiss = DismissGate()
     private let searchGlyph = NSTextField(labelWithString: "⌕")
     private let searchField = NSTextField()
     private let searchPlaceholder: String
@@ -60,7 +61,6 @@ class PaletteOverlay: NSView, ModalOverlay {
         rowHeight: CGFloat, maxListHeight: CGFloat = 320, emptyListHeight: CGFloat = ChromeMetrics.Height.xl,
         onDismiss: @escaping () -> Void
     ) {
-        self.onDismiss = onDismiss
         self.defaultRowHeight = rowHeight
         self.maxListHeight = maxListHeight
         self.emptyListHeight = emptyListHeight
@@ -69,18 +69,7 @@ class PaletteOverlay: NSView, ModalOverlay {
         self.footer = HintFooter(footerHints)
         let doc = FlippedView()
         self.scrollView = FadingScrollView(document: doc)
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-
-        let backdrop = BackdropView(onClick: onDismiss)
-        backdrop.wantsLayer = true
-        backdrop.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(backdrop)
-
-        CardChrome.apply(to: card)
-        card.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(card)
+        super.init(width: Self.width, onCancel: onDismiss)
 
         searchGlyph.font = ChromeType.font(.title, weight: .regular)
         searchGlyph.textColor = Theme.current.chrome.ink(.muted)
@@ -125,30 +114,12 @@ class PaletteOverlay: NSView, ModalOverlay {
         stack.orientation = .vertical
         stack.spacing = 0
         stack.alignment = .leading
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        card.addSubview(stack)
+        embed(stack)
 
         listHeight = scrollView.heightAnchor.constraint(equalToConstant: maxListHeight)
-
-        let cardWidth = card.widthAnchor.constraint(equalToConstant: 560)
-        cardWidth.priority = .defaultHigh
+        listHeight.priority = Self.listHeightPriority
 
         NSLayoutConstraint.activate([
-            backdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
-            backdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
-            backdrop.topAnchor.constraint(equalTo: topAnchor),
-            backdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
-
-            card.centerXAnchor.constraint(equalTo: centerXAnchor),
-            card.centerYAnchor.constraint(equalTo: centerYAnchor),
-            cardWidth,
-            card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.92),
-
-            stack.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: card.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-
             searchRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             divider.widthAnchor.constraint(equalTo: stack.widthAnchor),
             scrollView.widthAnchor.constraint(equalTo: stack.widthAnchor),
@@ -179,36 +150,9 @@ class PaletteOverlay: NSView, ModalOverlay {
         window?.makeFirstResponder(searchField)
     }
 
-    func animateIn() {
-        superview?.layoutSubtreeIfNeeded()
-        Motion.springScaleFade(card, appearing: true)
-    }
-
-    func animateOut(completion: @escaping () -> Void) {
-        guard dismiss.begin() else { return }
-        Motion.springScaleFade(card, appearing: false, completion: completion)
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        dismiss.isDismissing ? nil : super.hitTest(point)
-    }
-
-    /// Declared on the class: a protocol-extension default would bind statically in `performKeyEquivalent`.
-    var isShowingOverlaidCard: Bool { false }
-
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if !isShowingOverlaidCard,
-            ModalEscape.handle(
-                event, in: window, dismissing: dismiss.isDismissing, close: { self.onDismiss() })
-        {
-            return true
-        }
-        return super.performKeyEquivalent(with: event)
-    }
-
-    func reapplyTheme() {
+    override func reapplyTheme() {
+        super.reapplyTheme()
         let chrome = Theme.current.chrome
-        CardChrome.reapplyTheme(to: card)
         searchGlyph.textColor = chrome.ink(.muted)
         searchField.textColor = chrome.ink(.normal)
         searchField.applyThemedEditor()

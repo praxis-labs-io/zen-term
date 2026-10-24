@@ -1932,6 +1932,10 @@ final class WindowController: NSObject {
                 self?.submitToolFloat(built, replacing: originalID, returnTo: returnTo)
             },
             onCancel: { [weak self] in self?.finishToolFloatForm(returnTo) },
+            onDismiss: { [weak self] in
+                self?.toolFormReturn = nil
+                self?.closeModal()
+            },
             onDelete: float.map { existing in { [weak self] in self?.deleteToolFloat(existing) } }
         )
         toolFormReturn = returnTo
@@ -2002,7 +2006,8 @@ final class WindowController: NSObject {
             onSubmit: { [weak self] host in
                 edited == nil ? self?.addSSHHost(host) : self?.renameSSHHost(host)
             },
-            onCancel: { [weak self] in self?.reopenSettingsOnSSHHosts(focusing: edited.map { .host($0) }) })
+            onCancel: { [weak self] in self?.reopenSettingsOnSSHHosts(focusing: edited.map { .host($0) }) },
+            onDismiss: { [weak self] in self?.closeModal() })
         presentModal(overlay, kind: .sshHostForm)
     }
 
@@ -2085,6 +2090,7 @@ final class WindowController: NSObject {
                     }
                 },
                 onCancel: done,
+                onDismiss: { [weak self] in self?.closeModal() },
                 onDelete: workspace.map { existing in
                     { [weak self] in self?.deleteWorkspace(existing, then: done) }
                 }

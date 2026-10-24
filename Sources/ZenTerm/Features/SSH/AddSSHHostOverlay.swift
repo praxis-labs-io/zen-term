@@ -1,6 +1,8 @@
 import AppKit
 
-final class AddSSHHostOverlay: NSView, ModalOverlay {
+final class AddSSHHostOverlay: ModalShell, ModalOverlay {
+    static let width: CGFloat = 380
+
     enum Mode {
         case add(taken: Set<String>)
         case edit(SSHHostEntry, address: String?)
@@ -14,10 +16,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
     private let mode: Mode
     private let removal: Removal?
     private let onSubmit: (SSHHostEntry) -> String?
-    private let onCancel: () -> Void
 
-    private let card = CardView()
-    private var dismiss = DismissGate()
     private lazy var confirm = ConfirmSlot(over: self)
 
     private let header = NSTextField(labelWithString: "")
@@ -39,45 +38,13 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
 
     init(
         mode: Mode, removal: Removal? = nil, onSubmit: @escaping (SSHHostEntry) -> String?,
-        onCancel: @escaping () -> Void
+        onCancel: @escaping () -> Void, onDismiss: @escaping () -> Void
     ) {
         self.mode = mode
         self.removal = removal
         self.onSubmit = onSubmit
-        self.onCancel = onCancel
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-
-        let backdrop = BackdropView(onClick: onCancel)
-        backdrop.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(backdrop)
-
-        CardChrome.apply(to: card)
-        card.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(card)
-
-        let content = buildContent()
-        card.addSubview(content)
-
-        let cardWidth = card.widthAnchor.constraint(equalToConstant: 380)
-        cardWidth.priority = .defaultHigh
-        NSLayoutConstraint.activate([
-            backdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
-            backdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
-            backdrop.topAnchor.constraint(equalTo: topAnchor),
-            backdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
-
-            card.centerXAnchor.constraint(equalTo: centerXAnchor),
-            card.centerYAnchor.constraint(equalTo: centerYAnchor),
-            cardWidth,
-            card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.92),
-
-            content.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            content.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            content.topAnchor.constraint(equalTo: card.topAnchor),
-            content.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-        ])
+        super.init(width: Self.width, onCancel: onCancel, onDismiss: onDismiss)
+        embed(buildContent())
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -96,7 +63,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         name.contains("\"") ? "Can't contain \"." : nil
     }
 
-    var isShowingOverlaidCard: Bool { confirm.isShowing }
+    override var isShowingOverlaidCard: Bool { confirm.isShowing }
 
     func focusInitialResponder() {
         if let card = confirm.card { return card.focusInitialResponder() }
@@ -104,32 +71,8 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         window?.makeFirstResponder(field)
     }
 
-    func animateIn() {
-        superview?.layoutSubtreeIfNeeded()
-        Motion.springScaleFade(card, appearing: true)
-    }
-
-    func animateOut(completion: @escaping () -> Void) {
-        guard dismiss.begin() else { return }
-        Motion.springScaleFade(card, appearing: false, completion: completion)
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        dismiss.isDismissing ? nil : super.hitTest(point)
-    }
-
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if confirm.isShowing { return super.performKeyEquivalent(with: event) }
-        if ModalEscape.handle(
-            event, in: window, dismissing: dismiss.isDismissing, close: { self.onCancel() })
-        {
-            return true
-        }
-        return super.performKeyEquivalent(with: event)
-    }
-
-    func reapplyTheme() {
-        CardChrome.reapplyTheme(to: card)
+    override func reapplyTheme() {
+        super.reapplyTheme()
         header.textColor = Theme.current.chrome.ink(.normal)
         errorLabel.reapplyTheme()
         confirm.card?.reapplyTheme()
@@ -164,7 +107,7 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         }
         nameField.onTab = { [weak self] in self?.focus(self?.cancelButton) }
 
-        cancelButton.onTap = { [weak self] in self?.onCancel() }
+        cancelButton.onTap = { [weak self] in self?.cancel() }
         submitButton.onTap = { [weak self] in self?.submit() }
         for button in [cancelButton, submitButton] {
             button.isKeyboardFocusable = true
@@ -242,11 +185,6 @@ final class AddSSHHostOverlay: NSView, ModalOverlay {
         guard let failure = removal?.perform() else { return }
         errorLabel.show(failure)
         focus(removeButton)
-    }
-
-    private func focus(_ view: NSView?) {
-        guard let view else { return }
-        window?.makeFirstResponder(view)
     }
 
     private func showFixedHost(_ alias: String, address: String?) {

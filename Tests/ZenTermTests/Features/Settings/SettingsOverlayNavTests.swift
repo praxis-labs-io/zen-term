@@ -105,6 +105,22 @@ final class SettingsOverlayNavTests: WindowTestCase {
             "Down from the last section row focuses the Report button")
     }
 
+    private final class CountingCapturer: KeybindCapturing {
+        private(set) var endCount = 0
+        func beginCapture(_ handler: @escaping (NSEvent) -> Void) {}
+        func endCapture() { endCount += 1 }
+    }
+
+    func test_dismissing_endsAnArmedCaptureOnce() {
+        let capturer = CountingCapturer()
+        let overlay = SettingsOverlay(sections: [BareSection()], capturer: capturer, onClose: {})
+
+        overlay.animateOut {}
+        overlay.animateOut {}
+
+        XCTAssertEqual(capturer.endCount, 1)
+    }
+
     private func mount(_ section: SettingsSection, onClose: @escaping () -> Void) -> NSWindow {
         let overlay = SettingsOverlay(
             sections: [section], capturer: nil,

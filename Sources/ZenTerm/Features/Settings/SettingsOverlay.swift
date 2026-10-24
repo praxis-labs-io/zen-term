@@ -1,14 +1,10 @@
 import AppKit
 
-final class SettingsOverlay: NSView, ModalOverlay {
+final class SettingsOverlay: ModalShell, ModalOverlay {
     private let sections: [SettingsSection]
     private let capturer: KeybindCapturing?
-    private let onClose: () -> Void
 
     private static let cardSize = NSSize(width: 620, height: 460)
-
-    private let card = CardView()
-    private var dismiss = DismissGate()
 
     private let navStack = NSStackView()
     private let navScroll = FadingScrollView()
@@ -28,42 +24,12 @@ final class SettingsOverlay: NSView, ModalOverlay {
     ) {
         self.sections = sections
         self.capturer = capturer
-        self.onClose = onClose
         self.selectedIndex = sections.indices.contains(initialSection) ? initialSection : 0
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-
-        let backdrop = BackdropView(onClick: onClose)
-        backdrop.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(backdrop)
-
-        CardChrome.apply(to: card)
-        card.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(card)
-
-        let content = buildContent()
-        card.addSubview(content)
-
-        NSLayoutConstraint.activate([
-            backdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
-            backdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
-            backdrop.topAnchor.constraint(equalTo: topAnchor),
-            backdrop.bottomAnchor.constraint(equalTo: bottomAnchor),
-
-            card.centerXAnchor.constraint(equalTo: centerXAnchor),
-            card.centerYAnchor.constraint(equalTo: centerYAnchor),
-            card.widthAnchor.constraint(equalToConstant: Self.cardSize.width),
-            card.heightAnchor.constraint(equalToConstant: Self.cardSize.height),
-            card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.92),
-            card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.92),
-
-            content.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            content.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            content.topAnchor.constraint(equalTo: card.topAnchor),
-            content.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-        ])
-
+        super.init(width: Self.cardSize.width, onCancel: onClose)
+        let cardHeight = card.heightAnchor.constraint(equalToConstant: Self.cardSize.height)
+        cardHeight.priority = .defaultHigh
+        cardHeight.isActive = true
+        embed(buildContent())
         selectSection(selectedIndex)
     }
 
@@ -73,30 +39,16 @@ final class SettingsOverlay: NSView, ModalOverlay {
         guard navRows.indices.contains(selectedIndex) else { return }
         window?.makeFirstResponder(navRows[selectedIndex])
     }
-    func animateIn() {
-        superview?.layoutSubtreeIfNeeded()
-        Motion.springScaleFade(card, appearing: true)
-    }
-    func animateOut(completion: @escaping () -> Void) {
-        guard dismiss.begin() else { return }
-        capturer?.endCapture()
-        Motion.springScaleFade(card, appearing: false, completion: completion)
-    }
-    override func hitTest(_ point: NSPoint) -> NSView? { dismiss.isDismissing ? nil : super.hitTest(point) }
 
-    // Here, not `keyDown`, so Esc from a focused text field's field editor still closes the card.
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if ModalEscape.handle(
-            event, in: window, dismissing: dismiss.isDismissing, close: { self.onClose() }
-        ) {
-            return true
-        }
-        return super.performKeyEquivalent(with: event)
+    override func animateOut(completion: @escaping () -> Void) {
+        guard !isDismissing else { return }
+        capturer?.endCapture()
+        super.animateOut(completion: completion)
     }
 
     // In place, not via `selectSection`, which would cancel another window's armed keybind capture.
-    func reapplyTheme() {
-        CardChrome.reapplyTheme(to: card)
+    override func reapplyTheme() {
+        super.reapplyTheme()
         heading.textColor = Theme.current.chrome.ink(.muted)
         divider.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor
         brandMark.contentTintColor = Theme.current.chrome.ink(.muted)
