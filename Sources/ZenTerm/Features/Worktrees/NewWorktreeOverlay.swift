@@ -2,6 +2,7 @@ import AppKit
 
 final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     static let width: CGFloat = 460
+    private static let submitChord = Chord(command: true, key: "⏎")
 
     private let workspace: Workspace
     private let options: WorktreeStore.CreateOptions
@@ -57,6 +58,8 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     override var isBusy: Bool { isWorking }
 
     override var isShowingOverlaidCard: Bool { confirm.isShowing }
+
+    func owns(_ chord: Chord) -> Bool { chord == Self.submitChord }
 
     func focusInitialResponder() {
         if let card = confirm.card { card.focusInitialResponder() } else { focus(branchField.field) }

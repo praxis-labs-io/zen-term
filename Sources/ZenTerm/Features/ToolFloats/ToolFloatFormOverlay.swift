@@ -2,6 +2,7 @@ import AppKit
 
 final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     static let width: CGFloat = 460
+    private static let submitChord = Chord(command: true, key: "⏎")
 
     private let editingFloat: ToolFloat?
     private let existingIDs: Set<String>
@@ -65,6 +66,8 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func owns(_ chord: Chord) -> Bool { chord == Self.submitChord }
 
     func focusInitialResponder() { window?.makeFirstResponder(titleField.field) }
 

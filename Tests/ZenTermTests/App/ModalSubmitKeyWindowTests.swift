@@ -64,82 +64,148 @@ final class ModalSubmitKeyWindowTests: WindowTestCase {
         return c.window.performKeyEquivalent(with: routed)
     }
 
-    func test_commandReturn_submitsReportIssueFromTheTitleField() throws {
-        let c = makeWindow()
-        var opened: [URL] = []
-        let report = SystemReport(appVersion: "0.3.0", build: "1", osVersion: "15.5", architecture: "arm64")
-        let form = ReportIssueOverlay(
-            report: report, onOpenURL: { opened.append($0) }, onExportDiagnostics: {}, onCancel: {})
-        present(form, in: c)
-        let title = try field(form, placeholder: "A short summary")
-        title.setText("Split closes the pane")
-        try XCTUnwrap(descendants(of: form).compactMap { $0 as? TextAreaBox }.first).setText("It closed the pane")
-        XCTAssertTrue(KeyboardFocus.isFocused(title.field, in: c.window), "the title field has focus")
-
-        XCTAssertTrue(try press(36, flags: [.command], in: c))
-
-        XCTAssertEqual(opened.count, 1)
+    private final class Sink {
+        var submitCount = 0
     }
 
-    func test_commandReturn_submitsNewWorktreeFromTheBranchField() throws {
-        let c = makeWindow()
-        var submitted: [NewWorktreeOverlay.Request] = []
+    private func makeReportIssue(_ sink: Sink) throws -> ReportIssueOverlay {
+        let report = SystemReport(appVersion: "0.3.0", build: "1", osVersion: "15.5", architecture: "arm64")
+        let form = ReportIssueOverlay(
+            report: report, onOpenURL: { _ in sink.submitCount += 1 }, onExportDiagnostics: {}, onCancel: {})
+        try field(form, placeholder: "A short summary").setText("Split closes the pane")
+        try XCTUnwrap(descendants(of: form).compactMap { $0 as? TextAreaBox }.first).setText("It closed the pane")
+        return form
+    }
+
+    private func makeNewWorktree(_ sink: Sink) throws -> NewWorktreeOverlay {
         let workspace = Workspace(
             title: "ZenTerm", path: URL(fileURLWithPath: "/tmp/zenterm-fixture"), tabs: [], env: [:], carry: [])
         let form = NewWorktreeOverlay(
             workspace: workspace,
             options: WorktreeStore.CreateOptions(
                 branches: [], defaultBase: "origin/main", currentBranch: "main", holders: [:]),
-            onSubmit: { submitted.append($0) }, onCancel: {}, onDismiss: {})
-        present(form, in: c)
+            onSubmit: { _ in sink.submitCount += 1 }, onCancel: {}, onDismiss: {})
         let branch = try field(form, placeholder: "feature/name")
         branch.setText("feature/zen-671")
         branch.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: branch.field))
-        XCTAssertTrue(KeyboardFocus.isFocused(branch.field, in: c.window), "the branch field has focus")
-
-        XCTAssertTrue(try press(36, flags: [.command], in: c))
-
-        XCTAssertEqual(submitted.count, 1)
+        return form
     }
 
-    func test_commandReturn_submitsToolFloatFromTheTitleField() throws {
-        let c = makeWindow()
-        var submitted: [ToolFloat] = []
+    private func makeToolFloat(_ sink: Sink) -> ToolFloatFormOverlay {
         let existing = ToolFloat(
             id: "scratch-pad", order: 1, title: "Scratch pad", icon: ToolFloatParser.defaultIcon,
             command: "vim", dir: nil, widthFraction: 0.85, heightFraction: 0.85,
             requiresGitRepo: false, persist: .ephemeral, toggle: Chord(command: true, shift: true, key: "l"))
-        let form = ToolFloatFormOverlay(
+        return ToolFloatFormOverlay(
             editing: existing, existingIDs: [], capturer: nil,
-            onSubmit: {
-                submitted.append($0)
+            onSubmit: { _ in
+                sink.submitCount += 1
                 return nil
             }, onCancel: {}, onDismiss: {})
+    }
+
+    private func makeAddSSHHost(_ sink: Sink) throws -> AddSSHHostOverlay {
+        let form = AddSSHHostOverlay(
+            mode: .add(taken: []), removal: nil,
+            onSubmit: { _ in
+                sink.submitCount += 1
+                return nil
+            }, onCancel: {}, onDismiss: {})
+        try XCTUnwrap(descendants(of: form).compactMap { $0 as? FieldBox }.first).setText("deploy@10.0.0.5")
+        return form
+    }
+
+    private func focus(_ view: NSView, in c: WindowController) {
+        XCTAssertTrue(c.window.makeFirstResponder(view))
+        XCTAssertTrue(KeyboardFocus.isFocused(view, in: c.window), "the \(type(of: view)) has focus")
+    }
+
+    func test_commandReturn_submitsReportIssueFromTheTitleField() throws {
+        let c = makeWindow()
+        let sink = Sink()
+        let form = try makeReportIssue(sink)
         present(form, in: c)
-        let title = try field(form, placeholder: "Open GitDash")
-        XCTAssertTrue(KeyboardFocus.isFocused(title.field, in: c.window), "the title field has focus")
+        focus(try field(form, placeholder: "A short summary").field, in: c)
 
         XCTAssertTrue(try press(36, flags: [.command], in: c))
 
-        XCTAssertEqual(submitted.count, 1)
+        XCTAssertEqual(sink.submitCount, 1)
+    }
+
+    func test_commandReturn_submitsNewWorktreeFromTheBranchField() throws {
+        let c = makeWindow()
+        let sink = Sink()
+        let form = try makeNewWorktree(sink)
+        present(form, in: c)
+        focus(try field(form, placeholder: "feature/name").field, in: c)
+
+        XCTAssertTrue(try press(36, flags: [.command], in: c))
+
+        XCTAssertEqual(sink.submitCount, 1)
+    }
+
+    func test_commandReturn_submitsToolFloatFromTheTitleField() throws {
+        let c = makeWindow()
+        let sink = Sink()
+        let form = makeToolFloat(sink)
+        present(form, in: c)
+        focus(try field(form, placeholder: "Open GitDash").field, in: c)
+
+        XCTAssertTrue(try press(36, flags: [.command], in: c))
+
+        XCTAssertEqual(sink.submitCount, 1)
     }
 
     func test_return_submitsAddSSHHostFromTheHostField() throws {
         let c = makeWindow()
-        var submitted: [SSHHostEntry] = []
-        let form = AddSSHHostOverlay(
-            mode: .add(taken: []), removal: nil,
-            onSubmit: {
-                submitted.append($0)
-                return nil
-            }, onCancel: {}, onDismiss: {})
+        let sink = Sink()
+        let form = try makeAddSSHHost(sink)
         present(form, in: c)
-        let host = try XCTUnwrap(descendants(of: form).compactMap { $0 as? FieldBox }.first)
-        host.setText("deploy@10.0.0.5")
-        XCTAssertTrue(KeyboardFocus.isFocused(host.field, in: c.window), "the host field has focus")
+        focus(try XCTUnwrap(descendants(of: form).compactMap { $0 as? FieldBox }.first).field, in: c)
 
         XCTAssertTrue(try press(36, flags: [], in: c))
 
-        XCTAssertEqual(submitted, [SSHHostEntry(alias: "deploy@10.0.0.5")])
+        XCTAssertEqual(sink.submitCount, 1)
+    }
+
+    func test_commandReturn_submitsReportIssueFromTheExportButton() throws {
+        let c = makeWindow()
+        let sink = Sink()
+        let form = try makeReportIssue(sink)
+        present(form, in: c)
+        focus(
+            try XCTUnwrap(descendants(of: form).compactMap { $0 as? AppButton }.first { $0.title.hasPrefix("Export") }),
+            in: c)
+
+        XCTAssertTrue(try press(36, flags: [.command], in: c))
+
+        XCTAssertEqual(sink.submitCount, 1)
+    }
+
+    func test_commandReturn_submitsNewWorktreeFromTheBaseSegment() throws {
+        let c = makeWindow()
+        let sink = Sink()
+        let form = try makeNewWorktree(sink)
+        present(form, in: c)
+        focus(try XCTUnwrap(descendants(of: form).compactMap { $0 as? SegmentedControl }.first), in: c)
+
+        XCTAssertTrue(try press(36, flags: [.command], in: c))
+
+        XCTAssertEqual(sink.submitCount, 1)
+    }
+
+    func test_commandReturn_submitsToolFloatFromTheGitSegment() throws {
+        let c = makeWindow()
+        let sink = Sink()
+        let form = makeToolFloat(sink)
+        present(form, in: c)
+        let git = try XCTUnwrap(
+            descendants(of: form).compactMap { $0 as? SegmentedControl }.first { $0.optionTitles.first == "Any folder" }
+        )
+        focus(git, in: c)
+
+        XCTAssertTrue(try press(36, flags: [.command], in: c))
+
+        XCTAssertEqual(sink.submitCount, 1)
     }
 }

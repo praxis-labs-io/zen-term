@@ -2,6 +2,7 @@ import AppKit
 
 final class ReportIssueOverlay: ModalShell, ModalOverlay {
     static let width: CGFloat = 460
+    private static let submitChord = Chord(command: true, key: "⏎")
 
     private let report: SystemReport
     private let onOpenURL: (URL) -> Void
@@ -34,6 +35,8 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func owns(_ chord: Chord) -> Bool { chord == Self.submitChord }
 
     func focusInitialResponder() { window?.makeFirstResponder(titleField.field) }
 
