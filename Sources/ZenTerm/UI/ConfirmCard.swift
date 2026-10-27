@@ -5,7 +5,7 @@ final class ConfirmCard: ModalShell, ModalOverlay {
 
     private let onConfirm: () -> Void
 
-    private let header = NSTextField(labelWithString: "")
+    private let header: ModalHeader
     private let messageLabel = NSTextField(labelWithString: "")
     private let checklist: ConfirmCardChecklist?
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
@@ -35,9 +35,10 @@ final class ConfirmCard: ModalShell, ModalOverlay {
     ) {
         self.checklist = checklist
         self.onConfirm = onConfirm
+        header = ModalHeader(title: title)
         confirmButton = AppButton(title: confirmLabel, variant: .destructive)
         super.init(width: Self.width, onCancel: onCancel)
-        embed(buildContent(title: title, message: message))
+        embed(buildContent(message: message))
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -47,18 +48,14 @@ final class ConfirmCard: ModalShell, ModalOverlay {
     override func reapplyTheme() {
         super.reapplyTheme()
         let chrome = Theme.current.chrome
-        header.textColor = chrome.ink(.normal)
+        header.reapplyTheme()
         messageLabel.textColor = chrome.ink(.muted)
         checklist?.reapplyTheme()
         cancelButton.reapplyTheme()
         confirmButton.reapplyTheme()
     }
 
-    private func buildContent(title: String, message: String) -> NSStackView {
-        header.font = ChromeType.font(.title)
-        header.textColor = Theme.current.chrome.ink(.normal)
-        header.stringValue = title
-
+    private func buildContent(message: String) -> NSStackView {
         messageLabel.font = ChromeType.font(.small)
         messageLabel.textColor = Theme.current.chrome.ink(.muted)
         messageLabel.lineBreakMode = .byWordWrapping
@@ -80,12 +77,7 @@ final class ConfirmCard: ModalShell, ModalOverlay {
         cancelButton.onBacktab = { [weak self] in self?.focus(self?.confirmButton) }
         confirmButton.onBacktab = { [weak self] in self?.focus(self?.cancelButton) }
 
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let footer = NSStackView(views: [spacer, cancelButton, confirmButton])
-        footer.orientation = .horizontal
-        footer.alignment = .centerY
-        footer.spacing = ChromeMetrics.Spacing.s8
+        let footer = ModalActionBar(trailing: [cancelButton, confirmButton])
 
         let content = NSStackView(views: [header, checklist ?? messageLabel, footer])
         content.orientation = .vertical
