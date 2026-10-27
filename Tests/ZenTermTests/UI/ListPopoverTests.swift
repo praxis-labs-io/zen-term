@@ -48,4 +48,45 @@ final class ListPopoverTests: WindowTestCase {
 
         XCTAssertFalse(popover.isOpen)
     }
+
+    func test_openContent_sizesToTheContentPastTheRowsCap_insideTheCardInsets() throws {
+        let (popover, _, _) = contentPopover(windowHeight: 900, contentSize: NSSize(width: 284, height: 500))
+
+        let card = try XCTUnwrap(popover.cardForTesting)
+
+        XCTAssertEqual(card.frame.width, 284 + ChromeMetrics.Spacing.s8 * 2, accuracy: 0.5)
+        XCTAssertEqual(card.frame.height, 500 + ChromeMetrics.Spacing.s6 * 2, accuracy: 0.5)
+        XCTAssertGreaterThan(card.frame.height, 260, "content mode is not held to the rows cap")
+    }
+
+    func test_openContent_inAShortWindow_clampsToTheWindowAndAddsTheScrollerLane() throws {
+        let (tall, _, _) = contentPopover(windowHeight: 900, contentSize: NSSize(width: 284, height: 500))
+        let (short, window, content) = contentPopover(windowHeight: 300, contentSize: NSSize(width: 284, height: 500))
+        let roomy = try XCTUnwrap(tall.cardForTesting)
+        let clamped = try XCTUnwrap(short.cardForTesting)
+
+        XCTAssertEqual(
+            clamped.frame.height, window.contentView!.bounds.height - ChromeMetrics.Spacing.s8 * 2, accuracy: 0.5)
+        XCTAssertEqual(clamped.frame.width - roomy.frame.width, ChromeMetrics.Spacing.s16, accuracy: 0.5)
+        clamped.layoutSubtreeIfNeeded()
+        XCTAssertLessThanOrEqual(
+            content.convert(content.bounds, to: clamped).maxX,
+            clamped.frame.width - ChromeMetrics.Spacing.s16 - ChromeMetrics.Spacing.s8 + 0.5,
+            "content runs into the scroller lane")
+    }
+
+    private func contentPopover(windowHeight: CGFloat, contentSize: NSSize) -> (ListPopover, NSWindow, NSView) {
+        let anchor = NSView(frame: NSRect(x: 20, y: windowHeight - 100, width: 220, height: 30))
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: windowHeight),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView?.addSubview(anchor)
+        let content = NSView()
+        content.translatesAutoresizingMaskIntoConstraints = false
+        content.widthAnchor.constraint(equalToConstant: contentSize.width).isActive = true
+        content.heightAnchor.constraint(equalToConstant: contentSize.height).isActive = true
+        let popover = ListPopover(anchor: anchor)
+        popover.open(content: content)
+        return (popover, window, content)
+    }
 }

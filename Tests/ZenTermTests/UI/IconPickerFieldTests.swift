@@ -113,6 +113,17 @@ final class IconPickerFieldTests: WindowTestCase {
             "no card left drawn on the content view after the resize")
     }
 
+    func test_afterAResizeCloses_theGrid_returnReopensIt() throws {
+        let (field, window) = openedField(selected: IconCatalog.defaultSymbol, windowHeight: 900)
+        window.setFrame(NSRect(x: 0, y: 0, width: 520, height: 400), display: false)
+        XCTAssertFalse(field.isPopoverOpen, "precondition: the resize closed the grid")
+
+        field.keyDown(with: try key(36))
+
+        XCTAssertTrue(field.isPopoverOpen)
+        XCTAssertEqual(field.cellCountForTesting, IconCatalog.all.count, "reopening rebuilds the cells")
+    }
+
     func test_inATallWindow_theGridIsNotTruncated() throws {
         let (field, window) = openedField(selected: IconCatalog.defaultSymbol, windowHeight: 900)
         let card = try XCTUnwrap(
@@ -139,8 +150,8 @@ final class IconPickerFieldTests: WindowTestCase {
         _ = field
 
         XCTAssertEqual(
-            card.frame.height, stack.fittingSize.height + 16, accuracy: 0.5,
-            "card \(card.frame.height) against content \(stack.fittingSize.height) + 16pt of inset")
+            card.frame.height, stack.fittingSize.height + ChromeMetrics.Spacing.s6 * 2, accuracy: 0.5,
+            "card \(card.frame.height) against content \(stack.fittingSize.height) + s6 insets")
     }
 
     func test_theScrollerGetsItsOwnLane_onlyWhenTheGridScrolls() throws {
@@ -164,6 +175,68 @@ final class IconPickerFieldTests: WindowTestCase {
         XCTAssertLessThanOrEqual(card.frame.height, window.contentView!.bounds.height)
         XCTAssertGreaterThanOrEqual(card.frame.minY, 0)
         XCTAssertLessThanOrEqual(card.frame.maxY, window.contentView!.bounds.height)
+    }
+
+    func test_arrowsMoveTheHighlight_andReturnCommitsIt() throws {
+        let (field, window) = openedField(selected: IconCatalog.symbols[0])
+        var changed: [String] = []
+        field.onChange = { changed.append($0) }
+
+        field.keyDown(with: try arrowKey(124))
+        field.keyDown(with: try arrowKey(125))
+        XCTAssertEqual(field.highlightedSymbolForTesting, IconCatalog.symbols[1 + IconPickerField.columnsForTesting])
+        field.keyDown(with: try key(36))
+
+        XCTAssertEqual(changed, [IconCatalog.symbols[1 + IconPickerField.columnsForTesting]])
+        XCTAssertEqual(field.selected, changed.first)
+        XCTAssertFalse(field.isPopoverOpen)
+        XCTAssertTrue(window.firstResponder === field, "commit hands focus back to the field")
+    }
+
+    func test_keypadEnterCommitsTheHighlight() throws {
+        let (field, _) = openedField(selected: IconCatalog.symbols[0])
+        field.keyDown(with: try arrowKey(124))
+
+        field.keyDown(with: try key(76, flags: [.function, .numericPad]))
+
+        XCTAssertEqual(field.selected, IconCatalog.symbols[1])
+        XCTAssertFalse(field.isPopoverOpen)
+    }
+
+    func test_clickingACell_commitsItsSymbol() throws {
+        let (field, window) = openedField(selected: IconCatalog.symbols[0])
+        var changed: [String] = []
+        field.onChange = { changed.append($0) }
+        field.moveHighlightForTesting(2)
+        let cell = try XCTUnwrap(field.highlightedCellForTesting)
+        let point = cell.convert(NSPoint(x: cell.bounds.midX, y: cell.bounds.midY), to: nil)
+        let down = try mouse(.leftMouseDown, at: point, in: window)
+        let up = try mouse(.leftMouseUp, at: point, in: window)
+
+        cell.mouseDown(with: down)
+        cell.mouseUp(with: up)
+
+        XCTAssertEqual(changed, [IconCatalog.symbols[2]])
+        XCTAssertFalse(field.isPopoverOpen)
+        XCTAssertTrue(window.firstResponder === field)
+    }
+
+    private func key(_ code: UInt16, flags: NSEvent.ModifierFlags = []) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0,
+                context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: code))
+    }
+
+    private func arrowKey(_ code: UInt16) throws -> NSEvent {
+        try key(code, flags: [.function, .numericPad])
+    }
+
+    private func mouse(_ type: NSEvent.EventType, at point: NSPoint, in window: NSWindow) throws -> NSEvent {
+        try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: type, location: point, modifierFlags: [], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
     }
 
     @discardableResult

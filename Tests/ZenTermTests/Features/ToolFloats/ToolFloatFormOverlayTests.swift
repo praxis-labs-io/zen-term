@@ -367,6 +367,7 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
 
         XCTAssertFalse(picker.isPopoverOpen, "Esc in the picker's keyDown closes the grid")
         XCTAssertEqual(sink.cancelled, 0, "closing the grid must not cancel the form")
+        XCTAssertTrue(window!.firstResponder === picker, "Esc leaves focus on the field")
     }
 
     func test_editForm_deleteButton_firesOnDelete() {
