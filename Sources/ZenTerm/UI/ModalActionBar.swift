@@ -3,6 +3,7 @@ import AppKit
 final class ModalActionBar: NSStackView {
     init(leading: [NSView] = [], trailing: [AppButton]) {
         super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
         orientation = .horizontal
         alignment = .centerY
         spacing = ChromeMetrics.Spacing.s8

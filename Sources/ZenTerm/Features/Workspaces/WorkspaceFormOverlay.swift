@@ -28,7 +28,8 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     private var form: WorkspaceForm
 
     private var footerDivider: ThemeReapplying?
-    private let header = NSTextField(labelWithString: "")
+    private lazy var header = ModalHeader(
+        title: editingWorkspace == nil ? "Add Workspace" : "Edit Workspace", accessory: escapeCap)
     private let escapeCap = KeycapView(shortcut: "esc")
 
     private let titleField = FieldBox(placeholder: WorkspaceFormOverlay.namePlaceholder)
@@ -114,7 +115,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     override func reapplyTheme() {
         super.reapplyTheme()
         let chrome = Theme.current.chrome
-        header.textColor = chrome.ink(.normal)
+        header.reapplyTheme()
         envError.textColor = chrome.destructive.nsColor
         notice.textColor = chrome.ink(.subtle)
         escapeCap.reapplyTheme()
@@ -133,12 +134,6 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     }
 
     private func buildContent() -> NSStackView {
-        header.font = ChromeType.font(.title)
-        header.textColor = Theme.current.chrome.ink(.normal)
-        header.stringValue = editingWorkspace == nil ? "Add Workspace" : "Edit Workspace"
-        let headerSpacer = NSView()
-        headerSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let headerRow = Self.hStack([header, headerSpacer, escapeCap], spacing: ChromeMetrics.Spacing.s8)
 
         let nameRow = buildNameRow()
         let tabsGroup = buildTabsGroup()
@@ -165,7 +160,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
             [caption("Copy into new worktrees", required: false), carryPicker], spacing: ChromeMetrics.Spacing.s6)
 
         let built = FormCard.content(
-            rows: [headerRow, nameRow, tabsGroup, envGroup, carryGroup], footer: buildFooter(),
+            rows: [header, nameRow, tabsGroup, envGroup, carryGroup], footer: buildFooter(),
             spacing: ChromeMetrics.Spacing.modalSectionGap)
         footerDivider = built.divider
         return built.view
@@ -255,15 +250,13 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         cancelButton.onTap = { [weak self] in self?.closeForm() }
         addButton.setTitle(editingWorkspace == nil ? "Add Workspace" : "Save")
         addButton.onTap = { [weak self] in self?.submit() }
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        var views: [NSView] = [notice, undoButton, spacer, cancelButton, addButton]
+        var leading: [NSView] = [notice, undoButton]
         if onDelete != nil {
             deleteButton.onTap = { [weak self] in
                 guard let self, !self.isDismissing else { return }
                 self.onDelete?()
             }
-            views.insert(deleteButton, at: 0)
+            leading.insert(deleteButton, at: 0)
         }
         for button in [addVarButton, undoButton, cancelButton, addButton, deleteButton] {
             button.isKeyboardFocusable = true
@@ -273,7 +266,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
             button.onBacktab = { [weak self] in self?.moveTab(-1) }
         }
         wireFooterArrows()
-        return Self.hStack(views, spacing: ChromeMetrics.Spacing.s8)
+        return ModalActionBar(leading: leading, trailing: [cancelButton, addButton])
     }
 
     private func wireFooterArrows() {
@@ -623,14 +616,6 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         let field = FieldCaption(text, required: required)
         captions.append(field)
         return field
-    }
-
-    private static func hStack(_ views: [NSView], spacing: CGFloat) -> NSStackView {
-        let stack = NSStackView(views: views)
-        stack.orientation = .horizontal
-        stack.alignment = .centerY
-        stack.spacing = spacing
-        return stack
     }
 
     private static func vStack(_ views: [NSView], spacing: CGFloat) -> NSStackView {

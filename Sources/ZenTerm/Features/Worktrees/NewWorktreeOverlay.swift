@@ -11,7 +11,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
 
     private var footerDivider: ThemeReapplying?
     private lazy var confirm = ConfirmSlot(over: self)
-    private let header = NSTextField(labelWithString: "")
+    private let header = ModalHeader(title: "New Worktree")
 
     private let branchField = BranchField()
     private var branchGroup: LabeledField?
@@ -68,7 +68,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     override func reapplyTheme() {
         super.reapplyTheme()
         let chrome = Theme.current.chrome
-        header.textColor = chrome.ink(.normal)
+        header.reapplyTheme()
         baseCaption.textColor = chrome.ink(.muted)
         branchCaption.textColor = chrome.ink(.muted)
         confirm.card?.reapplyTheme()
@@ -115,10 +115,6 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     }
 
     private func buildContent() -> NSStackView {
-        header.font = ChromeType.font(.title)
-        header.textColor = Theme.current.chrome.ink(.normal)
-        header.stringValue = "New Worktree"
-
         wireBranchField()
         let branchGroup = LabeledField(
             caption: FieldCaption("Branch", required: true), control: branchField)
@@ -177,9 +173,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
         cancelButton.onBacktab = { [weak self] in self?.focus(self?.createButton) }
         cancelButton.onTab = { [weak self] in self?.moveTab(1) }
         createButton.onBacktab = { [weak self] in self?.moveTab(-1) }
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let footer = Self.hStack([phaseGroup, spacer, cancelButton, createButton], spacing: ChromeMetrics.Spacing.s8)
+        let footer = ModalActionBar(leading: [phaseGroup], trailing: [cancelButton, createButton])
 
         let built = FormCard.content(
             rows: [header, branchStack, baseGroup, carryGroup, errorLabel],
@@ -393,14 +387,6 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
         let stack = NSStackView(views: [view])
         stack.orientation = .horizontal
         stack.alignment = .centerY
-        return stack
-    }
-
-    private static func hStack(_ views: [NSView], spacing: CGFloat) -> NSStackView {
-        let stack = NSStackView(views: views)
-        stack.orientation = .horizontal
-        stack.alignment = .centerY
-        stack.spacing = spacing
         return stack
     }
 

@@ -5,6 +5,7 @@ final class ModalHeader: NSStackView, ThemeReapplying {
 
     init(title: String, accessory: NSView? = nil) {
         super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
         orientation = .horizontal
         alignment = .centerY
         spacing = ChromeMetrics.Spacing.s8

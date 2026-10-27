@@ -11,7 +11,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     private let onDelete: (() -> String?)?
 
     private var footerDivider: ThemeReapplying?
-    private let header = NSTextField(labelWithString: "")
+    private lazy var header = ModalHeader(title: editingFloat == nil ? "New Tool Float" : "Edit Tool Float")
 
     private let titleField = FieldBox(placeholder: "Open GitDash")
     private var iconPicker: IconPickerField!
@@ -83,7 +83,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     override func reapplyTheme() {
         super.reapplyTheme()
         hintBubble?.reapplyTheme()
-        header.textColor = Theme.current.chrome.ink(.normal)
+        header.reapplyTheme()
         footerDivider?.reapplyTheme()
         errorLabel.reapplyTheme()
 
@@ -101,10 +101,6 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     }
 
     private func buildContent() -> NSStackView {
-        header.font = ChromeType.font(.title)
-        header.textColor = Theme.current.chrome.ink(.normal)
-        header.stringValue = editingFloat == nil ? "New Tool Float" : "Edit Tool Float"
-
         wireField(titleField)
         titleField.onChange = { [weak self] in self?.refreshValidity() }
         let titleGroup = LabeledField(caption: caption("Title", required: true), control: titleField)
@@ -190,9 +186,6 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         }
         submitButton.onArrowLeft = { [weak self] in self?.focus(self?.cancelButton) }
         cancelButton.onArrowRight = { [weak self] in self?.focus(self?.submitButton) }
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        var footerViews: [NSView] = [spacer, cancelButton, submitButton]
         if onDelete != nil {
             deleteButton.isKeyboardFocusable = true
             deleteButton.onTap = { [weak self] in self?.delete() }
@@ -202,7 +195,6 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
             deleteButton.onBacktab = { [weak self] in self?.moveTab(-1) }
             deleteButton.onArrowRight = { [weak self] in self?.focus(self?.cancelButton) }
             cancelButton.onArrowLeft = { [weak self] in self?.focus(self?.deleteButton) }
-            footerViews = [deleteButton, spacer, cancelButton, submitButton]
         }
         submitButton.onTab = { [weak self] in self?.focus(self?.cancelButton) }
         cancelButton.onBacktab = { [weak self] in self?.focus(self?.submitButton) }
@@ -212,9 +204,9 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         } else {
             cancelButton.onTab = { [weak self] in self?.moveTab(1) }
         }
-        let footer = Self.vStack(
-            [errorLabel, Self.hStack(footerViews, spacing: ChromeMetrics.Spacing.s8)],
-            spacing: ChromeMetrics.Spacing.s10)
+        let actionBar = ModalActionBar(
+            leading: onDelete == nil ? [] : [deleteButton], trailing: [cancelButton, submitButton])
+        let footer = Self.vStack([errorLabel, actionBar], spacing: ChromeMetrics.Spacing.s10)
 
         let built = FormCard.content(
             rows: [
