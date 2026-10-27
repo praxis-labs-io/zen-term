@@ -27,9 +27,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     private var form: WorkspaceForm
 
     private var footerDivider: ThemeReapplying?
-    private lazy var header = ModalHeader(
-        title: editingWorkspace == nil ? "Add Workspace" : "Edit Workspace", accessory: escapeCap)
-    private let escapeCap = KeycapView(shortcut: "esc")
+    private lazy var header = ModalHeader(title: editingWorkspace == nil ? "Add Workspace" : "Edit Workspace")
 
     private let titleField = FieldBox(placeholder: WorkspaceFormOverlay.namePlaceholder)
     private let folderPicker = DirectoryPickerField(placeholder: "Type a path, or Choose")
@@ -117,7 +115,6 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         header.reapplyTheme()
         envError.textColor = chrome.destructive.nsColor
         notice.textColor = chrome.ink(.subtle)
-        escapeCap.reapplyTheme()
 
         let controls: [ThemeReapplying] = [
             titleField, folderPicker, addVarButton, undoButton, cancelButton, addButton, deleteButton,

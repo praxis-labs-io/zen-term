@@ -25,11 +25,6 @@
                 rows: [
                     GallerySection.Row(label: "Header", samples: [sized(ModalHeader(title: "Report an Issue"))]),
                     GallerySection.Row(
-                        label: "Header with accessory",
-                        samples: [
-                            sized(ModalHeader(title: "Add Workspace", accessory: KeycapView(shortcut: "esc")))
-                        ]),
-                    GallerySection.Row(
                         label: "Bar",
                         samples: [
                             sized(

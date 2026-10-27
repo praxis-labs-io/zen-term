@@ -3,24 +3,16 @@ import AppKit
 final class ModalHeader: NSStackView, ThemeReapplying {
     private let titleLabel = NSTextField(labelWithString: "")
 
-    init(title: String, accessory: NSView? = nil) {
+    init(title: String) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         orientation = .horizontal
         alignment = .centerY
-        spacing = ChromeMetrics.Spacing.s8
         titleLabel.font = ChromeType.font(.title)
         titleLabel.textColor = Theme.current.chrome.ink(.normal)
         titleLabel.stringValue = title
         addArrangedSubview(titleLabel)
-        guard let accessory else {
-            titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
-            return
-        }
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        addArrangedSubview(spacer)
-        addArrangedSubview(accessory)
+        titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
