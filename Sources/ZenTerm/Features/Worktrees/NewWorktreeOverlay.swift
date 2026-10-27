@@ -2,7 +2,6 @@ import AppKit
 
 final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     static let width: CGFloat = 460
-    private static let submitChord = Chord(command: true, key: "⏎")
 
     private let workspace: Workspace
     private let options: WorktreeStore.CreateOptions

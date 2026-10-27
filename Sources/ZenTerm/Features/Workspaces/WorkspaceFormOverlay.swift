@@ -6,7 +6,6 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     static let width: CGFloat = 640
     private static let nameWidth: CGFloat = 210
     private static let namePlaceholder = "Named after the folder"
-    private static let submitChord = Chord(command: true, key: "⏎")
     private static let launchFocusChord = Chord(command: true, key: "l")
 
     private enum Problem {
@@ -134,7 +133,6 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     }
 
     private func buildContent() -> NSStackView {
-
         let nameRow = buildNameRow()
         let tabsGroup = buildTabsGroup()
 

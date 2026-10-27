@@ -420,7 +420,8 @@ New modal surfaces compose the existing primitives.
 
 - **Primitives:** `AppButton` (variants `primary`, `secondary`, `muted`, `destructive`,
   `segment`, `link`; an optional shortcut keycap inside),
-  `SegmentedControl`, `FieldBox` + `LabeledField`, `ModalCard.swift`
+  `SegmentedControl`, `FieldBox` + `LabeledField`, `ModalHeader` and `ModalActionBar` for a modal's
+  title row and button row, `ModalCard.swift`
   for card chrome and scrolling, `ModalShell` for a centred card over a backdrop (Esc goes
   back one step, a click outside closes the stack), `FormCard` for forms (body scrolls, footer pinned,
   capped at `FormCard.maxHeight`; the workspace form takes its own taller cap).
@@ -488,7 +489,7 @@ and passes; a chord resolves; whatever is left goes to `modeHandler`, then the P
   open card, which stays open. A card is offered every other chord first
   (`ModalOverlay.handle`, how the workspace form takes the tab shortcuts) and swallows
   what it declines; a key it `owns` passes `passThroughGuard` to reach it as a key event
-  (the workspace form's ⌘↩ and ⌘L). A float raises a notice for pane commands and passes
+  (⌘↩ in the report, worktree, tool float and workspace forms, and the workspace form's ⌘L). A float raises a notice for pane commands and passes
   reading chords to its own buffer (`modeTarget`).
 - **Picker chords go through `PickerChordGuard`** (⌥⏎, ⌘⇧⌫), because a bound chord is
   otherwise consumed app-wide and those keys belong to shells and TUIs. A focused sidebar

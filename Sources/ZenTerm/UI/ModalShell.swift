@@ -2,6 +2,8 @@ import AppKit
 
 // Full-bleed so its backdrop swallows clicks on whatever is underneath.
 class ModalShell: NSView {
+    static let submitChord = Chord(command: true, key: "⏎")
+
     let card = CardView()
     private let onCancel: () -> Void
     private let onDismiss: (() -> Void)?

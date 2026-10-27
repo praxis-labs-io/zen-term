@@ -2,7 +2,6 @@ import AppKit
 
 final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     static let width: CGFloat = 460
-    private static let submitChord = Chord(command: true, key: "⏎")
 
     private let editingFloat: ToolFloat?
     private let existingIDs: Set<String>

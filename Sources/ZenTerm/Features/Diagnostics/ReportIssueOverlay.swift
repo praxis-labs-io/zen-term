@@ -2,7 +2,6 @@ import AppKit
 
 final class ReportIssueOverlay: ModalShell, ModalOverlay {
     static let width: CGFloat = 460
-    private static let submitChord = Chord(command: true, key: "⏎")
 
     private let report: SystemReport
     private let onOpenURL: (URL) -> Void
