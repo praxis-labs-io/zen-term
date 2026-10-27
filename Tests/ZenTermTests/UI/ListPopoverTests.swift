@@ -50,7 +50,7 @@ final class ListPopoverTests: WindowTestCase {
     }
 
     func test_openContent_sizesToTheContentPastTheRowsCap_insideTheCardInsets() throws {
-        let (popover, _) = contentPopover(windowHeight: 900, contentSize: NSSize(width: 284, height: 500))
+        let (popover, _, _) = contentPopover(windowHeight: 900, contentSize: NSSize(width: 284, height: 500))
 
         let card = try XCTUnwrap(popover.cardForTesting)
 
@@ -60,17 +60,22 @@ final class ListPopoverTests: WindowTestCase {
     }
 
     func test_openContent_inAShortWindow_clampsToTheWindowAndAddsTheScrollerLane() throws {
-        let (tall, _) = contentPopover(windowHeight: 900, contentSize: NSSize(width: 284, height: 500))
-        let (short, window) = contentPopover(windowHeight: 300, contentSize: NSSize(width: 284, height: 500))
+        let (tall, _, _) = contentPopover(windowHeight: 900, contentSize: NSSize(width: 284, height: 500))
+        let (short, window, content) = contentPopover(windowHeight: 300, contentSize: NSSize(width: 284, height: 500))
         let roomy = try XCTUnwrap(tall.cardForTesting)
         let clamped = try XCTUnwrap(short.cardForTesting)
 
         XCTAssertEqual(
             clamped.frame.height, window.contentView!.bounds.height - ChromeMetrics.Spacing.s8 * 2, accuracy: 0.5)
         XCTAssertEqual(clamped.frame.width - roomy.frame.width, ChromeMetrics.Spacing.s16, accuracy: 0.5)
+        clamped.layoutSubtreeIfNeeded()
+        XCTAssertLessThanOrEqual(
+            content.convert(content.bounds, to: clamped).maxX,
+            clamped.frame.width - ChromeMetrics.Spacing.s16 - ChromeMetrics.Spacing.s8 + 0.5,
+            "content runs into the scroller lane")
     }
 
-    private func contentPopover(windowHeight: CGFloat, contentSize: NSSize) -> (ListPopover, NSWindow) {
+    private func contentPopover(windowHeight: CGFloat, contentSize: NSSize) -> (ListPopover, NSWindow, NSView) {
         let anchor = NSView(frame: NSRect(x: 20, y: windowHeight - 100, width: 220, height: 30))
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 500, height: windowHeight),
@@ -82,6 +87,6 @@ final class ListPopoverTests: WindowTestCase {
         content.heightAnchor.constraint(equalToConstant: contentSize.height).isActive = true
         let popover = ListPopover(anchor: anchor)
         popover.open(content: content)
-        return (popover, window)
+        return (popover, window, content)
     }
 }

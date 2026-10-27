@@ -22,7 +22,7 @@ final class ListPopover {
     private static let rowSpacing: CGFloat = ChromeMetrics.Spacing.s2
     private static let gap: CGFloat = ChromeMetrics.Spacing.s4
     private static let margin: CGFloat = ChromeMetrics.Spacing.s8
-    /// Overlay scrollers draw over content, so without this lane the bar covers the last column.
+    /// Overlay scrollers draw over content, so without this lane the bar covers the content's trailing edge.
     private static let scrollerGutter: CGFloat = ChromeMetrics.Spacing.s16
 
     init(anchor: NSView) {
@@ -42,15 +42,17 @@ final class ListPopover {
     func open(rows: [Row]) {
         guard let (window, contentView) = openingContext() else { return }
         let (stack, contentHeight) = rowStack(rows)
-        let built = assembleCard(around: stack)
+        let (built, _) = assembleCard(around: stack)
         built.frame.size = anchoredSize(contentHeight: contentHeight)
         present(built, in: window, on: contentView)
     }
 
     func open(content: NSView) {
         guard let (window, contentView) = openingContext() else { return }
-        let built = assembleCard(around: content)
-        built.frame.size = naturalSize(of: content, in: contentView)
+        let (built, trailing) = assembleCard(around: content)
+        let (size, scrolls) = naturalSize(of: content, in: contentView)
+        built.frame.size = size
+        if scrolls { trailing.constant -= Self.scrollerGutter }
         present(built, in: window, on: contentView)
     }
 
@@ -107,14 +109,15 @@ final class ListPopover {
             height: min(contentHeight + Self.verticalInset * 2, Self.maxHeight))
     }
 
-    private func naturalSize(of content: NSView, in contentView: NSView) -> NSSize {
+    private func naturalSize(of content: NSView, in contentView: NSView) -> (size: NSSize, scrolls: Bool) {
         content.layoutSubtreeIfNeeded()
         let fitting = content.fittingSize
         let natural = NSSize(
             width: fitting.width + Self.horizontalInset * 2, height: fitting.height + Self.verticalInset * 2)
         let height = min(natural.height, contentView.bounds.height - Self.margin * 2)
         let scrolls = height < natural.height
-        return NSSize(width: natural.width + (scrolls ? Self.scrollerGutter : 0), height: height)
+        let width = natural.width + (scrolls ? Self.scrollerGutter : 0)
+        return (NSSize(width: width, height: height), scrolls)
     }
 
     /// Each row joins the stack before its width constraint, which throws without a common ancestor.
@@ -136,7 +139,7 @@ final class ListPopover {
         return (stack, contentHeight)
     }
 
-    private func assembleCard(around content: NSView) -> NSView {
+    private func assembleCard(around content: NSView) -> (card: NSView, trailing: NSLayoutConstraint) {
         content.translatesAutoresizingMaskIntoConstraints = false
         let doc = FlippedView()
         doc.translatesAutoresizingMaskIntoConstraints = false
@@ -150,6 +153,7 @@ final class ListPopover {
         card.translatesAutoresizingMaskIntoConstraints = true
         card.addSubview(scroll)
 
+        let trailing = content.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -Self.horizontalInset)
         NSLayoutConstraint.activate([
             scroll.leadingAnchor.constraint(equalTo: card.leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: card.trailingAnchor),
@@ -160,9 +164,9 @@ final class ListPopover {
             doc.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
             content.topAnchor.constraint(equalTo: doc.topAnchor, constant: Self.verticalInset),
             content.leadingAnchor.constraint(equalTo: doc.leadingAnchor, constant: Self.horizontalInset),
-            content.trailingAnchor.constraint(equalTo: doc.trailingAnchor, constant: -Self.horizontalInset),
+            trailing,
             content.bottomAnchor.constraint(equalTo: doc.bottomAnchor, constant: -Self.verticalInset),
         ])
-        return card
+        return (card, trailing)
     }
 }
