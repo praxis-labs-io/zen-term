@@ -7,7 +7,7 @@
         ]
 
         static func sections() -> [GallerySection] {
-            [cards(), toasts(), hoverCards()]
+            [cards(), modalParts(), toasts(), hoverCards()]
         }
 
         private static func cards() -> GallerySection {
@@ -17,6 +17,59 @@
                     GallerySection.Row(label: "Plain edge", samples: [card(focusBorder: false)]),
                     GallerySection.Row(label: "Focus border", samples: [card(focusBorder: true)]),
                 ])
+        }
+
+        private static func modalParts() -> GallerySection {
+            GallerySection(
+                title: "ModalHeader and ModalActionBar",
+                rows: [
+                    GallerySection.Row(label: "Header", samples: [sized(ModalHeader(title: "Report an Issue"))]),
+                    GallerySection.Row(
+                        label: "Bar",
+                        samples: [
+                            sized(
+                                ModalActionBar(trailing: [
+                                    AppButton(title: "Cancel", variant: .secondary),
+                                    AppButton(title: "Create", variant: .primary),
+                                ]))
+                        ]),
+                    GallerySection.Row(
+                        label: "Bar with destructive",
+                        samples: [
+                            sized(
+                                ModalActionBar(
+                                    leading: [AppButton(title: "Delete", variant: .destructive)],
+                                    trailing: [
+                                        AppButton(title: "Cancel", variant: .secondary),
+                                        AppButton(title: "Save", variant: .primary),
+                                    ]))
+                        ]),
+                    GallerySection.Row(
+                        label: "Bar with notice",
+                        samples: [
+                            sized(
+                                ModalActionBar(
+                                    leading: [
+                                        modalNotice("Folder moved"), AppButton(title: "Undo", variant: .secondary),
+                                    ],
+                                    trailing: [
+                                        AppButton(title: "Cancel", variant: .secondary),
+                                        AppButton(title: "Add", variant: .primary),
+                                    ]))
+                        ]),
+                ])
+        }
+
+        private static func sized(_ view: NSView) -> NSView {
+            view.widthAnchor.constraint(equalToConstant: ConfirmCard.width).isActive = true
+            return view
+        }
+
+        private static func modalNotice(_ text: String) -> NSTextField {
+            let label = NSTextField(labelWithString: text)
+            label.font = ChromeType.font(.small)
+            label.textColor = Theme.current.chrome.ink(.subtle)
+            return label
         }
 
         private static let sampleSize = NSSize(width: 220, height: 80)

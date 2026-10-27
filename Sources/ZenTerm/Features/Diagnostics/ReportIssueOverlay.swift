@@ -7,7 +7,7 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
     private let onOpenURL: (URL) -> Void
     private let onExportDiagnostics: () -> Void
 
-    private let header = NSTextField(labelWithString: "")
+    private let header = ModalHeader(title: "Report an Issue")
     private let titleField = FieldBox(placeholder: "A short summary")
     private let whatHappened = TextAreaBox(placeholder: "What went wrong, and what you expected instead")
     private var titleGroup: LabeledField?
@@ -35,12 +35,14 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    func owns(_ chord: Chord) -> Bool { chord == Self.submitChord }
+
     func focusInitialResponder() { window?.makeFirstResponder(titleField.field) }
 
     override func reapplyTheme() {
         super.reapplyTheme()
         let chrome = Theme.current.chrome
-        header.textColor = chrome.ink(.normal)
+        header.reapplyTheme()
         envText.textColor = chrome.ink(.muted)
         envText.applyThemedEditor()
         envNote.textColor = chrome.ink(.muted)
@@ -52,10 +54,6 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
     }
 
     private func buildContent() -> NSStackView {
-        header.font = ChromeType.font(.title)
-        header.textColor = Theme.current.chrome.ink(.normal)
-        header.stringValue = "Report an Issue"
-
         wireField(titleField)
         titleField.onEnter = { [weak self] in self?.moveVertical(1) }
         let titleGroup = LabeledField(caption: FieldCaption("Title", required: true), control: titleField)
@@ -96,7 +94,7 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
         return content
     }
 
-    private func buildFooter() -> NSStackView {
+    private func buildFooter() -> ModalActionBar {
         exportButton.onTap = { [weak self] in
             guard let self, !self.isDismissing else { return }
             self.onExportDiagnostics()
@@ -120,9 +118,7 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
         openButton.onTab = { [weak self] in self?.moveTab(1) }
         openButton.onBacktab = { [weak self] in self?.focus(self?.cancelButton) }
 
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        return Self.hStack([spacer, exportButton, cancelButton, openButton], spacing: ChromeMetrics.Spacing.s8)
+        return ModalActionBar(trailing: [exportButton, cancelButton, openButton])
     }
 
     private func verticalStops() -> [NSView] {
@@ -192,14 +188,6 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
     }
 
     private func refreshValidity() { validate(includeRequired: false) }
-
-    private static func hStack(_ views: [NSView], spacing: CGFloat) -> NSStackView {
-        let stack = NSStackView(views: views)
-        stack.orientation = .horizontal
-        stack.alignment = .centerY
-        stack.spacing = spacing
-        return stack
-    }
 
     private static func vStack(_ views: [NSView], spacing: CGFloat) -> NSStackView {
         let stack = NSStackView(views: views)

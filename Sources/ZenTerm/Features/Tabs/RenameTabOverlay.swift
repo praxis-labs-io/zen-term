@@ -5,7 +5,7 @@ final class RenameTabOverlay: ModalShell, ModalOverlay {
 
     private let onSubmit: (String) -> Void
 
-    private let header = NSTextField(labelWithString: "")
+    private let header = ModalHeader(title: "Rename Tab")
     private let nameField: FieldBox
     private let footer = HintFooter([.init(keys: "⏎", label: "Save"), .init(keys: "⎋", label: "Cancel")])
 
@@ -31,17 +31,12 @@ final class RenameTabOverlay: ModalShell, ModalOverlay {
 
     override func reapplyTheme() {
         super.reapplyTheme()
-        let chrome = Theme.current.chrome
-        header.textColor = chrome.ink(.normal)
+        header.reapplyTheme()
         nameField.reapplyTheme()
         footer.reapplyTheme()
     }
 
     private func buildContent() -> NSStackView {
-        header.font = ChromeType.font(.title)
-        header.textColor = Theme.current.chrome.ink(.normal)
-        header.stringValue = "Rename Tab"
-
         nameField.onEnter = { [weak self] in self?.submit() }
         nameField.onSubmit = { [weak self] in self?.submit() }
 

@@ -19,7 +19,7 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
 
     private lazy var confirm = ConfirmSlot(over: self)
 
-    private let header = NSTextField(labelWithString: "")
+    private lazy var header = ModalHeader(title: editing == nil ? "Add remote host" : "Edit remote host")
     private let hostField = FieldBox(placeholder: "user@host or alias")
     private lazy var hostCaption = FieldCaption("Host", required: editing == nil)
     private lazy var hostGroup = LabeledField(caption: hostCaption, control: hostField)
@@ -73,7 +73,7 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
 
     override func reapplyTheme() {
         super.reapplyTheme()
-        header.textColor = Theme.current.chrome.ink(.normal)
+        header.reapplyTheme()
         errorLabel.reapplyTheme()
         confirm.card?.reapplyTheme()
         hostGroup.reapplyTheme()
@@ -84,9 +84,6 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
     }
 
     private func buildContent() -> NSStackView {
-        header.stringValue = editing == nil ? "Add remote host" : "Edit remote host"
-        header.font = ChromeType.font(.title)
-        header.textColor = Theme.current.chrome.ink(.normal)
         submitButton.setTitle(editing == nil ? "Add" : "Save")
 
         hostField.onEnter = { [weak self] in self?.focus(self?.nameField.field) }
@@ -132,14 +129,8 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
             submitButton.onTab = { [weak self] in self?.focus(self?.hostField.field) }
         }
 
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let trailing = [spacer, cancelButton, submitButton]
-        let footerViews = removal == nil ? trailing : [removeButton] + trailing
-        let footer = NSStackView(views: footerViews)
-        footer.orientation = .horizontal
-        footer.spacing = ChromeMetrics.Spacing.s8
-        footer.translatesAutoresizingMaskIntoConstraints = false
+        let footer = ModalActionBar(
+            leading: removal == nil ? [] : [removeButton], trailing: [cancelButton, submitButton])
 
         let content = NSStackView(views: [header, hostGroup, nameGroup, errorLabel, footer])
         content.orientation = .vertical

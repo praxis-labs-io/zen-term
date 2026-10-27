@@ -559,4 +559,16 @@ final class OverlayReapplyThemeTests: WindowTestCase {
             "two variants share a badge tone")
         XCTAssertEqual(badge(.warning), Theme.current.chrome.warning.nsColor)
     }
+
+    func test_reapplyTheme_recolorsModalHeaderTitle() throws {
+        let header = ModalHeader(title: "Report an Issue")
+        let title = try XCTUnwrap(descendants(of: header).compactMap { $0 as? NSTextField }.first)
+        let before = title.textColor
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        header.reapplyTheme()
+
+        XCTAssertNotEqual(before, title.textColor, "the title stayed stale")
+        XCTAssertEqual(title.textColor, Theme.current.chrome.ink(.normal))
+    }
 }

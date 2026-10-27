@@ -183,6 +183,9 @@ Tokens live in `Sources/ZenTerm/Tokens/`, and shared components in `Sources/ZenT
 Neither depends on a feature or on `App/`. The dev build's Component Gallery is the
 catalog: it shows every shared component and its states.
 
+A modal's title row is `ModalHeader` and its button row is `ModalActionBar`; a keyboard-only card uses
+`HintFooter` in its place.
+
 ## Extending the system
 
 Ask before adding a role, a token, a tier or a primitive. A new role is derived in
