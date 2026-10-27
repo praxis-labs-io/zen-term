@@ -113,6 +113,17 @@ final class IconPickerFieldTests: WindowTestCase {
             "no card left drawn on the content view after the resize")
     }
 
+    func test_afterAResizeCloses_theGrid_returnReopensIt() throws {
+        let (field, window) = openedField(selected: IconCatalog.defaultSymbol, windowHeight: 900)
+        window.setFrame(NSRect(x: 0, y: 0, width: 520, height: 400), display: false)
+        XCTAssertFalse(field.isPopoverOpen, "precondition: the resize closed the grid")
+
+        field.keyDown(with: try key(36))
+
+        XCTAssertTrue(field.isPopoverOpen)
+        XCTAssertEqual(field.cellCountForTesting, IconCatalog.all.count, "reopening rebuilds the cells")
+    }
+
     func test_inATallWindow_theGridIsNotTruncated() throws {
         let (field, window) = openedField(selected: IconCatalog.defaultSymbol, windowHeight: 900)
         let card = try XCTUnwrap(
@@ -139,8 +150,8 @@ final class IconPickerFieldTests: WindowTestCase {
         _ = field
 
         XCTAssertEqual(
-            card.frame.height, stack.fittingSize.height + 16, accuracy: 0.5,
-            "card \(card.frame.height) against content \(stack.fittingSize.height) + 16pt of inset")
+            card.frame.height, stack.fittingSize.height + ChromeMetrics.Spacing.s6 * 2, accuracy: 0.5,
+            "card \(card.frame.height) against content \(stack.fittingSize.height) + s6 insets")
     }
 
     func test_theScrollerGetsItsOwnLane_onlyWhenTheGridScrolls() throws {
