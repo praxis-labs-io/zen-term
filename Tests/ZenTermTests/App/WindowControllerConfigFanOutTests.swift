@@ -365,4 +365,38 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         XCTAssertFalse(after.contains(original), "the picker is still offering the chord that moved")
         XCTAssertTrue(after.contains(rebound.displayGlyph), "the rebind never reached the New Workspace row")
     }
+
+    func test_keymapChange_rebuildsTheRepoPickersFooterHints() throws {
+        var config = GeneralConfig.builtIn
+        GeneralConfig.setCurrentForTesting(config)
+
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
+        self.controller = controller
+        controller.mountAndStart()
+        controller.handle(.toggleRepoPicker)
+
+        func picker() -> RepoPickerOverlay? {
+            descendants(of: controller.window.contentView!).compactMap { $0 as? RepoPickerOverlay }.first
+        }
+        waitUntil(picker() != nil, "the picker to be presented")
+        func footerItem(_ label: String) throws -> NSView? {
+            try descendants(of: XCTUnwrap(picker()))
+                .first { ($0 as? NSTextField)?.stringValue == label }?.superview
+        }
+        func keycap(in item: NSView?) -> String? {
+            item?.subviews.compactMap { ($0 as? KeycapView)?.shortcut }.first
+        }
+        let original = try XCTUnwrap(Chord.displayed(.removeWorktree, in: config.keymap)?.displayGlyph)
+        XCTAssertEqual(keycap(in: try footerItem("remove worktree")), original, "premise: the default chord")
+
+        let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
+        config.keymap = config.keymap.filter { $0.value != .removeWorktree }
+        config.keymap[rebound] = .removeWorktree
+        GeneralConfig.setCurrentForTesting(config)
+        post(.keymap)
+
+        let item = try XCTUnwrap(footerItem("remove worktree"), "the rebind dropped the hint")
+        XCTAssertEqual(keycap(in: item), rebound.displayGlyph, "the footer still names the chord that moved")
+    }
 }

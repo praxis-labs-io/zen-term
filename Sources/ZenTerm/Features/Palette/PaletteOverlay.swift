@@ -326,6 +326,10 @@ class PaletteOverlay: ModalShell, ModalOverlay {
         footer.setHint(label, isShown: isShown)
     }
 
+    func setFooterHints(_ hints: [HintFooter.Hint]) {
+        footer.setHints(hints)
+    }
+
     private func scrollSelectedToVisible(travelling: KeyboardFocus.Travel = .unknown) {
         guard laidOutRows.indices.contains(selected) else { return }
         let stops = laidOutRows.indices.filter { isSelectable(at: $0) }.map { laidOutRows[$0].view }

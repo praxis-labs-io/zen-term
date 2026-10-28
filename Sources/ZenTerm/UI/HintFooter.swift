@@ -7,6 +7,7 @@ final class HintFooter: NSView, ThemeReapplying {
     }
 
     private let hairline = NSView()
+    private let pairs = NSStackView()
     private var labels: [NSTextField] = []
     private var itemsByLabel: [String: NSView] = [:]
 
@@ -19,9 +20,12 @@ final class HintFooter: NSView, ThemeReapplying {
         hairline.translatesAutoresizingMaskIntoConstraints = false
         addSubview(hairline)
 
-        let pairs = makePairs(hints)
+        pairs.orientation = .horizontal
+        pairs.spacing = ChromeMetrics.Spacing.s16
+        pairs.alignment = .centerY
         pairs.translatesAutoresizingMaskIntoConstraints = false
         addSubview(pairs)
+        setHints(hints)
 
         NSLayoutConstraint.activate([
             hairline.topAnchor.constraint(equalTo: topAnchor),
@@ -37,6 +41,13 @@ final class HintFooter: NSView, ThemeReapplying {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    func setHints(_ hints: [Hint]) {
+        pairs.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        labels = []
+        itemsByLabel = [:]
+        hints.forEach { pairs.addArrangedSubview(makeItem($0)) }
+    }
+
     func setHint(_ label: String, isShown: Bool) {
         itemsByLabel[label]?.isHidden = !isShown
     }
@@ -47,24 +58,17 @@ final class HintFooter: NSView, ThemeReapplying {
         labels.forEach { $0.textColor = chrome.ink(.muted) }
     }
 
-    private func makePairs(_ hints: [Hint]) -> NSStackView {
-        let items = hints.map { hint -> NSView in
-            let keycap = KeycapView(shortcut: hint.keys)
-            let label = NSTextField(labelWithString: hint.label)
-            label.font = ChromeType.font(.caption, weight: .medium)
-            label.textColor = Theme.current.chrome.ink(.muted)
-            labels.append(label)
-            let item = NSStackView(views: [keycap, label])
-            item.orientation = .horizontal
-            item.spacing = ChromeMetrics.Spacing.s4
-            item.alignment = .centerY
-            itemsByLabel[hint.label] = item
-            return item
-        }
-        let stack = NSStackView(views: items)
-        stack.orientation = .horizontal
-        stack.spacing = ChromeMetrics.Spacing.s16
-        stack.alignment = .centerY
-        return stack
+    private func makeItem(_ hint: Hint) -> NSView {
+        let keycap = KeycapView(shortcut: hint.keys)
+        let label = NSTextField(labelWithString: hint.label)
+        label.font = ChromeType.font(.caption, weight: .medium)
+        label.textColor = Theme.current.chrome.ink(.muted)
+        labels.append(label)
+        let item = NSStackView(views: [keycap, label])
+        item.orientation = .horizontal
+        item.spacing = ChromeMetrics.Spacing.s4
+        item.alignment = .centerY
+        itemsByLabel[hint.label] = item
+        return item
     }
 }
