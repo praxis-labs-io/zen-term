@@ -560,6 +560,10 @@ final class WindowController: NSObject {
                     self.refreshConnectView()
                     self.renderTabBar()
                 }
+                if change.contains(.keymap) {
+                    for host in self.panelHosts { host.reapplyKeymap() }
+                    (self.modal?.overlay as? PaletteOverlay)?.reapplyKeymap()
+                }
                 self.reapplyThemeTrees(for: change)
             }
         }
@@ -574,14 +578,14 @@ final class WindowController: NSObject {
             if let connectView, connectView.window == nil { connectView.reapplyThemeTree() }
             return
         }
-        if change.contains(.keymap) || change.contains(.terminalBehavior) {
+        if change.contains(.terminalBehavior) {
             for host in panelHosts { host.reapplyThemeTree() }
         }
         if change.contains(.terminalBehavior) {
             floats.reapplyTheme()
             connectView?.reapplyThemeTree()
         }
-        if change.contains(.keymap) || change.contains(.floats) { modal?.overlay.reapplyThemeTree() }
+        if change.contains(.floats) { modal?.overlay.reapplyThemeTree() }
         if change.contains(.floats) { dock.reapplyThemeTree() }
     }
 

@@ -128,28 +128,6 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         wait(for: [drained], timeout: 5)
     }
 
-    func test_keymapOnlyChange_skipsTheChromeRecolor() throws {
-        let controller = WindowController(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
-        self.controller = controller
-
-        guard
-            let tabBar = descendants(of: controller.window.contentView!)
-                .compactMap({ $0 as? TabBarView }).first
-        else {
-            return XCTFail("expected the tab bar mounted in the window")
-        }
-        let pillBefore = tabBar.pillColorForTesting
-        XCTAssertNotNil(pillBefore)
-
-        Theme.setCurrentForTesting(try makeAlternateTheme())
-        post(.keymap)
-
-        XCTAssertEqual(
-            pillBefore, tabBar.pillColorForTesting,
-            "a keymap-only change re-themed the tab bar — the gate isn't holding")
-    }
-
     func test_themeChange_stillRecolorsThroughTheGate() throws {
         let controller = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
@@ -355,5 +333,36 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         XCTAssertTrue(
             after.contains(rebound.displayGlyph),
             "the rebind never reached the open palette's shortcut column")
+    }
+
+    func test_keymapChange_rebuildsTheRepoPickersNewWorkspaceRow() throws {
+        var config = GeneralConfig.builtIn
+        GeneralConfig.setCurrentForTesting(config)
+
+        let controller = WindowController(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
+        self.controller = controller
+        controller.mountAndStart()
+        controller.handle(.toggleRepoPicker)
+
+        func picker() -> RepoPickerOverlay? {
+            descendants(of: controller.window.contentView!).compactMap { $0 as? RepoPickerOverlay }.first
+        }
+        waitUntil(picker() != nil, "the picker to be presented")
+        func pickerKeycaps() throws -> [String] {
+            try descendants(of: XCTUnwrap(picker())).compactMap { ($0 as? KeycapView)?.shortcut }
+        }
+        let original = try XCTUnwrap(Chord.displayed(.newWorkspace, in: config.keymap)?.displayGlyph)
+        XCTAssertTrue(try pickerKeycaps().contains(original), "expected New Workspace's default chord on its row")
+
+        let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
+        config.keymap = config.keymap.filter { $0.value != .newWorkspace }
+        config.keymap[rebound] = .newWorkspace
+        GeneralConfig.setCurrentForTesting(config)
+        post(.keymap)
+
+        let after = try pickerKeycaps()
+        XCTAssertFalse(after.contains(original), "the picker is still offering the chord that moved")
+        XCTAssertTrue(after.contains(rebound.displayGlyph), "the rebind never reached the New Workspace row")
     }
 }

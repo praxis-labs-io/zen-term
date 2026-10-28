@@ -59,6 +59,8 @@ final class ModeChrome {
         setHeaderShown(true)
     }
 
+    func reapplyKeymap() { header?.reapplyKeymap() }
+
     func setScrollCursor(
         _ state: ScrollCursorView.State?, metrics: @escaping () -> TerminalCellMetrics?
     ) {
@@ -187,10 +189,9 @@ private final class PanelHeader: NSView, ThemeReapplying {
         if actionMoved { rebuildKeycap() }
     }
 
-    func reapplyTheme() {
-        applyTitle()
-        rebuildKeycap()
-    }
+    func reapplyTheme() { applyTitle() }
+
+    func reapplyKeymap() { rebuildKeycap() }
 
     private func rebuildKeycap() {
         keycap.removeFromSuperview()

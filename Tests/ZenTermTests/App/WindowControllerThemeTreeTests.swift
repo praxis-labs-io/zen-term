@@ -152,6 +152,44 @@ final class WindowControllerThemeTreeTests: WindowTestCase {
         XCTAssertEqual(dockProbe.count, 1, "an untagged reload walked the dock again")
     }
 
+    private func rebind(_ action: KeyInterceptor.ReservedChord, to chord: Chord) {
+        var config = GeneralConfig.current
+        config.keymap = config.keymap.filter { $0.value != action }
+        config.keymap[chord] = action
+        GeneralConfig.setCurrentForTesting(config)
+    }
+
+    func test_keymapChange_recolorsNothing() throws {
+        Motion.isReduceMotionEnabled = { true }
+        let controller = makeController()
+        let root = controller.window.contentView!
+        controller.handle(.toggleBottomDrawer)
+        controller.handle(.toggleCommandPalette)
+        let drawer = try XCTUnwrap(
+            descendants(of: root).compactMap { $0 as? PanelHostView }
+                .first { $0.builtHeaderKeycapForTesting != nil },
+            "premise: the drawer's header is mounted")
+        let palette = try XCTUnwrap(descendants(of: root).compactMap { $0 as? CommandPaletteOverlay }.first)
+        let rootProbe = CountingProbe()
+        let drawerProbe = CountingProbe()
+        let paletteProbe = CountingProbe()
+        root.addSubview(rootProbe)
+        drawer.addSubview(drawerProbe)
+        palette.addSubview(paletteProbe)
+        let borderBefore = drawer.borderForTesting.color
+
+        let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
+        rebind(.toggleZoom, to: rebound)
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        post(.keymap)
+
+        XCTAssertEqual(drawer.builtHeaderKeycapForTesting, rebound.displayGlyph, "premise: the rebind landed")
+        XCTAssertEqual(rootProbe.count, 0, "a keymap change walked the window")
+        XCTAssertEqual(drawerProbe.count, 0, "a keymap change walked the drawer host")
+        XCTAssertEqual(paletteProbe.count, 0, "a keymap change walked the open palette")
+        XCTAssertEqual(borderBefore, drawer.borderForTesting.color, "a keymap change recolored the drawer")
+    }
+
     func test_themeChange_reachesAnInactiveTabsHostBeforeYouSwitchBack() throws {
         Motion.isReduceMotionEnabled = { true }
         let controller = makeController()

@@ -597,13 +597,14 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   only when `font-size` moved, and new surfaces are spawned with it.
 - **Live reload works because call sites re-read** `GeneralConfig.current` and
   `Theme.current`. Built constraints and live surfaces are fixed up by
-  `reapplyChromeLayout` and `applyAppearance`. A surface's shell is fixed for its life.
+  `reapplyChromeLayout` and `applyAppearance`, and a view that bakes in a shortcut by
+  `reapplyKeymap`. A surface's shell is fixed for its life.
 - **A theme change recolors by walking the view tree.** `WindowController` calls
   `reapplyThemeTree()` on its content view once, and every `ThemeReapplying` view under it
   recolors without its parent listing it. A `.theme` change takes that one walk in place of
-  the keymap, behavior and floats walks. Tab hosts and the connect view that have left the
-  window are extra roots. A child a parent removes and keeps recolors where the parent
-  re-attaches it.
+  the behavior and floats walks; a keymap change never walks. Tab hosts and the connect
+  view that have left the window are extra roots. A child a parent removes and keeps
+  recolors where the parent re-attaches it.
 - **`AppConfig.reload()` order:** general config, then theme, then post
   `.configDidChange`. `AppConfig.loadAtLaunch()` does the first load; the statics are not
   lazy (see "Carbon and the main thread" in `docs/swift-conventions.md`).
