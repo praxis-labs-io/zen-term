@@ -173,6 +173,8 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
 
     func reapplyTerminalBehavior() { activeFloat?.overlay.reapplyTerminalBehavior() }
 
+    func reapplyKeymap() { activeFloat?.overlay.reapplyKeymap() }
+
     private func floatCWD(_ spec: ToolFloat) -> URL? { spec.dir ?? sessionCWD() }
 
     func toggle(_ spec: ToolFloat) {

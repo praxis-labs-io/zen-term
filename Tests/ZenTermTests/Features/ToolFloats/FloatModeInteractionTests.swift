@@ -93,6 +93,30 @@ final class FloatModeInteractionTests: WindowTestCase {
         XCTAssertFalse(panel.isHeaderVisibleForTesting, "the pane behind is not what is being read")
     }
 
+    func test_keymapChange_rebuildsTheFloatHeaderKeycap() throws {
+        let c = makeWindow()
+        _ = try openScratch(c)
+        let overlay = try card(c)
+        c.handle(.toggleScrollMode)
+        XCTAssertEqual(
+            overlay.builtHeaderKeycapForTesting, CommandCatalog.spec(for: .toggleScrollMode).shortcut,
+            "premise: the card wears the scroll header with its chord")
+
+        let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
+        var config = GeneralConfig.current
+        config.keymap = config.keymap.filter { $0.value != .toggleScrollMode }
+        config.keymap[rebound] = .toggleScrollMode
+        GeneralConfig.setCurrentForTesting(config)
+        NotificationCenter.default.post(
+            name: .configDidChange, object: nil, userInfo: [ConfigChange.userInfoKey: ConfigChange.keymap])
+        let drained = expectation(description: "main queue drained")
+        OperationQueue.main.addOperation { drained.fulfill() }
+        wait(for: [drained], timeout: 5)
+
+        XCTAssertEqual(
+            overlay.builtHeaderKeycapForTesting, rebound.displayGlyph, "the rebind never reached the float's header")
+    }
+
     func test_scrollKeysOverAFloat_moveTheBandOnTheCardsSurface() throws {
         let c = makeWindow()
         let host = ModeHostSpy()
