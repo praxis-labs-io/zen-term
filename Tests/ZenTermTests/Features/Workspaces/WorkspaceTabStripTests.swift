@@ -214,6 +214,18 @@ final class WorkspaceTabStripTests: WindowTestCase {
         }
     }
 
+    func test_hoveringAChip_layingOutItsRemoveButton_conflictsWithNoConstraint() throws {
+        let conflicts = try constraintConflicts {
+            mount([Workspace.Tab(main: "nvim"), Workspace.Tab(name: "gate")])
+            for chip in strip.chips {
+                chip.mouseEntered(with: try mouse(.mouseMoved, at: chip))
+                chip.layoutSubtreeIfNeeded()
+            }
+        }
+
+        XCTAssertEqual(conflicts, [])
+    }
+
     func test_hover_neverChangesAChipsWidth() throws {
         mount(
             [Workspace.Tab(main: "nvim"), Workspace.Tab(name: "gate"), Workspace.Tab()],

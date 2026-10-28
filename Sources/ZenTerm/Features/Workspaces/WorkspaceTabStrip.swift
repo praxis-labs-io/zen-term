@@ -154,12 +154,6 @@ final class WorkspaceTabStrip: NSView {
         pillSlides = false
         renameHint.isHidden = !isRenaming
         idleHint.isHidden = isRenaming
-        for hint in [idleHint, renameHint] {
-            let size = hint.fittingSize
-            hint.frame = CGRect(
-                x: 0, y: WorkspaceTabChip.height + Self.hintGap + (Self.hintHeight - size.height) / 2,
-                width: size.width, height: size.height)
-        }
         if let chip = chips.first(where: \.isRenaming) ?? (revealsSelection ? selectedChip : nil) {
             scrollView.reveal(chip)
         }
@@ -308,7 +302,12 @@ final class WorkspaceTabStrip: NSView {
                 }
             }
         }
-        hint.translatesAutoresizingMaskIntoConstraints = true
+        hint.translatesAutoresizingMaskIntoConstraints = false
         addSubview(hint)
+        NSLayoutConstraint.activate([
+            hint.leadingAnchor.constraint(equalTo: leadingAnchor),
+            hint.centerYAnchor.constraint(
+                equalTo: topAnchor, constant: WorkspaceTabChip.height + Self.hintGap + Self.hintHeight / 2),
+        ])
     }
 }
