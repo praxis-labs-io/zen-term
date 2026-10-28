@@ -70,7 +70,7 @@ final class ReapplyThemeTests: WindowTestCase {
         XCTAssertNotNil(colorBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        button.reapplyTheme()
+        button.reapplyThemeTree()
 
         XCTAssertNotEqual(colorBefore, attributedTitleColor(button))
     }
@@ -83,7 +83,7 @@ final class ReapplyThemeTests: WindowTestCase {
         let inkBefore = keycap.inkForTesting
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        button.reapplyTheme()
+        button.reapplyThemeTree()
 
         XCTAssertNotEqual(inkBefore, keycap.inkForTesting)
         XCTAssertEqual(keycap.inkForTesting, Theme.current.chrome.onAccent.nsColor)
@@ -108,7 +108,7 @@ final class ReapplyThemeTests: WindowTestCase {
         XCTAssertNotNil(colorBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        list.reapplyTheme()
+        list.reapplyThemeTree()
 
         XCTAssertNotEqual(colorBefore, statusColor())
     }
@@ -126,7 +126,7 @@ final class ReapplyThemeTests: WindowTestCase {
         XCTAssertNotNil(colorBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        checklist.reapplyTheme()
+        checklist.reapplyThemeTree()
 
         XCTAssertNotEqual(colorBefore, icon.contentTintColor)
     }
@@ -141,7 +141,7 @@ final class ReapplyThemeTests: WindowTestCase {
         let colorBefore = field.field.textColor
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        field.reapplyTheme()
+        field.reapplyThemeTree()
 
         XCTAssertNotEqual(colorBefore, field.field.textColor)
     }
@@ -165,7 +165,7 @@ final class ReapplyThemeTests: WindowTestCase {
         XCTAssertEqual(colorBefore, Theme.current.chrome.ink(.muted))
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        field.reapplyTheme()
+        field.reapplyThemeTree()
 
         let colorAfter = placeholderColor(field.field)
         XCTAssertEqual(colorAfter, Theme.current.chrome.ink(.muted))
@@ -183,7 +183,7 @@ final class ReapplyThemeTests: WindowTestCase {
         let colorBefore = dropdown.layer?.backgroundColor
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        dropdown.reapplyTheme()
+        dropdown.reapplyThemeTree()
 
         XCTAssertNotEqual(colorBefore, dropdown.layer?.backgroundColor)
     }
@@ -205,7 +205,7 @@ final class ReapplyThemeTests: WindowTestCase {
         XCTAssertNotNil(colorBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        control.reapplyTheme()
+        control.reapplyThemeTree()
 
         XCTAssertNotEqual(colorBefore, attributedTitleColor(firstSegment))
     }
@@ -223,7 +223,7 @@ final class ReapplyThemeTests: WindowTestCase {
         let colorBefore = label.textColor
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        row.reapplyTheme()
+        row.reapplyThemeTree()
 
         XCTAssertNotEqual(colorBefore, label.textColor)
     }
@@ -244,7 +244,7 @@ final class ReapplyThemeTests: WindowTestCase {
         let colorBefore = card.layer?.borderColor
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         XCTAssertNotEqual(colorBefore, card.layer?.borderColor)
     }
@@ -269,7 +269,7 @@ final class ReapplyThemeTests: WindowTestCase {
         }
 
         Theme.setCurrentForTesting(try makeLightTheme())
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         XCTAssertEqual(
             elevation.color.alphaComponent, Theme.current.chrome.shadowAlpha(.float), accuracy: 0.001,
@@ -332,7 +332,7 @@ final class ReapplyThemeTests: WindowTestCase {
         XCTAssertNotNil(resetColorBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         XCTAssertNotEqual(shellColorBefore, card.layer?.borderColor)
         XCTAssertNotEqual(resetColorBefore, attributedTitleColor(section.resetButton))
@@ -351,7 +351,7 @@ final class ReapplyThemeTests: WindowTestCase {
         let callsBefore = section.sectionWillHideCallCount
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         XCTAssertEqual(section.sectionWillHideCallCount, callsBefore)
     }
@@ -370,7 +370,7 @@ final class ReapplyThemeTests: WindowTestCase {
         XCTAssertNotNil(borderBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        row.reapplyTheme()
+        row.reapplyThemeTree()
 
         XCTAssertNotEqual(borderBefore, row.chip.layer?.borderColor)
         XCTAssertNotEqual(fillBefore, row.chip.layer?.backgroundColor)
@@ -388,7 +388,7 @@ final class ReapplyThemeTests: WindowTestCase {
         overlay.frame = NSRect(x: 0, y: 0, width: 620, height: 460)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         XCTAssertEqual(hidden.reapplyThemeCallCount, 1)
         XCTAssertEqual(hidden.sectionWillHideCallCount, 0)

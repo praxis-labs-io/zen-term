@@ -1,7 +1,7 @@
 import AppKit
 import TerminalKit
 
-final class ConfirmCardChecklist: NSView, ThemeReapplying {
+final class ConfirmCardChecklist: NSView {
     enum Mark: Equatable {
         case lost
         case warning
@@ -36,10 +36,8 @@ final class ConfirmCardChecklist: NSView, ThemeReapplying {
     static let iconSize = NSSize(width: 14, height: 15)
     static let listIndent = iconSize.width + ChromeMetrics.Spacing.s8
 
-    private let itemViews: [ItemView]
-
     init(items: [Item]) {
-        itemViews = items.map(ItemView.init)
+        let itemViews = items.map(ItemView.init)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
@@ -58,14 +56,9 @@ final class ConfirmCardChecklist: NSView, ThemeReapplying {
         for view in itemViews {
             view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
-        reapplyTheme()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-    func reapplyTheme() {
-        itemViews.forEach { $0.reapplyTheme() }
-    }
 
     private final class ItemView: NSView, ThemeReapplying {
         private let item: Item
@@ -97,17 +90,18 @@ final class ConfirmCardChecklist: NSView, ThemeReapplying {
                 label.trailingAnchor.constraint(equalTo: trailingAnchor),
                 label.topAnchor.constraint(equalTo: topAnchor),
             ])
-            guard let list else {
+            if let list {
+                addSubview(list)
+                NSLayoutConstraint.activate([
+                    list.topAnchor.constraint(equalTo: label.bottomAnchor, constant: ChromeMetrics.Spacing.s6),
+                    list.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ConfirmCardChecklist.listIndent),
+                    list.trailingAnchor.constraint(equalTo: trailingAnchor),
+                    list.bottomAnchor.constraint(equalTo: bottomAnchor),
+                ])
+            } else {
                 label.bottomAnchor.constraint(equalTo: bottomAnchor).isActive = true
-                return
             }
-            addSubview(list)
-            NSLayoutConstraint.activate([
-                list.topAnchor.constraint(equalTo: label.bottomAnchor, constant: ChromeMetrics.Spacing.s6),
-                list.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ConfirmCardChecklist.listIndent),
-                list.trailingAnchor.constraint(equalTo: trailingAnchor),
-                list.bottomAnchor.constraint(equalTo: bottomAnchor),
-            ])
+            reapplyTheme()
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -126,7 +120,6 @@ final class ConfirmCardChecklist: NSView, ThemeReapplying {
                             .foregroundColor: ConfirmCardList.color(run.tone, chrome),
                         ]))
             }
-            list?.reapplyTheme()
         }
     }
 }

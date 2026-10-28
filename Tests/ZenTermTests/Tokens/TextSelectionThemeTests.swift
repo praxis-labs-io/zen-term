@@ -243,7 +243,7 @@ final class TextSelectionThemeTests: WindowTestCase {
             chip.renameFieldForTesting.currentEditor() as? NSTextView, "the rename has to be editing")
 
         Theme.setCurrentForTesting(try lightTheme(accent: .magenta))
-        chip.reapplyTheme()
+        chip.reapplyThemeTree()
 
         XCTAssertEqual(editor.selectedTextAttributes[.backgroundColor] as? NSColor, focusedTint)
         XCTAssertEqual(editor.insertionPointColor, Theme.current.chrome.ink(.normal))
@@ -258,8 +258,8 @@ final class TextSelectionThemeTests: WindowTestCase {
         try mount([area], in: window)
 
         Theme.setCurrentForTesting(try lightTheme(accent: .magenta))
-        box.reapplyTheme()
-        area.reapplyTheme()
+        box.reapplyThemeTree()
+        area.reapplyThemeTree()
 
         for (name, view) in [("field", editor), ("text area", area.textView)] {
             XCTAssertEqual(

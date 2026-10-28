@@ -56,7 +56,7 @@ final class KeycapViewTests: XCTestCase {
         let second = KeycapView(shortcut: "⌘")
         let secondTint = glyphs(in: second)[0].contentTintColor
 
-        first.reapplyTheme()
+        first.reapplyThemeTree()
 
         XCTAssertEqual(glyphs(in: second)[0].contentTintColor, secondTint)
         XCTAssertNotNil(glyphs(in: first)[0].image, "the rebuilt token still resolves its glyph")

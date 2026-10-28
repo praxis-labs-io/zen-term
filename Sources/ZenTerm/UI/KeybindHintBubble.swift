@@ -113,7 +113,6 @@ final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
 
     private func paintColors() {
         let chrome = Theme.current.chrome
-        badge.reapplyTheme()
         title.textColor = chrome.ink(.normal)
         previewBox.layer?.backgroundColor = chrome.fill(.rest).cgColor
         previewBox.layer?.borderColor = chrome.accent.nsColor.cgColor

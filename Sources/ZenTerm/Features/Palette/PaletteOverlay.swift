@@ -161,7 +161,6 @@ class PaletteOverlay: ModalShell, ModalOverlay {
             hairline.layer?.backgroundColor = chrome.fill(alpha: ChromeTheme.hairline).cgColor
         }
         emptyLabel.textColor = chrome.ink(.muted)
-        footer.reapplyTheme()
         laidOutRows.forEach { $0.view.removeFromSuperview() }
         laidOutRows = []
         applyFilter(query: searchField.stringValue)

@@ -3,13 +3,8 @@ import AppKit
 enum FormCard {
     static let maxHeight: CGFloat = 460
 
-    struct Content {
-        let view: NSStackView
-        let divider: ThemeReapplying
-    }
-
     /// The body's fit constraint stays `.defaultLow`; higher, it squashed captions to zero at the cap.
-    static func content(rows: [NSView], footer: NSView, spacing: CGFloat) -> Content {
+    static func content(rows: [NSView], footer: NSView, spacing: CGFloat) -> NSStackView {
         let body = NSStackView(views: rows)
         body.orientation = .vertical
         body.alignment = .leading
@@ -54,7 +49,7 @@ enum FormCard {
         scroll.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
         divider.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
         footerRow.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
-        return Content(view: content, divider: divider)
+        return content
     }
 
     private final class Hairline: NSView, ThemeReapplying {

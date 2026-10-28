@@ -98,6 +98,8 @@ final class WindowControllerThemeTreeTests: WindowTestCase {
         let outer = NSStackView(views: [inner, hidden])
         hidden.isHidden = true
         controller.window.contentView!.addSubview(outer)
+        controller.window.contentView!.layoutSubtreeIfNeeded()
+        XCTAssertTrue(outer.subviews.contains(hidden), "premise: a hidden arranged view stays a subview")
         let nestedBefore = fill(nested)
         let hiddenBefore = fill(hidden)
 
@@ -157,5 +159,51 @@ final class WindowControllerThemeTreeTests: WindowTestCase {
 
         XCTAssertNotNil(host.window)
         XCTAssertNotEqual(before, host.borderForTesting.color, "the inactive tab came back in the old theme")
+    }
+
+    func test_themeChange_reachesACarryStatusThatWasOutOfTheViewWhenItFired() throws {
+        let controller = makeController()
+        let picker = CarryPicker()
+        picker.settle = 0
+        picker.probe = { _, _ in
+            IgnoredCatalog(entries: ["node_modules"], resting: [], fileCounts: [:], directories: [])
+        }
+        picker.frame = NSRect(x: 0, y: 0, width: 300, height: 100)
+        controller.window.contentView!.addSubview(picker)
+        let before = try XCTUnwrap(picker.statusBorderForTesting)
+
+        let listed = expectation(description: "list shown")
+        picker.onChanged = { listed.fulfill() }
+        picker.workspaceFolder = FileManager.default.temporaryDirectory
+        wait(for: [listed], timeout: 5)
+        picker.onChanged = nil
+        XCTAssertNil(picker.statusForTesting, "premise: the list replaced the status")
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        post(.theme)
+        picker.workspaceFolder = nil
+
+        XCTAssertEqual(picker.statusForTesting, "Choose a folder first.")
+        XCTAssertNotEqual(before, picker.statusBorderForTesting, "the returning status kept the old theme")
+    }
+
+    func test_themeChange_reachesADrawerRailThatSwappedBackIn() throws {
+        let controller = makeController()
+        let drawing = WorkspaceTabDrawing()
+        controller.window.contentView!.addSubview(drawing)
+        drawing.frame = NSRect(x: 0, y: 0, width: 600, height: WorkspaceTabDrawing.height)
+        drawing.render(tab: Workspace.Tab(main: "vim", bottom: "tail -f log"), index: 0, opensFocusedIn: nil)
+        drawing.layoutSubtreeIfNeeded()
+        let rail = try XCTUnwrap(drawing.rail(.bottom))
+        XCTAssertNil(rail.superview, "premise: an open drawer has no rail in the view")
+        let before = try XCTUnwrap(rail.borderStrokeForTesting)
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        post(.theme)
+        drawing.render(tab: Workspace.Tab(main: "vim"), index: 0, opensFocusedIn: nil)
+        drawing.layoutSubtreeIfNeeded()
+
+        XCTAssertNotNil(rail.superview)
+        XCTAssertNotEqual(before, rail.borderStrokeForTesting, "the returning rail kept the old theme")
     }
 }

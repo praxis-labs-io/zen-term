@@ -47,12 +47,7 @@ final class ConfirmCard: ModalShell, ModalOverlay {
 
     override func reapplyTheme() {
         super.reapplyTheme()
-        let chrome = Theme.current.chrome
-        header.reapplyTheme()
-        messageLabel.textColor = chrome.ink(.muted)
-        checklist?.reapplyTheme()
-        cancelButton.reapplyTheme()
-        confirmButton.reapplyTheme()
+        messageLabel.textColor = Theme.current.chrome.ink(.muted)
     }
 
     private func buildContent(message: String) -> NSStackView {

@@ -74,7 +74,7 @@ final class HintFooterTests: WindowTestCase {
         let hairlineBefore = hairline.layer?.backgroundColor
 
         Theme.setCurrentForTesting(try alternateTheme())
-        footer.reapplyTheme()
+        footer.reapplyThemeTree()
 
         XCTAssertNotEqual(labels(in: footer).first?.textColor, labelBefore)
         XCTAssertNotEqual(keycap.inkForTesting, keycapBefore)

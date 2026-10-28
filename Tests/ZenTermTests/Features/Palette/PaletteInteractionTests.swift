@@ -436,7 +436,7 @@ final class PaletteInteractionTests: WindowTestCase {
         mount(overlay)
         let before = rows(in: overlay)
 
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         let after = rows(in: overlay)
         XCTAssertEqual(after.count, before.count)

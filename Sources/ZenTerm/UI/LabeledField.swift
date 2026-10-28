@@ -1,11 +1,9 @@
 import AppKit
 
 final class LabeledField: NSView, ThemeReapplying {
-    private let caption: NSView
     private let messageLabel = NSTextField(labelWithString: "")
 
     init(caption: NSView, control: NSView) {
-        self.caption = caption
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         messageLabel.font = ChromeType.font(.caption, weight: .medium)
@@ -38,6 +36,5 @@ final class LabeledField: NSView, ThemeReapplying {
 
     func reapplyTheme() {
         messageLabel.textColor = Theme.current.chrome.destructive.nsColor
-        (caption as? ThemeReapplying)?.reapplyTheme()
     }
 }

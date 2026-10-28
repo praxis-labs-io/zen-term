@@ -42,15 +42,9 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
     override func reapplyTheme() {
         super.reapplyTheme()
         let chrome = Theme.current.chrome
-        header.reapplyTheme()
         envText.textColor = chrome.ink(.muted)
         envText.applyThemedEditor()
         envNote.textColor = chrome.ink(.muted)
-        let controls: [ThemeReapplying] = [titleField, whatHappened, exportButton, cancelButton, openButton]
-        controls.forEach { $0.reapplyTheme() }
-        titleGroup?.reapplyTheme()
-        whatGroup?.reapplyTheme()
-        envCaption.reapplyTheme()
     }
 
     private func buildContent() -> NSStackView {

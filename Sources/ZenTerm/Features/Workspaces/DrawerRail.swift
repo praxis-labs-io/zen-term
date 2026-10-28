@@ -15,6 +15,7 @@ final class DrawerRail: NSView, ThemeReapplying {
     private var hasFocus = false
 
     var tooltipLabelForTesting: String { tooltip.label }
+    var borderStrokeForTesting: CGColor? { border.strokeColor }
 
     init(region: Workspace.Region) {
         self.region = region

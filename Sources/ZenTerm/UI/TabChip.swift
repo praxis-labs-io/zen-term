@@ -104,7 +104,6 @@ class TabChip: NSView, ThemeReapplying {
     static func clamp(_ width: CGFloat) -> CGFloat { min(max(width, minWidth), maxChipWidth) }
 
     func reapplyTheme() {
-        closeButton.reapplyTheme()
         restyle()
     }
 

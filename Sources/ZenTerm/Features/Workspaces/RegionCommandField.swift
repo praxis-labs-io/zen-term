@@ -99,7 +99,6 @@ final class RegionCommandField: NSView, NSTextFieldDelegate, ThemeReapplying {
         let placeholder = region == .main ? WorkspaceForm.shellLabel : ""
         field.placeholderAttributedString = NSAttributedString(
             string: placeholder, attributes: [.font: Self.commandFont, .foregroundColor: chrome.ink(.muted)])
-        cornerButton.reapplyTheme()
         refresh()
     }
 

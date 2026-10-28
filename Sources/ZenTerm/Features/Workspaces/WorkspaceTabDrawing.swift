@@ -85,8 +85,6 @@ final class WorkspaceTabDrawing: NSView, ThemeReapplying {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         layer?.borderColor = chrome.fill(alpha: ChromeTheme.hairline).cgColor
-        regions.values.forEach { $0.reapplyTheme() }
-        rails.values.forEach { $0.reapplyTheme() }
     }
 
     override func layout() {
@@ -112,11 +110,17 @@ final class WorkspaceTabDrawing: NSView, ThemeReapplying {
         let field = regions[region]
         let rail = rails[region]
         if open {
-            if let field, field.superview == nil { addSubview(field) }
+            if let field, field.superview == nil {
+                addSubview(field)
+                field.reapplyThemeTree()
+            }
             field?.frame = frame
             rail?.removeFromSuperview()
         } else {
-            if let rail, rail.superview == nil { addSubview(rail) }
+            if let rail, rail.superview == nil {
+                addSubview(rail)
+                rail.reapplyThemeTree()
+            }
             rail?.frame = frame
             field?.removeFromSuperview()
         }

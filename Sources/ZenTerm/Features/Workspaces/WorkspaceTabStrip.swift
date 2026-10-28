@@ -29,7 +29,6 @@ final class WorkspaceTabStrip: NSView, ThemeReapplying {
     private let idleHint = NSStackView()
     private let renameHint = NSStackView()
     private var hintLabels: [NSTextField] = []
-    private var hintCaps: [KeycapView] = []
 
     var addButtonForTesting: AppButton { addButton }
     var isRenameHintVisibleForTesting: Bool { !renameHint.isHidden }
@@ -123,9 +122,6 @@ final class WorkspaceTabStrip: NSView, ThemeReapplying {
 
     func reapplyTheme() {
         pill.backgroundColor = Theme.current.chrome.fill(.active).cgColor
-        chips.forEach { $0.reapplyTheme() }
-        addButton.reapplyTheme()
-        hintCaps.forEach { $0.reapplyTheme() }
         hintLabels.forEach { $0.textColor = Theme.current.chrome.ink(.muted) }
     }
 
@@ -294,7 +290,6 @@ final class WorkspaceTabStrip: NSView, ThemeReapplying {
             switch part {
             case .key(let key):
                 let cap = KeycapView(shortcut: key)
-                hintCaps.append(cap)
                 hint.addArrangedSubview(cap)
             case .text(let text):
                 let label = NSTextField(labelWithString: text)

@@ -95,7 +95,7 @@ final class SurfaceFloatOverlayTests: WindowTestCase {
         var config = GeneralConfig.builtIn
         config.backgroundAlpha = 0.5
         GeneralConfig.setCurrentForTesting(config)
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
         overlay.layoutSubtreeIfNeeded()
 
         XCTAssertGreaterThan(
@@ -124,7 +124,7 @@ final class SurfaceFloatOverlayTests: WindowTestCase {
         var config = GeneralConfig.builtIn
         config.backgroundAlpha = 0.5
         GeneralConfig.setCurrentForTesting(config)
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         XCTAssertFalse(frost.isHidden, "dialling the alpha down must bring the frost up")
         XCTAssertEqual(

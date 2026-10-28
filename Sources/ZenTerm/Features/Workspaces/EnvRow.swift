@@ -40,9 +40,6 @@ final class EnvRow: NSView, ThemeReapplying {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func reapplyTheme() {
-        keyBox.reapplyTheme()
-        valueBox.reapplyTheme()
-        removeButton.reapplyTheme()
         equals.textColor = Theme.current.chrome.ink(.muted)
     }
 }

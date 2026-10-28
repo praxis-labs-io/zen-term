@@ -8,7 +8,6 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     private let onSubmit: (Request) -> Void
     private let onEditWorkspace: (() -> Void)?
 
-    private var footerDivider: ThemeReapplying?
     private lazy var confirm = ConfirmSlot(over: self)
     private let header = ModalHeader(title: "New Worktree")
 
@@ -28,7 +27,6 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     private let phaseLabel = NSTextField(labelWithString: "")
     private let phaseGroup = NSStackView()
 
-    private var captions: [FieldCaption] = []
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
     private let createButton = AppButton(
         title: "Create Worktree", variant: .primary, keyEquivalent: "\r",
@@ -67,20 +65,10 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     override func reapplyTheme() {
         super.reapplyTheme()
         let chrome = Theme.current.chrome
-        header.reapplyTheme()
         baseCaption.textColor = chrome.ink(.muted)
         branchCaption.textColor = chrome.ink(.muted)
-        confirm.card?.reapplyTheme()
         carryLabel.textColor = chrome.ink(.muted)
         phaseLabel.textColor = chrome.ink(.muted)
-        errorLabel.reapplyTheme()
-        spinner.reapplyTheme()
-        footerDivider?.reapplyTheme()
-
-        let controls: [ThemeReapplying] = [branchField, baseSegment, carryLink, cancelButton, createButton]
-        controls.forEach { $0.reapplyTheme() }
-        branchGroup?.reapplyTheme()
-        captions.forEach { $0.reapplyTheme() }
     }
 
     func beginWork(_ phase: String) {
@@ -130,7 +118,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
         baseCaption.font = ChromeType.font(.caption)
         baseCaption.textColor = Theme.current.chrome.ink(.muted)
         let baseGroup = Self.vStack(
-            [caption("Base"), baseSegment, baseCaption], spacing: ChromeMetrics.Spacing.s6)
+            [FieldCaption("Base", required: false), baseSegment, baseCaption], spacing: ChromeMetrics.Spacing.s6)
         self.baseGroup = baseGroup
 
         carryLabel.font = ChromeType.font(.caption)
@@ -147,7 +135,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
         carryLink.onTab = { [weak self] in self?.moveTab(1) }
         carryLink.onBacktab = { [weak self] in self?.moveTab(-1) }
         let carryGroup = Self.vStack(
-            [caption("Copy into this worktree"), carryLabel, Self.leadingWrap(carryLink)],
+            [FieldCaption("Copy into this worktree", required: false), carryLabel, Self.leadingWrap(carryLink)],
             spacing: ChromeMetrics.Spacing.s6)
 
         phaseLabel.font = ChromeType.font(.caption)
@@ -174,11 +162,9 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
         createButton.onBacktab = { [weak self] in self?.moveTab(-1) }
         let footer = ModalActionBar(leading: [phaseGroup], trailing: [cancelButton, createButton])
 
-        let built = FormCard.content(
+        return FormCard.content(
             rows: [header, branchStack, baseGroup, carryGroup, errorLabel],
             footer: footer, spacing: ChromeMetrics.Spacing.modalSectionGap)
-        footerDivider = built.divider
-        return built.view
     }
 
     private func verticalStops() -> [NSView] {
@@ -369,12 +355,6 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     private func refreshValidity() {
         errorLabel.clear()
         validate(includeRequired: false)
-    }
-
-    private func caption(_ text: String) -> FieldCaption {
-        let field = FieldCaption(text, required: false)
-        captions.append(field)
-        return field
     }
 
     private func editWorkspace() {

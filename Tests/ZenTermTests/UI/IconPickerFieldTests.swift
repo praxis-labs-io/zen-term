@@ -35,7 +35,7 @@ final class IconPickerFieldTests: WindowTestCase {
         let arrowedTo = field.highlightedSymbolForTesting
 
         Theme.setCurrentForTesting(AppTheme(terminal: Theme.builtIn.terminal, accent: .magenta))
-        field.reapplyTheme()
+        field.reapplyThemeTree()
 
         XCTAssertTrue(field.isPopoverOpen)
         XCTAssertEqual(field.highlightedSymbolForTesting, arrowedTo, "the rebuild must not undo the arrowing")

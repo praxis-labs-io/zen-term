@@ -29,13 +29,6 @@ final class RenameTabOverlay: ModalShell, ModalOverlay {
         nameField.field.currentEditor()?.selectAll(nil)
     }
 
-    override func reapplyTheme() {
-        super.reapplyTheme()
-        header.reapplyTheme()
-        nameField.reapplyTheme()
-        footer.reapplyTheme()
-    }
-
     private func buildContent() -> NSStackView {
         nameField.onEnter = { [weak self] in self?.submit() }
         nameField.onSubmit = { [weak self] in self?.submit() }
