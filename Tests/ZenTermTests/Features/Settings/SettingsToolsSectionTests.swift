@@ -106,7 +106,12 @@ final class SettingsToolsSectionTests: WindowTestCase {
         XCTAssertEqual(
             CommandCatalog.spec(for: .toggleToolFloat("dev")).shortcut, "", "premise: the keybind took the chord")
 
-        XCTAssertEqual(rows(in: detail).map(\.renderedShortcutForTesting), ["Not set", "⌘⇧T"])
+        let dev = try XCTUnwrap(rows(in: detail).first)
+        let mounted = descendants(of: dev).filter {
+            $0 is KeycapView || ($0 as? NSTextField)?.stringValue == "Not set"
+        }
+        XCTAssertEqual(mounted.count, 1, "the row must mount exactly one shortcut view")
+        XCTAssertEqual((mounted.first as? NSTextField)?.stringValue, "Not set")
         withExtendedLifetime(section) {}
     }
 
