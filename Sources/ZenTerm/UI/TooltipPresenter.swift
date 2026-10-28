@@ -43,6 +43,7 @@ final class TooltipPresenter {
     private func present(for source: NSView, label: String, shortcut: String?, style: ChromeTooltip.Style) {
         guard let window = source.window, let content = window.contentView else { return }
         let tip = ChromeTooltip(label: label, shortcut: shortcut, style: style)
+        tip.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(tip)
         tip.layoutSubtreeIfNeeded()
 
