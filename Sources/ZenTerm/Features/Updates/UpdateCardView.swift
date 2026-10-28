@@ -1,7 +1,7 @@
 import AppKit
 import AppLog
 
-final class UpdateCardView: ShadowCardView {
+final class UpdateCardView: ShadowCardView, ThemeReapplying {
     enum State: Equatable {
         case available(version: String, current: String, notes: [String], notesURL: URL?)
         case downloading(fraction: Double?)

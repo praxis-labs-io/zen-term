@@ -152,7 +152,7 @@ final class ModeChrome {
     }
 }
 
-private final class PanelHeader: NSView {
+private final class PanelHeader: NSView, ThemeReapplying {
     private var title: String
     private var action: KeyInterceptor.ReservedChord
     private let titleField = NSTextField(labelWithString: "")

@@ -1,6 +1,6 @@
 import AppKit
 
-final class EnvRow: NSView {
+final class EnvRow: NSView, ThemeReapplying {
     let keyBox = FieldBox(placeholder: "KEY")
     let valueBox = FieldBox(placeholder: "value")
     let removeButton = AppButton(title: "✕", variant: .secondary)

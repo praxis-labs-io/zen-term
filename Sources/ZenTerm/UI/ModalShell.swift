@@ -1,7 +1,7 @@
 import AppKit
 
 // Full-bleed so its backdrop swallows clicks on whatever is underneath.
-class ModalShell: NSView {
+class ModalShell: NSView, ThemeReapplying {
     static let submitChord = Chord(command: true, key: "⏎")
 
     let card = CardView()

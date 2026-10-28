@@ -1,6 +1,6 @@
 import AppKit
 
-final class HintFooter: NSView {
+final class HintFooter: NSView, ThemeReapplying {
     struct Hint {
         let keys: String
         let label: String

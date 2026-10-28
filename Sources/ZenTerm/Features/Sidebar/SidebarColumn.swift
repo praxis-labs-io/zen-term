@@ -1,7 +1,7 @@
 import AppKit
 
 // Everything a reveal brings on screen: the rows and footer, and the card chrome they float behind.
-final class SidebarColumn: ShadowCardView {
+final class SidebarColumn: ShadowCardView, ThemeReapplying {
     let rows: SidebarView
     let footer: SidebarFooter
     let toggle: IconButton

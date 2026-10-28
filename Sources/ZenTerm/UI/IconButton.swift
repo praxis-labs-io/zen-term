@@ -5,7 +5,7 @@ private final class GlyphView: NSImageView {
     override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets() }
 }
 
-final class IconButton: NSView {
+final class IconButton: NSView, ThemeReapplying {
     var onClick: () -> Void
     private let icon = GlyphView()
     private var trackingArea: NSTrackingArea?

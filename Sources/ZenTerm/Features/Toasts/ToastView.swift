@@ -19,7 +19,7 @@ struct ToastContent: Equatable {
     }
 }
 
-final class ToastView: ShadowCardView {
+final class ToastView: ShadowCardView, ThemeReapplying {
     var onClose: (() -> Void)?
     var onDismissed: (() -> Void)?
     private(set) var isDismissing = false

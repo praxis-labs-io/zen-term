@@ -67,7 +67,7 @@ final class ConfirmCardChecklist: NSView, ThemeReapplying {
         itemViews.forEach { $0.reapplyTheme() }
     }
 
-    private final class ItemView: NSView {
+    private final class ItemView: NSView, ThemeReapplying {
         private let item: Item
         private let icon = NSImageView()
         private let label = NSTextField(wrappingLabelWithString: "")

@@ -32,7 +32,7 @@ struct SidebarRowItem: Equatable {
     let isWaiting: Bool
 }
 
-final class SidebarView: NSView {
+final class SidebarView: NSView, ThemeReapplying {
     static let width: CGFloat = 240
     static let padding: CGFloat = ChromeMetrics.Spacing.s8
     private static let captionHeight: CGFloat = ChromeMetrics.Height.control

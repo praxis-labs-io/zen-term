@@ -1,7 +1,7 @@
 import AppKit
 
 // A tab drawn as its main pane and two drawers, not to scale: the region being edited grows to fit its command.
-final class WorkspaceTabDrawing: NSView {
+final class WorkspaceTabDrawing: NSView, ThemeReapplying {
     // Drawing proportions, not chrome heights.
     // swiftlint:disable:next untokened_spacing_constant
     static let height: CGFloat = 232

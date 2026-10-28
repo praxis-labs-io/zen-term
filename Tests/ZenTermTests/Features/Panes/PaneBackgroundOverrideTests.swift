@@ -113,7 +113,7 @@ final class PaneBackgroundOverrideTests: WindowTestCase {
         let host = try XCTUnwrap(host(showing: surface))
         controller.surface(surface, backgroundDidChange: osc11)
 
-        controller.reapplyChromeColors()
+        controller.panelHosts.forEach { $0.reapplyThemeTree() }
 
         assertPaints(host, osc11, "a theme reload dropped the program's background")
     }

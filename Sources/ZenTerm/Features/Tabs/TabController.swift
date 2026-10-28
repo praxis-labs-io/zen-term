@@ -888,10 +888,8 @@ final class TabController: NSObject {
         view.layoutSubtreeIfNeeded()
     }
 
-    func reapplyChromeColors() {
-        paneCanvas.reapplyChromeColors()
-        bottomDrawerPanel?.reapplyTheme()
-        rightDrawerPanel?.reapplyTheme()
+    var panelHosts: [PanelHostView] {
+        paneCanvas.panelHosts + [bottomDrawerPanel, rightDrawerPanel].compactMap { $0 }
     }
 
     private func beginDrawerSlide() {

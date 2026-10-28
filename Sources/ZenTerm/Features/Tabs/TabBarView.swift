@@ -14,7 +14,7 @@ struct TabBarItem {
 }
 
 // Chips are framed by hand: inside a scroll view an `NSStackView`'s intrinsic width is not authoritative.
-final class TabBarView: NSView {
+final class TabBarView: NSView, ThemeReapplying {
     private let onSelect: (TabID) -> Void
     private let onClose: (TabID) -> Void
     private let onRename: (TabID) -> Void

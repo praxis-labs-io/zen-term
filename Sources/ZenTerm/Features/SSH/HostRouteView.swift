@@ -1,6 +1,6 @@
 import AppKit
 
-final class HostRouteView: NSView {
+final class HostRouteView: NSView, ThemeReapplying {
     static let preferredLineLength: CGFloat = 120
     private static let lineHeight: CGFloat = ChromeMetrics.Height.sm
     private static let minimumLineLength: CGFloat = 24

@@ -1,7 +1,7 @@
 import AppKit
 
 // One region of a tab drawing: its label, its command, and whether the workspace opens focused there.
-final class RegionCommandField: NSView, NSTextFieldDelegate {
+final class RegionCommandField: NSView, NSTextFieldDelegate, ThemeReapplying {
     enum Edge { case left, right, up, down }
 
     static let commandFont = ChromeType.font(.body, face: .mono)

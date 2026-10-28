@@ -1,6 +1,6 @@
 import AppKit
 
-final class SidebarRowMenuItemView: NSView {
+final class SidebarRowMenuItemView: NSView, ThemeReapplying {
     let title: String
     private let label: NSTextField
     private let keycap: KeycapView?

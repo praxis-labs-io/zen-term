@@ -77,7 +77,7 @@ enum SettingsDetail {
     }
 }
 
-final class ResetFlashLabel: NSTextField {
+final class ResetFlashLabel: NSTextField, ThemeReapplying {
     private var hideTimer: DispatchWorkItem?
 
     init() {

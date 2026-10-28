@@ -1,6 +1,6 @@
 import AppKit
 
-final class KeybindRow: NSView {
+final class KeybindRow: NSView, ThemeReapplying {
     enum MessageKind: Equatable {
         case diagnostic
         case explanation

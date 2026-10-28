@@ -2,7 +2,7 @@ import AppKit
 import TerminalKit
 
 // A symbol or brand mark on a rounded chip tinted by one chrome role.
-final class IconBadge: NSView {
+final class IconBadge: NSView, ThemeReapplying {
     enum Size {
         case regular
 

@@ -1,7 +1,7 @@
 import AppKit
 import TabKit
 
-final class ToggleDock: NSView {
+final class ToggleDock: NSView, ThemeReapplying {
     private let bottomBtn: IconButton
     private let rightBtn: IconButton
     private let scratchBtn: IconButton

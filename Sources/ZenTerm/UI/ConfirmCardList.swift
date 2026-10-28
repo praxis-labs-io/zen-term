@@ -62,7 +62,7 @@ final class ConfirmCardList: NSView, ThemeReapplying {
         rowViews.forEach { $0.reapplyTheme() }
     }
 
-    private final class RowView: NSView {
+    private final class RowView: NSView, ThemeReapplying {
         private let row: Row
         private let leading = NSTextField(labelWithString: "")
         private let trailing = NSTextField(labelWithString: "")

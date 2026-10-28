@@ -1,6 +1,6 @@
 import AppKit
 
-final class KeybindHintBubble: ShadowCardView {
+final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
     private static let width: CGFloat = 220
     private static let padding = ChromeMetrics.Spacing.s12
     private static let resetSlot = ChromeMetrics.Height.control + ChromeMetrics.Spacing.s8

@@ -1,6 +1,6 @@
 import AppKit
 
-final class RouteEndpointView: NSView {
+final class RouteEndpointView: NSView, ThemeReapplying {
     static let tileSide: CGFloat = ChromeMetrics.Height.xl
     static let columnWidth: CGFloat = 96
     private static let tileCornerRadius: CGFloat = ChromeMetrics.Radius.tile

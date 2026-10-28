@@ -1,6 +1,6 @@
 import AppKit
 
-final class LabeledField: NSView {
+final class LabeledField: NSView, ThemeReapplying {
     private let caption: NSView
     private let messageLabel = NSTextField(labelWithString: "")
 

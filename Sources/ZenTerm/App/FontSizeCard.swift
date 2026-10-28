@@ -1,7 +1,7 @@
 import AppKit
 
 /// Updates in place because held zoom chords auto-repeat and a card per step would stack.
-final class FontSizeCard: ShadowCardView {
+final class FontSizeCard: ShadowCardView, ThemeReapplying {
     private let label: NSTextField
 
     private static let font: NSFont = ChromeType.font(.body, weight: .semibold, face: .digits)

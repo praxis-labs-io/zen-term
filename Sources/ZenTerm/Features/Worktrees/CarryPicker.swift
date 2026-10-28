@@ -253,7 +253,7 @@ final class CarryPicker: NSView, ThemeReapplying {
         return catalog.indices.filter { shown.contains(catalog[$0]) }
     }
 
-    private final class PlaceholderSelect: NSView {
+    private final class PlaceholderSelect: NSView, ThemeReapplying {
         private let label = NSTextField(labelWithString: "")
         private let spinner = Spinner()
 

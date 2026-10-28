@@ -1,6 +1,6 @@
 import AppKit
 
-class SettingsFocusRow: NSView {
+class SettingsFocusRow: NSView, ThemeReapplying {
     var onActivate: (() -> Void)?
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?

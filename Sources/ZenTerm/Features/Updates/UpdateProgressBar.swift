@@ -1,7 +1,7 @@
 import AppKit
 
 /// Not `NSProgressIndicator`, which tints from `effectiveAppearance` rather than the theme.
-final class UpdateProgressBar: NSView {
+final class UpdateProgressBar: NSView, ThemeReapplying {
     private let fill = CALayer()
     private static let thickness: CGFloat = 4
     private static let sweepFraction: CGFloat = 0.3

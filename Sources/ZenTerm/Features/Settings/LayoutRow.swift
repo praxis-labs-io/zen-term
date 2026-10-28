@@ -1,6 +1,6 @@
 import AppKit
 
-final class LayoutRow: NSView {
+final class LayoutRow: NSView, ThemeReapplying {
     enum MessageKind { case diagnostic, failure }
 
     private let captionLabel: NSTextField

@@ -1,7 +1,7 @@
 import AppKit
 import TerminalKit
 
-class SurfaceFloatOverlay: NSView, TerminalModeHost {
+class SurfaceFloatOverlay: NSView, TerminalModeHost, ThemeReapplying {
     private let onDismiss: () -> Void
     private let content: NSView
     private let contentInset: CGFloat
