@@ -168,8 +168,7 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         }
 
         let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
-        config.keymap = config.keymap.filter { $0.value != .toggleZoom }
-        config.keymap[rebound] = .toggleZoom
+        config.rebind(.toggleZoom, to: rebound)
         GeneralConfig.setCurrentForTesting(config)
         post(.keymap)
 
@@ -323,8 +322,7 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         XCTAssertTrue(try paletteKeycaps().contains("⌘⇧⏎"), "expected Focus Mode's default chord on a row")
 
         let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
-        config.keymap = config.keymap.filter { $0.value != .toggleZoom }
-        config.keymap[rebound] = .toggleZoom
+        config.rebind(.toggleZoom, to: rebound)
         GeneralConfig.setCurrentForTesting(config)
         post(.keymap)
 
@@ -335,54 +333,43 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
             "the rebind never reached the open palette's shortcut column")
     }
 
-    func test_keymapChange_rebuildsTheRepoPickersNewWorkspaceRow() throws {
-        var config = GeneralConfig.builtIn
-        GeneralConfig.setCurrentForTesting(config)
-
+    private func openRepoPicker() throws -> RepoPickerOverlay {
+        GeneralConfig.setCurrentForTesting(.builtIn)
         let controller = WindowController(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
         self.controller = controller
         controller.mountAndStart()
         controller.handle(.toggleRepoPicker)
-
         func picker() -> RepoPickerOverlay? {
             descendants(of: controller.window.contentView!).compactMap { $0 as? RepoPickerOverlay }.first
         }
         waitUntil(picker() != nil, "the picker to be presented")
-        func pickerKeycaps() throws -> [String] {
-            try descendants(of: XCTUnwrap(picker())).compactMap { ($0 as? KeycapView)?.shortcut }
+        return try XCTUnwrap(picker())
+    }
+
+    func test_keymapChange_rebuildsTheRepoPickersNewWorkspaceRow() throws {
+        let picker = try openRepoPicker()
+        func pickerKeycaps() -> [String] {
+            descendants(of: picker).compactMap { ($0 as? KeycapView)?.shortcut }
         }
+        var config = GeneralConfig.current
         let original = try XCTUnwrap(Chord.displayed(.newWorkspace, in: config.keymap)?.displayGlyph)
-        XCTAssertTrue(try pickerKeycaps().contains(original), "expected New Workspace's default chord on its row")
+        XCTAssertTrue(pickerKeycaps().contains(original), "expected New Workspace's default chord on its row")
 
         let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
-        config.keymap = config.keymap.filter { $0.value != .newWorkspace }
-        config.keymap[rebound] = .newWorkspace
+        config.rebind(.newWorkspace, to: rebound)
         GeneralConfig.setCurrentForTesting(config)
         post(.keymap)
 
-        let after = try pickerKeycaps()
+        let after = pickerKeycaps()
         XCTAssertFalse(after.contains(original), "the picker is still offering the chord that moved")
         XCTAssertTrue(after.contains(rebound.displayGlyph), "the rebind never reached the New Workspace row")
     }
 
     func test_keymapChange_rebuildsTheRepoPickersFooterHints() throws {
-        var config = GeneralConfig.builtIn
-        GeneralConfig.setCurrentForTesting(config)
-
-        let controller = WindowController(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), initialCWD: nil)
-        self.controller = controller
-        controller.mountAndStart()
-        controller.handle(.toggleRepoPicker)
-
-        func picker() -> RepoPickerOverlay? {
-            descendants(of: controller.window.contentView!).compactMap { $0 as? RepoPickerOverlay }.first
-        }
-        waitUntil(picker() != nil, "the picker to be presented")
-        func footerItem(_ label: String) throws -> NSView? {
-            try descendants(of: XCTUnwrap(picker()))
-                .first { ($0 as? NSTextField)?.stringValue == label }?.superview
+        let picker = try openRepoPicker()
+        func footerItem(_ label: String) -> NSView? {
+            descendants(of: picker).first { ($0 as? NSTextField)?.stringValue == label }?.superview
         }
         func keycap(in item: NSView?) -> String? {
             item?.subviews.compactMap { ($0 as? KeycapView)?.shortcut }.first
@@ -391,14 +378,14 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
             let labels = ["new workspace", "open", "switch", "new worktree", "remove worktree", "close workspace"]
             return try Dictionary(uniqueKeysWithValues: labels.map { ($0, try XCTUnwrap(footerItem($0)).isHidden) })
         }
+        var config = GeneralConfig.current
         let original = try XCTUnwrap(Chord.displayed(.removeWorktree, in: config.keymap)?.displayGlyph)
-        XCTAssertEqual(keycap(in: try footerItem("remove worktree")), original, "premise: the default chord")
+        XCTAssertEqual(keycap(in: footerItem("remove worktree")), original, "premise: the default chord")
         let hiddenBefore = try hiddenHints()
         XCTAssertEqual(hiddenBefore["remove worktree"], true, "premise: no worktree is selected")
 
         let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
-        config.keymap = config.keymap.filter { $0.value != .removeWorktree }
-        config.keymap[rebound] = .removeWorktree
+        config.rebind(.removeWorktree, to: rebound)
         GeneralConfig.setCurrentForTesting(config)
         NotificationCenter.default.post(
             name: .configDidChange, object: nil, userInfo: [ConfigChange.userInfoKey: ConfigChange.keymap])

@@ -152,13 +152,6 @@ final class WindowControllerThemeTreeTests: WindowTestCase {
         XCTAssertEqual(dockProbe.count, 1, "an untagged reload walked the dock again")
     }
 
-    private func rebind(_ action: KeyInterceptor.ReservedChord, to chord: Chord) {
-        var config = GeneralConfig.current
-        config.keymap = config.keymap.filter { $0.value != action }
-        config.keymap[chord] = action
-        GeneralConfig.setCurrentForTesting(config)
-    }
-
     func test_keymapChange_recolorsNothing() throws {
         Motion.isReduceMotionEnabled = { true }
         let controller = makeController()
@@ -179,7 +172,9 @@ final class WindowControllerThemeTreeTests: WindowTestCase {
         let borderBefore = drawer.borderForTesting.color
 
         let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
-        rebind(.toggleZoom, to: rebound)
+        var config = GeneralConfig.current
+        config.rebind(.toggleZoom, to: rebound)
+        GeneralConfig.setCurrentForTesting(config)
         Theme.setCurrentForTesting(try makeAlternateTheme())
         post(.keymap)
 

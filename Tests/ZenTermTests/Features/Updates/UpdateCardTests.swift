@@ -123,8 +123,7 @@ final class UpdateCardTests: WindowTestCase {
         addTeardownBlock { @MainActor in GeneralConfig.setCurrentForTesting(original) }
         let chord = Chord(command: true, shift: true, option: true, control: true, key: "u")
         var config = GeneralConfig.builtIn
-        config.keymap = config.keymap.filter { $0.value != .checkForUpdates }
-        config.keymap[chord] = .checkForUpdates
+        config.rebind(.checkForUpdates, to: chord)
         GeneralConfig.setCurrentForTesting(config)
         return chord
     }

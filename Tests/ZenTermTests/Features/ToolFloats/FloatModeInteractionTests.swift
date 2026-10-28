@@ -104,8 +104,7 @@ final class FloatModeInteractionTests: WindowTestCase {
 
         let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
         var config = GeneralConfig.current
-        config.keymap = config.keymap.filter { $0.value != .toggleScrollMode }
-        config.keymap[rebound] = .toggleScrollMode
+        config.rebind(.toggleScrollMode, to: rebound)
         GeneralConfig.setCurrentForTesting(config)
         NotificationCenter.default.post(
             name: .configDidChange, object: nil, userInfo: [ConfigChange.userInfoKey: ConfigChange.keymap])
