@@ -173,7 +173,6 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
 
     func reapplyTheme() {
         applyBackground()
-        chrome.reapplyTheme()
         updateBorder()
     }
 

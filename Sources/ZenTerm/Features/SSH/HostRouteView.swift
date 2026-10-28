@@ -80,8 +80,6 @@ final class HostRouteView: NSView, ThemeReapplying {
     func setStatus(_ status: SSHHostStatus) { destination.setStatus(status) }
 
     func reapplyTheme() {
-        mac.reapplyTheme()
-        destination.reapplyTheme()
         line.strokeColor = Theme.current.chrome.ink(.muted).cgColor
     }
 

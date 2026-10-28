@@ -136,16 +136,12 @@ final class HostConnectView: NSView, ThemeReapplying {
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        grid.reapplyTheme()
-        route.reapplyTheme()
         eyebrow.attributedStringValue = Self.line(
             "Remote host", font: ChromeType.sectionLabel, color: chrome.ink(.muted),
             breaking: .byClipping)
         applyName()
         destinationLine.textColor = chrome.ink(.muted)
         applyDetail()
-        connectButton.reapplyTheme()
-        panel.reapplyTheme()
     }
 
     func reapplyChromeLayout() {

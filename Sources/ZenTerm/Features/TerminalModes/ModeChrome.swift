@@ -94,11 +94,6 @@ final class ModeChrome {
         didSet { findBar?.paneFill = findBarFill }
     }
 
-    func reapplyTheme() {
-        header?.reapplyTheme()
-        findBar?.reapplyTheme()
-    }
-
     var scrollCursorForTesting: ScrollCursorView { cursor }
     var findBarForTesting: FindBarView? { findBar?.isHidden == false ? findBar : nil }
     var isHeaderVisibleForTesting: Bool { header.map { !$0.isHidden } ?? false }

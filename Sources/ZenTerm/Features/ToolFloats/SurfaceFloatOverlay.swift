@@ -143,7 +143,6 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost, ThemeReapplying {
         CardChrome.reapplyEdge(to: card, focusBorder: isFocusBorderVisible)
         elevation.color = FloatShadow.color(.float)
         applyBackground()
-        chrome.reapplyTheme()
     }
 
     var modeMeta: PanelMeta? {
