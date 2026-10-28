@@ -220,6 +220,39 @@ final class WindowControllerThemeTreeTests: WindowTestCase {
         XCTAssertEqual(borderBefore, host.borderForTesting.color, "a behavior change recolored the pane border")
     }
 
+    func test_floatsChange_recolorsNothing() throws {
+        Motion.isReduceMotionEnabled = { true }
+        let controller = makeController()
+        let root = controller.window.contentView!
+        controller.handle(.toggleCommandPalette)
+        let palette = try XCTUnwrap(descendants(of: root).compactMap { $0 as? CommandPaletteOverlay }.first)
+        let dock = try XCTUnwrap(descendants(of: root).compactMap { $0 as? ToggleDock }.first)
+        let rootProbe = CountingProbe()
+        let paletteProbe = CountingProbe()
+        let dockProbe = CountingProbe()
+        root.addSubview(rootProbe)
+        palette.addSubview(paletteProbe)
+        dock.addSubview(dockProbe)
+
+        var config = GeneralConfig.current
+        config.floats = [
+            ToolFloat(
+                id: "notes", order: 0, title: "Notes", icon: ToolFloatParser.defaultIcon,
+                command: "ls", dir: nil, widthFraction: 0.85, heightFraction: 0.85,
+                requiresGitRepo: false, persist: .ephemeral,
+                toggle: Chord(command: true, shift: true, key: "n"))
+        ]
+        GeneralConfig.setCurrentForTesting(config)
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        post(.floats)
+
+        let titles = descendants(of: palette).compactMap { ($0 as? NSTextField)?.stringValue }
+        XCTAssertTrue(titles.contains("Notes"), "the new float never reached the open palette")
+        XCTAssertEqual(rootProbe.count, 0, "a floats change walked the window")
+        XCTAssertEqual(paletteProbe.count, 0, "a floats change walked the open palette")
+        XCTAssertEqual(dockProbe.count, 0, "a floats change walked the dock")
+    }
+
     func test_themeChange_reachesAnInactiveTabsHostBeforeYouSwitchBack() throws {
         Motion.isReduceMotionEnabled = { true }
         let controller = makeController()

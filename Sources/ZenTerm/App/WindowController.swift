@@ -562,6 +562,8 @@ final class WindowController: NSObject {
                 }
                 if change.contains(.keymap) {
                     for host in self.panelHosts { host.reapplyKeymap() }
+                }
+                if change.contains(.keymap) || change.contains(.floats) {
                     (self.modal?.overlay as? PaletteOverlay)?.reapplyKeymap()
                 }
                 if change.contains(.terminalBehavior) {
@@ -569,22 +571,17 @@ final class WindowController: NSObject {
                     self.floats.reapplyTerminalBehavior()
                     self.connectView?.reapplyTerminalBehavior()
                 }
-                self.reapplyThemeTrees(for: change)
+                if change.contains(.theme) { self.reapplyThemeTrees() }
             }
         }
     }
 
     private var panelHosts: [PanelHostView] { allTabControllers.flatMap(\.panelHosts) }
 
-    private func reapplyThemeTrees(for change: ConfigChange) {
-        if change.contains(.theme) {
-            window.contentView?.reapplyThemeTree()
-            for host in panelHosts where host.window == nil { host.reapplyThemeTree() }
-            if let connectView, connectView.window == nil { connectView.reapplyThemeTree() }
-            return
-        }
-        if change.contains(.floats) { modal?.overlay.reapplyThemeTree() }
-        if change.contains(.floats) { dock.reapplyThemeTree() }
+    private func reapplyThemeTrees() {
+        window.contentView?.reapplyThemeTree()
+        for host in panelHosts where host.window == nil { host.reapplyThemeTree() }
+        if let connectView, connectView.window == nil { connectView.reapplyThemeTree() }
     }
 
     private func layoutContainer() {

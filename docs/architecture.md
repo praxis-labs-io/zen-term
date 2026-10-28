@@ -602,8 +602,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   fixed for its life.
 - **A theme change recolors by walking the view tree.** `WindowController` calls
   `reapplyThemeTree()` on its content view once, and every `ThemeReapplying` view under it
-  recolors without its parent listing it. A `.theme` change takes that one walk in place of
-  the floats walk; a keymap or behavior change never walks. Tab hosts and the connect
+  recolors without its parent listing it. No other change walks. Tab hosts and the connect
   view that have left the window are extra roots. A child a parent removes and keeps
   recolors where the parent re-attaches it.
 - **`AppConfig.reload()` order:** general config, then theme, then post
