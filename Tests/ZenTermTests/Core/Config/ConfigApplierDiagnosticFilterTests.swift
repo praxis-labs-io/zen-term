@@ -47,7 +47,7 @@ final class ConfigApplierDiagnosticFilterTests: XCTestCase {
                     return true
                 },
                 retractConflicts: { [unowned self] in self.carded = [] },
-                reapplyUpdateCardTheme: {}, applyAutoCheckSetting: {}, publishTheme: {}))
+                refreshUpdateCardKeycap: {}, applyAutoCheckSetting: {}, publishTheme: {}))
     }
 
     func test_aChordConflict_getsACardAndNotTheSharedNotice() throws {

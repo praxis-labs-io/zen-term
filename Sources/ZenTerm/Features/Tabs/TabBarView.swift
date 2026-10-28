@@ -139,7 +139,6 @@ final class TabBarView: NSView, ThemeReapplying {
 
     func reapplyTheme() {
         pill.backgroundColor = Theme.current.chrome.fill(.active).cgColor
-        chips.forEach { $0.reapplyTheme() }
         render(lastItems)
     }
 

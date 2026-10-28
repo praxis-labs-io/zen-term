@@ -234,4 +234,52 @@ final class WindowControllerThemeTreeTests: WindowTestCase {
         let after = try XCTUnwrap((keybinds.detailStops().last as? AppButton)?.layer?.backgroundColor)
         XCTAssertNotEqual(before, after, "the section's reset button came back in the old theme")
     }
+
+    func test_themeChange_recolorsAPresentedUpdateCard() throws {
+        Motion.isReduceMotionEnabled = { true }
+        let controller = makeController()
+        let card = UpdateCardView(
+            state: .available(version: "9.9.9", current: "1.0.0", notes: [], notesURL: nil),
+            actions: UpdateCardView.Actions())
+        controller.presentUpdateCard(card)
+        XCTAssertNotNil(card.window, "premise: the card is in the window")
+        let before = card.badgeFillForTesting
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        post(.theme)
+
+        XCTAssertNotEqual(before, card.badgeFillForTesting, "the presented update card kept the old theme")
+    }
+
+    func test_themeChange_reachesAnUpdateProgressBarThatWasOutOfTheCardWhenItFired() throws {
+        Motion.isReduceMotionEnabled = { true }
+        let controller = makeController()
+        let card = UpdateCardView(state: .downloading(fraction: 0.5), actions: UpdateCardView.Actions())
+        controller.presentUpdateCard(card)
+        let bar = card.progressBarForTesting
+        let before = try XCTUnwrap(bar.fillForTesting)
+
+        card.update(to: .ready(version: "9.9.9"), actions: UpdateCardView.Actions())
+        XCTAssertNil(bar.superview, "premise: the finished download left the bar out of the card")
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        post(.theme)
+        card.update(to: .downloading(fraction: 0.1), actions: UpdateCardView.Actions())
+
+        XCTAssertNotNil(bar.superview)
+        XCTAssertNotEqual(before, bar.fillForTesting, "the returning progress bar kept the old theme")
+    }
+
+    func test_themeChange_recolorsAnOrdinaryToastOnScreen() throws {
+        Motion.isReduceMotionEnabled = { true }
+        let controller = makeController()
+        controller.showToast(ToastContent(variant: .destructive, title: "Heads up", message: "Something."))
+        let toast = try XCTUnwrap(
+            descendants(of: controller.window.contentView!).compactMap { $0 as? ToastView }.first)
+        let before = toast.badgeFillForTesting
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        post(.theme)
+
+        XCTAssertNotEqual(before, toast.badgeFillForTesting, "a toast on screen kept the old theme")
+    }
 }

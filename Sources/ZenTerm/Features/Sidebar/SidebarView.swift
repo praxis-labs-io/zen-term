@@ -549,17 +549,6 @@ final class SidebarView: NSView, ThemeReapplying {
 
     func reapplyTheme() {
         rowMenu.close()
-        caption.reapplyTheme()
-        addButton.reapplyTheme()
-        hostsCaption.reapplyTheme()
-        agentsCaption.reapplyTheme()
-        for row in hostRows.values { row.reapplyTheme() }
-        for row in rows.values {
-            row.reapplyTheme()
-            (row.hoverAccessory as? IconButton)?.reapplyTheme()
-        }
-        for row in agentRows.values { row.reapplyTheme() }
-        waitingRow?.reapplyTheme()
     }
 
     var addButtonForTesting: IconButton { addButton }

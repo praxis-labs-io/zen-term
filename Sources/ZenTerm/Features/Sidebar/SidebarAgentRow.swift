@@ -128,7 +128,6 @@ final class SidebarAgentRow: SidebarJumpRow {
         summaryLabel.textColor = ink
         detailLabel.textColor = Theme.current.chrome.ink(.muted)
         dot.layer?.backgroundColor = ink.cgColor
-        spinner.reapplyTheme()
         super.reapplyTheme()
     }
 }

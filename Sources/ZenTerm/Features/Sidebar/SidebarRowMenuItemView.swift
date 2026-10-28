@@ -53,7 +53,6 @@ final class SidebarRowMenuItemView: NSView, ThemeReapplying {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         label.textColor = chrome.ink(.normal)
-        keycap?.reapplyTheme()
         layer?.backgroundColor = isHovered ? chrome.fill(.hover).cgColor : NSColor.clear.cgColor
     }
 

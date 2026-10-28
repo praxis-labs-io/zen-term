@@ -36,7 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             retractConflicts: { [weak self] in
                 self?.windows.forEach { $0.dismissConflictToasts() }
             },
-            reapplyUpdateCardTheme: { [weak self] in self?.updateController?.reapplyTheme() },
+            refreshUpdateCardKeycap: { [weak self] in self?.updateController?.refreshKeycap() },
             applyAutoCheckSetting: { [weak self] in self?.updateController?.applyAutoCheckSetting() },
             publishTheme: { ThemePublisher.publish() }))
 

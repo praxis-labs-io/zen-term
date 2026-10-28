@@ -11,7 +11,7 @@ final class ConfigApplier {
         var retractDiagnostics: @MainActor () -> Void
         var announceConflicts: @MainActor ([KeybindConflict]) -> Bool
         var retractConflicts: @MainActor () -> Void
-        var reapplyUpdateCardTheme: @MainActor () -> Void
+        var refreshUpdateCardKeycap: @MainActor () -> Void
         var applyAutoCheckSetting: @MainActor () -> Void
         var publishTheme: @MainActor () -> Void
     }
@@ -35,7 +35,7 @@ final class ConfigApplier {
         }
         if change.contains(.motion) { sinks.applyMotion(GeneralConfig.current.reduceMotion) }
         surfaceConfigNotices()
-        if change.contains(.theme) || change.contains(.keymap) { sinks.reapplyUpdateCardTheme() }
+        if change.contains(.keymap) { sinks.refreshUpdateCardKeycap() }
         if change.contains(.updates) { sinks.applyAutoCheckSetting() }
         if change.contains(.theme) { sinks.publishTheme() }
     }

@@ -26,6 +26,8 @@ final class UpdateProgressBar: NSView, ThemeReapplying {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    var fillForTesting: CGColor? { fill.backgroundColor }
+
     /// Intrinsic, because a height constraint would be re-added on every card rebuild.
     override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: Self.thickness) }
 

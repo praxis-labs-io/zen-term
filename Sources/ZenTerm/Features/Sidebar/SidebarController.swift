@@ -511,12 +511,6 @@ final class SidebarController {
 
     func shutdown() { edgeReveal.shutdown() }
 
-    func reapplyTheme() {
-        column.reapplyTheme()
-        lead.reapplyTheme()
-        collapsedToggle.reapplyTheme()
-    }
-
     func reapplyChromeLayout() {
         sidebarTop?.constant = ChromeMetrics.topInset
         collapsedToggleLeading?.constant = ChromeMetrics.windowGutter

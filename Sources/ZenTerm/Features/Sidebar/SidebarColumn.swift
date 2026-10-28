@@ -99,9 +99,6 @@ final class SidebarColumn: ShadowCardView, ThemeReapplying {
     func setToggleHidden(_ hidden: Bool) { toggle.isHidden = hidden }
 
     func reapplyTheme() {
-        rows.reapplyTheme()
-        footer.reapplyTheme()
-        toggle.reapplyTheme()
         if isFloating { CardChrome.reapplyTheme(to: self, tier: .float) }
     }
 }
