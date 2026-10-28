@@ -25,6 +25,7 @@ final class LinkPreviewPresenter {
         guard let window = source.window, let content = window.contentView else { return }
 
         let card = LinkPreviewView(url: url)
+        card.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(card)
         card.layoutSubtreeIfNeeded()
 
