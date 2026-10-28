@@ -145,6 +145,8 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost, ThemeReapplying {
         applyBackground()
     }
 
+    func reapplyTerminalBehavior() { applyBackground() }
+
     var modeMeta: PanelMeta? {
         didSet {
             guard oldValue?.title != modeMeta?.title || oldValue?.action != modeMeta?.action else { return }

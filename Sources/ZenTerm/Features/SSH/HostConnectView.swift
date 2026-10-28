@@ -151,6 +151,8 @@ final class HostConnectView: NSView, ThemeReapplying {
         panel.reapplyChromeLayout()
     }
 
+    func reapplyTerminalBehavior() { panel.reapplyTerminalBehavior() }
+
     @objc private func fitDetailToWidth() {
         let width = min(Self.detailMaxWidth, content.frame.width - Self.edgeSpacing * 2)
         guard width > 0, detail.preferredMaxLayoutWidth != width else { return }

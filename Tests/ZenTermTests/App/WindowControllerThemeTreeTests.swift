@@ -190,6 +190,36 @@ final class WindowControllerThemeTreeTests: WindowTestCase {
         XCTAssertEqual(borderBefore, drawer.borderForTesting.color, "a keymap change recolored the drawer")
     }
 
+    func test_terminalBehaviorChange_recolorsNothing() throws {
+        Motion.isReduceMotionEnabled = { true }
+        let controller = makeController()
+        let root = controller.window.contentView!
+        controller.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        let host = try XCTUnwrap(descendants(of: root).compactMap { $0 as? PanelHostView }.first)
+        let float = try XCTUnwrap(controller.floatsForTesting.shownOverlayForTesting)
+        let rootProbe = CountingProbe()
+        let hostProbe = CountingProbe()
+        let floatProbe = CountingProbe()
+        root.addSubview(rootProbe)
+        host.addSubview(hostProbe)
+        float.addSubview(floatProbe)
+        let borderBefore = host.borderForTesting.color
+        let fillBefore = host.paintedBackgroundForTesting.fill
+
+        var config = GeneralConfig.current
+        config.backgroundAlpha = 0.5
+        GeneralConfig.setCurrentForTesting(config)
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        post(.terminalBehavior)
+
+        XCTAssertNotEqual(
+            fillBefore, host.paintedBackgroundForTesting.fill, "the behavior change never reached the pane host")
+        XCTAssertEqual(rootProbe.count, 0, "a behavior change walked the window")
+        XCTAssertEqual(hostProbe.count, 0, "a behavior change walked the pane host")
+        XCTAssertEqual(floatProbe.count, 0, "a behavior change walked the open float")
+        XCTAssertEqual(borderBefore, host.borderForTesting.color, "a behavior change recolored the pane border")
+    }
+
     func test_themeChange_reachesAnInactiveTabsHostBeforeYouSwitchBack() throws {
         Motion.isReduceMotionEnabled = { true }
         let controller = makeController()

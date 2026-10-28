@@ -115,7 +115,7 @@ final class PanelHostViewTests: WindowTestCase {
         var config = GeneralConfig.builtIn
         config.backgroundAlpha = 0.5
         GeneralConfig.setCurrentForTesting(config)
-        panel.reapplyThemeTree()
+        panel.reapplyTerminalBehavior()
         panel.layoutSubtreeIfNeeded()
 
         let inRing = NSPoint(x: 5, y: panel.bounds.midY)

@@ -171,7 +171,7 @@ final class ToolFloatController: NSObject, TerminalSurfaceDelegate {
         active.overlay.isFocusBorderVisible = holdsKeyFocus
     }
 
-    func reapplyTheme() { activeFloat?.overlay.reapplyThemeTree() }
+    func reapplyTerminalBehavior() { activeFloat?.overlay.reapplyTerminalBehavior() }
 
     private func floatCWD(_ spec: ToolFloat) -> URL? { spec.dir ?? sessionCWD() }
 
