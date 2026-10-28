@@ -82,6 +82,19 @@ final class KeybindCaptureFlowTests: WindowTestCase {
 
     private var liveKeymap: [Chord: KeyInterceptor.ReservedChord] { GeneralConfig.current.keymap }
 
+    func test_recordingAShortcut_showsTheHintWithoutConflictingConstraints() {
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+
+        let conflicts = constraintConflicts {
+            row(for: .newTab).chip.onActivate?()
+            capturer.feed(event(for: novelChord))
+            hostWindow?.contentView?.layoutSubtreeIfNeeded()
+        }
+
+        XCTAssertEqual(conflicts, [])
+    }
+
     func test_validChord_commitsRebindAndEndsCapture() {
         let capturer = FakeCapturer()
         _ = mountSection(capturer)

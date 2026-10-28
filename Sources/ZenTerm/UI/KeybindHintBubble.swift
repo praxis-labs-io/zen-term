@@ -27,6 +27,7 @@ final class KeybindHintBubble: ShadowCardView {
         accessibilityLabel: "Reset to default", restsFilled: true
     ) { [weak self] in self?.onResetToDefault?() }
     var onResetToDefault: (() -> Void)?
+    private var originPins: (leading: NSLayoutConstraint, edge: NSLayoutConstraint)?
 
     init() {
         super.init(frame: .zero)
@@ -103,6 +104,27 @@ final class KeybindHintBubble: ShadowCardView {
 
     var badgeFillForTesting: CGColor? { badge.fillForTesting }
     var badgeIconTintForTesting: NSColor? { badge.iconTintForTesting }
+
+    func place(origin: (NSSize) -> NSPoint) {
+        guard let host = superview else { return }
+        let pins = originPins ?? makeOriginPins(in: host)
+        originPins = pins
+        layoutSubtreeIfNeeded()
+        let point = origin(fittingSize)
+        pins.leading.constant = point.x
+        pins.edge.constant = host.isFlipped ? point.y : -point.y
+        host.layoutSubtreeIfNeeded()
+    }
+
+    private func makeOriginPins(in host: NSView) -> (leading: NSLayoutConstraint, edge: NSLayoutConstraint) {
+        let pins = (
+            leading: leadingAnchor.constraint(equalTo: host.leadingAnchor),
+            edge: host.isFlipped
+                ? topAnchor.constraint(equalTo: host.topAnchor) : bottomAnchor.constraint(equalTo: host.bottomAnchor)
+        )
+        NSLayoutConstraint.activate([pins.leading, pins.edge])
+        return pins
+    }
 
     func reapplyTheme() {
         CardChrome.reapplyTheme(to: self, tier: .overlay)

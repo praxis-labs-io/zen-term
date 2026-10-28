@@ -328,7 +328,6 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         addSubview(backdrop)
         hintBackdrop = backdrop
         let bubble = KeybindHintBubble()
-        bubble.translatesAutoresizingMaskIntoConstraints = true
         addSubview(bubble)
         hintBubble = bubble
         positionHint()
@@ -340,16 +339,14 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     }
 
     private func positionHint() {
-        guard let bubble = hintBubble else { return }
-        bubble.layoutSubtreeIfNeeded()
-        let size = bubble.fittingSize
-        let chipRect = chordChip.convert(chordChip.bounds, to: self)
-        let x = max(8, min(chipRect.midX - size.width / 2, bounds.width - size.width - 8))
-        let maxY = max(8, bounds.height - size.height - 8)
-        var y = chipRect.minY - size.height - 6
-        if y < 8 { y = chipRect.maxY + 6 }
-        y = max(8, min(y, maxY))
-        bubble.frame = NSRect(x: x, y: y, width: size.width, height: size.height)
+        hintBubble?.place { size in
+            let chipRect = chordChip.convert(chordChip.bounds, to: self)
+            let x = max(8, min(chipRect.midX - size.width / 2, bounds.width - size.width - 8))
+            let maxY = max(8, bounds.height - size.height - 8)
+            var y = chipRect.minY - size.height - 6
+            if y < 8 { y = chipRect.maxY + 6 }
+            return NSPoint(x: x, y: max(8, min(y, maxY)))
+        }
     }
 
     private func hideHint() {
