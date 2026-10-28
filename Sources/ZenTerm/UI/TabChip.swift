@@ -70,7 +70,6 @@ class TabChip: NSView {
         dot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.dotDiameter)
         dot.isHidden = true
 
-        closeButton.translatesAutoresizingMaskIntoConstraints = true
         closeButton.firesOnRelease = true
         closeButton.isHidden = true
         closeButton.onClick = { [weak self] in self?.onCloseButton?() }
@@ -81,6 +80,10 @@ class TabChip: NSView {
         for view in [labelContainer, dot, closeButton] {
             addSubview(view)
         }
+        NSLayoutConstraint.activate([
+            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.closeSlotInset),
+            closeButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -171,7 +174,6 @@ class TabChip: NSView {
     override func layout() {
         super.layout()
         let slot = closeSlot
-        closeButton.frame = slot
         dot.frame = CGRect(
             x: slot.midX - Self.dotDiameter / 2, y: slot.midY - Self.dotDiameter / 2,
             width: Self.dotDiameter, height: Self.dotDiameter)

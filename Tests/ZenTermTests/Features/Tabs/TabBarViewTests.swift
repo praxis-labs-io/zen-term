@@ -22,6 +22,22 @@ final class TabBarViewTests: WindowTestCase {
         TabBarItem(id: TabID(id), index: index, title: title, isActive: active, attentionState: .idle)
     }
 
+    func test_hoveringAChip_layingOutItsCloseButton_conflictsWithNoConstraint() {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
+        mount(tabBar)
+
+        let conflicts = constraintConflicts {
+            tabBar.render([item(1, "one", index: 1, active: true), item(2, "two", index: 2)])
+            tabBar.layoutSubtreeIfNeeded()
+            for chip in tabBar.chipsForTesting {
+                chip.setHover(true)
+                chip.layoutSubtreeIfNeeded()
+            }
+        }
+
+        XCTAssertEqual(conflicts, [])
+    }
+
     func test_render_keepsEachTabsChipAcrossARerender() throws {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         mount(tabBar)
