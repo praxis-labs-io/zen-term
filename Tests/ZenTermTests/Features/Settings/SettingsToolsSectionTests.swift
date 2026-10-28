@@ -95,6 +95,21 @@ final class SettingsToolsSectionTests: WindowTestCase {
         XCTAssertEqual(rows(in: detail).map(\.renderedShortcutForTesting), ["⌘⇧D", "⌘⇧T"])
     }
 
+    func test_keymapChange_redrawsAFloatsShortcutAKeybindTookAway() throws {
+        try seed(twoFloats)
+        let section = SettingsToolsSection()
+        let detail = mount(section)
+        XCTAssertEqual(rows(in: detail).map(\.renderedShortcutForTesting), ["⌘⇧D", "⌘⇧T"])
+
+        try seed(twoFloats + "\nkeybind = split_vertical=cmd+shift+d")
+        settleReorder()
+        XCTAssertEqual(
+            CommandCatalog.spec(for: .toggleToolFloat("dev")).shortcut, "", "premise: the keybind took the chord")
+
+        XCTAssertEqual(rows(in: detail).map(\.renderedShortcutForTesting), ["Not set", "⌘⇧T"])
+        withExtendedLifetime(section) {}
+    }
+
     func test_row_aMenuOwnedKey_readsAsUnset() throws {
         _ = NSApplication.shared
         let previous = NSApp.mainMenu
