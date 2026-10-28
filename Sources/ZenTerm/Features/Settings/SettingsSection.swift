@@ -7,7 +7,6 @@ protocol SettingsSection: AnyObject {
     func makeDetailView() -> NSView
     func detailStops() -> [NSView]
     func sectionWillHide()
-    /// Recolors in place: it runs on hidden sections too, whose in-flight capture has to survive.
     func reapplyTheme()
 }
 

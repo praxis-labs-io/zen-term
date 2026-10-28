@@ -50,13 +50,14 @@ final class SettingsKeybindsSection: SettingsSection {
     private var desired = KeymapOverrides()
     private var rows: [KeybindRow] = []
     private var groupCaptions: [NSTextField] = []
-    private let resetAllButton = AppButton(title: "Reset all to defaults", variant: .muted)
+    private static let resetAllTitle = "Reset all to defaults"
+    private var resetAllButton = AppButton(title: resetAllTitle, variant: .muted)
     private weak var detailScroll: NSScrollView?
     private var hintBubble: KeybindHintBubble?
     private var hintBackdrop: NSView?
     private weak var capturingRow: KeybindRow?
     private var captureCloseTimer: DispatchWorkItem?
-    private let resetAllMessage = ResetFlashLabel()
+    private var resetAllMessage = ResetFlashLabel()
     private var configObserver: NSObjectProtocol?
     private var hasMissedConfigReload = false
 
@@ -127,6 +128,8 @@ final class SettingsKeybindsSection: SettingsSection {
             }
         }
 
+        resetAllButton = AppButton(title: Self.resetAllTitle, variant: .muted)
+        resetAllMessage = ResetFlashLabel()
         resetAllButton.isKeyboardFocusable = true
         resetAllButton.onArrowUp = { [weak self] in
             guard let self else { return }
@@ -165,11 +168,7 @@ final class SettingsKeybindsSection: SettingsSection {
     }
 
     func reapplyTheme() {
-        hintBubble?.reapplyTheme()
         groupCaptions.forEach { $0.textColor = Theme.current.chrome.ink(.muted) }
-        rows.forEach { $0.reapplyTheme() }
-        resetAllButton.reapplyTheme()
-        resetAllMessage.reapplyTheme()
     }
 
     private func beginCapture(for row: KeybindRow) {

@@ -7,7 +7,9 @@ final class SettingsWorkspacesSection: SettingsSection {
     var onReorder: ((_ moved: Workspace, _ with: Workspace) -> Bool)?
 
     private var rows: [WorkspaceRow] = []
-    private let addButton = AppButton(title: "＋ Add workspace", variant: .muted)
+    private static let addTitle = "＋ Add workspace"
+
+    private var addButton = AppButton(title: addTitle, variant: .muted)
     private weak var caption: NSTextField?
     private weak var emptyHint: NSTextField?
     private weak var reorderHint: NSTextField?
@@ -21,6 +23,7 @@ final class SettingsWorkspacesSection: SettingsSection {
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
 
+        addButton = AppButton(title: Self.addTitle, variant: .muted)
         addButton.isKeyboardFocusable = true
         addButton.onArrowUp = { [weak self] in self?.moveFocus(from: self?.addButton, delta: -1) }
         addButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
@@ -38,8 +41,6 @@ final class SettingsWorkspacesSection: SettingsSection {
         caption?.textColor = Theme.current.chrome.ink(.muted)
         emptyHint?.textColor = Theme.current.chrome.ink(.muted)
         reorderHint?.textColor = Theme.current.chrome.ink(.faint)
-        rows.forEach { $0.reapplyTheme() }
-        addButton.reapplyTheme()
     }
 
     private func populateRows() {

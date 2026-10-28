@@ -308,10 +308,7 @@ final class ReapplyThemeTests: WindowTestCase {
         func makeDetailView() -> NSView { resetButton }
         func detailStops() -> [NSView] { [resetButton] }
         func sectionWillHide() { sectionWillHideCallCount += 1 }
-        func reapplyTheme() {
-            reapplyThemeCallCount += 1
-            resetButton.reapplyTheme()
-        }
+        func reapplyTheme() { reapplyThemeCallCount += 1 }
     }
 
     func test_reapplyTheme_recolorsSettingsOverlayShellAndPersistentResetControl() throws {

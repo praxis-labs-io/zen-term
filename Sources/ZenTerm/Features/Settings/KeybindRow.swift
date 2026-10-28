@@ -82,7 +82,6 @@ final class KeybindRow: NSView, ThemeReapplying {
         titleLabel.textColor = Theme.current.chrome.ink(.normal)
         messageLabel.textColor = KeybindRow.ink(for: messageKind)
         chip.render(shortcut: lastShortcut)
-        chip.reapplyTheme()
     }
 
     var renderedMessageForTesting: String? {

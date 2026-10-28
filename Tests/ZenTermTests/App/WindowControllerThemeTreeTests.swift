@@ -88,6 +88,14 @@ final class WindowControllerThemeTreeTests: WindowTestCase {
         wait(for: [drained], timeout: 5)
     }
 
+    private func click(_ row: SettingsNavRow) {
+        let event = NSEvent.mouseEvent(
+            with: .leftMouseDown, location: .zero, modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: row.window?.windowNumber ?? 0,
+            context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+        row.mouseDown(with: event)
+    }
+
     private func fill(_ button: AppButton) -> CGColor? { button.layer?.backgroundColor }
 
     func test_themeChange_recolorsANestedButtonAndAHiddenArrangedOne() throws {
@@ -205,5 +213,25 @@ final class WindowControllerThemeTreeTests: WindowTestCase {
 
         XCTAssertNotNil(rail.superview)
         XCTAssertNotEqual(before, rail.borderStrokeForTesting, "the returning rail kept the old theme")
+    }
+
+    func test_themeChange_reachesASettingsResetButtonAfterTheSectionSwitchesBack() throws {
+        let controller = makeController()
+        let keybinds = SettingsKeybindsSection(capturer: nil)
+        let overlay = SettingsOverlay(
+            sections: [keybinds, SettingsToolsSection()], capturer: nil, onClose: {})
+        overlay.translatesAutoresizingMaskIntoConstraints = true
+        controller.window.contentView!.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 620, height: 460)
+        let navRows = descendants(of: overlay).compactMap { $0 as? SettingsNavRow }
+        let before = try XCTUnwrap((keybinds.detailStops().last as? AppButton)?.layer?.backgroundColor)
+
+        click(navRows[1])
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        post(.theme)
+        click(navRows[0])
+
+        let after = try XCTUnwrap((keybinds.detailStops().last as? AppButton)?.layer?.backgroundColor)
+        XCTAssertNotEqual(before, after, "the section's reset button came back in the old theme")
     }
 }

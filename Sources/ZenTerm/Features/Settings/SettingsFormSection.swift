@@ -6,7 +6,6 @@ protocol ThemeReapplying: AnyObject {
 extension FieldBox: ThemeReapplying {}
 extension TextAreaBox: ThemeReapplying {}
 extension Dropdown: ThemeReapplying {}
-extension SegmentedControl: ThemeReapplying {}
 extension AppButton: ThemeReapplying {}
 extension CheckboxDropdown: ThemeReapplying {}
 
@@ -14,8 +13,10 @@ class SettingsFormSection: SettingsSection {
     var navTitle: String { "" }
     var onExitToNav: (() -> Void)?
 
-    private let resetAllButton = AppButton(title: "Reset all to defaults", variant: .muted)
-    private let resetAllMessage = ResetFlashLabel()
+    private static let resetAllTitle = "Reset all to defaults"
+
+    private var resetAllButton = AppButton(title: resetAllTitle, variant: .muted)
+    private var resetAllMessage = ResetFlashLabel()
     private var rows: [LayoutRow] = []
     private var groupCaptions: [NSTextField] = []
     private var stops: [NSView] = []
@@ -50,6 +51,8 @@ class SettingsFormSection: SettingsSection {
 
         populate()
 
+        resetAllButton = AppButton(title: Self.resetAllTitle, variant: .muted)
+        resetAllMessage = ResetFlashLabel()
         resetAllButton.isKeyboardFocusable = true
         resetAllButton.onArrowUp = { [weak self] in self?.moveFocus(-1) }
         resetAllButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
@@ -76,10 +79,6 @@ class SettingsFormSection: SettingsSection {
 
     func reapplyTheme() {
         groupCaptions.forEach { $0.textColor = Theme.current.chrome.ink(.muted) }
-        rows.forEach { $0.reapplyTheme() }
-        controlForKey.values.compactMap { $0 as? ThemeReapplying }.forEach { $0.reapplyTheme() }
-        resetAllButton.reapplyTheme()
-        resetAllMessage.reapplyTheme()
     }
 
     func populate() {}

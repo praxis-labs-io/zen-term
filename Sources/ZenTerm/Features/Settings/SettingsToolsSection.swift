@@ -7,7 +7,9 @@ final class SettingsToolsSection: SettingsSection {
     var onReorder: (([ToolFloat]) -> Void)?
 
     private var rows: [ToolFloatRow] = []
-    private let addButton = AppButton(title: "＋ Add tool float", variant: .muted)
+    private static let addTitle = "＋ Add tool float"
+
+    private var addButton = AppButton(title: addTitle, variant: .muted)
     private weak var caption: NSTextField?
     private weak var emptyHint: NSTextField?
     private weak var reorderHint: NSTextField?
@@ -22,6 +24,7 @@ final class SettingsToolsSection: SettingsSection {
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
 
+        addButton = AppButton(title: Self.addTitle, variant: .muted)
         addButton.isKeyboardFocusable = true
         addButton.onArrowUp = { [weak self] in self?.moveFocus(from: self?.addButton, delta: -1) }
         addButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
@@ -40,8 +43,6 @@ final class SettingsToolsSection: SettingsSection {
         emptyHint?.textColor = Theme.current.chrome.ink(.muted)
         reorderHint?.textColor = Theme.current.chrome.ink(.faint)
         droppedFloatNotice?.textColor = Theme.current.chrome.warning.nsColor
-        rows.forEach { $0.reapplyTheme() }
-        addButton.reapplyTheme()
     }
 
     private func droppedFloatMessages() -> [String] {
@@ -230,7 +231,6 @@ final class ToolFloatRow: SettingsFocusRow {
         titleLabel.textColor = Theme.current.chrome.ink(.normal)
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         messageLabel.textColor = Theme.current.chrome.warning.nsColor
-        (shortcutView as? KeycapView)?.reapplyTheme()
         (shortcutView as? NSTextField)?.textColor = Self.unsetInk
         super.reapplyTheme()
     }

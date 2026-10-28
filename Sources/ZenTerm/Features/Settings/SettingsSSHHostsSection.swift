@@ -23,7 +23,8 @@ final class SettingsSSHHostsSection: SettingsSection {
     private var statusObserver: NSObjectProtocol?
     private var configObserver: NSObjectProtocol?
     private var hostRows: [SSHHostRow] = []
-    private let addButton = AppButton(title: "＋ Add Host…", variant: .muted)
+    private static let addTitle = "＋ Add Host…"
+    private var addButton = AppButton(title: addTitle, variant: .muted)
     private var caption: NSTextField?
     private var emptyNote: NSTextField?
     private var rowsStack: NSStackView?
@@ -41,6 +42,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
 
+        addButton = AppButton(title: Self.addTitle, variant: .muted)
         addButton.isKeyboardFocusable = true
         addButton.onArrowUp = { [weak self] in self?.moveFocus(from: self?.addButton, delta: -1) }
         addButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
@@ -60,8 +62,6 @@ final class SettingsSSHHostsSection: SettingsSection {
     func reapplyTheme() {
         caption?.textColor = Theme.current.chrome.ink(.muted)
         emptyNote?.textColor = Theme.current.chrome.ink(.muted)
-        hostRows.forEach { $0.reapplyTheme() }
-        addButton.reapplyTheme()
     }
 
     private func focusInitialStop() {
