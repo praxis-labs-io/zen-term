@@ -222,7 +222,7 @@ explicit optional and re-point only when non-nil.
 ## Theme recolor
 
 **`reapplyTheme` recolors only.** A view that reads the keymap or terminal behavior needs
-`reapplyKeymap` or `reapplyTerminalBehavior` wired from `WindowController` or `ConfigApplier`.
+`reapplyKeymap` or `reapplyTerminalBehavior` wired from a config observer.
 
 **A view held out of the hierarchy misses the theme walk.** `reapplyThemeTree()` reaches subviews
 only, so a child a parent keeps but removes (a placeholder swapped for a list, a rail swapped for a
