@@ -97,8 +97,8 @@ final class UpdateController {
         render()
     }
 
-    func refreshKeycap() {
-        card?.reapplyTheme()
+    func reapplyKeymap() {
+        card?.reapplyKeymap()
     }
 
     /// Morphs a live card even when `keyController()` is nil: a foreign key window would strand it with spent replies.

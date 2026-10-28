@@ -63,7 +63,7 @@ final class ConfigApplierDifferentialTests: XCTestCase {
                     return true
                 },
                 retractConflicts: { [unowned self] in self.conflicts = [] },
-                refreshUpdateCardKeycap: { [unowned self] in self.card.reapplyTheme() },
+                refreshUpdateCardKeycap: { [unowned self] in self.card.reapplyKeymap() },
                 applyAutoCheckSetting: { [unowned self] in
                     self.autoChecks = GeneralConfig.current.automaticUpdateChecks
                 },

@@ -67,7 +67,7 @@ final class UpdateCardView: ShadowCardView, ThemeReapplying {
         header.spacing = ChromeMetrics.Spacing.s6
         header.addArrangedSubview(titleLabel)
         header.addArrangedSubview(headerSpacer)
-        refreshKeycap()
+        reapplyKeymap()
 
         bodyColumn.orientation = .vertical
         bodyColumn.alignment = .leading
@@ -203,11 +203,10 @@ final class UpdateCardView: ShadowCardView, ThemeReapplying {
     func reapplyTheme() {
         applyColors()
         CardChrome.reapplyTheme(to: self, tier: .float)
-        refreshKeycap()
         render()
     }
 
-    private func refreshKeycap() {
+    func reapplyKeymap() {
         let glyph = Chord.displayed(.checkForUpdates, in: GeneralConfig.current.keymap)?.displayGlyph ?? ""
         guard glyph != checkKeycap?.shortcut else { return }
         checkKeycap.map { header.removeArrangedSubview($0) }

@@ -117,4 +117,43 @@ final class UpdateCardTests: WindowTestCase {
         }
         return nil
     }
+
+    private func bindCheckForUpdates() -> Chord {
+        let original = GeneralConfig.current
+        addTeardownBlock { @MainActor in GeneralConfig.setCurrentForTesting(original) }
+        let chord = Chord(command: true, shift: true, option: true, control: true, key: "u")
+        var config = GeneralConfig.builtIn
+        config.keymap = config.keymap.filter { $0.value != .checkForUpdates }
+        config.keymap[chord] = .checkForUpdates
+        GeneralConfig.setCurrentForTesting(config)
+        return chord
+    }
+
+    private func keycaps(in card: UpdateCardView) -> [String] {
+        func descendants(of view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants(of: $0) } }
+        return descendants(of: card).compactMap { ($0 as? KeycapView)?.shortcut }
+    }
+
+    func test_reapplyKeymap_showsANewlyBoundCheckForUpdatesShortcut() {
+        GeneralConfig.setCurrentForTesting(.builtIn)
+        let card = UpdateCardView(state: .ready(version: "9.9.9"), actions: .init())
+        let chord = bindCheckForUpdates()
+        XCTAssertFalse(keycaps(in: card).contains(chord.displayGlyph), "premise: built before the bind")
+
+        card.reapplyKeymap()
+
+        XCTAssertTrue(keycaps(in: card).contains(chord.displayGlyph), "the new shortcut never reached the card")
+    }
+
+    func test_reapplyTheme_leavesTheShortcutAlone() {
+        GeneralConfig.setCurrentForTesting(.builtIn)
+        let card = UpdateCardView(state: .ready(version: "9.9.9"), actions: .init())
+        let before = keycaps(in: card)
+        let chord = bindCheckForUpdates()
+
+        card.reapplyTheme()
+
+        XCTAssertFalse(keycaps(in: card).contains(chord.displayGlyph), "a recolor re-read the keymap")
+        XCTAssertEqual(before, keycaps(in: card))
+    }
 }
