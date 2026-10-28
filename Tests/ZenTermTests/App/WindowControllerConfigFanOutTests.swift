@@ -387,16 +387,24 @@ final class WindowControllerConfigFanOutTests: WindowTestCase {
         func keycap(in item: NSView?) -> String? {
             item?.subviews.compactMap { ($0 as? KeycapView)?.shortcut }.first
         }
+        func hiddenHints() throws -> [String: Bool] {
+            let labels = ["new workspace", "open", "switch", "new worktree", "remove worktree", "close workspace"]
+            return try Dictionary(uniqueKeysWithValues: labels.map { ($0, try XCTUnwrap(footerItem($0)).isHidden) })
+        }
         let original = try XCTUnwrap(Chord.displayed(.removeWorktree, in: config.keymap)?.displayGlyph)
         XCTAssertEqual(keycap(in: try footerItem("remove worktree")), original, "premise: the default chord")
+        let hiddenBefore = try hiddenHints()
+        XCTAssertEqual(hiddenBefore["remove worktree"], true, "premise: no worktree is selected")
 
         let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
         config.keymap = config.keymap.filter { $0.value != .removeWorktree }
         config.keymap[rebound] = .removeWorktree
         GeneralConfig.setCurrentForTesting(config)
-        post(.keymap)
+        NotificationCenter.default.post(
+            name: .configDidChange, object: nil, userInfo: [ConfigChange.userInfoKey: ConfigChange.keymap])
 
         let item = try XCTUnwrap(footerItem("remove worktree"), "the rebind dropped the hint")
         XCTAssertEqual(keycap(in: item), rebound.displayGlyph, "the footer still names the chord that moved")
+        XCTAssertEqual(try hiddenHints(), hiddenBefore, "the rebuilt hints ignored the selection")
     }
 }
