@@ -118,10 +118,10 @@ final class PanelHostViewTests: WindowTestCase {
         panel.reapplyTerminalBehavior()
         panel.layoutSubtreeIfNeeded()
 
-        let inRing = NSPoint(x: 5, y: panel.bounds.midY)
-        XCTAssertGreaterThan(
-            paintedAlpha(of: panel, at: inRing), 0,
-            "dialling the alpha down must bring the ring up on an already-built panel")
+        let inRing = paintedAlpha(of: panel, at: NSPoint(x: 5, y: panel.bounds.midY))
+        XCTAssertGreaterThan(inRing, 0, "dialling the alpha down must bring the ring up on an already-built panel")
+        XCTAssertLessThan(inRing, 0.99, "the ring still paints the opaque fill")
+        XCTAssertNil(panel.paintedBackgroundForTesting.fill, "a translucent terminal panel must stop filling its clip")
     }
 
     func test_drawerMeta_showsHeaderImmediately() {
