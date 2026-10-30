@@ -83,6 +83,7 @@ final class HostRouteView: NSView, ThemeReapplying {
         line.strokeColor = Theme.current.chrome.ink(.muted).cgColor
     }
 
+    var macForTesting: RouteEndpointView { mac }
     var destinationForTesting: RouteEndpointView { destination }
     var lineStrokeForTesting: CGColor? { line.strokeColor }
     var lineWidthForTesting: CGFloat { lineHost.frame.width }

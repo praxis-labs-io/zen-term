@@ -91,5 +91,7 @@ final class RouteEndpointView: NSView, ThemeReapplying {
         statusMark.lineWidth = ChromeMetrics.Border.width
     }
 
+    var tileFillForTesting: CGColor? { tile.layer?.backgroundColor }
+    var nameColorForTesting: NSColor? { name.textColor }
     var statusMarkForTesting: (fill: CGColor?, stroke: CGColor?) { (statusMark.fillColor, statusMark.strokeColor) }
 }
