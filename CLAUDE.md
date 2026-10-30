@@ -1,9 +1,7 @@
 # zen-term: project rules
 
-Native macOS terminal. **The chrome is the product; the terminal is a drop-in
-dependency behind the `TerminalSurface` seam.** Swift + SwiftPM + AppKit over
-libghostty (the sole backend, embedded as `GhosttyKit`). Global workflow rules in
-`~/.claude/CLAUDE.md` apply; this file only adds what is specific to zen-term.
+Native macOS terminal. Swift + SwiftPM + AppKit over
+libghostty (the sole backend, embedded as `GhosttyKit`).
 
 ## The docs
 
@@ -11,19 +9,19 @@ libghostty (the sole backend, embedded as `GhosttyKit`). Global workflow rules i
 wrong, the change fixes it. Docs never describe cancelled features, speculative work,
 or how something used to be.
 
-| File | Holds |
-|---|---|
-| `docs/architecture.md` | how the app fits together, and the constraints that shape it |
-| `docs/swift-conventions.md` | AppKit and Swift traps past what a linter catches |
-| `docs/design-system.md` | the chrome's tokens and the rules for using them |
-| `docs/releasing.md` | `bin/release`, versioning guards, notarization, Sparkle |
-| `docs/third-party-notices.md` | re-probing the notices after a ghostty pin move |
-| `docs/control-protocol.md` | the control socket wire contract `zen` speaks |
-| `docs/nvim-navigator-protocol.md` | the nav socket wire contract |
-| `docs/nvim-theme-protocol.md` | the published theme contract |
-| `docs/config/*` | the reference config files users open |
-| `docs/release-notes/*` | one curated file per version |
-| `docs/CONTRIBUTING.md` | what an outside contributor reads: setup, the gate, the boundaries |
+| File                              | Holds                                                              |
+| --------------------------------- | ------------------------------------------------------------------ |
+| `docs/architecture.md`            | how the app fits together, and the constraints that shape it       |
+| `docs/swift-conventions.md`       | AppKit and Swift traps past what a linter catches                  |
+| `docs/design-system.md`           | the chrome's tokens and the rules for using them                   |
+| `docs/releasing.md`               | `bin/release`, versioning guards, notarization, Sparkle            |
+| `docs/third-party-notices.md`     | re-probing the notices after a ghostty pin move                    |
+| `docs/control-protocol.md`        | the control socket wire contract `zen` speaks                      |
+| `docs/nvim-navigator-protocol.md` | the nav socket wire contract                                       |
+| `docs/nvim-theme-protocol.md`     | the published theme contract                                       |
+| `docs/config/*`                   | the reference config files users open                              |
+| `docs/release-notes/*`            | one curated file per version                                       |
+| `docs/CONTRIBUTING.md`            | what an outside contributor reads: setup, the gate, the boundaries |
 
 **Internal docs accumulate stale detail, so they hold only what is load-bearing now.**
 No history, rejected designs, measurements, ticket ids, UI copy reasoning, or anything
@@ -66,8 +64,8 @@ of the gate and CI enforces them. While iterating, run the tests that cover the 
 
 **Test what can be silently dead. Show the rest.** A test earns its keep where a
 thing can be broken while looking fine. Anything you would catch by glancing at the
-screen goes in the runbook: Drew is at the machine and would rather look than read
-an assertion.
+screen goes in the runbook
+``
 
 - **AppKit controls get window-based interaction tests, not state-only tests.**
   Drive the real control in a real window. A test that only checks the backing
@@ -75,7 +73,7 @@ an assertion.
 - **The event has to be real too.** AppKit puts `.function` and `.numericPad` on
   every arrow `keyDown`, so a synthesized `modifierFlags: .option` is a keystroke
   macOS never sends. Match modifiers against the reservable set (`[.command,
-  .shift, .option, .control]`), never `.deviceIndependentFlagsMask`.
+.shift, .option, .control]`), never `.deviceIndependentFlagsMask`.
 - **Prove a new test can fail.** Reinstate the bug and watch it go red. A test
   written against working code can assert the wrong thing and pass for the wrong
   reason.
@@ -88,7 +86,7 @@ The failures behind each of these are in `docs/swift-conventions.md`.
 
 **A runbook is handed over in chat, never written to disk** (the `runbook` and
 `interactive-runbook` skills). A new chord always gets a line, because a keyboard
-path crosses `KeyInterceptor`'s event monitor *before* the responder chain and no
+path crosses `KeyInterceptor`'s event monitor _before_ the responder chain and no
 view-level test covers that.
 
 ## Architecture: the seam (load-bearing)
@@ -99,7 +97,7 @@ view-level test covers that.
   `TabKit`, `AppLog`, Sparkle) and must never `import GhosttyKit`. This is enforced at the module level
   in `Package.swift`: the app target has no backend dependency to import.
 - Anything only one backend can do stays **below** the seam. The protocol grows only
-  to hold what the chrome needs from *any* terminal.
+  to hold what the chrome needs from _any_ terminal.
 
 ## Swift conventions
 
@@ -107,7 +105,7 @@ view-level test covers that.
 - Public API in `TerminalKit` is `public`. Prefer `struct` / `final class` / `type`.
 - No force-unwrap except documented AppKit (`contentView!`).
 - **Never block the main thread.** No synchronous subprocess (`waitUntilExit`),
-  filesystem walk, or blocking I/O on the main queue. The chrome *is* the product,
+  filesystem walk, or blocking I/O on the main queue. The chrome _is_ the product,
   and a stalled main thread is a beachball. Work off-main, hop back to main
   for the UI update.
 - Per global rules: no `TODO`/`FIXME`/`HACK` markers. Fix it now, or file a Linear
@@ -122,6 +120,7 @@ view-level test covers that.
 
   Nothing inside a function or method body. If code needs more than these allow, fix
   the naming or structure instead.
+
 - **Read `docs/swift-conventions.md` before touching window sizing, event routing,
   layers, config live-apply, or interaction tests.** Add to it when a new trap bites.
 
