@@ -4,6 +4,7 @@ final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
     private static let width: CGFloat = 220
     private static let padding = ChromeMetrics.Spacing.s12
     private static let resetSlot = ChromeMetrics.Height.control + ChromeMetrics.Spacing.s8
+    private static let gap = ChromeMetrics.Spacing.s6
 
     static func inputWidth(withReset: Bool) -> CGFloat {
         width - padding - padding - (withReset ? resetSlot : 0)
@@ -27,6 +28,8 @@ final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
         accessibilityLabel: "Reset to default", restsFilled: true
     ) { [weak self] in self?.onResetToDefault?() }
     var onResetToDefault: (() -> Void)?
+    private var originPins: (leading: NSLayoutConstraint, edge: NSLayoutConstraint)?
+    private weak var anchor: NSView?
 
     init() {
         super.init(frame: .zero)
@@ -104,6 +107,39 @@ final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
     var badgeFillForTesting: CGColor? { badge.fillForTesting }
     var badgeIconTintForTesting: NSColor? { badge.iconTintForTesting }
 
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        originPins = nil
+    }
+
+    func place(near anchor: NSView) {
+        self.anchor = anchor
+        reposition()
+    }
+
+    private func reposition() {
+        guard let anchor, let host = superview else { return }
+        let pins = originPins ?? makeOriginPins(in: host)
+        originPins = pins
+        layoutSubtreeIfNeeded()
+        let origin = HoverCardView.placementFrame(
+            size: fittingSize, anchor: anchor.convert(anchor.bounds, to: host), in: host, gap: Self.gap
+        ).origin
+        pins.leading.constant = origin.x
+        pins.edge.constant = host.isFlipped ? origin.y : -origin.y
+        host.layoutSubtreeIfNeeded()
+    }
+
+    private func makeOriginPins(in host: NSView) -> (leading: NSLayoutConstraint, edge: NSLayoutConstraint) {
+        let pins = (
+            leading: leadingAnchor.constraint(equalTo: host.leadingAnchor),
+            edge: host.isFlipped
+                ? topAnchor.constraint(equalTo: host.topAnchor) : bottomAnchor.constraint(equalTo: host.bottomAnchor)
+        )
+        NSLayoutConstraint.activate([pins.leading, pins.edge])
+        return pins
+    }
+
     func reapplyTheme() {
         CardChrome.reapplyTheme(to: self, tier: .overlay)
         paintColors()
@@ -139,6 +175,7 @@ final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
             content.topAnchor.constraint(equalTo: previewHost.topAnchor),
             content.bottomAnchor.constraint(equalTo: previewHost.bottomAnchor),
         ])
+        reposition()
     }
 
     var inputWidthForTesting: CGFloat { previewHost.superview?.frame.width ?? 0 }
@@ -152,10 +189,18 @@ final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
     func showError(_ text: String) {
         errorLabel.stringValue = text
         errorLabel.isHidden = false
+        reposition()
     }
-    func clearError() { errorLabel.isHidden = true }
 
-    func setCanResetToDefault(_ canReset: Bool) { resetButton.isHidden = !canReset }
+    func clearError() {
+        errorLabel.isHidden = true
+        reposition()
+    }
+
+    func setCanResetToDefault(_ canReset: Bool) {
+        resetButton.isHidden = !canReset
+        reposition()
+    }
 
     func showInstructions() {
         successText = nil
@@ -188,6 +233,7 @@ final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
             view.topAnchor.constraint(equalTo: statusHost.topAnchor),
             view.bottomAnchor.constraint(equalTo: statusHost.bottomAnchor),
         ])
+        reposition()
     }
 
     private static func keyCap(_ text: String) -> NSView {

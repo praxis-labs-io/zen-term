@@ -242,17 +242,14 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         hintBubble?.clearError()
         guard chord.command || chord.shift || chord.option || chord.control else {
             hintBubble?.showError("Add at least one modifier (⌘ ⇧ ⌥ ⌃).")
-            positionHint()
             return
         }
         if let menuItem = MenuShortcuts.owner(of: chord) {
             hintBubble?.showError("\(chord.displayGlyph) is the \(menuItem) menu shortcut.")
-            positionHint()
             return
         }
         if let conflict = chordConflict(chord) {
             hintBubble?.showError(conflict)
-            positionHint()
             return
         }
         commit(chord)
@@ -270,7 +267,6 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         chordChip.render(shortcut: chord.displayGlyph)
         hintBubble?.setPreview(chord.displayGlyph)
         hintBubble?.showSuccess("Shortcut saved.")
-        positionHint()
         let close = DispatchWorkItem { [weak self] in
             self?.hideHint()
             self?.chordChip.setCapturing(false)
@@ -303,28 +299,14 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         addSubview(backdrop)
         hintBackdrop = backdrop
         let bubble = KeybindHintBubble()
-        bubble.translatesAutoresizingMaskIntoConstraints = true
         addSubview(bubble)
         hintBubble = bubble
-        positionHint()
+        hintBubble?.place(near: chordChip)
     }
 
     private func cancelCapture() {
         endCapture()
         renderChord()
-    }
-
-    private func positionHint() {
-        guard let bubble = hintBubble else { return }
-        bubble.layoutSubtreeIfNeeded()
-        let size = bubble.fittingSize
-        let chipRect = chordChip.convert(chordChip.bounds, to: self)
-        let x = max(8, min(chipRect.midX - size.width / 2, bounds.width - size.width - 8))
-        let maxY = max(8, bounds.height - size.height - 8)
-        var y = chipRect.minY - size.height - 6
-        if y < 8 { y = chipRect.maxY + 6 }
-        y = max(8, min(y, maxY))
-        bubble.frame = NSRect(x: x, y: y, width: size.width, height: size.height)
     }
 
     private func hideHint() {

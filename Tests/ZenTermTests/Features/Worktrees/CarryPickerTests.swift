@@ -24,12 +24,15 @@ final class CarryPickerTests: WindowTestCase {
         let picker = CarryPicker()
         picker.settle = 0
         picker.probe = { _, _ in catalogProvider() }
-        picker.translatesAutoresizingMaskIntoConstraints = true
         let win = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 460, height: 400),
             styleMask: [.borderless], backing: .buffered, defer: false)
         win.contentView?.addSubview(picker)
-        picker.frame = NSRect(x: 20, y: 320, width: 300, height: ChromeMetrics.Height.control)
+        NSLayoutConstraint.activate([
+            picker.leadingAnchor.constraint(equalTo: win.contentView!.leadingAnchor, constant: 20),
+            picker.topAnchor.constraint(equalTo: win.contentView!.topAnchor, constant: 20),
+            picker.widthAnchor.constraint(equalToConstant: 300),
+        ])
         window = win
         return picker
     }
@@ -81,6 +84,16 @@ final class CarryPickerTests: WindowTestCase {
             picker.dropdownForTesting?.itemsForTesting.map(\.title), ["node_modules", ".env"])
         XCTAssertNil(picker.statusForTesting)
         XCTAssertNotNil(picker.focusStop)
+    }
+
+    func test_aLoadedPicker_conflictsWithNoConstraint() {
+        let conflicts = constraintConflicts {
+            let picker = picker(ignoring: ["node_modules", ".env"])
+            load(picker)
+            window?.layoutIfNeeded()
+        }
+
+        XCTAssertEqual(conflicts, [])
     }
 
     func test_nothingIsChosenUntilItIsPicked() {

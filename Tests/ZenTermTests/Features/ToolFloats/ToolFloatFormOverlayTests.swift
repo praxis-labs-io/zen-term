@@ -142,6 +142,17 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         field(in: overlay, placeholder: "npm run dev").onSubmit?()
     }
 
+    func test_recordingAShortcut_showsTheHintWithoutConflictingConstraints() {
+        let (overlay, capturer, _) = mount()
+
+        let conflicts = constraintConflicts {
+            capture(novelChord, in: overlay, capturer)
+            overlay.layoutSubtreeIfNeeded()
+        }
+
+        XCTAssertEqual(conflicts, [])
+    }
+
     func test_commandReturnWhileDismissing_doesNotSubmit() throws {
         let (overlay, capturer, sink) = mount()
         field(in: overlay, placeholder: "Open GitDash").setText("dev")

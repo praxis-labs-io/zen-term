@@ -22,6 +22,22 @@ final class TabBarViewTests: WindowTestCase {
         TabBarItem(id: TabID(id), index: index, title: title, isActive: active, attentionState: .idle)
     }
 
+    func test_hoveringAChip_layingOutItsCloseButton_conflictsWithNoConstraint() {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
+        mount(tabBar)
+
+        let conflicts = constraintConflicts {
+            tabBar.render([item(1, "one", index: 1, active: true), item(2, "two", index: 2)])
+            tabBar.layoutSubtreeIfNeeded()
+            for chip in tabBar.chipsForTesting {
+                chip.setHover(true)
+                chip.layoutSubtreeIfNeeded()
+            }
+        }
+
+        XCTAssertEqual(conflicts, [])
+    }
+
     func test_render_keepsEachTabsChipAcrossARerender() throws {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         mount(tabBar)
@@ -583,6 +599,19 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertEqual(slot.midY, chips[3].bounds.midY, accuracy: 0.01, "centered in the chip")
         XCTAssertEqual(chips[3].closeFrameForTesting.midX, dotCenter.x, accuracy: 0.01)
         XCTAssertEqual(chips[3].closeFrameForTesting.midY, dotCenter.y, accuracy: 0.01)
+    }
+
+    func test_theCloseButton_fillsTheSlotTheDotSitsIn() throws {
+        let (bar, _) = settledBar([
+            TabBarItem(id: TabID(1), index: 1, title: "idle", isActive: true, attentionState: .idle),
+            TabBarItem(id: TabID(2), index: 2, title: "asks", isActive: false, attentionState: .waiting),
+        ])
+        let chip = bar.chipsForTesting[1]
+
+        try hover(chip)
+        bar.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(chip.closeFrameForTesting, chip.closeSlotForTesting)
     }
 
     func test_theLabelFades_onlyWhileTheCloseButtonShows() throws {

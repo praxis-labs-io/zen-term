@@ -50,6 +50,16 @@ final class LinkPreviewTests: WindowTestCase {
         XCTAssertTrue(shownPreviews().isEmpty, "leaving the link left the preview mounted")
     }
 
+    func test_showingAPreview_conflictsWithNoConstraint() throws {
+        let surface = try XCTUnwrap(controller.allSurfaces.first)
+
+        let conflicts = constraintConflicts {
+            controller.surface(surface, hoveredLinkDidChange: "https://example.com/docs")
+        }
+
+        XCTAssertEqual(conflicts, [])
+    }
+
     func test_aSecondLinkReplacesThePreview() throws {
         let surface = try XCTUnwrap(controller.allSurfaces.first)
 
