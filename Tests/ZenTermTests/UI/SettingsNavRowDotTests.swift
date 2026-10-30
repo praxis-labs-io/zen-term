@@ -10,7 +10,7 @@ final class SettingsNavRowDotTests: XCTestCase {
         row.setDot({ ink }, accessibilityValue: "Online")
 
         ink = NSColor.systemGreen
-        row.reapplyTheme()
+        row.reapplyThemeTree()
 
         XCTAssertEqual(row.dotColorForTesting, NSColor.systemGreen.cgColor)
     }

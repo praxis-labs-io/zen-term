@@ -1,7 +1,7 @@
 import AppKit
 import AppLog
 
-final class UpdateCardView: ShadowCardView {
+final class UpdateCardView: ShadowCardView, ThemeReapplying {
     enum State: Equatable {
         case available(version: String, current: String, notes: [String], notesURL: URL?)
         case downloading(fraction: Double?)
@@ -147,6 +147,7 @@ final class UpdateCardView: ShadowCardView {
             progressBar.fraction = fraction
             bodyColumn.addArrangedSubview(progressBar)
             progressBar.widthAnchor.constraint(equalTo: bodyColumn.widthAnchor).isActive = true
+            progressBar.reapplyThemeTree()
 
         case .ready(let version):
             addBodyLabel(
@@ -192,19 +193,17 @@ final class UpdateCardView: ShadowCardView {
 
     private func applyColors() {
         titleLabel.textColor = Theme.current.chrome.ink(.normal)
-        badge.reapplyTheme()
-        progressBar.reapplyTheme()
     }
 
     var badgeFillForTesting: CGColor? { badge.fillForTesting }
     var badgeIconTintForTesting: NSColor? { badge.iconTintForTesting }
     var badgeForTesting: IconBadge { badge }
+    var progressBarForTesting: UpdateProgressBar { progressBar }
 
     func reapplyTheme() {
         applyColors()
         CardChrome.reapplyTheme(to: self, tier: .float)
         refreshKeycap()
-        checkKeycap?.reapplyTheme()
         render()
     }
 

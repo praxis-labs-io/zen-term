@@ -97,7 +97,7 @@ final class UpdateController {
         render()
     }
 
-    func reapplyTheme() {
+    func refreshKeycap() {
         card?.reapplyTheme()
     }
 

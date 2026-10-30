@@ -1,6 +1,6 @@
 import AppKit
 
-final class HostRouteView: NSView {
+final class HostRouteView: NSView, ThemeReapplying {
     static let preferredLineLength: CGFloat = 120
     private static let lineHeight: CGFloat = ChromeMetrics.Height.sm
     private static let minimumLineLength: CGFloat = 24
@@ -80,11 +80,10 @@ final class HostRouteView: NSView {
     func setStatus(_ status: SSHHostStatus) { destination.setStatus(status) }
 
     func reapplyTheme() {
-        mac.reapplyTheme()
-        destination.reapplyTheme()
         line.strokeColor = Theme.current.chrome.ink(.muted).cgColor
     }
 
+    var macForTesting: RouteEndpointView { mac }
     var destinationForTesting: RouteEndpointView { destination }
     var lineStrokeForTesting: CGColor? { line.strokeColor }
     var lineWidthForTesting: CGFloat { lineHost.frame.width }

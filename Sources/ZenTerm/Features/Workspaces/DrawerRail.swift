@@ -1,7 +1,7 @@
 import AppKit
 
 // A closed drawer in a tab drawing, drawn as a dashed rail that opens into a command field.
-final class DrawerRail: NSView {
+final class DrawerRail: NSView, ThemeReapplying {
     let region: Workspace.Region
     var onOpen: (() -> Void)?
     var onEdge: ((RegionCommandField.Edge) -> Void)?
@@ -15,6 +15,7 @@ final class DrawerRail: NSView {
     private var hasFocus = false
 
     var tooltipLabelForTesting: String { tooltip.label }
+    var borderStrokeForTesting: CGColor? { border.strokeColor }
 
     init(region: Workspace.Region) {
         self.region = region

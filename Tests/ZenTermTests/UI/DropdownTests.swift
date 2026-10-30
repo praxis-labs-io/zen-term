@@ -373,7 +373,7 @@ final class DropdownTests: WindowTestCase {
         let before = dropdown.queryFieldTextColorForTesting
 
         Theme.setCurrentForTesting(AppTheme(terminal: Self.contrastingTheme()))
-        dropdown.reapplyTheme()
+        dropdown.reapplyThemeTree()
 
         XCTAssertNotEqual(
             dropdown.queryFieldTextColorForTesting, before, "the query stayed in the old theme")
@@ -390,7 +390,7 @@ final class DropdownTests: WindowTestCase {
         let staleRow = try XCTUnwrap(dropdown.rowFillsForTesting.first)
 
         Theme.setCurrentForTesting(AppTheme(terminal: Self.contrastingTheme()))
-        dropdown.reapplyTheme()
+        dropdown.reapplyThemeTree()
 
         XCTAssertTrue(dropdown.isPopoverOpen, "the list has to survive the recolour")
         XCTAssertEqual(dropdown.queryForTesting, "nor", "the query survives the rebuild")

@@ -1,6 +1,6 @@
 import AppKit
 
-final class KeybindChip: NSView {
+final class KeybindChip: NSView, ThemeReapplying {
     var onActivate: (() -> Void)?
     var onRemove: (() -> Void)?
     var onArrowUp: (() -> Void)?

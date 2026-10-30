@@ -55,7 +55,7 @@ final class CheckboxDropdownTests: WindowTestCase {
         let staleRow = try XCTUnwrap(dropdown.rowViewsForTesting.first)
 
         Theme.setCurrentForTesting(AppTheme(terminal: Theme.builtIn.terminal, accent: .magenta))
-        dropdown.reapplyTheme()
+        dropdown.reapplyThemeTree()
 
         XCTAssertTrue(dropdown.isPopoverOpen, "the list has to survive the recolour")
         XCTAssertFalse(dropdown.rowViewsForTesting.first === staleRow, "the list is still painted in the old theme")

@@ -1,7 +1,7 @@
 import AppKit
 
 /// Not `NSProgressIndicator`, which tints from `effectiveAppearance` rather than the theme.
-final class UpdateProgressBar: NSView {
+final class UpdateProgressBar: NSView, ThemeReapplying {
     private let fill = CALayer()
     private static let thickness: CGFloat = 4
     private static let sweepFraction: CGFloat = 0.3
@@ -25,6 +25,8 @@ final class UpdateProgressBar: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    var fillForTesting: CGColor? { fill.backgroundColor }
 
     /// Intrinsic, because a height constraint would be re-added on every card rebuild.
     override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: Self.thickness) }

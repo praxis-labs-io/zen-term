@@ -1,6 +1,6 @@
 import AppKit
 
-final class IconPickerField: NSView {
+final class IconPickerField: NSView, ThemeReapplying {
     private(set) var selected: String
     var onChange: ((String) -> Void)?
     var onArrowUp: (() -> Void)?

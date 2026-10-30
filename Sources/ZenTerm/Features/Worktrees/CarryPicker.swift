@@ -35,6 +35,7 @@ final class CarryPicker: NSView, ThemeReapplying {
     var summaryForTesting: String { summary() }
     var detailForTesting: String { detail.stringValue }
     var dropdownForTesting: CheckboxDropdown? { dropdown }
+    var statusBorderForTesting: CGColor? { status.layer?.borderColor }
 
     private let slot = NSStackView()
     private let detail = NSTextField(labelWithString: "")
@@ -95,9 +96,7 @@ final class CarryPicker: NSView, ThemeReapplying {
     }
 
     func reapplyTheme() {
-        status.reapplyTheme()
         detail.textColor = Theme.current.chrome.ink(.muted)
-        dropdown?.reapplyTheme()
     }
 
     private func reload() {
@@ -195,6 +194,7 @@ final class CarryPicker: NSView, ThemeReapplying {
             status.set(title: text, isLoading: isLoading)
             status.isHidden = false
             slot.addArrangedSubview(status)
+            status.reapplyThemeTree()
             status.widthAnchor.constraint(equalTo: slot.widthAnchor).isActive = true
             guard placeholderHadFocus || listHadFocus else { return }
             if status.isFocusable {
@@ -253,7 +253,7 @@ final class CarryPicker: NSView, ThemeReapplying {
         return catalog.indices.filter { shown.contains(catalog[$0]) }
     }
 
-    private final class PlaceholderSelect: NSView {
+    private final class PlaceholderSelect: NSView, ThemeReapplying {
         private let label = NSTextField(labelWithString: "")
         private let spinner = Spinner()
 
@@ -337,7 +337,6 @@ final class CarryPicker: NSView, ThemeReapplying {
         func reapplyTheme() {
             PopoverButtonStyle.applyRestFill(to: self)
             applyColors()
-            spinner.reapplyTheme()
         }
 
         private func restyle() {

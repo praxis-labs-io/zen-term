@@ -7,7 +7,7 @@ final class SettingsToolsSection: SettingsSection {
     var onReorder: (([ToolFloat]) -> Void)?
 
     private var rows: [ToolFloatRow] = []
-    private let addButton = AppButton(title: "＋ Add tool float", variant: .muted)
+    private var addButton: AppButton?
     private weak var caption: NSTextField?
     private weak var emptyHint: NSTextField?
     private weak var reorderHint: NSTextField?
@@ -22,26 +22,26 @@ final class SettingsToolsSection: SettingsSection {
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
 
-        addButton.isKeyboardFocusable = true
-        addButton.onArrowUp = { [weak self] in self?.moveFocus(from: self?.addButton, delta: -1) }
-        addButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
-        addButton.onTab = { [weak self] in self?.moveTab(from: self?.addButton, delta: 1) }
-        addButton.onBacktab = { [weak self] in self?.moveTab(from: self?.addButton, delta: -1) }
-        addButton.onTap = { [weak self] in self?.onEditFloat?(nil) }
+        let button = AppButton(title: "＋ Add tool float", variant: .muted)
+        button.isKeyboardFocusable = true
+        button.onArrowUp = { [weak self] in self?.moveFocus(from: self?.addButton, delta: -1) }
+        button.onArrowLeft = { [weak self] in self?.onExitToNav?() }
+        button.onTab = { [weak self] in self?.moveTab(from: self?.addButton, delta: 1) }
+        button.onBacktab = { [weak self] in self?.moveTab(from: self?.addButton, delta: -1) }
+        button.onTap = { [weak self] in self?.onEditFloat?(nil) }
+        addButton = button
 
         populateRows()
         return SettingsDetail.scroll(for: stack)
     }
 
-    func detailStops() -> [NSView] { rows + [addButton] }
+    func detailStops() -> [NSView] { rows + [addButton].compactMap { $0 } }
 
     func reapplyTheme() {
         caption?.textColor = Theme.current.chrome.ink(.muted)
         emptyHint?.textColor = Theme.current.chrome.ink(.muted)
         reorderHint?.textColor = Theme.current.chrome.ink(.faint)
         droppedFloatNotice?.textColor = Theme.current.chrome.warning.nsColor
-        rows.forEach { $0.reapplyTheme() }
-        addButton.reapplyTheme()
     }
 
     private func droppedFloatMessages() -> [String] {
@@ -68,7 +68,7 @@ final class SettingsToolsSection: SettingsSection {
     }
 
     private func populateRows() {
-        guard let stack = rowsStack else { return }
+        guard let stack = rowsStack, let addButton else { return }
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         rows = []
 
@@ -144,20 +144,20 @@ final class SettingsToolsSection: SettingsSection {
             self.populateRows()
             guard let moved = self.rows.first(where: { $0.float.id == movedID }) else { return }
             moved.window?.makeFirstResponder(moved)
-            KeyboardFocus.reveal(moved, among: self.rows + [self.addButton])
+            KeyboardFocus.reveal(moved, among: self.detailStops())
         }
     }
 
     private func moveFocus(from view: NSView?, delta: Int) {
         guard let view else { return }
-        let stops = rows + [addButton]
+        let stops = detailStops()
         guard let anchor = stops.firstIndex(where: { $0 === view }) else { return }
         SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta) { $0 }
     }
 
     private func moveTab(from view: NSView?, delta: Int) {
         guard let view else { return }
-        let stops = rows + [addButton]
+        let stops = detailStops()
         guard let anchor = stops.firstIndex(where: { $0 === view }) else { return }
         if delta < 0, anchor == 0 {
             onExitToNav?()
@@ -230,7 +230,6 @@ final class ToolFloatRow: SettingsFocusRow {
         titleLabel.textColor = Theme.current.chrome.ink(.normal)
         subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         messageLabel.textColor = Theme.current.chrome.warning.nsColor
-        (shortcutView as? KeycapView)?.reapplyTheme()
         (shortcutView as? NSTextField)?.textColor = Self.unsetInk
         super.reapplyTheme()
     }

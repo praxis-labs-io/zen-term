@@ -1,7 +1,7 @@
 import AppKit
 
 // `NSProgressIndicator` tints from `effectiveAppearance`, which the chrome bans.
-final class Spinner: NSView {
+final class Spinner: NSView, ThemeReapplying {
     private let pixels: [CALayer] = (0..<6).map { _ in CALayer() }
     private static let size: CGFloat = 13
     private static let pixelSize: CGFloat = 3

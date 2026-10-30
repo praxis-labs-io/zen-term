@@ -1,6 +1,6 @@
 import AppKit
 
-class SidebarJumpRow: NSView, HoverSuppressing {
+class SidebarJumpRow: NSView, HoverSuppressing, ThemeReapplying {
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onEscape: (() -> Void)?

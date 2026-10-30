@@ -112,7 +112,6 @@ final class AppButton: NSButton {
     }
 
     func reapplyTheme() {
-        keycap?.reapplyTheme()
         restyle()
     }
 

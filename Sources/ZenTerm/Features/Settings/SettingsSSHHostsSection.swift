@@ -23,7 +23,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     private var statusObserver: NSObjectProtocol?
     private var configObserver: NSObjectProtocol?
     private var hostRows: [SSHHostRow] = []
-    private let addButton = AppButton(title: "＋ Add Host…", variant: .muted)
+    private var addButton: AppButton?
     private var caption: NSTextField?
     private var emptyNote: NSTextField?
     private var rowsStack: NSStackView?
@@ -41,12 +41,14 @@ final class SettingsSSHHostsSection: SettingsSection {
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
 
-        addButton.isKeyboardFocusable = true
-        addButton.onArrowUp = { [weak self] in self?.moveFocus(from: self?.addButton, delta: -1) }
-        addButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
-        addButton.onTab = { [weak self] in self?.moveTab(from: self?.addButton, delta: 1) }
-        addButton.onBacktab = { [weak self] in self?.moveTab(from: self?.addButton, delta: -1) }
-        addButton.onTap = { [weak self] in self?.onAddHost?() }
+        let button = AppButton(title: "＋ Add Host…", variant: .muted)
+        button.isKeyboardFocusable = true
+        button.onArrowUp = { [weak self] in self?.moveFocus(from: self?.addButton, delta: -1) }
+        button.onArrowLeft = { [weak self] in self?.onExitToNav?() }
+        button.onTab = { [weak self] in self?.moveTab(from: self?.addButton, delta: 1) }
+        button.onBacktab = { [weak self] in self?.moveTab(from: self?.addButton, delta: -1) }
+        button.onTap = { [weak self] in self?.onAddHost?() }
+        addButton = button
 
         observeStatuses()
         observeHostList()
@@ -55,13 +57,11 @@ final class SettingsSSHHostsSection: SettingsSection {
         return SettingsDetail.scroll(for: stack)
     }
 
-    func detailStops() -> [NSView] { hostRows + [addButton] }
+    func detailStops() -> [NSView] { hostRows + [addButton].compactMap { $0 } }
 
     func reapplyTheme() {
         caption?.textColor = Theme.current.chrome.ink(.muted)
         emptyNote?.textColor = Theme.current.chrome.ink(.muted)
-        hostRows.forEach { $0.reapplyTheme() }
-        addButton.reapplyTheme()
     }
 
     private func focusInitialStop() {
@@ -114,7 +114,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private func populate(focusing target: Stop? = nil) {
-        guard let stack = rowsStack else { return }
+        guard let stack = rowsStack, let addButton else { return }
         let restore = target ?? focusedStop()
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         hostRows = []
@@ -190,7 +190,7 @@ final class SettingsSSHHostsSection: SettingsSection {
 
     private func focusedStop() -> Stop? {
         let window = rowsStack?.window
-        if KeyboardFocus.isFocused(addButton, in: window) { return .add }
+        if let addButton, KeyboardFocus.isFocused(addButton, in: window) { return .add }
         return hostRows.first { KeyboardFocus.isFocused($0, in: window) }.map { .row($0.host) }
     }
 

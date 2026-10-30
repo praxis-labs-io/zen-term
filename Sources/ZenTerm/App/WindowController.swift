@@ -529,24 +529,9 @@ final class WindowController: NSObject {
                     self.builtToasts?.reapplyInsets(
                         topInset: Self.toastTopInset, trailingInset: Self.toastTrailingInset)
                 }
-                if change.contains(.theme) || change.contains(.keymap)
-                    || change.contains(.terminalBehavior)
-                {
-                    for controller in self.allTabControllers { controller.reapplyChromeColors() }
-                }
-                if change.contains(.theme) || change.contains(.terminalBehavior) {
-                    self.floats.reapplyTheme()
-                    self.connectView?.reapplyTheme()
-                }
                 if change.contains(.theme) {
                     TooltipPresenter.shared.dismiss()
                     LinkPreviewPresenter.shared.dismiss()
-                    self.tabBar.reapplyTheme()
-                    self.dock.reapplyTheme()
-                    self.sidebar.reapplyTheme()
-                    self.confirmToast?.reapplyTheme()
-                    self.attentionCards.values.forEach { $0.reapplyTheme() }
-                    self.fontSizeCard?.reapplyTheme()
                 }
                 if change.contains(.toasts) {
                     self.builtToasts?.reapplyDuration(GeneralConfig.current.toastDuration)
@@ -561,7 +546,6 @@ final class WindowController: NSObject {
                 if change.contains(.floats) {
                     self.floats.prune(against: ToolFloatCatalog.all)
                     self.dock.setToolFloats(ToolFloatCatalog.userDefined)
-                    self.dock.reapplyTheme()
                     self.renderDock()
                 }
                 if change.contains(.toolbarButtons) {
@@ -576,11 +560,29 @@ final class WindowController: NSObject {
                     self.refreshConnectView()
                     self.renderTabBar()
                 }
-                if change.contains(.theme) || change.contains(.keymap) || change.contains(.floats) {
-                    self.modal?.overlay.reapplyTheme()
-                }
+                self.reapplyThemeTrees(for: change)
             }
         }
+    }
+
+    private var panelHosts: [PanelHostView] { allTabControllers.flatMap(\.panelHosts) }
+
+    private func reapplyThemeTrees(for change: ConfigChange) {
+        if change.contains(.theme) {
+            window.contentView?.reapplyThemeTree()
+            for host in panelHosts where host.window == nil { host.reapplyThemeTree() }
+            if let connectView, connectView.window == nil { connectView.reapplyThemeTree() }
+            return
+        }
+        if change.contains(.keymap) || change.contains(.terminalBehavior) {
+            for host in panelHosts { host.reapplyThemeTree() }
+        }
+        if change.contains(.terminalBehavior) {
+            floats.reapplyTheme()
+            connectView?.reapplyThemeTree()
+        }
+        if change.contains(.keymap) || change.contains(.floats) { modal?.overlay.reapplyThemeTree() }
+        if change.contains(.floats) { dock.reapplyThemeTree() }
     }
 
     private func layoutContainer() {

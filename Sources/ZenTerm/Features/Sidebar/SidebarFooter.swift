@@ -42,10 +42,6 @@ final class SidebarFooter: NSStackView {
         settingsButton.isActive = settings
     }
 
-    func reapplyTheme() {
-        for button in [paletteButton, settingsButton] { button.reapplyTheme() }
-    }
-
     var paletteButtonForTesting: IconButton { paletteButton }
     var settingsButtonForTesting: IconButton { settingsButton }
 }

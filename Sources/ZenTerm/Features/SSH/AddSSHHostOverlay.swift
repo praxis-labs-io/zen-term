@@ -73,13 +73,6 @@ final class AddSSHHostOverlay: ModalShell, ModalOverlay {
 
     override func reapplyTheme() {
         super.reapplyTheme()
-        header.reapplyTheme()
-        errorLabel.reapplyTheme()
-        confirm.card?.reapplyTheme()
-        hostGroup.reapplyTheme()
-        nameGroup.reapplyTheme()
-        let controls: [ThemeReapplying] = [hostField, nameField, cancelButton, submitButton, removeButton]
-        controls.forEach { $0.reapplyTheme() }
         if let editing { showFixedHost(editing.entry.alias, address: editing.address) }
     }
 

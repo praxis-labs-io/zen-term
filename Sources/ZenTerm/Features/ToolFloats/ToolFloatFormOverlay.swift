@@ -9,7 +9,6 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     private let onSubmit: (ToolFloat) -> String?
     private let onDelete: (() -> String?)?
 
-    private var footerDivider: ThemeReapplying?
     private lazy var header = ModalHeader(title: editingFloat == nil ? "New Tool Float" : "Edit Tool Float")
 
     private let titleField = FieldBox(placeholder: "Open GitDash")
@@ -34,8 +33,6 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     private var commandGroup: LabeledField?
     private var dirGroup: LabeledField?
     private var sizeGroup: LabeledField?
-
-    private var captions: [FieldCaption] = []
 
     private var capturedChord: Chord?
     private var hintBubble: KeybindHintBubble?
@@ -78,31 +75,10 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         super.animateOut(completion: completion)
     }
 
-    /// Recolors in place, because a rebuild would lose typed values.
-    override func reapplyTheme() {
-        super.reapplyTheme()
-        hintBubble?.reapplyTheme()
-        header.reapplyTheme()
-        footerDivider?.reapplyTheme()
-        errorLabel.reapplyTheme()
-
-        let controls: [ThemeReapplying] = [
-            titleField, commandField, dirPicker, widthField, heightField, gitSegment,
-            persistSegment, toolbarSegment, cancelButton, submitButton, deleteButton,
-        ]
-        controls.forEach { $0.reapplyTheme() }
-        chordChip.reapplyTheme()
-        iconPicker.reapplyTheme()
-        for group in [titleGroup, iconGroup, chordGroup, commandGroup, dirGroup, sizeGroup] {
-            group?.reapplyTheme()
-        }
-        captions.forEach { $0.reapplyTheme() }
-    }
-
     private func buildContent() -> NSStackView {
         wireField(titleField)
         titleField.onChange = { [weak self] in self?.refreshValidity() }
-        let titleGroup = LabeledField(caption: caption("Title", required: true), control: titleField)
+        let titleGroup = LabeledField(caption: FieldCaption("Title", required: true), control: titleField)
         self.titleGroup = titleGroup
 
         let picker = IconPickerField(selected: editingFloat?.icon ?? IconCatalog.defaultSymbol)
@@ -112,7 +88,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         picker.onTab = { [weak self] in self?.moveTab(1) }
         picker.onBacktab = { [weak self] in self?.moveTab(-1) }
         iconPicker = picker
-        let iconGroup = LabeledField(caption: caption("Icon", required: false), control: picker)
+        let iconGroup = LabeledField(caption: FieldCaption("Icon", required: false), control: picker)
         self.iconGroup = iconGroup
 
         chordChip.onActivate = { [weak self] in self?.beginCapture() }
@@ -124,12 +100,12 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         let chordSpacer = NSView()
         chordSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let chordRow = Self.hStack([chordChip, chordSpacer], spacing: 0)
-        let chordGroup = LabeledField(caption: caption("Shortcut", required: true), control: chordRow)
+        let chordGroup = LabeledField(caption: FieldCaption("Shortcut", required: true), control: chordRow)
         self.chordGroup = chordGroup
 
         wireField(commandField)
         commandField.onChange = { [weak self] in self?.refreshValidity() }
-        let commandGroup = LabeledField(caption: caption("Command", required: true), control: commandField)
+        let commandGroup = LabeledField(caption: FieldCaption("Command", required: true), control: commandField)
         self.commandGroup = commandGroup
 
         wireField(dirPicker.field)
@@ -138,7 +114,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         dirPicker.wireNav(
             onVertical: { [weak self] in self?.moveVertical($0) },
             onTabForward: { [weak self] in self?.moveTab(1) })
-        let dirGroup = LabeledField(caption: caption("Directory", required: false), control: dirPicker)
+        let dirGroup = LabeledField(caption: FieldCaption("Directory", required: false), control: dirPicker)
         self.dirGroup = dirGroup
 
         for box in [widthField, heightField] { wireField(box) }
@@ -158,20 +134,21 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         let sizeRow = Self.hStack([widthField, times, heightField, sizeSpacer], spacing: ChromeMetrics.Spacing.s8)
         widthField.widthAnchor.constraint(equalToConstant: 72).isActive = true
         heightField.widthAnchor.constraint(equalTo: widthField.widthAnchor).isActive = true
-        let sizeGroup = LabeledField(caption: caption("Size (fraction of tile)", required: false), control: sizeRow)
+        let sizeGroup = LabeledField(
+            caption: FieldCaption("Size (fraction of tile)", required: false), control: sizeRow)
         self.sizeGroup = sizeGroup
 
         wireSegment(gitSegment)
         let gitGroup = Self.vStack(
-            [caption("Open in", required: false), gitSegment], spacing: ChromeMetrics.Spacing.s6)
+            [FieldCaption("Open in", required: false), gitSegment], spacing: ChromeMetrics.Spacing.s6)
 
         wireSegment(persistSegment)
         let persistGroup = Self.vStack(
-            [caption("Keep running", required: false), persistSegment], spacing: ChromeMetrics.Spacing.s6)
+            [FieldCaption("Keep running", required: false), persistSegment], spacing: ChromeMetrics.Spacing.s6)
 
         wireSegment(toolbarSegment)
         let toolbarGroup = Self.vStack(
-            [caption("Toolbar button", required: false), toolbarSegment], spacing: ChromeMetrics.Spacing.s6)
+            [FieldCaption("Toolbar button", required: false), toolbarSegment], spacing: ChromeMetrics.Spacing.s6)
 
         cancelButton.onTap = { [weak self] in self?.cancel() }
         submitButton.setTitle(editingFloat == nil ? "Add Tool Float" : "Save")
@@ -207,13 +184,11 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
             leading: onDelete == nil ? [] : [deleteButton], trailing: [cancelButton, submitButton])
         let footer = Self.vStack([errorLabel, actionBar], spacing: ChromeMetrics.Spacing.s10)
 
-        let built = FormCard.content(
+        return FormCard.content(
             rows: [
                 header, titleGroup, iconGroup, chordGroup, commandGroup, dirGroup, sizeGroup,
                 gitGroup, persistGroup, toolbarGroup,
             ], footer: footer, spacing: ChromeMetrics.Spacing.modalSectionGap)
-        footerDivider = built.divider
-        return built.view
     }
 
     /// Seeds only a chord capture would accept, or Save writes back a `key:` the load refused.
@@ -531,12 +506,6 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         let text = box.text.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty, let value = Double(text) else { return ToolFloatParser.defaultFraction }
         return ToolFloatParser.clampedFraction(value)
-    }
-
-    private func caption(_ text: String, required: Bool) -> FieldCaption {
-        let field = FieldCaption(text, required: required)
-        captions.append(field)
-        return field
     }
 
     private static func hStack(_ views: [NSView], spacing: CGFloat) -> NSStackView {

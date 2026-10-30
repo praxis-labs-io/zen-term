@@ -198,7 +198,6 @@ final class BranchField: NSView, ThemeReapplying {
     }
 
     func reapplyTheme() {
-        box.reapplyTheme()
         guard popover.isOpen else { return }
         rerenderList()
     }

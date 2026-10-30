@@ -7,7 +7,7 @@ final class SettingsWorkspacesSection: SettingsSection {
     var onReorder: ((_ moved: Workspace, _ with: Workspace) -> Bool)?
 
     private var rows: [WorkspaceRow] = []
-    private let addButton = AppButton(title: "＋ Add workspace", variant: .muted)
+    private var addButton: AppButton?
     private weak var caption: NSTextField?
     private weak var emptyHint: NSTextField?
     private weak var reorderHint: NSTextField?
@@ -21,25 +21,25 @@ final class SettingsWorkspacesSection: SettingsSection {
         stack.translatesAutoresizingMaskIntoConstraints = false
         rowsStack = stack
 
-        addButton.isKeyboardFocusable = true
-        addButton.onArrowUp = { [weak self] in self?.moveFocus(from: self?.addButton, delta: -1) }
-        addButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
-        addButton.onTab = { [weak self] in self?.moveTab(from: self?.addButton, delta: 1) }
-        addButton.onBacktab = { [weak self] in self?.moveTab(from: self?.addButton, delta: -1) }
-        addButton.onTap = { [weak self] in self?.onEditWorkspace?(nil) }
+        let button = AppButton(title: "＋ Add workspace", variant: .muted)
+        button.isKeyboardFocusable = true
+        button.onArrowUp = { [weak self] in self?.moveFocus(from: self?.addButton, delta: -1) }
+        button.onArrowLeft = { [weak self] in self?.onExitToNav?() }
+        button.onTab = { [weak self] in self?.moveTab(from: self?.addButton, delta: 1) }
+        button.onBacktab = { [weak self] in self?.moveTab(from: self?.addButton, delta: -1) }
+        button.onTap = { [weak self] in self?.onEditWorkspace?(nil) }
+        addButton = button
 
         populateRows()
         return SettingsDetail.scroll(for: stack)
     }
 
-    func detailStops() -> [NSView] { rows + [addButton] }
+    func detailStops() -> [NSView] { rows + [addButton].compactMap { $0 } }
 
     func reapplyTheme() {
         caption?.textColor = Theme.current.chrome.ink(.muted)
         emptyHint?.textColor = Theme.current.chrome.ink(.muted)
         reorderHint?.textColor = Theme.current.chrome.ink(.faint)
-        rows.forEach { $0.reapplyTheme() }
-        addButton.reapplyTheme()
     }
 
     private func populateRows() {
@@ -54,7 +54,7 @@ final class SettingsWorkspacesSection: SettingsSection {
 
     /// Restores focus after the rebuild, which otherwise leaves the card's keyboard dead.
     private func populate(with workspaces: [Workspace]?, focusing title: String? = nil) {
-        guard let stack = rowsStack else { return }
+        guard let stack = rowsStack, let addButton else { return }
         let focusedStop = stack.window?.firstResponder as? NSView
         let hadFocus = focusedStop.map { stop in detailStops().contains { $0 === stop } } ?? false
         let wasAddButton = focusedStop === addButton
@@ -108,7 +108,7 @@ final class SettingsWorkspacesSection: SettingsSection {
 
         if let title, let moved = rows.first(where: { $0.workspace.title == title }) {
             stack.window?.makeFirstResponder(moved)
-            KeyboardFocus.reveal(moved, among: rows + [addButton])
+            KeyboardFocus.reveal(moved, among: detailStops())
             return
         }
         if hadFocus { stack.window?.makeFirstResponder(wasAddButton ? addButton : detailStops().first) }
@@ -135,14 +135,14 @@ final class SettingsWorkspacesSection: SettingsSection {
 
     private func moveFocus(from view: NSView?, delta: Int) {
         guard let view else { return }
-        let stops = rows + [addButton]
+        let stops = detailStops()
         guard let anchor = stops.firstIndex(where: { $0 === view }) else { return }
         SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta) { $0 }
     }
 
     private func moveTab(from view: NSView?, delta: Int) {
         guard let view else { return }
-        let stops = rows + [addButton]
+        let stops = detailStops()
         guard let anchor = stops.firstIndex(where: { $0 === view }) else { return }
         if delta < 0, anchor == 0 {
             onExitToNav?()

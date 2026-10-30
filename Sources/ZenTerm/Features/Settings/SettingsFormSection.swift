@@ -1,21 +1,10 @@
 import AppKit
 
-protocol ThemeReapplying: AnyObject {
-    func reapplyTheme()
-}
-extension FieldBox: ThemeReapplying {}
-extension TextAreaBox: ThemeReapplying {}
-extension Dropdown: ThemeReapplying {}
-extension SegmentedControl: ThemeReapplying {}
-extension AppButton: ThemeReapplying {}
-extension CheckboxDropdown: ThemeReapplying {}
-
 class SettingsFormSection: SettingsSection {
     var navTitle: String { "" }
     var onExitToNav: (() -> Void)?
 
-    private let resetAllButton = AppButton(title: "Reset all to defaults", variant: .muted)
-    private let resetAllMessage = ResetFlashLabel()
+    private weak var resetAllMessage: ResetFlashLabel?
     private var rows: [LayoutRow] = []
     private var groupCaptions: [NSTextField] = []
     private var stops: [NSView] = []
@@ -50,6 +39,9 @@ class SettingsFormSection: SettingsSection {
 
         populate()
 
+        let resetAllButton = AppButton(title: "Reset all to defaults", variant: .muted)
+        let resetAllMessage = ResetFlashLabel()
+        self.resetAllMessage = resetAllMessage
         resetAllButton.isKeyboardFocusable = true
         resetAllButton.onArrowUp = { [weak self] in self?.moveFocus(-1) }
         resetAllButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
@@ -76,10 +68,6 @@ class SettingsFormSection: SettingsSection {
 
     func reapplyTheme() {
         groupCaptions.forEach { $0.textColor = Theme.current.chrome.ink(.muted) }
-        rows.forEach { $0.reapplyTheme() }
-        controlForKey.values.compactMap { $0 as? ThemeReapplying }.forEach { $0.reapplyTheme() }
-        resetAllButton.reapplyTheme()
-        resetAllMessage.reapplyTheme()
     }
 
     func populate() {}
@@ -269,7 +257,7 @@ class SettingsFormSection: SettingsSection {
     }
     private func resetAll() {
         guard persist({ try ConfigWriter.apply(removals: Set(self.scalarKeys)) }, reportKey: nil) else { return }
-        resetAllMessage.flash("Defaults restored.")
+        resetAllMessage?.flash("Defaults restored.")
     }
 
     @discardableResult

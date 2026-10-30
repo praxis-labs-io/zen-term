@@ -100,7 +100,7 @@ final class TabBarViewTests: WindowTestCase {
         let inkBefore = try XCTUnwrap(labelInk(tabBar))
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        tabBar.reapplyTheme()
+        tabBar.reapplyThemeTree()
 
         XCTAssertTrue(chip === tabBar.chipsForTesting.first, "the chip is recolored in place, not replaced")
         XCTAssertNotEqual(labelInk(tabBar), inkBefore, "the label picked up the new theme's ink")
@@ -140,14 +140,14 @@ final class TabBarViewTests: WindowTestCase {
         let items = [TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle)]
         tabBar.render(items)
 
-        tabBar.reapplyTheme()
+        tabBar.reapplyThemeTree()
 
         XCTAssertEqual(tabBar.pillColorForTesting, Theme.current.chrome.fill(.active))
     }
 
     func test_reapplyTheme_beforeAnyRender_doesNotCrash() {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
-        tabBar.reapplyTheme()
+        tabBar.reapplyThemeTree()
         XCTAssertTrue(tabBar.chipsForTesting.isEmpty)
     }
 

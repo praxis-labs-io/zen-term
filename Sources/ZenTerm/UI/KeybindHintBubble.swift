@@ -1,6 +1,6 @@
 import AppKit
 
-final class KeybindHintBubble: ShadowCardView {
+final class KeybindHintBubble: ShadowCardView, ThemeReapplying {
     private static let width: CGFloat = 220
     private static let padding = ChromeMetrics.Spacing.s12
     private static let resetSlot = ChromeMetrics.Height.control + ChromeMetrics.Spacing.s8
@@ -113,7 +113,6 @@ final class KeybindHintBubble: ShadowCardView {
 
     private func paintColors() {
         let chrome = Theme.current.chrome
-        badge.reapplyTheme()
         title.textColor = chrome.ink(.normal)
         previewBox.layer?.backgroundColor = chrome.fill(.rest).cgColor
         previewBox.layer?.borderColor = chrome.accent.nsColor.cgColor

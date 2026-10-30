@@ -1,7 +1,7 @@
 import AppKit
 import TabKit
 
-final class ToggleDock: NSView {
+final class ToggleDock: NSView, ThemeReapplying {
     private let bottomBtn: IconButton
     private let rightBtn: IconButton
     private let scratchBtn: IconButton
@@ -14,7 +14,6 @@ final class ToggleDock: NSView {
     private var toolFloatBtns: [String: IconButton] = [:]
     /// Built and hidden, not skipped: the dot is a hidden live float's only handle.
     private var toolbarHiddenFloatIDs: Set<String> = []
-    private var allButtons: [IconButton] = []
     private var dividers: [NSView] = []
     private let stack = NSStackView()
     private let onToolFloat: (ToolFloat) -> Void
@@ -53,7 +52,6 @@ final class ToggleDock: NSView {
             .bottomDrawer: bottomBtn, .rightDrawer: rightBtn, .scratch: scratchBtn,
             .focusMode: zoomBtn,
         ]
-        allButtons = ToolbarButton.allCases.compactMap { fixedButtons[$0] }
         dividers = ToolbarButton.groups.map { _ in Self.divider() }
 
         stack.orientation = .horizontal
@@ -117,7 +115,6 @@ final class ToggleDock: NSView {
             stack.removeArrangedSubview(button)
             button.removeFromSuperview()
         }
-        allButtons.removeAll { button in toolFloatBtns.values.contains { $0 === button } }
         toolFloatBtns = [:]
         toolbarHiddenFloatIDs = Set(toolFloats.filter { !$0.showsInToolbar }.map(\.id))
         for spec in toolFloats {
@@ -127,7 +124,6 @@ final class ToggleDock: NSView {
             ) { [weak self] in self?.onToolFloat(spec) }
             btn.isHidden = !spec.showsInToolbar
             toolFloatBtns[spec.id] = btn
-            allButtons.append(btn)
             stack.addArrangedSubview(btn)
         }
         refreshVisibility()
@@ -236,7 +232,6 @@ final class ToggleDock: NSView {
     }
 
     func reapplyTheme() {
-        for button in allButtons { button.reapplyTheme() }
         let dividerColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
         for divider in dividers { divider.layer?.backgroundColor = dividerColor }
     }

@@ -1,7 +1,7 @@
 import AppKit
 
 // Leads the tab bar with the active workspace's name while the sidebar is collapsed.
-final class CollapsedSidebarLead: NSView {
+final class CollapsedSidebarLead: NSView, ThemeReapplying {
     static let tabGap: CGFloat = ChromeMetrics.Spacing.s4
 
     private let nameLabel = NSTextField(labelWithString: "")

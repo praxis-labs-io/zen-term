@@ -86,7 +86,7 @@ final class RenameTabOverlayTests: WindowTestCase {
         let label = try XCTUnwrap(descendants(of: footer).compactMap { $0 as? NSTextField }.first)
         label.textColor = .red
 
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         XCTAssertEqual(label.textColor, Theme.current.chrome.ink(.muted))
     }

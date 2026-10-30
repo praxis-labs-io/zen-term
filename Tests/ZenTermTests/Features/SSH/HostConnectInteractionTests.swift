@@ -1256,6 +1256,40 @@ final class HostConnectInteractionTests: WindowTestCase {
             screen.detachedForTesting.contains(screen.routeForTesting), "the route should give way before Connect does")
     }
 
+    func test_aThemeChange_whileTheRouteGaveWay_recolorsItWhenTheWindowGrowsBack() throws {
+        let c = onConnectScreen()
+        let screen = try XCTUnwrap(c.connectViewForTesting)
+        let content = try XCTUnwrap(c.window.contentView)
+        let route = screen.routeForTesting
+        let fullSize = content.frame.size
+        c.window.setContentSize(c.window.contentMinSize)
+        c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
+        content.layoutSubtreeIfNeeded()
+        XCTAssertTrue(screen.detachedForTesting.contains(route), "premise: the route gave way")
+        let strokeBefore = route.lineStrokeForTesting
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-connect-theme-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        try "background = #010101\nforeground = #fefefe\n"
+            .write(to: dir.appendingPathComponent("theme"), atomically: true, encoding: .utf8)
+        Theme.setCurrentForTesting(ConfigLoader.loadAppTheme(configRoot: dir, general: .builtIn))
+
+        postConfigChange(.theme)
+        c.window.setContentSize(fullSize)
+        c.windowDidResize(Notification(name: NSWindow.didResizeNotification))
+        content.layoutSubtreeIfNeeded()
+
+        let chrome = Theme.current.chrome
+        XCTAssertNotNil(route.window, "premise: the route came back")
+        XCTAssertNotEqual(route.lineStrokeForTesting, strokeBefore)
+        XCTAssertEqual(route.lineStrokeForTesting, chrome.ink(.muted).cgColor)
+        for endpoint in [route.macForTesting, route.destinationForTesting] {
+            XCTAssertEqual(endpoint.tileFillForTesting, chrome.fill(.rest).cgColor)
+            XCTAssertEqual(endpoint.nameColorForTesting, chrome.ink(.muted))
+        }
+    }
+
     func test_atTheNarrowestWidths_withTheWidestGutter_theScreenFitsTheWindow() throws {
         var config = GeneralConfig.current
         config.windowGutter = 64

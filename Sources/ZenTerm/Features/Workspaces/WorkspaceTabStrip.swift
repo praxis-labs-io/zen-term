@@ -1,7 +1,7 @@
 import AppKit
 
 // Chips are framed by hand so a dragged chip can leave its slot while the others close the gap.
-final class WorkspaceTabStrip: NSView {
+final class WorkspaceTabStrip: NSView, ThemeReapplying {
     private static let chipSpacing: CGFloat = ChromeMetrics.Spacing.s4
     private static let addSize: CGFloat = ChromeMetrics.Height.sm
     private static let hintGap: CGFloat = ChromeMetrics.Spacing.s8
@@ -29,7 +29,6 @@ final class WorkspaceTabStrip: NSView {
     private let idleHint = NSStackView()
     private let renameHint = NSStackView()
     private var hintLabels: [NSTextField] = []
-    private var hintCaps: [KeycapView] = []
 
     var addButtonForTesting: AppButton { addButton }
     var isRenameHintVisibleForTesting: Bool { !renameHint.isHidden }
@@ -123,9 +122,6 @@ final class WorkspaceTabStrip: NSView {
 
     func reapplyTheme() {
         pill.backgroundColor = Theme.current.chrome.fill(.active).cgColor
-        chips.forEach { $0.reapplyTheme() }
-        addButton.reapplyTheme()
-        hintCaps.forEach { $0.reapplyTheme() }
         hintLabels.forEach { $0.textColor = Theme.current.chrome.ink(.muted) }
     }
 
@@ -294,7 +290,6 @@ final class WorkspaceTabStrip: NSView {
             switch part {
             case .key(let key):
                 let cap = KeycapView(shortcut: key)
-                hintCaps.append(cap)
                 hint.addArrangedSubview(cap)
             case .text(let text):
                 let label = NSTextField(labelWithString: text)

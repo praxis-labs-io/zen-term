@@ -14,7 +14,7 @@ struct TabBarItem {
 }
 
 // Chips are framed by hand: inside a scroll view an `NSStackView`'s intrinsic width is not authoritative.
-final class TabBarView: NSView {
+final class TabBarView: NSView, ThemeReapplying {
     private let onSelect: (TabID) -> Void
     private let onClose: (TabID) -> Void
     private let onRename: (TabID) -> Void
@@ -139,7 +139,6 @@ final class TabBarView: NSView {
 
     func reapplyTheme() {
         pill.backgroundColor = Theme.current.chrome.fill(.active).cgColor
-        chips.forEach { $0.reapplyTheme() }
         render(lastItems)
     }
 

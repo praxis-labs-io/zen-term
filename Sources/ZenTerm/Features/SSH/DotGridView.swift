@@ -1,6 +1,6 @@
 import AppKit
 
-final class DotGridView: NSView {
+final class DotGridView: NSView, ThemeReapplying {
     static let pitch: CGFloat = 24
     // A dot of the drawn grid, not a chrome corner.
     // swiftlint:disable:next untokened_radius

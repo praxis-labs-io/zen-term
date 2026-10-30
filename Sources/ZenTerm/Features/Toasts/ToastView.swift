@@ -19,7 +19,7 @@ struct ToastContent: Equatable {
     }
 }
 
-final class ToastView: ShadowCardView {
+final class ToastView: ShadowCardView, ThemeReapplying {
     var onClose: (() -> Void)?
     var onDismissed: (() -> Void)?
     private(set) var isDismissing = false
@@ -34,7 +34,6 @@ final class ToastView: ShadowCardView {
     private let titleTailLabel: NSTextField?
     private var titleFloor: NSLayoutConstraint?
     private let messageLabel: NSTextField?
-    private var closeButton: IconButton?
     private var actionButtons: [AppButton] = []
     private let badge: IconBadge
 
@@ -124,7 +123,6 @@ final class ToastView: ShadowCardView {
                 accessibilityLabel: "Dismiss"
             ) { [weak self] in self?.onClose?() }
             header.addArrangedSubview(close)
-            closeButton = close
         }
 
         if !actions.isEmpty {
@@ -191,8 +189,6 @@ final class ToastView: ShadowCardView {
             group.addArrangedSubview(cap)
             keycap = cap
         }
-
-        func reapplyTheme() { keycap?.reapplyTheme() }
     }
 
     override var acceptsFirstResponder: Bool { gatesFocus }
@@ -236,10 +232,6 @@ final class ToastView: ShadowCardView {
         titleLabel.textColor = Self.titleColor
         titleTailLabel?.textColor = Self.titleColor
         messageLabel?.textColor = Self.messageColor
-        shortcutSlots.forEach { $0.reapplyTheme() }
-        closeButton?.reapplyTheme()
-        actionButtons.forEach { $0.reapplyTheme() }
-        badge.reapplyTheme()
     }
 
     var actionTitleColorsForTesting: [NSColor] {

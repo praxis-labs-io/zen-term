@@ -91,7 +91,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertNotNil(colorBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         XCTAssertNotEqual(colorBefore, searchField.textColor)
         XCTAssertEqual(searchField.stringValue, "swap")
@@ -112,7 +112,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         let colorBefore = card.layer?.borderColor
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         XCTAssertNotEqual(colorBefore, card.layer?.borderColor)
     }
@@ -146,7 +146,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertNotNil(titleColorBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         XCTAssertNotEqual(headerColorBefore, header.textColor)
         XCTAssertNotEqual(titleColorBefore, titleField.field.textColor)
@@ -168,7 +168,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         let colorBefore = card.layer?.borderColor
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         XCTAssertNotEqual(colorBefore, card.layer?.borderColor)
     }
@@ -204,7 +204,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         let captionBefore = caption.attributedStringValue
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         XCTAssertNotEqual(headerColorBefore, header.textColor)
         XCTAssertNotEqual(captionBefore, caption.attributedStringValue)
@@ -224,7 +224,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertEqual(colorsBefore.count, 6, "a 2 by 3 grid of pixels")
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         let colorsAfter = (spinner.layer?.sublayers ?? []).compactMap(\.backgroundColor)
         XCTAssertNotEqual(colorsBefore, colorsAfter)
@@ -251,7 +251,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         let before = row.textColor
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        field.reapplyTheme()
+        field.reapplyThemeTree()
 
         guard
             let after = descendants(of: try XCTUnwrap(window.contentView))
@@ -295,7 +295,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         let before = hairline.layer?.backgroundColor
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         XCTAssertNotEqual(before, hairline.layer?.backgroundColor)
     }
@@ -324,7 +324,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         let before = list.layer?.borderColor
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         XCTAssertNotEqual(before, list.layer?.borderColor)
         XCTAssertEqual(carry.carried, ["node_modules"], "a recolor never loses what was picked")
@@ -369,7 +369,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertNotNil(equalsColorBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         XCTAssertNotEqual(keyColorBefore, keyBox.field.textColor)
         XCTAssertNotEqual(equalsColorBefore, equalsLabel.textColor)
@@ -397,7 +397,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertNotNil(colorBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         let colorAfter =
             caption.attributedStringValue.attribute(.foregroundColor, at: 0, effectiveRange: nil)
@@ -426,7 +426,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertNotNil(colorBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        overlay.reapplyTheme()
+        overlay.reapplyThemeTree()
 
         let colorAfter =
             caption.attributedStringValue.attribute(.foregroundColor, at: 0, effectiveRange: nil)
@@ -456,7 +456,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertNotNil(badgeBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        toast.reapplyTheme()
+        toast.reapplyThemeTree()
 
         XCTAssertNotEqual(colorBefore, titleLabel.textColor)
         XCTAssertNotEqual(borderBefore, toast.layer?.borderColor)
@@ -478,7 +478,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         let fillBefore = card.layer?.backgroundColor
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        card.reapplyTheme()
+        card.reapplyThemeTree()
         window.displayIfNeeded()
 
         XCTAssertNotEqual(fillBefore, card.layer?.backgroundColor)
@@ -497,7 +497,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         let tintBefore = bubble.badgeIconTintForTesting
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        bubble.reapplyTheme()
+        bubble.reapplyThemeTree()
 
         let chrome = Theme.current.chrome
         XCTAssertNotEqual(fillBefore, bubble.badgeFillForTesting, "the badge fill stayed stale")
@@ -513,7 +513,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         let fillBefore = card.layer?.backgroundColor
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        card.reapplyTheme()
+        card.reapplyThemeTree()
         window.displayIfNeeded()
 
         XCTAssertNotEqual(fillBefore, card.layer?.backgroundColor)
@@ -536,7 +536,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertEqual(before.count, 2, "expected both action buttons")
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        toast.reapplyTheme()
+        toast.reapplyThemeTree()
 
         XCTAssertNotEqual(before, toast.actionTitleColorsForTesting, "the action buttons stayed stale")
         XCTAssertTrue(
@@ -566,7 +566,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         let before = title.textColor
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        header.reapplyTheme()
+        header.reapplyThemeTree()
 
         XCTAssertNotEqual(before, title.textColor, "the title stayed stale")
         XCTAssertEqual(title.textColor, Theme.current.chrome.ink(.normal))

@@ -1,6 +1,6 @@
 import AppKit
 
-final class FindBarView: NSView {
+final class FindBarView: NSView, ThemeReapplying {
     private let glyph = NSImageView()
     private let field = NSTextField()
     private let count = NSTextField(labelWithString: "")

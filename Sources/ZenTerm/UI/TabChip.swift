@@ -1,6 +1,6 @@
 import AppKit
 
-class TabChip: NSView {
+class TabChip: NSView, ThemeReapplying {
     static let height: CGFloat = ChromeMetrics.Height.sm
     static let chipFont = ChromeType.font(.caption, weight: .medium, face: .mono)
     // The rename editor matches it, or the text reflows on open.
@@ -104,7 +104,6 @@ class TabChip: NSView {
     static func clamp(_ width: CGFloat) -> CGFloat { min(max(width, minWidth), maxChipWidth) }
 
     func reapplyTheme() {
-        closeButton.reapplyTheme()
         restyle()
     }
 

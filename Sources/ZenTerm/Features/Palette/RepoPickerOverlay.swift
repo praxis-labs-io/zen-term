@@ -301,11 +301,6 @@ final class RepoPickerOverlay: PaletteOverlay {
         confirm.dismiss { [weak self] in self?.focusQuery() }
     }
 
-    override func reapplyTheme() {
-        super.reapplyTheme()
-        confirm.card?.reapplyTheme()
-    }
-
     #if DEBUG
         var presentedConfirmForTesting: ConfirmCard? { confirm.card }
     #endif

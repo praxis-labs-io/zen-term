@@ -26,7 +26,6 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     private let onDelete: (() -> Void)?
     private var form: WorkspaceForm
 
-    private var footerDivider: ThemeReapplying?
     private lazy var header = ModalHeader(title: editingWorkspace == nil ? "Add Workspace" : "Edit Workspace")
 
     private let titleField = FieldBox(placeholder: WorkspaceFormOverlay.namePlaceholder)
@@ -38,7 +37,6 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     private let drawing = WorkspaceTabDrawing()
     private var tabsGroup: LabeledField?
 
-    private var captions: [FieldCaption] = []
     private var envRows: [EnvRow] = []
     private let envStack = NSStackView()
     private let envError = NSTextField(labelWithString: "")
@@ -112,21 +110,8 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     override func reapplyTheme() {
         super.reapplyTheme()
         let chrome = Theme.current.chrome
-        header.reapplyTheme()
         envError.textColor = chrome.destructive.nsColor
         notice.textColor = chrome.ink(.subtle)
-
-        let controls: [ThemeReapplying] = [
-            titleField, folderPicker, addVarButton, undoButton, cancelButton, addButton, deleteButton,
-        ]
-        controls.forEach { $0.reapplyTheme() }
-        tabStrip.reapplyTheme()
-        drawing.reapplyTheme()
-        carryPicker.reapplyTheme()
-        footerDivider?.reapplyTheme()
-        envRows.forEach { $0.reapplyTheme() }
-        for group in [titleGroup, folderGroup, tabsGroup] { group?.reapplyTheme() }
-        captions.forEach { $0.reapplyTheme() }
     }
 
     private func buildContent() -> NSStackView {
@@ -143,7 +128,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         let envControls = Self.vStack(
             [envStack, Self.leadingWrap(addVarButton), envError], spacing: ChromeMetrics.Spacing.s8)
         let envGroup = Self.vStack(
-            [caption("Environment", required: false), envControls], spacing: ChromeMetrics.Spacing.s6)
+            [FieldCaption("Environment", required: false), envControls], spacing: ChromeMetrics.Spacing.s6)
 
         carryPicker.onChanged = { [weak self] in self?.refreshValidity() }
         carryPicker.onArrowUp = { [weak self] in self?.moveVertical(-1) }
@@ -152,20 +137,18 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         carryPicker.onBacktab = { [weak self] in self?.moveTab(-1) }
         carryPicker.onFocusLost = { [weak self] in self?.focus(self?.addVarButton) }
         let carryGroup = Self.vStack(
-            [caption("Copy into new worktrees", required: false), carryPicker], spacing: ChromeMetrics.Spacing.s6)
+            [FieldCaption("Copy into new worktrees", required: false), carryPicker], spacing: ChromeMetrics.Spacing.s6)
 
-        let built = FormCard.content(
+        return FormCard.content(
             rows: [header, nameRow, tabsGroup, envGroup, carryGroup], footer: buildFooter(),
             spacing: ChromeMetrics.Spacing.modalSectionGap)
-        footerDivider = built.divider
-        return built.view
     }
 
     private func buildNameRow() -> NSView {
         wireField(titleField)
         titleField.onChange = { [weak self] in self?.nameEdited() }
         titleField.onArrowRight = { [weak self] in self?.focus(self?.folderPicker.field.field) }
-        let titleGroup = LabeledField(caption: caption("Workspace name", required: true), control: titleField)
+        let titleGroup = LabeledField(caption: FieldCaption("Workspace name", required: true), control: titleField)
         titleGroup.widthAnchor.constraint(equalToConstant: Self.nameWidth).isActive = true
         self.titleGroup = titleGroup
 
@@ -176,7 +159,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
             onVertical: { [weak self] in self?.moveVertical($0) },
             onTabForward: { [weak self] in self?.moveTab(1) })
         folderPicker.field.onArrowLeft = { [weak self] in self?.focus(self?.titleField.field) }
-        let folderGroup = LabeledField(caption: caption("Folder", required: true), control: folderPicker)
+        let folderGroup = LabeledField(caption: FieldCaption("Folder", required: true), control: folderPicker)
         folderGroup.setContentHuggingPriority(.defaultLow, for: .horizontal)
         self.folderGroup = folderGroup
 
@@ -227,7 +210,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         drawing.onBacktab = { [weak self] in self?.moveTab(-1) }
 
         let stack = Self.vStack([drawing, tabStrip], spacing: ChromeMetrics.Spacing.s10)
-        let group = LabeledField(caption: caption("Tabs", required: false), control: stack)
+        let group = LabeledField(caption: FieldCaption("Tabs", required: false), control: stack)
         tabsGroup = group
         return group
     }
@@ -606,12 +589,6 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     }
 
     private func refreshValidity() { validate(includeRequired: false) }
-
-    private func caption(_ text: String, required: Bool) -> FieldCaption {
-        let field = FieldCaption(text, required: required)
-        captions.append(field)
-        return field
-    }
 
     private static func vStack(_ views: [NSView], spacing: CGFloat) -> NSStackView {
         let stack = NSStackView(views: views)

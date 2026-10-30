@@ -94,11 +94,6 @@ final class ModeChrome {
         didSet { findBar?.paneFill = findBarFill }
     }
 
-    func reapplyTheme() {
-        header?.reapplyTheme()
-        findBar?.reapplyTheme()
-    }
-
     var scrollCursorForTesting: ScrollCursorView { cursor }
     var findBarForTesting: FindBarView? { findBar?.isHidden == false ? findBar : nil }
     var isHeaderVisibleForTesting: Bool { header.map { !$0.isHidden } ?? false }
@@ -152,7 +147,7 @@ final class ModeChrome {
     }
 }
 
-private final class PanelHeader: NSView {
+private final class PanelHeader: NSView, ThemeReapplying {
     private var title: String
     private var action: KeyInterceptor.ReservedChord
     private let titleField = NSTextField(labelWithString: "")

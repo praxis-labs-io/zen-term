@@ -82,10 +82,6 @@ final class SegmentedControl: NSView {
 
     private var isControlFocused = false
 
-    func reapplyTheme() {
-        segments.forEach { $0.reapplyTheme() }
-    }
-
     private func updateSelection() {
         for (index, segment) in segments.enumerated() { segment.isOn = (index == selectedIndex) }
         refreshOutline()

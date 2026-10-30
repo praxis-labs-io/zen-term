@@ -219,6 +219,13 @@ frozen.
 **A `lazy var` cannot be touched from a config observer without constructing it.** Hold it as an
 explicit optional and re-point only when non-nil.
 
+## Theme recolor
+
+**A view held out of the hierarchy misses the theme walk.** `reapplyThemeTree()` reaches subviews
+only, so a child a parent keeps but removes (a placeholder swapped for a list, a rail swapped for a
+field, a progress bar out of its card) comes back in the old theme. Recolor it where the parent
+re-attaches it, or build it fresh each time.
+
 ## Process-global state
 
 **Release process-global macOS state on focus and app-active changes, not surface teardown.** Hidden

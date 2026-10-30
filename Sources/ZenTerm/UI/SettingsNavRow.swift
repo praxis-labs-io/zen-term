@@ -1,6 +1,6 @@
 import AppKit
 
-final class SettingsNavRow: NSView, HoverSuppressing {
+final class SettingsNavRow: NSView, HoverSuppressing, ThemeReapplying {
     enum Variant: Equatable {
         case standard
         case nested(symbol: String)

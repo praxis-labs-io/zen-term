@@ -1,7 +1,7 @@
 import AppKit
 
 // Everything a reveal brings on screen: the rows and footer, and the card chrome they float behind.
-final class SidebarColumn: ShadowCardView {
+final class SidebarColumn: ShadowCardView, ThemeReapplying {
     let rows: SidebarView
     let footer: SidebarFooter
     let toggle: IconButton
@@ -99,9 +99,6 @@ final class SidebarColumn: ShadowCardView {
     func setToggleHidden(_ hidden: Bool) { toggle.isHidden = hidden }
 
     func reapplyTheme() {
-        rows.reapplyTheme()
-        footer.reapplyTheme()
-        toggle.reapplyTheme()
         if isFloating { CardChrome.reapplyTheme(to: self, tier: .float) }
     }
 }

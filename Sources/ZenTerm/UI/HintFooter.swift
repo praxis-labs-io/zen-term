@@ -1,6 +1,6 @@
 import AppKit
 
-final class HintFooter: NSView {
+final class HintFooter: NSView, ThemeReapplying {
     struct Hint {
         let keys: String
         let label: String
@@ -8,7 +8,6 @@ final class HintFooter: NSView {
 
     private let hairline = NSView()
     private var labels: [NSTextField] = []
-    private var keycaps: [KeycapView] = []
     private var itemsByLabel: [String: NSView] = [:]
 
     init(_ hints: [Hint]) {
@@ -46,7 +45,6 @@ final class HintFooter: NSView {
         let chrome = Theme.current.chrome
         hairline.layer?.backgroundColor = chrome.fill(alpha: ChromeTheme.hairline).cgColor
         labels.forEach { $0.textColor = chrome.ink(.muted) }
-        keycaps.forEach { $0.reapplyTheme() }
     }
 
     private func makePairs(_ hints: [Hint]) -> NSStackView {
@@ -55,7 +53,6 @@ final class HintFooter: NSView {
             let label = NSTextField(labelWithString: hint.label)
             label.font = ChromeType.font(.caption, weight: .medium)
             label.textColor = Theme.current.chrome.ink(.muted)
-            keycaps.append(keycap)
             labels.append(label)
             let item = NSStackView(views: [keycap, label])
             item.orientation = .horizontal

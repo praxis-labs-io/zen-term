@@ -1,6 +1,6 @@
 import AppKit
 
-final class DirectoryPickerField: NSView, ThemeReapplying {
+final class DirectoryPickerField: NSView {
     let field: FieldBox
     let chooseButton = AppButton(title: "Choose", variant: .muted)
     var onPicked: ((URL) -> Void)?
@@ -38,11 +38,6 @@ final class DirectoryPickerField: NSView, ThemeReapplying {
 
     var text: String { field.text }
     func setText(_ value: String) { field.setText(value) }
-
-    func reapplyTheme() {
-        field.reapplyTheme()
-        chooseButton.reapplyTheme()
-    }
 
     func wireNav(onVertical: @escaping (Int) -> Void, onTabForward: @escaping () -> Void) {
         field.onArrowRight = { [weak self] in self?.focusButton() }

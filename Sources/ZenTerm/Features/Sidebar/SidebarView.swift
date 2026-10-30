@@ -32,7 +32,7 @@ struct SidebarRowItem: Equatable {
     let isWaiting: Bool
 }
 
-final class SidebarView: NSView {
+final class SidebarView: NSView, ThemeReapplying {
     static let width: CGFloat = 240
     static let padding: CGFloat = ChromeMetrics.Spacing.s8
     private static let captionHeight: CGFloat = ChromeMetrics.Height.control
@@ -549,17 +549,6 @@ final class SidebarView: NSView {
 
     func reapplyTheme() {
         rowMenu.close()
-        caption.reapplyTheme()
-        addButton.reapplyTheme()
-        hostsCaption.reapplyTheme()
-        agentsCaption.reapplyTheme()
-        for row in hostRows.values { row.reapplyTheme() }
-        for row in rows.values {
-            row.reapplyTheme()
-            (row.hoverAccessory as? IconButton)?.reapplyTheme()
-        }
-        for row in agentRows.values { row.reapplyTheme() }
-        waitingRow?.reapplyTheme()
     }
 
     var addButtonForTesting: IconButton { addButton }

@@ -20,10 +20,8 @@ final class ConfirmCardList: NSView, ThemeReapplying {
     static let rowHeight: CGFloat = ChromeMetrics.Height.xs
     static let pathFont = ChromeType.font(.caption, face: .mono)
 
-    private let rowViews: [RowView]
-
     init(rows: [Row]) {
-        rowViews = rows.map(RowView.init)
+        let rowViews = rows.map(RowView.init)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
@@ -59,10 +57,9 @@ final class ConfirmCardList: NSView, ThemeReapplying {
 
     func reapplyTheme() {
         layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
-        rowViews.forEach { $0.reapplyTheme() }
     }
 
-    private final class RowView: NSView {
+    private final class RowView: NSView, ThemeReapplying {
         private let row: Row
         private let leading = NSTextField(labelWithString: "")
         private let trailing = NSTextField(labelWithString: "")
@@ -89,6 +86,7 @@ final class ConfirmCardList: NSView, ThemeReapplying {
                 trailing.leadingAnchor.constraint(
                     greaterThanOrEqualTo: leading.trailingAnchor, constant: ChromeMetrics.Spacing.s8),
             ])
+            reapplyTheme()
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }

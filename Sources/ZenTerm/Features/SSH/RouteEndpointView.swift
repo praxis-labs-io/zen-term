@@ -1,6 +1,6 @@
 import AppKit
 
-final class RouteEndpointView: NSView {
+final class RouteEndpointView: NSView, ThemeReapplying {
     static let tileSide: CGFloat = ChromeMetrics.Height.xl
     static let columnWidth: CGFloat = 96
     private static let tileCornerRadius: CGFloat = ChromeMetrics.Radius.tile
@@ -91,5 +91,7 @@ final class RouteEndpointView: NSView {
         statusMark.lineWidth = ChromeMetrics.Border.width
     }
 
+    var tileFillForTesting: CGColor? { tile.layer?.backgroundColor }
+    var nameColorForTesting: NSColor? { name.textColor }
     var statusMarkForTesting: (fill: CGColor?, stroke: CGColor?) { (statusMark.fillColor, statusMark.strokeColor) }
 }

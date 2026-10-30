@@ -6,7 +6,7 @@ struct PanelMeta {
     let action: KeyInterceptor.ReservedChord
 }
 
-final class PanelHostView: NSView, TerminalModeHost {
+final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
     private let onFocusRequest: () -> Void
     private let pane = NSView()
     private let clip = NSView()
@@ -173,7 +173,6 @@ final class PanelHostView: NSView, TerminalModeHost {
 
     func reapplyTheme() {
         applyBackground()
-        chrome.reapplyTheme()
         updateBorder()
     }
 

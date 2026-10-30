@@ -1,6 +1,6 @@
 import AppKit
 
-final class EnvRow: NSView {
+final class EnvRow: NSView, ThemeReapplying {
     let keyBox = FieldBox(placeholder: "KEY")
     let valueBox = FieldBox(placeholder: "value")
     let removeButton = AppButton(title: "✕", variant: .secondary)
@@ -40,9 +40,6 @@ final class EnvRow: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func reapplyTheme() {
-        keyBox.reapplyTheme()
-        valueBox.reapplyTheme()
-        removeButton.reapplyTheme()
         equals.textColor = Theme.current.chrome.ink(.muted)
     }
 }

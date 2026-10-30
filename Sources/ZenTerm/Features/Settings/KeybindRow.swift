@@ -1,6 +1,6 @@
 import AppKit
 
-final class KeybindRow: NSView {
+final class KeybindRow: NSView, ThemeReapplying {
     enum MessageKind: Equatable {
         case diagnostic
         case explanation
@@ -82,7 +82,6 @@ final class KeybindRow: NSView {
         titleLabel.textColor = Theme.current.chrome.ink(.normal)
         messageLabel.textColor = KeybindRow.ink(for: messageKind)
         chip.render(shortcut: lastShortcut)
-        chip.reapplyTheme()
     }
 
     var renderedMessageForTesting: String? {

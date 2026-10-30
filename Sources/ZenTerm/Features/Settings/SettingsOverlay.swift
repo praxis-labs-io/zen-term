@@ -53,8 +53,6 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
         divider.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor
         brandMark.contentTintColor = Theme.current.chrome.ink(.muted)
         versionLabel.textColor = Theme.current.chrome.ink(.muted)
-        reportButton.reapplyTheme()
-        navRows.forEach { $0.reapplyTheme() }
         sections.forEach { $0.reapplyTheme() }
     }
 

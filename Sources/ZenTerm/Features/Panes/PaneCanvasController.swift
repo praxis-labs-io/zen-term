@@ -281,9 +281,7 @@ final class PaneCanvasController: NSObject {
         updateFocusBorder()
     }
 
-    func reapplyChromeColors() {
-        for host in hostByLeaf.values { host.reapplyTheme() }
-    }
+    var panelHosts: [PanelHostView] { Array(hostByLeaf.values) }
 
     func reapplyChromeLayout() {
         for split in splitViewByID.values { split.setGutter(ChromeMetrics.panelGap) }

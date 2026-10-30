@@ -1,7 +1,7 @@
 import AppKit
 
 // The canvas for an SSH host that isn't connected: the route from this Mac to the host, and Connect on ↵.
-final class HostConnectView: NSView {
+final class HostConnectView: NSView, ThemeReapplying {
     private static let edgeSpacing: CGFloat = ChromeMetrics.Spacing.s12
     private static let routeToEyebrow: CGFloat = ChromeMetrics.Spacing.s32
     private static let eyebrowToTitle: CGFloat = ChromeMetrics.Spacing.s12
@@ -136,16 +136,12 @@ final class HostConnectView: NSView {
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        grid.reapplyTheme()
-        route.reapplyTheme()
         eyebrow.attributedStringValue = Self.line(
             "Remote host", font: ChromeType.sectionLabel, color: chrome.ink(.muted),
             breaking: .byClipping)
         applyName()
         destinationLine.textColor = chrome.ink(.muted)
         applyDetail()
-        connectButton.reapplyTheme()
-        panel.reapplyTheme()
     }
 
     func reapplyChromeLayout() {
