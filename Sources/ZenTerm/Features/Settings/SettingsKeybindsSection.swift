@@ -226,7 +226,6 @@ final class SettingsKeybindsSection: SettingsSection {
     private func refuse(_ reason: String, for row: KeybindRow) {
         hintBubble?.setPreview("")
         hintBubble?.showError(reason)
-        hintBubble?.place(near: row.chip)
     }
 
     private func isAtDefault(_ action: KeyInterceptor.ReservedChord) -> Bool {
@@ -244,7 +243,6 @@ final class SettingsKeybindsSection: SettingsSection {
         }
         hintBubble?.setPreview(chord.displayGlyph)
         hintBubble?.showSuccess("Shortcut saved.")
-        hintBubble?.place(near: row.chip)
         let close = DispatchWorkItem { [weak self, weak row] in
             self?.hideHint()
             row?.setCapturing(false)

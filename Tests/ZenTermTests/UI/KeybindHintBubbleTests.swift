@@ -80,4 +80,21 @@ final class KeybindHintBubbleTests: WindowTestCase {
         XCTAssertEqual(bubble.frame.midX, anchor.frame.midX, accuracy: 0.5)
         XCTAssertEqual(bubble.frame.maxY, anchor.frame.minY - gap)
     }
+
+    func test_theBubbleKeepsItsGapAboveTheAnchor_asAnErrorGrowsIt() {
+        let host = FlippedHost()
+        let (bubble, anchor) = hosted(in: host, anchorAt: NSRect(x: 280, y: 400, width: 40, height: 20))
+        let window = NSWindow(
+            contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = host
+        bubble.place(near: anchor)
+        let before = bubble.frame.height
+
+        bubble.showError("That shortcut is already bound to a command in another part of the app.")
+        host.layoutSubtreeIfNeeded()
+
+        XCTAssertGreaterThan(bubble.frame.height, before, "the error has to grow the bubble")
+        XCTAssertEqual(bubble.frame.maxY, anchor.frame.minY - gap)
+        XCTAssertEqual(bubble.frame.midX, anchor.frame.midX, accuracy: 0.5)
+    }
 }

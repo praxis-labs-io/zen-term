@@ -176,6 +176,7 @@ final class KeybindHintBubble: ShadowCardView {
             content.topAnchor.constraint(equalTo: previewHost.topAnchor),
             content.bottomAnchor.constraint(equalTo: previewHost.bottomAnchor),
         ])
+        reposition()
     }
 
     var inputWidthForTesting: CGFloat { previewHost.superview?.frame.width ?? 0 }
@@ -189,10 +190,18 @@ final class KeybindHintBubble: ShadowCardView {
     func showError(_ text: String) {
         errorLabel.stringValue = text
         errorLabel.isHidden = false
+        reposition()
     }
-    func clearError() { errorLabel.isHidden = true }
 
-    func setCanResetToDefault(_ canReset: Bool) { resetButton.isHidden = !canReset }
+    func clearError() {
+        errorLabel.isHidden = true
+        reposition()
+    }
+
+    func setCanResetToDefault(_ canReset: Bool) {
+        resetButton.isHidden = !canReset
+        reposition()
+    }
 
     func showInstructions() {
         successText = nil
@@ -225,6 +234,7 @@ final class KeybindHintBubble: ShadowCardView {
             view.topAnchor.constraint(equalTo: statusHost.topAnchor),
             view.bottomAnchor.constraint(equalTo: statusHost.bottomAnchor),
         ])
+        reposition()
     }
 
     private static func keyCap(_ text: String) -> NSView {

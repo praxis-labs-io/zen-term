@@ -267,17 +267,14 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         hintBubble?.clearError()
         guard chord.command || chord.shift || chord.option || chord.control else {
             hintBubble?.showError("Add at least one modifier (⌘ ⇧ ⌥ ⌃).")
-            hintBubble?.place(near: chordChip)
             return
         }
         if let menuItem = MenuShortcuts.owner(of: chord) {
             hintBubble?.showError("\(chord.displayGlyph) is the \(menuItem) menu shortcut.")
-            hintBubble?.place(near: chordChip)
             return
         }
         if let conflict = chordConflict(chord) {
             hintBubble?.showError(conflict)
-            hintBubble?.place(near: chordChip)
             return
         }
         commit(chord)
@@ -295,7 +292,6 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         chordChip.render(shortcut: chord.displayGlyph)
         hintBubble?.setPreview(chord.displayGlyph)
         hintBubble?.showSuccess("Shortcut saved.")
-        hintBubble?.place(near: chordChip)
         let close = DispatchWorkItem { [weak self] in
             self?.hideHint()
             self?.chordChip.setCapturing(false)
