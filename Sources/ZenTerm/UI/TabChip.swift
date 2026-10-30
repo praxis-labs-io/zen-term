@@ -41,6 +41,7 @@ class TabChip: NSView {
     var dotColorForTesting: NSColor? { dot.layer?.backgroundColor.flatMap { NSColor(cgColor: $0) } }
     var dotFrameForTesting: CGRect { dot.frame }
     var closeFrameForTesting: CGRect { closeButton.frame }
+    var closeSlotForTesting: CGRect { closeSlot }
     var labelFrameForTesting: CGRect { labelFrame }
     var isLabelFadedForTesting: Bool { labelContainer.layer?.mask != nil }
     var backgroundColorForTesting: NSColor? { layer?.backgroundColor.flatMap { NSColor(cgColor: $0) } }

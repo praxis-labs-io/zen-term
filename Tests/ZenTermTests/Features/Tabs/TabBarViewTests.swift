@@ -601,6 +601,19 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertEqual(chips[3].closeFrameForTesting.midY, dotCenter.y, accuracy: 0.01)
     }
 
+    func test_theCloseButton_fillsTheSlotTheDotSitsIn() throws {
+        let (bar, _) = settledBar([
+            TabBarItem(id: TabID(1), index: 1, title: "idle", isActive: true, attentionState: .idle),
+            TabBarItem(id: TabID(2), index: 2, title: "asks", isActive: false, attentionState: .waiting),
+        ])
+        let chip = bar.chipsForTesting[1]
+
+        try hover(chip)
+        bar.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(chip.closeFrameForTesting, chip.closeSlotForTesting)
+    }
+
     func test_theLabelFades_onlyWhileTheCloseButtonShows() throws {
         let (bar, _) = settledBar([item(1, "one", index: 1, active: true), item(2, "two", index: 2)])
         let chip = bar.chipsForTesting[1]
