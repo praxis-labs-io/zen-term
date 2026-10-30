@@ -105,6 +105,11 @@ final class KeybindHintBubble: ShadowCardView {
     var badgeFillForTesting: CGColor? { badge.fillForTesting }
     var badgeIconTintForTesting: NSColor? { badge.iconTintForTesting }
 
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        originPins = nil
+    }
+
     func place(origin: (NSSize) -> NSPoint) {
         guard let host = superview else { return }
         let pins = originPins ?? makeOriginPins(in: host)

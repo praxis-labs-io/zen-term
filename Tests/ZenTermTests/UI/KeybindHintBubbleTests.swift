@@ -43,4 +43,18 @@ final class KeybindHintBubbleTests: WindowTestCase {
 
         XCTAssertEqual(bubble.frame.origin, NSPoint(x: 50, y: 60))
     }
+
+    func test_place_putsTheBubbleAtTheOrigin_afterItMovesToAnotherHost() {
+        let first = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
+        let second = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
+        let bubble = KeybindHintBubble()
+        first.addSubview(bubble)
+        bubble.place { _ in NSPoint(x: 30, y: 40) }
+
+        bubble.removeFromSuperview()
+        second.addSubview(bubble)
+        bubble.place { _ in NSPoint(x: 50, y: 60) }
+
+        XCTAssertEqual(bubble.frame.origin, NSPoint(x: 50, y: 60))
+    }
 }
