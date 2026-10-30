@@ -8,53 +8,76 @@ final class KeybindHintBubbleTests: WindowTestCase {
         override var isFlipped: Bool { true }
     }
 
-    private func placedFrame(in host: NSView, at origin: NSPoint) -> (frame: NSRect, fitted: NSSize) {
-        host.frame = NSRect(x: 0, y: 0, width: 600, height: 400)
+    private let gap = ChromeMetrics.Spacing.s6
+
+    private func hosted(in host: NSView, anchorAt anchorFrame: NSRect) -> (bubble: KeybindHintBubble, anchor: NSView) {
+        host.frame = NSRect(x: 0, y: 0, width: 600, height: 800)
+        let anchor = NSView(frame: anchorFrame)
+        host.addSubview(anchor)
         let bubble = KeybindHintBubble()
         host.addSubview(bubble)
-        var fitted = NSSize.zero
-        bubble.place { size in
-            fitted = size
-            return origin
-        }
-        return (bubble.frame, fitted)
+        return (bubble, anchor)
     }
 
-    func test_place_putsTheBubbleAtTheOrigin_inAnUnflippedHost() {
-        let placed = placedFrame(in: NSView(), at: NSPoint(x: 30, y: 40))
+    func test_place_centersTheBubbleAboveTheAnchor_inAnUnflippedHost() {
+        let (bubble, anchor) = hosted(in: NSView(), anchorAt: NSRect(x: 280, y: 400, width: 40, height: 20))
 
-        XCTAssertEqual(placed.frame, NSRect(origin: NSPoint(x: 30, y: 40), size: placed.fitted))
+        bubble.place(near: anchor)
+
+        XCTAssertEqual(bubble.frame.midX, anchor.frame.midX, accuracy: 0.5)
+        XCTAssertEqual(bubble.frame.minY, anchor.frame.maxY + gap)
     }
 
-    func test_place_putsTheBubbleAtTheOrigin_inAFlippedHost() {
-        let placed = placedFrame(in: FlippedHost(), at: NSPoint(x: 30, y: 40))
+    func test_place_centersTheBubbleAboveTheAnchor_inAFlippedHost() {
+        let (bubble, anchor) = hosted(in: FlippedHost(), anchorAt: NSRect(x: 280, y: 400, width: 40, height: 20))
 
-        XCTAssertEqual(placed.frame, NSRect(origin: NSPoint(x: 30, y: 40), size: placed.fitted))
+        bubble.place(near: anchor)
+
+        XCTAssertEqual(bubble.frame.midX, anchor.frame.midX, accuracy: 0.5)
+        XCTAssertEqual(bubble.frame.maxY, anchor.frame.minY - gap)
+    }
+
+    func test_place_putsTheBubbleBelowTheAnchor_whenThereIsNoRoomAbove() {
+        let (bubble, anchor) = hosted(in: FlippedHost(), anchorAt: NSRect(x: 280, y: 10, width: 40, height: 20))
+
+        bubble.place(near: anchor)
+
+        XCTAssertEqual(bubble.frame.minY, anchor.frame.maxY + gap)
+    }
+
+    func test_place_keepsTheBubbleInsideTheHost_nearAnEdge() {
+        let (bubble, anchor) = hosted(in: FlippedHost(), anchorAt: NSRect(x: 570, y: 400, width: 20, height: 20))
+
+        bubble.place(near: anchor)
+
+        XCTAssertEqual(bubble.frame.maxX, 600 - ChromeMetrics.Spacing.s8)
     }
 
     func test_place_movesTheBubbleWhenAskedAgain() {
-        let host = NSView()
-        host.frame = NSRect(x: 0, y: 0, width: 600, height: 400)
-        let bubble = KeybindHintBubble()
-        host.addSubview(bubble)
-        bubble.place { _ in NSPoint(x: 30, y: 40) }
+        let host = FlippedHost()
+        let (bubble, first) = hosted(in: host, anchorAt: NSRect(x: 280, y: 400, width: 40, height: 20))
+        let second = NSView(frame: NSRect(x: 180, y: 450, width: 40, height: 20))
+        host.addSubview(second)
+        bubble.place(near: first)
 
-        bubble.place { _ in NSPoint(x: 50, y: 60) }
+        bubble.place(near: second)
 
-        XCTAssertEqual(bubble.frame.origin, NSPoint(x: 50, y: 60))
+        XCTAssertEqual(bubble.frame.midX, second.frame.midX, accuracy: 0.5)
+        XCTAssertEqual(bubble.frame.maxY, second.frame.minY - gap)
     }
 
-    func test_place_putsTheBubbleAtTheOrigin_afterItMovesToAnotherHost() {
-        let first = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
-        let second = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
-        let bubble = KeybindHintBubble()
-        first.addSubview(bubble)
-        bubble.place { _ in NSPoint(x: 30, y: 40) }
+    func test_place_putsTheBubbleNearTheAnchor_afterItMovesToAnotherHost() {
+        let (bubble, first) = hosted(in: FlippedHost(), anchorAt: NSRect(x: 280, y: 400, width: 40, height: 20))
+        bubble.place(near: first)
+        let second = FlippedHost(frame: NSRect(x: 0, y: 0, width: 600, height: 800))
+        let anchor = NSView(frame: NSRect(x: 180, y: 450, width: 40, height: 20))
+        second.addSubview(anchor)
 
         bubble.removeFromSuperview()
         second.addSubview(bubble)
-        bubble.place { _ in NSPoint(x: 50, y: 60) }
+        bubble.place(near: anchor)
 
-        XCTAssertEqual(bubble.frame.origin, NSPoint(x: 50, y: 60))
+        XCTAssertEqual(bubble.frame.midX, anchor.frame.midX, accuracy: 0.5)
+        XCTAssertEqual(bubble.frame.maxY, anchor.frame.minY - gap)
     }
 }

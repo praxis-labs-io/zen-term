@@ -267,17 +267,17 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         hintBubble?.clearError()
         guard chord.command || chord.shift || chord.option || chord.control else {
             hintBubble?.showError("Add at least one modifier (⌘ ⇧ ⌥ ⌃).")
-            positionHint()
+            hintBubble?.place(near: chordChip)
             return
         }
         if let menuItem = MenuShortcuts.owner(of: chord) {
             hintBubble?.showError("\(chord.displayGlyph) is the \(menuItem) menu shortcut.")
-            positionHint()
+            hintBubble?.place(near: chordChip)
             return
         }
         if let conflict = chordConflict(chord) {
             hintBubble?.showError(conflict)
-            positionHint()
+            hintBubble?.place(near: chordChip)
             return
         }
         commit(chord)
@@ -295,7 +295,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         chordChip.render(shortcut: chord.displayGlyph)
         hintBubble?.setPreview(chord.displayGlyph)
         hintBubble?.showSuccess("Shortcut saved.")
-        positionHint()
+        hintBubble?.place(near: chordChip)
         let close = DispatchWorkItem { [weak self] in
             self?.hideHint()
             self?.chordChip.setCapturing(false)
@@ -330,23 +330,12 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         let bubble = KeybindHintBubble()
         addSubview(bubble)
         hintBubble = bubble
-        positionHint()
+        hintBubble?.place(near: chordChip)
     }
 
     private func cancelCapture() {
         endCapture()
         renderChord()
-    }
-
-    private func positionHint() {
-        hintBubble?.place { size in
-            let chipRect = chordChip.convert(chordChip.bounds, to: self)
-            let x = max(8, min(chipRect.midX - size.width / 2, bounds.width - size.width - 8))
-            let maxY = max(8, bounds.height - size.height - 8)
-            var y = chipRect.minY - size.height - 6
-            if y < 8 { y = chipRect.maxY + 6 }
-            return NSPoint(x: x, y: max(8, min(y, maxY)))
-        }
     }
 
     private func hideHint() {

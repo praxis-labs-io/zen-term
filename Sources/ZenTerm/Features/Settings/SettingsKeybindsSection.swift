@@ -226,7 +226,7 @@ final class SettingsKeybindsSection: SettingsSection {
     private func refuse(_ reason: String, for row: KeybindRow) {
         hintBubble?.setPreview("")
         hintBubble?.showError(reason)
-        positionBubble(for: row)
+        hintBubble?.place(near: row.chip)
     }
 
     private func isAtDefault(_ action: KeyInterceptor.ReservedChord) -> Bool {
@@ -244,7 +244,7 @@ final class SettingsKeybindsSection: SettingsSection {
         }
         hintBubble?.setPreview(chord.displayGlyph)
         hintBubble?.showSuccess("Shortcut saved.")
-        positionBubble(for: row)
+        hintBubble?.place(near: row.chip)
         let close = DispatchWorkItem { [weak self, weak row] in
             self?.hideHint()
             row?.setCapturing(false)
@@ -357,27 +357,13 @@ final class SettingsKeybindsSection: SettingsSection {
         }
         host.addSubview(bubble)
         hintBubble = bubble
-        positionBubble(for: row)
+        hintBubble?.place(near: row.chip)
     }
 
     private func cancelCapture() {
         guard let row = capturingRow else { hideHint(); return }
         endCapture(row)
         refreshRows()
-    }
-
-    private func positionBubble(for row: KeybindRow) {
-        guard let host = hintBubble?.superview else { return }
-        hintBubble?.place { size in
-            let chipRect = row.chip.convert(row.chip.bounds, to: host)
-            let x = max(8, min(chipRect.midX - size.width / 2, host.bounds.width - size.width - 8))
-            let primary = host.isFlipped ? (chipRect.maxY + 6) : (chipRect.minY - size.height - 6)
-            let fallback = host.isFlipped ? (chipRect.minY - size.height - 6) : (chipRect.maxY + 6)
-            let maxY = max(8, host.bounds.height - size.height - 8)
-            var y = primary
-            if y < 8 || y > maxY { y = fallback }
-            return NSPoint(x: x, y: max(8, min(y, maxY)))
-        }
     }
 
     private func hideHint() {

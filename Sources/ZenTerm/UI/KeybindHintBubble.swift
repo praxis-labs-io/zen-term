@@ -4,6 +4,7 @@ final class KeybindHintBubble: ShadowCardView {
     private static let width: CGFloat = 220
     private static let padding = ChromeMetrics.Spacing.s12
     private static let resetSlot = ChromeMetrics.Height.control + ChromeMetrics.Spacing.s8
+    private static let gap = ChromeMetrics.Spacing.s6
 
     static func inputWidth(withReset: Bool) -> CGFloat {
         width - padding - padding - (withReset ? resetSlot : 0)
@@ -28,6 +29,7 @@ final class KeybindHintBubble: ShadowCardView {
     ) { [weak self] in self?.onResetToDefault?() }
     var onResetToDefault: (() -> Void)?
     private var originPins: (leading: NSLayoutConstraint, edge: NSLayoutConstraint)?
+    private weak var anchor: NSView?
 
     init() {
         super.init(frame: .zero)
@@ -110,14 +112,21 @@ final class KeybindHintBubble: ShadowCardView {
         originPins = nil
     }
 
-    func place(origin: (NSSize) -> NSPoint) {
-        guard let host = superview else { return }
+    func place(near anchor: NSView) {
+        self.anchor = anchor
+        reposition()
+    }
+
+    private func reposition() {
+        guard let anchor, let host = superview else { return }
         let pins = originPins ?? makeOriginPins(in: host)
         originPins = pins
         layoutSubtreeIfNeeded()
-        let point = origin(fittingSize)
-        pins.leading.constant = point.x
-        pins.edge.constant = host.isFlipped ? point.y : -point.y
+        let origin = HoverCardView.placementFrame(
+            size: fittingSize, anchor: anchor.convert(anchor.bounds, to: host), in: host, gap: Self.gap
+        ).origin
+        pins.leading.constant = origin.x
+        pins.edge.constant = host.isFlipped ? origin.y : -origin.y
         host.layoutSubtreeIfNeeded()
     }
 

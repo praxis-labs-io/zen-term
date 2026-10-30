@@ -27,7 +27,7 @@ class HoverCardView: ShadowCardView {
     }
 
     static func placementFrame(
-        size: NSSize, anchor: NSRect, in content: NSView, gap: CGFloat, margin: CGFloat = 8
+        size: NSSize, anchor: NSRect, in content: NSView, gap: CGFloat, margin: CGFloat = ChromeMetrics.Spacing.s8
     ) -> NSRect {
         let width = min(size.width, max(0, content.bounds.width - 2 * margin))
         var x = anchor.midX - width / 2
