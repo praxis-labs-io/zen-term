@@ -95,12 +95,12 @@ final class SurfaceFloatOverlayTests: WindowTestCase {
         var config = GeneralConfig.builtIn
         config.backgroundAlpha = 0.5
         GeneralConfig.setCurrentForTesting(config)
-        overlay.reapplyThemeTree()
+        overlay.reapplyTerminalBehavior()
         overlay.layoutSubtreeIfNeeded()
 
-        XCTAssertGreaterThan(
-            paintedAlpha(of: ring, at: NSPoint(x: 5, y: ring.bounds.midY)), 0,
-            "dialling the alpha down must bring the ring up on an already-built float")
+        let inRing = paintedAlpha(of: ring, at: NSPoint(x: 5, y: ring.bounds.midY))
+        XCTAssertGreaterThan(inRing, 0, "dialling the alpha down must bring the ring up on an already-built float")
+        XCTAssertLessThan(inRing, 0.99, "the ring paints opaque on a translucent float")
     }
 
     func test_solidBackground_leavesTheRingDown() throws {
@@ -124,7 +124,7 @@ final class SurfaceFloatOverlayTests: WindowTestCase {
         var config = GeneralConfig.builtIn
         config.backgroundAlpha = 0.5
         GeneralConfig.setCurrentForTesting(config)
-        overlay.reapplyThemeTree()
+        overlay.reapplyTerminalBehavior()
 
         XCTAssertFalse(frost.isHidden, "dialling the alpha down must bring the frost up")
         XCTAssertEqual(

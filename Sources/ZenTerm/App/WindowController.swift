@@ -560,29 +560,29 @@ final class WindowController: NSObject {
                     self.refreshConnectView()
                     self.renderTabBar()
                 }
-                self.reapplyThemeTrees(for: change)
+                if change.contains(.keymap) {
+                    for host in self.panelHosts { host.reapplyKeymap() }
+                    self.floats.reapplyKeymap()
+                }
+                if change.contains(.keymap) || change.contains(.floats) {
+                    (self.modal?.overlay as? PaletteOverlay)?.reapplyKeymap()
+                }
+                if change.contains(.terminalBehavior) {
+                    for host in self.panelHosts { host.reapplyTerminalBehavior() }
+                    self.floats.reapplyTerminalBehavior()
+                    self.connectView?.reapplyTerminalBehavior()
+                }
+                if change.contains(.theme) { self.reapplyThemeTrees() }
             }
         }
     }
 
     private var panelHosts: [PanelHostView] { allTabControllers.flatMap(\.panelHosts) }
 
-    private func reapplyThemeTrees(for change: ConfigChange) {
-        if change.contains(.theme) {
-            window.contentView?.reapplyThemeTree()
-            for host in panelHosts where host.window == nil { host.reapplyThemeTree() }
-            if let connectView, connectView.window == nil { connectView.reapplyThemeTree() }
-            return
-        }
-        if change.contains(.keymap) || change.contains(.terminalBehavior) {
-            for host in panelHosts { host.reapplyThemeTree() }
-        }
-        if change.contains(.terminalBehavior) {
-            floats.reapplyTheme()
-            connectView?.reapplyThemeTree()
-        }
-        if change.contains(.keymap) || change.contains(.floats) { modal?.overlay.reapplyThemeTree() }
-        if change.contains(.floats) { dock.reapplyThemeTree() }
+    private func reapplyThemeTrees() {
+        window.contentView?.reapplyThemeTree()
+        for host in panelHosts where host.window == nil { host.reapplyThemeTree() }
+        if let connectView, connectView.window == nil { connectView.reapplyThemeTree() }
     }
 
     private func layoutContainer() {

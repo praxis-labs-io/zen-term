@@ -430,6 +430,11 @@ final class RepoPickerOverlay: PaletteOverlay {
         return candidates.compactMap { FuzzyMatch.score(query, $0) }.max()
     }
 
+    override func reapplyKeymap() {
+        setFooterHints(Self.footerHints())
+        super.reapplyKeymap()
+    }
+
     static func footerHints() -> [HintFooter.Hint] {
         var hints = [
             HintFooter.Hint(keys: "⏎", label: "new workspace"), HintFooter.Hint(keys: "⏎", label: "open"),

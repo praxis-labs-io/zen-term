@@ -95,6 +95,26 @@ final class SettingsToolsSectionTests: WindowTestCase {
         XCTAssertEqual(rows(in: detail).map(\.renderedShortcutForTesting), ["⌘⇧D", "⌘⇧T"])
     }
 
+    func test_keymapChange_redrawsAFloatsShortcutAKeybindTookAway() throws {
+        try seed(twoFloats)
+        let section = SettingsToolsSection()
+        let detail = mount(section)
+        XCTAssertEqual(rows(in: detail).map(\.renderedShortcutForTesting), ["⌘⇧D", "⌘⇧T"])
+
+        try seed(twoFloats + "\nkeybind = split_vertical=cmd+shift+d")
+        settleReorder()
+        XCTAssertEqual(
+            CommandCatalog.spec(for: .toggleToolFloat("dev")).shortcut, "", "premise: the keybind took the chord")
+
+        let dev = try XCTUnwrap(rows(in: detail).first)
+        let mounted = descendants(of: dev).filter {
+            $0 is KeycapView || ($0 as? NSTextField)?.stringValue == "Not set"
+        }
+        XCTAssertEqual(mounted.count, 1, "the row must mount exactly one shortcut view")
+        XCTAssertEqual((mounted.first as? NSTextField)?.stringValue, "Not set")
+        withExtendedLifetime(section) {}
+    }
+
     func test_row_aMenuOwnedKey_readsAsUnset() throws {
         _ = NSApplication.shared
         let previous = NSApp.mainMenu

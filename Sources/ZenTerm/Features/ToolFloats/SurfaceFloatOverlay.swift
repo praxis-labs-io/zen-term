@@ -145,6 +145,10 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost, ThemeReapplying {
         applyBackground()
     }
 
+    func reapplyTerminalBehavior() { applyBackground() }
+
+    func reapplyKeymap() { chrome.reapplyKeymap() }
+
     var modeMeta: PanelMeta? {
         didSet {
             guard oldValue?.title != modeMeta?.title || oldValue?.action != modeMeta?.action else { return }
@@ -170,6 +174,8 @@ class SurfaceFloatOverlay: NSView, TerminalModeHost, ThemeReapplying {
     var scrollCursorForTesting: ScrollCursorView { chrome.scrollCursorForTesting }
     var isHeaderVisibleForTesting: Bool { chrome.isHeaderVisibleForTesting }
     var headerContentForTesting: (title: String, shortcut: String)? { chrome.headerContentForTesting }
+
+    var builtHeaderKeycapForTesting: String? { chrome.builtHeaderKeycapForTesting }
 
     func animateIn() {
         superview?.layoutSubtreeIfNeeded()

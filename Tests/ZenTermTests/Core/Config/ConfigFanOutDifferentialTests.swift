@@ -230,8 +230,7 @@ final class ConfigFanOutDifferentialTests: WindowTestCase {
         try assertGateSkipsNothing(
             Scenario(name: "rebind Focus Mode") {
                 let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
-                $0.keymap = $0.keymap.filter { $0.value != .toggleZoom }
-                $0.keymap[rebound] = .toggleZoom
+                $0.rebind(.toggleZoom, to: rebound)
             })
     }
 

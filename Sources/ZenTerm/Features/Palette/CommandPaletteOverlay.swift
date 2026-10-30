@@ -38,9 +38,9 @@ final class CommandPaletteOverlay: PaletteOverlay {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    override func reapplyTheme() {
+    override func reapplyKeymap() {
         commands = resolveCommands()
-        super.reapplyTheme()
+        super.reapplyKeymap()
     }
 
     var builtRowShortcutsForTesting: [String] {

@@ -13,6 +13,20 @@ final class SettingsToolsSection: SettingsSection {
     private weak var reorderHint: NSTextField?
     private weak var droppedFloatNotice: NSTextField?
     private var rowsStack: NSStackView?
+    private var configObserver: NSObjectProtocol?
+
+    init() {
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .configDidChange, object: nil, queue: .main
+        ) { [weak self] note in
+            guard ConfigChange.from(note).contains(.keymap) else { return }
+            MainActor.assumeIsolated { self?.rows.forEach { $0.reapplyKeymap() } }
+        }
+    }
+
+    deinit {
+        if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
+    }
 
     func makeDetailView() -> NSView {
         let stack = NSStackView()
@@ -172,15 +186,15 @@ final class ToolFloatRow: SettingsFocusRow {
     private let iconView = NSImageView()
     private let titleLabel: NSTextField
     private let subtitleLabel: NSTextField
-    private let shortcutView: NSView
+    private var shortcutView: NSView
+    private let controls = NSStackView()
     private let messageLabel = NSTextField(labelWithString: "")
 
     init(float: ToolFloat) {
         self.float = float
         titleLabel = NSTextField(labelWithString: float.title)
         subtitleLabel = NSTextField(labelWithString: float.command)
-        let shortcut = CommandCatalog.spec(for: .toggleToolFloat(float.id)).shortcut
-        shortcutView = shortcut.isEmpty ? Self.unsetLabel() : KeycapView(shortcut: shortcut)
+        shortcutView = Self.makeShortcutView(for: float)
 
         super.init()
 
@@ -201,7 +215,7 @@ final class ToolFloatRow: SettingsFocusRow {
 
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let controls = NSStackView(views: [iconView, labels, spacer, shortcutView])
+        [iconView, labels, spacer, shortcutView].forEach(controls.addArrangedSubview)
         controls.orientation = .horizontal
         controls.alignment = .centerY
         controls.spacing = ChromeMetrics.Spacing.s10
@@ -232,6 +246,17 @@ final class ToolFloatRow: SettingsFocusRow {
         messageLabel.textColor = Theme.current.chrome.warning.nsColor
         (shortcutView as? NSTextField)?.textColor = Self.unsetInk
         super.reapplyTheme()
+    }
+
+    func reapplyKeymap() {
+        shortcutView.removeFromSuperview()
+        shortcutView = Self.makeShortcutView(for: float)
+        controls.addArrangedSubview(shortcutView)
+    }
+
+    private static func makeShortcutView(for float: ToolFloat) -> NSView {
+        let shortcut = CommandCatalog.spec(for: .toggleToolFloat(float.id)).shortcut
+        return shortcut.isEmpty ? unsetLabel() : KeycapView(shortcut: shortcut)
     }
 
     private static var unsetInk: NSColor { Theme.current.chrome.ink(.muted) }

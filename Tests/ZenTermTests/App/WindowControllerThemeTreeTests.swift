@@ -152,6 +152,102 @@ final class WindowControllerThemeTreeTests: WindowTestCase {
         XCTAssertEqual(dockProbe.count, 1, "an untagged reload walked the dock again")
     }
 
+    func test_keymapChange_recolorsNothing() throws {
+        Motion.isReduceMotionEnabled = { true }
+        let controller = makeController()
+        let root = controller.window.contentView!
+        controller.handle(.toggleBottomDrawer)
+        controller.handle(.toggleCommandPalette)
+        let drawer = try XCTUnwrap(
+            descendants(of: root).compactMap { $0 as? PanelHostView }
+                .first { $0.builtHeaderKeycapForTesting != nil },
+            "premise: the drawer's header is mounted")
+        let palette = try XCTUnwrap(descendants(of: root).compactMap { $0 as? CommandPaletteOverlay }.first)
+        let rootProbe = CountingProbe()
+        let drawerProbe = CountingProbe()
+        let paletteProbe = CountingProbe()
+        root.addSubview(rootProbe)
+        drawer.addSubview(drawerProbe)
+        palette.addSubview(paletteProbe)
+        let borderBefore = drawer.borderForTesting.color
+
+        let rebound = Chord(command: true, shift: true, option: true, control: true, key: "j")
+        var config = GeneralConfig.current
+        config.rebind(.toggleZoom, to: rebound)
+        GeneralConfig.setCurrentForTesting(config)
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        post(.keymap)
+
+        XCTAssertEqual(drawer.builtHeaderKeycapForTesting, rebound.displayGlyph, "premise: the rebind landed")
+        XCTAssertEqual(rootProbe.count, 0, "a keymap change walked the window")
+        XCTAssertEqual(drawerProbe.count, 0, "a keymap change walked the drawer host")
+        XCTAssertEqual(paletteProbe.count, 0, "a keymap change walked the open palette")
+        XCTAssertEqual(borderBefore, drawer.borderForTesting.color, "a keymap change recolored the drawer")
+    }
+
+    func test_terminalBehaviorChange_recolorsNothing() throws {
+        Motion.isReduceMotionEnabled = { true }
+        let controller = makeController()
+        let root = controller.window.contentView!
+        controller.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        let host = try XCTUnwrap(descendants(of: root).compactMap { $0 as? PanelHostView }.first)
+        let float = try XCTUnwrap(controller.floatsForTesting.shownOverlayForTesting)
+        let rootProbe = CountingProbe()
+        let hostProbe = CountingProbe()
+        let floatProbe = CountingProbe()
+        root.addSubview(rootProbe)
+        host.addSubview(hostProbe)
+        float.addSubview(floatProbe)
+        let borderBefore = host.borderForTesting.color
+        let fillBefore = host.paintedBackgroundForTesting.fill
+
+        var config = GeneralConfig.current
+        config.backgroundAlpha = 0.5
+        GeneralConfig.setCurrentForTesting(config)
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        post(.terminalBehavior)
+
+        XCTAssertNotEqual(
+            fillBefore, host.paintedBackgroundForTesting.fill, "the behavior change never reached the pane host")
+        XCTAssertEqual(rootProbe.count, 0, "a behavior change walked the window")
+        XCTAssertEqual(hostProbe.count, 0, "a behavior change walked the pane host")
+        XCTAssertEqual(floatProbe.count, 0, "a behavior change walked the open float")
+        XCTAssertEqual(borderBefore, host.borderForTesting.color, "a behavior change recolored the pane border")
+    }
+
+    func test_floatsChange_recolorsNothing() throws {
+        Motion.isReduceMotionEnabled = { true }
+        let controller = makeController()
+        let root = controller.window.contentView!
+        controller.handle(.toggleCommandPalette)
+        let palette = try XCTUnwrap(descendants(of: root).compactMap { $0 as? CommandPaletteOverlay }.first)
+        let dock = try XCTUnwrap(descendants(of: root).compactMap { $0 as? ToggleDock }.first)
+        let rootProbe = CountingProbe()
+        let paletteProbe = CountingProbe()
+        let dockProbe = CountingProbe()
+        root.addSubview(rootProbe)
+        palette.addSubview(paletteProbe)
+        dock.addSubview(dockProbe)
+
+        var config = GeneralConfig.current
+        config.floats = [
+            ToolFloat(
+                id: "notes", order: 0, title: "Notes", icon: ToolFloatParser.defaultIcon,
+                command: "ls", dir: nil, widthFraction: 0.85, heightFraction: 0.85,
+                requiresGitRepo: false, persist: .ephemeral,
+                toggle: Chord(command: true, shift: true, key: "n"))
+        ]
+        GeneralConfig.setCurrentForTesting(config)
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        post(.floats)
+
+        let titles = descendants(of: palette).compactMap { ($0 as? NSTextField)?.stringValue }
+        XCTAssertTrue(titles.contains("Notes"), "the new float never reached the open palette")
+        XCTAssertEqual(rootProbe.count, 0, "a floats change walked the window")
+        XCTAssertEqual(paletteProbe.count, 0, "a floats change walked the open palette")
+        XCTAssertEqual(dockProbe.count, 0, "a floats change walked the dock")
+    }
+
     func test_themeChange_reachesAnInactiveTabsHostBeforeYouSwitchBack() throws {
         Motion.isReduceMotionEnabled = { true }
         let controller = makeController()

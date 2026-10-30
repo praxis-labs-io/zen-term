@@ -176,6 +176,10 @@ final class PanelHostView: NSView, TerminalModeHost, ThemeReapplying {
         updateBorder()
     }
 
+    func reapplyKeymap() { chrome.reapplyKeymap() }
+
+    func reapplyTerminalBehavior() { applyBackground() }
+
     func reapplyChromeLayout() {
         let radius = Self.cornerRadius
         pane.layer?.cornerRadius = radius
