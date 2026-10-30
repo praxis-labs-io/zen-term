@@ -43,15 +43,7 @@ final class TooltipPresenter {
     private func present(for source: NSView, label: String, shortcut: String?, style: ChromeTooltip.Style) {
         guard let window = source.window, let content = window.contentView else { return }
         let tip = ChromeTooltip(label: label, shortcut: shortcut, style: style)
-        tip.translatesAutoresizingMaskIntoConstraints = false
-        content.addSubview(tip)
-        tip.layoutSubtreeIfNeeded()
-
-        tip.translatesAutoresizingMaskIntoConstraints = true
-        tip.frame = HoverCardView.placementFrame(
-            size: tip.fittingSize,
-            anchor: content.convert(source.bounds, from: source),
-            in: content, gap: Self.gap)
+        tip.show(in: content, anchor: content.convert(source.bounds, from: source), gap: Self.gap)
         tooltip = tip
         installDismissTriggers(in: window)
     }

@@ -25,15 +25,8 @@ final class LinkPreviewPresenter {
         guard let window = source.window, let content = window.contentView else { return }
 
         let card = LinkPreviewView(url: url)
-        card.translatesAutoresizingMaskIntoConstraints = false
-        content.addSubview(card)
-        card.layoutSubtreeIfNeeded()
-
         let pointer = content.convert(window.mouseLocationOutsideOfEventStream, from: nil)
-        card.translatesAutoresizingMaskIntoConstraints = true
-        card.frame = HoverCardView.placementFrame(
-            size: card.fittingSize, anchor: NSRect(origin: pointer, size: .zero),
-            in: content, gap: Self.gap)
+        card.show(in: content, anchor: NSRect(origin: pointer, size: .zero), gap: Self.gap)
         preview = card
         shownURL = url
         owner = source

@@ -17,6 +17,15 @@ class HoverCardView: ShadowCardView {
         return label
     }
 
+    // Measured with autoresizing off: a 0x0 autoresizing frame conflicts with the card's own constraints.
+    func show(in content: NSView, anchor: NSRect, gap: CGFloat) {
+        translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(self)
+        layoutSubtreeIfNeeded()
+        translatesAutoresizingMaskIntoConstraints = true
+        frame = Self.placementFrame(size: fittingSize, anchor: anchor, in: content, gap: gap)
+    }
+
     static func placementFrame(
         size: NSSize, anchor: NSRect, in content: NSView, gap: CGFloat, margin: CGFloat = 8
     ) -> NSRect {
