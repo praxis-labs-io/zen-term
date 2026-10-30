@@ -34,6 +34,7 @@ final class WorkspaceTabStrip: NSView {
     var addButtonForTesting: AppButton { addButton }
     var isRenameHintVisibleForTesting: Bool { !renameHint.isHidden }
     var isIdleHintVisibleForTesting: Bool { !idleHint.isHidden }
+    var idleHintFrameForTesting: CGRect { idleHint.frame }
     var visibleChipsRectForTesting: CGRect { scrollView.contentView.documentVisibleRect }
     var chipsScrollForTesting: FadingScrollView { scrollView }
     var pillFrameForTesting: CGRect { pill.frame }
@@ -302,10 +303,12 @@ final class WorkspaceTabStrip: NSView {
                 }
             }
         }
+        hint.setClippingResistancePriority(.defaultLow, for: .horizontal)
         hint.translatesAutoresizingMaskIntoConstraints = false
         addSubview(hint)
         NSLayoutConstraint.activate([
             hint.leadingAnchor.constraint(equalTo: leadingAnchor),
+            hint.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
             hint.centerYAnchor.constraint(
                 equalTo: topAnchor, constant: WorkspaceTabChip.height + Self.hintGap + Self.hintHeight / 2),
         ])

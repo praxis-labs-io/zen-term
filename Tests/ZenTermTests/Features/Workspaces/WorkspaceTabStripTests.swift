@@ -226,6 +226,20 @@ final class WorkspaceTabStripTests: WindowTestCase {
         XCTAssertEqual(conflicts, [])
     }
 
+    func test_aHintWiderThanTheStrip_staysInsideIt() throws {
+        mount([Workspace.Tab(main: "nvim")])
+        let wide = strip.idleHintFrameForTesting.width
+
+        let conflicts = constraintConflicts {
+            window?.setContentSize(NSSize(width: wide / 2 + 40, height: 80))
+            window?.contentView?.layoutSubtreeIfNeeded()
+        }
+
+        XCTAssertEqual(conflicts, [])
+        XCTAssertLessThan(strip.bounds.width, wide, "the strip has to be narrower than the hint")
+        XCTAssertLessThanOrEqual(strip.idleHintFrameForTesting.maxX, strip.bounds.width)
+    }
+
     func test_hover_neverChangesAChipsWidth() throws {
         mount(
             [Workspace.Tab(main: "nvim"), Workspace.Tab(name: "gate"), Workspace.Tab()],
