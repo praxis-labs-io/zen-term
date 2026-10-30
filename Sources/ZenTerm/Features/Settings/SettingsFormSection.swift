@@ -4,10 +4,7 @@ class SettingsFormSection: SettingsSection {
     var navTitle: String { "" }
     var onExitToNav: (() -> Void)?
 
-    private static let resetAllTitle = "Reset all to defaults"
-
-    private var resetAllButton = AppButton(title: resetAllTitle, variant: .muted)
-    private var resetAllMessage = ResetFlashLabel()
+    private weak var resetAllMessage: ResetFlashLabel?
     private var rows: [LayoutRow] = []
     private var groupCaptions: [NSTextField] = []
     private var stops: [NSView] = []
@@ -42,8 +39,9 @@ class SettingsFormSection: SettingsSection {
 
         populate()
 
-        resetAllButton = AppButton(title: Self.resetAllTitle, variant: .muted)
-        resetAllMessage = ResetFlashLabel()
+        let resetAllButton = AppButton(title: "Reset all to defaults", variant: .muted)
+        let resetAllMessage = ResetFlashLabel()
+        self.resetAllMessage = resetAllMessage
         resetAllButton.isKeyboardFocusable = true
         resetAllButton.onArrowUp = { [weak self] in self?.moveFocus(-1) }
         resetAllButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
@@ -259,7 +257,7 @@ class SettingsFormSection: SettingsSection {
     }
     private func resetAll() {
         guard persist({ try ConfigWriter.apply(removals: Set(self.scalarKeys)) }, reportKey: nil) else { return }
-        resetAllMessage.flash("Defaults restored.")
+        resetAllMessage?.flash("Defaults restored.")
     }
 
     @discardableResult

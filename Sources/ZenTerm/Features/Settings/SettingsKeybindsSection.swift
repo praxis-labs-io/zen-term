@@ -50,14 +50,13 @@ final class SettingsKeybindsSection: SettingsSection {
     private var desired = KeymapOverrides()
     private var rows: [KeybindRow] = []
     private var groupCaptions: [NSTextField] = []
-    private static let resetAllTitle = "Reset all to defaults"
-    private var resetAllButton = AppButton(title: resetAllTitle, variant: .muted)
+    private weak var resetAllButton: AppButton?
     private weak var detailScroll: NSScrollView?
     private var hintBubble: KeybindHintBubble?
     private var hintBackdrop: NSView?
     private weak var capturingRow: KeybindRow?
     private var captureCloseTimer: DispatchWorkItem?
-    private var resetAllMessage = ResetFlashLabel()
+    private weak var resetAllMessage: ResetFlashLabel?
     private var configObserver: NSObjectProtocol?
     private var hasMissedConfigReload = false
 
@@ -128,21 +127,23 @@ final class SettingsKeybindsSection: SettingsSection {
             }
         }
 
-        resetAllButton = AppButton(title: Self.resetAllTitle, variant: .muted)
-        resetAllMessage = ResetFlashLabel()
+        let resetAllButton = AppButton(title: "Reset all to defaults", variant: .muted)
+        let resetAllMessage = ResetFlashLabel()
+        self.resetAllButton = resetAllButton
+        self.resetAllMessage = resetAllMessage
         resetAllButton.isKeyboardFocusable = true
-        resetAllButton.onArrowUp = { [weak self] in
-            guard let self else { return }
-            self.moveFocus(from: self.resetAllButton, delta: -1)
+        resetAllButton.onArrowUp = { [weak self, weak resetAllButton] in
+            guard let self, let resetAllButton else { return }
+            self.moveFocus(from: resetAllButton, delta: -1)
         }
         resetAllButton.onArrowLeft = { [weak self] in self?.onExitToNav?() }
-        resetAllButton.onTab = { [weak self] in
-            guard let self else { return }
-            self.moveTab(from: self.resetAllButton, delta: 1)
+        resetAllButton.onTab = { [weak self, weak resetAllButton] in
+            guard let self, let resetAllButton else { return }
+            self.moveTab(from: resetAllButton, delta: 1)
         }
-        resetAllButton.onBacktab = { [weak self] in
-            guard let self else { return }
-            self.moveTab(from: self.resetAllButton, delta: -1)
+        resetAllButton.onBacktab = { [weak self, weak resetAllButton] in
+            guard let self, let resetAllButton else { return }
+            self.moveTab(from: resetAllButton, delta: -1)
         }
         resetAllButton.onTap = { [weak self] in self?.resetAll() }
         let resetRow = SettingsDetail.trailingRow(resetAllButton)
@@ -161,7 +162,7 @@ final class SettingsKeybindsSection: SettingsSection {
         return scroll
     }
 
-    func detailStops() -> [NSView] { rows.map(\.chip) + [resetAllButton] }
+    func detailStops() -> [NSView] { rows.map(\.chip) + [resetAllButton].compactMap { $0 } }
 
     func sectionWillHide() {
         if let row = capturingRow { endCapture(row) }
@@ -305,7 +306,7 @@ final class SettingsKeybindsSection: SettingsSection {
     private func resetAll() {
         desired = KeymapOverrides(defaults: KeymapDefaults.map)
         guard persist(reportingRow: rows.last) else { return }
-        resetAllMessage.flash("Defaults restored.")
+        resetAllMessage?.flash("Defaults restored.")
     }
 
     @discardableResult
@@ -399,7 +400,7 @@ final class SettingsKeybindsSection: SettingsSection {
     }
 
     private func moveFocus(from view: NSView, delta: Int) {
-        let stops = rows.map(\.chip) + [resetAllButton]
+        let stops = detailStops()
         guard let anchor = stops.firstIndex(where: { $0 === view }) else { return }
         SettingsDetail.moveFocus(stops: stops, from: anchor, delta: delta) { [rows] target in
             rows.first { $0.chip === target } ?? target
@@ -407,7 +408,7 @@ final class SettingsKeybindsSection: SettingsSection {
     }
 
     private func moveTab(from view: NSView, delta: Int) {
-        let stops = rows.map(\.chip) + [resetAllButton]
+        let stops = detailStops()
         guard let anchor = stops.firstIndex(where: { $0 === view }) else { return }
         if delta < 0, anchor == 0 {
             onExitToNav?()
