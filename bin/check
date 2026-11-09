@@ -11,7 +11,7 @@ cd "$(dirname "$0")/.."
 # than a guarantee. `|| true` so a read-only checkout can never fail a run over a cache hint.
 mkdir -p .build 2>/dev/null && touch .build/.metadata_never_index 2>/dev/null || true
 
-# Harmless linker noise from libghostty-fat.a — filtered out so real output stands out.
+# Harmless linker noise from libghostty-internal.a — filtered out so real output stands out.
 # `-Xlinker -w` doesn't suppress these on the current linker.
 #
 # Filtered through a pipeline, not a `> >(…)` process substitution: bash doesn't wait on a
