@@ -50,9 +50,9 @@ final class GhosttyApp {
             supports_selection_clipboard: false,
             wakeup_cb: { _ in GhosttyApp.wakeup() },
             action_cb: { app, target, action in GhosttyApp.action(app, target, action) },
-            read_clipboard_cb: { ud, loc, state in GhosttyApp.readClipboard(ud, loc, state) },
-            confirm_read_clipboard_cb: { ud, str, state, _ in
-                GhosttyApp.confirmReadClipboard(ud, str, state)
+            read_clipboard_cb: { ud, loc, state, _, _, _ in GhosttyApp.readClipboard(ud, loc, state) },
+            confirm_read_clipboard_cb: { ud, confirm, state, _ in
+                GhosttyApp.confirmReadClipboard(ud, confirm, state)
             },
             write_clipboard_cb: { ud, _, content, len, _ in GhosttyApp.writeClipboard(ud, content, len) },
             close_surface_cb: { ud, alive in GhosttyApp.closeSurface(ud, alive) }
@@ -198,22 +198,47 @@ final class GhosttyApp {
         _ userdata: UnsafeMutableRawPointer?,
         _ location: ghostty_clipboard_e,
         _ state: UnsafeMutableRawPointer?
-    ) -> Bool {
-        guard let surface = surface(from: userdata), let ptr = surface.surfacePtr else { return false }
-        guard let str = NSPasteboard.general.string(forType: .string) else { return false }
-        str.withCString { ghostty_surface_complete_clipboard_request(ptr, $0, state, false) }
-        return true
+    ) -> ghostty_clipboard_read_result_e {
+        guard let surface = surface(from: userdata),
+            let ptr = surface.surfacePtr,
+            let str = NSPasteboard.general.string(forType: .string)
+        else { return GHOSTTY_CLIPBOARD_READ_UNAVAILABLE }
+        "text/plain".withCString { mime in
+            str.withCString { data in
+                var content = ghostty_clipboard_content_s(mime: mime, data: data, len: strlen(data))
+                withUnsafePointer(to: &content) { contents in
+                    var complete = ghostty_clipboard_complete_s(
+                        contents: contents,
+                        contents_len: 1,
+                        available: nil,
+                        available_len: 0,
+                        confirmed: false,
+                        remember: false
+                    )
+                    ghostty_surface_complete_clipboard_request(ptr, &complete, state)
+                }
+            }
+        }
+        return GHOSTTY_CLIPBOARD_READ_STARTED
     }
 
     // Auto-confirms, since reads are allowed outright; leaving it unanswered hangs the program.
     private static func confirmReadClipboard(
         _ userdata: UnsafeMutableRawPointer?,
-        _ string: UnsafePointer<CChar>?,
+        _ confirm: UnsafePointer<ghostty_clipboard_confirm_s>?,
         _ state: UnsafeMutableRawPointer?
     ) {
-        guard let surface = surface(from: userdata), let ptr = surface.surfacePtr, let string
+        guard let surface = surface(from: userdata), let ptr = surface.surfacePtr, let confirm
         else { return }
-        ghostty_surface_complete_clipboard_request(ptr, string, state, true)
+        var complete = ghostty_clipboard_complete_s(
+            contents: confirm.pointee.contents,
+            contents_len: confirm.pointee.contents_len,
+            available: confirm.pointee.available,
+            available_len: confirm.pointee.available_len,
+            confirmed: true,
+            remember: false
+        )
+        ghostty_surface_complete_clipboard_request(ptr, &complete, state)
     }
 
     private static func writeClipboard(
@@ -227,7 +252,8 @@ final class GhosttyApp {
             guard let mime = item.mime, String(cString: mime) == "text/plain", let data = item.data
             else { continue }
             NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(String(cString: data), forType: .string)
+            let text = String(decoding: UnsafeRawBufferPointer(start: data, count: item.len), as: UTF8.self)
+            NSPasteboard.general.setString(text, forType: .string)
             return
         }
     }
