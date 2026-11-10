@@ -98,6 +98,31 @@ final class GhosttyClipboardTests: XCTestCase {
         XCTAssertTrue(screen.contains(reply), "the reply lost bytes: \(screen)")
     }
 
+    func test_aProgramReadingTheClipboardGetsTextWithEmbeddedNullWhole() throws {
+        let text = "null\0instead\0of\0space"
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        let reply = "]52;c;\(base64(text))"
+
+        let surface = try mounted("printf '\\033]52;c;?\\007'; exec cat -v")
+        let screen = screen(of: surface) { $0.contains(reply) }
+
+        XCTAssertTrue(screen.contains(reply), "the reply lost bytes: \(screen)")
+    }
+
+    func test_aProgramReadingThePrimarySelectionIsToldItIsUnsupported() throws {
+        let text = "zen-primary-must-not-leak"
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+
+        let surface = try mounted(
+            "printf '\\033]5522;type=read:loc=primary:id=abc;dGV4dC9wbGFpbg==\\033\\\\'; exec cat -v")
+        let screen = screen(of: surface) { $0.contains("status=ENOSYS") }
+
+        XCTAssertTrue(screen.contains("]5522;type=read:status=ENOSYS:id=abc"), "no ENOSYS reply: \(screen)")
+        XCTAssertFalse(screen.contains(base64(text)), "the pasteboard text leaked: \(screen)")
+    }
+
     func test_aProgramWritingTheClipboardSetsThePasteboard() throws {
         let text = "héllo ✓ wörld"
         NSPasteboard.general.clearContents()

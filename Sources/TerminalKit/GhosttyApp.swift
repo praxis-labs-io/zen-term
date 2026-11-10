@@ -199,13 +199,15 @@ final class GhosttyApp {
         _ location: ghostty_clipboard_e,
         _ state: UnsafeMutableRawPointer?
     ) -> ghostty_clipboard_read_result_e {
+        guard location == GHOSTTY_CLIPBOARD_STANDARD
+        else { return GHOSTTY_CLIPBOARD_READ_UNSUPPORTED }
         guard let surface = surface(from: userdata),
             let ptr = surface.surfacePtr,
             let str = NSPasteboard.general.string(forType: .string)
         else { return GHOSTTY_CLIPBOARD_READ_UNAVAILABLE }
         "text/plain".withCString { mime in
             str.withCString { data in
-                var content = ghostty_clipboard_content_s(mime: mime, data: data, len: strlen(data))
+                var content = ghostty_clipboard_content_s(mime: mime, data: data, len: str.utf8.count)
                 withUnsafePointer(to: &content) { contents in
                     var complete = ghostty_clipboard_complete_s(
                         contents: contents,
