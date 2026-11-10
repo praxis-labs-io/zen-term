@@ -144,7 +144,7 @@ even when keychain reads succeed.
 `vendor/ghostty` pin moves. The procedure is `docs/third-party-notices.md`.
 
 The one thing worth knowing before you start: **probe the linked executable
-(`.build/release/ZenTerm`), never `libghostty-fat.a` or `build.zig.zon`.** An
+(`.build/release/ZenTerm`), never `libghostty-internal.a` or `build.zig.zon`.** An
 archive is a bag of object files the linker draws from selectively, and the manifest
 lists what *could* link, most of it Linux-only. Probing the archive undercounted the
 shipped library set by eight libraries.

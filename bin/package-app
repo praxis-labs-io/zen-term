@@ -98,7 +98,7 @@ ZEN_BIN=".build/release/zen"
 # bundle is a resource copy, not a relink.
 EXPECTED_BUNDLES=(ZenTerm_TerminalKit.bundle ZenTerm_ZenTerm.bundle)
 
-# Harmless linker noise from libghostty-fat.a is filtered out, same as bin/check. A pipeline (not
+# Harmless linker noise from libghostty-internal.a is filtered out, same as bin/check. A pipeline (not
 # `> >(…)`) so bash waits on the filter, and `set -o pipefail` above keeps swift build's exit status.
 LINKER_NOISE='could not find symbol .* in object file'
 echo "▸ Building release…"
