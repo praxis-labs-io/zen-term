@@ -4,14 +4,15 @@ import XCTest
 @testable import TerminalKit
 
 final class GhosttyClipboardTests: XCTestCase {
+    private typealias ClipboardBackup = [[NSPasteboard.PasteboardType: Data]]
     private var window: NSWindow!
     private var surfaces: [GhosttySurface] = []
-    private var savedClipboard: String?
+    private var clipboardBackup: ClipboardBackup = []
 
     override func setUp() {
         super.setUp()
         _ = NSApplication.shared
-        savedClipboard = NSPasteboard.general.string(forType: .string)
+        clipboardBackup = saveClipboard(NSPasteboard.general)
         window = NSWindow(
             contentRect: NSRect(x: 100, y: 100, width: 800, height: 600),
             styleMask: [.titled], backing: .buffered, defer: false)
@@ -28,8 +29,24 @@ final class GhosttyClipboardTests: XCTestCase {
         window.close()
         window = nil
         NSPasteboard.general.clearContents()
-        if let savedClipboard { NSPasteboard.general.setString(savedClipboard, forType: .string) }
+        restoreClipboard(NSPasteboard.general, clipboardBackup)
+        clipboardBackup = []
         super.tearDown()
+    }
+
+    private func saveClipboard(_ pb: NSPasteboard) -> ClipboardBackup {
+        (pb.pasteboardItems ?? []).map { item in
+            item.types.reduce(into: [:]) { $0[$1] = item.data(forType: $1) }
+        }
+    }
+
+    private func restoreClipboard(_ pb: NSPasteboard, _ backup: ClipboardBackup) {
+        pb.writeObjects(
+            backup.map { contents in
+                let item = NSPasteboardItem()
+                for (type, data) in contents { item.setData(data, forType: type) }
+                return item
+            })
     }
 
     private func mounted(_ script: String) throws -> GhosttySurface {
@@ -93,5 +110,36 @@ final class GhosttyClipboardTests: XCTestCase {
         }
 
         XCTAssertEqual(NSPasteboard.general.string(forType: .string), text)
+    }
+
+    func test_theClipboardBackupRestoresEveryItemWithTypes() {
+        let pb = NSPasteboard.withUniqueName()
+        defer { pb.releaseGlobally() }
+
+        let a = NSPasteboardItem()
+        a.setString("first-item", forType: .string)
+        let testType = NSPasteboard.PasteboardType("test.data")
+        let testData = Data([1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89])
+        let b = NSPasteboardItem()
+        b.setString("second-item", forType: .string)
+        b.setData(testData, forType: testType)
+
+        pb.writeObjects([a, b])
+        XCTAssertEqual(pb.pasteboardItems?.count, 2)
+        let backup = saveClipboard(pb)
+
+        pb.clearContents()
+        XCTAssertEqual(pb.pasteboardItems ?? [], [])
+        restoreClipboard(pb, backup)
+        XCTAssertEqual(pb.pasteboardItems?.count, 2)
+
+        let first = pb.pasteboardItems?.first
+        XCTAssertNotNil(first)
+        XCTAssertEqual(first?.string(forType: .string), "first-item")
+
+        let second = pb.pasteboardItems?.last
+        XCTAssertNotNil(second)
+        XCTAssertEqual(second?.string(forType: .string), "second-item")
+        XCTAssertEqual(second?.data(forType: testType), testData)
     }
 }
