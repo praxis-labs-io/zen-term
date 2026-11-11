@@ -2249,6 +2249,8 @@ final class WindowController: NSObject {
 
     func holdsWorkspace(at path: URL) -> Bool { openWorkspace(at: path) != nil }
 
+    func configuredWorkspaceID(at path: URL) -> WorkspaceID? { openWorkspace(at: path)?.id }
+
     func activateWorkspace(at path: URL) {
         guard let workspace = openWorkspace(at: path) else { return }
         activate(workspace.id)
@@ -2384,7 +2386,9 @@ final class WindowController: NSObject {
         workspaces.first { $0.id == id }.map { $0.origin?.parent.path ?? $0.folder }
     }
 
-    func openUnconfiguredWorkspace(at folder: URL) -> WorkspaceID { appendUnconfiguredWorkspace(at: folder).id }
+    func openUnconfiguredWorkspace(at folder: URL, named name: String? = nil) -> WorkspaceID {
+        appendUnconfiguredWorkspace(at: folder, named: name).id
+    }
 
     func closeStakes(tab id: TabID) -> CloseStakes? {
         guard let workspace = workspace(of: id), let tab = controller(id) else { return nil }

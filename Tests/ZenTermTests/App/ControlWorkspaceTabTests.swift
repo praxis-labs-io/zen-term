@@ -296,6 +296,59 @@ final class ControlWorkspaceTabTests: WindowTestCase {
         XCTAssertEqual(try error(send(.workspaceNew, ControlArgs(path: "relative"))).code, .badRequest)
     }
 
+    func test_workspaceNewWithATitle_namesIt_andAnEmptyOneFallsBackToWorkspaceN() throws {
+        _ = makeWindow()
+
+        let named = try result(send(.workspaceNew, ControlArgs(title: "scratch")), as: WorkspaceResult.self)
+        let plain = try result(send(.workspaceNew, ControlArgs(title: "")), as: WorkspaceResult.self)
+
+        XCTAssertEqual(named.workspace?.title, "scratch")
+        XCTAssertEqual(plain.workspace?.title, "Workspace 2")
+    }
+
+    private func listedTitles() throws -> [String] {
+        try result(send(.list), as: ListResult.self).windows.flatMap(\.workspaces).map(\.title)
+    }
+
+    func test_workspaceRename_byFolderByTitleAndAsTheCaller() throws {
+        let c = makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        c.openWorkspaceForTesting(alpha())
+
+        _ = try result(send(.workspaceRename, ControlArgs(workspace: folder.path, title: "api")), as: NoPayload.self)
+        XCTAssertEqual(try listedTitles(), ["Workspace 1", "api"])
+
+        _ = try result(send(.workspaceRename, ControlArgs(workspace: "api", title: "web")), as: NoPayload.self)
+        XCTAssertEqual(try listedTitles(), ["Workspace 1", "web"], "addressed by its current name")
+
+        _ = try result(send(.workspaceRename, ControlArgs(title: "home"), from: caller), as: NoPayload.self)
+        XCTAssertEqual(try listedTitles(), ["home", "web"], "the caller's workspace, not the active one")
+    }
+
+    func test_workspaceRename_emptyClears_theOldNameIsGone_andATitleIsRequired() throws {
+        let c = makeWindow()
+        c.openWorkspaceForTesting(alpha())
+        _ = try result(send(.workspaceRename, ControlArgs(workspace: "alpha", title: "api")), as: NoPayload.self)
+
+        XCTAssertEqual(try error(send(.workspaceSwitch, ControlArgs(workspace: "alpha"))).code, .notFound)
+        XCTAssertEqual(try error(send(.workspaceRename, ControlArgs(workspace: "api"))).code, .badRequest)
+
+        _ = try result(send(.workspaceRename, ControlArgs(workspace: "api", title: "")), as: NoPayload.self)
+        XCTAssertEqual(try listedTitles(), ["Workspace 1", "alpha"])
+    }
+
+    func test_workspaceOpenOfARenamedConfiguredWorkspace_returnsTheOpenOne() throws {
+        let c = makeWindow()
+        configured = [alpha()]
+        c.openWorkspaceForTesting(alpha())
+        _ = try result(send(.workspaceRename, ControlArgs(workspace: folder.path, title: "api")), as: NoPayload.self)
+
+        let opened = try result(send(.workspaceOpen, ControlArgs(workspace: "alpha")), as: WorkspaceResult.self)
+
+        XCTAssertEqual(opened.workspace?.title, "api")
+        XCTAssertEqual(c.workspaceIDsForTesting.count, 2, "its folder still identifies it, so no second copy")
+    }
+
     func test_workspaceSwitchMovesTheViewAndRaisesAnotherWindow() throws {
         let here = makeWindow()
         let there = makeWindow()

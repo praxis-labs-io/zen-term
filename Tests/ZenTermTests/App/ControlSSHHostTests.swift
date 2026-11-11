@@ -405,6 +405,20 @@ final class ControlSSHHostTests: WindowTestCase {
         }
     }
 
+    func test_renamingAHostWorkspace_isRefused_byAddressOrAsTheCaller() throws {
+        let c = makeWindow()
+        let login = try token(of: connected(c))
+
+        let refusals = try [
+            error(send(.workspaceRename, ControlArgs(workspace: address, title: "box"))),
+            error(send(.workspaceRename, ControlArgs(title: "box"), from: login)),
+        ]
+
+        XCTAssertEqual(refusals.map(\.code), [.refused, .refused])
+        XCTAssertEqual(refusals[0].message, "ssh:devbox is named by its host. Rename it in Settings.")
+        XCTAssertEqual(c.window.title, "devbox")
+    }
+
     private func listedWorkspaces(_ c: WindowController) throws -> [ListResult.Workspace] {
         let list = try result(send(.list), as: ListResult.self)
         return try XCTUnwrap(list.windows.first { $0.id == ControlAddress.window(c.windowID) }).workspaces

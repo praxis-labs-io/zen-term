@@ -41,6 +41,21 @@ final class WorkspaceTabCommandTests: XCTestCase {
         XCTAssertFalse(open.focus)
     }
 
+    func test_workspaceRenameAndNewTakeATitle() throws {
+        let rename = try XCTUnwrap(
+            try Zen.parseAsRoot(["workspace", "rename", "api", "--workspace", "alpha"]) as? WorkspaceCommands.Rename)
+        XCTAssertEqual(rename.title, "api")
+        XCTAssertEqual(rename.workspace, "alpha")
+
+        let clear = try XCTUnwrap(try Zen.parseAsRoot(["workspace", "rename", ""]) as? WorkspaceCommands.Rename)
+        XCTAssertEqual(clear.title, "")
+        XCTAssertNil(clear.workspace)
+
+        let new = try XCTUnwrap(
+            try Zen.parseAsRoot(["workspace", "new", "--title", "scratch"]) as? WorkspaceCommands.New)
+        XCTAssertEqual(new.title, "scratch")
+    }
+
     func test_theSocketBeforeANestedSubcommandIsUsed() throws {
         let select = try XCTUnwrap(
             try Zen.parseAsRoot(["--socket", "/a.sock", "tab", "select"]) as? TabCommands.Select)

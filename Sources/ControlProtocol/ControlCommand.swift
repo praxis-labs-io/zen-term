@@ -5,6 +5,7 @@ public enum ControlCommand: String, Codable, Sendable, CaseIterable {
     case workspaceOpen = "workspace.open"
     case workspaceNew = "workspace.new"
     case workspaceSwitch = "workspace.switch"
+    case workspaceRename = "workspace.rename"
     case workspaceClose = "workspace.close"
     case tabNew = "tab.new"
     case tabSelect = "tab.select"

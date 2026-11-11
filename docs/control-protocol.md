@@ -98,7 +98,7 @@ Requests are decoded off the main thread, applied on it, and written back off it
 | ------ | --------------------------------- | --------------------------------------------- |
 | Pane   | its `$ZEN_PANE` token, e.g. `31`  | Unique across the app and never reused. Drawers have tokens. |
 | Tab    | `w<window>.t<tab>`, e.g. `w1.t14` | Tab ids are minted per window, so the window is part of it. |
-| Workspace | its folder as an absolute path, or its title | Matched across every window. More than one match is `ambiguous`. |
+| Workspace | its folder as an absolute path, or its title | Matched across every window. The title is its current name, so after a rename the old one is `not_found`. More than one match is `ambiguous`. |
 | Remote host workspace | `ssh:<host>`             | The host's alias in Settings, never its name. A host not in Settings is `not_found`, and so is one with no session or a failed login, except to `workspace.open` and the worktree commands, which refuse a host in Settings whether it has a session or not. A folder or title never names a host's workspace. |
 | Window | `w<window>`                       |                                               |
 
@@ -147,6 +147,8 @@ is listed from its first opening until it closes, shown or hidden.
 
 - `key`: the window is the key window.
 - `folder`: absent for a remote host's workspace.
+- A workspace's `title` is its current name: a rename's while one is set, else its config
+  title or "Workspace N".
 - `host`: present for a remote host's workspace, as `{"alias":"devbox","state":"connected"}`.
   `state` is `connecting` or `connected`. A host whose login failed is left out.
 - `worktree`: present when the workspace was opened from a worktree. `parent` is
@@ -165,7 +167,8 @@ is listed from its first opening until it closes, shown or hidden.
 
 Returns a workspace that is already open, in whichever window holds it, rather than
 opening a second copy. Otherwise opens the workspaces-file entry whose folder or title
-matches, with its tabs and launch focus, in the caller's window. When neither matches it is
+matches, or returns the open workspace at that entry's folder when a rename moved it off
+its config title, with its tabs and launch focus, in the caller's window. When neither matches it is
 `not_found`.
 
 `ssh:<host>` returns the host's workspace when it has a session. Without one, `focus`
@@ -186,14 +189,20 @@ names the host:
 
 ### `workspace.new`
 
-`args`: `path` (absolute, the home folder by default), `focus`.
+`args`: `path` (absolute, the home folder by default), `title`, `focus`.
 
-Opens a workspace with no config entry at the end of the caller's window's sidebar,
-named the way a new workspace is named in the app. Returns it as `workspace.open` does.
+Opens a workspace with no config entry at the end of the caller's window's sidebar, named
+`title`, or the way a new workspace is named in the app when `title` is absent or empty. Returns it as `workspace.open` does.
 
 ### `workspace.switch`
 
 `args`: `workspace`. Switches its window to it.
+
+### `workspace.rename`
+
+`args`: `workspace`, `title` (required). Names the workspace for this session; the
+workspaces file is never written. An empty `title` gives it back its config title or
+"Workspace N". A host's workspace is `refused`: its name is its Settings display name.
 
 ### `workspace.close`
 
@@ -349,13 +358,14 @@ answer within 10 seconds (5 minutes for `worktree create` and `worktree remove`)
 speaks is refused with exit 1, before its result is read, and the message names both
 versions.
 
-Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|close`,
+Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close`,
 `zen tab new|select|rename|close`, `zen pane split|focus|close|send|read` and
 `zen worktree list|create|remove`, with `--focus` and `--force` for those fields.
 `zen action <name>` runs a keymap action. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
 rest print nothing. `zen pane split` splits to the right unless `--dir down` says otherwise.
-`zen worktree create <branch>` takes `--base default|current` or `--existing`, not both.
+`zen workspace new` takes `--title`, and `zen workspace rename <title>` takes the workspace
+as `--workspace`. `zen worktree create <branch>` takes `--base default|current` or `--existing`, not both.
 `zen worktree remove` takes a folder when it starts with `/`, `~` or `.`, and a branch
 otherwise. `zen` sends
 folders as absolute paths, read against its own folder, and refuses a `--cwd` or
