@@ -60,7 +60,7 @@ final class WindowSelectionTests: WindowTestCase {
         let (c, workspace) = makeHostWindow()
 
         for chord: KeyInterceptor.ReservedChord in [
-            .splitVertical, .closeTab, .renameTab, .closeWorkspace, .newWorkspace,
+            .splitVertical, .closeTab, .renameTab, .renameWorkspace, .closeWorkspace, .newWorkspace,
             .selectTab(1),
         ] {
             c.handle(chord)

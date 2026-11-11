@@ -78,14 +78,17 @@ final class SidebarView: NSView, ThemeReapplying {
     var onActivateHost: ((SSHHostID) -> Void)?
     private let onActivate: (SidebarRowID) -> Void
     private let onNewWorktree: (SidebarRowID) -> Void
+    private let onRenameWorkspace: (WorkspaceID) -> Void
     private let onCloseWorkspace: (WorkspaceID) -> Void
 
     init(
         onActivate: @escaping (SidebarRowID) -> Void, onNewWorktree: @escaping (SidebarRowID) -> Void,
-        onCloseWorkspace: @escaping (WorkspaceID) -> Void, onAdd: @escaping () -> Void
+        onRenameWorkspace: @escaping (WorkspaceID) -> Void, onCloseWorkspace: @escaping (WorkspaceID) -> Void,
+        onAdd: @escaping () -> Void
     ) {
         self.onActivate = onActivate
         self.onNewWorktree = onNewWorktree
+        self.onRenameWorkspace = onRenameWorkspace
         self.onCloseWorkspace = onCloseWorkspace
         addButton = SidebarFooter.button("plus", "Open workspace", .toggleRepoPicker, onAdd)
         super.init(frame: .zero)
@@ -454,12 +457,17 @@ final class SidebarView: NSView, ThemeReapplying {
         }
         let creates = worktreeParents.contains(row) ? [create] : []
         guard case .workspace(let id) = row else { return [creates] }
+        let rename = SidebarRowMenu.Item(
+            title: "Rename Workspace…", action: row == activeRow ? .renameWorkspace : nil
+        ) { [weak self] in
+            self?.onRenameWorkspace(id)
+        }
         let close = SidebarRowMenu.Item(
             title: "Close Workspace", action: row == activeRow ? .closeWorkspace : nil
         ) { [weak self] in
             self?.onCloseWorkspace(id)
         }
-        return [creates + [close]]
+        return [creates + [rename, close]]
     }
 
     override func viewDidHide() {

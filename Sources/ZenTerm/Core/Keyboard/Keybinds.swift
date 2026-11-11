@@ -71,6 +71,7 @@ extension KeyInterceptor.ReservedChord {
         case .prevWorkspace: return "prev_workspace"
         case .nextWorkspace: return "next_workspace"
         case .closeWorkspace: return "close_workspace"
+        case .renameWorkspace: return "rename_workspace"
         case .nextWaitingAgent: return "next_waiting_agent"
         }
     }
@@ -96,7 +97,7 @@ extension KeyInterceptor.ReservedChord {
             .clearScreen, .selectAll, .scrollToSelection, .pasteSelection, .writeScreenFile,
             .copyScreenFilePath, .openScreenFile,
             .dismissToast, .dismissAllToasts,
-            .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace,
+            .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace, .renameWorkspace,
             .nextWaitingAgent:
             return false
         }
@@ -119,7 +120,7 @@ extension KeyInterceptor.ReservedChord {
             .scrollPageDown,
             .findNext, .findPrevious, .searchSelection, .clearScreen, .scrollToSelection,
             .writeScreenFile, .copyScreenFilePath, .openScreenFile, .selectAll, .pasteSelection,
-            .jumpToPreviousPrompt, .jumpToNextPrompt, .closeWorkspace:
+            .jumpToPreviousPrompt, .jumpToNextPrompt, .closeWorkspace, .renameWorkspace:
             return false
         }
     }
@@ -145,7 +146,7 @@ extension KeyInterceptor.ReservedChord {
             .toggleRepoPicker, .newWorkspace, .createWorktree, .removeWorktree, .toggleCommandPalette, .newTool,
             .openSettings,
             .dismissToast, .dismissAllToasts,
-            .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace,
+            .selectWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace, .renameWorkspace,
             .nextWaitingAgent:
             return true
         }
@@ -222,6 +223,7 @@ extension KeyInterceptor.ReservedChord {
         case "prev_workspace": self = .prevWorkspace
         case "next_workspace": self = .nextWorkspace
         case "close_workspace": self = .closeWorkspace
+        case "rename_workspace": self = .renameWorkspace
         case "next_waiting_agent": self = .nextWaitingAgent
         default:
             if let rest = token.dropPrefixIfPresent("select_tab_"), let n = Int(rest), (1...9).contains(n) {
@@ -253,7 +255,7 @@ extension KeyInterceptor.ReservedChord {
             .toggleRepoPicker, .toggleCommandPalette, .createWorktree, .removeWorktree,
             .openSettings, .reloadConfig, .increaseFontSize, .decreaseFontSize, .resetFontSize,
             .checkForUpdates, .reportIssue, .newTool,
-            .newWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace, .nextWaitingAgent,
+            .newWorkspace, .prevWorkspace, .nextWorkspace, .closeWorkspace, .renameWorkspace, .nextWaitingAgent,
         ]
         let numbered: [KeyInterceptor.ReservedChord] =
             (1...9).map { .selectTab($0) } + (1...9).map { .selectWorkspace($0) }

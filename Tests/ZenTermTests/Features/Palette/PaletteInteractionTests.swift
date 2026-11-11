@@ -301,7 +301,7 @@ final class PaletteInteractionTests: WindowTestCase {
         entries: [Workspace],
         onChoose: @escaping (Workspace, WorktreeOrigin?) -> Void = { _, _ in },
         onAddWorkspace: @escaping () -> Void = {},
-        onNewWorkspace: @escaping () -> Void = {},
+        onNewWorkspace: @escaping (String?) -> Void = { _ in },
         onDismiss: @escaping () -> Void = {}
     ) -> RepoPickerOverlay {
         RepoPickerOverlay(
@@ -317,7 +317,7 @@ final class PaletteInteractionTests: WindowTestCase {
         let overlay = makeRepoPicker(
             entries: [workspace("alpha"), workspace("beta")],
             onChoose: { ws, _ in chosen = ws }, onAddWorkspace: { addOpened = true },
-            onNewWorkspace: { made = true })
+            onNewWorkspace: { _ in made = true })
         mount(overlay)
         try sendReturn(to: overlay)
         XCTAssertTrue(made, "New Workspace holds the selection until a query matches something")
@@ -330,7 +330,7 @@ final class PaletteInteractionTests: WindowTestCase {
         var made = false
         let overlay = makeRepoPicker(
             entries: [workspace("alpha"), workspace("beta")],
-            onChoose: { ws, _ in chosen = ws }, onNewWorkspace: { made = true })
+            onChoose: { ws, _ in chosen = ws }, onNewWorkspace: { _ in made = true })
         mount(overlay)
         type("zzzz", into: overlay)
         try sendReturn(to: overlay)
@@ -370,9 +370,12 @@ final class PaletteInteractionTests: WindowTestCase {
 
         type("a", into: overlay)
 
+        let arranged = rowsStack(in: overlay).arrangedSubviews
         XCTAssertEqual(
-            rowsStack(in: overlay).arrangedSubviews, [newRow, header, alphaRow, zetaRow, addRow],
-            "every row is reused, re-ordered by the filter rather than rebuilt")
+            Array(arranged.dropFirst()), [header, alphaRow, zetaRow, addRow],
+            "every listed row is reused, re-ordered by the filter rather than rebuilt")
+        XCTAssertNotIdentical(arranged.first, newRow, "New Workspace is rebuilt to name the query")
+        XCTAssertEqual((arranged.first as? RepoPickerOverlay.ActionRowView)?.title, "New Workspace “a”")
     }
 
     func test_repoPicker_clickingAReusedRow_runsWhereItNowSits() {

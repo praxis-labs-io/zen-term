@@ -208,13 +208,14 @@ final class WindowController: NSObject {
 
     private enum ModalKind {
         case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm, reportIssue
-        case renameTab, worktreeForm, sshHostForm
+        case renameTab, renameWorkspace, worktreeForm, sshHostForm
 
         var selfToggle: KeyInterceptor.ReservedChord? {
             switch self {
             case .repoPicker: return .toggleRepoPicker
             case .commandPalette: return .toggleCommandPalette
             case .settings: return .openSettings
+            case .renameWorkspace: return .renameWorkspace
             case .workspaceForm, .toolFloatForm, .reportIssue, .renameTab, .worktreeForm, .sshHostForm:
                 return nil
             }
@@ -248,7 +249,7 @@ final class WindowController: NSObject {
 
     var openWorkspacesElsewhere: (() -> [RunningWorkspace])?
 
-    var onWorktreeMarkChanged: (() -> Void)?
+    var onOpenWorkspacesChanged: (() -> Void)?
 
     var revealWorkspaceElsewhere: ((Int, WorkspaceID) -> Bool)?
 
@@ -422,6 +423,7 @@ final class WindowController: NSObject {
         var onActivateRow: (SidebarRowID) -> Void = { _ in }
         var onNewWorktree: (SidebarRowID) -> Void = { _ in }
         var onCloseWorkspace: (WorkspaceID) -> Void = { _ in }
+        var onRenameWorkspace: (WorkspaceID) -> Void = { _ in }
         var onOpenWorkspace: () -> Void = {}
         var onBottom: () -> Void = {}
         var onRight: () -> Void = {}
@@ -437,7 +439,8 @@ final class WindowController: NSObject {
         sidebar = SidebarController(
             onPalette: { onPalette() }, onSettings: { onSettings() }, onToggle: { onToggleSidebar() },
             onActivate: { onActivateRow($0) }, onNewWorktree: { onNewWorktree($0) },
-            onCloseWorkspace: { onCloseWorkspace($0) }, onAdd: { onOpenWorkspace() })
+            onRenameWorkspace: { onRenameWorkspace($0) }, onCloseWorkspace: { onCloseWorkspace($0) },
+            onAdd: { onOpenWorkspace() })
         super.init()
         nextTabID = 2
 
@@ -468,6 +471,7 @@ final class WindowController: NSObject {
         onActivateRow = { [weak self] in self?.activateFromSidebar($0) }
         onNewWorktree = { [weak self] in self?.createWorktreeFromSidebar($0) }
         onCloseWorkspace = { [weak self] in self?.requestCloseWorkspace(id: $0) }
+        onRenameWorkspace = { [weak self] in self?.openRenameWorkspace($0) }
         sidebar.onJump = { [weak self] in self?.jumpToAgent($0) }
         sidebar.onJumpElsewhere = { [weak self] in self?.jumpToWaitingElsewhere() }
         sidebar.onActivateHost = { [weak self] host in
@@ -790,7 +794,7 @@ final class WindowController: NSObject {
         guard changed else { return }
         renderTabBar()
         refreshOpenPicker()
-        onWorktreeMarkChanged?()
+        onOpenWorkspacesChanged?()
     }
 
     func refreshOpenPicker() {
@@ -1274,8 +1278,8 @@ final class WindowController: NSObject {
         cancelConfirm()
         if modal?.kind == .renameTab { closeModal(); return }
         if modal != nil { closeModal() }
-        let overlay = RenameTabOverlay(
-            current: controller.title, liveTitle: controller.liveTitle,
+        let overlay = RenameOverlay(
+            title: "Rename Tab", current: controller.title, placeholder: controller.liveTitle,
             onSubmit: { [weak self] name in
                 self?.renameTab(id, to: name)
                 self?.closeModal()
@@ -1289,6 +1293,32 @@ final class WindowController: NSObject {
         controller.pinnedTitle = name.isEmpty ? nil : name
         workspace.setTitle(controller.title, for: id)
         renderTabBar()
+    }
+
+    private func openRenameWorkspace(_ id: WorkspaceID) {
+        guard let workspace = workspaces.first(where: { $0.id == id }), workspace.host == nil else { return }
+        cancelConfirm()
+        if modal != nil { closeModal() }
+        let overlay = RenameOverlay(
+            title: "Rename Workspace", current: workspace.name, placeholder: workspace.givenName,
+            onSubmit: { [weak self] name in
+                self?.renameWorkspace(id, to: name)
+                self?.closeModal()
+            },
+            onCancel: { [weak self] in self?.closeModal() })
+        presentModal(overlay, kind: .renameWorkspace)
+    }
+
+    @discardableResult
+    func renameWorkspace(_ id: WorkspaceID, to name: String) -> Bool {
+        guard let workspace = workspaces.first(where: { $0.id == id }), workspace.host == nil else { return false }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        workspace.pinnedName = trimmed.isEmpty ? nil : trimmed
+        Log.info("workspace renamed", category: .workspace)
+        renderTabBar()
+        refreshOpenPicker()
+        onOpenWorkspacesChanged?()
+        return true
     }
 
     private func closeTab(_ id: TabID, dismissingModal: Bool = true) {
@@ -1489,7 +1519,7 @@ final class WindowController: NSObject {
                     return true
                 },
                 onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
-                onNewWorkspace: { [weak self] in self?.newWorkspace() },
+                onNewWorkspace: { [weak self] in self?.newWorkspace(named: $0) },
                 onDismiss: { [weak self] in self?.closeModal() }
             )
             self.presentModal(picker, kind: .repoPicker)
@@ -2219,6 +2249,8 @@ final class WindowController: NSObject {
 
     func holdsWorkspace(at path: URL) -> Bool { openWorkspace(at: path) != nil }
 
+    func configuredWorkspaceID(at path: URL) -> WorkspaceID? { openWorkspace(at: path)?.id }
+
     func activateWorkspace(at path: URL) {
         guard let workspace = openWorkspace(at: path) else { return }
         activate(workspace.id)
@@ -2238,7 +2270,8 @@ final class WindowController: NSObject {
                 guard let workspace = byID[id] else { return nil }
                 return RunningWorkspace(
                     window: windowID, id: id, name: workspace.name, folder: workspace.folder,
-                    isWorktree: true, removedWorktreeName: workspace.isWorktreeRemoved ? workspace.origin?.name : nil)
+                    isWorktree: true, removedWorktreeName: workspace.isWorktreeRemoved ? workspace.origin?.name : nil,
+                    pinnedName: workspace.pinnedName)
             case .ghost(let parent):
                 return RunningWorkspace(
                     window: windowID, id: nil, name: parent.title, folder: parent.path, isWorktree: false,
@@ -2354,7 +2387,9 @@ final class WindowController: NSObject {
         workspaces.first { $0.id == id }.map { $0.origin?.parent.path ?? $0.folder }
     }
 
-    func openUnconfiguredWorkspace(at folder: URL) -> WorkspaceID { appendUnconfiguredWorkspace(at: folder).id }
+    func openUnconfiguredWorkspace(at folder: URL, named name: String? = nil) -> WorkspaceID {
+        appendUnconfiguredWorkspace(at: folder, named: name).id
+    }
 
     func closeStakes(tab id: TabID) -> CloseStakes? {
         guard let workspace = workspace(of: id), let tab = controller(id) else { return nil }
@@ -2435,13 +2470,14 @@ final class WindowController: NSObject {
     }
 
     // The home folder, not the focused pane's: a workspace is a place, and folder identity makes two on one folder collide.
-    private func newWorkspace() {
+    private func newWorkspace(named name: String? = nil) {
         closeModal()
-        activate(appendUnconfiguredWorkspace(at: ShellLaunch.defaultCWD).id, transition: .instant)
+        activate(appendUnconfiguredWorkspace(at: ShellLaunch.defaultCWD, named: name).id, transition: .instant)
     }
 
-    private func appendUnconfiguredWorkspace(at folder: URL) -> WorkspaceController {
-        appendWorkspace(named: Self.unconfiguredName(among: workspaces.map(\.name)), at: folder, config: nil)
+    private func appendUnconfiguredWorkspace(at folder: URL, named name: String? = nil) -> WorkspaceController {
+        appendWorkspace(
+            named: name ?? Self.unconfiguredName(among: workspaces.map(\.name)), at: folder, config: nil)
     }
 
     private func appendWorkspace(
@@ -2485,7 +2521,7 @@ final class WindowController: NSObject {
                 return
             }
             if modal.kind == .repoPicker, chord == .newWorkspace {
-                newWorkspace()
+                newWorkspace(named: (modal.overlay as? RepoPickerOverlay)?.newWorkspaceName)
                 return
             }
             switch chord {
@@ -2516,7 +2552,7 @@ final class WindowController: NSObject {
                 toastFloatBlocked()
                 return
             case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue, .newTool,
-                .renameTab:
+                .renameTab, .renameWorkspace:
                 floats.close()
             case .toggleToolFloat, .newTab, .newWindow, .closeTab, .closeWindow,
                 .selectTab, .prevTab, .nextTab,
@@ -2578,6 +2614,7 @@ final class WindowController: NSObject {
         case .moveTabLeft: moveActiveTab(-1)
         case .moveTabRight: moveActiveTab(1)
         case .renameTab: activeWorkspace?.activeID.map { openRenameTab($0) }
+        case .renameWorkspace: activeWorkspace.map { openRenameWorkspace($0.id) }
         case .closePane:
             Log.info("close pane", category: .panes)
             requestClosePane()

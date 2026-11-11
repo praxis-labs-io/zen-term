@@ -13,10 +13,12 @@ final class SidebarColumn: ShadowCardView, ThemeReapplying {
     init(
         onPalette: @escaping () -> Void, onSettings: @escaping () -> Void, onToggle: @escaping () -> Void,
         onActivate: @escaping (SidebarRowID) -> Void, onNewWorktree: @escaping (SidebarRowID) -> Void,
-        onCloseWorkspace: @escaping (WorkspaceID) -> Void, onAdd: @escaping () -> Void
+        onRenameWorkspace: @escaping (WorkspaceID) -> Void, onCloseWorkspace: @escaping (WorkspaceID) -> Void,
+        onAdd: @escaping () -> Void
     ) {
         rows = SidebarView(
-            onActivate: onActivate, onNewWorktree: onNewWorktree, onCloseWorkspace: onCloseWorkspace, onAdd: onAdd)
+            onActivate: onActivate, onNewWorktree: onNewWorktree, onRenameWorkspace: onRenameWorkspace,
+            onCloseWorkspace: onCloseWorkspace, onAdd: onAdd)
         footer = SidebarFooter(onPalette: onPalette, onSettings: onSettings)
         toggle = SidebarFooter.button("sidebar.left", "Toggle sidebar", .toggleSidebar, onToggle)
         super.init(frame: .zero)
