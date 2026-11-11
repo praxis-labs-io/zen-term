@@ -15,11 +15,9 @@ final class SplitContainerView: NSView {
     private var dividerCenter: NSLayoutConstraint?
     private var dividerBand: NSLayoutConstraint?
 
-    typealias DragHandler = (SplitID, SplitAxis, Double) -> Void
-
     init(
         node: PaneNode, gutter: CGFloat = ChromeMetrics.panelGap,
-        register: ((SplitID, SplitContainerView) -> Void)? = nil, onDrag: DragHandler? = nil,
+        register: ((SplitID, SplitContainerView) -> Void)? = nil, onDrag: SplitDivider.DragHandler? = nil,
         leafView: (PaneID) -> NSView
     ) {
         super.init(frame: .zero)
@@ -133,7 +131,7 @@ final class SplitContainerView: NSView {
 
     private func build(
         _ node: PaneNode, gutter: CGFloat,
-        register: ((SplitID, SplitContainerView) -> Void)?, onDrag: DragHandler?,
+        register: ((SplitID, SplitContainerView) -> Void)?, onDrag: SplitDivider.DragHandler?,
         leafView: (PaneID) -> NSView
     ) {
         switch node {
@@ -195,7 +193,9 @@ final class SplitContainerView: NSView {
         }
     }
 
-    private func mountDivider(id: SplitID, axis: SplitAxis, after first: NSView, onDrag: @escaping DragHandler) {
+    private func mountDivider(
+        id: SplitID, axis: SplitAxis, after first: NSView, onDrag: @escaping SplitDivider.DragHandler
+    ) {
         let divider = SplitDivider(splitID: id, axis: axis, onDrag: onDrag)
         addSubview(divider)
         let band = Self.dividerBand(gutter: gutter)

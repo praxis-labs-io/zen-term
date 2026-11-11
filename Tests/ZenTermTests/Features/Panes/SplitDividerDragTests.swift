@@ -166,6 +166,38 @@ final class SplitDividerDragTests: WindowTestCase {
         XCTAssertEqual(controller.hostsForTesting[top]?.bounds.height ?? 0, before + 40, accuracy: 1.0)
     }
 
+    func test_drag_stopsReportingOnceARebuildRemovesTheDivider() throws {
+        let first = controller.focusedLeafID
+        controller.split(.vertical)
+        layout()
+        let divider = try divider(.vertical)
+        let start = center(of: divider)
+
+        divider.mouseDown(with: try mouse(.leftMouseDown, at: start))
+        controller.zoomFocusedLeaf()
+        layout()
+        divider.mouseDragged(with: try mouse(.leftMouseDragged, at: CGPoint(x: 540, y: start.y)))
+        controller.unzoom()
+        layout()
+
+        XCTAssertEqual(width(of: first), 0.5 * 900 - ChromeMetrics.panelGap / 2, accuracy: 1.0)
+    }
+
+    func test_divider_isTheHitTargetOverThePaneEdges_atZeroPaneGap() throws {
+        controller.split(.vertical)
+        layout()
+        var config = GeneralConfig.current
+        config.panelGap = 0
+        GeneralConfig.setCurrentForTesting(config)
+        controller.reapplyChromeLayout()
+        layout()
+        let divider = try divider(.vertical)
+        let content = try XCTUnwrap(window.contentView)
+
+        XCTAssertTrue(
+            content.hitTest(center(of: divider)) === divider, "the divider must sit above the panes it overlaps")
+    }
+
     func test_divider_doesNotMoveTheWindow() throws {
         controller.split(.vertical)
         layout()

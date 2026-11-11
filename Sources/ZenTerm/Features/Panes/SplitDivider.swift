@@ -2,12 +2,14 @@ import AppKit
 import PaneKit
 
 final class SplitDivider: NSView {
+    typealias DragHandler = (SplitID, SplitAxis, Double) -> Void
+
     let splitID: SplitID
     let axis: SplitAxis
-    private let onDrag: (SplitID, SplitAxis, Double) -> Void
+    private let onDrag: DragHandler
     private var grabOffset: CGFloat?
 
-    init(splitID: SplitID, axis: SplitAxis, onDrag: @escaping (SplitID, SplitAxis, Double) -> Void) {
+    init(splitID: SplitID, axis: SplitAxis, onDrag: @escaping DragHandler) {
         self.splitID = splitID
         self.axis = axis
         self.onDrag = onDrag
@@ -27,8 +29,8 @@ final class SplitDivider: NSView {
     override func mouseDown(with event: NSEvent) {
         guard let container = superview else { return }
         let center = position(of: CGPoint(x: frame.midX, y: frame.midY), in: container)
+        if grabOffset == nil { resizeCursor.push() }
         grabOffset = position(of: container.convert(event.locationInWindow, from: nil), in: container) - center
-        resizeCursor.push()
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -39,7 +41,15 @@ final class SplitDivider: NSView {
         onDrag(splitID, axis, Double((pointer - grabOffset) / extent))
     }
 
-    override func mouseUp(with event: NSEvent) {
+    override func mouseUp(with event: NSEvent) { endDrag() }
+
+    // A rebuild mid-drag removes the divider before its mouseUp arrives.
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        if newWindow == nil { endDrag() }
+    }
+
+    private func endDrag() {
         guard grabOffset != nil else { return }
         grabOffset = nil
         NSCursor.pop()
