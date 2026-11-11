@@ -2270,7 +2270,8 @@ final class WindowController: NSObject {
                 guard let workspace = byID[id] else { return nil }
                 return RunningWorkspace(
                     window: windowID, id: id, name: workspace.name, folder: workspace.folder,
-                    isWorktree: true, removedWorktreeName: workspace.isWorktreeRemoved ? workspace.origin?.name : nil)
+                    isWorktree: true, removedWorktreeName: workspace.isWorktreeRemoved ? workspace.origin?.name : nil,
+                    pinnedName: workspace.pinnedName)
             case .ghost(let parent):
                 return RunningWorkspace(
                     window: windowID, id: nil, name: parent.title, folder: parent.path, isWorktree: false,

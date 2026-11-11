@@ -12,6 +12,7 @@ final class SidebarController {
         let row: SidebarRowID
         let kind: Kind
         let name: String
+        let pinnedName: String?
         let folder: URL?
         let number: Int?
         let isActive: Bool
@@ -355,14 +356,15 @@ final class SidebarController {
                 guard let workspace = byID[id] else { return nil }
                 let kind = workspace.origin.map(Entry.Kind.worktree) ?? .workspace
                 return Entry(
-                    row: .workspace(id), kind: kind, name: workspace.name, folder: workspace.folder,
+                    row: .workspace(id), kind: kind, name: workspace.name, pinnedName: workspace.pinnedName,
+                    folder: workspace.folder,
                     number: numbers[.workspace(id)], isActive: workspace === active,
                     isConfigured: workspace.isConfigured,
                     isWaiting: waiting.contains(id), isWorktreeRemoved: workspace.isWorktreeRemoved)
             case .ghost(let parent):
                 return Entry(
                     row: .ghost(parent.path.standardizedFileURL.path), kind: .ghost, name: parent.title,
-                    folder: nil, number: nil, isActive: false, isConfigured: true, isWaiting: false,
+                    pinnedName: nil, folder: nil, number: nil, isActive: false, isConfigured: true, isWaiting: false,
                     isWorktreeRemoved: false)
             }
         }
@@ -465,7 +467,8 @@ final class SidebarController {
         guard let active = entries.first(where: \.isActive) else { return }
         if case .worktree(let origin) = active.kind {
             lead.setWorkspaceName(
-                origin.parent.title, worktree: active.folder.flatMap(GitRepoStatus.branch) ?? origin.name)
+                origin.parent.title,
+                worktree: active.pinnedName ?? active.folder.flatMap(GitRepoStatus.branch) ?? origin.name)
         } else {
             lead.setWorkspaceName(active.name)
         }
@@ -490,7 +493,8 @@ final class SidebarController {
                 isActive: entry.isActive, makesWorktrees: entry.isConfigured && isRepo, isWaiting: entry.isWaiting)
         case .worktree(let origin):
             return SidebarRowItem(
-                id: entry.row, variant: .nested(symbol: worktreeSymbol), name: branch ?? origin.name,
+                id: entry.row, variant: .nested(symbol: worktreeSymbol),
+                name: entry.pinnedName ?? branch ?? origin.name,
                 detail: entry.isWorktreeRemoved ? WorktreeOrigin.removedDetail : nil, number: entry.number,
                 isActive: entry.isActive, makesWorktrees: false,
                 isWaiting: entry.isWaiting)

@@ -705,7 +705,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         convenience init(open: RunningWorkspace) {
             self.init(
                 workspace: nil, worktree: nil, running: open,
-                label: open.isWorktree ? Self.typeRail : open.name, statusPath: open.folder,
+                label: open.isWorktree ? open.pinnedName ?? Self.typeRail : open.name, statusPath: open.folder,
                 style: open.isWorktree ? .child : .workspace)
         }
 

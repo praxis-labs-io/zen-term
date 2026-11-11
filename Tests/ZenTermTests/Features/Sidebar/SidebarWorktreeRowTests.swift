@@ -660,6 +660,31 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Workspace 1:")
     }
 
+    func test_renamingAWorktreeFromTheMenu_namesItsRowItsLeadAndItsPickerRow() throws {
+        let c = makeWindow()
+        try openAlphaWorktree(branch: "feature/one", in: c)
+
+        try rightClick(rows(of: c)[2])
+        try XCTUnwrap(menu.itemViewsForTesting.first { $0.title == "Rename Workspace…" }).mouseDown(
+            with: try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+                    windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
+        let card = try renameCard(in: c)
+        card.nameFieldForTesting.setText("spike")
+        try sendReturn(through: card.nameFieldForTesting, in: c)
+
+        XCTAssertEqual(titles(of: c)[2], "spike", "the rename, not the branch")
+        c.handle(.toggleSidebar)
+        XCTAssertEqual(c.sidebarForTesting.lead.workspaceNameForTesting, "Alpha / spike:")
+        c.handle(.toggleSidebar)
+        let picker = try openPicker(in: c)
+        XCTAssertTrue(
+            picker.rowViews.compactMap { $0 as? RepoPickerOverlay.RowView }
+                .contains { $0.running?.isWorktree == true && $0.label == "spike" },
+            "the Open row names it too")
+    }
+
     func test_collapsedLead_cutsALongWorktreeAtAWholeCharacter_soTheDividerKeepsItsGap() throws {
         let c = makeWindow()
         try openAlphaWorktree(branch: "feature/zen-532-make-a-new-workspace-without-a-config-entry", in: c)

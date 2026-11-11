@@ -186,7 +186,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   or the ⌘P query when New Workspace is chosen with one (its row reads `New Workspace “<query>”`).
   Rename Workspace pins a session name over that given name (`pinnedName ?? givenName`), the
   way Rename Tab pins a tab's. It is never written to the workspaces file, so a configured
-  workspace keeps its config title as its identity, and empty clears it. A host's name is
+  workspace keeps its config title as its identity, and empty clears it. A renamed worktree
+  shows its name where it would show its branch: its sidebar row, the collapsed lead and
+  ⌘P's Open row. A host's name is
   always its Settings display name, so a host workspace is never renamed.
   ⌘⌃T opens one at the end of the sidebar, in the home folder: a workspace is a place, and one opened on the focused pane's folder
   would collide with the open workspace already identified by it. A workspace is open when

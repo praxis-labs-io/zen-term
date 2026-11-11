@@ -8,4 +8,5 @@ struct RunningWorkspace: Equatable {
     let folder: URL
     let isWorktree: Bool
     let removedWorktreeName: String?
+    var pinnedName: String?
 }
