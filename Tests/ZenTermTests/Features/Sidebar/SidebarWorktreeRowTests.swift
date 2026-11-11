@@ -472,12 +472,12 @@ final class SidebarWorktreeRowTests: WindowTestCase {
                     pressure: 1)))
     }
 
-    func test_aWorktreeRowsMenu_offersOnlyClose_andAGhostsOnlyNewWorktree() throws {
+    func test_aWorktreeRowsMenu_offersRenameAndClose_andAGhostsOnlyNewWorktree() throws {
         let c = makeWindow()
         try openAlphaWorktree(branch: "feature/one", in: c)
 
         try rightClick(rows(of: c)[2])
-        XCTAssertEqual(menu.itemViewsForTesting.map(\.title), ["Close Workspace"])
+        XCTAssertEqual(menu.itemViewsForTesting.map(\.title), ["Rename Workspace…", "Close Workspace"])
 
         try rightClick(rows(of: c)[1])
         XCTAssertEqual(menu.itemViewsForTesting.map(\.title), ["New Worktree…"], "a ghost is not open to close")
@@ -499,6 +499,48 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(titles(of: c), ["Workspace 1", "Beta"])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, beta, "closing a background workspace leaves the screen alone")
         XCTAssertFalse(menu.isOpen)
+    }
+
+    private func renameCard(in c: WindowController) throws -> RenameOverlay {
+        try XCTUnwrap(descendants(of: c.window.contentView!).compactMap { $0 as? RenameOverlay }.first)
+    }
+
+    private func sendReturn(through field: FieldBox, in c: WindowController) throws {
+        XCTAssertTrue(c.window.makeFirstResponder(field.field))
+        let editor = try XCTUnwrap(c.window.firstResponder as? NSTextView, "the field editor is first responder")
+        let event = try XCTUnwrap(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: c.window.windowNumber, context: nil, characters: "\r", charactersIgnoringModifiers: "\r",
+                isARepeat: false, keyCode: 36))
+        NSApp.postEvent(event, atStart: true)
+        _ = NSApp.nextEvent(matching: .keyDown, until: nil, inMode: .default, dequeue: true)
+        editor.keyDown(with: event)
+    }
+
+    func test_renameFromTheMenu_renamesThatRow_evenInTheBackground() throws {
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        try openWorkspace(named: "Beta", in: c)
+        let beta = c.activeWorkspaceIDForTesting
+
+        try rightClick(rows(of: c)[1])
+        let item = try XCTUnwrap(menu.itemViewsForTesting.first { $0.title == "Rename Workspace…" })
+        XCTAssertEqual(item.shortcutForTesting, "", "the chord renames the active workspace, not this one")
+        item.mouseDown(
+            with: try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+                    windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
+        let card = try renameCard(in: c)
+        XCTAssertEqual(card.nameFieldForTesting.text, "Alpha", "the clicked row's name, not the active one's")
+        card.nameFieldForTesting.setText("api")
+        try sendReturn(through: card.nameFieldForTesting, in: c)
+
+        XCTAssertEqual(titles(of: c), ["Workspace 1", "api", "Beta"])
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, beta, "renaming a background workspace leaves the screen alone")
+        XCTAssertEqual(c.window.title, "Beta")
+        XCTAssertFalse(c.isModalOverlayOpen)
     }
 
     func test_closingAWorkspace_landsOnItsNeighbourInTheSidebar_andLeavesItsWorktreeUnderAGhost() throws {

@@ -63,11 +63,13 @@ final class SidebarController {
     init(
         onPalette: @escaping () -> Void, onSettings: @escaping () -> Void, onToggle: @escaping () -> Void,
         onActivate: @escaping (SidebarRowID) -> Void, onNewWorktree: @escaping (SidebarRowID) -> Void,
-        onCloseWorkspace: @escaping (WorkspaceID) -> Void, onAdd: @escaping () -> Void
+        onRenameWorkspace: @escaping (WorkspaceID) -> Void, onCloseWorkspace: @escaping (WorkspaceID) -> Void,
+        onAdd: @escaping () -> Void
     ) {
         column = SidebarColumn(
             onPalette: onPalette, onSettings: onSettings, onToggle: onToggle, onActivate: onActivate,
-            onNewWorktree: onNewWorktree, onCloseWorkspace: onCloseWorkspace, onAdd: onAdd)
+            onNewWorktree: onNewWorktree, onRenameWorkspace: onRenameWorkspace, onCloseWorkspace: onCloseWorkspace,
+            onAdd: onAdd)
         collapsedToggle = SidebarFooter.button("sidebar.left", "Toggle sidebar", .toggleSidebar, onToggle)
         lead = CollapsedSidebarLead(leadingInset: Self.leadInset)
         edgeReveal.onReveal = { [weak self] in self?.reveal() }

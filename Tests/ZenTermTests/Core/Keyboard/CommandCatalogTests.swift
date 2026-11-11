@@ -27,6 +27,17 @@ final class CommandCatalogTests: XCTestCase {
         XCTAssertEqual(disconnect?.shortcut, CommandCatalog.spec(for: .closeWorkspace).shortcut)
     }
 
+    func test_renameWorkspace_isListedUnbound_andAbsentOnAHost() {
+        let entry = CommandCatalog.commands(tabCount: 1, workspaceCount: 1).first { $0.chord == .renameWorkspace }
+
+        XCTAssertEqual(entry?.title, "Rename Workspace…")
+        XCTAssertEqual(entry?.shortcut, "", "Rename Workspace has no default binding")
+        for tabCount in [0, 1] {
+            let onHost = CommandCatalog.commands(tabCount: tabCount, workspaceCount: 1, onHost: true)
+            XCTAssertFalse(onHost.contains { $0.chord == .renameWorkspace }, "a host's name is its Settings name")
+        }
+    }
+
     func test_aHostsConnectScreen_listsNeitherDisconnectNorCloseWorkspace() {
         let titles = CommandCatalog.commands(tabCount: 0, workspaceCount: 0, onHost: true).map(\.title)
 
@@ -45,7 +56,7 @@ final class CommandCatalogTests: XCTestCase {
                 "Check for Updates",
                 "Report an Issue…",
                 "Open Workspace Picker", "New Workspace", "Previous Workspace", "Next Workspace",
-                "Close Workspace",
+                "Rename Workspace…", "Close Workspace",
                 "Jump to Waiting Agent",
                 "Toggle Bottom Drawer", "Toggle Right Drawer",
                 "New Tab", "Previous Tab", "Next Tab", "Move Tab Left", "Move Tab Right",
@@ -152,6 +163,7 @@ final class CommandCatalogTests: XCTestCase {
             KeyInterceptor.ReservedChord.reportIssue.actionToken,
             KeyInterceptor.ReservedChord.newTool.actionToken,
             KeyInterceptor.ReservedChord.renameTab.actionToken,
+            KeyInterceptor.ReservedChord.renameWorkspace.actionToken,
             KeyInterceptor.ReservedChord.focusSidebar.actionToken,
         ]
         for command in CommandCatalog.commands(tabCount: 9, workspaceCount: 9) {

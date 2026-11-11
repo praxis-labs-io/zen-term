@@ -350,12 +350,12 @@ final class RepoPickerOverlay: PaletteOverlay {
         case .mutedParent(let workspace): return ["muted", workspace.title]
         case .open(let workspace):
             return [
-                "open", "\(workspace.window)", "\(workspace.id?.raw ?? -1)", workspace.folder.path,
+                "open", "\(workspace.window)", "\(workspace.id?.raw ?? -1)", workspace.folder.path, workspace.name,
                 removingWorktree(workspace) == nil ? "" : "removing", workspace.removedWorktreeName ?? "",
             ]
         case .elsewhere(let workspace):
             return [
-                "elsewhere", "\(workspace.window)", "\(workspace.id?.raw ?? -1)", workspace.folder.path,
+                "elsewhere", "\(workspace.window)", "\(workspace.id?.raw ?? -1)", workspace.folder.path, workspace.name,
                 removingWorktree(workspace) == nil ? "" : "removing", workspace.removedWorktreeName ?? "",
             ]
         case .workspace(let workspace): return ["workspace", workspace.title]

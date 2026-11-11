@@ -79,7 +79,7 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
                 other.activateWorkspace(workspace)
                 return true
             }
-            window.onWorktreeMarkChanged = { [weak window] in
+            window.onOpenWorkspacesChanged = { [weak window] in
                 others().filter { $0 !== window }.forEach { $0.refreshOpenPicker() }
             }
             window.revealWorkspaceInAnotherWindow = { [weak window] path in
@@ -194,6 +194,21 @@ final class RepoPickerAcrossWindowsTests: WindowTestCase {
         pressReturn(in: try openPicker(in: two, on: "Alpha"))
 
         XCTAssertEqual(section(of: "Alpha", in: try openPicker(in: one)), "Open elsewhere")
+    }
+
+    func test_renamingAWorkspace_updatesAnOpenPickerInTheOtherWindow() throws {
+        try seedWorkspaces(twoWorkspaces)
+        let (one, two) = makeWindows()
+        pressReturn(in: try openPicker(in: two, on: "Alpha"))
+        let picker = try openPicker(in: one)
+        XCTAssertEqual(section(of: "Alpha", in: picker), "Open elsewhere")
+
+        XCTAssertTrue(two.renameWorkspace(two.activeWorkspaceIDForTesting, to: "api"))
+
+        XCTAssertEqual(section(of: "api", in: picker), "Open elsewhere", "the open picker shows the new name")
+        XCTAssertNil(
+            picker.rowViews.compactMap { $0 as? RepoPickerOverlay.RowView }
+                .first { $0.running?.name == "Alpha" }, "and no longer the old one")
     }
 
     func test_aWorkspaceOpenInThisWindow_isListedUnderOpen() throws {

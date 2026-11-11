@@ -208,13 +208,14 @@ final class WindowController: NSObject {
 
     private enum ModalKind {
         case repoPicker, commandPalette, workspaceForm, settings, toolFloatForm, reportIssue
-        case renameTab, worktreeForm, sshHostForm
+        case renameTab, renameWorkspace, worktreeForm, sshHostForm
 
         var selfToggle: KeyInterceptor.ReservedChord? {
             switch self {
             case .repoPicker: return .toggleRepoPicker
             case .commandPalette: return .toggleCommandPalette
             case .settings: return .openSettings
+            case .renameWorkspace: return .renameWorkspace
             case .workspaceForm, .toolFloatForm, .reportIssue, .renameTab, .worktreeForm, .sshHostForm:
                 return nil
             }
@@ -248,7 +249,7 @@ final class WindowController: NSObject {
 
     var openWorkspacesElsewhere: (() -> [RunningWorkspace])?
 
-    var onWorktreeMarkChanged: (() -> Void)?
+    var onOpenWorkspacesChanged: (() -> Void)?
 
     var revealWorkspaceElsewhere: ((Int, WorkspaceID) -> Bool)?
 
@@ -422,6 +423,7 @@ final class WindowController: NSObject {
         var onActivateRow: (SidebarRowID) -> Void = { _ in }
         var onNewWorktree: (SidebarRowID) -> Void = { _ in }
         var onCloseWorkspace: (WorkspaceID) -> Void = { _ in }
+        var onRenameWorkspace: (WorkspaceID) -> Void = { _ in }
         var onOpenWorkspace: () -> Void = {}
         var onBottom: () -> Void = {}
         var onRight: () -> Void = {}
@@ -437,7 +439,8 @@ final class WindowController: NSObject {
         sidebar = SidebarController(
             onPalette: { onPalette() }, onSettings: { onSettings() }, onToggle: { onToggleSidebar() },
             onActivate: { onActivateRow($0) }, onNewWorktree: { onNewWorktree($0) },
-            onCloseWorkspace: { onCloseWorkspace($0) }, onAdd: { onOpenWorkspace() })
+            onRenameWorkspace: { onRenameWorkspace($0) }, onCloseWorkspace: { onCloseWorkspace($0) },
+            onAdd: { onOpenWorkspace() })
         super.init()
         nextTabID = 2
 
@@ -468,6 +471,7 @@ final class WindowController: NSObject {
         onActivateRow = { [weak self] in self?.activateFromSidebar($0) }
         onNewWorktree = { [weak self] in self?.createWorktreeFromSidebar($0) }
         onCloseWorkspace = { [weak self] in self?.requestCloseWorkspace(id: $0) }
+        onRenameWorkspace = { [weak self] in self?.openRenameWorkspace($0) }
         sidebar.onJump = { [weak self] in self?.jumpToAgent($0) }
         sidebar.onJumpElsewhere = { [weak self] in self?.jumpToWaitingElsewhere() }
         sidebar.onActivateHost = { [weak self] host in
@@ -790,7 +794,7 @@ final class WindowController: NSObject {
         guard changed else { return }
         renderTabBar()
         refreshOpenPicker()
-        onWorktreeMarkChanged?()
+        onOpenWorkspacesChanged?()
     }
 
     func refreshOpenPicker() {
@@ -1274,8 +1278,8 @@ final class WindowController: NSObject {
         cancelConfirm()
         if modal?.kind == .renameTab { closeModal(); return }
         if modal != nil { closeModal() }
-        let overlay = RenameTabOverlay(
-            current: controller.title, liveTitle: controller.liveTitle,
+        let overlay = RenameOverlay(
+            title: "Rename Tab", current: controller.title, placeholder: controller.liveTitle,
             onSubmit: { [weak self] name in
                 self?.renameTab(id, to: name)
                 self?.closeModal()
@@ -1289,6 +1293,32 @@ final class WindowController: NSObject {
         controller.pinnedTitle = name.isEmpty ? nil : name
         workspace.setTitle(controller.title, for: id)
         renderTabBar()
+    }
+
+    private func openRenameWorkspace(_ id: WorkspaceID) {
+        guard let workspace = workspaces.first(where: { $0.id == id }), workspace.host == nil else { return }
+        cancelConfirm()
+        if modal?.kind == .renameWorkspace { closeModal(); return }
+        if modal != nil { closeModal() }
+        let overlay = RenameOverlay(
+            title: "Rename Workspace", current: workspace.name, placeholder: workspace.givenName,
+            onSubmit: { [weak self] name in
+                self?.renameWorkspace(id, to: name)
+                self?.closeModal()
+            },
+            onCancel: { [weak self] in self?.closeModal() })
+        presentModal(overlay, kind: .renameWorkspace)
+    }
+
+    @discardableResult
+    func renameWorkspace(_ id: WorkspaceID, to name: String) -> Bool {
+        guard let workspace = workspaces.first(where: { $0.id == id }), workspace.host == nil else { return false }
+        workspace.pinnedName = name.isEmpty ? nil : name
+        Log.info("workspace renamed", category: .workspace)
+        renderTabBar()
+        refreshOpenPicker()
+        onOpenWorkspacesChanged?()
+        return true
     }
 
     private func closeTab(_ id: TabID, dismissingModal: Bool = true) {
@@ -2516,7 +2546,7 @@ final class WindowController: NSObject {
                 toastFloatBlocked()
                 return
             case .toggleCommandPalette, .toggleRepoPicker, .openSettings, .reportIssue, .newTool,
-                .renameTab:
+                .renameTab, .renameWorkspace:
                 floats.close()
             case .toggleToolFloat, .newTab, .newWindow, .closeTab, .closeWindow,
                 .selectTab, .prevTab, .nextTab,
@@ -2578,6 +2608,7 @@ final class WindowController: NSObject {
         case .moveTabLeft: moveActiveTab(-1)
         case .moveTabRight: moveActiveTab(1)
         case .renameTab: activeWorkspace?.activeID.map { openRenameTab($0) }
+        case .renameWorkspace: activeWorkspace.map { openRenameWorkspace($0.id) }
         case .closePane:
             Log.info("close pane", category: .panes)
             requestClosePane()

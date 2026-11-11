@@ -183,6 +183,10 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **A window starts with one workspace, with no config entry**, and shows either a workspace
   or an SSH host's Connect screen, which has no workspace behind it. A workspace without a
   config entry is named "Workspace N", the lowest number no open workspace in the window holds.
+  Rename Workspace pins a session name over that given name (`pinnedName ?? givenName`), the
+  way Rename Tab pins a tab's. It is never written to the workspaces file, so a configured
+  workspace keeps its config title as its identity, and empty clears it. A host's name is
+  always its Settings display name, so a host workspace is never renamed.
   ⌘⌃T opens one at the end of the sidebar, in the home folder: a workspace is a place, and one opened on the focused pane's folder
   would collide with the open workspace already identified by it. A workspace is open when
   one with a config entry is open at its folder, so renaming it in Settings does not open a
@@ -380,7 +384,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   ↵ activates a row as a click does. Rows take focus from the keyboard only
   (`SettingsNavRow.takeKeyboardFocus`): AppKit promotes any clicked view that accepts.
   A right-click or ⌃-click opens `SidebarRowMenu`, a `ListPopover` that never switches
-  workspaces; a local event monitor closes it on Esc or a click outside it.
+  workspaces (New Worktree…, Rename Workspace… and Close Workspace act on that row); a local event monitor closes it on Esc or a click outside it.
 - **Collapsed, the sidebar still reveals from the window's leading edge.**
   `SidebarEdgeReveal` watches an 8pt strip there, measured from where a hand aiming at the
   edge comes to rest, and floats `SidebarColumn` as a card over the panes after a hold.
