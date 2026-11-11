@@ -123,7 +123,9 @@ struct ControlResponder {
         }
         return caller(request).map { context in
             let id = context.window.openUnconfiguredWorkspace(
-                at: folder, named: request.args.title.flatMap { $0.isEmpty ? nil : $0 })
+                at: folder,
+                named: request.args.title.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .flatMap { $0.isEmpty ? nil : $0 })
             return present(WorkspacePlace(window: context.window, id: id), focus: request.args.focus)
         }
     }

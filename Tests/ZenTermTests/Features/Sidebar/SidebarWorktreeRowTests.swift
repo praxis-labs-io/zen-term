@@ -543,6 +543,23 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertFalse(c.isModalOverlayOpen)
     }
 
+    func test_renameFromTheMenu_whileTheActiveWorkspacesCardIsUp_opensTheCardForThatRow() throws {
+        let c = makeWindow()
+        try openWorkspace(named: "Alpha", in: c)
+        try openWorkspace(named: "Beta", in: c)
+        c.handle(.renameWorkspace)
+        XCTAssertEqual(try renameCard(in: c).nameFieldForTesting.text, "Beta")
+
+        try rightClick(rows(of: c)[1])
+        try XCTUnwrap(menu.itemViewsForTesting.first { $0.title == "Rename Workspace…" }).mouseDown(
+            with: try XCTUnwrap(
+                NSEvent.mouseEvent(
+                    with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+                    windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)))
+
+        XCTAssertEqual(try renameCard(in: c).nameFieldForTesting.text, "Alpha", "Alpha's card, not none")
+    }
+
     func test_closingAWorkspace_landsOnItsNeighbourInTheSidebar_andLeavesItsWorktreeUnderAGhost() throws {
         let c = makeWindow()
         try openWorkspace(named: "Alpha", in: c)

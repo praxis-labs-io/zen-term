@@ -301,9 +301,11 @@ final class ControlWorkspaceTabTests: WindowTestCase {
 
         let named = try result(send(.workspaceNew, ControlArgs(title: "scratch")), as: WorkspaceResult.self)
         let plain = try result(send(.workspaceNew, ControlArgs(title: "")), as: WorkspaceResult.self)
+        let blank = try result(send(.workspaceNew, ControlArgs(title: "   ")), as: WorkspaceResult.self)
 
         XCTAssertEqual(named.workspace?.title, "scratch")
         XCTAssertEqual(plain.workspace?.title, "Workspace 2")
+        XCTAssertEqual(blank.workspace?.title, "Workspace 3")
     }
 
     private func listedTitles() throws -> [String] {
@@ -333,8 +335,11 @@ final class ControlWorkspaceTabTests: WindowTestCase {
         XCTAssertEqual(try error(send(.workspaceSwitch, ControlArgs(workspace: "alpha"))).code, .notFound)
         XCTAssertEqual(try error(send(.workspaceRename, ControlArgs(workspace: "api"))).code, .badRequest)
 
-        _ = try result(send(.workspaceRename, ControlArgs(workspace: "api", title: "")), as: NoPayload.self)
-        XCTAssertEqual(try listedTitles(), ["Workspace 1", "alpha"])
+        _ = try result(send(.workspaceRename, ControlArgs(workspace: "api", title: "  \n")), as: NoPayload.self)
+        XCTAssertEqual(try listedTitles(), ["Workspace 1", "alpha"], "whitespace clears, like an empty title")
+
+        _ = try result(send(.workspaceRename, ControlArgs(workspace: "alpha", title: " api ")), as: NoPayload.self)
+        XCTAssertEqual(try listedTitles(), ["Workspace 1", "api"], "trimmed")
     }
 
     func test_workspaceOpenOfARenamedConfiguredWorkspace_returnsTheOpenOne() throws {

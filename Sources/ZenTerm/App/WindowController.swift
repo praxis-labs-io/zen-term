@@ -1298,7 +1298,6 @@ final class WindowController: NSObject {
     private func openRenameWorkspace(_ id: WorkspaceID) {
         guard let workspace = workspaces.first(where: { $0.id == id }), workspace.host == nil else { return }
         cancelConfirm()
-        if modal?.kind == .renameWorkspace { closeModal(); return }
         if modal != nil { closeModal() }
         let overlay = RenameOverlay(
             title: "Rename Workspace", current: workspace.name, placeholder: workspace.givenName,
@@ -1313,7 +1312,8 @@ final class WindowController: NSObject {
     @discardableResult
     func renameWorkspace(_ id: WorkspaceID, to name: String) -> Bool {
         guard let workspace = workspaces.first(where: { $0.id == id }), workspace.host == nil else { return false }
-        workspace.pinnedName = name.isEmpty ? nil : name
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        workspace.pinnedName = trimmed.isEmpty ? nil : trimmed
         Log.info("workspace renamed", category: .workspace)
         renderTabBar()
         refreshOpenPicker()

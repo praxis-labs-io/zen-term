@@ -222,8 +222,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     // New Workspace holds the selection until a query matches something, so a search that finds nothing makes one.
     override func defaultSelectionIndex() -> Int {
-        guard !currentQuery.trimmingCharacters(in: .whitespaces).isEmpty else { return 0 }
-        let query = currentQuery.trimmingCharacters(in: .whitespaces)
+        guard let query = newWorkspaceName else { return 0 }
         return rows.indices.first { isSelectable(at: $0) && Self.matches(rows[$0], query) } ?? 0
     }
 

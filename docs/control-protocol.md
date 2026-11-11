@@ -98,7 +98,7 @@ Requests are decoded off the main thread, applied on it, and written back off it
 | ------ | --------------------------------- | --------------------------------------------- |
 | Pane   | its `$ZEN_PANE` token, e.g. `31`  | Unique across the app and never reused. Drawers have tokens. |
 | Tab    | `w<window>.t<tab>`, e.g. `w1.t14` | Tab ids are minted per window, so the window is part of it. |
-| Workspace | its folder as an absolute path, or its title | Matched across every window. The title is its current name, so after a rename the old one is `not_found`. More than one match is `ambiguous`. |
+| Workspace | its folder as an absolute path, or its title | Matched across every window. The title is its current name, so after a rename the old one is `not_found`, except to `workspace.open`, which still reaches a renamed configured workspace through its entry's folder. More than one match is `ambiguous`. |
 | Remote host workspace | `ssh:<host>`             | The host's alias in Settings, never its name. A host not in Settings is `not_found`, and so is one with no session or a failed login, except to `workspace.open` and the worktree commands, which refuse a host in Settings whether it has a session or not. A folder or title never names a host's workspace. |
 | Window | `w<window>`                       |                                               |
 
@@ -166,9 +166,9 @@ is listed from its first opening until it closes, shown or hidden.
 `args`: `workspace` (required), `focus`.
 
 Returns a workspace that is already open, in whichever window holds it, rather than
-opening a second copy. Otherwise opens the workspaces-file entry whose folder or title
-matches, or returns the open workspace at that entry's folder when a rename moved it off
-its config title, with its tabs and launch focus, in the caller's window. When neither matches it is
+opening a second copy, including a configured one a rename moved off its config title,
+which is found through its entry's folder. Otherwise opens the workspaces-file entry whose
+folder or title matches, with its tabs and launch focus, in the caller's window. When neither matches it is
 `not_found`.
 
 `ssh:<host>` returns the host's workspace when it has a session. Without one, `focus`
