@@ -182,7 +182,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 
 - **A window starts with one workspace, with no config entry**, and shows either a workspace
   or an SSH host's Connect screen, which has no workspace behind it. A workspace without a
-  config entry is named "Workspace N", the lowest number no open workspace in the window holds.
+  config entry is named "Workspace N", the lowest number no open workspace in the window holds,
+  or the ⌘P query when New Workspace is chosen with one (its row reads `New Workspace “<query>”`).
   Rename Workspace pins a session name over that given name (`pinnedName ?? givenName`), the
   way Rename Tab pins a tab's. It is never written to the workspaces file, so a configured
   workspace keeps its config title as its identity, and empty clears it. A host's name is

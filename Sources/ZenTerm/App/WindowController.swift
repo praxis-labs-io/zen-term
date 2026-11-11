@@ -1519,7 +1519,7 @@ final class WindowController: NSObject {
                     return true
                 },
                 onAddWorkspace: { [weak self] in self?.openAddWorkspaceForm() },
-                onNewWorkspace: { [weak self] in self?.newWorkspace() },
+                onNewWorkspace: { [weak self] in self?.newWorkspace(named: $0) },
                 onDismiss: { [weak self] in self?.closeModal() }
             )
             self.presentModal(picker, kind: .repoPicker)
@@ -2465,13 +2465,14 @@ final class WindowController: NSObject {
     }
 
     // The home folder, not the focused pane's: a workspace is a place, and folder identity makes two on one folder collide.
-    private func newWorkspace() {
+    private func newWorkspace(named name: String? = nil) {
         closeModal()
-        activate(appendUnconfiguredWorkspace(at: ShellLaunch.defaultCWD).id, transition: .instant)
+        activate(appendUnconfiguredWorkspace(at: ShellLaunch.defaultCWD, named: name).id, transition: .instant)
     }
 
-    private func appendUnconfiguredWorkspace(at folder: URL) -> WorkspaceController {
-        appendWorkspace(named: Self.unconfiguredName(among: workspaces.map(\.name)), at: folder, config: nil)
+    private func appendUnconfiguredWorkspace(at folder: URL, named name: String? = nil) -> WorkspaceController {
+        appendWorkspace(
+            named: name ?? Self.unconfiguredName(among: workspaces.map(\.name)), at: folder, config: nil)
     }
 
     private func appendWorkspace(
@@ -2515,7 +2516,7 @@ final class WindowController: NSObject {
                 return
             }
             if modal.kind == .repoPicker, chord == .newWorkspace {
-                newWorkspace()
+                newWorkspace(named: (modal.overlay as? RepoPickerOverlay)?.newWorkspaceName)
                 return
             }
             switch chord {

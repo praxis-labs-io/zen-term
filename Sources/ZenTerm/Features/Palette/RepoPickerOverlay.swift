@@ -25,7 +25,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     private let onReveal: (Int, WorkspaceID) -> Bool
     private let openState: (URL) -> WorkspaceOpenState
     private let onAddWorkspace: () -> Void
-    private let onNewWorkspace: () -> Void
+    private let onNewWorkspace: (String?) -> Void
 
     private let entries: [Workspace]
     private var open: [RunningWorkspace]
@@ -49,7 +49,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         onSwitch: @escaping (WorkspaceID) -> Void = { _ in },
         onReveal: @escaping (Int, WorkspaceID) -> Bool = { _, _ in false },
         onAddWorkspace: @escaping () -> Void,
-        onNewWorkspace: @escaping () -> Void = {}, onDismiss: @escaping () -> Void
+        onNewWorkspace: @escaping (String?) -> Void = { _ in }, onDismiss: @escaping () -> Void
     ) {
         self.entries = entries
         self.open = open
@@ -237,11 +237,16 @@ final class RepoPickerOverlay: PaletteOverlay {
         }
     }
 
+    var newWorkspaceName: String? {
+        let query = currentQuery.trimmingCharacters(in: .whitespaces)
+        return query.isEmpty ? nil : query
+    }
+
     override func makeRow(at index: Int) -> PaletteRowView {
         switch rows[index] {
         case .newWorkspace:
             return ActionRowView(
-                symbol: "plus", title: "New Workspace",
+                symbol: "plus", title: newWorkspaceName.map { "New Workspace “\($0)”" } ?? "New Workspace",
                 shortcut: Chord.displayed(.newWorkspace, in: GeneralConfig.current.keymap)?.displayGlyph,
                 emphasis: .listed)
         case .add:
@@ -344,7 +349,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
     override func rowIdentity(at index: Int) -> AnyHashable? {
         switch rows[index] {
-        case .newWorkspace: return ["new"]
+        case .newWorkspace: return ["new", newWorkspaceName ?? ""]
         case .add: return ["add"]
         case .header(let title): return ["header", title]
         case .mutedParent(let workspace): return ["muted", workspace.title]
@@ -508,7 +513,7 @@ final class RepoPickerOverlay: PaletteOverlay {
     override func activate(index: Int, modifiers: NSEvent.ModifierFlags) {
         guard rows.indices.contains(index) else { return }
         switch rows[index] {
-        case .newWorkspace: onNewWorkspace()
+        case .newWorkspace: onNewWorkspace(newWorkspaceName)
         case .add: onAddWorkspace()
         case .header, .mutedParent: return
         case .open(let row):
@@ -574,6 +579,8 @@ final class RepoPickerOverlay: PaletteOverlay {
             let label = NSTextField(labelWithString: title)
             label.font = ChromeType.font(.body, weight: emphasis.weight)
             label.textColor = emphasis.ink
+            label.lineBreakMode = .byTruncatingTail
+            label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             label.translatesAutoresizingMaskIntoConstraints = false
             addSubview(label)
 
@@ -585,7 +592,12 @@ final class RepoPickerOverlay: PaletteOverlay {
                 label.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
 
-            guard let shortcut else { return }
+            guard let shortcut else {
+                label.trailingAnchor.constraint(
+                    lessThanOrEqualTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset
+                ).isActive = true
+                return
+            }
             let keycap = KeycapView(shortcut: shortcut)
             addSubview(keycap)
             NSLayoutConstraint.activate([
