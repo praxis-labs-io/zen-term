@@ -218,6 +218,7 @@ final class PaneCanvasController: NSObject {
             root = SplitContainerView(
                 node: tree.root,
                 register: { [weak self] id, v in self?.splitViewByID[id] = v },
+                onDrag: { [weak self] id, axis, ratio in self?.applyRatio(ratio, to: id, axis: axis) },
                 leafView: { [weak self] id in
                     self?.hostView(for: id) ?? NSView()
                 })
@@ -403,9 +404,16 @@ final class PaneCanvasController: NSObject {
         guard let split = tree.edgeSplitID(for: tree.focusedLeaf, axis: axis, positive: positive),
             let current = tree.ratio(of: split)
         else { NSSound.beep(); return }
+        let step = positive ? Self.resizeStep : -Self.resizeStep
+        guard applyRatio(current + step, to: split, axis: axis) else { NSSound.beep(); return }
+    }
+
+    @discardableResult
+    private func applyRatio(_ proposed: Double, to split: SplitID, axis: SplitAxis) -> Bool {
+        guard let current = tree.ratio(of: split) else { return false }
         let minRatio = minRatioForSplit(split, axis: axis)
-        let next = min(max(current + (positive ? Self.resizeStep : -Self.resizeStep), minRatio), 1 - minRatio)
-        guard abs(next - current) > 1e-6 else { NSSound.beep(); return }
+        let next = min(max(proposed, minRatio), 1 - minRatio)
+        guard abs(next - current) > 1e-6 else { return false }
         tree = tree.settingRatio(split, to: next)
         if let container = splitViewByID[split] {
             container.setRatio(next)
@@ -413,6 +421,7 @@ final class PaneCanvasController: NSObject {
             reconcileAndRender()
             focusActivePane()
         }
+        return true
     }
 
     private func minRatioForSplit(_ split: SplitID, axis: SplitAxis) -> Double {

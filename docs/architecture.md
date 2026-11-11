@@ -166,8 +166,11 @@ reparented rather than rebuilt.
 
 `PaneCanvasController` owns the tree, the registry and per-leaf state, and is every
 pane's `TerminalSurfaceDelegate`. Zoom changes only what `rebuildViews()` mounts at the
-root. Resize swaps one constraint in place and clamps against the rendered extent
-(`minSplitExtent`). `launchByLeaf` keeps the spawn config for `retryStart`.
+root. Keyboard resize and a divider drag share one apply: it sets the ratio in the tree,
+swaps one constraint in place, and clamps against the rendered extent (`minSplitExtent`).
+Each split container owns the `SplitDivider` over its own gutter, stacked above both
+children, so a nested split needs nothing extra. `launchByLeaf` keeps the spawn config
+for `retryStart`.
 
 ## Windows, workspaces and tabs
 
