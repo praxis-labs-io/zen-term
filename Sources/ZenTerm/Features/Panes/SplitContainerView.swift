@@ -12,14 +12,19 @@ final class SplitContainerView: NSView {
     private var isAnimatingIn = false
     private var splitInExtents: [NSLayoutConstraint] = []
     private var suspendGrids: ((Bool) -> Void)?
+    private var dividerCenter: NSLayoutConstraint?
+    private var dividerBand: NSLayoutConstraint?
+
+    typealias DragHandler = (SplitID, SplitAxis, Double) -> Void
 
     init(
         node: PaneNode, gutter: CGFloat = ChromeMetrics.panelGap,
-        register: ((SplitID, SplitContainerView) -> Void)? = nil, leafView: (PaneID) -> NSView
+        register: ((SplitID, SplitContainerView) -> Void)? = nil, onDrag: DragHandler? = nil,
+        leafView: (PaneID) -> NSView
     ) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        build(node, gutter: gutter, register: register, leafView: leafView)
+        build(node, gutter: gutter, register: register, onDrag: onDrag, leafView: leafView)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -29,7 +34,11 @@ final class SplitContainerView: NSView {
         gutter = next
         secondFollowsFirst?.constant = next
         ratioConstraint?.constant = -next / 2
+        dividerCenter?.constant = next / 2
+        dividerBand?.constant = Self.dividerBand(gutter: next)
     }
+
+    private static func dividerBand(gutter: CGFloat) -> CGFloat { max(gutter, ChromeMetrics.Spacing.s8) }
 
     func setRatio(_ ratio: Double) {
         settleSplitIn()
@@ -124,7 +133,8 @@ final class SplitContainerView: NSView {
 
     private func build(
         _ node: PaneNode, gutter: CGFloat,
-        register: ((SplitID, SplitContainerView) -> Void)?, leafView: (PaneID) -> NSView
+        register: ((SplitID, SplitContainerView) -> Void)?, onDrag: DragHandler?,
+        leafView: (PaneID) -> NSView
     ) {
         switch node {
         case .leaf(let id):
@@ -140,8 +150,10 @@ final class SplitContainerView: NSView {
 
         case .split(let id, let axis, let ratio, let a, let b):
             register?(id, self)
-            let first = SplitContainerView(node: a, gutter: gutter, register: register, leafView: leafView)
-            let second = SplitContainerView(node: b, gutter: gutter, register: register, leafView: leafView)
+            let first = SplitContainerView(
+                node: a, gutter: gutter, register: register, onDrag: onDrag, leafView: leafView)
+            let second = SplitContainerView(
+                node: b, gutter: gutter, register: register, onDrag: onDrag, leafView: leafView)
             addSubview(first)
             addSubview(second)
             firstChild = first
@@ -179,6 +191,33 @@ final class SplitContainerView: NSView {
                     ratioConstraint,
                 ])
             }
+            if let onDrag { mountDivider(id: id, axis: axis, after: first, onDrag: onDrag) }
         }
+    }
+
+    private func mountDivider(id: SplitID, axis: SplitAxis, after first: NSView, onDrag: @escaping DragHandler) {
+        let divider = SplitDivider(splitID: id, axis: axis, onDrag: onDrag)
+        addSubview(divider)
+        let band = Self.dividerBand(gutter: gutter)
+        let center: NSLayoutConstraint
+        let extent: NSLayoutConstraint
+        if axis == .vertical {
+            center = divider.centerXAnchor.constraint(equalTo: first.trailingAnchor, constant: gutter / 2)
+            extent = divider.widthAnchor.constraint(equalToConstant: band)
+            NSLayoutConstraint.activate([
+                divider.topAnchor.constraint(equalTo: topAnchor),
+                divider.bottomAnchor.constraint(equalTo: bottomAnchor),
+            ])
+        } else {
+            center = divider.centerYAnchor.constraint(equalTo: first.bottomAnchor, constant: gutter / 2)
+            extent = divider.heightAnchor.constraint(equalToConstant: band)
+            NSLayoutConstraint.activate([
+                divider.leadingAnchor.constraint(equalTo: leadingAnchor),
+                divider.trailingAnchor.constraint(equalTo: trailingAnchor),
+            ])
+        }
+        NSLayoutConstraint.activate([center, extent])
+        dividerCenter = center
+        dividerBand = extent
     }
 }
