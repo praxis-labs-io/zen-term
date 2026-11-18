@@ -222,6 +222,17 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertNotNil(c.activeConnectionForTesting)
     }
 
+    func test_aConnectedHost_cannotBeRenamed_byTheChordOrTheVerb() throws {
+        let (c, _) = try connected()
+        let workspace = c.activeWorkspaceIDForTesting
+
+        c.handle(.renameWorkspace)
+
+        XCTAssertFalse(c.isModalOverlayOpen, "a host's name is its Settings display name")
+        XCTAssertFalse(c.renameWorkspace(workspace, to: "box"))
+        XCTAssertEqual(c.window.title, "devbox")
+    }
+
     func test_chordsThatNeedATab_doNothingOnConnect() {
         let c = onConnectScreen()
         let before = c.workspaceIDsForTesting

@@ -391,6 +391,7 @@
 #                        any other action)
 #   new_workspace  prev_workspace  next_workspace
 #   select_workspace_1 … select_workspace_9  close_workspace
+#   rename_workspace    (no default binding; right-click a workspace, or use the palette)
 #   next_waiting_agent
 #
 # Defaults (uncomment to change; these are what ships):

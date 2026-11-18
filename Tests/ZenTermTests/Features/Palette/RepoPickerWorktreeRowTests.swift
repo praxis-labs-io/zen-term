@@ -794,7 +794,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
                 return "removing:\(removing.name)"
             }
             if let action = view as? RepoPickerOverlay.ActionRowView {
-                return action.title == "New Workspace" ? "new" : "add"
+                return action.title.hasPrefix("New Workspace") ? "new" : "add"
             }
             if let header = view as? PaletteSectionHeader { return "header:\(header.title)" }
             guard let row = view as? RepoPickerOverlay.RowView else { return "?" }

@@ -85,10 +85,10 @@ final class TabReorderAndRenameTests: WindowTestCase {
         view.subviews.flatMap { [$0] + descendants(of: $0) }
     }
 
-    private func renameCard(_ controller: WindowController) throws -> RenameTabOverlay {
+    private func renameCard(_ controller: WindowController) throws -> RenameOverlay {
         let content = try XCTUnwrap(controller.window.contentView)
         return try XCTUnwrap(
-            descendants(of: content).compactMap { $0 as? RenameTabOverlay }.first,
+            descendants(of: content).compactMap { $0 as? RenameOverlay }.first,
             "the rename card should be up")
     }
 

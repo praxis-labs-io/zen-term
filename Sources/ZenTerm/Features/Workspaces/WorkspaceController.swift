@@ -7,8 +7,10 @@ import TerminalKit
 final class WorkspaceController {
     let id: WorkspaceID
     let isConfigured: Bool
-    private let givenName: String
-    var name: String { host.map { GeneralConfig.current.displayName(of: $0) } ?? givenName }
+    let givenName: String
+    // Session-only: a rename never reaches the workspaces file, so the config title stays the identity Settings edits.
+    var pinnedName: String?
+    var name: String { host.map { GeneralConfig.current.displayName(of: $0) } ?? pinnedName ?? givenName }
     let folder: URL
     let origin: WorktreeOrigin?
     let connection: SSHConnection?

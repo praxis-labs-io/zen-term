@@ -199,4 +199,76 @@ final class NewWorkspaceTests: WindowTestCase {
         XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 2"])
         XCTAssertNil(pickerIn(c), "the picker closes")
     }
+
+    private func searchField(of picker: RepoPickerOverlay) throws -> NSTextField {
+        try XCTUnwrap(
+            descendants(of: picker).compactMap { $0 as? NSTextField }
+                .first { ($0.delegate as? PaletteOverlay) === picker })
+    }
+
+    // Through the field editor, so the query arrives by the text-change notification a keystroke sends.
+    private func type(_ text: String, into picker: RepoPickerOverlay, in c: WindowController) throws {
+        let field = try searchField(of: picker)
+        XCTAssertTrue(c.window.makeFirstResponder(field))
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        editor.selectAll(nil)
+        editor.insertText(text, replacementRange: editor.selectedRange())
+    }
+
+    private func command(_ selector: Selector, in picker: RepoPickerOverlay) throws {
+        _ = picker.control(try searchField(of: picker), textView: NSTextView(), doCommandBy: selector)
+    }
+
+    private func newWorkspaceRow(of picker: RepoPickerOverlay) throws -> RepoPickerOverlay.ActionRowView {
+        try XCTUnwrap(picker.rowViews.first as? RepoPickerOverlay.ActionRowView)
+    }
+
+    func test_aQueryThatMatchesNothing_namesTheNewWorkspace_trimmed() throws {
+        let c = makeWindow()
+        let picker = try openPicker(in: c)
+
+        try type("  api server ", into: picker, in: c)
+        XCTAssertEqual(try newWorkspaceRow(of: picker).title, "New Workspace “api server”")
+        try command(#selector(NSResponder.insertNewline(_:)), in: picker)
+
+        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "api server"])
+        XCTAssertEqual(c.window.title, "api server")
+        XCTAssertNil(pickerIn(c), "the picker closes")
+    }
+
+    func test_theRowTitle_followsTheQuery_backToPlainWhenEmptied() throws {
+        let c = makeWindow()
+        let picker = try openPicker(in: c)
+
+        try type("api", into: picker, in: c)
+        try type("", into: picker, in: c)
+
+        XCTAssertEqual(try newWorkspaceRow(of: picker).title, "New Workspace")
+        try command(#selector(NSResponder.insertNewline(_:)), in: picker)
+        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Workspace 2"])
+    }
+
+    func test_arrowingToNewWorkspacePastAMatch_stillNamesItTheQuery() throws {
+        try seedWorkspaces("[Alpha]\npath = ~/Dev/alpha\n")
+        let c = makeWindow()
+        let picker = try openPicker(in: c)
+        try type("Al", into: picker, in: c)
+        XCTAssertNotEqual(picker.selected, 0, "the match takes the selection")
+
+        try command(#selector(NSResponder.moveUp(_:)), in: picker)
+        XCTAssertEqual(picker.selected, 0)
+        try command(#selector(NSResponder.insertNewline(_:)), in: picker)
+
+        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "Al"])
+    }
+
+    func test_cmdCtrlT_withAQueryInThePicker_namesTheWorkspaceTheQuery() throws {
+        let c = makeWindow()
+        let picker = try openPicker(in: c)
+        try type("scratch", into: picker, in: c)
+
+        try pressCmdCtrlT(in: c)
+
+        XCTAssertEqual(c.workspaceNamesForTesting, ["Workspace 1", "scratch"])
+    }
 }

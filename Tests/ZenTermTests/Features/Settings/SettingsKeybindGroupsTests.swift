@@ -26,7 +26,7 @@ final class SettingsKeybindGroupsTests: XCTestCase {
             .reloadConfig, .checkForUpdates, .reportIssue, .newTool,
             .dismissToast, .dismissAllToasts,
             .toggleToolFloat(ToolFloat.scratch.id), .toggleToolFloat("btop"),
-            .prevWorkspace, .nextWorkspace, .closeWorkspace,
+            .prevWorkspace, .nextWorkspace, .renameWorkspace, .closeWorkspace,
             .nextWaitingAgent,
         ] + (1...9).map { .selectTab($0) } + (1...9).map { .selectWorkspace($0) }
 

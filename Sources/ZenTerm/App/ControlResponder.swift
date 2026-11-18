@@ -19,6 +19,7 @@ struct ControlResponder {
         case .workspaceOpen: openWorkspace(request, reply: reply)
         case .workspaceNew: reply(newWorkspace(request))
         case .workspaceSwitch: reply(switchWorkspace(request))
+        case .workspaceRename: reply(renameWorkspace(request))
         case .workspaceClose: reply(closeWorkspace(request))
         case .tabNew: reply(newTab(request))
         case .tabSelect: reply(selectTab(request))
@@ -88,10 +89,19 @@ struct ControlResponder {
         guard let entry = matches.first else {
             return .failure(ControlError(.notFound, "No workspace is open or configured at \(address)."))
         }
+        if let open = openPlace(of: entry) { return .success(present(open, focus: request.args.focus)) }
         return caller(request).map { context in
             let place = WorkspacePlace(window: context.window, id: context.window.openConfiguredWorkspace(entry))
             return present(place, focus: request.args.focus)
         }
+    }
+
+    // A rename moves an open workspace off its config title, and its folder still identifies it.
+    private func openPlace(of entry: Workspace) -> WorkspacePlace? {
+        for window in windows() {
+            if let id = window.configuredWorkspaceID(at: entry.path) { return WorkspacePlace(window: window, id: id) }
+        }
+        return nil
     }
 
     static func names(_ entry: Workspace, _ address: String) -> Bool {
@@ -112,7 +122,10 @@ struct ControlResponder {
         case let path?: return .failure(ControlError(.badRequest, "\(path) is not an absolute path."))
         }
         return caller(request).map { context in
-            let id = context.window.openUnconfiguredWorkspace(at: folder)
+            let id = context.window.openUnconfiguredWorkspace(
+                at: folder,
+                named: request.args.title.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .flatMap { $0.isEmpty ? nil : $0 })
             return present(WorkspacePlace(window: context.window, id: id), focus: request.args.focus)
         }
     }
@@ -122,6 +135,24 @@ struct ControlResponder {
             place.window.activateWorkspace(place.id)
             raise(place.window)
             return NoPayload()
+        }
+    }
+
+    private func renameWorkspace(_ request: ControlRequest) -> ControlReply {
+        guard let title = request.args.title else {
+            return .failure(ControlError(.badRequest, "workspace.rename needs a title. An empty one clears it."))
+        }
+        return workspace(request.args.workspace, for: request).flatMap { place in
+            if let host = place.window.host(of: place.id) {
+                return .failure(
+                    ControlError(
+                        .refused,
+                        "\(ControlAddress.hostPrefix + host.alias) is named by its host. Rename it in Settings."))
+            }
+            guard place.window.renameWorkspace(place.id, to: title) else {
+                return .failure(ControlError(.notFound, "That workspace is gone."))
+            }
+            return .success(NoPayload())
         }
     }
 

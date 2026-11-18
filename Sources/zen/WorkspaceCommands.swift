@@ -4,7 +4,7 @@ import ControlProtocol
 struct WorkspaceCommands: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "workspace", abstract: "Open, switch to and close workspaces.",
-        subcommands: [Open.self, New.self, Switch.self, Close.self])
+        subcommands: [Open.self, New.self, Switch.self, Rename.self, Close.self])
 
     struct Open: ParsableCommand {
         static let configuration = CommandConfiguration(
@@ -34,11 +34,14 @@ struct WorkspaceCommands: ParsableCommand {
         @Argument(help: "Its folder. The home folder by default.")
         var path: String?
 
+        @Option(help: "Its name. Workspace N by default.")
+        var title: String?
+
         @Flag(help: "Switch to it.")
         var focus = false
 
         func run() throws {
-            let args = ControlArgs(path: try path.map(CommandPath.folder), focus: focus)
+            let args = ControlArgs(path: try path.map(CommandPath.folder), title: title, focus: focus)
             let made = try connection.client().send(.workspaceNew, args, expecting: WorkspaceResult.self)
             print(try JSONOutput.text(made))
         }
@@ -55,6 +58,24 @@ struct WorkspaceCommands: ParsableCommand {
         func run() throws {
             let args = ControlArgs(workspace: workspace.map(CommandPath.workspace))
             _ = try connection.client().send(.workspaceSwitch, args, expecting: NoPayload.self)
+        }
+    }
+
+    struct Rename: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Rename a workspace for this session. An empty title clears it.")
+
+        @OptionGroup var connection: ConnectionOptions
+
+        @Argument(help: "The new title.")
+        var title: String
+
+        @Option(help: "A folder or a title. This pane's workspace by default.")
+        var workspace: String?
+
+        func run() throws {
+            let args = ControlArgs(workspace: workspace.map(CommandPath.workspace), title: title)
+            _ = try connection.client().send(.workspaceRename, args, expecting: NoPayload.self)
         }
     }
 

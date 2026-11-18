@@ -1,20 +1,21 @@
 import AppKit
 
-final class RenameTabOverlay: ModalShell, ModalOverlay {
+final class RenameOverlay: ModalShell, ModalOverlay {
     static let width: CGFloat = 380
 
     private let onSubmit: (String) -> Void
 
-    private let header = ModalHeader(title: "Rename Tab")
+    private let header: ModalHeader
     private let nameField: FieldBox
     private let footer = HintFooter([.init(keys: "⏎", label: "Save"), .init(keys: "⎋", label: "Cancel")])
 
     init(
-        current: String, liveTitle: String,
+        title: String, current: String, placeholder: String,
         onSubmit: @escaping (String) -> Void, onCancel: @escaping () -> Void
     ) {
         self.onSubmit = onSubmit
-        nameField = FieldBox(placeholder: liveTitle)
+        header = ModalHeader(title: title)
+        nameField = FieldBox(placeholder: placeholder)
         super.init(width: Self.width, onCancel: onCancel)
         nameField.setText(current)
         embed(buildContent())

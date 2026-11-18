@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-final class RenameTabOverlayTests: WindowTestCase {
+final class RenameOverlayTests: WindowTestCase {
     private var window: NSWindow?
     private var submitted: [String] = []
     private var cancelCount = 0
@@ -80,6 +80,21 @@ final class RenameTabOverlayTests: WindowTestCase {
         XCTAssertTrue(descendants(of: overlay).compactMap { $0 as? AppButton }.isEmpty, "no buttons")
     }
 
+    func test_header_showsTheTitleItWasGiven() throws {
+        let overlay = try overlay(in: try mount())
+
+        let header = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? ModalHeader }.first)
+
+        XCTAssertEqual(descendants(of: header).compactMap { ($0 as? NSTextField)?.stringValue }, ["Rename Workspace"])
+    }
+
+    func test_field_holdsTheCurrentName_overThePlaceholder() throws {
+        let overlay = try overlay(in: try mount())
+
+        XCTAssertEqual(overlay.nameFieldForTesting.text, "build")
+        XCTAssertEqual(overlay.nameFieldForTesting.placeholder, "zsh")
+    }
+
     func test_reapplyTheme_reachesTheFooter() throws {
         let overlay = try overlay(in: try mount())
         let footer = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? HintFooter }.first)
@@ -91,8 +106,8 @@ final class RenameTabOverlayTests: WindowTestCase {
         XCTAssertEqual(label.textColor, Theme.current.chrome.ink(.muted))
     }
 
-    private func overlay(in host: NSView) throws -> RenameTabOverlay {
-        try XCTUnwrap(host.subviews.compactMap { $0 as? RenameTabOverlay }.first)
+    private func overlay(in host: NSView) throws -> RenameOverlay {
+        try XCTUnwrap(host.subviews.compactMap { $0 as? RenameOverlay }.first)
     }
 
     private func descendants(of view: NSView) -> [NSView] {
@@ -107,7 +122,7 @@ final class RenameTabOverlayTests: WindowTestCase {
                 isARepeat: false, keyCode: 53))
     }
 
-    private func sendReturnThroughField(of overlay: RenameTabOverlay) throws {
+    private func sendReturnThroughField(of overlay: RenameOverlay) throws {
         let win = try XCTUnwrap(window)
         XCTAssertTrue(win.makeFirstResponder(overlay.nameFieldForTesting.field))
         let editor = try XCTUnwrap(win.firstResponder as? NSTextView, "the field editor is first responder")
@@ -119,8 +134,8 @@ final class RenameTabOverlayTests: WindowTestCase {
     }
 
     private func mount() throws -> NSView {
-        let overlay = RenameTabOverlay(
-            current: "build", liveTitle: "zsh",
+        let overlay = RenameOverlay(
+            title: "Rename Workspace", current: "build", placeholder: "zsh",
             onSubmit: { [weak self] name in self?.submitted.append(name) },
             onCancel: { [weak self] in self?.cancelCount += 1 })
         let win = NSWindow(

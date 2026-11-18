@@ -504,9 +504,10 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         try rightClick(row, in: c)
 
         XCTAssertTrue(menu.isOpen)
-        XCTAssertEqual(menu.itemViewsForTesting.map(\.title), ["New Worktree…", "Close Workspace"])
         XCTAssertEqual(
-            menu.itemViewsForTesting.map(\.shortcutForTesting), ["⌥⏎", ""],
+            menu.itemViewsForTesting.map(\.title), ["New Worktree…", "Rename Workspace…", "Close Workspace"])
+        XCTAssertEqual(
+            menu.itemViewsForTesting.map(\.shortcutForTesting), ["⌥⏎", "", ""],
             "⌘⌃W closes the active workspace, not this background one")
         XCTAssertEqual(c.activeWorkspaceIDForTesting, home, "a right-click never switches")
     }
@@ -518,7 +519,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
 
         try rightClick(row, in: c)
 
-        XCTAssertEqual(menu.itemViewsForTesting.map(\.shortcutForTesting), ["⌥⏎", "⌘⌃W"])
+        XCTAssertEqual(menu.itemViewsForTesting.map(\.shortcutForTesting), ["⌥⏎", "", "⌘⌃W"])
     }
 
     func test_controlClickingAWorkspaceRow_opensItsMenu_withoutSwitching() throws {
@@ -587,7 +588,9 @@ final class SidebarNewWorktreeTests: WindowTestCase {
 
         try rightClick(rows(of: c)[0], in: c)
 
-        XCTAssertEqual(menu.itemViewsForTesting.map(\.title), ["Close Workspace"], "Workspace 1 has no config entry")
+        XCTAssertEqual(
+            menu.itemViewsForTesting.map(\.title), ["Rename Workspace…", "Close Workspace"],
+            "Workspace 1 has no config entry")
     }
 
     func test_collapsingTheSidebar_closesTheMenu() throws {
