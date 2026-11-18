@@ -178,11 +178,15 @@ class PopoverPicker: NSView {
         }
     }
 
-    /// Reads `isOpen` before taking focus: focusing ends the field's editing, which closes the list synchronously.
+    /// Closes before taking focus: focusing first would end the field's edit and close the list inside the focus change.
     override func mouseDown(with event: NSEvent) {
-        let wasOpen = popover.isOpen
-        window?.makeFirstResponder(self)
-        if wasOpen { closeList() } else { openList() }
+        if popover.isOpen {
+            closeList()
+            window?.makeFirstResponder(self)
+        } else {
+            window?.makeFirstResponder(self)
+            openList()
+        }
     }
 
     /// The label and chevron are controls that would swallow the click, so the whole view takes it.
@@ -299,7 +303,7 @@ class PopoverPicker: NSView {
         let before = visible
         refilter()
         guard visible != before else { return }
-        highlighted = visible.first ?? highlighted
+        highlighted = query.isEmpty ? openingHighlight() : visible.first ?? highlighted
         rebuildOpenList()
     }
 
