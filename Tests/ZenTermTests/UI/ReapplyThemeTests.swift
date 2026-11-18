@@ -390,4 +390,38 @@ final class ReapplyThemeTests: WindowTestCase {
         XCTAssertEqual(hidden.reapplyThemeCallCount, 1)
         XCTAssertEqual(hidden.sectionWillHideCallCount, 0)
     }
+
+    func test_reapplyTheme_recolorsTheSettingsNavDivider() throws {
+        let overlay = SettingsOverlay(sections: [FakeSettingsSection()], capturer: nil, onClose: {})
+        overlay.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 620, height: 460)
+        func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
+        let divider = try XCTUnwrap(descendants(overlay).compactMap { $0 as? Divider }.first)
+        let before = divider.layer?.backgroundColor
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        overlay.reapplyThemeTree()
+
+        XCTAssertNotEqual(before, divider.layer?.backgroundColor)
+    }
+
+    func test_reapplyTheme_recolorsDividerAndEmptyStateLabel() throws {
+        let divider = Divider(.vertical)
+        let label = EmptyStateLabel("Nothing here yet")
+        let host = NSView()
+        host.addSubview(divider)
+        host.addSubview(label)
+        let dividerBefore = divider.layer?.backgroundColor
+        let labelBefore = label.textColor
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        host.reapplyThemeTree()
+
+        XCTAssertNotEqual(dividerBefore, divider.layer?.backgroundColor)
+        XCTAssertEqual(divider.layer?.backgroundColor, Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor)
+        XCTAssertNotEqual(labelBefore, label.textColor)
+        XCTAssertEqual(label.textColor, Theme.current.chrome.ink(.muted))
+    }
 }

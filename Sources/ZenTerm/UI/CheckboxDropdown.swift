@@ -346,15 +346,14 @@ final class CheckboxDropdown: NSView {
     }
 
     private static func emptyRowView() -> NSView {
-        let label = NSTextField(labelWithString: "No matches")
-        label.font = ChromeType.sectionLabel
-        label.textColor = Theme.current.chrome.ink(.muted)
-        label.translatesAutoresizingMaskIntoConstraints = false
+        let label = EmptyStateLabel("No matches")
         let host = NSView()
         host.translatesAutoresizingMaskIntoConstraints = false
         host.addSubview(label)
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
+            label.trailingAnchor.constraint(
+                lessThanOrEqualTo: host.trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
             label.centerYAnchor.constraint(equalTo: host.centerYAnchor),
         ])
         return host

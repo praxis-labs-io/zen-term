@@ -58,8 +58,8 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
             "the workspaces section to finish loading")
     }
 
-    private func emptyHint(in view: NSView) -> NSTextField? {
-        descendants(of: view).compactMap { $0 as? NSTextField }
+    private func emptyHint(in view: NSView) -> EmptyStateLabel? {
+        descendants(of: view).compactMap { $0 as? EmptyStateLabel }
             .first { $0.stringValue.hasPrefix("No workspaces yet") }
     }
 
@@ -87,6 +87,7 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         let section = SettingsWorkspacesSection()
         let detail = mount(section)
         XCTAssertTrue(rows(in: detail).isEmpty)
+        XCTAssertNotNil(emptyHint(in: detail))
         XCTAssertEqual(section.detailStops().count, 1, "empty state exposes only the add button")
         XCTAssertTrue(section.detailStops().first is AppButton)
     }

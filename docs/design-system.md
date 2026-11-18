@@ -184,7 +184,8 @@ Neither depends on a feature or on `App/`. The dev build's Component Gallery is 
 catalog: it shows every shared component and its states.
 
 A modal's title row is `ModalHeader` and its button row is `ModalActionBar`; a keyboard-only card uses
-`HintFooter` in its place.
+`HintFooter` in its place. A rule between regions is `Divider`, and a list's "nothing here" line is
+`EmptyStateLabel`.
 
 ## Extending the system
 

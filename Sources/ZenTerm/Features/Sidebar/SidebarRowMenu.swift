@@ -28,16 +28,12 @@ final class SidebarRowMenu {
 
     private static func separator() -> NSView {
         let row = NSView()
-        let line = NSView()
-        line.wantsLayer = true
-        line.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor
-        line.translatesAutoresizingMaskIntoConstraints = false
+        let line = Divider()
         row.addSubview(line)
         NSLayoutConstraint.activate([
             line.leadingAnchor.constraint(equalTo: row.leadingAnchor),
             line.trailingAnchor.constraint(equalTo: row.trailingAnchor),
             line.centerYAnchor.constraint(equalTo: row.centerYAnchor),
-            line.heightAnchor.constraint(equalToConstant: ChromeMetrics.Border.width),
         ])
         return row
     }

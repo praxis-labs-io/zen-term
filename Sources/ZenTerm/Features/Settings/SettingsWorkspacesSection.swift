@@ -9,7 +9,6 @@ final class SettingsWorkspacesSection: SettingsSection {
     private var rows: [WorkspaceRow] = []
     private var addButton: AppButton?
     private weak var caption: NSTextField?
-    private weak var emptyHint: NSTextField?
     private weak var reorderHint: NSTextField?
     private var rowsStack: NSStackView?
 
@@ -38,7 +37,6 @@ final class SettingsWorkspacesSection: SettingsSection {
 
     func reapplyTheme() {
         caption?.textColor = Theme.current.chrome.ink(.muted)
-        emptyHint?.textColor = Theme.current.chrome.ink(.muted)
         reorderHint?.textColor = Theme.current.chrome.ink(.faint)
     }
 
@@ -70,13 +68,7 @@ final class SettingsWorkspacesSection: SettingsSection {
         header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
 
         if let workspaces, workspaces.isEmpty {
-            let hint = NSTextField(
-                labelWithString: "No workspaces yet. Add one to launch a folder with its own layout from ⌘P.")
-            hint.font = ChromeType.font(.small)
-            hint.textColor = Theme.current.chrome.ink(.muted)
-            hint.lineBreakMode = .byWordWrapping
-            hint.maximumNumberOfLines = 0
-            emptyHint = hint
+            let hint = EmptyStateLabel("No workspaces yet. Add one to launch a folder with its own layout from ⌘P.")
             stack.addArrangedSubview(hint)
             hint.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         } else if let workspaces {

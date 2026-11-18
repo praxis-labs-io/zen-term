@@ -39,7 +39,7 @@ enum FormCard {
                 equalTo: footerRow.bottomAnchor, constant: -ChromeMetrics.Spacing.modalInsets.bottom),
         ])
 
-        let divider = Hairline()
+        let divider = Divider()
 
         let content = NSStackView(views: [scroll, divider, footerRow])
         content.orientation = .vertical
@@ -50,22 +50,6 @@ enum FormCard {
         divider.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
         footerRow.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
         return content
-    }
-
-    private final class Hairline: NSView, ThemeReapplying {
-        init() {
-            super.init(frame: .zero)
-            wantsLayer = true
-            translatesAutoresizingMaskIntoConstraints = false
-            heightAnchor.constraint(equalToConstant: ChromeMetrics.Border.width).isActive = true
-            reapplyTheme()
-        }
-
-        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-        func reapplyTheme() {
-            layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor
-        }
     }
 
     static func revealTarget(for stop: NSView) -> NSView {

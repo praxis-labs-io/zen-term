@@ -9,7 +9,6 @@ final class SettingsToolsSection: SettingsSection {
     private var rows: [ToolFloatRow] = []
     private var addButton: AppButton?
     private weak var caption: NSTextField?
-    private weak var emptyHint: NSTextField?
     private weak var reorderHint: NSTextField?
     private weak var droppedFloatNotice: NSTextField?
     private var rowsStack: NSStackView?
@@ -53,7 +52,6 @@ final class SettingsToolsSection: SettingsSection {
 
     func reapplyTheme() {
         caption?.textColor = Theme.current.chrome.ink(.muted)
-        emptyHint?.textColor = Theme.current.chrome.ink(.muted)
         reorderHint?.textColor = Theme.current.chrome.ink(.faint)
         droppedFloatNotice?.textColor = Theme.current.chrome.warning.nsColor
     }
@@ -107,13 +105,7 @@ final class SettingsToolsSection: SettingsSection {
         }
 
         if floats.isEmpty {
-            let hint = NSTextField(
-                labelWithString: "No tool floats yet. Add one to get a toolbar button and a shortcut.")
-            hint.font = ChromeType.font(.small)
-            hint.textColor = Theme.current.chrome.ink(.muted)
-            hint.lineBreakMode = .byWordWrapping
-            hint.maximumNumberOfLines = 0
-            emptyHint = hint
+            let hint = EmptyStateLabel("No tool floats yet. Add one to get a toolbar button and a shortcut.")
             stack.addArrangedSubview(hint)
             hint.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         } else {

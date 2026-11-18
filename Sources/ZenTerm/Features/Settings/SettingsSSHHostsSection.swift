@@ -25,7 +25,6 @@ final class SettingsSSHHostsSection: SettingsSection {
     private var hostRows: [SSHHostRow] = []
     private var addButton: AppButton?
     private var caption: NSTextField?
-    private var emptyNote: NSTextField?
     private var rowsStack: NSStackView?
 
     deinit {
@@ -61,7 +60,6 @@ final class SettingsSSHHostsSection: SettingsSection {
 
     func reapplyTheme() {
         caption?.textColor = Theme.current.chrome.ink(.muted)
-        emptyNote?.textColor = Theme.current.chrome.ink(.muted)
     }
 
     private func focusInitialStop() {
@@ -118,7 +116,6 @@ final class SettingsSSHHostsSection: SettingsSection {
         let restore = target ?? focusedStop()
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         hostRows = []
-        emptyNote = nil
 
         addCaption("Remote hosts", to: stack)
         shownEntries = GeneralConfig.current.sshHosts
@@ -145,12 +142,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private func addNote(_ text: String, to stack: NSStackView) {
-        let note = NSTextField(labelWithString: text)
-        note.font = ChromeType.font(.small)
-        note.textColor = Theme.current.chrome.ink(.muted)
-        note.lineBreakMode = .byWordWrapping
-        note.maximumNumberOfLines = 0
-        emptyNote = note
+        let note = EmptyStateLabel(text)
         stack.addArrangedSubview(note)
         note.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }

@@ -117,6 +117,21 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         XCTAssertNotEqual(colorBefore, card.layer?.borderColor)
     }
 
+    func test_reapplyTheme_recolorsThePaletteSearchDivider() throws {
+        let overlay = CommandPaletteOverlay(commands: { [] }, onRun: { _ in }, onDismiss: {})
+        overlay.translatesAutoresizingMaskIntoConstraints = true
+        let window = makeWindow()
+        window.contentView?.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 560, height: 400)
+        let divider = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? Divider }.first)
+        let before = divider.layer?.backgroundColor
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        overlay.reapplyThemeTree()
+
+        XCTAssertNotEqual(before, divider.layer?.backgroundColor)
+    }
+
     func test_reapplyTheme_recolorsWorkspaceFormOverlayAndPreservesTypedTitle() throws {
         let overlay = WorkspaceFormOverlay(
             existingTitles: [],
