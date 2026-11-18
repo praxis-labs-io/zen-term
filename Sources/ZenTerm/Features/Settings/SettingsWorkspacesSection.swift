@@ -8,7 +8,6 @@ final class SettingsWorkspacesSection: SettingsSection {
 
     private var rows: [WorkspaceRow] = []
     private var addButton: AppButton?
-    private weak var caption: NSTextField?
     private weak var reorderHint: NSTextField?
     private var rowsStack: NSStackView?
 
@@ -36,7 +35,6 @@ final class SettingsWorkspacesSection: SettingsSection {
     func detailStops() -> [NSView] { rows + [addButton].compactMap { $0 } }
 
     func reapplyTheme() {
-        caption?.textColor = Theme.current.chrome.ink(.muted)
         reorderHint?.textColor = Theme.current.chrome.ink(.faint)
     }
 
@@ -59,8 +57,7 @@ final class SettingsWorkspacesSection: SettingsSection {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         rows = []
 
-        let caption = SettingsDetail.groupCaption("Workspaces")
-        self.caption = caption
+        let caption = SectionCaption("Workspaces")
         let reorderHintLabel = (workspaces?.count ?? 0) > 1 ? SettingsDetail.reorderHint() : nil
         reorderHint = reorderHintLabel
         let header = SettingsDetail.headerRow(caption: caption, hint: reorderHintLabel)

@@ -23,13 +23,6 @@ enum SettingsDetail {
         return scroll
     }
 
-    static func groupCaption(_ title: String) -> NSTextField {
-        let caption = NSTextField(labelWithString: title)
-        caption.font = ChromeType.sectionLabel
-        caption.textColor = Theme.current.chrome.ink(.muted)
-        return caption
-    }
-
     static func reorderHint() -> NSTextField {
         let hint = NSTextField(labelWithString: "⌥↑ ⌥↓ to reorder")
         hint.font = ChromeType.font(.caption, weight: .medium)

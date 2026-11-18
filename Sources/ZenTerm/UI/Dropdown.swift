@@ -401,7 +401,7 @@ final class Dropdown: NSView {
             if query.isEmpty, let group = item.group, group != previousGroup {
                 lines.append(
                     ListPopover.Row(
-                        view: Self.groupHeaderView(group, chrome: chrome), height: Self.headerHeight))
+                        view: Self.groupHeaderView(group), height: Self.headerHeight))
             }
             previousGroup = item.group
             let row = DropdownRowView(index: index, item: item, chrome: chrome) { [weak self] i in
@@ -433,11 +433,8 @@ final class Dropdown: NSView {
         return host
     }
 
-    private static func groupHeaderView(_ text: String, chrome: ChromeTheme) -> NSView {
-        let label = NSTextField(labelWithString: text)
-        label.font = ChromeType.sectionLabel
-        label.textColor = chrome.ink(.muted)
-        label.translatesAutoresizingMaskIntoConstraints = false
+    private static func groupHeaderView(_ text: String) -> NSView {
+        let label = SectionCaption(text)
         let host = NSView()
         host.translatesAutoresizingMaskIntoConstraints = false
         host.addSubview(label)

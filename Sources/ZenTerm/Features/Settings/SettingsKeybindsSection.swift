@@ -49,7 +49,6 @@ final class SettingsKeybindsSection: SettingsSection {
     private let capturer: KeybindCapturing?
     private var desired = KeymapOverrides()
     private var rows: [KeybindRow] = []
-    private var groupCaptions: [NSTextField] = []
     private weak var resetAllButton: AppButton?
     private weak var detailScroll: NSScrollView?
     private var hintBubble: KeybindHintBubble?
@@ -97,7 +96,6 @@ final class SettingsKeybindsSection: SettingsSection {
     func makeDetailView() -> NSView {
         desired = KeymapOverrides(config: .current)
         rows = []
-        groupCaptions = []
 
         let rowsStack = NSStackView()
         rowsStack.orientation = .vertical
@@ -107,9 +105,8 @@ final class SettingsKeybindsSection: SettingsSection {
 
         var previous: NSView?
         for (category, actions) in Self.groups {
-            let caption = SettingsDetail.groupCaption(category)
+            let caption = SectionCaption(category)
             rowsStack.addArrangedSubview(caption)
-            groupCaptions.append(caption)
             if let previous { rowsStack.setCustomSpacing(ChromeMetrics.Spacing.s16, after: previous) }
             for action in actions {
                 let row = KeybindRow(action: action, title: CommandCatalog.spec(for: action).title)
@@ -166,10 +163,6 @@ final class SettingsKeybindsSection: SettingsSection {
 
     func sectionWillHide() {
         if let row = capturingRow { endCapture(row) }
-    }
-
-    func reapplyTheme() {
-        groupCaptions.forEach { $0.textColor = Theme.current.chrome.ink(.muted) }
     }
 
     private func beginCapture(for row: KeybindRow) {

@@ -584,7 +584,7 @@ final class NewWorktreeOverlayTests: WindowTestCase {
         else { return nil }
         return descendants(of: group)
             .compactMap { $0 as? NSTextField }
-            .first { !($0 is FieldCaption) && !$0.isEditable && !$0.isHidden }?
+            .first { !($0 is SectionCaption) && !$0.isEditable && !$0.isHidden }?
             .stringValue
     }
 

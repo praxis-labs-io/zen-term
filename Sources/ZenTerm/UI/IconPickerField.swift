@@ -231,10 +231,7 @@ final class IconPickerField: NSView, ThemeReapplying {
     }
 
     private static func sectionHeader(_ title: String) -> NSTextField {
-        let label = NSTextField(labelWithString: title)
-        label.font = ChromeType.sectionLabel
-        label.textColor = Theme.current.chrome.ink(.muted)
-        label.translatesAutoresizingMaskIntoConstraints = false
+        let label = SectionCaption(title)
         label.heightAnchor.constraint(equalToConstant: headerHeight).isActive = true
         return label
     }

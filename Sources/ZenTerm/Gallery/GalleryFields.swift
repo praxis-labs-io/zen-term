@@ -41,7 +41,7 @@
             let withMessage = labeled("Name", required: true)
             withMessage.setMessage("Name is already taken")
             return GallerySection(
-                title: "LabeledField and FieldCaption",
+                title: "LabeledField and SectionCaption",
                 rows: [
                     GallerySection.Row(label: "Caption optional", samples: [sized(labeled("Branch", required: false))]),
                     GallerySection.Row(label: "Caption required", samples: [sized(labeled("Name", required: true))]),
@@ -50,7 +50,7 @@
         }
 
         private static func labeled(_ caption: String, required: Bool) -> LabeledField {
-            LabeledField(caption: FieldCaption(caption, required: required), control: FieldBox(placeholder: caption))
+            LabeledField(caption: SectionCaption(caption, required: required), control: FieldBox(placeholder: caption))
         }
 
         private static func errors() -> GallerySection {

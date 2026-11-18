@@ -12,7 +12,7 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
     private let whatHappened = TextAreaBox(placeholder: "What went wrong, and what you expected instead")
     private var titleGroup: LabeledField?
     private var whatGroup: LabeledField?
-    private let envCaption = FieldCaption("Environment", required: false)
+    private let envCaption = SectionCaption("Environment")
     private let envText = NSTextField(wrappingLabelWithString: "")
     private let envNote = NSTextField(labelWithString: "Sent with your report")
 
@@ -50,7 +50,7 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
     private func buildContent() -> NSStackView {
         wireField(titleField)
         titleField.onEnter = { [weak self] in self?.moveVertical(1) }
-        let titleGroup = LabeledField(caption: FieldCaption("Title", required: true), control: titleField)
+        let titleGroup = LabeledField(caption: SectionCaption("Title", required: true), control: titleField)
         self.titleGroup = titleGroup
 
         whatHappened.onChange = { [weak self] in self?.refreshValidity() }
@@ -60,7 +60,7 @@ final class ReportIssueOverlay: ModalShell, ModalOverlay {
         whatHappened.onBacktab = { [weak self] in self?.moveTab(-1) }
         whatHappened.onSubmit = { [weak self] in self?.submit() }
         let whatGroup = LabeledField(
-            caption: FieldCaption("What happened", required: true), control: whatHappened)
+            caption: SectionCaption("What happened", required: true), control: whatHappened)
         self.whatGroup = whatGroup
 
         envText.font = ChromeType.font(.caption, face: .mono)

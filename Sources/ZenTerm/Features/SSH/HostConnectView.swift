@@ -20,7 +20,7 @@ final class HostConnectView: NSView, ThemeReapplying {
     private var status: SSHHostStatus
     private let grid = DotGridView()
     private let route: HostRouteView
-    private let eyebrow = NSTextField(labelWithString: "")
+    private let eyebrow = SectionCaption("Remote host")
     private let title = NSTextField(labelWithString: "")
     private let destinationLine = NSTextField(labelWithString: "")
     private let detail = NSTextField(wrappingLabelWithString: "")
@@ -45,7 +45,6 @@ final class HostConnectView: NSView, ThemeReapplying {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
-        eyebrow.maximumNumberOfLines = 1
         title.maximumNumberOfLines = 1
         title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         destinationLine.font = ChromeType.font(.small, face: .mono)
@@ -136,9 +135,6 @@ final class HostConnectView: NSView, ThemeReapplying {
 
     func reapplyTheme() {
         let chrome = Theme.current.chrome
-        eyebrow.attributedStringValue = Self.line(
-            "Remote host", font: ChromeType.sectionLabel, color: chrome.ink(.muted),
-            breaking: .byClipping)
         applyName()
         destinationLine.textColor = chrome.ink(.muted)
         applyDetail()
