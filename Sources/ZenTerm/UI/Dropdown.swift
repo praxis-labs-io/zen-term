@@ -74,19 +74,9 @@ final class Dropdown: PopoverPicker {
         renderSelection()
     }
 
-    var titlePrefix: String = "" { didSet { renderSelection() } }
-
-    var titleTruncatesUnderPressure: Bool = false {
-        didSet {
-            let priority: NSLayoutConstraint.Priority = titleTruncatesUnderPressure ? .defaultLow : .defaultHigh
-            titleLabel.setContentCompressionResistancePriority(priority, for: .horizontal)
-            setContentCompressionResistancePriority(priority, for: .horizontal)
-        }
-    }
-
     private func renderSelection() {
         let item = items.indices.contains(selectedIndex) ? items[selectedIndex] : nil
-        title = item.map { titlePrefix + $0.title } ?? ""
+        title = item?.title ?? ""
         swatch.layer?.backgroundColor = item?.swatch?.cgColor
         swatch.isHidden = item?.swatch == nil
         titleAfterSwatch.isActive = false
