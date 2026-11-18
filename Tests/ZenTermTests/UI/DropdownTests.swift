@@ -220,6 +220,28 @@ final class DropdownTests: WindowTestCase {
         XCTAssertNil(picked)
     }
 
+    func test_aQueryWithNoMatches_saysSoRatherThanShowingASliver() {
+        let dropdown = filterFixture()
+
+        dropdown.typeForTesting("zzz")
+
+        XCTAssertGreaterThan(dropdown.listCardSizeForTesting.height, 20, "the card has to hold a line")
+    }
+
+    func test_typing_highlightsTheTopMatch_evenWhenTheSelectionStillMatches() {
+        var picked: Int?
+        let dropdown = filterFixture { picked = $0 }
+
+        dropdown.typeForTesting("o")
+        let ranked = dropdown.visibleIndicesForTesting
+        XCTAssertTrue(ranked.contains(0), "the selection has to survive the query: \(ranked)")
+        XCTAssertNotEqual(ranked.first, 0, "the selection has to rank below the top match: \(ranked)")
+
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
+
+        XCTAssertEqual(picked, ranked.first, "Return takes the best match, as the palette does")
+    }
+
     func test_arrowNavigation_scrollsHighlightIntoView() {
         let items = (0..<15).map {
             DropdownItem(title: "Theme \($0)", group: nil, note: nil, isSelected: $0 == 0)
