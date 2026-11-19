@@ -42,7 +42,7 @@ final class SidebarView: NSView, ThemeReapplying {
     private static let sectionGap: CGFloat = ChromeMetrics.Spacing.s12
     private static let contentBottomGap: CGFloat = ChromeMetrics.Spacing.s8
 
-    private let caption = FieldCaption("Workspaces", required: false)
+    private let caption = SectionCaption("Workspaces")
     private let addButton: IconButton
     private let rowStack = NSStackView()
     private var rows: [SidebarRowID: SettingsNavRow] = [:]
@@ -52,7 +52,7 @@ final class SidebarView: NSView, ThemeReapplying {
     private var hoverCovers = 0
     private weak var hoverExempt: NSView?
     let rowMenu = SidebarRowMenu()
-    private let hostsCaption = FieldCaption("Remote hosts", required: false)
+    private let hostsCaption = SectionCaption("Remote hosts")
     private let hostStack = NSStackView()
     private var hostRows: [String: SettingsNavRow] = [:]
     private var hostNumbers: [String: Int] = [:]
@@ -60,7 +60,7 @@ final class SidebarView: NSView, ThemeReapplying {
     private var agentsBelowRows: [NSLayoutConstraint] = []
     private var agentsBelowHosts: [NSLayoutConstraint] = []
     private var contentEndsAtHosts: NSLayoutConstraint?
-    private let agentsCaption = FieldCaption("Agents", required: false)
+    private let agentsCaption = SectionCaption("Agents")
     private let agentStack = NSStackView()
     private let scroll = FadingScrollView()
     private let content = FlippedView()

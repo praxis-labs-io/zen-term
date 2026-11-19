@@ -95,7 +95,7 @@ final class FormCardHeightTests: WindowTestCase {
         _ = try cardHeight(of: overlay)
 
         func walk(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(walk) }
-        let captions = walk(overlay).compactMap { $0 as? FieldCaption }
+        let captions = walk(overlay).compactMap { $0 as? SectionCaption }
         XCTAssertGreaterThanOrEqual(captions.count, 5, "expected the form's captions")
         for caption in captions {
             XCTAssertGreaterThan(

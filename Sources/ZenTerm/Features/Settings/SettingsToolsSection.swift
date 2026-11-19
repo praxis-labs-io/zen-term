@@ -8,7 +8,6 @@ final class SettingsToolsSection: SettingsSection {
 
     private var rows: [ToolFloatRow] = []
     private var addButton: AppButton?
-    private weak var caption: NSTextField?
     private weak var reorderHint: NSTextField?
     private weak var droppedFloatNotice: NSTextField?
     private var rowsStack: NSStackView?
@@ -51,7 +50,6 @@ final class SettingsToolsSection: SettingsSection {
     func detailStops() -> [NSView] { rows + [addButton].compactMap { $0 } }
 
     func reapplyTheme() {
-        caption?.textColor = Theme.current.chrome.ink(.muted)
         reorderHint?.textColor = Theme.current.chrome.ink(.faint)
         droppedFloatNotice?.textColor = Theme.current.chrome.warning.nsColor
     }
@@ -84,8 +82,7 @@ final class SettingsToolsSection: SettingsSection {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         rows = []
 
-        let caption = SettingsDetail.groupCaption("Tool floats")
-        self.caption = caption
+        let caption = SectionCaption("Tool floats")
 
         let floats = GeneralConfig.current.floats
         let header = SettingsDetail.headerRow(

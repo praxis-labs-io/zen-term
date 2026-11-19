@@ -12,14 +12,7 @@ final class PaletteSectionHeader: NSView, PaletteRowView {
         self.title = title
         super.init(frame: .zero)
 
-        let label = NSTextField(
-            labelWithAttributedString: NSAttributedString(
-                string: title,
-                attributes: [
-                    .font: ChromeType.sectionLabel,
-                    .foregroundColor: Theme.current.chrome.ink(.muted),
-                ]))
-        label.translatesAutoresizingMaskIntoConstraints = false
+        let label = SectionCaption(title)
         addSubview(label)
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),

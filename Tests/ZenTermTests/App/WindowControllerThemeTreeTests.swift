@@ -378,4 +378,25 @@ final class WindowControllerThemeTreeTests: WindowTestCase {
 
         XCTAssertNotEqual(before, toast.badgeFillForTesting, "a toast on screen kept the old theme")
     }
+
+    func test_themeChange_recolorsEverySettingsCaptionWithoutTheSection() throws {
+        let controller = makeController()
+        let overlay = SettingsOverlay(
+            sections: [SettingsKeybindsSection(capturer: nil)], capturer: nil, onClose: {})
+        overlay.translatesAutoresizingMaskIntoConstraints = true
+        controller.window.contentView!.addSubview(overlay)
+        overlay.frame = NSRect(x: 0, y: 0, width: 620, height: 460)
+        let captions = descendants(of: overlay).compactMap { $0 as? SectionCaption }
+        XCTAssertTrue(captions.contains { $0.stringValue == "Settings" }, "premise: the nav heading is a caption")
+        XCTAssertGreaterThan(captions.count, 1, "premise: the keybind groups have captions")
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        post(.theme)
+
+        let muted = Theme.current.chrome.ink(.muted)
+        for caption in captions {
+            let color = caption.attributedStringValue.attribute(.foregroundColor, at: 0, effectiveRange: nil)
+            XCTAssertEqual(color as? NSColor, muted, "\(caption.stringValue) kept the old theme")
+        }
+    }
 }

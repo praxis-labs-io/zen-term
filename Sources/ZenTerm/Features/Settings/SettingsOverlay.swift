@@ -11,7 +11,7 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
     private var navRows: [SettingsNavRow] = []
     private let detailContainer = NSView()
     private var selectedIndex = 0
-    private let heading = NSTextField(labelWithString: "Settings")
+    private let heading = SectionCaption("Settings")
     private let divider = Divider(.vertical)
     private let brandMark = NSImageView()
     private let versionLabel = NSTextField(labelWithString: "")
@@ -49,7 +49,6 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
     // In place, not via `selectSection`, which would cancel another window's armed keybind capture.
     override func reapplyTheme() {
         super.reapplyTheme()
-        heading.textColor = Theme.current.chrome.ink(.muted)
         brandMark.contentTintColor = Theme.current.chrome.ink(.muted)
         versionLabel.textColor = Theme.current.chrome.ink(.muted)
         sections.forEach { $0.reapplyTheme() }
@@ -64,9 +63,6 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
             top: ChromeMetrics.Spacing.s16, left: ChromeMetrics.Spacing.s12, bottom: ChromeMetrics.Spacing.s16,
             right: ChromeMetrics.Spacing.s12)
 
-        heading.font = ChromeType.sectionLabel
-        heading.textColor = Theme.current.chrome.ink(.muted)
-        heading.translatesAutoresizingMaskIntoConstraints = false
         let headingRow = NSView()
         headingRow.translatesAutoresizingMaskIntoConstraints = false
         headingRow.addSubview(heading)

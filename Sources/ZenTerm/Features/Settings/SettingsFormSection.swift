@@ -6,7 +6,6 @@ class SettingsFormSection: SettingsSection {
 
     private weak var resetAllMessage: ResetFlashLabel?
     private var rows: [LayoutRow] = []
-    private var groupCaptions: [NSTextField] = []
     private var stops: [NSView] = []
     private var controlForKey: [String: NSView] = [:]
     private var scalarKeys: [String] = []
@@ -22,7 +21,6 @@ class SettingsFormSection: SettingsSection {
 
     func makeDetailView() -> NSView {
         rows = []
-        groupCaptions = []
         stops = []
         controlForKey = [:]
         scalarKeys = []
@@ -66,17 +64,14 @@ class SettingsFormSection: SettingsSection {
 
     func detailStops() -> [NSView] { stops.filter { !$0.isHidden } }
 
-    func reapplyTheme() {
-        groupCaptions.forEach { $0.textColor = Theme.current.chrome.ink(.muted) }
-    }
+    func reapplyTheme() {}
 
     func populate() {}
 
     func addGroup(_ title: String, _ build: () -> Void) {
         guard let stack = rowsStack else { return }
-        let caption = SettingsDetail.groupCaption(title)
+        let caption = SectionCaption(title)
         stack.addArrangedSubview(caption)
-        groupCaptions.append(caption)
         if let lastArranged { stack.setCustomSpacing(ChromeMetrics.Spacing.s20, after: lastArranged) }
         build()
         lastArranged = stack.arrangedSubviews.last

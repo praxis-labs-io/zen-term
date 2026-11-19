@@ -128,7 +128,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         let envControls = Self.vStack(
             [envStack, Self.leadingWrap(addVarButton), envError], spacing: ChromeMetrics.Spacing.s8)
         let envGroup = Self.vStack(
-            [FieldCaption("Environment", required: false), envControls], spacing: ChromeMetrics.Spacing.s6)
+            [SectionCaption("Environment"), envControls], spacing: ChromeMetrics.Spacing.s6)
 
         carryPicker.onChanged = { [weak self] in self?.refreshValidity() }
         carryPicker.onArrowUp = { [weak self] in self?.moveVertical(-1) }
@@ -137,7 +137,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         carryPicker.onBacktab = { [weak self] in self?.moveTab(-1) }
         carryPicker.onFocusLost = { [weak self] in self?.focus(self?.addVarButton) }
         let carryGroup = Self.vStack(
-            [FieldCaption("Copy into new worktrees", required: false), carryPicker], spacing: ChromeMetrics.Spacing.s6)
+            [SectionCaption("Copy into new worktrees"), carryPicker], spacing: ChromeMetrics.Spacing.s6)
 
         return FormCard.content(
             rows: [header, nameRow, tabsGroup, envGroup, carryGroup], footer: buildFooter(),
@@ -148,7 +148,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         wireField(titleField)
         titleField.onChange = { [weak self] in self?.nameEdited() }
         titleField.onArrowRight = { [weak self] in self?.focus(self?.folderPicker.field.field) }
-        let titleGroup = LabeledField(caption: FieldCaption("Workspace name", required: true), control: titleField)
+        let titleGroup = LabeledField(caption: SectionCaption("Workspace name", required: true), control: titleField)
         titleGroup.widthAnchor.constraint(equalToConstant: Self.nameWidth).isActive = true
         self.titleGroup = titleGroup
 
@@ -159,7 +159,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
             onVertical: { [weak self] in self?.moveVertical($0) },
             onTabForward: { [weak self] in self?.moveTab(1) })
         folderPicker.field.onArrowLeft = { [weak self] in self?.focus(self?.titleField.field) }
-        let folderGroup = LabeledField(caption: FieldCaption("Folder", required: true), control: folderPicker)
+        let folderGroup = LabeledField(caption: SectionCaption("Folder", required: true), control: folderPicker)
         folderGroup.setContentHuggingPriority(.defaultLow, for: .horizontal)
         self.folderGroup = folderGroup
 
@@ -210,7 +210,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         drawing.onBacktab = { [weak self] in self?.moveTab(-1) }
 
         let stack = Self.vStack([drawing, tabStrip], spacing: ChromeMetrics.Spacing.s10)
-        let group = LabeledField(caption: FieldCaption("Tabs", required: false), control: stack)
+        let group = LabeledField(caption: SectionCaption("Tabs"), control: stack)
         tabsGroup = group
         return group
     }

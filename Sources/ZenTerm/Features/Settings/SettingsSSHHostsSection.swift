@@ -24,7 +24,6 @@ final class SettingsSSHHostsSection: SettingsSection {
     private var configObserver: NSObjectProtocol?
     private var hostRows: [SSHHostRow] = []
     private var addButton: AppButton?
-    private var caption: NSTextField?
     private var rowsStack: NSStackView?
 
     deinit {
@@ -59,7 +58,6 @@ final class SettingsSSHHostsSection: SettingsSection {
     func detailStops() -> [NSView] { hostRows + [addButton].compactMap { $0 } }
 
     func reapplyTheme() {
-        caption?.textColor = Theme.current.chrome.ink(.muted)
     }
 
     private func focusInitialStop() {
@@ -137,8 +135,7 @@ final class SettingsSSHHostsSection: SettingsSection {
     }
 
     private func addCaption(_ title: String, to stack: NSStackView) {
-        let label = SettingsDetail.groupCaption(title)
-        caption = label
+        let label = SectionCaption(title)
         let header = SettingsDetail.headerRow(caption: label, hint: nil)
         stack.addArrangedSubview(header)
         header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true

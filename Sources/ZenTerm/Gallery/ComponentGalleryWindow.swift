@@ -122,8 +122,8 @@
                 notifiesOnReselect: true
             ) { [weak self] index in self?.selectLiveState(index) }
             let controls = NSStackView(views: [
-                FieldCaption("Theme", required: false), makeThemeDropdown(),
-                FieldCaption("Live state", required: false), live,
+                SectionCaption("Theme"), makeThemeDropdown(),
+                SectionCaption("Live state"), live,
             ])
             controls.orientation = .horizontal
             controls.alignment = .centerY

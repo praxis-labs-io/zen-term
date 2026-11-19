@@ -104,7 +104,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
     private func buildContent() -> NSStackView {
         wireBranchField()
         let branchGroup = LabeledField(
-            caption: FieldCaption("Branch", required: true), control: branchField)
+            caption: SectionCaption("Branch", required: true), control: branchField)
         self.branchGroup = branchGroup
         branchCaption.font = ChromeType.font(.caption)
         branchCaption.textColor = Theme.current.chrome.ink(.muted)
@@ -118,7 +118,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
         baseCaption.font = ChromeType.font(.caption)
         baseCaption.textColor = Theme.current.chrome.ink(.muted)
         let baseGroup = Self.vStack(
-            [FieldCaption("Base", required: false), baseSegment, baseCaption], spacing: ChromeMetrics.Spacing.s6)
+            [SectionCaption("Base"), baseSegment, baseCaption], spacing: ChromeMetrics.Spacing.s6)
         self.baseGroup = baseGroup
 
         carryLabel.font = ChromeType.font(.caption)
@@ -135,7 +135,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
         carryLink.onTab = { [weak self] in self?.moveTab(1) }
         carryLink.onBacktab = { [weak self] in self?.moveTab(-1) }
         let carryGroup = Self.vStack(
-            [FieldCaption("Copy into this worktree", required: false), carryLabel, Self.leadingWrap(carryLink)],
+            [SectionCaption("Copy into this worktree"), carryLabel, Self.leadingWrap(carryLink)],
             spacing: ChromeMetrics.Spacing.s6)
 
         phaseLabel.font = ChromeType.font(.caption)

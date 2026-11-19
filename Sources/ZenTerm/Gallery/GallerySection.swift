@@ -35,7 +35,7 @@
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
         private static func line(_ row: Row) -> NSView {
-            let caption = FieldCaption(row.label, required: false)
+            let caption = SectionCaption(row.label)
             caption.widthAnchor.constraint(equalToConstant: labelWidth).isActive = true
 
             let samples = NSStackView(views: row.samples)

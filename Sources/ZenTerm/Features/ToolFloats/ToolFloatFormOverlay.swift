@@ -78,7 +78,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     private func buildContent() -> NSStackView {
         wireField(titleField)
         titleField.onChange = { [weak self] in self?.refreshValidity() }
-        let titleGroup = LabeledField(caption: FieldCaption("Title", required: true), control: titleField)
+        let titleGroup = LabeledField(caption: SectionCaption("Title", required: true), control: titleField)
         self.titleGroup = titleGroup
 
         let picker = IconPickerField(selected: editingFloat?.icon ?? IconCatalog.defaultSymbol)
@@ -88,7 +88,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         picker.onTab = { [weak self] in self?.moveTab(1) }
         picker.onBacktab = { [weak self] in self?.moveTab(-1) }
         iconPicker = picker
-        let iconGroup = LabeledField(caption: FieldCaption("Icon", required: false), control: picker)
+        let iconGroup = LabeledField(caption: SectionCaption("Icon"), control: picker)
         self.iconGroup = iconGroup
 
         chordChip.onActivate = { [weak self] in self?.beginCapture() }
@@ -100,12 +100,12 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         let chordSpacer = NSView()
         chordSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let chordRow = Self.hStack([chordChip, chordSpacer], spacing: 0)
-        let chordGroup = LabeledField(caption: FieldCaption("Shortcut", required: true), control: chordRow)
+        let chordGroup = LabeledField(caption: SectionCaption("Shortcut", required: true), control: chordRow)
         self.chordGroup = chordGroup
 
         wireField(commandField)
         commandField.onChange = { [weak self] in self?.refreshValidity() }
-        let commandGroup = LabeledField(caption: FieldCaption("Command", required: true), control: commandField)
+        let commandGroup = LabeledField(caption: SectionCaption("Command", required: true), control: commandField)
         self.commandGroup = commandGroup
 
         wireField(dirPicker.field)
@@ -114,7 +114,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         dirPicker.wireNav(
             onVertical: { [weak self] in self?.moveVertical($0) },
             onTabForward: { [weak self] in self?.moveTab(1) })
-        let dirGroup = LabeledField(caption: FieldCaption("Directory", required: false), control: dirPicker)
+        let dirGroup = LabeledField(caption: SectionCaption("Directory"), control: dirPicker)
         self.dirGroup = dirGroup
 
         for box in [widthField, heightField] { wireField(box) }
@@ -135,20 +135,20 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         widthField.widthAnchor.constraint(equalToConstant: 72).isActive = true
         heightField.widthAnchor.constraint(equalTo: widthField.widthAnchor).isActive = true
         let sizeGroup = LabeledField(
-            caption: FieldCaption("Size (fraction of tile)", required: false), control: sizeRow)
+            caption: SectionCaption("Size (fraction of tile)"), control: sizeRow)
         self.sizeGroup = sizeGroup
 
         wireSegment(gitSegment)
         let gitGroup = Self.vStack(
-            [FieldCaption("Open in", required: false), gitSegment], spacing: ChromeMetrics.Spacing.s6)
+            [SectionCaption("Open in"), gitSegment], spacing: ChromeMetrics.Spacing.s6)
 
         wireSegment(persistSegment)
         let persistGroup = Self.vStack(
-            [FieldCaption("Keep running", required: false), persistSegment], spacing: ChromeMetrics.Spacing.s6)
+            [SectionCaption("Keep running"), persistSegment], spacing: ChromeMetrics.Spacing.s6)
 
         wireSegment(toolbarSegment)
         let toolbarGroup = Self.vStack(
-            [FieldCaption("Toolbar button", required: false), toolbarSegment], spacing: ChromeMetrics.Spacing.s6)
+            [SectionCaption("Toolbar button"), toolbarSegment], spacing: ChromeMetrics.Spacing.s6)
 
         cancelButton.onTap = { [weak self] in self?.cancel() }
         submitButton.setTitle(editingFloat == nil ? "Add Tool Float" : "Save")

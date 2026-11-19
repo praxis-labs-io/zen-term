@@ -207,7 +207,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
             return XCTFail("expected the branch field")
         }
         guard
-            let caption = descendants(of: overlay).compactMap({ $0 as? FieldCaption })
+            let caption = descendants(of: overlay).compactMap({ $0 as? SectionCaption })
                 .first(where: { $0.stringValue.hasPrefix("Copy into") })
         else {
             return XCTFail("expected the copy-into caption")

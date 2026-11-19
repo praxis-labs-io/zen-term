@@ -111,7 +111,7 @@ Fonts come from `ChromeType.font(_:weight:face:)`, never `systemFont(ofSize:)`.
 
 Weights are `.regular`, `.medium` and `.semibold`; each role has a default. Faces are
 `.text`, `.mono` (code, commands, paths, keycaps) and `.digits` (numbers that change in
-place). A section heading takes `ChromeType.sectionLabel`, in sentence case.
+place). A section heading or field caption is a `SectionCaption`, in sentence case.
 
 ## Space and shape
 

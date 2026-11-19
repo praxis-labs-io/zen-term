@@ -61,7 +61,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
     private func groupCaptions(in view: NSView) -> [String] {
         view.subviews.flatMap { child -> [String] in
             if child is SSHHostRow { return [] }
-            let own = (child as? NSTextField).flatMap { $0.font == ChromeType.sectionLabel ? $0.stringValue : nil }
+            let own = (child as? SectionCaption)?.stringValue
             return (own.map { [$0] } ?? []) + groupCaptions(in: child)
         }
     }
