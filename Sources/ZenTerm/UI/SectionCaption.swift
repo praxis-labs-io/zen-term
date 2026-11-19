@@ -13,8 +13,6 @@ final class SectionCaption: NSTextField, ThemeReapplying {
         isSelectable = false
         isBordered = false
         drawsBackground = false
-        maximumNumberOfLines = 1
-        lineBreakMode = .byTruncatingTail
         translatesAutoresizingMaskIntoConstraints = false
         reapplyTheme()
     }
@@ -23,19 +21,14 @@ final class SectionCaption: NSTextField, ThemeReapplying {
 
     func reapplyTheme() {
         let ink = Theme.current.chrome.ink(.muted)
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.lineBreakMode = .byTruncatingTail
         let string = NSMutableAttributedString(
-            string: text,
-            attributes: [.font: ChromeType.sectionLabel, .foregroundColor: ink, .paragraphStyle: paragraph])
+            string: text, attributes: [.font: ChromeType.sectionLabel, .foregroundColor: ink])
         if isRequired {
             string.append(
                 NSAttributedString(
                     string: " ✳",
-                    attributes: [
-                        .font: ChromeType.font(.caption, weight: .medium), .foregroundColor: ink,
-                        .paragraphStyle: paragraph,
-                    ]))
+                    attributes: [.font: ChromeType.font(.caption, weight: .medium), .foregroundColor: ink]
+                ))
         }
         attributedStringValue = string
     }

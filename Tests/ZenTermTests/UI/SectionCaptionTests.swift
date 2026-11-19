@@ -47,14 +47,4 @@ final class SectionCaptionTests: WindowTestCase {
         }
         XCTAssertEqual(runs(caption).first?[.font] as? NSFont, ChromeType.sectionLabel)
     }
-
-    func test_everyRunTruncatesOnOneLine() {
-        let caption = SectionCaption("Copy into new worktrees", required: true)
-
-        XCTAssertEqual(caption.maximumNumberOfLines, 1)
-        for run in runs(caption) {
-            let paragraph = run[.paragraphStyle] as? NSParagraphStyle
-            XCTAssertEqual(paragraph?.lineBreakMode, .byTruncatingTail)
-        }
-    }
 }

@@ -45,6 +45,7 @@ final class HostConnectView: NSView, ThemeReapplying {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
+        eyebrow.maximumNumberOfLines = 1
         title.maximumNumberOfLines = 1
         title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         destinationLine.font = ChromeType.font(.small, face: .mono)
