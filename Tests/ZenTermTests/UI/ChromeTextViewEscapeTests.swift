@@ -53,6 +53,36 @@ final class ChromeTextViewEscapeTests: WindowTestCase {
         XCTAssertFalse(window.cancelReachedWindow)
     }
 
+    func test_shiftEscInTheWorkspacePickerSearch_closesThePicker_withoutReachingTheWindow() throws {
+        var dismissed = 0
+        let picker = RepoPickerOverlay(
+            entries: [], onChoose: { _, _ in }, onAddWorkspace: {}, onNewWorkspace: { _ in },
+            onDismiss: { dismissed += 1 })
+        let window = mount(picker)
+        picker.focusInitialResponder()
+
+        try pressEscape(in: window, modifiers: .shift)
+
+        XCTAssertEqual(dismissed, 1)
+        XCTAssertFalse(window.cancelReachedWindow)
+    }
+
+    func test_escInACardsTextArea_keepsTheCardAndTheDraft() throws {
+        var cancelled = 0
+        let shell = ModalShell(width: 300, onCancel: { cancelled += 1 })
+        let area = TextAreaBox(placeholder: "What went wrong")
+        area.setText("a draft")
+        shell.embed(area)
+        let window = mount(shell)
+        XCTAssertTrue(window.makeFirstResponder(area.textView))
+
+        try pressEscape(in: window)
+
+        XCTAssertEqual(cancelled, 0)
+        XCTAssertEqual(area.text, "a draft")
+        XCTAssertFalse(window.cancelReachedWindow)
+    }
+
     func test_escClaimedByTheFieldsDelegate_leavesTheCardOpen() throws {
         var cancelled = 0
         let shell = ModalShell(width: 300, onCancel: { cancelled += 1 })
@@ -81,10 +111,10 @@ final class ChromeTextViewEscapeTests: WindowTestCase {
         return window
     }
 
-    private func pressEscape(in window: NSWindow) throws {
+    private func pressEscape(in window: NSWindow, modifiers: NSEvent.ModifierFlags = []) throws {
         let event = try XCTUnwrap(
             NSEvent.keyEvent(
-                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 0,
                 windowNumber: window.windowNumber, context: nil, characters: "\u{1b}",
                 charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53))
         NSApp.postEvent(event, atStart: true)

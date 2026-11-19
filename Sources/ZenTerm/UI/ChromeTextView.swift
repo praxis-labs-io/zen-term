@@ -27,8 +27,7 @@ class ChromeTextView: NSTextView {
 
     private func claimEscape(_ selector: Selector) -> Bool {
         if delegate?.textView?(self, doCommandBy: selector) == true { return true }
-        guard let event = NSApp.currentEvent, event.type == .keyDown,
-            KeyboardFocus.key(for: event) == .escape, KeyboardFocus.isUnmodified(event)
+        guard let event = NSApp.currentEvent, event.type == .keyDown, KeyboardFocus.key(for: event) == .escape
         else { return false }
         return window?.performKeyEquivalent(with: event) == true
     }
