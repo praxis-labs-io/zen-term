@@ -708,6 +708,7 @@ final class RepoPickerOverlay: PaletteOverlay {
                 ?? GitRepoStatus.branch(statusPath)
             branchLabel.stringValue = head ?? ""
             branchLabel.setAccessibilityLabel(head.map { Self.headDescription($0, worktree) })
+            setAccessibilityValue(branchLabel.accessibilityLabel())
             branchFloor.constant = min(
                 branchLabel.intrinsicContentSize.width, Self.branchMinWidth)
 
@@ -718,6 +719,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         private func applyRemoved(_ name: String) {
             branchLabel.stringValue = "\(name) \(WorktreeOrigin.removedDetail)"
             branchLabel.setAccessibilityLabel("worktree \(name), \(WorktreeOrigin.removedDetail)")
+            setAccessibilityValue(branchLabel.accessibilityLabel())
             branchFloor.constant = min(branchLabel.intrinsicContentSize.width, Self.branchMinWidth)
             churnLabel.attributedStringValue = NSAttributedString()
         }

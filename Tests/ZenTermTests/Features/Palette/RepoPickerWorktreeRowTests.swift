@@ -143,6 +143,18 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertLessThan(try XCTUnwrap(rail.font?.pointSize), ChromeType.Role.body.pointSize)
     }
 
+    func test_aWorktreeRow_announcesItsBranch_notJustItsTypeRail() throws {
+        let repo = path("alpha")
+        let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])
+        mount(overlay)
+
+        overlay.setWorktrees(listing(repo, "one"), for: repo)
+
+        let child = try XCTUnwrap(rowViews(in: overlay)[3] as? RepoPickerOverlay.RowView)
+        XCTAssertEqual(child.accessibilityLabel(), RepoPickerOverlay.RowView.typeRail)
+        XCTAssertEqual(child.accessibilityValue() as? String, "worktree on branch one")
+    }
+
     func test_detachedWorktree_showsItsShortHeadInTheBranchColumn() throws {
         let repo = path("alpha")
         let overlay = makeRepoPicker(entries: [workspace("alpha", path: repo)])

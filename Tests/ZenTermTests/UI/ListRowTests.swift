@@ -85,6 +85,20 @@ final class ListRowTests: WindowTestCase {
         XCTAssertEqual(row.layer?.borderColor?.alpha, 0, "the ring stays after focus leaves")
     }
 
+    func test_aThemeChange_keepsTheSameRunningSpinner() throws {
+        let row = mount(ListRow(ListRow.Content(title: "Removing one…", leading: .spinner)) {})
+        func spinner() -> Spinner? {
+            func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
+            return descendants(row).compactMap { $0 as? Spinner }.first
+        }
+        let before = try XCTUnwrap(spinner())
+
+        row.reapplyTheme()
+
+        XCTAssertTrue(spinner() === before, "a rebuild restarts the spinner from its first frame")
+        XCTAssertTrue(before.isSpinning)
+    }
+
     func test_branchField_highlightsWithTheArrow_andAClickedRowCommitsItsBranch() throws {
         let field = BranchField()
         window.contentView?.addSubview(field)

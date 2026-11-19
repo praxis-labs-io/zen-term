@@ -80,7 +80,7 @@ final class SidebarAgentRow: SidebarJumpRow {
     func render(_ item: SidebarAgentItem) {
         guard item != self.item else { return }
         self.item = item
-        render(Content(title: item.summary, subtitle: item.detail))
+        render(Content(title: item.summary, subtitle: item.detail, titleColor: item.state.ink))
         tooltip?.label = item.message ?? Self.jumpHint
         tooltip?.style = item.message == nil ? .line : .paragraph
         tooltip?.relabel(from: self)
@@ -89,7 +89,7 @@ final class SidebarAgentRow: SidebarJumpRow {
         dot.isHidden = item.state == .working
         spinner.isHidden = item.state != .working
         spinner.isSpinning = item.state == .working
-        reapplyTheme()
+        dot.layer?.backgroundColor = item.state.ink.cgColor
     }
 
     var itemForTesting: SidebarAgentItem? { item }
@@ -97,7 +97,9 @@ final class SidebarAgentRow: SidebarJumpRow {
     var summaryTextForTesting: String { content.title }
 
     override func reapplyTheme() {
-        dot.layer?.backgroundColor = (item?.state ?? .idle).ink.cgColor
+        let state = item?.state ?? .idle
+        dot.layer?.backgroundColor = state.ink.cgColor
+        if let item { render(Content(title: item.summary, subtitle: item.detail, titleColor: state.ink)) }
         super.reapplyTheme()
     }
 }

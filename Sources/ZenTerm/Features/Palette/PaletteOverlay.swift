@@ -22,7 +22,7 @@ class SelectableRowView: ListRow, PaletteRowView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Accepts the press so the release lands here; `mouseUp` runs the row only if it lands inside.
+    // Accepts the press so the release lands here; `mouseUp` runs the row only if it lands inside.
     override func mouseDown(with event: NSEvent) {}
     override func mouseUp(with event: NSEvent) {
         if bounds.contains(convert(event.locationInWindow, from: nil)) { onChoose() }
