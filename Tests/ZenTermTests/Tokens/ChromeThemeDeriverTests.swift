@@ -298,7 +298,9 @@ final class ChromeThemeDeriverTests: XCTestCase {
             for tier in FloatShadow.Tier.allCases {
                 let raised = try XCTUnwrap(rgb(chrome.raised(tier)))
                 let gained = ChromeThemeDeriver.lightness(of: raised) - window
-                let expected = min(Double(tier.lightening), max(0, ceiling - window))
+                let room = max(0, ceiling - window)
+                let expected = min(
+                    Double(tier.lightening), terminal.background.isDark ? room * ChromeThemeDeriver.inkClearance : room)
                 XCTAssertEqual(
                     gained, expected, accuracy: 0.6,
                     "\(token) raises its \(tier) fill by \(gained) L*, not \(expected)")
@@ -329,6 +331,19 @@ final class ChromeThemeDeriverTests: XCTestCase {
         for tier in FloatShadow.Tier.allCases {
             XCTAssertEqual(rgb(ChromeThemeDeriver.derive(from: white).raised(tier)), white.background)
         }
+    }
+
+    func test_aLowContrastDarkTheme_neverLiftsItsFloatsOntoTheInkColor() throws {
+        var murky = Theme.rosePineZen
+        murky.background = try XCTUnwrap(TerminalColor(hex: "#202020"))
+        murky.foreground = try XCTUnwrap(TerminalColor(hex: "#2e2e2e"))
+        let raised = try XCTUnwrap(rgb(ChromeThemeDeriver.derive(from: murky).raised(.overlay)))
+        let separation =
+            ChromeThemeDeriver.lightness(of: murky.foreground) - ChromeThemeDeriver.lightness(of: murky.background)
+        XCTAssertNotEqual(raised, murky.foreground, "the overlay paints the ink's own color")
+        XCTAssertLessThanOrEqual(
+            ChromeThemeDeriver.lightness(of: raised) - ChromeThemeDeriver.lightness(of: murky.background),
+            separation * ChromeThemeDeriver.inkClearance + 0.5)
     }
 
     private func rgb(_ color: NSColor) -> TerminalColor? {

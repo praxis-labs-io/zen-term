@@ -14,7 +14,7 @@ enum FloatShadow {
             }
         }
 
-        /// L* the raised fill gains over the window; the tier most often stacked on another float gains most.
+        // The tier most often stacked on another float lifts most.
         var lightening: CGFloat {
             switch self {
             case .overlay: return 7

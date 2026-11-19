@@ -149,7 +149,7 @@ applies all three. Never build an `NSShadow` by hand, and never paint a float `b
 
 The raised fill steps the window color lighter by the tier's `lightening` in L\*, solved per
 theme in `ChromeThemeDeriver`: toward the foreground on a dark theme, toward white on a light one,
-clamping where there is no room left. The overlay lifts most, since it opens on other floats. A
+clamping where there is no room left. A dark float stops halfway to its ink, so text on it stays legible. The overlay lifts most, since it opens on other floats. A
 tool float's terminal host keeps the terminal background.
 
 | Tier | For |

@@ -73,12 +73,15 @@ enum ChromeThemeDeriver {
     /// A light theme's foreground is darker than its window, so it lifts toward white instead.
     private static let lightCeiling = TerminalColor(red: 255, green: 255, blue: 255)
 
+    // Ink is the foreground at an alpha, so a dark float lifts at most this share of the way toward it.
+    static let inkClearance = 0.5
+
     static func raisedFill(for terminal: TerminalTheme, tier: FloatShadow.Tier) -> TerminalColor {
         let background = terminal.background
         let toward = background.isDark ? terminal.foreground : lightCeiling
-        let goal = Double(tier.lightening)
         let available = lightening(of: background, to: toward)
         guard available > 0 else { return background }
+        let goal = min(Double(tier.lightening), background.isDark ? available * inkClearance : available)
         guard available > goal else { return toward }
         var low = 0.0
         var high = 1.0
