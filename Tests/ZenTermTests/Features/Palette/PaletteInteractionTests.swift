@@ -481,11 +481,13 @@ final class PaletteInteractionTests: WindowTestCase {
 
         let overlay = makeRepoPicker(entries: [workspace("repo", path: repo)])
         mount(overlay)
-        let labels = descendants(of: rows(in: overlay)[1]).compactMap { $0 as? NSTextField }
-        let branch = labels.first { $0.stringValue != "repo" }
-        XCTAssertEqual(branch?.stringValue, "", "nothing has probed the folder yet")
+        let row = rows(in: overlay)[1]
+        func showsBranch() -> Bool {
+            descendants(of: row).contains { ($0 as? NSTextField)?.stringValue == "feature/zen-450" }
+        }
+        XCTAssertFalse(showsBranch(), "nothing has probed the folder yet")
 
-        waitUntil(branch?.stringValue == "feature/zen-450", "the branch to land when the probe does")
+        waitUntil(showsBranch(), "the branch to land when the probe does")
     }
 
     func test_repoPicker_filterNarrowsWorkspacesKeepingAddRowPinned() throws {
