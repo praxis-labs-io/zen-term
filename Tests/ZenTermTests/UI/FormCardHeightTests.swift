@@ -39,8 +39,8 @@ final class FormCardHeightTests: WindowTestCase {
         box.onSubmit?()
         overlay.layoutSubtreeIfNeeded()
 
-        let label = try XCTUnwrap(walk(overlay).compactMap { $0 as? FormErrorLabel }.first)
-        XCTAssertFalse(label.isHidden)
+        let label = try XCTUnwrap(
+            walk(overlay).compactMap { $0 as? FormErrorLabel }.first { !$0.isHidden }, "the submit error shows")
         let lineHeight = try XCTUnwrap(label.font).boundingRectForFont.height
         XCTAssertLessThanOrEqual(label.frame.height, lineHeight * 3 + 4, "capped at three lines")
         let card = try XCTUnwrap(walk(overlay).compactMap { $0 as? CardView }.first)

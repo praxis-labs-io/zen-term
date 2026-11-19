@@ -191,6 +191,8 @@ A row in a list is a `ListRow`: popover lists, menus, Settings lists, and the Se
 
 A boxed input (a text field, a text area, a picker) takes its rest fill and border from `FieldChrome`.
 
+A form or row's message line is a `FormErrorLabel`, in its destructive, warning or muted tone.
+
 A modal's title row is `ModalHeader` and its button row is `ModalActionBar`; a keyboard-only card uses
 `HintFooter` in its place. The shared hairline rule is `Divider`, and the shared muted "nothing here"
 line is `EmptyStateLabel`.
