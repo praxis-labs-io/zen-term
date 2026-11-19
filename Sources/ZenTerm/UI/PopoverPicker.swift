@@ -54,9 +54,7 @@ class PopoverPicker: NSView {
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
         layer?.cornerRadius = ChromeMetrics.Radius.control
-        PopoverButtonStyle.applyRestFill(to: self)
-        layer?.borderWidth = ChromeMetrics.Border.width
-        layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
+        FieldChrome.apply(to: self, isFocused: false)
 
         titleLabel.font = ChromeType.font(.body)
         titleLabel.textColor = Theme.current.chrome.ink(.normal)
@@ -153,7 +151,7 @@ class PopoverPicker: NSView {
     #endif
 
     private func restyle() {
-        PopoverButtonStyle.apply(to: self, isFocused: isFocusedStop, isOpen: popover.isOpen)
+        FieldChrome.apply(to: self, isFocused: isFocusedStop || popover.isOpen)
     }
 
     /// Fallback only: an open list normally holds focus in the query field, whose delegate routes its keys.

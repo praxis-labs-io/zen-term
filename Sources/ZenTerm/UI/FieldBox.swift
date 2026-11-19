@@ -15,8 +15,6 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     // Handled here because `performKeyEquivalent` does not run for a bare Esc while a popover host holds focus.
     var onEscape: (() -> Bool)?
 
-    private static var restFill: NSColor { Theme.current.chrome.fill(.rest) }
-
     var text: String { field.stringValue }
     func setText(_ value: String) { field.stringValue = value }
 
@@ -33,9 +31,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = ChromeMetrics.Radius.control
-        layer?.backgroundColor = Self.restFill.cgColor
-        layer?.borderWidth = ChromeMetrics.Border.width
-        layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
+        setFocused(false)
         translatesAutoresizingMaskIntoConstraints = false
 
         field.isBordered = false
@@ -86,10 +82,7 @@ final class FieldBox: NSView, NSTextFieldDelegate {
     }
 
     private func setFocused(_ focused: Bool) {
-        let chrome = Theme.current.chrome
-        layer?.backgroundColor = Self.restFill.cgColor
-        layer?.borderColor = (focused ? chrome.focusRing : chrome.fill(alpha: ChromeTheme.border)).cgColor
-        layer?.borderWidth = ChromeMetrics.Border.width
+        FieldChrome.apply(to: self, isFocused: focused)
     }
 
     #if DEBUG
