@@ -1,7 +1,7 @@
 import AppKit
 
 // One region of a tab drawing: its label, its command, and whether the workspace opens focused there.
-final class RegionCommandField: NSView, NSTextFieldDelegate, ThemeReapplying {
+final class RegionCommandField: ControlView, NSTextFieldDelegate, ThemeReapplying {
     enum Edge { case left, right, up, down }
 
     static let commandFont = ChromeType.font(.body, face: .mono)
@@ -32,7 +32,6 @@ final class RegionCommandField: NSView, NSTextFieldDelegate, ThemeReapplying {
         accessibilityLabel: "Open with focus here", shortcut: { WorkspaceTabDrawing.launchFocusShortcut }
     ) { [weak self] in self?.onOpenFocusedHere?() }
     private(set) var opensFocused = false
-    private var isHovered = false
     private(set) var isEditing = false
 
     var isCornerButtonVisibleForTesting: Bool { !cornerButton.isHidden }
@@ -144,23 +143,7 @@ final class RegionCommandField: NSView, NSTextFieldDelegate, ThemeReapplying {
             width: max(0, bounds.width - x - Self.horizontalInset + 2), height: fieldHeight)
     }
 
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        trackingAreas.forEach(removeTrackingArea)
-        addTrackingArea(
-            NSTrackingArea(
-                rect: bounds, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self))
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        isHovered = true
-        refresh()
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        isHovered = false
-        refresh()
-    }
+    override func hoverDidChange() { refresh() }
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(field)

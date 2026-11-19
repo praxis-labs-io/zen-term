@@ -183,6 +183,10 @@ Tokens live in `Sources/ZenTerm/Tokens/`, and shared components in `Sources/ZenT
 Neither depends on a feature or on `App/`. The dev build's Component Gallery is the
 catalog: it shows every shared component and its states.
 
+A control's hover and eased fill come from `ControlView`, or from `ControlState` on a control that
+cannot subclass it (`AppButton`). A control never keeps its own tracking area. A control on that base
+takes keyboard focus and its ring from it too.
+
 A modal's title row is `ModalHeader` and its button row is `ModalActionBar`; a keyboard-only card uses
 `HintFooter` in its place. The shared hairline rule is `Divider`, and the shared muted "nothing here"
 line is `EmptyStateLabel`.

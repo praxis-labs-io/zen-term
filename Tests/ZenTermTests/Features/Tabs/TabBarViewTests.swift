@@ -30,7 +30,7 @@ final class TabBarViewTests: WindowTestCase {
             tabBar.render([item(1, "one", index: 1, active: true), item(2, "two", index: 2)])
             tabBar.layoutSubtreeIfNeeded()
             for chip in tabBar.chipsForTesting {
-                chip.setHover(true)
+                chip.setHovered(true)
                 chip.layoutSubtreeIfNeeded()
             }
         }
@@ -311,9 +311,9 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertEqual(try labelColor(chips[0]), chrome.ink(.normal))
         XCTAssertEqual(try labelColor(chips[1]), chrome.ink(.subtle))
 
-        chips[1].setHover(true)
+        chips[1].setHovered(true)
         XCTAssertEqual(try labelColor(chips[1]), chrome.ink(.normal), "hover restyles the title")
-        chips[1].setHover(false)
+        chips[1].setHovered(false)
         XCTAssertEqual(try labelColor(chips[1]), chrome.ink(.subtle))
     }
 

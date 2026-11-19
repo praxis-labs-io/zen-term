@@ -1,6 +1,6 @@
 import AppKit
 
-final class SettingsNavRow: NSView, HoverSuppressing, ThemeReapplying {
+final class SettingsNavRow: ControlView, HoverSuppressing, ThemeReapplying {
     enum Variant: Equatable {
         case standard
         case nested(symbol: String)
@@ -31,12 +31,9 @@ final class SettingsNavRow: NSView, HoverSuppressing, ThemeReapplying {
     private let onActivate: () -> Void
     private let focusesOnClick: Bool
     private var isTakingKeyboardFocus = false
-    private var trackingArea: NSTrackingArea?
     private var isSelected = false
-    private var isFocusedStop = false
     private var isHoverSuppressed = false
     var onFocusChanged: (() -> Void)?
-    private var isHovered = false { didSet { refreshAccessory() } }
     private(set) var hoverAccessory: NSView?
 
     private static let detailMaxWidth: CGFloat = 96
@@ -225,14 +222,14 @@ final class SettingsNavRow: NSView, HoverSuppressing, ThemeReapplying {
     private var showsHover: Bool { isHovered && !isHoverSuppressed }
 
     private func refreshFill() {
-        layer?.borderWidth = ChromeMetrics.Border.width
-        layer?.borderColor = isFocusedStop ? Theme.current.chrome.focusRing.cgColor : NSColor.clear.cgColor
+        let chrome = Theme.current.chrome
+        showFocusRing(hasKeyboardFocus)
         if showsHover {
-            layer?.backgroundColor = Theme.current.chrome.fill(.hover).cgColor
+            easeFill(chrome.fill(.hover))
         } else if isSelected {
-            layer?.backgroundColor = Theme.current.chrome.fill(.active).cgColor
+            easeFill(chrome.fill(.active))
         } else {
-            layer?.backgroundColor = NSColor.clear.cgColor
+            easeFill(.clear)
         }
     }
 
@@ -244,64 +241,29 @@ final class SettingsNavRow: NSView, HoverSuppressing, ThemeReapplying {
         window?.makeFirstResponder(self)
         isTakingKeyboardFocus = false
     }
-    override func becomeFirstResponder() -> Bool {
-        isFocusedStop = true
+    override func focusDidChange() {
         refreshFill()
         onFocusChanged?()
-        return true
     }
 
-    override func resignFirstResponder() -> Bool {
-        isFocusedStop = false
+    override func hoverDidChange() {
+        if !isHovered { tooltip?.hide(from: self) }
+        refreshAccessory()
         refreshFill()
-        onFocusChanged?()
-        return true
-    }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if let trackingArea { removeTrackingArea(trackingArea) }
-        let area = NSTrackingArea(
-            rect: bounds, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self)
-        addTrackingArea(area)
-        trackingArea = area
     }
 
     override func mouseEntered(with event: NSEvent) {
-        isHovered = true
-        refreshFill()
+        super.mouseEntered(with: event)
         guard !isHoverSuppressed else { return }
         tooltip?.show(from: self)
-    }
-
-    func refreshHover() {
-        let inside = pointerIsInside
-        guard inside != isHovered else { return }
-        isHovered = inside
-        if !inside { tooltip?.hide(from: self) }
-        refreshAccessory()
-        refreshFill()
     }
 
     func setHoverSuppressed(_ suppressed: Bool) {
         guard suppressed != isHoverSuppressed else { return }
         isHoverSuppressed = suppressed
-        if suppressed { tooltip?.hide(from: self) } else { isHovered = pointerIsInside }
+        if suppressed { tooltip?.hide(from: self) } else { refreshHover() }
         refreshAccessory()
         refreshFill()
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        isHovered = false
-        refreshFill()
-        tooltip?.hide(from: self)
-    }
-
-    override func viewDidHide() {
-        super.viewDidHide()
-        isHovered = false
-        refreshFill()
-        tooltip?.hide(from: self)
     }
 
     override func viewDidMoveToWindow() {

@@ -1,12 +1,10 @@
 import AppKit
 
-final class SidebarRowMenuItemView: NSView, ThemeReapplying {
+final class SidebarRowMenuItemView: ControlView, ThemeReapplying {
     let title: String
     private let label: NSTextField
     private let keycap: KeycapView?
     private let onChoose: () -> Void
-    private var trackingArea: NSTrackingArea?
-    private var isHovered = false
 
     private static let inset: CGFloat = ChromeMetrics.Spacing.controlInset
     private static let gap: CGFloat = ChromeMetrics.Spacing.s12
@@ -53,27 +51,10 @@ final class SidebarRowMenuItemView: NSView, ThemeReapplying {
     func reapplyTheme() {
         let chrome = Theme.current.chrome
         label.textColor = chrome.ink(.normal)
-        layer?.backgroundColor = isHovered ? chrome.fill(.hover).cgColor : NSColor.clear.cgColor
+        easeFill(isHovered ? chrome.fill(.hover) : .clear)
     }
 
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if let trackingArea { removeTrackingArea(trackingArea) }
-        let area = NSTrackingArea(
-            rect: bounds, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self)
-        addTrackingArea(area)
-        trackingArea = area
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        isHovered = true
-        reapplyTheme()
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        isHovered = false
-        reapplyTheme()
-    }
+    override func hoverDidChange() { reapplyTheme() }
 
     override func mouseDown(with event: NSEvent) { onChoose() }
 

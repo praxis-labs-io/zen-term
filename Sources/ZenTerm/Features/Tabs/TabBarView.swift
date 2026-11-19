@@ -202,14 +202,14 @@ final class TabBarView: NSView, ThemeReapplying {
     // Per-chip tracking areas miss `mouseExited` when chips scroll under a stationary cursor.
     private func refreshHover() {
         guard let window, window.isKeyWindow else {
-            chips.forEach { $0.setHover(isPinnedHover($0.id)) }
+            chips.forEach { $0.setHovered(isPinnedHover($0.id)) }
             return
         }
         let mouse = window.mouseLocationOutsideOfEventStream
         let visible = scrollView.contentView.documentVisibleRect
         for chip in chips {
             let underPointer = chip.frame.intersects(visible) && chip.convert(chip.bounds, to: nil).contains(mouse)
-            chip.setHover(underPointer || isPinnedHover(chip.id))
+            chip.setHovered(underPointer || isPinnedHover(chip.id))
         }
     }
 

@@ -23,9 +23,8 @@ final class AppButton: NSButton {
     private let keycap: KeycapView?
     private let symbolName: String?
     private var labelText: String
-    private var isHovered = false { didSet { restyle() } }
-    private var isFocusedStop = false { didSet { restyle() } }
-    private var trackingAreaRef: NSTrackingArea?
+    private lazy var controlState = ControlState(
+        host: self, hoverChanged: { [unowned self] in restyle() }, focusChanged: { [unowned self] in restyle() })
     private let insetRing = CALayer()
 
     override var isEnabled: Bool {
@@ -119,13 +118,14 @@ final class AppButton: NSButton {
 
     override func becomeFirstResponder() -> Bool {
         let ok = super.becomeFirstResponder()
-        isFocusedStop = ok
+        if ok { controlState.setKeyboardFocus(true) }
         return ok
     }
 
     override func resignFirstResponder() -> Bool {
-        isFocusedStop = false
-        return super.resignFirstResponder()
+        let ok = super.resignFirstResponder()
+        if ok { controlState.setKeyboardFocus(false) }
+        return ok
     }
 
     // The focus ring is drawn on a layer border instead.
@@ -151,11 +151,12 @@ final class AppButton: NSButton {
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
-        if let trackingAreaRef { removeTrackingArea(trackingAreaRef) }
-        let area = NSTrackingArea(
-            rect: bounds, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self)
-        addTrackingArea(area)
-        trackingAreaRef = area
+        controlState.updateTrackingArea()
+    }
+
+    override func viewDidHide() {
+        super.viewDidHide()
+        controlState.clearHover()
     }
 
     override func layout() {
@@ -166,8 +167,8 @@ final class AppButton: NSButton {
         CATransaction.commit()
     }
 
-    override func mouseEntered(with event: NSEvent) { isHovered = true }
-    override func mouseExited(with event: NSEvent) { isHovered = false }
+    override func mouseEntered(with event: NSEvent) { controlState.pointerEntered() }
+    override func mouseExited(with event: NSEvent) { controlState.pointerExited() }
     override func resetCursorRects() {
         if isEnabled { addCursorRect(bounds, cursor: .pointingHand) }
     }
@@ -175,11 +176,10 @@ final class AppButton: NSButton {
     private func restyle() {
         let chrome = Theme.current.chrome
         let (textColor, background) = isEnabled ? enabledColors(chrome) : disabledColors(chrome)
-        layer?.backgroundColor = background.cgColor
-        let outlined = isEnabled && (isFocusedStop || showsFocusOutline)
+        controlState.easeFill(background)
+        let outlined = isEnabled && (controlState.hasKeyboardFocus || showsFocusOutline)
         let insetOutlined = outlined && variant == .primary
-        layer?.borderWidth = ChromeMetrics.Border.width
-        layer?.borderColor = (outlined && !insetOutlined ? chrome.focusRing : .clear).cgColor
+        controlState.showFocusRing(outlined && !insetOutlined)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         insetRing.borderColor = (insetOutlined ? chrome.onAccent.nsColor : .clear).cgColor
@@ -197,6 +197,7 @@ final class AppButton: NSButton {
     }
 
     private func enabledColors(_ chrome: ChromeTheme) -> (text: NSColor, background: NSColor) {
+        let isHovered = controlState.isHovered
         switch variant {
         case .primary:
             return (chrome.onAccent.nsColor, isHovered ? Self.primaryHoverFill(chrome) : chrome.accent.nsColor)
@@ -237,7 +238,7 @@ final class AppButton: NSButton {
     var insetRingForTesting: CALayer { insetRing }
 
     #if DEBUG
-        func forceFocusForGallery() { isFocusedStop = true }
+        func forceFocusForGallery() { controlState.setKeyboardFocus(true) }
     #endif
 }
 
