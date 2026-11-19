@@ -393,7 +393,7 @@ final class Dropdown: NSView {
         if visible.isEmpty {
             lines.append(
                 ListPopover.Row(
-                    view: Self.groupHeaderView("No matches", chrome: chrome), height: Self.headerHeight))
+                    view: Self.emptyRowView(), height: Self.headerHeight))
             return lines
         }
         for index in visible {
@@ -417,6 +417,20 @@ final class Dropdown: NSView {
     private func refreshListHighlight() {
         let chrome = Theme.current.chrome
         for row in rowViews { row.setHighlighted(row.index == highlighted, chrome: chrome) }
+    }
+
+    private static func emptyRowView() -> NSView {
+        let label = EmptyStateLabel("No matches")
+        let host = NSView()
+        host.translatesAutoresizingMaskIntoConstraints = false
+        host.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
+            label.trailingAnchor.constraint(
+                lessThanOrEqualTo: host.trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
+            label.centerYAnchor.constraint(equalTo: host.centerYAnchor),
+        ])
+        return host
     }
 
     private static func groupHeaderView(_ text: String, chrome: ChromeTheme) -> NSView {

@@ -25,7 +25,6 @@ final class SettingsSSHHostsSection: SettingsSection {
     private var hostRows: [SSHHostRow] = []
     private var addButton: AppButton?
     private var caption: NSTextField?
-    private var emptyNote: NSTextField?
     private var rowsStack: NSStackView?
 
     deinit {
@@ -61,7 +60,6 @@ final class SettingsSSHHostsSection: SettingsSection {
 
     func reapplyTheme() {
         caption?.textColor = Theme.current.chrome.ink(.muted)
-        emptyNote?.textColor = Theme.current.chrome.ink(.muted)
     }
 
     private func focusInitialStop() {
@@ -118,11 +116,14 @@ final class SettingsSSHHostsSection: SettingsSection {
         let restore = target ?? focusedStop()
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         hostRows = []
-        emptyNote = nil
 
         addCaption("Remote hosts", to: stack)
         shownEntries = GeneralConfig.current.sshHosts
-        if shownEntries.isEmpty { addNote("No remote hosts yet. Add one below.", to: stack) }
+        if shownEntries.isEmpty {
+            let note = EmptyStateLabel("No remote hosts yet. Add one below.")
+            stack.addArrangedSubview(note)
+            note.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        }
         for host in shownEntries.map(\.alias) { add(makeRow(host), to: stack) }
 
         let addRow = SettingsDetail.trailingRow(addButton)
@@ -142,17 +143,6 @@ final class SettingsSSHHostsSection: SettingsSection {
         stack.addArrangedSubview(header)
         header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         stack.setCustomSpacing(ChromeMetrics.Spacing.s10, after: header)
-    }
-
-    private func addNote(_ text: String, to stack: NSStackView) {
-        let note = NSTextField(labelWithString: text)
-        note.font = ChromeType.font(.small)
-        note.textColor = Theme.current.chrome.ink(.muted)
-        note.lineBreakMode = .byWordWrapping
-        note.maximumNumberOfLines = 0
-        emptyNote = note
-        stack.addArrangedSubview(note)
-        note.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
 
     private func add(_ row: SSHHostRow, to stack: NSStackView) {

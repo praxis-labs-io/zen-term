@@ -12,7 +12,7 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
     private let detailContainer = NSView()
     private var selectedIndex = 0
     private let heading = NSTextField(labelWithString: "Settings")
-    private let divider = NSView()
+    private let divider = Divider(.vertical)
     private let brandMark = NSImageView()
     private let versionLabel = NSTextField(labelWithString: "")
     private let reportButton = AppButton(title: "Report an Issue", variant: .link)
@@ -50,7 +50,6 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
     override func reapplyTheme() {
         super.reapplyTheme()
         heading.textColor = Theme.current.chrome.ink(.muted)
-        divider.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor
         brandMark.contentTintColor = Theme.current.chrome.ink(.muted)
         versionLabel.textColor = Theme.current.chrome.ink(.muted)
         sections.forEach { $0.reapplyTheme() }
@@ -96,10 +95,6 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
         }
 
         detailContainer.translatesAutoresizingMaskIntoConstraints = false
-
-        divider.wantsLayer = true
-        divider.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor
-        divider.translatesAutoresizingMaskIntoConstraints = false
 
         let footer = makeNavFooter()
 
@@ -154,7 +149,6 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
             divider.leadingAnchor.constraint(equalTo: navScroll.trailingAnchor),
             divider.topAnchor.constraint(equalTo: root.topAnchor),
             divider.bottomAnchor.constraint(equalTo: root.bottomAnchor),
-            divider.widthAnchor.constraint(equalToConstant: ChromeMetrics.Border.width),
 
             detailContainer.leadingAnchor.constraint(equalTo: divider.trailingAnchor),
             detailContainer.trailingAnchor.constraint(equalTo: root.trailingAnchor),

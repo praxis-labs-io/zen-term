@@ -37,7 +37,7 @@ class PaletteOverlay: ModalShell, ModalOverlay {
     private let searchGlyph = NSTextField(labelWithString: "⌕")
     private let searchField = NSTextField()
     private let searchPlaceholder: String
-    private let divider = NSView()
+    private let divider = Divider()
     private let rowsStack = NSStackView()
     private let scrollView: FadingScrollView
     private let emptyLabel: NSTextField
@@ -88,13 +88,6 @@ class PaletteOverlay: ModalShell, ModalOverlay {
         searchRow.edgeInsets = NSEdgeInsets(
             top: ChromeMetrics.Spacing.s12, left: ChromeMetrics.Spacing.s12, bottom: ChromeMetrics.Spacing.s12,
             right: ChromeMetrics.Spacing.s12)
-
-        for hairline in [divider] {
-            hairline.wantsLayer = true
-            hairline.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.hairline).cgColor
-            hairline.translatesAutoresizingMaskIntoConstraints = false
-            hairline.heightAnchor.constraint(equalToConstant: ChromeMetrics.Border.width).isActive = true
-        }
 
         rowsStack.orientation = .vertical
         rowsStack.spacing = 0
@@ -157,9 +150,6 @@ class PaletteOverlay: ModalShell, ModalOverlay {
         searchField.textColor = chrome.ink(.normal)
         searchField.applyThemedEditor()
         applyPlaceholder()
-        for hairline in [divider] {
-            hairline.layer?.backgroundColor = chrome.fill(alpha: ChromeTheme.hairline).cgColor
-        }
         emptyLabel.textColor = chrome.ink(.muted)
         reapplyKeymap()
     }

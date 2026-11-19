@@ -7,7 +7,7 @@
         ]
 
         static func sections() -> [GallerySection] {
-            [cards(), modalParts(), toasts(), hoverCards()]
+            [cards(), modalParts(), toasts(), hoverCards(), dividersAndEmptyStates()]
         }
 
         private static func cards() -> GallerySection {
@@ -56,6 +56,24 @@
                                         AppButton(title: "Cancel", variant: .secondary),
                                         AppButton(title: "Add", variant: .primary),
                                     ]))
+                        ]),
+                ])
+        }
+
+        private static func dividersAndEmptyStates() -> GallerySection {
+            let vertical = Divider(.vertical)
+            vertical.heightAnchor.constraint(equalToConstant: sampleSize.height).isActive = true
+            return GallerySection(
+                title: "Divider and EmptyStateLabel",
+                rows: [
+                    GallerySection.Row(label: "Horizontal", samples: [sized(Divider())]),
+                    GallerySection.Row(label: "Vertical", samples: [vertical]),
+                    GallerySection.Row(
+                        label: "Empty state",
+                        samples: [
+                            sized(
+                                EmptyStateLabel(
+                                    "No workspaces yet. Add one to launch a folder with its own layout from ⌘P."))
                         ]),
                 ])
         }
