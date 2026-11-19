@@ -286,7 +286,7 @@ final class GallerySeamTests: WindowTestCase {
     private func regionField() -> RegionCommandField {
         let field = RegionCommandField(region: .main)
         field.translatesAutoresizingMaskIntoConstraints = false
-        field.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.xl).isActive = true
+        field.heightAnchor.constraint(equalToConstant: WorkspaceTabDrawing.bottomHeight).isActive = true
         return sized(field)
     }
 

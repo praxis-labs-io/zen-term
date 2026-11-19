@@ -10,7 +10,7 @@ final class WorkspaceTabDrawing: NSView, ThemeReapplying {
     private static let gap: CGFloat = ChromeMetrics.Spacing.s8
     private static let railThickness: CGFloat = ChromeMetrics.Height.control
     // swiftlint:disable:next untokened_spacing_constant
-    private static let bottomHeight: CGFloat = 72
+    static let bottomHeight: CGFloat = 72
     private static let rightWidth: CGFloat = 216
     private static let focusedRightWidth: CGFloat = 240
     private static let minRightWidth: CGFloat = 140
