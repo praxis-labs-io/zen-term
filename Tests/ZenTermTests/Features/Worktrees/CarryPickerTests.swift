@@ -222,6 +222,20 @@ final class CarryPickerTests: WindowTestCase {
         XCTAssertEqual(picker.catalog, ["zzz"], "and the waiting catalog landed")
     }
 
+    func test_aFocusedLoadingStatus_keepsItsRingAcrossAThemeChange() throws {
+        let picker = picker(ignoring: [])
+        picker.settle = 60
+        picker.workspaceFolder = folder
+        let stop = try XCTUnwrap(picker.focusStop)
+        XCTAssertEqual(window?.makeFirstResponder(stop), true)
+        let ring = Theme.current.chrome.focusRing.cgColor
+        XCTAssertEqual(picker.statusBorderForTesting, ring, "precondition: the focused status shows its ring")
+
+        picker.reapplyThemeTree()
+
+        XCTAssertEqual(picker.statusBorderForTesting, ring, "a theme change keeps the focus ring")
+    }
+
     func test_losingTheStopWhileFocused_tellsTheForm() throws {
         let picker = picker(ignoring: [])
         picker.settle = 0.05
