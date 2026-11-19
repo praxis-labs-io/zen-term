@@ -109,6 +109,10 @@ final class RegionCommandField: ControlView, NSTextFieldDelegate, ThemeReapplyin
         needsLayout = true
     }
 
+    #if DEBUG
+        func forceFocusForGallery() { setEditing(true) }
+    #endif
+
     private func setEditing(_ on: Bool) {
         guard isEditing != on else { return }
         isEditing = on

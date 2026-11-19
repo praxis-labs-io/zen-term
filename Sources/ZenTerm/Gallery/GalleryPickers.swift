@@ -5,7 +5,7 @@
         static let width: CGFloat = 220
 
         static func sections() -> [GallerySection] {
-            [listRows(), dropdowns(), segmentedControls()]
+            [listRows(), focusRows(), dropdowns(), segmentedControls()]
         }
 
         static func liveDropdown() -> Dropdown {
@@ -82,6 +82,23 @@
                         label: "Receding",
                         samples: [row(ListRow.Content(title: "Unchecked", leading: .symbol("terminal"), ink: .muted))]
                     ),
+                ])
+        }
+
+        private static func focusRows() -> GallerySection {
+            let nav = { sized(NavRow(title: "General") {}) }
+            let settings = { sized(SettingsFocusRow(ListRow.Content(title: "api-server", subtitle: "~/Dev/api"))) }
+            let jump = { sized(SidebarJumpRow(ListRow.Content(title: "zen-term"), tooltip: "Jump") {}) }
+            let focused = { (row: ListRow) -> ListRow in
+                row.setKeyboardFocus(true)
+                return row
+            }
+            return GallerySection(
+                title: "NavRow, SettingsFocusRow and SidebarJumpRow",
+                rows: [
+                    GallerySection.Row(label: "NavRow", samples: [nav(), focused(nav())]),
+                    GallerySection.Row(label: "SettingsFocusRow", samples: [settings(), focused(settings())]),
+                    GallerySection.Row(label: "SidebarJumpRow", samples: [jump(), focused(jump())]),
                 ])
         }
 

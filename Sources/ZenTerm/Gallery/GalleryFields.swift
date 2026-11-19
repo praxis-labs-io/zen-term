@@ -7,7 +7,7 @@
             "That name is already used by another workspace in this window, so pick a different one."
 
         static func sections() -> [GallerySection] {
-            [boxes(), labeledFields(), errors()]
+            [boxes(), labeledFields(), errors(), keybindChips(), iconPickers(), workspaceDrawing()]
         }
 
         private static func boxes() -> GallerySection {
@@ -66,7 +66,63 @@
                 ])
         }
 
-        private static func sized(_ view: NSView) -> NSView {
+        private static func keybindChips() -> GallerySection {
+            let chip = { () -> KeybindChip in
+                let chip = KeybindChip()
+                chip.render(shortcut: "⌘⇧P")
+                return chip
+            }
+            let focused = chip()
+            focused.setKeyboardFocus(true)
+            let capturing = chip()
+            capturing.setCapturing(true)
+            return GallerySection(
+                title: "KeybindChip",
+                rows: [
+                    GallerySection.Row(label: "Rest", samples: [chip()]),
+                    GallerySection.Row(label: "Focused, capturing", samples: [focused, capturing]),
+                ])
+        }
+
+        private static func iconPickers() -> GallerySection {
+            let focused = IconPickerField(selected: "terminal")
+            focused.forceFocusForGallery()
+            return GallerySection(
+                title: "IconPickerField",
+                rows: [
+                    GallerySection.Row(label: "Rest", samples: [IconPickerField(selected: "terminal")]),
+                    GallerySection.Row(label: "Focused", samples: [focused]),
+                ])
+        }
+
+        private static func workspaceDrawing() -> GallerySection {
+            let field = { () -> RegionCommandField in
+                let field = RegionCommandField(region: .main)
+                field.translatesAutoresizingMaskIntoConstraints = false
+                field.heightAnchor.constraint(equalToConstant: WorkspaceTabDrawing.bottomHeight).isActive = true
+                return sized(field)
+            }
+            let rail = { () -> DrawerRail in
+                let rail = DrawerRail(region: .bottom)
+                rail.translatesAutoresizingMaskIntoConstraints = false
+                rail.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control).isActive = true
+                return sized(rail)
+            }
+            let focusedField = field()
+            focusedField.forceFocusForGallery()
+            let focusedRail = rail()
+            focusedRail.setKeyboardFocus(true)
+            return GallerySection(
+                title: "RegionCommandField and DrawerRail",
+                rows: [
+                    GallerySection.Row(label: "Field rest", samples: [field()]),
+                    GallerySection.Row(label: "Field focused", samples: [focusedField]),
+                    GallerySection.Row(label: "Rail rest", samples: [rail()]),
+                    GallerySection.Row(label: "Rail focused", samples: [focusedRail]),
+                ])
+        }
+
+        private static func sized<View: NSView>(_ view: View) -> View {
             view.widthAnchor.constraint(equalToConstant: width).isActive = true
             return view
         }
