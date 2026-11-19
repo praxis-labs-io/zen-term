@@ -172,23 +172,14 @@ final class SettingsToolsSection: SettingsSection {
 
 final class ToolFloatRow: SettingsFocusRow {
     let float: ToolFloat
-    private let messageLabel = NSTextField(labelWithString: "")
+    private let messageLabel = FormErrorLabel()
 
     init(float: ToolFloat) {
         self.float = float
         super.init(Self.content(for: float))
-        messageLabel.font = ChromeType.font(.caption, weight: .medium)
-        messageLabel.textColor = Theme.current.chrome.warning.nsColor
-        messageLabel.lineBreakMode = .byWordWrapping
-        messageLabel.maximumNumberOfLines = 0
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-    override func reapplyTheme() {
-        messageLabel.textColor = Theme.current.chrome.warning.nsColor
-        super.reapplyTheme()
-    }
 
     func reapplyKeymap() {
         render(Self.content(for: float))
@@ -202,8 +193,13 @@ final class ToolFloatRow: SettingsFocusRow {
     }
 
     func showMessage(_ text: String?) {
-        messageLabel.stringValue = text ?? ""
-        footnote = text == nil ? nil : messageLabel
+        guard let text else {
+            messageLabel.clear()
+            footnote = nil
+            return
+        }
+        messageLabel.show(text, tone: .warning)
+        footnote = messageLabel
     }
 
     var renderedMessageForTesting: String? {

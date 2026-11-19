@@ -6,7 +6,7 @@ final class LayoutRow: NSView, ThemeReapplying {
     private let captionLabel: NSTextField
     private let descriptionLabel: NSTextField?
     private let controlNoteLabel: NSTextField?
-    private let messageLabel = NSTextField(labelWithString: "")
+    private let messageLabel = FormErrorLabel()
     private(set) var messageKind: MessageKind?
     var isDimmed = false { didSet { reapplyTheme() } }
 
@@ -36,10 +36,6 @@ final class LayoutRow: NSView, ThemeReapplying {
         controls.alignment = .centerY
         controls.spacing = ChromeMetrics.Spacing.s8
 
-        messageLabel.font = ChromeType.font(.caption, weight: .medium)
-        messageLabel.textColor = Theme.current.chrome.destructive.nsColor
-        messageLabel.isHidden = true
-
         let stack = NSStackView(views: [controls, messageLabel])
         stack.orientation = .vertical
         stack.alignment = .leading
@@ -52,6 +48,7 @@ final class LayoutRow: NSView, ThemeReapplying {
             stack.topAnchor.constraint(equalTo: topAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
             controls.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            messageLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ]
         if let controlWidth {
             constraints.append(control.widthAnchor.constraint(equalToConstant: controlWidth))
@@ -76,17 +73,9 @@ final class LayoutRow: NSView, ThemeReapplying {
     }
 
     func showMessage(_ text: String?, kind: MessageKind = .failure) {
-        messageLabel.stringValue = text ?? ""
-        messageLabel.isHidden = (text == nil)
         messageKind = (text == nil) ? nil : kind
-        messageLabel.textColor = LayoutRow.ink(for: messageKind)
-    }
-
-    private static func ink(for kind: MessageKind?) -> NSColor {
-        switch kind {
-        case .diagnostic: return Theme.current.chrome.warning.nsColor
-        case .failure, nil: return Theme.current.chrome.destructive.nsColor
-        }
+        guard let text else { return messageLabel.clear() }
+        messageLabel.show(text, tone: kind == .diagnostic ? .warning : .destructive)
     }
 
     var renderedMessageForTesting: String? {
@@ -98,6 +87,5 @@ final class LayoutRow: NSView, ThemeReapplying {
         captionLabel.textColor = isDimmed ? chrome.ink(.faint) : chrome.ink(.normal)
         descriptionLabel?.textColor = chrome.ink(isDimmed ? .faint : .muted)
         controlNoteLabel?.textColor = chrome.ink(.muted)
-        messageLabel.textColor = LayoutRow.ink(for: messageKind)
     }
 }

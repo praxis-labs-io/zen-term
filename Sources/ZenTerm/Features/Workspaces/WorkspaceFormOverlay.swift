@@ -39,7 +39,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
 
     private var envRows: [EnvRow] = []
     private let envStack = NSStackView()
-    private let envError = NSTextField(labelWithString: "")
+    private let envError = FormErrorLabel()
     private let addVarButton = AppButton(title: "＋ Add variable", variant: .muted)
     private let carryPicker = CarryPicker()
     private let notice = NSTextField(labelWithString: "")
@@ -109,9 +109,7 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
     /// Recolors in place rather than rebuilding, which would lose uncommitted typed values.
     override func reapplyTheme() {
         super.reapplyTheme()
-        let chrome = Theme.current.chrome
-        envError.textColor = chrome.destructive.nsColor
-        notice.textColor = chrome.ink(.subtle)
+        notice.textColor = Theme.current.chrome.ink(.subtle)
     }
 
     private func buildContent() -> NSStackView {
@@ -122,9 +120,6 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         envStack.alignment = .leading
         envStack.spacing = ChromeMetrics.Spacing.s6
         addVarButton.onTap = { [weak self] in self?.addEnvRow() }
-        envError.font = ChromeType.font(.caption, weight: .medium)
-        envError.textColor = Theme.current.chrome.destructive.nsColor
-        envError.isHidden = true
         let envControls = Self.vStack(
             [envStack, Self.leadingWrap(addVarButton), envError], spacing: ChromeMetrics.Spacing.s8)
         let envGroup = Self.vStack(
@@ -405,6 +400,8 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         row.removeButton.isKeyboardFocusable = true
         row.removeButton.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         row.removeButton.onArrowDown = { [weak self] in self?.moveVertical(1) }
+        row.removeButton.onTab = { [weak self] in self?.moveTab(1) }
+        row.removeButton.onBacktab = { [weak self] in self?.moveTab(-1) }
         row.keyBox.onArrowRight = { [weak self, weak row] in self?.focus(row?.valueBox.field) }
         row.keyBox.onEnter = { [weak self, weak row] in self?.focus(row?.valueBox.field) }
         row.valueBox.onArrowLeft = { [weak self, weak row] in self?.focus(row?.keyBox.field) }
@@ -559,9 +556,11 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
 
         func keyIsBad(_ row: EnvRow) -> Bool { row.key.contains("=") || row.key.contains("\"") }
         let badEnvRow = envRows.first { keyIsBad($0) || $0.value.contains("\"") }
-        envError.stringValue =
-            badEnvRow == nil ? "" : "Names can't use = or \" and values can't use \"."
-        envError.isHidden = (badEnvRow == nil)
+        if badEnvRow == nil {
+            envError.clear()
+        } else {
+            envError.show("Names can't use = or \" and values can't use \".")
+        }
         if let badEnvRow, first == nil {
             first = .view(keyIsBad(badEnvRow) ? badEnvRow.keyBox.field : badEnvRow.valueBox.field)
         }

@@ -11,7 +11,7 @@ final class KeybindRow: NSView, ThemeReapplying {
     let action: KeyInterceptor.ReservedChord
     let chip = KeybindChip()
     private let titleLabel: NSTextField
-    private let messageLabel = NSTextField(labelWithString: "")
+    private let messageLabel = FormErrorLabel()
     private(set) var messageKind: MessageKind?
     private var lastShortcut = ""
 
@@ -34,10 +34,6 @@ final class KeybindRow: NSView, ThemeReapplying {
         controls.alignment = .centerY
         controls.spacing = ChromeMetrics.Spacing.s8
 
-        messageLabel.font = ChromeType.font(.caption, weight: .medium)
-        messageLabel.textColor = Theme.current.chrome.destructive.nsColor
-        messageLabel.isHidden = true
-
         let stack = NSStackView(views: [controls, messageLabel])
         stack.orientation = .vertical
         stack.alignment = .leading
@@ -50,6 +46,7 @@ final class KeybindRow: NSView, ThemeReapplying {
             stack.topAnchor.constraint(equalTo: topAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
             controls.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            messageLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
     }
 
@@ -63,24 +60,22 @@ final class KeybindRow: NSView, ThemeReapplying {
     func setCapturing(_ capturing: Bool) { chip.setCapturing(capturing) }
 
     func showMessage(_ text: String?, kind: MessageKind = .failure) {
-        messageLabel.stringValue = text ?? ""
-        messageLabel.isHidden = (text == nil)
         messageKind = (text == nil) ? nil : kind
-        messageLabel.textColor = KeybindRow.ink(for: messageKind)
+        guard let text else { return messageLabel.clear() }
+        messageLabel.show(text, tone: KeybindRow.tone(for: kind))
     }
 
-    private static func ink(for kind: MessageKind?) -> NSColor {
+    private static func tone(for kind: MessageKind) -> FormErrorLabel.Tone {
         switch kind {
-        case .diagnostic, .notice: return Theme.current.chrome.warning.nsColor
-        case .explanation: return Theme.current.chrome.ink(.muted)
-        case .failure, nil: return Theme.current.chrome.destructive.nsColor
+        case .diagnostic, .notice: return .warning
+        case .explanation: return .muted
+        case .failure: return .destructive
         }
     }
     func focusChip() { window?.makeFirstResponder(chip) }
 
     func reapplyTheme() {
         titleLabel.textColor = Theme.current.chrome.ink(.normal)
-        messageLabel.textColor = KeybindRow.ink(for: messageKind)
         chip.render(shortcut: lastShortcut)
     }
 

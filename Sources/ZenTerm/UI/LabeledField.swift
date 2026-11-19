@@ -1,14 +1,11 @@
 import AppKit
 
-final class LabeledField: NSView, ThemeReapplying {
-    private let messageLabel = NSTextField(labelWithString: "")
+final class LabeledField: NSView {
+    private let messageLabel = FormErrorLabel()
 
     init(caption: NSView, control: NSView) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        messageLabel.font = ChromeType.font(.caption, weight: .medium)
-        messageLabel.textColor = Theme.current.chrome.destructive.nsColor
-        messageLabel.isHidden = true
 
         let stack = NSStackView(views: [caption, control, messageLabel])
         stack.orientation = .vertical
@@ -30,11 +27,7 @@ final class LabeledField: NSView, ThemeReapplying {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     func setMessage(_ text: String?) {
-        messageLabel.stringValue = text ?? ""
-        messageLabel.isHidden = (text == nil)
-    }
-
-    func reapplyTheme() {
-        messageLabel.textColor = Theme.current.chrome.destructive.nsColor
+        guard let text else { return messageLabel.clear() }
+        messageLabel.show(text)
     }
 }

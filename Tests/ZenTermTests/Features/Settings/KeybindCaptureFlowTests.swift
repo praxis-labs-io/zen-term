@@ -126,6 +126,27 @@ final class KeybindCaptureFlowTests: WindowTestCase {
             "the rebind has nowhere else to live: \(text)")
     }
 
+    func test_aClickOutsideTheHint_cancelsTheCapture_andTakesTheHintDown() throws {
+        let capturer = FakeCapturer()
+        _ = mountSection(capturer)
+        row(for: .newTab).chip.onActivate?()
+        _ = try hintBubble()
+        let window = try XCTUnwrap(hostWindow)
+        let corner = NSPoint(x: 4, y: 4)
+        let click = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: corner, modifierFlags: [], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+
+        let hit = try XCTUnwrap(window.contentView?.hitTest(corner))
+        XCTAssertTrue(hit is BackdropView, "the backdrop takes a click outside the hint")
+        hit.mouseDown(with: click)
+
+        XCTAssertFalse(capturer.isArmed, "the click ends the capture")
+        let leftovers = descendants(of: window.contentView!).filter { $0 is KeybindHintBubble || $0 is BackdropView }
+        XCTAssertTrue(leftovers.isEmpty, "the hint and its backdrop go")
+    }
+
     func test_esc_cancelsWithoutRebinding() {
         let capturer = FakeCapturer()
         _ = mountSection(capturer)

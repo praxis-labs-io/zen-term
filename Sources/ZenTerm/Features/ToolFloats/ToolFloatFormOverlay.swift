@@ -35,8 +35,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     private var sizeGroup: LabeledField?
 
     private var capturedChord: Chord?
-    private var hintBubble: KeybindHintBubble?
-    private var hintBackdrop: NSView?
+    private let hint = KeybindHintHost()
     private var captureCloseTimer: DispatchWorkItem?
 
     private let cancelButton = AppButton(title: "Cancel", variant: .secondary)
@@ -229,7 +228,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     /// Refuses menu chords itself: the live keymap `chordConflict` asks never contains them.
     private func handleCaptureEvent(_ event: NSEvent) {
         if event.type == .flagsChanged {
-            hintBubble?.setPreview(Chord.modifierGlyph(event.modifierFlags))
+            hint.bubble?.setPreview(Chord.modifierGlyph(event.modifierFlags))
             return
         }
         switch KeyboardFocus.key(for: event) {
@@ -238,18 +237,18 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         default: break
         }
         guard let chord = Chord(event: event) else { return }
-        hintBubble?.setPreview(chord.displayGlyph)
-        hintBubble?.clearError()
+        hint.bubble?.setPreview(chord.displayGlyph)
+        hint.bubble?.clearError()
         guard chord.command || chord.shift || chord.option || chord.control else {
-            hintBubble?.showError("Add at least one modifier (⌘ ⇧ ⌥ ⌃).")
+            hint.bubble?.showError("Add at least one modifier (⌘ ⇧ ⌥ ⌃).")
             return
         }
         if let menuItem = MenuShortcuts.owner(of: chord) {
-            hintBubble?.showError("\(chord.displayGlyph) is the \(menuItem) menu shortcut.")
+            hint.bubble?.showError("\(chord.displayGlyph) is the \(menuItem) menu shortcut.")
             return
         }
         if let conflict = chordConflict(chord) {
-            hintBubble?.showError(conflict)
+            hint.bubble?.showError(conflict)
             return
         }
         commit(chord)
@@ -265,8 +264,8 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         capturedChord = chord
         capturer?.endCapture()
         chordChip.render(shortcut: chord.displayGlyph)
-        hintBubble?.setPreview(chord.displayGlyph)
-        hintBubble?.showSuccess("Shortcut saved.")
+        hint.bubble?.setPreview(chord.displayGlyph)
+        hint.bubble?.showSuccess("Shortcut saved.")
         let close = DispatchWorkItem { [weak self] in
             self?.hideHint()
             self?.chordChip.setCapturing(false)
@@ -292,16 +291,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
     }
 
     private func showHint() {
-        hideHint()
-        let backdrop = BackdropView { [weak self] in self?.cancelCapture() }
-        backdrop.frame = bounds
-        backdrop.autoresizingMask = [.width, .height]
-        addSubview(backdrop)
-        hintBackdrop = backdrop
-        let bubble = KeybindHintBubble()
-        addSubview(bubble)
-        hintBubble = bubble
-        hintBubble?.place(near: chordChip)
+        hint.show(over: self, near: chordChip) { [weak self] in self?.cancelCapture() }
     }
 
     private func cancelCapture() {
@@ -309,12 +299,7 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         renderChord()
     }
 
-    private func hideHint() {
-        hintBubble?.removeFromSuperview()
-        hintBubble = nil
-        hintBackdrop?.removeFromSuperview()
-        hintBackdrop = nil
-    }
+    private func hideHint() { hint.hide() }
 
     private func verticalStops() -> [NSView] {
         [

@@ -200,6 +200,29 @@ final class ToolFloatFormOverlayTests: WindowTestCase {
         XCTAssertNotNil(bubble, "arming the shortcut capture shows the shared Keybinds popover")
     }
 
+    func test_aClickOutsideTheHint_cancelsTheCapture_andTakesTheHintDown() throws {
+        let (overlay, capturer, sink) = mount()
+        let backdrops = { self.descendants(of: overlay).filter { $0 is BackdropView }.count }
+        let restingBackdrops = backdrops()
+        chip(in: overlay).onActivate?()
+        XCTAssertTrue(capturer.isArmed)
+        let window = try XCTUnwrap(self.window)
+        let corner = NSPoint(x: 4, y: 4)
+        let click = try XCTUnwrap(
+            NSEvent.mouseEvent(
+                with: .leftMouseDown, location: corner, modifierFlags: [], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+
+        let hit = try XCTUnwrap(window.contentView?.hitTest(corner))
+        XCTAssertTrue(hit is BackdropView, "the backdrop takes a click outside the hint")
+        hit.mouseDown(with: click)
+
+        XCTAssertFalse(capturer.isArmed, "the click ends the capture")
+        XCTAssertTrue(descendants(of: overlay).filter { $0 is KeybindHintBubble }.isEmpty)
+        XCTAssertEqual(backdrops(), restingBackdrops, "the hint's backdrop goes with it")
+        XCTAssertEqual(sink.cancelled, 0, "it cancels the capture, not the form")
+    }
+
     func test_missingChord_blocksSubmit() {
         let (overlay, _, sink) = mount()
         field(in: overlay, placeholder: "Open GitDash").setText("dev")
