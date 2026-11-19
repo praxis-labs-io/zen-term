@@ -16,52 +16,20 @@ struct DropdownItem: Equatable {
     }
 }
 
-final class Dropdown: NSView {
+final class Dropdown: PopoverPicker {
     private(set) var selectedIndex: Int
     private var items: [DropdownItem]
     private let onChange: (Int) -> Void
 
-    var onArrowUp: (() -> Void)?
-    var onArrowDown: (() -> Void)?
-    var onArrowLeft: (() -> Void)?
-    var onTab: (() -> Void)?
-    var onBacktab: (() -> Void)?
-
-    private let titleLabel = NSTextField(labelWithString: "")
-    private let chevron = NSImageView()
     private let swatch = NSView()
     private var titleAfterSwatch = NSLayoutConstraint()
-    private var titleAtLeading = NSLayoutConstraint()
-    private lazy var popover: ListPopover = {
-        let popover = ListPopover(anchor: self)
-        popover.onSelfClose = { [weak self] in
-            self?.query = ""
-            self?.endEditing()
-            self?.rowViews = []
-            self?.restyle()
-        }
-        return popover
-    }()
     private var rowViews: [DropdownRowView] = []
-    private var highlighted = 0
-    private let queryField = NSTextField()
-    private var isEditing = false
-    private var query = ""
-    private var visible: [Int] = []
-    private var isFocusedStop = false
 
     static let swatchSize: CGFloat = 10
-    private static let rowHeight: CGFloat = ChromeMetrics.Height.control
     private static let headerHeight: CGFloat = ChromeMetrics.Height.xs
 
-    var buttonTitleForTesting: String { titleLabel.stringValue }
     var itemsForTesting: [DropdownItem] { items }
-
-    func openListForTesting() { openList() }
-    var listCardSizeForTesting: NSSize { popover.cardFrame.size }
-    var listCardFrameForTesting: NSRect { popover.cardFrame }
-    func moveHighlightForTesting(_ delta: Int) { moveHighlight(delta) }
-    var highlightedRowForTesting: NSView? { rowViews.first { $0.index == highlighted } }
+    var highlightedRowForTesting: NSView? { highlightedRow() }
     var isHighlightedRowVisibleForTesting: Bool {
         guard rowViews.indices.contains(highlighted),
             let clip = rowViews[highlighted].enclosingScrollView?.contentView
@@ -69,38 +37,15 @@ final class Dropdown: NSView {
         let row = rowViews[highlighted]
         return clip.bounds.intersects(row.convert(row.bounds, to: clip))
     }
+    var rowFillsForTesting: [NSColor?] {
+        rowViews.map { $0.layer?.backgroundColor.flatMap(NSColor.init(cgColor:)) }
+    }
 
     init(items: [DropdownItem], selectedIndex: Int, onChange: @escaping (Int) -> Void) {
         self.items = items
         self.selectedIndex = selectedIndex
         self.onChange = onChange
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-        layer?.cornerRadius = ChromeMetrics.Radius.control
-        PopoverButtonStyle.applyRestFill(to: self)
-        layer?.borderWidth = ChromeMetrics.Border.width
-        layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
-
-        queryField.font = ChromeType.font(.body)
-        queryField.textColor = Theme.current.chrome.ink(.normal)
-        queryField.isBordered = false
-        queryField.makeSingleLine()
-        queryField.drawsBackground = false
-        queryField.focusRingType = .none
-        queryField.isHidden = true
-        queryField.delegate = self
-        queryField.translatesAutoresizingMaskIntoConstraints = false
-
-        titleLabel.font = ChromeType.font(.body)
-        titleLabel.textColor = Theme.current.chrome.ink(.normal)
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        titleLabel.lineBreakMode = .byTruncatingTail
-
-        chevron.image = NSImage(systemSymbolName: "chevron.up.chevron.down", accessibilityDescription: nil)
-        chevron.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.xs, weight: .semibold)
-        chevron.contentTintColor = Theme.current.chrome.ink(.muted)
-        chevron.translatesAutoresizingMaskIntoConstraints = false
+        super.init()
 
         swatch.wantsLayer = true
         swatch.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.swatchSize)
@@ -110,30 +55,15 @@ final class Dropdown: NSView {
         swatch.translatesAutoresizingMaskIntoConstraints = false
 
         addSubview(swatch)
-        addSubview(titleLabel)
-        addSubview(queryField)
-        addSubview(chevron)
         titleAfterSwatch = titleLabel.leadingAnchor.constraint(
             equalTo: swatch.trailingAnchor, constant: ChromeMetrics.Spacing.s6)
-        titleAtLeading = titleLabel.leadingAnchor.constraint(
-            equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset)
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
             swatch.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
             swatch.centerYAnchor.constraint(equalTo: centerYAnchor),
             swatch.widthAnchor.constraint(equalToConstant: Self.swatchSize),
             swatch.heightAnchor.constraint(equalToConstant: Self.swatchSize),
-            titleAtLeading,
-            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            chevron.leadingAnchor.constraint(
-                greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
-            chevron.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
-            chevron.centerYAnchor.constraint(equalTo: centerYAnchor),
-            queryField.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-            queryField.centerYAnchor.constraint(equalTo: centerYAnchor),
-            queryField.trailingAnchor.constraint(equalTo: chevron.leadingAnchor, constant: -ChromeMetrics.Spacing.s6),
         ])
-        renderTitle()
+        renderSelection()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -141,261 +71,50 @@ final class Dropdown: NSView {
     func setItems(_ items: [DropdownItem], selectedIndex: Int) {
         self.items = items
         self.selectedIndex = min(max(selectedIndex, 0), max(0, items.count - 1))
-        renderTitle()
+        renderSelection()
     }
 
-    var titlePrefix: String = "" { didSet { renderTitle() } }
-
-    var titleTruncatesUnderPressure: Bool = false {
-        didSet {
-            let priority: NSLayoutConstraint.Priority = titleTruncatesUnderPressure ? .defaultLow : .defaultHigh
-            titleLabel.setContentCompressionResistancePriority(priority, for: .horizontal)
-            setContentCompressionResistancePriority(priority, for: .horizontal)
-        }
-    }
-
-    private func renderTitle() {
+    private func renderSelection() {
         let item = items.indices.contains(selectedIndex) ? items[selectedIndex] : nil
-        titleLabel.stringValue = item.map { titlePrefix + $0.title } ?? ""
+        title = item?.title ?? ""
         swatch.layer?.backgroundColor = item?.swatch?.cgColor
         swatch.isHidden = item?.swatch == nil
         titleAfterSwatch.isActive = false
-        titleAtLeading.isActive = false
-        (swatch.isHidden ? titleAtLeading : titleAfterSwatch).isActive = true
+        titleLeading.isActive = false
+        (swatch.isHidden ? titleLeading : titleAfterSwatch).isActive = true
     }
 
-    /// Rebuilds an open list too: its rows bake in the theme at build time.
-    func reapplyTheme() {
-        restyle()
-        titleLabel.textColor = Theme.current.chrome.ink(.normal)
-        chevron.contentTintColor = Theme.current.chrome.ink(.muted)
+    override func reapplyTheme() {
         swatch.layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.swatchRing).cgColor
-        queryField.textColor = Theme.current.chrome.ink(.normal)
-        if !queryField.isHidden {
-            renderQueryPlaceholder()
-            queryField.applyThemedEditor()
-        }
-        rebuildOpenList()
+        super.reapplyTheme()
     }
 
-    override var acceptsFirstResponder: Bool { true }
-    override func becomeFirstResponder() -> Bool {
-        showFocus()
-        return true
-    }
-    /// Handing focus to the query field on open is not losing focus, or opening would close the list.
-    override func resignFirstResponder() -> Bool {
-        isFocusedStop = false
-        if !isEditing { closeList() }
-        restyle()
-        return super.resignFirstResponder()
-    }
-    override func drawFocusRingMask() {}
+    override func itemTitles() -> [String] { items.map(\.title) }
 
-    /// The card is parented to the content view, so it has to close when the dropdown leaves the window.
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        if window == nil { closeList() }
-    }
+    override func openingHighlight() -> Int { selectedIndex }
 
-    private func showFocus() {
-        isFocusedStop = true
-        restyle()
-    }
-
-    #if DEBUG
-        func forceFocusForGallery() { showFocus() }
-    #endif
-
-    private func restyle() {
-        PopoverButtonStyle.apply(to: self, isFocused: isFocusedStop, isOpen: popover.isOpen)
-    }
-
-    /// Fallback only: an open list normally holds focus in the query field, whose delegate routes its keys.
-    override func keyDown(with event: NSEvent) {
-        if popover.isOpen {
-            switch KeyboardFocus.key(for: event) {
-            case .up: moveHighlight(-1)
-            case .down: moveHighlight(1)
-            case .activate: commitHighlight()
-            case .escape: escapePressed()
-            default: break
-            }
-            return
-        }
-        switch KeyboardFocus.key(for: event) {
-        case .activate: openList()
-        case .up: onArrowUp?()
-        case .down: onArrowDown?()
-        case .left where onArrowLeft != nil: onArrowLeft?()
-        case .tab(let shift): shift ? onBacktab?() : onTab?()
-        default: super.keyDown(with: event)
-        }
-    }
-
-    private func escapePressed() {
-        if query.isEmpty {
-            closeList()
-        } else {
-            query = ""
-            queryField.stringValue = ""
-            rerenderList()
-        }
-    }
-
-    func typeForTesting(_ text: String) {
-        queryField.stringValue = text
-        controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: queryField))
-    }
-
-    var isEditingForTesting: Bool { !queryField.isHidden }
-
-    func fieldCommandForTesting(_ selector: Selector) -> Bool {
-        control(queryField, textView: NSTextView(), doCommandBy: selector)
-    }
-
-    var queryFieldTextColorForTesting: NSColor? { queryField.textColor }
-
-    var rowFillsForTesting: [NSColor?] {
-        rowViews.map { $0.layer?.backgroundColor.flatMap(NSColor.init(cgColor:)) }
-    }
-
-    var queryForTesting: String { query }
-
-    var visibleIndicesForTesting: [Int] { visible }
-
-    var isPopoverOpen: Bool { popover.isOpen }
-
-    /// Reads `isOpen` before taking focus: focusing ends the field's editing, which closes the list synchronously.
-    override func mouseDown(with event: NSEvent) {
-        let wasOpen = popover.isOpen
-        window?.makeFirstResponder(self)
-        if wasOpen { closeList() } else { openList() }
-    }
-
-    /// The label and chevron are controls that would swallow the click, so the whole view takes it.
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        guard !isHidden, alphaValue > 0 else { return nil }
-        return bounds.contains(convert(point, from: superview)) ? self : nil
-    }
-
-    /// Guarded before `buildRows()`: a second open would repoint `rowViews` at views in no card.
-    private func openList() {
-        guard !popover.isOpen, window?.contentView != nil else { return }
-        query = ""
-        refilter()
-        highlighted = selectedIndex
-        beginEditing()
-        popover.open(rows: buildRows())
-        refreshListHighlight()
-        scrollHighlightIntoView()
-        restyle()
-    }
-
-    private func closeList() {
-        popover.close()
-        query = ""
-        endEditing()
-        rowViews = []
-        restyle()
-    }
-
-    private func beginEditing() {
-        queryField.stringValue = ""
-        renderQueryPlaceholder()
-        titleLabel.isHidden = true
-        queryField.isHidden = false
-        isEditing = true
-        guard window?.makeFirstResponder(queryField) == true else { return endEditing() }
-    }
-
-    /// Restores focus before hiding the field: hiding a first responder dumps focus to the window.
-    private func endEditing() {
-        let wasEditing = isEditing
-        isEditing = false
-        if wasEditing { window?.makeFirstResponder(self) }
-        queryField.isHidden = true
-        titleLabel.isHidden = false
-    }
-
-    /// `placeholderString` draws in `placeholderTextColor`, which follows `effectiveAppearance`, not `Theme.current`.
-    private func renderQueryPlaceholder() {
-        let title = items.indices.contains(selectedIndex) ? items[selectedIndex].title : ""
-        queryField.placeholderAttributedString = NSAttributedString(
-            string: title,
-            attributes: [
-                .foregroundColor: Theme.current.chrome.ink(.muted),
-                .font: ChromeType.font(.body),
-            ])
-    }
-
-    private func moveHighlight(_ delta: Int) {
-        guard let position = visible.firstIndex(of: highlighted),
-            let nextPosition = KeyboardFocus.step(from: position, delta: delta, count: visible.count)
-        else { return }
-        highlighted = visible[nextPosition]
-        refreshListHighlight()
-        scrollHighlightIntoView()
-    }
-
-    private func scrollHighlightIntoView() {
-        guard let row = rowViews.first(where: { $0.index == highlighted }) else { return }
-        popover.reveal(row)
-    }
-
-    private func commitHighlight() {
-        guard visible.contains(highlighted) else { return }
-        selectedIndex = highlighted
-        renderTitle()
+    override func pick(_ index: Int) {
+        selectedIndex = index
+        renderSelection()
         closeList()
         onChange(selectedIndex)
         window?.makeFirstResponder(self)
     }
 
-    private func refilter() {
-        guard !query.isEmpty else {
-            visible = Array(items.indices)
-            return
-        }
-        visible =
-            items.indices
-            .compactMap { index -> (index: Int, score: Int)? in
-                guard let score = FuzzyMatch.score(query, items[index].title) else { return nil }
-                return (index, score)
-            }
-            .sorted { $0.score == $1.score ? $0.index < $1.index : $0.score > $1.score }
-            .map(\.index)
+    override func listDidClose() { rowViews = [] }
+
+    override func highlightedRow() -> NSView? { rowViews.first { $0.index == highlighted } }
+
+    override func renderRows() {
+        let chrome = Theme.current.chrome
+        for row in rowViews { row.setHighlighted(row.index == highlighted, chrome: chrome) }
     }
 
-    private func rebuildOpenList() {
-        guard popover.isOpen else { return }
-        popover.close()
-        popover.open(rows: buildRows())
-        refreshListHighlight()
-        scrollHighlightIntoView()
-    }
-
-    /// Skips an unchanged filter: rebuilding the card costs about 22 ms at sixty-five rows.
-    private func rerenderList() {
-        guard popover.isOpen else { return }
-        let before = visible
-        refilter()
-        guard visible != before else { return }
-        if !visible.contains(highlighted) { highlighted = visible.first ?? highlighted }
-        rebuildOpenList()
-    }
-
-    private func buildRows() -> [ListPopover.Row] {
+    override func itemRows() -> [ListPopover.Row] {
         let chrome = Theme.current.chrome
         rowViews = []
         var lines: [ListPopover.Row] = []
         var previousGroup: String?
-        if visible.isEmpty {
-            lines.append(
-                ListPopover.Row(
-                    view: Self.emptyRowView(), height: Self.headerHeight))
-            return lines
-        }
         for index in visible {
             let item = items[index]
             if query.isEmpty, let group = item.group, group != previousGroup {
@@ -405,32 +124,12 @@ final class Dropdown: NSView {
             }
             previousGroup = item.group
             let row = DropdownRowView(index: index, item: item, chrome: chrome) { [weak self] i in
-                self?.highlighted = i
-                self?.commitHighlight()
+                self?.pick(i)
             }
             rowViews.append(row)
             lines.append(ListPopover.Row(view: row, height: Self.rowHeight))
         }
         return lines
-    }
-
-    private func refreshListHighlight() {
-        let chrome = Theme.current.chrome
-        for row in rowViews { row.setHighlighted(row.index == highlighted, chrome: chrome) }
-    }
-
-    private static func emptyRowView() -> NSView {
-        let label = EmptyStateLabel("No matches")
-        let host = NSView()
-        host.translatesAutoresizingMaskIntoConstraints = false
-        host.addSubview(label)
-        NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
-            label.trailingAnchor.constraint(
-                lessThanOrEqualTo: host.trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
-            label.centerYAnchor.constraint(equalTo: host.centerYAnchor),
-        ])
-        return host
     }
 
     private static func groupHeaderView(_ text: String) -> NSView {
@@ -525,36 +224,5 @@ private final class DropdownRowView: NSView {
 
     func setHighlighted(_ isHighlighted: Bool, chrome: ChromeTheme) {
         layer?.backgroundColor = (isHighlighted ? chrome.fill(.hover) : NSColor.clear).cgColor
-    }
-}
-
-extension Dropdown: NSTextFieldDelegate {
-    func controlTextDidEndEditing(_ obj: Notification) {
-        guard isEditing, window?.firstResponder !== self else { return }
-        closeList()
-    }
-
-    func controlTextDidChange(_ obj: Notification) {
-        query = queryField.stringValue
-        rerenderList()
-    }
-
-    /// Takes Tab back from the field editor: `selectNextKeyView` would land focus on the hidden field.
-    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
-        switch selector {
-        case #selector(NSResponder.moveUp(_:)): moveHighlight(-1)
-        case #selector(NSResponder.moveDown(_:)): moveHighlight(1)
-        case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertLineBreak(_:)):
-            commitHighlight()
-        case #selector(NSResponder.cancelOperation(_:)): escapePressed()
-        case #selector(NSResponder.insertTab(_:)):
-            closeList()
-            onTab?()
-        case #selector(NSResponder.insertBacktab(_:)):
-            closeList()
-            onBacktab?()
-        default: return false
-        }
-        return true
     }
 }

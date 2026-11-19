@@ -99,12 +99,12 @@ final class DropdownTests: WindowTestCase {
             "no orphaned list card left drawn on the content view")
     }
 
-    private func filterFixture(onChange: @escaping (Int) -> Void = { _ in }) -> Dropdown {
+    private func filterFixture(selectedIndex: Int = 0, onChange: @escaping (Int) -> Void = { _ in }) -> Dropdown {
         let titles = ["Gruvbox Dark", "Gruvbox Light", "Nord", "Rosé Pine", "Tokyo Night"]
         let items = titles.enumerated().map {
-            DropdownItem(title: $0.element, group: nil, note: nil, isSelected: $0.offset == 0)
+            DropdownItem(title: $0.element, group: nil, note: nil, isSelected: $0.offset == selectedIndex)
         }
-        let dropdown = Dropdown(items: items, selectedIndex: 0, onChange: onChange)
+        let dropdown = Dropdown(items: items, selectedIndex: selectedIndex, onChange: onChange)
         dropdown.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 500),
@@ -218,6 +218,41 @@ final class DropdownTests: WindowTestCase {
 
         XCTAssertEqual(dropdown.visibleIndicesForTesting, [])
         XCTAssertNil(picked)
+    }
+
+    func test_aQueryWithNoMatches_saysSoRatherThanShowingASliver() {
+        let dropdown = filterFixture()
+
+        dropdown.typeForTesting("zzz")
+
+        XCTAssertGreaterThan(dropdown.listCardSizeForTesting.height, 20, "the card has to hold a line")
+    }
+
+    func test_typing_highlightsTheTopMatch_evenWhenTheSelectionStillMatches() {
+        var picked: Int?
+        let dropdown = filterFixture { picked = $0 }
+
+        dropdown.typeForTesting("o")
+        let ranked = dropdown.visibleIndicesForTesting
+        XCTAssertTrue(ranked.contains(0), "the selection has to survive the query: \(ranked)")
+        XCTAssertNotEqual(ranked.first, 0, "the selection has to rank below the top match: \(ranked)")
+
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
+
+        XCTAssertEqual(picked, ranked.first, "Return takes the best match, as the palette does")
+    }
+
+    func test_escapeClearingTheQuery_returnsTheHighlightToTheSelection() {
+        var picked: Int?
+        let dropdown = filterFixture(selectedIndex: 2) { picked = $0 }
+        dropdown.typeForTesting("g")
+        XCTAssertNotEqual(
+            dropdown.highlightedIndexForTesting, 2, "the query has to move the highlight off the selection")
+
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.cancelOperation(_:)))
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
+
+        XCTAssertEqual(picked, 2, "Return after clearing the query changed the selection")
     }
 
     func test_arrowNavigation_scrollsHighlightIntoView() {

@@ -5,6 +5,5 @@ protocol ThemeReapplying: AnyObject {
 }
 extension FieldBox: ThemeReapplying {}
 extension TextAreaBox: ThemeReapplying {}
-extension Dropdown: ThemeReapplying {}
+extension PopoverPicker: ThemeReapplying {}
 extension AppButton: ThemeReapplying {}
-extension CheckboxDropdown: ThemeReapplying {}
