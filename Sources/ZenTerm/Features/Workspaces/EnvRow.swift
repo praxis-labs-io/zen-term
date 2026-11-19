@@ -3,7 +3,7 @@ import AppKit
 final class EnvRow: NSView, ThemeReapplying {
     let keyBox = FieldBox(placeholder: "KEY")
     let valueBox = FieldBox(placeholder: "value")
-    let removeButton = AppButton(title: "✕", variant: .secondary)
+    let removeButton = IconButton(symbol: "xmark", accessibilityLabel: "Remove variable") {}
     private let equals = NSTextField(labelWithString: "=")
 
     var key: String { keyBox.text }
@@ -20,7 +20,7 @@ final class EnvRow: NSView, ThemeReapplying {
         equals.setContentHuggingPriority(.required, for: .horizontal)
 
         removeButton.setContentHuggingPriority(.required, for: .horizontal)
-        removeButton.onTap = { [weak self] in if let self { onRemove(self) } }
+        removeButton.onClick = { [weak self] in if let self { onRemove(self) } }
 
         let stack = NSStackView(views: [keyBox, equals, valueBox, removeButton])
         stack.orientation = .horizontal

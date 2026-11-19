@@ -222,7 +222,7 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
         typeFolder(try makeRealDir(named: "site").path, in: overlay)
         let strip = overlay.tabStripForTesting
 
-        strip.addButtonForTesting.performClick(nil)
+        _ = strip.addButtonForTesting.accessibilityPerformPress()
         XCTAssertEqual(strip.chips.map(\.title), ["shell", "shell"])
         XCTAssertTrue(
             KeyboardFocus.isFocused(try XCTUnwrap(overlay.drawingForTesting.region(.main)).field, in: window),
@@ -460,6 +460,20 @@ final class WorkspaceFormOverlayTests: WindowTestCase {
 
         let row = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? EnvRow }.first)
         XCTAssertTrue(KeyboardFocus.isFocused(row.keyBox.field, in: window))
+    }
+
+    func test_anEnvRowsRemoveButton_stepsBackOnLeft_andRemovesTheRowOnReturn() throws {
+        let (overlay, _) = mount()
+        try XCTUnwrap(button(in: overlay, title: "＋ Add variable")).onTap()
+        let row = try XCTUnwrap(descendants(of: overlay).compactMap { $0 as? EnvRow }.first)
+        XCTAssertTrue(window!.makeFirstResponder(row.removeButton))
+
+        row.removeButton.keyDown(with: try arrow(123, NSLeftArrowFunctionKey))
+        XCTAssertTrue(KeyboardFocus.isFocused(row.valueBox.field, in: window), "Left steps back to the value")
+
+        XCTAssertTrue(window!.makeFirstResponder(row.removeButton))
+        row.removeButton.keyDown(with: try key(36, "\r"))
+        XCTAssertTrue(descendants(of: overlay).compactMap { $0 as? EnvRow }.isEmpty, "Return removes the row")
     }
 
     func test_tab_walksAnEnvRow_ratherThanSkippingItsValueBox() throws {

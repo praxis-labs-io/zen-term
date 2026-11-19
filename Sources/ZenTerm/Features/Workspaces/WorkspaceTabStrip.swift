@@ -25,12 +25,14 @@ final class WorkspaceTabStrip: NSView, ThemeReapplying {
     private let pill = CALayer()
     private var pillSlides = false
     private var drag: (index: Int, offset: CGFloat)?
-    private lazy var addButton = AppButton(variant: .muted, symbol: "plus") { [weak self] in self?.onAdd?() }
+    private lazy var addButton = IconButton(symbol: "plus", accessibilityLabel: "Add tab") { [weak self] in
+        self?.onAdd?()
+    }
     private let idleHint = NSStackView()
     private let renameHint = NSStackView()
     private var hintLabels: [NSTextField] = []
 
-    var addButtonForTesting: AppButton { addButton }
+    var addButtonForTesting: IconButton { addButton }
     var isRenameHintVisibleForTesting: Bool { !renameHint.isHidden }
     var isIdleHintVisibleForTesting: Bool { !idleHint.isHidden }
     var idleHintFrameForTesting: CGRect { idleHint.frame }
@@ -61,9 +63,7 @@ final class WorkspaceTabStrip: NSView, ThemeReapplying {
         NotificationCenter.default.addObserver(
             self, selector: #selector(clipBoundsChanged),
             name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
-        addButton.translatesAutoresizingMaskIntoConstraints = true
         addButton.isKeyboardFocusable = true
-        addButton.setAccessibilityLabel("Add tab")
         addButton.onArrowLeft = { [weak self] in
             guard let self, !self.chips.isEmpty else { return }
             self.onSelect?(self.chips.count - 1)
@@ -74,6 +74,10 @@ final class WorkspaceTabStrip: NSView, ThemeReapplying {
         addButton.onTab = { [weak self] in self?.onTab?() }
         addButton.onBacktab = { [weak self] in self?.onBacktab?() }
         addSubview(addButton)
+        NSLayoutConstraint.activate([
+            addButton.trailingAnchor.constraint(equalTo: trailingAnchor),
+            addButton.topAnchor.constraint(equalTo: topAnchor),
+        ])
         buildRenameHint()
         heightAnchor.constraint(equalToConstant: WorkspaceTabChip.height + Self.hintGap + Self.hintHeight)
             .isActive = true
@@ -141,7 +145,6 @@ final class WorkspaceTabStrip: NSView, ThemeReapplying {
         let visibleWidth = min(contentWidth, max(0, addX - Self.chipSpacing))
         scrollView.frame = CGRect(x: 0, y: 0, width: visibleWidth, height: WorkspaceTabChip.height)
         docView.frame = CGRect(x: 0, y: 0, width: contentWidth, height: WorkspaceTabChip.height)
-        addButton.frame = CGRect(x: addX, y: 0, width: Self.addSize, height: Self.addSize)
         if let chip = selectedChip {
             Motion.stretch(pill, to: chip.frame, animated: pillSlides)
             pill.isHidden = false

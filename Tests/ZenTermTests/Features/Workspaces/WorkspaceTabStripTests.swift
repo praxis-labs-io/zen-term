@@ -92,7 +92,7 @@ final class WorkspaceTabStripTests: WindowTestCase {
     func test_thePlus_addsATab_andSelectsIt() throws {
         mount([Workspace.Tab(main: "nvim")])
 
-        strip.addButtonForTesting.performClick(nil)
+        _ = strip.addButtonForTesting.accessibilityPerformPress()
 
         XCTAssertEqual(strip.chips.map(\.title), ["nvim", "shell"])
         XCTAssertEqual(strip.chips.map(\.isSelected), [false, true])
@@ -101,7 +101,7 @@ final class WorkspaceTabStripTests: WindowTestCase {
     func test_moreTabsThanFit_scrollTheNewestIntoView_andKeepThePlusInTheStrip() throws {
         mount((0..<12).map { Workspace.Tab(name: "a-long-tab-name-\($0)") })
 
-        strip.addButtonForTesting.performClick(nil)
+        _ = strip.addButtonForTesting.accessibilityPerformPress()
 
         let newest = try XCTUnwrap(strip.chips.last)
         XCTAssertTrue(newest.isSelected)
@@ -147,7 +147,7 @@ final class WorkspaceTabStripTests: WindowTestCase {
 
     func test_renamingAChipAtTheScrolledEnd_keepsItInView_besideTheHint() throws {
         mount((0..<12).map { Workspace.Tab(name: "a-long-tab-name-\($0)") })
-        strip.addButtonForTesting.performClick(nil)
+        _ = strip.addButtonForTesting.accessibilityPerformPress()
         let newest = try XCTUnwrap(strip.chips.last)
 
         newest.beginRename()

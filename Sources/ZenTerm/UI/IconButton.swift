@@ -13,6 +13,10 @@ final class IconButton: ControlView, ThemeReapplying {
     private var isPressed = false
 
     var isKeyboardFocusable = false
+    var onArrowUp: (() -> Void)?
+    var onArrowDown: (() -> Void)?
+    var onArrowLeft: (() -> Void)?
+    var onArrowRight: (() -> Void)?
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
 
@@ -113,6 +117,10 @@ final class IconButton: ControlView, ThemeReapplying {
         guard isKeyboardFocusable else { return super.keyDown(with: event) }
         switch KeyboardFocus.key(for: event) {
         case .activate where KeyboardFocus.isUnmodified(event): onClick()
+        case .up where onArrowUp != nil: onArrowUp?()
+        case .down where onArrowDown != nil: onArrowDown?()
+        case .left where onArrowLeft != nil: onArrowLeft?()
+        case .right where onArrowRight != nil: onArrowRight?()
         case .tab(shift: false) where onTab != nil: onTab?()
         case .tab(shift: true) where onBacktab != nil: onBacktab?()
         default: super.keyDown(with: event)
