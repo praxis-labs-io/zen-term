@@ -119,7 +119,11 @@ final class SettingsSSHHostsSection: SettingsSection {
 
         addCaption("Remote hosts", to: stack)
         shownEntries = GeneralConfig.current.sshHosts
-        if shownEntries.isEmpty { addNote("No remote hosts yet. Add one below.", to: stack) }
+        if shownEntries.isEmpty {
+            let note = EmptyStateLabel("No remote hosts yet. Add one below.")
+            stack.addArrangedSubview(note)
+            note.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        }
         for host in shownEntries.map(\.alias) { add(makeRow(host), to: stack) }
 
         let addRow = SettingsDetail.trailingRow(addButton)
@@ -139,12 +143,6 @@ final class SettingsSSHHostsSection: SettingsSection {
         stack.addArrangedSubview(header)
         header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         stack.setCustomSpacing(ChromeMetrics.Spacing.s10, after: header)
-    }
-
-    private func addNote(_ text: String, to stack: NSStackView) {
-        let note = EmptyStateLabel(text)
-        stack.addArrangedSubview(note)
-        note.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
 
     private func add(_ row: SSHHostRow, to stack: NSStackView) {
