@@ -14,6 +14,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     struct Content: Equatable {
         var title: String
         var subtitle: String?
+        var subtitleTruncation: NSLineBreakMode
         var note: String?
         var leading: Leading?
         var trailing: Trailing?
@@ -21,11 +22,13 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         var nests: Bool
 
         init(
-            title: String, subtitle: String? = nil, note: String? = nil, leading: Leading? = nil,
-            trailing: Trailing? = nil, ink: ChromeTheme.InkLevel = .normal, nests: Bool = false
+            title: String, subtitle: String? = nil, subtitleTruncation: NSLineBreakMode = .byTruncatingTail,
+            note: String? = nil, leading: Leading? = nil, trailing: Trailing? = nil,
+            ink: ChromeTheme.InkLevel = .normal, nests: Bool = false
         ) {
             self.title = title
             self.subtitle = subtitle
+            self.subtitleTruncation = subtitleTruncation
             self.note = note
             self.leading = leading
             self.trailing = trailing
@@ -42,6 +45,8 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     private static let tallPadding: CGFloat = ChromeMetrics.Spacing.s6
 
     var tooltip: TooltipHost?
+    private weak var subtitleLine: NSTextField?
+    private let subtitleTip = TooltipHost(label: "")
     var onChoose: () -> Void
     var focusesOnClick = false
     var isHighlighted = false {
@@ -163,9 +168,10 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         guard let subtitle = content.subtitle else { return title }
 
         let line = NSTextField(labelWithString: subtitle)
+        subtitleLine = line
         line.font = ChromeType.font(.caption)
         line.textColor = chrome.ink(.muted)
-        line.lineBreakMode = .byTruncatingMiddle
+        line.lineBreakMode = content.subtitleTruncation
         line.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         let lines = NSStackView(views: [title, line])
         lines.orientation = .vertical
@@ -266,7 +272,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     override func focusDidChange() { refreshFill() }
 
     override func hoverDidChange() {
-        if !isHovered { tooltip?.hide(from: self) }
+        if !isHovered { hideTooltip() }
         refreshFill()
     }
 
@@ -274,23 +280,33 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     func setHoverSuppressed(_ suppressed: Bool) {
         guard suppressed != isHoverSuppressed else { return }
         isHoverSuppressed = suppressed
-        if suppressed { tooltip?.hide(from: self) } else { refreshHover() }
+        if suppressed { hideTooltip() } else { refreshHover() }
         hoverDidChange()
     }
+
+    // A truncated subtitle shows in full on hover, unless the owner gave the row a tooltip of its own.
+    private var hoverTooltip: TooltipHost? {
+        if let tooltip { return tooltip }
+        guard let line = subtitleLine, line.bounds.width < line.intrinsicContentSize.width else { return nil }
+        subtitleTip.label = line.stringValue
+        return subtitleTip
+    }
+
+    private func hideTooltip() { TooltipPresenter.shared.hide(for: self) }
 
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
         guard !isHoverSuppressed else { return }
-        tooltip?.show(from: self)
+        hoverTooltip?.show(from: self)
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if window == nil { tooltip?.hide(from: self) }
+        if window == nil { hideTooltip() }
     }
 
     override func mouseDown(with event: NSEvent) {
-        tooltip?.hide(from: self)
+        hideTooltip()
         if focusesOnClick { window?.makeFirstResponder(self) }
         onChoose()
     }

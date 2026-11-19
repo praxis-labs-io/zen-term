@@ -147,7 +147,10 @@ final class WorkspaceRow: SettingsFocusRow {
 
     init(workspace: Workspace) {
         self.workspace = workspace
-        super.init(Content(title: workspace.title, subtitle: PathDisplay.abbreviatingHome(workspace.path.path)))
+        super.init(
+            Content(
+                title: workspace.title, subtitle: PathDisplay.abbreviatingHome(workspace.path.path),
+                subtitleTruncation: .byTruncatingMiddle))
         gitBadge.image = IconCatalog.gitBadge()
         gitBadge.setAccessibilityLabel("Git repository")
         gitBadge.contentTintColor = Theme.current.chrome.ink(.faint)

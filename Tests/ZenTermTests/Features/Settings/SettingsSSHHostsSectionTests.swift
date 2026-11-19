@@ -259,7 +259,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         let hostLabels = labels.filter { $0.stringValue != "Connected" }
         XCTAssertEqual(hostLabels.count, 2)
         for label in hostLabels {
-            XCTAssertTrue([.byTruncatingTail, .byTruncatingMiddle].contains(label.lineBreakMode), label.stringValue)
+            XCTAssertEqual(label.lineBreakMode, .byTruncatingTail)
             XCTAssertLessThan(label.contentCompressionResistancePriority(for: .horizontal).rawValue, 500)
         }
         let word = try XCTUnwrap(labels.first { $0.stringValue == "Connected" })

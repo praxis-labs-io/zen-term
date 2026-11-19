@@ -77,6 +77,48 @@ final class SettingsFocusRowTests: WindowTestCase {
         }
     }
 
+    func test_aFolderPathTruncatesInTheMiddle_andOtherSubtitlesAtTheEnd() throws {
+        func subtitle(_ row: NSView, _ text: String) throws -> NSTextField {
+            func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
+            return try XCTUnwrap(descendants(row).compactMap { $0 as? NSTextField }.first { $0.stringValue == text })
+        }
+        let path = URL(fileURLWithPath: "/tmp/deeply/nested/zen-term")
+        let workspace = WorkspaceRow(workspace: Workspace(title: "Repo", path: path, tabs: [], env: [:]))
+        let host = SSHHostRow(host: "devbox", title: "devbox", subtitle: "devbox · 10.0.0.5", status: .offline)
+        let tool = ToolFloatRow(float: .scratch)
+
+        XCTAssertEqual(
+            try subtitle(workspace, PathDisplay.abbreviatingHome(path.path)).lineBreakMode, .byTruncatingMiddle,
+            "a path keeps its folder name in view")
+        XCTAssertEqual(try subtitle(host, "devbox · 10.0.0.5").lineBreakMode, .byTruncatingTail)
+        XCTAssertEqual(tool.content.subtitleTruncation, .byTruncatingTail)
+    }
+
+    private func hoverTooltip(on row: NSView, waitingUpTo seconds: TimeInterval) throws -> String? {
+        TooltipPresenter.shared.dismiss()
+        row.mouseEntered(with: try crossing(.mouseEntered))
+        let deadline = Date().addingTimeInterval(seconds)
+        while TooltipPresenter.shared.tooltipForTesting == nil, Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        }
+        return TooltipPresenter.shared.tooltipForTesting?.labelForTesting
+    }
+
+    func test_hoveringATruncatedSubtitle_showsItInFull() throws {
+        defer { TooltipPresenter.shared.dismiss() }
+        let address = "someone@" + String(repeating: "deeply.nested.", count: 12) + "example.com"
+        let row = try mount(SSHHostRow(host: "devbox", title: "devbox", subtitle: address, status: .offline))
+
+        XCTAssertEqual(try hoverTooltip(on: row, waitingUpTo: 2), address)
+    }
+
+    func test_hoveringASubtitleThatFits_showsNoTooltip() throws {
+        defer { TooltipPresenter.shared.dismiss() }
+        let row = try mount(SSHHostRow(host: "devbox", title: "devbox", subtitle: "10.0.0.5", status: .offline))
+
+        XCTAssertNil(try hoverTooltip(on: row, waitingUpTo: 1))
+    }
+
     func test_toolFloatRow_showsItsWarningUnderTheRow() throws {
         let row = try XCTUnwrap(try mount(ToolFloatRow(float: .scratch)) as? ToolFloatRow)
         let quiet = row.fittingSize.height
