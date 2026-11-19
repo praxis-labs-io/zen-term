@@ -51,8 +51,7 @@ final class SettingsKeybindsSection: SettingsSection {
     private var rows: [KeybindRow] = []
     private weak var resetAllButton: AppButton?
     private weak var detailScroll: NSScrollView?
-    private var hintBubble: KeybindHintBubble?
-    private var hintBackdrop: NSView?
+    private let hint = KeybindHintHost()
     private weak var capturingRow: KeybindRow?
     private var captureCloseTimer: DispatchWorkItem?
     private weak var resetAllMessage: ResetFlashLabel?
@@ -184,7 +183,7 @@ final class SettingsKeybindsSection: SettingsSection {
 
     private func handleCaptureEvent(_ event: NSEvent, for row: KeybindRow) {
         if event.type == .flagsChanged {
-            hintBubble?.setPreview(Self.modifierGlyph(event.modifierFlags))
+            hint.bubble?.setPreview(Self.modifierGlyph(event.modifierFlags))
             return
         }
         let isRecordable = event.keyCode == 51 && !KeyboardFocus.isUnmodified(event)
@@ -197,8 +196,8 @@ final class SettingsKeybindsSection: SettingsSection {
         default: break
         }
         guard let chord = Chord(event: event) else { return }
-        hintBubble?.setPreview(chord.displayGlyph)
-        hintBubble?.clearError()
+        hint.bubble?.setPreview(chord.displayGlyph)
+        hint.bubble?.clearError()
         guard chord.command || chord.shift || chord.option || chord.control else {
             refuse("Add at least one modifier (⌘ ⇧ ⌥ ⌃).", for: row)
             return
@@ -217,8 +216,8 @@ final class SettingsKeybindsSection: SettingsSection {
     }
 
     private func refuse(_ reason: String, for row: KeybindRow) {
-        hintBubble?.setPreview("")
-        hintBubble?.showError(reason)
+        hint.bubble?.setPreview("")
+        hint.bubble?.showError(reason)
     }
 
     private func isAtDefault(_ action: KeyInterceptor.ReservedChord) -> Bool {
@@ -234,8 +233,8 @@ final class SettingsKeybindsSection: SettingsSection {
             endCapture(row)
             return
         }
-        hintBubble?.setPreview(chord.displayGlyph)
-        hintBubble?.showSuccess("Shortcut saved.")
+        hint.bubble?.setPreview(chord.displayGlyph)
+        hint.bubble?.showSuccess("Shortcut saved.")
         let close = DispatchWorkItem { [weak self, weak row] in
             self?.hideHint()
             row?.setCapturing(false)
@@ -333,22 +332,19 @@ final class SettingsKeybindsSection: SettingsSection {
     private func showHint(for row: KeybindRow) {
         hideHint()
         guard let host = detailScroll?.superview else { return }
-        let backdrop = BackdropView { [weak self] in self?.cancelCapture() }
-        backdrop.frame = host.bounds
-        backdrop.autoresizingMask = [.width, .height]
-        host.addSubview(backdrop)
-        hintBackdrop = backdrop
-        let bubble = KeybindHintBubble()
         let conflict = KeybindConflict.all(in: GeneralConfig.current).first { $0.loser == row.action }
-        bubble.setCanResetToDefault(conflict.map(\.isRevertable) ?? !isAtDefault(row.action))
-        bubble.onResetToDefault = { [weak self, weak row] in
-            guard let self, let row else { return }
-            self.endCapture(row)
-            self.reset(row)
-        }
-        host.addSubview(bubble)
-        hintBubble = bubble
-        hintBubble?.place(near: row.chip)
+        let canReset = conflict.map(\.isRevertable) ?? !isAtDefault(row.action)
+        hint.show(
+            over: host, near: row.chip,
+            configure: { bubble in
+                bubble.setCanResetToDefault(canReset)
+                bubble.onResetToDefault = { [weak self, weak row] in
+                    guard let self, let row else { return }
+                    self.endCapture(row)
+                    self.reset(row)
+                }
+            },
+            onDismiss: { [weak self] in self?.cancelCapture() })
     }
 
     private func cancelCapture() {
@@ -358,10 +354,7 @@ final class SettingsKeybindsSection: SettingsSection {
     }
 
     private func hideHint() {
-        hintBubble?.removeFromSuperview()
-        hintBubble = nil
-        hintBackdrop?.removeFromSuperview()
-        hintBackdrop = nil
+        hint.hide()
         capturingRow = nil
         if hasMissedConfigReload { refreshFromConfig() }
     }
