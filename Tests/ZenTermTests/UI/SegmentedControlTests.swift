@@ -129,4 +129,33 @@ final class SegmentedControlTests: WindowTestCase {
         XCTAssertEqual(control.segmentInkForTesting(0), Theme.current.chrome.ink(.faint))
         XCTAssertEqual(control.segmentInkForTesting(2), Theme.current.chrome.ink(.faint))
     }
+
+    func test_aPressThatEndsAfterTheControlIsDisabled_selectsNothing() throws {
+        var changes: [Int] = []
+        let control = mount { changes.append($0) }
+        let segment = control.segmentsForTesting[2]
+        let point = segment.convert(NSPoint(x: segment.bounds.midX, y: segment.bounds.midY), to: nil)
+        let target = try XCTUnwrap(window.contentView?.hitTest(point))
+
+        target.mouseDown(with: try mouse(.leftMouseDown, at: point))
+        control.isEnabled = false
+        target.mouseUp(with: try mouse(.leftMouseUp, at: point))
+
+        XCTAssertEqual(changes, [])
+        XCTAssertEqual(control.selectedIndex, 0)
+    }
+
+    func test_eachSegmentIsARadioButtonVoiceOverCanPress() {
+        var changes: [Int] = []
+        let control = mount { changes.append($0) }
+        let segment = control.segmentsForTesting[1]
+
+        XCTAssertEqual(control.accessibilityRole(), .radioGroup)
+        XCTAssertEqual(segment.accessibilityRole(), .radioButton)
+        XCTAssertEqual(segment.accessibilityLabel(), "Auto")
+        XCTAssertTrue(segment.accessibilityPerformPress())
+
+        XCTAssertEqual(changes, [1])
+        XCTAssertEqual(segment.accessibilityValue() as? Bool, true)
+    }
 }

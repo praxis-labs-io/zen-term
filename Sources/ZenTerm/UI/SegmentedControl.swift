@@ -22,7 +22,8 @@ final class SegmentedControl: ControlView, ThemeReapplying {
     private static let inset = ChromeMetrics.Spacing.s2
     private static let trackHeight = ChromeMetrics.Height.control
     private var segments: [Segment] = []
-    private let selectedSurface = ShadowCardView()
+    // A layer the control owns, so the slide drives its geometry and its shadow follows the animated bounds.
+    private let selectedSurface = CALayer()
     // Lets a reselect pin a value that is only OS-derived, as the reduce-motion row needs.
     private let notifiesOnReselect: Bool
 
@@ -31,7 +32,7 @@ final class SegmentedControl: ControlView, ThemeReapplying {
         onChange: @escaping (Int) -> Void
     ) {
         self.optionTitles = options
-        self.selectedIndex = selectedIndex
+        self.selectedIndex = min(max(selectedIndex, 0), max(options.count - 1, 0))
         self.notifiesOnReselect = notifiesOnReselect
         self.onChange = onChange
         super.init(frame: .zero)
@@ -39,9 +40,16 @@ final class SegmentedControl: ControlView, ThemeReapplying {
         layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.trackHeight)
         translatesAutoresizingMaskIntoConstraints = false
 
-        CardChrome.apply(
-            to: selectedSurface, cornerRadius: ChromeMetrics.Radius.capsule(ChromeMetrics.Height.sm), tier: .overlay)
-        addSubview(selectedSurface)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.radioGroup)
+        selectedSurface.anchorPoint = CGPoint(x: 0, y: 0.5)
+        selectedSurface.cornerRadius = ChromeMetrics.Radius.capsule(ChromeMetrics.Height.sm)
+        selectedSurface.borderWidth = ChromeMetrics.Border.width
+        selectedSurface.shadowRadius = FloatShadow.Tier.overlay.blur
+        selectedSurface.shadowOffset = FloatShadow.Tier.overlay.offset
+        selectedSurface.shadowOpacity = 1
+        selectedSurface.zPosition = -1
+        layer?.insertSublayer(selectedSurface, at: 0)
 
         segments = options.enumerated().map { index, title in
             Segment(title: title) { [weak self] in self?.select(index) }
@@ -89,7 +97,6 @@ final class SegmentedControl: ControlView, ThemeReapplying {
     }
 
     func reapplyTheme() {
-        CardChrome.reapplyTheme(to: selectedSurface, tier: .overlay)
         restyle()
         segments.forEach { $0.restyle() }
     }
@@ -121,20 +128,24 @@ final class SegmentedControl: ControlView, ThemeReapplying {
 
     private func restyle() {
         layer?.backgroundColor = Theme.current.chrome.fill(.rest).cgColor
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        selectedSurface.backgroundColor = CardChrome.fill(.overlay).cgColor
+        selectedSurface.borderColor = FloatShadow.edge.cgColor
+        selectedSurface.shadowColor = FloatShadow.color(.overlay).cgColor
+        CATransaction.commit()
         showFocusRing(hasKeyboardFocus && isEnabled)
         for (index, segment) in segments.enumerated() { segment.isSelected = index == selectedIndex }
     }
 
     private func placeSelectedSurface(animated: Bool) {
-        guard segments.indices.contains(selectedIndex), let surfaceLayer = selectedSurface.layer else { return }
-        let target = segments[selectedIndex].frame
-        Motion.stretch(surfaceLayer, to: target, animated: animated && window != nil)
-        selectedSurface.frame = target
+        guard segments.indices.contains(selectedIndex) else { return }
+        Motion.stretch(selectedSurface, to: segments[selectedIndex].frame, animated: animated && window != nil)
     }
 
     var selectedSurfaceFrameForTesting: CGRect { selectedSurface.frame }
-    var selectedSurfaceFillForTesting: CGColor? { selectedSurface.layer?.backgroundColor }
-    var isSelectedSurfaceSlidingForTesting: Bool { selectedSurface.layer?.animation(forKey: "stretch.left") != nil }
+    var selectedSurfaceFillForTesting: CGColor? { selectedSurface.backgroundColor }
+    var isSelectedSurfaceSlidingForTesting: Bool { selectedSurface.animation(forKey: "stretch.left") != nil }
     var segmentsForTesting: [NSView] { segments }
 
     func segmentInkForTesting(_ index: Int) -> NSColor? { segments[index].inkForTesting }
@@ -155,7 +166,11 @@ private final class Segment: ControlView {
     var isEnabled = true {
         didSet {
             guard isEnabled != oldValue else { return }
-            if !isEnabled { setHovered(false) }
+            if !isEnabled {
+                setHovered(false)
+                isPressed = false
+            }
+            window?.invalidateCursorRects(for: self)
             restyle()
         }
     }
@@ -170,6 +185,9 @@ private final class Segment: ControlView {
         label.font = ChromeType.font(.small, weight: .semibold)
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.radioButton)
+        setAccessibilityLabel(title)
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.sm),
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
@@ -197,11 +215,19 @@ private final class Segment: ControlView {
 
     override func mouseUp(with event: NSEvent) {
         defer { isPressed = false }
-        guard isPressed, bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        guard isPressed, isEnabled, bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
         onPress()
     }
 
+    override func accessibilityPerformPress() -> Bool {
+        guard isEnabled else { return false }
+        onPress()
+        return true
+    }
+
     func restyle() {
+        setAccessibilityValue(isSelected)
+        setAccessibilityEnabled(isEnabled)
         let chrome = Theme.current.chrome
         let hovered = isHovered && isEnabled && !isSelected
         let ink: ChromeTheme.InkLevel = !isEnabled ? .faint : (isSelected || hovered ? .normal : .subtle)
