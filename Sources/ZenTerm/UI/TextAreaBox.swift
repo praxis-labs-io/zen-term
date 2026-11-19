@@ -12,8 +12,6 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
     let placeholder: String
     private lazy var scroll = FadingScrollView(document: textView)
 
-    private static var restFill: NSColor { Theme.current.chrome.fill(.rest) }
-
     var text: String { textView.string }
     func setText(_ value: String) {
         textView.string = value
@@ -25,9 +23,7 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = ChromeMetrics.Radius.control
-        layer?.backgroundColor = Self.restFill.cgColor
-        layer?.borderWidth = ChromeMetrics.Border.width
-        layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
+        setFocused(false)
         translatesAutoresizingMaskIntoConstraints = false
 
         textView.isRichText = false
@@ -101,10 +97,7 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
     }
 
     private func setFocused(_ focused: Bool) {
-        let chrome = Theme.current.chrome
-        layer?.backgroundColor = Self.restFill.cgColor
-        layer?.borderColor = (focused ? chrome.focusRing : chrome.fill(alpha: ChromeTheme.border)).cgColor
-        layer?.borderWidth = ChromeMetrics.Border.width
+        FieldChrome.apply(to: self, isFocused: focused)
     }
 
     #if DEBUG

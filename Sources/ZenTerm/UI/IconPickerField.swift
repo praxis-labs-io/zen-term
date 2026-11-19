@@ -33,7 +33,6 @@ final class IconPickerField: NSView, ThemeReapplying {
     private static let cellSpacing: CGFloat = ChromeMetrics.Spacing.s4
     private static let headerHeight: CGFloat = ChromeMetrics.Height.xs
     private static let sectionGap: CGFloat = ChromeMetrics.Spacing.s12
-    private static var restFill: NSColor { Theme.current.chrome.fill(.rest) }
 
     func openForTesting() { openPopover() }
     var highlightedSymbolForTesting: String? {
@@ -64,7 +63,6 @@ final class IconPickerField: NSView, ThemeReapplying {
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
         layer?.cornerRadius = ChromeMetrics.Radius.control
-        layer?.borderWidth = ChromeMetrics.Border.width
 
         glyph.translatesAutoresizingMaskIntoConstraints = false
         glyph.setContentHuggingPriority(.required, for: .horizontal)
@@ -119,11 +117,7 @@ final class IconPickerField: NSView, ThemeReapplying {
     }
 
     private func restyle() {
-        let chrome = Theme.current.chrome
-        let active = isFocusedStop || popover.isOpen
-        layer?.backgroundColor = Self.restFill.cgColor
-        layer?.borderColor = (active ? chrome.focusRing : chrome.fill(alpha: ChromeTheme.border)).cgColor
-        layer?.borderWidth = ChromeMetrics.Border.width
+        FieldChrome.apply(to: self, isFocused: isFocusedStop || popover.isOpen)
     }
 
     override var acceptsFirstResponder: Bool { true }

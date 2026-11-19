@@ -304,8 +304,6 @@ final class CarryPicker: NSView, ThemeReapplying {
             translatesAutoresizingMaskIntoConstraints = false
             wantsLayer = true
             layer?.cornerRadius = ChromeMetrics.Radius.control
-            PopoverButtonStyle.applyRestFill(to: self)
-            layer?.borderWidth = ChromeMetrics.Border.width
 
             label.font = ChromeType.font(.body)
             label.lineBreakMode = .byTruncatingTail
@@ -323,7 +321,7 @@ final class CarryPicker: NSView, ThemeReapplying {
                     equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
                 spinner.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
-            applyColors()
+            restyle()
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -334,19 +332,11 @@ final class CarryPicker: NSView, ThemeReapplying {
             spinner.isSpinning = isLoading
         }
 
-        func reapplyTheme() {
-            PopoverButtonStyle.applyRestFill(to: self)
-            applyColors()
-        }
+        func reapplyTheme() { restyle() }
 
         private func restyle() {
-            PopoverButtonStyle.apply(to: self, isFocused: isFocused, isOpen: false)
+            FieldChrome.apply(to: self, isFocused: isFocused)
             label.textColor = Theme.current.chrome.ink(.muted)
-        }
-
-        private func applyColors() {
-            label.textColor = Theme.current.chrome.ink(.muted)
-            layer?.borderColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
         }
     }
 

@@ -189,6 +189,8 @@ takes keyboard focus and its ring from it too.
 
 A row in a popover list or menu is a `ListRow`.
 
+A boxed input (a text field, a text area, a picker) takes its rest fill and border from `FieldChrome`.
+
 A modal's title row is `ModalHeader` and its button row is `ModalActionBar`; a keyboard-only card uses
 `HintFooter` in its place. The shared hairline rule is `Divider`, and the shared muted "nothing here"
 line is `EmptyStateLabel`.

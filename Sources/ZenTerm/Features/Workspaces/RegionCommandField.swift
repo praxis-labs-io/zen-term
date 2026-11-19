@@ -43,7 +43,6 @@ final class RegionCommandField: ControlView, NSTextFieldDelegate, ThemeReapplyin
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = ChromeMetrics.Radius.control
-        layer?.borderWidth = ChromeMetrics.Border.width
 
         label.stringValue = WorkspaceForm.label(for: region)
         label.font = ChromeType.font(.caption, weight: .medium)
@@ -102,10 +101,7 @@ final class RegionCommandField: ControlView, NSTextFieldDelegate, ThemeReapplyin
     }
 
     private func refresh() {
-        let chrome = Theme.current.chrome
-        layer?.backgroundColor = chrome.fill(.rest).cgColor
-        layer?.borderColor = (isEditing ? chrome.focusRing : chrome.fill(alpha: ChromeTheme.border)).cgColor
-        layer?.borderWidth = ChromeMetrics.Border.width
+        FieldChrome.apply(to: self, isFocused: isEditing)
         marker.isHidden = !opensFocused
         opensFocusedLabel.isHidden = !opensFocused
         cornerButton.isHidden = !(isHovered || isEditing)
