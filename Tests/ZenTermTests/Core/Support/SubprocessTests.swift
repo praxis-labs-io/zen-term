@@ -43,4 +43,29 @@ final class SubprocessTests: XCTestCase {
 
         XCTAssertEqual(output, Subprocess.Output(status: 3, stdout: "hi", stderr: "err"))
     }
+
+    func test_aSaturatedGlobalPool_cannotStallTheRun() {
+        let blockerCount = 128
+        let release = DispatchSemaphore(value: 0)
+        for _ in 0..<blockerCount {
+            DispatchQueue.global(qos: .utility).async { release.wait() }
+        }
+        defer { for _ in 0..<blockerCount { release.signal() } }
+        let finished = expectation(description: "the run returns")
+        let result = ResultBox()
+        let runner = Thread {
+            result.value = Subprocess.run(
+                URL(fileURLWithPath: "/bin/sh"), ["-c", "echo hi; echo err >&2"], timeout: 3)
+            finished.fulfill()
+        }
+
+        runner.start()
+
+        wait(for: [finished], timeout: 5)
+        XCTAssertEqual(try result.value?.get(), Subprocess.Output(status: 0, stdout: "hi", stderr: "err"))
+    }
+}
+
+nonisolated private final class ResultBox: @unchecked Sendable {
+    var value: Result<Subprocess.Output, Error>?
 }

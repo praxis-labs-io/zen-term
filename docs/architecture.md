@@ -802,7 +802,8 @@ The workspace `carry` key names ignored files to copy into a new worktree.
 ### Subprocess and GitCommand
 
 `Subprocess.run` is the app's one run-and-capture `Process()` site, blocking by design. Both
-pipes drain concurrently before `waitUntilExit`, or a full stderr buffer deadlocks. `GitCommand`
+pipes drain concurrently before it waits for exit, or a full stderr buffer deadlocks. Each drain
+gets its own thread, never the global dispatch pool, which AppKit can saturate. `GitCommand`
 runs git through it and gates on `xcode-select -p`, since `/usr/bin/git` without Command Line
 Tools opens a system prompt.
 
