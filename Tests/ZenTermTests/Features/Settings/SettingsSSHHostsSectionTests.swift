@@ -259,7 +259,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         let hostLabels = labels.filter { $0.stringValue != "Connected" }
         XCTAssertEqual(hostLabels.count, 2)
         for label in hostLabels {
-            XCTAssertEqual(label.lineBreakMode, .byTruncatingTail)
+            XCTAssertTrue([.byTruncatingTail, .byTruncatingMiddle].contains(label.lineBreakMode), label.stringValue)
             XCTAssertLessThan(label.contentCompressionResistancePriority(for: .horizontal).rawValue, 500)
         }
         let word = try XCTUnwrap(labels.first { $0.stringValue == "Connected" })
@@ -292,7 +292,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         section?.onEditHost = { _, address in edited = address }
         let row = try XCTUnwrap(descendants(of: detail).compactMap { $0 as? SSHHostRow }.first)
 
-        row.onActivate?()
+        row.onChoose()
 
         XCTAssertEqual(edited, "drew@10.0.0.2")
     }

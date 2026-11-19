@@ -95,7 +95,7 @@ final class SettingsOverlayNavTests: WindowTestCase {
 
     func test_downFromLastNavRow_reachesReportButton() {
         let (overlay, win) = mountNav(onReportIssue: {})
-        let lastRow = descendants(of: overlay).compactMap { $0 as? SettingsNavRow }.last
+        let lastRow = descendants(of: overlay).compactMap { $0 as? NavRow }.last
         win.makeFirstResponder(lastRow)
 
         lastRow?.onArrowDown?()

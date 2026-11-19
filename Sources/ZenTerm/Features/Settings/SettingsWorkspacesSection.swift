@@ -71,7 +71,7 @@ final class SettingsWorkspacesSection: SettingsSection {
         } else if let workspaces {
             for workspace in workspaces {
                 let row = WorkspaceRow(workspace: workspace)
-                row.onActivate = { [weak self, weak row] in row.map { self?.onEditWorkspace?($0.workspace) } }
+                row.onChoose = { [weak self, weak row] in row.map { self?.onEditWorkspace?($0.workspace) } }
                 row.onArrowUp = { [weak self, weak row] in self?.moveFocus(from: row, delta: -1) }
                 row.onArrowDown = { [weak self, weak row] in self?.moveFocus(from: row, delta: 1) }
                 row.onMoveUp = { [weak self, weak row] in self?.move(row, delta: -1) }
@@ -143,47 +143,22 @@ final class SettingsWorkspacesSection: SettingsSection {
 
 final class WorkspaceRow: SettingsFocusRow {
     let workspace: Workspace
-    private let titleLabel: NSTextField
-    private let subtitleLabel: NSTextField
     private let gitBadge = NSImageView()
 
     init(workspace: Workspace) {
         self.workspace = workspace
-        titleLabel = NSTextField(labelWithString: workspace.title)
-        subtitleLabel = NSTextField(labelWithString: PathDisplay.abbreviatingHome(workspace.path.path))
-
-        super.init()
-
-        titleLabel.font = ChromeType.font(.body)
-        titleLabel.textColor = Theme.current.chrome.ink(.normal)
-        subtitleLabel.font = ChromeType.font(.caption)
-        subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
-        subtitleLabel.lineBreakMode = .byTruncatingMiddle
-        let labels = NSStackView(views: [titleLabel, subtitleLabel])
-        labels.orientation = .vertical
-        labels.alignment = .leading
-        labels.spacing = ChromeMetrics.Spacing.s2
-        labels.setContentHuggingPriority(.defaultLow, for: .horizontal)
-
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        super.init(Content(title: workspace.title, subtitle: PathDisplay.abbreviatingHome(workspace.path.path)))
         gitBadge.image = IconCatalog.gitBadge()
         gitBadge.setAccessibilityLabel("Git repository")
         gitBadge.contentTintColor = Theme.current.chrome.ink(.faint)
         gitBadge.setContentHuggingPriority(.required, for: .horizontal)
+        accessories = [gitBadge]
         applyGitStatus()
-        let controls = NSStackView(views: [labels, spacer, gitBadge])
-        controls.orientation = .horizontal
-        controls.alignment = .centerY
-        controls.spacing = ChromeMetrics.Spacing.s10
-        pin(controls)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     override func reapplyTheme() {
-        titleLabel.textColor = Theme.current.chrome.ink(.normal)
-        subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         gitBadge.contentTintColor = Theme.current.chrome.ink(.faint)
         super.reapplyTheme()
     }

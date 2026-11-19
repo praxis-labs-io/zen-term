@@ -119,7 +119,7 @@ final class Dropdown: PopoverPicker {
                 title: item.title, note: item.note, leading: item.swatch.map { .swatch($0) },
                 trailing: item.isSelected ? .check : nil)
             let row = ListRow(content) { [weak self] in self?.pick(index) }
-            row.hoverFills = false
+            row.setHoverSuppressed(true)
             rowViews.append((index, row))
             lines.append(ListPopover.Row(view: row, height: Self.rowHeight))
         }

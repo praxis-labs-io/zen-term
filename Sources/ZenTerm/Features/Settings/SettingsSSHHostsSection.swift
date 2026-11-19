@@ -162,7 +162,7 @@ final class SettingsSSHHostsSection: SettingsSection {
         let row = SSHHostRow(
             host: host, title: entry(of: host).displayName, subtitle: description(of: host),
             status: status(of: host))
-        row.onActivate = { [weak self] in self?.edit(host) }
+        row.onChoose = { [weak self] in self?.edit(host) }
         row.onArrowUp = { [weak self, weak row] in self?.moveFocus(from: row, delta: -1) }
         row.onArrowDown = { [weak self, weak row] in self?.moveFocus(from: row, delta: 1) }
         row.onTab = { [weak self, weak row] in self?.moveTab(from: row, delta: 1) }

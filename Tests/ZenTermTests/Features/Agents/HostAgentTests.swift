@@ -120,7 +120,7 @@ final class HostAgentTests: WindowTestCase {
         XCTAssertNil(host.c.agentWaitForTesting(host.loginID), "landing on it answers the turn end")
     }
 
-    private func hostRow(_ c: WindowController) throws -> SettingsNavRow {
+    private func hostRow(_ c: WindowController) throws -> NavRow {
         try XCTUnwrap(c.sidebarForTesting.view.hostRowsForTesting.first { $0.titleForTesting == "devbox" })
     }
 

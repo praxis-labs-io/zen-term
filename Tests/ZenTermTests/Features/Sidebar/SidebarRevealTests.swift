@@ -78,7 +78,7 @@ final class SidebarRevealTests: WindowTestCase {
         button.mouseDown(with: event)
     }
 
-    private func click(_ row: SettingsNavRow) throws {
+    private func click(_ row: NavRow) throws {
         let event = try XCTUnwrap(
             NSEvent.mouseEvent(
                 with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,

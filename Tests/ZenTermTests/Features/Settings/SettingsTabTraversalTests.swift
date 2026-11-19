@@ -189,7 +189,7 @@ final class SettingsTabTraversalTests: WindowTestCase {
     }
 
     func test_navRow_tabEntersDetail_shiftTabRetreatsViaBacktab_notUp() {
-        let row = SettingsNavRow(title: "Test", onActivate: {})
+        let row = NavRow(title: "Test", onActivate: {})
         var entered = 0
         var uped = 0
         var backtabbed = 0

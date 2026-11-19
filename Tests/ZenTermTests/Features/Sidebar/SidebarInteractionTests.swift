@@ -85,7 +85,7 @@ final class SidebarInteractionTests: WindowTestCase {
         button.mouseDown(with: event)
     }
 
-    private func click(_ row: SettingsNavRow) throws {
+    private func click(_ row: NavRow) throws {
         let event = try XCTUnwrap(
             NSEvent.mouseEvent(
                 with: .leftMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
@@ -95,7 +95,7 @@ final class SidebarInteractionTests: WindowTestCase {
     }
 
     private func rowFillEdge(in controller: WindowController) throws -> CGFloat {
-        let row = try XCTUnwrap(modals(SettingsNavRow.self, in: controller).first, "a workspace row")
+        let row = try XCTUnwrap(modals(NavRow.self, in: controller).first, "a workspace row")
         return frame(of: row, in: controller).maxX
     }
 

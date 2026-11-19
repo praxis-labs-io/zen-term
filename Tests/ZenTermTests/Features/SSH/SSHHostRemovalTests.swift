@@ -77,7 +77,7 @@ final class SSHHostRemovalTests: WindowTestCase {
     private func editForm(ofRow index: Int, in c: WindowController) throws -> AddSSHHostOverlay {
         let content = try XCTUnwrap(c.window.contentView)
         let row = try XCTUnwrap(hostRows(in: content)[index])
-        row.onActivate?()
+        row.onChoose()
         return try XCTUnwrap(form(in: content))
     }
 

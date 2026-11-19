@@ -23,7 +23,7 @@ struct SidebarHostItem: Equatable {
 
 struct SidebarRowItem: Equatable {
     let id: SidebarRowID
-    let variant: SettingsNavRow.Variant
+    let variant: NavRow.Variant
     let name: String
     let detail: String?
     let number: Int?
@@ -45,7 +45,7 @@ final class SidebarView: NSView, ThemeReapplying {
     private let caption = SectionCaption("Workspaces")
     private let addButton: IconButton
     private let rowStack = NSStackView()
-    private var rows: [SidebarRowID: SettingsNavRow] = [:]
+    private var rows: [SidebarRowID: NavRow] = [:]
     private var numbers: [SidebarRowID: Int] = [:]
     private var worktreeParents: Set<SidebarRowID> = []
     private var activeRow: SidebarRowID?
@@ -54,7 +54,7 @@ final class SidebarView: NSView, ThemeReapplying {
     let rowMenu = SidebarRowMenu()
     private let hostsCaption = SectionCaption("Remote hosts")
     private let hostStack = NSStackView()
-    private var hostRows: [String: SettingsNavRow] = [:]
+    private var hostRows: [String: NavRow] = [:]
     private var hostNumbers: [String: Int] = [:]
     private var hostsBelowRows: [NSLayoutConstraint] = []
     private var agentsBelowRows: [NSLayoutConstraint] = []
@@ -234,7 +234,7 @@ final class SidebarView: NSView, ThemeReapplying {
         for (index, item) in items.enumerated() {
             let row = hostRow(for: item)
             row.setTitle(item.name)
-            row.setSelected(item.isActive)
+            row.isCurrent = item.isActive
             let status = item.status
             let word = status.word
             if item.isWaiting {
@@ -242,7 +242,7 @@ final class SidebarView: NSView, ThemeReapplying {
             } else {
                 row.setDot({ status.ink }, accessibilityValue: word)
             }
-            row.setTitleInk(status == .connected ? nil : { Theme.current.chrome.ink(.subtle) })
+            row.setTitleInk(status == .connected ? nil : .subtle)
             guard hostStack.arrangedSubviews.firstIndex(of: row) != index else { continue }
             let isNew = row.superview == nil
             if !isNew { hostStack.removeArrangedSubview(row) }
@@ -260,11 +260,11 @@ final class SidebarView: NSView, ThemeReapplying {
         return CommandCatalog.spec(for: .selectWorkspace(number)).shortcut
     }
 
-    private func hostRow(for item: SidebarHostItem) -> SettingsNavRow {
+    private func hostRow(for item: SidebarHostItem) -> NavRow {
         let host = item.id.alias
         if let row = hostRows[host] { return row }
         let id = item.id
-        let row = SettingsNavRow(title: item.name, focusesOnClick: false) {
+        let row = NavRow(title: item.name, focusesOnClick: false) {
             [weak self] in self?.onActivateHost?(id)
         }
         row.tooltip = TooltipHost(label: "Open host") { [weak self] in
@@ -377,7 +377,7 @@ final class SidebarView: NSView, ThemeReapplying {
             }
             row.setTitle(item.name)
             row.setDetail(item.detail)
-            row.setSelected(item.isActive)
+            row.isCurrent = item.isActive
             setNewWorktreeButton(on: row, for: item)
             row.setDot(item.isWaiting ? { AttentionTone.waiting.ink } : nil, accessibilityValue: "Agent waiting")
         }
@@ -393,10 +393,10 @@ final class SidebarView: NSView, ThemeReapplying {
         scroll.reveal(row)
     }
 
-    private func row(for item: SidebarRowItem) -> SettingsNavRow {
+    private func row(for item: SidebarRowItem) -> NavRow {
         if let row = rows[item.id] { return row }
         let id = item.id
-        let row = SettingsNavRow(title: item.name, variant: item.variant, focusesOnClick: false) {
+        let row = NavRow(title: item.name, variant: item.variant, focusesOnClick: false) {
             [weak self] in self?.onActivate(id)
         }
         if case .workspace = id {
@@ -439,7 +439,7 @@ final class SidebarView: NSView, ThemeReapplying {
         Array(rows.values) + Array(hostRows.values) + Array(agentRows.values) + (waitingRow.map { [$0] } ?? [])
     }
 
-    private func setNewWorktreeButton(on row: SettingsNavRow, for item: SidebarRowItem) {
+    private func setNewWorktreeButton(on row: NavRow, for item: SidebarRowItem) {
         guard item.makesWorktrees else { return row.setHoverAccessory(nil) }
         let id = item.id
         guard row.hoverAccessory == nil else { return }
@@ -531,7 +531,7 @@ final class SidebarView: NSView, ThemeReapplying {
         let current = stops.firstIndex { KeyboardFocus.isFocused($0, in: window) }
         guard let next = KeyboardFocus.step(from: current, delta: delta, count: stops.count) else { return }
         switch stops[next] {
-        case let row as SettingsNavRow: row.takeKeyboardFocus()
+        case let row as NavRow: row.takeKeyboardFocus()
         case let row as SidebarJumpRow: row.takeKeyboardFocus()
         default: return
         }
@@ -551,8 +551,8 @@ final class SidebarView: NSView, ThemeReapplying {
         }
     }
 
-    private var orderedRows: [SettingsNavRow] {
-        rowStack.arrangedSubviews.compactMap { $0 as? SettingsNavRow }
+    private var orderedRows: [NavRow] {
+        rowStack.arrangedSubviews.compactMap { $0 as? NavRow }
     }
 
     func reapplyTheme() {
@@ -561,13 +561,13 @@ final class SidebarView: NSView, ThemeReapplying {
 
     var addButtonForTesting: IconButton { addButton }
 
-    var rowsForTesting: [SettingsNavRow] { orderedRows }
+    var rowsForTesting: [NavRow] { orderedRows }
 
     private(set) var rendersForTesting = 0
 
     var agentRowsForTesting: [SidebarAgentRow] { orderedAgentRows }
 
-    var hostRowsForTesting: [SettingsNavRow] { hostStack.arrangedSubviews.compactMap { $0 as? SettingsNavRow } }
+    var hostRowsForTesting: [NavRow] { hostStack.arrangedSubviews.compactMap { $0 as? NavRow } }
 
     var hostsAreHiddenForTesting: Bool { hostStack.isHidden && hostsCaption.isHidden }
 

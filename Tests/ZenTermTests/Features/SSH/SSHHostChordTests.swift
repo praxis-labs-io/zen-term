@@ -56,7 +56,7 @@ final class SSHHostChordTests: WindowTestCase {
         return c
     }
 
-    private func row(_ host: String, in c: WindowController) throws -> SettingsNavRow {
+    private func row(_ host: String, in c: WindowController) throws -> NavRow {
         try XCTUnwrap(c.sidebarForTesting.view.hostRowsForTesting.first { $0.titleForTesting == host })
     }
 

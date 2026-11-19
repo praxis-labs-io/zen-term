@@ -170,7 +170,7 @@ final class BranchField: NSView, ThemeReapplying {
         rowViews = matches.map { branch in
             let content = ListRow.Content(title: branch, note: notes[branch], leading: .symbol("arrow.branch"))
             let row = ListRow(content) { [weak self] in self?.commit(branch) }
-            row.hoverFills = false
+            row.setHoverSuppressed(true)
             return row
         }
         return rowViews.map { ListPopover.Row(view: $0, height: Self.rowHeight) }

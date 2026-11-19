@@ -55,7 +55,7 @@ final class SettingsFormBackdropWindowTests: WindowTestCase {
         c.handle(.openSettings)
         let settings = try XCTUnwrap(overlay(SettingsOverlay.self, in: c))
         let nav = try XCTUnwrap(
-            descendants(of: settings).compactMap { $0 as? SettingsNavRow }.first { $0.titleForTesting == title })
+            descendants(of: settings).compactMap { $0 as? NavRow }.first { $0.titleForTesting == title })
         _ = nav.accessibilityPerformPress()
         waitUntil(
             descendants(of: settings).contains { ($0 as? AppButton)?.title == buttonTitle },

@@ -84,7 +84,7 @@ final class CheckboxDropdown: PopoverPicker {
         rowViews = visible.map { index in
             let content = items.indices.contains(index) ? Self.content(items[index]) : ListRow.Content(title: "")
             let row = ListRow(content) { [weak self] in self?.pick(index) }
-            row.hoverFills = false
+            row.setHoverSuppressed(true)
             return row
         }
         return rowViews.map { ListPopover.Row(view: $0, height: Self.rowHeight) }
@@ -93,6 +93,6 @@ final class CheckboxDropdown: PopoverPicker {
     private static func content(_ item: CheckboxDropdownItem) -> ListRow.Content {
         ListRow.Content(
             title: item.title, note: item.note, leading: item.symbol.map { .symbol($0) },
-            trailing: item.isChecked ? .check : nil, recedes: !item.isChecked)
+            trailing: item.isChecked ? .check : nil, ink: item.isChecked ? .normal : .muted)
     }
 }
