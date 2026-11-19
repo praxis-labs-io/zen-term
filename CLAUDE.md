@@ -213,7 +213,7 @@ way round.
 ## Shipping
 
 The **`ship-feature` skill** owns the PR flow (local gate, `/code-review`, triage,
-PR ready for review). Cutting a public release is the
+PR ready for review, Codex's review on the PR). Cutting a public release is the
 **`release` skill**, over `docs/releasing.md`.
 
 **Neither runs on its own.** A feature looking finished is not the trigger; Drew
