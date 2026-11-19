@@ -31,6 +31,7 @@ final class FormErrorLabel: NSTextField, ThemeReapplying {
         reapplyTheme()
         guard message != announced else { return }
         announced = message
+        guard window != nil else { return }
         onAnnounceForTesting?(message)
         NSAccessibility.post(
             element: self, notification: .announcementRequested,

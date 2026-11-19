@@ -1,8 +1,21 @@
+import AppKit
 import XCTest
 
 @testable import ZenTerm
 
-final class FormErrorLabelTests: XCTestCase {
+final class FormErrorLabelTests: WindowTestCase {
+    private var window: NSWindow?
+
+    private func mounted() -> FormErrorLabel {
+        let label = FormErrorLabel()
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 100), styleMask: [.borderless], backing: .buffered,
+            defer: false)
+        window.contentView?.addSubview(label)
+        self.window = window
+        return label
+    }
+
     func test_aLongMessage_doesNotResistHorizontalCompression() {
         let label = FormErrorLabel()
         label.show(String(repeating: "a long failure message ", count: 20))
@@ -11,7 +24,7 @@ final class FormErrorLabelTests: XCTestCase {
     }
 
     func test_reshowingTheSameMessage_announcesItOnce() {
-        let label = FormErrorLabel()
+        let label = mounted()
         var announced: [String] = []
         label.onAnnounceForTesting = { announced.append($0) }
 
@@ -25,6 +38,16 @@ final class FormErrorLabelTests: XCTestCase {
         label.clear()
         label.show("The path can't contain a quote.")
         XCTAssertEqual(announced.count, 3, "text shown again after a clear is announced")
+    }
+
+    func test_aMessageShownBeforeTheLabelIsOnScreen_isNotAnnounced() {
+        let label = FormErrorLabel()
+        var announced: [String] = []
+        label.onAnnounceForTesting = { announced.append($0) }
+
+        label.show("Unknown key: tabz.")
+
+        XCTAssertEqual(announced, [], "a row built off screen with a diagnostic stays silent")
     }
 
     func test_eachTone_takesItsRole() {
