@@ -109,7 +109,7 @@ final class SettingsToolsSection: SettingsSection {
             for float in floats {
                 let row = ToolFloatRow(float: float)
                 row.showMessage(fieldDiagnosticMessages(for: float.id))
-                row.onActivate = { [weak self, weak row] in row.map { self?.onEditFloat?($0.float) } }
+                row.onChoose = { [weak self, weak row] in row.map { self?.onEditFloat?($0.float) } }
                 row.onArrowUp = { [weak self, weak row] in self?.moveFocus(from: row, delta: -1) }
                 row.onArrowDown = { [weak self, weak row] in self?.moveFocus(from: row, delta: 1) }
                 row.onMoveUp = { [weak self, weak row] in self?.move(row, delta: -1) }
@@ -172,101 +172,45 @@ final class SettingsToolsSection: SettingsSection {
 
 final class ToolFloatRow: SettingsFocusRow {
     let float: ToolFloat
-    private let iconView = NSImageView()
-    private let titleLabel: NSTextField
-    private let subtitleLabel: NSTextField
-    private var shortcutView: NSView
-    private let controls = NSStackView()
     private let messageLabel = NSTextField(labelWithString: "")
 
     init(float: ToolFloat) {
         self.float = float
-        titleLabel = NSTextField(labelWithString: float.title)
-        subtitleLabel = NSTextField(labelWithString: float.command)
-        shortcutView = Self.makeShortcutView(for: float)
-
-        super.init()
-
-        iconView.image = IconCatalog.image(float.icon)
-        iconView.contentTintColor = Theme.current.chrome.ink(.subtle)
-        iconView.setContentHuggingPriority(.required, for: .horizontal)
-
-        titleLabel.font = ChromeType.font(.body)
-        titleLabel.textColor = Theme.current.chrome.ink(.normal)
-        subtitleLabel.font = ChromeType.font(.caption)
-        subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
-        subtitleLabel.lineBreakMode = .byTruncatingTail
-        let labels = NSStackView(views: [titleLabel, subtitleLabel])
-        labels.orientation = .vertical
-        labels.alignment = .leading
-        labels.spacing = ChromeMetrics.Spacing.s2
-        labels.setContentHuggingPriority(.defaultLow, for: .horizontal)
-
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        [iconView, labels, spacer, shortcutView].forEach(controls.addArrangedSubview)
-        controls.orientation = .horizontal
-        controls.alignment = .centerY
-        controls.spacing = ChromeMetrics.Spacing.s10
-
+        super.init(Self.content(for: float))
         messageLabel.font = ChromeType.font(.caption, weight: .medium)
         messageLabel.textColor = Theme.current.chrome.warning.nsColor
         messageLabel.lineBreakMode = .byWordWrapping
         messageLabel.maximumNumberOfLines = 0
-        messageLabel.isHidden = true
-
-        let stack = NSStackView(views: [controls, messageLabel])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = ChromeMetrics.Spacing.s2
-        pin(stack)
-        NSLayoutConstraint.activate([
-            controls.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            messageLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
-        ])
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     override func reapplyTheme() {
-        iconView.contentTintColor = Theme.current.chrome.ink(.subtle)
-        titleLabel.textColor = Theme.current.chrome.ink(.normal)
-        subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         messageLabel.textColor = Theme.current.chrome.warning.nsColor
-        (shortcutView as? NSTextField)?.textColor = Self.unsetInk
         super.reapplyTheme()
     }
 
     func reapplyKeymap() {
-        shortcutView.removeFromSuperview()
-        shortcutView = Self.makeShortcutView(for: float)
-        controls.addArrangedSubview(shortcutView)
+        render(Self.content(for: float))
     }
 
-    private static func makeShortcutView(for float: ToolFloat) -> NSView {
+    private static func content(for float: ToolFloat) -> Content {
         let shortcut = CommandCatalog.spec(for: .toggleToolFloat(float.id)).shortcut
-        return shortcut.isEmpty ? unsetLabel() : KeycapView(shortcut: shortcut)
-    }
-
-    private static var unsetInk: NSColor { Theme.current.chrome.ink(.muted) }
-
-    private static func unsetLabel() -> NSTextField {
-        let label = NSTextField(labelWithString: "Not set")
-        label.font = ChromeType.font(.small)
-        label.textColor = unsetInk
-        return label
+        return Content(
+            title: float.title, subtitle: float.command, note: shortcut.isEmpty ? "Not set" : nil,
+            leading: .symbol(float.icon), trailing: shortcut.isEmpty ? nil : .keycap(shortcut))
     }
 
     func showMessage(_ text: String?) {
         messageLabel.stringValue = text ?? ""
-        messageLabel.isHidden = (text == nil)
+        footnote = text == nil ? nil : messageLabel
     }
 
     var renderedMessageForTesting: String? {
-        messageLabel.isHidden ? nil : messageLabel.stringValue
+        footnote == nil ? nil : messageLabel.stringValue
     }
 
     var renderedShortcutForTesting: String {
-        (shortcutView as? KeycapView)?.shortcut ?? (shortcutView as? NSTextField)?.stringValue ?? ""
+        shortcutForTesting.isEmpty ? content.note ?? "" : shortcutForTesting
     }
 }

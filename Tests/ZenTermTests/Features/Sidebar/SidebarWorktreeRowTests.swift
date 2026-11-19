@@ -115,7 +115,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
             origin: WorktreeOrigin(parent: parent, worktree: worktree))
     }
 
-    private func rows(of c: WindowController) -> [SettingsNavRow] { c.sidebarForTesting.view.rowsForTesting }
+    private func rows(of c: WindowController) -> [NavRow] { c.sidebarForTesting.view.rowsForTesting }
 
     func test_aWorktreeRemovedOutsideZenTerm_staysOpenAndSaysSo() throws {
         let c = makeWindow()
@@ -463,7 +463,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
 
     private var menu: SidebarRowMenu { controller!.sidebarForTesting.view.rowMenu }
 
-    private func rightClick(_ row: SettingsNavRow) throws {
+    private func rightClick(_ row: NavRow) throws {
         row.rightMouseDown(
             with: try XCTUnwrap(
                 NSEvent.mouseEvent(

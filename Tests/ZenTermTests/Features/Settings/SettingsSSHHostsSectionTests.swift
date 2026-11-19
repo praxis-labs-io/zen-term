@@ -292,7 +292,7 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         section?.onEditHost = { _, address in edited = address }
         let row = try XCTUnwrap(descendants(of: detail).compactMap { $0 as? SSHHostRow }.first)
 
-        row.onActivate?()
+        row.onChoose()
 
         XCTAssertEqual(edited, "drew@10.0.0.2")
     }

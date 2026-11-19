@@ -150,7 +150,7 @@ final class WorkspaceFormWindowTests: WindowTestCase {
         let settings = try XCTUnwrap(
             descendants(of: c.window.contentView!).compactMap { $0 as? SettingsOverlay }.first)
         let nav = try XCTUnwrap(
-            descendants(of: settings).compactMap { $0 as? SettingsNavRow }.first { $0.titleForTesting == "Workspaces" })
+            descendants(of: settings).compactMap { $0 as? NavRow }.first { $0.titleForTesting == "Workspaces" })
         _ = nav.accessibilityPerformPress()
         waitUntil(
             descendants(of: settings).contains { ($0 as? AppButton)?.title == "＋ Add workspace" },
@@ -180,7 +180,7 @@ final class WorkspaceFormWindowTests: WindowTestCase {
         let settings = try XCTUnwrap(
             descendants(of: c.window.contentView!).compactMap { $0 as? SettingsOverlay }.first)
         let nav = try XCTUnwrap(
-            descendants(of: settings).compactMap { $0 as? SettingsNavRow }.first { $0.titleForTesting == "Workspaces" })
+            descendants(of: settings).compactMap { $0 as? NavRow }.first { $0.titleForTesting == "Workspaces" })
         _ = nav.accessibilityPerformPress()
         waitUntil(
             descendants(of: settings).contains { ($0 as? AppButton)?.title == "＋ Add workspace" },

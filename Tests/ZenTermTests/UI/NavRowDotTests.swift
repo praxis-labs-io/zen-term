@@ -3,10 +3,10 @@ import XCTest
 
 @testable import ZenTerm
 
-final class SettingsNavRowDotTests: XCTestCase {
+final class NavRowDotTests: XCTestCase {
     func test_aThemeChange_repaintsTheDotFromItsInk() {
         var ink = NSColor.systemRed
-        let row = SettingsNavRow(title: "devbox") {}
+        let row = NavRow(title: "devbox") {}
         row.setDot({ ink }, accessibilityValue: "Online")
 
         ink = NSColor.systemGreen
@@ -16,7 +16,7 @@ final class SettingsNavRowDotTests: XCTestCase {
     }
 
     func test_noInk_hidesTheDotAndItsValue() {
-        let row = SettingsNavRow(title: "devbox") {}
+        let row = NavRow(title: "devbox") {}
         row.setDot({ .systemRed }, accessibilityValue: "Online")
 
         row.setDot(nil, accessibilityValue: "Online")

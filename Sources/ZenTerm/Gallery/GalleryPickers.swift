@@ -48,6 +48,8 @@
             highlighted.isHighlighted = true
             let focused = row(ListRow.Content(title: "Focused"))
             focused.setKeyboardFocus(true)
+            let current = row(ListRow.Content(title: "Workspaces"))
+            current.isCurrent = true
             return GallerySection(
                 title: "ListRow",
                 rows: [
@@ -55,7 +57,17 @@
                     GallerySection.Row(label: "Keyboard cursor", samples: [highlighted]),
                     GallerySection.Row(label: "Focused", samples: [focused]),
                     GallerySection.Row(
-                        label: "Current", samples: [row(ListRow.Content(title: "Selected", trailing: .check))]),
+                        label: "Current", samples: [row(ListRow.Content(title: "Selected", trailing: .check)), current]),
+                    GallerySection.Row(
+                        label: "Subtitle",
+                        samples: [row(ListRow.Content(title: "zen-term", subtitle: "~/Dev/zen-term"))]),
+                    GallerySection.Row(
+                        label: "Nested",
+                        samples: [
+                            row(
+                                ListRow.Content(title: "feature/zen-677", leading: .symbol("arrow.branch"), nests: true)
+                            )
+                        ]),
                     GallerySection.Row(
                         label: "Icon and note",
                         samples: [row(ListRow.Content(title: "main", note: "Note", leading: .symbol("arrow.branch")))]),
@@ -68,7 +80,7 @@
                         label: "Keycap", samples: [row(ListRow.Content(title: "Close", trailing: .keycap("⌘⌃W")))]),
                     GallerySection.Row(
                         label: "Receding",
-                        samples: [row(ListRow.Content(title: "Unchecked", leading: .symbol("terminal"), recedes: true))]
+                        samples: [row(ListRow.Content(title: "Unchecked", leading: .symbol("terminal"), ink: .muted))]
                     ),
                 ])
         }

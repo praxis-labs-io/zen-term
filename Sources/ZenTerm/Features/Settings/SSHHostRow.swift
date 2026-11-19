@@ -2,48 +2,18 @@ import AppKit
 
 final class SSHHostRow: SettingsFocusRow {
     let host: String
-    private let titleLabel: NSTextField
-    private let subtitleLabel: NSTextField
     private let statusLabel = NSTextField(labelWithString: "")
     private var status: SSHHostStatus
 
     init(host: String, title: String, subtitle: String?, status: SSHHostStatus) {
         self.host = host
         self.status = status
-        titleLabel = NSTextField(labelWithString: title)
-        subtitleLabel = NSTextField(labelWithString: subtitle ?? "")
-
-        super.init()
-
-        setAccessibilityRole(.button)
+        super.init(Content(title: title, subtitle: subtitle))
         setAccessibilityLabel("Edit \(title)")
-
-        titleLabel.font = ChromeType.font(.body)
-        titleLabel.lineBreakMode = .byTruncatingTail
-        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        titleLabel.textColor = Theme.current.chrome.ink(.normal)
-        subtitleLabel.font = ChromeType.font(.caption)
-        subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
-        subtitleLabel.lineBreakMode = .byTruncatingTail
-        subtitleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        subtitleLabel.isHidden = subtitle == nil
-        let labels = NSStackView(views: [titleLabel, subtitleLabel])
-        labels.orientation = .vertical
-        labels.alignment = .leading
-        labels.spacing = ChromeMetrics.Spacing.s2
-        labels.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        labels.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
         statusLabel.font = ChromeType.font(.small)
         statusLabel.setContentHuggingPriority(.required, for: .horizontal)
         statusLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let controls = NSStackView(views: [labels, spacer, statusLabel])
-        controls.orientation = .horizontal
-        controls.alignment = .centerY
-        controls.spacing = ChromeMetrics.Spacing.s10
-        pin(controls)
+        accessories = [statusLabel]
         showStatus()
     }
 
@@ -56,15 +26,8 @@ final class SSHHostRow: SettingsFocusRow {
     }
 
     override func reapplyTheme() {
-        titleLabel.textColor = Theme.current.chrome.ink(.normal)
-        subtitleLabel.textColor = Theme.current.chrome.ink(.muted)
         statusLabel.textColor = status.ink
         super.reapplyTheme()
-    }
-
-    override func accessibilityPerformPress() -> Bool {
-        onActivate?()
-        return true
     }
 
     #if DEBUG

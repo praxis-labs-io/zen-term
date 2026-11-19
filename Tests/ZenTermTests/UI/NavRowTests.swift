@@ -3,7 +3,7 @@ import XCTest
 
 @testable import ZenTerm
 
-final class SettingsNavRowTests: WindowTestCase {
+final class NavRowTests: WindowTestCase {
     func test_focus_showsTheRingWithoutAFill() {
         let (row, window) = mountedRow()
 
@@ -22,7 +22,7 @@ final class SettingsNavRowTests: WindowTestCase {
     func test_focus_keepsTheCurrentFill() {
         let (row, window) = mountedRow()
 
-        row.setSelected(true)
+        row.isCurrent = true
         XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.active).cgColor)
 
         window.makeFirstResponder(row)
@@ -58,7 +58,7 @@ final class SettingsNavRowTests: WindowTestCase {
 
     func test_hoverFillWinsOverTheCurrentFill() {
         let (row, window) = mountedRow()
-        row.setSelected(true)
+        row.isCurrent = true
 
         row.mouseEntered(with: crossing(.mouseEntered, over: row))
         XCTAssertEqual(row.layer?.backgroundColor, Theme.current.chrome.fill(.hover).cgColor)
@@ -80,8 +80,78 @@ final class SettingsNavRowTests: WindowTestCase {
 
         XCTAssertEqual(row.detailForTesting, "main")
         let detail = try XCTUnwrap(
-            row.subviews.compactMap { $0 as? NSTextField }.first { $0.stringValue == "main" })
+            descendants(of: row).compactMap { $0 as? NSTextField }.first { $0.stringValue == "main" })
         XCTAssertEqual(detail.textColor, Theme.current.chrome.ink(.muted))
+    }
+
+    func test_hover_swapsTheDetailForTheHoverAccessory() {
+        let (row, _) = mountedRow()
+        let plus = NSButton(title: "+", target: nil, action: nil)
+        row.setDetail("main")
+        row.setHoverAccessory(plus)
+        row.layoutSubtreeIfNeeded()
+        func showsDetail() -> Bool { descendants(of: row).contains { ($0 as? NSTextField)?.stringValue == "main" } }
+        XCTAssertFalse(descendants(of: row).contains { $0 === plus })
+        XCTAssertTrue(showsDetail())
+
+        row.mouseEntered(with: crossing(.mouseEntered, over: row))
+
+        XCTAssertTrue(descendants(of: row).contains { $0 === plus })
+        XCTAssertFalse(showsDetail(), "the detail gives way")
+        XCTAssertTrue(row.bounds.contains(plus.convert(plus.bounds, to: row)), "the accessory is not placed yet")
+        XCTAssertGreaterThan(plus.frame.width, 0)
+
+        row.mouseExited(with: crossing(.mouseExited, over: row))
+
+        XCTAssertFalse(descendants(of: row).contains { $0 === plus })
+        XCTAssertTrue(showsDetail())
+    }
+
+    func test_aThemeChange_reachesTheHoverAccessoryWhileItIsOutOfTheRow() {
+        let (row, _) = mountedRow()
+        let plus = ThemeRecorder()
+        row.setHoverAccessory(plus)
+        XCTAssertNil(plus.superview, "premise: the accessory waits outside the row until hover")
+
+        row.reapplyThemeTree()
+
+        XCTAssertEqual(plus.reapplied, 1, "the accessory comes back on hover in the old theme")
+    }
+
+    private final class ThemeRecorder: NSView, ThemeReapplying {
+        var reapplied = 0
+        func reapplyTheme() { reapplied += 1 }
+    }
+
+    func test_hover_placesThePlusWhereAClickThroughTheWindowLands() throws {
+        let (row, window) = mountedRow()
+        let plus = IconButton(symbol: "plus", accessibilityLabel: "New worktree") {}
+        row.setHoverAccessory(plus)
+        row.layoutSubtreeIfNeeded()
+
+        row.mouseEntered(with: crossing(.mouseEntered, over: row))
+
+        let point = plus.convert(NSPoint(x: plus.bounds.midX, y: plus.bounds.midY), to: nil)
+        let target = try XCTUnwrap(window.contentView?.hitTest(point))
+        XCTAssertTrue(target === plus || target.isDescendant(of: plus), "the click lands on \(target), not the plus")
+    }
+
+    func test_hover_keepsALongTitleClearOfThePlus() throws {
+        let (row, _) = mountedRow()
+        let long = String(repeating: "a-very-long-workspace-name-", count: 4)
+        row.setTitle(long)
+        let plus = IconButton(symbol: "plus", accessibilityLabel: "New worktree") {}
+        row.setHoverAccessory(plus)
+        let title = try XCTUnwrap(
+            descendants(of: row).compactMap { $0 as? NSTextField }.first { $0.stringValue == long })
+
+        row.mouseEntered(with: crossing(.mouseEntered, over: row))
+        row.layoutSubtreeIfNeeded()
+
+        XCTAssertTrue(title.isDescendant(of: row), "hover replaced the title label")
+        XCTAssertLessThanOrEqual(
+            title.convert(title.bounds, to: row).maxX, plus.convert(plus.bounds, to: row).minX,
+            "the title truncates before the plus, not under it")
     }
 
     func test_click_takesFocus() {
@@ -126,14 +196,14 @@ final class SettingsNavRowTests: WindowTestCase {
         var activations = 0
         let (row, _) = mountedRow { activations += 1 }
         row.setDetail("main")
-        row.setSelected(true)
+        row.isCurrent = true
 
         XCTAssertTrue(row.isAccessibilityElement())
         XCTAssertEqual(row.accessibilityRole(), .button)
         XCTAssertEqual(row.accessibilityLabel(), "Terminal")
         XCTAssertEqual(row.accessibilityValue() as? String, "main")
         XCTAssertTrue(row.isAccessibilitySelected())
-        row.setSelected(false)
+        row.isCurrent = false
         XCTAssertFalse(row.isAccessibilitySelected())
 
         XCTAssertTrue(row.accessibilityPerformPress())
@@ -189,6 +259,10 @@ final class SettingsNavRowTests: WindowTestCase {
         XCTAssertEqual(parent.keyCodes, [36, 53], "a row with no callbacks leaves Return and Esc to its container")
     }
 
+    private func descendants(of view: NSView) -> [NSView] {
+        view.subviews.flatMap { [$0] + descendants(of: $0) }
+    }
+
     private final class KeyRecorder: NSView {
         var keyCodes: [UInt16] = []
         override func keyDown(with event: NSEvent) { keyCodes.append(event.keyCode) }
@@ -218,8 +292,8 @@ final class SettingsNavRowTests: WindowTestCase {
 
     private func mountedRow(
         focusesOnClick: Bool = true, onActivate: @escaping () -> Void = {}
-    ) -> (SettingsNavRow, NSWindow) {
-        let row = SettingsNavRow(title: "Terminal", focusesOnClick: focusesOnClick, onActivate: onActivate)
+    ) -> (NavRow, NSWindow) {
+        let row = NavRow(title: "Terminal", focusesOnClick: focusesOnClick, onActivate: onActivate)
         row.translatesAutoresizingMaskIntoConstraints = true
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 200, height: 40),

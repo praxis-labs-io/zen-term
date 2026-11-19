@@ -64,7 +64,7 @@ final class SidebarSSHHostsTests: WindowTestCase {
         wait(for: [drained], timeout: 2)
     }
 
-    private func hostRows(_ c: WindowController) -> [SettingsNavRow] {
+    private func hostRows(_ c: WindowController) -> [NavRow] {
         c.sidebarForTesting.view.hostRowsForTesting
     }
 

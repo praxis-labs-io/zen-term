@@ -59,9 +59,9 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         descendants(of: c.window.contentView!).compactMap { $0 as? T }
     }
 
-    private func rows(of c: WindowController) -> [SettingsNavRow] { c.sidebarForTesting.view.rowsForTesting }
+    private func rows(of c: WindowController) -> [NavRow] { c.sidebarForTesting.view.rowsForTesting }
 
-    private func openRepoWorkspace(in c: WindowController) throws -> SettingsNavRow {
+    private func openRepoWorkspace(in c: WindowController) throws -> NavRow {
         let home = c.activeWorkspaceIDForTesting
         c.handle(.toggleRepoPicker)
         waitUntil(!modals(RepoPickerOverlay.self, in: c).isEmpty, "the picker to be presented")
@@ -109,18 +109,22 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         let c = makeWindow()
         let row = try openRepoWorkspace(in: c)
         let plus = try XCTUnwrap(row.hoverAccessory)
-        XCTAssertTrue(plus.isHidden)
-        XCTAssertEqual(row.detailForTesting, "main")
+        func shows(_ view: NSView) -> Bool { descendants(of: row).contains { $0 === view } }
+        func showsBranch() -> Bool {
+            descendants(of: row).contains { ($0 as? NSTextField)?.stringValue == "main" }
+        }
+        XCTAssertFalse(shows(plus))
+        XCTAssertTrue(showsBranch())
 
         row.mouseEntered(with: crossing(.mouseEntered, over: row))
 
-        XCTAssertFalse(plus.isHidden)
-        XCTAssertTrue(descendants(of: row).contains { $0 is NSTextField && $0.isHidden }, "the branch gives way")
+        XCTAssertTrue(shows(plus))
+        XCTAssertFalse(showsBranch(), "the branch gives way")
 
         row.mouseExited(with: crossing(.mouseExited, over: row))
 
-        XCTAssertTrue(plus.isHidden)
-        XCTAssertFalse(descendants(of: row).contains { $0 is NSTextField && $0.isHidden })
+        XCTAssertFalse(shows(plus))
+        XCTAssertTrue(showsBranch())
     }
 
     func test_hoveringARowWithALongTitle_keepsTheTitleClearOfThePlus() throws {
@@ -281,7 +285,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertNil(rows(of: c)[2].hoverAccessory, "a worktree is made from its workspace")
     }
 
-    private func create(_ branch: String, from row: SettingsNavRow, in c: WindowController) throws {
+    private func create(_ branch: String, from row: NavRow, in c: WindowController) throws {
         let before = rows(of: c).count
         row.mouseEntered(with: crossing(.mouseEntered, over: row))
         try clickThroughTheWindow(at: try XCTUnwrap(row.hoverAccessory), in: c)
@@ -292,7 +296,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         waitUntil(rows(of: c).count == before + 1, "the new worktree's row", timeout: 10)
     }
 
-    private func ghostWithAWorktree(in c: WindowController) throws -> SettingsNavRow {
+    private func ghostWithAWorktree(in c: WindowController) throws -> NavRow {
         try create("feature/first", from: try openRepoWorkspace(in: c), in: c)
         c.activateWorkspaceForTesting(c.workspaceIDsForTesting[1])
         c.handle(.closeWorkspace)
@@ -454,7 +458,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
                 windowNumber: c.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
     }
 
-    private func rightClick(_ row: SettingsNavRow, in c: WindowController) throws {
+    private func rightClick(_ row: NavRow, in c: WindowController) throws {
         row.rightMouseDown(with: try mouse(.rightMouseDown, at: .zero, in: c))
     }
 
@@ -548,6 +552,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
     func test_escape_closesTheMenu_andGoesNoFurther() throws {
         let c = makeWindow()
         try rightClick(try openRepoWorkspace(in: c), in: c)
+        let items = menu.itemViewsForTesting
         let escape = try XCTUnwrap(
             NSEvent.keyEvent(
                 with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
@@ -557,7 +562,8 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertNil(menu.filter(escape))
 
         XCTAssertFalse(menu.isOpen)
-        XCTAssertTrue(modals(ListRow.self, in: c).isEmpty)
+        XCTAssertFalse(items.isEmpty)
+        XCTAssertTrue(items.allSatisfy { $0.window == nil }, "the menu's rows stay in the window")
     }
 
     func test_aClickElsewhere_closesTheMenu_andStillLands() throws {
@@ -597,22 +603,26 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         let c = makeWindow()
         try rightClick(try openRepoWorkspace(in: c), in: c)
         XCTAssertTrue(menu.isOpen)
+        let items = menu.itemViewsForTesting
 
         c.handle(.toggleSidebar)
 
         waitUntil(!menu.isOpen, "the menu to close with the sidebar")
-        XCTAssertTrue(modals(ListRow.self, in: c).isEmpty)
+        XCTAssertFalse(items.isEmpty)
+        XCTAssertTrue(items.allSatisfy { $0.window == nil }, "the menu's rows stay in the window")
     }
 
     func test_theWindowResigningKey_closesTheMenu() throws {
         let c = makeWindow()
         try rightClick(try openRepoWorkspace(in: c), in: c)
         XCTAssertTrue(menu.isOpen)
+        let items = menu.itemViewsForTesting
 
         NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: c.window)
 
         waitUntil(!menu.isOpen, "the menu to close with the window's focus")
-        XCTAssertTrue(modals(ListRow.self, in: c).isEmpty)
+        XCTAssertFalse(items.isEmpty)
+        XCTAssertTrue(items.allSatisfy { $0.window == nil }, "the menu's rows stay in the window")
     }
 
     private func drainGitStatus() {

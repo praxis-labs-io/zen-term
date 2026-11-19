@@ -41,7 +41,7 @@ final class ControlViewTests: WindowTestCase {
             ("AppButton", AppButton(title: "Add", variant: .secondary)),
             ("IconButton", IconButton(symbol: "plus", accessibilityLabel: "New tab") {}),
             ("SidebarJumpRow", SidebarJumpRow(tooltip: "Jump") {}),
-            ("SettingsNavRow", SettingsNavRow(title: "General") {}),
+            ("NavRow", NavRow(title: "General") {}),
             ("ListRow", ListRow(ListRow.Content(title: "Rename")) {}),
             ("KeybindChip", KeybindChip()),
             ("WorkspaceTabChip", WorkspaceTabChip()),

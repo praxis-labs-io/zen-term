@@ -388,7 +388,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   first, and through nav with no neighbor to the left (`TabController.focusPastLeftEdge`)
   from the active tab, so panes, drawers and the nvim navigator all reach it.
   ↵ activates a row as a click does. Rows take focus from the keyboard only
-  (`SettingsNavRow.takeKeyboardFocus`): AppKit promotes any clicked view that accepts.
+  (`NavRow.takeKeyboardFocus`): AppKit promotes any clicked view that accepts.
   A right-click or ⌃-click opens `SidebarRowMenu`, a `ListPopover` that never switches
   workspaces (New Worktree…, Rename Workspace… and Close Workspace act on that row); a local event monitor closes it on Esc or a click outside it.
 - **Collapsed, the sidebar still reveals from the window's leading edge.**

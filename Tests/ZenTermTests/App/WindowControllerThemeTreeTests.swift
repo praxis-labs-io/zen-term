@@ -88,7 +88,7 @@ final class WindowControllerThemeTreeTests: WindowTestCase {
         wait(for: [drained], timeout: 5)
     }
 
-    private func click(_ row: SettingsNavRow) {
+    private func click(_ row: NavRow) {
         let event = NSEvent.mouseEvent(
             with: .leftMouseDown, location: .zero, modifierFlags: [],
             timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: row.window?.windowNumber ?? 0,
@@ -319,7 +319,7 @@ final class WindowControllerThemeTreeTests: WindowTestCase {
         overlay.translatesAutoresizingMaskIntoConstraints = true
         controller.window.contentView!.addSubview(overlay)
         overlay.frame = NSRect(x: 0, y: 0, width: 620, height: 460)
-        let navRows = descendants(of: overlay).compactMap { $0 as? SettingsNavRow }
+        let navRows = descendants(of: overlay).compactMap { $0 as? NavRow }
         let before = try XCTUnwrap((keybinds.detailStops().last as? AppButton)?.layer?.backgroundColor)
 
         click(navRows[1])

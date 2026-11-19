@@ -210,22 +210,23 @@ final class ReapplyThemeTests: WindowTestCase {
         XCTAssertNotEqual(colorBefore, attributedTitleColor(firstSegment))
     }
 
-    func test_reapplyTheme_recolorsSettingsNavRow() throws {
-        let row = SettingsNavRow(title: "General") {}
+    func test_reapplyTheme_recolorsNavRow() throws {
+        let row = NavRow(title: "General") {}
         row.translatesAutoresizingMaskIntoConstraints = true
         let window = makeWindow()
         window.contentView?.addSubview(row)
         row.frame = NSRect(x: 0, y: 0, width: 150, height: ChromeMetrics.Height.control)
 
-        guard let label = row.subviews.compactMap({ $0 as? NSTextField }).first else {
-            return XCTFail("expected the row's label")
+        func label() -> NSTextField? {
+            func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
+            return descendants(row).compactMap { $0 as? NSTextField }.first { $0.stringValue == "General" }
         }
-        let colorBefore = label.textColor
+        let colorBefore = try XCTUnwrap(label(), "expected the row's label").textColor
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
         row.reapplyThemeTree()
 
-        XCTAssertNotEqual(colorBefore, label.textColor)
+        XCTAssertNotEqual(colorBefore, try XCTUnwrap(label()).textColor)
     }
 
     func test_reapplyTheme_recolorsSurfaceFloatOverlay() throws {

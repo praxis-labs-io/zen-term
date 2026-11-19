@@ -170,7 +170,7 @@ final class SettingsWorkspacesSectionTests: WindowTestCase {
         section.onEditWorkspace = { sink.calls.append($0) }
         let detail = mount(section)
 
-        rows(in: detail).first { $0.workspace.title == "Beta" }?.onActivate?()
+        rows(in: detail).first { $0.workspace.title == "Beta" }?.onChoose()
 
         XCTAssertEqual(sink.calls.first??.title, "Beta")
     }

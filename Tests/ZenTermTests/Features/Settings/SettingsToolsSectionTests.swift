@@ -161,7 +161,7 @@ final class SettingsToolsSectionTests: WindowTestCase {
         section.onEditFloat = { sink.calls.append($0) }
         let detail = mount(section)
 
-        rows(in: detail).first { $0.float.id == "top" }?.onActivate?()
+        rows(in: detail).first { $0.float.id == "top" }?.onChoose()
 
         XCTAssertEqual(sink.calls.first??.id, "top")
     }

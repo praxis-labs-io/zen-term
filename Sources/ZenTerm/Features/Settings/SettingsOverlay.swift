@@ -8,7 +8,7 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
 
     private let navStack = NSStackView()
     private let navScroll = FadingScrollView()
-    private var navRows: [SettingsNavRow] = []
+    private var navRows: [NavRow] = []
     private let detailContainer = NSView()
     private var selectedIndex = 0
     private let heading = SectionCaption("Settings")
@@ -78,7 +78,7 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
 
         for (index, section) in sections.enumerated() {
             section.onExitToNav = { [weak self] in self?.focusNav() }
-            let row = SettingsNavRow(title: section.navTitle) { [weak self] in self?.selectSection(index) }
+            let row = NavRow(title: section.navTitle) { [weak self] in self?.selectSection(index) }
             row.onArrowUp = { [weak self] in self?.moveNav(-1) }
             row.onArrowDown = { [weak self] in self?.moveNav(1) }
             row.onBacktab = { [weak self] in self?.moveNav(-1, wrap: true) }
@@ -192,7 +192,7 @@ final class SettingsOverlay: ModalShell, ModalOverlay {
         guard sections.indices.contains(index) else { return }
         if sections.indices.contains(selectedIndex) { sections[selectedIndex].sectionWillHide() }
         selectedIndex = index
-        for (rowIndex, row) in navRows.enumerated() { row.setSelected(rowIndex == index) }
+        for (rowIndex, row) in navRows.enumerated() { row.isCurrent = rowIndex == index }
         detailContainer.subviews.forEach { $0.removeFromSuperview() }
         let detail = sections[index].makeDetailView()
         detail.translatesAutoresizingMaskIntoConstraints = false

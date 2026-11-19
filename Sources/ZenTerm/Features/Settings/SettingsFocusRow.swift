@@ -1,7 +1,6 @@
 import AppKit
 
-class SettingsFocusRow: NSView, ThemeReapplying {
-    var onActivate: (() -> Void)?
+class SettingsFocusRow: ListRow {
     var onArrowUp: (() -> Void)?
     var onArrowDown: (() -> Void)?
     var onArrowRight: (() -> Void)?
@@ -11,35 +10,14 @@ class SettingsFocusRow: NSView, ThemeReapplying {
     var onBacktab: (() -> Void)?
     var onExitToNav: (() -> Void)?
 
-    private var isFocused = false { didSet { restyle() } }
-
-    init() {
-        super.init(frame: .zero)
-        translatesAutoresizingMaskIntoConstraints = false
-        wantsLayer = true
-        layer?.cornerRadius = ChromeMetrics.Radius.control
-        restyle()
+    init(_ content: Content) {
+        super.init(content) {}
+        focusesOnClick = true
+        setAccessibilityRole(.button)
+        heightAnchor.constraint(greaterThanOrEqualToConstant: ChromeMetrics.Height.control).isActive = true
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-    func pin(_ content: NSView) {
-        content.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(content)
-        NSLayoutConstraint.activate([
-            content.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.s6),
-            content.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.s6),
-            content.topAnchor.constraint(equalTo: topAnchor, constant: ChromeMetrics.Spacing.s6),
-            content.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -ChromeMetrics.Spacing.s6),
-        ])
-    }
-
-    func reapplyTheme() { restyle() }
-
-    override var acceptsFirstResponder: Bool { true }
-    override func becomeFirstResponder() -> Bool { isFocused = true; return true }
-    override func resignFirstResponder() -> Bool { isFocused = false; return true }
-    override func drawFocusRingMask() {}
 
     // KeyboardFocus.key(for:) decodes the keyCode alone, so ⌥ is checked here.
     override func keyDown(with event: NSEvent) {
@@ -52,7 +30,7 @@ class SettingsFocusRow: NSView, ThemeReapplying {
             }
         }
         switch key {
-        case .activate: onActivate?()
+        case .activate: onChoose()
         case .up: onArrowUp?()
         case .down: onArrowDown?()
         case .right where onArrowRight != nil: onArrowRight?()
@@ -63,19 +41,7 @@ class SettingsFocusRow: NSView, ThemeReapplying {
         }
     }
 
-    override func mouseDown(with event: NSEvent) {
-        guard acceptsFirstResponder else { return super.mouseDown(with: event) }
-        window?.makeFirstResponder(self)
-        onActivate?()
-    }
-
     override func resetCursorRects() {
-        if acceptsFirstResponder { addCursorRect(bounds, cursor: .pointingHand) }
-    }
-
-    private func restyle() {
-        let chrome = Theme.current.chrome
-        layer?.borderWidth = ChromeMetrics.Border.width
-        layer?.borderColor = isFocused ? chrome.focusRing.cgColor : NSColor.clear.cgColor
+        addCursorRect(bounds, cursor: .pointingHand)
     }
 }
