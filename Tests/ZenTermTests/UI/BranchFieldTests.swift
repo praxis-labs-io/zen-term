@@ -16,7 +16,7 @@ final class BranchFieldTests: XCTestCase {
         field.frame = NSRect(x: 20, y: 300, width: 420, height: ChromeMetrics.Height.control)
         window.contentView?.layoutSubtreeIfNeeded()
         field.setBranches(
-            ["main", "feature/zen-454", "feature/zen-481", "refactor/flags"], holders: [:])
+            ["main", "feature/zen-454", "feature/zen-481", "refactor/flags"], notes: [:])
     }
 
     override func tearDown() {
@@ -65,7 +65,7 @@ final class BranchFieldTests: XCTestCase {
     }
 
     func test_anExactMatchWithOtherCandidates_keepsTheList() {
-        field.setBranches(["main", "main-ish"], holders: [:])
+        field.setBranches(["main", "main-ish"], notes: [:])
 
         type("main")
 
@@ -159,9 +159,8 @@ final class BranchFieldTests: XCTestCase {
     }
 
     func test_aHeldBranchKeepsItsRowAndItsNote() {
-        field.setBranches(
-            ["feature/zen-454"],
-            holders: ["feature/zen-454": .worktree(URL(fileURLWithPath: "/tmp/wt"))])
+        let note = NewWorktreeOverlay.branchNote(for: .worktree(URL(fileURLWithPath: "/tmp/wt")))
+        field.setBranches(["feature/zen-454"], notes: ["feature/zen-454": note])
 
         type("zen")
 
@@ -170,9 +169,8 @@ final class BranchFieldTests: XCTestCase {
     }
 
     func test_aBranchTheMainCheckoutHoldsSaysSoOnItsRow() {
-        field.setBranches(
-            ["feature/zen-454"],
-            holders: ["feature/zen-454": .mainCheckout(URL(fileURLWithPath: "/tmp/repo"))])
+        let note = NewWorktreeOverlay.branchNote(for: .mainCheckout(URL(fileURLWithPath: "/tmp/repo")))
+        field.setBranches(["feature/zen-454"], notes: ["feature/zen-454": note])
 
         type("zen")
 

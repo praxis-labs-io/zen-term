@@ -38,10 +38,15 @@ final class SidebarRowMenu {
         return row
     }
 
+    private static func content(_ item: Item) -> ListRow.Content {
+        let shortcut = item.action.map { CommandCatalog.spec(for: $0).shortcut } ?? ""
+        return ListRow.Content(title: item.title, trailing: shortcut.isEmpty ? nil : .keycap(shortcut))
+    }
+
     private var popover: ListPopover?
     private(set) weak var anchor: NSView?
     private var monitor: Any?
-    private var itemViews: [SidebarRowMenuItemView] = []
+    private var itemViews: [ListRow] = []
     private var dismissObservers: [NSObjectProtocol] = []
 
     var isOpen: Bool { popover?.isOpen == true }
@@ -60,10 +65,12 @@ final class SidebarRowMenu {
         for (index, group) in groups.enumerated() {
             if index > 0 { rows.append(ListPopover.Row(view: Self.separator(), height: Self.separatorHeight)) }
             let views = group.map { item in
-                SidebarRowMenuItemView(item) { [weak self] in
+                let row = ListRow(Self.content(item)) { [weak self] in
                     self?.close()
                     item.run()
                 }
+                row.setAccessibilityRole(.menuItem)
+                return row
             }
             itemViews += views
             rows += views.map { ListPopover.Row(view: $0, height: Self.rowHeight) }
@@ -110,5 +117,5 @@ final class SidebarRowMenu {
         return false
     }
 
-    var itemViewsForTesting: [SidebarRowMenuItemView] { itemViews }
+    var itemViewsForTesting: [ListRow] { itemViews }
 }

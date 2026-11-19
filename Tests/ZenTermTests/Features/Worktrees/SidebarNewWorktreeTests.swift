@@ -557,7 +557,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertNil(menu.filter(escape))
 
         XCTAssertFalse(menu.isOpen)
-        XCTAssertTrue(modals(SidebarRowMenuItemView.self, in: c).isEmpty)
+        XCTAssertTrue(modals(ListRow.self, in: c).isEmpty)
     }
 
     func test_aClickElsewhere_closesTheMenu_andStillLands() throws {
@@ -601,7 +601,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         c.handle(.toggleSidebar)
 
         waitUntil(!menu.isOpen, "the menu to close with the sidebar")
-        XCTAssertTrue(modals(SidebarRowMenuItemView.self, in: c).isEmpty)
+        XCTAssertTrue(modals(ListRow.self, in: c).isEmpty)
     }
 
     func test_theWindowResigningKey_closesTheMenu() throws {
@@ -612,7 +612,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: c.window)
 
         waitUntil(!menu.isOpen, "the menu to close with the window's focus")
-        XCTAssertTrue(modals(SidebarRowMenuItemView.self, in: c).isEmpty)
+        XCTAssertTrue(modals(ListRow.self, in: c).isEmpty)
     }
 
     private func drainGitStatus() {

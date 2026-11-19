@@ -5,7 +5,7 @@
         static let width: CGFloat = 220
 
         static func sections() -> [GallerySection] {
-            [dropdowns(), segmentedControls()]
+            [listRows(), dropdowns(), segmentedControls()]
         }
 
         static func liveDropdown() -> Dropdown {
@@ -40,6 +40,37 @@
                 CheckboxDropdownItem(title: "With icon", isChecked: false, symbol: "terminal"),
                 CheckboxDropdownItem(title: "Icon and note", isChecked: true, note: "Note", symbol: "folder"),
             ]
+        }
+
+        private static func listRows() -> GallerySection {
+            let row = { (content: ListRow.Content) in sized(ListRow(content) {}) }
+            let highlighted = row(ListRow.Content(title: "Keyboard cursor"))
+            highlighted.isHighlighted = true
+            let focused = row(ListRow.Content(title: "Focused"))
+            focused.setKeyboardFocus(true)
+            return GallerySection(
+                title: "ListRow",
+                rows: [
+                    GallerySection.Row(label: "Rest", samples: [row(ListRow.Content(title: "Title"))]),
+                    GallerySection.Row(label: "Keyboard cursor", samples: [highlighted]),
+                    GallerySection.Row(label: "Focused", samples: [focused]),
+                    GallerySection.Row(
+                        label: "Current", samples: [row(ListRow.Content(title: "Selected", trailing: .check))]),
+                    GallerySection.Row(
+                        label: "Icon and note",
+                        samples: [row(ListRow.Content(title: "main", note: "Note", leading: .symbol("arrow.branch")))]),
+                    GallerySection.Row(
+                        label: "Swatch",
+                        samples: [
+                            row(ListRow.Content(title: "Accent", leading: .swatch(Theme.current.chrome.accent.nsColor)))
+                        ]),
+                    GallerySection.Row(
+                        label: "Keycap", samples: [row(ListRow.Content(title: "Close", trailing: .keycap("⌘⌃W")))]),
+                    GallerySection.Row(
+                        label: "Receding",
+                        samples: [row(ListRow.Content(title: "Unchecked", leading: .symbol("terminal"), recedes: true))]
+                    ),
+                ])
         }
 
         private static func dropdowns() -> GallerySection {
