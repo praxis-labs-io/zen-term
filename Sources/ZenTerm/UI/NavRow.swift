@@ -130,9 +130,12 @@ final class NavRow: ListRow {
         onFocusChanged?()
     }
 
+    // A click can follow hover in the same turn, before a layout pass would place the accessory it just showed.
     override func hoverDidChange() {
         super.hoverDidChange()
-        if hoverAccessory != nil { refreshContent() }
+        guard hoverAccessory != nil else { return }
+        refreshContent()
+        layoutSubtreeIfNeeded()
     }
 
     override func mouseDown(with event: NSEvent) {

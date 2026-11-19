@@ -79,6 +79,8 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     private(set) var isTakingKeyboardFocus = false
     private(set) var isHoverSuppressed = false
     private let stack = NSStackView()
+    // Kept across rebuilds, so a row that re-renders on hover keeps the label its layout and callers hold.
+    private let titleLabel = NSTextField(labelWithString: "")
     private lazy var stackLeading = stack.leadingAnchor.constraint(equalTo: leadingAnchor)
     private lazy var stackTop = stack.topAnchor.constraint(equalTo: topAnchor)
     private lazy var stackBottom = stack.bottomAnchor.constraint(equalTo: bottomAnchor)
@@ -164,7 +166,8 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     }
 
     private func titleView(_ chrome: ChromeTheme) -> NSView {
-        let title = NSTextField(labelWithString: content.title)
+        let title = titleLabel
+        title.stringValue = content.title
         title.font = ChromeType.font(content.nests ? .small : .body)
         title.textColor = chrome.ink(content.ink)
         title.lineBreakMode = .byTruncatingTail

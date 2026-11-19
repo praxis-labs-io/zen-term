@@ -123,6 +123,37 @@ final class NavRowTests: WindowTestCase {
         func reapplyTheme() { reapplied += 1 }
     }
 
+    func test_hover_placesThePlusWhereAClickThroughTheWindowLands() throws {
+        let (row, window) = mountedRow()
+        let plus = IconButton(symbol: "plus", accessibilityLabel: "New worktree") {}
+        row.setHoverAccessory(plus)
+        row.layoutSubtreeIfNeeded()
+
+        row.mouseEntered(with: crossing(.mouseEntered, over: row))
+
+        let point = plus.convert(NSPoint(x: plus.bounds.midX, y: plus.bounds.midY), to: nil)
+        let target = try XCTUnwrap(window.contentView?.hitTest(point))
+        XCTAssertTrue(target === plus || target.isDescendant(of: plus), "the click lands on \(target), not the plus")
+    }
+
+    func test_hover_keepsALongTitleClearOfThePlus() throws {
+        let (row, _) = mountedRow()
+        let long = String(repeating: "a-very-long-workspace-name-", count: 4)
+        row.setTitle(long)
+        let plus = IconButton(symbol: "plus", accessibilityLabel: "New worktree") {}
+        row.setHoverAccessory(plus)
+        let title = try XCTUnwrap(
+            descendants(of: row).compactMap { $0 as? NSTextField }.first { $0.stringValue == long })
+
+        row.mouseEntered(with: crossing(.mouseEntered, over: row))
+        row.layoutSubtreeIfNeeded()
+
+        XCTAssertTrue(title.isDescendant(of: row), "hover replaced the title label")
+        XCTAssertLessThanOrEqual(
+            title.convert(title.bounds, to: row).maxX, plus.convert(plus.bounds, to: row).minX,
+            "the title truncates before the plus, not under it")
+    }
+
     func test_click_takesFocus() {
         var activations = 0
         let (row, window) = mountedRow { activations += 1 }

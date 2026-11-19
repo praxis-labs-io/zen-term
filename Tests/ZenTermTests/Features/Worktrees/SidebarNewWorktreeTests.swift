@@ -552,6 +552,7 @@ final class SidebarNewWorktreeTests: WindowTestCase {
     func test_escape_closesTheMenu_andGoesNoFurther() throws {
         let c = makeWindow()
         try rightClick(try openRepoWorkspace(in: c), in: c)
+        let items = menu.itemViewsForTesting
         let escape = try XCTUnwrap(
             NSEvent.keyEvent(
                 with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
@@ -561,7 +562,8 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         XCTAssertNil(menu.filter(escape))
 
         XCTAssertFalse(menu.isOpen)
-        XCTAssertTrue(modals(ListRow.self, in: c).isEmpty)
+        XCTAssertFalse(items.isEmpty)
+        XCTAssertTrue(items.allSatisfy { $0.window == nil }, "the menu's rows stay in the window")
     }
 
     func test_aClickElsewhere_closesTheMenu_andStillLands() throws {
@@ -601,22 +603,26 @@ final class SidebarNewWorktreeTests: WindowTestCase {
         let c = makeWindow()
         try rightClick(try openRepoWorkspace(in: c), in: c)
         XCTAssertTrue(menu.isOpen)
+        let items = menu.itemViewsForTesting
 
         c.handle(.toggleSidebar)
 
         waitUntil(!menu.isOpen, "the menu to close with the sidebar")
-        XCTAssertTrue(modals(ListRow.self, in: c).isEmpty)
+        XCTAssertFalse(items.isEmpty)
+        XCTAssertTrue(items.allSatisfy { $0.window == nil }, "the menu's rows stay in the window")
     }
 
     func test_theWindowResigningKey_closesTheMenu() throws {
         let c = makeWindow()
         try rightClick(try openRepoWorkspace(in: c), in: c)
         XCTAssertTrue(menu.isOpen)
+        let items = menu.itemViewsForTesting
 
         NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: c.window)
 
         waitUntil(!menu.isOpen, "the menu to close with the window's focus")
-        XCTAssertTrue(modals(ListRow.self, in: c).isEmpty)
+        XCTAssertFalse(items.isEmpty)
+        XCTAssertTrue(items.allSatisfy { $0.window == nil }, "the menu's rows stay in the window")
     }
 
     private func drainGitStatus() {
