@@ -18,6 +18,20 @@ class ChromeTextView: NSTextView {
         if gained { applyThemedEditing() }
         return gained
     }
+
+    // In full screen, an unclaimed cancelOperation makes NSTextView exit full screen before the card's Esc runs.
+    override func doCommand(by selector: Selector) {
+        if selector == #selector(cancelOperation(_:)), claimEscape(selector) { return }
+        super.doCommand(by: selector)
+    }
+
+    private func claimEscape(_ selector: Selector) -> Bool {
+        if delegate?.textView?(self, doCommandBy: selector) == true { return true }
+        guard let event = NSApp.currentEvent, event.type == .keyDown,
+            KeyboardFocus.key(for: event) == .escape, KeyboardFocus.isUnmodified(event)
+        else { return false }
+        return window?.performKeyEquivalent(with: event) == true
+    }
 }
 
 // AppKit has no API for the unfocused selection color, and super fills with the current color, not `color`.
