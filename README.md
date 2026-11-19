@@ -1,27 +1,14 @@
 # ZenTerm
 
+ZenTerm is a modern macOS terminal built on a libghostty core.
+
+[Website](https://zenterm.io) · [Install](#install) · [Docs](https://zenterm.io/docs) · [Releases](https://github.com/praxis-labs-io/zen-term/releases)
+
 ![ZenTerm going from a single pane to a full tab: nvim in the main pane, a dev server in the bottom drawer, an agent in the right drawer, and tool floats over the top](docs/images/demo.gif)
 
-ZenTerm is a modern macOS terminal built on a libghostty core. Native panes and
-windows, hideable drawers and floats, tools bound to the keys you pick, and
-workspaces you define.
-
-The terminal emulation is Ghostty's own, from
-[libghostty](https://ghostty.org), built from a pinned `vendor/ghostty`
-submodule. The layout, input routing, scroll mode, theming, and chrome are
-ZenTerm's. All of it exists so you can reach your toolchain without stopping to
-find somewhere to run it.
-
-Release notes, documentation, and guides live at
-[zenterm.io](https://zenterm.io).
-
-![An editor in the main pane, a dev server in the labeled bottom drawer, and an agent in the right drawer, with the workspace name leading the tab bar](docs/images/drawers.png)
-
-One tab, three shells. ⌘B opens the drawer along the bottom, ⌘\ opens the one
-down the right side, and each runs its own shell with its chord printed in the
-corner. Hiding a drawer doesn't stop its process. The dev server here keeps
-running while the drawer is hidden. The tabs along the bottom are ⌘1
-through ⌘9.
+Native panes and windows, hideable drawers and floats, tools bound to the keys
+you pick, and workspaces you define. All of it exists so you can reach your
+toolchain without stopping to find somewhere to run it.
 
 ## Install
 
@@ -54,6 +41,11 @@ sudo ln -s /Applications/ZenTerm.app/Contents/MacOS/zen /usr/local/bin/zen
 The [zen CLI Guide](https://zenterm.io/docs/cli) covers the rest.
 
 ## What it does
+
+The terminal emulation is Ghostty's own, from
+[libghostty](https://ghostty.org), built from a pinned `vendor/ghostty`
+submodule. The layout, input routing, scroll mode, theming, and chrome are
+ZenTerm's.
 
 - **Panes that tile.** Split right or down, and move between panes by direction
   rather than by order.
@@ -112,6 +104,14 @@ Tool floats have no defaults. Each one takes the chord you give it in the
 config.
 
 ## A look around
+
+![An editor in the main pane, a dev server in the labeled bottom drawer, and an agent in the right drawer, with the workspace name leading the tab bar](docs/images/drawers.png)
+
+One tab, three shells. ⌘B opens the drawer along the bottom, ⌘\ opens the one
+down the right side, and each runs its own shell with its chord printed in the
+corner. Hiding a drawer doesn't stop its process. The dev server here keeps
+running while the drawer is hidden. The tabs along the bottom are ⌘1
+through ⌘9.
 
 ![Three panes tiled in one tab, the focused one outlined in its accent color](docs/images/panes.png)
 
@@ -183,6 +183,9 @@ Tools alone.
 
 ## Documentation
 
+Release notes, documentation, and guides live at
+[zenterm.io](https://zenterm.io).
+
 - [zenterm.io/docs](https://zenterm.io/docs) walks through the app for someone
   opening it for the first time.
 - [zenterm.io/docs/cli](https://zenterm.io/docs/cli) is the guide to `zen`, and
@@ -200,13 +203,12 @@ Tools alone.
 
 Read [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md). The short version: `bin/check`
 is the gate, one branch is one pull request, and `CLAUDE.md` holds the rules an
-agent working in this repo follows.
-
-## Security
-
-Report a vulnerability privately. [`SECURITY.md`](SECURITY.md) says how.
+agent working in this repo follows. Report a vulnerability privately through
+the repo's Security tab; [`SECURITY.md`](SECURITY.md) says how.
 
 ## License
 
 MIT. See [LICENSE](LICENSE). Third-party notices ship inside the app and live in
 [`Sources/ZenTerm/Resources/THIRD-PARTY-NOTICES.md`](Sources/ZenTerm/Resources/THIRD-PARTY-NOTICES.md).
+
+Part of the [Zen family](https://github.com/praxis-labs-io) from Praxis Labs.
