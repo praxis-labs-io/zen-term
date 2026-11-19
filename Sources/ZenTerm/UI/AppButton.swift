@@ -1,14 +1,13 @@
 import AppKit
 
 final class AppButton: NSButton {
-    enum Variant { case primary, secondary, muted, destructive, segment, link }
+    enum Variant { case primary, secondary, muted, destructive, link }
 
     private static let height = ChromeMetrics.Height.control
     private static let horizontalPadding = ChromeMetrics.Spacing.s8
     private static let keycapGap = ChromeMetrics.Spacing.s6
 
     var onTap: () -> Void
-    var isOn = false { didSet { restyle() } }
 
     var isKeyboardFocusable = false
     var onArrowUp: (() -> Void)?
@@ -17,7 +16,6 @@ final class AppButton: NSButton {
     var onArrowRight: (() -> Void)?
     var onTab: (() -> Void)?
     var onBacktab: (() -> Void)?
-    var showsFocusOutline = false { didSet { restyle() } }
 
     private let variant: Variant
     private let keycap: KeycapView?
@@ -177,7 +175,7 @@ final class AppButton: NSButton {
         let chrome = Theme.current.chrome
         let (textColor, background) = isEnabled ? enabledColors(chrome) : disabledColors(chrome)
         controlState.easeFill(background)
-        let outlined = isEnabled && (controlState.hasKeyboardFocus || showsFocusOutline)
+        let outlined = isEnabled && controlState.hasKeyboardFocus
         let insetOutlined = outlined && variant == .primary
         controlState.showFocusRing(outlined && !insetOutlined)
         CATransaction.begin()
@@ -207,11 +205,6 @@ final class AppButton: NSButton {
             return (chrome.ink(.subtle), chrome.fill(isHovered ? .hover : .rest))
         case .destructive:
             return (chrome.destructive.nsColor, chrome.fill(isHovered ? .hover : .rest))
-        case .segment:
-            return (
-                chrome.ink(isOn ? .normal : .subtle),
-                isOn ? chrome.fill(.active) : chrome.fill(isHovered ? .hover : .rest)
-            )
         case .link:
             return (chrome.ink(isHovered ? .normal : .subtle), .clear)
         }
@@ -219,7 +212,6 @@ final class AppButton: NSButton {
 
     private func disabledColors(_ chrome: ChromeTheme) -> (text: NSColor, background: NSColor) {
         switch variant {
-        case .segment: return (chrome.ink(.faint), chrome.fill(isOn ? .active : .rest))
         case .primary, .muted, .destructive: return (chrome.ink(.faint), chrome.fill(.rest))
         case .secondary, .link: return (chrome.ink(.faint), .clear)
         }

@@ -97,37 +97,23 @@ final class AppButtonTests: WindowTestCase {
         XCTAssertEqual(button.layer?.borderColor?.alpha, 0, "an accent ring on an accent fill vanishes")
     }
 
-    func test_aSegmentThatIsOn_labelsInNormalInk() {
-        let (button, window) = mount(.segment)
-        let chrome = Theme.current.chrome
-
-        button.isOn = true
-
-        XCTAssertEqual(titleColor(button), chrome.ink(.normal))
-        XCTAssertEqual(button.layer?.backgroundColor, chrome.fill(.active).cgColor)
-        withExtendedLifetime(window) {}
-    }
-
     func test_noAppButtonLabelDrawsInAccent() throws {
         let accent = Theme.current.chrome.accent.nsColor
         for variant in GalleryButtons.variants {
-            for segmentOn in variant == .segment ? [false, true] : [false] {
-                for state in ["rest", "hovered", "focused", "disabled"] {
-                    let button = AppButton(
-                        title: "Open", variant: variant, shortcut: variant == .primary ? "⏎" : nil)
-                    button.isKeyboardFocusable = true
-                    button.isOn = segmentOn
-                    let window = try mountFitted(button)
-                    switch state {
-                    case "hovered": button.mouseEntered(with: try crossing(.mouseEntered, in: window))
-                    case "focused": XCTAssertTrue(window.makeFirstResponder(button))
-                    case "disabled": button.isEnabled = false
-                    default: break
-                    }
-                    let name = "\(variant)\(segmentOn ? " on" : "") \(state)"
-                    XCTAssertNotEqual(titleColor(button), accent, "\(name) labels in accent")
-                    XCTAssertNotEqual(button.keycapForTesting?.inkForTesting, accent, "\(name) draws an accent glyph")
+            for state in ["rest", "hovered", "focused", "disabled"] {
+                let button = AppButton(
+                    title: "Open", variant: variant, shortcut: variant == .primary ? "⏎" : nil)
+                button.isKeyboardFocusable = true
+                let window = try mountFitted(button)
+                switch state {
+                case "hovered": button.mouseEntered(with: try crossing(.mouseEntered, in: window))
+                case "focused": XCTAssertTrue(window.makeFirstResponder(button))
+                case "disabled": button.isEnabled = false
+                default: break
                 }
+                let name = "\(variant) \(state)"
+                XCTAssertNotEqual(titleColor(button), accent, "\(name) labels in accent")
+                XCTAssertNotEqual(button.keycapForTesting?.inkForTesting, accent, "\(name) draws an accent glyph")
             }
         }
     }
@@ -269,13 +255,11 @@ final class AppButtonTests: WindowTestCase {
     }
 
     private func disabledButtons() -> [(name: String, button: AppButton)] {
-        let segmentOn = AppButton(title: "Create Worktree", variant: .segment)
-        segmentOn.isOn = true
         let variants: [(String, AppButton.Variant)] = [
             ("primary", .primary), ("secondary", .secondary), ("muted", .muted),
-            ("destructive", .destructive), ("segment off", .segment), ("link", .link),
+            ("destructive", .destructive), ("link", .link),
         ]
-        return variants.map { ($0.0, AppButton(title: "Create Worktree", variant: $0.1)) } + [("segment on", segmentOn)]
+        return variants.map { ($0.0, AppButton(title: "Create Worktree", variant: $0.1)) }
     }
 
     private func faintInk(over background: CGColor?, in space: NSColorSpace) throws -> NSColor {
@@ -325,19 +309,6 @@ final class AppButtonTests: WindowTestCase {
 
     func test_aDisabledButton_drawsItsLabelInTheThemesFaintInk_withADarkThemeOnALightModeMac() throws {
         try assertDisabledLabelsDrawInFaintInk(theme: Theme.builtIn, appearance: .aqua)
-    }
-
-    func test_aDisabledSegmentThatIsOn_staysSelected() throws {
-        let button = AppButton(title: "main", variant: .segment)
-        button.isOn = true
-        let window = try mountFitted(button)
-        let chrome = Theme.current.chrome
-
-        button.isEnabled = false
-
-        XCTAssertEqual(button.layer?.backgroundColor, chrome.fill(.active).cgColor, "the selection vanished")
-        XCTAssertEqual(titleColor(button), chrome.ink(.faint))
-        withExtendedLifetime(window) {}
     }
 
     func test_aTitleTooWideForItsButton_drawsNoInkOutsideIt() throws {

@@ -403,13 +403,13 @@ final class NewWorktreeOverlayTests: WindowTestCase {
 
         overlay.beginWork("Creating spike")
 
-        XCTAssertEqual(segmentButtons(in: base).filter(\.isEnabled), [])
+        XCTAssertFalse(base.isEnabled)
         XCTAssertFalse(base.acceptsFirstResponder)
         XCTAssertTrue(visibleText(in: overlay).contains("Starts from origin/main."))
 
         overlay.failWork("nope")
 
-        XCTAssertEqual(segmentButtons(in: base).filter { !$0.isEnabled }, [], "and it comes back")
+        XCTAssertTrue(base.isEnabled, "and it comes back")
         XCTAssertTrue(base.acceptsFirstResponder)
     }
 
@@ -558,10 +558,6 @@ final class NewWorktreeOverlayTests: WindowTestCase {
 
     private func button(in overlay: NSView, title: String) -> AppButton? {
         descendants(of: overlay).compactMap { $0 as? AppButton }.first { $0.title == title }
-    }
-
-    private func segmentButtons(in segment: SegmentedControl) -> [AppButton] {
-        descendants(of: segment).compactMap { $0 as? AppButton }
     }
 
     private func backdrop(in overlay: NSView) -> BackdropView? {

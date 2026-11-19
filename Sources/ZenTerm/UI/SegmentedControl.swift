@@ -1,6 +1,6 @@
 import AppKit
 
-final class SegmentedControl: NSView {
+final class SegmentedControl: ControlView, ThemeReapplying {
     private(set) var selectedIndex: Int
     private(set) var optionTitles: [String]
     var onChange: (Int) -> Void
@@ -14,13 +14,16 @@ final class SegmentedControl: NSView {
         didSet {
             guard isEnabled != oldValue else { return }
             segments.forEach { $0.isEnabled = isEnabled }
-            if !isEnabled, isControlFocused { window?.makeFirstResponder(nil) }
+            if !isEnabled, hasKeyboardFocus { window?.makeFirstResponder(nil) }
+            restyle()
         }
     }
 
-    private var segments: [AppButton] = []
-    // Without an intrinsic width the control stretches to fill its row instead of hugging its segments.
-    private var segmentsStack: NSStackView?
+    private static let inset = ChromeMetrics.Spacing.s2
+    private static let trackHeight = ChromeMetrics.Height.control
+    private var segments: [Segment] = []
+    // A layer the control owns, so the slide drives its geometry and its shadow follows the animated bounds.
+    private let selectedSurface = CALayer()
     // Lets a reselect pin a value that is only OS-derived, as the reduce-motion row needs.
     private let notifiesOnReselect: Bool
 
@@ -29,78 +32,85 @@ final class SegmentedControl: NSView {
         onChange: @escaping (Int) -> Void
     ) {
         self.optionTitles = options
-        self.selectedIndex = selectedIndex
+        self.selectedIndex = min(max(selectedIndex, 0), max(options.count - 1, 0))
         self.notifiesOnReselect = notifiesOnReselect
         self.onChange = onChange
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.cornerRadius = ChromeMetrics.Radius.control
+        layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.trackHeight)
         translatesAutoresizingMaskIntoConstraints = false
 
+        setAccessibilityElement(true)
+        setAccessibilityRole(.radioGroup)
+        selectedSurface.anchorPoint = CGPoint(x: 0, y: 0.5)
+        selectedSurface.cornerRadius = ChromeMetrics.Radius.capsule(ChromeMetrics.Height.sm)
+        selectedSurface.borderWidth = ChromeMetrics.Border.width
+        selectedSurface.shadowRadius = FloatShadow.Tier.overlay.blur
+        selectedSurface.shadowOffset = FloatShadow.Tier.overlay.offset
+        selectedSurface.shadowOpacity = 1
+        selectedSurface.zPosition = -1
+        layer?.insertSublayer(selectedSurface, at: 0)
+
         segments = options.enumerated().map { index, title in
-            AppButton(title: title, variant: .segment) { [weak self] in self?.select(index) }
+            Segment(title: title) { [weak self] in self?.select(index) }
         }
-        let stack = NSStackView(views: segments)
-        stack.orientation = .horizontal
-        stack.alignment = .centerY
-        stack.spacing = ChromeMetrics.Spacing.s4
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
-        segmentsStack = stack
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
-            stack.topAnchor.constraint(equalTo: topAnchor),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
-        ])
-        updateSelection()
+        var leading = leadingAnchor
+        var leadingInset = Self.inset
+        for segment in segments {
+            addSubview(segment)
+            NSLayoutConstraint.activate([
+                segment.leadingAnchor.constraint(equalTo: leading, constant: leadingInset),
+                segment.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ])
+            leading = segment.trailingAnchor
+            leadingInset = 0
+        }
+        heightAnchor.constraint(equalToConstant: Self.trackHeight).isActive = true
+        if let last = segments.last {
+            last.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -Self.inset).isActive = true
+        }
+        restyle()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    // Without an intrinsic width the control stretches to fill its row instead of hugging its segments.
     override var intrinsicContentSize: NSSize {
-        guard let segmentsStack else { return super.intrinsicContentSize }
-        return NSSize(width: segmentsStack.fittingSize.width, height: NSView.noIntrinsicMetric)
+        let segmentsWidth = segments.reduce(0) { $0 + $1.fittingSize.width }
+        return NSSize(width: segmentsWidth + Self.inset * 2, height: Self.trackHeight)
     }
 
     func select(_ index: Int) {
         let clamped = min(max(index, 0), segments.count - 1)
-        guard notifiesOnReselect || clamped != selectedIndex || !segments[clamped].isOn else {
-            selectedIndex = clamped
-            updateSelection()
-            return
-        }
+        let changed = clamped != selectedIndex
         selectedIndex = clamped
-        updateSelection()
+        restyle()
+        placeSelectedSurface(animated: changed)
+        guard changed || notifiesOnReselect else { return }
         onChange(clamped)
     }
 
     func setSelection(_ index: Int) {
         selectedIndex = min(max(index, 0), segments.count - 1)
-        updateSelection()
+        restyle()
+        placeSelectedSurface(animated: false)
     }
 
-    private var isControlFocused = false
-
-    private func updateSelection() {
-        for (index, segment) in segments.enumerated() { segment.isOn = (index == selectedIndex) }
-        refreshOutline()
+    func reapplyTheme() {
+        restyle()
+        segments.forEach { $0.restyle() }
     }
 
     override var acceptsFirstResponder: Bool { isEnabled }
 
-    override func becomeFirstResponder() -> Bool {
-        showFocus()
-        return true
-    }
+    override func drawFocusRingMask() {}
 
-    override func resignFirstResponder() -> Bool {
-        isControlFocused = false
-        refreshOutline()
-        return true
-    }
+    override func focusDidChange() { restyle() }
 
-    override func drawFocusRingMask() {}  // the selected segment's outline marks focus
+    override func layout() {
+        super.layout()
+        placeSelectedSurface(animated: false)
+    }
 
     override func keyDown(with event: NSEvent) {
         guard isEnabled else { return super.keyDown(with: event) }
@@ -116,18 +126,112 @@ final class SegmentedControl: NSView {
         }
     }
 
-    private func showFocus() {
-        isControlFocused = true
-        refreshOutline()
+    private func restyle() {
+        layer?.backgroundColor = Theme.current.chrome.fill(.rest).cgColor
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        selectedSurface.backgroundColor = CardChrome.fill(.overlay).cgColor
+        selectedSurface.borderColor = FloatShadow.edge.cgColor
+        selectedSurface.shadowColor = FloatShadow.color(.overlay).cgColor
+        CATransaction.commit()
+        showFocusRing(hasKeyboardFocus && isEnabled)
+        for (index, segment) in segments.enumerated() { segment.isSelected = index == selectedIndex }
     }
 
-    #if DEBUG
-        func forceFocusForGallery() { showFocus() }
-    #endif
+    private func placeSelectedSurface(animated: Bool) {
+        guard segments.indices.contains(selectedIndex) else { return }
+        Motion.stretch(selectedSurface, to: segments[selectedIndex].frame, animated: animated && window != nil)
+    }
 
-    private func refreshOutline() {
-        for (index, segment) in segments.enumerated() {
-            segment.showsFocusOutline = isControlFocused && index == selectedIndex
+    var selectedSurfaceFrameForTesting: CGRect { selectedSurface.frame }
+    var selectedSurfaceFillForTesting: CGColor? { selectedSurface.backgroundColor }
+    var isSelectedSurfaceSlidingForTesting: Bool { selectedSurface.animation(forKey: "stretch.left") != nil }
+    var segmentsForTesting: [NSView] { segments }
+
+    func segmentInkForTesting(_ index: Int) -> NSColor? { segments[index].inkForTesting }
+    func segmentFillForTesting(_ index: Int) -> CGColor? { segments[index].layer?.backgroundColor }
+
+    #if DEBUG
+        func forceFocusForGallery() { setKeyboardFocus(true) }
+        func forceHoverForGallery(segment index: Int) { segments[index].setHovered(true) }
+    #endif
+}
+
+private final class Segment: ControlView {
+    private let label: NSTextField
+    private let onPress: () -> Void
+    private var isPressed = false
+
+    var isSelected = false { didSet { if isSelected != oldValue { restyle() } } }
+    var isEnabled = true {
+        didSet {
+            guard isEnabled != oldValue else { return }
+            if !isEnabled {
+                setHovered(false)
+                isPressed = false
+            }
+            window?.invalidateCursorRects(for: self)
+            restyle()
         }
+    }
+
+    init(title: String, onPress: @escaping () -> Void) {
+        label = NSTextField(labelWithString: title)
+        self.onPress = onPress
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = ChromeMetrics.Radius.capsule(ChromeMetrics.Height.sm)
+        translatesAutoresizingMaskIntoConstraints = false
+        label.font = ChromeType.font(.small, weight: .semibold)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.radioButton)
+        setAccessibilityLabel(title)
+        NSLayoutConstraint.activate([
+            heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.sm),
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+        restyle()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    var inkForTesting: NSColor? { label.textColor }
+
+    override func hoverDidChange() { restyle() }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        super.hitTest(point) == nil ? nil : self
+    }
+
+    override func resetCursorRects() {
+        if isEnabled { addCursorRect(bounds, cursor: .pointingHand) }
+    }
+
+    override func mouseDown(with event: NSEvent) { isPressed = isEnabled }
+
+    override func mouseUp(with event: NSEvent) {
+        defer { isPressed = false }
+        guard isPressed, isEnabled, bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        onPress()
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        guard isEnabled else { return false }
+        onPress()
+        return true
+    }
+
+    func restyle() {
+        setAccessibilityValue(isSelected)
+        setAccessibilityEnabled(isEnabled)
+        let chrome = Theme.current.chrome
+        let hovered = isHovered && isEnabled && !isSelected
+        let ink: ChromeTheme.InkLevel = !isEnabled ? .faint : (isSelected || hovered ? .normal : .subtle)
+        label.textColor = chrome.ink(ink)
+        easeFill(hovered ? chrome.fill(.hover) : .clear)
     }
 }

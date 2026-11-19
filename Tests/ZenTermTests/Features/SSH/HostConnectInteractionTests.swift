@@ -1094,7 +1094,6 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(button.frame.height, ChromeMetrics.Height.control)
         XCTAssertEqual(button.keycapForTesting?.shortcut, "⏎")
 
-        XCTAssertFalse(button.showsFocusOutline)
         XCTAssertFalse(button.acceptsFirstResponder, "the panel takes ↵, so the button never draws a focus ring")
         XCTAssertEqual(button.layer?.borderColor?.alpha, 0)
         XCTAssertNotNil(button.layer?.backgroundColor)

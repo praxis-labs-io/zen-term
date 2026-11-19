@@ -2,7 +2,7 @@
     import AppKit
 
     enum GalleryButtons {
-        static let variants: [AppButton.Variant] = [.primary, .secondary, .muted, .destructive, .segment, .link]
+        static let variants: [AppButton.Variant] = [.primary, .secondary, .muted, .destructive, .link]
 
         static func sections() -> [GallerySection] {
             [appButtons(), iconButtons(), keycaps()]
@@ -14,7 +14,6 @@
             case .secondary: return "Secondary"
             case .muted: return "Muted"
             case .destructive: return "Destructive"
-            case .segment: return "Segment"
             case .link: return "Link"
             }
         }
@@ -36,13 +35,7 @@
             focused.forceFocusForGallery()
             let disabled = AppButton(title: "Disabled", variant: variant)
             disabled.isEnabled = false
-            guard variant == .segment else { return [rest, hover, focused, disabled] }
-            let selected = AppButton(title: "Selected", variant: variant)
-            selected.isOn = true
-            let selectedFocused = AppButton(title: "Selected focused", variant: variant)
-            selectedFocused.isOn = true
-            selectedFocused.forceFocusForGallery()
-            return [rest, hover, focused, disabled, selected, selectedFocused]
+            return [rest, hover, focused, disabled]
         }
 
         private static func symbolButtons() -> [NSView] {
