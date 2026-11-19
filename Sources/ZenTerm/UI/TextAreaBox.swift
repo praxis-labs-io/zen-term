@@ -92,6 +92,8 @@ final class TextAreaBox: NSView, NSTextViewDelegate {
         case #selector(NSResponder.insertBacktab(_:)):
             guard let onBacktab else { return false }
             onBacktab()
+        case #selector(NSResponder.cancelOperation(_:)):
+            break
         default:
             return false
         }

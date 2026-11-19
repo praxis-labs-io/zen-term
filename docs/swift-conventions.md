@@ -35,6 +35,12 @@ handles these as ported from ghostty: Ctrl-Return passes through, Ctrl-/ becomes
 it on the second pass. Event identity is a timestamp because an `NSEvent` reference does not survive
 the round trip.
 
+**With a text field focused, a bare Esc reaches `performKeyEquivalent` only after the field editor.**
+The editor turns it into `cancelOperation:`, and an unclaimed one goes up to the window, whose key-equivalent
+pass is what closes a `ModalShell`. In full screen `NSTextView` exits full screen instead of forwarding it.
+`ChromeTextView.doCommand(by:)` offers Esc to the field's delegate, then the window's key equivalents,
+before AppKit's default. A test sending Esc to `performKeyEquivalent` directly skips this path.
+
 **A consumed `keyDown` leaves its `keyUp` behind.** `KeyInterceptor` matches only
 `[.keyDown, .flagsChanged]`, so a consumed chord's release still reaches `GhosttyHostView`. An input
 method, a composing key, and the soft-newline chord swallow presses the same way. The surface keeps a
