@@ -208,7 +208,14 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
         branchField.onTab = { [weak self] in self?.moveTab(1) }
         branchField.onBacktab = { [weak self] in self?.moveTab(-1) }
         branchField.onSubmit = { [weak self] in self?.submit() }
-        branchField.setBranches(options.branches, holders: options.holders)
+        branchField.setBranches(options.branches, notes: options.holders.mapValues(Self.branchNote))
+    }
+
+    static func branchNote(for holder: WorktreeStore.Holder) -> String {
+        switch holder {
+        case .worktree: return "has a worktree"
+        case .mainCheckout: return "main checkout"
+        }
     }
 
     private func wireSegment(_ segment: SegmentedControl) {

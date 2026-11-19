@@ -187,6 +187,8 @@ A control's hover and eased fill come from `ControlView`, or from `ControlState`
 cannot subclass it (`AppButton`). A control never keeps its own tracking area. A control on that base
 takes keyboard focus and its ring from it too.
 
+A row in a popover list or menu is a `ListRow`.
+
 A modal's title row is `ModalHeader` and its button row is `ModalActionBar`; a keyboard-only card uses
 `HintFooter` in its place. The shared hairline rule is `Divider`, and the shared muted "nothing here"
 line is `EmptyStateLabel`.

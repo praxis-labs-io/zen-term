@@ -23,7 +23,7 @@ final class CheckboxDropdown: PopoverPicker {
     var onClosed: (() -> Void)?
     var restingIndices: [Int]?
 
-    private var rowViews: [CheckboxRowView] = []
+    private var rowViews: [ListRow] = []
 
     var shownSummaryForTesting: String? { titleLabel.isHidden ? nil : titleLabel.stringValue }
     var itemsForTesting: [CheckboxDropdownItem] { items }
@@ -73,85 +73,26 @@ final class CheckboxDropdown: PopoverPicker {
     }
 
     override func renderRows() {
-        let chrome = Theme.current.chrome
         for (row, index) in zip(rowViews, visible) {
             guard items.indices.contains(index) else { continue }
-            row.render(item: items[index], isHighlighted: isPopoverOpen && index == highlighted, chrome: chrome)
+            row.render(Self.content(items[index]))
+            row.isHighlighted = isPopoverOpen && index == highlighted
         }
     }
 
     override func itemRows() -> [ListPopover.Row] {
-        rowViews = visible.map { index in CheckboxRowView { [weak self] in self?.pick(index) } }
+        rowViews = visible.map { index in
+            let content = items.indices.contains(index) ? Self.content(items[index]) : ListRow.Content(title: "")
+            let row = ListRow(content) { [weak self] in self?.pick(index) }
+            row.hoverFills = false
+            return row
+        }
         return rowViews.map { ListPopover.Row(view: $0, height: Self.rowHeight) }
     }
 
-    private final class CheckboxRowView: NSView {
-        private let onClick: () -> Void
-        private let check = NSImageView()
-        private let title = NSTextField(labelWithString: "")
-        private let note = NSTextField(labelWithString: "")
-        private let icon = NSImageView()
-        private lazy var iconWidth = icon.widthAnchor.constraint(equalToConstant: 0)
-        private lazy var titleGap = title.leadingAnchor.constraint(equalTo: icon.trailingAnchor)
-
-        init(onClick: @escaping () -> Void) {
-            self.onClick = onClick
-            super.init(frame: .zero)
-            wantsLayer = true
-            layer?.cornerRadius = ChromeMetrics.Radius.control
-            translatesAutoresizingMaskIntoConstraints = false
-
-            check.image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)
-            check.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.sm, weight: .semibold)
-            check.translatesAutoresizingMaskIntoConstraints = false
-            title.font = ChromeType.font(.body)
-            title.lineBreakMode = .byTruncatingTail
-            title.translatesAutoresizingMaskIntoConstraints = false
-            note.font = ChromeType.font(.caption)
-            note.translatesAutoresizingMaskIntoConstraints = false
-            note.setContentCompressionResistancePriority(.required, for: .horizontal)
-            icon.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.sm, weight: .regular)
-            icon.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(check)
-            addSubview(icon)
-            addSubview(title)
-            addSubview(note)
-            NSLayoutConstraint.activate([
-                check.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
-                check.widthAnchor.constraint(equalToConstant: 14),
-                check.centerYAnchor.constraint(equalTo: centerYAnchor),
-                icon.leadingAnchor.constraint(equalTo: check.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
-                iconWidth,
-                icon.centerYAnchor.constraint(equalTo: centerYAnchor),
-                titleGap,
-                title.trailingAnchor.constraint(
-                    lessThanOrEqualTo: note.leadingAnchor, constant: -ChromeMetrics.Spacing.s8),
-                title.centerYAnchor.constraint(equalTo: centerYAnchor),
-                note.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
-                note.centerYAnchor.constraint(equalTo: centerYAnchor),
-            ])
-        }
-
-        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-        func render(item: CheckboxDropdownItem, isHighlighted: Bool, chrome: ChromeTheme) {
-            title.stringValue = item.title
-            title.textColor = item.isChecked ? chrome.ink(.normal) : chrome.ink(.muted)
-            note.stringValue = item.note ?? ""
-            note.textColor = chrome.ink(.faint)
-            note.isHidden = item.note == nil
-            icon.image = item.symbol.flatMap {
-                NSImage(systemSymbolName: $0, accessibilityDescription: nil)
-            }
-            icon.contentTintColor = item.isChecked ? chrome.ink(.normal) : chrome.ink(.subtle)
-            icon.isHidden = item.symbol == nil
-            iconWidth.constant = icon.isHidden ? 0 : 14
-            titleGap.constant = icon.isHidden ? 0 : ChromeMetrics.Spacing.s6
-            check.isHidden = !item.isChecked
-            check.contentTintColor = chrome.ink(.normal)
-            layer?.backgroundColor = (isHighlighted ? chrome.fill(.hover) : NSColor.clear).cgColor
-        }
-
-        override func mouseDown(with event: NSEvent) { onClick() }
+    private static func content(_ item: CheckboxDropdownItem) -> ListRow.Content {
+        ListRow.Content(
+            title: item.title, note: item.note, leading: item.symbol.map { .symbol($0) },
+            trailing: item.isChecked ? .check : nil, recedes: !item.isChecked)
     }
 }

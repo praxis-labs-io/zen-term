@@ -14,11 +14,11 @@ final class BranchField: NSView, ThemeReapplying {
     var onSubmit: (() -> Void)?
 
     private var branches: [String] = []
-    private var holders: [String: WorktreeStore.Holder] = [:]
+    private var notes: [String: String] = [:]
     private var matches: [String] = []
     private var highlighted = 0
     private lazy var popover = ListPopover(anchor: box)
-    private var rowViews: [BranchRowView] = []
+    private var rowViews: [ListRow] = []
 
     private static let rowHeight: CGFloat = ChromeMetrics.Height.control
 
@@ -77,17 +77,15 @@ final class BranchField: NSView, ThemeReapplying {
         if window == nil { closeList() }
     }
 
-    func setBranches(_ branches: Set<String>, holders: [String: WorktreeStore.Holder]) {
+    func setBranches(_ branches: Set<String>, notes: [String: String]) {
         self.branches = branches.sorted()
-        self.holders = holders
+        self.notes = notes
     }
 
     func setText(_ value: String) {
         box.setText(value)
         closeList()
     }
-
-    var holderOfTypedBranch: WorktreeStore.Holder? { holders[text] }
 
     func repositionList() {
         guard popover.isOpen else { return }
@@ -170,88 +168,21 @@ final class BranchField: NSView, ThemeReapplying {
 
     private func buildRows() -> [ListPopover.Row] {
         rowViews = matches.map { branch in
-            BranchRowView(onClick: { [weak self] in self?.commit(branch) })
+            let content = ListRow.Content(title: branch, note: notes[branch], leading: .symbol("arrow.branch"))
+            let row = ListRow(content) { [weak self] in self?.commit(branch) }
+            row.hoverFills = false
+            return row
         }
         return rowViews.map { ListPopover.Row(view: $0, height: Self.rowHeight) }
     }
 
     private func renderRows() {
-        let chrome = Theme.current.chrome
-        if rowViews.indices.contains(highlighted) {
-            let row = rowViews[highlighted]
-            popover.reveal(row)
-        }
-        for (index, row) in rowViews.enumerated() {
-            let branch = matches[index]
-            row.render(
-                branch: branch, note: Self.note(for: holders[branch]),
-                isHighlighted: index == highlighted, chrome: chrome)
-        }
-    }
-
-    private static func note(for holder: WorktreeStore.Holder?) -> String? {
-        switch holder {
-        case .worktree: return "has a worktree"
-        case .mainCheckout: return "main checkout"
-        case nil: return nil
-        }
+        if rowViews.indices.contains(highlighted) { popover.reveal(rowViews[highlighted]) }
+        for (index, row) in rowViews.enumerated() { row.isHighlighted = index == highlighted }
     }
 
     func reapplyTheme() {
         guard popover.isOpen else { return }
         rerenderList()
-    }
-
-    private final class BranchRowView: NSView {
-        private let onClick: () -> Void
-        private let icon = NSImageView()
-        private let title = NSTextField(labelWithString: "")
-        private let note = NSTextField(labelWithString: "")
-
-        init(onClick: @escaping () -> Void) {
-            self.onClick = onClick
-            super.init(frame: .zero)
-            wantsLayer = true
-            layer?.cornerRadius = ChromeMetrics.Radius.control
-            translatesAutoresizingMaskIntoConstraints = false
-
-            icon.image = NSImage(systemSymbolName: "arrow.branch", accessibilityDescription: nil)
-            icon.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.sm, weight: .regular)
-            icon.translatesAutoresizingMaskIntoConstraints = false
-            title.font = ChromeType.font(.body)
-            title.lineBreakMode = .byTruncatingTail
-            title.translatesAutoresizingMaskIntoConstraints = false
-            note.font = ChromeType.font(.caption)
-            note.translatesAutoresizingMaskIntoConstraints = false
-            note.setContentCompressionResistancePriority(.required, for: .horizontal)
-            addSubview(icon)
-            addSubview(title)
-            addSubview(note)
-            NSLayoutConstraint.activate([
-                icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
-                icon.widthAnchor.constraint(equalToConstant: 14),
-                icon.centerYAnchor.constraint(equalTo: centerYAnchor),
-                title.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: ChromeMetrics.Spacing.s6),
-                title.trailingAnchor.constraint(
-                    lessThanOrEqualTo: note.leadingAnchor, constant: -ChromeMetrics.Spacing.s8),
-                title.centerYAnchor.constraint(equalTo: centerYAnchor),
-                note.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
-                note.centerYAnchor.constraint(equalTo: centerYAnchor),
-            ])
-        }
-
-        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-        func render(branch: String, note text: String?, isHighlighted: Bool, chrome: ChromeTheme) {
-            title.stringValue = branch
-            title.textColor = chrome.ink(.normal)
-            note.stringValue = text ?? ""
-            note.textColor = chrome.ink(.faint)
-            note.isHidden = text == nil
-            icon.contentTintColor = chrome.ink(.subtle)
-            layer?.backgroundColor = (isHighlighted ? chrome.fill(.hover) : NSColor.clear).cgColor
-        }
-
-        override func mouseDown(with event: NSEvent) { onClick() }
     }
 }

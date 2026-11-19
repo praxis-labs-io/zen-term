@@ -42,7 +42,7 @@ final class ControlViewTests: WindowTestCase {
             ("IconButton", IconButton(symbol: "plus", accessibilityLabel: "New tab") {}),
             ("SidebarJumpRow", SidebarJumpRow(tooltip: "Jump") {}),
             ("SettingsNavRow", SettingsNavRow(title: "General") {}),
-            ("SidebarRowMenuItemView", SidebarRowMenuItemView(SidebarRowMenu.Item(title: "Rename", action: nil) {}) {}),
+            ("ListRow", ListRow(ListRow.Content(title: "Rename")) {}),
             ("KeybindChip", KeybindChip()),
             ("WorkspaceTabChip", WorkspaceTabChip()),
             ("DrawerRail", DrawerRail(region: .bottom)),
