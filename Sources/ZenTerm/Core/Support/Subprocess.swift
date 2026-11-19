@@ -34,15 +34,9 @@ enum Subprocess {
             return .failure(error)
         }
 
-        var outData = Data()
-        var errData = Data()
         let drained = DispatchGroup()
-        DispatchQueue.global(qos: .utility).async(group: drained) {
-            outData = out.fileHandleForReading.readDataToEndOfFile()
-        }
-        DispatchQueue.global(qos: .utility).async(group: drained) {
-            errData = err.fileHandleForReading.readDataToEndOfFile()
-        }
+        let outDrain = Drain(out, group: drained)
+        let errDrain = Drain(err, group: drained)
         let deadline: DispatchTime = timeout.map { .now() + $0 } ?? .distantFuture
         guard drained.wait(timeout: deadline) == .success, exited.wait(timeout: deadline) == .success else {
             stop(process, exited: exited)
@@ -52,9 +46,9 @@ enum Subprocess {
         return .success(
             Output(
                 status: process.terminationStatus,
-                stdout: String(decoding: outData, as: UTF8.self)
+                stdout: String(decoding: outDrain.data, as: UTF8.self)
                     .trimmingCharacters(in: .whitespacesAndNewlines),
-                stderr: String(decoding: errData, as: UTF8.self)
+                stderr: String(decoding: errDrain.data, as: UTF8.self)
                     .trimmingCharacters(in: .whitespacesAndNewlines)))
     }
 
@@ -63,5 +57,18 @@ enum Subprocess {
         guard exited.wait(timeout: .now() + killGrace) == .timedOut else { return }
         kill(process.processIdentifier, SIGKILL)
         exited.wait()
+    }
+
+    // Its own thread, not the global pool: a saturated pool never runs the read and the wait never returns.
+    private final class Drain: @unchecked Sendable {
+        private(set) var data = Data()
+
+        init(_ pipe: Pipe, group: DispatchGroup) {
+            group.enter()
+            Thread { [self] in
+                data = pipe.fileHandleForReading.readDataToEndOfFile()
+                group.leave()
+            }.start()
+        }
     }
 }
