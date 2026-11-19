@@ -19,7 +19,6 @@ final class WorkspaceTabChip: TabChip, NSTextFieldDelegate {
     private var defaultName = ""
     private(set) var opensFocused = false
     private(set) var isRemovable = false
-    private var hasFocus = false
     private var dragStartX: CGFloat?
     private var isDragging = false
     private var isCancellingRename = false
@@ -88,33 +87,16 @@ final class WorkspaceTabChip: TabChip, NSTextFieldDelegate {
         renameField.textColor = chrome.ink(.normal)
         renameField.placeholderAttributedString = NSAttributedString(
             string: defaultName, attributes: [.font: Self.chipFont, .foregroundColor: chrome.ink(.muted)])
-        let ringed = hasFocus || isRenaming
-        layer?.borderWidth = ChromeMetrics.Border.width
-        layer?.borderColor = ringed ? chrome.focusRing.cgColor : NSColor.clear.cgColor
+        showFocusRing(hasKeyboardFocus || isRenaming)
     }
 
     override var acceptsFirstResponder: Bool { true }
 
-    override func becomeFirstResponder() -> Bool {
-        let ok = super.becomeFirstResponder()
-        if ok { showFocus() }
-        return ok
-    }
-
-    private func showFocus() {
-        hasFocus = true
-        restyle()
-    }
+    override func focusDidChange() { restyle() }
 
     #if DEBUG
-        func forceFocusForGallery() { showFocus() }
+        func forceFocusForGallery() { setKeyboardFocus(true) }
     #endif
-
-    override func resignFirstResponder() -> Bool {
-        hasFocus = false
-        restyle()
-        return super.resignFirstResponder()
-    }
 
     override func drawFocusRingMask() {}
 

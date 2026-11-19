@@ -14,6 +14,7 @@ class ControlView: NSView {
     func focusDidChange() {}
 
     func setHovered(_ on: Bool) { state.setHovered(on) }
+    func setKeyboardFocus(_ on: Bool) { state.setKeyboardFocus(on) }
     func refreshHover() { state.refreshHover() }
     func easeFill(_ color: NSColor) { state.easeFill(color) }
     func showFocusRing(_ shown: Bool) { state.showFocusRing(shown) }
