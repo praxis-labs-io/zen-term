@@ -42,8 +42,6 @@ extension AttentionTone {
 }
 
 final class SidebarAgentRow: SidebarJumpRow {
-    private let summaryLabel = NSTextField(labelWithString: "")
-    private let detailLabel = NSTextField(labelWithString: "")
     private let glyphSlot = NSView()
     private let dot = NSView()
     private let spinner = Spinner()
@@ -51,29 +49,14 @@ final class SidebarAgentRow: SidebarJumpRow {
 
     static let height: CGFloat = ChromeMetrics.Height.xl
     private static let jumpHint = "Jump to agent"
-    private static let inset: CGFloat = ChromeMetrics.Spacing.controlInset
-    private static let top: CGFloat = ChromeMetrics.Spacing.s8
     private static let glyphSize = NSSize(width: 14, height: 16)
-    private static let glyphGap: CGFloat = ChromeMetrics.Spacing.s8
-    private static let lineGap: CGFloat = ChromeMetrics.Spacing.s2
     private static let dotDiameter: CGFloat = 7
 
     init(onActivate: @escaping () -> Void) {
         super.init(tooltip: Self.jumpHint, onActivate: onActivate)
 
-        summaryLabel.font = ChromeType.font(.small)
-        detailLabel.font = ChromeType.font(.caption)
-        for label in [summaryLabel, detailLabel] {
-            label.lineBreakMode = .byTruncatingTail
-            label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            label.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(label)
-        }
-
         dot.wantsLayer = true
         dot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.dotDiameter)
-        glyphSlot.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(glyphSlot)
         for glyph in [dot, spinner] {
             glyph.translatesAutoresizingMaskIntoConstraints = false
             glyphSlot.addSubview(glyph)
@@ -82,23 +65,14 @@ final class SidebarAgentRow: SidebarJumpRow {
                 glyph.centerYAnchor.constraint(equalTo: glyphSlot.centerYAnchor),
             ])
         }
-
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: Self.height),
-            glyphSlot.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset),
-            glyphSlot.topAnchor.constraint(equalTo: topAnchor, constant: Self.top),
             glyphSlot.widthAnchor.constraint(equalToConstant: Self.glyphSize.width),
             glyphSlot.heightAnchor.constraint(equalToConstant: Self.glyphSize.height),
             dot.widthAnchor.constraint(equalToConstant: Self.dotDiameter),
             dot.heightAnchor.constraint(equalToConstant: Self.dotDiameter),
-            summaryLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),
-            summaryLabel.trailingAnchor.constraint(
-                lessThanOrEqualTo: glyphSlot.leadingAnchor, constant: -Self.glyphGap),
-            summaryLabel.centerYAnchor.constraint(equalTo: glyphSlot.centerYAnchor),
-            detailLabel.leadingAnchor.constraint(equalTo: summaryLabel.leadingAnchor),
-            detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -Self.inset),
-            detailLabel.topAnchor.constraint(equalTo: glyphSlot.bottomAnchor, constant: Self.lineGap),
         ])
+        accessories = [glyphSlot]
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -106,28 +80,34 @@ final class SidebarAgentRow: SidebarJumpRow {
     func render(_ item: SidebarAgentItem) {
         guard item != self.item else { return }
         self.item = item
-        summaryLabel.stringValue = item.summary
-        tooltip.label = item.message ?? Self.jumpHint
-        tooltip.style = item.message == nil ? .line : .paragraph
-        tooltip.relabel(from: self)
-        detailLabel.stringValue = item.detail
-        setAccessibilityLabel(item.message ?? item.summary)
+        render(Content(title: item.summary, subtitle: item.detail, titleColor: item.state.ink))
+        tooltip?.label = item.message ?? Self.jumpHint
+        tooltip?.style = item.message == nil ? .line : .paragraph
+        tooltip?.relabel(from: self)
+        announce(item)
         setAccessibilityValue(item.detail)
         dot.isHidden = item.state == .working
         spinner.isHidden = item.state != .working
         spinner.isSpinning = item.state == .working
-        reapplyTheme()
+        dot.layer?.backgroundColor = item.state.ink.cgColor
     }
 
     var itemForTesting: SidebarAgentItem? { item }
 
-    var summaryTextForTesting: String { summaryLabel.stringValue }
+    var summaryTextForTesting: String { content.title }
 
     override func reapplyTheme() {
-        let ink = (item?.state ?? .idle).ink
-        summaryLabel.textColor = ink
-        detailLabel.textColor = Theme.current.chrome.ink(.muted)
-        dot.layer?.backgroundColor = ink.cgColor
+        let state = item?.state ?? .idle
+        dot.layer?.backgroundColor = state.ink.cgColor
+        if let item {
+            render(Content(title: item.summary, subtitle: item.detail, titleColor: state.ink))
+            announce(item)
+        }
         super.reapplyTheme()
+    }
+
+    // `render` labels the row with its title, the summary, which cuts a multi-sentence message short.
+    private func announce(_ item: SidebarAgentItem) {
+        setAccessibilityLabel(item.message ?? item.summary)
     }
 }

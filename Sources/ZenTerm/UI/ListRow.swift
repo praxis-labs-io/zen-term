@@ -4,6 +4,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     enum Leading: Equatable {
         case symbol(String)
         case swatch(NSColor)
+        case spinner
     }
 
     enum Trailing: Equatable {
@@ -20,11 +21,12 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         var trailing: Trailing?
         var ink: ChromeTheme.InkLevel
         var nests: Bool
+        var titleColor: NSColor?
 
         init(
             title: String, subtitle: String? = nil, subtitleTruncation: NSLineBreakMode = .byTruncatingTail,
             note: String? = nil, leading: Leading? = nil, trailing: Trailing? = nil,
-            ink: ChromeTheme.InkLevel = .normal, nests: Bool = false
+            ink: ChromeTheme.InkLevel = .normal, nests: Bool = false, titleColor: NSColor? = nil
         ) {
             self.title = title
             self.subtitle = subtitle
@@ -34,6 +36,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
             self.trailing = trailing
             self.ink = ink
             self.nests = nests
+            self.titleColor = titleColor
         }
     }
 
@@ -81,6 +84,12 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     private let stack = NSStackView()
     // Kept across rebuilds, so a row that re-renders on hover keeps the label its layout and callers hold.
     private let titleLabel = NSTextField(labelWithString: "")
+    // Kept across rebuilds too, or a theme change restarts its animation from the first frame.
+    private lazy var spinner: Spinner = {
+        let spinner = Spinner()
+        spinner.isSpinning = true
+        return spinner
+    }()
     private lazy var stackLeading = stack.leadingAnchor.constraint(equalTo: leadingAnchor)
     private lazy var stackTop = stack.topAnchor.constraint(equalTo: topAnchor)
     private lazy var stackBottom = stack.bottomAnchor.constraint(equalTo: bottomAnchor)
@@ -143,7 +152,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         let chrome = Theme.current.chrome
 
         var lead: [NSView] = []
-        if let leading = content.leading { lead.append(Self.leadingView(leading, chrome)) }
+        if let leading = content.leading { lead.append(leadingView(leading, chrome)) }
         lead.append(titleView(chrome))
 
         var trail: [NSView] = accessoryViews
@@ -169,7 +178,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         let title = titleLabel
         title.stringValue = content.title
         title.font = ChromeType.font(content.nests ? .small : .body)
-        title.textColor = chrome.ink(content.ink)
+        title.textColor = content.titleColor ?? chrome.ink(content.ink)
         title.lineBreakMode = .byTruncatingTail
         title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         guard let subtitle = content.subtitle else { return title }
@@ -217,26 +226,28 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         ])
     }
 
-    private static func leadingView(_ leading: Leading, _ chrome: ChromeTheme) -> NSView {
+    private func leadingView(_ leading: Leading, _ chrome: ChromeTheme) -> NSView {
         switch leading {
         case .symbol(let name):
             let icon = NSImageView()
             icon.image = IconCatalog.image(name, pointSize: ChromeMetrics.Icon.sm, weight: .regular)
             icon.contentTintColor = chrome.ink(.subtle)
-            icon.widthAnchor.constraint(equalToConstant: symbolColumn).isActive = true
+            icon.widthAnchor.constraint(equalToConstant: Self.symbolColumn).isActive = true
             return icon
         case .swatch(let color):
             let dot = NSView()
             dot.wantsLayer = true
-            dot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(swatchSize)
+            dot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.swatchSize)
             dot.layer?.backgroundColor = color.cgColor
             dot.layer?.borderWidth = ChromeMetrics.Border.width
             dot.layer?.borderColor = chrome.fill(alpha: ChromeTheme.swatchRing).cgColor
             NSLayoutConstraint.activate([
-                dot.widthAnchor.constraint(equalToConstant: swatchSize),
-                dot.heightAnchor.constraint(equalToConstant: swatchSize),
+                dot.widthAnchor.constraint(equalToConstant: Self.swatchSize),
+                dot.heightAnchor.constraint(equalToConstant: Self.swatchSize),
             ])
             return dot
+        case .spinner:
+            return spinner
         }
     }
 

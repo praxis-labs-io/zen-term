@@ -187,7 +187,7 @@ A control's hover and eased fill come from `ControlView`, or from `ControlState`
 cannot subclass it (`AppButton`). A control never keeps its own tracking area. A control on that base
 takes keyboard focus and its ring from it too.
 
-A row in a list is a `ListRow`: popover lists, menus, Settings lists, and the Settings and sidebar nav (`NavRow`).
+A row in a list is a `ListRow`: popover lists, menus, palettes (`SelectableRowView`), Settings lists, the Settings and sidebar nav (`NavRow`), and the sidebar's agent rows (`SidebarJumpRow`).
 
 A boxed input (a text field, a text area, a picker) takes its rest fill and border from `FieldChrome`.
 

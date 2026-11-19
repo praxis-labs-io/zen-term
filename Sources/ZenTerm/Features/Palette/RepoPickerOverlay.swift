@@ -553,59 +553,14 @@ final class RepoPickerOverlay: PaletteOverlay {
             case listed
             case quiet
 
-            var ink: NSColor {
-                self == .listed
-                    ? Theme.current.chrome.ink(.normal) : Theme.current.chrome.ink(.muted)
-            }
-
-            var weight: ChromeType.Weight { self == .listed ? .regular : .medium }
+            var ink: ChromeTheme.InkLevel { self == .listed ? .normal : .muted }
         }
 
-        let title: String
-
         init(symbol: String, title: String, shortcut: String?, emphasis: Emphasis = .quiet) {
-            self.title = title
-            super.init()
-
-            let icon = NSImageView()
-            let config = NSImage.SymbolConfiguration(pointSize: ChromeMetrics.Icon.sm, weight: .semibold)
-            icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)?
-                .withSymbolConfiguration(config)
-            icon.contentTintColor = emphasis.ink
-            icon.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(icon)
-
-            let label = NSTextField(labelWithString: title)
-            label.font = ChromeType.font(.body, weight: emphasis.weight)
-            label.textColor = emphasis.ink
-            label.lineBreakMode = .byTruncatingTail
-            label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            label.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(label)
-
-            NSLayoutConstraint.activate([
-                icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
-                icon.widthAnchor.constraint(equalToConstant: 17),
-                icon.centerYAnchor.constraint(equalTo: centerYAnchor),
-                label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: ChromeMetrics.Spacing.s8),
-                label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            ])
-
-            guard let shortcut else {
-                label.trailingAnchor.constraint(
-                    lessThanOrEqualTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset
-                ).isActive = true
-                return
-            }
-            let keycap = KeycapView(shortcut: shortcut)
-            addSubview(keycap)
-            NSLayoutConstraint.activate([
-                keycap.trailingAnchor.constraint(
-                    equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
-                keycap.centerYAnchor.constraint(equalTo: centerYAnchor),
-                label.trailingAnchor.constraint(
-                    lessThanOrEqualTo: keycap.leadingAnchor, constant: -ChromeMetrics.Spacing.s8),
-            ])
+            super.init(
+                Content(
+                    title: title, leading: .symbol(symbol), trailing: shortcut.map { .keycap($0) },
+                    ink: emphasis.ink))
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -616,25 +571,7 @@ final class RepoPickerOverlay: PaletteOverlay {
 
         init(worktree: Worktree) {
             name = worktree.name
-            super.init()
-
-            let spinner = Spinner()
-            spinner.isSpinning = true
-            addSubview(spinner)
-
-            let label = NSTextField(labelWithString: "Removing \(name)…")
-            label.font = ChromeType.font(.caption)
-            label.textColor = Theme.current.chrome.ink(.faint)
-            label.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(label)
-
-            NSLayoutConstraint.activate([
-                spinner.leadingAnchor.constraint(
-                    equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset + RowView.childIndent),
-                spinner.centerYAnchor.constraint(equalTo: centerYAnchor),
-                label.leadingAnchor.constraint(equalTo: spinner.trailingAnchor, constant: ChromeMetrics.Spacing.s8),
-                label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            ])
+            super.init(Content(title: "Removing \(name)…", leading: .spinner, ink: .faint, nests: true))
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -648,19 +585,16 @@ final class RepoPickerOverlay: PaletteOverlay {
             // A group label rather than a listing: the selectable row is closed, or sits in another section.
             case ghost
 
-            var indent: CGFloat { self == .child ? RowView.childIndent : 0 }
-            var role: ChromeType.Role { self == .child ? .caption : .body }
-            var ink: NSColor {
-                self == .workspace
-                    ? Theme.current.chrome.ink(.normal) : Theme.current.chrome.ink(.faint)
-            }
+            var ink: ChromeTheme.InkLevel { self == .workspace ? .normal : .faint }
         }
 
         static let branchMaxWidth: CGFloat = 220
 
         static let branchMinWidth: CGFloat = 120
 
-        static let childIndent: CGFloat = ChromeMetrics.Spacing.s16
+        // Below the title's compression resistance, so a long branch gives way to its floor before the name truncates.
+        private static let branchYield = NSLayoutConstraint.Priority(
+            NSLayoutConstraint.Priority.defaultLow.rawValue - 1)
 
         let workspace: Workspace?
         let worktree: Worktree?
@@ -731,51 +665,28 @@ final class RepoPickerOverlay: PaletteOverlay {
             self.style = style
             self.label = label
             self.statusPath = statusPath
-            super.init()
-
-            let name = NSTextField(labelWithString: label)
-            name.font = ChromeType.font(style.role)
-            name.textColor = style.ink
-            name.lineBreakMode = .byTruncatingTail
-            name.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(name)
+            super.init(Content(title: label, ink: style.ink, nests: style == .child))
 
             branchLabel.font = ChromeType.font(.caption)
             branchLabel.textColor = Theme.current.chrome.ink(.muted)
             branchLabel.alignment = .right
             branchLabel.lineBreakMode = .byTruncatingTail
             branchLabel.setContentHuggingPriority(.required, for: .horizontal)
-            branchLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            branchLabel.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(branchLabel)
+            branchLabel.setContentCompressionResistancePriority(Self.branchYield, for: .horizontal)
 
             churnLabel.alignment = .right
             churnLabel.lineBreakMode = .byClipping
             churnLabel.maximumNumberOfLines = 1
             churnLabel.setContentHuggingPriority(.required, for: .horizontal)
             churnLabel.setContentCompressionResistancePriority(.defaultHigh + 1, for: .horizontal)
-            churnLabel.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(churnLabel)
 
             branchFloor = branchLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 0)
             branchFloor.priority = .defaultHigh
-
             NSLayoutConstraint.activate([
-                name.leadingAnchor.constraint(
-                    equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset + style.indent),
-                name.centerYAnchor.constraint(equalTo: centerYAnchor),
-                branchLabel.widthAnchor.constraint(
-                    lessThanOrEqualToConstant: Self.branchMaxWidth),
+                branchLabel.widthAnchor.constraint(lessThanOrEqualToConstant: Self.branchMaxWidth),
                 branchFloor,
-                branchLabel.trailingAnchor.constraint(
-                    equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
-                branchLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-                churnLabel.trailingAnchor.constraint(
-                    equalTo: branchLabel.leadingAnchor, constant: -ChromeMetrics.Spacing.s10),
-                churnLabel.leadingAnchor.constraint(
-                    greaterThanOrEqualTo: name.trailingAnchor, constant: ChromeMetrics.Spacing.s12),
-                churnLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             ])
+            accessories = [churnLabel, branchLabel]
             applyGitStatus()
         }
 
@@ -797,6 +708,7 @@ final class RepoPickerOverlay: PaletteOverlay {
                 ?? GitRepoStatus.branch(statusPath)
             branchLabel.stringValue = head ?? ""
             branchLabel.setAccessibilityLabel(head.map { Self.headDescription($0, worktree) })
+            setAccessibilityValue(branchLabel.accessibilityLabel())
             branchFloor.constant = min(
                 branchLabel.intrinsicContentSize.width, Self.branchMinWidth)
 
@@ -807,6 +719,7 @@ final class RepoPickerOverlay: PaletteOverlay {
         private func applyRemoved(_ name: String) {
             branchLabel.stringValue = "\(name) \(WorktreeOrigin.removedDetail)"
             branchLabel.setAccessibilityLabel("worktree \(name), \(WorktreeOrigin.removedDetail)")
+            setAccessibilityValue(branchLabel.accessibilityLabel())
             branchFloor.constant = min(branchLabel.intrinsicContentSize.width, Self.branchMinWidth)
             churnLabel.attributedStringValue = NSAttributedString()
         }

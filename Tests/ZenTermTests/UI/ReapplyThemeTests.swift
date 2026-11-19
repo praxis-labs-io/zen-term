@@ -210,6 +210,23 @@ final class ReapplyThemeTests: WindowTestCase {
         XCTAssertNotEqual(colorBefore, attributedTitleColor(firstSegment))
     }
 
+    func test_reapplyTheme_keepsAnAgentRowsFullMessageForVoiceOver() throws {
+        let row = SidebarAgentRow {}
+        let message = "Finished the migration. Two tests still need a look."
+        row.render(
+            SidebarAgentItem(
+                id: SurfaceID(raw: 1), state: .idle, summary: "Finished the migration.", detail: "zen-term",
+                message: message))
+        XCTAssertEqual(row.accessibilityLabel(), message)
+        let inkBefore = AttentionTone.idle.ink
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        XCTAssertNotEqual(AttentionTone.idle.ink, inkBefore, "premise: the theme change recolors the summary")
+        row.reapplyThemeTree()
+
+        XCTAssertEqual(row.accessibilityLabel(), message, "the theme change cut the message to its summary")
+    }
+
     func test_reapplyTheme_recolorsNavRow() throws {
         let row = NavRow(title: "General") {}
         row.translatesAutoresizingMaskIntoConstraints = true

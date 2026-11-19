@@ -1,12 +1,9 @@
 import AppKit
 
 final class SidebarWaitingElsewhereRow: SidebarJumpRow {
-    private let label = NSTextField(labelWithString: "")
     private let dot = NSView()
 
     static let height: CGFloat = ChromeMetrics.Height.control
-    private static let inset: CGFloat = ChromeMetrics.Spacing.controlInset
-    private static let gap: CGFloat = ChromeMetrics.Spacing.s8
     private static let dotDiameter: CGFloat = 7
 
     static func text(agents: Int, windows: Int) -> String {
@@ -14,29 +11,16 @@ final class SidebarWaitingElsewhereRow: SidebarJumpRow {
     }
 
     init(onActivate: @escaping () -> Void) {
-        super.init(tooltip: "Jump to the agent waiting longest", onActivate: onActivate)
-
-        label.font = ChromeType.font(.small)
-        label.lineBreakMode = .byTruncatingTail
-        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(label)
-
+        super.init(
+            Content(title: "", ink: .muted), tooltip: "Jump to the agent waiting longest", onActivate: onActivate)
         dot.wantsLayer = true
         dot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.dotDiameter)
-        dot.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(dot)
-
         NSLayoutConstraint.activate([
             heightAnchor.constraint(equalToConstant: Self.height),
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: dot.leadingAnchor, constant: -Self.gap),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            dot.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset),
-            dot.centerYAnchor.constraint(equalTo: centerYAnchor),
             dot.widthAnchor.constraint(equalToConstant: Self.dotDiameter),
             dot.heightAnchor.constraint(equalToConstant: Self.dotDiameter),
         ])
+        accessories = [dot]
         reapplyTheme()
     }
 
@@ -44,15 +28,13 @@ final class SidebarWaitingElsewhereRow: SidebarJumpRow {
 
     func render(agents: Int, windows: Int) {
         let text = Self.text(agents: agents, windows: windows)
-        guard text != label.stringValue else { return }
-        label.stringValue = text
-        setAccessibilityLabel(text)
+        guard text != content.title else { return }
+        render(Content(title: text, ink: .muted))
     }
 
-    var textForTesting: String { label.stringValue }
+    var textForTesting: String { content.title }
 
     override func reapplyTheme() {
-        label.textColor = Theme.current.chrome.ink(.muted)
         dot.layer?.backgroundColor = AttentionTone.waiting.ink.cgColor
         super.reapplyTheme()
     }
