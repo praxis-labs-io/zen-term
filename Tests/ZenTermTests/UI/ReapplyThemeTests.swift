@@ -195,19 +195,16 @@ final class ReapplyThemeTests: WindowTestCase {
         window.contentView?.addSubview(control)
         control.frame = NSRect(x: 0, y: 0, width: 100, height: ChromeMetrics.Height.control)
 
-        guard
-            let firstSegment = control.subviews.compactMap({ $0 as? NSStackView }).first?.arrangedSubviews
-                .compactMap({ $0 as? AppButton }).first
-        else {
-            return XCTFail("expected a segment AppButton")
-        }
-        let colorBefore = attributedTitleColor(firstSegment)
+        let colorBefore = control.segmentInkForTesting(0)
+        let surfaceBefore = control.selectedSurfaceFillForTesting
         XCTAssertNotNil(colorBefore)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
         control.reapplyThemeTree()
 
-        XCTAssertNotEqual(colorBefore, attributedTitleColor(firstSegment))
+        XCTAssertNotEqual(colorBefore, control.segmentInkForTesting(0))
+        XCTAssertNotEqual(surfaceBefore, control.selectedSurfaceFillForTesting)
+        XCTAssertEqual(control.selectedSurfaceFillForTesting, Theme.current.chrome.raised(.overlay).cgColor)
     }
 
     func test_reapplyTheme_recolorsSettingsNavRow() throws {

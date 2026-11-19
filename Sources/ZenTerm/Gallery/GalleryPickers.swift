@@ -109,8 +109,10 @@
 
         private static func segmentedControls() -> GallerySection {
             let options = ["Off", "Auto", "On"]
-            let middle = SegmentedControl(options: options) { _ in }
-            middle.setSelection(1)
+            let hover = SegmentedControl(options: options) { _ in }
+            hover.forceHoverForGallery(segment: 2)
+            let selected = SegmentedControl(options: options) { _ in }
+            selected.setSelection(1)
             let focused = SegmentedControl(options: options) { _ in }
             focused.forceFocusForGallery()
             let disabled = SegmentedControl(options: options) { _ in }
@@ -118,8 +120,9 @@
             return GallerySection(
                 title: "SegmentedControl",
                 rows: [
-                    GallerySection.Row(label: "First selected", samples: [SegmentedControl(options: options) { _ in }]),
-                    GallerySection.Row(label: "Middle selected", samples: [middle]),
+                    GallerySection.Row(label: "Rest", samples: [SegmentedControl(options: options) { _ in }]),
+                    GallerySection.Row(label: "Hover", samples: [hover]),
+                    GallerySection.Row(label: "Selected", samples: [selected]),
                     GallerySection.Row(label: "Focused", samples: [focused]),
                     GallerySection.Row(label: "Disabled", samples: [disabled]),
                 ])
