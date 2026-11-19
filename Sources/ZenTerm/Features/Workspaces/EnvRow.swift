@@ -20,6 +20,7 @@ final class EnvRow: NSView, ThemeReapplying {
         equals.setContentHuggingPriority(.required, for: .horizontal)
 
         removeButton.setContentHuggingPriority(.required, for: .horizontal)
+        removeButton.firesOnRelease = true
         removeButton.onClick = { [weak self] in if let self { onRemove(self) } }
 
         let stack = NSStackView(views: [keyBox, equals, valueBox, removeButton])

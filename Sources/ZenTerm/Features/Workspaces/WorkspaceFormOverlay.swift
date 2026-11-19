@@ -400,6 +400,8 @@ final class WorkspaceFormOverlay: ModalShell, ModalOverlay {
         row.removeButton.isKeyboardFocusable = true
         row.removeButton.onArrowUp = { [weak self] in self?.moveVertical(-1) }
         row.removeButton.onArrowDown = { [weak self] in self?.moveVertical(1) }
+        row.removeButton.onTab = { [weak self] in self?.moveTab(1) }
+        row.removeButton.onBacktab = { [weak self] in self?.moveTab(-1) }
         row.keyBox.onArrowRight = { [weak self, weak row] in self?.focus(row?.valueBox.field) }
         row.keyBox.onEnter = { [weak self, weak row] in self?.focus(row?.valueBox.field) }
         row.valueBox.onArrowLeft = { [weak self, weak row] in self?.focus(row?.keyBox.field) }
