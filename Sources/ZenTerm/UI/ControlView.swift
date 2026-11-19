@@ -1,0 +1,45 @@
+import AppKit
+
+// The base for a chrome control that is a plain view: hover, keyboard focus, eased fill and focus ring through `ControlState`.
+class ControlView: NSView {
+    private lazy var state = ControlState(
+        host: self,
+        hoverChanged: { [unowned self] in hoverDidChange() },
+        focusChanged: { [unowned self] in focusDidChange() })
+
+    var isHovered: Bool { state.isHovered }
+    var hasKeyboardFocus: Bool { state.hasKeyboardFocus }
+
+    func hoverDidChange() {}
+    func focusDidChange() {}
+
+    func setHovered(_ on: Bool) { state.setHovered(on) }
+    func refreshHover() { state.refreshHover() }
+    func easeFill(_ color: NSColor) { state.easeFill(color) }
+    func showFocusRing(_ shown: Bool) { state.showFocusRing(shown) }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        state.updateTrackingArea()
+    }
+
+    override func mouseEntered(with event: NSEvent) { state.pointerEntered() }
+    override func mouseExited(with event: NSEvent) { state.pointerExited() }
+
+    override func viewDidHide() {
+        super.viewDidHide()
+        state.clearHover()
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        let ok = super.becomeFirstResponder()
+        if ok { state.setKeyboardFocus(true) }
+        return ok
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let ok = super.resignFirstResponder()
+        if ok { state.setKeyboardFocus(false) }
+        return ok
+    }
+}

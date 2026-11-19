@@ -1,6 +1,6 @@
 import AppKit
 
-final class KeybindChip: NSView, ThemeReapplying {
+final class KeybindChip: ControlView, ThemeReapplying {
     var onActivate: (() -> Void)?
     var onRemove: (() -> Void)?
     var onArrowUp: (() -> Void)?
@@ -12,10 +12,7 @@ final class KeybindChip: NSView, ThemeReapplying {
     static let width: CGFloat = 110
 
     private let host = NSView()
-    private var isFocused = false { didSet { restyle() } }
     private(set) var isCapturing = false { didSet { restyle() } }
-    private var isHovered = false { didSet { restyle() } }
-    private var trackingAreaRef: NSTrackingArea?
 
     init() {
         super.init(frame: .zero)
@@ -67,8 +64,8 @@ final class KeybindChip: NSView, ThemeReapplying {
     }
 
     override var acceptsFirstResponder: Bool { true }
-    override func becomeFirstResponder() -> Bool { isFocused = true; return true }
-    override func resignFirstResponder() -> Bool { isFocused = false; return true }
+    override func focusDidChange() { restyle() }
+    override func hoverDidChange() { restyle() }
     override func drawFocusRingMask() {}
 
     override func keyDown(with event: NSEvent) {
@@ -91,38 +88,18 @@ final class KeybindChip: NSView, ThemeReapplying {
 
     override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
 
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if let trackingAreaRef { removeTrackingArea(trackingAreaRef) }
-        let area = NSTrackingArea(
-            rect: bounds, options: [.mouseEnteredAndExited, .activeInKeyWindow], owner: self)
-        addTrackingArea(area)
-        trackingAreaRef = area
-    }
-
-    override func mouseEntered(with event: NSEvent) { isHovered = true }
-    override func mouseExited(with event: NSEvent) { isHovered = false }
-
     private func restyle() {
         let chrome = Theme.current.chrome
         let fill: NSColor
         if isCapturing {
             fill = chrome.fill(.active)
-        } else if isFocused || isHovered {
+        } else if hasKeyboardFocus || isHovered {
             fill = chrome.fill(.hover)
         } else {
             fill = chrome.fill(.rest)
         }
-        layer?.backgroundColor = fill.cgColor
-        let ring: NSColor
-        if isCapturing {
-            ring = chrome.accent.nsColor
-        } else if isFocused {
-            ring = chrome.focusRing
-        } else {
-            ring = .clear
-        }
-        layer?.borderWidth = ChromeMetrics.Border.width
-        layer?.borderColor = ring.cgColor
+        easeFill(fill)
+        showFocusRing(hasKeyboardFocus)
+        if isCapturing { layer?.borderColor = chrome.accent.nsColor.cgColor }
     }
 }

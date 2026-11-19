@@ -1,7 +1,7 @@
 import AppKit
 
 // A closed drawer in a tab drawing, drawn as a dashed rail that opens into a command field.
-final class DrawerRail: NSView, ThemeReapplying {
+final class DrawerRail: ControlView, ThemeReapplying {
     let region: Workspace.Region
     var onOpen: (() -> Void)?
     var onEdge: ((RegionCommandField.Edge) -> Void)?
@@ -11,8 +11,6 @@ final class DrawerRail: NSView, ThemeReapplying {
     private let border = CAShapeLayer()
     private let glyph = NSImageView()
     private let tooltip: TooltipHost
-    private var isHovered = false
-    private var hasFocus = false
 
     var tooltipLabelForTesting: String { tooltip.label }
     var borderStrokeForTesting: CGColor? { border.strokeColor }
@@ -55,28 +53,15 @@ final class DrawerRail: NSView, ThemeReapplying {
 
     private func restyle() {
         let chrome = Theme.current.chrome
-        border.strokeColor = (hasFocus ? chrome.focusRing : chrome.ink(.faint)).cgColor
+        border.strokeColor = (hasKeyboardFocus ? chrome.focusRing : chrome.ink(.faint)).cgColor
         border.lineWidth = ChromeMetrics.Border.width
-        layer?.backgroundColor = (isHovered ? chrome.fill(.hover) : .clear).cgColor
-        glyph.contentTintColor = chrome.ink(isHovered || hasFocus ? .normal : .muted)
+        easeFill(isHovered ? chrome.fill(.hover) : .clear)
+        glyph.contentTintColor = chrome.ink(isHovered || hasKeyboardFocus ? .normal : .muted)
     }
 
     override var acceptsFirstResponder: Bool { true }
 
-    override func becomeFirstResponder() -> Bool {
-        let ok = super.becomeFirstResponder()
-        if ok {
-            hasFocus = true
-            restyle()
-        }
-        return ok
-    }
-
-    override func resignFirstResponder() -> Bool {
-        hasFocus = false
-        restyle()
-        return super.resignFirstResponder()
-    }
+    override func focusDidChange() { restyle() }
 
     override func drawFocusRingMask() {}
 
@@ -92,24 +77,14 @@ final class DrawerRail: NSView, ThemeReapplying {
         }
     }
 
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        trackingAreas.forEach(removeTrackingArea)
-        addTrackingArea(
-            NSTrackingArea(
-                rect: bounds, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self))
+    override func hoverDidChange() {
+        if !isHovered { tooltip.hide(from: self) }
+        restyle()
     }
 
     override func mouseEntered(with event: NSEvent) {
-        isHovered = true
-        restyle()
+        super.mouseEntered(with: event)
         tooltip.show(from: self)
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        isHovered = false
-        restyle()
-        tooltip.hide(from: self)
     }
 
     override func mouseDown(with event: NSEvent) {

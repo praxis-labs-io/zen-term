@@ -1,6 +1,6 @@
 import AppKit
 
-class TabChip: NSView, ThemeReapplying {
+class TabChip: ControlView, ThemeReapplying {
     static let height: CGFloat = ChromeMetrics.Height.sm
     static let chipFont = ChromeType.font(.caption, weight: .medium, face: .mono)
     // The rename editor matches it, or the text reflows on open.
@@ -18,7 +18,6 @@ class TabChip: NSView, ThemeReapplying {
     private(set) var isCurrent = false
     private(set) var isClosable = false
     private(set) var dotColor: NSColor?
-    private(set) var isHovered = false
     private var firstClickTime: TimeInterval?
     private(set) var labelFrame = CGRect.zero
 
@@ -26,7 +25,6 @@ class TabChip: NSView, ThemeReapplying {
     private let labelContainer = NSView()
     private let dot = NSView()
     private let fadeMask = CAGradientLayer()
-    private var restingBackground: NSColor?
     let closeButton: IconButton
 
     var onCloseButton: (() -> Void)?
@@ -127,11 +125,7 @@ class TabChip: NSView, ThemeReapplying {
             needsLayout = true
         }
         dot.layer?.backgroundColor = dotColor?.cgColor
-        let background: NSColor = isHovered && !isCurrent ? chrome.fill(.hover) : .clear
-        if let layer, restingBackground != background {
-            restingBackground = background
-            Motion.ease(layer, keyPath: "backgroundColor", to: background.cgColor)
-        }
+        easeFill(isHovered && !isCurrent ? chrome.fill(.hover) : .clear)
         updateAccessories()
     }
 
@@ -142,28 +136,10 @@ class TabChip: NSView, ThemeReapplying {
         return event.timestamp - firstClickTime <= NSEvent.doubleClickInterval
     }
 
-    func setHover(_ on: Bool) {
-        guard isHovered != on else { return }
-        isHovered = on
+    override func hoverDidChange() {
         restyle()
         needsLayout = true
-        hoverDidChange()
     }
-
-    func hoverDidChange() {}
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        trackingAreas.forEach(removeTrackingArea)
-        addTrackingArea(
-            NSTrackingArea(
-                rect: bounds,
-                options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
-                owner: self))
-    }
-
-    override func mouseEntered(with event: NSEvent) { setHover(true) }
-    override func mouseExited(with event: NSEvent) { setHover(false) }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard let hit = super.hitTest(point) else { return nil }

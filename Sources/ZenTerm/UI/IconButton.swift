@@ -5,14 +5,16 @@ private final class GlyphView: NSImageView {
     override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets() }
 }
 
-final class IconButton: NSView, ThemeReapplying {
+final class IconButton: ControlView, ThemeReapplying {
     var onClick: () -> Void
     private let icon = GlyphView()
-    private var trackingArea: NSTrackingArea?
-    private var isHovered = false { didSet { update() } }
 
     var firesOnRelease = false
     private var isPressed = false
+
+    var isKeyboardFocusable = false
+    var onTab: (() -> Void)?
+    var onBacktab: (() -> Void)?
 
     var isActive = false { didSet { update() } }
 
@@ -76,26 +78,18 @@ final class IconButton: NSView, ThemeReapplying {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if let trackingArea { removeTrackingArea(trackingArea) }
-        let area = NSTrackingArea(
-            rect: bounds,
-            options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
-            owner: self)
-        addTrackingArea(area)
-        trackingArea = area
-        if isHovered, window?.isKeyWindow == true, !pointerIsInside { clearHover() }
+    override func hoverDidChange() {
+        if !isHovered { tooltip.hide(from: self) }
+        update()
     }
 
+    override func focusDidChange() { update() }
+
     override func mouseEntered(with event: NSEvent) {
-        isHovered = true
+        super.mouseEntered(with: event)
         tooltip.show(from: self)
     }
-    override func mouseExited(with event: NSEvent) {
-        isHovered = false
-        tooltip.hide(from: self)
-    }
+
     override func mouseDown(with event: NSEvent) {
         tooltip.hide(from: self)
         guard firesOnRelease else { return onClick() }
@@ -104,26 +98,30 @@ final class IconButton: NSView, ThemeReapplying {
     override func mouseUp(with event: NSEvent) {
         guard firesOnRelease, isPressed else { return super.mouseUp(with: event) }
         isPressed = false
-        if bounds.contains(convert(event.locationInWindow, from: nil)) { onClick() }
+        guard !isHiddenOrHasHiddenAncestor, bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        onClick()
     }
     override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
     override func accessibilityPerformPress() -> Bool { onClick(); return true }
 
+    override var acceptsFirstResponder: Bool { isKeyboardFocusable }
+
+    // The focus ring is drawn on a layer border instead.
+    override func drawFocusRingMask() {}
+
+    override func keyDown(with event: NSEvent) {
+        guard isKeyboardFocusable else { return super.keyDown(with: event) }
+        switch KeyboardFocus.key(for: event) {
+        case .activate where KeyboardFocus.isUnmodified(event): onClick()
+        case .tab(shift: false) where onTab != nil: onTab?()
+        case .tab(shift: true) where onBacktab != nil: onBacktab?()
+        default: super.keyDown(with: event)
+        }
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window == nil { tooltip.hide(from: self) }
-    }
-
-    override func viewDidHide() {
-        super.viewDidHide()
-        clearHover()
-    }
-
-    // A button that moves or hides under a still pointer never gets `mouseExited`.
-    private func clearHover() {
-        isHovered = false
-        isPressed = false
-        tooltip.hide(from: self)
     }
 
     var isHoveredForTesting: Bool { isHovered }
@@ -135,7 +133,7 @@ final class IconButton: NSView, ThemeReapplying {
     func reapplyTheme() { update() }
 
     #if DEBUG
-        func forceHoverForGallery() { isHovered = true }
+        func forceHoverForGallery() { setHovered(true) }
     #endif
 
     private var activityColor: NSColor {
@@ -159,7 +157,8 @@ final class IconButton: NSView, ThemeReapplying {
             bg = restsFilled ? chrome.fill(.rest) : .clear
             tint = chrome.ink(.subtle)
         }
-        if let layer { Motion.ease(layer, keyPath: "backgroundColor", to: bg.cgColor) }
+        easeFill(bg)
+        showFocusRing(hasKeyboardFocus)
         icon.contentTintColor = tint
         activityDot.layer?.backgroundColor = activityColor.cgColor
     }

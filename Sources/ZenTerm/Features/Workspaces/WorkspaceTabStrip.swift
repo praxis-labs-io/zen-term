@@ -165,11 +165,11 @@ final class WorkspaceTabStrip: NSView, ThemeReapplying {
 
     // Per-chip tracking areas miss `mouseExited` when chips move or scroll under a stationary pointer.
     private func refreshHover() {
-        guard let window, window.isKeyWindow else { return chips.forEach { $0.setHover(false) } }
+        guard let window, window.isKeyWindow else { return chips.forEach { $0.setHovered(false) } }
         let pointer = window.mouseLocationOutsideOfEventStream
         let visible = scrollView.contentView.documentVisibleRect
         for chip in chips {
-            chip.setHover(chip.frame.intersects(visible) && chip.convert(chip.bounds, to: nil).contains(pointer))
+            chip.setHovered(chip.frame.intersects(visible) && chip.convert(chip.bounds, to: nil).contains(pointer))
         }
     }
 

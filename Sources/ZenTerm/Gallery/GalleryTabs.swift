@@ -50,9 +50,9 @@
 
         private static func workspaceChips() -> GallerySection {
             let hovered = chip(title: "hover", removable: true)
-            hovered.setHover(true)
+            hovered.setHovered(true)
             let hoveredOverDot = chip(title: "hover", opensFocused: true, removable: true)
-            hoveredOverDot.setHover(true)
+            hoveredOverDot.setHovered(true)
             let focused = chip(title: "focused")
             focused.forceFocusForGallery()
             return GallerySection(
