@@ -17,6 +17,9 @@ struct ChromeTheme: Equatable {
     let overlayShadowAlpha: CGFloat
     let floatShadowAlpha: CGFloat
     let modalShadowAlpha: CGFloat
+    let overlayRaised: TerminalColor
+    let floatRaised: TerminalColor
+    let modalRaised: TerminalColor
     /// Check `1 / inkBoost` before raising it: above that a level clamps to opaque.
     static let inkBoost: CGFloat = 1.15
 
@@ -74,6 +77,14 @@ struct ChromeTheme: Equatable {
         case .overlay: return overlayShadowAlpha
         case .float: return floatShadowAlpha
         case .modal: return modalShadowAlpha
+        }
+    }
+
+    func raised(_ tier: FloatShadow.Tier) -> NSColor {
+        switch tier {
+        case .overlay: return overlayRaised.nsColor
+        case .float: return floatRaised.nsColor
+        case .modal: return modalRaised.nsColor
         }
     }
 

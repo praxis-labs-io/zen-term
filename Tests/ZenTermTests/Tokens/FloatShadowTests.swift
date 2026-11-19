@@ -87,4 +87,25 @@ final class FloatShadowTests: WindowTestCase {
             effectiveShadowAlpha(tooltip), Theme.current.chrome.shadowAlpha(.overlay), accuracy: 0.001,
             "the tooltip's overlay shadow must survive presentation")
     }
+
+    func test_everyCardChromeTier_paintsItsRaisedFill_notTheWindow() {
+        let chrome = Theme.current.chrome
+        for tier in FloatShadow.Tier.allCases {
+            let card = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 120))
+            CardChrome.apply(to: card, tier: tier)
+            XCTAssertEqual(card.layer?.backgroundColor, chrome.raised(tier).cgColor, "the \(tier) card")
+            XCTAssertNotEqual(
+                card.layer?.backgroundColor, chrome.background.nsColor.cgColor,
+                "a \(tier) card painting the window color sinks into it")
+        }
+    }
+
+    func test_chromeTooltip_paintsTheOverlayRaisedFill() {
+        let tooltip = ChromeTooltip(label: "probe", shortcut: nil)
+        tooltip.frame = NSRect(x: 100, y: 100, width: 120, height: 24)
+        window.contentView!.addSubview(tooltip)
+        window.displayIfNeeded()
+
+        XCTAssertEqual(tooltip.layer?.backgroundColor, Theme.current.chrome.raised(.overlay).cgColor)
+    }
 }
