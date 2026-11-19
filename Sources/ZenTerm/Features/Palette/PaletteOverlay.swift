@@ -5,14 +5,19 @@ protocol PaletteRowView: NSView {
     var onActivate: (() -> Void)? { get set }
 }
 
-class SelectableRowView: NSView, PaletteRowView {
-    var onActivate: (() -> Void)?
-    var isSelected = false { didSet { updateBackground() } }
+class SelectableRowView: ListRow, PaletteRowView {
+    var onActivate: (() -> Void)? {
+        get { onChoose }
+        set { onChoose = newValue ?? {} }
+    }
+    var isSelected: Bool {
+        get { isHighlighted }
+        set { isHighlighted = newValue }
+    }
 
-    init() {
-        super.init(frame: .zero)
-        wantsLayer = true
-        layer?.cornerRadius = ChromeMetrics.Radius.control
+    init(_ content: Content) {
+        super.init(content) {}
+        setHoverSuppressed(true)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -20,11 +25,7 @@ class SelectableRowView: NSView, PaletteRowView {
     /// Accepts the press so the release lands here; `mouseUp` runs the row only if it lands inside.
     override func mouseDown(with event: NSEvent) {}
     override func mouseUp(with event: NSEvent) {
-        if bounds.contains(convert(event.locationInWindow, from: nil)) { onActivate?() }
-    }
-
-    private func updateBackground() {
-        layer?.backgroundColor = (isSelected ? Theme.current.chrome.fill(.hover) : .clear).cgColor
+        if bounds.contains(convert(event.locationInWindow, from: nil)) { onChoose() }
     }
 }
 

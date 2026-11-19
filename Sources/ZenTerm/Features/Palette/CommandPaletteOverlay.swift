@@ -47,8 +47,9 @@ final class CommandPaletteOverlay: PaletteOverlay {
         func descendants(of view: NSView) -> [NSView] {
             view.subviews.flatMap { [$0] + descendants(of: $0) }
         }
-        return descendants(of: self).compactMap { $0 as? RowView }
-            .flatMap { descendants(of: $0).compactMap { ($0 as? KeycapView)?.shortcut } }
+        return descendants(of: self).compactMap { ($0 as? SelectableRowView)?.shortcutForTesting }.filter {
+            !$0.isEmpty
+        }
     }
 
     override func numberOfRows() -> Int { rows.count }
@@ -58,7 +59,9 @@ final class CommandPaletteOverlay: PaletteOverlay {
         case .header(let title):
             return PaletteSectionHeader(title: title)
         case .command(let command):
-            return RowView(command: command)
+            return SelectableRowView(
+                ListRow.Content(
+                    title: command.title, trailing: command.shortcut.isEmpty ? nil : .keycap(command.shortcut)))
         }
     }
 
@@ -124,33 +127,4 @@ final class CommandPaletteOverlay: PaletteOverlay {
         return rows
     }
 
-    private final class RowView: SelectableRowView {
-        init(command: PaletteCommand) {
-            super.init()
-
-            let title = NSTextField(labelWithString: command.title)
-            title.font = ChromeType.font(.body)
-            title.textColor = Theme.current.chrome.ink(.normal)
-            title.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(title)
-
-            NSLayoutConstraint.activate([
-                title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ChromeMetrics.Spacing.controlInset),
-                title.centerYAnchor.constraint(equalTo: centerYAnchor),
-            ])
-
-            guard !command.shortcut.isEmpty else { return }
-            let keycap = KeycapView(shortcut: command.shortcut)
-            addSubview(keycap)
-            NSLayoutConstraint.activate([
-                keycap.trailingAnchor.constraint(
-                    equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
-                keycap.centerYAnchor.constraint(equalTo: centerYAnchor),
-                title.trailingAnchor.constraint(
-                    lessThanOrEqualTo: keycap.leadingAnchor, constant: -ChromeMetrics.Spacing.s8),
-            ])
-        }
-
-        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-    }
 }

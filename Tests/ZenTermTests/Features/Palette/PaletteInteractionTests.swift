@@ -154,6 +154,28 @@ final class PaletteInteractionTests: WindowTestCase {
         XCTAssertEqual(ran, .splitVertical, "a single click must run the row, no double-click")
     }
 
+    func test_commandPalette_theArrowMovesTheListRowFill_andThePointerDoesNot() throws {
+        Motion.isReduceMotionEnabled = { true }
+        let overlay = makeCommandPalette()
+        let window = mount(overlay)
+        window.layoutIfNeeded()
+        let hover = Theme.current.chrome.fill(.hover).cgColor
+        let shown = rows(in: overlay)
+        XCTAssertEqual(shown.map { $0.layer?.backgroundColor == hover }, [true, false, false])
+
+        send(Self.moveDown, to: overlay)
+        XCTAssertEqual(shown.map { $0.layer?.backgroundColor == hover }, [false, true, false])
+
+        let enter = try XCTUnwrap(
+            NSEvent.enterExitEvent(
+                with: .mouseEntered, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
+        shown[2].mouseEntered(with: enter)
+        XCTAssertEqual(
+            shown.map { $0.layer?.backgroundColor == hover }, [false, true, false],
+            "the pointer fills a row beside the selection")
+    }
+
     func test_commandPalette_pressThenDragOff_doesNotRun() {
         var ran: KeyInterceptor.ReservedChord?
         let overlay = makeCommandPalette(onRun: { ran = $0 })

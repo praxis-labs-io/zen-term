@@ -530,11 +530,8 @@ final class SidebarView: NSView, ThemeReapplying {
         let stops = focusStops
         let current = stops.firstIndex { KeyboardFocus.isFocused($0, in: window) }
         guard let next = KeyboardFocus.step(from: current, delta: delta, count: stops.count) else { return }
-        switch stops[next] {
-        case let row as NavRow: row.takeKeyboardFocus()
-        case let row as SidebarJumpRow: row.takeKeyboardFocus()
-        default: return
-        }
+        guard let row = stops[next] as? ListRow else { return }
+        row.takeKeyboardFocus()
         scroll.reveal(stops[next])
     }
 

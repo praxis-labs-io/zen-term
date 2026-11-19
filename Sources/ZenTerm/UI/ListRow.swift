@@ -4,6 +4,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     enum Leading: Equatable {
         case symbol(String)
         case swatch(NSColor)
+        case spinner
     }
 
     enum Trailing: Equatable {
@@ -237,6 +238,10 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
                 dot.heightAnchor.constraint(equalToConstant: swatchSize),
             ])
             return dot
+        case .spinner:
+            let spinner = Spinner()
+            spinner.isSpinning = true
+            return spinner
         }
     }
 

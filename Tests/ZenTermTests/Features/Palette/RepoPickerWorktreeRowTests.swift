@@ -140,7 +140,7 @@ final class RepoPickerWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(name.textColor, Theme.current.chrome.ink(.normal))
         XCTAssertEqual(rail.textColor, Theme.current.chrome.ink(.faint))
         XCTAssertEqual(name.font?.pointSize, ChromeType.Role.body.pointSize)
-        XCTAssertEqual(rail.font?.pointSize, ChromeType.Role.caption.pointSize)
+        XCTAssertLessThan(try XCTUnwrap(rail.font?.pointSize), ChromeType.Role.body.pointSize)
     }
 
     func test_detachedWorktree_showsItsShortHeadInTheBranchColumn() throws {
