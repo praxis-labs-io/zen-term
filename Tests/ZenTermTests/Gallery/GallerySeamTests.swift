@@ -100,6 +100,61 @@ final class GallerySeamTests: WindowTestCase {
         assertSeam(seam, matches: real, unlike: rest, "SegmentedControl")
     }
 
+    func test_keybindChipFocusSeam_rendersLikeRealFocus() {
+        let (rest, real, seam) = (keybindChip(), keybindChip(), keybindChip())
+        mount([rest, real, seam])
+        XCTAssertTrue(window.makeFirstResponder(real))
+        seam.setKeyboardFocus(true)
+        assertSeam(seam, matches: real, unlike: rest, "KeybindChip")
+    }
+
+    func test_iconPickerFieldFocusSeam_rendersLikeRealFocus() {
+        let (rest, real, seam) = (iconPicker(), iconPicker(), iconPicker())
+        mount([rest, real, seam])
+        XCTAssertTrue(window.makeFirstResponder(real))
+        seam.forceFocusForGallery()
+        assertSeam(seam, matches: real, unlike: rest, "IconPickerField")
+    }
+
+    func test_regionCommandFieldFocusSeam_rendersLikeRealFocus() throws {
+        let (rest, real, seam) = (regionField(), regionField(), regionField())
+        mount([rest, real, seam])
+        let editor = try XCTUnwrap(real.subviews.first { $0 is RegionCommandField.CommandField })
+        XCTAssertTrue(window.makeFirstResponder(editor))
+        seam.forceFocusForGallery()
+        assertSeam(seam, matches: real, unlike: rest, "RegionCommandField")
+    }
+
+    func test_drawerRailFocusSeam_rendersLikeRealFocus() {
+        let (rest, real, seam) = (drawerRail(), drawerRail(), drawerRail())
+        mount([rest, real, seam])
+        XCTAssertTrue(window.makeFirstResponder(real))
+        seam.setKeyboardFocus(true)
+        assertSeam(seam, matches: real, unlike: rest, "DrawerRail")
+        XCTAssertEqual(seam.borderStrokeForTesting, real.borderStrokeForTesting, "DrawerRail: the dashed ring drifted")
+        XCTAssertNotEqual(rest.borderStrokeForTesting, real.borderStrokeForTesting, "DrawerRail: focus changed no ring")
+    }
+
+    func test_listRowSubclassFocusSeams_renderLikeRealFocus() {
+        let makers: [(String, () -> ListRow)] = [
+            ("NavRow", { self.sized(NavRow(title: "General") {}) }),
+            (
+                "SettingsFocusRow",
+                { self.sized(SettingsFocusRow(ListRow.Content(title: "api", subtitle: "~/Dev/api"))) }
+            ),
+            ("SidebarJumpRow", { self.sized(SidebarJumpRow(ListRow.Content(title: "zen-term"), tooltip: "Jump") {}) }),
+        ]
+        for (name, make) in makers {
+            let (rest, real, seam) = (make(), make(), make())
+            mount([rest, real, seam])
+            XCTAssertTrue(window.makeFirstResponder(real))
+            seam.setKeyboardFocus(true)
+            assertSeam(seam, matches: real, unlike: rest, name)
+            window.makeFirstResponder(nil)
+            window.contentView?.subviews.forEach { $0.removeFromSuperview() }
+        }
+    }
+
     func test_workspaceTabChipFocusSeam_rendersLikeRealFocus() {
         let (rest, real, seam) = (chip(), chip(), chip())
         mount([rest, real, seam])
@@ -216,6 +271,30 @@ final class GallerySeamTests: WindowTestCase {
 
     private func checkboxDropdown() -> CheckboxDropdown {
         sized(CheckboxDropdown(title: "1 shown", items: [CheckboxDropdownItem(title: "One", isChecked: true)]) { _ in })
+    }
+
+    private func keybindChip() -> KeybindChip {
+        let chip = KeybindChip()
+        chip.render(shortcut: "⌘⇧P")
+        return chip
+    }
+
+    private func iconPicker() -> IconPickerField {
+        sized(IconPickerField(selected: "terminal"))
+    }
+
+    private func regionField() -> RegionCommandField {
+        let field = RegionCommandField(region: .main)
+        field.translatesAutoresizingMaskIntoConstraints = false
+        field.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.xl).isActive = true
+        return sized(field)
+    }
+
+    private func drawerRail() -> DrawerRail {
+        let rail = DrawerRail(region: .bottom)
+        rail.translatesAutoresizingMaskIntoConstraints = false
+        rail.heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control).isActive = true
+        return sized(rail)
     }
 
     private func segmented() -> SegmentedControl {

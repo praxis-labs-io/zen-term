@@ -129,6 +129,10 @@ final class IconPickerField: NSView, ThemeReapplying {
     }
     override func drawFocusRingMask() {}
 
+    #if DEBUG
+        func forceFocusForGallery() { isFocusedStop = true }
+    #endif
+
     /// The card lives on the content view, so it closes here or a tab switch strands it.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
