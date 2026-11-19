@@ -83,7 +83,9 @@ final class CheckboxDropdown: PopoverPicker {
     override func itemRows() -> [ListPopover.Row] {
         rowViews = visible.map { index in
             let content = items.indices.contains(index) ? Self.content(items[index]) : ListRow.Content(title: "")
-            return ListRow(content) { [weak self] in self?.pick(index) }
+            let row = ListRow(content) { [weak self] in self?.pick(index) }
+            row.hoverFills = false
+            return row
         }
         return rowViews.map { ListPopover.Row(view: $0, height: Self.rowHeight) }
     }

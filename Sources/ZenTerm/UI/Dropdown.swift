@@ -106,22 +106,20 @@ final class Dropdown: PopoverPicker {
     }
 
     override func itemRows() -> [ListPopover.Row] {
-        let chrome = Theme.current.chrome
         rowViews = []
         var lines: [ListPopover.Row] = []
         var previousGroup: String?
         for index in visible {
             let item = items[index]
             if query.isEmpty, let group = item.group, group != previousGroup {
-                lines.append(
-                    ListPopover.Row(
-                        view: Self.groupHeaderView(group), height: Self.headerHeight))
+                lines.append(ListPopover.Row(view: Self.groupHeaderView(group), height: Self.headerHeight))
             }
             previousGroup = item.group
             let content = ListRow.Content(
                 title: item.title, note: item.note, leading: item.swatch.map { .swatch($0) },
                 trailing: item.isSelected ? .check : nil)
             let row = ListRow(content) { [weak self] in self?.pick(index) }
+            row.hoverFills = false
             rowViews.append((index, row))
             lines.append(ListPopover.Row(view: row, height: Self.rowHeight))
         }

@@ -65,12 +65,10 @@ final class SidebarRowMenu {
         for (index, group) in groups.enumerated() {
             if index > 0 { rows.append(ListPopover.Row(view: Self.separator(), height: Self.separatorHeight)) }
             let views = group.map { item in
-                let row = ListRow(Self.content(item)) { [weak self] in
+                ListRow(Self.content(item)) { [weak self] in
                     self?.close()
                     item.run()
                 }
-                row.setAccessibilityRole(.menuItem)
-                return row
             }
             itemViews += views
             rows += views.map { ListPopover.Row(view: $0, height: Self.rowHeight) }

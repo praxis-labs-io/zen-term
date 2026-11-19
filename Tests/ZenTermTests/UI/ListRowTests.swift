@@ -98,6 +98,8 @@ final class ListRowTests: WindowTestCase {
         XCTAssertEqual(shown.map(\.title), ["feature/zen-454", "feature/zen-481"])
         XCTAssertEqual(shown.map(\.isHighlighted), [false, true], "the arrow did not move the highlight")
         XCTAssertEqual(shown[1].layer?.backgroundColor, hover)
+        shown[0].mouseEntered(with: try crossing(.mouseEntered))
+        XCTAssertEqual(shown[0].layer?.backgroundColor?.alpha, 0, "the hovered row fills beside the cursor's row")
 
         try click(shown[0])
         XCTAssertEqual(field.text, "feature/zen-454")

@@ -1,6 +1,6 @@
 import AppKit
 
-class ListRow: ControlView, ThemeReapplying {
+final class ListRow: ControlView, ThemeReapplying {
     enum Leading: Equatable {
         case symbol(String)
         case swatch(NSColor)
@@ -37,6 +37,10 @@ class ListRow: ControlView, ThemeReapplying {
     var isHighlighted = false {
         didSet { if isHighlighted != oldValue { refreshFill() } }
     }
+    // A list with a keyboard cursor turns this off, or the hovered row and the cursor's row would both look chosen.
+    var hoverFills = true {
+        didSet { refreshFill() }
+    }
     private(set) var content: Content
     private(set) var isTakingKeyboardFocus = false
     private let onChoose: () -> Void
@@ -57,6 +61,7 @@ class ListRow: ControlView, ThemeReapplying {
         wantsLayer = true
         layer?.cornerRadius = ChromeMetrics.Radius.control
         setAccessibilityElement(true)
+        setAccessibilityRole(.menuItem)
 
         stack.orientation = .horizontal
         stack.alignment = .centerY
@@ -91,6 +96,7 @@ class ListRow: ControlView, ThemeReapplying {
     private func rebuild() {
         let chrome = Theme.current.chrome
         setAccessibilityLabel(content.title)
+        setAccessibilitySelected(content.trailing == .check)
 
         let title = NSTextField(labelWithString: content.title)
         title.font = ChromeType.font(.body)
@@ -99,7 +105,7 @@ class ListRow: ControlView, ThemeReapplying {
         title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         var lead: [NSView] = []
-        if let leading = content.leading { lead.append(Self.leadingView(leading, recedes: content.recedes, chrome)) }
+        if let leading = content.leading { lead.append(Self.leadingView(leading, chrome)) }
         lead.append(title)
 
         var trail: [NSView] = []
@@ -118,13 +124,13 @@ class ListRow: ControlView, ThemeReapplying {
         if trail.count > 1 { stack.setCustomSpacing(ChromeMetrics.Spacing.s6, after: trail[0]) }
     }
 
-    private static func leadingView(_ leading: Leading, recedes: Bool, _ chrome: ChromeTheme) -> NSView {
+    private static func leadingView(_ leading: Leading, _ chrome: ChromeTheme) -> NSView {
         switch leading {
         case .symbol(let name):
             let icon = NSImageView()
             icon.image = NSImage(systemSymbolName: name, accessibilityDescription: nil)
             icon.symbolConfiguration = .init(pointSize: ChromeMetrics.Icon.sm, weight: .regular)
-            icon.contentTintColor = chrome.ink(recedes ? .subtle : .normal)
+            icon.contentTintColor = chrome.ink(.subtle)
             icon.widthAnchor.constraint(equalToConstant: symbolColumn).isActive = true
             return icon
         case .swatch(let color):
@@ -157,7 +163,7 @@ class ListRow: ControlView, ThemeReapplying {
 
     private func refreshFill() {
         showFocusRing(hasKeyboardFocus)
-        easeFill(isHovered || isHighlighted ? Theme.current.chrome.fill(.hover) : .clear)
+        easeFill((isHovered && hoverFills) || isHighlighted ? Theme.current.chrome.fill(.hover) : .clear)
     }
 
     // AppKit promotes any clicked view that accepts, so a row accepts only in `takeKeyboardFocus`.
