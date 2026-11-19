@@ -85,14 +85,12 @@ final class NavRow: ListRow {
         var shown: [NSView] = []
         if dotInk != nil { shown.append(attentionDot) }
         if showsHoverAccessory, let hoverAccessory { shown.append(hoverAccessory) }
-        if shown.map(ObjectIdentifier.init) != accessories.map(ObjectIdentifier.init) { accessories = shown }
-
         var next = Content(title: content.title, note: showsHoverAccessory ? nil : detail, ink: titleInkLevel)
         if case .nested(let symbol) = variant {
             next.leading = .symbol(symbol)
             next.nests = true
         }
-        render(next)
+        render(next, accessories: shown)
         let value = [detail ?? "", dotAccessibilityValue ?? ""].filter { !$0.isEmpty }.joined(separator: ", ")
         setAccessibilityValue(value.isEmpty ? nil : value)
     }
@@ -108,7 +106,12 @@ final class NavRow: ListRow {
 
     var titleForTesting: String { content.title }
 
-    var titleInkForTesting: NSColor { Theme.current.chrome.ink(content.ink) }
+    var titleInkForTesting: NSColor? {
+        func labels(in view: NSView) -> [NSTextField] {
+            view.subviews.flatMap { (($0 as? NSTextField).map { [$0] } ?? []) + labels(in: $0) }
+        }
+        return labels(in: self).first { $0.stringValue == content.title }?.textColor
+    }
 
     var detailForTesting: String { detail ?? "" }
 
@@ -118,6 +121,7 @@ final class NavRow: ListRow {
 
     override func reapplyTheme() {
         attentionDot.layer?.backgroundColor = dotInk?().cgColor
+        if let hoverAccessory, hoverAccessory.superview == nil { hoverAccessory.reapplyThemeTree() }
         super.reapplyTheme()
     }
 

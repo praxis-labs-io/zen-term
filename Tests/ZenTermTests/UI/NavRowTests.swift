@@ -107,6 +107,22 @@ final class NavRowTests: WindowTestCase {
         XCTAssertTrue(showsDetail())
     }
 
+    func test_aThemeChange_reachesTheHoverAccessoryWhileItIsOutOfTheRow() {
+        let (row, _) = mountedRow()
+        let plus = ThemeRecorder()
+        row.setHoverAccessory(plus)
+        XCTAssertNil(plus.superview, "premise: the accessory waits outside the row until hover")
+
+        row.reapplyThemeTree()
+
+        XCTAssertEqual(plus.reapplied, 1, "the accessory comes back on hover in the old theme")
+    }
+
+    private final class ThemeRecorder: NSView, ThemeReapplying {
+        var reapplied = 0
+        func reapplyTheme() { reapplied += 1 }
+    }
+
     func test_click_takesFocus() {
         var activations = 0
         let (row, window) = mountedRow { activations += 1 }

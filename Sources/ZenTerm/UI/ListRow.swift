@@ -59,8 +59,13 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
             refreshFill()
         }
     }
-    var accessories: [NSView] = [] {
-        didSet { rebuild() }
+    private var accessoryViews: [NSView] = []
+    var accessories: [NSView] {
+        get { accessoryViews }
+        set {
+            accessoryViews = newValue
+            rebuild()
+        }
     }
     var footnote: NSView? {
         didSet {
@@ -74,9 +79,9 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     private(set) var isTakingKeyboardFocus = false
     private(set) var isHoverSuppressed = false
     private let stack = NSStackView()
-    private var stackLeading: NSLayoutConstraint!
-    private var stackTop: NSLayoutConstraint!
-    private var stackBottom: NSLayoutConstraint!
+    private lazy var stackLeading = stack.leadingAnchor.constraint(equalTo: leadingAnchor)
+    private lazy var stackTop = stack.topAnchor.constraint(equalTo: topAnchor)
+    private lazy var stackBottom = stack.bottomAnchor.constraint(equalTo: bottomAnchor)
     private var footnoteBottom: NSLayoutConstraint?
 
     var title: String { content.title }
@@ -101,9 +106,6 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         stack.spacing = ChromeMetrics.Spacing.s8
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
-        stackLeading = stack.leadingAnchor.constraint(equalTo: leadingAnchor)
-        stackTop = stack.topAnchor.constraint(equalTo: topAnchor)
-        stackBottom = stack.bottomAnchor.constraint(equalTo: bottomAnchor)
         NSLayoutConstraint.activate([
             stackLeading, stackTop, stackBottom,
             stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ChromeMetrics.Spacing.controlInset),
@@ -116,8 +118,10 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    func render(_ content: Content) {
-        guard content != self.content else { return }
+    func render(_ content: Content, accessories: [NSView]? = nil) {
+        let accessoriesChange = accessories.map { !$0.elementsEqual(self.accessories, by: ===) } ?? false
+        guard content != self.content || accessoriesChange else { return }
+        if let accessories, accessoriesChange { accessoryViews = accessories }
         self.content = content
         setAccessibilityLabel(content.title)
         refreshAccessibilitySelected()
@@ -140,7 +144,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         if let leading = content.leading { lead.append(Self.leadingView(leading, chrome)) }
         lead.append(titleView(chrome))
 
-        var trail: [NSView] = accessories
+        var trail: [NSView] = accessoryViews
         if let note = content.note {
             let label = NSTextField(labelWithString: note)
             label.font = ChromeType.font(.caption)
