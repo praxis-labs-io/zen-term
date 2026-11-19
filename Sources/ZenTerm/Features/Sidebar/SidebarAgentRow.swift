@@ -84,7 +84,7 @@ final class SidebarAgentRow: SidebarJumpRow {
         tooltip?.label = item.message ?? Self.jumpHint
         tooltip?.style = item.message == nil ? .line : .paragraph
         tooltip?.relabel(from: self)
-        setAccessibilityLabel(item.message ?? item.summary)
+        announce(item)
         setAccessibilityValue(item.detail)
         dot.isHidden = item.state == .working
         spinner.isHidden = item.state != .working
@@ -99,7 +99,15 @@ final class SidebarAgentRow: SidebarJumpRow {
     override func reapplyTheme() {
         let state = item?.state ?? .idle
         dot.layer?.backgroundColor = state.ink.cgColor
-        if let item { render(Content(title: item.summary, subtitle: item.detail, titleColor: state.ink)) }
+        if let item {
+            render(Content(title: item.summary, subtitle: item.detail, titleColor: state.ink))
+            announce(item)
+        }
         super.reapplyTheme()
+    }
+
+    // `render` labels the row with its title, the summary, which cuts a multi-sentence message short.
+    private func announce(_ item: SidebarAgentItem) {
+        setAccessibilityLabel(item.message ?? item.summary)
     }
 }
