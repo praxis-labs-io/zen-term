@@ -59,7 +59,7 @@ final class OverlayReapplyThemeTests: WindowTestCase {
         _ card: NSView, tier: FloatShadow.Tier, file: StaticString = #filePath, line: UInt = #line
     ) {
         XCTAssertEqual(
-            card.layer?.backgroundColor, CardChrome.fill.cgColor, "the fill stayed stale", file: file, line: line)
+            card.layer?.backgroundColor, CardChrome.fill(tier).cgColor, "the fill stayed stale", file: file, line: line)
         XCTAssertEqual(
             card.layer?.borderColor, FloatShadow.edge.cgColor, "the border stayed stale", file: file, line: line)
         XCTAssertEqual(

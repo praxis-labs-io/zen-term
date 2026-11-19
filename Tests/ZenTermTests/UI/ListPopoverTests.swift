@@ -36,7 +36,7 @@ final class ListPopoverTests: WindowTestCase {
 
         let card = popover.cardForTesting
         XCTAssertEqual(CGFloat(card?.layer?.shadowRadius ?? -1), FloatShadow.Tier.overlay.blur)
-        XCTAssertEqual(card?.layer?.backgroundColor, CardChrome.fill.cgColor)
+        XCTAssertEqual(card?.layer?.backgroundColor, CardChrome.fill(.overlay).cgColor)
         XCTAssertEqual(card?.layer?.borderColor, FloatShadow.edge.cgColor)
     }
 

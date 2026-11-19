@@ -14,6 +14,15 @@ enum FloatShadow {
             }
         }
 
+        // The tier most often stacked on another float lifts most.
+        var lightening: CGFloat {
+            switch self {
+            case .overlay: return 7
+            case .float: return 5
+            case .modal: return 3
+            }
+        }
+
         /// Dark themes cannot show the target darkening without a heavy halo; the 1pt edge carries their depth.
         var maxAlpha: CGFloat {
             switch self {

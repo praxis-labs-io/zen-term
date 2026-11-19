@@ -16,7 +16,7 @@ Everything in the chrome resolves from `Theme.current`. Chrome UI takes
 
 | Role | Means |
 |---|---|
-| `background` | The window and every surface on it |
+| `background` | The window and every surface on it except a float, which takes its tier's raised fill. See [Elevation](#elevation) |
 | `foreground` | The base every ink and fill is derived from |
 | `accent` | Pane focus, the primary action, work in progress. See [Accent](#accent) |
 | `onAccent` | Text and rings on an accent fill, and nowhere else. The background or the foreground, whichever contrasts more with `accent` |
@@ -76,8 +76,9 @@ follow the macOS appearance, not the theme.
 
 - Text fields edit through `ChromeTextView`, which `HostWindow` vends as the field
   editor; a field calls `applyThemedEditor()` on a theme change.
-- The one exception is the shadow's black in `FloatShadow`, whose strength is solved per
-  theme. Any other theme-independent value (an alpha mask) carries a one-line why.
+- The exceptions are the shadow's black in `FloatShadow`, whose strength is solved per
+  theme, and the white a light theme's raised fill lifts toward. Any other
+  theme-independent value (an alpha mask) carries a one-line why.
 
 ## State
 
@@ -142,8 +143,14 @@ dimension only. A drawing proportion that is not chrome takes
 
 ## Elevation
 
-Every float has a 1pt `FloatShadow.edge` and a shadow tier, applied with
-`FloatShadow.apply(_:to:)`. Never build an `NSShadow` by hand.
+Every float has a 1pt `FloatShadow.edge`, a shadow tier applied with
+`FloatShadow.apply(_:to:)`, and its tier's raised fill, `chrome.raised(_:)`. `CardChrome`
+applies all three. Never build an `NSShadow` by hand, and never paint a float `background`.
+
+The raised fill steps the window color lighter by the tier's `lightening` in L\*, solved per
+theme in `ChromeThemeDeriver`: toward the foreground on a dark theme, toward white on a light one,
+clamping where there is no room left. A dark float stops halfway to its ink, so text on it stays legible. The overlay lifts most, since it opens on other floats. A
+tool float's terminal host keeps the terminal background.
 
 | Tier | For |
 |---|---|

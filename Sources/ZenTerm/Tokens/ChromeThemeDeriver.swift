@@ -18,7 +18,10 @@ enum ChromeThemeDeriver {
             fillScale: fillScale(for: terminal),
             overlayShadowAlpha: shadowAlpha(on: terminal.background, tier: .overlay),
             floatShadowAlpha: shadowAlpha(on: terminal.background, tier: .float),
-            modalShadowAlpha: shadowAlpha(on: terminal.background, tier: .modal))
+            modalShadowAlpha: shadowAlpha(on: terminal.background, tier: .modal),
+            overlayRaised: raisedFill(for: terminal, tier: .overlay),
+            floatRaised: raisedFill(for: terminal, tier: .float),
+            modalRaised: raisedFill(for: terminal, tier: .modal))
     }
 
     private static func onAccent(for accent: TerminalColor, in terminal: TerminalTheme) -> TerminalColor {
@@ -65,6 +68,36 @@ enum ChromeThemeDeriver {
             if darkening(of: background, alpha: mid) < goal { low = mid } else { high = mid }
         }
         return CGFloat(high)
+    }
+
+    /// A light theme's foreground is darker than its window, so it lifts toward white instead.
+    private static let lightCeiling = TerminalColor(red: 255, green: 255, blue: 255)
+
+    // Ink is the foreground at an alpha, so a dark float lifts at most this share of the way toward it.
+    static let inkClearance = 0.5
+
+    static func raisedFill(for terminal: TerminalTheme, tier: FloatShadow.Tier) -> TerminalColor {
+        let background = terminal.background
+        let toward = background.isDark ? terminal.foreground : lightCeiling
+        let available = lightening(of: background, to: toward)
+        guard available > 0 else { return background }
+        let goal = min(Double(tier.lightening), background.isDark ? available * inkClearance : available)
+        guard available > goal else { return toward }
+        var low = 0.0
+        var high = 1.0
+        for _ in 0..<40 {
+            let mid = (low + high) / 2
+            if lightening(of: background, to: blend(toward, background, mid)) < goal { low = mid } else { high = mid }
+        }
+        return blend(toward, background, high)
+    }
+
+    private static func lightening(of background: TerminalColor, to color: TerminalColor) -> Double {
+        lightness(of: color) - lightness(of: background)
+    }
+
+    static func lightness(of color: TerminalColor) -> Double {
+        lightness(relativeLuminance(of: color))
     }
 
     private static func darkening(of background: TerminalColor, alpha: Double) -> Double {

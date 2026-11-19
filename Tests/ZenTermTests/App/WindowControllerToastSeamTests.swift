@@ -235,7 +235,7 @@ final class WindowControllerToastSeamTests: WindowTestCase {
             toast.layer?.backgroundColor, stale,
             "a live waiting toast must recolor with the chrome, not keep the old theme's fill")
         XCTAssertEqual(
-            toast.layer?.backgroundColor, Theme.current.chrome.background.nsColor.cgColor)
+            toast.layer?.backgroundColor, Theme.current.chrome.raised(.float).cgColor)
     }
 
     func test_waitingToast_keycapFollowsItsTab_whenAnEarlierTabCloses() throws {

@@ -289,6 +289,70 @@ final class ChromeThemeDeriverTests: XCTestCase {
             accuracy: 0.001, "a tint has picked up fillScale")
     }
 
+    func test_everyBundledTheme_raisesEachTierByItsLighteningUntilThereIsNoRoomLeft() throws {
+        let white = TerminalColor(red: 255, green: 255, blue: 255)
+        for (token, terminal) in try bundledTerminals() {
+            let chrome = ChromeThemeDeriver.derive(from: terminal)
+            let window = ChromeThemeDeriver.lightness(of: terminal.background)
+            let ceiling = ChromeThemeDeriver.lightness(of: terminal.background.isDark ? terminal.foreground : white)
+            for tier in FloatShadow.Tier.allCases {
+                let raised = try XCTUnwrap(rgb(chrome.raised(tier)))
+                let gained = ChromeThemeDeriver.lightness(of: raised) - window
+                let room = max(0, ceiling - window)
+                let expected = min(
+                    Double(tier.lightening), terminal.background.isDark ? room * ChromeThemeDeriver.inkClearance : room)
+                XCTAssertEqual(
+                    gained, expected, accuracy: 0.6,
+                    "\(token) raises its \(tier) fill by \(gained) L*, not \(expected)")
+            }
+        }
+    }
+
+    func test_aDarkTheme_raisesEveryTierAboveTheWindow_overlayHighest() throws {
+        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
+        let lightness = try [FloatShadow.Tier.modal, .float, .overlay].map {
+            ChromeThemeDeriver.lightness(of: try XCTUnwrap(rgb(chrome.raised($0))))
+        }
+        XCTAssertGreaterThan(lightness[0], ChromeThemeDeriver.lightness(of: Theme.rosePineZen.background))
+        XCTAssertEqual(lightness, lightness.sorted(), "the tiers must lift modal, then float, then overlay")
+        XCTAssertEqual(Set(lightness).count, 3, "two tiers collapsed onto one fill")
+    }
+
+    func test_aLightTheme_liftsTowardWhite_andAWhiteWindowStaysWhite() throws {
+        var offWhite = Theme.rosePineZen
+        offWhite.background = try XCTUnwrap(TerminalColor(hex: "#e1e2e7"))
+        offWhite.foreground = try XCTUnwrap(TerminalColor(hex: "#3760bf"))
+        let lifted = try XCTUnwrap(rgb(ChromeThemeDeriver.derive(from: offWhite).raised(.overlay)))
+        XCTAssertGreaterThan(
+            ChromeThemeDeriver.lightness(of: lifted), ChromeThemeDeriver.lightness(of: offWhite.background))
+
+        var white = offWhite
+        white.background = try XCTUnwrap(TerminalColor(hex: "#ffffff"))
+        for tier in FloatShadow.Tier.allCases {
+            XCTAssertEqual(rgb(ChromeThemeDeriver.derive(from: white).raised(tier)), white.background)
+        }
+    }
+
+    func test_aLowContrastDarkTheme_neverLiftsItsFloatsOntoTheInkColor() throws {
+        var murky = Theme.rosePineZen
+        murky.background = try XCTUnwrap(TerminalColor(hex: "#202020"))
+        murky.foreground = try XCTUnwrap(TerminalColor(hex: "#2e2e2e"))
+        let raised = try XCTUnwrap(rgb(ChromeThemeDeriver.derive(from: murky).raised(.overlay)))
+        let separation =
+            ChromeThemeDeriver.lightness(of: murky.foreground) - ChromeThemeDeriver.lightness(of: murky.background)
+        XCTAssertNotEqual(raised, murky.foreground, "the overlay paints the ink's own color")
+        XCTAssertLessThanOrEqual(
+            ChromeThemeDeriver.lightness(of: raised) - ChromeThemeDeriver.lightness(of: murky.background),
+            separation * ChromeThemeDeriver.inkClearance + 0.5)
+    }
+
+    private func rgb(_ color: NSColor) -> TerminalColor? {
+        guard let srgb = color.usingColorSpace(.sRGB) else { return nil }
+        func byte(_ component: CGFloat) -> UInt8 { UInt8((component * 255).rounded()) }
+        return TerminalColor(
+            red: byte(srgb.redComponent), green: byte(srgb.greenComponent), blue: byte(srgb.blueComponent))
+    }
+
     private func bundledTerminals() throws -> [(token: String, terminal: TerminalTheme)] {
         try ThemeCatalog.bundled.map { entry in
             let url = try XCTUnwrap(ThemeCatalog.bundledURL(for: entry.token))
