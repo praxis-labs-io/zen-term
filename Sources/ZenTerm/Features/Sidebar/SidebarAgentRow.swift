@@ -55,6 +55,7 @@ final class SidebarAgentRow: SidebarJumpRow {
     init(onActivate: @escaping () -> Void) {
         super.init(tooltip: Self.jumpHint, onActivate: onActivate)
 
+        spinner.role = \.working
         dot.wantsLayer = true
         dot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.dotDiameter)
         for glyph in [dot, spinner] {
