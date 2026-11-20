@@ -139,15 +139,16 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
 
         wireSegment(gitSegment)
         let gitGroup = Self.vStack(
-            [SectionCaption("Open in"), gitSegment], spacing: ChromeMetrics.Spacing.s6)
+            [SectionCaption("Open in"), NSStackView.huggingRow(gitSegment)], spacing: ChromeMetrics.Spacing.s6)
 
         wireSegment(persistSegment)
         let persistGroup = Self.vStack(
-            [SectionCaption("Keep running"), persistSegment], spacing: ChromeMetrics.Spacing.s6)
+            [SectionCaption("Keep running"), NSStackView.huggingRow(persistSegment)], spacing: ChromeMetrics.Spacing.s6)
 
         wireSegment(toolbarSegment)
         let toolbarGroup = Self.vStack(
-            [SectionCaption("Toolbar button"), toolbarSegment], spacing: ChromeMetrics.Spacing.s6)
+            [SectionCaption("Toolbar button"), NSStackView.huggingRow(toolbarSegment)],
+            spacing: ChromeMetrics.Spacing.s6)
 
         cancelButton.onTap = { [weak self] in self?.cancel() }
         submitButton.setTitle(editingFloat == nil ? "Add Tool Float" : "Save")

@@ -47,7 +47,7 @@ not carry it:
 | The change | Why it doesn't flow | Flag |
 |---|---|---|
 | A theme concept | the example theme file syncs on its own, but the website `theming` Guide is authored MDX | edit the website `theming` Guide |
-| A **new** `docs/config/<file>` | `sync-docs` FILES is `config`, `workspaces`, `themes/rose-pine-zen`, so a new file is never fetched and no reference page exists | add it to `sync-docs.mjs` FILES + a website reference page |
+| A **new** `docs/config/<file>` | `sync-docs` FILES is `config`, `workspaces`, `themes/zen-ink`, so a new file is never fetched and no reference page exists | add it to `sync-docs.mjs` FILES + a website reference page |
 | Behavior a Guide narrates (install, panes, shortcuts, workspaces, tool-floats, neovim) | those are authored MDX (`app/docs/*/page.mdx`), not parsed from facts | edit that website Guide |
 | Install steps, download link, or positioning copy | this repo's README and the website's are hand-kept, separately | flag it |
 

@@ -80,7 +80,7 @@ final class SidebarAgentRow: SidebarJumpRow {
     func render(_ item: SidebarAgentItem) {
         guard item != self.item else { return }
         self.item = item
-        render(Content(title: item.summary, subtitle: item.detail, titleColor: item.state.ink))
+        render(Content(title: item.summary, subtitle: item.detail))
         tooltip?.label = item.message ?? Self.jumpHint
         tooltip?.style = item.message == nil ? .line : .paragraph
         tooltip?.relabel(from: self)
@@ -100,7 +100,7 @@ final class SidebarAgentRow: SidebarJumpRow {
         let state = item?.state ?? .idle
         dot.layer?.backgroundColor = state.ink.cgColor
         if let item {
-            render(Content(title: item.summary, subtitle: item.detail, titleColor: state.ink))
+            render(Content(title: item.summary, subtitle: item.detail))
             announce(item)
         }
         super.reapplyTheme()

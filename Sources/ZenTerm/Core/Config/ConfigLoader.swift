@@ -25,7 +25,7 @@ enum ConfigLoader {
 
     @MainActor
     static func loadAppTheme(configRoot: URL = defaultRoot, general: GeneralConfig = .current) -> AppTheme {
-        let builtIn = Theme.rosePineZen
+        let builtIn = Theme.zenInk
 
         var terminal: TerminalTheme
         if let themeURL = activeThemeURL(configRoot: configRoot, themeName: general.themeName) {

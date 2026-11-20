@@ -42,9 +42,7 @@ The epic's record is **Linear** and git, so `docs/` does not re-copy that histor
 Terminal-native. Xcode must be installed for the toolchain, but you never open it
 (`open Package.swift` only for a debugger or Instruments session).
 
-- `bin/build-ghosttykit` once per machine and per ghostty pin move. Its outputs are
-  gitignored, so a new git worktree needs `Frameworks/GhosttyKit.xcframework` and
-  `Sources/TerminalKit/Resources/ghostty-resources` symlinked from the main checkout.
+- `bin/build-ghosttykit` once per machine and per ghostty pin move.
 - `bin/run` (build and launch, filters linker noise) / `swift build` / `swift test`
 - `bin/check` is **the full local gate** (mirrors CI): build, test,
   `swift format lint --strict`, `swiftlint --strict`. `bin/check --fix`

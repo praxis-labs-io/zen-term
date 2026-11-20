@@ -9,11 +9,12 @@ struct ThemeEntry: Equatable {
 }
 
 enum ThemeCatalog {
-    /// Stays in step with `Theme.rosePineZen`.
-    static let defaultThemeName = "rose-pine-zen"
+    /// Stays in step with `Theme.zenInk`.
+    static let defaultThemeName = "zen-ink"
 
     static let bundled: [(token: String, displayName: String, isDark: Bool)] = [
-        (defaultThemeName, "Rosé Pine Zen", true),
+        (defaultThemeName, "Zen Ink", true),
+        ("rose-pine-zen", "Rosé Pine Zen", true),
         ("rose-pine", "Rosé Pine", true),
         ("rose-pine-moon", "Rosé Pine Moon", true),
         ("rose-pine-dawn", "Rosé Pine Dawn", false),

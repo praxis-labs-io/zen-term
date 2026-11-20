@@ -117,8 +117,9 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
         wireSegment(baseSegment)
         baseCaption.font = ChromeType.font(.caption)
         baseCaption.textColor = Theme.current.chrome.ink(.muted)
+        let baseRow = NSStackView.huggingRow(baseSegment)
         let baseGroup = Self.vStack(
-            [SectionCaption("Base"), baseSegment, baseCaption], spacing: ChromeMetrics.Spacing.s6)
+            [SectionCaption("Base"), baseRow, baseCaption], spacing: ChromeMetrics.Spacing.s6)
         self.baseGroup = baseGroup
 
         carryLabel.font = ChromeType.font(.caption)

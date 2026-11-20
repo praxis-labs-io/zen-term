@@ -26,7 +26,7 @@ final class ReferenceConfigTests: XCTestCase {
         var general = GeneralConfig.builtIn
         general.themeName = ThemeCatalog.defaultThemeName
         let terminal = ConfigLoader.loadAppTheme(configRoot: docsConfig, general: general).terminal
-        let expected = Theme.rosePineZen
+        let expected = Theme.zenInk
         XCTAssertEqual(terminal.background, expected.background)
         XCTAssertEqual(terminal.foreground, expected.foreground)
         XCTAssertEqual(terminal.cursor, expected.cursor)

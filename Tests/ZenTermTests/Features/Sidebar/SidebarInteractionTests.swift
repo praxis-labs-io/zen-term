@@ -646,6 +646,7 @@ final class SidebarInteractionTests: WindowTestCase {
     func test_clickingAPane_fromTheSidebar_givesItBackItsFocusBorderAndCursor() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.splitVertical)
         let pane = try XCTUnwrap(controller.focusedSurfaceForTesting as? RecordingSurface)
         let panel = try XCTUnwrap(controller.focusedPanelForTesting)
         pane.focus()
@@ -1088,6 +1089,7 @@ final class SidebarInteractionTests: WindowTestCase {
     func test_whileTheSidebarHoldsFocus_noPaneShowsTheFocusBorder() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.splitVertical)
         let pane = try XCTUnwrap(controller.focusedPanelForTesting)
         XCTAssertTrue(pane.isFocused, "precondition: the focused pane wears the focus border")
 
@@ -1101,6 +1103,7 @@ final class SidebarInteractionTests: WindowTestCase {
     func test_whileTheWindowIsNotKey_noPaneShowsTheFocusBorder() throws {
         let controller = makeController()
         controller.window.makeKeyAndOrderFront(nil)
+        controller.handle(.splitVertical)
         let pane = try XCTUnwrap(controller.focusedPanelForTesting)
         XCTAssertTrue(pane.isFocused)
 

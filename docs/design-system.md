@@ -25,7 +25,7 @@ Everything in the chrome resolves from `Theme.current`. Chrome UI takes
 | `warning` | Caution: proceeding has a cost |
 | `destructive` | Loss, deletion, errors |
 | `info` | A neutral notice |
-| `cursor` | The terminal cursor's color, and chrome that marks where the cursor or focus will land |
+| `cursor` | The accent, painted onto the terminal cursor too, and chrome that marks where the cursor or focus will land |
 
 A role the chrome needs and `ChromeTheme` lacks gets added to `ChromeTheme` and derived
 in `ChromeThemeDeriver`. Never a literal.
@@ -49,7 +49,7 @@ Three ways in, never a raw alpha:
 
 - **A control's interactive states** take a tier, `chrome.fill(.rest / .hover / .active)`.
 - **Structural fills** (a divider, a border, a swatch ring) take `chrome.fill(alpha:)`
-  with `ChromeTheme.hairline`, `.border` or `.swatchRing`.
+  with `ChromeTheme.hairline`, `.border`, `.divider` (the toolbar's group dividers) or `.swatchRing`.
 - **A role-toned surface behind text** takes `chrome.tint(_:alpha:)` with `ChromeTheme.badgeTint`
   or `.flashTint`. It sits outside the per-theme fill scale, so it never goes next to a
   sibling `fill(_:)`.
@@ -58,7 +58,7 @@ Three ways in, never a raw alpha:
 
 Accent is rare. It goes in these places only:
 
-- The focus border of a pane or tool float, and a shortcut being recorded.
+- The focus border of a tool float, of a pane while another pane or drawer shares the screen, and a shortcut being recorded.
 - The primary button's fill, labeled and ringed in `onAccent`.
 - Work in progress: the working dot, `Spinner`, the update progress bar.
 - Role-toned `tint` surfaces: icon badges, focused text selection, the find bar, the
@@ -90,7 +90,7 @@ One ladder for every control and row:
 | Hover | `fill(.hover)` |
 | Keyboard cursor | `fill(.hover)`. In a transient list (palette, dropdown, menu) the cursor is the focus |
 | Focused | A `focusRing` ring at `Border.width`. Fill and ink unchanged. On the primary button the ring is `onAccent`, inset by `Border.width` |
-| Current | Pick lists: a check mark only. Persistent nav and tabs: `fill(.active)`. A segment: the raised overlay surface inside its track |
+| Current | Pick lists: a check mark only. Persistent nav, tabs and segments: `fill(.active)` |
 | Pressed | Looks like hover |
 | Disabled | `ink(.faint)` on every variant. Controls keep `fill(.rest)`; no hover, no ring |
 

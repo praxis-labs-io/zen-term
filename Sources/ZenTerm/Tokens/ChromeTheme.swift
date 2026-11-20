@@ -43,7 +43,7 @@ struct ChromeTheme: Equatable {
         foreground.nsColor.withAlphaComponent(min(1, level.alpha * Self.inkBoost))
     }
 
-    var focusRing: NSColor { ink(.subtle) }
+    var focusRing: NSColor { ink(.muted) }
 
     enum FillLevel: CaseIterable {
         case rest
@@ -65,6 +65,7 @@ struct ChromeTheme: Equatable {
 
     static let hairline: CGFloat = 0.08
     static let border: CGFloat = 0.10
+    static let divider: CGFloat = 0.15
     /// Heavier than `border`: it has to contain an arbitrary color, and a black slot vanishes on the list card.
     static let swatchRing: CGFloat = 0.15
 

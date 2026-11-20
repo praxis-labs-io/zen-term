@@ -42,7 +42,7 @@ final class ReapplyThemeTests: WindowTestCase {
     }
 
     private func makeLightTheme() throws -> AppTheme {
-        var terminal = Theme.rosePineZen
+        var terminal = Theme.zenInk
         terminal.background = try XCTUnwrap(TerminalColor(hex: "#faf4ed"))
         return AppTheme(terminal: terminal)
     }
@@ -204,7 +204,7 @@ final class ReapplyThemeTests: WindowTestCase {
 
         XCTAssertNotEqual(colorBefore, control.segmentInkForTesting(0))
         XCTAssertNotEqual(surfaceBefore, control.selectedSurfaceFillForTesting)
-        XCTAssertEqual(control.selectedSurfaceFillForTesting, Theme.current.chrome.raised(.overlay).cgColor)
+        XCTAssertEqual(control.selectedSurfaceFillForTesting, Theme.current.chrome.fill(.active).cgColor)
     }
 
     func test_reapplyTheme_keepsAnAgentRowsFullMessageForVoiceOver() throws {

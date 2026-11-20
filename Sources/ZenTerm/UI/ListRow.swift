@@ -21,12 +21,11 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         var trailing: Trailing?
         var ink: ChromeTheme.InkLevel
         var nests: Bool
-        var titleColor: NSColor?
 
         init(
             title: String, subtitle: String? = nil, subtitleTruncation: NSLineBreakMode = .byTruncatingTail,
             note: String? = nil, leading: Leading? = nil, trailing: Trailing? = nil,
-            ink: ChromeTheme.InkLevel = .normal, nests: Bool = false, titleColor: NSColor? = nil
+            ink: ChromeTheme.InkLevel = .normal, nests: Bool = false
         ) {
             self.title = title
             self.subtitle = subtitle
@@ -36,7 +35,6 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
             self.trailing = trailing
             self.ink = ink
             self.nests = nests
-            self.titleColor = titleColor
         }
     }
 
@@ -178,7 +176,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         let title = titleLabel
         title.stringValue = content.title
         title.font = ChromeType.font(content.nests ? .small : .body)
-        title.textColor = content.titleColor ?? chrome.ink(content.ink)
+        title.textColor = chrome.ink(content.ink)
         title.lineBreakMode = .byTruncatingTail
         title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         guard let subtitle = content.subtitle else { return title }

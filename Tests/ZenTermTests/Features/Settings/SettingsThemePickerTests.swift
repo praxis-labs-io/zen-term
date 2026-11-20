@@ -67,54 +67,54 @@ final class SettingsThemePickerTests: WindowTestCase {
 
     func test_noThemeKey_showsTheDefaultSelected() {
         let dropdown = mountThemeDropdown()
-        XCTAssertEqual(dropdown.buttonTitleForTesting, "Rosé Pine Zen")
+        XCTAssertEqual(dropdown.buttonTitleForTesting, "Zen Ink")
         XCTAssertFalse(configText().contains("theme"))
     }
 
     func test_selectingATheme_writesTheToken_andReturningWritesTheDefaultsOwn() throws {
         let entries = ThemeCatalog.entries(configRoot: tempRoot)
         let defaultIndex = try XCTUnwrap(entries.firstIndex { $0.name == ThemeCatalog.defaultThemeName })
-        XCTAssertTrue(entries.indices.contains(defaultIndex + 1), "the default is last; nothing to step to")
-        let next = entries[defaultIndex + 1]
+        XCTAssertTrue(entries.indices.contains(defaultIndex - 1), "the default is first; nothing to step to")
+        let next = entries[defaultIndex - 1]
 
         let dropdown = mountThemeDropdown()
         hostWindow?.makeFirstResponder(dropdown)
 
         dropdown.keyDown(with: key(Self.returnKey, arrow: false))
-        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.moveDown(_:)))
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.moveUp(_:)))
         _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
 
         XCTAssertTrue(configText().contains("theme = \(next.name)"), "got: \(configText())")
         XCTAssertEqual(dropdown.buttonTitleForTesting, next.displayName)
 
         dropdown.keyDown(with: key(Self.returnKey, arrow: false))
-        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.moveUp(_:)))
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.moveDown(_:)))
         _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
 
-        XCTAssertTrue(configText().contains("theme = rose-pine-zen"), "got: \(configText())")
-        XCTAssertEqual(dropdown.buttonTitleForTesting, "Rosé Pine Zen")
+        XCTAssertTrue(configText().contains("theme = zen-ink"), "got: \(configText())")
+        XCTAssertEqual(dropdown.buttonTitleForTesting, "Zen Ink")
     }
 
     func test_committingASelection_movesTheLiveTheme() throws {
         let entries = ThemeCatalog.entries(configRoot: tempRoot)
         let defaultIndex = try XCTUnwrap(entries.firstIndex { $0.name == ThemeCatalog.defaultThemeName })
-        XCTAssertTrue(entries.indices.contains(defaultIndex + 1), "the default is last; nothing to step to")
-        let next = entries[defaultIndex + 1]
+        XCTAssertTrue(entries.indices.contains(defaultIndex - 1), "the default is first; nothing to step to")
+        let next = entries[defaultIndex - 1]
         var general = GeneralConfig.builtIn
         general.themeName = next.name
         let expected = ConfigLoader.loadAppTheme(configRoot: tempRoot, general: general).terminal
 
         let dropdown = mountThemeDropdown()
         hostWindow?.makeFirstResponder(dropdown)
-        XCTAssertEqual(Theme.current.terminal.ansi[2], TerminalColor(red: 0x3E, green: 0x8F, blue: 0xB0))
+        XCTAssertEqual(Theme.current.terminal.ansi[2], Theme.zenInk.ansi[2])
 
         dropdown.keyDown(with: key(Self.returnKey, arrow: false))
-        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.moveDown(_:)))
+        _ = dropdown.fieldCommandForTesting(#selector(NSResponder.moveUp(_:)))
         _ = dropdown.fieldCommandForTesting(#selector(NSResponder.insertNewline(_:)))
 
         XCTAssertEqual(Theme.current.terminal.ansi, expected.ansi)
         XCTAssertEqual(Theme.current.terminal.background, expected.background)
-        XCTAssertNotEqual(Theme.current.terminal.ansi[2], TerminalColor(red: 0x3E, green: 0x8F, blue: 0xB0))
+        XCTAssertNotEqual(Theme.current.terminal.ansi[2], Theme.zenInk.ansi[2])
     }
 
     func test_aUserFileNamedForTheDefault_isBothSelectedAndActive() throws {

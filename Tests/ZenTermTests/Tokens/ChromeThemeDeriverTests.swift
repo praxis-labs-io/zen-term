@@ -6,46 +6,47 @@ import XCTest
 
 final class ChromeThemeDeriverTests: XCTestCase {
     func test_derivesRolesFromPaletteMatchingLegacyToastColors() {
-        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
-        XCTAssertEqual(chrome.background, TerminalColor(hex: "#191724"))
-        XCTAssertEqual(chrome.foreground, TerminalColor(hex: "#e0def4"))
-        XCTAssertEqual(chrome.info, TerminalColor(hex: "#9ccfd8"))
-        XCTAssertEqual(chrome.warning, TerminalColor(hex: "#f6c177"))
-        XCTAssertEqual(chrome.destructive, TerminalColor(hex: "#eb6f92"))
-        XCTAssertEqual(chrome.accent, TerminalColor(hex: "#9ccfd8"))
-        XCTAssertEqual(chrome.attention, TerminalColor(hex: "#ea9a97"))
-        XCTAssertEqual(chrome.positive, TerminalColor(hex: "#3e8fb0"))
-        XCTAssertEqual(chrome.cursor, TerminalColor(hex: "#6b6790"))
+        let chrome = ChromeThemeDeriver.derive(from: Theme.zenInk)
+        XCTAssertEqual(chrome.background, TerminalColor(hex: "#0a0d14"))
+        XCTAssertEqual(chrome.foreground, TerminalColor(hex: "#dce3ee"))
+        XCTAssertEqual(chrome.info, TerminalColor(hex: "#6e9bff"))
+        XCTAssertEqual(chrome.warning, TerminalColor(hex: "#ebc17a"))
+        XCTAssertEqual(chrome.destructive, TerminalColor(hex: "#f2707a"))
+        XCTAssertEqual(chrome.accent, TerminalColor(hex: "#6e9bff"))
+        XCTAssertEqual(chrome.attention, TerminalColor(hex: "#5cc8e0"))
+        XCTAssertEqual(chrome.positive, TerminalColor(hex: "#6ee6b8"))
+        XCTAssertEqual(chrome.cursor, chrome.accent)
     }
 
     func test_chromeThemeStaysEquatable_acrossAllFields() {
         XCTAssertEqual(
-            ChromeThemeDeriver.derive(from: Theme.rosePineZen),
-            ChromeThemeDeriver.derive(from: Theme.rosePineZen))
-        var recolored = Theme.rosePineZen
+            ChromeThemeDeriver.derive(from: Theme.zenInk),
+            ChromeThemeDeriver.derive(from: Theme.zenInk))
+        var recolored = Theme.zenInk
         recolored.ansi[AccentSlot.themeDefault.ansiIndex] = TerminalColor(red: 255, green: 255, blue: 255)
         XCTAssertNotEqual(
-            ChromeThemeDeriver.derive(from: Theme.rosePineZen),
+            ChromeThemeDeriver.derive(from: Theme.zenInk),
             ChromeThemeDeriver.derive(from: recolored))
-        var recursored = Theme.rosePineZen
+        var recursored = Theme.zenInk
         recursored.cursor = TerminalColor(red: 255, green: 255, blue: 255)
-        XCTAssertNotEqual(
-            ChromeThemeDeriver.derive(from: Theme.rosePineZen),
-            ChromeThemeDeriver.derive(from: recursored))
+        XCTAssertEqual(
+            ChromeThemeDeriver.derive(from: Theme.zenInk),
+            ChromeThemeDeriver.derive(from: recursored),
+            "the theme's own cursor is overridden by the accent")
     }
 
     func test_accentOverride_movesOnlyTheAccentRole() {
-        let base = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
-        let overridden = ChromeThemeDeriver.derive(from: Theme.rosePineZen, accent: .brightGreen)
+        let base = ChromeThemeDeriver.derive(from: Theme.zenInk)
+        let overridden = ChromeThemeDeriver.derive(from: Theme.zenInk, accent: .magenta)
 
-        XCTAssertEqual(overridden.accent, TerminalColor(hex: "#3e8fb0"))
+        XCTAssertEqual(overridden.accent, TerminalColor(hex: "#b58cff"))
         XCTAssertNotEqual(overridden.accent, base.accent)
         XCTAssertEqual(overridden.info, base.info)
         XCTAssertEqual(overridden.warning, base.warning)
         XCTAssertEqual(overridden.destructive, base.destructive)
         XCTAssertEqual(overridden.attention, base.attention)
         XCTAssertEqual(overridden.positive, base.positive)
-        XCTAssertEqual(overridden.cursor, base.cursor)
+        XCTAssertEqual(overridden.cursor, overridden.accent)
         XCTAssertEqual(overridden.background, base.background)
         XCTAssertEqual(overridden.foreground, base.foreground)
     }
@@ -53,38 +54,38 @@ final class ChromeThemeDeriverTests: XCTestCase {
     func test_noAccentOverride_resolvesToTheDefaultSlot() {
         XCTAssertEqual(AccentSlot.themeDefault, .blue)
         XCTAssertEqual(
-            ChromeThemeDeriver.derive(from: Theme.rosePineZen, accent: nil).accent,
-            ChromeThemeDeriver.derive(from: Theme.rosePineZen, accent: AccentSlot.themeDefault).accent)
+            ChromeThemeDeriver.derive(from: Theme.zenInk, accent: nil).accent,
+            ChromeThemeDeriver.derive(from: Theme.zenInk, accent: AccentSlot.themeDefault).accent)
     }
 
     func test_everySlotResolvesToItsPaletteEntry() {
         for slot in AccentSlot.allCases {
             XCTAssertEqual(
-                ChromeThemeDeriver.derive(from: Theme.rosePineZen, accent: slot).accent,
-                Theme.rosePineZen.ansi[slot.ansiIndex],
+                ChromeThemeDeriver.derive(from: Theme.zenInk, accent: slot).accent,
+                Theme.zenInk.ansi[slot.ansiIndex],
                 "\(slot.rawValue) resolved to the wrong palette entry")
         }
     }
 
     func test_slotBeyondAShortPalette_fallsBackToForeground() {
-        var short = Theme.rosePineZen
+        var short = Theme.zenInk
         short.ansi = Array(short.ansi.prefix(8))
         XCTAssertEqual(
             ChromeThemeDeriver.derive(from: short, accent: .brightWhite).accent, short.foreground)
     }
 
     func test_inkIsThemeForegroundAtTheBoostedLevelAlpha() {
-        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
+        let chrome = ChromeThemeDeriver.derive(from: Theme.zenInk)
         for level in ChromeTheme.InkLevel.allCases {
             assertEqualRGBA(
                 chrome.ink(level),
-                Theme.rosePineZen.foreground.nsColor
+                Theme.zenInk.foreground.nsColor
                     .withAlphaComponent(min(1, level.alpha * ChromeTheme.inkBoost)))
         }
     }
 
     func test_theBoost_clampsOnlyTheNormalLevel() {
-        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
+        let chrome = ChromeThemeDeriver.derive(from: Theme.zenInk)
         for level in ChromeTheme.InkLevel.allCases where level != .normal {
             XCTAssertLessThan(
                 chrome.ink(level).alphaComponent, 1, "\(level) has been boosted into normal")
@@ -101,7 +102,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
     }
 
     func test_faint_isTheQuietestLevelAndClearsTheClamp() {
-        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
+        let chrome = ChromeThemeDeriver.derive(from: Theme.zenInk)
         XCTAssertEqual(ChromeTheme.InkLevel.allCases.first, .faint)
         XCTAssertLessThan(
             chrome.ink(.faint).alphaComponent, chrome.ink(.muted).alphaComponent,
@@ -112,14 +113,14 @@ final class ChromeThemeDeriverTests: XCTestCase {
     }
 
     func test_aThemeSilentOnSelectedTextGetsItsOwnForeground() {
-        XCTAssertNil(Theme.rosePineZen.selectionForeground)
+        XCTAssertNil(Theme.zenInk.selectionForeground)
         XCTAssertEqual(
-            AppTheme(terminal: Theme.rosePineZen).terminal.selectionForeground,
-            Theme.rosePineZen.foreground)
+            AppTheme(terminal: Theme.zenInk).terminal.selectionForeground,
+            Theme.zenInk.foreground)
     }
 
     func test_aThemeThatNamesSelectedTextKeepsWhatItNamed() {
-        var named = Theme.rosePineZen
+        var named = Theme.zenInk
         named.selectionForeground = TerminalColor(hex: "#abcdef")
         XCTAssertEqual(
             AppTheme(terminal: named).terminal.selectionForeground, TerminalColor(hex: "#abcdef"))
@@ -211,17 +212,17 @@ final class ChromeThemeDeriverTests: XCTestCase {
     }
 
     func test_aWellSeparatedTheme_isNotScaled() {
-        XCTAssertEqual(ChromeThemeDeriver.fillScale(for: Theme.rosePineZen), 1, accuracy: 0.0001)
+        XCTAssertEqual(ChromeThemeDeriver.fillScale(for: Theme.zenInk), 1, accuracy: 0.0001)
     }
 
     func test_theScale_isCapped() {
-        var flat = Theme.rosePineZen
+        var flat = Theme.zenInk
         flat.foreground = flat.background
         XCTAssertEqual(ChromeThemeDeriver.fillScale(for: flat), 1.8, accuracy: 0.0001)
     }
 
     func test_activeFill_isNeutral() {
-        var narrow = Theme.rosePineZen
+        var narrow = Theme.zenInk
         narrow.foreground = TerminalColor(red: 0x70, green: 0x70, blue: 0x70)
         let chrome = ChromeThemeDeriver.derive(from: narrow)
         XCTAssertGreaterThan(ChromeThemeDeriver.fillScale(for: narrow), 1, "precondition: it scales")
@@ -280,7 +281,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
     }
 
     func test_aTint_isNotScaled() {
-        var narrow = Theme.rosePineZen
+        var narrow = Theme.zenInk
         narrow.foreground = TerminalColor(red: 0x70, green: 0x70, blue: 0x70)
         let chrome = ChromeThemeDeriver.derive(from: narrow)
         XCTAssertGreaterThan(ChromeThemeDeriver.fillScale(for: narrow), 1, "precondition: it scales")
@@ -309,17 +310,17 @@ final class ChromeThemeDeriverTests: XCTestCase {
     }
 
     func test_aDarkTheme_raisesEveryTierAboveTheWindow_overlayHighest() throws {
-        let chrome = ChromeThemeDeriver.derive(from: Theme.rosePineZen)
+        let chrome = ChromeThemeDeriver.derive(from: Theme.zenInk)
         let lightness = try [FloatShadow.Tier.modal, .float, .overlay].map {
             ChromeThemeDeriver.lightness(of: try XCTUnwrap(rgb(chrome.raised($0))))
         }
-        XCTAssertGreaterThan(lightness[0], ChromeThemeDeriver.lightness(of: Theme.rosePineZen.background))
+        XCTAssertGreaterThan(lightness[0], ChromeThemeDeriver.lightness(of: Theme.zenInk.background))
         XCTAssertEqual(lightness, lightness.sorted(), "the tiers must lift modal, then float, then overlay")
         XCTAssertEqual(Set(lightness).count, 3, "two tiers collapsed onto one fill")
     }
 
     func test_aLightTheme_liftsTowardWhite_andAWhiteWindowStaysWhite() throws {
-        var offWhite = Theme.rosePineZen
+        var offWhite = Theme.zenInk
         offWhite.background = try XCTUnwrap(TerminalColor(hex: "#e1e2e7"))
         offWhite.foreground = try XCTUnwrap(TerminalColor(hex: "#3760bf"))
         let lifted = try XCTUnwrap(rgb(ChromeThemeDeriver.derive(from: offWhite).raised(.overlay)))
@@ -334,7 +335,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
     }
 
     func test_aLowContrastDarkTheme_neverLiftsItsFloatsOntoTheInkColor() throws {
-        var murky = Theme.rosePineZen
+        var murky = Theme.zenInk
         murky.background = try XCTUnwrap(TerminalColor(hex: "#202020"))
         murky.foreground = try XCTUnwrap(TerminalColor(hex: "#2e2e2e"))
         let raised = try XCTUnwrap(rgb(ChromeThemeDeriver.derive(from: murky).raised(.overlay)))
@@ -358,7 +359,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
             let url = try XCTUnwrap(ThemeCatalog.bundledURL(for: entry.token))
             let terminal = GhosttyThemeParser.parse(
                 try String(contentsOf: url, encoding: .utf8), fontName: "Menlo", fontSize: 12,
-                fallback: Theme.rosePineZen)
+                fallback: Theme.zenInk)
             return (entry.token, terminal)
         }
     }

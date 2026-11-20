@@ -80,12 +80,12 @@ final class SegmentedControlTests: WindowTestCase {
         XCTAssertEqual(control.selectedSurfaceFrameForTesting, control.segmentsForTesting[1].frame)
     }
 
-    func test_theSelectedSegment_isARaisedSurfaceInsideTheTrack() {
+    func test_theSelectedSegment_takesTheActiveFillInsideTheTrack() {
         let control = mount(selected: 1)
         let chrome = Theme.current.chrome
 
         XCTAssertEqual(control.layer?.backgroundColor, chrome.fill(.rest).cgColor)
-        XCTAssertEqual(control.selectedSurfaceFillForTesting, chrome.raised(.overlay).cgColor)
+        XCTAssertEqual(control.selectedSurfaceFillForTesting, chrome.fill(.active).cgColor)
         XCTAssertEqual(control.selectedSurfaceFrameForTesting, control.segmentsForTesting[1].frame)
         XCTAssertEqual(control.selectedSurfaceFrameForTesting.height, ChromeMetrics.Height.sm)
         XCTAssertEqual(control.frame.height, ChromeMetrics.Height.control)

@@ -230,6 +230,29 @@ final class WindowKeyFocusTests: WindowTestCase {
         XCTAssertFalse(afterClose.contains(false), "a false between two trues leaves libghostty's blink cancelled")
     }
 
+    func test_aLonePane_wearsNoFocusBorder_untilAnotherPanelSharesTheScreen() throws {
+        let c = makeWindow()
+        let lone = try XCTUnwrap(c.focusedPanelForTesting)
+        XCTAssertFalse(lone.isFocused, "one pane on screen needs no border to say it has focus")
+
+        c.handle(.toggleBottomDrawer)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertTrue(try XCTUnwrap(c.focusedPanelForTesting).isFocused, "a drawer beside it makes it one of two")
+
+        c.handle(.toggleBottomDrawer)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertFalse(lone.isFocused, "and closing the drawer leaves it alone again")
+
+        c.handle(.splitVertical)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        let split = try XCTUnwrap(c.focusedPanelForTesting)
+        XCTAssertTrue(split.isFocused, "a split puts two panes on screen")
+
+        c.handle(.toggleZoom)
+        c.window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertFalse(split.isFocused, "a zoomed pane is the only one on screen")
+    }
+
     func test_closingAFocusedDrawer_neverBlursThePaneBetweenItsTwoFocuses() throws {
         let c = makeWindow()
         let pane = try XCTUnwrap(c.focusedSurfaceForTesting as? RecordingSurface)

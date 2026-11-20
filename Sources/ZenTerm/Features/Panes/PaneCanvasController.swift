@@ -252,11 +252,19 @@ final class PaneCanvasController: NSObject {
 
     /// Sets cursor focus explicitly: the responder chain alone leaves stale blinking cursors after rapid splits.
     private func updateFocusBorder() {
-        for (id, host) in hostByLeaf {
+        paintFocusBorder()
+        for id in hostByLeaf.keys {
             let focused = panesHoldFocus && (id == tree.focusedLeaf)
-            host.isFocused = focused && focusBorderIsVisible
-            host.isZoomed = (id == zoomedLeaf)
             registry.surface(for: id)?.setFocused(focused && focusedSurfaceRendersFocused && holdsKeyFocus)
+        }
+    }
+
+    // Border only: a drawer toggling re-reports no surface focus, which would cancel libghostty's blink mid-handoff.
+    private func paintFocusBorder() {
+        let showsBorder = focusBorderIsVisible && (sharesScreen || (zoomedLeaf == nil && tree.leafIDs.count > 1))
+        for (id, host) in hostByLeaf {
+            host.isFocused = panesHoldFocus && (id == tree.focusedLeaf) && showsBorder
+            host.isZoomed = (id == zoomedLeaf)
         }
     }
 
@@ -275,6 +283,15 @@ final class PaneCanvasController: NSObject {
     func setFocusBorderVisible(_ visible: Bool) {
         focusBorderIsVisible = visible
         updateFocusBorder()
+    }
+
+    // A lone pane needs no border to say it holds focus; a drawer on screen beside the canvas makes it one of several.
+    private var sharesScreen = false
+
+    func setSharesScreen(_ shares: Bool) {
+        guard shares != sharesScreen else { return }
+        sharesScreen = shares
+        paintFocusBorder()
     }
 
     func setFocusedSurfaceRendersFocused(_ focused: Bool) {

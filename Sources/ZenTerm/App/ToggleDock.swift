@@ -232,14 +232,14 @@ final class ToggleDock: NSView, ThemeReapplying {
     }
 
     func reapplyTheme() {
-        let dividerColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
+        let dividerColor = Theme.current.chrome.fill(alpha: ChromeTheme.divider).cgColor
         for divider in dividers { divider.layer?.backgroundColor = dividerColor }
     }
 
     static func divider() -> NSView {
         let v = NSView()
         v.wantsLayer = true
-        v.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor
+        v.layer?.backgroundColor = Theme.current.chrome.fill(alpha: ChromeTheme.divider).cgColor
         v.translatesAutoresizingMaskIntoConstraints = false
         v.widthAnchor.constraint(equalToConstant: ChromeMetrics.Border.width).isActive = true
         v.heightAnchor.constraint(equalToConstant: ChromeMetrics.Spacing.s12).isActive = true

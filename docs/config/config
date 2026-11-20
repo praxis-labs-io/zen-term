@@ -16,7 +16,7 @@
 # Select a named theme from ~/.config/zen-term/themes/. Keep a library there and
 # switch with this one line. Each file is ghostty-format (drop in any ghostty
 # theme unchanged); it recolors both the terminal and the chrome. Unset → a
-# legacy single ~/.config/zen-term/theme file if present, else Rosé Pine Zen.
+# legacy single ~/.config/zen-term/theme file if present, else Zen Ink.
 # A name that doesn't exist warns and falls back to that default. See
 # docs/config/themes/ for an example.
 #
@@ -24,19 +24,19 @@
 # Appearance → Theme without hand-editing this file. A name resolves a user
 # themes/<name> file first, else a bundled theme. The picker writes this same
 # key; restart the app to apply the change.
-# theme = rose-pine-zen
+# theme = zen-ink
 
 # The chrome's accent: the color for the focused pane, work in progress, and the
 # primary action. It paints the focused pane's border, a shortcut while you
 # record it, a tool's activity dot while nothing there needs you, primary
-# buttons, and the progress bar. A dot takes the theme's attention color when an agent there is
+# buttons, the progress bar, and the terminal cursor. A dot takes the theme's attention color when an agent there is
 # waiting on you, and its positive color when a long command there finished
 # unseen, the same colors a tab's dot takes. Pick any slot of the
-# theme's palette and the whole chrome follows; the terminal is untouched, so a
-# program printing in that color is unaffected.
+# theme's palette and the whole chrome and the cursor follow; the terminal's other
+# colors are untouched, so a program printing in that color is unaffected.
 #
 # The names are the usual ANSI hues, so what you get is whatever your theme put in
-# that slot: on Rosé Pine Zen, magenta is iris. Settings → Appearance → Accent
+# that slot: on Zen Ink, magenta is #b58cff. Settings → Appearance → Accent
 # color shows each one's swatch and hex. Unset → blue (palette 4).
 #
 #   black    red    green    yellow    blue    magenta    cyan    white

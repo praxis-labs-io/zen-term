@@ -4,7 +4,7 @@ import XCTest
 @testable import ZenTerm
 
 final class GhosttyThemeParserTests: XCTestCase {
-    private var fallback: TerminalTheme { Theme.rosePineZen }
+    private var fallback: TerminalTheme { Theme.zenInk }
 
     private func parse(_ text: String) -> TerminalTheme {
         GhosttyThemeParser.parse(text, fontName: "TestFont", fontSize: 12, fallback: fallback)
@@ -55,7 +55,7 @@ final class GhosttyThemeParserTests: XCTestCase {
 
     func test_theConfigASurfaceIsHandedNamesAColorForSelectedText() {
         let text = GhosttyConfigWriter.configText(for: AppTheme(terminal: fallback).terminal)
-        XCTAssertTrue(text.contains("selection-foreground = #e0def4"), "got: \(text)")
+        XCTAssertTrue(text.contains("selection-foreground = #dce3ee"), "got: \(text)")
     }
 
     func test_roundTripsGhosttyConfigWriterOutput() {
