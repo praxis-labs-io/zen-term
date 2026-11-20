@@ -12,7 +12,7 @@ enum ChromeThemeDeriver {
             destructive: AccentSlot.red.color(in: terminal),
             accent: accent,
             onAccent: onAccent(for: accent, in: terminal),
-            attention: AccentSlot.cyan.color(in: terminal),
+            working: AccentSlot.yellow.color(in: terminal),
             positive: AccentSlot.green.color(in: terminal),
             cursor: accent,
             fillScale: fillScale(for: terminal),

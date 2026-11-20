@@ -1,4 +1,5 @@
 import AppKit
+import TerminalKit
 
 // `NSProgressIndicator` tints from `effectiveAppearance`, which the chrome bans.
 final class Spinner: NSView, ThemeReapplying {
@@ -14,6 +15,8 @@ final class Spinner: NSView, ThemeReapplying {
     private static let clockwiseCells: [(column: Int, rowFromTop: Int)] = [
         (0, 0), (1, 0), (1, 1), (1, 2), (0, 2), (0, 1),
     ]
+
+    var role: KeyPath<ChromeTheme, TerminalColor> = \.accent { didSet { reapplyTheme() } }
 
     var isSpinning = false {
         didSet {
@@ -53,8 +56,8 @@ final class Spinner: NSView, ThemeReapplying {
     }
 
     func reapplyTheme() {
-        let accent = Theme.current.chrome.accent.nsColor.cgColor
-        pixels.forEach { $0.backgroundColor = accent }
+        let color = Theme.current.chrome[keyPath: role].nsColor.cgColor
+        pixels.forEach { $0.backgroundColor = color }
     }
 
     private func applySpin() {

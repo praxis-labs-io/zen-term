@@ -11,8 +11,8 @@ enum AttentionTone {
     var ink: NSColor {
         let chrome = Theme.current.chrome
         switch self {
-        case .waiting: return chrome.attention.nsColor
-        case .working: return chrome.accent.nsColor
+        case .waiting: return chrome.info.nsColor
+        case .working: return chrome.working.nsColor
         case .idle: return chrome.ink(.muted)
         }
     }

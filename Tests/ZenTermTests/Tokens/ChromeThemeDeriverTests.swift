@@ -13,7 +13,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(chrome.warning, TerminalColor(hex: "#ebc17a"))
         XCTAssertEqual(chrome.destructive, TerminalColor(hex: "#f2707a"))
         XCTAssertEqual(chrome.accent, TerminalColor(hex: "#6e9bff"))
-        XCTAssertEqual(chrome.attention, TerminalColor(hex: "#5cc8e0"))
+        XCTAssertEqual(chrome.working, TerminalColor(hex: "#ebc17a"))
         XCTAssertEqual(chrome.positive, TerminalColor(hex: "#6ee6b8"))
         XCTAssertEqual(chrome.cursor, chrome.accent)
     }
@@ -44,11 +44,18 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(overridden.info, base.info)
         XCTAssertEqual(overridden.warning, base.warning)
         XCTAssertEqual(overridden.destructive, base.destructive)
-        XCTAssertEqual(overridden.attention, base.attention)
+        XCTAssertEqual(overridden.working, base.working)
         XCTAssertEqual(overridden.positive, base.positive)
         XCTAssertEqual(overridden.cursor, overridden.accent)
         XCTAssertEqual(overridden.background, base.background)
         XCTAssertEqual(overridden.foreground, base.foreground)
+    }
+
+    func test_working_readsAnsiYellowWhateverTheAccent() {
+        let yellow = TerminalColor(hex: "#ebc17a")
+        for slot in [AccentSlot.yellow, .magenta, .brightBlack] {
+            XCTAssertEqual(ChromeThemeDeriver.derive(from: Theme.zenInk, accent: slot).working, yellow, "\(slot)")
+        }
     }
 
     func test_noAccentOverride_resolvesToTheDefaultSlot() {

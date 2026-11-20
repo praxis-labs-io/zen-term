@@ -18,9 +18,9 @@ Everything in the chrome resolves from `Theme.current`. Chrome UI takes
 |---|---|
 | `background` | The window and every surface on it except a float, which takes its tier's raised fill. See [Elevation](#elevation) |
 | `foreground` | The base every ink and fill is derived from |
-| `accent` | Pane focus, the primary action, work in progress. See [Accent](#accent) |
+| `accent` | Pane focus, the primary action, loading. See [Accent](#accent) |
 | `onAccent` | Text and rings on an accent fill, and nowhere else. The background or the foreground, whichever contrasts more with `accent` |
-| `attention` | Something is waiting on the user |
+| `working` | An agent mid-turn. ANSI yellow, whatever the accent |
 | `positive` | Success, completed, kept |
 | `warning` | Caution: proceeding has a cost |
 | `destructive` | Loss, deletion, errors |
@@ -60,7 +60,7 @@ Accent is rare. It goes in these places only:
 
 - The focus border of a tool float, of a pane while another pane or drawer shares the screen, and a shortcut being recorded.
 - The primary button's fill, labeled and ringed in `onAccent`.
-- Work in progress: the working dot, `Spinner`, the update progress bar.
+- Loading: `Spinner` and the update progress bar. An agent's spinner takes `working` instead.
 - Role-toned `tint` surfaces: icon badges, focused text selection, the find bar, the
   scroll flash.
 
