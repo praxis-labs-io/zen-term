@@ -637,7 +637,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   host's name on its line and holds Remove. Remove asks first while the host is connecting or
   connected, then returns to Settings with focus on the next host (Add Host when none is left). The
   sidebar's Remote hosts rows show their status as a dot (`SSHHostStatus.ink`): Offline takes the idle
-  agent row's ink on the dot and the title, Online is positive, Connected is accent, and the
+  agent row's dot ink, Online is positive, Connected is accent, and the
   status word is the row's accessibility value rather than visible text. While an agent in a
   connected host's workspace waits, the dot takes the waiting ink a workspace row's does, from
   the same rollup, and the value reads `Connected, Agent waiting`.

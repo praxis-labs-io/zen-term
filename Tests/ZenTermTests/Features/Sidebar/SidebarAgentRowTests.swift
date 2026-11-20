@@ -9,7 +9,7 @@ final class SidebarAgentRowTests: WindowTestCase {
         return try XCTUnwrap(descendants(row).compactMap { $0 as? NSTextField }.first { $0.stringValue == text })
     }
 
-    func test_theSummary_takesItsStatesInk() throws {
+    func test_theSummary_takesNormalInk_leavingTheStateToTheDot() throws {
         let row = SidebarAgentRow {}
         for state in [AttentionTone.waiting, .working, .idle] {
             row.render(
@@ -17,8 +17,8 @@ final class SidebarAgentRowTests: WindowTestCase {
                     id: SurfaceID(raw: 1), state: state, summary: state.summary, detail: "zen-term", message: nil))
 
             XCTAssertEqual(
-                try summaryLabel(of: row, saying: state.summary).textColor, state.ink,
-                "a \(state.summary) agent's summary loses its state color")
+                try summaryLabel(of: row, saying: state.summary).textColor, Theme.current.chrome.ink(.normal),
+                "a \(state.summary) agent's summary takes a state color")
         }
     }
 }
