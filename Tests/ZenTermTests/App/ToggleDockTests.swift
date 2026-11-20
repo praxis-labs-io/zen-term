@@ -91,13 +91,16 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertEqual(dock.dottedToolFloatIDsForTesting, [])
     }
 
-    func test_render_dotShowsEvenWhileDrawerOpen() {
+    func test_render_noDotWhileTheBusyDrawerIsOnScreen() {
         let dock = makeDock([])
         var overlay = OverlayState()
         overlay.isBottomOpen = true
         overlay.bottomBusy = true
         dock.render(overlay: overlay, floatID: nil)
-        XCTAssertTrue(dock.bottomActivityForTesting)
+        XCTAssertFalse(dock.bottomActivityForTesting, "you can see it, so it is not in the background")
+
+        dock.render(overlay: overlay, floatID: "dev")
+        XCTAssertTrue(dock.bottomActivityForTesting, "a float over the tab hides the open drawer")
     }
 
     func test_render_noDotWhenIdle() {

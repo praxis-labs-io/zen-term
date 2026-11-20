@@ -94,6 +94,23 @@ final class DrawerAttentionTests: WindowTestCase {
             "the toolbar says live, never what the agent needs")
     }
 
+    func test_aBusyDrawer_dotsItsButtonOnlyWhileHidden() throws {
+        let c = makeWindow()
+        let drawer = try closedRightDrawer(c)
+        drawer.isBusy = true
+        notify(drawer)
+        XCTAssertTrue(c.dockForTesting.rightActivityForTesting, "precondition: running behind a closed drawer")
+
+        c.handle(.toggleRightDrawer)
+        drainMainQueue()
+        XCTAssertTrue(c.dockForTesting.rightActiveForTesting, "precondition: the drawer is on screen")
+        XCTAssertFalse(c.dockForTesting.rightActivityForTesting, "on screen, so no dot")
+
+        c.handle(.toggleRightDrawer)
+        drainMainQueue()
+        XCTAssertTrue(c.dockForTesting.rightActivityForTesting)
+    }
+
     func test_aClosedDrawerAsking_raisesACard() throws {
         let c = makeWindow()
         let drawer = try closedRightDrawer(c)
