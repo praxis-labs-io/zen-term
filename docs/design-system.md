@@ -58,7 +58,7 @@ Three ways in, never a raw alpha:
 
 Accent is rare. It goes in these places only:
 
-- The focus border of a pane or tool float, and a shortcut being recorded.
+- The focus border of a tool float, of a pane while another pane or drawer shares the screen, and a shortcut being recorded.
 - The primary button's fill, labeled and ringed in `onAccent`.
 - Work in progress: the working dot, `Spinner`, the update progress bar.
 - Role-toned `tint` surfaces: icon badges, focused text selection, the find bar, the

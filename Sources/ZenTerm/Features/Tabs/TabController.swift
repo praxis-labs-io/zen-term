@@ -403,6 +403,7 @@ final class TabController: NSObject {
             break
         }
         isBottomOpen.toggle()
+        syncPanelsShareScreen()
         let animate = !Motion.isReduceMotionEnabled() && view.window != nil
         if isBottomOpen {
             _ = ensureBottomDrawerPanel()
@@ -494,6 +495,7 @@ final class TabController: NSObject {
             break
         }
         isRightOpen.toggle()
+        syncPanelsShareScreen()
         let animate = !Motion.isReduceMotionEnabled() && view.window != nil
         if isRightOpen {
             _ = ensureRightDrawerPanel()
@@ -571,6 +573,7 @@ final class TabController: NSObject {
     }
 
     private var focusBorderIsVisible = true
+    private var panelsShareScreen = false
 
     func setHoldsKeyFocus(_ holds: Bool) {
         holdsKeyFocus = holds
@@ -590,11 +593,20 @@ final class TabController: NSObject {
     // Stored for the drawers, which have no canvas to hold it: `syncDrawerFocus` runs on more than focus moves.
     private var focusedSurfaceRendersFocused = true
 
+    // Read from where the drawers are headed, not what is attached, so the border settles before a slide does.
+    private func syncPanelsShareScreen() {
+        let effectiveZoom = zoomedPanel.flatMap { zoomedView($0) != nil ? $0 : nil }
+        panelsShareScreen = effectiveZoom == nil && (isBottomOpen || isRightOpen)
+        paneCanvas.setSharesScreen(panelsShareScreen)
+        syncDrawerFocus()
+    }
+
     private func syncDrawerFocus() {
         let focused = isYieldedToFloat ? nil : focusedPanel
         let renders = focusedSurfaceRendersFocused && holdsKeyFocus
-        bottomDrawerPanel?.isFocused = focusBorderIsVisible && focused == .bottomDrawer
-        rightDrawerPanel?.isFocused = focusBorderIsVisible && focused == .rightDrawer
+        let showsBorder = focusBorderIsVisible && panelsShareScreen
+        bottomDrawerPanel?.isFocused = showsBorder && focused == .bottomDrawer
+        rightDrawerPanel?.isFocused = showsBorder && focused == .rightDrawer
         bottomDrawerSurface?.setFocused(renders && focused == .bottomDrawer)
         rightDrawerSurface?.setFocused(renders && focused == .rightDrawer)
     }
@@ -1055,6 +1067,7 @@ final class TabController: NSObject {
         setAttached(canvas, canvasVisible)
         if let p = bottomDrawerPanel { setAttached(p, bottomVisible) }
         if let p = rightDrawerPanel { setAttached(p, rightVisible) }
+        syncPanelsShareScreen()
 
         if let z = effectiveZoom, let zv = zoomedView(z) {
             let cs = [

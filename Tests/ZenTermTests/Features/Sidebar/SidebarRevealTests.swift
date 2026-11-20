@@ -311,6 +311,7 @@ final class SidebarRevealTests: WindowTestCase {
 
     func test_dockingARevealedCard_handsThePaneItsFocusBorderBack() throws {
         let controller = try makeCollapsedController()
+        controller.handle(.splitVertical)
         let sidebar = controller.sidebarForTesting
         let panel = try pane(in: controller)
         sidebar.reveal()
@@ -706,6 +707,7 @@ final class SidebarRevealTests: WindowTestCase {
 
     func test_revealing_dimsThePanesFocusBorder_withoutTakingItsKeyboard() throws {
         let controller = try makeCollapsedController()
+        controller.handle(.splitVertical)
         let sidebar = controller.sidebarForTesting
         let panel = try pane(in: controller)
         XCTAssertEqual(
