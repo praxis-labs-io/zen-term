@@ -36,7 +36,7 @@
 # colors are untouched, so a program printing in that color is unaffected.
 #
 # The names are the usual ANSI hues, so what you get is whatever your theme put in
-# that slot: on Rosé Pine Zen, magenta is iris. Settings → Appearance → Accent
+# that slot: on Zen Ink, magenta is #b58cff. Settings → Appearance → Accent
 # color shows each one's swatch and hex. Unset → blue (palette 4).
 #
 #   black    red    green    yellow    blue    magenta    cyan    white
