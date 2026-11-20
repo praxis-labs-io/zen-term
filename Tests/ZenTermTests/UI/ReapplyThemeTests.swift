@@ -204,7 +204,7 @@ final class ReapplyThemeTests: WindowTestCase {
 
         XCTAssertNotEqual(colorBefore, control.segmentInkForTesting(0))
         XCTAssertNotEqual(surfaceBefore, control.selectedSurfaceFillForTesting)
-        XCTAssertEqual(control.selectedSurfaceFillForTesting, Theme.current.chrome.raised(.overlay).cgColor)
+        XCTAssertEqual(control.selectedSurfaceFillForTesting, Theme.current.chrome.fill(.active).cgColor)
     }
 
     func test_reapplyTheme_keepsAnAgentRowsFullMessageForVoiceOver() throws {

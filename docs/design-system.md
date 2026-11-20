@@ -90,7 +90,7 @@ One ladder for every control and row:
 | Hover | `fill(.hover)` |
 | Keyboard cursor | `fill(.hover)`. In a transient list (palette, dropdown, menu) the cursor is the focus |
 | Focused | A `focusRing` ring at `Border.width`. Fill and ink unchanged. On the primary button the ring is `onAccent`, inset by `Border.width` |
-| Current | Pick lists: a check mark only. Persistent nav and tabs: `fill(.active)`. A segment: the raised overlay surface inside its track |
+| Current | Pick lists: a check mark only. Persistent nav, tabs and segments: `fill(.active)` |
 | Pressed | Looks like hover |
 | Disabled | `ink(.faint)` on every variant. Controls keep `fill(.rest)`; no hover, no ring |
 

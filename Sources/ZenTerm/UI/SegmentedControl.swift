@@ -22,7 +22,7 @@ final class SegmentedControl: ControlView, ThemeReapplying {
     private static let inset = ChromeMetrics.Spacing.s2
     private static let trackHeight = ChromeMetrics.Height.control
     private var segments: [Segment] = []
-    // A layer the control owns, so the slide drives its geometry and its shadow follows the animated bounds.
+    // A layer the control owns, so the slide drives its geometry.
     private let selectedSurface = CALayer()
     // Lets a reselect pin a value that is only OS-derived, as the reduce-motion row needs.
     private let notifiesOnReselect: Bool
@@ -44,10 +44,6 @@ final class SegmentedControl: ControlView, ThemeReapplying {
         setAccessibilityRole(.radioGroup)
         selectedSurface.anchorPoint = CGPoint(x: 0, y: 0.5)
         selectedSurface.cornerRadius = ChromeMetrics.Radius.capsule(ChromeMetrics.Height.sm)
-        selectedSurface.borderWidth = ChromeMetrics.Border.width
-        selectedSurface.shadowRadius = FloatShadow.Tier.overlay.blur
-        selectedSurface.shadowOffset = FloatShadow.Tier.overlay.offset
-        selectedSurface.shadowOpacity = 1
         selectedSurface.zPosition = -1
         layer?.insertSublayer(selectedSurface, at: 0)
 
@@ -130,9 +126,7 @@ final class SegmentedControl: ControlView, ThemeReapplying {
         layer?.backgroundColor = Theme.current.chrome.fill(.rest).cgColor
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        selectedSurface.backgroundColor = CardChrome.fill(.overlay).cgColor
-        selectedSurface.borderColor = FloatShadow.edge.cgColor
-        selectedSurface.shadowColor = FloatShadow.color(.overlay).cgColor
+        selectedSurface.backgroundColor = Theme.current.chrome.fill(.active).cgColor
         CATransaction.commit()
         showFocusRing(hasKeyboardFocus && isEnabled)
         for (index, segment) in segments.enumerated() { segment.isSelected = index == selectedIndex }
