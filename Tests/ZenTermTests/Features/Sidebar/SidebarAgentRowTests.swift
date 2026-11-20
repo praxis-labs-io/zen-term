@@ -34,13 +34,15 @@ final class SidebarAgentRowTests: WindowTestCase {
     }
 
     private func spinnerColors(of row: NSView) throws -> [NSColor] {
-        func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
         let spinner = try XCTUnwrap(descendants(row).compactMap { $0 as? Spinner }.first)
         return (spinner.layer?.sublayers ?? []).compactMap(\.backgroundColor).compactMap { NSColor(cgColor: $0) }
     }
 
+    private func descendants(_ view: NSView) -> [NSView] {
+        view.subviews.flatMap { [$0] + descendants($0) }
+    }
+
     private func summaryLabel(of row: NSView, saying text: String) throws -> NSTextField {
-        func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
         return try XCTUnwrap(descendants(row).compactMap { $0 as? NSTextField }.first { $0.stringValue == text })
     }
 

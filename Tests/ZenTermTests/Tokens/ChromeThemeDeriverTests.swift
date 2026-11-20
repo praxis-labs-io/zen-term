@@ -14,6 +14,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(chrome.destructive, TerminalColor(hex: "#f2707a"))
         XCTAssertEqual(chrome.accent, TerminalColor(hex: "#6e9bff"))
         XCTAssertEqual(chrome.working, TerminalColor(hex: "#ebc17a"))
+        XCTAssertEqual(chrome.done, TerminalColor(hex: "#6e9bff"))
         XCTAssertEqual(chrome.positive, TerminalColor(hex: "#6ee6b8"))
         XCTAssertEqual(chrome.cursor, chrome.accent)
     }
@@ -45,16 +46,18 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(overridden.warning, base.warning)
         XCTAssertEqual(overridden.destructive, base.destructive)
         XCTAssertEqual(overridden.working, base.working)
+        XCTAssertEqual(overridden.done, base.done)
         XCTAssertEqual(overridden.positive, base.positive)
         XCTAssertEqual(overridden.cursor, overridden.accent)
         XCTAssertEqual(overridden.background, base.background)
         XCTAssertEqual(overridden.foreground, base.foreground)
     }
 
-    func test_working_readsAnsiYellowWhateverTheAccent() {
-        let yellow = TerminalColor(hex: "#ebc17a")
+    func test_agentStates_readTheirOwnAnsiSlotsWhateverTheAccent() {
         for slot in [AccentSlot.yellow, .magenta, .brightBlack] {
-            XCTAssertEqual(ChromeThemeDeriver.derive(from: Theme.zenInk, accent: slot).working, yellow, "\(slot)")
+            let chrome = ChromeThemeDeriver.derive(from: Theme.zenInk, accent: slot)
+            XCTAssertEqual(chrome.working, TerminalColor(hex: "#ebc17a"), "\(slot)")
+            XCTAssertEqual(chrome.done, TerminalColor(hex: "#6e9bff"), "\(slot)")
         }
     }
 

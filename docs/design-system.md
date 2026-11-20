@@ -21,11 +21,14 @@ Everything in the chrome resolves from `Theme.current`. Chrome UI takes
 | `accent` | Pane focus, the primary action, loading. See [Accent](#accent) |
 | `onAccent` | Text and rings on an accent fill, and nowhere else. The background or the foreground, whichever contrasts more with `accent` |
 | `working` | An agent mid-turn. ANSI yellow, whatever the accent |
+| `done` | An agent waiting on the user. ANSI blue, whatever the accent |
 | `positive` | Success, completed, kept |
 | `warning` | Caution: proceeding has a cost |
 | `destructive` | Loss, deletion, errors |
 | `info` | A neutral notice |
 | `cursor` | The accent, painted onto the terminal cursor too, and chrome that marks where the cursor or focus will land |
+
+Agent state roles are their own and never borrow `info`, `positive`, `warning` or `destructive`.
 
 A role the chrome needs and `ChromeTheme` lacks gets added to `ChromeTheme` and derived
 in `ChromeThemeDeriver`. Never a literal.
