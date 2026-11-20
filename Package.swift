@@ -68,10 +68,15 @@ let package = Package(
             name: "ControlProtocol",
             swiftSettings: mainThreadEnforced
         ),
+        .target(
+            name: "AgentSetup",
+            resources: [.copy("Claude")],
+            swiftSettings: mainThreadEnforced
+        ),
         .executableTarget(
             name: "ZenTerm",
             dependencies: [
-                "TerminalKit", "PaneKit", "TabKit", "AppLog", "ControlProtocol",
+                "TerminalKit", "PaneKit", "TabKit", "AppLog", "ControlProtocol", "AgentSetup",
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
             resources: [
@@ -87,7 +92,7 @@ let package = Package(
         .executableTarget(
             name: "zen",
             dependencies: [
-                "ControlProtocol",
+                "ControlProtocol", "AgentSetup",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
             swiftSettings: mainThreadEnforced
@@ -110,6 +115,11 @@ let package = Package(
         .testTarget(
             name: "ControlProtocolTests",
             dependencies: ["ControlProtocol"],
+            swiftSettings: mainThreadEnforced
+        ),
+        .testTarget(
+            name: "AgentSetupTests",
+            dependencies: ["AgentSetup"],
             swiftSettings: mainThreadEnforced
         ),
         .testTarget(

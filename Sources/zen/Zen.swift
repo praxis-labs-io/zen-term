@@ -8,7 +8,7 @@ struct Zen: ParsableCommand {
         version: BundleVersion.current,
         subcommands: [
             Hello.self, List.self, WorkspaceCommands.self, TabCommands.self, PaneCommands.self, WorktreeCommands.self,
-            Action.self,
+            Action.self, SetupCommands.self,
         ])
 
     // Parses `--socket` before the subcommand; argument-parser hands the value to the subcommand's own copy.
