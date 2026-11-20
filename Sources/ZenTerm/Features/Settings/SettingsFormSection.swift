@@ -334,7 +334,7 @@ class SettingsFormSection: SettingsSection {
         }
     }
 
-    private func rowFor(_ key: String) -> LayoutRow? {
+    func rowFor(_ key: String) -> LayoutRow? {
         guard let control = controlForKey[key] else { return nil }
         return rows.first { control.isDescendant(of: $0) }
     }

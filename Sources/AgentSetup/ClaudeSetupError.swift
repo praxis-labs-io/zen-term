@@ -4,6 +4,10 @@ import Foundation
 public struct ClaudeSetupError: Error, Equatable, Sendable {
     public let message: String
 
+    public init(message: String) {
+        self.message = message
+    }
+
     static func malformed(_ url: URL, _ problem: String) -> ClaudeSetupError {
         ClaudeSetupError(message: "\(url.path) \(problem), so setup left it as it is. Fix it, then run setup again.")
     }

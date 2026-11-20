@@ -1,7 +1,12 @@
+import AgentSetup
 import AppKit
 
 final class SettingsGeneralSection: SettingsFormSection {
     override var navTitle: String { "General" }
+
+    static let claudeSetupKey = "claude-setup"
+    private weak var claudeSetupControl: SegmentedControl?
+    private var claudeSetupState: ClaudeSetup.State = .notInstalled
 
     override func populate() {
         addGroup("Agents") {
@@ -14,6 +19,7 @@ final class SettingsGeneralSection: SettingsFormSection {
                 key: "agents", caption: "Agent programs",
                 blurb: "claude and codex are built in", placeholder: "pi, gemini",
                 read: { $0.agents.joined(separator: ", ") })
+            self.addClaudeSetupRow()
         }
         addGroup("Notifications") {
             self.addSegmentedRow(
@@ -43,6 +49,40 @@ final class SettingsGeneralSection: SettingsFormSection {
                 read: { $0.automaticUpdateChecks ? 0 : 1 },
                 token: { LayoutFormat.boolToken($0 == 0) }, notifiesOnReselect: false)
         }
+    }
+
+    private func addClaudeSetupRow() {
+        let control = SegmentedControl(options: ["On", "Off"], selectedIndex: 1, notifiesOnReselect: true) {
+            [weak self] index in
+            self?.applyClaudeSetup(index == 0 ? .install : .remove)
+        }
+        control.isEnabled = false
+        claudeSetupControl = control
+        addCustomRow(
+            key: Self.claudeSetupKey, caption: "Teach Claude Code to use zen",
+            description: "The zen skill and a session hook, in ~/.claude", control: control, focusStop: control,
+            controlNote: nil, width: nil, refresh: {})
+        ClaudeCodeSetup.refresh { [weak self] in self?.showClaudeSetup($0) }
+    }
+
+    private func applyClaudeSetup(_ change: ClaudeCodeSetup.Change) {
+        claudeSetupControl?.isEnabled = false
+        ClaudeCodeSetup.refresh(applying: change) { [weak self] in self?.showClaudeSetup($0) }
+    }
+
+    private func showClaudeSetup(_ result: Result<ClaudeSetup.State, ClaudeSetupError>) {
+        let row = rowFor(Self.claudeSetupKey)
+        switch result {
+        case .success(let state):
+            claudeSetupState = state
+            row?.showMessage(
+                state == .outdated ? "An older version is installed. Choose On to update it." : nil,
+                kind: .diagnostic)
+        case .failure(let error):
+            row?.showMessage(error.message)
+        }
+        claudeSetupControl?.setSelection(claudeSetupState == .notInstalled ? 1 : 0)
+        claudeSetupControl?.isEnabled = true
     }
 
     private static let dismissals: [GeneralConfig.ToastDismissal] = [.off, .sticky, .auto]

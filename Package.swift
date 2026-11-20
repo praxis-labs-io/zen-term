@@ -134,7 +134,7 @@ let package = Package(
         ),
         .testTarget(
             name: "ZenTermTests",
-            dependencies: ["ZenTerm", "TabKit", "ControlProtocol"],
+            dependencies: ["ZenTerm", "TabKit", "ControlProtocol", "AgentSetup"],
             swiftSettings: mainThreadEnforced + [.defaultIsolation(MainActor.self)]
         ),
     ]

@@ -42,8 +42,9 @@ struct ClaudeSettings {
     }
 
     func hasOwnEntry() -> Bool {
-        let groups = (root["hooks"] as? [String: Any])?["SessionStart"] as? [Any] ?? []
-        return groups.contains { (($0 as? [String: Any])?["hooks"] as? [Any])?.contains(where: Self.isOwn) == true }
+        sessionStartGroups.contains {
+            (($0 as? [String: Any])?["hooks"] as? [Any])?.contains(where: Self.isOwn) == true
+        }
     }
 
     mutating func register(command: String) -> Bool {
