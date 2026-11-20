@@ -593,9 +593,12 @@ final class TabController: NSObject {
     // Stored for the drawers, which have no canvas to hold it: `syncDrawerFocus` runs on more than focus moves.
     private var focusedSurfaceRendersFocused = true
 
+    private var effectiveZoom: PanelRef? {
+        zoomedPanel.flatMap { zoomedView($0) != nil ? $0 : nil }
+    }
+
     // Read from where the drawers are headed, not what is attached, so the border settles before a slide does.
     private func syncPanelsShareScreen() {
-        let effectiveZoom = zoomedPanel.flatMap { zoomedView($0) != nil ? $0 : nil }
         panelsShareScreen = effectiveZoom == nil && (isBottomOpen || isRightOpen)
         paneCanvas.setSharesScreen(panelsShareScreen)
         syncDrawerFocus()
@@ -1050,7 +1053,7 @@ final class TabController: NSObject {
         NSLayoutConstraint.deactivate(tileConstraints)
         tileConstraints = []
 
-        let effectiveZoom: PanelRef? = zoomedPanel.flatMap { zoomedView($0) != nil ? $0 : nil }
+        let effectiveZoom = self.effectiveZoom
 
         let canvasVisible: Bool
         let bottomVisible: Bool
