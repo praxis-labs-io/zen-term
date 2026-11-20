@@ -54,7 +54,7 @@ Three details in that script are load-bearing and cost a wrong document if chang
   about something else. raw.githubusercontent is case-sensitive, so pointing at the
   lowercase path publishes the wrong document as the app's license disclosure. APFS is
   case-insensitive, so check this with `git ls-files` rather than `ls`.
-- **The example theme is `docs/config/themes/rose-pine-zen`.**
+- **The example theme is `docs/config/themes/zen-ink`.**
 
 ## Versioning
 

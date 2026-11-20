@@ -34,7 +34,7 @@ final class SectionCaptionTests: WindowTestCase {
         window.contentView?.addSubview(caption)
         XCTAssertEqual(runs(caption).count, 2, "premise: the label and the marker are separate runs")
 
-        var dimmed = Theme.rosePineZen
+        var dimmed = Theme.zenInk
         dimmed.foreground = try XCTUnwrap(TerminalColor(hex: "#575279"))
         Theme.setCurrentForTesting(AppTheme(terminal: dimmed))
         XCTAssertNotEqual(

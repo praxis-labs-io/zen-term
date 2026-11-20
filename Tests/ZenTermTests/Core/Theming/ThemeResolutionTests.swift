@@ -28,7 +28,7 @@ final class ThemeResolutionTests: XCTestCase {
     func test_bundledName_resolvesToBundledColors() throws {
         let root = try makeTempRoot()
         let theme = ConfigLoader.loadAppTheme(configRoot: root, general: config(themeName: "catppuccin-mocha"))
-        XCTAssertNotEqual(theme.terminal.background, Theme.rosePineZen.background)
+        XCTAssertNotEqual(theme.terminal.background, Theme.zenInk.background)
     }
 
     func test_userFile_winsOverBundled() throws {
@@ -47,7 +47,7 @@ final class ThemeResolutionTests: XCTestCase {
     func test_unknownName_fallsBackToBuiltIn() throws {
         let root = try makeTempRoot()
         let theme = ConfigLoader.loadAppTheme(configRoot: root, general: config(themeName: "does-not-exist"))
-        XCTAssertEqual(theme.terminal.background, Theme.rosePineZen.background)
+        XCTAssertEqual(theme.terminal.background, Theme.zenInk.background)
     }
 
     func test_directoryNamedLikeATheme_fallsBackToBuiltIn() throws {
@@ -57,12 +57,12 @@ final class ThemeResolutionTests: XCTestCase {
             at: themes.appendingPathComponent("dir-theme"), withIntermediateDirectories: true)
 
         let theme = ConfigLoader.loadAppTheme(configRoot: root, general: config(themeName: "dir-theme"))
-        XCTAssertEqual(theme.terminal.background, Theme.rosePineZen.background)
+        XCTAssertEqual(theme.terminal.background, Theme.zenInk.background)
     }
 
     func test_nilName_isBuiltIn() throws {
         let root = try makeTempRoot()
         let theme = ConfigLoader.loadAppTheme(configRoot: root, general: config(themeName: nil))
-        XCTAssertEqual(theme.terminal.background, Theme.rosePineZen.background)
+        XCTAssertEqual(theme.terminal.background, Theme.zenInk.background)
     }
 }

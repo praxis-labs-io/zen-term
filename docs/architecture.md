@@ -696,7 +696,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
 
 `ChromeThemeDeriver` maps ANSI slots onto chrome roles (info ansi[4], warning ansi[3],
 destructive ansi[1], accent ansi[4], attention ansi[6], positive ansi[2], cursor the terminal cursor).
-Sixty-five themes ship; a user file shadows a bundled one. `accent-color` repoints
+Sixty-six themes ship; a user file shadows a bundled one. `accent-color` repoints
 `accent`, and the search highlight when the theme sets no search colors. The usage rules are in `docs/design-system.md`.
 `onAccent` is whichever of background and foreground has the higher WCAG contrast with `accent`.
 

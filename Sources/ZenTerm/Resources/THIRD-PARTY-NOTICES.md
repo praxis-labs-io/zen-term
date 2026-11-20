@@ -3142,10 +3142,11 @@ The copyright/license for each individual theme belongs to the author of that th
 
 ### The Settings theme catalog
 
-Sixty-five themes in Settings → Appearance, separate from the 463 above. Each is a
+Sixty-six themes in Settings → Appearance, separate from the 463 above. Each is a
 palette file under `Sources/ZenTerm/Themes`, carrying sixteen ANSI colors plus
 background, foreground, cursor, and selection. The upstream project for each is
-credited below, with the license that project publishes.
+credited below, with the license that project publishes. `zen-ink` is ZenTerm's own
+theme, with no upstream.
 
 Most of these values reached ZenTerm through Ghostty's bundled set, which draws on
 the iTerm2-Color-Schemes collection above. That collection's own license says the

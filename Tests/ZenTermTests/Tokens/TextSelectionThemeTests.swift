@@ -33,7 +33,7 @@ final class TextSelectionThemeTests: WindowTestCase {
         let url = try XCTUnwrap(ThemeCatalog.bundledURL(for: "github-light-default"))
         let terminal = GhosttyThemeParser.parse(
             try String(contentsOf: url, encoding: .utf8), fontName: "Menlo", fontSize: 12,
-            fallback: Theme.rosePineZen)
+            fallback: Theme.zenInk)
         return AppTheme(terminal: terminal, accent: accent)
     }
 

@@ -140,7 +140,7 @@ final class SurfaceFloatOverlayTests: WindowTestCase {
         let url = try XCTUnwrap(ThemeCatalog.bundledURL(for: "nord"))
         let terminal = GhosttyThemeParser.parse(
             try String(contentsOf: url, encoding: .utf8), fontName: "Menlo", fontSize: 12,
-            fallback: Theme.rosePineZen)
+            fallback: Theme.zenInk)
         Theme.setCurrentForTesting(AppTheme(terminal: terminal))
         let overlay = mount()
         let card = try card(of: overlay)

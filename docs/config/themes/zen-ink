@@ -1,8 +1,7 @@
-# Rosé Pine Zen: the theme ZenTerm ships with, written out in full.
+# Zen Ink: the theme ZenTerm ships with, written out in full.
 #
-# Ours, not an upstream variant: Rosé Pine Moon's pine and rose over Rosé Pine's
-# darker base. The app bundles it, so `theme = rose-pine-zen` in `config` works
-# without this file. Copy it to ~/.config/zen-term/themes/rose-pine-zen to edit
+# Blue-black ink with a cobalt accent. The app bundles it, so `theme = zen-ink`
+# in `config` works without this file. Copy it to ~/.config/zen-term/themes/zen-ink to edit
 # the values: a file there shadows the bundled one under the same name.
 #
 # Drop any number of theme files in that directory and switch between them with
@@ -19,10 +18,10 @@
 # One non-color key is read, at the bottom of this file: `nvim-colorscheme`.
 
 # Base surfaces.
-background = #191724
-foreground = #e0def4
-cursor-color = #6b6790
-selection-background = #403d52
+background = #0a0d14
+foreground = #dce3ee
+cursor-color = #6e9bff
+selection-background = #1c2536
 
 # What gets drawn over your text. These are the only optional keys in this file.
 # Leave one out and it's derived, and the value shown is what you get. Set it to
@@ -31,42 +30,43 @@ selection-background = #403d52
 # Selected text. Without it every character keeps its own color, and the dark ones
 # go unreadable on the fill.
 #
-#   selection-foreground = #e0def4
+#   selection-foreground = #dce3ee
 #
 # Find highlights (⌘F), derived from the accent. The first pair paints
 # every match, the second the one you're currently on.
 #
-#   search-foreground = #e0def4
-#   search-background = #554968
-#   search-selected-foreground = #191724
-#   search-selected-background = #c4a7e7
+#   search-foreground = #dce3ee
+#   search-background = #2d3f66
+#   search-selected-foreground = #0a0d14
+#   search-selected-background = #6e9bff
 
 # The 16 ANSI colors, `palette = N=#rrggbb` (N = 0…15).
 # 0–7 normal:
-palette = 0=#393552
-palette = 1=#eb6f92
-palette = 2=#3e8fb0
-palette = 3=#f6c177
-palette = 4=#9ccfd8
-palette = 5=#c4a7e7
-palette = 6=#ea9a97
-palette = 7=#e0def4
+palette = 0=#161b26
+palette = 1=#f2707a
+palette = 2=#6ee6b8
+palette = 3=#ebc17a
+palette = 4=#6e9bff
+palette = 5=#b58cff
+palette = 6=#5cc8e0
+palette = 7=#c3ccda
 # 8–15 bright:
-palette = 8=#6e6a86
-palette = 9=#eb6f92
-palette = 10=#3e8fb0
-palette = 11=#f6c177
-palette = 12=#9ccfd8
-palette = 13=#c4a7e7
-palette = 14=#ea9a97
-palette = 15=#e0def4
+palette = 8=#4a5468
+palette = 9=#ff8c94
+palette = 10=#97f0cf
+palette = 11=#f7d594
+palette = 12=#93b4ff
+palette = 13=#c9a8ff
+palette = 14=#82d9ec
+palette = 15=#f1f5fb
 
 # Chrome roles derived from the palette (for reference, not separate keys):
-#   accent       ← palette 4  (#9ccfd8, foam)
-#   info         ← palette 4  (#9ccfd8, foam)
-#   warning      ← palette 3  (#f6c177, gold)
-#   destructive  ← palette 1  (#eb6f92, love)
-#   attention    ← palette 6  (#ea9a97, rose)
+#   accent       ← palette 4  (#6e9bff, cobalt)
+#   info         ← palette 4  (#6e9bff, cobalt)
+#   positive     ← palette 2  (#6ee6b8, mint)
+#   warning      ← palette 3  (#ebc17a, amber)
+#   destructive  ← palette 1  (#f2707a, coral)
+#   attention    ← palette 6  (#5cc8e0, sky)
 #
 # `accent` is the one you can repoint without editing this file: `accent-color`
 # in `config` sends it to any palette entry by ANSI hue name.
@@ -80,4 +80,4 @@ palette = 15=#e0def4
 # Set it on your own theme files too, and they stay in step with the bundled
 # ones. Leave it out and the plugin leaves your colorscheme alone. It changes no
 # color, so a theme file carrying it is still a valid ghostty theme.
-nvim-colorscheme = rose-pine-main
+nvim-colorscheme = zen-ink

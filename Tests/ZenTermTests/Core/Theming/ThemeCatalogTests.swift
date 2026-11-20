@@ -102,7 +102,7 @@ final class ThemeCatalogTests: XCTestCase {
 
     func test_bundledDefault_matchesTheCompiledInFallback() throws {
         let fromFile = AppTheme(terminal: try parseBundled(ThemeCatalog.defaultThemeName)).terminal
-        let compiled = AppTheme(terminal: Theme.rosePineZen).terminal
+        let compiled = AppTheme(terminal: Theme.zenInk).terminal
         XCTAssertEqual(fromFile.background, compiled.background)
         XCTAssertEqual(fromFile.foreground, compiled.foreground)
         XCTAssertEqual(fromFile.cursor, compiled.cursor)
@@ -115,7 +115,7 @@ final class ThemeCatalogTests: XCTestCase {
     func test_theRosePines_carryTheirOwnUpstreamValues() throws {
         let main = try parseBundled("rose-pine")
         let moon = try parseBundled("rose-pine-moon")
-        let zen = try parseBundled(ThemeCatalog.defaultThemeName)
+        let zen = try parseBundled("rose-pine-zen")
 
         XCTAssertEqual(main.background, TerminalColor(red: 0x19, green: 0x17, blue: 0x24))
         XCTAssertEqual(main.ansi[2], TerminalColor(red: 0x31, green: 0x74, blue: 0x8F))
