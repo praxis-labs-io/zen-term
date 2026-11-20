@@ -507,8 +507,8 @@ final class SidebarController {
 
     func renderAgents(_ items: [SidebarAgentItem]) { view.renderAgents(items) }
 
-    func renderWaitingElsewhere(agents: Int, windows: Int, index: Int, dot: StateDot.State?) {
-        view.renderWaitingElsewhere(agents: agents, windows: windows, index: index, dot: dot)
+    func renderWaitingElsewhere(agents: Int, windows: Int, index: Int) {
+        view.renderWaitingElsewhere(agents: agents, windows: windows, index: index)
     }
 
     func setOpenModal(palette: Bool, settings: Bool) { footer.setOpenModal(palette: palette, settings: settings) }

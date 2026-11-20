@@ -69,7 +69,7 @@ final class SidebarView: NSView, ThemeReapplying {
     private var agentRows: [SurfaceID: SidebarAgentRow] = [:]
     private var waitingRow: SidebarWaitingElsewhereRow?
     private var agentViews: [SidebarAgentRow] = []
-    private var waitingElsewhere: (agents: Int, windows: Int, index: Int, dot: StateDot.State?) = (0, 0, 0, nil)
+    private var waitingElsewhere: (agents: Int, windows: Int, index: Int) = (0, 0, 0)
     var onHoverCoverChanged: ((Bool) -> Void)?
     var onLeave: (() -> Void)?
     var onFocusChanged: (() -> Void)?
@@ -274,9 +274,9 @@ final class SidebarView: NSView, ThemeReapplying {
         return row
     }
 
-    func renderWaitingElsewhere(agents: Int, windows: Int, index: Int, dot: StateDot.State?) {
-        guard (agents, windows, index, dot) != waitingElsewhere else { return }
-        waitingElsewhere = (agents, windows, index, dot)
+    func renderWaitingElsewhere(agents: Int, windows: Int, index: Int) {
+        guard (agents, windows, index) != waitingElsewhere else { return }
+        waitingElsewhere = (agents, windows, index)
         refreshAgentsSection()
         refreshRowHover()
     }
@@ -304,7 +304,7 @@ final class SidebarView: NSView, ThemeReapplying {
             return hadFocus
         }
         let row = waitingRow ?? makeWaitingRow()
-        row.render(agents: waitingElsewhere.agents, windows: waitingElsewhere.windows, dot: waitingElsewhere.dot)
+        row.render(agents: waitingElsewhere.agents, windows: waitingElsewhere.windows)
         return false
     }
 

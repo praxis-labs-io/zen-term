@@ -3601,15 +3601,14 @@ final class WindowController: NSObject {
         sidebar.renderAgents(items)
         let center = AttentionCenter.shared
         sidebar.renderWaitingElsewhere(
-            agents: center.waitingCount(excluding: windowID),
-            windows: center.waitingWindows(excluding: windowID),
-            index: waitingElsewherePlace(among: items),
-            dot: center.isBlocked(excluding: windowID) ? .blocked : nil)
+            agents: center.blockedCount(excluding: windowID),
+            windows: center.blockedWindows(excluding: windowID),
+            index: waitingElsewherePlace(among: items))
     }
 
     // The row queues on the same rule the rows use: waiting first, and among those the oldest reads first.
     private func waitingElsewherePlace(among items: [SidebarAgentItem]) -> Int {
-        guard let since = AttentionCenter.shared.waiting.first(where: { $0.windowID != windowID })?.since
+        guard let since = AttentionCenter.shared.blocked.first(where: { $0.windowID != windowID })?.since
         else { return items.count }
         return items.prefix {
             $0.state.isWaiting && (attention.agentSince(of: $0.id) ?? .distantFuture) <= since
@@ -3617,15 +3616,15 @@ final class WindowController: NSObject {
     }
 
     private func jumpToWaitingElsewhere() {
-        guard let target = AttentionCenter.shared.waiting.first(where: { $0.windowID != windowID })
+        guard let target = AttentionCenter.shared.blocked.first(where: { $0.windowID != windowID })
         else { return }
         if revealWaitingAgentElsewhere?(target.windowID) != true { renderAgents() }
     }
 
-    /// Lands on whatever has waited longest here, calling `raise` first. False, and nothing raised, when nothing waits.
+    /// Lands on the longest unseen ask here, calling `raise` first. False, and nothing raised, when nothing is blocked.
     @discardableResult
-    func revealLongestWaitingAgent(raising raise: () -> Void = {}) -> Bool {
-        guard let target = attention.waitingInOrder.first else { return false }
+    func revealLongestBlockedAgent(raising raise: () -> Void = {}) -> Bool {
+        guard let target = attention.blockedInOrder.first else { return false }
         raise()
         switch target {
         case .surface(let id):
@@ -3692,7 +3691,7 @@ final class WindowController: NSObject {
     }
 
     private func toastNothingWaiting() {
-        let elsewhere = AttentionCenter.shared.waitingCount(excluding: windowID) > 0
+        let elsewhere = AttentionCenter.shared.blockedCount(excluding: windowID) > 0
         toasts.show(
             ToastContent(
                 variant: .info,
@@ -3991,8 +3990,7 @@ final class WindowController: NSObject {
     private func publishAttention() {
         guard !didTearDown else { return }
         AttentionCenter.shared.update(
-            windowID: windowID, waitingCount: attention.waitingCount, since: attention.waitingSince,
-            blocked: attention.isWindowBlocked)
+            windowID: windowID, blockedCount: attention.blockedCount, since: attention.blockedSince)
     }
 
     private func renderTabBar() {
