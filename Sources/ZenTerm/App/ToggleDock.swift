@@ -197,8 +197,8 @@ final class ToggleDock: NSView, ThemeReapplying {
             }
         }
 
-        bottomBtn.showsActivity = overlay.bottomBusy
-        rightBtn.showsActivity = overlay.rightBusy
+        bottomBtn.showsActivity = overlay.bottomBusy && !bottomBtn.isActive
+        rightBtn.showsActivity = overlay.rightBusy && !rightBtn.isActive
 
         surface(
             .bottomDrawer, busy: overlay.bottomBusy || drawerAttention(.bottom) != .idle,
