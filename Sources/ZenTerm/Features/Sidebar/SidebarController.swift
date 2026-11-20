@@ -339,20 +339,16 @@ final class SidebarController {
 
     func render(
         order: WorkspaceOrder, workspaces: [WorkspaceController], active: WorkspaceController?,
-        activeHost: SSHHostID?, needs: [WorkspaceID: AttentionStore.AgentWait]
+        activeHost: SSHHostID?, blocked: Set<WorkspaceID>
     ) {
         let byID = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
         let numbers = Dictionary(uniqueKeysWithValues: order.navigable.enumerated().map { ($1, $0 + 1) })
-        let hostNeeds = Dictionary(
-            workspaces.compactMap { workspace in
-                workspace.host.flatMap { host in needs[workspace.id].map { (host, $0) } }
-            },
-            uniquingKeysWith: max)
+        let blockedHosts = Set(workspaces.filter { blocked.contains($0.id) }.compactMap(\.host))
         let nextHosts = order.hosts.map {
             SidebarHostItem(
                 id: $0.id, name: GeneralConfig.current.displayName(of: $0.id), status: $0.status,
                 number: numbers[.host($0.id)], isActive: $0.id == activeHost,
-                dot: $0.status == .connected ? hostNeeds[$0.id]?.dot : nil)
+                dot: $0.status == .connected && blockedHosts.contains($0.id) ? .blocked : nil)
         }
         let next = order.entries.compactMap { entry -> Entry? in
             switch entry {
@@ -364,7 +360,7 @@ final class SidebarController {
                     folder: workspace.folder,
                     number: numbers[.workspace(id)], isActive: workspace === active,
                     isConfigured: workspace.isConfigured,
-                    dot: needs[id]?.dot, isWorktreeRemoved: workspace.isWorktreeRemoved)
+                    dot: blocked.contains(id) ? .blocked : nil, isWorktreeRemoved: workspace.isWorktreeRemoved)
             case .ghost(let parent):
                 return Entry(
                     row: .ghost(parent.path.standardizedFileURL.path), kind: .ghost, name: parent.title,

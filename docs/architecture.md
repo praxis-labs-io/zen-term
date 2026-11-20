@@ -349,10 +349,11 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   that reports no progress, since Claude clears its progress at launch and none means
   progress is off. Every other agent notification asks.
 - **A dot means one thing on each surface, and every dot is a `StateDot`.** An Agents row
-  shows every agent state. Tabs and workspace, worktree and host rows show only an unseen
-  wait, from `need(tab:)` / `need(tabs:)`: blocked over done. The store keeps which wait
-  latched a surface, so an ask answered while unseen reads blocked until you look, and a
-  closed pane's wait folds into its tab's residual. A finished command latches `completed`
+  shows every agent state. Tabs, the workspace, worktree and host rows, and the row for
+  agents waiting in other windows show only an unseen ask, as blocked, from
+  `isBlocked(tab:)` / `isBlocked(tabs:)`; a finished turn never dots them. The store latches
+  the ask on its surface, so an ask answered while unseen reads blocked until you look, and a
+  closed pane's ask folds into its tab's residual. A finished command latches `completed`
   for its card and draws no dot. A toolbar button's dot says only that its drawer or float
   is running or live in the background.
 - **Background command completion:** OSC 133 `COMMAND_FINISHED` over a threshold in a
@@ -641,7 +642,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   host's name on its line and holds Remove. Remove asks first while the host is connecting or
   connected, then returns to Settings with focus on the next host (Add Host when none is left). The
   sidebar's Remote hosts rows show their status word as the row's detail. While an agent in a
-  connected host's workspace is blocked or done, the row shows that dot, from the same rollup a
+  connected host's workspace is blocked, the row shows the blocked dot, from the same rollup a
   workspace row's takes.
 - **`SSHHostProbe` keeps each host's reachability in `SSHHostStatusCenter`, and never logs in.**
   Off-main, at most four at a time, it resolves the host with `ssh -G`, once until the network or the date

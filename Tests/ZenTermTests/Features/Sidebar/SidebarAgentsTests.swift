@@ -232,22 +232,43 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertFalse(idleRow.isSpinningForTesting)
     }
 
-    func test_aTab_showsBlockedOverDone() throws {
+    func test_aTabAndItsWorkspaceRow_showBlocked_neverDone() throws {
         let c = makeWindow()
         let finished = try focusedAgent(c)
         let asking = try split(c)
         c.identifyAgentForTesting(finished.id, name: "claude")
         WindowController.isPresent = { _ in false }
+        let workspaceRow = try XCTUnwrap(c.sidebarForTesting.view.rowsForTesting.first)
 
         finishATurn(finished)
-        XCTAssertEqual(tabChips(c).map(\.dotStateForTesting), [.done])
-        XCTAssertTrue(try XCTUnwrap(tabChips(c).first).isDotVisibleForTesting)
+        XCTAssertEqual(try row(of: finished, in: c).dotForTesting.state, .done, "precondition: the agent row says done")
+        XCTAssertEqual(tabChips(c).map(\.dotStateForTesting), [nil], "a finished turn puts no dot on its tab")
+        XCTAssertFalse(try XCTUnwrap(tabChips(c).first).isDotVisibleForTesting)
+        XCTAssertNil(workspaceRow.dotForTesting, "or on its workspace row")
 
         notify(asking, "Wants to run swift test")
 
-        XCTAssertEqual(tabChips(c).map(\.dotStateForTesting), [.blocked], "an ask outranks a finished turn")
+        XCTAssertEqual(tabChips(c).map(\.dotStateForTesting), [.blocked])
         XCTAssertEqual(
             try XCTUnwrap(tabChips(c).first).dotColorForTesting, Theme.current.chrome.blocked.nsColor.cgColor)
+        XCTAssertEqual(workspaceRow.dotForTesting?.state, .blocked)
+    }
+
+    func test_theWaitingElsewhereRow_showsBlocked_neverDone() throws {
+        let a = makeWindow()
+        let b = makeWindow()
+        let finished = try focusedAgent(b)
+        let asking = try split(b)
+        b.identifyAgentForTesting(finished.id, name: "claude")
+        WindowController.isPresent = { _ in false }
+
+        finishATurn(finished)
+        let row = try XCTUnwrap(waitingRow(a), "precondition: a finished turn still counts as waiting")
+        XCTAssertNil(row.dotForTesting.state, "a finished turn elsewhere puts no dot on the row")
+
+        notify(asking, "Wants to run swift test")
+
+        XCTAssertEqual(try XCTUnwrap(waitingRow(a)).dotForTesting.state, .blocked)
     }
 
     func test_aCommandFinishingUnseen_showsNoDotOnItsTab() throws {
@@ -558,7 +579,7 @@ final class SidebarAgentsTests: WindowTestCase {
         let c = makeWindow()
         _ = try focusedAgent(c)
         let other = c.windowID + 1_000
-        AttentionCenter.shared.update(windowID: other, waitingCount: 1, since: Date(), need: .ask)
+        AttentionCenter.shared.update(windowID: other, waitingCount: 1, since: Date(), blocked: true)
         addTeardownBlock { AttentionCenter.shared.forget(windowID: other) }
 
         c.handle(.nextWaitingAgent)

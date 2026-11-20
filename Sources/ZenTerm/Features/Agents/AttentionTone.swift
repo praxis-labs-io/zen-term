@@ -1,4 +1,4 @@
-// One agent's state. The Agents list shows every case; tabs and rows show only `blocked` and `done`.
+// One agent's state. The Agents list shows every case; tabs and rows show only `blocked`.
 enum AttentionTone {
     case blocked, done, working, idle
 
@@ -17,15 +17,6 @@ enum AttentionTone {
         case .blocked: return .blocked
         case .done: return .done
         case .working, .idle: return nil
-        }
-    }
-}
-
-extension AttentionStore.AgentWait {
-    var dot: StateDot.State {
-        switch self {
-        case .ask: return .blocked
-        case .turnEnd: return .done
         }
     }
 }
