@@ -713,4 +713,54 @@ final class TabBarViewTests: WindowTestCase {
         ])
         XCTAssertEqual(bar.chipsForTesting.map(\.isTitleTruncatedForTesting), [false, false, false])
     }
+
+    func test_anIndicator_growsTheChip_andLeavesTheTitlesFrameAlone_atEveryWidth() {
+        let titles = ["a", "claude", String(repeating: "long-title-", count: 6)]
+        for indicator in [TabChip.Indicator.dot(.blocked), .spinner] {
+            for title in titles {
+                let (bar, _) = settledBar([
+                    TabBarItem(id: TabID(1), index: 1, title: title, isActive: true, indicator: nil),
+                    TabBarItem(id: TabID(2), index: 2, title: title, isActive: false, indicator: indicator),
+                ])
+                let plain = bar.chipsForTesting[0]
+                let marked = bar.chipsForTesting[1]
+                let shown = indicatorFrame(marked)
+                let context = "\(indicator), \(title)"
+
+                XCTAssertTrue(marked.isDotVisibleForTesting || marked.isSpinningForTesting, context)
+                XCTAssertEqual(
+                    marked.labelFrameForTesting, plain.labelFrameForTesting, "\(context): the indicator moved the title"
+                )
+                XCTAssertGreaterThan(marked.frame.width, plain.frame.width, "\(context): the chip grows for the slot")
+                XCTAssertLessThanOrEqual(
+                    marked.labelFrameForTesting.maxX, shown.minX, "\(context): the indicator covers the title")
+                let slot = marked.closeSlotForTesting
+                XCTAssertEqual(shown.midX, slot.midX, accuracy: 0.01, context)
+                XCTAssertEqual(shown.midY, slot.midY, accuracy: 0.01, context)
+            }
+        }
+    }
+
+    func test_hoveringAChipWithAnIndicator_swapsInTheClose_withoutFadingTheTitle() throws {
+        for indicator in [TabChip.Indicator.dot(.blocked), .spinner] {
+            let (bar, _) = settledBar([
+                TabBarItem(id: TabID(1), index: 1, title: "shell", isActive: true, indicator: nil),
+                TabBarItem(id: TabID(2), index: 2, title: "claude", isActive: false, indicator: indicator),
+            ])
+            let chip = bar.chipsForTesting[1]
+            let labelAtRest = chip.labelFrameForTesting
+
+            try hover(chip)
+            bar.layoutSubtreeIfNeeded()
+
+            XCTAssertTrue(chip.isCloseVisibleForTesting, "\(indicator)")
+            XCTAssertFalse(chip.isDotVisibleForTesting || chip.isSpinningForTesting, "\(indicator): the x replaces it")
+            XCTAssertEqual(chip.labelFrameForTesting, labelAtRest, "\(indicator)")
+            XCTAssertFalse(chip.isLabelFadedForTesting, "\(indicator): the x sits in the slot, clear of the title")
+        }
+    }
+
+    private func indicatorFrame(_ chip: TabChip) -> CGRect {
+        chip.indicator == .spinner ? chip.spinnerFrameForTesting : chip.dotFrameForTesting
+    }
 }

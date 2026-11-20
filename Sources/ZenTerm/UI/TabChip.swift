@@ -17,6 +17,7 @@ class TabChip: ControlView, ThemeReapplying {
     private static let closeSlotSize: CGFloat = ChromeMetrics.Height.xs
     private static let closeSlotInset: CGFloat = ChromeMetrics.Spacing.s2
     private static let fadeRamp: CGFloat = ChromeMetrics.Spacing.s24
+    private static let indicatorSlotGrowth: CGFloat = closeSlotInset + closeSlotSize - labelInset
 
     private(set) var title = ""
     private(set) var isCurrent = false
@@ -45,6 +46,7 @@ class TabChip: ControlView, ThemeReapplying {
     var dotColorForTesting: CGColor? { dot.colorForTesting }
     var dotFrameForTesting: CGRect { dot.frame }
     var isSpinningForTesting: Bool { !spinner.isHidden && spinner.isSpinning }
+    var spinnerFrameForTesting: CGRect { spinner.frame }
     var closeFrameForTesting: CGRect { closeButton.frame }
     var closeSlotForTesting: CGRect { closeSlot }
     var labelFrameForTesting: CGRect { labelFrame }
@@ -107,8 +109,7 @@ class TabChip: ControlView, ThemeReapplying {
     var textWidth: CGFloat { ceil(label.cell?.cellSize.width ?? label.intrinsicContentSize.width) }
 
     var fittingWidth: CGFloat {
-        let trailing = indicator == nil ? Self.labelInset : Self.closeSlotSize + Self.closeSlotInset
-        return Self.clamp(Self.labelInset + textWidth + trailing)
+        Self.clamp(Self.labelInset + textWidth + Self.labelInset) + (indicator == nil ? 0 : Self.indicatorSlotGrowth)
     }
 
     static func clamp(_ width: CGFloat) -> CGFloat { min(max(width, minWidth), maxChipWidth) }
@@ -191,7 +192,7 @@ class TabChip: ControlView, ThemeReapplying {
         dot.isHidden = dot.state == nil || closing
         spinner.isHidden = indicator != .spinner || closing
         spinner.isSpinning = !spinner.isHidden
-        guard closing, labelFrame.width > 0 else {
+        guard closing, labelFrame.width > 0, closeSlot.minX < labelFrame.maxX else {
             labelContainer.layer?.mask = nil
             return
         }
