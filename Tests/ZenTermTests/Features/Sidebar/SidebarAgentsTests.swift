@@ -184,6 +184,84 @@ final class SidebarAgentsTests: WindowTestCase {
             charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36)!
     }
 
+    private func finishATurn(_ agent: Agent) {
+        progress(agent, working: true)
+        progress(agent, working: false)
+    }
+
+    private func tabChips(_ c: WindowController) -> [TerminalTabChip] {
+        func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
+        return descendants(c.containerForTesting).compactMap { $0 as? TabBarView }.first?.chipsForTesting ?? []
+    }
+
+    private func row(of agent: Agent, in c: WindowController) throws -> SidebarAgentRow {
+        try XCTUnwrap(rows(c).first { $0.itemForTesting?.id == agent.id })
+    }
+
+    func test_anAgentRow_showsBlockedDoneWorkingAndIdle() throws {
+        let c = makeWindow()
+        let finished = try focusedAgent(c)
+        let asking = try split(c)
+        let working = try split(c)
+        let idle = try split(c)
+        for agent in [finished, working, idle] { c.identifyAgentForTesting(agent.id, name: "claude") }
+        WindowController.isPresent = { _ in false }
+
+        finishATurn(finished)
+        notify(asking, "Wants to run swift test")
+        progress(working, working: true)
+
+        let chrome = Theme.current.chrome
+        let blockedRow = try row(of: asking, in: c)
+        XCTAssertEqual(blockedRow.dotForTesting.state, .blocked)
+        XCTAssertEqual(blockedRow.dotForTesting.colorForTesting, chrome.blocked.nsColor.cgColor)
+        XCTAssertFalse(blockedRow.isSpinningForTesting)
+
+        let doneRow = try row(of: finished, in: c)
+        XCTAssertEqual(doneRow.dotForTesting.state, .done)
+        XCTAssertEqual(doneRow.dotForTesting.colorForTesting, chrome.done.nsColor.cgColor)
+        XCTAssertFalse(doneRow.isSpinningForTesting)
+
+        let workingRow = try row(of: working, in: c)
+        XCTAssertNil(workingRow.dotForTesting.state, "the spinner says working, not a dot")
+        XCTAssertTrue(workingRow.isSpinningForTesting)
+
+        let idleRow = try row(of: idle, in: c)
+        XCTAssertNil(idleRow.dotForTesting.state)
+        XCTAssertNil(idleRow.dotForTesting.colorForTesting, "idle draws nothing")
+        XCTAssertFalse(idleRow.isSpinningForTesting)
+    }
+
+    func test_aTab_showsBlockedOverDone() throws {
+        let c = makeWindow()
+        let finished = try focusedAgent(c)
+        let asking = try split(c)
+        c.identifyAgentForTesting(finished.id, name: "claude")
+        WindowController.isPresent = { _ in false }
+
+        finishATurn(finished)
+        XCTAssertEqual(tabChips(c).map(\.dotStateForTesting), [.done])
+        XCTAssertTrue(try XCTUnwrap(tabChips(c).first).isDotVisibleForTesting)
+
+        notify(asking, "Wants to run swift test")
+
+        XCTAssertEqual(tabChips(c).map(\.dotStateForTesting), [.blocked], "an ask outranks a finished turn")
+        XCTAssertEqual(
+            try XCTUnwrap(tabChips(c).first).dotColorForTesting, Theme.current.chrome.blocked.nsColor.cgColor)
+    }
+
+    func test_aCommandFinishingUnseen_showsNoDotOnItsTab() throws {
+        let c = makeWindow()
+        WindowController.isPresent = { _ in false }
+
+        c.notifyCommandFinishedForTesting(tabIndex: 0, result: TerminalCommandResult(exitCode: 0, duration: 30))
+        drainMainQueue()
+
+        XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .completed, "precondition: the finish latched")
+        XCTAssertEqual(tabChips(c).map(\.dotStateForTesting), [nil])
+        XCTAssertFalse(try XCTUnwrap(tabChips(c).first).isDotVisibleForTesting)
+    }
+
     func test_noAgents_hidesTheSection() {
         let c = makeWindow()
 
@@ -204,7 +282,7 @@ final class SidebarAgentsTests: WindowTestCase {
         notify(first, "Wants to run swift test")
 
         XCTAssertEqual(items(c).map(\.id), [first.id, second.id, third.id])
-        XCTAssertEqual(items(c).map(\.state), [.waiting, .working, .idle])
+        XCTAssertEqual(items(c).map(\.state), [.blocked, .working, .idle])
         XCTAssertEqual(items(c).map(\.summary), ["Wants to run swift test", "Working", "Idle"])
         XCTAssertFalse(c.sidebarForTesting.view.agentsAreHiddenForTesting)
 
@@ -214,12 +292,12 @@ final class SidebarAgentsTests: WindowTestCase {
         focus(first, in: c)
         c.answerTypedAgent()
         XCTAssertEqual(items(c).map(\.id), [second.id, first.id, third.id])
-        XCTAssertEqual(items(c).map(\.state), [.waiting, .idle, .idle])
+        XCTAssertEqual(items(c).map(\.state), [.blocked, .idle, .idle])
         XCTAssertEqual(items(c)[1].summary, "Idle", "an answered question does not linger")
 
         progress(third, working: true)
         XCTAssertEqual(items(c).map(\.id), [second.id, third.id, first.id])
-        XCTAssertEqual(items(c).map(\.state), [.waiting, .working, .idle])
+        XCTAssertEqual(items(c).map(\.state), [.blocked, .working, .idle])
     }
 
     func test_anAgentWaitingInAnUnfocusedSplit_staysWaitingUntilItIsAnswered() throws {
@@ -230,13 +308,13 @@ final class SidebarAgentsTests: WindowTestCase {
         notify(first, "Wants to run swift test")
 
         XCTAssertNil(c.attentionStateForTesting(tabIndex: 0), "the tab number keeps using tab activeness")
-        XCTAssertEqual(items(c).map(\.state), [.waiting])
+        XCTAssertEqual(items(c).map(\.state), [.blocked])
 
         _ = try split(c)
-        XCTAssertEqual(items(c).map(\.state), [.waiting], "focusing another pane does not answer it")
+        XCTAssertEqual(items(c).map(\.state), [.blocked], "focusing another pane does not answer it")
 
         focus(first, in: c)
-        XCTAssertEqual(items(c).map(\.state), [.waiting], "focusing it back is not answering it")
+        XCTAssertEqual(items(c).map(\.state), [.blocked], "focusing it back is not answering it")
 
         c.answerTypedAgent()
         XCTAssertEqual(items(c).map(\.state), [.idle])
@@ -341,7 +419,7 @@ final class SidebarAgentsTests: WindowTestCase {
         first.surface.isBusy = false
         c.trackAgentExitsForTesting()
 
-        XCTAssertEqual(items(c).map(\.state), [.waiting], "a crash waits on you")
+        XCTAssertEqual(items(c).map(\.state), [.blocked], "a crash waits on you")
         XCTAssertEqual(items(c).first?.summary, WindowController.commandResultMessage(result))
 
         focus(first, in: c)
@@ -370,13 +448,13 @@ final class SidebarAgentsTests: WindowTestCase {
         let first = try focusedAgent(c)
         _ = try split(c)
         notify(first, "Wants to run swift test")
-        XCTAssertEqual(items(c).map(\.state), [.waiting], "precondition")
+        XCTAssertEqual(items(c).map(\.state), [.blocked], "precondition")
 
         let result = TerminalCommandResult(exitCode: 1, duration: 3)
         first.surface.delegate?.surface(first.surface, commandDidFinish: result)
         drainMainQueue()
 
-        XCTAssertEqual(items(c).map(\.state), [.waiting])
+        XCTAssertEqual(items(c).map(\.state), [.blocked])
         XCTAssertEqual(items(c).first?.summary, WindowController.commandResultMessage(result))
     }
 
@@ -385,7 +463,7 @@ final class SidebarAgentsTests: WindowTestCase {
         let first = try focusedAgent(c)
         _ = try split(c)
         notify(first, "Wants to run swift test")
-        XCTAssertEqual(items(c).map(\.state), [.waiting], "precondition")
+        XCTAssertEqual(items(c).map(\.state), [.blocked], "precondition")
 
         let result = TerminalCommandResult(exitCode: 130, duration: 3)
         first.surface.delegate?.surface(first.surface, commandDidFinish: result)
@@ -433,7 +511,7 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(
             c.focusedSurfaceIDForTesting, first.id, "precondition: you are on the head of the queue")
         XCTAssertEqual(
-            items(c).filter { $0.state == .waiting }.map(\.id), [first.id, second.id],
+            items(c).filter { $0.state.isWaiting }.map(\.id), [first.id, second.id],
             "precondition: both are still waiting, and the one you are on reads first")
 
         c.handle(.nextWaitingAgent)
@@ -452,7 +530,7 @@ final class SidebarAgentsTests: WindowTestCase {
         notify(first, "Wants to run swift test")
         notify(second, "Wants to edit a file")
         notify(third, "Wants to push")
-        let queue = items(c).filter { $0.state == .waiting }.map(\.id)
+        let queue = items(c).filter { $0.state.isWaiting }.map(\.id)
         XCTAssertEqual(queue.count, 3, "precondition: three agents are waiting")
 
         var visited: [SurfaceID] = []
@@ -480,7 +558,7 @@ final class SidebarAgentsTests: WindowTestCase {
         let c = makeWindow()
         _ = try focusedAgent(c)
         let other = c.windowID + 1_000
-        AttentionCenter.shared.update(windowID: other, waitingCount: 1, since: Date())
+        AttentionCenter.shared.update(windowID: other, waitingCount: 1, since: Date(), need: .ask)
         addTeardownBlock { AttentionCenter.shared.forget(windowID: other) }
 
         c.handle(.nextWaitingAgent)
@@ -516,7 +594,7 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(c.activeWorkspaceIDForTesting, target)
         XCTAssertEqual(c.focusedSurfaceIDForTesting, agent.id)
         XCTAssertEqual(
-            items(c).map(\.state), [.waiting], "the jump takes you to the prompt, it does not answer it")
+            items(c).map(\.state), [.blocked], "the jump takes you to the prompt, it does not answer it")
     }
 
     func test_clickingAnAgent_inAClosedDrawer_opensAndFocusesIt() throws {
@@ -628,14 +706,14 @@ final class SidebarAgentsTests: WindowTestCase {
         let rows = c.sidebarForTesting.view.rowsForTesting
 
         progress(agent, working: true)
-        XCTAssertEqual(rows.map(\.showsAttentionForTesting), [false, false], "working is not waiting")
+        XCTAssertEqual(rows.map(\.dotForTesting?.state), [nil, nil], "working is not waiting")
 
         notify(agent, "Wants to run swift test")
-        XCTAssertEqual(rows.map(\.showsAttentionForTesting), [false, true])
-        XCTAssertEqual(rows[1].accessibilityValue() as? String, "Agent waiting")
+        XCTAssertEqual(rows.map(\.dotForTesting?.state), [nil, .blocked])
+        XCTAssertEqual(rows[1].accessibilityValue() as? String, StateDot.State.blocked.accessibilityValue)
 
         c.activateWorkspaceForTesting(review)
-        XCTAssertEqual(rows.map(\.showsAttentionForTesting), [false, false])
+        XCTAssertEqual(rows.map(\.dotForTesting?.state), [nil, nil])
         XCTAssertNil(rows[1].accessibilityValue())
     }
 
@@ -754,14 +832,14 @@ final class SidebarAgentsTests: WindowTestCase {
 
         notify(agent, "Wants to run swift test")
         let row = try XCTUnwrap(b.sidebarForTesting.view.rowsForTesting.first)
-        XCTAssertTrue(row.showsAttentionForTesting, "precondition: its own workspace says something waits")
+        XCTAssertEqual(row.dotForTesting?.state, .blocked, "precondition: its own workspace says something waits")
         XCTAssertNotNil(waitingRow(a), "precondition")
 
         WindowController.isPresent = { _ in true }
         focus(agent, in: b)
 
-        XCTAssertFalse(
-            row.showsAttentionForTesting, "answering by focus has to repaint the row that carried the dot")
+        XCTAssertNil(
+            row.dotForTesting, "answering by focus has to repaint the row that carried the dot")
         XCTAssertNil(waitingRow(a))
     }
 

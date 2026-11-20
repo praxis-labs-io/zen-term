@@ -9,6 +9,7 @@ struct WindowAttention: Equatable {
     /// How many agents in that window are waiting, never how many windows.
     let count: Int
     let since: Date?
+    let need: AttentionStore.AgentWait?
 }
 
 /// Which windows have an agent waiting on you, how many, and since when. It answers nothing else. Main-thread only.
@@ -20,10 +21,10 @@ final class AttentionCenter {
     private var byWindow: [Int: WindowAttention] = [:]
 
     /// Lists the window while `waitingCount` is above zero, and drops it at zero.
-    func update(windowID: Int, waitingCount: Int, since: Date?) {
+    func update(windowID: Int, waitingCount: Int, since: Date?, need: AttentionStore.AgentWait?) {
         let entry =
             waitingCount > 0
-            ? WindowAttention(windowID: windowID, count: waitingCount, since: since) : nil
+            ? WindowAttention(windowID: windowID, count: waitingCount, since: since, need: need) : nil
         set(windowID, entry)
     }
 
@@ -41,6 +42,11 @@ final class AttentionCenter {
     /// Every agent waiting outside this window.
     func waitingCount(excluding windowID: Int) -> Int {
         byWindow.values.filter { $0.windowID != windowID }.reduce(0) { $0 + $1.count }
+    }
+
+    /// What the agents outside this window need from you: an ask over a finished turn.
+    func need(excluding windowID: Int) -> AttentionStore.AgentWait? {
+        byWindow.values.filter { $0.windowID != windowID }.compactMap(\.need).max()
     }
 
     /// How many other windows hold one, so the copy can choose window or windows.

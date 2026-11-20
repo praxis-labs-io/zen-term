@@ -23,14 +23,4 @@ final class SurfaceAttentionTests: XCTestCase {
         XCTAssertEqual(SurfaceAttention.rollup([.waiting, .completed]), .waiting)
         XCTAssertEqual(SurfaceAttention.rollup([.completed, .waiting]), .waiting)
     }
-
-    func test_working_rendersAsNothing() {
-        XCTAssertEqual(SurfaceAttention.working.tabState, .idle)
-        XCTAssertEqual(SurfaceAttention.idle.tabState, .idle)
-    }
-
-    func test_theTwoColoredStates_keepTheirChip() {
-        XCTAssertEqual(SurfaceAttention.completed.tabState, .completed)
-        XCTAssertEqual(SurfaceAttention.waiting.tabState, .waiting)
-    }
 }

@@ -1,16 +1,12 @@
 import AppKit
 import TabKit
 
-enum TabAttentionState {
-    case idle, completed, waiting
-}
-
 struct TabBarItem {
     let id: TabID
     let index: Int
     let title: String
     let isActive: Bool
-    let attentionState: TabAttentionState
+    let dot: StateDot.State?
 }
 
 // Chips are framed by hand: inside a scroll view an `NSStackView`'s intrinsic width is not authoritative.
@@ -110,7 +106,7 @@ final class TabBarView: NSView, ThemeReapplying {
                 }()
             chip.update(
                 index: item.index, title: item.title, isCurrent: item.isActive,
-                dotColor: Self.dotColor(for: item.attentionState))
+                dot: item.dot)
             next.append(chip)
             if item.isActive { activeChip = chip }
         }
@@ -228,14 +224,5 @@ final class TabBarView: NSView, ThemeReapplying {
         #else
             return false
         #endif
-    }
-
-    private static func dotColor(for state: TabAttentionState) -> NSColor? {
-        let chrome = Theme.current.chrome
-        switch state {
-        case .idle: return nil
-        case .completed: return chrome.positive.nsColor
-        case .waiting: return chrome.done.nsColor
-        }
     }
 }

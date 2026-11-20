@@ -253,7 +253,7 @@ final class FloatAttentionTests: WindowTestCase {
         c.selectTabForTesting(index: 0)
         drainMainQueue()
 
-        XCTAssertEqual(c.dockForTesting.scratchActivityStateForTesting, .waiting)
+        XCTAssertEqual(c.floatAttentionForTesting(ToolFloat.scratch.id), .waiting)
     }
 
     func test_aWindowScopedFloat_marksNoSingleTab() throws {

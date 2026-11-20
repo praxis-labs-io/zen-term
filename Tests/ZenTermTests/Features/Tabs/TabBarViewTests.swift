@@ -19,7 +19,7 @@ final class TabBarViewTests: WindowTestCase {
     }
 
     private func item(_ id: Int, _ title: String, index: Int, active: Bool = false) -> TabBarItem {
-        TabBarItem(id: TabID(id), index: index, title: title, isActive: active, attentionState: .idle)
+        TabBarItem(id: TabID(id), index: index, title: title, isActive: active, dot: nil)
     }
 
     func test_hoveringAChip_layingOutItsCloseButton_conflictsWithNoConstraint() {
@@ -153,7 +153,7 @@ final class TabBarViewTests: WindowTestCase {
 
     func test_reapplyTheme_resetsPillColor() {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
-        let items = [TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle)]
+        let items = [TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, dot: nil)]
         tabBar.render(items)
 
         tabBar.reapplyThemeTree()
@@ -180,8 +180,8 @@ final class TabBarViewTests: WindowTestCase {
         let dirs = [TabID(1): URL(fileURLWithPath: home + "/Dev/one"), TabID(10): URL(fileURLWithPath: "/tmp/ten")]
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in }, directory: { dirs[$0] })
         tabBar.render([
-            TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle),
-            TabBarItem(id: TabID(10), index: 10, title: "ten", isActive: false, attentionState: .idle),
+            TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, dot: nil),
+            TabBarItem(id: TabID(10), index: 10, title: "ten", isActive: false, dot: nil),
         ])
         let tooltips = tabBar.chipTooltipsForTesting
         XCTAssertEqual(tooltips.count, 2)
@@ -254,7 +254,7 @@ final class TabBarViewTests: WindowTestCase {
         tabBar.frame = NSRect(x: 0, y: 0, width: 160, height: 30)
 
         let many = (1...14).map {
-            TabBarItem(id: TabID($0), index: $0, title: "tab\($0)", isActive: $0 == 1, attentionState: .idle)
+            TabBarItem(id: TabID($0), index: $0, title: "tab\($0)", isActive: $0 == 1, dot: nil)
         }
         tabBar.render(many)
         tabBar.layoutSubtreeIfNeeded()
@@ -270,7 +270,7 @@ final class TabBarViewTests: WindowTestCase {
         window.contentView?.addSubview(tabBar)
         tabBar.frame = NSRect(x: 0, y: 0, width: 800, height: 30)
 
-        tabBar.render([TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, attentionState: .idle)])
+        tabBar.render([TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, dot: nil)])
         tabBar.layoutSubtreeIfNeeded()
         XCTAssertFalse(tabBar.isOverflowFadedForTesting, "a single tab in a wide bar must not fade")
     }
@@ -285,7 +285,7 @@ final class TabBarViewTests: WindowTestCase {
         tabBar.frame = NSRect(x: 0, y: 0, width: 160, height: 30)
 
         let many = (1...14).map {
-            TabBarItem(id: TabID($0), index: $0, title: "tab\($0)", isActive: $0 == 1, attentionState: .idle)
+            TabBarItem(id: TabID($0), index: $0, title: "tab\($0)", isActive: $0 == 1, dot: nil)
         }
         tabBar.render(many)
         tabBar.layoutSubtreeIfNeeded()
@@ -543,13 +543,13 @@ final class TabBarViewTests: WindowTestCase {
     }
 
     func test_hover_neverChangesAnyChipWidthOrAnyNeighborsPosition() throws {
-        let states: [TabAttentionState] = [.idle, .completed, .waiting]
+        let states: [StateDot.State?] = [nil, .done, .blocked]
         for state in states {
             for currentIndex in [1, 2] {
                 let items = (1...3).map {
                     TabBarItem(
                         id: TabID($0), index: $0, title: "tab \($0)", isActive: $0 == currentIndex,
-                        attentionState: state)
+                        dot: state)
                 }
                 let (bar, _) = settledBar(items)
                 let before = bar.chipsForTesting.map(\.frame)
@@ -571,40 +571,37 @@ final class TabBarViewTests: WindowTestCase {
     }
 
     @MainActor
-    func test_theDot_followsAttention_andHoverSwapsItForTheCloseButtonInTheSameSlot() throws {
+    func test_theDot_takesItsStateColor_andHoverSwapsItForTheCloseButtonInTheSameSlot() throws {
         let chrome = Theme.current.chrome
         let (bar, _) = settledBar([
-            TabBarItem(id: TabID(1), index: 1, title: "idle", isActive: true, attentionState: .idle),
-            TabBarItem(
-                id: TabID(2), index: 2, title: "working", isActive: false,
-                attentionState: SurfaceAttention.working.tabState),
-            TabBarItem(id: TabID(3), index: 3, title: "done", isActive: false, attentionState: .completed),
-            TabBarItem(id: TabID(4), index: 4, title: "asks", isActive: false, attentionState: .waiting),
+            TabBarItem(id: TabID(1), index: 1, title: "idle", isActive: true, dot: nil),
+            TabBarItem(id: TabID(2), index: 2, title: "done", isActive: false, dot: .done),
+            TabBarItem(id: TabID(3), index: 3, title: "asks", isActive: false, dot: .blocked),
         ])
         let chips = bar.chipsForTesting
 
-        XCTAssertEqual(chips.map(\.isDotVisibleForTesting), [false, false, true, true], "idle and working show none")
-        XCTAssertEqual(chips[2].dotColorForTesting, chrome.positive.nsColor)
-        XCTAssertEqual(chips[3].dotColorForTesting, chrome.done.nsColor)
+        XCTAssertEqual(chips.map(\.isDotVisibleForTesting), [false, true, true])
+        XCTAssertEqual(chips[1].dotColorForTesting, chrome.done.nsColor.cgColor)
+        XCTAssertEqual(chips[2].dotColorForTesting, chrome.blocked.nsColor.cgColor)
 
-        let dotCenter = CGPoint(x: chips[3].dotFrameForTesting.midX, y: chips[3].dotFrameForTesting.midY)
-        try hover(chips[3])
+        let dotCenter = CGPoint(x: chips[2].dotFrameForTesting.midX, y: chips[2].dotFrameForTesting.midY)
+        try hover(chips[2])
         bar.layoutSubtreeIfNeeded()
 
-        XCTAssertFalse(chips[3].isDotVisibleForTesting, "the x replaces the dot")
-        XCTAssertTrue(chips[3].isCloseVisibleForTesting)
-        let slot = chips[3].closeFrameForTesting
+        XCTAssertFalse(chips[2].isDotVisibleForTesting, "the x replaces the dot")
+        XCTAssertTrue(chips[2].isCloseVisibleForTesting)
+        let slot = chips[2].closeFrameForTesting
         XCTAssertEqual(slot.size, CGSize(width: ChromeMetrics.Height.xs, height: ChromeMetrics.Height.xs))
-        XCTAssertEqual(chips[3].bounds.width - slot.maxX, ChromeMetrics.Spacing.s2, "inset from the trailing edge")
-        XCTAssertEqual(slot.midY, chips[3].bounds.midY, accuracy: 0.01, "centered in the chip")
-        XCTAssertEqual(chips[3].closeFrameForTesting.midX, dotCenter.x, accuracy: 0.01)
-        XCTAssertEqual(chips[3].closeFrameForTesting.midY, dotCenter.y, accuracy: 0.01)
+        XCTAssertEqual(chips[2].bounds.width - slot.maxX, ChromeMetrics.Spacing.s2, "inset from the trailing edge")
+        XCTAssertEqual(slot.midY, chips[2].bounds.midY, accuracy: 0.01, "centered in the chip")
+        XCTAssertEqual(chips[2].closeFrameForTesting.midX, dotCenter.x, accuracy: 0.01)
+        XCTAssertEqual(chips[2].closeFrameForTesting.midY, dotCenter.y, accuracy: 0.01)
     }
 
     func test_theCloseButton_fillsTheSlotTheDotSitsIn() throws {
         let (bar, _) = settledBar([
-            TabBarItem(id: TabID(1), index: 1, title: "idle", isActive: true, attentionState: .idle),
-            TabBarItem(id: TabID(2), index: 2, title: "asks", isActive: false, attentionState: .waiting),
+            TabBarItem(id: TabID(1), index: 1, title: "idle", isActive: true, dot: nil),
+            TabBarItem(id: TabID(2), index: 2, title: "asks", isActive: false, dot: .blocked),
         ])
         let chip = bar.chipsForTesting[1]
 
@@ -712,9 +709,9 @@ final class TabBarViewTests: WindowTestCase {
 
     func test_everyTitle_showsWhole_withOrWithoutADot() {
         let (bar, _) = settledBar([
-            TabBarItem(id: TabID(1), index: 1, title: "shell", isActive: true, attentionState: .idle),
-            TabBarItem(id: TabID(2), index: 2, title: "shell", isActive: false, attentionState: .waiting),
-            TabBarItem(id: TabID(3), index: 3, title: "~/Dev/zen-term", isActive: false, attentionState: .completed),
+            TabBarItem(id: TabID(1), index: 1, title: "shell", isActive: true, dot: nil),
+            TabBarItem(id: TabID(2), index: 2, title: "shell", isActive: false, dot: .blocked),
+            TabBarItem(id: TabID(3), index: 3, title: "~/Dev/zen-term", isActive: false, dot: .done),
         ])
         XCTAssertEqual(bar.chipsForTesting.map(\.isTitleTruncatedForTesting), [false, false, false])
     }

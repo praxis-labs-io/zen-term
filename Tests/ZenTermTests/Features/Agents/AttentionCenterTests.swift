@@ -9,7 +9,7 @@ final class AttentionCenterTests: XCTestCase {
     func test_aWindowWithNobodyWaiting_isNotListed() {
         let center = AttentionCenter()
 
-        center.update(windowID: 1, waitingCount: 0, since: nil)
+        center.update(windowID: 1, waitingCount: 0, since: nil, need: nil)
 
         XCTAssertTrue(center.waiting.isEmpty)
     }
@@ -17,40 +17,40 @@ final class AttentionCenterTests: XCTestCase {
     func test_aWaitingWindow_carriesItsCountAndWhenItStarted() {
         let center = AttentionCenter()
 
-        center.update(windowID: 1, waitingCount: 2, since: since)
+        center.update(windowID: 1, waitingCount: 2, since: since, need: .ask)
 
-        XCTAssertEqual(center.waiting, [WindowAttention(windowID: 1, count: 2, since: since)])
+        XCTAssertEqual(center.waiting, [WindowAttention(windowID: 1, count: 2, since: since, need: .ask)])
     }
 
     func test_theLastAgentAnswered_takesTheWindowOffTheList() {
         let center = AttentionCenter()
-        center.update(windowID: 1, waitingCount: 1, since: since)
+        center.update(windowID: 1, waitingCount: 1, since: since, need: .ask)
 
-        center.update(windowID: 1, waitingCount: 0, since: nil)
+        center.update(windowID: 1, waitingCount: 0, since: nil, need: nil)
 
         XCTAssertTrue(center.waiting.isEmpty)
     }
 
     func test_theOldestWaitReadsFirst() {
         let center = AttentionCenter()
-        center.update(windowID: 1, waitingCount: 1, since: Date(timeIntervalSince1970: 200))
-        center.update(windowID: 2, waitingCount: 1, since: Date(timeIntervalSince1970: 100))
+        center.update(windowID: 1, waitingCount: 1, since: Date(timeIntervalSince1970: 200), need: .ask)
+        center.update(windowID: 2, waitingCount: 1, since: Date(timeIntervalSince1970: 100), need: .ask)
 
         XCTAssertEqual(center.waiting.map(\.windowID), [2, 1])
     }
 
     func test_theCountSumsAgents_notWindows() {
         let center = AttentionCenter()
-        center.update(windowID: 1, waitingCount: 2, since: since)
-        center.update(windowID: 2, waitingCount: 3, since: since)
+        center.update(windowID: 1, waitingCount: 2, since: since, need: .ask)
+        center.update(windowID: 2, waitingCount: 3, since: since, need: .ask)
 
         XCTAssertEqual(center.waitingCount(excluding: 9), 5)
     }
 
     func test_theCountLeavesOutTheWindowYouAreIn() {
         let center = AttentionCenter()
-        center.update(windowID: 1, waitingCount: 2, since: since)
-        center.update(windowID: 2, waitingCount: 3, since: since)
+        center.update(windowID: 1, waitingCount: 2, since: since, need: .ask)
+        center.update(windowID: 2, waitingCount: 3, since: since, need: .ask)
 
         XCTAssertEqual(center.waitingCount(excluding: 1), 3)
     }
@@ -58,18 +58,29 @@ final class AttentionCenterTests: XCTestCase {
     func test_windowsWaitingAtTheSameInstant_orderTheSameWayEveryTime() {
         let center = AttentionCenter()
         let since = Date(timeIntervalSince1970: 100)
-        center.update(windowID: 7, waitingCount: 1, since: since)
-        center.update(windowID: 3, waitingCount: 1, since: since)
-        center.update(windowID: 5, waitingCount: 1, since: since)
+        center.update(windowID: 7, waitingCount: 1, since: since, need: .ask)
+        center.update(windowID: 3, waitingCount: 1, since: since, need: .ask)
+        center.update(windowID: 5, waitingCount: 1, since: since, need: .ask)
 
         XCTAssertEqual(
             center.waiting.map(\.windowID), [3, 5, 7],
             "a tie resolves by window, so placing the row and jumping from it agree")
     }
 
+    func test_anAskInAnotherWindow_outranksAFinishedTurn() {
+        let center = AttentionCenter()
+        center.update(windowID: 1, waitingCount: 1, since: since, need: .turnEnd)
+        XCTAssertEqual(center.need(excluding: 9), .turnEnd)
+
+        center.update(windowID: 2, waitingCount: 1, since: since, need: .ask)
+
+        XCTAssertEqual(center.need(excluding: 9), .ask)
+        XCTAssertEqual(center.need(excluding: 2), .turnEnd, "the window you are in is left out")
+    }
+
     func test_aClosedWindow_isForgotten() {
         let center = AttentionCenter()
-        center.update(windowID: 1, waitingCount: 1, since: since)
+        center.update(windowID: 1, waitingCount: 1, since: since, need: .ask)
 
         center.forget(windowID: 1)
 

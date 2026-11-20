@@ -301,11 +301,12 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   on screen: a closed drawer or float keeps its latch and its card. Releasing an unseen
   surface folds its latch into a per-tab residual, so a closed pane does not unmark the
   tab it left; the next visit drops it.
-- **An agent is working, waiting or idle, never done.** Its wait (`agentWait(of:)`) is
-  an `ask` or a `turnEnd`, and what answers it is the difference.
+- **An agent is blocked, done, working or idle** (`AttentionTone`). Its wait
+  (`agentWait(of:)`) is an `ask` (blocked) or a `turnEnd` (done), and what answers it is the
+  difference.
   - An **ask** (a notification, Codex's Action Required title, a crash) latches whatever
     the pane's focus, since the notification behind it comes only once, so a split asking
-    in the active tab reads waiting while its tab dot stays quiet. Looking at a prompt
+    in the active tab reads blocked while its tab dot stays quiet. Looking at a prompt
     is not answering it. Claude and Codex answer their own ask: Claude when a spinner
     title follows its `✳` prompt title, Codex when its title leaves the prompt, and either
     when a turn starts. A key at their prompt answers nothing, since an arrow key sends
@@ -335,8 +336,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   exit. libghostty turns a cleared title into the pane's pwd, which on a host is the local folder
   ssh started in, so that path is the signal. Only on a host: locally a cleared title would drop
   the agent before the result that tells a crash from a clean exit.
-  The Agents rows join it with `agentWait(of:)` and sort waiting (oldest first), working,
-  idle, ties in sidebar order.
+  The Agents rows join it with `agentWait(of:)` and sort blocked and done together (oldest
+  first), then working, then idle, ties in sidebar order.
 - **Only an agent's OSC 777 can ask.** A notification from a surface that is not in the
   roster, and whose title names no known or listed agent, lands like a finished
   command: `completed`, no banner, no row, and never over a tab that is already waiting.
@@ -347,10 +348,13 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   end still unseen, and changes nothing once the turn was seen. It asks only from a Claude
   that reports no progress, since Claude clears its progress at launch and none means
   progress is off. Every other agent notification asks.
-- **A state only the chrome can act on never reaches the tab dot.** `working`
-  says an agent is mid-turn, not that it wants you, so it stops at the dock's dot. The dock's
-  dot and the tab dot are one signal at two altitudes; a hidden drawer or float has
-  no tab, so it asks through its own dot.
+- **A dot means one thing on each surface, and every dot is a `StateDot`.** An Agents row
+  shows every agent state. Tabs and workspace, worktree and host rows show only an unseen
+  wait, from `need(tab:)` / `need(tabs:)`: blocked over done. The store keeps which wait
+  latched a surface, so an ask answered while unseen reads blocked until you look, and a
+  closed pane's wait folds into its tab's residual. A finished command latches `completed`
+  for its card and draws no dot. A toolbar button's dot says only that its drawer or float
+  is running or live in the background.
 - **Background command completion:** OSC 133 `COMMAND_FINISHED` over a threshold in a
   background tab raises one sticky toast; the rank keeps it under a waiting agent. A
   notification no agent sent raises the same card, with its own words.
@@ -636,11 +640,9 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   updated in place; ↩ or a click opens `AddSSHHostOverlay` in edit mode, which rewrites only that
   host's name on its line and holds Remove. Remove asks first while the host is connecting or
   connected, then returns to Settings with focus on the next host (Add Host when none is left). The
-  sidebar's Remote hosts rows show their status as a dot (`SSHHostStatus.ink`): Offline takes the idle
-  agent row's dot ink, Online is positive, Connected is accent, and the
-  status word is the row's accessibility value rather than visible text. While an agent in a
-  connected host's workspace waits, the dot takes the waiting ink a workspace row's does, from
-  the same rollup, and the value reads `Connected, Agent waiting`.
+  sidebar's Remote hosts rows show their status word as the row's detail. While an agent in a
+  connected host's workspace is blocked or done, the row shows that dot, from the same rollup a
+  workspace row's takes.
 - **`SSHHostProbe` keeps each host's reachability in `SSHHostStatusCenter`, and never logs in.**
   Off-main, at most four at a time, it resolves the host with `ssh -G`, once until the network or the date
   on `~/.ssh/config` or a file it includes changes, because `Match exec` can prompt (a host that stays
@@ -695,7 +697,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
 ### Theming
 
 `ChromeThemeDeriver` maps ANSI slots onto chrome roles (info ansi[4], warning ansi[3],
-destructive ansi[1], accent ansi[4], working ansi[3], done ansi[4], positive ansi[2], cursor the accent, painted back onto the terminal cursor).
+destructive ansi[1], accent ansi[4], working ansi[3], done ansi[4], blocked ansi[1], positive ansi[2], cursor the accent, painted back onto the terminal cursor).
 Sixty-six themes ship; a user file shadows a bundled one. `accent-color` repoints
 `accent`, and the search highlight when the theme sets no search colors. The usage rules are in `docs/design-system.md`.
 `onAccent` is whichever of background and foreground has the higher WCAG contrast with `accent`.

@@ -215,13 +215,28 @@ final class ReapplyThemeTests: WindowTestCase {
                 id: SurfaceID(raw: 1), state: .idle, summary: "Finished the migration.", detail: "zen-term",
                 message: message))
         XCTAssertEqual(row.accessibilityLabel(), message)
-        let inkBefore = AttentionTone.idle.ink
+        let inkBefore = Theme.current.chrome.ink(.normal)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        XCTAssertNotEqual(AttentionTone.idle.ink, inkBefore, "premise: the theme change recolors the summary")
+        XCTAssertNotEqual(
+            Theme.current.chrome.ink(.normal), inkBefore, "premise: the theme change recolors the summary")
         row.reapplyThemeTree()
 
         XCTAssertEqual(row.accessibilityLabel(), message, "the theme change cut the message to its summary")
+    }
+
+    func test_reapplyTheme_repaintsANavRowsStateDot() throws {
+        let row = NavRow(title: "zen-term") {}
+        makeWindow().contentView?.addSubview(row)
+        row.setDot(.blocked)
+        let before = try XCTUnwrap(row.dotForTesting?.colorForTesting)
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        row.reapplyThemeTree()
+
+        let after = try XCTUnwrap(row.dotForTesting?.colorForTesting)
+        XCTAssertNotEqual(before, after, "premise: the theme change moves ANSI red")
+        XCTAssertEqual(after, Theme.current.chrome.blocked.nsColor.cgColor)
     }
 
     func test_reapplyTheme_recolorsNavRow() throws {

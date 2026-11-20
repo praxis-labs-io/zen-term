@@ -101,7 +101,7 @@ final class AgentFocusTests: WindowTestCase {
 
         finishATurn(on: try XCTUnwrap(spawned.first))
 
-        XCTAssertEqual(c.agentStateForTesting(pane), .waiting)
+        XCTAssertEqual(c.agentStateForTesting(pane), .done)
         XCTAssertEqual(c.agentWaitForTesting(pane), .turnEnd)
         XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .waiting)
         XCTAssertEqual(c.agentRowForTesting(pane)?.summary, "Finished its turn.")
@@ -115,7 +115,7 @@ final class AgentFocusTests: WindowTestCase {
         c.identifyAgentForTesting(pane, name: "claude")
         WindowController.isPresent = { _ in false }
         finishATurn(on: try XCTUnwrap(spawned.first))
-        XCTAssertEqual(c.agentStateForTesting(pane), .waiting, "precondition: it finished while you were away")
+        XCTAssertEqual(c.agentStateForTesting(pane), .done, "precondition: it finished while you were away")
 
         WindowController.isPresent = { _ in true }
         c.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
@@ -165,7 +165,7 @@ final class AgentFocusTests: WindowTestCase {
 
         XCTAssertNil(c.waitingToastForTesting(tabIndex: 0), "a card for the pane you are looking at points nowhere")
         XCTAssertNil(c.attentionStateForTesting(tabIndex: 0), "coming back to the tab is visiting it")
-        XCTAssertEqual(c.agentStateForTesting(pane), .waiting, "looking at an ask is not answering it")
+        XCTAssertEqual(c.agentStateForTesting(pane), .blocked, "looking at an ask is not answering it")
     }
 
     func test_comingBackToAnAskInAnUnfocusedSplitInView_takesDownItsCard() throws {
@@ -185,7 +185,7 @@ final class AgentFocusTests: WindowTestCase {
 
         XCTAssertNil(c.waitingToastForTesting(tabIndex: 0), "a split on screen is in view, focused or not")
         XCTAssertNil(c.attentionStateForTesting(tabIndex: 0))
-        XCTAssertEqual(c.agentStateForTesting(first), .waiting)
+        XCTAssertEqual(c.agentStateForTesting(first), .blocked)
     }
 
     func test_comingBackToACrash_takesDownItsCard_butLeavesItWaiting() throws {
@@ -201,7 +201,7 @@ final class AgentFocusTests: WindowTestCase {
 
         XCTAssertNil(c.waitingToastForTesting(tabIndex: 0))
         XCTAssertNil(c.attentionStateForTesting(tabIndex: 0))
-        XCTAssertEqual(c.agentStateForTesting(pane), .waiting, "a crash waits for you to act on it")
+        XCTAssertEqual(c.agentStateForTesting(pane), .blocked, "a crash waits for you to act on it")
     }
 
     func test_comingBackToAFinishedCommand_takesDownItsCard() throws {
@@ -245,7 +245,7 @@ final class AgentFocusTests: WindowTestCase {
         comeBack(c)
 
         XCTAssertNil(c.waitingToastForTesting(tabIndex: 0), "a float on screen is in view")
-        XCTAssertEqual(c.agentStateForTesting(float.id), .waiting)
+        XCTAssertEqual(c.agentStateForTesting(float.id), .blocked)
     }
 
     func test_aNewTurn_answersAFinishedTurn_andTakesDownItsCard() throws {
@@ -311,11 +311,11 @@ final class AgentFocusTests: WindowTestCase {
         c.identifyAgentForTesting(pane, name: "claude")
         c.notifyCommandFinishedForTesting(tabIndex: 0, result: TerminalCommandResult(exitCode: 1, duration: 1))
         drainMainQueue()
-        XCTAssertEqual(c.agentStateForTesting(pane), .waiting, "precondition: it exited failing")
+        XCTAssertEqual(c.agentStateForTesting(pane), .blocked, "precondition: it exited failing")
 
         c.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
 
-        XCTAssertEqual(c.agentStateForTesting(pane), .waiting, "a crash waits for you to act on it")
+        XCTAssertEqual(c.agentStateForTesting(pane), .blocked, "a crash waits for you to act on it")
         XCTAssertEqual(c.agentRowForTesting(pane)?.summary, "Exited 1 after 1s.")
     }
 
@@ -332,14 +332,14 @@ final class AgentFocusTests: WindowTestCase {
         drainMainQueue()
 
         XCTAssertNil(c.attentionStateForTesting(tabIndex: 0), "the tab number keeps using tab activeness")
-        XCTAssertEqual(c.agentStateForTesting(first), .waiting)
+        XCTAssertEqual(c.agentStateForTesting(first), .blocked)
 
         c.handle(.splitVertical)
         c.window.contentView?.layoutSubtreeIfNeeded()
-        XCTAssertEqual(c.agentStateForTesting(first), .waiting, "focusing another pane does not answer it")
+        XCTAssertEqual(c.agentStateForTesting(first), .blocked, "focusing another pane does not answer it")
 
         while c.focusedSurfaceIDForTesting != first { c.handle(.nextPane) }
-        XCTAssertEqual(c.agentStateForTesting(first), .waiting, "focusing it back is not answering it either")
+        XCTAssertEqual(c.agentStateForTesting(first), .blocked, "focusing it back is not answering it either")
 
         c.answerTypedAgent()
 
@@ -354,13 +354,13 @@ final class AgentFocusTests: WindowTestCase {
 
         surface.delegate?.surface(surface, didPostNotification: TerminalNotification(title: "pi", body: "Done?"))
         drainMainQueue()
-        XCTAssertEqual(c.agentStateForTesting(pane), .waiting)
+        XCTAssertEqual(c.agentStateForTesting(pane), .blocked)
 
         WindowController.isPresent = { _ in true }
         c.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
 
         XCTAssertEqual(
-            c.agentStateForTesting(pane), .waiting,
+            c.agentStateForTesting(pane), .blocked,
             "coming back to the window is looking at the prompt, not answering it")
 
         c.answerTypedAgent()
@@ -380,7 +380,7 @@ final class AgentFocusTests: WindowTestCase {
             didPostNotification: TerminalNotification(
                 title: AgentNotificationFixtures.claudeTitle, body: AgentNotificationFixtures.claudePermission))
         drainMainQueue()
-        XCTAssertEqual(c.agentStateForTesting(pane), .waiting)
+        XCTAssertEqual(c.agentStateForTesting(pane), .blocked)
 
         c.notifyProgressForTesting(tabIndex: 0, progress: nil)
         drainMainQueue()
@@ -402,14 +402,14 @@ final class AgentFocusTests: WindowTestCase {
             didPostNotification: TerminalNotification(
                 title: AgentNotificationFixtures.claudeTitle, body: AgentNotificationFixtures.claudePermission))
         drainMainQueue()
-        XCTAssertEqual(c.agentStateForTesting(pane), .waiting)
+        XCTAssertEqual(c.agentStateForTesting(pane), .blocked)
 
         c.handle(.toggleSearch)
         XCTAssertTrue(c.search.isEditing, "precondition: the find field holds the keys")
         c.answerTypedAgent()
 
         XCTAssertEqual(
-            c.agentStateForTesting(pane), .waiting, "the keys went to the find field, not to the agent")
+            c.agentStateForTesting(pane), .blocked, "the keys went to the find field, not to the agent")
     }
 
     func test_typingIntoAWatchedPane_answersIt_andTheRowStopsSayingBlocked() throws {
@@ -422,7 +422,7 @@ final class AgentFocusTests: WindowTestCase {
             surface, didPostNotification: TerminalNotification(title: "pi", body: "Approve the plan?"))
         drainMainQueue()
         let asking = try XCTUnwrap(c.agentRowForTesting(pane))
-        XCTAssertEqual(c.agentStateForTesting(pane), .waiting, "a prompt you watched arrive is still blocked")
+        XCTAssertEqual(c.agentStateForTesting(pane), .blocked, "a prompt you watched arrive is still blocked")
         XCTAssertEqual(asking.summary, "Approve the plan?")
 
         c.answerTypedAgent()

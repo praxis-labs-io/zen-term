@@ -24,9 +24,10 @@ struct SidebarAgentItem: Equatable {
 
 // The Agents list's own ordering and copy for the shared states.
 extension AttentionTone {
+    // Blocked and done share a rank, so waiting agents queue by age alone.
     var rank: Int {
         switch self {
-        case .waiting: return 0
+        case .blocked, .done: return 0
         case .working: return 1
         case .idle: return 2
         }
@@ -34,7 +35,8 @@ extension AttentionTone {
 
     var summary: String {
         switch self {
-        case .waiting: return "Waiting"
+        case .blocked: return "Waiting"
+        case .done: return "Done"
         case .working: return "Working"
         case .idle: return "Idle"
         }
@@ -43,21 +45,18 @@ extension AttentionTone {
 
 final class SidebarAgentRow: SidebarJumpRow {
     private let glyphSlot = NSView()
-    private let dot = NSView()
+    private let dot = StateDot()
     private let spinner = Spinner()
     private var item: SidebarAgentItem?
 
     static let height: CGFloat = ChromeMetrics.Height.xl
     private static let jumpHint = "Jump to agent"
     private static let glyphSize = NSSize(width: 14, height: 16)
-    private static let dotDiameter: CGFloat = 7
 
     init(onActivate: @escaping () -> Void) {
         super.init(tooltip: Self.jumpHint, onActivate: onActivate)
 
         spinner.role = \.working
-        dot.wantsLayer = true
-        dot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.dotDiameter)
         for glyph in [dot, spinner] {
             glyph.translatesAutoresizingMaskIntoConstraints = false
             glyphSlot.addSubview(glyph)
@@ -70,8 +69,6 @@ final class SidebarAgentRow: SidebarJumpRow {
             heightAnchor.constraint(equalToConstant: Self.height),
             glyphSlot.widthAnchor.constraint(equalToConstant: Self.glyphSize.width),
             glyphSlot.heightAnchor.constraint(equalToConstant: Self.glyphSize.height),
-            dot.widthAnchor.constraint(equalToConstant: Self.dotDiameter),
-            dot.heightAnchor.constraint(equalToConstant: Self.dotDiameter),
         ])
         accessories = [glyphSlot]
     }
@@ -87,19 +84,20 @@ final class SidebarAgentRow: SidebarJumpRow {
         tooltip?.relabel(from: self)
         announce(item)
         setAccessibilityValue(item.detail)
-        dot.isHidden = item.state == .working
+        dot.state = item.state.dot
         spinner.isHidden = item.state != .working
         spinner.isSpinning = item.state == .working
-        dot.layer?.backgroundColor = item.state.ink.cgColor
     }
 
     var itemForTesting: SidebarAgentItem? { item }
 
+    var dotForTesting: StateDot { dot }
+
+    var isSpinningForTesting: Bool { !spinner.isHidden && spinner.isSpinning }
+
     var summaryTextForTesting: String { content.title }
 
     override func reapplyTheme() {
-        let state = item?.state ?? .idle
-        dot.layer?.backgroundColor = state.ink.cgColor
         if let item {
             render(Content(title: item.summary, subtitle: item.detail))
             announce(item)

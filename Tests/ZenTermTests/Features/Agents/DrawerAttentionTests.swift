@@ -78,14 +78,20 @@ final class DrawerAttentionTests: WindowTestCase {
         drainMainQueue()
     }
 
-    func test_aClosedDrawerAsking_dotsItsButton() throws {
+    func test_aClosedDrawerAsking_latchesIt_andTheToolbarDotStaysAccent() throws {
         let c = makeWindow()
         let drawer = try closedRightDrawer(c)
+        drawer.isBusy = true
 
         notify(drawer)
 
-        XCTAssertEqual(c.dockForTesting.rightActivityStateForTesting, .waiting)
+        XCTAssertEqual(c.drawerAttentionForTesting(.right), .waiting)
+        XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .waiting, "the tab carries the ask")
         XCTAssertTrue(c.dockForTesting.rightActivityForTesting)
+        XCTAssertEqual(c.dockForTesting.rightActivityDotForTesting.state, .live)
+        XCTAssertEqual(
+            c.dockForTesting.rightActivityDotForTesting.colorForTesting, Theme.current.chrome.accent.nsColor.cgColor,
+            "the toolbar says live, never what the agent needs")
     }
 
     func test_aClosedDrawerAsking_raisesACard() throws {
@@ -135,7 +141,7 @@ final class DrawerAttentionTests: WindowTestCase {
         c.handle(.toggleRightDrawer)
         drainMainQueue()
 
-        XCTAssertEqual(c.dockForTesting.rightActivityStateForTesting, .idle)
+        XCTAssertEqual(c.drawerAttentionForTesting(.right), .idle)
         XCTAssertEqual(c.windowAttentionForTesting, .idle)
         XCTAssertTrue(toastViews(c).isEmpty, "the card goes once you are looking at what raised it")
     }
@@ -182,7 +188,7 @@ final class DrawerAttentionTests: WindowTestCase {
         XCTAssertEqual(toastViews(c).count, 1)
     }
 
-    func test_aLongCommandFinishingInAClosedDrawer_dotsItPositive() throws {
+    func test_aLongCommandFinishingInAClosedDrawer_latchesWithoutADot() throws {
         let c = makeWindow()
         let drawer = try closedRightDrawer(c)
 
@@ -190,9 +196,8 @@ final class DrawerAttentionTests: WindowTestCase {
             drawer, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 30))
         drainMainQueue()
 
-        XCTAssertEqual(c.dockForTesting.rightActivityStateForTesting, .completed)
-        XCTAssertEqual(
-            c.dockForTesting.rightActivityColorForTesting, Theme.current.chrome.positive.nsColor)
+        XCTAssertEqual(c.drawerAttentionForTesting(.right), .completed)
+        XCTAssertFalse(c.dockForTesting.rightActivityForTesting, "a finished command is not live")
     }
 
     func test_aClosedDrawerWorking_dotsItsButton_andClearingLowersIt() throws {
@@ -201,11 +206,11 @@ final class DrawerAttentionTests: WindowTestCase {
 
         drawer.delegate?.surface(drawer, progressDidChange: TerminalProgress(state: .indeterminate))
         drainMainQueue()
-        XCTAssertEqual(c.dockForTesting.rightActivityStateForTesting, .working)
+        XCTAssertEqual(c.drawerAttentionForTesting(.right), .working)
 
         drawer.delegate?.surface(drawer, progressDidChange: nil)
         drainMainQueue()
-        XCTAssertEqual(c.dockForTesting.rightActivityStateForTesting, .idle)
+        XCTAssertEqual(c.drawerAttentionForTesting(.right), .idle)
     }
 
     func test_aWorkingAgentExitingInAClosedDrawer_lowersItsDot() throws {
@@ -213,13 +218,13 @@ final class DrawerAttentionTests: WindowTestCase {
         let drawer = try closedRightDrawer(c)
         drawer.delegate?.surface(drawer, progressDidChange: TerminalProgress(state: .indeterminate))
         drainMainQueue()
-        XCTAssertEqual(c.dockForTesting.rightActivityStateForTesting, .working, "precondition: the agent is mid-turn")
+        XCTAssertEqual(c.drawerAttentionForTesting(.right), .working, "precondition: the agent is mid-turn")
 
         drawer.delegate?.surface(drawer, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
         drainMainQueue()
 
         XCTAssertEqual(
-            c.dockForTesting.rightActivityStateForTesting, .idle,
+            c.drawerAttentionForTesting(.right), .idle,
             "an agent that exited is not working, whichever path noticed it")
     }
 
@@ -232,7 +237,7 @@ final class DrawerAttentionTests: WindowTestCase {
         c.selectTabForTesting(index: 0)
         drainMainQueue()
 
-        XCTAssertEqual(c.dockForTesting.rightActivityStateForTesting, .waiting)
+        XCTAssertEqual(c.drawerAttentionForTesting(.right), .waiting)
         XCTAssertEqual(toastViews(c).count, 1, "the drawer is still closed, so its card still has somewhere to go")
     }
 

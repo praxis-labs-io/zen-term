@@ -10,7 +10,8 @@ enum WaitingTarget: Equatable {
 /// One window's attention: every surface latches its own, tabs and the window roll up by `max`. Main-thread only.
 final class AttentionStore {
     // Looking at a finished turn answers it; an ask is answered only by answering it.
-    enum AgentWait: Equatable {
+    // Declared quietest first: an ask outranks a finished turn in every rollup.
+    enum AgentWait: Comparable {
         case turnEnd, ask
     }
 
@@ -24,6 +25,8 @@ final class AttentionStore {
         var waitingSince: Date?
         var agentWait: AgentWait?
         var agentSince: Date?
+        // What latched `waiting`, kept after the agent moves on: the latch outlives the wait until you look.
+        var need: AgentWait?
     }
 
     private var entries: [SurfaceID: Entry] = [:]
@@ -37,6 +40,7 @@ final class AttentionStore {
         var since: Date?
         var waiting: Int
         var waitingSince: Date?
+        var need: AgentWait?
     }
 
     var onChange: (() -> Void)?
@@ -65,7 +69,8 @@ final class AttentionStore {
                 since: earliest(existing?.since, entry.since),
                 waiting: (existing?.waiting ?? 0) + (entry.latched == .waiting ? 1 : 0),
                 waitingSince: entry.latched == .waiting
-                    ? earliest(existing?.waitingSince, entry.waitingSince) : existing?.waitingSince
+                    ? earliest(existing?.waitingSince, entry.waitingSince) : existing?.waitingSince,
+                need: [existing?.need, entry.need].compactMap { $0 }.max()
             )
         }
     }
@@ -87,6 +92,7 @@ final class AttentionStore {
         changing {
             guard entries[id] != nil else { return }
             record(id, .waiting, seen: seen)
+            if !seen { latchNeed(id, .ask) }
             entries[id]?.agentWait = .ask
             if entries[id]?.agentSince == nil { entries[id]?.agentSince = now() }
         }
@@ -96,6 +102,7 @@ final class AttentionStore {
         changing {
             guard !seen, entries[id] != nil, entries[id]?.agentWait == nil else { return }
             record(id, .waiting, seen: false)
+            latchNeed(id, .turnEnd)
             entries[id]?.agentWait = .turnEnd
             entries[id]?.agentSince = now()
         }
@@ -155,6 +162,7 @@ final class AttentionStore {
             entries[id]?.latched = .idle
             entries[id]?.since = nil
             entries[id]?.waitingSince = nil
+            entries[id]?.need = nil
             if entries[id]?.agentWait == .turnEnd {
                 entries[id]?.agentWait = nil
                 entries[id]?.agentSince = nil
@@ -193,6 +201,20 @@ final class AttentionStore {
     /// A workspace's attention: its tabs folded the same way a tab folds its surfaces.
     func state(tabs ids: [TabID]) -> SurfaceAttention {
         SurfaceAttention.rollup(ids.map { state(tab: $0) })
+    }
+
+    /// What an agent in the tab needs from you that you have not seen: an ask over a finished turn.
+    func need(tab: TabID) -> AgentWait? {
+        (entries.values.filter { $0.tab == tab }.compactMap(unseenNeed) + [residual[tab]?.need].compactMap { $0 })
+            .max()
+    }
+
+    func need(tabs ids: [TabID]) -> AgentWait? {
+        ids.compactMap { need(tab: $0) }.max()
+    }
+
+    var windowNeed: AgentWait? {
+        (entries.values.compactMap(unseenNeed) + residual.values.compactMap(\.need)).max()
     }
 
     var windowState: SurfaceAttention {
@@ -246,6 +268,15 @@ final class AttentionStore {
 
     private func ids(in tab: TabID) -> [SurfaceID] {
         entries.filter { $0.value.tab == tab }.map(\.key)
+    }
+
+    private func latchNeed(_ id: SurfaceID, _ wait: AgentWait) {
+        let latched = entries[id]?.need
+        entries[id]?.need = latched.map { max($0, wait) } ?? wait
+    }
+
+    private func unseenNeed(_ entry: Entry) -> AgentWait? {
+        entry.seen ? nil : entry.need
     }
 
     private func effective(_ entry: Entry) -> SurfaceAttention {
