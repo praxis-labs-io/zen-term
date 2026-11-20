@@ -43,7 +43,7 @@ struct ChromeTheme: Equatable {
         foreground.nsColor.withAlphaComponent(min(1, level.alpha * Self.inkBoost))
     }
 
-    var focusRing: NSColor { ink(.subtle) }
+    var focusRing: NSColor { ink(.muted) }
 
     enum FillLevel: CaseIterable {
         case rest
