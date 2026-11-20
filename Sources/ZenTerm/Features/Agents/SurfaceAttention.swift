@@ -8,13 +8,4 @@ enum SurfaceAttention: Int, Comparable, CaseIterable {
     static func rollup(_ states: some Sequence<SurfaceAttention>) -> SurfaceAttention {
         states.reduce(.idle, max)
     }
-
-    /// `working` renders as nothing: the tab bar colors two states and this is not one of them.
-    var tabState: TabAttentionState {
-        switch self {
-        case .idle, .working: return .idle
-        case .completed: return .completed
-        case .waiting: return .waiting
-        }
-    }
 }

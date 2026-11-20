@@ -18,7 +18,7 @@ struct SidebarHostItem: Equatable {
     let status: SSHHostStatus
     let number: Int?
     let isActive: Bool
-    let isWaiting: Bool
+    let dot: StateDot.State?
 }
 
 struct SidebarRowItem: Equatable {
@@ -29,7 +29,7 @@ struct SidebarRowItem: Equatable {
     let number: Int?
     let isActive: Bool
     let makesWorktrees: Bool
-    let isWaiting: Bool
+    let dot: StateDot.State?
 }
 
 final class SidebarView: NSView, ThemeReapplying {
@@ -69,7 +69,7 @@ final class SidebarView: NSView, ThemeReapplying {
     private var agentRows: [SurfaceID: SidebarAgentRow] = [:]
     private var waitingRow: SidebarWaitingElsewhereRow?
     private var agentViews: [SidebarAgentRow] = []
-    private var waitingElsewhere = (agents: 0, windows: 0, index: 0)
+    private var waitingElsewhere: (agents: Int, windows: Int, index: Int, dot: StateDot.State?) = (0, 0, 0, nil)
     var onHoverCoverChanged: ((Bool) -> Void)?
     var onLeave: (() -> Void)?
     var onFocusChanged: (() -> Void)?
@@ -235,14 +235,9 @@ final class SidebarView: NSView, ThemeReapplying {
             let row = hostRow(for: item)
             row.setTitle(item.name)
             row.isCurrent = item.isActive
-            let status = item.status
-            let word = status.word
-            if item.isWaiting {
-                row.setDot({ AttentionTone.waiting.ink }, accessibilityValue: "\(word), Agent waiting")
-            } else {
-                row.setDot({ status.ink }, accessibilityValue: word)
-            }
-            row.setTitleInk(status == .connected ? nil : .subtle)
+            row.setDetail(item.status.word)
+            row.setDot(item.dot)
+            row.setTitleInk(item.status == .connected ? nil : .subtle)
             guard hostStack.arrangedSubviews.firstIndex(of: row) != index else { continue }
             let isNew = row.superview == nil
             if !isNew { hostStack.removeArrangedSubview(row) }
@@ -279,9 +274,9 @@ final class SidebarView: NSView, ThemeReapplying {
         return row
     }
 
-    func renderWaitingElsewhere(agents: Int, windows: Int, index: Int) {
-        guard (agents, windows, index) != waitingElsewhere else { return }
-        waitingElsewhere = (agents, windows, index)
+    func renderWaitingElsewhere(agents: Int, windows: Int, index: Int, dot: StateDot.State?) {
+        guard (agents, windows, index, dot) != waitingElsewhere else { return }
+        waitingElsewhere = (agents, windows, index, dot)
         refreshAgentsSection()
         refreshRowHover()
     }
@@ -309,7 +304,7 @@ final class SidebarView: NSView, ThemeReapplying {
             return hadFocus
         }
         let row = waitingRow ?? makeWaitingRow()
-        row.render(agents: waitingElsewhere.agents, windows: waitingElsewhere.windows)
+        row.render(agents: waitingElsewhere.agents, windows: waitingElsewhere.windows, dot: waitingElsewhere.dot)
         return false
     }
 
@@ -379,7 +374,7 @@ final class SidebarView: NSView, ThemeReapplying {
             row.setDetail(item.detail)
             row.isCurrent = item.isActive
             setNewWorktreeButton(on: row, for: item)
-            row.setDot(item.isWaiting ? { AttentionTone.waiting.ink } : nil, accessibilityValue: "Agent waiting")
+            row.setDot(item.dot)
         }
         if activeRow != previouslyActive { revealActiveRow() }
         refreshRowHover()

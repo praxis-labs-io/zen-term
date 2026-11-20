@@ -595,14 +595,14 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         try openAlphaWorktree(branch: "feature/one", in: c)
         let agent = try XCTUnwrap(spawned.last)
         c.activateWorkspaceForTesting(c.workspaceIDsForTesting[0])
-        XCTAssertEqual(rows(of: c).map(\.showsAttentionForTesting), [false, false, false])
+        XCTAssertEqual(rows(of: c).map(\.dotForTesting?.state), [nil, nil, nil])
 
         agent.delegate?.surface(
             agent, didPostNotification: TerminalNotification(title: "Claude Code", body: "Claude needs your permission")
         )
-        waitUntil(rows(of: c)[2].showsAttentionForTesting, "the worktree row's dot")
+        waitUntil(rows(of: c)[2].dotForTesting != nil, "the worktree row's dot")
 
-        XCTAssertEqual(rows(of: c).map(\.showsAttentionForTesting), [false, false, true])
+        XCTAssertEqual(rows(of: c).map(\.dotForTesting?.state), [nil, nil, .blocked])
     }
 
     private func drainMainQueue() {

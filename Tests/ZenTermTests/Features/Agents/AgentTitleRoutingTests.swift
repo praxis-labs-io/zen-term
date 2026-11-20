@@ -79,7 +79,7 @@ final class AgentTitleRoutingTests: WindowTestCase {
         drainMainQueue()
         push(AgentTitleFixtures.claudeAsking, from: surface)
         notify(TerminalNotification(title: "Claude Code", body: "Claude needs your permission"), from: surface)
-        XCTAssertEqual(c.agentStateForTesting(id), .waiting, "precondition: Claude is asking")
+        XCTAssertEqual(c.agentStateForTesting(id), .blocked, "precondition: Claude is asking")
         return (surface, id)
     }
 
@@ -127,7 +127,7 @@ final class AgentTitleRoutingTests: WindowTestCase {
 
         push(AgentTitleFixtures.codexBlockedOn, from: drawer)
 
-        XCTAssertEqual(c.agentStateForTesting(id), .waiting)
+        XCTAssertEqual(c.agentStateForTesting(id), .blocked)
     }
 
     func test_aClaudeTurnInADrawer_showsItsToolName() throws {
@@ -165,7 +165,7 @@ final class AgentTitleRoutingTests: WindowTestCase {
 
         push(AgentTitleFixtures.codexBlockedOn, from: surface)
 
-        XCTAssertEqual(c.agentStateForTesting(id), .waiting)
+        XCTAssertEqual(c.agentStateForTesting(id), .blocked)
     }
 
     func test_typingAtABlockedCodex_leavesItWaiting() throws {
@@ -176,7 +176,7 @@ final class AgentTitleRoutingTests: WindowTestCase {
 
         c.answerTypedAgent()
 
-        XCTAssertEqual(c.agentStateForTesting(id), .waiting, "an arrow key at the prompt answers nothing")
+        XCTAssertEqual(c.agentStateForTesting(id), .blocked, "an arrow key at the prompt answers nothing")
     }
 
     func test_aBlockedCodexBackAtWork_isAnswered() throws {
@@ -206,7 +206,7 @@ final class AgentTitleRoutingTests: WindowTestCase {
         let (surface, id) = try firstPane(c)
         c.identifyAgentForTesting(id, name: "claude")
         notify(TerminalNotification(title: "Claude Code", body: "Claude needs your permission"), from: surface)
-        XCTAssertEqual(c.agentStateForTesting(id), .waiting, "precondition: it asked without its prompt title")
+        XCTAssertEqual(c.agentStateForTesting(id), .blocked, "precondition: it asked without its prompt title")
 
         surface.delegate?.surface(surface, progressDidChange: TerminalProgress(state: .indeterminate))
         drainMainQueue()
@@ -221,7 +221,7 @@ final class AgentTitleRoutingTests: WindowTestCase {
 
         c.answerTypedAgent()
 
-        XCTAssertEqual(c.agentStateForTesting(id), .waiting, "an arrow key at the prompt answers nothing")
+        XCTAssertEqual(c.agentStateForTesting(id), .blocked, "an arrow key at the prompt answers nothing")
     }
 
     func test_aClaudePrompt_isAnsweredWhenItsSpinnerComesBack() throws {
@@ -256,7 +256,7 @@ final class AgentTitleRoutingTests: WindowTestCase {
         let (surface, id) = try firstPane(c)
         c.identifyAgentForTesting(id, name: "aider")
         notify(TerminalNotification(title: "", body: "Apply these edits?"), from: surface)
-        XCTAssertEqual(c.agentStateForTesting(id), .waiting)
+        XCTAssertEqual(c.agentStateForTesting(id), .blocked)
 
         c.answerTypedAgent()
 

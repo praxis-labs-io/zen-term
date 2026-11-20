@@ -11,6 +11,71 @@ final class AttentionStoreTests: XCTestCase {
         AttentionStore(now: { now })
     }
 
+    func test_aTabsNeed_isAnAskOverAFinishedTurn_andACompletionIsNone() {
+        let store = makeStore()
+        let finished = SurfaceIDs.mint()
+        let asked = SurfaceIDs.mint()
+        let command = SurfaceIDs.mint()
+        store.register(finished, tab: tab)
+        store.register(asked, tab: tab)
+        store.register(command, tab: other)
+
+        store.record(command, .completed, seen: false)
+        store.endTurn(finished, seen: false)
+        XCTAssertNil(store.need(tab: other), "a finished command needs nothing from you")
+        XCTAssertEqual(store.need(tab: tab), .turnEnd)
+
+        store.ask(asked, seen: false)
+        XCTAssertEqual(store.need(tab: tab), .ask)
+        XCTAssertEqual(store.windowNeed, .ask)
+    }
+
+    func test_anAskAnsweredUnseen_staysAnAskUntilYouLook() {
+        let store = makeStore()
+        let pane = SurfaceIDs.mint()
+        store.register(pane, tab: tab)
+        store.ask(pane, seen: false)
+
+        store.answerAgent(pane)
+        store.endTurn(pane, seen: false)
+
+        XCTAssertEqual(store.need(tab: tab), .ask, "the latch remembers what it was")
+        store.markSeen(pane)
+        XCTAssertNil(store.need(tab: tab))
+    }
+
+    func test_closingAPaneThatAsked_leavesTheAskOnItsTab() {
+        let store = makeStore()
+        let asked = SurfaceIDs.mint()
+        let finished = SurfaceIDs.mint()
+        store.register(asked, tab: tab)
+        store.register(finished, tab: tab)
+        store.ask(asked, seen: false)
+        store.endTurn(finished, seen: false)
+
+        store.release(asked)
+        store.release(finished)
+
+        XCTAssertEqual(store.need(tab: tab), .ask)
+        XCTAssertEqual(store.need(tabs: [other, tab]), .ask)
+        store.markSeen(tab: tab)
+        XCTAssertNil(store.need(tab: tab))
+    }
+
+    func test_aSeenAsk_needsNothingOnTheTab() {
+        let store = makeStore()
+        let pane = SurfaceIDs.mint()
+        store.register(pane, tab: tab)
+
+        store.ask(pane, seen: true)
+
+        XCTAssertNil(store.need(tab: tab), "the tab latches only what you have not seen")
+        XCTAssertEqual(store.agentWait(of: pane), .ask, "the agent row still shows it blocked")
+
+        store.record(pane, .completed, seen: false)
+        XCTAssertNil(store.need(tab: tab), "a command finishing later is not the ask you already saw")
+    }
+
     func test_aTabThatCompletedBeforeItAsked_datesTheWaitFromTheQuestion() {
         var clock = Date(timeIntervalSince1970: 100)
         let store = AttentionStore(now: { clock })

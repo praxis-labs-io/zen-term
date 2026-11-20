@@ -4,7 +4,7 @@ import XCTest
 
 final class SSHHostStatusTests: XCTestCase {
     func test_offline_takesTheIdleAgentInk() {
-        XCTAssertEqual(SSHHostStatus.offline.ink, AttentionTone.idle.ink)
+        XCTAssertEqual(SSHHostStatus.offline.ink, Theme.current.chrome.ink(.muted))
     }
 
     func test_online_isPositive() {
@@ -12,6 +12,6 @@ final class SSHHostStatusTests: XCTestCase {
     }
 
     func test_connected_takesTheWorkingAgentInk() {
-        XCTAssertEqual(SSHHostStatus.connected.ink, AttentionTone.working.ink)
+        XCTAssertEqual(SSHHostStatus.connected.ink, Theme.current.chrome.working.nsColor)
     }
 }

@@ -2326,7 +2326,7 @@ final class WindowController: NSObject {
 
     private static func agentState(_ tone: AttentionTone) -> ListResult.AgentState {
         switch tone {
-        case .waiting: return .waiting
+        case .blocked, .done: return .waiting
         case .working: return .working
         case .idle: return .idle
         }
@@ -3603,7 +3603,8 @@ final class WindowController: NSObject {
         sidebar.renderWaitingElsewhere(
             agents: center.waitingCount(excluding: windowID),
             windows: center.waitingWindows(excluding: windowID),
-            index: waitingElsewherePlace(among: items))
+            index: waitingElsewherePlace(among: items),
+            dot: center.need(excluding: windowID)?.dot)
     }
 
     // The row queues on the same rule the rows use: waiting first, and among those the oldest reads first.
@@ -3611,7 +3612,7 @@ final class WindowController: NSObject {
         guard let since = AttentionCenter.shared.waiting.first(where: { $0.windowID != windowID })?.since
         else { return items.count }
         return items.prefix {
-            $0.state == .waiting && (attention.agentSince(of: $0.id) ?? .distantFuture) <= since
+            $0.state.isWaiting && (attention.agentSince(of: $0.id) ?? .distantFuture) <= since
         }.count
     }
 
@@ -3653,7 +3654,7 @@ final class WindowController: NSObject {
         }
         return located.sorted { a, b in
             if a.item.state.rank != b.item.state.rank { return a.item.state.rank < b.item.state.rank }
-            if a.item.state == .waiting, a.since != b.since {
+            if a.item.state.isWaiting, a.since != b.since {
                 return (a.since ?? .distantFuture) < (b.since ?? .distantFuture)
             }
             return a.position.lexicographicallyPrecedes(b.position)
@@ -3682,7 +3683,7 @@ final class WindowController: NSObject {
 
     // Steps from where you are rather than tracking a cursor, so answering or a new wait cannot strand the cycle.
     private func jumpToNextWaitingAgent() {
-        let waiting = agentItems().filter { $0.state == .waiting }
+        let waiting = agentItems().filter(\.state.isWaiting)
         guard !waiting.isEmpty else { return toastNothingWaiting() }
         let current = waiting.firstIndex { $0.id == focusedSurface }
         let next = waiting[((current ?? -1) + 1) % waiting.count]
@@ -3803,10 +3804,10 @@ final class WindowController: NSObject {
         commandFinished(surface: controller(id)?.focusedSurfaceID, id: id, result: result)
     }
 
-    func attentionStateForTesting(tabIndex: Int) -> TabAttentionState? {
+    func attentionStateForTesting(tabIndex: Int) -> SurfaceAttention? {
         guard activeTabIDs.indices.contains(tabIndex) else { return nil }
-        let state = attention.state(tab: activeTabIDs[tabIndex]).tabState
-        return state == .idle ? nil : state
+        let state = attention.state(tab: activeTabIDs[tabIndex])
+        return state > .working ? state : nil
     }
 
     func notifyProgressForTesting(tabIndex: Int, progress: TerminalProgress?) {
@@ -3817,6 +3818,10 @@ final class WindowController: NSObject {
     }
 
     var windowAttentionForTesting: SurfaceAttention { attention.windowState }
+
+    func drawerAttentionForTesting(_ edge: DrawerEdge) -> SurfaceAttention { drawerAttention(edge) }
+
+    func floatAttentionForTesting(_ id: String) -> SurfaceAttention { floatAttention(id) }
 
     var dockForTesting: ToggleDock { dock }
 
@@ -3986,7 +3991,8 @@ final class WindowController: NSObject {
     private func publishAttention() {
         guard !didTearDown else { return }
         AttentionCenter.shared.update(
-            windowID: windowID, waitingCount: attention.waitingCount, since: attention.waitingSince)
+            windowID: windowID, waitingCount: attention.waitingCount, since: attention.waitingSince,
+            need: attention.windowNeed)
     }
 
     private func renderTabBar() {
@@ -3995,17 +4001,19 @@ final class WindowController: NSObject {
                 id: id, index: i + 1,
                 title: title(of: id),
                 isActive: id == activeWorkspace?.activeID,
-                attentionState: attention.state(tab: id).tabState)
+                dot: attention.need(tab: id)?.dot)
         }
         tabBar.render(items)
         switch selection {
         case .workspace(let workspace): window.title = workspace.name
         case .host(let host): window.title = GeneralConfig.current.displayName(of: host)
         }
-        let waiting = workspaces.filter { attention.state(tabs: $0.tabIDs) == .waiting }.map(\.id)
+        let needs = workspaces.compactMap { workspace in
+            attention.need(tabs: workspace.tabIDs).map { (workspace.id, $0) }
+        }
         sidebar.render(
             order: order, workspaces: workspaces, active: activeWorkspace, activeHost: selection.host,
-            waiting: Set(waiting))
+            needs: Dictionary(uniqueKeysWithValues: needs))
         renderAgents()
         for (id, card) in attentionCards {
             cardTitles[id].map { card.setTitle($0()) }

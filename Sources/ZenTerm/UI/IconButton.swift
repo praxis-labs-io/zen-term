@@ -22,15 +22,12 @@ final class IconButton: ControlView, ThemeReapplying {
 
     var isActive = false { didSet { update() } }
 
-    var showsActivity = false { didSet { activityDot.isHidden = !showsActivity } }
+    var showsActivity = false { didSet { activityDot.state = showsActivity ? .live : nil } }
 
-    /// Colors the same dot that already says "something is live here", so it says what rather than whether.
-    var activityState: SurfaceAttention = .idle { didSet { update() } }
-    var activityDotHiddenForTesting: Bool { activityDot.isHidden }
-    var activityColorForTesting: NSColor { activityColor }
-    private let activityDot = NSView()
-    private static let dotDiameter: CGFloat = 4
-    private static let dotInset: CGFloat = dotDiameter / 2 + 2
+    var activityDotHiddenForTesting: Bool { activityDot.state == nil }
+    var activityDotForTesting: StateDot { activityDot }
+    private let activityDot = StateDot()
+    private static let dotInset: CGFloat = StateDot.diameter / 2 + 2
 
     private let tooltip: TooltipHost
 
@@ -59,9 +56,6 @@ final class IconButton: ControlView, ThemeReapplying {
         setAccessibilityRole(.button)
         setAccessibilityLabel(label)
 
-        activityDot.wantsLayer = true
-        activityDot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.dotDiameter)
-        activityDot.isHidden = true
         activityDot.translatesAutoresizingMaskIntoConstraints = false
         addSubview(activityDot)
 
@@ -72,8 +66,6 @@ final class IconButton: ControlView, ThemeReapplying {
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
             icon.widthAnchor.constraint(equalToConstant: size.width),
             icon.heightAnchor.constraint(equalToConstant: size.height),
-            activityDot.widthAnchor.constraint(equalToConstant: Self.dotDiameter),
-            activityDot.heightAnchor.constraint(equalToConstant: Self.dotDiameter),
             activityDot.centerXAnchor.constraint(equalTo: trailingAnchor, constant: -Self.dotInset),
             activityDot.centerYAnchor.constraint(equalTo: topAnchor, constant: Self.dotInset),
         ])
@@ -144,15 +136,6 @@ final class IconButton: ControlView, ThemeReapplying {
         func forceHoverForGallery() { setHovered(true) }
     #endif
 
-    private var activityColor: NSColor {
-        let chrome = Theme.current.chrome
-        switch activityState {
-        case .completed: return chrome.positive.nsColor
-        case .waiting: return chrome.done.nsColor
-        case .idle, .working: return chrome.accent.nsColor
-        }
-    }
-
     private func update() {
         let chrome = Theme.current.chrome
         let bg: NSColor
@@ -168,6 +151,5 @@ final class IconButton: ControlView, ThemeReapplying {
         easeFill(bg)
         showFocusRing(hasKeyboardFocus)
         icon.contentTintColor = tint
-        activityDot.layer?.backgroundColor = activityColor.cgColor
     }
 }

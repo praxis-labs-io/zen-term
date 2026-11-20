@@ -11,19 +11,18 @@ class TabChip: ControlView, ThemeReapplying {
 
     private static let closeSlotSize: CGFloat = ChromeMetrics.Height.xs
     private static let closeSlotInset: CGFloat = ChromeMetrics.Spacing.s2
-    private static let dotDiameter: CGFloat = 6
     private static let fadeRamp: CGFloat = ChromeMetrics.Spacing.s24
 
     private(set) var title = ""
     private(set) var isCurrent = false
     private(set) var isClosable = false
-    private(set) var dotColor: NSColor?
+    private(set) var dotState: StateDot.State?
     private var firstClickTime: TimeInterval?
     private(set) var labelFrame = CGRect.zero
 
     let label = NSTextField(labelWithString: "")
     private let labelContainer = NSView()
-    private let dot = NSView()
+    private let dot = StateDot()
     private let fadeMask = CAGradientLayer()
     let closeButton: IconButton
 
@@ -36,7 +35,8 @@ class TabChip: ControlView, ThemeReapplying {
     var isDotVisibleForTesting: Bool { !dot.isHidden }
     var closeButtonForTesting: IconButton { closeButton }
     var isHoveredForTesting: Bool { isHovered }
-    var dotColorForTesting: NSColor? { dot.layer?.backgroundColor.flatMap { NSColor(cgColor: $0) } }
+    var dotStateForTesting: StateDot.State? { dot.state }
+    var dotColorForTesting: CGColor? { dot.colorForTesting }
     var dotFrameForTesting: CGRect { dot.frame }
     var closeFrameForTesting: CGRect { closeButton.frame }
     var closeSlotForTesting: CGRect { closeSlot }
@@ -65,8 +65,6 @@ class TabChip: ControlView, ThemeReapplying {
         labelContainer.wantsLayer = true
         labelContainer.addSubview(label)
 
-        dot.wantsLayer = true
-        dot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.dotDiameter)
         dot.isHidden = true
 
         closeButton.firesOnRelease = true
@@ -87,11 +85,11 @@ class TabChip: ControlView, ThemeReapplying {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    func apply(title: String, isCurrent: Bool, isClosable: Bool, dotColor: NSColor?) {
+    func apply(title: String, isCurrent: Bool, isClosable: Bool, dot dotState: StateDot.State?) {
         self.title = title
         self.isCurrent = isCurrent
         self.isClosable = isClosable
-        self.dotColor = dotColor
+        self.dotState = dotState
         restyle()
         needsLayout = true
     }
@@ -99,7 +97,7 @@ class TabChip: ControlView, ThemeReapplying {
     var textWidth: CGFloat { ceil(label.cell?.cellSize.width ?? label.intrinsicContentSize.width) }
 
     var fittingWidth: CGFloat {
-        let trailing = dotColor == nil ? Self.labelInset : Self.closeSlotSize + Self.closeSlotInset
+        let trailing = dotState == nil ? Self.labelInset : Self.closeSlotSize + Self.closeSlotInset
         return Self.clamp(Self.labelInset + textWidth + trailing)
     }
 
@@ -124,7 +122,7 @@ class TabChip: ControlView, ThemeReapplying {
             label.attributedStringValue = styled
             needsLayout = true
         }
-        dot.layer?.backgroundColor = dotColor?.cgColor
+        dot.state = dotState
         easeFill(isHovered && !isCurrent ? chrome.fill(.hover) : .clear)
         updateAccessories()
     }
@@ -151,9 +149,9 @@ class TabChip: ControlView, ThemeReapplying {
         super.layout()
         let slot = closeSlot
         dot.frame = CGRect(
-            x: slot.midX - Self.dotDiameter / 2, y: slot.midY - Self.dotDiameter / 2,
-            width: Self.dotDiameter, height: Self.dotDiameter)
-        let trailing = dotColor == nil ? bounds.width - Self.labelInset : slot.minX
+            x: slot.midX - StateDot.diameter / 2, y: slot.midY - StateDot.diameter / 2,
+            width: StateDot.diameter, height: StateDot.diameter)
+        let trailing = dotState == nil ? bounds.width - Self.labelInset : slot.minX
         labelFrame = CGRect(
             x: Self.labelInset, y: 0, width: max(0, trailing - Self.labelInset), height: bounds.height)
         labelContainer.frame = labelFrame
@@ -173,7 +171,7 @@ class TabChip: ControlView, ThemeReapplying {
     private func updateAccessories() {
         let closing = showsClose
         closeButton.isHidden = !closing
-        dot.isHidden = dotColor == nil || closing
+        dot.isHidden = dotState == nil || closing
         guard closing, labelFrame.width > 0 else {
             labelContainer.layer?.mask = nil
             return

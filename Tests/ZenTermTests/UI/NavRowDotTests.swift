@@ -4,24 +4,23 @@ import XCTest
 @testable import ZenTerm
 
 final class NavRowDotTests: XCTestCase {
-    func test_aThemeChange_repaintsTheDotFromItsInk() {
-        var ink = NSColor.systemRed
-        let row = NavRow(title: "devbox") {}
-        row.setDot({ ink }, accessibilityValue: "Online")
+    func test_aDot_joinsTheAccessoriesAndSaysItsState() throws {
+        let row = NavRow(title: "zen-term") {}
+        row.setDetail("main")
 
-        ink = NSColor.systemGreen
-        row.reapplyThemeTree()
+        row.setDot(.done)
 
-        XCTAssertEqual(row.dotColorForTesting, NSColor.systemGreen.cgColor)
+        XCTAssertEqual(try XCTUnwrap(row.dotForTesting).state, .done)
+        XCTAssertEqual(row.accessibilityValue() as? String, "main, \(StateDot.State.done.accessibilityValue)")
     }
 
-    func test_noInk_hidesTheDotAndItsValue() {
-        let row = NavRow(title: "devbox") {}
-        row.setDot({ .systemRed }, accessibilityValue: "Online")
+    func test_noState_hidesTheDotAndItsValue() {
+        let row = NavRow(title: "zen-term") {}
+        row.setDot(.blocked)
 
-        row.setDot(nil, accessibilityValue: "Online")
+        row.setDot(nil)
 
-        XCTAssertFalse(row.showsAttentionForTesting)
+        XCTAssertNil(row.dotForTesting)
         XCTAssertNil(row.accessibilityValue())
     }
 }

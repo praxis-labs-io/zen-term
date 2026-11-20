@@ -48,7 +48,7 @@ final class SidebarAgentRowTests: WindowTestCase {
 
     func test_theSummary_takesNormalInk_leavingTheStateToTheDot() throws {
         let row = SidebarAgentRow {}
-        for state in [AttentionTone.waiting, .working, .idle] {
+        for state in [AttentionTone.blocked, .done, .working, .idle] {
             row.render(
                 SidebarAgentItem(
                     id: SurfaceID(raw: 1), state: state, summary: state.summary, detail: "zen-term", message: nil))

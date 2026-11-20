@@ -17,7 +17,7 @@ final class SidebarController {
         let number: Int?
         let isActive: Bool
         let isConfigured: Bool
-        let isWaiting: Bool
+        let dot: StateDot.State?
         let isWorktreeRemoved: Bool
     }
 
@@ -339,16 +339,20 @@ final class SidebarController {
 
     func render(
         order: WorkspaceOrder, workspaces: [WorkspaceController], active: WorkspaceController?,
-        activeHost: SSHHostID?, waiting: Set<WorkspaceID>
+        activeHost: SSHHostID?, needs: [WorkspaceID: AttentionStore.AgentWait]
     ) {
         let byID = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
         let numbers = Dictionary(uniqueKeysWithValues: order.navigable.enumerated().map { ($1, $0 + 1) })
-        let waitingHosts = Set(workspaces.filter { waiting.contains($0.id) }.compactMap(\.host))
+        let hostNeeds = Dictionary(
+            workspaces.compactMap { workspace in
+                workspace.host.flatMap { host in needs[workspace.id].map { (host, $0) } }
+            },
+            uniquingKeysWith: max)
         let nextHosts = order.hosts.map {
             SidebarHostItem(
                 id: $0.id, name: GeneralConfig.current.displayName(of: $0.id), status: $0.status,
                 number: numbers[.host($0.id)], isActive: $0.id == activeHost,
-                isWaiting: $0.status == .connected && waitingHosts.contains($0.id))
+                dot: $0.status == .connected ? hostNeeds[$0.id]?.dot : nil)
         }
         let next = order.entries.compactMap { entry -> Entry? in
             switch entry {
@@ -360,11 +364,11 @@ final class SidebarController {
                     folder: workspace.folder,
                     number: numbers[.workspace(id)], isActive: workspace === active,
                     isConfigured: workspace.isConfigured,
-                    isWaiting: waiting.contains(id), isWorktreeRemoved: workspace.isWorktreeRemoved)
+                    dot: needs[id]?.dot, isWorktreeRemoved: workspace.isWorktreeRemoved)
             case .ghost(let parent):
                 return Entry(
                     row: .ghost(parent.path.standardizedFileURL.path), kind: .ghost, name: parent.title,
-                    pinnedName: nil, folder: nil, number: nil, isActive: false, isConfigured: true, isWaiting: false,
+                    pinnedName: nil, folder: nil, number: nil, isActive: false, isConfigured: true, dot: nil,
                     isWorktreeRemoved: false)
             }
         }
@@ -490,25 +494,25 @@ final class SidebarController {
             let isRepo = entry.folder.flatMap(GitRepoStatus.known) == true
             return SidebarRowItem(
                 id: entry.row, variant: .standard, name: entry.name, detail: branch, number: entry.number,
-                isActive: entry.isActive, makesWorktrees: entry.isConfigured && isRepo, isWaiting: entry.isWaiting)
+                isActive: entry.isActive, makesWorktrees: entry.isConfigured && isRepo, dot: entry.dot)
         case .worktree(let origin):
             return SidebarRowItem(
                 id: entry.row, variant: .nested(symbol: worktreeSymbol),
                 name: entry.pinnedName ?? branch ?? origin.name,
                 detail: entry.isWorktreeRemoved ? WorktreeOrigin.removedDetail : nil, number: entry.number,
                 isActive: entry.isActive, makesWorktrees: false,
-                isWaiting: entry.isWaiting)
+                dot: entry.dot)
         case .ghost:
             return SidebarRowItem(
                 id: entry.row, variant: .faint, name: entry.name, detail: nil, number: nil, isActive: false,
-                makesWorktrees: true, isWaiting: false)
+                makesWorktrees: true, dot: nil)
         }
     }
 
     func renderAgents(_ items: [SidebarAgentItem]) { view.renderAgents(items) }
 
-    func renderWaitingElsewhere(agents: Int, windows: Int, index: Int) {
-        view.renderWaitingElsewhere(agents: agents, windows: windows, index: index)
+    func renderWaitingElsewhere(agents: Int, windows: Int, index: Int, dot: StateDot.State?) {
+        view.renderWaitingElsewhere(agents: agents, windows: windows, index: index, dot: dot)
     }
 
     func setOpenModal(palette: Bool, settings: Bool) { footer.setOpenModal(palette: palette, settings: settings) }

@@ -111,7 +111,7 @@ final class HostAgentTests: WindowTestCase {
         host.c.activateWorkspaceForTesting(host.local)
 
         progress(nil, from: host.login)
-        XCTAssertEqual(host.c.agentStateForTesting(host.loginID), .waiting)
+        XCTAssertEqual(host.c.agentStateForTesting(host.loginID), .done)
 
         host.c.handle(.nextWaitingAgent)
 
@@ -129,16 +129,19 @@ final class HostAgentTests: WindowTestCase {
         claudeWorking(on: host.login)
         host.c.activateWorkspaceForTesting(host.local)
         XCTAssertEqual(try hostRow(host.c).accessibilityValue() as? String, "Connected")
+        XCTAssertNil(try hostRow(host.c).dotForTesting)
 
         progress(nil, from: host.login)
 
-        XCTAssertEqual(try hostRow(host.c).accessibilityValue() as? String, "Connected, Agent waiting")
-        XCTAssertEqual(try hostRow(host.c).dotColorForTesting, AttentionTone.waiting.ink.cgColor)
+        XCTAssertEqual(try hostRow(host.c).dotForTesting?.state, .done)
+        XCTAssertEqual(
+            try hostRow(host.c).accessibilityValue() as? String,
+            "Connected, \(StateDot.State.done.accessibilityValue)")
 
         host.c.handle(.nextWaitingAgent)
 
         XCTAssertEqual(try hostRow(host.c).accessibilityValue() as? String, "Connected")
-        XCTAssertEqual(try hostRow(host.c).dotColorForTesting, SSHHostStatus.connected.ink.cgColor)
+        XCTAssertNil(try hostRow(host.c).dotForTesting)
     }
 
     func test_aHostAgentClearingItsTitle_endsItsRow_andTakesDownItsWait() throws {

@@ -56,57 +56,39 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertTrue(dock.rightActivityForTesting)
     }
 
-    func test_render_aWaitingDrawer_dotsItsToggleEvenWhenIdle() {
+    func test_render_anIdleDrawerHoldingAnAgentThatNeedsYou_showsNoDot() {
         let dock = makeDock([])
 
         dock.render(
             overlay: OverlayState(), floatID: nil, tab: nil,
             drawerAttention: { $0 == .right ? .waiting : .idle })
 
-        XCTAssertTrue(
-            dock.rightActivityForTesting,
-            "a hidden drawer holding a blocked agent has to say so, busy or not")
-        XCTAssertEqual(dock.rightActivityStateForTesting, .waiting)
+        XCTAssertFalse(dock.rightActivityForTesting, "the tab and the sidebar say blocked; the toolbar says live")
     }
 
-    func test_render_theDotTakesTheAttentionColor() {
-        let dock = makeDock([])
-        let chrome = Theme.current.chrome
-
-        dock.render(
-            overlay: OverlayState(), floatID: nil, tab: nil,
-            drawerAttention: { _ in .waiting })
-        XCTAssertEqual(dock.rightActivityColorForTesting, chrome.done.nsColor)
-
-        dock.render(
-            overlay: OverlayState(), floatID: nil, tab: nil,
-            drawerAttention: { _ in .completed })
-        XCTAssertEqual(dock.rightActivityColorForTesting, chrome.positive.nsColor)
-    }
-
-    func test_render_aBusyDrawerWithNothingPending_keepsTheNeutralDot() {
+    func test_render_theDotIsAccent_whateverTheAgentState() {
         let dock = makeDock([])
         var overlay = OverlayState()
         overlay.rightBusy = true
 
-        dock.render(
-            overlay: overlay, floatID: nil, tab: nil,
-            drawerAttention: { _ in .working })
+        for attention in SurfaceAttention.allCases {
+            dock.render(overlay: overlay, floatID: nil, tab: nil, drawerAttention: { _ in attention })
 
-        XCTAssertTrue(dock.rightActivityForTesting)
-        XCTAssertEqual(
-            dock.rightActivityColorForTesting, Theme.current.chrome.accent.nsColor,
-            "working is not asking for you, so the dot stays the colour it has always been")
+            XCTAssertEqual(dock.rightActivityDotForTesting.state, .live, "\(attention)")
+            XCTAssertEqual(
+                dock.rightActivityDotForTesting.colorForTesting, Theme.current.chrome.accent.nsColor.cgColor,
+                "\(attention)")
+        }
     }
 
-    func test_render_aWaitingFloat_dotsItsButton() {
+    func test_render_aFloatThatIsNotLive_showsNoDot_evenWithAnAgentWaiting() {
         let dock = makeDock([float("dev")])
 
         dock.render(
             overlay: OverlayState(), floatID: nil, tab: nil,
             floatAttention: { $0 == "dev" ? .waiting : .idle })
 
-        XCTAssertEqual(dock.dottedToolFloatIDsForTesting, ["dev"])
+        XCTAssertEqual(dock.dottedToolFloatIDsForTesting, [])
     }
 
     func test_render_dotShowsEvenWhileDrawerOpen() {
@@ -373,7 +355,7 @@ final class ToggleDockTests: XCTestCase {
         XCTAssertEqual(
             dock.visibleLayoutForTesting, Self.fixedDefault,
             "the command is done so nothing is busy, but it is still asking to be seen")
-        XCTAssertTrue(dock.bottomActivityForTesting)
+        XCTAssertFalse(dock.bottomActivityForTesting, "surfaced, but a finished command is not live")
     }
 
     func test_hiddenDrawer_rehidesOnceItsAttentionIsAnswered() {
