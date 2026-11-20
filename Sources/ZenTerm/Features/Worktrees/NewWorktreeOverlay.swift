@@ -117,11 +117,7 @@ final class NewWorktreeOverlay: ModalShell, ModalOverlay {
         wireSegment(baseSegment)
         baseCaption.font = ChromeType.font(.caption)
         baseCaption.textColor = Theme.current.chrome.ink(.muted)
-        let baseSpacer = NSView()
-        baseSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let baseRow = NSStackView(views: [baseSegment, baseSpacer])
-        baseRow.orientation = .horizontal
-        baseRow.spacing = 0
+        let baseRow = NSStackView.huggingRow(baseSegment)
         let baseGroup = Self.vStack(
             [SectionCaption("Base"), baseRow, baseCaption], spacing: ChromeMetrics.Spacing.s6)
         self.baseGroup = baseGroup

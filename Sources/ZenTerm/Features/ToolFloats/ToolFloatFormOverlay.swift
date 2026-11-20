@@ -139,15 +139,16 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
 
         wireSegment(gitSegment)
         let gitGroup = Self.vStack(
-            [SectionCaption("Open in"), Self.huggingRow(gitSegment)], spacing: ChromeMetrics.Spacing.s6)
+            [SectionCaption("Open in"), NSStackView.huggingRow(gitSegment)], spacing: ChromeMetrics.Spacing.s6)
 
         wireSegment(persistSegment)
         let persistGroup = Self.vStack(
-            [SectionCaption("Keep running"), Self.huggingRow(persistSegment)], spacing: ChromeMetrics.Spacing.s6)
+            [SectionCaption("Keep running"), NSStackView.huggingRow(persistSegment)], spacing: ChromeMetrics.Spacing.s6)
 
         wireSegment(toolbarSegment)
         let toolbarGroup = Self.vStack(
-            [SectionCaption("Toolbar button"), Self.huggingRow(toolbarSegment)], spacing: ChromeMetrics.Spacing.s6)
+            [SectionCaption("Toolbar button"), NSStackView.huggingRow(toolbarSegment)],
+            spacing: ChromeMetrics.Spacing.s6)
 
         cancelButton.onTap = { [weak self] in self?.cancel() }
         submitButton.setTitle(editingFloat == nil ? "Add Tool Float" : "Save")
@@ -481,12 +482,6 @@ final class ToolFloatFormOverlay: ModalShell, ModalOverlay {
         stack.alignment = .centerY
         stack.spacing = spacing
         return stack
-    }
-
-    private static func huggingRow(_ control: NSView) -> NSStackView {
-        let spacer = NSView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        return hStack([control, spacer], spacing: 0)
     }
 
     private static func vStack(_ views: [NSView], spacing: CGFloat) -> NSStackView {
