@@ -62,6 +62,7 @@ palette = 15=#f1f5fb
 
 # Chrome roles derived from the palette (for reference, not separate keys):
 #   accent       ← palette 4  (#6e9bff, cobalt)
+#   cursor       ← the accent; `cursor-color` above is overridden
 #   info         ← palette 4  (#6e9bff, cobalt)
 #   positive     ← palette 2  (#6ee6b8, mint)
 #   warning      ← palette 3  (#ebc17a, amber)

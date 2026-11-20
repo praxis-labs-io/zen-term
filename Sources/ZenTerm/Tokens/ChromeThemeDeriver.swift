@@ -14,7 +14,7 @@ enum ChromeThemeDeriver {
             onAccent: onAccent(for: accent, in: terminal),
             attention: AccentSlot.cyan.color(in: terminal),
             positive: AccentSlot.green.color(in: terminal),
-            cursor: terminal.cursor,
+            cursor: accent,
             fillScale: fillScale(for: terminal),
             overlayShadowAlpha: shadowAlpha(on: terminal.background, tier: .overlay),
             floatShadowAlpha: shadowAlpha(on: terminal.background, tier: .float),
@@ -120,6 +120,7 @@ enum ChromeThemeDeriver {
 
     static func withHighlightColors(_ terminal: TerminalTheme, chrome: ChromeTheme) -> TerminalTheme {
         var theme = terminal
+        theme.cursor = chrome.cursor
         theme.selectionForeground = terminal.selectionForeground ?? terminal.foreground
         theme.searchForeground = terminal.searchForeground ?? terminal.foreground
         theme.searchBackground =

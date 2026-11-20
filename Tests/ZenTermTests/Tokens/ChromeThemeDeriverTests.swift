@@ -29,9 +29,10 @@ final class ChromeThemeDeriverTests: XCTestCase {
             ChromeThemeDeriver.derive(from: recolored))
         var recursored = Theme.zenInk
         recursored.cursor = TerminalColor(red: 255, green: 255, blue: 255)
-        XCTAssertNotEqual(
+        XCTAssertEqual(
             ChromeThemeDeriver.derive(from: Theme.zenInk),
-            ChromeThemeDeriver.derive(from: recursored))
+            ChromeThemeDeriver.derive(from: recursored),
+            "the theme's own cursor is overridden by the accent")
     }
 
     func test_accentOverride_movesOnlyTheAccentRole() {
@@ -45,7 +46,7 @@ final class ChromeThemeDeriverTests: XCTestCase {
         XCTAssertEqual(overridden.destructive, base.destructive)
         XCTAssertEqual(overridden.attention, base.attention)
         XCTAssertEqual(overridden.positive, base.positive)
-        XCTAssertEqual(overridden.cursor, base.cursor)
+        XCTAssertEqual(overridden.cursor, overridden.accent)
         XCTAssertEqual(overridden.background, base.background)
         XCTAssertEqual(overridden.foreground, base.foreground)
     }

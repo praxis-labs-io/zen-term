@@ -25,7 +25,7 @@ Everything in the chrome resolves from `Theme.current`. Chrome UI takes
 | `warning` | Caution: proceeding has a cost |
 | `destructive` | Loss, deletion, errors |
 | `info` | A neutral notice |
-| `cursor` | The terminal cursor's color, and chrome that marks where the cursor or focus will land |
+| `cursor` | The accent, painted onto the terminal cursor too, and chrome that marks where the cursor or focus will land |
 
 A role the chrome needs and `ChromeTheme` lacks gets added to `ChromeTheme` and derived
 in `ChromeThemeDeriver`. Never a literal.

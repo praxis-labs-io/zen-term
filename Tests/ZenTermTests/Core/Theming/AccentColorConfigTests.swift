@@ -57,6 +57,7 @@ final class AccentColorConfigTests: XCTestCase {
         AppConfig.reload()
 
         XCTAssertEqual(Theme.current.chrome.accent, Theme.current.terminal.ansi[5])
+        XCTAssertEqual(Theme.current.terminal.cursor, Theme.current.terminal.ansi[5], "the cursor follows the accent")
         XCTAssertNotEqual(
             Theme.current.chrome.accent,
             Theme.current.terminal.ansi[AccentSlot.themeDefault.ansiIndex],
