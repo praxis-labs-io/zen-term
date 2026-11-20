@@ -1,5 +1,7 @@
 .build/
+.idea/
 .swiftpm/
+bin/__pycache__/
 dist/
 *.xcodeproj
 DerivedData/

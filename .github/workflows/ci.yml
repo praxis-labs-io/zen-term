@@ -59,10 +59,9 @@ jobs:
       - name: Build GhosttyKit (cache miss only)
         if: steps.ghosttykit.outputs.cache-hit != 'true'
         run: |
-          # Zig 0.15.2 can't link libSystem against the newest macOS SDK (undefined
-          # __availability_version_check et al.), so this step alone uses the oldest
-          # Xcode 26.x on the runner, the older SDK ghostty itself builds v1.3.1 against.
-          # DEVELOPER_DIR rather than xcode-select, so Build and Test keep the default.
+          # This step uses the oldest Xcode 26.x on the runner; CONTRIBUTING.md
+          # documents this as the minimum requirement. Set DEVELOPER_DIR rather
+          # than overriding with xcode-select, so Build and Test keep the default.
           echo "available xcodes:"; ls -d /Applications/Xcode_*.app 2>/dev/null || true
           XCODE="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | head -1)"
           [ -n "$XCODE" ] && export DEVELOPER_DIR="$XCODE/Contents/Developer"

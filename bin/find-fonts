@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+"""
+Scan for font headers in the release binary.
+Used for validating attributions: see section 3 in docs/third-party-notices.md.
+"""
+
+import struct
+from dataclasses import dataclass, field
+from pathlib import Path
+
+
+@dataclass
+class FontInfo:
+    index: int
+    copyright: str = ""
+    family: str = ""
+    subfamily: list[str] = field(default_factory=list)
+
+
+path = Path(__file__).resolve().parent.parent / ".build" / "release" / "ZenTerm"
+with open(path, "rb") as program:
+    data = program.read()
+
+fonts: dict[int, FontInfo] = {}
+for magic in (b"\x00\x01\x00\x00", b"OTTO", b"true", b"ttcf"):
+    index = data.find(magic)
+    while index >= 0:
+        n = struct.unpack(">H", data[index + 4: index + 6])[0]
+        if 1 <= n <= 64:
+            tables = {}
+            for k in range(n):
+                rec = index + 12 + k * 16
+                tag = data[rec : rec + 4]
+                if len(tag) == 4 and all(0x20 <= b < 0x7F for b in tag):
+                    tables[tag] = struct.unpack(">II", data[rec + 8 : rec + 16])
+            # 'head' rather than 'glyf'/'CFF ', or bitmap and color fonts slip through.
+            if b"name" in tables and b"head" in tables:
+                off, _ = tables[b"name"]
+                base = index + off
+                count, str_off = struct.unpack(">HH", data[base + 2 : base + 6])
+                for k in range(count):
+                    rec = base + 6 + k * 12
+                    plat, _, _, nid, slen, soff = struct.unpack(">HHHHHH", data[rec : rec + 12])
+                    if nid in (0, 1, 2):  # copyright, family, subfamily
+                        s = data[base + str_off + soff :][:slen]
+                        try:
+                            text = s.decode("utf-16-be") if plat == 3 else s.decode("latin-1")
+                        except UnicodeDecodeError:
+                            continue
+
+                        info = fonts.setdefault(index, FontInfo(index))
+                        if nid == 0 and not info.copyright:
+                            info.copyright = text
+                        elif nid == 1 and not info.family:
+                            info.family = text
+                        elif nid == 2 and text not in info.subfamily:
+                            info.subfamily.append(text)
+        index = data.find(magic, index + 1)
+
+for index in sorted(fonts.keys()):
+    info = fonts[index]
+    offset = f"0x{info.index:<7x}"
+    subfamily = f" : {', '.join(info.subfamily)}" if info.subfamily else ""
+    print(f"{offset} {info.family}{subfamily}")
+    if info.copyright:
+        print(f"{' ' * len(offset)} - {info.copyright}")

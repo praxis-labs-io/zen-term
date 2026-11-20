@@ -10,11 +10,11 @@
 # Prereqs it can't install for you:
 #   • Xcode (full) selected: xcode-select -p → /Applications/Xcode.app/...
 #   • Metal toolchain: xcodebuild -downloadComponent MetalToolchain
-# The ghostty source is the pinned vendor/ghostty submodule (v1.3.1); Zig 0.15.2 is
+# The ghostty source is the pinned vendor/ghostty submodule (v1.4.0). Zig 0.17.0 is
 # fetched on demand. The submodule is auto-initialized below if not yet checked out.
 set -euo pipefail
 
-ZIG_VERSION="0.15.2"       # ghostty v1.3.1's minimum_zig_version
+ZIG_VERSION="0.17.0"       # ghostty v1.4.0's minimum_zig_version
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VENDOR="$ROOT/vendor"
 ZIG_DIR="$VENDOR/zig-aarch64-macos-$ZIG_VERSION"
@@ -23,8 +23,8 @@ GHOSTTY="$VENDOR/ghostty"
 
 mkdir -p "$VENDOR"
 
-# 1. Zig 0.15.2 — Homebrew tracks a newer Zig whose stdlib won't compile v1.3.1, so we
-#    fetch the exact toolchain locally rather than install it system-wide.
+# 1. Fetch Zig 0.17.0 locally. Any other installed version of the toolchain
+#    may not be compatible with either ghostty or the SDK version.
 if [ ! -x "$ZIG" ]; then
   echo "▸ fetching Zig $ZIG_VERSION"
   curl -sSL "https://ziglang.org/download/$ZIG_VERSION/zig-aarch64-macos-$ZIG_VERSION.tar.xz" \

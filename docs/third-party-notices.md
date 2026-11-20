@@ -7,8 +7,8 @@ notices before tagging.
 
 Three rules learned the hard way:
 
-- **Probe the linked executable, not `libghostty-fat.a`.** The archive is a bag of object
-  files the linker draws from selectively: it is ~141 MB against a ~18 MB binary. The
+- **Probe the linked executable, not `libghostty-internal.a`.** The archive is a bag of object
+  files the linker draws from selectively: it is ~143 MB against a ~20 MB binary. The
   original audit probed the archive and still under-counted the shipped set by eight
   libraries, because it went looking for names it already expected.
 - **Symbols cannot see data.** Fonts are embedded bytes with no symbols, so a symbol probe
@@ -29,9 +29,9 @@ swift build -c release
 
 ```sh
 nm -U .build/release/ZenTerm | awk '$2=="T"||$2=="t"{ $1=""; $2=""; print }' | c++filt > /tmp/defined.txt
-wc -l < /tmp/defined.txt   # ~17.5k at the v1.3.1 pin
+wc -l < /tmp/defined.txt   # ~21.6k at the v1.4.0 pin
 
-for p in google_breakpad simdutf glslang spirv_cross ImGui "utf8::" "hwy::" \
+for p in google_breakpad simdutf glslang spirv_cross ImGui "hwy::" \
          FT_ onig_ png_ sentry_ wuffs inflate libintl mpack; do
     printf '%-18s %s\n' "$p" "$(grep -ci "$p" /tmp/defined.txt)"
 done
@@ -69,43 +69,10 @@ undercount to zero. Watch for the reverse too: a case-insensitive `gettext` grep
 Symbols will not find these. Scan for font headers and read their name tables:
 
 ```sh
-python3 - <<'EOF'
-import struct
-data = open(".build/release/ZenTerm", "rb").read()
-seen = set()
-for magic in (b"\x00\x01\x00\x00", b"OTTO", b"true", b"ttcf"):
-    i = data.find(magic)
-    while i >= 0:
-        n = struct.unpack(">H", data[i + 4 : i + 6])[0]
-        if 1 <= n <= 64:
-            tables = {}
-            for k in range(n):
-                rec = i + 12 + k * 16
-                tag = data[rec : rec + 4]
-                if len(tag) == 4 and all(0x20 <= b < 0x7F for b in tag):
-                    tables[tag] = struct.unpack(">II", data[rec + 8 : rec + 16])
-            # 'head' rather than 'glyf'/'CFF ', or bitmap and color fonts slip through.
-            if b"name" in tables and b"head" in tables:
-                off, _ = tables[b"name"]
-                base = i + off
-                count, str_off = struct.unpack(">HH", data[base + 2 : base + 6])
-                for k in range(count):
-                    rec = base + 6 + k * 12
-                    plat, _, _, nid, slen, soff = struct.unpack(">HHHHHH", data[rec : rec + 12])
-                    if nid in (0, 1):  # copyright, family
-                        s = data[base + str_off + soff :][:slen]
-                        try:
-                            t = s.decode("utf-16-be") if plat == 3 else s.decode("latin-1")
-                        except UnicodeDecodeError:
-                            continue
-                        if t not in seen:
-                            seen.add(t)
-                            print(f"0x{i:x}  {t}")
-        i = data.find(magic, i + 1)
-EOF
+bin/find-fonts
 ```
 
-At the `v1.3.1` pin this reports exactly three fonts: JetBrains Mono (variable regular and
+At the `v1.4.0` pin this reports exactly three fonts: JetBrains Mono (variable regular and
 variable italic) and Symbols Nerd Font. More than three means ghostty started embedding
 something new and it needs an OFL/MIT notice.
 
