@@ -49,7 +49,7 @@ Three ways in, never a raw alpha:
 
 - **A control's interactive states** take a tier, `chrome.fill(.rest / .hover / .active)`.
 - **Structural fills** (a divider, a border, a swatch ring) take `chrome.fill(alpha:)`
-  with `ChromeTheme.hairline`, `.border` or `.swatchRing`.
+  with `ChromeTheme.hairline`, `.border`, `.divider` (the toolbar's group dividers) or `.swatchRing`.
 - **A role-toned surface behind text** takes `chrome.tint(_:alpha:)` with `ChromeTheme.badgeTint`
   or `.flashTint`. It sits outside the per-theme fill scale, so it never goes next to a
   sibling `fill(_:)`.
