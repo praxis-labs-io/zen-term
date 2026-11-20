@@ -543,7 +543,7 @@ final class TabBarViewTests: WindowTestCase {
     }
 
     func test_hover_neverChangesAnyChipWidthOrAnyNeighborsPosition() throws {
-        let states: [StateDot.State?] = [nil, .done, .blocked]
+        let states: [StateDot.State?] = [nil, .blocked]
         for state in states {
             for currentIndex in [1, 2] {
                 let items = (1...3).map {
@@ -575,27 +575,25 @@ final class TabBarViewTests: WindowTestCase {
         let chrome = Theme.current.chrome
         let (bar, _) = settledBar([
             TabBarItem(id: TabID(1), index: 1, title: "idle", isActive: true, dot: nil),
-            TabBarItem(id: TabID(2), index: 2, title: "done", isActive: false, dot: .done),
-            TabBarItem(id: TabID(3), index: 3, title: "asks", isActive: false, dot: .blocked),
+            TabBarItem(id: TabID(2), index: 2, title: "asks", isActive: false, dot: .blocked),
         ])
         let chips = bar.chipsForTesting
 
-        XCTAssertEqual(chips.map(\.isDotVisibleForTesting), [false, true, true])
-        XCTAssertEqual(chips[1].dotColorForTesting, chrome.done.nsColor.cgColor)
-        XCTAssertEqual(chips[2].dotColorForTesting, chrome.blocked.nsColor.cgColor)
+        XCTAssertEqual(chips.map(\.isDotVisibleForTesting), [false, true])
+        XCTAssertEqual(chips[1].dotColorForTesting, chrome.blocked.nsColor.cgColor)
 
-        let dotCenter = CGPoint(x: chips[2].dotFrameForTesting.midX, y: chips[2].dotFrameForTesting.midY)
-        try hover(chips[2])
+        let dotCenter = CGPoint(x: chips[1].dotFrameForTesting.midX, y: chips[1].dotFrameForTesting.midY)
+        try hover(chips[1])
         bar.layoutSubtreeIfNeeded()
 
-        XCTAssertFalse(chips[2].isDotVisibleForTesting, "the x replaces the dot")
-        XCTAssertTrue(chips[2].isCloseVisibleForTesting)
-        let slot = chips[2].closeFrameForTesting
+        XCTAssertFalse(chips[1].isDotVisibleForTesting, "the x replaces the dot")
+        XCTAssertTrue(chips[1].isCloseVisibleForTesting)
+        let slot = chips[1].closeFrameForTesting
         XCTAssertEqual(slot.size, CGSize(width: ChromeMetrics.Height.xs, height: ChromeMetrics.Height.xs))
-        XCTAssertEqual(chips[2].bounds.width - slot.maxX, ChromeMetrics.Spacing.s2, "inset from the trailing edge")
-        XCTAssertEqual(slot.midY, chips[2].bounds.midY, accuracy: 0.01, "centered in the chip")
-        XCTAssertEqual(chips[2].closeFrameForTesting.midX, dotCenter.x, accuracy: 0.01)
-        XCTAssertEqual(chips[2].closeFrameForTesting.midY, dotCenter.y, accuracy: 0.01)
+        XCTAssertEqual(chips[1].bounds.width - slot.maxX, ChromeMetrics.Spacing.s2, "inset from the trailing edge")
+        XCTAssertEqual(slot.midY, chips[1].bounds.midY, accuracy: 0.01, "centered in the chip")
+        XCTAssertEqual(chips[1].closeFrameForTesting.midX, dotCenter.x, accuracy: 0.01)
+        XCTAssertEqual(chips[1].closeFrameForTesting.midY, dotCenter.y, accuracy: 0.01)
     }
 
     func test_theCloseButton_fillsTheSlotTheDotSitsIn() throws {
@@ -711,7 +709,7 @@ final class TabBarViewTests: WindowTestCase {
         let (bar, _) = settledBar([
             TabBarItem(id: TabID(1), index: 1, title: "shell", isActive: true, dot: nil),
             TabBarItem(id: TabID(2), index: 2, title: "shell", isActive: false, dot: .blocked),
-            TabBarItem(id: TabID(3), index: 3, title: "~/Dev/zen-term", isActive: false, dot: .done),
+            TabBarItem(id: TabID(3), index: 3, title: "~/Dev/zen-term", isActive: false, dot: .blocked),
         ])
         XCTAssertEqual(bar.chipsForTesting.map(\.isTitleTruncatedForTesting), [false, false, false])
     }

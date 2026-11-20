@@ -21,7 +21,7 @@ Everything in the chrome resolves from `Theme.current`. Chrome UI takes
 | `accent` | Pane focus, the primary action, loading. See [Accent](#accent) |
 | `onAccent` | Text and rings on an accent fill, and nowhere else. The background or the foreground, whichever contrasts more with `accent` |
 | `working` | An agent mid-turn. ANSI yellow, whatever the accent |
-| `done` | An agent that finished its turn. ANSI blue, whatever the accent |
+| `done` | An agent that finished its turn, on its Agents row only. ANSI blue, whatever the accent |
 | `blocked` | An agent asking for approval. ANSI red, whatever the accent |
 | `positive` | Success, completed, kept |
 | `warning` | Caution: proceeding has a cost |

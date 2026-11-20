@@ -3604,7 +3604,7 @@ final class WindowController: NSObject {
             agents: center.waitingCount(excluding: windowID),
             windows: center.waitingWindows(excluding: windowID),
             index: waitingElsewherePlace(among: items),
-            dot: center.need(excluding: windowID)?.dot)
+            dot: center.isBlocked(excluding: windowID) ? .blocked : nil)
     }
 
     // The row queues on the same rule the rows use: waiting first, and among those the oldest reads first.
@@ -3992,7 +3992,7 @@ final class WindowController: NSObject {
         guard !didTearDown else { return }
         AttentionCenter.shared.update(
             windowID: windowID, waitingCount: attention.waitingCount, since: attention.waitingSince,
-            need: attention.windowNeed)
+            blocked: attention.isWindowBlocked)
     }
 
     private func renderTabBar() {
@@ -4001,19 +4001,17 @@ final class WindowController: NSObject {
                 id: id, index: i + 1,
                 title: title(of: id),
                 isActive: id == activeWorkspace?.activeID,
-                dot: attention.need(tab: id)?.dot)
+                dot: attention.isBlocked(tab: id) ? .blocked : nil)
         }
         tabBar.render(items)
         switch selection {
         case .workspace(let workspace): window.title = workspace.name
         case .host(let host): window.title = GeneralConfig.current.displayName(of: host)
         }
-        let needs = workspaces.compactMap { workspace in
-            attention.need(tabs: workspace.tabIDs).map { (workspace.id, $0) }
-        }
+        let blocked = workspaces.filter { attention.isBlocked(tabs: $0.tabIDs) }.map(\.id)
         sidebar.render(
             order: order, workspaces: workspaces, active: activeWorkspace, activeHost: selection.host,
-            needs: Dictionary(uniqueKeysWithValues: needs))
+            blocked: Set(blocked))
         renderAgents()
         for (id, card) in attentionCards {
             cardTitles[id].map { card.setTitle($0()) }

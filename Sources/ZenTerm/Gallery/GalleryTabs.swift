@@ -39,13 +39,12 @@
                 TabBarItem(id: TabID(1), index: 1, title: "active", isActive: true, dot: nil),
                 TabBarItem(id: TabID(2), index: 2, title: "hover", isActive: false, dot: .blocked),
                 TabBarItem(id: TabID(3), index: 3, title: "blocked", isActive: false, dot: .blocked),
-                TabBarItem(id: TabID(4), index: 4, title: "done", isActive: false, dot: .done),
-                TabBarItem(id: TabID(5), index: 5, title: longTitle, isActive: false, dot: nil),
+                TabBarItem(id: TabID(4), index: 4, title: longTitle, isActive: false, dot: nil),
             ])
             bar.forceHoverForGallery(tab: TabID(2))
             return GallerySection(
                 title: "TabBarView",
-                rows: [GallerySection.Row(label: "Active, hover over a dot, blocked, done, long", samples: [bar])])
+                rows: [GallerySection.Row(label: "Active, hover over a dot, blocked, long", samples: [bar])])
         }
 
         private static func workspaceChips() -> GallerySection {

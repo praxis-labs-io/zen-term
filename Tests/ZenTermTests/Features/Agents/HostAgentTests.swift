@@ -124,7 +124,7 @@ final class HostAgentTests: WindowTestCase {
         try XCTUnwrap(c.sidebarForTesting.view.hostRowsForTesting.first { $0.titleForTesting == "devbox" })
     }
 
-    func test_aWaitingHostAgent_takesTheHostRowsDot_untilItIsAnswered() throws {
+    func test_anAskingHostAgent_takesTheHostRowsDot_untilItIsAnswered() throws {
         let host = try connected()
         claudeWorking(on: host.login)
         host.c.activateWorkspaceForTesting(host.local)
@@ -132,11 +132,17 @@ final class HostAgentTests: WindowTestCase {
         XCTAssertNil(try hostRow(host.c).dotForTesting)
 
         progress(nil, from: host.login)
+        XCTAssertEqual(host.c.agentStateForTesting(host.loginID), .done, "precondition: its turn ended")
+        XCTAssertNil(try hostRow(host.c).dotForTesting, "a finished turn puts no dot on the host row")
 
-        XCTAssertEqual(try hostRow(host.c).dotForTesting?.state, .done)
+        host.login.delegate?.surface(
+            host.login, didPostNotification: TerminalNotification(title: "claude", body: "Wants to run make"))
+        drainMainQueue()
+
+        XCTAssertEqual(try hostRow(host.c).dotForTesting?.state, .blocked)
         XCTAssertEqual(
             try hostRow(host.c).accessibilityValue() as? String,
-            "Connected, \(StateDot.State.done.accessibilityValue)")
+            "Connected, \(StateDot.State.blocked.accessibilityValue)")
 
         host.c.handle(.nextWaitingAgent)
 

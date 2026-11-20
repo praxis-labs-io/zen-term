@@ -8,10 +8,10 @@ final class NavRowDotTests: XCTestCase {
         let row = NavRow(title: "zen-term") {}
         row.setDetail("main")
 
-        row.setDot(.done)
+        row.setDot(.blocked)
 
-        XCTAssertEqual(try XCTUnwrap(row.dotForTesting).state, .done)
-        XCTAssertEqual(row.accessibilityValue() as? String, "main, \(StateDot.State.done.accessibilityValue)")
+        XCTAssertEqual(try XCTUnwrap(row.dotForTesting).state, .blocked)
+        XCTAssertEqual(row.accessibilityValue() as? String, "main, \(StateDot.State.blocked.accessibilityValue)")
     }
 
     func test_noState_hidesTheDotAndItsValue() {
