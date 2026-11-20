@@ -349,9 +349,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   that reports no progress, since Claude clears its progress at launch and none means
   progress is off. Every other agent notification asks.
 - **A dot means one thing on each surface, and every dot is a `StateDot`.** An Agents row
-  shows every agent state. Tabs, the workspace, worktree and host rows, and the row for
-  agents waiting in other windows show only an unseen ask, as blocked, from
-  `isBlocked(tab:)` / `isBlocked(tabs:)`; a finished turn never dots them. The store latches
+  shows every agent state. Tabs and the workspace, worktree and host rows show only an
+  unseen ask, as blocked, from `isBlocked(tab:)` / `isBlocked(tabs:)`; a finished turn never
+  dots them. The store latches
   the ask on its surface, so an ask answered while unseen reads blocked until you look, and a
   closed pane's ask folds into its tab's residual. A finished command latches `completed`
   for its card and draws no dot. A toolbar button's dot says only that its drawer or float
@@ -360,7 +360,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   background tab raises one sticky toast; the rank keeps it under a waiting agent. A
   notification no agent sent raises the same card, with its own words.
 - Notification identity is `(windowID, tabID)`; `TabID` is per window. `AttentionCenter`
-  records which windows are asking and since when, and answers nothing else.
+  records which windows hold an unseen ask, how many and since when, and answers nothing
+  else. The sidebar's row for agents waiting in other windows counts only those asks, so a
+  window with only finished turns shows none, and the row lands on the oldest ask.
 - `tearDown()` is idempotent, the single close path, and cancels pending confirms and
   keybind capture (a stranded capture swallows every key app-wide).
 

@@ -121,7 +121,7 @@ final class SidebarAgentsTests: WindowTestCase {
     private func wireJump(from asking: WindowController, to others: [WindowController]) {
         asking.revealWaitingAgentElsewhere = { window in
             guard let other = others.first(where: { $0.windowID == window }) else { return false }
-            return other.revealLongestWaitingAgent()
+            return other.revealLongestBlockedAgent()
         }
     }
 
@@ -254,7 +254,7 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(workspaceRow.dotForTesting?.state, .blocked)
     }
 
-    func test_theWaitingElsewhereRow_showsBlocked_neverDone() throws {
+    func test_theWaitingElsewhereRow_countsOnlyBlockedAgents() throws {
         let a = makeWindow()
         let b = makeWindow()
         let finished = try focusedAgent(b)
@@ -263,12 +263,14 @@ final class SidebarAgentsTests: WindowTestCase {
         WindowController.isPresent = { _ in false }
 
         finishATurn(finished)
-        let row = try XCTUnwrap(waitingRow(a), "precondition: a finished turn still counts as waiting")
-        XCTAssertNil(row.dotForTesting.state, "a finished turn elsewhere puts no dot on the row")
+        XCTAssertEqual(b.agentStateForTesting(finished.id), .done, "precondition: its turn ended unseen")
+        XCTAssertNil(waitingRow(a), "a window with only finished turns shows no row elsewhere")
 
         notify(asking, "Wants to run swift test")
 
-        XCTAssertEqual(try XCTUnwrap(waitingRow(a)).dotForTesting.state, .blocked)
+        let row = try XCTUnwrap(waitingRow(a))
+        XCTAssertEqual(row.textForTesting, "1 waiting in another window", "the finished turn is not counted")
+        XCTAssertEqual(row.dotForTesting.state, .blocked)
     }
 
     func test_aCommandFinishingUnseen_showsNoDotOnItsTab() throws {
@@ -579,7 +581,7 @@ final class SidebarAgentsTests: WindowTestCase {
         let c = makeWindow()
         _ = try focusedAgent(c)
         let other = c.windowID + 1_000
-        AttentionCenter.shared.update(windowID: other, waitingCount: 1, since: Date(), blocked: true)
+        AttentionCenter.shared.update(windowID: other, blockedCount: 1, since: Date())
         addTeardownBlock { AttentionCenter.shared.forget(windowID: other) }
 
         c.handle(.nextWaitingAgent)
@@ -882,7 +884,7 @@ final class SidebarAgentsTests: WindowTestCase {
         let b = makeWindow()
         var raised = false
 
-        XCTAssertFalse(b.revealLongestWaitingAgent { raised = true })
+        XCTAssertFalse(b.revealLongestBlockedAgent { raised = true })
         XCTAssertFalse(raised, "nothing waits there, so nothing is disturbed")
     }
 

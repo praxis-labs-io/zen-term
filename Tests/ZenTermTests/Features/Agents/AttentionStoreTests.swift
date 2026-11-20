@@ -24,11 +24,11 @@ final class AttentionStoreTests: XCTestCase {
         store.endTurn(finished, seen: false)
         XCTAssertFalse(store.isBlocked(tab: other), "a finished command needs nothing from you")
         XCTAssertFalse(store.isBlocked(tab: tab), "a finished turn does not block")
-        XCTAssertFalse(store.isWindowBlocked)
+        XCTAssertEqual(store.blockedCount, 0)
 
         store.ask(asked, seen: false)
         XCTAssertTrue(store.isBlocked(tab: tab))
-        XCTAssertTrue(store.isWindowBlocked)
+        XCTAssertEqual(store.blockedCount, 1)
     }
 
     func test_anAskAnsweredUnseen_staysBlockedUntilYouLook() {
@@ -60,7 +60,7 @@ final class AttentionStoreTests: XCTestCase {
         XCTAssertTrue(store.isBlocked(tab: tab))
         XCTAssertFalse(store.isBlocked(tab: other), "a closed pane's finished turn leaves no block")
         XCTAssertTrue(store.isBlocked(tabs: [other, tab]))
-        XCTAssertTrue(store.isWindowBlocked)
+        XCTAssertEqual(store.blockedCount, 1)
         store.markSeen(tab: tab)
         XCTAssertFalse(store.isBlocked(tab: tab))
     }
@@ -90,12 +90,12 @@ final class AttentionStoreTests: XCTestCase {
         store.record(finished, .completed, seen: false)
         store.release(finished)
         clock = Date(timeIntervalSince1970: 200)
-        store.record(asked, .waiting, seen: false)
+        store.ask(asked, seen: false)
         store.release(asked)
 
         XCTAssertEqual(store.state(tab: tab), .waiting, "precondition: the tab still asks")
         XCTAssertEqual(
-            store.waitingSince, Date(timeIntervalSince1970: 200),
+            store.blockedSince, Date(timeIntervalSince1970: 200),
             "the wait dates from the question, not from something else finishing earlier")
     }
 
@@ -107,11 +107,11 @@ final class AttentionStoreTests: XCTestCase {
 
         store.record(pane, .completed, seen: false)
         clock = Date(timeIntervalSince1970: 200)
-        store.record(pane, .waiting, seen: false)
+        store.ask(pane, seen: false)
 
         XCTAssertEqual(store.state(tab: tab), .waiting, "precondition: the pane still asks")
         XCTAssertEqual(
-            store.waitingSince, Date(timeIntervalSince1970: 200),
+            store.blockedSince, Date(timeIntervalSince1970: 200),
             "the wait dates from the question, not from its own earlier completion")
     }
 
@@ -316,30 +316,30 @@ final class AttentionStoreTests: XCTestCase {
         XCTAssertEqual(store.windowState, .idle)
     }
 
-    func test_waitingSince_isWhenTheOldestThingStartedAsking() {
+    func test_blockedSince_isWhenTheOldestThingStartedAsking() {
         let start = Date(timeIntervalSince1970: 1000)
         let store = AttentionStore(now: { start })
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
 
-        XCTAssertNil(store.waitingSince)
-        store.record(pane, .waiting, seen: false)
-        XCTAssertEqual(store.waitingSince, start)
+        XCTAssertNil(store.blockedSince)
+        store.ask(pane, seen: false)
+        XCTAssertEqual(store.blockedSince, start)
 
         store.markSeen(tab: tab)
-        XCTAssertNil(store.waitingSince)
+        XCTAssertNil(store.blockedSince)
     }
 
-    func test_waitingSince_survivesTheSurfaceThatRaisedIt() {
+    func test_blockedSince_survivesTheSurfaceThatRaisedIt() {
         let start = Date(timeIntervalSince1970: 2000)
         let store = AttentionStore(now: { start })
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
-        store.record(pane, .waiting, seen: false)
+        store.ask(pane, seen: false)
 
         store.release(pane)
 
-        XCTAssertEqual(store.waitingSince, start)
+        XCTAssertEqual(store.blockedSince, start)
     }
 
     func test_aWorkspaceFoldsItsTabsByMax() {
@@ -394,7 +394,7 @@ final class AttentionStoreTests: XCTestCase {
 
         XCTAssertEqual(store.agentWait(of: pane), .ask)
         XCTAssertEqual(store.state(tab: tab), .idle)
-        XCTAssertEqual(store.waitingCount, 0)
+        XCTAssertEqual(store.blockedCount, 0)
     }
 
     func test_anAgentThatAsksWhileWatched_keepsAsking_onceTheTabIsLeft() {
@@ -455,7 +455,7 @@ final class AttentionStoreTests: XCTestCase {
 
         XCTAssertEqual(store.agentWait(of: pane), .turnEnd)
         XCTAssertEqual(store.state(tab: tab), .waiting)
-        XCTAssertEqual(store.waitingCount, 1)
+        XCTAssertEqual(store.blockedCount, 0, "a finished turn is not blocked")
     }
 
     func test_aTurnEndingSeen_latchesNothing() {

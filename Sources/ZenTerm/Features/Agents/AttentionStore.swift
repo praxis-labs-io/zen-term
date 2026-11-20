@@ -21,26 +21,22 @@ final class AttentionStore {
         var seen = true
         var working = false
         var since: Date?
-        // Its own clock, because `since` dates from the first latch of any kind, a completion included.
-        var waitingSince: Date?
         var agentWait: AgentWait?
         var agentSince: Date?
-        // An ask you have not seen, kept after the agent moves on: the latch outlives the ask until you look.
-        var blocked = false
+        // An unseen ask on its own clock, kept after the agent moves on: the latch outlives the ask until you look.
+        var blockedSince: Date?
     }
 
     private var entries: [SurfaceID: Entry] = [:]
 
-    // `waiting` is a count, not a flag: two agents that each asked and exited are still two.
-    // `waitingSince` is its own clock, because a completion folded earlier would otherwise date the question.
+    // `blocked` is a count, not a flag: two agents that each asked and exited are still two.
     private var residual: [TabID: Residual] = [:]
 
     private struct Residual: Equatable {
         var state: SurfaceAttention
         var since: Date?
-        var waiting: Int
-        var waitingSince: Date?
-        var blocked: Bool
+        var blocked: Int
+        var blockedSince: Date?
     }
 
     var onChange: (() -> Void)?
@@ -67,10 +63,8 @@ final class AttentionStore {
             residual[tab] = Residual(
                 state: max(existing?.state ?? .idle, entry.latched),
                 since: earliest(existing?.since, entry.since),
-                waiting: (existing?.waiting ?? 0) + (entry.latched == .waiting ? 1 : 0),
-                waitingSince: entry.latched == .waiting
-                    ? earliest(existing?.waitingSince, entry.waitingSince) : existing?.waitingSince,
-                blocked: existing?.blocked == true || entry.blocked
+                blocked: (existing?.blocked ?? 0) + (entry.blockedSince == nil ? 0 : 1),
+                blockedSince: earliest(existing?.blockedSince, entry.blockedSince)
             )
         }
     }
@@ -82,7 +76,6 @@ final class AttentionStore {
             entry.latched = max(entry.latched, event)
             entry.seen = false
             entry.since = entry.latched == .idle ? nil : (entry.since ?? now())
-            if entry.latched == .waiting { entry.waitingSince = entry.waitingSince ?? now() }
             entries[id] = entry
         }
     }
@@ -92,7 +85,7 @@ final class AttentionStore {
         changing {
             guard entries[id] != nil else { return }
             record(id, .waiting, seen: seen)
-            if !seen { entries[id]?.blocked = true }
+            if !seen, entries[id]?.blockedSince == nil { entries[id]?.blockedSince = now() }
             entries[id]?.agentWait = .ask
             if entries[id]?.agentSince == nil { entries[id]?.agentSince = now() }
         }
@@ -160,8 +153,7 @@ final class AttentionStore {
             entries[id]?.seen = true
             entries[id]?.latched = .idle
             entries[id]?.since = nil
-            entries[id]?.waitingSince = nil
-            entries[id]?.blocked = false
+            entries[id]?.blockedSince = nil
             if entries[id]?.agentWait == .turnEnd {
                 entries[id]?.agentWait = nil
                 entries[id]?.agentSince = nil
@@ -204,39 +196,35 @@ final class AttentionStore {
 
     /// Whether an agent in the tab asked and you have not seen it. A finished turn never blocks.
     func isBlocked(tab: TabID) -> Bool {
-        entries.values.contains { $0.tab == tab && isUnseenAsk($0) } || residual[tab]?.blocked == true
+        entries.values.contains { $0.tab == tab && isUnseenAsk($0) } || (residual[tab]?.blocked ?? 0) > 0
     }
 
     func isBlocked(tabs ids: [TabID]) -> Bool {
         ids.contains { isBlocked(tab: $0) }
     }
 
-    var isWindowBlocked: Bool {
-        entries.values.contains(where: isUnseenAsk) || residual.values.contains(where: \.blocked)
-    }
-
     var windowState: SurfaceAttention {
         SurfaceAttention.rollup(entries.values.map(effective) + residual.values.map(\.state))
     }
 
-    /// When the oldest agent still waiting on you started waiting. A completion is not waiting.
-    var waitingSince: Date? {
-        waitingByAge.compactMap(\.since).min()
+    /// When the oldest unseen ask was asked. A finished turn or a completion is not blocked.
+    var blockedSince: Date? {
+        blockedByAge.compactMap(\.since).min()
     }
 
-    /// Everything still waiting on you, longest first. A pane that exited leaves the tab it spoke from.
-    var waitingInOrder: [WaitingTarget] {
-        waitingByAge.map(\.target)
+    /// Every unseen ask, longest first. A pane that exited leaves the tab it asked from.
+    var blockedInOrder: [WaitingTarget] {
+        blockedByAge.map(\.target)
     }
 
-    private var waitingByAge: [(target: WaitingTarget, since: Date?, rank: Int)] {
+    private var blockedByAge: [(target: WaitingTarget, since: Date?, rank: Int)] {
         let latched = entries.compactMap { id, entry -> (WaitingTarget, Date?, Int)? in
-            guard !entry.seen, entry.latched == .waiting else { return nil }
-            return (.surface(id), entry.waitingSince, id.raw)
+            guard isUnseenAsk(entry) else { return nil }
+            return (.surface(id), entry.blockedSince, id.raw)
         }
         let folded = residual.compactMap { tab, value -> (WaitingTarget, Date?, Int)? in
-            guard value.state == .waiting else { return nil }
-            return (.tab(tab), value.waitingSince, tab.raw)
+            guard value.blocked > 0 else { return nil }
+            return (.tab(tab), value.blockedSince, tab.raw)
         }
         return (latched + folded)
             .sorted {
@@ -247,10 +235,9 @@ final class AttentionStore {
             .map { (target: $0.0, since: $0.1, rank: $0.2) }
     }
 
-    /// How many agents are waiting on you. A residual counts: something asked, and you have not looked.
-    var waitingCount: Int {
-        entries.values.filter { !$0.seen && $0.latched == .waiting }.count
-            + residual.values.reduce(0) { $0 + $1.waiting }
+    /// How many agents asked that you have not seen. A residual counts: something asked, and you have not looked.
+    var blockedCount: Int {
+        entries.values.filter(isUnseenAsk).count + residual.values.reduce(0) { $0 + $1.blocked }
     }
 
     // One report per public call: a render between its steps would read a half-applied change.
@@ -269,7 +256,7 @@ final class AttentionStore {
     }
 
     private func isUnseenAsk(_ entry: Entry) -> Bool {
-        !entry.seen && entry.blocked
+        !entry.seen && entry.blockedSince != nil
     }
 
     private func effective(_ entry: Entry) -> SurfaceAttention {

@@ -6,13 +6,12 @@ extension Notification.Name {
 
 struct WindowAttention: Equatable {
     let windowID: Int
-    /// How many agents in that window are waiting, never how many windows.
+    /// How many agents in that window are blocked, never how many windows.
     let count: Int
     let since: Date?
-    let blocked: Bool
 }
 
-/// Which windows have an agent waiting on you, how many, and since when. It answers nothing else. Main-thread only.
+/// Which windows have a blocked agent, how many, and since when. It answers nothing else. Main-thread only.
 final class AttentionCenter {
     static let shared = AttentionCenter()
 
@@ -20,11 +19,9 @@ final class AttentionCenter {
 
     private var byWindow: [Int: WindowAttention] = [:]
 
-    /// Lists the window while `waitingCount` is above zero, and drops it at zero.
-    func update(windowID: Int, waitingCount: Int, since: Date?, blocked: Bool) {
-        let entry =
-            waitingCount > 0
-            ? WindowAttention(windowID: windowID, count: waitingCount, since: since, blocked: blocked) : nil
+    /// Lists the window while `blockedCount` is above zero, and drops it at zero.
+    func update(windowID: Int, blockedCount: Int, since: Date?) {
+        let entry = blockedCount > 0 ? WindowAttention(windowID: windowID, count: blockedCount, since: since) : nil
         set(windowID, entry)
     }
 
@@ -39,23 +36,18 @@ final class AttentionCenter {
         NotificationCenter.default.post(name: .attentionCenterDidChange, object: windowID)
     }
 
-    /// Every agent waiting outside this window.
-    func waitingCount(excluding windowID: Int) -> Int {
+    /// Every blocked agent outside this window.
+    func blockedCount(excluding windowID: Int) -> Int {
         byWindow.values.filter { $0.windowID != windowID }.reduce(0) { $0 + $1.count }
     }
 
-    /// Whether an agent outside this window asked and you have not seen it.
-    func isBlocked(excluding windowID: Int) -> Bool {
-        byWindow.values.contains { $0.windowID != windowID && $0.blocked }
-    }
-
     /// How many other windows hold one, so the copy can choose window or windows.
-    func waitingWindows(excluding windowID: Int) -> Int {
+    func blockedWindows(excluding windowID: Int) -> Int {
         byWindow.values.filter { $0.windowID != windowID }.count
     }
 
     /// Oldest first, so the one that has waited longest reads first. Ties resolve by window, never by luck.
-    var waiting: [WindowAttention] {
+    var blocked: [WindowAttention] {
         byWindow.values.sorted {
             let a = $0.since ?? .distantFuture
             let b = $1.since ?? .distantFuture
