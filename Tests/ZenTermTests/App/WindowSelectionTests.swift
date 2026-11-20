@@ -60,8 +60,7 @@ final class WindowSelectionTests: WindowTestCase {
         let (c, workspace) = makeHostWindow()
 
         for chord: KeyInterceptor.ReservedChord in [
-            .splitVertical, .closeTab, .renameTab, .renameWorkspace, .closeWorkspace, .newWorkspace,
-            .selectTab(1),
+            .splitVertical, .closeTab, .renameTab, .renameWorkspace, .closeWorkspace, .selectTab(1),
         ] {
             c.handle(chord)
         }
@@ -71,6 +70,15 @@ final class WindowSelectionTests: WindowTestCase {
         XCTAssertNil(c.activeTabIDForTesting)
         XCTAssertFalse(c.isModalOverlayOpen)
         XCTAssertFalse(c.isConfirmOpen)
+    }
+
+    func test_aHost_opensANewWorkspace_withoutATab() {
+        let (c, workspace) = makeHostWindow()
+
+        c.handle(.newWorkspace)
+
+        XCTAssertEqual(c.workspaceIDsForTesting.count, 2)
+        XCTAssertNotEqual(c.activeWorkspaceIDForTesting, workspace)
     }
 
     func test_aHost_rendersNoTabs() {
