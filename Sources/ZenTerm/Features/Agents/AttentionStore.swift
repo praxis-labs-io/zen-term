@@ -194,7 +194,6 @@ final class AttentionStore {
         SurfaceAttention.rollup(ids.map { state(tab: $0) })
     }
 
-    /// Whether an agent in the tab asked and you have not seen it. A finished turn never blocks.
     func isBlocked(tab: TabID) -> Bool {
         entries.values.contains { $0.tab == tab && isUnseenAsk($0) } || (residual[tab]?.blocked ?? 0) > 0
     }
@@ -207,12 +206,10 @@ final class AttentionStore {
         SurfaceAttention.rollup(entries.values.map(effective) + residual.values.map(\.state))
     }
 
-    /// When the oldest unseen ask was asked. A finished turn or a completion is not blocked.
     var blockedSince: Date? {
         blockedByAge.compactMap(\.since).min()
     }
 
-    /// Every unseen ask, longest first. A pane that exited leaves the tab it asked from.
     var blockedInOrder: [WaitingTarget] {
         blockedByAge.map(\.target)
     }
@@ -235,7 +232,6 @@ final class AttentionStore {
             .map { (target: $0.0, since: $0.1, rank: $0.2) }
     }
 
-    /// How many agents asked that you have not seen. A residual counts: something asked, and you have not looked.
     var blockedCount: Int {
         entries.values.filter(isUnseenAsk).count + residual.values.reduce(0) { $0 + $1.blocked }
     }

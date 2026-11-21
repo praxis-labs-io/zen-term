@@ -6,12 +6,12 @@ extension Notification.Name {
 
 struct WindowAttention: Equatable {
     let windowID: Int
-    /// How many agents in that window are blocked, never how many windows.
+    // Agents, never windows.
     let count: Int
     let since: Date?
 }
 
-/// Which windows have a blocked agent, how many, and since when. It answers nothing else. Main-thread only.
+// Main-thread only.
 final class AttentionCenter {
     static let shared = AttentionCenter()
 
@@ -19,7 +19,6 @@ final class AttentionCenter {
 
     private var byWindow: [Int: WindowAttention] = [:]
 
-    /// Lists the window while `blockedCount` is above zero, and drops it at zero.
     func update(windowID: Int, blockedCount: Int, since: Date?) {
         let entry = blockedCount > 0 ? WindowAttention(windowID: windowID, count: blockedCount, since: since) : nil
         set(windowID, entry)
@@ -36,7 +35,6 @@ final class AttentionCenter {
         NotificationCenter.default.post(name: .attentionCenterDidChange, object: windowID)
     }
 
-    /// Every blocked agent outside this window.
     func blockedCount(excluding windowID: Int) -> Int {
         byWindow.values.filter { $0.windowID != windowID }.reduce(0) { $0 + $1.count }
     }
