@@ -29,8 +29,7 @@ final class SidebarAgentsTests: WindowTestCase {
             self?.spawned.append(surface)
             return surface
         }
-        var config = GeneralConfig.builtIn
-        config.attentionToast = .sticky
+        var config = GeneralConfig.builtInWithStickyCards
         config.ai = "pi"
         GeneralConfig.setCurrentForTesting(config)
         WindowController.isPresent = { _ in true }
