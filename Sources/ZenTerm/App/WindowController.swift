@@ -3960,7 +3960,7 @@ final class WindowController: NSObject {
         takeDownCard(id)
     }
 
-    /// Answers what the tab shows on arrival; a closed drawer or Scratch keeps its dot and card.
+    /// Answers what the tab shows on arrival; a closed drawer or Scratch keeps its ask and card.
     private func visit(_ id: TabID) {
         attention.visit(id) { isOnScreen($0, in: id) }
         answerFocusedAgent()
@@ -3979,7 +3979,6 @@ final class WindowController: NSObject {
         AgentNotifier.shared.clear(windowID: windowID, tabID: id)
     }
 
-    /// The tab's dot and the dock's dots are the same signal at two altitudes, so they move together.
     private func renderAttention() {
         renderTabBar()
         renderDock()
