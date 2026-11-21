@@ -34,10 +34,21 @@ final class GhosttyConfigWriterTests: XCTestCase {
     func test_nilThemeStillEmitsBehaviorBaseline() {
         let text = GhosttyConfigWriter.configText(for: nil)
         XCTAssertTrue(text.contains("cursor-style = block\n"))
-        XCTAssertTrue(text.contains("shell-integration-features = no-cursor,ssh-env\n"))
+        XCTAssertTrue(text.contains("shell-integration-features = no-cursor\n"))
         XCTAssertTrue(text.contains("mouse-hide-while-typing = true\n"))
         XCTAssertFalse(text.contains("font-family"))
         XCTAssertFalse(text.contains("palette"))
+    }
+
+    // Ghostty's ssh features wrap `ssh` in `$GHOSTTY_BIN_DIR/ghostty +ssh`, a binary zen-term does not ship.
+    func test_generatedConfigEnablesNoSshFeature() {
+        let text = GhosttyConfigWriter.configText(for: theme)
+        let features = text.split(separator: "\n")
+            .filter { $0.hasPrefix("shell-integration-features") }
+            .flatMap { $0.split(separator: "=", maxSplits: 1).last?.split(separator: ",") ?? [] }
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        XCTAssertFalse(features.isEmpty)
+        XCTAssertFalse(features.contains { $0.hasPrefix("ssh-") }, "enabled: \(features)")
     }
 
     func test_writeConfigProducesLoadableFile() throws {
