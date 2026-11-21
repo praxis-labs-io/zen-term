@@ -3387,7 +3387,6 @@ final class WindowController: NSObject {
     ) {
         let title = address.title
         let titleTail = address.titleTail
-        if let old = attentionCards[id] { toasts.dismiss(old) }
         let content: ToastContent
         let dismissal: GeneralConfig.ToastDismissal
         switch card {
@@ -3400,6 +3399,7 @@ final class WindowController: NSObject {
             dismissal = GeneralConfig.current.completionToast
         }
         guard dismissal != .off else { return }
+        if let old = attentionCards[id] { toasts.dismiss(old) }
         let destination =
             address.destination
             ?? CardDestination(

@@ -334,6 +334,25 @@ final class WindowControllerToastSeamTests: WindowTestCase {
             file: file, line: line)
     }
 
+    func test_anAskUnderOff_leavesTheTabsCompletionCardUp() throws {
+        Motion.isReduceMotionEnabled = { true }
+        try seed("attention-toast = off\ncompletion-toast = sticky\n")
+        let controller = makeController()
+        controller.newTabForTesting()
+        controller.notifyCommandFinishedForTesting(
+            tabIndex: 0, result: TerminalCommandResult(exitCode: 0, duration: 126))
+        drainMainQueue()
+        let completionCard = try XCTUnwrap(controller.waitingToastForTesting(tabIndex: 0))
+
+        controller.notifyAgentForTesting(tabIndex: 0, message: "needs your input")
+        drainMainQueue()
+
+        XCTAssertTrue(
+            controller.waitingToastForTesting(tabIndex: 0) === completionCard,
+            "an off notice takes nothing down")
+        XCTAssertEqual(toastViews(in: controller).count, 1)
+    }
+
     func test_longCommandInBackgroundTab_underAuto_presentsANotice() throws {
         try seed("completion-toast = auto\n")
         let controller = makeController()
