@@ -3599,6 +3599,7 @@ final class WindowController: NSObject {
         }
         let items = agentItems()
         sidebar.renderAgents(items)
+        renderTabChips(agents: items)
         let center = AttentionCenter.shared
         sidebar.renderWaitingElsewhere(
             agents: center.blockedCount(excluding: windowID),
@@ -3991,15 +3992,26 @@ final class WindowController: NSObject {
             windowID: windowID, blockedCount: attention.blockedCount, since: attention.blockedSince)
     }
 
-    private func renderTabBar() {
+    // A tab shows what its agents' rows show, so it reads the same items, after their rows.
+    private func renderTabChips(agents: [SidebarAgentItem]) {
+        let tones = Dictionary(grouping: agents) { attention.tab(of: $0.id) }.mapValues { Set($0.map(\.state)) }
         let items = activeTabIDs.enumerated().map { i, id in
             TabBarItem(
                 id: id, index: i + 1,
                 title: title(of: id),
                 isActive: id == activeWorkspace?.activeID,
-                dot: attention.isBlocked(tab: id) ? .blocked : nil)
+                indicator: Self.indicator(for: tones[id] ?? []))
         }
         tabBar.render(items)
+    }
+
+    private static func indicator(for tones: Set<AttentionTone>) -> TabChip.Indicator? {
+        if tones.contains(.blocked) { return .dot(.blocked) }
+        if tones.contains(.done) { return .dot(.done) }
+        return tones.contains(.working) ? .spinner : nil
+    }
+
+    private func renderTabBar() {
         switch selection {
         case .workspace(let workspace): window.title = workspace.name
         case .host(let host): window.title = GeneralConfig.current.displayName(of: host)

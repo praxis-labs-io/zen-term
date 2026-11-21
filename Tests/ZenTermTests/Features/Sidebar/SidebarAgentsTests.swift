@@ -198,6 +198,13 @@ final class SidebarAgentsTests: WindowTestCase {
         try XCTUnwrap(rows(c).first { $0.itemForTesting?.id == agent.id })
     }
 
+    private func indicators(_ c: WindowController) -> [TabChip.Indicator?] {
+        tabChips(c).map { chip in
+            if chip.isSpinningForTesting { return .spinner }
+            return chip.isDotVisibleForTesting ? chip.dotStateForTesting.map { .dot($0) } : nil
+        }
+    }
+
     func test_anAgentRow_showsBlockedDoneWorkingAndIdle() throws {
         let c = makeWindow()
         let finished = try focusedAgent(c)
@@ -232,26 +239,64 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertFalse(idleRow.isSpinningForTesting)
     }
 
-    func test_aTabAndItsWorkspaceRow_showBlocked_neverDone() throws {
+    func test_aTab_showsWhatItsAgentRowShows() throws {
         let c = makeWindow()
-        let finished = try focusedAgent(c)
-        let asking = try split(c)
-        c.identifyAgentForTesting(finished.id, name: "claude")
+        let agent = try focusedAgent(c)
+        c.identifyAgentForTesting(agent.id, name: "claude")
         WindowController.isPresent = { _ in false }
-        let workspaceRow = try XCTUnwrap(c.sidebarForTesting.view.rowsForTesting.first)
+        c.newTabForTesting()
+        let asking = try focusedAgent(c)
 
-        finishATurn(finished)
-        XCTAssertEqual(try row(of: finished, in: c).dotForTesting.state, .done, "precondition: the agent row says done")
-        XCTAssertEqual(tabChips(c).map(\.dotStateForTesting), [nil], "a finished turn puts no dot on its tab")
-        XCTAssertFalse(try XCTUnwrap(tabChips(c).first).isDotVisibleForTesting)
-        XCTAssertNil(workspaceRow.dotForTesting, "or on its workspace row")
+        XCTAssertEqual(c.agentStateForTesting(agent.id), .idle, "precondition")
+        XCTAssertEqual(indicators(c), [nil, nil], "an idle agent shows nothing, and neither does a tab with none")
+
+        progress(agent, working: true)
+        XCTAssertEqual(c.agentStateForTesting(agent.id), .working, "precondition")
+        XCTAssertEqual(indicators(c), [.spinner, nil])
+
+        progress(agent, working: false)
+        XCTAssertEqual(c.agentStateForTesting(agent.id), .done, "precondition")
+        XCTAssertEqual(indicators(c), [.dot(.done), nil])
+        XCTAssertEqual(
+            try XCTUnwrap(tabChips(c).first).dotColorForTesting, Theme.current.chrome.done.nsColor.cgColor)
 
         notify(asking, "Wants to run swift test")
-
-        XCTAssertEqual(tabChips(c).map(\.dotStateForTesting), [.blocked])
+        XCTAssertEqual(c.agentStateForTesting(asking.id), .blocked, "precondition")
+        XCTAssertEqual(indicators(c), [.dot(.done), .dot(.blocked)])
         XCTAssertEqual(
-            try XCTUnwrap(tabChips(c).first).dotColorForTesting, Theme.current.chrome.blocked.nsColor.cgColor)
-        XCTAssertEqual(workspaceRow.dotForTesting?.state, .blocked)
+            try XCTUnwrap(tabChips(c).last).dotColorForTesting, Theme.current.chrome.blocked.nsColor.cgColor)
+
+        WindowController.isPresent = { _ in true }
+        c.answerTypedAgent()
+        XCTAssertEqual(c.agentStateForTesting(asking.id), .idle, "precondition: answered")
+        XCTAssertEqual(indicators(c), [.dot(.done), nil], "the tab clears when its row does")
+
+        c.selectTabForTesting(index: 0)
+        XCTAssertEqual(c.agentStateForTesting(agent.id), .idle, "precondition: seen")
+        XCTAssertEqual(indicators(c), [nil, nil])
+    }
+
+    func test_aTabWithSeveralAgents_showsBlockedOverDoneOverWorking() throws {
+        let c = makeWindow()
+        let finished = try focusedAgent(c)
+        let working = try split(c)
+        let asking = try split(c)
+        for agent in [finished, working] { c.identifyAgentForTesting(agent.id, name: "claude") }
+        WindowController.isPresent = { _ in false }
+
+        progress(working, working: true)
+        XCTAssertEqual(indicators(c), [.spinner])
+
+        finishATurn(finished)
+        XCTAssertEqual(indicators(c), [.dot(.done)], "done over working")
+
+        notify(asking, "Wants to run swift test")
+        XCTAssertEqual(indicators(c), [.dot(.blocked)], "blocked over done and working")
+
+        WindowController.isPresent = { _ in true }
+        c.answerTypedAgent()
+        XCTAssertEqual(c.agentStateForTesting(asking.id), .idle, "precondition: answered")
+        XCTAssertEqual(indicators(c), [.dot(.done)])
     }
 
     func test_theWaitingElsewhereRow_countsOnlyBlockedAgents() throws {

@@ -6,7 +6,7 @@ struct TabBarItem {
     let index: Int
     let title: String
     let isActive: Bool
-    let dot: StateDot.State?
+    let indicator: TabChip.Indicator?
 }
 
 // Chips are framed by hand: inside a scroll view an `NSStackView`'s intrinsic width is not authoritative.
@@ -106,7 +106,7 @@ final class TabBarView: NSView, ThemeReapplying {
                 }()
             chip.update(
                 index: item.index, title: item.title, isCurrent: item.isActive,
-                dot: item.dot)
+                indicator: item.indicator)
             next.append(chip)
             if item.isActive { activeChip = chip }
         }

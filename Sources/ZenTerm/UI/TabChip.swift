@@ -1,6 +1,11 @@
 import AppKit
 
 class TabChip: ControlView, ThemeReapplying {
+    enum Indicator: Equatable {
+        case dot(StateDot.State)
+        case spinner
+    }
+
     static let height: CGFloat = ChromeMetrics.Height.sm
     static let chipFont = ChromeType.font(.caption, weight: .medium, face: .mono)
     // The rename editor matches it, or the text reflows on open.
@@ -16,13 +21,14 @@ class TabChip: ControlView, ThemeReapplying {
     private(set) var title = ""
     private(set) var isCurrent = false
     private(set) var isClosable = false
-    private(set) var dotState: StateDot.State?
+    private(set) var indicator: Indicator?
     private var firstClickTime: TimeInterval?
     private(set) var labelFrame = CGRect.zero
 
     let label = NSTextField(labelWithString: "")
     private let labelContainer = NSView()
     private let dot = StateDot()
+    private let spinner = Spinner()
     private let fadeMask = CAGradientLayer()
     let closeButton: IconButton
 
@@ -38,6 +44,7 @@ class TabChip: ControlView, ThemeReapplying {
     var dotStateForTesting: StateDot.State? { dot.state }
     var dotColorForTesting: CGColor? { dot.colorForTesting }
     var dotFrameForTesting: CGRect { dot.frame }
+    var isSpinningForTesting: Bool { !spinner.isHidden && spinner.isSpinning }
     var closeFrameForTesting: CGRect { closeButton.frame }
     var closeSlotForTesting: CGRect { closeSlot }
     var labelFrameForTesting: CGRect { labelFrame }
@@ -66,6 +73,9 @@ class TabChip: ControlView, ThemeReapplying {
         labelContainer.addSubview(label)
 
         dot.isHidden = true
+        spinner.translatesAutoresizingMaskIntoConstraints = true
+        spinner.role = \.working
+        spinner.isHidden = true
 
         closeButton.firesOnRelease = true
         closeButton.isHidden = true
@@ -74,7 +84,7 @@ class TabChip: ControlView, ThemeReapplying {
         fadeMask.startPoint = CGPoint(x: 0, y: 0.5)
         fadeMask.endPoint = CGPoint(x: 1, y: 0.5)
 
-        for view in [labelContainer, dot, closeButton] {
+        for view in [labelContainer, dot, spinner, closeButton] {
             addSubview(view)
         }
         NSLayoutConstraint.activate([
@@ -85,11 +95,11 @@ class TabChip: ControlView, ThemeReapplying {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    func apply(title: String, isCurrent: Bool, isClosable: Bool, dot dotState: StateDot.State?) {
+    func apply(title: String, isCurrent: Bool, isClosable: Bool, indicator: Indicator?) {
         self.title = title
         self.isCurrent = isCurrent
         self.isClosable = isClosable
-        self.dotState = dotState
+        self.indicator = indicator
         restyle()
         needsLayout = true
     }
@@ -97,7 +107,7 @@ class TabChip: ControlView, ThemeReapplying {
     var textWidth: CGFloat { ceil(label.cell?.cellSize.width ?? label.intrinsicContentSize.width) }
 
     var fittingWidth: CGFloat {
-        let trailing = dotState == nil ? Self.labelInset : Self.closeSlotSize + Self.closeSlotInset
+        let trailing = indicator == nil ? Self.labelInset : Self.closeSlotSize + Self.closeSlotInset
         return Self.clamp(Self.labelInset + textWidth + trailing)
     }
 
@@ -122,7 +132,11 @@ class TabChip: ControlView, ThemeReapplying {
             label.attributedStringValue = styled
             needsLayout = true
         }
-        dot.state = dotState
+        if case .dot(let state) = indicator {
+            dot.state = state
+        } else {
+            dot.state = nil
+        }
         easeFill(isHovered && !isCurrent ? chrome.fill(.hover) : .clear)
         updateAccessories()
     }
@@ -141,7 +155,7 @@ class TabChip: ControlView, ThemeReapplying {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard let hit = super.hitTest(point) else { return nil }
-        let passive: [NSView] = [labelContainer, dot]
+        let passive: [NSView] = [labelContainer, dot, spinner]
         return passive.contains { hit === $0 || hit.isDescendant(of: $0) } ? self : hit
     }
 
@@ -151,7 +165,10 @@ class TabChip: ControlView, ThemeReapplying {
         dot.frame = CGRect(
             x: slot.midX - StateDot.diameter / 2, y: slot.midY - StateDot.diameter / 2,
             width: StateDot.diameter, height: StateDot.diameter)
-        let trailing = dotState == nil ? bounds.width - Self.labelInset : slot.minX
+        let spin = spinner.intrinsicContentSize
+        spinner.frame = CGRect(
+            x: slot.midX - spin.width / 2, y: slot.midY - spin.height / 2, width: spin.width, height: spin.height)
+        let trailing = indicator == nil ? bounds.width - Self.labelInset : slot.minX
         labelFrame = CGRect(
             x: Self.labelInset, y: 0, width: max(0, trailing - Self.labelInset), height: bounds.height)
         labelContainer.frame = labelFrame
@@ -171,7 +188,9 @@ class TabChip: ControlView, ThemeReapplying {
     private func updateAccessories() {
         let closing = showsClose
         closeButton.isHidden = !closing
-        dot.isHidden = dotState == nil || closing
+        dot.isHidden = dot.state == nil || closing
+        spinner.isHidden = indicator != .spinner || closing
+        spinner.isSpinning = !spinner.isHidden
         guard closing, labelFrame.width > 0 else {
             labelContainer.layer?.mask = nil
             return
