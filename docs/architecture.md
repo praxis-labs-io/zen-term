@@ -343,7 +343,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   command: `completed`, no banner, no row, and never over a tab that is already waiting.
   An agent's notification goes through `AgentRules.notificationKind`. Codex's carries no
   state, because it arrives before its title says what Codex wants; the move into its
-  Action Required title raises the waiting card and banner instead, once per ask.
+  Action Required title raises the banner and, unless `attention-toast` is off, the
+  waiting card instead, once per ask.
   Claude's idle prompt is a turn end arriving a minute late: it only banners over a turn
   end still unseen, and changes nothing once the turn was seen. It asks only from a Claude
   that reports no progress, since Claude clears its progress at launch and none means
