@@ -83,8 +83,8 @@ applies each to the pinned source before the build and reverses it after, so `ve
 stays at its pin, and stops on a patch that no longer applies. Every pin move re-applies them
 and rebases any that fail. `ghostty-program-status.patch` makes termio answer the OSC 7501
 support query and raise `GHOSTTY_ACTION_PROGRAM_STATUS` with the program's own report (state,
-kind, app, decoded msg), dropping reports about a sub-record (`id=`). The answer matters as much
-as the action: Claude Code sends 7501 only to a terminal that answers its query.
+kind, app, decoded msg and title), dropping reports about a sub-record (`id=`). The answer
+matters as much as the action: Claude Code sends 7501 only to a terminal that answers its query.
 
 **Never call `Bundle.module` in shippable code.** In a real `.app` it checks the
 bundle root and a build-machine path, then `fatalError`s, so it works on the build
@@ -277,9 +277,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   and agent exits, and lands a held idle that has no event left to push.
 - **An agent's state is derived from the signals it already pushes.** Its own OSC 7501
   report (`TerminalProgramStatus`) outranks everything: `AgentStateEngine` maps it straight
-  to a state (`done` is a turn end, `error` asks like `blocked`), and the report's `msg` is
-  the row's words and the ask card's. While a report is present, the screen-reading
-  fallbacks below stand down; without one (a Claude that is older, or under tmux, which
+  to a state (`done` is a turn end, `error` asks like `blocked`). The report's `msg` is
+  the row's words and the ask card's, and its `title`, when it sends one, is the row's title.
+  While a report is present, the screen-reading fallbacks below stand down; without one (a Claude that is older, or under tmux, which
   does not pass the query through), rules that are typed data in the repo, never
   configuration, decide:
   `AgentStateRule` (a state, a priority, a region, a `contains`/`regex` matcher nesting

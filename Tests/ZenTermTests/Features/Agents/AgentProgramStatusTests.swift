@@ -145,6 +145,21 @@ final class AgentProgramStatusTests: WindowTestCase {
         XCTAssertEqual(chip.dotStateForTesting, .blocked)
     }
 
+    func test_aReportsTitle_isTheRowsTitle_andItsMessageStaysWithTheRow() throws {
+        let c = makeWindow()
+        let (surface, id) = try firstPane(c)
+
+        surface.delegate?.surface(
+            surface,
+            programStatusDidChange: TerminalProgramStatus(
+                state: .working, app: "claude-code", message: "Reading AgentRules.swift", title: "Fix the login bug"))
+        drainMainQueue()
+
+        let row = try XCTUnwrap(renderedAgentRows(c).first { $0.id == id })
+        XCTAssertEqual(row.summary, "Fix the login bug")
+        XCTAssertEqual(row.message, "Reading AgentRules.swift", "the words still reach the row's tooltip")
+    }
+
     func test_aClaudeNobodyLaunched_joinsOnItsFirstReport_byName() throws {
         let c = makeWindow()
         let (surface, id) = try firstPane(c)

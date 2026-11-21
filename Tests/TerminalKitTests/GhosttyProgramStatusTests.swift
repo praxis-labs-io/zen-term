@@ -39,30 +39,36 @@ final class GhosttyProgramStatusTests: XCTestCase {
         XCTAssertNil(Self.mapped(GHOSTTY_PROGRAM_STATUS_STATE_CLEAR, GHOSTTY_PROGRAM_STATUS_KIND_NONE))
     }
 
-    func test_appAndMessageCrossTheSeamWithoutControlCharacters() {
+    func test_appMessageAndTitleCrossTheSeamWithoutControlCharacters() {
         let status = "claude-code".withCString { app in
             "approve\u{1b}[31m Write\u{7}".withCString { msg in
-                GhosttySurface.programStatus(
-                    ghostty_action_program_status_s(
-                        state: GHOSTTY_PROGRAM_STATUS_STATE_BLOCKED, kind: GHOSTTY_PROGRAM_STATUS_KIND_PERMISSION,
-                        app: app, msg: msg))
+                "Review\u{7} PR".withCString { title in
+                    GhosttySurface.programStatus(
+                        ghostty_action_program_status_s(
+                            state: GHOSTTY_PROGRAM_STATUS_STATE_BLOCKED, kind: GHOSTTY_PROGRAM_STATUS_KIND_PERMISSION,
+                            app: app, msg: msg, title: title))
+                }
             }
         }
         XCTAssertEqual(status?.app, "claude-code")
         XCTAssertEqual(status?.message, "approve[31m Write")
+        XCTAssertEqual(status?.title, "Review PR")
     }
 
     func test_aBlockedReportReachesTheDelegate() throws {
         let spy = StatusSpy()
         let message = Data("approve Write".utf8).base64EncodedString()
+        let title = Data("Fix the login bug".utf8).base64EncodedString()
         _ = try runInSurface(
             [
-                "printf '\\033]7501;state=blocked:app=claude-code:kind=permission:msg=\(message)\\007'",
+                "printf '\\033]7501;state=blocked:app=claude-code:kind=permission:msg=\(message):title=\(title)\\007'",
                 "sleep 5",
             ], delegate: spy, until: { _ in !spy.statuses.isEmpty })
         XCTAssertEqual(
             spy.statuses.first,
-            TerminalProgramStatus(state: .blocked(.permission), app: "claude-code", message: "approve Write"))
+            TerminalProgramStatus(
+                state: .blocked(.permission), app: "claude-code", message: "approve Write",
+                title: "Fix the login bug"))
     }
 
     private static func mapped(
@@ -70,7 +76,7 @@ final class GhosttyProgramStatusTests: XCTestCase {
     ) -> TerminalProgramStatus? {
         "".withCString { empty in
             GhosttySurface.programStatus(
-                ghostty_action_program_status_s(state: state, kind: kind, app: empty, msg: empty))
+                ghostty_action_program_status_s(state: state, kind: kind, app: empty, msg: empty, title: empty))
         }
     }
 

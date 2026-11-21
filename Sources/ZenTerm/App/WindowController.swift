@@ -3635,9 +3635,10 @@ final class WindowController: NSObject {
             let wait = attention.agentWait(of: id)
             let state = AttentionTone(wait: wait, working: attention.isWorking(id))
             let message = wait == .turnEnd ? Self.turnEndMessage : agent.message
+            let title = agentStates.status(of: id)?.title
             let item = SidebarAgentItem(
                 id: id, state: state,
-                summary: message.map(SidebarAgentItem.summaryLine) ?? state.summary,
+                summary: title ?? message.map(SidebarAgentItem.summaryLine) ?? state.summary,
                 detail: "\(place.name) · \(agent.name ?? AgentRoster.unnamed)",
                 message: message)
             return (item, attention.agentSince(of: id), place.position)

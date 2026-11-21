@@ -734,7 +734,8 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         default: return nil
         }
         return TerminalProgramStatus(
-            state: state, app: displayable(report.app), message: displayable(report.msg))
+            state: state, app: displayable(report.app), message: displayable(report.msg),
+            title: displayable(report.title))
     }
 
     private static func need(_ kind: ghostty_action_program_status_kind_e) -> TerminalProgramStatus.Need? {

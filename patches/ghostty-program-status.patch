@@ -1,8 +1,8 @@
 diff --git i/include/ghostty.h w/include/ghostty.h
-index 40ff55c9b..872be9f3e 100644
+index 40ff55c9b..e1a53ed28 100644
 --- i/include/ghostty.h
 +++ w/include/ghostty.h
-@@ -824,6 +824,34 @@ typedef struct {
+@@ -824,6 +824,36 @@ typedef struct {
    int8_t progress;
  } ghostty_action_progress_report_s;
  
@@ -32,12 +32,14 @@ index 40ff55c9b..872be9f3e 100644
 +  const char* app;
 +  // Decoded text for people, or empty.
 +  const char* msg;
++  // A short decoded label for people, or empty.
++  const char* title;
 +} ghostty_action_program_status_s;
 +
  // apprt.action.CommandFinished.C
  typedef struct {
    // -1 if no exit code was reported, otherwise 0-255
-@@ -921,6 +949,7 @@ typedef enum {
+@@ -921,6 +951,7 @@ typedef enum {
    GHOSTTY_ACTION_SEARCH_SELECTED,
    GHOSTTY_ACTION_READONLY,
    GHOSTTY_ACTION_COPY_TITLE_TO_CLIPBOARD,
@@ -45,7 +47,7 @@ index 40ff55c9b..872be9f3e 100644
  } ghostty_action_tag_e;
  
  typedef union {
-@@ -962,6 +991,7 @@ typedef union {
+@@ -962,6 +993,7 @@ typedef union {
    ghostty_action_search_total_s search_total;
    ghostty_action_search_selected_s search_selected;
    ghostty_action_readonly_e readonly;
@@ -54,10 +56,10 @@ index 40ff55c9b..872be9f3e 100644
  
  typedef struct {
 diff --git i/src/Surface.zig w/src/Surface.zig
-index 4d66622e3..d79156ef4 100644
+index 4d66622e3..01e7e69ef 100644
 --- i/src/Surface.zig
 +++ w/src/Surface.zig
-@@ -1105,6 +1105,21 @@ pub fn handleMessage(self: *Surface, msg: Message) !void {
+@@ -1105,6 +1105,22 @@ pub fn handleMessage(self: *Surface, msg: Message) !void {
              };
          },
  
@@ -70,6 +72,7 @@ index 4d66622e3..d79156ef4 100644
 +                    .kind = v.kind,
 +                    .app = std.mem.sliceTo(&v.app, 0),
 +                    .msg = std.mem.sliceTo(&v.msg, 0),
++                    .title = std.mem.sliceTo(&v.title, 0),
 +                },
 +            ) catch |err| {
 +                log.warn("apprt failed to report program status err={}", .{err});
@@ -80,7 +83,7 @@ index 4d66622e3..d79156ef4 100644
              self.selection_scroll_active = active;
              try self.selectionScrollTick();
 diff --git i/src/apprt/action.zig w/src/apprt/action.zig
-index f6865af83..d0c247b5e 100644
+index f6865af83..169d2f643 100644
 --- i/src/apprt/action.zig
 +++ w/src/apprt/action.zig
 @@ -343,6 +343,9 @@ pub const Action = union(Key) {
@@ -101,7 +104,18 @@ index f6865af83..d0c247b5e 100644
  
          test "ghostty.h Action.Key" {
              try lib.checkGhosttyHEnum(Key, "GHOSTTY_ACTION_");
-@@ -739,6 +743,39 @@ pub const Pwd = struct {
+@@ -455,8 +459,8 @@ pub const Action = union(Key) {
+         // At the time of writing, we don't promise ABI compatibility
+         // so we can change this but I want to be aware of it.
+         assert(@sizeOf(CValue) == switch (@sizeOf(usize)) {
+-            4 => 16,
+-            8 => 24,
++            4 => 20,
++            8 => 32,
+             else => unreachable,
+         });
+     }
+@@ -739,6 +743,42 @@ pub const Pwd = struct {
      }
  };
  
@@ -111,21 +125,24 @@ index f6865af83..d0c247b5e 100644
 +    kind: terminal.osc.Command.ProgramStatus.Kind,
 +    app: [:0]const u8,
 +    msg: [:0]const u8,
++    title: [:0]const u8,
 +
 +    // Sync with: ghostty_action_program_status_s
 +    pub const C = extern struct {
-+        state: terminal.osc.Command.ProgramStatus.State,
-+        kind: terminal.osc.Command.ProgramStatus.Kind,
++        state: c_int,
++        kind: c_int,
 +        app: [*:0]const u8,
 +        msg: [*:0]const u8,
++        title: [*:0]const u8,
 +    };
 +
 +    pub fn cval(self: ProgramStatus) C {
 +        return .{
-+            .state = self.state,
-+            .kind = self.kind,
++            .state = @intFromEnum(self.state),
++            .kind = @intFromEnum(self.kind),
 +            .app = self.app.ptr,
 +            .msg = self.msg.ptr,
++            .title = self.title.ptr,
 +        };
 +    }
 +
@@ -154,26 +171,27 @@ index 039e853aa..10ad3cf56 100644
                  log.warn("unimplemented action={}", .{action});
                  return false;
 diff --git i/src/apprt/surface.zig w/src/apprt/surface.zig
-index 3cb0016fa..7966d9a76 100644
+index 3cb0016fa..3564a376b 100644
 --- i/src/apprt/surface.zig
 +++ w/src/apprt/surface.zig
-@@ -91,6 +91,14 @@ pub const Message = union(enum) {
+@@ -91,6 +91,15 @@ pub const Message = union(enum) {
      /// Report the progress of an action using a GUI element
      progress_report: terminal.osc.Command.ProgressReport,
  
-+    /// A program reported its status (OSC 7501). `msg` is decoded text.
++    /// A program reported its status (OSC 7501). `msg` and `title` are decoded text.
 +    program_status: struct {
 +        state: terminal.osc.Command.ProgramStatus.State,
 +        kind: terminal.osc.Command.ProgramStatus.Kind,
 +        app: [31:0]u8,
 +        msg: [255:0]u8,
++        title: [127:0]u8,
 +    },
 +
      /// A command has started in the shell, start a timer.
      start_command,
  
 diff --git i/src/terminal/osc.zig w/src/terminal/osc.zig
-index 0086e48bc..b311bca9a 100644
+index 0086e48bc..c8f03ac7f 100644
 --- i/src/terminal/osc.zig
 +++ w/src/terminal/osc.zig
 @@ -19,6 +19,7 @@ const lib = @import("../lib/main.zig");
@@ -194,7 +212,7 @@ index 0086e48bc..b311bca9a 100644
      pub const SemanticPrompt = parsers.semantic_prompt.Command;
  
      pub const KittyClipboardProtocol = parsers.kitty_clipboard_protocol.OSC;
-@@ -193,9 +197,39 @@ pub const Command = union(Key) {
+@@ -193,9 +197,41 @@ pub const Command = union(Key) {
              "kitty_text_sizing",
              "kitty_clipboard_protocol",
              "context_signal",
@@ -203,7 +221,7 @@ index 0086e48bc..b311bca9a 100644
      );
  
 +    pub const ProgramStatus = struct {
-+        pub const State = enum(c_int) {
++        pub const State = enum(u8) {
 +            idle,
 +            working,
 +            done,
@@ -212,7 +230,7 @@ index 0086e48bc..b311bca9a 100644
 +            clear,
 +        };
 +
-+        pub const Kind = enum(c_int) {
++        pub const Kind = enum(u8) {
 +            none,
 +            permission,
 +            question,
@@ -227,6 +245,8 @@ index 0086e48bc..b311bca9a 100644
 +        app: []const u8 = "",
 +        /// Base64, as the program sent it.
 +        msg: []const u8 = "",
++        /// Base64, as the program sent it.
++        title: []const u8 = "",
 +        /// The report is about a sub-record, not the program itself.
 +        has_id: bool = false,
 +    };
@@ -234,7 +254,7 @@ index 0086e48bc..b311bca9a 100644
      pub const ProgressReport = struct {
          pub const State = enum(c_int) {
              remove,
-@@ -360,6 +394,9 @@ pub const Parser = struct {
+@@ -360,6 +396,9 @@ pub const Parser = struct {
          @"133",
          @"552",
          @"777",
@@ -244,7 +264,7 @@ index 0086e48bc..b311bca9a 100644
          @"1337",
          @"5522",
      };
-@@ -425,6 +462,7 @@ pub const Parser = struct {
+@@ -425,6 +464,7 @@ pub const Parser = struct {
              .kitty_text_sizing,
              .kitty_clipboard_protocol,
              .context_signal,
@@ -252,7 +272,7 @@ index 0086e48bc..b311bca9a 100644
              => {},
          }
  
-@@ -636,10 +674,26 @@ pub const Parser = struct {
+@@ -636,10 +676,26 @@ pub const Parser = struct {
  
              .@"7" => switch (c) {
                  ';' => self.writeToFixed(),
@@ -279,7 +299,7 @@ index 0086e48bc..b311bca9a 100644
              .@"77" => switch (c) {
                  '7' => self.state = .@"777",
                  else => self.state = .invalid,
-@@ -752,6 +806,12 @@ pub const Parser = struct {
+@@ -752,6 +808,12 @@ pub const Parser = struct {
  
              .@"77" => null,
  
@@ -306,10 +326,10 @@ index a56b38e88..9657b607c 100644
  pub const semantic_prompt = @import("parsers/semantic_prompt.zig");
 diff --git i/src/terminal/osc/parsers/program_status.zig w/src/terminal/osc/parsers/program_status.zig
 new file mode 100644
-index 000000000..e5f133f5e
+index 000000000..b4f5654b1
 --- /dev/null
 +++ w/src/terminal/osc/parsers/program_status.zig
-@@ -0,0 +1,125 @@
+@@ -0,0 +1,130 @@
 +//! OSC 7501: Program Status Protocol
 +//!
 +//! A program tells the terminal what it is doing with a list of
@@ -348,6 +368,7 @@ index 000000000..e5f133f5e
 +    var kind: Command.ProgramStatus.Kind = .none;
 +    var app: []const u8 = "";
 +    var msg: []const u8 = "";
++    var title: []const u8 = "";
 +    var has_id = false;
 +
 +    var pairs = std.mem.splitScalar(u8, data, ':');
@@ -363,6 +384,8 @@ index 000000000..e5f133f5e
 +            app = value;
 +        } else if (std.mem.eql(u8, key, "msg")) {
 +            msg = value;
++        } else if (std.mem.eql(u8, key, "title")) {
++            title = value;
 +        } else if (std.mem.eql(u8, key, "id")) {
 +            has_id = value.len > 0;
 +        }
@@ -378,6 +401,7 @@ index 000000000..e5f133f5e
 +        .kind = if (reported == .blocked) kind else .none,
 +        .app = app,
 +        .msg = msg,
++        .title = title,
 +        .has_id = has_id,
 +    } };
 +    return &parser.command;
@@ -400,7 +424,7 @@ index 000000000..e5f133f5e
 +
 +    var p: Parser = .init(testing.allocator);
 +    defer p.deinit();
-+    for ("7501;state=blocked:app=claude-code:kind=permission:msg=aGk=") |ch| p.next(ch);
++    for ("7501;state=blocked:app=claude-code:kind=permission:msg=aGk=:title=cmV2aWV3") |ch| p.next(ch);
 +
 +    const cmd = p.end('\x1b').?.*;
 +    try testing.expect(cmd == .program_status);
@@ -410,6 +434,7 @@ index 000000000..e5f133f5e
 +    try testing.expectEqual(.permission, v.kind);
 +    try testing.expectEqualStrings("claude-code", v.app);
 +    try testing.expectEqualStrings("aGk=", v.msg);
++    try testing.expectEqualStrings("cmV2aWV3", v.title);
 +    try testing.expect(!v.has_id);
 +}
 +
@@ -479,7 +504,7 @@ index 5b97bebfa..83d6fd54e 100644
              .title_push,
              .title_pop,
 diff --git i/src/termio/stream_handler.zig w/src/termio/stream_handler.zig
-index 8c1b5b8ab..93cfed703 100644
+index 8c1b5b8ab..cfb259c44 100644
 --- i/src/termio/stream_handler.zig
 +++ w/src/termio/stream_handler.zig
 @@ -318,6 +318,7 @@ pub const StreamHandler = struct {
@@ -490,7 +515,7 @@ index 8c1b5b8ab..93cfed703 100644
              .start_hyperlink => try self.startHyperlink(value.uri, value.id),
              .clipboard_contents => try self.clipboardContents(value.kind, value.data),
              .semantic_prompt => try self.semanticPrompt(value),
-@@ -1548,4 +1549,57 @@ pub const StreamHandler = struct {
+@@ -1548,4 +1549,59 @@ pub const StreamHandler = struct {
      fn progressReport(self: *StreamHandler, report: terminal.osc.Command.ProgressReport) void {
          self.surfaceMessageWriter(.{ .progress_report = report });
      }
@@ -516,6 +541,7 @@ index 8c1b5b8ab..93cfed703 100644
 +            .kind = status.kind,
 +            .app = undefined,
 +            .msg = undefined,
++            .title = undefined,
 +        } };
 +        const dest = &message.program_status;
 +
@@ -524,6 +550,7 @@ index 8c1b5b8ab..93cfed703 100644
 +        dest.app[app_len] = 0;
 +
 +        dest.msg[decodeStatusText(status.msg, &dest.msg)] = 0;
++        dest.title[decodeStatusText(status.title, &dest.title)] = 0;
 +        self.surfaceMessageWriter(message);
 +    }
 +

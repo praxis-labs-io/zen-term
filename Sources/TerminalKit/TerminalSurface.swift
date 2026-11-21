@@ -64,11 +64,14 @@ public struct TerminalProgramStatus: Equatable {
     public var app: String?
     /// One line for people. Never parse it for meaning.
     public var message: String?
+    /// A short label for people, naming what the program is on.
+    public var title: String?
 
-    public init(state: State, app: String? = nil, message: String? = nil) {
+    public init(state: State, app: String? = nil, message: String? = nil, title: String? = nil) {
         self.state = state
         self.app = app
         self.message = message
+        self.title = title
     }
 }
 
