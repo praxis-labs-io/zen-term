@@ -27,6 +27,10 @@ final class StateDot: NSView, ThemeReapplying {
         super.init(frame: NSRect(x: 0, y: 0, width: Self.diameter, height: Self.diameter))
         wantsLayer = true
         layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.diameter)
+        for orientation in [NSLayoutConstraint.Orientation.horizontal, .vertical] {
+            setContentHuggingPriority(.required, for: orientation)
+            setContentCompressionResistancePriority(.required, for: orientation)
+        }
         reapplyTheme()
     }
 
