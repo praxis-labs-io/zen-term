@@ -1,4 +1,5 @@
 import Foundation
+import TerminalKit
 
 // Main-thread only.
 final class AgentStateTracker {
@@ -9,6 +10,7 @@ final class AgentStateTracker {
         var title = ""
         var progress = AgentRules.clearedProgress
         var published: AgentSignalState = .idle
+        var status: TerminalProgramStatus?
         var pendingIdleSince: Date?
         var reportsProgress = false
     }
@@ -28,6 +30,13 @@ final class AgentStateTracker {
         entries[id, default: Entry()].progress = progress
         entries[id]?.reportsProgress = true
     }
+
+    func noteStatus(_ status: TerminalProgramStatus?, of id: SurfaceID) {
+        entries[id, default: Entry()].status = status
+    }
+
+    // A program that reports OSC 7501 owns its state, and the screen-reading fallbacks stand down.
+    func status(of id: SurfaceID) -> TerminalProgramStatus? { entries[id]?.status }
 
     func title(of id: SurfaceID) -> String { entries[id]?.title ?? "" }
 

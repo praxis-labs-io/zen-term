@@ -92,6 +92,32 @@ final class AgentStateEngineTests: XCTestCase {
         }
     }
 
+    func test_aStatusReport_outranksEveryRule() {
+        let claude = AgentStateEngine.evaluate(
+            AgentRules.rules(for: "claude"), title: "", progress: "4;3",
+            status: TerminalProgramStatus(state: .blocked(.permission)))
+        let codex = AgentStateEngine.evaluate(
+            AgentRules.rules(for: "codex"), title: AgentTitleFixtures.codexBlockedOn, progress: "4;0",
+            status: TerminalProgramStatus(state: .working))
+
+        XCTAssertEqual(claude.state, .blocked, "the report must beat Claude's progress saying working")
+        XCTAssertEqual(codex.state, .working, "the report must beat Codex's Action Required title")
+    }
+
+    func test_eachReportedState_mapsToAnAgentState() {
+        let cases: [(TerminalProgramStatus.State, AgentSignalState)] = [
+            (.idle, .idle), (.working, .working), (.done, .idle),
+            (.blocked(.permission), .blocked), (.blocked(.question), .blocked), (.blocked(nil), .blocked),
+            (.failed, .blocked),
+        ]
+        for (reported, expected) in cases {
+            let outcome = AgentStateEngine.evaluate(
+                [], title: "", progress: AgentRules.clearedProgress, status: TerminalProgramStatus(state: reported))
+            XCTAssertEqual(outcome.state, expected, "\(reported)")
+            XCTAssertNotEqual(outcome, .fallback, "a reported idle is never held as a dropped spinner frame")
+        }
+    }
+
     func test_aDeterminateReport_isAProgressBar_notAnAgentTurn() {
         let region = AgentRules.progressRegion(TerminalProgress(state: .running, fraction: 0.4))
         let outcome = AgentStateEngine.evaluate(AgentRules.rules(for: "claude"), title: "", progress: region)
@@ -254,32 +280,37 @@ final class AgentIdentificationTests: XCTestCase {
     func test_claudesPermissionPrompt_asksForYou() {
         let body = AgentNotificationFixtures.claudePermission
         XCTAssertEqual(
-            AgentRules.notificationKind(body: body, agentName: AgentNotificationFixtures.claudeTitle), .ask)
-        XCTAssertEqual(AgentRules.notificationKind(body: body, agentName: "claude"), .ask)
+            AgentRules.notificationKind(
+                body: body, agentName: AgentNotificationFixtures.claudeTitle, reportsStatus: false), .ask)
+        XCTAssertEqual(AgentRules.notificationKind(body: body, agentName: "claude", reportsStatus: false), .ask)
     }
 
     func test_claudesPlanApproval_asksForYou() {
         XCTAssertEqual(
             AgentRules.notificationKind(
-                body: AgentNotificationFixtures.claudePlanApproval, agentName: AgentNotificationFixtures.claudeTitle),
+                body: AgentNotificationFixtures.claudePlanApproval, agentName: AgentNotificationFixtures.claudeTitle,
+                reportsStatus: false),
             .ask)
     }
 
     func test_claudesIdlePrompt_isItsOwnKind() {
         XCTAssertEqual(
             AgentRules.notificationKind(
-                body: AgentNotificationFixtures.claudeIdlePrompt, agentName: AgentNotificationFixtures.claudeTitle),
+                body: AgentNotificationFixtures.claudeIdlePrompt, agentName: AgentNotificationFixtures.claudeTitle,
+                reportsStatus: false),
             .idlePrompt)
     }
 
     func test_onlyClaudesIdlePrompt_isAnIdlePrompt() {
         XCTAssertEqual(
-            AgentRules.notificationKind(body: AgentNotificationFixtures.claudeIdlePrompt, agentName: "pi"), .ask)
+            AgentRules.notificationKind(
+                body: AgentNotificationFixtures.claudeIdlePrompt, agentName: "pi", reportsStatus: false), .ask)
     }
 
     func test_anythingElseClaudePosts_asksForYou() {
         XCTAssertEqual(
-            AgentRules.notificationKind(body: "Refactor finished", agentName: AgentNotificationFixtures.claudeTitle),
+            AgentRules.notificationKind(
+                body: "Refactor finished", agentName: AgentNotificationFixtures.claudeTitle, reportsStatus: false),
             .ask)
     }
 
@@ -301,15 +332,25 @@ final class AgentIdentificationTests: XCTestCase {
         }
     }
 
+    func test_anAgentReportingStatus_postsNotificationsWithNoState() {
+        for body in [AgentNotificationFixtures.claudePermission, AgentNotificationFixtures.claudeIdlePrompt] {
+            XCTAssertEqual(
+                AgentRules.notificationKind(
+                    body: body, agentName: AgentNotificationFixtures.claudeTitle, reportsStatus: true),
+                .stateless, "its OSC 7501 report already moved its state")
+        }
+    }
+
     func test_aCodexNotification_carriesNoState() {
         XCTAssertEqual(
-            AgentRules.notificationKind(body: "Approve writing test2.txt", agentName: "codex"), .stateless)
+            AgentRules.notificationKind(body: "Approve writing test2.txt", agentName: "codex", reportsStatus: false),
+            .stateless)
     }
 
     func test_anAgentWithNoBodyRules_isTakenAtItsWord() {
         for name in ["pi", nil] as [String?] {
             XCTAssertEqual(
-                AgentRules.notificationKind(body: "Refactor finished", agentName: name), .ask,
+                AgentRules.notificationKind(body: "Refactor finished", agentName: name, reportsStatus: false), .ask,
                 "\(name ?? "an unnamed agent") has no rules to read its body by")
         }
     }

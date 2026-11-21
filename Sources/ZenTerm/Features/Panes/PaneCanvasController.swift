@@ -54,6 +54,8 @@ final class PaneCanvasController: NSObject {
     var onCommandFinished: ((SurfaceID, TerminalCommandResult) -> Void)?
 
     var onProgress: ((SurfaceID, TerminalProgress?) -> Void)?
+
+    var onProgramStatus: ((SurfaceID, TerminalProgramStatus?) -> Void)?
     // Every surface, focused or not: an agent working in a background split still reports.
     var onTitle: ((SurfaceID, String) -> Void)?
     var onProgramLaunched: ((SurfaceID, String) -> Void)?
@@ -555,6 +557,10 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     func surface(_ s: TerminalSurface, progressDidChange p: TerminalProgress?) {
         guard let id = surfaceID(of: s) else { return }
         onProgress?(id, p)
+    }
+    func surface(_ s: TerminalSurface, programStatusDidChange status: TerminalProgramStatus?) {
+        guard let id = surfaceID(of: s) else { return }
+        onProgramStatus?(id, status)
     }
     func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor) {
         guard let id = leafID(of: s) else { return }

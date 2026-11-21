@@ -275,18 +275,23 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   columns and crashes TUIs.
 - **Titles update on push**, re-read every 1.5s as a backstop that also polls drawer busy
   and agent exits, and lands a held idle that has no event left to push.
-- **An agent's state is derived from the signals it already pushes**, by rules that are
-  typed data in the repo, never configuration: `AgentStateRule` (a state, a priority, a
-  region, a `contains`/`regex` matcher nesting through `any`), `AgentRules` (what ships),
-  `AgentStateEngine` (pure; highest matching priority wins, a tie keeps the first). The
-  regions are the two pushed signals, `oscTitle` and `oscProgress`. **No match falls back
-  to `idle`, never `blocked`**: a false alarm costs more than a quiet row, so an agent we
-  ship no rules for reads idle and still gets working from OSC 9;4. Codex emits no
-  progress at all and its title carries all three states; Claude's title flickers to idle
-  mid-turn while progress holds working, so Claude's title is read for the row's message
-  and never for its state.
+- **An agent's state is derived from the signals it already pushes.** Its own OSC 7501
+  report (`TerminalProgramStatus`) outranks everything: `AgentStateEngine` maps it straight
+  to a state (`done` is a turn end, `error` asks like `blocked`), and the report's `msg` is
+  the row's words and the ask card's. While a report is present, the screen-reading
+  fallbacks below stand down; without one (a Claude that is older, or under tmux, which
+  does not pass the query through), rules that are typed data in the repo, never
+  configuration, decide:
+  `AgentStateRule` (a state, a priority, a region, a `contains`/`regex` matcher nesting
+  through `any`), `AgentRules` (what ships), `AgentStateEngine` (pure; highest matching
+  priority wins, a tie keeps the first). The regions are the two pushed signals, `oscTitle`
+  and `oscProgress`. **No match falls back to `idle`, never `blocked`**: a false alarm costs
+  more than a quiet row, so an agent we ship no rules for reads idle and still gets working
+  from OSC 9;4. Codex emits no progress at all and its title carries all three states;
+  Claude's title flickers to idle mid-turn while progress holds working, so without a report
+  Claude's title is read for the row's message and never for its state.
 - **`AgentStateTracker` publishes transitions, not events.** It holds each agent's latest
-  title and progress, and drops anything that does not move the derived state, because
+  report, title and progress, and drops anything that does not move the derived state, because
   Codex's title changes on every spinner frame and its blocked title blinks. A
   working-to-idle fall that no rule explains is held briefly, because that is the shape a
   dropped spinner frame takes, and settles on its own timer since the agent then goes
@@ -312,14 +317,15 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **An agent is blocked, done, working or idle** (`AttentionTone`). Its wait
   (`agentWait(of:)`) is an `ask` (blocked) or a `turnEnd` (done), and what answers it is the
   difference.
-  - An **ask** (a notification, Codex's Action Required title, a crash) latches whatever
-    the pane's focus, since the notification behind it comes only once, so a split asking
-    in the active tab reads blocked. Looking at a prompt
-    is not answering it. Claude and Codex answer their own ask: Claude when a spinner
-    title follows its `✳` prompt title, Codex when its title leaves the prompt, and either
-    when a turn starts. A key at their prompt answers nothing, since an arrow key sends
-    nothing. Any other agent is answered by typing into the pane, where a key the chrome
-    did not claim is aimed at the agent and a reserved chord is not.
+  - An **ask** (a `blocked` report, a notification, Codex's Action Required title, a crash)
+    latches whatever the pane's focus, since the signal behind it comes only once, so a
+    split asking in the active tab reads blocked. It banners whenever the app is in the
+    background. Looking at a prompt is not answering it. Claude and Codex answer their own
+    ask: Claude when its report leaves `blocked` (without a report, when a spinner title
+    follows its `✳` prompt title), Codex when its title leaves the prompt, and either when a
+    turn starts. A key at their prompt answers nothing, since an arrow
+    key sends nothing. Any other agent is answered by typing into the pane, where a key the
+    chrome did not claim is aimed at the agent and a reserved chord is not.
   - A **turn end** (a named agent's `working` falling) waits only if its surface is not
     seen. It latches the surface as well and raises the waiting card, with no banner.
     Looking at it, a new turn, typing or the agent exiting answers it.
@@ -329,11 +335,11 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   came from (`Source`, ranked so a stronger source renames, a weaker one never does, and a
   missing name yields to any real name), and what it last said. `identify` is the one way
   in. A launch whose program is a known or listed agent (`GeneralConfig.listedAgents`: `agents` plus the `ai` program) joins at launch, idle included; any
-  surface that sends indeterminate OSC 9;4 joins on that signal, an OSC 777 whose title
-  names a known or listed agent as a whole token joins on that, and a title an agent's
-  identification pattern recognises joins on that. The last is the only way in for
-  a hand-launched Codex, which emits no progress and notifies on only some stops, and the
-  only way a hand-launched Claude is listed, and named, before its first turn. An agent
+  surface that sends an OSC 7501 report joins on it, named by its `app`, as does one that
+  sends indeterminate OSC 9;4, an OSC 777 whose title names a known or listed agent as a
+  whole token, and a title an agent's identification pattern recognises. The last is the
+  only way in for a hand-launched Codex, which emits no progress and notifies on only some
+  stops, and for a hand-launched Claude without 7501 before its first turn. An agent
   leaves when its surface is released, when its command finishes, or when its busy reading falls (the program exited to the
   shell), once its wait is answered. Only a *fall* from busy counts: a surface polled
   before its program starts has not been busy yet. A fall settles one poll later, so the
@@ -349,14 +355,16 @@ its `TabController`s and their titles. `TabController` owns one tab: a
 - **Only an agent's OSC 777 can ask.** A notification from a surface that is not in the
   roster, and whose title names no known or listed agent, lands like a finished
   command: `completed`, no banner, no row, and never over a tab that is already waiting.
-  An agent's notification goes through `AgentRules.notificationKind`. Codex's carries no
-  state, because it arrives before its title says what Codex wants; the move into its
-  Action Required title raises the banner and, unless `attention-toast` is off, the
-  waiting card instead, once per ask.
-  Claude's idle prompt is a turn end arriving a minute late: it only banners over a turn
-  end still unseen, and changes nothing once the turn was seen. It asks only from a Claude
-  that reports no progress, since Claude clears its progress at launch and none means
-  progress is off. Every other agent notification asks.
+  An agent's notification goes through `AgentRules.notificationKind`. Codex's, and that of
+  any agent with a 7501 report, carries no state: Codex's arrives before its title says what
+  it wants, and Claude's seconds after its report did, so an ask answered in that gap would
+  ask again. The move into Codex's Action Required title raises the banner and, unless
+  `attention-toast` is off, the waiting card instead, once per ask. Such a notification only
+  banners over a turn end still unseen, and lends its words to a row that has no report.
+  Without a report, Claude's idle prompt is a turn end arriving a minute late: it only
+  banners over a turn end still unseen, and changes nothing once the turn was seen. It asks
+  only from a Claude that reports no progress, since Claude clears its progress at launch
+  and none means progress is off. Every other agent notification asks.
 - **A tab shows what its agents' rows show, except idle.** An Agents row shows every agent
   state, an idle `StateDot` included, and a tab reads the same items, after them, so the two
   change together: a blocked or done `StateDot` or a `working` `Spinner` in its close slot,
