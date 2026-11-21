@@ -17,7 +17,6 @@ final class SidebarController {
         let number: Int?
         let isActive: Bool
         let isConfigured: Bool
-        let isWaiting: Bool
         let isWorktreeRemoved: Bool
     }
 
@@ -55,7 +54,6 @@ final class SidebarController {
     var onLeave: () -> Void = {}
     var onFocusChanged: () -> Void = {}
     var onJump: (SurfaceID) -> Void = { _ in }
-    var onJumpElsewhere: () -> Void = {}
     var onActivateHost: (SSHHostID) -> Void = { _ in }
     var onRevealChanged: () -> Void = {}
     var onFocusYield: () -> Void = {}
@@ -91,7 +89,6 @@ final class SidebarController {
         }
         view.onFocusChanged = { [weak self] in self?.onFocusChanged() }
         view.onJump = { [weak self] in self?.onJump($0) }
-        view.onJumpElsewhere = { [weak self] in self?.onJumpElsewhere() }
         view.onActivateHost = { [weak self] in self?.onActivateHost($0) }
     }
 
@@ -339,16 +336,14 @@ final class SidebarController {
 
     func render(
         order: WorkspaceOrder, workspaces: [WorkspaceController], active: WorkspaceController?,
-        activeHost: SSHHostID?, waiting: Set<WorkspaceID>
+        activeHost: SSHHostID?
     ) {
         let byID = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
         let numbers = Dictionary(uniqueKeysWithValues: order.navigable.enumerated().map { ($1, $0 + 1) })
-        let waitingHosts = Set(workspaces.filter { waiting.contains($0.id) }.compactMap(\.host))
         let nextHosts = order.hosts.map {
             SidebarHostItem(
                 id: $0.id, name: GeneralConfig.current.displayName(of: $0.id), status: $0.status,
-                number: numbers[.host($0.id)], isActive: $0.id == activeHost,
-                isWaiting: $0.status == .connected && waitingHosts.contains($0.id))
+                number: numbers[.host($0.id)], isActive: $0.id == activeHost)
         }
         let next = order.entries.compactMap { entry -> Entry? in
             switch entry {
@@ -359,12 +354,11 @@ final class SidebarController {
                     row: .workspace(id), kind: kind, name: workspace.name, pinnedName: workspace.pinnedName,
                     folder: workspace.folder,
                     number: numbers[.workspace(id)], isActive: workspace === active,
-                    isConfigured: workspace.isConfigured,
-                    isWaiting: waiting.contains(id), isWorktreeRemoved: workspace.isWorktreeRemoved)
+                    isConfigured: workspace.isConfigured, isWorktreeRemoved: workspace.isWorktreeRemoved)
             case .ghost(let parent):
                 return Entry(
                     row: .ghost(parent.path.standardizedFileURL.path), kind: .ghost, name: parent.title,
-                    pinnedName: nil, folder: nil, number: nil, isActive: false, isConfigured: true, isWaiting: false,
+                    pinnedName: nil, folder: nil, number: nil, isActive: false, isConfigured: true,
                     isWorktreeRemoved: false)
             }
         }
@@ -490,26 +484,21 @@ final class SidebarController {
             let isRepo = entry.folder.flatMap(GitRepoStatus.known) == true
             return SidebarRowItem(
                 id: entry.row, variant: .standard, name: entry.name, detail: branch, number: entry.number,
-                isActive: entry.isActive, makesWorktrees: entry.isConfigured && isRepo, isWaiting: entry.isWaiting)
+                isActive: entry.isActive, makesWorktrees: entry.isConfigured && isRepo)
         case .worktree(let origin):
             return SidebarRowItem(
                 id: entry.row, variant: .nested(symbol: worktreeSymbol),
                 name: entry.pinnedName ?? branch ?? origin.name,
                 detail: entry.isWorktreeRemoved ? WorktreeOrigin.removedDetail : nil, number: entry.number,
-                isActive: entry.isActive, makesWorktrees: false,
-                isWaiting: entry.isWaiting)
+                isActive: entry.isActive, makesWorktrees: false)
         case .ghost:
             return SidebarRowItem(
                 id: entry.row, variant: .faint, name: entry.name, detail: nil, number: nil, isActive: false,
-                makesWorktrees: true, isWaiting: false)
+                makesWorktrees: true)
         }
     }
 
     func renderAgents(_ items: [SidebarAgentItem]) { view.renderAgents(items) }
-
-    func renderWaitingElsewhere(agents: Int, windows: Int, index: Int) {
-        view.renderWaitingElsewhere(agents: agents, windows: windows, index: index)
-    }
 
     func setOpenModal(palette: Bool, settings: Bool) { footer.setOpenModal(palette: palette, settings: settings) }
 

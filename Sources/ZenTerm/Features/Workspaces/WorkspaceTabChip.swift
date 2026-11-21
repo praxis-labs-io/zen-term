@@ -57,10 +57,10 @@ final class WorkspaceTabChip: TabChip, NSTextFieldDelegate {
         setAccessibilityLabel(title)
         setAccessibilitySelected(selected)
         setAccessibilityValue(opensFocused ? "Opens focused" : nil)
-        apply(title: title, isCurrent: selected, isClosable: removable, dotColor: openFocusedDotColor)
+        apply(title: title, isCurrent: selected, isClosable: removable, indicator: openFocusedDot)
     }
 
-    private var openFocusedDotColor: NSColor? { opensFocused ? Theme.current.chrome.cursor.nsColor : nil }
+    private var openFocusedDot: Indicator? { opensFocused ? .dot(.live) : nil }
 
     override var textWidth: CGFloat {
         guard isRenaming else { return super.textWidth }
@@ -76,7 +76,7 @@ final class WorkspaceTabChip: TabChip, NSTextFieldDelegate {
     }
 
     override func reapplyTheme() {
-        apply(title: title, isCurrent: isCurrent, isClosable: isClosable, dotColor: openFocusedDotColor)
+        apply(title: title, isCurrent: isCurrent, isClosable: isClosable, indicator: openFocusedDot)
         super.reapplyTheme()
         renameField.applyThemedEditor()
     }

@@ -28,10 +28,8 @@
 
 # The chrome's accent: the color for the focused pane, work in progress, and the
 # primary action. It paints the focused pane's border, a shortcut while you
-# record it, a tool's activity dot while nothing there needs you, primary
-# buttons, the progress bar, and the terminal cursor. A dot takes the theme's attention color when an agent there is
-# waiting on you, and its positive color when a long command there finished
-# unseen, the same colors a tab's dot takes. Pick any slot of the
+# record it, a hidden drawer's or tool's dot while something there runs, primary
+# buttons, the progress bar, and the terminal cursor. Pick any slot of the
 # theme's palette and the whole chrome and the cursor follow; the terminal's other
 # colors are untouched, so a program printing in that color is unaffected.
 #
@@ -207,8 +205,8 @@
 
 # The in-app notice for a background tab, or a drawer or tool out of sight, that
 # needs you. Sticky waits to be answered; auto clears itself after
-# `toast-duration`. Either way the tab's colored number and the drawer's or
-# tool's dot stay until you look at it or press Dismiss. Switch on a tool's notice
+# `toast-duration`. Either way the tab's dot and the agent's Waiting row stay
+# until you look at it or press Dismiss. Switch on a tool's notice
 # opens that tool.
 # In-app Settings edit: applies to the next notice.
 # attention-toast = sticky            # sticky | auto

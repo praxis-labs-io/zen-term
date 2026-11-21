@@ -14,6 +14,7 @@ enum ChromeThemeDeriver {
             onAccent: onAccent(for: accent, in: terminal),
             working: AccentSlot.yellow.color(in: terminal),
             done: AccentSlot.blue.color(in: terminal),
+            blocked: AccentSlot.red.color(in: terminal),
             positive: AccentSlot.green.color(in: terminal),
             cursor: accent,
             fillScale: fillScale(for: terminal),

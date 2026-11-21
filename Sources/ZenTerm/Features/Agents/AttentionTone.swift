@@ -1,19 +1,23 @@
-import AppKit
-
-// One mapping for the whole chrome: surfaces differ in which states they show, never in the hue.
+// One agent's state, shown by its Agents row and its tab.
 enum AttentionTone {
-    case waiting, working, idle
+    case blocked, done, working, idle
 
     init(wait: AttentionStore.AgentWait?, working: Bool) {
-        self = wait != nil ? .waiting : working ? .working : .idle
+        switch wait {
+        case .ask: self = .blocked
+        case .turnEnd: self = .done
+        case nil: self = working ? .working : .idle
+        }
     }
 
-    var ink: NSColor {
-        let chrome = Theme.current.chrome
+    var isWaiting: Bool { self == .blocked || self == .done }
+
+    var dot: StateDot.State? {
         switch self {
-        case .waiting: return chrome.done.nsColor
-        case .working: return chrome.working.nsColor
-        case .idle: return chrome.ink(.muted)
+        case .blocked: return .blocked
+        case .done: return .done
+        case .idle: return .idle
+        case .working: return nil
         }
     }
 }

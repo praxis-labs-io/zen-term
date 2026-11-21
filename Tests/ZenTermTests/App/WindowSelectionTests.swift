@@ -267,7 +267,7 @@ final class WindowSelectionTests: WindowTestCase {
         surface.delegate?.surface(
             surface, didPostNotification: TerminalNotification(title: "pi", body: "Wants to run swift test"))
         drainMainQueue()
-        XCTAssertEqual(c.agentStateForTesting(agent), .waiting, "precondition: the agent is waiting")
+        XCTAssertEqual(c.agentStateForTesting(agent), .blocked, "precondition: the agent is waiting")
         c.selectHostForTesting(SSHHostID(alias: "devbox"))
 
         c.handle(.nextWaitingAgent)

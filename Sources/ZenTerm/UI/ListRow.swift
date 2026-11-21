@@ -92,6 +92,9 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     private lazy var stackTop = stack.topAnchor.constraint(equalTo: topAnchor)
     private lazy var stackBottom = stack.bottomAnchor.constraint(equalTo: bottomAnchor)
     private var footnoteBottom: NSLayoutConstraint?
+    // Pinned again on every rebuild: moving the title into a new lines stack drops constraints on it.
+    private var titleLineViews: [NSView] = []
+    private var titleLinePins: [NSLayoutConstraint] = []
 
     var title: String { content.title }
 
@@ -142,6 +145,17 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         refreshFill()
     }
 
+    func centerOnTitleLine(_ views: [NSView]) {
+        titleLineViews = views
+        pinTitleLine()
+    }
+
+    private func pinTitleLine() {
+        NSLayoutConstraint.deactivate(titleLinePins)
+        titleLinePins = titleLineViews.map { $0.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor) }
+        NSLayoutConstraint.activate(titleLinePins)
+    }
+
     private func refreshAccessibilitySelected() {
         setAccessibilitySelected(isCurrent || content.trailing == .check)
     }
@@ -170,6 +184,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         if lead.count > 1 { stack.setCustomSpacing(ChromeMetrics.Spacing.s6, after: lead[0]) }
         for view in trail.dropLast() { stack.setCustomSpacing(ChromeMetrics.Spacing.s6, after: view) }
         refreshInsets()
+        pinTitleLine()
     }
 
     private func titleView(_ chrome: ChromeTheme) -> NSView {

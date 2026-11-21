@@ -88,9 +88,8 @@ final class ToggleDock: NSView, ThemeReapplying {
 
     var scratchActivityForTesting: Bool { scratchBtn.showsActivity }
 
-    var rightActivityStateForTesting: SurfaceAttention { rightBtn.activityState }
-    var scratchActivityStateForTesting: SurfaceAttention { scratchBtn.activityState }
-    var rightActivityColorForTesting: NSColor { rightBtn.activityColorForTesting }
+    var rightActivityDotForTesting: StateDot { rightBtn.activityDotForTesting }
+    var scratchActivityDotForTesting: StateDot { scratchBtn.activityDotForTesting }
     var scratchActiveForTesting: Bool { scratchBtn.isActive }
     var rightActiveForTesting: Bool { rightBtn.isActive }
 
@@ -166,18 +165,14 @@ final class ToggleDock: NSView, ThemeReapplying {
 
         for (id, btn) in toolFloatBtns {
             let isLive = isLiveInBackground(id)
-            let attention = floatAttention(id)
             btn.isActive = floatID == id
-            btn.activityState = attention
-            btn.showsActivity = isLive || attention != .idle
+            btn.showsActivity = isLive
             btn.isHidden = !showsToolFloat(id) || (toolbarHiddenFloatIDs.contains(id) && floatID != id && !isLive)
         }
 
         scratchBtn.isActive = floatID == ToolFloat.scratch.id
         let scratchAttention = floatAttention(ToolFloat.scratch.id)
-        scratchBtn.activityState = scratchAttention
-        scratchBtn.showsActivity =
-            isLiveInBackground(ToolFloat.scratch.id) || scratchAttention != .idle
+        scratchBtn.showsActivity = isLiveInBackground(ToolFloat.scratch.id)
 
         let floatCoversTab = floatID != nil
         if floatCoversTab {
@@ -202,15 +197,15 @@ final class ToggleDock: NSView, ThemeReapplying {
             }
         }
 
-        let bottomAttention = drawerAttention(.bottom)
-        let rightAttention = drawerAttention(.right)
-        bottomBtn.activityState = bottomAttention
-        rightBtn.activityState = rightAttention
-        bottomBtn.showsActivity = overlay.bottomBusy || bottomAttention != .idle
-        rightBtn.showsActivity = overlay.rightBusy || rightAttention != .idle
+        bottomBtn.showsActivity = overlay.bottomBusy && !bottomBtn.isActive
+        rightBtn.showsActivity = overlay.rightBusy && !rightBtn.isActive
 
-        surface(.bottomDrawer, busy: bottomBtn.showsActivity, onScreen: bottomBtn.isActive)
-        surface(.rightDrawer, busy: rightBtn.showsActivity, onScreen: rightBtn.isActive)
+        surface(
+            .bottomDrawer, busy: overlay.bottomBusy || drawerAttention(.bottom) != .idle,
+            onScreen: bottomBtn.isActive)
+        surface(
+            .rightDrawer, busy: overlay.rightBusy || drawerAttention(.right) != .idle,
+            onScreen: rightBtn.isActive)
         surface(
             .scratch, busy: isFloatBusy(ToolFloat.scratch.id) || scratchAttention != .idle,
             onScreen: scratchBtn.isActive)

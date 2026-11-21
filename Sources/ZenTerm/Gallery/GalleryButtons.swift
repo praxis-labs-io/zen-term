@@ -5,7 +5,7 @@
         static let variants: [AppButton.Variant] = [.primary, .secondary, .muted, .destructive, .link]
 
         static func sections() -> [GallerySection] {
-            [appButtons(), iconButtons(), keycaps()]
+            [appButtons(), iconButtons(), keycaps(), stateDots()]
         }
 
         static func title(for variant: AppButton.Variant) -> String {
@@ -72,12 +72,8 @@
             hovered.forceHoverForGallery()
             let active = iconButton()
             active.isActive = true
-            let activity = SurfaceAttention.allCases.map { state -> NSView in
-                let button = iconButton()
-                button.showsActivity = true
-                button.activityState = state
-                return button
-            }
+            let live = iconButton()
+            live.showsActivity = true
             return GallerySection(
                 title: "IconButton",
                 rows: [
@@ -85,7 +81,16 @@
                     GallerySection.Row(label: "Hover", samples: [hovered]),
                     GallerySection.Row(label: "Active", samples: [active]),
                     GallerySection.Row(label: "Rests filled", samples: [iconButton(restsFilled: true)]),
-                    GallerySection.Row(label: "Activity: idle, working, done, waiting", samples: activity),
+                    GallerySection.Row(label: "Live in the background", samples: [live]),
+                ])
+        }
+
+        private static func stateDots() -> GallerySection {
+            GallerySection(
+                title: "StateDot",
+                rows: [
+                    GallerySection.Row(
+                        label: "Blocked, done, idle, live", samples: StateDot.State.allCases.map(StateDot.init))
                 ])
         }
 

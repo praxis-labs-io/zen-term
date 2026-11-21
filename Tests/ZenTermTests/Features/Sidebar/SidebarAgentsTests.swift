@@ -113,18 +113,6 @@ final class SidebarAgentsTests: WindowTestCase {
         c.sidebarForTesting.view.agentSectionForTesting
     }
 
-    private func waitingRow(_ c: WindowController) -> SidebarWaitingElsewhereRow? {
-        c.sidebarForTesting.view.waitingElsewhereRowForTesting
-    }
-
-    // What AppDelegate wires for real. Raising the window is AppKit's, and belongs to the runbook.
-    private func wireJump(from asking: WindowController, to others: [WindowController]) {
-        asking.revealWaitingAgentElsewhere = { window in
-            guard let other = others.first(where: { $0.windowID == window }) else { return false }
-            return other.revealLongestWaitingAgent()
-        }
-    }
-
     private func items(_ c: WindowController) -> [SidebarAgentItem] {
         rows(c).compactMap(\.itemForTesting)
     }
@@ -184,6 +172,133 @@ final class SidebarAgentsTests: WindowTestCase {
             charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36)!
     }
 
+    private func finishATurn(_ agent: Agent) {
+        progress(agent, working: true)
+        progress(agent, working: false)
+    }
+
+    private func tabChips(_ c: WindowController) -> [TerminalTabChip] {
+        func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
+        return descendants(c.containerForTesting).compactMap { $0 as? TabBarView }.first?.chipsForTesting ?? []
+    }
+
+    private func row(of agent: Agent, in c: WindowController) throws -> SidebarAgentRow {
+        try XCTUnwrap(rows(c).first { $0.itemForTesting?.id == agent.id })
+    }
+
+    private func indicators(_ c: WindowController) -> [TabChip.Indicator?] {
+        tabChips(c).map { chip in
+            if chip.isSpinningForTesting { return .spinner }
+            return chip.isDotVisibleForTesting ? chip.dotStateForTesting.map { .dot($0) } : nil
+        }
+    }
+
+    func test_anAgentRow_showsBlockedDoneWorkingAndIdle() throws {
+        let c = makeWindow()
+        let finished = try focusedAgent(c)
+        let asking = try split(c)
+        let working = try split(c)
+        let idle = try split(c)
+        for agent in [finished, working, idle] { c.identifyAgentForTesting(agent.id, name: "claude") }
+        WindowController.isPresent = { _ in false }
+
+        finishATurn(finished)
+        notify(asking, "Wants to run swift test")
+        progress(working, working: true)
+
+        let chrome = Theme.current.chrome
+        let blockedRow = try row(of: asking, in: c)
+        XCTAssertEqual(blockedRow.dotForTesting.state, .blocked)
+        XCTAssertEqual(blockedRow.dotForTesting.colorForTesting, chrome.blocked.nsColor.cgColor)
+        XCTAssertFalse(blockedRow.isSpinningForTesting)
+
+        let doneRow = try row(of: finished, in: c)
+        XCTAssertEqual(doneRow.dotForTesting.state, .done)
+        XCTAssertEqual(doneRow.dotForTesting.colorForTesting, chrome.done.nsColor.cgColor)
+        XCTAssertFalse(doneRow.isSpinningForTesting)
+
+        let workingRow = try row(of: working, in: c)
+        XCTAssertNil(workingRow.dotForTesting.state, "the spinner says working, not a dot")
+        XCTAssertTrue(workingRow.isSpinningForTesting)
+
+        let idleRow = try row(of: idle, in: c)
+        XCTAssertEqual(idleRow.dotForTesting.state, .idle)
+        XCTAssertEqual(idleRow.dotForTesting.colorForTesting, chrome.ink(.muted).cgColor)
+        XCTAssertFalse(idleRow.isSpinningForTesting)
+    }
+
+    func test_aTab_showsWhatItsAgentRowShows() throws {
+        let c = makeWindow()
+        let agent = try focusedAgent(c)
+        c.identifyAgentForTesting(agent.id, name: "claude")
+        WindowController.isPresent = { _ in false }
+        c.newTabForTesting()
+        let asking = try focusedAgent(c)
+
+        XCTAssertEqual(c.agentStateForTesting(agent.id), .idle, "precondition")
+        XCTAssertEqual(indicators(c), [nil, nil], "an idle agent shows nothing, and neither does a tab with none")
+
+        progress(agent, working: true)
+        XCTAssertEqual(c.agentStateForTesting(agent.id), .working, "precondition")
+        XCTAssertEqual(indicators(c), [.spinner, nil])
+
+        progress(agent, working: false)
+        XCTAssertEqual(c.agentStateForTesting(agent.id), .done, "precondition")
+        XCTAssertEqual(indicators(c), [.dot(.done), nil])
+        XCTAssertEqual(
+            try XCTUnwrap(tabChips(c).first).dotColorForTesting, Theme.current.chrome.done.nsColor.cgColor)
+
+        notify(asking, "Wants to run swift test")
+        XCTAssertEqual(c.agentStateForTesting(asking.id), .blocked, "precondition")
+        XCTAssertEqual(indicators(c), [.dot(.done), .dot(.blocked)])
+        XCTAssertEqual(
+            try XCTUnwrap(tabChips(c).last).dotColorForTesting, Theme.current.chrome.blocked.nsColor.cgColor)
+
+        WindowController.isPresent = { _ in true }
+        c.answerTypedAgent()
+        XCTAssertEqual(c.agentStateForTesting(asking.id), .idle, "precondition: answered")
+        XCTAssertEqual(indicators(c), [.dot(.done), nil], "the tab clears when its row does")
+
+        c.selectTabForTesting(index: 0)
+        XCTAssertEqual(c.agentStateForTesting(agent.id), .idle, "precondition: seen")
+        XCTAssertEqual(indicators(c), [nil, nil])
+    }
+
+    func test_aTabWithSeveralAgents_showsBlockedOverDoneOverWorking() throws {
+        let c = makeWindow()
+        let finished = try focusedAgent(c)
+        let working = try split(c)
+        let asking = try split(c)
+        for agent in [finished, working] { c.identifyAgentForTesting(agent.id, name: "claude") }
+        WindowController.isPresent = { _ in false }
+
+        progress(working, working: true)
+        XCTAssertEqual(indicators(c), [.spinner])
+
+        finishATurn(finished)
+        XCTAssertEqual(indicators(c), [.dot(.done)], "done over working")
+
+        notify(asking, "Wants to run swift test")
+        XCTAssertEqual(indicators(c), [.dot(.blocked)], "blocked over done and working")
+
+        WindowController.isPresent = { _ in true }
+        c.answerTypedAgent()
+        XCTAssertEqual(c.agentStateForTesting(asking.id), .idle, "precondition: answered")
+        XCTAssertEqual(indicators(c), [.dot(.done)])
+    }
+
+    func test_aCommandFinishingUnseen_showsNoDotOnItsTab() throws {
+        let c = makeWindow()
+        WindowController.isPresent = { _ in false }
+
+        c.notifyCommandFinishedForTesting(tabIndex: 0, result: TerminalCommandResult(exitCode: 0, duration: 30))
+        drainMainQueue()
+
+        XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .completed, "precondition: the finish latched")
+        XCTAssertEqual(tabChips(c).map(\.dotStateForTesting), [nil])
+        XCTAssertFalse(try XCTUnwrap(tabChips(c).first).isDotVisibleForTesting)
+    }
+
     func test_noAgents_hidesTheSection() {
         let c = makeWindow()
 
@@ -204,7 +319,7 @@ final class SidebarAgentsTests: WindowTestCase {
         notify(first, "Wants to run swift test")
 
         XCTAssertEqual(items(c).map(\.id), [first.id, second.id, third.id])
-        XCTAssertEqual(items(c).map(\.state), [.waiting, .working, .idle])
+        XCTAssertEqual(items(c).map(\.state), [.blocked, .working, .idle])
         XCTAssertEqual(items(c).map(\.summary), ["Wants to run swift test", "Working", "Idle"])
         XCTAssertFalse(c.sidebarForTesting.view.agentsAreHiddenForTesting)
 
@@ -214,12 +329,12 @@ final class SidebarAgentsTests: WindowTestCase {
         focus(first, in: c)
         c.answerTypedAgent()
         XCTAssertEqual(items(c).map(\.id), [second.id, first.id, third.id])
-        XCTAssertEqual(items(c).map(\.state), [.waiting, .idle, .idle])
+        XCTAssertEqual(items(c).map(\.state), [.blocked, .idle, .idle])
         XCTAssertEqual(items(c)[1].summary, "Idle", "an answered question does not linger")
 
         progress(third, working: true)
         XCTAssertEqual(items(c).map(\.id), [second.id, third.id, first.id])
-        XCTAssertEqual(items(c).map(\.state), [.waiting, .working, .idle])
+        XCTAssertEqual(items(c).map(\.state), [.blocked, .working, .idle])
     }
 
     func test_anAgentWaitingInAnUnfocusedSplit_staysWaitingUntilItIsAnswered() throws {
@@ -230,13 +345,13 @@ final class SidebarAgentsTests: WindowTestCase {
         notify(first, "Wants to run swift test")
 
         XCTAssertNil(c.attentionStateForTesting(tabIndex: 0), "the tab number keeps using tab activeness")
-        XCTAssertEqual(items(c).map(\.state), [.waiting])
+        XCTAssertEqual(items(c).map(\.state), [.blocked])
 
         _ = try split(c)
-        XCTAssertEqual(items(c).map(\.state), [.waiting], "focusing another pane does not answer it")
+        XCTAssertEqual(items(c).map(\.state), [.blocked], "focusing another pane does not answer it")
 
         focus(first, in: c)
-        XCTAssertEqual(items(c).map(\.state), [.waiting], "focusing it back is not answering it")
+        XCTAssertEqual(items(c).map(\.state), [.blocked], "focusing it back is not answering it")
 
         c.answerTypedAgent()
         XCTAssertEqual(items(c).map(\.state), [.idle])
@@ -341,7 +456,7 @@ final class SidebarAgentsTests: WindowTestCase {
         first.surface.isBusy = false
         c.trackAgentExitsForTesting()
 
-        XCTAssertEqual(items(c).map(\.state), [.waiting], "a crash waits on you")
+        XCTAssertEqual(items(c).map(\.state), [.blocked], "a crash waits on you")
         XCTAssertEqual(items(c).first?.summary, WindowController.commandResultMessage(result))
 
         focus(first, in: c)
@@ -370,13 +485,13 @@ final class SidebarAgentsTests: WindowTestCase {
         let first = try focusedAgent(c)
         _ = try split(c)
         notify(first, "Wants to run swift test")
-        XCTAssertEqual(items(c).map(\.state), [.waiting], "precondition")
+        XCTAssertEqual(items(c).map(\.state), [.blocked], "precondition")
 
         let result = TerminalCommandResult(exitCode: 1, duration: 3)
         first.surface.delegate?.surface(first.surface, commandDidFinish: result)
         drainMainQueue()
 
-        XCTAssertEqual(items(c).map(\.state), [.waiting])
+        XCTAssertEqual(items(c).map(\.state), [.blocked])
         XCTAssertEqual(items(c).first?.summary, WindowController.commandResultMessage(result))
     }
 
@@ -385,7 +500,7 @@ final class SidebarAgentsTests: WindowTestCase {
         let first = try focusedAgent(c)
         _ = try split(c)
         notify(first, "Wants to run swift test")
-        XCTAssertEqual(items(c).map(\.state), [.waiting], "precondition")
+        XCTAssertEqual(items(c).map(\.state), [.blocked], "precondition")
 
         let result = TerminalCommandResult(exitCode: 130, duration: 3)
         first.surface.delegate?.surface(first.surface, commandDidFinish: result)
@@ -406,8 +521,7 @@ final class SidebarAgentsTests: WindowTestCase {
 
     private static let nothingWaitingMessage =
         "No agent in this window is asking for you.\nThe sidebar lists the ones that are."
-    private static let waitingElsewhereMessage =
-        "Nothing in this window is asking for you.\nThe sidebar row takes you there."
+    private static let waitingElsewhereMessage = "An agent is waiting in another window."
 
     func test_theChord_goesToTheAgentThatHasWaitedLongest() throws {
         let c = makeWindow()
@@ -433,7 +547,7 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(
             c.focusedSurfaceIDForTesting, first.id, "precondition: you are on the head of the queue")
         XCTAssertEqual(
-            items(c).filter { $0.state == .waiting }.map(\.id), [first.id, second.id],
+            items(c).filter { $0.state.isWaiting }.map(\.id), [first.id, second.id],
             "precondition: both are still waiting, and the one you are on reads first")
 
         c.handle(.nextWaitingAgent)
@@ -452,7 +566,7 @@ final class SidebarAgentsTests: WindowTestCase {
         notify(first, "Wants to run swift test")
         notify(second, "Wants to edit a file")
         notify(third, "Wants to push")
-        let queue = items(c).filter { $0.state == .waiting }.map(\.id)
+        let queue = items(c).filter { $0.state.isWaiting }.map(\.id)
         XCTAssertEqual(queue.count, 3, "precondition: three agents are waiting")
 
         var visited: [SurfaceID] = []
@@ -480,7 +594,7 @@ final class SidebarAgentsTests: WindowTestCase {
         let c = makeWindow()
         _ = try focusedAgent(c)
         let other = c.windowID + 1_000
-        AttentionCenter.shared.update(windowID: other, waitingCount: 1, since: Date())
+        AttentionCenter.shared.update(windowID: other, blockedCount: 1)
         addTeardownBlock { AttentionCenter.shared.forget(windowID: other) }
 
         c.handle(.nextWaitingAgent)
@@ -516,7 +630,7 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertEqual(c.activeWorkspaceIDForTesting, target)
         XCTAssertEqual(c.focusedSurfaceIDForTesting, agent.id)
         XCTAssertEqual(
-            items(c).map(\.state), [.waiting], "the jump takes you to the prompt, it does not answer it")
+            items(c).map(\.state), [.blocked], "the jump takes you to the prompt, it does not answer it")
     }
 
     func test_clickingAnAgent_inAClosedDrawer_opensAndFocusesIt() throws {
@@ -618,25 +732,32 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertFalse(c.sidebarForTesting.hasFocus)
     }
 
-    func test_aWorkspaceWithAnAgentWaiting_showsTheDot_untilItsTabIsVisited() throws {
+    func test_aWorkspaceRow_showsNoAgentState_whateverItsAgentsDo() throws {
         let c = makeWindow()
         let home = c.activeWorkspaceIDForTesting
         c.openWorkspaceForTesting(recipe("zen-review", right: nil))
-        let review = c.activeWorkspaceIDForTesting
-        let agent = try focusedAgent(c)
+        let finished = try focusedAgent(c)
+        let asking = try split(c)
+        c.identifyAgentForTesting(finished.id, name: "claude")
         c.activateWorkspaceForTesting(home)
+        WindowController.isPresent = { _ in false }
         let rows = c.sidebarForTesting.view.rowsForTesting
+        func shownStates() -> [[StateDot.State]] {
+            rows.map { row in descendants(of: row).compactMap { ($0 as? StateDot)?.state } }
+        }
 
-        progress(agent, working: true)
-        XCTAssertEqual(rows.map(\.showsAttentionForTesting), [false, false], "working is not waiting")
+        progress(finished, working: true)
+        XCTAssertEqual(c.agentStateForTesting(finished.id), .working, "precondition")
+        XCTAssertEqual(shownStates(), [[], []])
 
-        notify(agent, "Wants to run swift test")
-        XCTAssertEqual(rows.map(\.showsAttentionForTesting), [false, true])
-        XCTAssertEqual(rows[1].accessibilityValue() as? String, "Agent waiting")
+        progress(finished, working: false)
+        XCTAssertEqual(c.agentStateForTesting(finished.id), .done, "precondition")
+        XCTAssertEqual(shownStates(), [[], []])
 
-        c.activateWorkspaceForTesting(review)
-        XCTAssertEqual(rows.map(\.showsAttentionForTesting), [false, false])
-        XCTAssertNil(rows[1].accessibilityValue())
+        notify(asking, "Wants to run swift test")
+        XCTAssertEqual(c.agentStateForTesting(asking.id), .blocked, "precondition")
+        XCTAssertEqual(shownStates(), [[], []])
+        XCTAssertNil(rows[1].accessibilityValue(), "and says none")
     }
 
     func test_anAgentRowBornUnderACard_takesNoHover() throws {
@@ -693,27 +814,6 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertTrue(c.window.firstResponder === row, "focus goes back to the agent row it was opened from")
     }
 
-    func test_anAgentWaitingInAnotherWindow_readsHere_andClearsWhenItIsAnswered() throws {
-        let a = makeWindow()
-        let b = makeWindow()
-        let agent = try focusedAgent(b)
-        b.newTabForTesting()
-
-        XCTAssertNil(waitingRow(a), "nothing waits anywhere yet")
-
-        notify(agent, "Wants to run swift test")
-
-        XCTAssertEqual(waitingRow(a)?.textForTesting, "1 waiting in another window")
-        XCTAssertNil(waitingRow(b), "a window never counts its own")
-        XCTAssertFalse(a.sidebarForTesting.view.agentsAreHiddenForTesting)
-        XCTAssertTrue(rows(a).isEmpty, "the section is up for the row alone")
-
-        b.selectTabForTesting(index: 0)
-
-        XCTAssertNil(waitingRow(a), "answered there, gone here")
-        XCTAssertTrue(a.sidebarForTesting.view.agentsAreHiddenForTesting)
-    }
-
     func test_anAgentAskingInAWindowYouAreNotIn_waits_thoughItsPaneIsOnScreen() throws {
         let a = makeWindow()
         let b = makeWindow()
@@ -723,230 +823,9 @@ final class SidebarAgentsTests: WindowTestCase {
         notify(agent, "Wants to run swift test")
 
         XCTAssertEqual(
-            waitingRow(a)?.textForTesting, "1 waiting in another window",
+            AttentionCenter.shared.blockedCount(excluding: a.windowID), 1,
             "a pane you can see from another window has not been seen")
         XCTAssertEqual(b.attentionStateForTesting(tab: try XCTUnwrap(b.activeTabIDForTesting)), .waiting)
-    }
-
-    func test_answeringByFocusingThePane_clearsTheRowInTheOtherWindow() throws {
-        let a = makeWindow()
-        let b = makeWindow()
-        let agent = try focusedAgent(b)
-        _ = try split(b)
-        WindowController.isPresent = { [weak b] window in window !== b?.window }
-
-        notify(agent, "Wants to run swift test")
-        XCTAssertEqual(waitingRow(a)?.textForTesting, "1 waiting in another window", "precondition")
-
-        WindowController.isPresent = { _ in true }
-        focus(agent, in: b)
-
-        XCTAssertNil(
-            waitingRow(a), "focusing the pane answers it, and the count other windows read has to follow")
-    }
-
-    func test_answeringByFocusingThePane_clearsTheWorkspaceDotToo() throws {
-        let a = makeWindow()
-        let b = makeWindow()
-        let agent = try focusedAgent(b)
-        _ = try split(b)
-        WindowController.isPresent = { [weak b] window in window !== b?.window }
-
-        notify(agent, "Wants to run swift test")
-        let row = try XCTUnwrap(b.sidebarForTesting.view.rowsForTesting.first)
-        XCTAssertTrue(row.showsAttentionForTesting, "precondition: its own workspace says something waits")
-        XCTAssertNotNil(waitingRow(a), "precondition")
-
-        WindowController.isPresent = { _ in true }
-        focus(agent, in: b)
-
-        XCTAssertFalse(
-            row.showsAttentionForTesting, "answering by focus has to repaint the row that carried the dot")
-        XCTAssertNil(waitingRow(a))
-    }
-
-    func test_twoAgentsInDifferentTabsOfAnotherWindow_countAsTwo() throws {
-        let a = makeWindow()
-        let b = makeWindow()
-        let first = try focusedAgent(b)
-        b.newTabForTesting()
-        let second = try focusedAgent(b)
-        WindowController.isPresent = { [weak b] window in window !== b?.window }
-
-        notify(first, "Wants to run swift test")
-        notify(second, "Asks before the backfill")
-
-        XCTAssertEqual(waitingRow(a)?.textForTesting, "2 waiting in another window")
-    }
-
-    func test_aStaleRow_raisesNothing() throws {
-        let b = makeWindow()
-        var raised = false
-
-        XCTAssertFalse(b.revealLongestWaitingAgent { raised = true })
-        XCTAssertFalse(raised, "nothing waits there, so nothing is disturbed")
-    }
-
-    func test_theRowRefusesAWorktree_theWayAnAgentRowDoes() throws {
-        let a = makeWindow()
-        let b = makeWindow()
-        let agent = try focusedAgent(b)
-        b.newTabForTesting()
-        notify(agent, "Wants to run swift test")
-        let row = try XCTUnwrap(waitingRow(a))
-
-        a.sidebarForTesting.view.focusStop(.waitingElsewhere)
-        XCTAssertTrue(a.window.firstResponder === row, "precondition")
-
-        XCTAssertEqual(a.sidebarForTesting.focusedWorktreeRefusal, .agent, "a silent no-op is not an answer")
-    }
-
-    func test_askingAgainOnceYouAreLooking_clearsTheRowElsewhere() throws {
-        let a = makeWindow()
-        let b = makeWindow()
-        let agent = try focusedAgent(b)
-        WindowController.isPresent = { [weak b] window in window !== b?.window }
-
-        notify(agent, "Wants to run swift test")
-        XCTAssertEqual(waitingRow(a)?.textForTesting, "1 waiting in another window", "precondition")
-
-        WindowController.isPresent = { _ in true }
-        notify(agent, "Asks before the backfill")
-
-        XCTAssertNil(waitingRow(a), "a notification you are looking at clears the wait, and that has to be published")
-    }
-
-    func test_theCountIsAgents_andBothHalvesOfTheCopyFollowIt() throws {
-        let a = makeWindow()
-        let b = makeWindow()
-        let first = try focusedAgent(b)
-        let second = try split(b)
-        b.newTabForTesting()
-
-        notify(first, "Wants to run swift test")
-        XCTAssertEqual(waitingRow(a)?.textForTesting, "1 waiting in another window")
-
-        notify(second, "Asks before the backfill")
-        XCTAssertEqual(
-            waitingRow(a)?.textForTesting, "2 waiting in another window",
-            "two agents sharing one window is still another window")
-
-        let c = makeWindow()
-        let third = try focusedAgent(c)
-        c.newTabForTesting()
-        notify(third, "Wants to push")
-
-        XCTAssertEqual(waitingRow(a)?.textForTesting, "3 waiting in other windows")
-        XCTAssertEqual(waitingRow(b)?.textForTesting, "1 waiting in another window", "b sees only c")
-    }
-
-    func test_clickingTheRow_landsOnTheAgentThatHasWaitedLongest() throws {
-        let a = makeWindow()
-        let b = makeWindow()
-        let first = try focusedAgent(b)
-        b.newTabForTesting()
-        let second = try focusedAgent(b)
-        b.newTabForTesting()
-        wireJump(from: a, to: [b])
-
-        notify(first, "Wants to run swift test")
-        notify(second, "Asks before the backfill")
-        XCTAssertEqual(waitingRow(a)?.textForTesting, "2 waiting in another window", "precondition")
-        XCTAssertNotEqual(b.focusedSurfaceIDForTesting, first.id, "precondition: b is showing a third tab")
-
-        try click(try XCTUnwrap(waitingRow(a)))
-
-        XCTAssertEqual(b.focusedSurfaceIDForTesting, first.id, "the one that has waited longest, not the last")
-        XCTAssertEqual(
-            waitingRow(a)?.textForTesting, "1 waiting in another window", "the later one still waits")
-    }
-
-    func test_whenTheWaitingPaneHasExited_itLandsOnThatTabInstead() throws {
-        let a = makeWindow()
-        let b = makeWindow()
-        WindowController.isPresent = { [weak b] window in window !== b?.window }
-        let agent = try focusedAgent(b)
-        _ = try split(b)
-        focus(agent, in: b)
-        notify(agent, "Wants to run swift test")
-        let spoke = try XCTUnwrap(b.activeTabIDForTesting)
-        wireJump(from: a, to: [b])
-
-        b.handle(.closePane)
-        b.newTabForTesting()
-        XCTAssertNotEqual(b.activeTabIDForTesting, spoke, "precondition: b is showing another tab")
-        XCTAssertEqual(waitingRow(a)?.textForTesting, "1 waiting in another window", "a pane that exited still asks")
-
-        try click(try XCTUnwrap(waitingRow(a)))
-
-        XCTAssertEqual(b.activeTabIDForTesting, spoke)
-        XCTAssertNil(waitingRow(a), "arriving on the tab answers it")
-    }
-
-    func test_theRowQueuesWithTheAgents_oldestWaitingFirst() throws {
-        let a = makeWindow()
-        let mine = try focusedAgent(a)
-        let working = try split(a)
-        let b = makeWindow()
-        let theirs = try focusedAgent(b)
-        b.newTabForTesting()
-        progress(working, working: true)
-
-        notify(theirs, "Wants to push")
-        let row = try XCTUnwrap(waitingRow(a))
-        XCTAssertEqual(
-            section(a), [row, rows(a)[0]],
-            "waiting outranks this window's working agent, so the row reads above it")
-
-        notify(mine, "Wants to run swift test")
-        XCTAssertEqual(
-            section(a), [row, rows(a)[0], rows(a)[1]],
-            "the other window asked first, so it keeps its place")
-    }
-
-    func test_aLocalAgentThatAskedFirst_readsAboveTheRow() throws {
-        let a = makeWindow()
-        let mine = try focusedAgent(a)
-        _ = try split(a)
-        let b = makeWindow()
-        let theirs = try focusedAgent(b)
-        b.newTabForTesting()
-
-        notify(mine, "Wants to run swift test")
-        notify(theirs, "Wants to push")
-
-        let row = try XCTUnwrap(waitingRow(a))
-        XCTAssertEqual(section(a), [rows(a)[0], row], "the oldest thing wanting you reads first, wherever it is")
-    }
-
-    func test_arrows_reachTheRowInItsPlace_andReturnJumps() throws {
-        let a = makeWindow()
-        let mine = try focusedAgent(a)
-        let b = makeWindow()
-        let theirs = try focusedAgent(b)
-        b.newTabForTesting()
-        wireJump(from: a, to: [b])
-        progress(mine, working: true)
-        notify(theirs, "Wants to run swift test")
-
-        let workspaceRows = a.sidebarForTesting.view.rowsForTesting
-        let row = try XCTUnwrap(waitingRow(a))
-        XCTAssertEqual(section(a), [row, rows(a)[0]], "precondition: the row sorts above the working agent")
-
-        a.sidebarForTesting.focusActiveRow()
-        XCTAssertTrue(a.window.firstResponder === workspaceRows[0])
-        a.window.sendEvent(arrow(125, in: a))
-        XCTAssertTrue(a.window.firstResponder === row, "↓ reaches the row where it sits, not last")
-        XCTAssertEqual(row.fillForTesting, NSColor.clear.cgColor)
-        XCTAssertEqual(row.ringForTesting, Theme.current.chrome.focusRing.cgColor)
-        a.window.sendEvent(arrow(125, in: a))
-        XCTAssertTrue(a.window.firstResponder === rows(a)[0], "↓ carries on into the agent below it")
-        a.window.sendEvent(arrow(126, in: a))
-        XCTAssertTrue(a.window.firstResponder === row, "↑ climbs back to it")
-
-        a.window.sendEvent(returnKey(in: a))
-
-        XCTAssertEqual(b.focusedSurfaceIDForTesting, theirs.id)
     }
 
     func test_hoveringAnAgent_showsTheWholeMessage_whileTheRowReadsItsFirstSentence() throws {

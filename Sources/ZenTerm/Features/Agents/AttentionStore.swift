@@ -1,12 +1,6 @@
 import Foundation
 import TabKit
 
-/// Where a waiting agent is answered: its own pane, or the tab holding what it left behind when the pane exited.
-enum WaitingTarget: Equatable {
-    case surface(SurfaceID)
-    case tab(TabID)
-}
-
 /// One window's attention: every surface latches its own, tabs and the window roll up by `max`. Main-thread only.
 final class AttentionStore {
     // Looking at a finished turn answers it; an ask is answered only by answering it.
@@ -20,23 +14,21 @@ final class AttentionStore {
         var seen = true
         var working = false
         var since: Date?
-        // Its own clock, because `since` dates from the first latch of any kind, a completion included.
-        var waitingSince: Date?
         var agentWait: AgentWait?
         var agentSince: Date?
+        // Kept after the agent moves on: the latch outlives the ask until you look.
+        var hasUnseenAsk = false
     }
 
     private var entries: [SurfaceID: Entry] = [:]
 
-    // `waiting` is a count, not a flag: two agents that each asked and exited are still two.
-    // `waitingSince` is its own clock, because a completion folded earlier would otherwise date the question.
+    // `blocked` is a count, not a flag: two agents that each asked and exited are still two.
     private var residual: [TabID: Residual] = [:]
 
     private struct Residual: Equatable {
         var state: SurfaceAttention
         var since: Date?
-        var waiting: Int
-        var waitingSince: Date?
+        var blocked: Int
     }
 
     var onChange: (() -> Void)?
@@ -63,9 +55,7 @@ final class AttentionStore {
             residual[tab] = Residual(
                 state: max(existing?.state ?? .idle, entry.latched),
                 since: earliest(existing?.since, entry.since),
-                waiting: (existing?.waiting ?? 0) + (entry.latched == .waiting ? 1 : 0),
-                waitingSince: entry.latched == .waiting
-                    ? earliest(existing?.waitingSince, entry.waitingSince) : existing?.waitingSince
+                blocked: (existing?.blocked ?? 0) + (entry.hasUnseenAsk ? 1 : 0)
             )
         }
     }
@@ -77,7 +67,6 @@ final class AttentionStore {
             entry.latched = max(entry.latched, event)
             entry.seen = false
             entry.since = entry.latched == .idle ? nil : (entry.since ?? now())
-            if entry.latched == .waiting { entry.waitingSince = entry.waitingSince ?? now() }
             entries[id] = entry
         }
     }
@@ -87,6 +76,7 @@ final class AttentionStore {
         changing {
             guard entries[id] != nil else { return }
             record(id, .waiting, seen: seen)
+            if !seen { entries[id]?.hasUnseenAsk = true }
             entries[id]?.agentWait = .ask
             if entries[id]?.agentSince == nil { entries[id]?.agentSince = now() }
         }
@@ -154,7 +144,7 @@ final class AttentionStore {
             entries[id]?.seen = true
             entries[id]?.latched = .idle
             entries[id]?.since = nil
-            entries[id]?.waitingSince = nil
+            entries[id]?.hasUnseenAsk = false
             if entries[id]?.agentWait == .turnEnd {
                 entries[id]?.agentWait = nil
                 entries[id]?.agentSince = nil
@@ -199,38 +189,8 @@ final class AttentionStore {
         SurfaceAttention.rollup(entries.values.map(effective) + residual.values.map(\.state))
     }
 
-    /// When the oldest agent still waiting on you started waiting. A completion is not waiting.
-    var waitingSince: Date? {
-        waitingByAge.compactMap(\.since).min()
-    }
-
-    /// Everything still waiting on you, longest first. A pane that exited leaves the tab it spoke from.
-    var waitingInOrder: [WaitingTarget] {
-        waitingByAge.map(\.target)
-    }
-
-    private var waitingByAge: [(target: WaitingTarget, since: Date?, rank: Int)] {
-        let latched = entries.compactMap { id, entry -> (WaitingTarget, Date?, Int)? in
-            guard !entry.seen, entry.latched == .waiting else { return nil }
-            return (.surface(id), entry.waitingSince, id.raw)
-        }
-        let folded = residual.compactMap { tab, value -> (WaitingTarget, Date?, Int)? in
-            guard value.state == .waiting else { return nil }
-            return (.tab(tab), value.waitingSince, tab.raw)
-        }
-        return (latched + folded)
-            .sorted {
-                let a = $0.1 ?? .distantFuture
-                let b = $1.1 ?? .distantFuture
-                return a == b ? $0.2 < $1.2 : a < b
-            }
-            .map { (target: $0.0, since: $0.1, rank: $0.2) }
-    }
-
-    /// How many agents are waiting on you. A residual counts: something asked, and you have not looked.
-    var waitingCount: Int {
-        entries.values.filter { !$0.seen && $0.latched == .waiting }.count
-            + residual.values.reduce(0) { $0 + $1.waiting }
+    var blockedCount: Int {
+        entries.values.filter(isUnseenAsk).count + residual.values.reduce(0) { $0 + $1.blocked }
     }
 
     // One report per public call: a render between its steps would read a half-applied change.
@@ -246,6 +206,10 @@ final class AttentionStore {
 
     private func ids(in tab: TabID) -> [SurfaceID] {
         entries.filter { $0.value.tab == tab }.map(\.key)
+    }
+
+    private func isUnseenAsk(_ entry: Entry) -> Bool {
+        !entry.seen && entry.hasUnseenAsk
     }
 
     private func effective(_ entry: Entry) -> SurfaceAttention {

@@ -9,7 +9,6 @@ enum SidebarFocusStop: Equatable {
     case row(SidebarRowID)
     case host(String)
     case agent(SurfaceID)
-    case waitingElsewhere
 }
 
 struct SidebarHostItem: Equatable {
@@ -18,7 +17,6 @@ struct SidebarHostItem: Equatable {
     let status: SSHHostStatus
     let number: Int?
     let isActive: Bool
-    let isWaiting: Bool
 }
 
 struct SidebarRowItem: Equatable {
@@ -29,7 +27,6 @@ struct SidebarRowItem: Equatable {
     let number: Int?
     let isActive: Bool
     let makesWorktrees: Bool
-    let isWaiting: Bool
 }
 
 final class SidebarView: NSView, ThemeReapplying {
@@ -67,14 +64,11 @@ final class SidebarView: NSView, ThemeReapplying {
     private var contentEndsAtRows: NSLayoutConstraint?
     private var contentEndsAtAgents: NSLayoutConstraint?
     private var agentRows: [SurfaceID: SidebarAgentRow] = [:]
-    private var waitingRow: SidebarWaitingElsewhereRow?
     private var agentViews: [SidebarAgentRow] = []
-    private var waitingElsewhere = (agents: 0, windows: 0, index: 0)
     var onHoverCoverChanged: ((Bool) -> Void)?
     var onLeave: (() -> Void)?
     var onFocusChanged: (() -> Void)?
     var onJump: ((SurfaceID) -> Void)?
-    var onJumpElsewhere: (() -> Void)?
     var onActivateHost: ((SSHHostID) -> Void)?
     private let onActivate: (SidebarRowID) -> Void
     private let onNewWorktree: (SidebarRowID) -> Void
@@ -198,18 +192,15 @@ final class SidebarView: NSView, ThemeReapplying {
         scroll.bottomAnchor.constraint(equalTo: anchor, constant: -Self.contentBottomGap).isActive = true
     }
 
-    // The section outlives this window's own agents: the row alone keeps it up.
     private func refreshAgentsSection() {
-        let lostFocusedRow = refreshWaitingRow()
         arrangeAgents()
         refreshSections()
-        if lostFocusedRow { onLeave?() }
     }
 
     // A hidden section takes its gap with it, so each visible one hangs off the last visible one above it.
     private func refreshSections() {
         let showsHosts = !hostRows.isEmpty
-        let showsAgents = !agentViews.isEmpty || waitingRow != nil
+        let showsAgents = !agentViews.isEmpty
         hostsCaption.isHidden = !showsHosts
         hostStack.isHidden = !showsHosts
         agentsCaption.isHidden = !showsAgents
@@ -235,14 +226,8 @@ final class SidebarView: NSView, ThemeReapplying {
             let row = hostRow(for: item)
             row.setTitle(item.name)
             row.isCurrent = item.isActive
-            let status = item.status
-            let word = status.word
-            if item.isWaiting {
-                row.setDot({ AttentionTone.waiting.ink }, accessibilityValue: "\(word), Agent waiting")
-            } else {
-                row.setDot({ status.ink }, accessibilityValue: word)
-            }
-            row.setTitleInk(status == .connected ? nil : .subtle)
+            row.setDetail(item.status.word)
+            row.setTitleInk(item.status == .connected ? nil : .subtle)
             guard hostStack.arrangedSubviews.firstIndex(of: row) != index else { continue }
             let isNew = row.superview == nil
             if !isNew { hostStack.removeArrangedSubview(row) }
@@ -279,45 +264,14 @@ final class SidebarView: NSView, ThemeReapplying {
         return row
     }
 
-    func renderWaitingElsewhere(agents: Int, windows: Int, index: Int) {
-        guard (agents, windows, index) != waitingElsewhere else { return }
-        waitingElsewhere = (agents, windows, index)
-        refreshAgentsSection()
-        refreshRowHover()
-    }
-
-    // The row queues with the agents, so its place is theirs to share.
     private func arrangeAgents() {
-        var order: [NSView] = agentViews
-        if let row = waitingRow { order.insert(row, at: min(waitingElsewhere.index, order.count)) }
-        for (index, view) in order.enumerated()
+        for (index, view) in agentViews.enumerated()
         where agentStack.arrangedSubviews.firstIndex(of: view) != index {
             let isNew = view.superview == nil
             if !isNew { agentStack.removeArrangedSubview(view) }
             agentStack.insertArrangedSubview(view, at: index)
             if isNew { view.widthAnchor.constraint(equalTo: agentStack.widthAnchor).isActive = true }
         }
-    }
-
-    // Answers whether the row holding keyboard focus went away, for the caller to act on once the section has settled.
-    private func refreshWaitingRow() -> Bool {
-        guard waitingElsewhere.agents > 0 else {
-            guard let row = waitingRow else { return false }
-            let hadFocus = KeyboardFocus.isFocused(row, in: window)
-            row.removeFromSuperview()
-            waitingRow = nil
-            return hadFocus
-        }
-        let row = waitingRow ?? makeWaitingRow()
-        row.render(agents: waitingElsewhere.agents, windows: waitingElsewhere.windows)
-        return false
-    }
-
-    private func makeWaitingRow() -> SidebarWaitingElsewhereRow {
-        let row = SidebarWaitingElsewhereRow { [weak self] in self?.onJumpElsewhere?() }
-        wire(row)
-        waitingRow = row
-        return row
     }
 
     func renderAgents(_ items: [SidebarAgentItem]) {
@@ -379,7 +333,6 @@ final class SidebarView: NSView, ThemeReapplying {
             row.setDetail(item.detail)
             row.isCurrent = item.isActive
             setNewWorktreeButton(on: row, for: item)
-            row.setDot(item.isWaiting ? { AttentionTone.waiting.ink } : nil, accessibilityValue: "Agent waiting")
         }
         if activeRow != previouslyActive { revealActiveRow() }
         refreshRowHover()
@@ -436,7 +389,7 @@ final class SidebarView: NSView, ThemeReapplying {
     var isHoverCovered: Bool { hoverCovers > 0 }
 
     private var hoverRows: [any HoverSuppressing] {
-        Array(rows.values) + Array(hostRows.values) + Array(agentRows.values) + (waitingRow.map { [$0] } ?? [])
+        Array(rows.values) + Array(hostRows.values) + Array(agentRows.values)
     }
 
     private func setNewWorktreeButton(on row: NavRow, for item: SidebarRowItem) {
@@ -492,7 +445,6 @@ final class SidebarView: NSView, ThemeReapplying {
         if let host = hostRows.first(where: { KeyboardFocus.isFocused($0.value, in: window) })?.key {
             return .host(host)
         }
-        if let row = waitingRow, KeyboardFocus.isFocused(row, in: window) { return .waitingElsewhere }
         return agentRows.first { KeyboardFocus.isFocused($0.value, in: window) }.map { .agent($0.key) }
     }
 
@@ -507,11 +459,6 @@ final class SidebarView: NSView, ThemeReapplying {
             return true
         case .agent(let id):
             guard let row = agentRows[id] else { return false }
-            row.takeKeyboardFocus()
-            scroll.reveal(row)
-            return true
-        case .waitingElsewhere:
-            guard let row = waitingRow else { return false }
             row.takeKeyboardFocus()
             scroll.reveal(row)
             return true
@@ -569,8 +516,6 @@ final class SidebarView: NSView, ThemeReapplying {
     var hostsAreHiddenForTesting: Bool { hostStack.isHidden && hostsCaption.isHidden }
 
     var agentsAreHiddenForTesting: Bool { agentStack.isHidden && agentsCaption.isHidden }
-
-    var waitingElsewhereRowForTesting: SidebarWaitingElsewhereRow? { waitingRow }
 
     var agentSectionForTesting: [NSView] { agentStack.arrangedSubviews }
 

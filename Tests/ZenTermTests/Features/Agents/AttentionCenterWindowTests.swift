@@ -50,13 +50,12 @@ final class AttentionCenterWindowTests: WindowTestCase {
         wait(for: [expectation], timeout: 2)
     }
 
-    private func isListed(_ c: WindowController) -> Bool {
-        AttentionCenter.shared.waiting.contains { $0.windowID == c.windowID }
+    private func waitingCount(_ c: WindowController) -> Int {
+        let center = AttentionCenter.shared
+        return center.blockedCount(excluding: -1) - center.blockedCount(excluding: c.windowID)
     }
 
-    private func waitingCount(_ c: WindowController) -> Int {
-        AttentionCenter.shared.waiting.first { $0.windowID == c.windowID }?.count ?? 0
-    }
+    private func isListed(_ c: WindowController) -> Bool { waitingCount(c) > 0 }
 
     func test_visitingATabFocusedOnItsDrawer_takesTheWindowOffTheList() {
         let c = makeWindow()

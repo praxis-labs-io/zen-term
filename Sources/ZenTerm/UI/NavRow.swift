@@ -19,12 +19,7 @@ final class NavRow: ListRow {
     let variant: Variant
     private var detail: String?
     private var titleInk: ChromeTheme.InkLevel?
-    private let attentionDot = NSView()
-    private var dotInk: (() -> NSColor)?
-    private var dotAccessibilityValue: String?
     private(set) var hoverAccessory: NSView?
-
-    private static let attentionDotDiameter: CGFloat = 6
 
     override var isCurrent: Bool {
         didSet { if isCurrent != oldValue { refreshContent() } }
@@ -38,13 +33,7 @@ final class NavRow: ListRow {
         super.init(ListRow.Content(title: title), onChoose: onActivate)
         self.focusesOnClick = focusesOnClick
         setAccessibilityRole(.button)
-        attentionDot.wantsLayer = true
-        attentionDot.layer?.cornerRadius = ChromeMetrics.Radius.capsule(Self.attentionDotDiameter)
-        NSLayoutConstraint.activate([
-            attentionDot.widthAnchor.constraint(equalToConstant: Self.attentionDotDiameter),
-            attentionDot.heightAnchor.constraint(equalToConstant: Self.attentionDotDiameter),
-            heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control),
-        ])
+        heightAnchor.constraint(equalToConstant: ChromeMetrics.Height.control).isActive = true
         refreshContent()
     }
 
@@ -58,13 +47,6 @@ final class NavRow: ListRow {
 
     func setDetail(_ detail: String?) {
         self.detail = detail
-        refreshContent()
-    }
-
-    func setDot(_ ink: (() -> NSColor)?, accessibilityValue: String?) {
-        dotInk = ink
-        dotAccessibilityValue = ink == nil ? nil : accessibilityValue
-        attentionDot.layer?.backgroundColor = ink?().cgColor
         refreshContent()
     }
 
@@ -83,7 +65,6 @@ final class NavRow: ListRow {
 
     private func refreshContent() {
         var shown: [NSView] = []
-        if dotInk != nil { shown.append(attentionDot) }
         if showsHoverAccessory, let hoverAccessory { shown.append(hoverAccessory) }
         var next = Content(title: content.title, note: showsHoverAccessory ? nil : detail, ink: titleInkLevel)
         if case .nested(let symbol) = variant {
@@ -91,8 +72,7 @@ final class NavRow: ListRow {
             next.nests = true
         }
         render(next, accessories: shown)
-        let value = [detail ?? "", dotAccessibilityValue ?? ""].filter { !$0.isEmpty }.joined(separator: ", ")
-        setAccessibilityValue(value.isEmpty ? nil : value)
+        setAccessibilityValue(detail?.isEmpty == false ? detail : nil)
     }
 
     private var titleInkLevel: ChromeTheme.InkLevel {
@@ -115,12 +95,7 @@ final class NavRow: ListRow {
 
     var detailForTesting: String { detail ?? "" }
 
-    var showsAttentionForTesting: Bool { accessories.contains(attentionDot) }
-
-    var dotColorForTesting: CGColor? { dotInk == nil ? nil : attentionDot.layer?.backgroundColor }
-
     override func reapplyTheme() {
-        attentionDot.layer?.backgroundColor = dotInk?().cgColor
         if let hoverAccessory, hoverAccessory.superview == nil { hoverAccessory.reapplyThemeTree() }
         super.reapplyTheme()
     }
