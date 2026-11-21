@@ -55,6 +55,23 @@ public struct TerminalProgress {
     }
 }
 
+/// What a program says it is doing (OSC 7501), as it changes.
+public struct TerminalProgramStatus: Equatable {
+    public enum State: Equatable { case idle, working, done, blocked(Need?), failed }
+    public enum Need: Equatable { case permission, question, auth }
+    public var state: State
+    /// A stable program name such as `claude-code`, for matching, not display.
+    public var app: String?
+    /// One line for people. Never parse it for meaning.
+    public var message: String?
+
+    public init(state: State, app: String? = nil, message: String? = nil) {
+        self.state = state
+        self.app = app
+        self.message = message
+    }
+}
+
 /// A foreground command's result from shell integration. `exitCode` is nil when the shell reported
 /// none; `duration` is in seconds.
 public struct TerminalCommandResult: Equatable {
@@ -210,6 +227,8 @@ public protocol TerminalSurfaceDelegate: AnyObject {
     func surfaceDidRingBell(_ s: TerminalSurface)
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification)
     func surface(_ s: TerminalSurface, progressDidChange p: TerminalProgress?)
+    /// The program reported its status, or cleared it (nil).
+    func surface(_ s: TerminalSurface, programStatusDidChange status: TerminalProgramStatus?)
     func surface(_ s: TerminalSurface, commandDidFinish result: TerminalCommandResult)
     /// The program repainted this surface's background (OSC 11, or an OSC 111 reset to the current
     /// theme color). Foreground, cursor and palette changes send nothing.
@@ -244,6 +263,7 @@ public extension TerminalSurfaceDelegate {
     func surfaceDidRingBell(_ s: TerminalSurface) {}
     func surface(_ s: TerminalSurface, didPostNotification n: TerminalNotification) {}
     func surface(_ s: TerminalSurface, progressDidChange p: TerminalProgress?) {}
+    func surface(_ s: TerminalSurface, programStatusDidChange status: TerminalProgramStatus?) {}
     func surface(_ s: TerminalSurface, commandDidFinish result: TerminalCommandResult) {}
     func surface(_ s: TerminalSurface, backgroundDidChange color: TerminalColor) {}
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {}

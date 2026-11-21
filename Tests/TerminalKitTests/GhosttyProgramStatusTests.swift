@@ -1,4 +1,5 @@
 import AppKit
+import GhosttyKit
 import XCTest
 
 @testable import TerminalKit
@@ -9,6 +10,75 @@ final class GhosttyProgramStatusTests: XCTestCase {
             ["stty raw -echo", "printf '\\033]7501;?\\007'", "dd bs=1 count=8 2>/dev/null > \"$OUT\""],
             until: { $0.count >= 8 })
         XCTAssertEqual(String(decoding: reply, as: UTF8.self), "\u{1b}]7501;?")
+    }
+
+    func test_eachReportedStateCrossesTheSeam() {
+        let cases: [(ghostty_action_program_status_state_e, ghostty_action_program_status_kind_e, Expected)] = [
+            (Self.idle, Self.noKind, .idle),
+            (Self.working, Self.noKind, .working),
+            (Self.done, Self.noKind, .done),
+            (Self.blocked, GHOSTTY_PROGRAM_STATUS_KIND_PERMISSION, .blocked(.permission)),
+            (Self.blocked, GHOSTTY_PROGRAM_STATUS_KIND_QUESTION, .blocked(.question)),
+            (Self.blocked, GHOSTTY_PROGRAM_STATUS_KIND_AUTH, .blocked(.auth)),
+            (Self.blocked, Self.noKind, .blocked(nil)),
+            (GHOSTTY_PROGRAM_STATUS_STATE_ERROR, Self.noKind, .failed),
+        ]
+        for (state, kind, expected) in cases {
+            XCTAssertEqual(Self.mapped(state, kind)?.state, expected, "\(state) \(kind)")
+        }
+    }
+
+    private typealias Expected = TerminalProgramStatus.State
+    private static let idle = GHOSTTY_PROGRAM_STATUS_STATE_IDLE
+    private static let working = GHOSTTY_PROGRAM_STATUS_STATE_WORKING
+    private static let done = GHOSTTY_PROGRAM_STATUS_STATE_DONE
+    private static let blocked = GHOSTTY_PROGRAM_STATUS_STATE_BLOCKED
+    private static let noKind = GHOSTTY_PROGRAM_STATUS_KIND_NONE
+
+    func test_clearRemovesTheStatus() {
+        XCTAssertNil(Self.mapped(GHOSTTY_PROGRAM_STATUS_STATE_CLEAR, GHOSTTY_PROGRAM_STATUS_KIND_NONE))
+    }
+
+    func test_appAndMessageCrossTheSeamWithoutControlCharacters() {
+        let status = "claude-code".withCString { app in
+            "approve\u{1b}[31m Write\u{7}".withCString { msg in
+                GhosttySurface.programStatus(
+                    ghostty_action_program_status_s(
+                        state: GHOSTTY_PROGRAM_STATUS_STATE_BLOCKED, kind: GHOSTTY_PROGRAM_STATUS_KIND_PERMISSION,
+                        app: app, msg: msg))
+            }
+        }
+        XCTAssertEqual(status?.app, "claude-code")
+        XCTAssertEqual(status?.message, "approve[31m Write")
+    }
+
+    func test_aBlockedReportReachesTheDelegate() throws {
+        let spy = StatusSpy()
+        let message = Data("approve Write".utf8).base64EncodedString()
+        _ = try runInSurface(
+            [
+                "printf '\\033]7501;state=blocked:app=claude-code:kind=permission:msg=\(message)\\007'",
+                "sleep 5",
+            ], delegate: spy, until: { _ in !spy.statuses.isEmpty })
+        XCTAssertEqual(
+            spy.statuses.first,
+            TerminalProgramStatus(state: .blocked(.permission), app: "claude-code", message: "approve Write"))
+    }
+
+    private static func mapped(
+        _ state: ghostty_action_program_status_state_e, _ kind: ghostty_action_program_status_kind_e
+    ) -> TerminalProgramStatus? {
+        "".withCString { empty in
+            GhosttySurface.programStatus(
+                ghostty_action_program_status_s(state: state, kind: kind, app: empty, msg: empty))
+        }
+    }
+
+    private final class StatusSpy: TerminalSurfaceDelegate {
+        var statuses: [TerminalProgramStatus?] = []
+        func surface(_ s: TerminalSurface, programStatusDidChange status: TerminalProgramStatus?) {
+            statuses.append(status)
+        }
     }
 
     private func runInSurface(
