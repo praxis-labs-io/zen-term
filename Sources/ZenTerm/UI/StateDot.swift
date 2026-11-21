@@ -2,12 +2,13 @@ import AppKit
 
 final class StateDot: NSView, ThemeReapplying {
     enum State: CaseIterable {
-        case blocked, done, live
+        case blocked, done, idle, live
 
         var accessibilityValue: String {
             switch self {
             case .blocked: return "Agent waiting for approval"
             case .done: return "Agent finished its turn"
+            case .idle: return "Agent idle"
             case .live: return "Running"
             }
         }
@@ -49,6 +50,7 @@ final class StateDot: NSView, ThemeReapplying {
         switch state {
         case .blocked: return chrome.blocked.nsColor
         case .done: return chrome.done.nsColor
+        case .idle: return chrome.ink(.muted)
         case .live: return chrome.accent.nsColor
         }
     }
