@@ -217,22 +217,22 @@ final class SettingsSSHHostsSectionTests: WindowTestCase {
         XCTAssertIdentical(rows(in: detail).first, row)
     }
 
-    func test_aRow_showsItsStatusWordInTheStatusInk_andFollowsChangesLive() throws {
+    func test_aRow_showsItsStatusWordInMutedInk_andFollowsChangesLive() throws {
         try seed(config: "ssh-host = devbox\nssh-host = prod\n")
         let detail = mount()
         let devbox = SSHHostID(alias: "devbox")
         let row = try XCTUnwrap(rows(in: detail).first)
 
         XCTAssertEqual(row.renderedStatusForTesting.word, "Offline")
-        XCTAssertEqual(row.renderedStatusForTesting.ink, SSHHostStatus.offline.ink)
+        XCTAssertEqual(row.renderedStatusForTesting.ink, Theme.current.chrome.ink(.muted))
 
         center.setReachable(true, host: devbox)
         waitUntil(row.renderedStatusForTesting.word == "Online", "the row to read Online")
-        XCTAssertEqual(row.renderedStatusForTesting.ink, SSHHostStatus.online.ink)
+        XCTAssertEqual(row.renderedStatusForTesting.ink, Theme.current.chrome.ink(.muted))
 
         center.setConnected(true, host: devbox)
         waitUntil(row.renderedStatusForTesting.word == "Connected", "the row to read Connected")
-        XCTAssertEqual(row.renderedStatusForTesting.ink, SSHHostStatus.connected.ink)
+        XCTAssertEqual(row.renderedStatusForTesting.ink, Theme.current.chrome.ink(.muted))
         XCTAssertEqual(row.accessibilityValue() as? String, "Connected")
         XCTAssertEqual(rows(in: detail)[1].renderedStatusForTesting.word, "Offline", "only that host moved")
         XCTAssertIdentical(rows(in: detail).first, row, "the row is updated in place")

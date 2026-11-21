@@ -99,7 +99,6 @@ final class HostConnectView: NSView, ThemeReapplying {
         content.postsFrameChangedNotifications = true
         NotificationCenter.default.addObserver(
             self, selector: #selector(fitDetailToWidth), name: NSView.frameDidChangeNotification, object: content)
-        route.setStatus(status)
         setDestination(destination)
         reapplyTheme()
     }
@@ -118,7 +117,6 @@ final class HostConnectView: NSView, ThemeReapplying {
     func setStatus(_ status: SSHHostStatus) {
         guard status != self.status else { return }
         self.status = status
-        route.setStatus(status)
         applyDetail()
     }
 
