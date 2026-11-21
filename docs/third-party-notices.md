@@ -3,7 +3,9 @@
 `Sources/ZenTerm/Resources/THIRD-PARTY-NOTICES.md` lists what ZenTerm actually ships. **What gets linked is a
 property of the build, not of `build.zig.zon`**, so the pin moving is what makes this file
 wrong. Run this pass whenever `vendor/ghostty` changes, and fold any difference into the
-notices before tagging.
+notices before tagging. A pin move first rebases `patches/ghostty-*.patch` onto the new pin:
+`bin/build-ghosttykit` stops on a patch that no longer applies, so the build in section 1 is
+also the check that every patch still carries.
 
 Three rules learned the hard way:
 

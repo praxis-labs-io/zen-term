@@ -78,6 +78,14 @@ and `Sources/TerminalKit/Resources/ghostty-resources` symlinked from the main
 checkout. The ignore patterns are slashless because git does not treat a symlink as a
 directory.
 
+**ZenTerm builds ghostty with the patches in `patches/ghostty-*.patch`.** `bin/build-ghosttykit`
+applies each to the pinned source before the build and reverses it after, so `vendor/ghostty`
+stays at its pin, and stops on a patch that no longer applies. Every pin move re-applies them
+and rebases any that fail. `ghostty-program-status.patch` makes termio answer the OSC 7501
+support query and raise `GHOSTTY_ACTION_PROGRAM_STATUS` with the program's own report (state,
+kind, app, decoded msg), dropping reports about a sub-record (`id=`). The answer matters as much
+as the action: Claude Code sends 7501 only to a terminal that answers its query.
+
 **Never call `Bundle.module` in shippable code.** In a real `.app` it checks the
 bundle root and a build-machine path, then `fatalError`s, so it works on the build
 machine and crashes for everyone else. Use `Bundle.zenResourceBundle(named:fallback:)`.

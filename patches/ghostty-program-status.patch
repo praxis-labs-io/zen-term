@@ -1,0 +1,550 @@
+diff --git i/include/ghostty.h w/include/ghostty.h
+index 40ff55c9b..872be9f3e 100644
+--- i/include/ghostty.h
++++ w/include/ghostty.h
+@@ -824,6 +824,34 @@ typedef struct {
+   int8_t progress;
+ } ghostty_action_progress_report_s;
+ 
++// terminal.osc.Command.ProgramStatus.State
++typedef enum {
++  GHOSTTY_PROGRAM_STATUS_STATE_IDLE,
++  GHOSTTY_PROGRAM_STATUS_STATE_WORKING,
++  GHOSTTY_PROGRAM_STATUS_STATE_DONE,
++  GHOSTTY_PROGRAM_STATUS_STATE_BLOCKED,
++  GHOSTTY_PROGRAM_STATUS_STATE_ERROR,
++  GHOSTTY_PROGRAM_STATUS_STATE_CLEAR,
++} ghostty_action_program_status_state_e;
++
++// terminal.osc.Command.ProgramStatus.Kind
++typedef enum {
++  GHOSTTY_PROGRAM_STATUS_KIND_NONE,
++  GHOSTTY_PROGRAM_STATUS_KIND_PERMISSION,
++  GHOSTTY_PROGRAM_STATUS_KIND_QUESTION,
++  GHOSTTY_PROGRAM_STATUS_KIND_AUTH,
++} ghostty_action_program_status_kind_e;
++
++// apprt.action.ProgramStatus.C
++typedef struct {
++  ghostty_action_program_status_state_e state;
++  ghostty_action_program_status_kind_e kind;
++  // A stable program name such as "claude-code", or empty.
++  const char* app;
++  // Decoded text for people, or empty.
++  const char* msg;
++} ghostty_action_program_status_s;
++
+ // apprt.action.CommandFinished.C
+ typedef struct {
+   // -1 if no exit code was reported, otherwise 0-255
+@@ -921,6 +949,7 @@ typedef enum {
+   GHOSTTY_ACTION_SEARCH_SELECTED,
+   GHOSTTY_ACTION_READONLY,
+   GHOSTTY_ACTION_COPY_TITLE_TO_CLIPBOARD,
++  GHOSTTY_ACTION_PROGRAM_STATUS,
+ } ghostty_action_tag_e;
+ 
+ typedef union {
+@@ -962,6 +991,7 @@ typedef union {
+   ghostty_action_search_total_s search_total;
+   ghostty_action_search_selected_s search_selected;
+   ghostty_action_readonly_e readonly;
++  ghostty_action_program_status_s program_status;
+ } ghostty_action_u;
+ 
+ typedef struct {
+diff --git i/src/Surface.zig w/src/Surface.zig
+index 4d66622e3..d79156ef4 100644
+--- i/src/Surface.zig
++++ w/src/Surface.zig
+@@ -1105,6 +1105,21 @@ pub fn handleMessage(self: *Surface, msg: Message) !void {
+             };
+         },
+ 
++        .program_status => |*v| {
++            _ = self.rt_app.performAction(
++                .{ .surface = self },
++                .program_status,
++                .{
++                    .state = v.state,
++                    .kind = v.kind,
++                    .app = std.mem.sliceTo(&v.app, 0),
++                    .msg = std.mem.sliceTo(&v.msg, 0),
++                },
++            ) catch |err| {
++                log.warn("apprt failed to report program status err={}", .{err});
++            };
++        },
++
+         .selection_scroll_tick => |active| {
+             self.selection_scroll_active = active;
+             try self.selectionScrollTick();
+diff --git i/src/apprt/action.zig w/src/apprt/action.zig
+index f6865af83..d0c247b5e 100644
+--- i/src/apprt/action.zig
++++ w/src/apprt/action.zig
+@@ -343,6 +343,9 @@ pub const Action = union(Key) {
+     /// otherwise the terminal-set title.
+     copy_title_to_clipboard,
+ 
++    /// A program reported its status (OSC 7501).
++    program_status: ProgramStatus,
++
+     /// Sync with: ghostty_action_tag_e
+     pub const Key = enum(c_int) {
+         quit,
+@@ -410,6 +413,7 @@ pub const Action = union(Key) {
+         search_selected,
+         readonly,
+         copy_title_to_clipboard,
++        program_status,
+ 
+         test "ghostty.h Action.Key" {
+             try lib.checkGhosttyHEnum(Key, "GHOSTTY_ACTION_");
+@@ -739,6 +743,39 @@ pub const Pwd = struct {
+     }
+ };
+ 
++/// A program's status report (OSC 7501).
++pub const ProgramStatus = struct {
++    state: terminal.osc.Command.ProgramStatus.State,
++    kind: terminal.osc.Command.ProgramStatus.Kind,
++    app: [:0]const u8,
++    msg: [:0]const u8,
++
++    // Sync with: ghostty_action_program_status_s
++    pub const C = extern struct {
++        state: terminal.osc.Command.ProgramStatus.State,
++        kind: terminal.osc.Command.ProgramStatus.Kind,
++        app: [*:0]const u8,
++        msg: [*:0]const u8,
++    };
++
++    pub fn cval(self: ProgramStatus) C {
++        return .{
++            .state = self.state,
++            .kind = self.kind,
++            .app = self.app.ptr,
++            .msg = self.msg.ptr,
++        };
++    }
++
++    test "ghostty.h ProgramStatus.State" {
++        try lib.checkGhosttyHEnum(terminal.osc.Command.ProgramStatus.State, "GHOSTTY_PROGRAM_STATUS_STATE_");
++    }
++
++    test "ghostty.h ProgramStatus.Kind" {
++        try lib.checkGhosttyHEnum(terminal.osc.Command.ProgramStatus.Kind, "GHOSTTY_PROGRAM_STATUS_KIND_");
++    }
++};
++
+ /// The desktop notification to show.
+ pub const DesktopNotification = struct {
+     title: [:0]const u8,
+diff --git i/src/apprt/gtk/class/application.zig w/src/apprt/gtk/class/application.zig
+index 039e853aa..10ad3cf56 100644
+--- i/src/apprt/gtk/class/application.zig
++++ w/src/apprt/gtk/class/application.zig
+@@ -778,6 +778,7 @@ pub const Application = extern struct {
+             .check_for_updates,
+             .undo,
+             .redo,
++            .program_status,
+             => {
+                 log.warn("unimplemented action={}", .{action});
+                 return false;
+diff --git i/src/apprt/surface.zig w/src/apprt/surface.zig
+index 3cb0016fa..7966d9a76 100644
+--- i/src/apprt/surface.zig
++++ w/src/apprt/surface.zig
+@@ -91,6 +91,14 @@ pub const Message = union(enum) {
+     /// Report the progress of an action using a GUI element
+     progress_report: terminal.osc.Command.ProgressReport,
+ 
++    /// A program reported its status (OSC 7501). `msg` is decoded text.
++    program_status: struct {
++        state: terminal.osc.Command.ProgramStatus.State,
++        kind: terminal.osc.Command.ProgramStatus.Kind,
++        app: [31:0]u8,
++        msg: [255:0]u8,
++    },
++
+     /// A command has started in the shell, start a timer.
+     start_command,
+ 
+diff --git i/src/terminal/osc.zig w/src/terminal/osc.zig
+index 0086e48bc..b311bca9a 100644
+--- i/src/terminal/osc.zig
++++ w/src/terminal/osc.zig
+@@ -19,6 +19,7 @@ const lib = @import("../lib/main.zig");
+ 
+ pub const color = parsers.color;
+ pub const semantic_prompt = parsers.semantic_prompt;
++pub const program_status = parsers.program_status;
+ 
+ const log = std.log.scoped(.osc);
+ 
+@@ -160,6 +161,9 @@ pub const Command = union(Key) {
+     /// https://uapi-group.org/specifications/specs/osc_context/
+     context_signal: parsers.context_signal.Command,
+ 
++    /// Program status report or support query (OSC 7501)
++    program_status: ProgramStatus,
++
+     pub const SemanticPrompt = parsers.semantic_prompt.Command;
+ 
+     pub const KittyClipboardProtocol = parsers.kitty_clipboard_protocol.OSC;
+@@ -193,9 +197,39 @@ pub const Command = union(Key) {
+             "kitty_text_sizing",
+             "kitty_clipboard_protocol",
+             "context_signal",
++            "program_status",
+         },
+     );
+ 
++    pub const ProgramStatus = struct {
++        pub const State = enum(c_int) {
++            idle,
++            working,
++            done,
++            blocked,
++            @"error",
++            clear,
++        };
++
++        pub const Kind = enum(c_int) {
++            none,
++            permission,
++            question,
++            auth,
++        };
++
++        /// Set when the program asked whether the terminal supports the
++        /// protocol; the other fields are then unset.
++        query: ?Terminator = null,
++        state: State = .idle,
++        kind: Kind = .none,
++        app: []const u8 = "",
++        /// Base64, as the program sent it.
++        msg: []const u8 = "",
++        /// The report is about a sub-record, not the program itself.
++        has_id: bool = false,
++    };
++
+     pub const ProgressReport = struct {
+         pub const State = enum(c_int) {
+             remove,
+@@ -360,6 +394,9 @@ pub const Parser = struct {
+         @"133",
+         @"552",
+         @"777",
++        @"75",
++        @"750",
++        @"7501",
+         @"1337",
+         @"5522",
+     };
+@@ -425,6 +462,7 @@ pub const Parser = struct {
+             .kitty_text_sizing,
+             .kitty_clipboard_protocol,
+             .context_signal,
++            .program_status,
+             => {},
+         }
+ 
+@@ -636,10 +674,26 @@ pub const Parser = struct {
+ 
+             .@"7" => switch (c) {
+                 ';' => self.writeToFixed(),
++                '5' => self.state = .@"75",
+                 '7' => self.state = .@"77",
+                 else => self.state = .invalid,
+             },
+ 
++            .@"75" => switch (c) {
++                '0' => self.state = .@"750",
++                else => self.state = .invalid,
++            },
++
++            .@"750" => switch (c) {
++                '1' => self.state = .@"7501",
++                else => self.state = .invalid,
++            },
++
++            .@"7501" => switch (c) {
++                ';' => self.writeToAllocating(),
++                else => self.state = .invalid,
++            },
++
+             .@"77" => switch (c) {
+                 '7' => self.state = .@"777",
+                 else => self.state = .invalid,
+@@ -752,6 +806,12 @@ pub const Parser = struct {
+ 
+             .@"77" => null,
+ 
++            .@"75",
++            .@"750",
++            => null,
++
++            .@"7501" => parsers.program_status.parse(self, terminator_ch),
++
+             .@"133" => parsers.semantic_prompt.parse(self, terminator_ch),
+ 
+             .@"552" => null,
+diff --git i/src/terminal/osc/parsers.zig w/src/terminal/osc/parsers.zig
+index a56b38e88..9657b607c 100644
+--- i/src/terminal/osc/parsers.zig
++++ w/src/terminal/osc/parsers.zig
+@@ -12,6 +12,7 @@ pub const kitty_color = @import("parsers/kitty_color.zig");
+ pub const kitty_text_sizing = @import("parsers/kitty_text_sizing.zig");
+ pub const mouse_shape = @import("parsers/mouse_shape.zig");
+ pub const osc9 = @import("parsers/osc9.zig");
++pub const program_status = @import("parsers/program_status.zig");
+ pub const report_pwd = @import("parsers/report_pwd.zig");
+ pub const rxvt_extension = @import("parsers/rxvt_extension.zig");
+ pub const semantic_prompt = @import("parsers/semantic_prompt.zig");
+diff --git i/src/terminal/osc/parsers/program_status.zig w/src/terminal/osc/parsers/program_status.zig
+new file mode 100644
+index 000000000..e5f133f5e
+--- /dev/null
++++ w/src/terminal/osc/parsers/program_status.zig
+@@ -0,0 +1,125 @@
++//! OSC 7501: Program Status Protocol
++//!
++//! A program tells the terminal what it is doing with a list of
++//! `key=value` pairs separated by colons:
++//!
++//! ```
++//! ESC ] 7501 ; state=blocked:app=claude-code:kind=permission:msg=<base64> ESC \
++//! ```
++//!
++//! A program asks whether the terminal supports the protocol by sending
++//! `?` as the body. A terminal that does answers with `query_reply`.
++const std = @import("std");
++
++const osc = @import("../../osc.zig");
++const Parser = osc.Parser;
++const Command = osc.Command;
++
++/// The body of the reply to a support query.
++pub const query_reply = "?:states=idle,working,done,blocked,error:kinds=permission,question,auth";
++
++/// Parse OSC 7501. Unknown keys and malformed pairs are skipped; a report
++/// without a known `state` is discarded.
++pub fn parse(parser: *Parser, terminator_ch: ?u8) ?*Command {
++    const writer = parser.writer orelse {
++        parser.state = .invalid;
++        return null;
++    };
++    const data = writer.buffered();
++
++    if (std.mem.eql(u8, data, "?")) {
++        parser.command = .{ .program_status = .{ .query = .init(terminator_ch) } };
++        return &parser.command;
++    }
++
++    var state: ?Command.ProgramStatus.State = null;
++    var kind: Command.ProgramStatus.Kind = .none;
++    var app: []const u8 = "";
++    var msg: []const u8 = "";
++    var has_id = false;
++
++    var pairs = std.mem.splitScalar(u8, data, ':');
++    while (pairs.next()) |pair| {
++        const eq = std.mem.indexOfScalar(u8, pair, '=') orelse continue;
++        const key = pair[0..eq];
++        const value = pair[eq + 1 ..];
++        if (std.mem.eql(u8, key, "state")) {
++            state = std.meta.stringToEnum(Command.ProgramStatus.State, value);
++        } else if (std.mem.eql(u8, key, "kind")) {
++            kind = std.meta.stringToEnum(Command.ProgramStatus.Kind, value) orelse .none;
++        } else if (std.mem.eql(u8, key, "app")) {
++            app = value;
++        } else if (std.mem.eql(u8, key, "msg")) {
++            msg = value;
++        } else if (std.mem.eql(u8, key, "id")) {
++            has_id = value.len > 0;
++        }
++    }
++
++    const reported = state orelse {
++        parser.state = .invalid;
++        return null;
++    };
++
++    parser.command = .{ .program_status = .{
++        .state = reported,
++        .kind = if (reported == .blocked) kind else .none,
++        .app = app,
++        .msg = msg,
++        .has_id = has_id,
++    } };
++    return &parser.command;
++}
++
++test "OSC 7501: query" {
++    const testing = std.testing;
++
++    var p: Parser = .init(testing.allocator);
++    defer p.deinit();
++    for ("7501;?") |ch| p.next(ch);
++
++    const cmd = p.end(0x07).?.*;
++    try testing.expect(cmd == .program_status);
++    try testing.expectEqual(osc.Terminator.bel, cmd.program_status.query.?);
++}
++
++test "OSC 7501: blocked report" {
++    const testing = std.testing;
++
++    var p: Parser = .init(testing.allocator);
++    defer p.deinit();
++    for ("7501;state=blocked:app=claude-code:kind=permission:msg=aGk=") |ch| p.next(ch);
++
++    const cmd = p.end('\x1b').?.*;
++    try testing.expect(cmd == .program_status);
++    const v = cmd.program_status;
++    try testing.expect(v.query == null);
++    try testing.expectEqual(.blocked, v.state);
++    try testing.expectEqual(.permission, v.kind);
++    try testing.expectEqualStrings("claude-code", v.app);
++    try testing.expectEqualStrings("aGk=", v.msg);
++    try testing.expect(!v.has_id);
++}
++
++test "OSC 7501: kind is read only while blocked" {
++    const testing = std.testing;
++
++    var p: Parser = .init(testing.allocator);
++    defer p.deinit();
++    for ("7501;state=working:kind=question:id=task") |ch| p.next(ch);
++
++    const v = p.end('\x1b').?.program_status;
++    try testing.expectEqual(.working, v.state);
++    try testing.expectEqual(.none, v.kind);
++    try testing.expect(v.has_id);
++}
++
++test "OSC 7501: unknown state is discarded" {
++    const testing = std.testing;
++
++    var p: Parser = .init(testing.allocator);
++    defer p.deinit();
++    for ("7501;state=sleeping") |ch| p.next(ch);
++
++    try testing.expect(p.end('\x1b') == null);
++}
+diff --git i/src/terminal/stream.zig w/src/terminal/stream.zig
+index e89c73e66..bdeaf17d5 100644
+--- i/src/terminal/stream.zig
++++ w/src/terminal/stream.zig
+@@ -126,6 +126,7 @@ pub const Action = union(Key) {
+     kitty_color_report: kitty.color.OSC,
+     color_operation: ColorOperation,
+     semantic_prompt: SemanticPrompt,
++    program_status: osc.Command.ProgramStatus,
+ 
+     pub const Key = lib.Enum(
+         lib_target,
+@@ -223,6 +224,7 @@ pub const Action = union(Key) {
+             "kitty_color_report",
+             "color_operation",
+             "semantic_prompt",
++            "program_status",
+         },
+     );
+ 
+@@ -2043,6 +2045,10 @@ pub fn Stream(comptime Handler: type) type {
+                     try self.handler.vt(.progress_report, v);
+                 },
+ 
++                .program_status => |v| {
++                    try self.handler.vt(.program_status, v);
++                },
++
+                 .conemu_sleep,
+                 .conemu_show_message_box,
+                 .conemu_change_tab_title,
+diff --git i/src/terminal/stream_readonly.zig w/src/terminal/stream_readonly.zig
+index 5b97bebfa..83d6fd54e 100644
+--- i/src/terminal/stream_readonly.zig
++++ w/src/terminal/stream_readonly.zig
+@@ -186,6 +186,7 @@ pub const Handler = struct {
+             .report_pwd,
+             .show_desktop_notification,
+             .progress_report,
++            .program_status,
+             .clipboard_contents,
+             .title_push,
+             .title_pop,
+diff --git i/src/termio/stream_handler.zig w/src/termio/stream_handler.zig
+index 8c1b5b8ab..93cfed703 100644
+--- i/src/termio/stream_handler.zig
++++ w/src/termio/stream_handler.zig
+@@ -318,6 +318,7 @@ pub const StreamHandler = struct {
+             .report_pwd => try self.reportPwd(value.url),
+             .show_desktop_notification => try self.showDesktopNotification(value.title, value.body),
+             .progress_report => self.progressReport(value),
++            .program_status => try self.programStatus(value),
+             .start_hyperlink => try self.startHyperlink(value.uri, value.id),
+             .clipboard_contents => try self.clipboardContents(value.kind, value.data),
+             .semantic_prompt => try self.semanticPrompt(value),
+@@ -1548,4 +1549,57 @@ pub const StreamHandler = struct {
+     fn progressReport(self: *StreamHandler, report: terminal.osc.Command.ProgressReport) void {
+         self.surfaceMessageWriter(.{ .progress_report = report });
+     }
++
++    /// Answer an OSC 7501 support query, or hand the program's own status
++    /// report to the surface. Reports about a sub-record (`id=`) are
++    /// dropped: the surface tracks the program itself.
++    fn programStatus(
++        self: *StreamHandler,
++        status: terminal.osc.Command.ProgramStatus,
++    ) !void {
++        if (status.query) |terminator| {
++            const reply = "\x1b]7501;" ++ terminal.osc.program_status.query_reply;
++            var buf: [reply.len + 2]u8 = undefined;
++            const out = try std.fmt.bufPrint(&buf, "{s}{s}", .{ reply, terminator.string() });
++            self.messageWriter(try termio.Message.writeReq(self.alloc, out));
++            return;
++        }
++        if (status.has_id) return;
++
++        var message = apprt.surface.Message{ .program_status = .{
++            .state = status.state,
++            .kind = status.kind,
++            .app = undefined,
++            .msg = undefined,
++        } };
++        const dest = &message.program_status;
++
++        const app_len = @min(status.app.len, dest.app.len);
++        @memcpy(dest.app[0..app_len], status.app[0..app_len]);
++        dest.app[app_len] = 0;
++
++        dest.msg[decodeStatusText(status.msg, &dest.msg)] = 0;
++        self.surfaceMessageWriter(message);
++    }
++
++    /// Decode base64 into `dest`, cut at a UTF-8 boundary to fit, and
++    /// return its length. Text that doesn't decode reads as empty.
++    fn decodeStatusText(encoded: []const u8, dest: []u8) usize {
++        if (encoded.len == 0) return 0;
++        const decoder = if (std.mem.endsWith(u8, encoded, "="))
++            std.base64.standard.Decoder
++        else
++            std.base64.standard_no_pad.Decoder;
++        var buf: [4096]u8 = undefined;
++        const len = decoder.calcSizeForSlice(encoded) catch return 0;
++        if (len > buf.len) return 0;
++        decoder.decode(buf[0..len], encoded) catch return 0;
++
++        var cut = @min(len, dest.len);
++        if (cut < len) {
++            while (cut > 0 and (buf[cut] & 0xC0) == 0x80) cut -= 1;
++        }
++        @memcpy(dest[0..cut], buf[0..cut]);
++        return cut;
++    }
+ };

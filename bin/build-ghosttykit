@@ -40,7 +40,30 @@ if [ ! -f "$GHOSTTY/build.zig" ]; then
   git -C "$ROOT" submodule update --init vendor/ghostty
 fi
 
-# 3. Build the native (arm64-only) xcframework. app-runtime=none selects libghostty;
+# 3. Apply ZenTerm's carried ghostty patches for the build, and take them back off after,
+#    so the submodule stays at its pin. A patch that no longer applies stops the build:
+#    a pin move has to rebase it, never drop it silently.
+PATCHES=("$ROOT"/patches/ghostty-*.patch)
+unapply_patches() {
+  for (( i=${#PATCHES[@]}-1; i>=0; i-- )); do
+    git -C "$GHOSTTY" apply --reverse "${PATCHES[$i]}" 2>/dev/null || true
+  done
+}
+for patch in "${PATCHES[@]}"; do
+  if git -C "$GHOSTTY" apply --reverse --check "$patch" 2>/dev/null; then
+    git -C "$GHOSTTY" apply --reverse "$patch"
+  fi
+  if ! git -C "$GHOSTTY" apply --check "$patch"; then
+    echo "✗ $(basename "$patch") no longer applies to the ghostty pin; rebase it onto the pin" >&2
+    unapply_patches
+    exit 1
+  fi
+  echo "▸ applying $(basename "$patch")"
+  git -C "$GHOSTTY" apply "$patch"
+done
+trap unapply_patches EXIT
+
+# 4. Build the native (arm64-only) xcframework. app-runtime=none selects libghostty;
 #    emit-macos-app=false skips the full app (which would need xcodebuild + signing).
 #    i18n=false compiles out ghostty's gettext call sites so nothing references the LGPL
 #    libintl ghostty bundles on Apple platforms (Apple libc omits it). SharedDeps.zig still
@@ -59,14 +82,14 @@ echo "▸ building GhosttyKit.xcframework (this takes a few minutes)"
     -Di18n=false \
     -Doptimize=ReleaseFast )
 
-# 4. Stage it where Package.swift's binaryTarget points.
+# 5. Stage it where Package.swift's binaryTarget points.
 echo "▸ staging Frameworks/GhosttyKit.xcframework"
 rm -rf "$ROOT/Frameworks/GhosttyKit.xcframework"
 mkdir -p "$ROOT/Frameworks"
 cp -R "$GHOSTTY/macos/GhosttyKit.xcframework" "$ROOT/Frameworks/"
 rm -rf "$ROOT"/Frameworks/GhosttyKit.xcframework/*/Headers/ghostty
 
-# 5. Stage libghostty's runtime resources (shell-integration, themes, terminfo) from the
+# 6. Stage libghostty's runtime resources (shell-integration, themes, terminfo) from the
 #    same build, as a TerminalKit SwiftPM resource so Bundle.module resolves them at
 #    runtime. The ghostty/ + terminfo/ sibling layout mirrors Ghostty.app's
 #    Resources/{ghostty,terminfo} pair — libghostty derives TERMINFO from the sibling of
