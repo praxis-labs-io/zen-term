@@ -222,8 +222,8 @@ final class SidebarAgentsTests: WindowTestCase {
         XCTAssertTrue(workingRow.isSpinningForTesting)
 
         let idleRow = try row(of: idle, in: c)
-        XCTAssertNil(idleRow.dotForTesting.state)
-        XCTAssertNil(idleRow.dotForTesting.colorForTesting, "idle draws nothing")
+        XCTAssertEqual(idleRow.dotForTesting.state, .idle)
+        XCTAssertEqual(idleRow.dotForTesting.colorForTesting, chrome.ink(.muted).cgColor)
         XCTAssertFalse(idleRow.isSpinningForTesting)
     }
 

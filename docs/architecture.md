@@ -348,10 +348,11 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   end still unseen, and changes nothing once the turn was seen. It asks only from a Claude
   that reports no progress, since Claude clears its progress at launch and none means
   progress is off. Every other agent notification asks.
-- **A tab shows what its agents' rows show.** An Agents row shows every agent state, and a
-  tab reads the same items, after them, so the two change together: a blocked or done
-  `StateDot` or a `working` `Spinner` in its close slot, and nothing when idle. A tab with
-  several agents shows blocked over done over working; a tab with no agent shows nothing.
+- **A tab shows what its agents' rows show, except idle.** An Agents row shows every agent
+  state, an idle `StateDot` included, and a tab reads the same items, after them, so the two
+  change together: a blocked or done `StateDot` or a `working` `Spinner` in its close slot,
+  and nothing when idle. A tab with several agents shows blocked over done over working; a
+  tab with no agent shows nothing.
   The workspace, worktree and host rows show no agent state. The store latches an unseen ask
   on its surface for the count other windows read, so an ask answered while unseen counts
   until you look, and a closed pane's ask folds into its tab's residual. A finished command latches `completed`
