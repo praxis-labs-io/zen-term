@@ -60,17 +60,16 @@ final class SidebarAgentRow: SidebarJumpRow {
         for glyph in [dot, spinner] {
             glyph.translatesAutoresizingMaskIntoConstraints = false
             glyphSlot.addSubview(glyph)
-            NSLayoutConstraint.activate([
-                glyph.trailingAnchor.constraint(equalTo: glyphSlot.trailingAnchor),
-                glyph.centerYAnchor.constraint(equalTo: glyphSlot.centerYAnchor),
-            ])
+            glyph.trailingAnchor.constraint(equalTo: glyphSlot.trailingAnchor).isActive = true
         }
         NSLayoutConstraint.activate([
+            spinner.centerYAnchor.constraint(equalTo: glyphSlot.centerYAnchor),
             heightAnchor.constraint(equalToConstant: Self.height),
             glyphSlot.widthAnchor.constraint(equalToConstant: Self.glyphSize.width),
             glyphSlot.heightAnchor.constraint(equalToConstant: Self.glyphSize.height),
         ])
         accessories = [glyphSlot]
+        centerOnTitleLine(dot)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
