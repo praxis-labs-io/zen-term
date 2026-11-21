@@ -193,14 +193,6 @@ final class AttentionStore {
         SurfaceAttention.rollup(ids.map { state(tab: $0) })
     }
 
-    func isBlocked(tab: TabID) -> Bool {
-        entries.values.contains { $0.tab == tab && isUnseenAsk($0) } || (residual[tab]?.blocked ?? 0) > 0
-    }
-
-    func isBlocked(tabs ids: [TabID]) -> Bool {
-        ids.contains { isBlocked(tab: $0) }
-    }
-
     var windowState: SurfaceAttention {
         SurfaceAttention.rollup(entries.values.map(effective) + residual.values.map(\.state))
     }

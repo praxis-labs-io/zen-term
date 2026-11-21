@@ -150,14 +150,6 @@ final class SSHHostChordTests: WindowTestCase {
         XCTAssertEqual(try row("up", in: c).detailForTesting, "Online")
     }
 
-    func test_hostRows_drawNoStatusDot() throws {
-        let c = makeWindow(hosts: ["down", "up", "live"], offline: ["down"], connected: ["live"])
-
-        for host in ["down", "up", "live"] {
-            XCTAssertNil(try row(host, in: c).dotForTesting, "\(host): a dot only says an agent needs you")
-        }
-    }
-
     func test_aHostNotConnected_paintsItsTitleSubtle_andConnectingRepaintsItInPlace() throws {
         let c = makeWindow(hosts: ["devbox"], offline: ["devbox"])
         let row = try row("devbox", in: c)

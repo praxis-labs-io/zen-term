@@ -19,7 +19,6 @@ final class NavRow: ListRow {
     let variant: Variant
     private var detail: String?
     private var titleInk: ChromeTheme.InkLevel?
-    private let dot = StateDot()
     private(set) var hoverAccessory: NSView?
 
     override var isCurrent: Bool {
@@ -51,12 +50,6 @@ final class NavRow: ListRow {
         refreshContent()
     }
 
-    func setDot(_ state: StateDot.State?) {
-        guard state != dot.state else { return }
-        dot.state = state
-        refreshContent()
-    }
-
     func setTitleInk(_ ink: ChromeTheme.InkLevel?) {
         titleInk = ink
         refreshContent()
@@ -72,7 +65,6 @@ final class NavRow: ListRow {
 
     private func refreshContent() {
         var shown: [NSView] = []
-        if dot.state != nil { shown.append(dot) }
         if showsHoverAccessory, let hoverAccessory { shown.append(hoverAccessory) }
         var next = Content(title: content.title, note: showsHoverAccessory ? nil : detail, ink: titleInkLevel)
         if case .nested(let symbol) = variant {
@@ -80,8 +72,7 @@ final class NavRow: ListRow {
             next.nests = true
         }
         render(next, accessories: shown)
-        let value = [detail ?? "", dot.state?.accessibilityValue ?? ""].filter { !$0.isEmpty }.joined(separator: ", ")
-        setAccessibilityValue(value.isEmpty ? nil : value)
+        setAccessibilityValue(detail?.isEmpty == false ? detail : nil)
     }
 
     private var titleInkLevel: ChromeTheme.InkLevel {
@@ -103,8 +94,6 @@ final class NavRow: ListRow {
     }
 
     var detailForTesting: String { detail ?? "" }
-
-    var dotForTesting: StateDot? { accessories.contains(dot) ? dot : nil }
 
     override func reapplyTheme() {
         if let hoverAccessory, hoverAccessory.superview == nil { hoverAccessory.reapplyThemeTree() }

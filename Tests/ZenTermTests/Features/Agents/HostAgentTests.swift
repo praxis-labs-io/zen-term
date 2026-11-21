@@ -124,30 +124,27 @@ final class HostAgentTests: WindowTestCase {
         try XCTUnwrap(c.sidebarForTesting.view.hostRowsForTesting.first { $0.titleForTesting == "devbox" })
     }
 
-    func test_anAskingHostAgent_takesTheHostRowsDot_untilItIsAnswered() throws {
+    func test_aHostRow_showsNoAgentState_whateverItsAgentDoes() throws {
         let host = try connected()
         claudeWorking(on: host.login)
         host.c.activateWorkspaceForTesting(host.local)
-        XCTAssertEqual(try hostRow(host.c).accessibilityValue() as? String, "Connected")
-        XCTAssertNil(try hostRow(host.c).dotForTesting)
+        func shownStates() throws -> [StateDot.State] {
+            func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
+            return descendants(try hostRow(host.c)).compactMap { ($0 as? StateDot)?.state }
+        }
+        XCTAssertEqual(try shownStates(), [])
 
         progress(nil, from: host.login)
         XCTAssertEqual(host.c.agentStateForTesting(host.loginID), .done, "precondition: its turn ended")
-        XCTAssertNil(try hostRow(host.c).dotForTesting, "a finished turn puts no dot on the host row")
+        XCTAssertEqual(try shownStates(), [])
 
         host.login.delegate?.surface(
             host.login, didPostNotification: TerminalNotification(title: "claude", body: "Wants to run make"))
         drainMainQueue()
 
-        XCTAssertEqual(try hostRow(host.c).dotForTesting?.state, .blocked)
-        XCTAssertEqual(
-            try hostRow(host.c).accessibilityValue() as? String,
-            "Connected, \(StateDot.State.blocked.accessibilityValue)")
-
-        host.c.handle(.nextWaitingAgent)
-
-        XCTAssertEqual(try hostRow(host.c).accessibilityValue() as? String, "Connected")
-        XCTAssertNil(try hostRow(host.c).dotForTesting)
+        XCTAssertEqual(host.c.agentStateForTesting(host.loginID), .blocked, "precondition: it asks")
+        XCTAssertEqual(try shownStates(), [])
+        XCTAssertEqual(try hostRow(host.c).accessibilityValue() as? String, "Connected", "and says none")
     }
 
     func test_aHostAgentClearingItsTitle_endsItsRow_andTakesDownItsWait() throws {

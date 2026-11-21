@@ -4016,10 +4016,7 @@ final class WindowController: NSObject {
         case .workspace(let workspace): window.title = workspace.name
         case .host(let host): window.title = GeneralConfig.current.displayName(of: host)
         }
-        let blocked = workspaces.filter { attention.isBlocked(tabs: $0.tabIDs) }.map(\.id)
-        sidebar.render(
-            order: order, workspaces: workspaces, active: activeWorkspace, activeHost: selection.host,
-            blocked: Set(blocked))
+        sidebar.render(order: order, workspaces: workspaces, active: activeWorkspace, activeHost: selection.host)
         renderAgents()
         for (id, card) in attentionCards {
             cardTitles[id].map { card.setTitle($0()) }

@@ -17,7 +17,6 @@ final class SidebarController {
         let number: Int?
         let isActive: Bool
         let isConfigured: Bool
-        let dot: StateDot.State?
         let isWorktreeRemoved: Bool
     }
 
@@ -339,16 +338,14 @@ final class SidebarController {
 
     func render(
         order: WorkspaceOrder, workspaces: [WorkspaceController], active: WorkspaceController?,
-        activeHost: SSHHostID?, blocked: Set<WorkspaceID>
+        activeHost: SSHHostID?
     ) {
         let byID = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
         let numbers = Dictionary(uniqueKeysWithValues: order.navigable.enumerated().map { ($1, $0 + 1) })
-        let blockedHosts = Set(workspaces.filter { blocked.contains($0.id) }.compactMap(\.host))
         let nextHosts = order.hosts.map {
             SidebarHostItem(
                 id: $0.id, name: GeneralConfig.current.displayName(of: $0.id), status: $0.status,
-                number: numbers[.host($0.id)], isActive: $0.id == activeHost,
-                dot: $0.status == .connected && blockedHosts.contains($0.id) ? .blocked : nil)
+                number: numbers[.host($0.id)], isActive: $0.id == activeHost)
         }
         let next = order.entries.compactMap { entry -> Entry? in
             switch entry {
@@ -359,12 +356,11 @@ final class SidebarController {
                     row: .workspace(id), kind: kind, name: workspace.name, pinnedName: workspace.pinnedName,
                     folder: workspace.folder,
                     number: numbers[.workspace(id)], isActive: workspace === active,
-                    isConfigured: workspace.isConfigured,
-                    dot: blocked.contains(id) ? .blocked : nil, isWorktreeRemoved: workspace.isWorktreeRemoved)
+                    isConfigured: workspace.isConfigured, isWorktreeRemoved: workspace.isWorktreeRemoved)
             case .ghost(let parent):
                 return Entry(
                     row: .ghost(parent.path.standardizedFileURL.path), kind: .ghost, name: parent.title,
-                    pinnedName: nil, folder: nil, number: nil, isActive: false, isConfigured: true, dot: nil,
+                    pinnedName: nil, folder: nil, number: nil, isActive: false, isConfigured: true,
                     isWorktreeRemoved: false)
             }
         }
@@ -490,18 +486,17 @@ final class SidebarController {
             let isRepo = entry.folder.flatMap(GitRepoStatus.known) == true
             return SidebarRowItem(
                 id: entry.row, variant: .standard, name: entry.name, detail: branch, number: entry.number,
-                isActive: entry.isActive, makesWorktrees: entry.isConfigured && isRepo, dot: entry.dot)
+                isActive: entry.isActive, makesWorktrees: entry.isConfigured && isRepo)
         case .worktree(let origin):
             return SidebarRowItem(
                 id: entry.row, variant: .nested(symbol: worktreeSymbol),
                 name: entry.pinnedName ?? branch ?? origin.name,
                 detail: entry.isWorktreeRemoved ? WorktreeOrigin.removedDetail : nil, number: entry.number,
-                isActive: entry.isActive, makesWorktrees: false,
-                dot: entry.dot)
+                isActive: entry.isActive, makesWorktrees: false)
         case .ghost:
             return SidebarRowItem(
                 id: entry.row, variant: .faint, name: entry.name, detail: nil, number: nil, isActive: false,
-                makesWorktrees: true, dot: nil)
+                makesWorktrees: true)
         }
     }
 
