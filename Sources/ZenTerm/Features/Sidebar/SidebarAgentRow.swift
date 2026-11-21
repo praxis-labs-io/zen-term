@@ -63,13 +63,12 @@ final class SidebarAgentRow: SidebarJumpRow {
             glyph.trailingAnchor.constraint(equalTo: glyphSlot.trailingAnchor).isActive = true
         }
         NSLayoutConstraint.activate([
-            spinner.centerYAnchor.constraint(equalTo: glyphSlot.centerYAnchor),
             heightAnchor.constraint(equalToConstant: Self.height),
             glyphSlot.widthAnchor.constraint(equalToConstant: Self.glyphSize.width),
             glyphSlot.heightAnchor.constraint(equalToConstant: Self.glyphSize.height),
         ])
         accessories = [glyphSlot]
-        centerOnTitleLine(dot)
+        centerOnTitleLine([dot, spinner])
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
