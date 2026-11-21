@@ -81,4 +81,40 @@ final class SidebarAgentRowTests: WindowTestCase {
         let after = try spinnerColors(of: row)
         XCTAssertTrue(after.allSatisfy { $0 == yellow }, "\(after)")
     }
+
+    func test_aDot_centersOnTheTitleLine_andTheSpinnerOnTheRow() throws {
+        let row = SidebarAgentRow {}
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 80), styleMask: [.borderless],
+            backing: .buffered, defer: false)
+        let content = try XCTUnwrap(window.contentView)
+        content.addSubview(row)
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            row.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            row.topAnchor.constraint(equalTo: content.topAnchor),
+        ])
+        func midY(_ view: NSView) -> CGFloat { view.convert(view.bounds, to: nil).midY }
+
+        for state in [AttentionTone.blocked, .done, .working] {
+            row.render(
+                SidebarAgentItem(
+                    id: SurfaceID(raw: 1), state: state, summary: state.summary, detail: "zen-term", message: nil))
+            row.reapplyThemeTree()
+            content.layoutSubtreeIfNeeded()
+
+            let title = try summaryLabel(of: row, saying: state.summary)
+            if state == .working {
+                let spinner = try XCTUnwrap(descendants(row).compactMap { $0 as? Spinner }.first)
+                XCTAssertEqual(midY(spinner), midY(row), accuracy: 0.5, "the spinner centers on the row")
+            } else {
+                XCTAssertEqual(
+                    midY(row.dotForTesting), midY(title), accuracy: 0.5,
+                    "a \(state.summary) dot centers on the title's line")
+            }
+        }
+        XCTAssertNotEqual(
+            midY(try summaryLabel(of: row, saying: "Working")), midY(row), accuracy: 0.5,
+            "the title sits above the row's middle, or this test proves nothing")
+    }
 }
