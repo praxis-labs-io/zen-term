@@ -10,8 +10,7 @@ enum WaitingTarget: Equatable {
 /// One window's attention: every surface latches its own, tabs and the window roll up by `max`. Main-thread only.
 final class AttentionStore {
     // Looking at a finished turn answers it; an ask is answered only by answering it.
-    // Declared quietest first: an ask outranks a finished turn in every rollup.
-    enum AgentWait: Comparable {
+    enum AgentWait: Equatable {
         case turnEnd, ask
     }
 
