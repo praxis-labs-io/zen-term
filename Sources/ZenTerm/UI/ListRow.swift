@@ -93,8 +93,8 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     private lazy var stackBottom = stack.bottomAnchor.constraint(equalTo: bottomAnchor)
     private var footnoteBottom: NSLayoutConstraint?
     // Pinned again on every rebuild: moving the title into a new lines stack drops constraints on it.
-    private weak var titleLineView: NSView?
-    private var titleLinePin: NSLayoutConstraint?
+    private var titleLineViews: [NSView] = []
+    private var titleLinePins: [NSLayoutConstraint] = []
 
     var title: String { content.title }
 
@@ -145,15 +145,15 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         refreshFill()
     }
 
-    func centerOnTitleLine(_ view: NSView) {
-        titleLineView = view
+    func centerOnTitleLine(_ views: [NSView]) {
+        titleLineViews = views
         pinTitleLine()
     }
 
     private func pinTitleLine() {
-        titleLinePin?.isActive = false
-        titleLinePin = titleLineView.map { $0.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor) }
-        titleLinePin?.isActive = true
+        NSLayoutConstraint.deactivate(titleLinePins)
+        titleLinePins = titleLineViews.map { $0.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor) }
+        NSLayoutConstraint.activate(titleLinePins)
     }
 
     private func refreshAccessibilitySelected() {
