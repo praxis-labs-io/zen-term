@@ -618,7 +618,9 @@ Bundled themes carry an `nvim-colorscheme` key.
   the viewport moved by comparing rows (`rowsAtStep`), not the scroll offset, which lags
   by a frame, and counts from the clamped end when the viewport hits one. Case folding
   is ASCII-only.
-- **No wrap** (upstream), and **one-line needles** (everything downstream is per row).
+- **Find wraps** (upstream). A step that selects index 0 going older, or the last index
+  going newer, reached an end of the buffer, so `matchCell` takes that end of the screen.
+- **One-line needles** (everything downstream is per row).
 - The count shows `total - selected`, so 1 is the topmost match.
 
 ## Config

@@ -168,6 +168,36 @@ final class SearchMatchCellTests: XCTestCase {
             "nothing further down, so not the top of the screen")
     }
 
+    func test_nextFromTheOldestWrapsToTheNewestOnScreen() {
+        XCTAssertEqual(
+            cell("error", from: ScrollCell(row: 0, column: 10), .next, selected: 0, total: 3),
+            ScrollCell(row: 4, column: 9))
+    }
+
+    func test_previousFromTheNewestWrapsToTheOldestOnScreen() {
+        XCTAssertEqual(
+            cell("error", from: ScrollCell(row: 4, column: 9), .previous, selected: 2, total: 3),
+            ScrollCell(row: 0, column: 10))
+    }
+
+    func test_aWrapToTheNewestThatScrolledTakesTheBottomMatchNotTheTopRow() {
+        let liveEnd = ["error older", "quiet", "error newest", "a prompt"]
+        XCTAssertEqual(
+            cell(
+                "error", from: ScrollCell(row: 0, column: 0), .next, rows: liveEnd,
+                viewportMoved: true, selected: 0, total: 9),
+            ScrollCell(row: 2, column: 0))
+    }
+
+    func test_aWrapToTheOldestThatScrolledTakesTheTopMatch() {
+        let top = ["line 1", "error oldest", "quiet", "error newer", "error newer still"]
+        XCTAssertEqual(
+            cell(
+                "error", from: ScrollCell(row: 4, column: 0), .previous, rows: top,
+                viewportMoved: true, selected: 8, total: 9),
+            ScrollCell(row: 1, column: 0))
+    }
+
     func test_noOccurrenceLeavesTheCursorAlone() {
         XCTAssertNil(cell("absent", from: ScrollCell(row: 2, column: 0), .next))
         XCTAssertNil(cell("", from: ScrollCell(row: 2, column: 0), .next))

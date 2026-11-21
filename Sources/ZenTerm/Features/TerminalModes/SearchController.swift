@@ -323,6 +323,9 @@ final class SearchController {
             occurrenceColumns(of: needle, in: text).map { ScrollCell(row: row, column: $0) }
         }
         guard !occurrences.isEmpty else { return nil }
+        if let end = bufferEnd(in: occurrences, step: step, selected: selected, total: total) {
+            return end
+        }
         if viewportMoved {
             let onTopRow = occurrences.filter { $0.row == 0 }
             if !onTopRow.isEmpty { return step == .next ? onTopRow.last : onTopRow.first }
@@ -340,6 +343,18 @@ final class SearchController {
             $0.row > cursor.row || ($0.row == cursor.row && $0.column > cursor.column)
         }
         return (step == .next ? before.last ?? occurrences.first : after.first ?? occurrences.last)
+    }
+
+    /// Index 0 is the newest match and libghostty wraps, so either end is that end of the screen wherever it scrolled.
+    private static func bufferEnd(
+        in occurrences: [ScrollCell], step: TerminalSearchStep, selected: Int?, total: Int?
+    ) -> ScrollCell? {
+        switch step {
+        case .next: return selected == 0 ? occurrences.last : nil
+        case .previous:
+            guard let selected, let total, selected == total - 1 else { return nil }
+            return occurrences.first
+        }
     }
 
     private static func clampedMatch(
