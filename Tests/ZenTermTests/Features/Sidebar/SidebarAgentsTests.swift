@@ -521,8 +521,7 @@ final class SidebarAgentsTests: WindowTestCase {
 
     private static let nothingWaitingMessage =
         "No agent in this window is asking for you.\nThe sidebar lists the ones that are."
-    private static let waitingElsewhereMessage =
-        "Nothing in this window is asking for you.\nThe sidebar row takes you there."
+    private static let waitingElsewhereMessage = "An agent is waiting in another window."
 
     func test_theChord_goesToTheAgentThatHasWaitedLongest() throws {
         let c = makeWindow()
