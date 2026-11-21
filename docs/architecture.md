@@ -352,10 +352,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   tab reads the same items, after them, so the two change together: a blocked or done
   `StateDot` or a `working` `Spinner` in its close slot, and nothing when idle. A tab with
   several agents shows blocked over done over working; a tab with no agent shows nothing.
-  The workspace, worktree and host rows show only an unseen ask, as blocked, from
-  `isBlocked(tab:)` / `isBlocked(tabs:)`; a finished turn never dots them. The store latches
-  the ask on its surface, so an ask answered while unseen reads blocked until you look, and a
-  closed pane's ask folds into its tab's residual. A finished command latches `completed`
+  The workspace, worktree and host rows show no agent state. The store latches an unseen ask
+  on its surface for the count other windows read, so an ask answered while unseen counts
+  until you look, and a closed pane's ask folds into its tab's residual. A finished command latches `completed`
   for its card and draws no dot. A toolbar button's dot says only that its drawer or float
   is running or live in the background.
 - **Background command completion:** OSC 133 `COMMAND_FINISHED` over a threshold in a
@@ -645,9 +644,7 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   updated in place; ↩ or a click opens `AddSSHHostOverlay` in edit mode, which rewrites only that
   host's name on its line and holds Remove. Remove asks first while the host is connecting or
   connected, then returns to Settings with focus on the next host (Add Host when none is left). The
-  sidebar's Remote hosts rows show their status word as the row's detail. While an agent in a
-  connected host's workspace is blocked, the row shows the blocked dot, from the same rollup a
-  workspace row's takes.
+  sidebar's Remote hosts rows show their status word as the row's detail.
 - **`SSHHostProbe` keeps each host's reachability in `SSHHostStatusCenter`, and never logs in.**
   Off-main, at most four at a time, it resolves the host with `ssh -G`, once until the network or the date
   on `~/.ssh/config` or a file it includes changes, because `Match exec` can prompt (a host that stays

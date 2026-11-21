@@ -11,7 +11,7 @@ final class AttentionStoreTests: XCTestCase {
         AttentionStore(now: { now })
     }
 
-    func test_onlyAnUnseenAsk_blocksATab_neverAFinishedTurnOrACompletion() {
+    func test_onlyAnUnseenAsk_counts_neverAFinishedTurnOrACompletion() {
         let store = makeStore()
         let finished = SurfaceIDs.mint()
         let asked = SurfaceIDs.mint()
@@ -22,12 +22,9 @@ final class AttentionStoreTests: XCTestCase {
 
         store.record(command, .completed, seen: false)
         store.endTurn(finished, seen: false)
-        XCTAssertFalse(store.isBlocked(tab: other), "a finished command needs nothing from you")
-        XCTAssertFalse(store.isBlocked(tab: tab), "a finished turn does not block")
-        XCTAssertEqual(store.blockedCount, 0)
+        XCTAssertEqual(store.blockedCount, 0, "a finished command or turn needs nothing from you")
 
         store.ask(asked, seen: false)
-        XCTAssertTrue(store.isBlocked(tab: tab))
         XCTAssertEqual(store.blockedCount, 1)
     }
 
@@ -40,12 +37,12 @@ final class AttentionStoreTests: XCTestCase {
         store.answerAgent(pane)
         store.endTurn(pane, seen: false)
 
-        XCTAssertTrue(store.isBlocked(tab: tab), "the latch remembers the ask")
+        XCTAssertEqual(store.blockedCount, 1, "the latch remembers the ask")
         store.markSeen(pane)
-        XCTAssertFalse(store.isBlocked(tab: tab))
+        XCTAssertEqual(store.blockedCount, 0)
     }
 
-    func test_closingAPaneThatAsked_leavesTheAskOnItsTab() {
+    func test_closingAPaneThatAsked_stillCountsTheAsk_untilItsTabIsSeen() {
         let store = makeStore()
         let asked = SurfaceIDs.mint()
         let finished = SurfaceIDs.mint()
@@ -57,26 +54,23 @@ final class AttentionStoreTests: XCTestCase {
         store.release(asked)
         store.release(finished)
 
-        XCTAssertTrue(store.isBlocked(tab: tab))
-        XCTAssertFalse(store.isBlocked(tab: other), "a closed pane's finished turn leaves no block")
-        XCTAssertTrue(store.isBlocked(tabs: [other, tab]))
-        XCTAssertEqual(store.blockedCount, 1)
+        XCTAssertEqual(store.blockedCount, 1, "a closed pane's finished turn is not counted")
         store.markSeen(tab: tab)
-        XCTAssertFalse(store.isBlocked(tab: tab))
+        XCTAssertEqual(store.blockedCount, 0)
     }
 
-    func test_aSeenAsk_blocksNothingOnTheTab() {
+    func test_aSeenAsk_countsNothing() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
         store.register(pane, tab: tab)
 
         store.ask(pane, seen: true)
 
-        XCTAssertFalse(store.isBlocked(tab: tab), "the tab latches only what you have not seen")
+        XCTAssertEqual(store.blockedCount, 0, "the count latches only what you have not seen")
         XCTAssertEqual(store.agentWait(of: pane), .ask, "the agent row still shows it blocked")
 
         store.record(pane, .completed, seen: false)
-        XCTAssertFalse(store.isBlocked(tab: tab), "a command finishing later is not the ask you already saw")
+        XCTAssertEqual(store.blockedCount, 0, "a command finishing later is not the ask you already saw")
     }
 
     func test_aTabThatCompletedBeforeItAsked_datesTheWaitFromTheQuestion() {

@@ -18,7 +18,6 @@ struct SidebarHostItem: Equatable {
     let status: SSHHostStatus
     let number: Int?
     let isActive: Bool
-    let dot: StateDot.State?
 }
 
 struct SidebarRowItem: Equatable {
@@ -29,7 +28,6 @@ struct SidebarRowItem: Equatable {
     let number: Int?
     let isActive: Bool
     let makesWorktrees: Bool
-    let dot: StateDot.State?
 }
 
 final class SidebarView: NSView, ThemeReapplying {
@@ -236,7 +234,6 @@ final class SidebarView: NSView, ThemeReapplying {
             row.setTitle(item.name)
             row.isCurrent = item.isActive
             row.setDetail(item.status.word)
-            row.setDot(item.dot)
             row.setTitleInk(item.status == .connected ? nil : .subtle)
             guard hostStack.arrangedSubviews.firstIndex(of: row) != index else { continue }
             let isNew = row.superview == nil
@@ -374,7 +371,6 @@ final class SidebarView: NSView, ThemeReapplying {
             row.setDetail(item.detail)
             row.isCurrent = item.isActive
             setNewWorktreeButton(on: row, for: item)
-            row.setDot(item.dot)
         }
         if activeRow != previouslyActive { revealActiveRow() }
         refreshRowHover()

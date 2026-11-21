@@ -590,19 +590,24 @@ final class SidebarWorktreeRowTests: WindowTestCase {
         XCTAssertEqual(titles(of: c), ["Workspace 1", "Alpha", "Beta"])
     }
 
-    func test_aBackgroundWorktreeWithAnAgentWaiting_showsTheDotOnItsRow_notTheGhosts() throws {
+    func test_aBackgroundWorktreeWithAnAgentWaiting_showsNoDotOnAnyRow() throws {
         let c = makeWindow()
         try openAlphaWorktree(branch: "feature/one", in: c)
         let agent = try XCTUnwrap(spawned.last)
         c.activateWorkspaceForTesting(c.workspaceIDsForTesting[0])
-        XCTAssertEqual(rows(of: c).map(\.dotForTesting?.state), [nil, nil, nil])
+        func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
+        func shownStates() -> [[StateDot.State]] {
+            rows(of: c).map { descendants($0).compactMap { ($0 as? StateDot)?.state } }
+        }
 
         agent.delegate?.surface(
             agent, didPostNotification: TerminalNotification(title: "Claude Code", body: "Claude needs your permission")
         )
-        waitUntil(rows(of: c)[2].dotForTesting != nil, "the worktree row's dot")
+        drainMainQueue()
 
-        XCTAssertEqual(rows(of: c).map(\.dotForTesting?.state), [nil, nil, .blocked])
+        XCTAssertEqual(
+            c.sidebarForTesting.view.agentRowsForTesting.map(\.itemForTesting?.state), [.blocked], "precondition")
+        XCTAssertEqual(shownStates(), [[], [], []])
     }
 
     private func drainMainQueue() {
