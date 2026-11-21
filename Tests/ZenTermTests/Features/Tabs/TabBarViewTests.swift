@@ -585,7 +585,7 @@ final class TabBarViewTests: WindowTestCase {
 
         XCTAssertEqual(chips.map(\.isDotVisibleForTesting), [false, false, true, true], "idle and working show none")
         XCTAssertEqual(chips[2].dotColorForTesting, chrome.positive.nsColor)
-        XCTAssertEqual(chips[3].dotColorForTesting, chrome.attention.nsColor)
+        XCTAssertEqual(chips[3].dotColorForTesting, chrome.done.nsColor)
 
         let dotCenter = CGPoint(x: chips[3].dotFrameForTesting.midX, y: chips[3].dotFrameForTesting.midY)
         try hover(chips[3])

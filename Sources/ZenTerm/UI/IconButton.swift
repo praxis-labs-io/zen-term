@@ -148,7 +148,7 @@ final class IconButton: ControlView, ThemeReapplying {
         let chrome = Theme.current.chrome
         switch activityState {
         case .completed: return chrome.positive.nsColor
-        case .waiting: return chrome.attention.nsColor
+        case .waiting: return chrome.done.nsColor
         case .idle, .working: return chrome.accent.nsColor
         }
     }

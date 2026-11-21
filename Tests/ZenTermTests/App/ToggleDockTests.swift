@@ -76,7 +76,7 @@ final class ToggleDockTests: XCTestCase {
         dock.render(
             overlay: OverlayState(), floatID: nil, tab: nil,
             drawerAttention: { _ in .waiting })
-        XCTAssertEqual(dock.rightActivityColorForTesting, chrome.attention.nsColor)
+        XCTAssertEqual(dock.rightActivityColorForTesting, chrome.done.nsColor)
 
         dock.render(
             overlay: OverlayState(), floatID: nil, tab: nil,

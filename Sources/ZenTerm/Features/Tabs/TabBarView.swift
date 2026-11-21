@@ -235,7 +235,7 @@ final class TabBarView: NSView, ThemeReapplying {
         switch state {
         case .idle: return nil
         case .completed: return chrome.positive.nsColor
-        case .waiting: return chrome.attention.nsColor
+        case .waiting: return chrome.done.nsColor
         }
     }
 }

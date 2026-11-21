@@ -9,7 +9,8 @@ struct ChromeTheme: Equatable {
     let destructive: TerminalColor
     let accent: TerminalColor
     let onAccent: TerminalColor
-    let attention: TerminalColor
+    let working: TerminalColor
+    let done: TerminalColor
     let positive: TerminalColor
     let cursor: TerminalColor
     /// Per theme: foreground to background separation runs 0.40 to 0.94, so a constant alpha is not a constant border.
