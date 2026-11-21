@@ -306,7 +306,7 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   difference.
   - An **ask** (a notification, Codex's Action Required title, a crash) latches whatever
     the pane's focus, since the notification behind it comes only once, so a split asking
-    in the active tab reads blocked while its tab dot stays quiet. Looking at a prompt
+    in the active tab reads blocked. Looking at a prompt
     is not answering it. Claude and Codex answer their own ask: Claude when a spinner
     title follows its `✳` prompt title, Codex when its title leaves the prompt, and either
     when a turn starts. A key at their prompt answers nothing, since an arrow key sends
@@ -348,10 +348,12 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   end still unseen, and changes nothing once the turn was seen. It asks only from a Claude
   that reports no progress, since Claude clears its progress at launch and none means
   progress is off. Every other agent notification asks.
-- **A dot means one thing on each surface, and every dot is a `StateDot`.** An Agents row
-  shows every agent state. Tabs and the workspace, worktree and host rows show only an
-  unseen ask, as blocked, from `isBlocked(tab:)` / `isBlocked(tabs:)`; a finished turn never
-  dots them. The store latches
+- **A tab shows what its agents' rows show.** An Agents row shows every agent state, and a
+  tab reads the same items, after them, so the two change together: a blocked or done
+  `StateDot` or a `working` `Spinner` in its close slot, and nothing when idle. A tab with
+  several agents shows blocked over done over working; a tab with no agent shows nothing.
+  The workspace, worktree and host rows show only an unseen ask, as blocked, from
+  `isBlocked(tab:)` / `isBlocked(tabs:)`; a finished turn never dots them. The store latches
   the ask on its surface, so an ask answered while unseen reads blocked until you look, and a
   closed pane's ask folds into its tab's residual. A finished command latches `completed`
   for its card and draws no dot. A toolbar button's dot says only that its drawer or float

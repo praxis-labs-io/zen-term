@@ -317,8 +317,8 @@ final class GallerySeamTests: WindowTestCase {
     }
 
     private static let tabItems = [
-        TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, dot: nil),
-        TabBarItem(id: TabID(2), index: 2, title: "two", isActive: false, dot: nil),
+        TabBarItem(id: TabID(1), index: 1, title: "one", isActive: true, indicator: nil),
+        TabBarItem(id: TabID(2), index: 2, title: "two", isActive: false, indicator: nil),
     ]
 
     private func tabBar() -> TabBarView {
