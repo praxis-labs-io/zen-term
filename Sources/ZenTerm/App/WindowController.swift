@@ -3621,7 +3621,6 @@ final class WindowController: NSObject {
         if revealWaitingAgentElsewhere?(target.windowID) != true { renderAgents() }
     }
 
-    /// Lands on the longest unseen ask here, calling `raise` first. False, and nothing raised, when nothing is blocked.
     @discardableResult
     func revealLongestBlockedAgent(raising raise: () -> Void = {}) -> Bool {
         guard let target = attention.blockedInOrder.first else { return false }
