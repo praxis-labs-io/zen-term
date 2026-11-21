@@ -3206,15 +3206,16 @@ final class WindowController: NSObject {
     private func finishTurn(_ surface: SurfaceID) {
         guard let tab = tab(of: surface) else { return }
         attention.endTurn(surface, seen: isSeen(surface, in: tab))
-        guard attention.agentWait(of: surface) == .turnEnd, !hasAskNotice(tab) else { return }
+        guard attention.agentWait(of: surface) == .turnEnd, !askOutranksTurnEnd(in: tab) else { return }
         presentAttentionCard(
             .waiting, for: tab, address: cardAddress(of: surface, in: tab), message: Self.turnEndMessage,
             surface: surface)
     }
 
-    // A tab shows one card, and a finished turn is never worth more than a question.
-    private func hasAskNotice(_ tab: TabID) -> Bool {
-        (noticeSurfaces[tab] ?? nil).map { attention.agentWait(of: $0) == .ask } ?? false
+    // A tab shows one card, and a finished turn is never worth more than a question whose card is up or off.
+    private func askOutranksTurnEnd(in tab: TabID) -> Bool {
+        guard let surface = noticeSurfaces[tab] ?? nil, attention.agentWait(of: surface) == .ask else { return false }
+        return attentionCards[tab] != nil || GeneralConfig.current.attentionToast == .off
     }
 
     private static let blockedMessage = "Waiting for your approval."

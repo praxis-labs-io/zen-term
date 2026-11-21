@@ -257,6 +257,31 @@ final class DrawerAttentionTests: WindowTestCase {
         XCTAssertEqual(toastViews(c).count, 1, "the drawer is still closed, so its card still has somewhere to go")
     }
 
+    func test_underAuto_aTurnEndAfterAnAsksCardTimedOut_raisesItsOwnCard() throws {
+        var config = GeneralConfig.current
+        config.attentionToast = .auto
+        config.toastDuration = 0.05
+        GeneralConfig.setCurrentForTesting(config)
+        let c = makeWindow()
+        let pane = try XCTUnwrap(spawned.first)
+        c.identifyAgentForTesting(try XCTUnwrap(c.focusedSurfaceIDForTesting), name: "claude")
+        let drawer = try closedRightDrawer(c)
+        c.newTabForTesting()
+        drainMainQueue()
+        notify(drawer)
+        XCTAssertNotNil(c.waitingToastForTesting(tabIndex: 0), "precondition: the drawer's ask raised its card")
+        let deadline = Date().addingTimeInterval(0.6)
+        while Date() < deadline { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02)) }
+        XCTAssertNil(c.waitingToastForTesting(tabIndex: 0), "precondition: and it cleared itself")
+
+        pane.delegate?.surface(pane, progressDidChange: TerminalProgress(state: .indeterminate, fraction: nil))
+        drainMainQueue()
+        pane.delegate?.surface(pane, progressDidChange: nil)
+        drainMainQueue()
+
+        XCTAssertNotNil(c.waitingToastForTesting(tabIndex: 0), "no card is up, so the turn end has nothing to defer to")
+    }
+
     func test_aWaitingToastInAWindowYouAreNotIn_waitsForYouToArrive() throws {
         var config = GeneralConfig.current
         config.attentionToast = .auto
