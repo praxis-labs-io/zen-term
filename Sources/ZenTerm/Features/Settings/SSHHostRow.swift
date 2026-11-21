@@ -26,7 +26,7 @@ final class SSHHostRow: SettingsFocusRow {
     }
 
     override func reapplyTheme() {
-        statusLabel.textColor = status.ink
+        statusLabel.textColor = Theme.current.chrome.ink(.muted)
         super.reapplyTheme()
     }
 
@@ -40,7 +40,7 @@ final class SSHHostRow: SettingsFocusRow {
 
     private func showStatus() {
         statusLabel.stringValue = status.word
-        statusLabel.textColor = status.ink
+        statusLabel.textColor = Theme.current.chrome.ink(.muted)
         setAccessibilityValue(status.word)
     }
 }

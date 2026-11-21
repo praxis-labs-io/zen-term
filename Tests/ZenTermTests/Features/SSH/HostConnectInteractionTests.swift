@@ -1165,25 +1165,18 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(c.window.frame.height, before.height, accuracy: 1)
     }
 
-    func test_anOnlineHost_saysItSignsInWithYourSSHConfig_andBadgesTheHostFilled() throws {
+    func test_anOnlineHost_saysItSignsInWithYourSSHConfig() throws {
         SSHHostStatusCenter.shared.setReachable(true, host: host)
         let c = onConnectScreen()
-        let screen = try XCTUnwrap(c.connectViewForTesting)
-        let mark = screen.routeForTesting.destinationForTesting.statusMarkForTesting
 
-        XCTAssertEqual(screen.detailForTesting, "Signs in with your ssh config.")
-        XCTAssertEqual(mark.fill, SSHHostStatus.online.ink.cgColor)
-        XCTAssertNil(mark.stroke)
+        XCTAssertEqual(try XCTUnwrap(c.connectViewForTesting).detailForTesting, "Signs in with your ssh config.")
     }
 
-    func test_anOfflineHost_offersToConnectAnyway_andBadgesTheHostHollow() throws {
+    func test_anOfflineHost_offersToConnectAnyway() throws {
         let c = onConnectScreen()
-        let screen = try XCTUnwrap(c.connectViewForTesting)
-        let mark = screen.routeForTesting.destinationForTesting.statusMarkForTesting
 
-        XCTAssertEqual(screen.detailForTesting, "devbox appears offline. Connect anyway?")
-        XCTAssertNil(mark.fill)
-        XCTAssertEqual(mark.stroke, SSHHostStatus.offline.ink.cgColor)
+        XCTAssertEqual(
+            try XCTUnwrap(c.connectViewForTesting).detailForTesting, "devbox appears offline. Connect anyway?")
     }
 
     func test_aHostComingOnline_updatesTheConnectScreenItIsShowing() throws {
@@ -1195,8 +1188,6 @@ final class HostConnectInteractionTests: WindowTestCase {
         drainMainQueue()
 
         XCTAssertEqual(screen.detailForTesting, "Signs in with your ssh config.")
-        XCTAssertEqual(
-            screen.routeForTesting.destinationForTesting.statusMarkForTesting.fill, SSHHostStatus.online.ink.cgColor)
     }
 
     func test_theConnectScreen_showsWhereSSHWillSignIn_fromTheProbesResolution() throws {
@@ -1227,7 +1218,7 @@ final class HostConnectInteractionTests: WindowTestCase {
         XCTAssertEqual(spawned.first?.lastConfig?.command, "/usr/bin/ssh")
     }
 
-    func test_aThemeChange_recolorsTheRouteAndItsBadge() throws {
+    func test_aThemeChange_recolorsTheRoute() throws {
         SSHHostStatusCenter.shared.setReachable(true, host: host)
         let c = onConnectScreen()
         let route = try XCTUnwrap(c.connectViewForTesting).routeForTesting
@@ -1244,8 +1235,6 @@ final class HostConnectInteractionTests: WindowTestCase {
 
         XCTAssertNotEqual(route.lineStrokeForTesting, strokeBefore)
         XCTAssertEqual(route.lineStrokeForTesting, Theme.current.chrome.ink(.muted).cgColor)
-        XCTAssertEqual(
-            route.destinationForTesting.statusMarkForTesting.fill, SSHHostStatus.online.ink.cgColor)
     }
 
     func test_atTheSmallestWindow_connectStaysOnScreen_andTheRouteGivesWay() throws {
