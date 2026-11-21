@@ -640,11 +640,12 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   ssh itself. A line holds a Host alias or a typed user@host, each
   with an optional name. A name is only a label, read through `GeneralConfig.displayName(of:)`
   with the alias as fallback; ssh, control sockets and `SSHHostID` use the alias. A host row
-  is a plain row with the host's status word at its trailing edge, in `SSHHostStatus.ink` and
+  is a plain row with the host's status word at its trailing edge, in `ink(.muted)` and
   updated in place; ↩ or a click opens `AddSSHHostOverlay` in edit mode, which rewrites only that
   host's name on its line and holds Remove. Remove asks first while the host is connecting or
   connected, then returns to Settings with focus on the next host (Add Host when none is left). The
-  sidebar's Remote hosts rows show their status word as the row's detail.
+  sidebar's Remote hosts rows show their status word as the row's detail. Connectivity takes no color
+  anywhere: the word is muted text in both lists.
 - **`SSHHostProbe` keeps each host's reachability in `SSHHostStatusCenter`, and never logs in.**
   Off-main, at most four at a time, it resolves the host with `ssh -G`, once until the network or the date
   on `~/.ssh/config` or a file it includes changes, because `Match exec` can prompt (a host that stays
@@ -657,7 +658,8 @@ Root is `$XDG_CONFIG_HOME/zen-term/` or `~/.config/zen-term/`: `config`, `worksp
   probe. A host reads Offline until the probe reaches it,
   and a connected host takes its status from the connection, not the probe.
 - **The Connect screen reads its host from `SSHHostStatusCenter`**: the status, and the
-  destination the probe resolved from the same `ssh -G`, so it never runs ssh itself.
+  destination the probe resolved from the same `ssh -G`, so it never runs ssh itself. Its host
+  tile carries no badge.
 - **A connected host is a workspace whose tabs run ssh over one `SSHConnection`.** Every pane
   and drawer, and Scratch, starts through the tab's injected `SurfaceStart` (a user float
   never does, since a host's start keeps only the launch's environment and backing scale), which for a host runs
