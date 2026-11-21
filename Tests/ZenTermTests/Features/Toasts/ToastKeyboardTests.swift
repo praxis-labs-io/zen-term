@@ -8,17 +8,21 @@ import XCTest
 final class ToastKeyboardTests: WindowTestCase {
     private var originalOverride: (() -> TerminalSurface)?
     private var controller: WindowController?
+    private var originalConfig: GeneralConfig!
 
     override func setUp() {
         super.setUp()
         originalOverride = TerminalSurfaceFactory.makeOverride
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
+        originalConfig = GeneralConfig.current
+        GeneralConfig.setCurrentForTesting(.builtInWithStickyCards)
     }
 
     override func tearDown() {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
         controller = nil
         TerminalSurfaceFactory.makeOverride = originalOverride
+        GeneralConfig.setCurrentForTesting(originalConfig)
         super.tearDown()
     }
 

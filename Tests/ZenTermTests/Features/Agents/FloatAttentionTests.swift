@@ -28,7 +28,7 @@ final class FloatAttentionTests: WindowTestCase {
         root = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-float-attention-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        var config = GeneralConfig.builtIn
+        var config = GeneralConfig.builtInWithStickyCards
         config.floats = [Self.spec("pi")]
         config.ai = "pi"
         GeneralConfig.setCurrentForTesting(config)

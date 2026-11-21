@@ -24,7 +24,7 @@ final class SidebarWorktreeRowTests: WindowTestCase {
             self?.spawned.append(surface)
             return surface
         }
-        GeneralConfig.setCurrentForTesting(.builtIn)
+        GeneralConfig.setCurrentForTesting(.builtInWithStickyCards)
         tempRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("zenterm-sidebar-worktrees-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)

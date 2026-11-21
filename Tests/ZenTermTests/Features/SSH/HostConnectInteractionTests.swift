@@ -28,7 +28,7 @@ final class HostConnectInteractionTests: WindowTestCase {
             return surface
         }
         WindowController.isPresent = { _ in true }
-        var config = GeneralConfig.builtIn
+        var config = GeneralConfig.builtInWithStickyCards
         config.sshHosts = [SSHHostEntry(alias: host.alias)]
         config.floats = [Self.pi]
         config.ai = "pi"

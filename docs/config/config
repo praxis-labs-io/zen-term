@@ -204,17 +204,17 @@
 # agent-notifications = true          # true | false
 
 # The in-app notice for a background tab, or a drawer or tool out of sight, that
-# needs you. Sticky waits to be answered; auto clears itself after
-# `toast-duration`. Either way the tab's dot and the agent's Waiting row stay
-# until you look at it or press Dismiss. Switch on a tool's notice
-# opens that tool.
+# needs you. Off shows no notice; sticky waits to be answered; auto clears
+# itself after `toast-duration`. Whichever you pick, the tab's dot and the
+# agent's Waiting row stay until you look at it or press Dismiss on its notice.
+# Switch on a tool's notice opens that tool.
 # In-app Settings edit: applies to the next notice.
-# attention-toast = sticky            # sticky | auto
+# attention-toast = off               # off | sticky | auto
 
 # The same, for a notice that says something finished: a long command in a
 # background tab, or a notification from a program that is not an agent.
 # In-app Settings edit: applies to the next notice.
-# completion-toast = sticky           # sticky | auto
+# completion-toast = off              # off | sticky | auto
 
 # Seconds a notice that clears itself stays up. Covers every notice that clears
 # itself, not only the two above.

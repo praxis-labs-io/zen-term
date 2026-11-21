@@ -3399,6 +3399,7 @@ final class WindowController: NSObject {
             content = ToastContent(variant: variant, title: title(), titleTail: titleTail, message: message)
             dismissal = GeneralConfig.current.completionToast
         }
+        guard dismissal != .off else { return }
         let destination =
             address.destination
             ?? CardDestination(

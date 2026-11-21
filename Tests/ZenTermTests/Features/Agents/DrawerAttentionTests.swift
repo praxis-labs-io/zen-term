@@ -24,8 +24,7 @@ final class DrawerAttentionTests: WindowTestCase {
             self?.spawned.append(surface)
             return surface
         }
-        var config = GeneralConfig.builtIn
-        config.attentionToast = .sticky
+        var config = GeneralConfig.builtInWithStickyCards
         GeneralConfig.setCurrentForTesting(config)
     }
 
