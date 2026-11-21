@@ -361,9 +361,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   background tab raises one sticky toast; the rank keeps it under a waiting agent. A
   notification no agent sent raises the same card, with its own words.
 - Notification identity is `(windowID, tabID)`; `TabID` is per window. `AttentionCenter`
-  records which windows hold an unseen ask, how many and since when, and answers nothing
-  else. The sidebar's row for agents waiting in other windows counts only those asks, so a
-  window with only finished turns shows none, and the row lands on the oldest ask.
+  records how many unseen asks each window holds, and answers nothing else. Only the
+  next-waiting-agent chord's toast reads it, to say an agent waits in another window when
+  none waits in this one.
 - `tearDown()` is idempotent, the single close path, and cancels pending confirms and
   keybind capture (a stranded capture swallows every key app-wide).
 

@@ -123,7 +123,7 @@ final class WindowControllerWorkspaceTests: WindowTestCase {
         XCTAssertEqual(c.workspaceAttentionForTesting(first), .waiting)
         XCTAssertEqual(c.workspaceAttentionForTesting(second), .idle)
         XCTAssertEqual(c.windowAttentionForTesting, .waiting)
-        XCTAssertEqual(AttentionCenter.shared.blocked.first { $0.windowID == c.windowID }?.count, 1)
+        XCTAssertEqual(AttentionCenter.shared.blockedCount(excluding: c.windowID + 1_000_000), 1)
     }
 
     func test_selectingATabInABackgroundWorkspace_activatesItsWorkspaceFirst() throws {

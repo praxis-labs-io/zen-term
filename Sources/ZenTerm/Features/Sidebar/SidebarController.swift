@@ -54,7 +54,6 @@ final class SidebarController {
     var onLeave: () -> Void = {}
     var onFocusChanged: () -> Void = {}
     var onJump: (SurfaceID) -> Void = { _ in }
-    var onJumpElsewhere: () -> Void = {}
     var onActivateHost: (SSHHostID) -> Void = { _ in }
     var onRevealChanged: () -> Void = {}
     var onFocusYield: () -> Void = {}
@@ -90,7 +89,6 @@ final class SidebarController {
         }
         view.onFocusChanged = { [weak self] in self?.onFocusChanged() }
         view.onJump = { [weak self] in self?.onJump($0) }
-        view.onJumpElsewhere = { [weak self] in self?.onJumpElsewhere() }
         view.onActivateHost = { [weak self] in self?.onActivateHost($0) }
     }
 
@@ -501,10 +499,6 @@ final class SidebarController {
     }
 
     func renderAgents(_ items: [SidebarAgentItem]) { view.renderAgents(items) }
-
-    func renderWaitingElsewhere(agents: Int, windows: Int, index: Int) {
-        view.renderWaitingElsewhere(agents: agents, windows: windows, index: index)
-    }
 
     func setOpenModal(palette: Bool, settings: Bool) { footer.setOpenModal(palette: palette, settings: settings) }
 

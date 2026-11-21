@@ -1,12 +1,6 @@
 import Foundation
 import TabKit
 
-/// Where a waiting agent is answered: its own pane, or the tab holding what it left behind when the pane exited.
-enum WaitingTarget: Equatable {
-    case surface(SurfaceID)
-    case tab(TabID)
-}
-
 /// One window's attention: every surface latches its own, tabs and the window roll up by `max`. Main-thread only.
 final class AttentionStore {
     // Looking at a finished turn answers it; an ask is answered only by answering it.
@@ -22,8 +16,8 @@ final class AttentionStore {
         var since: Date?
         var agentWait: AgentWait?
         var agentSince: Date?
-        // An unseen ask on its own clock, kept after the agent moves on: the latch outlives the ask until you look.
-        var blockedSince: Date?
+        // Kept after the agent moves on: the latch outlives the ask until you look.
+        var hasUnseenAsk = false
     }
 
     private var entries: [SurfaceID: Entry] = [:]
@@ -35,7 +29,6 @@ final class AttentionStore {
         var state: SurfaceAttention
         var since: Date?
         var blocked: Int
-        var blockedSince: Date?
     }
 
     var onChange: (() -> Void)?
@@ -62,8 +55,7 @@ final class AttentionStore {
             residual[tab] = Residual(
                 state: max(existing?.state ?? .idle, entry.latched),
                 since: earliest(existing?.since, entry.since),
-                blocked: (existing?.blocked ?? 0) + (entry.blockedSince == nil ? 0 : 1),
-                blockedSince: earliest(existing?.blockedSince, entry.blockedSince)
+                blocked: (existing?.blocked ?? 0) + (entry.hasUnseenAsk ? 1 : 0)
             )
         }
     }
@@ -84,7 +76,7 @@ final class AttentionStore {
         changing {
             guard entries[id] != nil else { return }
             record(id, .waiting, seen: seen)
-            if !seen, entries[id]?.blockedSince == nil { entries[id]?.blockedSince = now() }
+            if !seen { entries[id]?.hasUnseenAsk = true }
             entries[id]?.agentWait = .ask
             if entries[id]?.agentSince == nil { entries[id]?.agentSince = now() }
         }
@@ -152,7 +144,7 @@ final class AttentionStore {
             entries[id]?.seen = true
             entries[id]?.latched = .idle
             entries[id]?.since = nil
-            entries[id]?.blockedSince = nil
+            entries[id]?.hasUnseenAsk = false
             if entries[id]?.agentWait == .turnEnd {
                 entries[id]?.agentWait = nil
                 entries[id]?.agentSince = nil
@@ -197,32 +189,6 @@ final class AttentionStore {
         SurfaceAttention.rollup(entries.values.map(effective) + residual.values.map(\.state))
     }
 
-    var blockedSince: Date? {
-        blockedByAge.compactMap(\.since).min()
-    }
-
-    var blockedInOrder: [WaitingTarget] {
-        blockedByAge.map(\.target)
-    }
-
-    private var blockedByAge: [(target: WaitingTarget, since: Date?, rank: Int)] {
-        let latched = entries.compactMap { id, entry -> (WaitingTarget, Date?, Int)? in
-            guard isUnseenAsk(entry) else { return nil }
-            return (.surface(id), entry.blockedSince, id.raw)
-        }
-        let folded = residual.compactMap { tab, value -> (WaitingTarget, Date?, Int)? in
-            guard value.blocked > 0 else { return nil }
-            return (.tab(tab), value.blockedSince, tab.raw)
-        }
-        return (latched + folded)
-            .sorted {
-                let a = $0.1 ?? .distantFuture
-                let b = $1.1 ?? .distantFuture
-                return a == b ? $0.2 < $1.2 : a < b
-            }
-            .map { (target: $0.0, since: $0.1, rank: $0.2) }
-    }
-
     var blockedCount: Int {
         entries.values.filter(isUnseenAsk).count + residual.values.reduce(0) { $0 + $1.blocked }
     }
@@ -243,7 +209,7 @@ final class AttentionStore {
     }
 
     private func isUnseenAsk(_ entry: Entry) -> Bool {
-        !entry.seen && entry.blockedSince != nil
+        !entry.seen && entry.hasUnseenAsk
     }
 
     private func effective(_ entry: Entry) -> SurfaceAttention {
