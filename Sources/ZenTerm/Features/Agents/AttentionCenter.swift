@@ -1,55 +1,23 @@
 import Foundation
 
-extension Notification.Name {
-    static let attentionCenterDidChange = Notification.Name("attentionCenterDidChange")
-}
-
-struct WindowAttention: Equatable {
-    let windowID: Int
-    // Agents, never windows.
-    let count: Int
-    let since: Date?
-}
-
 // Main-thread only.
 final class AttentionCenter {
     static let shared = AttentionCenter()
 
     init() {}
 
-    private var byWindow: [Int: WindowAttention] = [:]
+    // Agents, never windows.
+    private var blockedByWindow: [Int: Int] = [:]
 
-    func update(windowID: Int, blockedCount: Int, since: Date?) {
-        let entry = blockedCount > 0 ? WindowAttention(windowID: windowID, count: blockedCount, since: since) : nil
-        set(windowID, entry)
+    func update(windowID: Int, blockedCount: Int) {
+        blockedByWindow[windowID] = blockedCount > 0 ? blockedCount : nil
     }
 
     func forget(windowID: Int) {
-        set(windowID, nil)
-    }
-
-    // Only a real change announces itself, or two windows rendering each other would never settle.
-    private func set(_ windowID: Int, _ entry: WindowAttention?) {
-        guard byWindow[windowID] != entry else { return }
-        byWindow[windowID] = entry
-        NotificationCenter.default.post(name: .attentionCenterDidChange, object: windowID)
+        blockedByWindow[windowID] = nil
     }
 
     func blockedCount(excluding windowID: Int) -> Int {
-        byWindow.values.filter { $0.windowID != windowID }.reduce(0) { $0 + $1.count }
-    }
-
-    /// How many other windows hold one, so the copy can choose window or windows.
-    func blockedWindows(excluding windowID: Int) -> Int {
-        byWindow.values.filter { $0.windowID != windowID }.count
-    }
-
-    /// Oldest first, so the one that has waited longest reads first. Ties resolve by window, never by luck.
-    var blocked: [WindowAttention] {
-        byWindow.values.sorted {
-            let a = $0.since ?? .distantFuture
-            let b = $1.since ?? .distantFuture
-            return a == b ? $0.windowID < $1.windowID : a < b
-        }
+        blockedByWindow.filter { $0.key != windowID }.values.reduce(0, +)
     }
 }

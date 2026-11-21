@@ -312,9 +312,7 @@ final class WindowController: NSObject {
     private var hostStatusObserver: NSObjectProtocol?
     // Read at the change, not from the sidebar, which a disconnect's status change redraws first.
     private var hostOrder = GeneralConfig.current.sshHostAliases.map(SSHHostID.init)
-    private var attentionObserver: NSObjectProtocol?
     /// Raises the window holding the agent that has waited longest and lands on it. False when it has gone.
-    var revealWaitingAgentElsewhere: ((Int) -> Bool)?
 
     var onClosed: (() -> Void)?
 
@@ -473,7 +471,6 @@ final class WindowController: NSObject {
         onCloseWorkspace = { [weak self] in self?.requestCloseWorkspace(id: $0) }
         onRenameWorkspace = { [weak self] in self?.openRenameWorkspace($0) }
         sidebar.onJump = { [weak self] in self?.jumpToAgent($0) }
-        sidebar.onJumpElsewhere = { [weak self] in self?.jumpToWaitingElsewhere() }
         sidebar.onActivateHost = { [weak self] host in
             self?.sidebar.hideReveal()
             self?.activate(host)
@@ -491,15 +488,6 @@ final class WindowController: NSObject {
         window.delegate = self
         wireModes()
         attention.onChange = { [weak self] in self?.renderAttention() }
-
-        attentionObserver = NotificationCenter.default.addObserver(
-            forName: .attentionCenterDidChange, object: nil, queue: nil
-        ) { [weak self] note in
-            MainActor.assumeIsolated {
-                guard let self, note.object as? Int != self.windowID else { return }
-                self.renderAgents()
-            }
-        }
 
         hostStatusObserver = NotificationCenter.default.addObserver(
             forName: .sshHostStatusDidChange, object: nil, queue: .main
@@ -3600,41 +3588,6 @@ final class WindowController: NSObject {
         let items = agentItems()
         sidebar.renderAgents(items)
         renderTabChips(agents: items)
-        let center = AttentionCenter.shared
-        sidebar.renderWaitingElsewhere(
-            agents: center.blockedCount(excluding: windowID),
-            windows: center.blockedWindows(excluding: windowID),
-            index: waitingElsewherePlace(among: items))
-    }
-
-    // The row queues on the same rule the rows use: waiting first, and among those the oldest reads first.
-    private func waitingElsewherePlace(among items: [SidebarAgentItem]) -> Int {
-        guard let since = AttentionCenter.shared.blocked.first(where: { $0.windowID != windowID })?.since
-        else { return items.count }
-        return items.prefix {
-            $0.state.isWaiting && (attention.agentSince(of: $0.id) ?? .distantFuture) <= since
-        }.count
-    }
-
-    private func jumpToWaitingElsewhere() {
-        guard let target = AttentionCenter.shared.blocked.first(where: { $0.windowID != windowID })
-        else { return }
-        if revealWaitingAgentElsewhere?(target.windowID) != true { renderAgents() }
-    }
-
-    @discardableResult
-    func revealLongestBlockedAgent(raising raise: () -> Void = {}) -> Bool {
-        guard let target = attention.blockedInOrder.first else { return false }
-        raise()
-        switch target {
-        case .surface(let id):
-            jumpToAgent(id)
-        case .tab(let id):
-            reveal(id)
-            visit(id)
-            renderAttention()
-        }
-        return true
     }
 
     private func agentItems() -> [SidebarAgentItem] {
@@ -3988,8 +3941,7 @@ final class WindowController: NSObject {
     /// What other windows read. Every path that changes what this window is waiting on has to end here.
     private func publishAttention() {
         guard !didTearDown else { return }
-        AttentionCenter.shared.update(
-            windowID: windowID, blockedCount: attention.blockedCount, since: attention.blockedSince)
+        AttentionCenter.shared.update(windowID: windowID, blockedCount: attention.blockedCount)
     }
 
     // A tab shows what its agents' rows show, so it reads the same items, after their rows.
@@ -4075,8 +4027,6 @@ final class WindowController: NSObject {
     private func tearDown() {
         guard !didTearDown else { return }
         didTearDown = true
-        if let attentionObserver { NotificationCenter.default.removeObserver(attentionObserver) }
-        attentionObserver = nil
         AttentionCenter.shared.forget(windowID: windowID)
         pendingModal = nil
         cancelConfirm()

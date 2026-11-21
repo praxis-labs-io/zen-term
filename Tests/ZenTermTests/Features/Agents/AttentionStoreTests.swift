@@ -73,42 +73,6 @@ final class AttentionStoreTests: XCTestCase {
         XCTAssertEqual(store.blockedCount, 0, "a command finishing later is not the ask you already saw")
     }
 
-    func test_aTabThatCompletedBeforeItAsked_datesTheWaitFromTheQuestion() {
-        var clock = Date(timeIntervalSince1970: 100)
-        let store = AttentionStore(now: { clock })
-        let finished = SurfaceIDs.mint()
-        let asked = SurfaceIDs.mint()
-        store.register(finished, tab: tab)
-        store.register(asked, tab: tab)
-
-        store.record(finished, .completed, seen: false)
-        store.release(finished)
-        clock = Date(timeIntervalSince1970: 200)
-        store.ask(asked, seen: false)
-        store.release(asked)
-
-        XCTAssertEqual(store.state(tab: tab), .waiting, "precondition: the tab still asks")
-        XCTAssertEqual(
-            store.blockedSince, Date(timeIntervalSince1970: 200),
-            "the wait dates from the question, not from something else finishing earlier")
-    }
-
-    func test_aPaneThatCompletedBeforeItAsked_datesTheWaitFromTheQuestion() {
-        var clock = Date(timeIntervalSince1970: 100)
-        let store = AttentionStore(now: { clock })
-        let pane = SurfaceIDs.mint()
-        store.register(pane, tab: tab)
-
-        store.record(pane, .completed, seen: false)
-        clock = Date(timeIntervalSince1970: 200)
-        store.ask(pane, seen: false)
-
-        XCTAssertEqual(store.state(tab: tab), .waiting, "precondition: the pane still asks")
-        XCTAssertEqual(
-            store.blockedSince, Date(timeIntervalSince1970: 200),
-            "the wait dates from the question, not from its own earlier completion")
-    }
-
     func test_anUnseenLatch_colorsItsTab() {
         let store = makeStore()
         let pane = SurfaceIDs.mint()
@@ -308,32 +272,6 @@ final class AttentionStoreTests: XCTestCase {
         store.dropTab(tab)
 
         XCTAssertEqual(store.windowState, .idle)
-    }
-
-    func test_blockedSince_isWhenTheOldestThingStartedAsking() {
-        let start = Date(timeIntervalSince1970: 1000)
-        let store = AttentionStore(now: { start })
-        let pane = SurfaceIDs.mint()
-        store.register(pane, tab: tab)
-
-        XCTAssertNil(store.blockedSince)
-        store.ask(pane, seen: false)
-        XCTAssertEqual(store.blockedSince, start)
-
-        store.markSeen(tab: tab)
-        XCTAssertNil(store.blockedSince)
-    }
-
-    func test_blockedSince_survivesTheSurfaceThatRaisedIt() {
-        let start = Date(timeIntervalSince1970: 2000)
-        let store = AttentionStore(now: { start })
-        let pane = SurfaceIDs.mint()
-        store.register(pane, tab: tab)
-        store.ask(pane, seen: false)
-
-        store.release(pane)
-
-        XCTAssertEqual(store.blockedSince, start)
     }
 
     func test_aWorkspaceFoldsItsTabsByMax() {
