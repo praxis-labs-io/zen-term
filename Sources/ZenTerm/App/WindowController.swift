@@ -3650,7 +3650,7 @@ final class WindowController: NSObject {
                 variant: .info,
                 title: elsewhere ? "Waiting in another window" : "Nothing is waiting",
                 message: elsewhere
-                    ? "Nothing in this window is asking for you.\nThe sidebar row takes you there."
+                    ? "An agent is waiting in another window."
                     : "No agent in this window is asking for you.\nThe sidebar lists the ones that are."))
     }
 
