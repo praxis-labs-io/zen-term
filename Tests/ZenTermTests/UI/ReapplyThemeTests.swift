@@ -1,4 +1,5 @@
 import AppKit
+import TabKit
 import TerminalKit
 import XCTest
 
@@ -215,13 +216,29 @@ final class ReapplyThemeTests: WindowTestCase {
                 id: SurfaceID(raw: 1), state: .idle, summary: "Finished the migration.", detail: "zen-term",
                 message: message))
         XCTAssertEqual(row.accessibilityLabel(), message)
-        let inkBefore = AttentionTone.idle.ink
+        let inkBefore = Theme.current.chrome.ink(.normal)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
-        XCTAssertNotEqual(AttentionTone.idle.ink, inkBefore, "premise: the theme change recolors the summary")
+        XCTAssertNotEqual(
+            Theme.current.chrome.ink(.normal), inkBefore, "premise: the theme change recolors the summary")
         row.reapplyThemeTree()
 
         XCTAssertEqual(row.accessibilityLabel(), message, "the theme change cut the message to its summary")
+    }
+
+    func test_reapplyTheme_repaintsATabsStateDot() throws {
+        let chip = TerminalTabChip(
+            id: TabID(1), index: 1, onClick: {}, onClose: {}, onDoubleClick: {}, directory: { nil })
+        makeWindow().contentView?.addSubview(chip)
+        chip.update(index: 1, title: "zen-term", isCurrent: false, indicator: .dot(.blocked))
+        let before = try XCTUnwrap(chip.dotColorForTesting)
+
+        Theme.setCurrentForTesting(try makeAlternateTheme())
+        chip.reapplyThemeTree()
+
+        let after = try XCTUnwrap(chip.dotColorForTesting)
+        XCTAssertNotEqual(before, after, "premise: the theme change moves ANSI red")
+        XCTAssertEqual(after, Theme.current.chrome.blocked.nsColor.cgColor)
     }
 
     func test_reapplyTheme_recolorsNavRow() throws {

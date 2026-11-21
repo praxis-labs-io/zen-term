@@ -141,21 +141,13 @@ final class SSHHostChordTests: WindowTestCase {
         try row(host, in: c).accessibilityValue() as? String
     }
 
-    func test_hostRows_sayTheirStatusToVoiceOver_andShowNoStatusText() throws {
+    func test_hostRows_sayTheirStatusToVoiceOver_andShowItAsTheDetail() throws {
         let c = makeWindow(hosts: ["down", "up", "live"], offline: ["down"], connected: ["live"])
 
         XCTAssertEqual(try status("down", in: c), "Offline")
         XCTAssertEqual(try status("up", in: c), "Online")
         XCTAssertEqual(try status("live", in: c), "Connected")
-        XCTAssertEqual(try row("up", in: c).detailForTesting, "")
-    }
-
-    func test_hostRows_dotTheirStatusInItsInk() throws {
-        let c = makeWindow(hosts: ["down", "up", "live"], offline: ["down"], connected: ["live"])
-
-        XCTAssertEqual(try row("down", in: c).dotColorForTesting, SSHHostStatus.offline.ink.cgColor)
-        XCTAssertEqual(try row("up", in: c).dotColorForTesting, SSHHostStatus.online.ink.cgColor)
-        XCTAssertEqual(try row("live", in: c).dotColorForTesting, SSHHostStatus.connected.ink.cgColor)
+        XCTAssertEqual(try row("up", in: c).detailForTesting, "Online")
     }
 
     func test_aHostNotConnected_paintsItsTitleSubtle_andConnectingRepaintsItInPlace() throws {
@@ -182,7 +174,6 @@ final class SSHHostChordTests: WindowTestCase {
         SSHHostStatusCenter.shared.setConnected(true, host: SSHHostID(alias: "devbox"))
 
         XCTAssertTrue(try row("devbox", in: c) === online, "the row is repainted, not rebuilt")
-        XCTAssertEqual(online.dotColorForTesting, SSHHostStatus.connected.ink.cgColor)
         XCTAssertEqual(try status("devbox", in: c), "Connected")
     }
 

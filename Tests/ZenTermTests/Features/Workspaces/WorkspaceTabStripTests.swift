@@ -259,7 +259,7 @@ final class WorkspaceTabStripTests: WindowTestCase {
             focus: Workspace.LaunchFocus(tab: 1, region: .main))
         let chip = strip.chips[1]
         let dotFrame = chip.dotFrameForTesting
-        XCTAssertEqual(chip.dotColorForTesting, Theme.current.chrome.cursor.nsColor)
+        XCTAssertEqual(chip.dotStateForTesting, .live)
 
         chip.mouseEntered(with: try mouse(.mouseMoved, at: chip))
 

@@ -21,7 +21,8 @@ Everything in the chrome resolves from `Theme.current`. Chrome UI takes
 | `accent` | Pane focus, the primary action, loading. See [Accent](#accent) |
 | `onAccent` | Text and rings on an accent fill, and nowhere else. The background or the foreground, whichever contrasts more with `accent` |
 | `working` | An agent mid-turn. ANSI yellow, whatever the accent |
-| `done` | An agent waiting on the user. ANSI blue, whatever the accent |
+| `done` | An agent that finished its turn, on its Agents row and its tab. ANSI blue, whatever the accent |
+| `blocked` | An agent asking for approval. ANSI red, whatever the accent |
 | `positive` | Success, completed, kept |
 | `warning` | Caution: proceeding has a cost |
 | `destructive` | Loss, deletion, errors |
@@ -64,6 +65,7 @@ Accent is rare. It goes in these places only:
 - The focus border of a tool float, of a pane while another pane or drawer shares the screen, and a shortcut being recorded.
 - The primary button's fill, labeled and ringed in `onAccent`.
 - Loading: `Spinner` and the update progress bar. An agent's spinner takes `working` instead.
+- The live `StateDot`: a toolbar button's background dot and the workspace form's opens-focused tab.
 - Role-toned `tint` surfaces: icon badges, focused text selection, the find bar, the
   scroll flash.
 
@@ -198,6 +200,8 @@ cannot subclass it (`AppButton`). A control never keeps its own tracking area. A
 takes keyboard focus and its ring from it too.
 
 A row in a list is a `ListRow`: popover lists, menus, palettes (`SelectableRowView`), Settings lists, the Settings and sidebar nav (`NavRow`), and the sidebar's agent rows (`SidebarJumpRow`).
+
+A dot is a `StateDot`: blocked reads `blocked`, done `done`, live `accent`. It is never a ring.
 
 A boxed input (a text field, a text area, a picker) takes its rest fill and border from `FieldChrome`.
 

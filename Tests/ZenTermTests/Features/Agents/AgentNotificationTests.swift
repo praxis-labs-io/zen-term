@@ -126,7 +126,7 @@ final class AgentNotificationTests: WindowTestCase {
             body: AgentNotificationFixtures.claudePermission)
 
         XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .waiting)
-        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .waiting)
+        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .blocked)
     }
 
     private func finishATurn(on surface: RecordingSurface) {
@@ -146,7 +146,7 @@ final class AgentNotificationTests: WindowTestCase {
 
         XCTAssertEqual(
             c.attentionStateForTesting(tabIndex: 0), .waiting, "with its progress off, this is the only turn end")
-        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .waiting)
+        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .blocked)
         XCTAssertEqual(cardCount(c), 1)
     }
 
@@ -210,7 +210,7 @@ final class AgentNotificationTests: WindowTestCase {
             body: AgentNotificationFixtures.claudePlanApproval)
 
         XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .waiting)
-        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .waiting)
+        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .blocked)
     }
 
     func test_anyOtherClaudeNotification_waits() throws {
@@ -220,7 +220,7 @@ final class AgentNotificationTests: WindowTestCase {
         post(claude.surface, title: AgentNotificationFixtures.claudeTitle, body: "Refactor finished")
 
         XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .waiting)
-        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .waiting)
+        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .blocked)
         XCTAssertTrue(cardCopy(c).contains("Refactor finished"))
     }
 
@@ -263,7 +263,7 @@ final class AgentNotificationTests: WindowTestCase {
             pi.surface, progressDidChange: TerminalProgress(state: .indeterminate, fraction: nil))
         drainMainQueue()
 
-        XCTAssertEqual(c.agentRowForTesting(pi.id)?.state, .waiting, "only typing answers pi")
+        XCTAssertEqual(c.agentRowForTesting(pi.id)?.state, .blocked, "only typing answers pi")
         XCTAssertTrue(cardCopy(c).contains("Approve the plan?"), "the card stays as long as its ask does")
     }
 
@@ -277,7 +277,7 @@ final class AgentNotificationTests: WindowTestCase {
         drainMainQueue()
 
         XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .waiting)
-        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .waiting)
+        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .blocked)
         XCTAssertTrue(cardCopy(c).contains("Exited 1 after 2s."))
     }
 
@@ -294,7 +294,7 @@ final class AgentNotificationTests: WindowTestCase {
         c.notifyCommandFinishedForTesting(tab: tab, result: TerminalCommandResult(exitCode: 1, duration: 2))
         drainMainQueue()
 
-        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .waiting, "the poll noticed first, the result decides")
+        XCTAssertEqual(c.agentRowForTesting(claude.id)?.state, .blocked, "the poll noticed first, the result decides")
         XCTAssertTrue(cardCopy(c).contains("Exited 1 after 2s."))
     }
 
@@ -309,7 +309,7 @@ final class AgentNotificationTests: WindowTestCase {
 
         XCTAssertEqual(
             c.attentionStateForTesting(tabIndex: 0), .waiting, "an agent with no body rules is taken at its word")
-        XCTAssertEqual(c.agentRowForTesting(pi.id)?.state, .waiting)
+        XCTAssertEqual(c.agentRowForTesting(pi.id)?.state, .blocked)
     }
 
     private func pushTitle(_ title: String, from surface: RecordingSurface) {
@@ -330,7 +330,7 @@ final class AgentNotificationTests: WindowTestCase {
         pushTitle("[ . ] Action Required | Approve writing test2.txt | zen-term", from: codex.surface)
 
         XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .waiting)
-        XCTAssertEqual(c.agentRowForTesting(codex.id)?.state, .waiting)
+        XCTAssertEqual(c.agentRowForTesting(codex.id)?.state, .blocked)
         XCTAssertEqual(cardCount(c), 1, "Codex asks through its title, so its title raises the card")
         XCTAssertTrue(cardCopy(c).contains("Approve writing test2.txt"), "the card says what Codex asks")
     }
