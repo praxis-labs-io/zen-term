@@ -354,8 +354,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   first), then working, then idle, ties in sidebar order. A row's title is its 7501 title,
   else, for Claude and Codex until they exit, the task in their pane title (`AgentRules.taskTitle`:
   Claude's without its status glyph, Codex's between its prompt and its folder; any other pane
-  title is the shell's), else its name. Never its message, which stays in the tooltip and
-  accessibility label, and never a state word. Its second line is its place.
+  title is the shell's), else its name. Never its message, which stays in the tooltip and follows
+  the title in the accessibility label, and never a state word. Its second line is its place.
   Its state reaches VoiceOver through the accessibility value.
 - **Only an agent's OSC 777 can ask.** A notification from a surface that is not in the
   roster, and whose title names no known or listed agent, lands like a finished

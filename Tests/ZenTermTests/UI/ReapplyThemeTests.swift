@@ -213,9 +213,9 @@ final class ReapplyThemeTests: WindowTestCase {
         let message = "Finished the migration. Two tests still need a look."
         row.render(
             SidebarAgentItem(
-                id: SurfaceID(raw: 1), state: .idle, summary: "Finished the migration.", detail: "zen-term",
-                message: message))
-        XCTAssertEqual(row.accessibilityLabel(), message)
+                id: SurfaceID(raw: 1), state: .idle, summary: "claude", detail: "zen-term", message: message))
+        let label = "claude, \(message)"
+        XCTAssertEqual(row.accessibilityLabel(), label)
         let inkBefore = Theme.current.chrome.ink(.normal)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())
@@ -223,7 +223,7 @@ final class ReapplyThemeTests: WindowTestCase {
             Theme.current.chrome.ink(.normal), inkBefore, "premise: the theme change recolors the summary")
         row.reapplyThemeTree()
 
-        XCTAssertEqual(row.accessibilityLabel(), message, "the theme change cut the message to its summary")
+        XCTAssertEqual(row.accessibilityLabel(), label, "the theme change cut the label to the title")
     }
 
     func test_reapplyTheme_repaintsATabsStateDot() throws {

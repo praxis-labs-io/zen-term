@@ -420,7 +420,9 @@ final class SidebarAgentsTests: WindowTestCase {
         notify(agent, "Wants to run swift test", title: "Claude Code")
         let row = try XCTUnwrap(rows(c).first)
         XCTAssertEqual(row.summaryTextForTesting, "Review the diff", "the dot says it asks; the title stays")
-        XCTAssertEqual(row.accessibilityLabel(), "Wants to run swift test")
+        XCTAssertEqual(
+            row.accessibilityLabel(), "Review the diff, Wants to run swift test",
+            "VoiceOver names the row before its ask, or two asking rows sound alike")
         XCTAssertEqual(row.accessibilityValue() as? String, "Waiting, Workspace 1")
         try hover(row, in: c)
         XCTAssertEqual(try presentedTooltip().labelForTesting, "Wants to run swift test", "the tooltip keeps the ask")
@@ -1041,7 +1043,7 @@ final class SidebarAgentsTests: WindowTestCase {
         try hover(row, in: c)
 
         XCTAssertEqual(try presentedTooltip().labelForTesting, body)
-        XCTAssertEqual(row.accessibilityLabel(), body, "a screen reader hears the whole message too")
+        XCTAssertEqual(row.accessibilityLabel(), "pi, \(body)", "a screen reader hears the whole message too")
     }
 
     // Drives the row's own render: a window-level render would settle hover first, which a non-key test window reads as a pointer that left.

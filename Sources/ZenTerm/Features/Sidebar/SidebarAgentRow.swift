@@ -94,6 +94,6 @@ final class SidebarAgentRow: SidebarJumpRow {
 
     // `render` labels the row with its title, the summary, which cuts a multi-sentence message short.
     private func announce(_ item: SidebarAgentItem) {
-        setAccessibilityLabel(item.message ?? item.summary)
+        setAccessibilityLabel(item.message.map { "\(item.summary), \($0)" } ?? item.summary)
     }
 }
