@@ -595,8 +595,8 @@
 # scroll mode with it, unless you were already in scroll mode when you opened it.
 #
 # The count reads in the order you see on screen: match 1 is the one nearest the top
-# of your scrollback. Stepping does not wrap, so `n` on the oldest match and `N` on
-# the newest both stay where they are.
+# of your scrollback. Stepping wraps: `n` on the oldest match goes to the newest, and
+# `N` on the newest goes to the oldest.
 #
 # The find bar and a live prompt never sit on screen together. So leaving scroll mode
 # any other way closes the bar too: `q`, `i`, and ⌘⇧S all end the search and give the
