@@ -20,6 +20,8 @@ final class WindowController: NSObject {
     private let attention = AttentionStore()
     private let agents = AgentRoster()
     private let agentStates = AgentStateTracker()
+    private let firstTasks: FirstTaskDelivery
+    private(set) var launchedPaneExits = LaunchedPaneExits()
     private static let commandCompletionThreshold: TimeInterval = 10
     private var nextTabID = 1
 
@@ -396,7 +398,10 @@ final class WindowController: NSObject {
         return "\(workspace.name): \(title(of: id))"
     }
 
-    init(contentRect: NSRect, initialCWD: URL?) {
+    init(
+        contentRect: NSRect, initialCWD: URL?, firstTaskWindow: TimeInterval = FirstTaskDelivery.readinessWindow
+    ) {
+        firstTasks = FirstTaskDelivery(readinessWindow: firstTaskWindow)
         window = HostWindow(contentRect: contentRect)
         windowID = WindowController.nextWindowID
         WindowController.nextWindowID += 1
@@ -825,11 +830,11 @@ final class WindowController: NSObject {
     deinit { titlePoll?.invalidate() }
 
     private func makeController(
-        cwd: URL?, command: String? = nil, config ws: Workspace? = nil, tab index: Int = 0,
+        cwd: URL?, command: PaneProgram? = nil, config ws: Workspace? = nil, tab index: Int = 0,
         connection: SSHConnection? = nil
     ) -> TabController {
         let tab = ws?.tabs[index]
-        let mainCommand = command ?? tab?.main.flatMap { $0 == "shell" ? nil : $0 }
+        let mainCommand = command ?? tab?.main.flatMap { $0 == "shell" ? nil : PaneProgram(command: $0) }
         let c = TabController(
             initialCWD: cwd, initialCommand: mainCommand, env: ws?.env ?? [:],
             backingScale: window.backingScaleFactor,
@@ -1101,7 +1106,7 @@ final class WindowController: NSObject {
         select(openTab(in: workspace, cwd: cwd, command: nil), slideFrom: .fromRight)
     }
 
-    private func openTab(in workspace: WorkspaceController, cwd: URL?, command: String?) -> TabID {
+    private func openTab(in workspace: WorkspaceController, cwd: URL?, command: PaneProgram?) -> TabID {
         Log.info("tab opened", category: .tabs)
         let id = mintTabID()
         workspace.append(id)
@@ -1110,7 +1115,7 @@ final class WindowController: NSObject {
     }
 
     private func installController(
-        id: TabID, in workspace: WorkspaceController, cwd: URL?, command: String? = nil, config: Workspace?,
+        id: TabID, in workspace: WorkspaceController, cwd: URL?, command: PaneProgram? = nil, config: Workspace?,
         tab index: Int = 0
     ) {
         let c = makeController(
@@ -2312,7 +2317,8 @@ final class WindowController: NSObject {
         }
         return ListResult.Pane(
             token: pane.token, drawer: pane.drawer.map(Self.drawer), title: pane.surface.title,
-            cwd: pane.cwd?.path, busy: pane.surface.isBusy, agent: agent)
+            cwd: pane.cwd?.path, busy: pane.surface.isBusy, agent: agent, name: pane.record.name,
+            parent: pane.record.parent, firstTask: pane.record.firstTask)
     }
 
     private static func agentState(_ tone: AttentionTone) -> ListResult.AgentState {
@@ -2341,6 +2347,34 @@ final class WindowController: NSObject {
         return nil
     }
 
+    func panes(named name: String) -> [(tab: TabID, pane: PaneHandle)] {
+        workspaces.flatMap { workspace in
+            workspace.tabIDs.flatMap { id in
+                (workspace.controller(id)?.paneHandles ?? []).filter { $0.record.name == name }.map { (id, $0) }
+            }
+        }
+    }
+
+    func updateRecord(pane token: Int, _ change: (inout PaneRecord) -> Void) {
+        guard let (tab, _) = pane(token: token) else { return }
+        controller(tab)?.updateRecord(pane: token, change)
+    }
+
+    func deliverFirstTask(_ task: String, toPane token: Int, settle: @escaping (FirstTask) -> Void) {
+        guard let (_, handle) = pane(token: token) else { return settle(.held(.notReady)) }
+        let surface = handle.surface
+        firstTasks.await(
+            handle.surfaceID,
+            send: { [weak surface] in
+                surface?.paste(task)
+                surface?.submit()
+            },
+            settle: { [weak self] outcome in
+                self?.updateRecord(pane: token) { $0.firstTask = outcome }
+                settle(outcome)
+            })
+    }
+
     func holdsWorkspace(_ id: WorkspaceID) -> Bool { workspaces.contains { $0.id == id } }
 
     func activateWorkspace(_ id: WorkspaceID) { activate(id) }
@@ -2365,7 +2399,7 @@ final class WindowController: NSObject {
 
     func firstPaneToken(of tab: TabID) -> Int? { controller(tab)?.paneHandles.first?.token }
 
-    func openTab(in id: WorkspaceID, cwd: URL?, command: String?) -> TabID? {
+    func openTab(in id: WorkspaceID, cwd: URL?, command: PaneProgram?) -> TabID? {
         guard let workspace = workspaces.first(where: { $0.id == id }) else { return nil }
         return openTab(in: workspace, cwd: cwd, command: command)
     }
@@ -2409,7 +2443,7 @@ final class WindowController: NSObject {
         return c.paneHandles.first { $0.surfaceID == c.focusedSurfaceID }
     }
 
-    func splitPane(_ token: Int, in tab: TabID, axis: SplitAxis, command: String?) -> PaneSplitResult? {
+    func splitPane(_ token: Int, in tab: TabID, axis: SplitAxis, command: PaneProgram?) -> PaneSplitResult? {
         controller(tab)?.split(pane: token, axis: axis, command: command)
     }
 
@@ -3009,6 +3043,7 @@ final class WindowController: NSObject {
             self.renderAttention()
         }
         c.onLastPaneClosed = { [weak self] in self?.closeTab(id) }
+        c.onLaunchedPaneExited = { [weak self] exit in self?.launchedPaneExits.record(exit) }
         c.removedWorktree = { [weak self] in self?.workspace(of: id)?.removedWorktree }
         c.onOverlayStateChanged = { [weak self] in self?.renderDock() }
         c.onRequestToast = { [weak self] content in self?.toasts.show(content) }
@@ -3044,6 +3079,7 @@ final class WindowController: NSObject {
         c.onSurfacesReleased = { [weak self] ids in
             self?.workspace(of: id)?.connection?.release(ids)
             ids.forEach {
+                self?.firstTasks.release($0)
                 self?.attention.release($0)
                 self?.agents.drop($0)
                 self?.agentStates.drop($0)
@@ -3313,6 +3349,7 @@ final class WindowController: NSObject {
 
     private func programStatusChanged(surface: SurfaceID, status: TerminalProgramStatus?) {
         DispatchQueue.main.async { [weak self] in
+            if let status { self?.firstTasks.report(status, from: surface) }
             guard let self, self.agents.agents[surface]?.hasExited != true else { return }
             if let status {
                 let name = status.app.map { AgentRules.key(for: $0) ?? $0 }

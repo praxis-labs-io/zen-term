@@ -27,12 +27,14 @@ enum ShellLaunch {
             fontSize: SessionFontSize.points, theme: Theme.current.terminal, behavior: behavior)
     }
 
-    static func program(_ command: String, cwd: URL?, env: [String: String] = [:]) -> TerminalSurfaceConfig {
+    static func program(_ command: String, cwd: URL?, env: [String: String] = [:], exitClosesPane: Bool = false)
+        -> TerminalSurfaceConfig
+    {
         let sh = userShell
-        let tail = "\(zshIntegrationRearm(for: sh))exec \(sh) -l -i"
+        let tail = exitClosesPane ? "" : "\(zshIntegrationRearm(for: sh))exec \(sh) -l -i"
         let title = titling(command, for: sh)
         let script =
-            isAgent(command)
+            exitClosesPane || isAgent(command)
             ? "\(title)\(commandStart)\(command); \(commandFinish(for: sh))\(tail)"
             : "\(title)\(command); \(tail)"
         return TerminalSurfaceConfig(
@@ -46,7 +48,7 @@ enum ShellLaunch {
         )
     }
 
-    // Only an agent's exit is tracked, and marking every program would toast when nvim quits.
+    // Only an agent's or a closing pane's exit is tracked, and marking every program would toast when nvim quits.
     private static func isAgent(_ command: String) -> Bool {
         AgentRoster.agentName(launching: command, listed: GeneralConfig.current.listedAgents) != nil
     }

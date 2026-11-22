@@ -96,7 +96,7 @@ Requests are decoded off the main thread, applied on it, and written back off it
 
 | Thing  | Address                           | Notes                                         |
 | ------ | --------------------------------- | --------------------------------------------- |
-| Pane   | its `$ZEN_PANE` token, e.g. `31`  | Unique across the app and never reused. Drawers have tokens. |
+| Pane   | its `$ZEN_PANE` token, e.g. `31`, or its name, e.g. `"review"` | A token is unique across the app and never reused. Drawers have tokens. A name is the one `pane.run` gave it, unique among open panes, and is sent as a string; a string of digits is read as a token. |
 | Tab    | `w<window>.t<tab>`, e.g. `w1.t14` | Tab ids are minted per window, so the window is part of it. |
 | Workspace | its folder as an absolute path, or its title | Matched across every window. The title is its current name, so after a rename the old one is `not_found`, except to `workspace.open`, which still reaches a renamed configured workspace through its entry's folder. More than one match is `ambiguous`. |
 | Remote host workspace | `ssh:<host>`             | The host's alias in Settings, never its name. A host not in Settings is `not_found`, and so is one with no session or a failed login, except to `workspace.open` and the worktree commands, which refuse a host in Settings whether it has a session or not. A folder or title never names a host's workspace. |
@@ -142,7 +142,8 @@ is listed from its first opening until it closes, shown or hidden.
   "tabs":[{"id":"w1.t3","title":"zen-term","active":true,"panes":[
     {"token":31,"title":"nvim","cwd":"/Users/me/.zenterm/worktrees/zen-term/feat-x","busy":true,
      "agent":{"name":"claude","state":"waiting"}},
-    {"token":32,"drawer":"bottom","title":"","busy":false}]}]}]}]}
+    {"token":32,"drawer":"bottom","title":"","busy":false},
+    {"token":34,"title":"claude","busy":true,"name":"review","parent":31,"first_task":{"sent":true}}]}]}]}]}
 ```
 
 - `key`: the window is the key window.
@@ -160,6 +161,9 @@ is listed from its first opening until it closes, shown or hidden.
 - `busy`: always false in a host's workspace, since a remote shell reports no prompts.
 - `agent`: present when the pane runs an agent. `state` is `working`, `waiting` or
   `idle`; `name` is absent for an agent that has not been named.
+- `name`, `parent`, `first_task`: present for a pane `pane.run` opened, when it was given a
+  name, run from a pane, or given a task. `parent` is the token of the pane that ran it, kept
+  after that pane closes. `first_task` is the run's answer about its task, once it has one.
 
 ### `workspace.open`
 
@@ -274,6 +278,41 @@ paste, which runs the block once at a shell prompt. It delivers text, not keys: 
 characters become spaces. `failed` when the pane has not started, such as a host's pane
 waiting for its connection. Nothing is sent.
 
+### `pane.run`
+
+`args`: `cmd` (required), `name`, `task`, `split` (`right` or `down`), `pane`, `focus`, `keep`.
+
+Runs `cmd` in a shell in a new pane and records `caller.pane` as its parent. Without `split`
+it opens a tab behind the active one in the workspace of `pane` (the caller's by default),
+starting in that pane's folder. With `split` it splits `pane` the way `pane.split` does, and is
+refused or fails the same way. `focus` shows the new pane. A pane does not close when its
+parent does.
+
+The pane closes when its program exits, with any exit code. `keep` drops it to a shell instead,
+the way `tab.new` and `pane.split` run a `cmd`.
+
+`name` is refused when an open pane has it, and is a `bad_request` when it is blank or all
+digits. The name then addresses the pane anywhere a token does, until it closes.
+
+```json
+{"pane":34,"first_task":{"sent":false,"reason":"blocked"}}
+```
+
+Without `task` it answers at once and `first_task` is absent. With one, it answers once the
+program sends its first OSC 7501 status report, or after 60 seconds. A first report of `idle`
+or `done` means it is ready: the task is pasted and Return sent, as `pane.send` with `enter`
+does, and `first_task` is `{"sent":true}`. Otherwise the task is not sent and `reason` says why:
+
+| `reason`    | When                                                                 |
+| ----------- | -------------------------------------------------------------------- |
+| `blocked`   | The first report was `blocked`: it waits on the person, such as a permission ask. |
+| `not_ready` | The first report was `working` or `error`, or the pane closed before any report. |
+| `no_status` | No report in 60 seconds. A program that sends none, or an agent under tmux. |
+
+The pane keeps the answer as its `first_task` in `list`. The task is sent at most once: read the
+pane before sending it yourself, never resend blind. After `no_status`, wait for the program's
+prompt with `zen wait --output`, then send the task with `pane.send`.
+
 ### `pane.read`
 
 `args`: `pane`, `lines`.
@@ -350,7 +389,7 @@ lists every action.
 
 `zen hello` and `zen list` print the result as JSON. `zen list --pretty` prints an
 indented tree instead. Exit codes: 0 ok, 1 the app answered with an error or didn't
-answer within 10 seconds (5 minutes for `worktree create` and `worktree remove`), 2 usage,
+answer within 10 seconds (5 minutes for `worktree create`, `worktree remove` and `pane run`), 2 usage,
 3 no instance or the connection failed.
 
 `zen --version` prints the version of the ZenTerm.app it sits in, through a symlink too, and
@@ -359,11 +398,13 @@ speaks is refused with exit 1, before its result is read, and the message names 
 versions.
 
 Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close`,
-`zen tab new|select|rename|close`, `zen pane split|focus|close|send|read` and
+`zen tab new|select|rename|close`, `zen pane run|split|focus|close|send|read` and
 `zen worktree list|create|remove`, with `--focus` and `--force` for those fields.
 `zen action <name>` runs a keymap action. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
 rest print nothing. `zen pane split` splits to the right unless `--dir down` says otherwise.
+`zen pane run [--name] [--task] [--split right|down] [--pane] [--focus] [--keep] <command>` takes
+everything after its options as the command, joined with spaces. A pane argument is a token when it is all digits and a name otherwise.
 `zen workspace new` takes `--title`, and `zen workspace rename <title>` takes the workspace
 as `--workspace`. `zen worktree create <branch>` takes `--base default|current` or `--existing`, not both.
 `zen worktree remove` takes a folder when it starts with `/`, `~` or `.`, and a branch

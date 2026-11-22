@@ -7,4 +7,5 @@ struct PaneHandle {
     let surface: TerminalSurface
     let drawer: DrawerEdge?
     let cwd: URL?
+    var record = PaneRecord()
 }

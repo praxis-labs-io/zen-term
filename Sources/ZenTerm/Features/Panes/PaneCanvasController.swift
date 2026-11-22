@@ -15,7 +15,11 @@ final class PaneCanvasController: NSObject {
     private var tokenByLeaf: [PaneID: Int] = [:]
     private var surfaceIDByLeaf: [PaneID: SurfaceID] = [:]
     /// Consumed on first start; a split never inherits it.
-    private var startupCommandByLeaf: [PaneID: String] = [:]
+    private var startupCommandByLeaf: [PaneID: PaneProgram] = [:]
+    private var recordByLeaf: [PaneID: PaneRecord] = [:]
+    private var exitClosingLeaves: Set<PaneID> = []
+    private var reportedExitByLeaf: [PaneID: Int] = [:]
+    private static let exitTailLines = 40
     private let workspaceEnv: [String: String]
     private let backingScale: CGFloat?
     private var nextID = 1
@@ -40,6 +44,8 @@ final class PaneCanvasController: NSObject {
     var onLastPaneClosed: (() -> Void)?
 
     var onPanesRemoved: (([PaneID]) -> Void)?
+
+    var onLaunchedPaneExited: ((LaunchedPaneExit) -> Void)?
 
     var onTitleChanged: (() -> Void)?
 
@@ -124,7 +130,7 @@ final class PaneCanvasController: NSObject {
     }
 
     init(
-        initialCWD: URL? = nil, initialCommand: String? = nil, env: [String: String] = [:],
+        initialCWD: URL? = nil, initialCommand: PaneProgram? = nil, env: [String: String] = [:],
         backingScale: CGFloat? = nil,
         isToolFloatOpen: @escaping () -> Bool = { false },
         makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
@@ -180,15 +186,18 @@ final class PaneCanvasController: NSObject {
             let token = registerNavToken(for: id)
             var launch: TerminalSurfaceConfig
             let launchedCommand = startupCommandByLeaf.removeValue(forKey: id)
-            if let cmd = launchedCommand {
-                launch = ShellLaunch.program(cmd, cwd: cwdByLeaf[id], env: navEnv(token: token))
+            if let program = launchedCommand {
+                launch = ShellLaunch.program(
+                    program.command, cwd: cwdByLeaf[id], env: navEnv(token: token),
+                    exitClosesPane: program.exitClosesPane)
+                if program.exitClosesPane { exitClosingLeaves.insert(id) }
             } else {
                 launch = ShellLaunch.shell(cwd: cwdByLeaf[id], env: navEnv(token: token))
             }
             launch.backingScale = backingScale
             launchByLeaf[id] = launch
             startSurface(surface, surfaceID, launch)
-            if let cmd = launchedCommand { onProgramLaunched?(surfaceID, cmd) }
+            if let program = launchedCommand { onProgramLaunched?(surfaceID, program.command) }
             Log.info("surface started (pane \(id))", category: .surface)
         }
         var released: [SurfaceID] = []
@@ -197,6 +206,9 @@ final class PaneCanvasController: NSObject {
             cwdByLeaf[id] = nil
             hostByLeaf[id] = nil
             launchByLeaf[id] = nil
+            recordByLeaf[id] = nil
+            exitClosingLeaves.remove(id)
+            reportedExitByLeaf[id] = nil
             if let surfaceID = surfaceIDByLeaf.removeValue(forKey: id) { released.append(surfaceID) }
             if let token = tokenByLeaf.removeValue(forKey: id) { NavRegistry.shared.unregister(token: token) }
         }
@@ -375,7 +387,7 @@ final class PaneCanvasController: NSObject {
         guard split(tree.focusedLeaf, axis: axis, command: nil, focusing: true) != nil else { NSSound.beep(); return }
     }
 
-    func split(token: Int, axis: SplitAxis, command: String?) -> Int? {
+    func split(token: Int, axis: SplitAxis, command: PaneProgram?) -> Int? {
         guard let leaf = leafID(token: token) else { return nil }
         let keepsKeyFocus = holdsKeyFocusInCanvas
         guard let opened = split(leaf, axis: axis, command: command, focusing: false) else { return nil }
@@ -383,7 +395,7 @@ final class PaneCanvasController: NSObject {
         return tokenByLeaf[opened]
     }
 
-    private func split(_ source: PaneID, axis: SplitAxis, command: String?, focusing: Bool) -> PaneID? {
+    private func split(_ source: PaneID, axis: SplitAxis, command: PaneProgram?, focusing: Bool) -> PaneID? {
         guard let host = hostByLeaf[source] else { return nil }
         let size = host.bounds.size
         let extent = (axis == .vertical) ? size.width : size.height
@@ -416,6 +428,11 @@ final class PaneCanvasController: NSObject {
     }
 
     private func leafID(token: Int) -> PaneID? { tokenByLeaf.first { $0.value == token }?.key }
+
+    func updateRecord(token: Int, _ change: (inout PaneRecord) -> Void) {
+        guard let leaf = leafID(token: token) else { return }
+        change(&recordByLeaf[leaf, default: PaneRecord()])
+    }
 
     func resize(_ direction: Direction) {
         let axis: SplitAxis = (direction == .left || direction == .right) ? .vertical : .horizontal
@@ -551,6 +568,7 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
         onNotification?(id, n)
     }
     func surface(_ s: TerminalSurface, commandDidFinish result: TerminalCommandResult) {
+        if let leaf = leafID(of: s), exitClosingLeaves.contains(leaf) { reportedExitByLeaf[leaf] = result.exitCode }
         guard let id = surfaceID(of: s) else { return }
         onCommandFinished?(id, result)
     }
@@ -572,6 +590,12 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     }
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         guard let id = leafID(of: s) else { return }
+        if exitClosingLeaves.contains(id), let token = tokenByLeaf[id] {
+            onLaunchedPaneExited?(
+                LaunchedPaneExit(
+                    token: token, record: recordByLeaf[id] ?? PaneRecord(), exitCode: reportedExitByLeaf[id],
+                    lastLines: s.text(lastLines: Self.exitTailLines)))
+        }
         closePane(id)
     }
 
@@ -621,7 +645,7 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
             else { return nil }
             return PaneHandle(
                 token: token, surfaceID: surfaceID, surface: surface, drawer: nil,
-                cwd: surface.currentDirectory ?? cwdByLeaf[id])
+                cwd: surface.currentDirectory ?? cwdByLeaf[id], record: recordByLeaf[id] ?? PaneRecord())
         }
     }
 

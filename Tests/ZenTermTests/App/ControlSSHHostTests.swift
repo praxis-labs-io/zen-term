@@ -184,9 +184,9 @@ final class ControlSSHHostTests: WindowTestCase {
     func test_paneCloseOfTheLoginInASplitTab_refuses() throws {
         let c = makeWindow()
         let login = try token(of: loggingIn(c))
-        _ = try result(send(.paneSplit, ControlArgs(pane: login, dir: .right)), as: PaneResult.self)
+        _ = try result(send(.paneSplit, ControlArgs(pane: .token(login), dir: .right)), as: PaneResult.self)
 
-        let refusal = try error(send(.paneClose, ControlArgs(pane: login)))
+        let refusal = try error(send(.paneClose, ControlArgs(pane: .token(login))))
 
         XCTAssertEqual(refusal.code, .refused)
         XCTAssertEqual(refusal.message, "Closing pane \(login) would stop connecting to devbox and close its tab.")
@@ -195,7 +195,7 @@ final class ControlSSHHostTests: WindowTestCase {
 
     private func paneWaitingForTheHost(_ c: WindowController) throws -> (token: Int, surface: RecordingSurface) {
         let login = try token(of: loggingIn(c))
-        let split = try result(send(.paneSplit, ControlArgs(pane: login, dir: .right)), as: PaneResult.self)
+        let split = try result(send(.paneSplit, ControlArgs(pane: .token(login), dir: .right)), as: PaneResult.self)
         let surface = try XCTUnwrap(spawned.last)
         XCTAssertFalse(surface.isStarted, "a pane on a host waits for the connection")
         return (split.pane, surface)
@@ -206,8 +206,8 @@ final class ControlSSHHostTests: WindowTestCase {
         let waiting = try paneWaitingForTheHost(c)
 
         let refusals = try [
-            error(send(.paneSend, ControlArgs(pane: waiting.token, text: "ls"))),
-            error(send(.paneSend, ControlArgs(pane: waiting.token, text: "", enter: true))),
+            error(send(.paneSend, ControlArgs(pane: .token(waiting.token), text: "ls"))),
+            error(send(.paneSend, ControlArgs(pane: .token(waiting.token), text: "", enter: true))),
         ]
 
         XCTAssertEqual(refusals.map(\.code), [.failed, .failed])
@@ -216,7 +216,7 @@ final class ControlSSHHostTests: WindowTestCase {
         XCTAssertEqual(waiting.surface.inputs, [])
 
         fake.connect()
-        _ = try result(send(.paneSend, ControlArgs(pane: waiting.token, text: "ls")), as: NoPayload.self)
+        _ = try result(send(.paneSend, ControlArgs(pane: .token(waiting.token), text: "ls")), as: NoPayload.self)
 
         XCTAssertEqual(waiting.surface.inputs, [.paste("ls")])
     }
@@ -225,7 +225,7 @@ final class ControlSSHHostTests: WindowTestCase {
         let c = makeWindow()
         let waiting = try paneWaitingForTheHost(c)
 
-        let refusal = try error(send(.paneRead, ControlArgs(pane: waiting.token)))
+        let refusal = try error(send(.paneRead, ControlArgs(pane: .token(waiting.token))))
 
         XCTAssertEqual(refusal.code, .failed)
         XCTAssertEqual(refusal.message, "Pane \(waiting.token) has not started.")
@@ -350,7 +350,7 @@ final class ControlSSHHostTests: WindowTestCase {
         let refusals = try [
             error(send(.tabNew, ControlArgs(workspace: address, cmd: "make"))),
             error(send(.tabNew, ControlArgs(workspace: address, cwd: "/tmp"))),
-            error(send(.paneSplit, ControlArgs(cmd: "make", pane: login, dir: .right))),
+            error(send(.paneSplit, ControlArgs(cmd: "make", pane: .token(login), dir: .right))),
         ]
 
         XCTAssertEqual(refusals.map(\.code), [.refused, .refused, .refused])
@@ -365,7 +365,7 @@ final class ControlSSHHostTests: WindowTestCase {
         let login = try token(of: connected(c))
 
         _ = try result(send(.tabNew, ControlArgs(workspace: address, cmd: "")), as: TabResult.self)
-        _ = try result(send(.paneSplit, ControlArgs(cmd: "", pane: login, dir: .right)), as: PaneResult.self)
+        _ = try result(send(.paneSplit, ControlArgs(cmd: "", pane: .token(login), dir: .right)), as: PaneResult.self)
 
         XCTAssertEqual(spawned.suffix(2).map { $0.lastConfig?.command }, ["/usr/bin/ssh", "/usr/bin/ssh"])
     }

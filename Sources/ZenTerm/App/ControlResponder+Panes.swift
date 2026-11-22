@@ -10,12 +10,23 @@ struct PanePlace {
 }
 
 extension ControlResponder {
-    func pane(_ token: Int?, for request: ControlRequest) -> Result<PanePlace, ControlError> {
-        if let token {
+    func pane(_ address: ControlAddress.Pane?, for request: ControlRequest) -> Result<PanePlace, ControlError> {
+        switch address {
+        case .token(let token):
             guard let found = locate(pane: token) else {
                 return .failure(ControlError(.notFound, "There is no pane \(token)."))
             }
             return .success(PanePlace(window: found.window, tab: found.tab, pane: found.pane))
+        case .name(let name):
+            let found = locate(paneNamed: name)
+            guard found.count < 2 else {
+                return .failure(ControlError(.ambiguous, "\(found.count) panes are named \(name)."))
+            }
+            guard let only = found.first else {
+                return .failure(ControlError(.notFound, "There is no pane named \(name)."))
+            }
+            return .success(PanePlace(window: only.window, tab: only.tab, pane: only.pane))
+        case nil: break
         }
         return caller(request).flatMap { context in
             guard let tab = context.tab, let pane = context.pane ?? context.window.focusedPane(of: tab) else {
@@ -30,33 +41,39 @@ extension ControlResponder {
             return .failure(ControlError(.badRequest, "pane.split needs a dir, right or down."))
         }
         return pane(request.args.pane, for: request).flatMap { place in
-            let token = place.pane.token
-            if place.pane.drawer != nil {
-                return .failure(ControlError(.badRequest, "Pane \(token) is a drawer, and a drawer does not split."))
+            let command = request.args.cmd.flatMap { $0.isEmpty ? nil : PaneProgram(command: $0) }
+            return split(place, direction, running: command, focus: request.args.focus == true)
+                .map { PaneResult(pane: $0) as any ControlPayload }
+        }
+    }
+
+    func split(_ place: PanePlace, _ direction: PaneDirection, running command: PaneProgram?, focus: Bool)
+        -> Result<Int, ControlError>
+    {
+        let token = place.pane.token
+        if place.pane.drawer != nil {
+            return .failure(ControlError(.badRequest, "Pane \(token) is a drawer, and a drawer does not split."))
+        }
+        if command != nil, let host = place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) {
+            return .failure(
+                ControlError(
+                    .refused,
+                    "Pane \(token) is on \(ControlAddress.hostPrefix + host.alias), and a split there takes no cmd. "
+                        + "It starts the host's login shell."))
+        }
+        switch place.window.splitPane(token, in: place.tab, axis: Self.axis(direction), command: command) {
+        case nil:
+            return .failure(ControlError(.notFound, "There is no pane \(token)."))
+        case .focusMode:
+            return .failure(ControlError(.refused, "Pane \(token)'s tab is in Focus Mode. Exit Focus Mode to split."))
+        case .tooSmall:
+            return .failure(ControlError(.failed, "Pane \(token) is too small to split."))
+        case .opened(let opened):
+            if focus, let new = place.window.pane(token: opened) {
+                place.window.focus(new.pane.surfaceID, in: new.tab)
+                raise(place.window)
             }
-            let command = request.args.cmd.flatMap { $0.isEmpty ? nil : $0 }
-            if command != nil, let host = place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) {
-                return .failure(
-                    ControlError(
-                        .refused,
-                        "Pane \(token) is on \(ControlAddress.hostPrefix + host.alias), and a split there takes no cmd. "
-                            + "It starts the host's login shell."))
-            }
-            switch place.window.splitPane(token, in: place.tab, axis: Self.axis(direction), command: command) {
-            case nil:
-                return .failure(ControlError(.notFound, "There is no pane \(token)."))
-            case .focusMode:
-                return .failure(
-                    ControlError(.refused, "Pane \(token)'s tab is in Focus Mode. Exit Focus Mode to split."))
-            case .tooSmall:
-                return .failure(ControlError(.failed, "Pane \(token) is too small to split."))
-            case .opened(let opened):
-                if request.args.focus == true, let new = place.window.pane(token: opened) {
-                    place.window.focus(new.pane.surfaceID, in: new.tab)
-                    raise(place.window)
-                }
-                return .success(PaneResult(pane: opened))
-            }
+            return .success(opened)
         }
     }
 

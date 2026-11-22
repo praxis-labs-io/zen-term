@@ -10,8 +10,7 @@ public struct ControlArgs: Codable, Equatable, Sendable {
     public var title: String?
     public var focus: Bool?
     public var force: Bool?
-    /// A pane or drawer token.
-    public var pane: Int?
+    public var pane: ControlAddress.Pane?
     public var dir: PaneDirection?
     public var text: String?
     public var enter: Bool?
@@ -20,14 +19,21 @@ public struct ControlArgs: Codable, Equatable, Sendable {
     /// The commit a new branch starts from: `default` or `current`.
     public var base: String?
     public var existing: Bool?
-    /// A keymap action's config name, like `toggle_sidebar`.
+    /// A keymap action's config name, like `toggle_sidebar`, or the name `pane.run` gives its pane.
     public var name: String?
+    /// The first message `pane.run` sends its program once the program is ready.
+    public var task: String?
+    /// Where `pane.run` splits its pane. Absent opens a tab.
+    public var split: PaneDirection?
+    /// Whether `pane.run` keeps its pane open after its program exits.
+    public var keep: Bool?
 
     public init(
         workspace: String? = nil, path: String? = nil, tab: String? = nil, cwd: String? = nil, cmd: String? = nil,
-        title: String? = nil, focus: Bool? = nil, force: Bool? = nil, pane: Int? = nil, dir: PaneDirection? = nil,
-        text: String? = nil, enter: Bool? = nil, lines: Int? = nil, branch: String? = nil, base: String? = nil,
-        existing: Bool? = nil, name: String? = nil
+        title: String? = nil, focus: Bool? = nil, force: Bool? = nil, pane: ControlAddress.Pane? = nil,
+        dir: PaneDirection? = nil, text: String? = nil, enter: Bool? = nil, lines: Int? = nil, branch: String? = nil,
+        base: String? = nil, existing: Bool? = nil, name: String? = nil, task: String? = nil,
+        split: PaneDirection? = nil, keep: Bool? = nil
     ) {
         self.workspace = workspace
         self.path = path
@@ -46,5 +52,8 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         self.base = base
         self.existing = existing
         self.name = name
+        self.task = task
+        self.split = split
+        self.keep = keep
     }
 }

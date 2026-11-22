@@ -113,6 +113,11 @@ final class TabController: NSObject {
         set { paneCanvas.onLastPaneClosed = newValue }
     }
 
+    var onLaunchedPaneExited: ((LaunchedPaneExit) -> Void)? {
+        get { paneCanvas.onLaunchedPaneExited }
+        set { paneCanvas.onLaunchedPaneExited = newValue }
+    }
+
     var pinnedTitle: String?
     var title: String { pinnedTitle ?? liveTitle }
     var liveTitle: String { paneCanvas.title }
@@ -267,7 +272,7 @@ final class TabController: NSObject {
     private let backingScale: CGFloat?
 
     init(
-        initialCWD: URL?, initialCommand: String? = nil, env: [String: String] = [:], backingScale: CGFloat? = nil,
+        initialCWD: URL?, initialCommand: PaneProgram? = nil, env: [String: String] = [:], backingScale: CGFloat? = nil,
         isToolFloatOpen: @escaping () -> Bool = { false },
         makeSurface: @escaping () -> TerminalSurface = TerminalSurfaceFactory.make,
         startSurface: @escaping SurfaceStart = startSurfaceNow
@@ -328,12 +333,16 @@ final class TabController: NSObject {
         if isZoomed { toastZoomBlocked("split"); return }
         paneCanvas.split(axis)
     }
-    func split(pane token: Int, axis: SplitAxis, command: String?) -> PaneSplitResult {
+    func split(pane token: Int, axis: SplitAxis, command: PaneProgram?) -> PaneSplitResult {
         if isZoomed { return .focusMode }
         return paneCanvas.split(token: token, axis: axis, command: command).map { .opened(token: $0) } ?? .tooSmall
     }
 
     func close(pane token: Int) { paneCanvas.close(token: token) }
+
+    func updateRecord(pane token: Int, _ change: (inout PaneRecord) -> Void) {
+        paneCanvas.updateRecord(token: token, change)
+    }
 
     @discardableResult func closeFocused() -> Bool {
         exitZoomIfNeeded()

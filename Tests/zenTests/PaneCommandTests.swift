@@ -32,6 +32,39 @@ final class PaneCommandTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(try Zen.parseAsRoot(["pane", "focus", "32"]) as? PaneCommands.Focus).pane, 32)
     }
 
+    func test_aPaneArgumentTakesAName() throws {
+        let focus = try XCTUnwrap(try Zen.parseAsRoot(["pane", "focus", "review"]) as? PaneCommands.Focus)
+        XCTAssertEqual(focus.pane, .name("review"))
+        let send = try XCTUnwrap(try Zen.parseAsRoot(["pane", "send", "hi", "--pane", "review"]) as? PaneCommands.Send)
+        XCTAssertEqual(send.pane, .name("review"))
+    }
+
+    func test_runTakesItsOptionsThenTheWholeCommand() throws {
+        let run = try XCTUnwrap(
+            try Zen.parseAsRoot([
+                "pane", "run", "--name", "review", "--task", "Review x.swift", "--split", "down", "--pane", "31",
+                "--focus", "--keep", "claude", "--model", "opus",
+            ]) as? PaneCommands.Run)
+        XCTAssertEqual(run.name, "review")
+        XCTAssertEqual(run.task, "Review x.swift")
+        XCTAssertEqual(run.split, .down)
+        XCTAssertEqual(run.pane, 31)
+        XCTAssertTrue(run.focus)
+        XCTAssertTrue(run.keep)
+        XCTAssertEqual(run.command, ["claude", "--model", "opus"])
+
+        let plain = try XCTUnwrap(try Zen.parseAsRoot(["pane", "run", "npm run dev"]) as? PaneCommands.Run)
+        XCTAssertEqual(plain.command, ["npm run dev"])
+        XCTAssertNil(plain.split)
+        XCTAssertFalse(plain.keep)
+    }
+
+    func test_runWithoutACommandOrWithADigitNameIsAUsageError() {
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "run"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--name", "42", "claude"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--split", "left", "claude"]), 2)
+    }
+
     func test_aBadDirectionOrLineCountIsAUsageError() {
         XCTAssertEqual(Zen.exitCode(running: ["pane", "split", "--dir", "left"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["pane", "read", "--lines", "0"]), 2)

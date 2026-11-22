@@ -80,7 +80,8 @@ public struct ListResult: ControlPayload, Equatable {
         }
     }
 
-    /// `drawer` is set for a drawer and absent for a pane in the tab's split tree.
+    /// `drawer` is set for a drawer and absent for a pane in the tab's split tree. `name`, `parent` and
+    /// `firstTask` are set for a pane `pane.run` opened: `parent` is the token of the pane that ran it.
     public struct Pane: Codable, Equatable, Sendable {
         public let token: Int
         public let drawer: Drawer?
@@ -88,14 +89,28 @@ public struct ListResult: ControlPayload, Equatable {
         public let cwd: String?
         public let busy: Bool
         public let agent: Agent?
+        public let name: String?
+        public let parent: Int?
+        public let firstTask: FirstTask?
 
-        public init(token: Int, drawer: Drawer?, title: String, cwd: String?, busy: Bool, agent: Agent?) {
+        public init(
+            token: Int, drawer: Drawer?, title: String, cwd: String?, busy: Bool, agent: Agent?,
+            name: String? = nil, parent: Int? = nil, firstTask: FirstTask? = nil
+        ) {
             self.token = token
             self.drawer = drawer
             self.title = title
             self.cwd = cwd
             self.busy = busy
             self.agent = agent
+            self.name = name
+            self.parent = parent
+            self.firstTask = firstTask
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case token, drawer, title, cwd, busy, agent, name, parent
+            case firstTask = "first_task"
         }
     }
 
