@@ -3288,9 +3288,15 @@ final class WindowController: NSObject {
             {
                 self.answerAgent(surface)
             }
-            if self.deriveAgentState(surface) { return }
+            guard !self.deriveAgentState(surface) else { return }
             if self.agentStates.state(of: surface) == .working { self.noteTitleMessage(surface) }
-            if joined { self.renderAgents() }
+            let name = self.agents.agents[surface]?.name
+            if joined
+                || AgentRules.taskTitle(fromPane: title, agentName: name)
+                    != AgentRules.taskTitle(fromPane: previous, agentName: name)
+            {
+                self.renderAgents()
+            }
         }
     }
 
@@ -3659,12 +3665,11 @@ final class WindowController: NSObject {
             let wait = attention.agentWait(of: id)
             let state = AttentionTone(wait: wait, working: attention.isWorking(id))
             let message = wait == .turnEnd ? Self.turnEndMessage : agent.message
-            let title = agentStates.status(of: id)?.title
+            let paneTitle =
+                agent.hasExited ? nil : AgentRules.taskTitle(fromPane: agentStates.title(of: id), agentName: agent.name)
+            let title = agentStates.status(of: id)?.title ?? paneTitle ?? agent.name ?? AgentRoster.unnamed
             let item = SidebarAgentItem(
-                id: id, state: state,
-                summary: title ?? message.map(SidebarAgentItem.summaryLine) ?? state.summary,
-                detail: "\(place.name) · \(agent.name ?? AgentRoster.unnamed)",
-                message: message)
+                id: id, state: state, summary: title, detail: place.name, message: message)
             return (item, attention.agentSince(of: id), place.position)
         }
         return located.sorted { a, b in

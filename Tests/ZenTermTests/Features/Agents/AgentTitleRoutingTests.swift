@@ -153,7 +153,7 @@ final class AgentTitleRoutingTests: WindowTestCase {
         push(AgentTitleFixtures.codexWorking[0], from: surface)
 
         XCTAssertEqual(
-            c.agentRowForTesting(id)?.detail.contains("codex"), true,
+            c.agentNameForTesting(id), "codex",
             "codex emits no progress and its notification is unreliable, so the title is its only way in")
         XCTAssertEqual(c.agentStateForTesting(id), .working)
     }
@@ -299,7 +299,7 @@ final class AgentTitleRoutingTests: WindowTestCase {
         push(AgentTitleFixtures.claudeIdle, from: surface)
 
         let row = try XCTUnwrap(renderedAgentRows(c).first { $0.id == id }, "claude sends no progress until a turn")
-        XCTAssertTrue(row.detail.contains("claude"), "got \(row.detail)")
+        XCTAssertEqual(c.agentNameForTesting(row.id), "claude")
     }
 
     func test_aCodexRelaunchedAfterExitingMidTurn_readsWorking() throws {

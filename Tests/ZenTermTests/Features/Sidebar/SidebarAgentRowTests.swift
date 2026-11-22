@@ -51,11 +51,12 @@ final class SidebarAgentRowTests: WindowTestCase {
         for state in [AttentionTone.blocked, .done, .working, .idle] {
             row.render(
                 SidebarAgentItem(
-                    id: SurfaceID(raw: 1), state: state, summary: state.summary, detail: "zen-term", message: nil))
+                    id: SurfaceID(raw: 1), state: state, summary: state.accessibilityName, detail: "zen-term",
+                    message: nil))
 
             XCTAssertEqual(
-                try summaryLabel(of: row, saying: state.summary).textColor, Theme.current.chrome.ink(.normal),
-                "a \(state.summary) agent's summary takes a state color")
+                try summaryLabel(of: row, saying: state.accessibilityName).textColor, Theme.current.chrome.ink(.normal),
+                "a \(state.accessibilityName) agent's summary takes a state color")
         }
     }
 
@@ -99,16 +100,18 @@ final class SidebarAgentRowTests: WindowTestCase {
         for state in [AttentionTone.blocked, .done, .working, .idle] {
             row.render(
                 SidebarAgentItem(
-                    id: SurfaceID(raw: 1), state: state, summary: state.summary, detail: "zen-term", message: nil))
+                    id: SurfaceID(raw: 1), state: state, summary: state.accessibilityName, detail: "zen-term",
+                    message: nil))
             row.reapplyThemeTree()
             content.layoutSubtreeIfNeeded()
 
-            let title = try summaryLabel(of: row, saying: state.summary)
+            let title = try summaryLabel(of: row, saying: state.accessibilityName)
             let glyph: NSView =
                 state == .working
                 ? try XCTUnwrap(descendants(row).compactMap { $0 as? Spinner }.first) : row.dotForTesting
             XCTAssertEqual(
-                midY(glyph), midY(title), accuracy: 0.5, "a \(state.summary) agent's glyph centers on the title's line")
+                midY(glyph), midY(title), accuracy: 0.5,
+                "a \(state.accessibilityName) agent's glyph centers on the title's line")
         }
         XCTAssertNotEqual(
             midY(try summaryLabel(of: row, saying: "Idle")), midY(row), accuracy: 0.5,

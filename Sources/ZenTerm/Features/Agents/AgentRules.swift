@@ -108,6 +108,26 @@ enum AgentRules {
         return ask.isEmpty ? nil : ask
     }
 
+    // Only these agents title their pane with their task; any other title on it is the shell's.
+    static func taskTitle(fromPane title: String, agentName: String?) -> String? {
+        let task: String
+        switch key(for: agentName) {
+        case "claude": task = title
+        case "codex":
+            task =
+                codexAsk(fromTitle: title) ?? title.components(separatedBy: " | ").dropLast().joined(separator: " | ")
+        default: return nil
+        }
+        var words = task.split(whereSeparator: \.isWhitespace)
+        while let first = words.first, !isWord(first) { words.removeFirst() }
+        while let last = words.last, !isWord(last) { words.removeLast() }
+        return words.isEmpty ? nil : words.joined(separator: " ")
+    }
+
+    private static func isWord(_ token: Substring) -> Bool {
+        token.contains { $0.isLetter || $0.isNumber }
+    }
+
     // `✳` is left out: it heads the idle title Claude flickers to mid-turn, whose tail is only "Claude Code".
     private static let claudeWorkingGlyphs: Set<Character> = ["◐", "◑", "◒", "◓"]
 }

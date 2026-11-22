@@ -103,7 +103,7 @@ final class AgentFocusTests: WindowTestCase {
         XCTAssertEqual(c.agentStateForTesting(pane), .done)
         XCTAssertEqual(c.agentWaitForTesting(pane), .turnEnd)
         XCTAssertEqual(c.attentionStateForTesting(tabIndex: 0), .waiting)
-        XCTAssertEqual(c.agentRowForTesting(pane)?.summary, "Finished its turn.")
+        XCTAssertEqual(c.agentRowForTesting(pane)?.message, "Finished its turn.")
         let card = try XCTUnwrap(c.waitingToastForTesting(tabIndex: 0))
         XCTAssertTrue(texts(in: card).contains("Finished its turn."))
     }
@@ -121,7 +121,7 @@ final class AgentFocusTests: WindowTestCase {
 
         XCTAssertEqual(c.agentStateForTesting(pane), .idle, "looking at a finished turn is all it asked of you")
         XCTAssertNil(c.attentionStateForTesting(tabIndex: 0))
-        XCTAssertEqual(c.agentRowForTesting(pane)?.summary, AttentionTone.idle.summary)
+        XCTAssertNil(c.agentRowForTesting(pane)?.message)
         XCTAssertNil(c.waitingToastForTesting(tabIndex: 0), "the card goes with the wait it described")
     }
 
@@ -315,7 +315,7 @@ final class AgentFocusTests: WindowTestCase {
         c.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification))
 
         XCTAssertEqual(c.agentStateForTesting(pane), .blocked, "a crash waits for you to act on it")
-        XCTAssertEqual(c.agentRowForTesting(pane)?.summary, "Exited 1 after 1s.")
+        XCTAssertEqual(c.agentRowForTesting(pane)?.message, "Exited 1 after 1s.")
     }
 
     func test_anAgentWaitingInAnUnfocusedSplit_staysWaitingUntilItIsAnswered() throws {
@@ -386,9 +386,8 @@ final class AgentFocusTests: WindowTestCase {
 
         XCTAssertEqual(c.agentStateForTesting(pane), .idle, "an ask cannot outlive its turn")
         let row = try XCTUnwrap(c.agentRowForTesting(pane))
-        XCTAssertEqual(
-            row.summary, row.state.summary,
-            "a turn ending clears the words with the tone, or the row reads blocked under an idle dot")
+        XCTAssertNil(
+            row.message, "a turn ending clears the words with the tone, or the row reads blocked under an idle dot")
     }
 
     func test_typingIntoTheFindField_doesNotAnswerTheAgent() throws {
@@ -422,15 +421,14 @@ final class AgentFocusTests: WindowTestCase {
         drainMainQueue()
         let asking = try XCTUnwrap(c.agentRowForTesting(pane))
         XCTAssertEqual(c.agentStateForTesting(pane), .blocked, "a prompt you watched arrive is still blocked")
-        XCTAssertEqual(asking.summary, "Approve the plan?")
+        XCTAssertEqual(asking.message, "Approve the plan?")
 
         c.answerTypedAgent()
         drainMainQueue()
 
         XCTAssertEqual(c.agentStateForTesting(pane), .idle)
         let answered = try XCTUnwrap(c.agentRowForTesting(pane))
-        XCTAssertEqual(
-            answered.summary, answered.state.summary,
-            "the row's words have to agree with its tone, or it reads blocked while it looks idle")
+        XCTAssertNil(
+            answered.message, "the row's words have to agree with its tone, or it reads blocked while it looks idle")
     }
 }
