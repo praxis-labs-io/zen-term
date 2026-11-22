@@ -3872,14 +3872,17 @@ final class WindowController: NSObject {
             },
         ]
         let content = ToastContent(
-            variant: .info, title: "Teach Claude Code to use zen?", message: Self.claudeSetupOfferMessage)
+            variant: .info, title: "Teach Claude Code to use zen?",
+            message: Self.claudeSetupOfferMessage(in: ClaudeCodeSetup.folderName))
         let shown = toasts.showSticky(content, actions: actions, showsClose: true)
         shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
         toast = shown
     }
 
     // Two lines because each has to fit `ToastView.messageMaxWidth` on its own.
-    static let claudeSetupOfferMessage = "The zen skill and a session hook,\nin ~/.claude"
+    static func claudeSetupOfferMessage(in folder: String) -> String {
+        "The zen skill and a session hook,\nin \(folder)"
+    }
 
     private func showClaudeSetupResult(_ result: Result<ClaudeSetup.State, ClaudeSetupError>) {
         switch result {
