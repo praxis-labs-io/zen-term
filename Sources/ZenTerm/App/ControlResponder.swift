@@ -11,8 +11,12 @@ struct ControlResponder {
     var loadWorkspaces: (@escaping ([Workspace]) -> Void) -> Void = { ConfigLoader.loadWorkspaces(completion: $0) }
     var worktreeRemovals = WorktreeRemovalTracker()
     var runAction: (KeyInterceptor.ReservedChord) -> Void = { _ in }
+    var paneWaits = PaneWaits()
+    var interruptGroup: (pid_t) -> Bool = ControlResponder.interrupt(group:)
 
-    func respond(to request: ControlRequest, reply: @escaping (ControlReply) -> Void) {
+    func respond(
+        to request: ControlRequest, hangup: ControlHangup = ControlHangup(), reply: @escaping (ControlReply) -> Void
+    ) {
         switch request.cmd {
         case .hello: reply(.success(HelloResult(app: AppVersion.current)))
         case .list: reply(.success(ListResult(windows: windows().map { $0.listing() })))
@@ -29,8 +33,12 @@ struct ControlResponder {
         case .paneFocus: reply(focusPane(request))
         case .paneClose: reply(closePane(request))
         case .paneSend: reply(sendToPane(request))
+        case .paneKeys: reply(pressKeys(request))
+        case .paneInterrupt: reply(interruptPane(request))
         case .paneRead: reply(readPane(request))
         case .paneRun: runInPane(request, reply: reply)
+        case .paneGet: reply(getPane(request))
+        case .paneWait: waitOnPane(request, hangup: hangup, reply: reply)
         case .worktreeList: listWorktrees(request, reply: reply)
         case .worktreeCreate: createWorktree(request, reply: reply)
         case .worktreeRemove: removeWorktree(request, reply: reply)

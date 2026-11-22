@@ -54,6 +54,13 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         return ghostty_surface_needs_confirm_quit(surfacePtr)
     }
 
+    // libghostty answers 0 when the pty cannot say.
+    public var foregroundProcessGroupID: pid_t? {
+        guard let surfacePtr else { return nil }
+        let group = ghostty_surface_foreground_pid(surfacePtr)
+        return group > 0 && group <= UInt64(pid_t.max) ? pid_t(group) : nil
+    }
+
     public override init() {
         super.init()
         hostView.owner = self
@@ -422,6 +429,31 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         performBindingAction("text:\\r")
     }
 
+    // A control-held key carries its bare letter as text, as `ghosttyCharacters` does for a typed one.
+    public func press(_ key: TerminalKey) {
+        guard let surfacePtr else { return }
+        var event = Self.ghosttyKey(key)
+        event.mods = NSEvent.ghosttySidedMods(key.modifiers)
+        event.consumed_mods = NSEvent.ghosttyMods(key.modifiers.subtracting([.control, .command]))
+        let typed = key.text ?? Self.typedText(key.unshiftedCodepoint)
+        if let typed {
+            typed.withCString {
+                event.text = $0
+                _ = ghostty_surface_key(surfacePtr, event)
+            }
+        } else {
+            _ = ghostty_surface_key(surfacePtr, event)
+        }
+        event.action = GHOSTTY_ACTION_RELEASE
+        event.text = nil
+        _ = ghostty_surface_key(surfacePtr, event)
+    }
+
+    private static func typedText(_ codepoint: UInt32) -> String? {
+        guard codepoint >= 0x20, codepoint != 0x7F, let scalar = Unicode.Scalar(codepoint) else { return nil }
+        return String(Character(scalar))
+    }
+
     public func copySelection() -> String? {
         guard let surfacePtr, ghostty_surface_has_selection(surfacePtr) else { return nil }
         var text = ghostty_text_s()
@@ -481,6 +513,19 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         var lines = screen.components(separatedBy: "\n")
         while let last = lines.last, last.allSatisfy(\.isWhitespace) { lines.removeLast() }
         return lines.suffix(count).joined(separator: "\n")
+    }
+
+    public var activeScreenText: String? {
+        guard let surfacePtr else { return nil }
+        let screen = ghostty_selection_s(
+            top_left: ghostty_point_s(tag: GHOSTTY_POINT_ACTIVE, coord: GHOSTTY_POINT_COORD_TOP_LEFT, x: 0, y: 0),
+            bottom_right: ghostty_point_s(
+                tag: GHOSTTY_POINT_ACTIVE, coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT, x: 0, y: 0),
+            rectangle: false)
+        var text = ghostty_text_s()
+        guard ghostty_surface_read_text(surfacePtr, screen, &text) else { return nil }
+        defer { ghostty_surface_free_text(surfacePtr, &text) }
+        return text.text.map { String(cString: $0) }
     }
 
     private func text(in range: TerminalViewportRange, metrics: TerminalCellMetrics) -> String? {

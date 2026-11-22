@@ -293,6 +293,10 @@ public protocol TerminalSurface: AnyObject {
     /// Whether the shell is running a foreground command.
     var isBusy: Bool { get }
 
+    /// The terminal's foreground process group, which is also its leader's pid: the shell at a prompt, else the job
+    /// it runs. Nil while `isStarted` is false or when the backend cannot say.
+    var foregroundProcessGroupID: pid_t? { get }
+
     /// False until `start(_:)` brings the terminal up, after a failed start, and after `terminate()`.
     var isStarted: Bool { get }
 
@@ -326,6 +330,10 @@ public protocol TerminalSurface: AnyObject {
     /// Does nothing while `isStarted` is false.
     func submit()
 
+    /// Presses and releases `key` the way the keyboard would, so the program reads it as a key, not a paste.
+    /// Does nothing while `isStarted` is false.
+    func press(_ key: TerminalKey)
+
     func copySelection() -> String?
 
     /// The viewport cell the selection starts on, or nil when nothing is selected.
@@ -355,6 +363,10 @@ public protocol TerminalSurface: AnyObject {
     /// Nil when the screen cannot be read.
     func text(lastLines count: Int) -> String?
 
+    /// The screen's own rows, below the scrollback whatever the viewport shows, soft wraps joined. A bounded read
+    /// however long the scrollback is. Nil when the screen cannot be read.
+    var activeScreenText: String? { get }
+
     /// Runs or re-runs a scrollback search. An empty needle stops the engine only.
     func search(_ needle: String)
 
@@ -382,6 +394,8 @@ public extension TerminalSurface {
 
     var isBusy: Bool { false }
 
+    var foregroundProcessGroupID: pid_t? { nil }
+
     var backgroundOverride: TerminalColor? { nil }
 
     var cellMetrics: TerminalCellMetrics? { nil }
@@ -391,6 +405,8 @@ public extension TerminalSurface {
     func text(viewportRow row: Int) -> String? { nil }
 
     func text(in range: TerminalViewportRange) -> String? { nil }
+
+    var activeScreenText: String? { nil }
 
     func search(_ needle: String) {}
     func stepSearch(_ step: TerminalSearchStep) {}

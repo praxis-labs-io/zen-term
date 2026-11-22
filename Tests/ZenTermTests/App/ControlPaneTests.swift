@@ -12,6 +12,7 @@ final class ControlPaneTests: WindowTestCase {
     private var controllers: [WindowController] = []
     private var spawned: [RecordingSurface] = []
     private var raised: [WindowController] = []
+    private var interrupted: [pid_t] = []
     private let originalPresence = WindowController.isPresent
 
     override func setUpWithError() throws {
@@ -55,6 +56,10 @@ final class ControlPaneTests: WindowTestCase {
         var responder = ControlResponder(
             windows: { [unowned self] in controllers }, keyWindow: { [unowned self] in controllers.first })
         responder.bringForward = { [unowned self] in raised.append($0) }
+        responder.interruptGroup = { [unowned self] in
+            interrupted.append($0)
+            return true
+        }
         return responder
     }
 
@@ -283,6 +288,68 @@ final class ControlPaneTests: WindowTestCase {
         XCTAssertEqual(drawer.inputs, [.paste("top")])
     }
 
+    func test_keysPressEachNamedKeyInOrderRatherThanPasting() throws {
+        _ = makeWindow()
+        let target = try XCTUnwrap(spawned.first)
+
+        let reply = try send(
+            .paneKeys, ControlArgs(pane: .token(token(of: target)), keys: ["down", "enter", "ctrl-c"]))
+
+        XCTAssertEqual(reply.isSuccess, true, "\(reply)")
+        let expected = try ["down", "enter", "ctrl-c"].map {
+            try XCTUnwrap(PaneKey(name: $0).flatMap(TerminalKey.init(paneKey:)))
+        }
+        XCTAssertEqual(target.inputs, expected.map(RecordingSurface.Input.press))
+    }
+
+    func test_anUnknownKeyIsABadRequestNamingItAndPressesNothing() throws {
+        _ = makeWindow()
+        let target = try XCTUnwrap(spawned.first)
+
+        let refusal = try error(send(.paneKeys, ControlArgs(pane: .token(token(of: target)), keys: ["down", "hyper"])))
+
+        XCTAssertEqual(refusal.code, .badRequest)
+        XCTAssertTrue(refusal.message.hasPrefix("There is no key named hyper."), refusal.message)
+        XCTAssertEqual(target.inputs, [])
+        XCTAssertEqual(
+            try error(send(.paneKeys, ControlArgs(pane: .token(token(of: target)), keys: []))).code, .badRequest)
+    }
+
+    func test_interruptingAnAgentPressesEscapeAndSignalsNothing() throws {
+        _ = makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let opened = try result(
+            send(.paneSplit, ControlArgs(cmd: "claude", dir: .right), from: caller), as: PaneResult.self)
+        try surface(opened.pane).foregroundProcessGroupID = 4242
+
+        XCTAssertEqual(try send(.paneInterrupt, ControlArgs(pane: .token(opened.pane))).isSuccess, true)
+
+        XCTAssertEqual(try surface(opened.pane).inputs, [.press(.escape)])
+        XCTAssertEqual(interrupted, [])
+    }
+
+    func test_interruptingAPlainProgramSignalsItsForegroundGroupAndPressesNothing() throws {
+        _ = makeWindow()
+        let target = try XCTUnwrap(spawned.first)
+        target.foregroundProcessGroupID = 4242
+
+        XCTAssertEqual(try send(.paneInterrupt, from: token(of: target)).isSuccess, true)
+
+        XCTAssertEqual(interrupted, [4242])
+        XCTAssertEqual(target.inputs, [])
+    }
+
+    func test_interruptingAPaneWhoseForegroundIsUnknownFails() throws {
+        _ = makeWindow()
+        let target = try XCTUnwrap(spawned.first)
+
+        let failure = try error(send(.paneInterrupt, from: token(of: target)))
+
+        XCTAssertEqual(failure.code, .failed)
+        XCTAssertEqual(failure.message, "Pane \(try token(of: target))'s foreground process could not be interrupted.")
+        XCTAssertEqual(interrupted, [])
+    }
+
     func test_readReturnsTheViewportWithoutTrailingBlankRows() throws {
         _ = makeWindow()
         let target = try XCTUnwrap(spawned.first)
@@ -343,6 +410,72 @@ final class ControlPaneTests: WindowTestCase {
         XCTAssertEqual(try send(.paneSend, ControlArgs(text: "pwd")).isSuccess, true)
 
         XCTAssertEqual(focused.inputs, [.paste("pwd")])
+    }
+
+    private func drainMainQueue() {
+        let drained = expectation(description: "main queue")
+        DispatchQueue.main.async { drained.fulfill() }
+        wait(for: [drained], timeout: 2)
+    }
+
+    func test_getPassesTheAgentsOwnStatusWordThrough_inTheShapeListUses() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        let cases: [(TerminalProgramStatus.State, ListResult.AgentStatus, ListResult.AgentNeed?)] = [
+            (.working, .working, nil), (.blocked(.permission), .blocked, .permission),
+            (.blocked(.auth), .blocked, .auth),
+            (.blocked(nil), .blocked, nil), (.done, .done, nil), (.failed, .error, nil), (.idle, .idle, nil),
+        ]
+        for (state, status, kind) in cases {
+            agent.delegate?.surface(
+                agent,
+                programStatusDidChange: TerminalProgramStatus(
+                    state: state, app: "claude-code", message: "Reading x.swift", title: "Reviewing x.swift"))
+            drainMainQueue()
+
+            let got = try result(
+                send(.paneGet, ControlArgs(pane: .token(try token(of: agent)))), as: ListResult.Pane.self)
+
+            XCTAssertEqual(got.agent?.status, status, "\(state)")
+            XCTAssertEqual(got.agent?.kind, kind, "\(state)")
+            XCTAssertEqual(got.agent?.msg, "Reading x.swift")
+            XCTAssertEqual(got.agent?.title, "Reviewing x.swift")
+            XCTAssertEqual([got], panes(c), "pane.get and list must report a pane the same way")
+        }
+    }
+
+    func test_getWithoutAPane_reportsTheCaller_andAnAgentWithNoReportHasNoStatus() throws {
+        _ = makeWindow()
+        let caller = try XCTUnwrap(spawned.first)
+        caller.delegate?.surface(caller, didPostNotification: TerminalNotification(title: "Claude Code", body: "Done"))
+        drainMainQueue()
+
+        let got = try result(send(.paneGet, from: try token(of: caller)), as: ListResult.Pane.self)
+
+        XCTAssertEqual(got.token, try token(of: caller))
+        XCTAssertNotNil(got.agent)
+        XCTAssertNil(got.agent?.status)
+        XCTAssertEqual(try error(send(.paneGet, ControlArgs(pane: 9999))).code, .notFound)
+    }
+
+    func test_getNamesTheForegroundProgramByWhatItWasRunAs() throws {
+        _ = makeWindow()
+        let pane = try XCTUnwrap(spawned.first)
+        let program = Process()
+        program.executableURL = URL(fileURLWithPath: "/bin/bash")
+        program.arguments = ["-c", "exec -a -zen-probe /bin/sleep 30"]
+        try program.run()
+        defer { program.terminate() }
+        let exec = Date().addingTimeInterval(5)
+        while Date() < exec, ProcessArguments.programName(of: program.processIdentifier) == "bash" {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        }
+        XCTAssertNil(try result(send(.paneGet, from: try token(of: pane)), as: ListResult.Pane.self).process)
+
+        pane.foregroundProcessGroupID = program.processIdentifier
+        let got = try result(send(.paneGet, from: try token(of: pane)), as: ListResult.Pane.self)
+
+        XCTAssertEqual(got.process, ListResult.Process(pid: program.processIdentifier, program: "zen-probe"))
     }
 }
 

@@ -64,7 +64,8 @@ TerminalKit          the ONLY target that may import GhosttyKit
   TabKit             pure leaf used by ZenTerm: imports nothing
   AppLog             Foundation + os leaf used by TerminalKit and ZenTerm
   ControlProtocol    Foundation leaf: the control socket's wire types, used by ZenTerm and zen
-  zen                the control CLI: ControlProtocol + swift-argument-parser, nothing else
+  AgentSetup         Foundation leaf: the zen skill and session hook and their installer, used by ZenTerm and zen
+  zen                the control CLI: ControlProtocol + AgentSetup + swift-argument-parser, nothing else
 ```
 
 The package graph enforces the seam: `ZenTerm` has no `GhosttyKit` dependency, so an
@@ -577,7 +578,13 @@ that refuses a connect is always stale and a sibling's sweep never removes one m
 request decodes on the connection's thread, applies on main through `ControlResponder`,
 and is written back from the connection's thread, so a client that stops reading never
 stalls main. A command that reads off-main (`workspace.open` reading the workspaces file)
-replies when the read lands, holding only its own connection. A token resolves to its window, tab and surface by walking the windows
+replies when the read lands, holding only its own connection. `pane.wait` holds in `PaneWaits`,
+app-wide since a caller and the pane it waits on can sit in different windows: `WindowController`
+feeds it the 7501 status leaving `working`, the OSC 133 finish and the surface's release, and
+`pane.send` a message for the caller. libghostty reports no output, so output and a job's exit
+without OSC 133 are checked on a timer while a wait holds: the screen's own rows, lined up with the
+last read (`OutputWatch`), and the foreground group returning to the shell (`ForegroundGroup`). The
+connection's thread checks for a hangup while it waits and drops the hold. A token resolves to its window, tab and surface by walking the windows
 (`ControlResponder.locate`), not through a second registry. An `ssh:<alias>` address resolves
 through each window's host workspaces, not `runningWorkspaces()`, which feeds the ⌘P picker
 and leaves hosts out. `action` hands its keymap action
@@ -809,7 +816,8 @@ The create card replaces the picker and reopens it on cancel. `BranchField` is a
 plus `ListPopover`, Esc handled in its `doCommandBy`. `CreateTarget` carries the repo to
 branch in and the workspace to carry from. `WorktreeCreation` is the one create pipeline
 (create, mirror the entry, carry), run off-main: the card passes its phase line and opens the
-result through the chrome, and the control socket passes nothing and opens it headless.
+result through the chrome, and the control socket passes nothing and opens it headless
+only when asked to.
 
 ### Carry
 

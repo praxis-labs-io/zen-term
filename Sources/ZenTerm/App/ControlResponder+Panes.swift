@@ -1,4 +1,5 @@
 import ControlProtocol
+import Foundation
 import PaneKit
 import TabKit
 import TerminalKit
@@ -119,9 +120,63 @@ extension ControlResponder {
             guard surface.isStarted else { return .failure(Self.notStarted(place.pane.token)) }
             if !text.isEmpty { surface.paste(text) }
             if request.args.enter == true { surface.submit() }
+            paneWaits.sent(to: place.pane.surfaceID)
             return .success(NoPayload())
         }
     }
+
+    func pressKeys(_ request: ControlRequest) -> ControlReply {
+        guard let names = request.args.keys, !names.isEmpty else {
+            return .failure(ControlError(.badRequest, "pane.keys needs keys."))
+        }
+        var keys: [PaneKey] = []
+        for name in names {
+            guard let key = PaneKey(name: name) else {
+                let known = PaneKey.names.joined(separator: ", ")
+                return .failure(ControlError(.badRequest, "There is no key named \(name). The keys are \(known)."))
+            }
+            keys.append(key)
+        }
+        return pane(request.args.pane, for: request).flatMap { place in
+            let surface = place.pane.surface
+            guard surface.isStarted else { return .failure(Self.notStarted(place.pane.token)) }
+            var pressed: [TerminalKey] = []
+            for key in keys {
+                guard let typed = TerminalKey(paneKey: key) else {
+                    return .failure(ControlError(.failed, "The keyboard layout has no key for \(key.name)."))
+                }
+                pressed.append(typed)
+            }
+            pressed.forEach(surface.press)
+            return .success(NoPayload())
+        }
+    }
+
+    // A remote host's foreground is the local ssh, which a signal would end; its remote terminal turns Ctrl-C into one.
+    func interruptPane(_ request: ControlRequest) -> ControlReply {
+        pane(request.args.pane, for: request).flatMap { place in
+            let surface = place.pane.surface
+            let token = place.pane.token
+            guard surface.isStarted else { return .failure(Self.notStarted(token)) }
+            if place.window.runsAgent(place.pane) {
+                surface.press(.escape)
+                return .success(NoPayload())
+            }
+            if place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) != nil {
+                guard let controlC = TerminalKey(paneKey: .control("c")) else {
+                    return .failure(ControlError(.failed, "The keyboard layout has no key for ctrl-c."))
+                }
+                surface.press(controlC)
+                return .success(NoPayload())
+            }
+            guard let group = surface.foregroundProcessGroupID, interruptGroup(group) else {
+                return .failure(ControlError(.failed, "Pane \(token)'s foreground process could not be interrupted."))
+            }
+            return .success(NoPayload())
+        }
+    }
+
+    static func interrupt(group: pid_t) -> Bool { killpg(group, SIGINT) == 0 }
 
     func readPane(_ request: ControlRequest) -> ControlReply {
         if let lines = request.args.lines, lines < 1 {
@@ -140,6 +195,41 @@ extension ControlResponder {
                 return .failure(ControlError(.failed, "Pane \(place.pane.token) could not be read."))
             }
             return .success(PaneText(text: text))
+        }
+    }
+
+    func getPane(_ request: ControlRequest) -> ControlReply {
+        pane(request.args.pane, for: request).map { place in place.window.listing(of: place.pane, in: place.tab) }
+    }
+
+    func waitOnPane(_ request: ControlRequest, hangup: ControlHangup, reply: @escaping (ControlReply) -> Void) {
+        let timeout = request.args.timeout ?? ControlWire.defaultPaneWait
+        guard (1...ControlWire.longestPaneWait).contains(timeout) else {
+            return reply(
+                .failure(ControlError(.badRequest, "timeout must be 1 to \(ControlWire.longestPaneWait) seconds.")))
+        }
+        if request.args.output?.isEmpty == true {
+            return reply(.failure(ControlError(.badRequest, "output must not be empty.")))
+        }
+        if request.args.output?.contains(where: \.isNewline) == true {
+            return reply(.failure(ControlError(.badRequest, "output matches within one line, so it takes no newline.")))
+        }
+        guard let address = request.args.pane else {
+            return reply(.failure(ControlError(.badRequest, "pane.wait needs a pane.")))
+        }
+        switch pane(address, for: request) {
+        case .failure(let error): reply(.failure(error))
+        case .success(let place):
+            let token = place.pane.token
+            let onHost = place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) != nil
+            let watched = PaneWait.Watched(
+                surfaceID: place.pane.surfaceID, surface: place.pane.surface, readsForeground: !onHost,
+                pane: { [self] in locate(pane: token).map { $0.window.listing(of: $0.pane, in: $0.tab) } })
+            let caller = request.caller?.pane.flatMap { locate(pane: $0)?.pane.surfaceID }
+            guard let wait = PaneWait(watched, caller: caller, output: request.args.output, reply: reply) else {
+                return reply(.failure(ControlError(.notFound, "There is no pane \(token).")))
+            }
+            paneWaits.hold(wait, timeout: TimeInterval(timeout), hangup: hangup)
         }
     }
 

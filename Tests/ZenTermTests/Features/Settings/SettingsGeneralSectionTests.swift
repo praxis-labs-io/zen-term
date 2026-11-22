@@ -1,3 +1,4 @@
+import AgentSetup
 import AppKit
 import XCTest
 
@@ -14,6 +15,8 @@ final class SettingsGeneralSectionTests: WindowTestCase {
             .appendingPathComponent("zenterm-general-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
+        ClaudeCodeSetup.configRootOverrideForTesting = tempRoot.appendingPathComponent("claude")
+        ClaudeCodeSetup.filesOverrideForTesting = ClaudeSetupFiles(skill: Data("skill".utf8), hook: Data("hook".utf8))
         AppConfig.reload()
     }
 
@@ -21,6 +24,8 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         section = nil
         hostWindow = nil
         ConfigReset.toBuiltIn()
+        ClaudeCodeSetup.configRootOverrideForTesting = nil
+        ClaudeCodeSetup.filesOverrideForTesting = nil
         try? FileManager.default.removeItem(at: tempRoot)
         try super.tearDownWithError()
     }
@@ -48,7 +53,7 @@ final class SettingsGeneralSectionTests: WindowTestCase {
     }
 
     private enum Segment: Int {
-        case notifications, attentionToast, completionToast, updates
+        case notifications, claudeSetup, attentionToast, completionToast, updates
     }
 
     private func segment(_ which: Segment) -> SegmentedControl {
@@ -57,7 +62,7 @@ final class SettingsGeneralSectionTests: WindowTestCase {
 
     func test_everyToggle_isPresent_andDefaults() {
         let segments = mountSegments()
-        XCTAssertEqual(segments.count, 4, "notifications, the two toast rows, and updates")
+        XCTAssertEqual(segments.count, 5, "notifications, Claude Code setup, the two toast rows, and updates")
         XCTAssertEqual(segments[Segment.notifications.rawValue].selectedIndex, 0, "notifications On")
         XCTAssertEqual(segments[Segment.attentionToast.rawValue].selectedIndex, 0, "attention Off")
         XCTAssertEqual(segments[Segment.completionToast.rawValue].selectedIndex, 0, "completion Off")
@@ -121,6 +126,76 @@ final class SettingsGeneralSectionTests: WindowTestCase {
             configText().contains("automatic-update-checks = true"), "got: \(configText())")
     }
 
+    private var claudeRoot: URL { tempRoot.appendingPathComponent("claude") }
+
+    private func claudeSetupControl() -> SegmentedControl {
+        let control = segment(.claudeSetup)
+        waitUntil(control.isEnabled, "the Claude Code setup state to load")
+        return control
+    }
+
+    private func claudeSetupMessage() -> String? {
+        section?.rowFor(SettingsGeneralSection.claudeSetupKey)?.renderedMessageForTesting
+    }
+
+    private func press(_ keyCode: UInt16, on control: SegmentedControl) {
+        hostWindow?.makeFirstResponder(control)
+        control.keyDown(with: arrow(keyCode))
+        waitUntil(control.isEnabled, "the Claude Code setup change to land")
+    }
+
+    func test_claudeSetup_showsOffWhenNothingIsInstalled() {
+        let control = claudeSetupControl()
+
+        XCTAssertEqual(control.selectedIndex, 1)
+        XCTAssertNil(claudeSetupMessage())
+    }
+
+    func test_claudeSetup_choosingOnInstalls_andOffRemoves() {
+        let control = claudeSetupControl()
+
+        press(Self.leftKey, on: control)
+
+        XCTAssertEqual(control.selectedIndex, 0)
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: claudeRoot.appendingPathComponent("skills/zen/SKILL.md").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: claudeRoot.appendingPathComponent("settings.json").path))
+
+        press(Self.rightKey, on: control)
+
+        XCTAssertEqual(control.selectedIndex, 1)
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: claudeRoot.appendingPathComponent("skills/zen/SKILL.md").path))
+    }
+
+    func test_claudeSetup_anOlderInstallSaysChoosingOnUpdatesIt() throws {
+        let older = ClaudeSetupFiles(skill: Data("older".utf8), hook: Data("hook".utf8))
+        _ = try ClaudeSetup(configRoot: claudeRoot, files: older).install()
+        let control = claudeSetupControl()
+
+        XCTAssertEqual(control.selectedIndex, 0)
+        XCTAssertEqual(claudeSetupMessage(), "An older version is installed. Choose On to update it.")
+
+        press(Self.rightKey, on: control)
+        press(Self.leftKey, on: control)
+
+        XCTAssertNil(claudeSetupMessage())
+        XCTAssertEqual(
+            try Data(contentsOf: claudeRoot.appendingPathComponent("skills/zen/SKILL.md")), Data("skill".utf8))
+    }
+
+    func test_claudeSetup_malformedSettingsShowsWhy_andWritesNothing() throws {
+        try FileManager.default.createDirectory(at: claudeRoot, withIntermediateDirectories: true)
+        try Data("{".utf8).write(to: claudeRoot.appendingPathComponent("settings.json"))
+        let control = claudeSetupControl()
+
+        press(Self.leftKey, on: control)
+
+        XCTAssertEqual(control.selectedIndex, 1)
+        XCTAssertTrue(claudeSetupMessage()?.contains("settings.json") == true, "got: \(claudeSetupMessage() ?? "nil")")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: claudeRoot.appendingPathComponent("skills").path))
+    }
+
     private func arrow(_ keyCode: UInt16) -> NSEvent {
         NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: [.function, .numericPad], timestamp: 0,
@@ -129,6 +204,7 @@ final class SettingsGeneralSectionTests: WindowTestCase {
     }
     private static let leftKey: UInt16 = 123
     private static let upKey: UInt16 = 126
+    private static let rightKey: UInt16 = 124
 
     func test_leftAtLeftmostSegment_exitsToNav_withoutChangingTheValue() {
         let notifications = mountSegments()[0]

@@ -1,11 +1,11 @@
-/// The worktree a command made, what its carry copied and missed, and the workspace opened on it.
+/// The worktree a command made, what its carry copied and missed, and the workspace opened on it when it opened one.
 public struct WorktreeResult: ControlPayload, Equatable {
     public let path: String
     public let carry: Carry
-    public let window: String
-    public let workspace: ListResult.Workspace
+    public let window: String?
+    public let workspace: ListResult.Workspace?
 
-    public init(path: String, carry: Carry, window: String, workspace: ListResult.Workspace) {
+    public init(path: String, carry: Carry, window: String? = nil, workspace: ListResult.Workspace? = nil) {
         self.path = path
         self.carry = carry
         self.window = window

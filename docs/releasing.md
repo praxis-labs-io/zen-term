@@ -24,6 +24,10 @@ ZenTerm, install is a symlink to `/Applications/ZenTerm.app/Contents/MacOS/zen`,
 `zen --version` reads the version from the `Info.plist` two folders above wherever that
 symlink resolves. Moving or renaming the binary breaks every installed link.
 
+`zen setup claude` reads the skill and hook it installs from
+`Contents/Resources/ZenTerm_AgentSetup.bundle`, found the same way, so an app update ships
+new copies and a rerun of setup installs them.
+
 ## zen-term-releases stays archived
 
 Builds before v1.0.0 poll a frozen `SUFeedURL` in `zen-term/zen-term-releases`, which

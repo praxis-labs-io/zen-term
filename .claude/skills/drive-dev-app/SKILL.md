@@ -137,7 +137,7 @@ Run everything from the worktree root.
 S=.claude/skills/drive-dev-app/zt-drive.sh
 
 $S preflight                      # permissions + what is already running
-$S launch                         # bin/run in the background, waits for it
+$S launch                         # bin/run in a ZenTerm tab (else the background), waits for it
 $S verify-symbol drainAllSessions # PROVE the build has your change
 ```
 

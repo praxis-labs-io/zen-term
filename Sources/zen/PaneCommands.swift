@@ -4,8 +4,11 @@ import Foundation
 
 struct PaneCommands: ParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "pane", abstract: "Run programs in, split, focus, close, type into and read panes.",
-        subcommands: [Run.self, Split.self, Focus.self, Close.self, Send.self, Read.self])
+        commandName: "pane",
+        abstract: "Run programs in, split, focus, close, type into, interrupt, read and inspect panes.",
+        subcommands: [
+            Run.self, Split.self, Focus.self, Close.self, Send.self, Keys.self, Interrupt.self, Read.self, Get.self,
+        ])
 
     struct Run: ParsableCommand {
         static let configuration = CommandConfiguration(
@@ -150,6 +153,40 @@ struct PaneCommands: ParsableCommand {
         }
     }
 
+    struct Keys: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Press keys in a pane, in order, as keystrokes rather than a paste.")
+
+        private static let names = "One of " + PaneKey.names.joined(separator: ", ") + "."
+
+        @OptionGroup var connection: ConnectionOptions
+
+        @Argument(help: "A pane or drawer token, or a pane's name.")
+        var pane: ControlAddress.Pane
+
+        @Argument(help: ArgumentHelp("The keys.", discussion: Keys.names))
+        var keys: [PaneKey]
+
+        func run() throws {
+            let args = ControlArgs(pane: pane, keys: keys.map(\.name))
+            _ = try connection.client().send(.paneKeys, args, expecting: NoPayload.self)
+        }
+    }
+
+    struct Interrupt: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Stop an agent's turn with Escape, or send SIGINT to what a pane runs.")
+
+        @OptionGroup var connection: ConnectionOptions
+
+        @Argument(help: "A pane or drawer token, or a pane's name.")
+        var pane: ControlAddress.Pane
+
+        func run() throws {
+            _ = try connection.client().send(.paneInterrupt, ControlArgs(pane: pane), expecting: NoPayload.self)
+        }
+    }
+
     struct Read: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract: "Print a pane's text: the rows on screen, or its last lines with --lines.")
@@ -171,10 +208,29 @@ struct PaneCommands: ParsableCommand {
             print(try connection.client().send(.paneRead, args, expecting: PaneText.self).text)
         }
     }
+
+    struct Get: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Print one pane's state as JSON: its title, folder, program and agent status.")
+
+        @OptionGroup var connection: ConnectionOptions
+
+        @Argument(help: "A pane or drawer token, or a pane's name. This pane by default.")
+        var pane: ControlAddress.Pane?
+
+        func run() throws {
+            let got = try connection.client().send(.paneGet, ControlArgs(pane: pane), expecting: ListResult.Pane.self)
+            print(try JSONOutput.text(got))
+        }
+    }
 }
 
 extension PaneDirection: ExpressibleByArgument {}
 
 extension ControlAddress.Pane: ExpressibleByArgument {
     public init?(argument: String) { self.init(argument) }
+}
+
+extension PaneKey: ExpressibleByArgument {
+    public init?(argument: String) { self.init(name: argument) }
 }

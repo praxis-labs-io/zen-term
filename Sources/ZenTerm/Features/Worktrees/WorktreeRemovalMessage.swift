@@ -13,6 +13,12 @@ enum WorktreeRemovalMessage {
             items.append(Item(mark: .info, text: plain("Deletes the copied files"), rows: copiedRows(carried)))
         }
         items += closing(closes).map { Item(mark: .info, text: $0, rows: []) }
+        if !closes.stopping.isEmpty {
+            items.append(
+                Item(
+                    mark: .warning, text: plain("Stops ") + listing(closes.stopping) + plain(" in other tabs"), rows: []
+                ))
+        }
         if !detached, (state?.lostCommits ?? 0) == 0 {
             items.append(Item(mark: .kept, text: plain("Branch and commits preserved"), rows: []))
         }
