@@ -71,6 +71,17 @@ final class GhosttyProgramStatusTests: XCTestCase {
                 title: "Fix the login bug"))
     }
 
+    func test_aSubRecordsReportNeverReachesTheDelegate() throws {
+        let spy = StatusSpy()
+        _ = try runInSurface(
+            [
+                "printf '\\033]7501;state=error:app=claude-code:id=deploy\\007'",
+                "printf '\\033]7501;state=working:app=claude-code\\007'",
+                "sleep 5",
+            ], delegate: spy, until: { _ in !spy.statuses.isEmpty })
+        XCTAssertEqual(spy.statuses.map { $0?.state }, [.working])
+    }
+
     private static func mapped(
         _ state: ghostty_action_program_status_state_e, _ kind: ghostty_action_program_status_kind_e
     ) -> TerminalProgramStatus? {
