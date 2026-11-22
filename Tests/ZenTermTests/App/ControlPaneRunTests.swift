@@ -262,6 +262,24 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertEqual(result.firstTask, .held(.notReady))
     }
 
+    func test_runWaitWithATaskWhoseProgramExitsBeforeReportingAnswersExited() throws {
+        _ = makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let reply = send(.paneRun, ControlArgs(cmd: "./tool", task: "go", split: .right, wait: true), from: caller)
+        let helper = try XCTUnwrap(spawned.last)
+        helper.scrollback = ["boom"]
+
+        helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 1, duration: 1))
+        helper.delegate?.surfaceDidExit(helper, code: 0)
+        waitUntil(reply() != nil, "the run's answer")
+
+        let got = try XCTUnwrap(try XCTUnwrap(reply()).get() as? WaitResult)
+        XCTAssertEqual(got.reason, .exited)
+        XCTAssertEqual(got.exitCode, 1)
+        XCTAssertTrue(got.text?.hasPrefix("boom") == true, "\(String(describing: got.text))")
+        XCTAssertEqual(got.pane?.firstTask, .held(.notReady))
+    }
+
     func test_aLaunchedPaneClosesWhenItsProgramExits_keepingItsExitForLater() throws {
         let c = makeWindow()
         let caller = try token(of: XCTUnwrap(spawned.first))

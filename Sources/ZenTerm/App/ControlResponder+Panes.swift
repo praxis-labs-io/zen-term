@@ -282,11 +282,7 @@ extension ControlResponder {
         switch pane(address, for: request) {
         case .failure(let error):
             if error.code == .notFound, case .token(let token) = address, let exit = launchedExit(of: token) {
-                return reply(
-                    .success(
-                        WaitResult(
-                            reason: .exited, exitCode: exit.exitCode, text: exit.lastLines,
-                            pane: exit.pane ?? Self.closedPane(exit))))
+                return reply(.success(Self.exited(exit)))
             }
             reply(.failure(error))
         case .success(let place):
@@ -361,8 +357,12 @@ extension ControlResponder {
             exit: { [self] in launchedExit(of: token) })
     }
 
-    private func launchedExit(of token: Int) -> LaunchedPaneExit? {
+    func launchedExit(of token: Int) -> LaunchedPaneExit? {
         windows().lazy.compactMap { $0.launchedPaneExits.exit(of: token) }.first
+    }
+
+    static func exited(_ exit: LaunchedPaneExit) -> WaitResult {
+        WaitResult(reason: .exited, exitCode: exit.exitCode, text: exit.lastLines, pane: exit.pane ?? closedPane(exit))
     }
 
     private static func closedPane(_ exit: LaunchedPaneExit) -> ListResult.Pane {
