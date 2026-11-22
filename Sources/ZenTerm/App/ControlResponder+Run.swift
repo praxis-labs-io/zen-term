@@ -9,6 +9,10 @@ extension ControlResponder {
         if request.args.wait == true, case .failure(let error) = Self.waitTimeout(request) {
             return reply(.failure(error))
         }
+        if request.args.output != nil, request.args.wait != true {
+            return reply(.failure(ControlError(.badRequest, "output needs wait.")))
+        }
+        if let problem = Self.outputProblem(request.args.output) { return reply(.failure(problem)) }
         let name = request.args.name
         if let name {
             guard ControlAddress.Pane.isValidName(name) else {
@@ -66,6 +70,6 @@ extension ControlResponder {
             return reply(.failure(ControlError(.notFound, "Pane \(ran.pane) closed before the wait began.")))
         }
         let place = PanePlace(window: found.window, tab: found.tab, pane: found.pane)
-        hold(waitOn: place, output: nil, timeout: timeout, for: request, hangup: hangup, reply: reply)
+        hold(waitOn: place, output: request.args.output, timeout: timeout, for: request, hangup: hangup, reply: reply)
     }
 }

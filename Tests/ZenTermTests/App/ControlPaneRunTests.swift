@@ -593,6 +593,37 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertEqual(refusal.details?.floats, [ToolFloat.scratch.title])
     }
 
+    func test_runWaitWithOutputAnswersOnTextThePaneShowsBeforeAnyLaterWaitCouldBegin() throws {
+        makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let reply = send(
+            .paneRun, ControlArgs(cmd: "npm run dev", name: "dev", output: "ready on", wait: true), from: caller)
+        let server = try XCTUnwrap(spawned.last)
+        server.rows = ["> dev", "compiling"]
+        RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+        XCTAssertNil(reply())
+
+        server.rows = ["> dev", "compiling", "ready on http://localhost:3000"]
+
+        waitUntil(reply() != nil, "the run to answer")
+        let got = try XCTUnwrap(try XCTUnwrap(reply()).get() as? WaitResult)
+        XCTAssertEqual(got.reason, .output)
+        XCTAssertEqual(got.pane?.name, "dev")
+    }
+
+    func test_runOutputNeedsWaitAndOneLine() throws {
+        makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+
+        for args in [
+            ControlArgs(cmd: "npm run dev", output: "ready"),
+            ControlArgs(cmd: "npm run dev", output: "a\nb", wait: true),
+        ] {
+            XCTAssertEqual(error(try answer(.paneRun, args, from: caller))?.code, .badRequest)
+        }
+        XCTAssertEqual(spawned.count, 1, "a refused run opened a pane")
+    }
+
     func test_getAndWaitReachAPaneByItsName_andGetCarriesWhatRunRecorded() throws {
         _ = makeWindow()
         let lead = try token(of: XCTUnwrap(spawned.first))

@@ -314,7 +314,7 @@ Into a pane that runs an agent:
 ### `pane.run`
 
 `args`: `cmd` (required), `name`, `task`, `split` (`right` or `down`), `pane`, `focus`, `keep`,
-`outlive_parent`.
+`outlive_parent`, `wait`, `timeout`, `output`.
 
 Runs `cmd` in a shell in a new pane and records `caller.pane` as its parent. Without `split`
 it opens a tab behind the active one in the workspace of `pane` (the caller's by default),
@@ -355,7 +355,9 @@ pane before sending it yourself, never resend blind. After `no_status`, wait for
 prompt with `zen wait --output`, then send the task with `pane.send`.
 
 `wait` takes `timeout` and, once it would answer, holds as `pane.wait` on the new pane instead
-and answers as it does. The answer's `pane` carries `first_task`.
+and answers as it does. The answer's `pane` carries `first_task`. `output` holds for that text as
+`pane.wait` does, matched from the screen as the pane opens (with `task`, as the task is sent), so
+a server's ready line cannot print before the wait begins. It is a `bad_request` without `wait`.
 
 A parent that runs an agent hears from the children it ran, so a child that finishes after the
 parent's turn ended still wakes it. Each change sends one line, in the child's envelope
@@ -565,11 +567,11 @@ and never open the socket. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
 rest print nothing. `zen pane get` takes the pane as its argument, this pane by default.
 `zen pane send --wait` and `zen pane run --wait` take `--timeout` and print the answer as
-`zen wait` does.
+`zen wait` does. `zen pane run --wait` also takes `--output`.
 `zen pane split` splits to the right unless `--dir down` says otherwise.
 `zen pane keys <pane> <key>...` takes the keys as arguments, and a name that is not a key is
 a usage error.
-`zen pane run [--name] [--task] [--split right|down] [--pane] [--focus] [--keep] [--outlive-parent] [--wait] <command>` takes
+`zen pane run [--name] [--task] [--split right|down] [--pane] [--focus] [--keep] [--outlive-parent] [--wait [--output]] <command>` takes
 everything after its options, and after a `--`, as the command. One argument is a shell line as
 written; several are each quoted, so `-- sh -c 'sleep 1'` arrives as typed. A leading `--help` or
 `-h` prints the help, and `-- --help` runs `--help`. A pane argument,

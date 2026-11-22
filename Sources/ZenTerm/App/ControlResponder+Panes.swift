@@ -266,12 +266,7 @@ extension ControlResponder {
         case .failure(let error): return reply(.failure(error))
         case .success(let seconds): timeout = seconds
         }
-        if request.args.output?.isEmpty == true {
-            return reply(.failure(ControlError(.badRequest, "output must not be empty.")))
-        }
-        if request.args.output?.contains(where: \.isNewline) == true {
-            return reply(.failure(ControlError(.badRequest, "output matches within one line, so it takes no newline.")))
-        }
+        if let problem = Self.outputProblem(request.args.output) { return reply(.failure(problem)) }
         if let children = request.args.children {
             guard request.args.pane == nil else {
                 return reply(.failure(ControlError(.badRequest, "pane.wait takes a pane or children, not both.")))
@@ -299,6 +294,14 @@ extension ControlResponder {
                 waitOn: place, output: request.args.output, timeout: timeout, for: request, hangup: hangup,
                 reply: reply)
         }
+    }
+
+    static func outputProblem(_ output: String?) -> ControlError? {
+        if output?.isEmpty == true { return ControlError(.badRequest, "output must not be empty.") }
+        if output?.contains(where: \.isNewline) == true {
+            return ControlError(.badRequest, "output matches within one line, so it takes no newline.")
+        }
+        return nil
     }
 
     static func waitTimeout(_ request: ControlRequest) -> Result<Int, ControlError> {

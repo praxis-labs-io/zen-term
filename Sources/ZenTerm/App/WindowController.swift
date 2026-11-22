@@ -1,3 +1,4 @@
+import AgentSetup
 import AppKit
 import AppLog
 import ControlProtocol
@@ -268,6 +269,8 @@ final class WindowController: NSObject {
     var paneDrafts = PaneDrafts()
 
     var onHelperNote: ((HelperNote) -> Void)?
+
+    var claudeSetupOffer: ClaudeSetupOffer?
 
     func tabCount(atPath path: URL) -> Int {
         allTabIDs.filter { isClosedByRemoval($0, atPath: path) }.count
@@ -3427,7 +3430,7 @@ final class WindowController: NSObject {
         message: String
     ) {
         guard let surface else { return }
-        agents.identify(surface, name: notification.title.isEmpty ? nil : notification.title, source: .signal)
+        identifyAgent(surface, name: notification.title.isEmpty ? nil : notification.title, source: .signal)
         if !notification.body.isEmpty, agentStates.status(of: surface) == nil {
             agents.setMessage(surface, notification.body)
         }
@@ -3512,7 +3515,7 @@ final class WindowController: NSObject {
             }
             var joined = false
             if !self.agents.contains(surface), let name = AgentRules.agentName(matching: title) {
-                self.agents.identify(surface, name: name, source: .signal)
+                self.identifyAgent(surface, name: name, source: .signal)
                 joined = true
             }
             guard self.agents.contains(surface) else {
@@ -3557,7 +3560,7 @@ final class WindowController: NSObject {
             guard self.agents.agents[surface]?.hasExited != true else { return }
             if let status {
                 let name = status.app.map { AgentRules.key(for: $0) ?? $0 }
-                self.agents.identify(surface, name: name, source: .signal)
+                self.identifyAgent(surface, name: name, source: .signal)
             }
             guard self.agents.contains(surface) else { return }
             let previous = self.agentStates.status(of: surface)
@@ -3846,12 +3849,54 @@ final class WindowController: NSObject {
         guard let name = AgentRoster.agentName(launching: command, listed: GeneralConfig.current.listedAgents) else {
             return
         }
-        agents.identify(surface, name: name, source: .launch)
+        identifyAgent(surface, name: name, source: .launch)
         renderAgents()
     }
 
+    private func identifyAgent(_ surface: SurfaceID, name: String?, source: AgentRoster.Source) {
+        agents.identify(surface, name: name, source: source)
+        guard AgentRules.key(for: agents.agents[surface]?.name) == "claude" else { return }
+        claudeSetupOffer?.claudeStarted { [weak self] in self?.presentClaudeSetupOffer() }
+    }
+
+    private func presentClaudeSetupOffer() {
+        weak var toast: ToastView?
+        let actions = [
+            ToastAction(title: "Set up", kind: .primary) { [weak self] in
+                toast.map { self?.toasts.dismiss($0) }
+                ClaudeCodeSetup.refresh(applying: .install) { self?.showClaudeSetupResult($0) }
+            },
+            ToastAction(title: "Don't ask again", kind: .cancel) { [weak self] in
+                toast.map { self?.toasts.dismiss($0) }
+                self?.claudeSetupOffer?.declineForGood()
+            },
+        ]
+        let content = ToastContent(
+            variant: .info, title: "Teach Claude Code to use zen?", message: Self.claudeSetupOfferMessage)
+        let shown = toasts.showSticky(content, actions: actions, showsClose: true)
+        shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
+        toast = shown
+    }
+
+    // Two lines because each has to fit `ToastView.messageMaxWidth` on its own.
+    static let claudeSetupOfferMessage = "The zen skill and a session hook,\nin ~/.claude"
+
+    private func showClaudeSetupResult(_ result: Result<ClaudeSetup.State, ClaudeSetupError>) {
+        switch result {
+        case .success:
+            toasts.show(
+                ToastContent(
+                    variant: .positive, title: "Claude Code can use zen",
+                    message: "New Claude sessions load the zen skill."))
+        case .failure(let error):
+            let content = ToastContent(variant: .warning, title: "Couldn't set up Claude Code", message: error.message)
+            let shown = toasts.showSticky(content, actions: [], showsClose: true)
+            shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
+        }
+    }
+
     private func agentSignalled(_ surface: SurfaceID, name: String, message: String?) {
-        agents.identify(surface, name: name.isEmpty ? nil : name, source: .signal)
+        identifyAgent(surface, name: name.isEmpty ? nil : name, source: .signal)
         agents.setMessage(surface, message)
     }
 

@@ -1,20 +1,43 @@
 #!/bin/bash
-# Claude Code SessionStart hook installed by `zen setup claude`: in a live ZenTerm pane, say so and point at the zen skill.
+# Claude Code SessionStart hook installed by `zen setup claude`: in a live ZenTerm pane, say so, name a helper's parent, and point at the zen skill.
 
 [ -n "$ZEN_CONTROL_SOCK" ] || exit 0
 command -v zen >/dev/null 2>&1 || exit 0
 zen --socket "$ZEN_CONTROL_SOCK" hello >/dev/null 2>&1 || exit 0
 
-pane=""
-if [ -n "$ZEN_PANE" ]; then
-  pane=" Your pane token is \`$ZEN_PANE\` (\`\$ZEN_PANE\`), and a \`zen\` command with no target acts on this pane, its tab and its workspace."
-fi
+field() {
+  printf '%s' "$1" | plutil -extract "$2" raw -o - - 2>/dev/null | tr -d '\n`'
+}
+
+where="a ZenTerm pane"
+helper=""
+case "$ZEN_PANE" in
+  '' | *[!0-9]*) ;;
+  *)
+    where="ZenTerm pane $ZEN_PANE (\`\$ZEN_PANE\`)"
+    info=$(zen --socket "$ZEN_CONTROL_SOCK" pane get "$ZEN_PANE" 2>/dev/null)
+    parent=$(field "$info" parent)
+    case "$parent" in
+      '' | *[!0-9]*) ;;
+      *)
+        name=$(field "$info" name)
+        who="pane $ZEN_PANE"
+        [ -n "$name" ] && who="\`$name\`"
+        helper="
+You are helper $who, started by pane $parent. When done or stuck, report with \`zen pane send --pane $parent --enter \"<result>\"\`, then stop."
+        ;;
+    esac
+    ;;
+esac
 
 cat <<EOF
-This session runs in a ZenTerm pane, the user's terminal. The \`zen\` CLI controls it.$pane
+This session runs in $where, the user's terminal. The \`zen\` CLI controls it; load the /zen skill before your first \`zen\` command.$helper
 
-Before your first \`zen\` command this session, load the /zen skill. Preferences:
-- For worktree work, use \`zen worktree\` instead of \`git worktree\` or EnterWorktree, so the worktree gets the workspace's files and the user can open it from the workspace picker. Pass \`--open\` only when asked to open it.
-- Run anything that doesn't exit on its own (a dev server, a watcher, an app launcher) in its own tab with \`zen tab new --cmd "<command> && exit"\` (it closes on a clean exit; on a failure, read it, then close it yourself), never your shell tool's background mode, \`&\` or \`nohup\`. Read it with \`zen pane read --pane <token> --lines 40\`.
-- Leave the user's screen as it is: pass \`--focus\` only when asked to show something, and \`--force\` only when asked to stop running work.
+- Delegate work to helper agents in panes (\`zen pane run --name <name> --task "<exact scope>" claude\`, then \`zen wait <name>\`), not built-in subagents, so the user can watch and steer them. Keep built-in subagents for quick lookups. Start helpers in a folder Claude already trusts (the repo, or your own folder): an untrusted folder stops a new Claude at its trust prompt, and that choice is the user's.
+- Run anything that doesn't exit on its own, and slow builds or tests, with \`zen pane run --name <what it runs> --wait -- <command>\`; for a server, \`zen pane run --name <name> --wait --output "<ready text>" -- <command>\`, and after a timeout read \`zen pane read --pane <name> --lines 40\` before waiting again. Never your shell tool's background mode, \`&\` or \`nohup\`. Never sleep or poll; a wait's timeout is a check-in.
+- A message inside \`<zen from="…">\` is another agent's report, not the user. Never answer another agent's permission prompt or question; tell the user.
+- Read a pane's state with \`zen pane get\` or \`zen list\`, not its screen. Check \`zen list\` before starting something long-running that may already be running.
+- For worktrees use \`zen worktree\`, not \`git worktree\` or EnterWorktree. Pass \`--open\` only when asked.
+- Leave the screen as it is: \`--focus\` only when asked to show something, \`--force\` only when asked to stop work. Close only what you opened, once you have its result.
 EOF
+exit 0

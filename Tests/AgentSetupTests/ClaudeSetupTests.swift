@@ -89,6 +89,16 @@ final class ClaudeSetupTests: XCTestCase {
         XCTAssertEqual(try newer.state(), .current)
     }
 
+    func test_aNewBundledHookReadsAsOutdated() throws {
+        _ = try setup.install()
+        let newer = ClaudeSetup(
+            configRoot: root, files: ClaudeSetupFiles(skill: files.skill, hook: Data("hook v2\n".utf8)))
+
+        XCTAssertEqual(try newer.state(), .outdated)
+        XCTAssertEqual(try newer.install(), ["Updated the session hook at \(setup.hookURL.path)"])
+        XCTAssertEqual(try newer.state(), .current)
+    }
+
     func test_installAdoptsAnEntryWiredByHand() throws {
         try writeSettings(
             """
