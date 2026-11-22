@@ -437,4 +437,41 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertTrue(isOpen(child, in: c))
         XCTAssertEqual(try listed(child, in: c).parent, helper)
     }
+
+    func test_aChildThatIsItsTabsLastPaneCountsThatTabsRunningDrawer() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        let parent = try run(ControlArgs(cmd: "claude", focus: true, split: .right), from: lead).pane
+        let child = try run(ControlArgs(cmd: "claude", name: "review"), from: parent).pane
+        let childTab = try XCTUnwrap(c.pane(token: child)?.tab)
+        try XCTUnwrap(c.controllerForTesting(tab: childTab)).toggleBottomDrawer()
+        let drawer = try XCTUnwrap(spawned.last)
+        drawer.isBusy = true
+
+        let refusal = try XCTUnwrap(error(try answer(.paneClose, ControlArgs(pane: .token(parent)))))
+
+        XCTAssertEqual(refusal.code, .refused)
+        XCTAssertEqual(refusal.details?.panes.map(\.token), [try token(of: drawer)])
+        c.handle(.closePane)
+        XCTAssertTrue(
+            toastTexts(in: c).contains(
+                "Closing this pane will stop the process running in it, including the bottom drawer."),
+            "\(toastTexts(in: c))")
+    }
+
+    func test_removingAWorktreeCountsARunningChildItStartedElsewhere() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        let worktree = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-run-\(UUID().uuidString)", isDirectory: true)
+        let opened = try XCTUnwrap(
+            try answer(.tabNew, ControlArgs(cwd: worktree.path)).get() as? TabResult)
+        let child = try run(ControlArgs(cmd: "claude", pane: .token(lead), name: "review"), from: opened.pane).pane
+        try surface(child).isBusy = true
+
+        let stakes = c.closeStakes(atPath: worktree)
+
+        XCTAssertTrue(stakes.isRunning)
+        XCTAssertEqual(stakes.panes.map(\.token), [child])
+    }
 }
