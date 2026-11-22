@@ -304,7 +304,7 @@ Into a pane that runs an agent:
 - It holds while the person is typing into the pane: until 2 seconds after their last key
   into it, at most 60 seconds. A client that hangs up during the hold sends nothing.
 - From another pane, the text arrives wrapped, so the agent can tell it from its user:
-  `<zen from="31 lead" reply="zen pane send --pane 31">text</zen>`. `from` is the caller's
+  `<zen from="31 lead" reply="zen pane send --pane 31 --enter">text</zen>`. `from` is the caller's
   token, and its name after it when it has one. A send into a shell, into the caller's own
   pane, or of a single line starting with `/` (a slash command) is never wrapped. A child's
   note to its parent (`pane.run`) arrives the same way.
@@ -359,7 +359,7 @@ and answers as it does. The answer's `pane` carries `first_task`.
 
 A parent that runs an agent hears from the children it ran, so a child that finishes after the
 parent's turn ended still wakes it. Each change sends one line, in the child's envelope
-(`<zen from="34 review" reply="zen pane send --pane 34">`), pasted with Return as `pane.send`
+(`<zen from="34 review" reply="zen pane send --pane 34 --enter">`), pasted with Return as `pane.send`
 with `enter` sends it:
 
 | Change    | When                                                       | Note                                                                    |

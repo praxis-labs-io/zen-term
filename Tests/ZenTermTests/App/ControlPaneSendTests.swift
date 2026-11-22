@@ -247,7 +247,7 @@ final class ControlPaneSendTests: WindowTestCase {
         XCTAssertEqual(
             helper.inputs,
             [
-                .paste("<zen from=\"\(from)\" reply=\"zen pane send --pane \(from)\">2 bugs</zen>"), .submit,
+                .paste("<zen from=\"\(from)\" reply=\"zen pane send --pane \(from) --enter\">2 bugs</zen>"), .submit,
                 .paste("from the user"),
             ])
         XCTAssertEqual(shell.inputs, [.paste("ls")])
@@ -264,7 +264,7 @@ final class ControlPaneSendTests: WindowTestCase {
         XCTAssertEqual(send("/a\nb", to: try token(of: helper), from: from).reply?.isSuccess, true)
         XCTAssertEqual(send("see /tmp", to: try token(of: helper), from: from).reply?.isSuccess, true)
 
-        let reply = "reply=\"zen pane send --pane \(from)\""
+        let reply = "reply=\"zen pane send --pane \(from) --enter\""
         XCTAssertEqual(
             helper.inputs,
             [
@@ -285,7 +285,7 @@ final class ControlPaneSendTests: WindowTestCase {
 
         XCTAssertEqual(send("done: 2 bugs", to: to, from: from).reply?.isSuccess, true)
 
-        let envelope = "<zen from=\"\(from) review\" reply=\"zen pane send --pane \(from)\">done: 2 bugs</zen>"
+        let envelope = "<zen from=\"\(from) review\" reply=\"zen pane send --pane \(from) --enter\">done: 2 bugs</zen>"
         XCTAssertEqual(parent.inputs, [.paste(envelope)])
     }
 

@@ -175,7 +175,7 @@ extension ControlResponder {
         guard let sender, sender != place.pane.token, place.window.runsAgent(place.pane), !Self.isSlashCommand(text)
         else { return text }
         let from = locate(pane: sender)?.pane.record.name.map { "\(sender) \($0)" } ?? "\(sender)"
-        return "<zen from=\"\(from)\" reply=\"zen pane send --pane \(sender)\">\(text)</zen>"
+        return "<zen from=\"\(from)\" reply=\"zen pane send --pane \(sender) --enter\">\(text)</zen>"
     }
 
     // A wrapped slash command reaches the agent as a message and never runs.

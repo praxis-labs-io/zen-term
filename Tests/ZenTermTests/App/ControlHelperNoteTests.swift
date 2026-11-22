@@ -138,7 +138,7 @@ final class ControlHelperNoteTests: WindowTestCase {
     {
         let from = try token(of: helper)
         let sender = name.map { "\(from) \($0)" } ?? "\(from)"
-        return [.paste("<zen from=\"\(sender)\" reply=\"zen pane send --pane \(from)\">\(text)</zen>"), .submit]
+        return [.paste("<zen from=\"\(sender)\" reply=\"zen pane send --pane \(from) --enter\">\(text)</zen>"), .submit]
     }
 
     private func type(into surface: RecordingSurface, in c: WindowController) throws {
