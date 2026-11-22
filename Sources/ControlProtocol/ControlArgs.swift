@@ -36,6 +36,8 @@ public struct ControlArgs: Codable, Equatable, Sendable {
     public var output: String?
     /// Seconds `pane.wait` holds before it answers `timeout`.
     public var timeout: Int?
+    /// Which of the caller's children `pane.wait` waits on, in place of a pane.
+    public var children: WaitChildren?
 
     public init(
         workspace: String? = nil, path: String? = nil, tab: String? = nil, cwd: String? = nil, cmd: String? = nil,
@@ -43,7 +45,7 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         dir: PaneDirection? = nil, text: String? = nil, enter: Bool? = nil, keys: [String]? = nil, lines: Int? = nil,
         branch: String? = nil, base: String? = nil, existing: Bool? = nil, open: Bool? = nil, name: String? = nil,
         output: String? = nil, timeout: Int? = nil, task: String? = nil, split: PaneDirection? = nil,
-        keep: Bool? = nil, outliveParent: Bool? = nil
+        keep: Bool? = nil, outliveParent: Bool? = nil, children: WaitChildren? = nil
     ) {
         self.workspace = workspace
         self.path = path
@@ -70,11 +72,12 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         self.split = split
         self.keep = keep
         self.outliveParent = outliveParent
+        self.children = children
     }
 
     private enum CodingKeys: String, CodingKey {
         case workspace, path, tab, cwd, cmd, title, focus, force, pane, dir, text, enter, keys, lines, branch, base
-        case existing, open, name, output, timeout, task, split, keep
+        case existing, open, name, output, timeout, task, split, keep, children
         case outliveParent = "outlive_parent"
     }
 }

@@ -19,7 +19,10 @@ final class PaneCanvasController: NSObject {
     private var recordByLeaf: [PaneID: PaneRecord] = [:]
     private var exitClosingLeaves: Set<PaneID> = []
     private var reportedExitByLeaf: [PaneID: Int] = [:]
+    private var linesAwaitingMark: [PaneID: String?] = [:]
     private static let exitTailLines = 40
+    // The shell's D mark can trail the child's exit, so a launched pane waits this long for its exit code.
+    static let exitMarkGrace: TimeInterval = 0.25
     private let workspaceEnv: [String: String]
     private let backingScale: CGFloat?
     private var nextID = 1
@@ -212,6 +215,7 @@ final class PaneCanvasController: NSObject {
             recordByLeaf[id] = nil
             exitClosingLeaves.remove(id)
             reportedExitByLeaf[id] = nil
+            linesAwaitingMark[id] = nil
             if let surfaceID = surfaceIDByLeaf.removeValue(forKey: id) { released.append(surfaceID) }
             if let token = tokenByLeaf.removeValue(forKey: id) {
                 NavRegistry.shared.unregister(token: token)
@@ -577,9 +581,10 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
         onNotification?(id, n)
     }
     func surface(_ s: TerminalSurface, commandDidFinish result: TerminalCommandResult) {
-        if let leaf = leafID(of: s), exitClosingLeaves.contains(leaf) { reportedExitByLeaf[leaf] = result.exitCode }
-        guard let id = surfaceID(of: s) else { return }
-        onCommandFinished?(id, result)
+        let leaf = leafID(of: s)
+        if let leaf, exitClosingLeaves.contains(leaf) { reportedExitByLeaf[leaf] = result.exitCode }
+        if let id = surfaceID(of: s) { onCommandFinished?(id, result) }
+        if let leaf, linesAwaitingMark.keys.contains(leaf) { closeExited(leaf) }
     }
     func surface(_ s: TerminalSurface, progressDidChange p: TerminalProgress?) {
         guard let id = surfaceID(of: s) else { return }
@@ -599,12 +604,18 @@ extension PaneCanvasController: TerminalSurfaceDelegate {
     }
     func surfaceDidExit(_ s: TerminalSurface, code: Int32?) {
         guard let id = leafID(of: s) else { return }
-        if exitClosingLeaves.contains(id), let token = tokenByLeaf[id] {
-            onLaunchedPaneExited?(
-                LaunchedPaneExit(
-                    token: token, record: recordByLeaf[id] ?? PaneRecord(), exitCode: reportedExitByLeaf[id],
-                    lastLines: s.text(lastLines: Self.exitTailLines)))
-        }
+        guard exitClosingLeaves.contains(id), tokenByLeaf[id] != nil else { return closePane(id) }
+        linesAwaitingMark[id] = .some(s.text(lastLines: Self.exitTailLines))
+        if reportedExitByLeaf[id] != nil { return closeExited(id) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.exitMarkGrace) { [weak self] in self?.closeExited(id) }
+    }
+
+    private func closeExited(_ id: PaneID) {
+        guard let lastLines = linesAwaitingMark.removeValue(forKey: id), let token = tokenByLeaf[id] else { return }
+        onLaunchedPaneExited?(
+            LaunchedPaneExit(
+                token: token, record: recordByLeaf[id] ?? PaneRecord(), exitCode: reportedExitByLeaf[id],
+                lastLines: lastLines))
         closePane(id)
     }
 

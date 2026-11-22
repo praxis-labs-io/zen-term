@@ -104,7 +104,7 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
 
         let got = try result(answer)
         XCTAssertEqual(got.reason, .stopped)
-        XCTAssertEqual(got.pane.agent?.status, .done)
+        XCTAssertEqual(got.pane?.agent?.status, .done)
     }
 
     func test_textTheProgramPrintsAnswersOutput() throws {
