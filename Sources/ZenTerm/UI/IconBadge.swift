@@ -43,6 +43,7 @@ final class IconBadge: NSView, ThemeReapplying {
     private let icon = NSImageView()
     private let size: Size
     private var fill: Fill
+    private var shown: ProcessIcon?
     private let sheen = NSView()
     private let sheenLayer = CAGradientLayer()
     private lazy var iconWidth = icon.widthAnchor.constraint(equalToConstant: size.imageSide)
@@ -108,9 +109,8 @@ final class IconBadge: NSView, ThemeReapplying {
     }
 
     func show(_ process: ProcessIcon, animated: Bool = true) {
-        guard case .process(let current) = fill else { return }
-        let changed = current != process || icon.image == nil
-        guard changed else { return }
+        guard case .process = fill, process != shown else { return }
+        shown = process
         if animated, window != nil, let layer { Motion.crossfade(layer) }
         fill = .process(process)
         icon.image = process.image

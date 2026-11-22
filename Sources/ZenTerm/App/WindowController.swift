@@ -4011,7 +4011,7 @@ final class WindowController: NSObject {
             let title = agentStates.status(of: id)?.title ?? paneTitle ?? agent.name ?? AgentRoster.unnamed
             var item = SidebarAgentItem(
                 id: id, state: state, summary: title, detail: place.name, message: message)
-            item.mark = agent.name.map { ProcessIcon.forAgent($0).mark }
+            item.mark = agent.name.flatMap { $0.isEmpty ? nil : ProcessIcon.forAgent($0).mark }
             let pane = panes[id]
             return AgentFamilies.Member(
                 item: item, since: attention.agentSince(of: id), position: place.position, token: pane?.token,
@@ -4409,7 +4409,8 @@ final class WindowController: NSObject {
         if let agent = agents.agents[surfaceID], !agent.hasExited, let name = agent.name {
             return ProcessIcon.forAgent(name)
         }
-        return ProcessIcon.forProgram(surface.foregroundProcessGroupID.flatMap(ProcessArguments.programName))
+        guard let group = surface.foregroundProcessGroupID else { return .shell }
+        return ProcessArguments.arguments(of: group).map(ProcessIcon.forCommand) ?? .unknown
     }
 
     private static func indicator(for tones: Set<AttentionTone>) -> TabChip.Indicator? {

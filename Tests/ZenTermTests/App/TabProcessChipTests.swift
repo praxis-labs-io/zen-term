@@ -85,6 +85,42 @@ final class TabProcessChipTests: WindowTestCase {
         XCTAssertFalse(c.tabTitlesForTesting.contains { $0.contains("~") })
     }
 
+    func test_aScriptsTab_showsTheScript_notItsInterpreter() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(spawned.first)
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let script = dir.appendingPathComponent("brew")
+        try "#!/bin/bash\nsleep 30\n".write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        let job = Process()
+        job.executableURL = script
+        try job.run()
+        jobs.append(job)
+        let deadline = Date().addingTimeInterval(5)
+        while ProcessArguments.arguments(of: job.processIdentifier)?.last != script.path, Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        }
+        XCTAssertEqual(ProcessArguments.programName(of: job.processIdentifier), "bash", "precondition: it runs as bash")
+
+        pane.foregroundProcessGroupID = job.processIdentifier
+        c.pollTitlesForTesting()
+
+        XCTAssertEqual(try chipProcess(in: c)?.name, "Homebrew")
+    }
+
+    func test_aProgramWhoseArgumentsCannotBeRead_isUnknown_neverTheRestingShell() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(spawned.first)
+        XCTAssertNil(ProcessArguments.arguments(of: 1), "precondition: launchd's arguments are not readable")
+
+        pane.foregroundProcessGroupID = 1
+        c.pollTitlesForTesting()
+
+        XCTAssertEqual(try chipProcess(in: c), .unknown)
+    }
+
     func test_aTabsChip_followsTheProgramInItsFocusedPane() throws {
         let c = makeWindow()
         let pane = try XCTUnwrap(spawned.first)

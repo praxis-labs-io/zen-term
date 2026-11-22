@@ -279,7 +279,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   a lookup belongs fails silently.
 - **A tab leads with its focused pane's process chip.** `ProcessIcon` maps an agent by its
   own name, since some run under a runtime (`gemini` is `node`), and anything else by its
-  argv[0] (`ProcessArguments.programName` of the foreground group). A focused drawer does not
+  argv[0] (`ProcessArguments.arguments` of the foreground group), or for a script by the first
+  non-flag argument after its interpreter (`brew` runs as `bash`). A group whose arguments cannot
+  be read (a setuid program) is an unknown program, never the resting shell. A focused drawer does not
   change it, as it does not change the title. The title poll re-renders the tab bar when a
   tab's chip changes. A tab is named for its pane's folder, so one at home reads as the user's
   name, never a lone `~`.
