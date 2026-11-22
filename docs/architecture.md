@@ -593,7 +593,11 @@ as a single pane's does. A pane `pane.run` opened leaves its exit in its window'
 `LaunchedPaneExits` as it closes, which a wait reads when the pane is gone. A `pane.send` to an
 agent holds in `PaneDrafts`, also app-wide, which `WindowController.keyReachedFocus` feeds the
 person's last key into each surface from `KeyInterceptor`'s keys the chrome did not claim, the
-path that also answers an agent by typing. A token resolves to its window, tab and surface by walking the windows
+path that also answers an agent by typing. A `pane.run` child's note to its parent (`HelperNote`)
+starts in `WindowController` on the 7501 change or the launched pane's exit, which reads the parent
+waits it answers before `PaneWaits` drops them, and reaches `ControlResponder.tell` through
+`onHelperNote`. It takes `pane.send`'s paste and envelope, after `ParentNotes` holds it while the
+parent is blocked and `PaneDrafts` while it has a draft. A token resolves to its window, tab and surface by walking the windows
 (`ControlResponder.locate`), not through a second registry. An `ssh:<alias>` address resolves
 through each window's host workspaces, not `runningWorkspaces()`, which feeds the ⌘P picker
 and leaves hosts out. `action` hands its keymap action

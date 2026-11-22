@@ -41,5 +41,10 @@ final class PaneWaits {
         wait.onAnswered = { [weak self, weak wait] in self?.pending.removeAll { $0 === wait } }
     }
 
+    func callers(answeredBy reason: WaitReason, on surface: SurfaceID) -> Set<SurfaceID> {
+        let children = childrenWaits.filter { $0.answers(reason, from: surface) }.map(\.caller)
+        return Set(waits(on: surface).filter { $0.answers(reason) }.compactMap(\.caller) + children)
+    }
+
     private func waits(on surface: SurfaceID) -> [PaneWait] { pending.filter { $0.watched.surfaceID == surface } }
 }

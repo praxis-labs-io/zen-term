@@ -26,6 +26,8 @@ final class FirstTaskDelivery {
         DispatchQueue.main.asyncAfter(deadline: .now() + readinessWindow, execute: deadline)
     }
 
+    func isAwaiting(_ surface: SurfaceID) -> Bool { pending[surface] != nil }
+
     // A sent task waits for pickup until a report other than the readiness it was sent on.
     func report(_ status: TerminalProgramStatus, from surface: SurfaceID) {
         let outcome = Self.outcome(of: status)

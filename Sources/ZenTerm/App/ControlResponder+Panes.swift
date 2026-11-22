@@ -142,11 +142,7 @@ extension ControlResponder {
             return .success(place)
         }
         guard case .success(let place) = found else { return reply(found.map { _ in NoPayload() }) }
-        let text = request.args.text ?? ""
-        let surface = place.pane.surface
-        if !text.isEmpty { surface.paste(envelope(text, into: place, for: request)) }
-        if request.args.enter == true { surface.submit() }
-        paneWaits.sent(to: place.pane.surfaceID)
+        paste(request.args.text ?? "", from: request.caller?.pane, into: place, enter: request.args.enter == true)
         guard request.args.wait == true, case .success(let timeout) = Self.waitTimeout(request) else {
             return reply(.success(NoPayload()))
         }
@@ -154,7 +150,7 @@ extension ControlResponder {
     }
 
     // A permission prompt or a question is the user's to answer, and a paste would answer it for them.
-    private static func refusal(sending place: PanePlace, force: Bool?) -> ControlError? {
+    static func refusal(sending place: PanePlace, force: Bool?) -> ControlError? {
         guard force != true, let agent = place.window.listing(of: place.pane, in: place.tab).agent,
             agent.status == .blocked
         else { return nil }
@@ -165,12 +161,18 @@ extension ControlResponder {
                 + "Nothing was sent. Pass --force to send anyway.")
     }
 
+    func paste(_ text: String, from sender: Int?, into place: PanePlace, enter: Bool) {
+        let surface = place.pane.surface
+        if !text.isEmpty { surface.paste(envelope(text, from: sender, into: place)) }
+        if enter { surface.submit() }
+        paneWaits.sent(to: place.pane.surfaceID)
+    }
+
     // An agent reads a bare paste as its user typing, so another agent's message says who sent it and how to answer.
-    private func envelope(_ text: String, into place: PanePlace, for request: ControlRequest) -> String {
-        guard let caller = request.caller?.pane, caller != place.pane.token, place.window.runsAgent(place.pane)
-        else { return text }
-        let from = locate(pane: caller)?.pane.record.name.map { "\(caller) \($0)" } ?? "\(caller)"
-        return "<zen from=\"\(from)\" reply=\"zen pane send --pane \(caller)\">\(text)</zen>"
+    private func envelope(_ text: String, from sender: Int?, into place: PanePlace) -> String {
+        guard let sender, sender != place.pane.token, place.window.runsAgent(place.pane) else { return text }
+        let from = locate(pane: sender)?.pane.record.name.map { "\(sender) \($0)" } ?? "\(sender)"
+        return "<zen from=\"\(from)\" reply=\"zen pane send --pane \(sender)\">\(text)</zen>"
     }
 
     func pressKeys(_ request: ControlRequest) -> ControlReply {
