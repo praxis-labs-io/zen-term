@@ -247,10 +247,31 @@ final class ControlPaneSendTests: WindowTestCase {
         XCTAssertEqual(
             helper.inputs,
             [
-                .paste("<zen from=\"\(from)\" reply=\"zen pane send --pane \(from)\">2 bugs</zen>"), .submit,
+                .paste("<zen from=\"\(from)\" reply=\"zen pane send --pane \(from) --enter\">2 bugs</zen>"), .submit,
                 .paste("from the user"),
             ])
         XCTAssertEqual(shell.inputs, [.paste("ls")])
+    }
+
+    func test_anAgentsSlashCommandToAnotherAgentArrivesBare_andAMultilineOneIsWrapped() throws {
+        let c = makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        let helper = try split(c, from: parent)
+        report(.idle, from: helper)
+        let from = try token(of: parent)
+
+        XCTAssertEqual(send("/exit", to: try token(of: helper), from: from, enter: true).reply?.isSuccess, true)
+        XCTAssertEqual(send("/a\nb", to: try token(of: helper), from: from).reply?.isSuccess, true)
+        XCTAssertEqual(send("see /tmp", to: try token(of: helper), from: from).reply?.isSuccess, true)
+
+        let reply = "reply=\"zen pane send --pane \(from) --enter\""
+        XCTAssertEqual(
+            helper.inputs,
+            [
+                .paste("/exit"), .submit,
+                .paste("<zen from=\"\(from)\" \(reply)>/a\nb</zen>"),
+                .paste("<zen from=\"\(from)\" \(reply)>see /tmp</zen>"),
+            ])
     }
 
     func test_theEnvelopeNamesACallerThatHasAName() throws {
@@ -264,7 +285,7 @@ final class ControlPaneSendTests: WindowTestCase {
 
         XCTAssertEqual(send("done: 2 bugs", to: to, from: from).reply?.isSuccess, true)
 
-        let envelope = "<zen from=\"\(from) review\" reply=\"zen pane send --pane \(from)\">done: 2 bugs</zen>"
+        let envelope = "<zen from=\"\(from) review\" reply=\"zen pane send --pane \(from) --enter\">done: 2 bugs</zen>"
         XCTAssertEqual(parent.inputs, [.paste(envelope)])
     }
 

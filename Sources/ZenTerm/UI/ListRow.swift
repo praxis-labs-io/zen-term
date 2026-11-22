@@ -21,11 +21,12 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         var trailing: Trailing?
         var ink: ChromeTheme.InkLevel
         var nests: Bool
+        var leadingOnTitleLine: Bool
 
         init(
             title: String, subtitle: String? = nil, subtitleTruncation: NSLineBreakMode = .byTruncatingTail,
             note: String? = nil, leading: Leading? = nil, trailing: Trailing? = nil,
-            ink: ChromeTheme.InkLevel = .normal, nests: Bool = false
+            ink: ChromeTheme.InkLevel = .normal, nests: Bool = false, leadingOnTitleLine: Bool = false
         ) {
             self.title = title
             self.subtitle = subtitle
@@ -35,6 +36,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
             self.trailing = trailing
             self.ink = ink
             self.nests = nests
+            self.leadingOnTitleLine = leadingOnTitleLine
         }
     }
 
@@ -163,9 +165,14 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     private func rebuild() {
         let chrome = Theme.current.chrome
 
+        let glyph = content.leading.map { leadingView($0, chrome) }
         var lead: [NSView] = []
-        if let leading = content.leading { lead.append(leadingView(leading, chrome)) }
-        lead.append(titleView(chrome))
+        if content.leadingOnTitleLine, content.subtitle != nil, let glyph {
+            lead.append(titleView(chrome, leading: glyph))
+        } else {
+            if let glyph { lead.append(glyph) }
+            lead.append(titleView(chrome))
+        }
 
         var trail: [NSView] = accessoryViews
         if let note = content.note {
@@ -187,7 +194,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         pinTitleLine()
     }
 
-    private func titleView(_ chrome: ChromeTheme) -> NSView {
+    private func titleView(_ chrome: ChromeTheme, leading glyph: NSView? = nil) -> NSView {
         let title = titleLabel
         title.stringValue = content.title
         title.font = ChromeType.font(content.nests ? .small : .body)
@@ -202,13 +209,23 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         line.textColor = chrome.ink(.muted)
         line.lineBreakMode = content.subtitleTruncation
         line.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        let lines = NSStackView(views: [title, line])
+        let lines = NSStackView(views: [glyph.map { Self.titleLine(leading: $0, title: title) } ?? title, line])
         lines.orientation = .vertical
         lines.alignment = .leading
         lines.spacing = Self.lineGap
         lines.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         lines.setContentHuggingPriority(.defaultLow, for: .horizontal)
         return lines
+    }
+
+    private static func titleLine(leading glyph: NSView, title: NSTextField) -> NSView {
+        let line = NSStackView(views: [glyph, title])
+        line.orientation = .horizontal
+        line.alignment = .centerY
+        line.spacing = ChromeMetrics.Spacing.s6
+        line.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        line.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        return line
     }
 
     // A one-line row centers in the height its owner gives it; a taller row pads itself.

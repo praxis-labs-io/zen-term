@@ -62,6 +62,14 @@
                         label: "Subtitle",
                         samples: [row(ListRow.Content(title: "zen-term", subtitle: "~/Dev/zen-term"))]),
                     GallerySection.Row(
+                        label: "Icon on the title line",
+                        samples: [
+                            row(
+                                ListRow.Content(
+                                    title: "Review x.swift", subtitle: "zen-term", leading: .symbol("terminal"),
+                                    leadingOnTitleLine: true))
+                        ]),
+                    GallerySection.Row(
                         label: "Nested",
                         samples: [
                             row(

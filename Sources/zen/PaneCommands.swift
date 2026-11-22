@@ -45,6 +45,9 @@ struct PaneCommands: ParsableCommand {
         @Option(help: "With --wait, seconds to wait before answering timeout, at most \(ControlWire.longestPaneWait).")
         var timeout: Int = ControlWire.defaultPaneWait
 
+        @Option(help: "With --wait, answer once this text appears in the pane's output, from the moment it opens.")
+        var output: String?
+
         @Argument(parsing: .captureForPassthrough, help: "The command to run, in a shell.")
         var command: [String] = []
 
@@ -65,7 +68,9 @@ struct PaneCommands: ParsableCommand {
             return "'" + word.replacingOccurrences(of: "'", with: "'\\''") + "'"
         }
 
+        // Passthrough capture takes a leading `--help` as the command, so it is asked for here.
         func validate() throws {
+            if let first = command.first, ["--help", "-h"].contains(first) { throw CleanExit.helpRequest(self) }
             if commandLine.isEmpty { throw ValidationError("pane run needs a command to run.") }
             if let name, !ControlAddress.Pane.isValidName(name) {
                 throw ValidationError("--name needs at least one character that is not a digit or a space.")
@@ -73,12 +78,17 @@ struct PaneCommands: ParsableCommand {
             guard (1...ControlWire.longestPaneWait).contains(timeout) else {
                 throw ValidationError("--timeout must be 1 to \(ControlWire.longestPaneWait).")
             }
+            if output != nil, !wait { throw ValidationError("--output needs --wait.") }
+            if output?.isEmpty == true { throw ValidationError("--output must not be empty.") }
+            if output?.contains(where: \.isNewline) == true {
+                throw ValidationError("--output matches within one line, so it takes no newline.")
+            }
         }
 
         func run() throws {
             let args = ControlArgs(
-                cmd: commandLine, focus: focus, pane: pane, name: name, timeout: wait ? timeout : nil, task: task,
-                split: split, keep: keep, outliveParent: outliveParent, wait: wait)
+                cmd: commandLine, focus: focus, pane: pane, name: name, output: output, timeout: wait ? timeout : nil,
+                task: task, split: split, keep: keep, outliveParent: outliveParent, wait: wait)
             var client = try connection.client()
             client.replyTimeout = ControlClient.replyTimeout(for: .paneRun, args)
             if wait {

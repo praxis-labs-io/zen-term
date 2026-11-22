@@ -1,3 +1,4 @@
+import AgentSetup
 import AppKit
 import AppLog
 import ControlProtocol
@@ -270,6 +271,8 @@ final class WindowController: NSObject {
     var paneDrafts = PaneDrafts()
 
     var onHelperNote: ((HelperNote) -> Void)?
+
+    var claudeSetupOffer: ClaudeSetupOffer?
 
     func tabCount(atPath path: URL) -> Int {
         allTabIDs.filter { isClosedByRemoval($0, atPath: path) }.count
@@ -2502,14 +2505,16 @@ final class WindowController: NSObject {
         appendUnconfiguredWorkspace(at: folder, named: name).id
     }
 
-    func closeStakes(tab id: TabID) -> CloseStakes? {
+    func closeStakes(tab id: TabID, sparingWorkOf spared: Int? = nil) -> CloseStakes? {
         guard let workspace = workspace(of: id), let tab = controller(id) else { return nil }
         if holdsAwaitingLogin(tab: id) { return loginStakes(of: workspace) }
-        let children = childStakes(closing: [id])
+        let children = childStakes(closing: [id], sparingWorkOf: spared)
         let closesWindow = workspace.tabIDs.count == 1 && closesWindow(closing: workspace) || children.closesWindow
+        let busy = tab.paneHandles.filter { $0.surface.isBusy && $0.token != spared }
+        let running = spared == nil ? isRunning(tab: id) : !busy.isEmpty || floats.hasBusyInScope(id)
         return CloseStakes(
-            closesWindow: closesWindow, isRunning: isRunning(tab: id) || children.isRunning,
-            panes: tab.paneHandles.filter(\.surface.isBusy).map { listing(of: $0, onHost: workspace.host != nil) }
+            closesWindow: closesWindow, isRunning: running || children.isRunning,
+            panes: busy.map { listing(of: $0, onHost: workspace.host != nil) }
                 + children.running.map { listing(of: $0.pane, in: $0.tab) },
             floats: floats.runningTitles(scope: id) + children.floats
                 + (closesWindow ? floats.runningTitles(scope: nil) : []))
@@ -2538,12 +2543,13 @@ final class WindowController: NSObject {
         controller(tab)?.split(pane: token, axis: axis, command: command)
     }
 
-    func closeStakes(pane: PaneHandle, in tab: TabID) -> CloseStakes? {
+    func closeStakes(pane: PaneHandle, in tab: TabID, closedByItsParent: Bool = false) -> CloseStakes? {
         guard let c = controller(tab), let workspace = workspace(of: tab) else { return nil }
         if workspace.connection?.isAwaitingLogin(on: pane.surfaceID) == true { return loginStakes(of: workspace) }
-        if c.isSinglePane { return closeStakes(tab: tab) }
-        let busy = pane.surface.isBusy
-        let children = childStakes(closing: [], panes: [pane.token])
+        let spared = closedByItsParent ? pane.token : nil
+        if c.isSinglePane { return closeStakes(tab: tab, sparingWorkOf: spared) }
+        let busy = !closedByItsParent && pane.surface.isBusy
+        let children = childStakes(closing: [], panes: [pane.token], sparingWorkOf: spared)
         return CloseStakes(
             closesWindow: children.closesWindow, isRunning: busy || children.isRunning,
             panes: (busy ? [listing(of: pane, in: tab)] : [])
@@ -2567,12 +2573,15 @@ final class WindowController: NSObject {
 
     // Children close after their parent, wherever they are in the window, so the warning has to count them first.
     // A child that is its tab's last pane takes the tab, with its drawers and floats, so those count too.
-    private func childStakes(closing tabs: Set<TabID>, panes: Set<Int> = []) -> ChildStakes {
+    private func childStakes(closing tabs: Set<TabID>, panes: Set<Int> = [], sparingWorkOf spared: Int? = nil)
+        -> ChildStakes
+    {
         let every = workspaces.flatMap { workspace in
             workspace.tabIDs.flatMap { id in (workspace.controller(id)?.paneHandles ?? []).map { (tab: id, pane: $0) } }
         }
         var closing = panes.union(every.filter { tabs.contains($0.tab) }.map(\.pane.token))
         var children: [(tab: TabID, pane: PaneHandle)] = []
+        var lineage: Set<Int> = spared.map { [$0] } ?? []
         var cascadedTabs: [TabID] = []
         let tabCloses = { (id: TabID) in
             tabs.contains(id)
@@ -2584,6 +2593,7 @@ final class WindowController: NSObject {
             for entry in every where !closing.contains(entry.pane.token) && Self.closesWith(entry.pane, closing) {
                 closing.insert(entry.pane.token)
                 children.append(entry)
+                if Self.closesWith(entry.pane, lineage) { lineage.insert(entry.pane.token) }
                 grew = true
             }
             for id in Set(every.map(\.tab)) where !tabs.contains(id) && !cascadedTabs.contains(id) && tabCloses(id) {
@@ -2598,7 +2608,7 @@ final class WindowController: NSObject {
         guard !children.isEmpty else { return ChildStakes(running: [], floats: [], closesWindow: false) }
         let emptiesWindow = workspaces.allSatisfy { $0.host == nil && $0.tabIDs.allSatisfy(tabCloses) }
         return ChildStakes(
-            running: children.filter(\.pane.surface.isBusy),
+            running: children.filter { $0.pane.surface.isBusy && (spared == nil || !lineage.contains($0.pane.token)) },
             floats: cascadedTabs.flatMap { floats.runningTitles(scope: $0) }, closesWindow: emptiesWindow)
     }
 
@@ -3423,7 +3433,7 @@ final class WindowController: NSObject {
         message: String
     ) {
         guard let surface else { return }
-        agents.identify(surface, name: notification.title.isEmpty ? nil : notification.title, source: .signal)
+        identifyAgent(surface, name: notification.title.isEmpty ? nil : notification.title, source: .signal)
         if !notification.body.isEmpty, agentStates.status(of: surface) == nil {
             agents.setMessage(surface, notification.body)
         }
@@ -3508,7 +3518,7 @@ final class WindowController: NSObject {
             }
             var joined = false
             if !self.agents.contains(surface), let name = AgentRules.agentName(matching: title) {
-                self.agents.identify(surface, name: name, source: .signal)
+                self.identifyAgent(surface, name: name, source: .signal)
                 joined = true
             }
             guard self.agents.contains(surface) else {
@@ -3553,7 +3563,7 @@ final class WindowController: NSObject {
             guard self.agents.agents[surface]?.hasExited != true else { return }
             if let status {
                 let name = status.app.map { AgentRules.key(for: $0) ?? $0 }
-                self.agents.identify(surface, name: name, source: .signal)
+                self.identifyAgent(surface, name: name, source: .signal)
             }
             guard self.agents.contains(surface) else { return }
             let previous = self.agentStates.status(of: surface)
@@ -3842,12 +3852,54 @@ final class WindowController: NSObject {
         guard let name = AgentRoster.agentName(launching: command, listed: GeneralConfig.current.listedAgents) else {
             return
         }
-        agents.identify(surface, name: name, source: .launch)
+        identifyAgent(surface, name: name, source: .launch)
         renderAgents()
     }
 
+    private func identifyAgent(_ surface: SurfaceID, name: String?, source: AgentRoster.Source) {
+        agents.identify(surface, name: name, source: source)
+        guard AgentRules.key(for: agents.agents[surface]?.name) == "claude" else { return }
+        claudeSetupOffer?.claudeStarted { [weak self] in self?.presentClaudeSetupOffer() }
+    }
+
+    private func presentClaudeSetupOffer() {
+        weak var toast: ToastView?
+        let actions = [
+            ToastAction(title: "Set up", kind: .primary) { [weak self] in
+                toast.map { self?.toasts.dismiss($0) }
+                ClaudeCodeSetup.refresh(applying: .install) { self?.showClaudeSetupResult($0) }
+            },
+            ToastAction(title: "Don't ask again", kind: .cancel) { [weak self] in
+                toast.map { self?.toasts.dismiss($0) }
+                self?.claudeSetupOffer?.declineForGood()
+            },
+        ]
+        let content = ToastContent(
+            variant: .info, title: "Teach Claude Code to use zen?", message: Self.claudeSetupOfferMessage)
+        let shown = toasts.showSticky(content, actions: actions, showsClose: true)
+        shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
+        toast = shown
+    }
+
+    // Two lines because each has to fit `ToastView.messageMaxWidth` on its own.
+    static let claudeSetupOfferMessage = "The zen skill and a session hook,\nin ~/.claude"
+
+    private func showClaudeSetupResult(_ result: Result<ClaudeSetup.State, ClaudeSetupError>) {
+        switch result {
+        case .success:
+            toasts.show(
+                ToastContent(
+                    variant: .positive, title: "Claude Code can use zen",
+                    message: "New Claude sessions load the zen skill."))
+        case .failure(let error):
+            let content = ToastContent(variant: .warning, title: "Couldn't set up Claude Code", message: error.message)
+            let shown = toasts.showSticky(content, actions: [], showsClose: true)
+            shown.onClose = { [weak self, weak shown] in shown.map { self?.toasts.dismiss($0) } }
+        }
+    }
+
     private func agentSignalled(_ surface: SurfaceID, name: String, message: String?) {
-        agents.identify(surface, name: name.isEmpty ? nil : name, source: .signal)
+        identifyAgent(surface, name: name.isEmpty ? nil : name, source: .signal)
         agents.setMessage(surface, message)
     }
 
