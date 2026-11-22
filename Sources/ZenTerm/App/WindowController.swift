@@ -2294,7 +2294,8 @@ final class WindowController: NSObject {
             guard let tab = workspace.controller(id) else { return nil }
             return ListResult.Tab(
                 id: ControlAddress.tab(window: windowID, tab: id.raw), title: title(of: id),
-                active: id == workspace.activeID, panes: tab.paneHandles.map(listing(of:)))
+                active: id == workspace.activeID,
+                panes: tab.paneHandles.map { listing(of: $0, onHost: workspace.host != nil) })
         }
         let host = Self.hostListing(of: workspace)
         return ListResult.Workspace(
@@ -2304,15 +2305,56 @@ final class WindowController: NSObject {
             active: workspace === activeWorkspace, tabs: tabs)
     }
 
-    private func listing(of pane: PaneHandle) -> ListResult.Pane {
+    func listing(of pane: PaneHandle, in tab: TabID) -> ListResult.Pane {
+        listing(of: pane, onHost: workspace(of: tab)?.host != nil)
+    }
+
+    // A host pane's foreground program is the local ssh, not what runs on the host.
+    private func listing(of pane: PaneHandle, onHost: Bool) -> ListResult.Pane {
         let agent = agents.agents[pane.surfaceID].map { agent in
             let tone = AttentionTone(
                 wait: attention.agentWait(of: pane.surfaceID), working: attention.isWorking(pane.surfaceID))
-            return ListResult.Agent(name: agent.name, state: Self.agentState(tone))
+            return Self.agentListing(
+                name: agent.name, state: Self.agentState(tone), report: agentStates.status(of: pane.surfaceID))
         }
         return ListResult.Pane(
             token: pane.token, drawer: pane.drawer.map(Self.drawer), title: pane.surface.title,
-            cwd: pane.cwd?.path, busy: pane.surface.isBusy, agent: agent)
+            cwd: pane.cwd?.path, busy: pane.surface.isBusy,
+            process: onHost ? nil : Self.processListing(of: pane.surface), agent: agent)
+    }
+
+    private static func processListing(of surface: TerminalSurface) -> ListResult.Process? {
+        guard let group = surface.foregroundProcessGroupID,
+            let program = ProcessArguments.programName(of: group)
+        else { return nil }
+        return ListResult.Process(pid: group, program: program)
+    }
+
+    private static func agentListing(name: String?, state: ListResult.AgentState, report: TerminalProgramStatus?)
+        -> ListResult.Agent
+    {
+        guard let report else { return ListResult.Agent(name: name, state: state) }
+        let status: ListResult.AgentStatus
+        var kind: ListResult.AgentNeed?
+        switch report.state {
+        case .idle: status = .idle
+        case .working: status = .working
+        case .done: status = .done
+        case .blocked(let need):
+            status = .blocked
+            kind = need.map(Self.agentNeed)
+        case .failed: status = .error
+        }
+        return ListResult.Agent(
+            name: name, state: state, status: status, kind: kind, msg: report.message, title: report.title)
+    }
+
+    private static func agentNeed(_ need: TerminalProgramStatus.Need) -> ListResult.AgentNeed {
+        switch need {
+        case .permission: return .permission
+        case .question: return .question
+        case .auth: return .auth
+        }
     }
 
     private static func agentState(_ tone: AttentionTone) -> ListResult.AgentState {
@@ -2388,7 +2430,7 @@ final class WindowController: NSObject {
         let closesWindow = workspace.tabIDs.count == 1 && closesWindow(closing: workspace)
         return CloseStakes(
             closesWindow: closesWindow, isRunning: isRunning(tab: id),
-            panes: tab.paneHandles.filter(\.surface.isBusy).map(listing(of:)),
+            panes: tab.paneHandles.filter(\.surface.isBusy).map { listing(of: $0, onHost: workspace.host != nil) },
             floats: floats.runningTitles(scope: id) + (closesWindow ? floats.runningTitles(scope: nil) : []))
     }
 
@@ -2399,7 +2441,7 @@ final class WindowController: NSObject {
         let tabs = workspace.tabIDs.compactMap(workspace.controller)
         return CloseStakes(
             closesWindow: closesWindow, isRunning: isRunning(workspace: workspace),
-            panes: tabs.flatMap(\.paneHandles).filter(\.surface.isBusy).map(listing(of:)),
+            panes: tabs.flatMap(\.paneHandles).filter(\.surface.isBusy).map { listing(of: $0, onHost: false) },
             floats: workspace.tabIDs.flatMap { floats.runningTitles(scope: $0) }
                 + (closesWindow ? floats.runningTitles(scope: nil) : []))
     }
@@ -2418,7 +2460,8 @@ final class WindowController: NSObject {
         if workspace.connection?.isAwaitingLogin(on: pane.surfaceID) == true { return loginStakes(of: workspace) }
         if c.isSinglePane { return closeStakes(tab: tab) }
         let busy = pane.surface.isBusy
-        return CloseStakes(closesWindow: false, isRunning: busy, panes: busy ? [listing(of: pane)] : [], floats: [])
+        return CloseStakes(
+            closesWindow: false, isRunning: busy, panes: busy ? [listing(of: pane, in: tab)] : [], floats: [])
     }
 
     private func loginStakes(of workspace: WorkspaceController) -> CloseStakes {
@@ -2440,7 +2483,9 @@ final class WindowController: NSObject {
         let closesWindow = closedByRemoval(atPath: path).thisWindow
         return CloseStakes(
             closesWindow: closesWindow, isRunning: tabs.contains(where: isRunning(tab:)),
-            panes: tabs.compactMap(controller).flatMap(\.paneHandles).filter(\.surface.isBusy).map(listing(of:)),
+            panes: tabs.flatMap { tab in
+                (controller(tab)?.paneHandles ?? []).filter(\.surface.isBusy).map { listing(of: $0, in: tab) }
+            },
             floats: tabs.flatMap { floats.runningTitles(scope: $0) }
                 + (closesWindow ? floats.runningTitles(scope: nil) : []))
     }
