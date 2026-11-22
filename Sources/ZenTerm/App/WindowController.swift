@@ -2513,7 +2513,8 @@ final class WindowController: NSObject {
         let busy = tab.paneHandles.filter { $0.surface.isBusy && $0.token != spared }
         let running = spared == nil ? isRunning(tab: id) : !busy.isEmpty || floats.hasBusyInScope(id)
         return CloseStakes(
-            closesWindow: closesWindow, isRunning: running || children.isRunning,
+            closesWindow: closesWindow, closesOtherWindows: children.otherWindows.count,
+            isRunning: running || children.isRunning,
             panes: busy.map { listing(of: $0, onHost: workspace.host != nil) }
                 + children.listings,
             floats: floats.runningTitles(scope: id) + children.floatTitles
@@ -2527,7 +2528,8 @@ final class WindowController: NSObject {
         let closesWindow = closesWindow(closing: workspace) || children.closesWindow
         let tabs = workspace.tabIDs.compactMap(workspace.controller)
         return CloseStakes(
-            closesWindow: closesWindow, isRunning: isRunning(workspace: workspace) || children.isRunning,
+            closesWindow: closesWindow, closesOtherWindows: children.otherWindows.count,
+            isRunning: isRunning(workspace: workspace) || children.isRunning,
             panes: tabs.flatMap(\.paneHandles).filter(\.surface.isBusy).map { listing(of: $0, onHost: false) }
                 + children.listings,
             floats: workspace.tabIDs.flatMap { floats.runningTitles(scope: $0) } + children.floatTitles
@@ -2551,10 +2553,11 @@ final class WindowController: NSObject {
         let busy = !closedByItsParent && pane.surface.isBusy
         let children = childStakes(closing: [], panes: [pane.token], sparingWorkOf: spared)
         return CloseStakes(
-            closesWindow: children.closesWindow, isRunning: busy || children.isRunning,
+            closesWindow: children.closesWindow, closesOtherWindows: children.otherWindows.count,
+            isRunning: busy || children.isRunning,
             panes: (busy ? [listing(of: pane, in: tab)] : [])
                 + children.listings,
-            floats: children.floatTitles)
+            floats: children.floatTitles + (children.closesWindow ? floats.runningTitles(scope: nil) : []))
     }
 
     private struct FamilyTab: Hashable {
@@ -2575,6 +2578,7 @@ final class WindowController: NSObject {
         let running: [FamilyPane]
         let floats: [(window: WindowController, title: String)]
         let closesWindow: Bool
+        let otherWindows: [WindowController]
 
         var isRunning: Bool { !running.isEmpty || !floats.isEmpty }
         var floatTitles: [String] { floats.map(\.title) }
@@ -2588,7 +2592,7 @@ final class WindowController: NSObject {
         func held(by window: WindowController) -> ChildStakes {
             ChildStakes(
                 running: running.filter { $0.window === window }, floats: floats.filter { $0.window === window },
-                closesWindow: closesWindow)
+                closesWindow: closesWindow, otherWindows: [])
         }
 
         private func names(of panes: [FamilyPane]) -> [String] {
@@ -2663,18 +2667,29 @@ final class WindowController: NSObject {
                 grew = true
             }
         }
-        guard !children.isEmpty else { return ChildStakes(running: [], floats: [], closesWindow: false) }
-        let emptiesWindow = workspaces.allSatisfy {
-            $0.host == nil && $0.tabIDs.allSatisfy { tabCloses(FamilyTab(window: ObjectIdentifier(self), tab: $0)) }
+        guard !children.isEmpty else {
+            return ChildStakes(running: [], floats: [], closesWindow: false, otherWindows: [])
         }
-        let floats = cascadedTabs.flatMap { key in
-            windows.first { ObjectIdentifier($0) == key.window }.map { window in
-                window.floats.runningTitles(scope: key.tab).map { (window: window, title: $0) }
-            } ?? []
+        let empties = { (window: WindowController) in
+            !window.workspaces.isEmpty
+                && window.workspaces.allSatisfy {
+                    $0.host == nil
+                        && $0.tabIDs.allSatisfy { tabCloses(FamilyTab(window: ObjectIdentifier(window), tab: $0)) }
+                }
         }
+        let otherWindows = windows.filter { $0 !== self && empties($0) }
+        let floats =
+            cascadedTabs.flatMap { key in
+                windows.first { ObjectIdentifier($0) == key.window }.map { window in
+                    window.floats.runningTitles(scope: key.tab).map { (window: window, title: $0) }
+                } ?? []
+            }
+            + otherWindows.flatMap { window in
+                window.floats.runningTitles(scope: nil).map { (window: window, title: $0) }
+            }
         return ChildStakes(
             running: children.filter { $0.pane.surface.isBusy && (spared == nil || !lineage.contains($0.pane.token)) },
-            floats: floats, closesWindow: emptiesWindow)
+            floats: floats, closesWindow: empties(self), otherWindows: otherWindows)
     }
 
     private static func closesWith(_ pane: PaneHandle, _ closing: Set<Int>) -> Bool {
@@ -3093,6 +3108,7 @@ final class WindowController: NSObject {
             lastPane && activeTabIDs.count == 1 && closesWindow(closing: activeWorkspace) || children.closesWindow
         let needsConfirm =
             closesWindow
+            || !children.otherWindows.isEmpty
             || active.focusedPaneIsBusy
             || children.isRunning
             || (lastPane && activeWorkspace?.activeID.map(isRunning(tab:)) ?? false)
@@ -3109,7 +3125,9 @@ final class WindowController: NSObject {
             : (lastPane ? activeWorkspace?.activeID.map(hiddenRunningNames(inTab:)) ?? [] : []) + children.names
         presentConfirm(
             variant: .warning, title: subject.title,
-            message: CloseWarning.message(closing: subject, naming: names), confirmLabel: "Close"
+            message: CloseWarning.message(
+                closing: subject, naming: names, closingOtherWindows: children.otherWindows.count),
+            confirmLabel: "Close"
         ) { [weak self] in
             guard let self, let active = self.activeController else { return }
             if active.closeFocused() == false { self.activeWorkspace?.activeID.map { self.closeTab($0) } }
@@ -3167,7 +3185,10 @@ final class WindowController: NSObject {
         if holdsAwaitingLogin(tab: id) { return confirmAbandoningLogin(of: workspace, closing: .tab) }
         let children = childStakes(closing: [id])
         let closesWindow = workspace.tabIDs.count == 1 && closesWindow(closing: workspace) || children.closesWindow
-        guard closesWindow || isRunning(tab: id) || children.isRunning else { closeTab(id); return }
+        guard closesWindow || isRunning(tab: id) || children.isRunning || !children.otherWindows.isEmpty else {
+            closeTab(id)
+            return
+        }
         let subject: CloseWarning.Subject =
             closesWindow ? .lastTab(running: windowIsRunning) : .tab
         let names =
@@ -3175,7 +3196,8 @@ final class WindowController: NSObject {
             ? runningNamesInWindow() + children.names(outside: self) : hiddenRunningNames(inTab: id) + children.names
         presentConfirm(
             variant: .warning, title: subject.title,
-            message: CloseWarning.message(closing: subject, naming: names),
+            message: CloseWarning.message(
+                closing: subject, naming: names, closingOtherWindows: children.otherWindows.count),
             confirmLabel: "Close"
         ) { [weak self] in self?.closeTab(id) }
     }
@@ -3192,7 +3214,8 @@ final class WindowController: NSObject {
         }
         let children = childStakes(closing: Set(workspace.tabIDs))
         let closesWindow = closesWindow(closing: workspace) || children.closesWindow
-        guard closesWindow || isRunning(workspace: workspace) || children.isRunning else {
+        guard closesWindow || isRunning(workspace: workspace) || children.isRunning || !children.otherWindows.isEmpty
+        else {
             closeTabs(of: workspace) { closeTab($0) }
             return
         }
@@ -3204,7 +3227,8 @@ final class WindowController: NSObject {
             : runningTabNames(in: workspace) + children.names
         presentConfirm(
             variant: .warning, title: subject.title,
-            message: CloseWarning.message(closing: subject, naming: names),
+            message: CloseWarning.message(
+                closing: subject, naming: names, closingOtherWindows: children.otherWindows.count),
             confirmLabel: "Close"
         ) { [weak self] in self?.closeTabs(of: workspace) { self?.closeTab($0) } }
     }
@@ -3227,14 +3251,15 @@ final class WindowController: NSObject {
 
     private func requestCloseWindow() {
         let children = childStakes(closing: Set(allTabIDs))
-        guard windowIsRunning || children.isRunning else {
+        guard windowIsRunning || children.isRunning || !children.otherWindows.isEmpty else {
             window.close()
             return
         }
         presentConfirm(
             variant: .warning, title: CloseWarning.Subject.window.title,
             message: CloseWarning.message(
-                closing: .window, naming: runningNamesInWindow() + children.names(outside: self)),
+                closing: .window, naming: runningNamesInWindow() + children.names(outside: self),
+                closingOtherWindows: children.otherWindows.count),
             confirmLabel: "Close"
         ) { [weak self] in self?.window.close() }
     }
@@ -4562,7 +4587,8 @@ final class WindowController: NSObject {
 
 extension WindowController: NSWindowDelegate {
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        guard windowIsRunning || childStakes(closing: Set(allTabIDs)).isRunning else { return true }
+        let children = childStakes(closing: Set(allTabIDs))
+        guard windowIsRunning || children.isRunning || !children.otherWindows.isEmpty else { return true }
         requestCloseWindow()
         return false
     }

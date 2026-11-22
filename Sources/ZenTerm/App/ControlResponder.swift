@@ -285,6 +285,11 @@ struct ControlResponder {
     static func refusal(closing name: String, _ stakes: CloseStakes) -> ControlError {
         var consequences: [String] = []
         if stakes.closesWindow { consequences.append("close the window") }
+        switch stakes.closesOtherWindows {
+        case 0: break
+        case 1: consequences.append("close another window")
+        default: consequences.append("close \(stakes.closesOtherWindows) other windows")
+        }
         if stakes.isRunning { consequences.append(stopping(stakes.panes, stakes.floats)) }
         if let login = stakes.login {
             let tabs = login.tabs == 1 ? "tab" : "\(login.tabs) tabs"
@@ -292,7 +297,9 @@ struct ControlResponder {
         }
         return ControlError(
             .refused, "Closing \(name) would \(CloseWarning.list(consequences)).",
-            details: ControlError.Details(panes: stakes.panes, floats: stakes.floats, closesWindow: stakes.closesWindow)
+            details: ControlError.Details(
+                panes: stakes.panes, floats: stakes.floats,
+                closesWindow: stakes.closesWindow || stakes.closesOtherWindows > 0)
         )
     }
 

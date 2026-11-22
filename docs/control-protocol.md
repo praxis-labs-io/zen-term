@@ -86,8 +86,9 @@ A `refused` error says what `force` would end:
 
 `panes` are the running panes and drawers, in the shape `list` uses, the running children
 that `pane.run` started from them included. `floats` are the
-titles of running tool floats. `closesWindow` is true when the close would take the
-window with it.
+titles of running tool floats. `closesWindow` is true when the close would take a window with
+it: its own, or another window whose last tab is a child that closes with it, whose running
+floats are then counted too. The message says which.
 A worktree removal's refusal adds `files`, its uncommitted and untracked files, and
 `lostCommits`, the commits on it that no branch or other worktree holds.
 

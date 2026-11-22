@@ -40,9 +40,15 @@ enum CloseWarning {
         }
     }
 
-    static func message(closing subject: Subject, naming names: [String]) -> String {
-        guard !names.isEmpty else { return subject.consequence + "." }
-        return subject.consequence + ", including " + list(names) + "."
+    static func message(closing subject: Subject, naming names: [String], closingOtherWindows others: Int = 0)
+        -> String
+    {
+        let named = names.isEmpty ? subject.consequence + "." : subject.consequence + ", including " + list(names) + "."
+        switch others {
+        case 0: return named
+        case 1: return named + " It also closes another window."
+        default: return named + " It also closes \(others) other windows."
+        }
     }
 
     static func list(_ names: [String]) -> String {

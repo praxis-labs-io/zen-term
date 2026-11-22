@@ -540,6 +540,49 @@ final class ControlPaneRunTests: WindowTestCase {
         waitUntil(!isOpen(family.child, in: family.b), "the child in the other window closing")
     }
 
+    private func childThatIsAnotherWindowsLastTab() throws -> (a: WindowController, b: WindowController, parent: Int) {
+        var config = GeneralConfig.builtIn
+        config.floats = [
+            ToolFloat(
+                id: "btop", order: 0, title: "btop", icon: ToolFloatParser.defaultIcon, command: "btop", dir: nil,
+                widthFraction: 0.8, heightFraction: 0.8, requiresGitRepo: false, persist: .window,
+                toggle: Chord(command: true, shift: true, key: "b"))
+        ]
+        GeneralConfig.setCurrentForTesting(config)
+        let family = try childInAnotherWindow()
+        let elsewhere = try XCTUnwrap(everyPane(family.b).first { $0.token != family.child }?.token)
+        let tab = try XCTUnwrap(family.b.pane(token: elsewhere)?.tab)
+        XCTAssertTrue(
+            try answer(.tabClose, ControlArgs(tab: ControlAddress.tab(window: family.b.windowID, tab: tab.raw)))
+                .isSuccess)
+        XCTAssertEqual(everyPane(family.b).map(\.token), [family.child])
+        return (family.a, family.b, family.parent)
+    }
+
+    func test_aChildThatIsAnotherWindowsLastTabCountsThatWindowClosing_andItsRunningFloats() throws {
+        let family = try childThatIsAnotherWindowsLastTab()
+        let before = spawned.count
+        family.b.handle(.toggleToolFloat("btop"))
+        try XCTUnwrap(spawned.dropFirst(before).first, "opening btop spawns its program").isBusy = true
+
+        let refusal = try XCTUnwrap(error(try answer(.paneClose, ControlArgs(pane: .token(family.parent)))))
+
+        XCTAssertEqual(refusal.code, .refused)
+        XCTAssertEqual(refusal.details?.closesWindow, true)
+        XCTAssertEqual(refusal.details?.floats, ["btop"])
+        XCTAssertTrue(refusal.message.contains("close another window"), refusal.message)
+    }
+
+    func test_closingAWindowAsksFirstWhenAChildIsAnotherWindowsLastTab() throws {
+        let family = try childThatIsAnotherWindowsLastTab()
+
+        XCTAssertFalse(family.a.windowShouldClose(family.a.window))
+        let content = try XCTUnwrap(family.a.window.contentView)
+        let texts = Self.descendants(of: content).compactMap { ($0 as? NSTextField)?.stringValue }
+        XCTAssertTrue(
+            texts.contains { $0.hasSuffix("It also closes another window.") }, "the confirmation says so: \(texts)")
+    }
+
     func test_removingAWorktreeCountsARunningChildInAnotherWindowOnce() throws {
         let a = makeWindow()
         _ = makeWindow()

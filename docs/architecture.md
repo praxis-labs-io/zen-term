@@ -268,7 +268,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   Each closes that token's children on the next main-queue turn, since the release lands
   mid-rebuild of a canvas that may hold a child. A child's own release cascades the same way.
   Close stakes and confirmations count the children in every window first (`familyStakes`),
-  including whether closing them empties the window. A worktree removal closes every window's
+  including whether closing them empties the window or another one, whose window floats then
+  count too. A worktree removal closes every window's
   tabs in it together, so each window counts only the children it holds. `list` drops a `parent` that `NavRegistry` no longer holds.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
   workspace costs nothing beyond an inactive tab.
