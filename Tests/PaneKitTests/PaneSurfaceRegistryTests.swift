@@ -16,6 +16,7 @@ private final class FakeSurface: NSObject, TerminalSurface {
     func terminate() { terminated = true }
     func paste(_ text: String) {}
     func submit() {}
+    func press(_ key: TerminalKey) {}
     func copySelection() -> String? { nil }
     func scroll(_ command: TerminalScroll) {}
     func text(lastLines count: Int) -> String? { nil }

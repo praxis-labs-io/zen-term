@@ -11,6 +11,7 @@ struct ControlResponder {
     var loadWorkspaces: (@escaping ([Workspace]) -> Void) -> Void = { ConfigLoader.loadWorkspaces(completion: $0) }
     var worktreeRemovals = WorktreeRemovalTracker()
     var runAction: (KeyInterceptor.ReservedChord) -> Void = { _ in }
+    var interruptGroup: (pid_t) -> Bool = ControlResponder.interrupt(group:)
 
     func respond(to request: ControlRequest, reply: @escaping (ControlReply) -> Void) {
         switch request.cmd {
@@ -29,6 +30,8 @@ struct ControlResponder {
         case .paneFocus: reply(focusPane(request))
         case .paneClose: reply(closePane(request))
         case .paneSend: reply(sendToPane(request))
+        case .paneKeys: reply(pressKeys(request))
+        case .paneInterrupt: reply(interruptPane(request))
         case .paneRead: reply(readPane(request))
         case .paneGet: reply(getPane(request))
         case .worktreeList: listWorktrees(request, reply: reply)

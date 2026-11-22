@@ -330,6 +330,10 @@ public protocol TerminalSurface: AnyObject {
     /// Does nothing while `isStarted` is false.
     func submit()
 
+    /// Presses and releases `key` the way the keyboard would, so the program reads it as a key, not a paste.
+    /// Does nothing while `isStarted` is false.
+    func press(_ key: TerminalKey)
+
     func copySelection() -> String?
 
     /// The viewport cell the selection starts on, or nil when nothing is selected.
