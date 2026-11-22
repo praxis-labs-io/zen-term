@@ -3,8 +3,8 @@ import ControlProtocol
 
 struct PaneCommands: ParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "pane", abstract: "Split, focus, close, type into, read and inspect panes.",
-        subcommands: [Split.self, Focus.self, Close.self, Send.self, Read.self, Get.self])
+        commandName: "pane", abstract: "Split, focus, close, type into, interrupt, read and inspect panes.",
+        subcommands: [Split.self, Focus.self, Close.self, Send.self, Keys.self, Interrupt.self, Read.self, Get.self])
 
     struct Split: ParsableCommand {
         static let configuration = CommandConfiguration(
@@ -83,6 +83,40 @@ struct PaneCommands: ParsableCommand {
         }
     }
 
+    struct Keys: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Press keys in a pane, in order, as keystrokes rather than a paste.")
+
+        private static let names = "One of " + PaneKey.names.joined(separator: ", ") + "."
+
+        @OptionGroup var connection: ConnectionOptions
+
+        @Argument(help: "A pane or drawer token.")
+        var pane: Int
+
+        @Argument(help: ArgumentHelp("The keys.", discussion: Keys.names))
+        var keys: [PaneKey]
+
+        func run() throws {
+            let args = ControlArgs(pane: pane, keys: keys.map(\.name))
+            _ = try connection.client().send(.paneKeys, args, expecting: NoPayload.self)
+        }
+    }
+
+    struct Interrupt: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Stop an agent's turn with Escape, or send SIGINT to what a pane runs.")
+
+        @OptionGroup var connection: ConnectionOptions
+
+        @Argument(help: "A pane or drawer token.")
+        var pane: Int
+
+        func run() throws {
+            _ = try connection.client().send(.paneInterrupt, ControlArgs(pane: pane), expecting: NoPayload.self)
+        }
+    }
+
     struct Read: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract: "Print a pane's text: the rows on screen, or its last lines with --lines.")
@@ -122,3 +156,7 @@ struct PaneCommands: ParsableCommand {
 }
 
 extension PaneDirection: ExpressibleByArgument {}
+
+extension PaneKey: ExpressibleByArgument {
+    public init?(argument: String) { self.init(name: argument) }
+}

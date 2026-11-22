@@ -283,8 +283,28 @@ is not closed.
 
 Pastes `text`, so several lines arrive as one block. `enter` then sends Return outside the
 paste, which runs the block once at a shell prompt. It delivers text, not keys: control
-characters become spaces. `failed` when the pane has not started, such as a host's pane
+characters become spaces, and `pane.keys` presses keys. `failed` when the pane has not started, such as a host's pane
 waiting for its connection. Nothing is sent.
+
+### `pane.keys`
+
+`args`: `pane`, `keys` (required), a list of key names.
+
+Presses each key in order as a keystroke, not a paste, so a menu or a prompt reads it as
+the key: `enter`, `escape`, `tab`, `shift-tab`, `backspace`, `space`, `up`, `down`, `left`,
+`right`, `home`, `end`, `pageup`, `pagedown`, and `ctrl-a` through `ctrl-z`. A name that is
+not a key is `bad_request` naming it, and nothing is pressed. `failed` when the pane has not
+started.
+
+### `pane.interrupt`
+
+`args`: `pane`.
+
+Stops what the pane is doing without ending it. A pane running an agent gets Escape, which
+ends Claude's or Codex's turn and leaves the agent running. Otherwise the terminal's
+foreground process group gets SIGINT, as Ctrl-C would: the program, or the shell at a
+prompt. A remote host's pane gets Ctrl-C as a key, so the host's terminal sends the signal.
+`failed` when the pane has not started or its foreground process is not known.
 
 ### `pane.read`
 
@@ -355,15 +375,15 @@ is a remote host's workspace, by its `ssh:<host>` address or as the caller's.
 
 ### `worktree.create`
 
-`args`: `branch` (required), `workspace`, `base`, `existing`, `focus`.
+`args`: `branch` (required), `workspace`, `base`, `existing`, `open`, `focus`.
 
 Makes a worktree on a new branch cut from `base`: `default`, the default branch, unless
 `current` cuts it from what the workspace's checkout is on. `existing` checks out a branch
 that already exists instead and ignores `base`. It copies the entry's `carry` into the
-worktree and opens a workspace there, nested under the workspace it was made from, in the
-window that has that workspace open, else the caller's window. It answers once the copy
-finishes. Anything git refuses is `failed`, with the message the app's New Worktree card
-shows.
+worktree and opens nothing. `open` also opens a workspace there, nested under the
+workspace it was made from, in the window that has that workspace open, else the caller's
+window. `focus` implies `open` and switches to it. It answers once the copy finishes.
+Anything git refuses is `failed`, with the message the app's New Worktree card shows.
 
 ```json
 {"path":"/Users/me/.zenterm/worktrees/zen-term-1a2b3c4d/feat-x",
@@ -372,7 +392,8 @@ shows.
 ```
 
 `skipped` holds what was there to copy and did not arrive. An entry with nothing to copy
-is in neither list. `workspace` is in the shape `list` uses.
+is in neither list. `window` and `workspace` are present only when it opened one, and
+`workspace` is in the shape `list` uses.
 
 ### `worktree.remove`
 
@@ -411,15 +432,20 @@ speaks is refused with exit 1, before its result is read, and the message names 
 versions.
 
 Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close`,
-`zen tab new|select|rename|close`, `zen pane split|focus|close|send|read|get` and
+`zen tab new|select|rename|close`, `zen pane split|focus|close|send|keys|interrupt|read|get` and
 `zen worktree list|create|remove`, with `--focus` and `--force` for those fields.
 `zen action <name>` runs a keymap action. `zen wait <pane>` waits on a pane, taking
-`--output` and `--timeout`, and prints the answer as JSON, exiting 0 for every reason. A command
+`--output` and `--timeout`, and prints the answer as JSON, exiting 0 for every reason.
+`zen setup claude` and `zen setup claude --remove` edit Claude Code's config, not the app,
+and never open the socket. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
 rest print nothing. `zen pane get` takes the pane as its argument, this pane by default.
 `zen pane split` splits to the right unless `--dir down` says otherwise.
+`zen pane keys <pane> <key>...` takes the keys as arguments, and a name that is not a key is
+a usage error.
 `zen workspace new` takes `--title`, and `zen workspace rename <title>` takes the workspace
-as `--workspace`. `zen worktree create <branch>` takes `--base default|current` or `--existing`, not both.
+as `--workspace`. `zen worktree create <branch>` takes `--base default|current` or `--existing`, not both, and
+opens a workspace on it only with `--open` or `--focus`.
 `zen worktree remove` takes a folder when it starts with `/`, `~` or `.`, and a branch
 otherwise. `zen` sends
 folders as absolute paths, read against its own folder, and refuses a `--cwd` or

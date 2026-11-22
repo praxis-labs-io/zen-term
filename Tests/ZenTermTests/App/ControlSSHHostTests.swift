@@ -221,6 +221,16 @@ final class ControlSSHHostTests: WindowTestCase {
         XCTAssertEqual(waiting.surface.inputs, [.paste("ls")])
     }
 
+    func test_interruptingAHostsPanePressesCtrlCRatherThanSignallingTheLocalSSH() throws {
+        let c = makeWindow()
+        let login = try connected(c)
+        login.foregroundProcessGroupID = 4242
+
+        _ = try result(send(.paneInterrupt, ControlArgs(pane: token(of: login))), as: NoPayload.self)
+
+        XCTAssertEqual(login.inputs, [.press(try XCTUnwrap(TerminalKey(paneKey: .control("c"))))])
+    }
+
     func test_paneReadOfAPaneWaitingForItsHost_failsSayingItHasNotStarted() throws {
         let c = makeWindow()
         let waiting = try paneWaitingForTheHost(c)

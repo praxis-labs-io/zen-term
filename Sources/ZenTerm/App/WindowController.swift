@@ -2307,6 +2307,8 @@ final class WindowController: NSObject {
             active: workspace === activeWorkspace, tabs: tabs)
     }
 
+    func runsAgent(_ pane: PaneHandle) -> Bool { liveAgent(pane.surfaceID) != nil }
+
     func listing(of pane: PaneHandle, in tab: TabID) -> ListResult.Pane {
         listing(of: pane, onHost: workspace(of: tab)?.host != nil)
     }

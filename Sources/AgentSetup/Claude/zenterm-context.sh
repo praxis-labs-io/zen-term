@@ -1,0 +1,20 @@
+#!/bin/bash
+# Claude Code SessionStart hook installed by `zen setup claude`: in a live ZenTerm pane, say so and point at the zen skill.
+
+[ -n "$ZEN_CONTROL_SOCK" ] || exit 0
+command -v zen >/dev/null 2>&1 || exit 0
+zen --socket "$ZEN_CONTROL_SOCK" hello >/dev/null 2>&1 || exit 0
+
+pane=""
+if [ -n "$ZEN_PANE" ]; then
+  pane=" Your pane token is \`$ZEN_PANE\` (\`\$ZEN_PANE\`), and a \`zen\` command with no target acts on this pane, its tab and its workspace."
+fi
+
+cat <<EOF
+This session runs in a ZenTerm pane, the user's terminal. The \`zen\` CLI controls it.$pane
+
+Before your first \`zen\` command this session, load the /zen skill. Preferences:
+- For worktree work, use \`zen worktree\` instead of \`git worktree\` or EnterWorktree, so the worktree gets the workspace's files and the user can open it from the workspace picker. Pass \`--open\` only when asked to open it.
+- Run anything that doesn't exit on its own (a dev server, a watcher, an app launcher) in its own tab with \`zen tab new --cmd "<command> && exit"\` (it closes on a clean exit; on a failure, read it, then close it yourself), never your shell tool's background mode, \`&\` or \`nohup\`. Read it with \`zen pane read --pane <token> --lines 40\`.
+- Leave the user's screen as it is: pass \`--focus\` only when asked to show something, and \`--force\` only when asked to stop running work.
+EOF
