@@ -88,7 +88,7 @@ final class ClaudeSetupFilesTests: XCTestCase {
         XCTAssertEqual(
             lines[1],
             #"You are helper `review`, started by pane 31. When done or stuck, report with "#
-                + #"`zen pane send --pane 31 "<result>"`, then stop."#)
+                + #"`zen pane send --pane 31 --enter "<result>"`, then stop."#)
     }
 
     func test_shippedHookHasNoHelperLineWithoutAParent() throws {
