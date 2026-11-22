@@ -7,11 +7,11 @@ func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
         srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
         blue: CGFloat(hex & 0xFF) / 255, alpha: a)
 }
-let iris = rgb(0xC4A7E7)
-let bgTop = rgb(0x221E33)
-let bgBottom = rgb(0x141120)
-let textColor = rgb(0xE0DEF4)
-let mutedColor = rgb(0x908CAA)
+let mint = rgb(0x6EE6B8)
+let bgTop = rgb(0x161B26)
+let bgBottom = rgb(0x07090E)
+let textColor = rgb(0xDCE3EE)
+let mutedColor = rgb(0x8A94A8)
 
 let BASE_W: CGFloat = 660
 let BASE_H: CGFloat = 400
@@ -136,7 +136,7 @@ func render(scale: CGFloat) -> CGImage {
         bg, start: CGPoint(x: BASE_W / 2, y: BASE_H), end: CGPoint(x: BASE_W / 2, y: 0), options: [])
 
     let glow = CGGradient(
-        colorsSpace: space, colors: [rgb(0xC4A7E7, 0.12), rgb(0xC4A7E7, 0)] as CFArray,
+        colorsSpace: space, colors: [mint.copy(alpha: 0.12)!, mint.copy(alpha: 0)!] as CFArray,
         locations: [0, 1])!
     ctx.drawRadialGradient(
         glow, startCenter: CGPoint(x: BASE_W / 2, y: Y(ICON_ROW_Y)), startRadius: 0,
@@ -178,7 +178,7 @@ func render(scale: CGFloat) -> CGImage {
     let wordmarkY: CGFloat = 66
     let total = markH + gap + wordW
     let startX = (BASE_W - total) / 2
-    drawOrigami(cx: startX + markH / 2, cyTopDown: wordmarkY, height: markH, color: iris)
+    drawOrigami(cx: startX + markH / 2, cyTopDown: wordmarkY, height: markH, color: mint)
     drawText("ZenTerm", cx: startX + markH + gap + wordW / 2, cyTopDown: wordmarkY, font: wordFont, color: textColor)
 
     let arrowY = Y(ICON_ROW_Y)
@@ -186,7 +186,7 @@ func render(scale: CGFloat) -> CGImage {
     let shaftHalf: CGFloat = 34
     let head: CGFloat = 11
     let tip = CGPoint(x: arrowMidX + shaftHalf, y: arrowY)
-    ctx.setStrokeColor(rgb(0xC4A7E7, 0.55))
+    ctx.setStrokeColor(mint.copy(alpha: 0.55)!)
     ctx.setLineWidth(2.5)
     ctx.setLineCap(.round)
     ctx.setLineJoin(.round)
