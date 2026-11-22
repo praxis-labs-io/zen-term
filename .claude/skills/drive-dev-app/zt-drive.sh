@@ -206,16 +206,24 @@ ASK
     return $ok
 }
 
+# A pane closes on any exit, and `zen wait <token>` still reads how it ended; a zen without `pane run` gets a tab.
+pane_token() { sed -n 's/.*"pane" *: *\([0-9]*\).*/\1/p'; }
+
 cmd_launch() {
     target_pid >/dev/null 2>&1 && die "a .build ZenTerm is already running (pid $(target_pid))"
     [ -x bin/run ] || die "run this from the worktree root (no bin/run here)"
-    local where pane
-    if [ -n "${ZEN_CONTROL_SOCK:-}" ] && command -v zen >/dev/null 2>&1 \
-        && pane=$(zen tab new --cwd "$PWD" --cmd "bin/run && exit" | sed -n 's/.*"pane" *: *\([0-9]*\).*/\1/p') \
-        && [ -n "$pane" ]; then
-        note "launching bin/run in a ZenTerm tab (pane $pane)"
-        where="zen pane read --pane $pane --lines 40"
-    else
+    local where pane=""
+    if [ -n "${ZEN_CONTROL_SOCK:-}" ] && command -v zen >/dev/null 2>&1; then
+        if pane=$(zen pane run --name dev-build "cd $(printf '%q' "$PWD") && bin/run" 2>/dev/null | pane_token) \
+            && [ -n "$pane" ]; then
+            note "launching bin/run in pane dev-build ($pane)"
+            where="zen wait $pane"
+        elif pane=$(zen tab new --cwd "$PWD" --cmd "bin/run && exit" | pane_token) && [ -n "$pane" ]; then
+            note "launching bin/run in a ZenTerm tab (pane $pane): this zen has no pane run"
+            where="zen pane read --pane $pane --lines 40"
+        fi
+    fi
+    if [ -z "$pane" ]; then
         note "launching bin/run in the background"
         nohup bin/run >/tmp/zt-drive-run.log 2>&1 &
         where="/tmp/zt-drive-run.log"
@@ -351,7 +359,7 @@ case "${1:-}" in
 usage: zt-drive.sh <command>
 
   preflight              check TCC permissions and list instances
-  launch                 start bin/run in a ZenTerm tab (else the background), wait for it
+  launch                 start bin/run in a ZenTerm pane (else the background), wait for it
   verify-symbol <sym>    prove the RUNNING binary contains your change
   target                 print the target pid (refuses bundle apps)
 
