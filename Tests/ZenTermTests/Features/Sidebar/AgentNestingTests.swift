@@ -250,6 +250,8 @@ final class AgentNestingTests: WindowTestCase {
         let process = try run("htop", from: root, in: c)
         XCTAssertNotNil(rows(c).first { $0.itemForTesting?.id == process.id }, "precondition")
 
+        process.surface.delegate?.surface(
+            process.surface, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
         process.surface.delegate?.surfaceDidExit(process.surface, code: 0)
         drainMainQueue()
 
