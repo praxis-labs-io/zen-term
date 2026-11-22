@@ -61,8 +61,21 @@ final class PaneCommandTests: XCTestCase {
         XCTAssertFalse(plain.outliveParent)
     }
 
+    func test_runSendsOneArgumentAsALineAndQuotesSeveral() throws {
+        let separated = try XCTUnwrap(
+            try Zen.parseAsRoot(["pane", "run", "--name", "dev", "--", "sh", "-c", "sleep 1"]) as? PaneCommands.Run)
+        XCTAssertEqual(separated.commandLine, "sh -c 'sleep 1'")
+
+        let words = try XCTUnwrap(try Zen.parseAsRoot(["pane", "run", "echo", "it's"]) as? PaneCommands.Run)
+        XCTAssertEqual(words.commandLine, "echo 'it'\\''s'")
+
+        let line = try XCTUnwrap(try Zen.parseAsRoot(["pane", "run", "npm run dev && exit"]) as? PaneCommands.Run)
+        XCTAssertEqual(line.commandLine, "npm run dev && exit")
+    }
+
     func test_runWithoutACommandOrWithADigitNameIsAUsageError() {
         XCTAssertEqual(Zen.exitCode(running: ["pane", "run"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--name", "42", "claude"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--split", "left", "claude"]), 2)
     }
