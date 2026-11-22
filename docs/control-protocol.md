@@ -95,9 +95,8 @@ Requests are decoded off the main thread, applied on it, and written back off it
 answers within 5 minutes, except `pane.wait`, which answers within its `timeout` plus 5 seconds,
 `pane.send`, within 65 seconds, and with `wait` its `timeout` more, and `pane.run` with `wait`,
 within its `timeout` plus 65 seconds.
-A client that closes its connection before the answer ends a `pane.wait`. A client keeps its
-write side open until it has the answer: closing it is read as hanging up, which drops a held
-`pane.wait`.
+A client that closes its connection before the answer ends a `pane.wait`. Shutting down only its
+write side is not closing it: the answer still comes.
 
 ## Addressing
 
