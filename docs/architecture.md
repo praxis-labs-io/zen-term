@@ -281,7 +281,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   own name, since some run under a runtime (`gemini` is `node`), and anything else by its
   argv[0] (`ProcessArguments.programName` of the foreground group). A focused drawer does not
   change it, as it does not change the title. The title poll re-renders the tab bar when a
-  tab's chip changes.
+  tab's chip changes. A tab is named for its pane's folder, so one at home reads as the user's
+  name, never a lone `~`.
 - **Inactive tabs and workspaces are detached but retained**, so shells keep running.
 - **Closing the last tab closes its workspace, and the last workspace closes the window.** A
   close that takes the window with it confirms first, so the window never goes unannounced.

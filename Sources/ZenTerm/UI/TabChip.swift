@@ -15,7 +15,7 @@ class TabChip: ControlView, ThemeReapplying {
     static let maxChipWidth: CGFloat = 220
 
     private static let processInset: CGFloat = ChromeMetrics.Spacing.s4
-    private static let processGap: CGFloat = ChromeMetrics.Spacing.s6
+    private static let processGap: CGFloat = ChromeMetrics.Spacing.s4
     private static let processSize = IconBadge.Size.small
     private static let closeSlotSize: CGFloat = ChromeMetrics.Height.xs
     private static let closeSlotInset: CGFloat = ChromeMetrics.Spacing.s2
@@ -136,7 +136,7 @@ class TabChip: ControlView, ThemeReapplying {
         let chrome = Theme.current.chrome
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byTruncatingTail
-        paragraph.alignment = .center
+        paragraph.alignment = process == nil ? .center : .left
         let styled = NSAttributedString(
             string: title,
             attributes: [
@@ -186,10 +186,12 @@ class TabChip: ControlView, ThemeReapplying {
         spinner.frame = CGRect(
             x: slot.midX - spin.width / 2, y: slot.midY - spin.height / 2, width: spin.width, height: spin.height)
         let side = Self.processSize.side
-        processBadge.frame = CGRect(x: Self.processInset, y: (bounds.height - side) / 2, width: side, height: side)
         let trailing = indicator == nil ? bounds.width - Self.labelInset : slot.minX
-        labelFrame = CGRect(
-            x: labelLeading, y: 0, width: max(0, trailing - labelLeading), height: bounds.height)
+        let centering = process == nil ? 0 : max(0, (trailing - labelLeading - textWidth) / 2)
+        processBadge.frame = CGRect(
+            x: Self.processInset + centering, y: (bounds.height - side) / 2, width: side, height: side)
+        let labelX = labelLeading + centering
+        labelFrame = CGRect(x: labelX, y: 0, width: max(0, trailing - labelX), height: bounds.height)
         labelContainer.frame = labelFrame
         let labelHeight = label.intrinsicContentSize.height
         label.frame = CGRect(

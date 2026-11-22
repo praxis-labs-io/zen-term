@@ -91,11 +91,12 @@ A process chip (`IconBadge(process:size:)`) is a small app icon for what runs in
 brand's fill and glyph colors belong to the brand, not the theme, so they stay the same on
 every theme. They live in `ProcessIcon`'s registry and nowhere else; no call site names
 one. Everything else comes from the system: the shape (`Radius.icon(_:)`, continuous
-corners), the size (`IconBadge.Size`), the edge (`fill(alpha:)` with `divider`, at
-`Border.width`) and the sheen, a fixed alpha mask. A chip with no brand (a shell, a generic
-program, a worktree) takes `raised(.overlay)` and `ink(.normal)`. Brand color means a
+corners), the size and mark box (`IconBadge.Size`), the edge (`fill(alpha:)` with `border`,
+at `Border.width`) and the sheen, a fixed alpha mask lit from the top that every chip shares.
+A chip with no brand (a shell, a generic program, a worktree) takes `chipRaised`, a lift a
+step above the floats solved like the raised fills, and `ink(.normal)`. Brand color means a
 program runs, so a resting shell and a worktree are never branded. Process marks are never SF
-Symbols; a generic chip's glyph is Lucide.
+Symbols; a generic chip's glyph is Lucide, unmodified.
 
 ## State
 

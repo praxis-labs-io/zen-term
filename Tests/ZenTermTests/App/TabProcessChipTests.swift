@@ -74,6 +74,17 @@ final class TabProcessChipTests: WindowTestCase {
         return pid
     }
 
+    func test_aTabInTheHomeFolder_isNamedForTheUser_neverATilde() throws {
+        let c = makeWindow()
+        let pane = try XCTUnwrap(spawned.first)
+        pane.currentDirectory = URL(fileURLWithPath: NSHomeDirectory())
+
+        c.pollTitlesForTesting()
+
+        XCTAssertEqual(c.tabTitlesForTesting.first, NSUserName())
+        XCTAssertFalse(c.tabTitlesForTesting.contains { $0.contains("~") })
+    }
+
     func test_aTabsChip_followsTheProgramInItsFocusedPane() throws {
         let c = makeWindow()
         let pane = try XCTUnwrap(spawned.first)

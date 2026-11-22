@@ -21,7 +21,7 @@ struct ProcessIcon: Equatable {
     }
 
     static let shell = neutral("Shell", "terminal")
-    static let unknown = neutral("Program", "app-window")
+    static let unknown = neutral("Program", "binary")
     static let unknownAgent = neutral("Agent", "bot")
     static let worktree = neutral("Worktree", "git-branch")
 
@@ -41,8 +41,8 @@ struct ProcessIcon: Equatable {
         String(program.reversed().drop { $0.isNumber || $0 == "." }.reversed())
     }
 
-    // Lucide draws inside a 2pt margin, so its glyphs need a larger box to match the brand marks.
-    private static let lucideScale: CGFloat = 1.2
+    // Lucide draws inside a margin the brand marks lack, so its glyphs take a slightly larger box.
+    private static let lucideScale: CGFloat = 1.1
 
     private static func neutral(_ name: String, _ mark: String) -> ProcessIcon {
         ProcessIcon(name: name, mark: mark, look: .neutral, scale: lucideScale)
@@ -107,6 +107,7 @@ struct ProcessIcon: Equatable {
         (["zsh", "bash", "sh", "fish", "nu", "dash", "ksh", "tcsh", "csh", "elvish", "xonsh", "pwsh"], shell),
         (["aider", "amp", "goose", "crush", "cursor-agent", "llm", "aichat", "mods", "qwen"], unknownAgent),
         (["ssh", "mosh", "et", "autossh"], neutral("Remote", "server")),
+        (["sleep", "wait", "watch"], neutral("Timer", "hourglass")),
         (["make", "cmake", "ninja", "xcodebuild", "gradle", "mvn", "bazel"], neutral("Build", "hammer")),
         (["pip", "pip3", "pipx", "uv", "poetry", "apt", "apt-get", "gem", "conda"], neutral("Package", "package")),
         (["pytest", "jest", "vitest", "mocha"], neutral("Tests", "flask-conical")),

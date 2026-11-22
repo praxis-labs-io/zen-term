@@ -34,6 +34,13 @@ final class ProcessIconTests: XCTestCase {
         XCTAssertEqual(ProcessIcon.unknown.look, .neutral)
     }
 
+    func test_aWaitingCommand_isTheTimer_notAnUnknownProgram() {
+        for waiting in ["sleep", "wait", "watch"] {
+            XCTAssertEqual(ProcessIcon.forProgram(waiting).mark, "hourglass", waiting)
+        }
+        XCTAssertEqual(ProcessIcon.unknown.mark, "binary")
+    }
+
     func test_aVersionedProgram_findsItsUnversionedName() {
         XCTAssertEqual(ProcessIcon.forProgram("python3.12").name, "Python")
         XCTAssertEqual(ProcessIcon.forProgram("Python3").name, "Python", "program names match in any case")

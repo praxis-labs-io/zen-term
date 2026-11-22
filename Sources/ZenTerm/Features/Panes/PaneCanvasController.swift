@@ -123,7 +123,6 @@ final class PaneCanvasController: NSObject {
     var title: String {
         let surface = registry.surface(for: tree.focusedLeaf)
         if let cwd = surface?.currentDirectory ?? cwdByLeaf[tree.focusedLeaf] {
-            if cwd.path == PathDisplay.homePath { return "~" }
             let name = cwd.lastPathComponent
             if !name.isEmpty && name != "/" { return name }
         }

@@ -37,10 +37,27 @@ final class TabBarViewTests: WindowTestCase {
         XCTAssertEqual(badge.process?.name, "Neovim")
         XCTAssertEqual(badge.frame.minX, ChromeMetrics.Spacing.s4)
         XCTAssertEqual(badge.frame.midY, chips[0].bounds.midY, accuracy: 0.5)
-        XCTAssertEqual(
-            chips[0].labelFrameForTesting.minX, ChromeMetrics.Spacing.s4 + badge.frame.width + ChromeMetrics.Spacing.s6)
+        XCTAssertEqual(chips[0].labelFrameForTesting.minX, badge.frame.maxX + ChromeMetrics.Spacing.s4)
         XCTAssertNil(chips[1].processBadgeForTesting, "a tab with no process shows no chip")
         XCTAssertEqual(chips[1].labelFrameForTesting.minX, TabChip.labelInset)
+    }
+
+    func test_aShortTitle_centersTheChipAndLabelTogether_soTheGapStaysTight() throws {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
+        mount(tabBar)
+        var tab = item(1, "a", index: 1, active: true)
+        tab.process = .shell
+        tabBar.render([tab])
+        tabBar.layoutSubtreeIfNeeded()
+
+        let chip = try XCTUnwrap(tabBar.chipsForTesting.first)
+        let badge = try XCTUnwrap(chip.processBadgeForTesting)
+        XCTAssertEqual(chip.labelFrameForTesting.minX, badge.frame.maxX + ChromeMetrics.Spacing.s4)
+        XCTAssertEqual(
+            badge.frame.minX - ChromeMetrics.Spacing.s4,
+            chip.bounds.width - TabChip.labelInset
+                - chip.labelFrameForTesting.minX - chip.textWidth, accuracy: 0.5,
+            "the slack splits evenly either side of chip and label")
     }
 
     func test_aKeptChip_swapsToTheNewProgramsMark() throws {

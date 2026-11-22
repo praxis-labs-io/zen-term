@@ -35,10 +35,11 @@ final class IconBadgeTests: XCTestCase {
         XCTAssertEqual(chip.layer?.cornerRadius, ChromeMetrics.Radius.icon(16))
         XCTAssertEqual(chip.layer?.cornerCurve, .continuous)
         XCTAssertEqual(chip.layer?.borderWidth, ChromeMetrics.Border.width)
-        XCTAssertEqual(chip.edgeForTesting, Theme.current.chrome.fill(alpha: ChromeTheme.divider).cgColor)
+        XCTAssertEqual(chip.edgeForTesting, Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor)
         XCTAssertTrue(chip.hasSheenForTesting)
+        XCTAssertTrue(chip.sheenLitFromTopForTesting, "a layer's y runs up, so the light starts at y = 1")
         XCTAssertEqual(
-            chip.iconFrameForTesting.size, NSSize(width: ChromeMetrics.Icon.xs, height: ChromeMetrics.Icon.xs))
+            chip.iconFrameForTesting.size, NSSize(width: ChromeMetrics.Icon.sm, height: ChromeMetrics.Icon.sm))
     }
 
     func test_aBrandChip_keepsItsBrandsColorsOnEveryTheme_whileItsEdgeFollowsTheTheme() throws {
@@ -55,14 +56,16 @@ final class IconBadgeTests: XCTestCase {
         XCTAssertNotEqual(chip.edgeForTesting, darkEdge, "the edge is what holds the chip apart from this theme")
     }
 
-    func test_aNeutralChip_takesTheThemesRaisedFillAndInk() throws {
+    func test_aNeutralChip_takesTheChipsRaisedFillAndInk_onDarkAndLightThemes() throws {
         let chip = IconBadge(process: .shell, size: .small)
-        Theme.setCurrentForTesting(try lightTheme())
-        chip.reapplyTheme()
-
-        let chrome = Theme.current.chrome
-        XCTAssertEqual(chip.fillForTesting, chrome.raised(.overlay).cgColor)
-        XCTAssertEqual(chip.iconTintForTesting, chrome.ink(.normal))
+        for theme in [Theme.current, try lightTheme()] {
+            Theme.setCurrentForTesting(theme)
+            chip.reapplyTheme()
+            let chrome = Theme.current.chrome
+            XCTAssertEqual(chip.fillForTesting, chrome.chipRaised.nsColor.cgColor)
+            XCTAssertEqual(chip.iconTintForTesting, chrome.ink(.normal))
+            XCTAssertEqual(chip.edgeForTesting, chrome.fill(alpha: ChromeTheme.border).cgColor)
+        }
     }
 
     func test_anArtworkChip_drawsItsMarksOwnColors() throws {
