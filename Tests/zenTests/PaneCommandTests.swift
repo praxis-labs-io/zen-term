@@ -91,6 +91,13 @@ final class PaneCommandTests: XCTestCase {
         XCTAssertTrue(waiting.wait)
         XCTAssertEqual(waiting.timeout, 30)
         XCTAssertEqual(waiting.command, ["claude"])
+
+        let server = try XCTUnwrap(
+            try Zen.parseAsRoot([
+                "pane", "run", "--name", "dev", "--wait", "--output", "ready on", "--", "npm", "run", "dev",
+            ]) as? PaneCommands.Run)
+        XCTAssertEqual(server.output, "ready on")
+        XCTAssertEqual(server.commandLine, "npm run dev")
     }
 
     func test_runSendsOneArgumentAsALineAndQuotesSeveral() throws {
@@ -111,6 +118,9 @@ final class PaneCommandTests: XCTestCase {
         XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--name", "42", "claude"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--split", "left", "claude"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--wait", "--timeout", "601", "claude"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--output", "ready", "npm run dev"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--wait", "--output", "", "npm run dev"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--wait", "--output", "a\nb", "npm run dev"]), 2)
     }
 
     func test_aBadDirectionLineCountOrKeyIsAUsageError() {
