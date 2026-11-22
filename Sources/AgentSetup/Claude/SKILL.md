@@ -41,7 +41,7 @@ zen workspace open ~/code/app
 
 ```sh
 zen worktree list
-zen worktree create my-branch    # opens it as a workspace
+zen worktree create my-branch    # --open also opens it as a workspace
 zen worktree remove my-branch
 ```
 
@@ -59,7 +59,8 @@ zen worktree remove my-branch
 ## Preferences
 
 - For worktree work, use `zen worktree` instead of `git worktree` or
-  EnterWorktree, so the worktree opens as a workspace the user can see.
+  EnterWorktree, so the worktree gets the workspace's files and the user can
+  open it from the workspace picker. Pass `--open` only when asked to open it.
 - Run anything that doesn't exit on its own (a dev server, a watcher, an app
   launcher) in a tab of its own, never in your shell tool's background mode or
   with `&` or `nohup`. The user can watch a tab, and a background job keeps
