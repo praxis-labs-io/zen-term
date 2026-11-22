@@ -413,7 +413,8 @@ Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
 rest print nothing. `zen pane split` splits to the right unless `--dir down` says otherwise.
 `zen pane run [--name] [--task] [--split right|down] [--pane] [--focus] [--keep] [--outlive-parent] <command>` takes
-everything after its options as the command, joined with spaces. A pane argument is a token when it is all digits and a name otherwise.
+everything after its options, and after a `--`, as the command. One argument is a shell line as
+written; several are each quoted, so `-- sh -c 'sleep 1'` arrives as typed. A pane argument is a token when it is all digits and a name otherwise.
 `zen workspace new` takes `--title`, and `zen workspace rename <title>` takes the workspace
 as `--workspace`. `zen worktree create <branch>` takes `--base default|current` or `--existing`, not both.
 `zen worktree remove` takes a folder when it starts with `/`, `~` or `.`, and a branch

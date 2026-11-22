@@ -39,8 +39,25 @@ struct PaneCommands: ParsableCommand {
         @Argument(parsing: .captureForPassthrough, help: "The command to run, in a shell.")
         var command: [String] = []
 
+        // Passthrough capture keeps a `--` that separates the command from zen's options.
+        var commandLine: String {
+            let words = command.first == "--" ? Array(command.dropFirst()) : command
+            return words.count == 1 ? words[0] : words.map(Self.shellWord).joined(separator: " ")
+        }
+
+        private static let shellSafe = CharacterSet(charactersIn: "-_./=:,+@%")
+
+        // The app runs the line through the user's shell, so each argument is quoted to arrive whole.
+        private static func shellWord(_ word: String) -> String {
+            let plain = word.unicodeScalars.allSatisfy {
+                $0.isASCII && (shellSafe.contains($0) || $0.properties.isAlphabetic || ("0"..."9").contains($0))
+            }
+            guard word.isEmpty || !plain else { return word }
+            return "'" + word.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        }
+
         func validate() throws {
-            if command.isEmpty { throw ValidationError("pane run needs a command to run.") }
+            if commandLine.isEmpty { throw ValidationError("pane run needs a command to run.") }
             if let name, !ControlAddress.Pane.isValidName(name) {
                 throw ValidationError("--name needs at least one character that is not a digit or a space.")
             }
@@ -48,7 +65,7 @@ struct PaneCommands: ParsableCommand {
 
         func run() throws {
             let args = ControlArgs(
-                cmd: command.joined(separator: " "), focus: focus, pane: pane, name: name, task: task, split: split,
+                cmd: commandLine, focus: focus, pane: pane, name: name, task: task, split: split,
                 keep: keep, outliveParent: outliveParent)
             var client = try connection.client()
             client.replyTimeout = time_t(ControlWire.longestReplyWait)
