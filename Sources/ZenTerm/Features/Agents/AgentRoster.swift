@@ -20,7 +20,7 @@ final class AgentRoster {
     static let unnamed = "agent"
 
     private(set) var agents: [SurfaceID: Agent] = [:]
-    private var busy: Set<SurfaceID> = []
+    private var busy = BusyFallWatch()
 
     static func agentName(launching command: String, listed: [String]) -> String? {
         guard let program = program(of: command) else { return nil }
@@ -66,18 +66,13 @@ final class AgentRoster {
         agents[id]?.message = message
     }
 
-    // Only a fall counts as an exit: a surface polled before its program starts has not been busy yet.
     func trackBusy(_ id: SurfaceID, _ isBusy: Bool) {
-        guard agents[id] != nil else { return }
-        if isBusy {
-            busy.insert(id)
-        } else if busy.remove(id) != nil {
-            agents[id]?.hasExited = true
-        }
+        guard agents[id] != nil, busy.fell(id, isBusy: isBusy) else { return }
+        agents[id]?.hasExited = true
     }
 
     func drop(_ id: SurfaceID) {
         agents[id] = nil
-        busy.remove(id)
+        busy.forget(id)
     }
 }

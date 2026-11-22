@@ -55,6 +55,9 @@ final class WindowController: NSObject {
     private var fontSizeDismissal: DispatchWorkItem?
     // The poll can see an agent exit before its result arrives, and only the result can tell a crash.
     private var exitsAwaitingResult: Set<SurfaceID> = []
+    private var processBusy = BusyFallWatch()
+    private var exitedProcesses: Set<SurfaceID> = []
+    private var listedProcesses: Set<SurfaceID> = []
 
     func showFontSize(_ text: String) {
         if let card = fontSizeCard {
@@ -2431,6 +2434,7 @@ final class WindowController: NSObject {
     func updateRecord(pane token: Int, _ change: (inout PaneRecord) -> Void) {
         guard let (tab, _) = pane(token: token) else { return }
         controller(tab)?.updateRecord(pane: token, change)
+        renderAgents()
     }
 
     func deliverFirstTask(_ task: String, toPane token: Int, settle: @escaping (FirstTask) -> Void) {
@@ -3448,6 +3452,7 @@ final class WindowController: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.workspace(of: id) != nil else { return }
             if let surface { self.paneWaits.commandFinished(surface, exitCode: result.exitCode) }
+            if let surface, self.listedProcesses.contains(surface) { self.processFinished(surface) }
             let crashedAgent = surface.map { self.agentExited($0, in: id, result: result) } ?? false
             guard !crashedAgent, !self.isSeen(surface, in: id),
                 result.duration >= Self.commandCompletionThreshold,
@@ -3489,7 +3494,10 @@ final class WindowController: NSObject {
                 self.agents.identify(surface, name: name, source: .signal)
                 joined = true
             }
-            guard self.agents.contains(surface) else { return }
+            guard self.agents.contains(surface) else {
+                if self.listedProcesses.contains(surface) { self.renderAgents() }
+                return
+            }
             let previous = self.agentStates.title(of: surface)
             self.agentStates.noteTitle(title, of: surface)
             if self.attention.agentWait(of: surface) != nil, self.agentStates.status(of: surface) == nil,
@@ -3850,7 +3858,25 @@ final class WindowController: NSObject {
             if !agent.hasExited, agents.agents[id]?.hasExited == true { exitsAwaitingResult.insert(id) }
             if agentStates.isHoldingIdle(id) { deriveAgentState(id) }
         }
-        if !settling.isEmpty || agents.agents != before { renderAgents() }
+        let processesExited = trackProcessExits()
+        if !settling.isEmpty || agents.agents != before || processesExited { renderAgents() }
+    }
+
+    private func processFinished(_ surface: SurfaceID) {
+        exitedProcesses.insert(surface)
+        renderAgents()
+    }
+
+    private func trackProcessExits() -> Bool {
+        let parented = panesBySurface().values.filter { $0.record.parent != nil }
+        let ids = Set(parented.map(\.surfaceID))
+        processBusy.keep(only: ids)
+        exitedProcesses.formIntersection(ids)
+        let fell = parented.filter {
+            agents.agents[$0.surfaceID] == nil && processBusy.fell($0.surfaceID, isBusy: $0.surface.isBusy)
+        }
+        exitedProcesses.formUnion(fell.map(\.surfaceID))
+        return !fell.isEmpty
     }
 
     private func terminalSurface(_ id: SurfaceID) -> TerminalSurface? {
@@ -3869,15 +3895,17 @@ final class WindowController: NSObject {
         {
             agents.drop(id)
             agentStates.drop(id)
+            exitedProcesses.insert(id)
         }
         let items = agentItems()
+        listedProcesses = Set(items.filter { !$0.showsState }.map(\.id))
         sidebar.renderAgents(items)
         renderTabChips(agents: items)
     }
 
     private func agentItems() -> [SidebarAgentItem] {
-        typealias Ranked = (item: SidebarAgentItem, since: Date?, position: [Int])
-        let located = agents.agents.compactMap { id, agent -> Ranked? in
+        let panes = panesBySurface()
+        let agentRows = agents.agents.compactMap { id, agent -> AgentFamilies.Member? in
             guard let place = agentPlace(id) else { return nil }
             let wait = attention.agentWait(of: id)
             let state = AttentionTone(wait: wait, working: attention.isWorking(id))
@@ -3885,17 +3913,41 @@ final class WindowController: NSObject {
             let paneTitle =
                 agent.hasExited ? nil : AgentRules.taskTitle(fromPane: agentStates.title(of: id), agentName: agent.name)
             let title = agentStates.status(of: id)?.title ?? paneTitle ?? agent.name ?? AgentRoster.unnamed
-            let item = SidebarAgentItem(
+            var item = SidebarAgentItem(
                 id: id, state: state, summary: title, detail: place.name, message: message)
-            return (item, attention.agentSince(of: id), place.position)
+            item.mark = AgentRules.brandMark(for: agent.name)
+            let pane = panes[id]
+            return AgentFamilies.Member(
+                item: item, since: attention.agentSince(of: id), position: place.position, token: pane?.token,
+                parent: pane?.record.parent, isAgent: true)
         }
-        return located.sorted { a, b in
-            if a.item.state.rank != b.item.state.rank { return a.item.state.rank < b.item.state.rank }
-            if a.item.state.isWaiting, a.since != b.since {
-                return (a.since ?? .distantFuture) < (b.since ?? .distantFuture)
+        let processRows = panes.values.compactMap { pane -> AgentFamilies.Member? in
+            guard pane.record.parent != nil, agents.agents[pane.surfaceID] == nil,
+                !exitedProcesses.contains(pane.surfaceID),
+                let place = agentPlace(pane.surfaceID)
+            else { return nil }
+            let title = pane.record.name ?? (pane.surface.title.isEmpty ? Self.unnamedProcess : pane.surface.title)
+            let item = SidebarAgentItem(
+                id: pane.surfaceID, state: .idle, summary: title, detail: place.name, message: nil)
+            return AgentFamilies.Member(
+                item: item, since: nil, position: place.position, token: pane.token, parent: pane.record.parent,
+                isAgent: false)
+        }
+        return AgentFamilies.arrange(agentRows + processRows)
+    }
+
+    private static let unnamedProcess = "process"
+
+    private func panesBySurface() -> [SurfaceID: PaneHandle] {
+        var panes: [SurfaceID: PaneHandle] = [:]
+        for workspace in workspaces {
+            for tab in workspace.tabIDs {
+                for pane in workspace.controller(tab)?.paneHandles ?? [] {
+                    panes[pane.surfaceID] = pane
+                }
             }
-            return a.position.lexicographicallyPrecedes(b.position)
-        }.map(\.item)
+        }
+        return panes
     }
 
     // Sidebar position, so rows sharing a state keep still: workspace, tab, then the surface within it.

@@ -12,6 +12,15 @@ enum AgentRules {
         return AgentRoster.knownAgents.first { name.contains($0) }
     }
 
+    static func brandMark(for agentName: String?) -> String? {
+        guard let name = agentName?.lowercased(), !name.isEmpty else { return nil }
+        return brandMarks.first { name.contains($0.program) }?.mark
+    }
+
+    // Codex is OpenAI's, so its program name is not its mark's.
+    private static let brandMarks: [(program: String, mark: String)] =
+        [("codex", "openai")] + ["claude", "gemini", "copilot", "opencode", "ollama"].map { ($0, $0) }
+
     static func agentName(matching title: String) -> String? {
         identifiers.first { $0.match.matches(title) }?.name
     }
