@@ -45,7 +45,10 @@ struct PaneCommands: ParsableCommand {
         @Option(help: "With --wait, seconds to wait before answering timeout, at most \(ControlWire.longestPaneWait).")
         var timeout: Int = ControlWire.defaultPaneWait
 
-        @Option(help: "With --wait, answer once this text appears in the pane's output, from the moment it opens.")
+        @Option(
+            help: ArgumentHelp(
+                "With --wait, answer once this text appears in the pane's output, matched as the pane opens, "
+                    + "or with --task, as the task is sent."))
         var output: String?
 
         @Argument(parsing: .captureForPassthrough, help: "The command to run, in a shell.")
