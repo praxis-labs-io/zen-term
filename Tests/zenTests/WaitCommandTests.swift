@@ -14,7 +14,7 @@ final class WaitCommandTests: XCTestCase {
 
         let plain = try XCTUnwrap(try Zen.parseAsRoot(["wait", "34"]) as? WaitCommand)
         XCTAssertNil(plain.output)
-        XCTAssertEqual(plain.timeout, ControlWire.defaultPaneWait)
+        XCTAssertEqual(plain.timeout, 90)
     }
 
     func test_theReplyDeadlineOutlastsTheTimeoutAndTheAppsOwnMargin() {

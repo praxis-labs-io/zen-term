@@ -11,8 +11,8 @@ public enum ControlWire {
     /// The longest, in seconds, the app takes to answer a command that does not set its own deadline.
     public static let longestReplyWait = 300
 
-    /// The seconds `pane.wait` holds when the request gives no `timeout`.
-    public static let defaultPaneWait = 180
+    /// The seconds `pane.wait` holds when the request gives no `timeout`, under the 2-minute default of agents' shell tools.
+    public static let defaultPaneWait = 90
 
     /// The most seconds a `pane.wait` may hold.
     public static let longestPaneWait = 600

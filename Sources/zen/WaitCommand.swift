@@ -22,7 +22,10 @@ struct WaitCommand: ParsableCommand {
     @Option(help: "Answer once this text appears in output printed after the wait began.")
     var output: String?
 
-    @Option(help: "Seconds to wait before answering timeout, at most \(ControlWire.longestPaneWait).")
+    @Option(
+        help: ArgumentHelp(
+            "Seconds to wait before answering timeout, at most \(ControlWire.longestPaneWait). "
+                + "The default answers under the 2-minute default of agents' shell tools."))
     var timeout: Int = ControlWire.defaultPaneWait
 
     func validate() throws {

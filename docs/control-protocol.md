@@ -312,7 +312,7 @@ Returns one pane or drawer in the shape `list` uses, without the tree around it.
 
 ### `pane.wait`
 
-`args`: `pane` (required), `output`, `timeout` (seconds, 1 to 600, 180 by default).
+`args`: `pane` (required), `output`, `timeout` (seconds, 1 to 600, 90 by default, under the 2-minute default of agents' shell tools).
 
 Holds until something happens to the pane, then answers once with why:
 
