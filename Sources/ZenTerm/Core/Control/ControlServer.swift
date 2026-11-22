@@ -3,13 +3,18 @@ import ControlProtocol
 import Foundation
 
 typealias ControlReply = Result<any ControlPayload, ControlError>
+typealias ControlRespond =
+    @MainActor (ControlRequest, ControlHangup, @escaping @MainActor (ControlReply) -> Void) -> Void
 
 final class ControlServer {
     static var socketPath: String { SocketListener.path(prefix: ControlEndpoint.fileNamePrefix) }
 
     static let answerTimeout = TimeInterval(ControlWire.longestReplyWait)
 
-    private let respond: @MainActor (ControlRequest, @escaping @MainActor (ControlReply) -> Void) -> Void
+    // How often a held request checks that its client is still connected.
+    private static let hangupCheck: TimeInterval = 0.5
+
+    private let respond: ControlRespond
     private let idleTimeout: time_t
     private let answerTimeout: TimeInterval
     private let connections = DispatchQueue(
@@ -19,7 +24,7 @@ final class ControlServer {
     init(
         path: String = ControlServer.socketPath, idleTimeout: time_t = 30,
         answerTimeout: TimeInterval = ControlServer.answerTimeout,
-        respond: @escaping @MainActor (ControlRequest, @escaping @MainActor (ControlReply) -> Void) -> Void
+        respond: @escaping ControlRespond
     ) {
         self.respond = respond
         self.idleTimeout = idleTimeout
@@ -59,7 +64,7 @@ final class ControlServer {
                 let line = Data(pending[pending.startIndex..<newline])
                 pending.removeSubrange(pending.startIndex...newline)
                 guard line.count <= ControlWire.maxLineLength else { return refuseOverlongLine(on: fd) }
-                guard UnixSocket.writeAll(reply(to: line), to: fd) else { return }
+                guard let answer = reply(to: line, on: fd), UnixSocket.writeAll(answer, to: fd) else { return }
             }
             if pending.count > ControlWire.maxLineLength { return refuseOverlongLine(on: fd) }
         }
@@ -70,18 +75,23 @@ final class ControlServer {
         _ = UnixSocket.writeAll(Self.encoded(.failure(tooLong), id: nil), to: fd)
     }
 
-    private func reply(to line: Data) -> Data {
+    private func reply(to line: Data, on fd: Int32) -> Data? {
         switch ControlRequest.decode(line) {
         case .failure(let rejection):
             Log.info("ControlSocket: rejected a request, \(rejection.error.code.rawValue)", category: .control)
             return Self.encoded(.failure(rejection.error), id: rejection.id)
         case .success(let request):
             Log.info("ControlSocket: \(request.cmd.rawValue) id=\(request.id)", category: .control)
-            return Self.encoded(applyOnMain(request), id: request.id)
+            return applyOnMain(request, on: fd).map { Self.encoded($0, id: request.id) }
         }
     }
 
-    private func applyOnMain(_ request: ControlRequest) -> ControlReply {
+    private func deadline(for request: ControlRequest) -> TimeInterval {
+        request.cmd == .paneWait ? TimeInterval(ControlWire.answerWait(for: request.cmd, request.args)) : answerTimeout
+    }
+
+    // Nil when the client hung up first, which leaves nobody to answer.
+    private func applyOnMain(_ request: ControlRequest, on fd: Int32) -> ControlReply? {
         final class Answer: @unchecked Sendable {
             private let lock = NSLock()
             private var reply: ControlReply?
@@ -96,19 +106,36 @@ final class ControlServer {
         }
         let answer = Answer()
         let answered = DispatchSemaphore(value: 0)
+        let hangup = ControlHangup()
         DispatchQueue.main.async { [respond] in
             MainActor.assumeIsolated {
-                respond(request) { reply in
+                respond(request, hangup) { reply in
                     if answer.settle(reply) { answered.signal() }
                 }
             }
         }
-        _ = answered.wait(timeout: .now() + answerTimeout)
+        let deadline = Date().addingTimeInterval(deadline(for: request))
+        while answer.settled == nil, deadline.timeIntervalSinceNow > 0 {
+            let slice = min(Self.hangupCheck, deadline.timeIntervalSinceNow)
+            if answered.wait(timeout: .now() + slice) == .success { break }
+            guard Self.hasHungUp(fd) else { continue }
+            Log.info("ControlSocket: \(request.cmd.rawValue) id=\(request.id) lost its client", category: .control)
+            if answer.settle(.failure(ControlError(.failed, "The client hung up."))) {
+                DispatchQueue.main.async { hangup.hangUp() }
+            }
+            return nil
+        }
         guard let reply = answer.settled else {
             Log.info("ControlSocket: \(request.cmd.rawValue) id=\(request.id) went unanswered", category: .control)
             return .failure(ControlError(.failed, "ZenTerm did not answer."))
         }
         return reply
+    }
+
+    // A peek that reads end-of-file means the peer closed; pending bytes are its next request.
+    private static func hasHungUp(_ fd: Int32) -> Bool {
+        var byte: UInt8 = 0
+        return recv(fd, &byte, 1, MSG_PEEK | MSG_DONTWAIT) == 0
     }
 
     private static func encoded(_ reply: ControlReply, id: Int?) -> Data {

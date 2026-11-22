@@ -258,6 +258,8 @@ final class WindowController: NSObject {
 
     var worktreeRemovals = WorktreeRemovalTracker()
 
+    var paneWaits = PaneWaits()
+
     func tabCount(atPath path: URL) -> Int {
         allTabIDs.filter { isClosedByRemoval($0, atPath: path) }.count
     }
@@ -3087,6 +3089,7 @@ final class WindowController: NSObject {
             ids.forEach { self?.attention.register($0, tab: id) }
         }
         c.onSurfacesReleased = { [weak self] ids in
+            self?.paneWaits.panesClosed(ids)
             self?.workspace(of: id)?.connection?.release(ids)
             ids.forEach {
                 self?.attention.release($0)
@@ -3284,6 +3287,7 @@ final class WindowController: NSObject {
     private func commandFinished(surface: SurfaceID?, id: TabID, result: TerminalCommandResult) {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.workspace(of: id) != nil else { return }
+            if let surface { self.paneWaits.commandFinished(surface, exitCode: result.exitCode) }
             let crashedAgent = surface.map { self.agentExited($0, in: id, result: result) } ?? false
             guard !crashedAgent, !self.isSeen(surface, in: id),
                 result.duration >= Self.commandCompletionThreshold,
@@ -3372,6 +3376,7 @@ final class WindowController: NSObject {
                 self.raiseAsk(surface)
             }
             self.renderAgents()
+            if previous?.state == .working, status?.state != .working { self.paneWaits.agentStopped(surface) }
         }
     }
 

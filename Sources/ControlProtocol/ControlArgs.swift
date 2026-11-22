@@ -22,12 +22,16 @@ public struct ControlArgs: Codable, Equatable, Sendable {
     public var existing: Bool?
     /// A keymap action's config name, like `toggle_sidebar`.
     public var name: String?
+    /// Text `pane.wait` answers on once it appears in the pane's output.
+    public var output: String?
+    /// Seconds `pane.wait` holds before it answers `timeout`.
+    public var timeout: Int?
 
     public init(
         workspace: String? = nil, path: String? = nil, tab: String? = nil, cwd: String? = nil, cmd: String? = nil,
         title: String? = nil, focus: Bool? = nil, force: Bool? = nil, pane: Int? = nil, dir: PaneDirection? = nil,
         text: String? = nil, enter: Bool? = nil, lines: Int? = nil, branch: String? = nil, base: String? = nil,
-        existing: Bool? = nil, name: String? = nil
+        existing: Bool? = nil, name: String? = nil, output: String? = nil, timeout: Int? = nil
     ) {
         self.workspace = workspace
         self.path = path
@@ -46,5 +50,7 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         self.base = base
         self.existing = existing
         self.name = name
+        self.output = output
+        self.timeout = timeout
     }
 }

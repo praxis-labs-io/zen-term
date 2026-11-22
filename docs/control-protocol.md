@@ -90,7 +90,9 @@ window with it.
 A worktree removal's refusal adds `files`, its uncommitted and untracked files, and
 `lostCommits`, the commits on it that no branch or other worktree holds.
 
-Requests are decoded off the main thread, applied on it, and written back off it.
+Requests are decoded off the main thread, applied on it, and written back off it. The app
+answers within 5 minutes, except `pane.wait`, which answers within its `timeout` plus 5 seconds.
+A client that closes its connection before the answer ends a `pane.wait`.
 
 ## Addressing
 
@@ -308,6 +310,33 @@ Returns one pane or drawer in the shape `list` uses, without the tree around it.
  "agent":{"name":"claude","state":"working","status":"working","msg":"Reading x.swift"}}
 ```
 
+### `pane.wait`
+
+`args`: `pane` (required), `output`, `timeout` (seconds, 1 to 600, 180 by default).
+
+Holds until something happens to the pane, then answers once with why:
+
+| `reason`  | When |
+| --------- | ---- |
+| `stopped` | The agent's `status` left `working`. Without `output` only. |
+| `exited`  | Its program exited, or the pane closed. |
+| `output`  | `output` appeared in text printed after the wait began. |
+| `message` | A `pane.send` reached the caller's own pane. |
+| `timeout` | Nothing happened within `timeout`. A check-in, not a failure: wait again. |
+
+```json
+{"reason":"exited","exitCode":1,"text":"$ make test\n1 test failed",
+ "pane":{"token":34,"title":"make test","busy":false,...}}
+```
+
+- `pane` is the pane as `pane.get` reports it, or for a pane that closed, as it was last read.
+- The program is the pane's foreground job, an agent included. A pane at a shell prompt waits
+  for the next command to finish. An agent that sends no `status` waits as a plain program does.
+- `exitCode` is the shell's report through its integration, and is absent when the shell
+  integration is off or the pane closed. `text` is the last 40 lines while the pane is open.
+- `output` is matched on the screen's rows, without escapes. Text that scrolls more than a
+  screen past between checks, a quarter second apart, can be missed.
+
 ### `worktree.list`
 
 `args`: `workspace`.
@@ -372,7 +401,8 @@ lists every action.
 
 `zen hello` and `zen list` print the result as JSON. `zen list --pretty` prints an
 indented tree instead. Exit codes: 0 ok, 1 the app answered with an error or didn't
-answer within 10 seconds (5 minutes for `worktree create` and `worktree remove`), 2 usage,
+answer within 10 seconds (5 minutes for `worktree create` and `worktree remove`, and the
+`--timeout` plus 10 seconds for `zen wait`), 2 usage,
 3 no instance or the connection failed.
 
 `zen --version` prints the version of the ZenTerm.app it sits in, through a symlink too, and
@@ -383,7 +413,8 @@ versions.
 Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close`,
 `zen tab new|select|rename|close`, `zen pane split|focus|close|send|read|get` and
 `zen worktree list|create|remove`, with `--focus` and `--force` for those fields.
-`zen action <name>` runs a keymap action. A command
+`zen action <name>` runs a keymap action. `zen wait <pane>` waits on a pane, taking
+`--output` and `--timeout`, and prints the answer as JSON, exiting 0 for every reason. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
 rest print nothing. `zen pane get` takes the pane as its argument, this pane by default.
 `zen pane split` splits to the right unless `--dir down` says otherwise.
