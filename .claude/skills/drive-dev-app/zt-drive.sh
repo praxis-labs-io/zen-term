@@ -211,7 +211,7 @@ cmd_launch() {
     [ -x bin/run ] || die "run this from the worktree root (no bin/run here)"
     local where pane
     if [ -n "${ZEN_CONTROL_SOCK:-}" ] && command -v zen >/dev/null 2>&1 \
-        && pane=$(zen tab new --cwd "$PWD" --cmd bin/run | sed -n 's/.*"pane" *: *\([0-9]*\).*/\1/p') \
+        && pane=$(zen tab new --cwd "$PWD" --cmd "bin/run && exit" | sed -n 's/.*"pane" *: *\([0-9]*\).*/\1/p') \
         && [ -n "$pane" ]; then
         note "launching bin/run in a ZenTerm tab (pane $pane)"
         where="zen pane read --pane $pane --lines 40"
