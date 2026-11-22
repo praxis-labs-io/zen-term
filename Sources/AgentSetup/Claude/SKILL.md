@@ -66,10 +66,11 @@ zen worktree remove my-branch
   your session reading as working after your turn ends.
 
   ```sh
-  zen tab new --cmd "npm run dev"        # prints {"pane":34,"tab":"w1.t7"}
-  zen pane read --pane 34 --lines 40     # its output, instead of restarting it
+  zen tab new --cmd "npm run dev && exit"  # prints {"pane":34,"tab":"w1.t7"}
+  zen pane read --pane 34 --lines 40       # its output, instead of restarting it
   ```
 
-  Leave it running when your turn ends unless asked to stop it. When the
-  command exits, its tab stays open at a shell prompt.
+  End the command with `&& exit`: the tab closes when it ends cleanly and stays
+  open on a failure, so the error is still there to read. Leave it running when
+  your turn ends unless asked to stop it.
 - Close only what you opened.
