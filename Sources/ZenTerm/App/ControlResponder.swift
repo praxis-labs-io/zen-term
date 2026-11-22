@@ -302,7 +302,7 @@ struct ControlResponder {
     }
 
     static func stopping(_ panes: [ListResult.Pane], _ floats: [String]) -> String {
-        let running = panes.map { $0.title.isEmpty ? "pane \($0.token)" : $0.title } + floats
+        let running = panes.map { $0.name ?? ($0.title.isEmpty ? "pane \($0.token)" : $0.title) } + floats
         return running.isEmpty ? "stop what it is running" : "stop \(CloseWarning.list(running))"
     }
 }

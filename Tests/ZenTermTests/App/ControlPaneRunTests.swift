@@ -373,11 +373,14 @@ final class ControlPaneRunTests: WindowTestCase {
         let c = makeWindow()
         let family = try family(in: c)
         try surface(family.grandchild).isBusy = true
+        try surface(family.grandchild).title = "swift test --parallel"
 
         let refusal = try XCTUnwrap(error(try answer(.paneClose, ControlArgs(pane: .token(family.parent)))))
 
         XCTAssertEqual(refusal.code, .refused)
+        XCTAssertEqual(refusal.message, "Closing pane \(family.parent) would stop tests.")
         XCTAssertEqual(refusal.details?.panes.map(\.token), [family.grandchild])
+        XCTAssertEqual(refusal.details?.panes.map(\.name), ["tests"])
         XCTAssertTrue(isOpen(family.parent, in: c))
 
         _ = try answer(.paneClose, ControlArgs(force: true, pane: .token(family.parent)))
@@ -388,6 +391,7 @@ final class ControlPaneRunTests: WindowTestCase {
         let c = makeWindow()
         let family = try family(in: c)
         try surface(family.child).isBusy = true
+        try surface(family.child).title = "Reviewing x.swift"
         XCTAssertTrue(c.focusedSurfaceForTesting === (try surface(family.parent)))
 
         c.handle(.closePane)
@@ -511,6 +515,7 @@ final class ControlPaneRunTests: WindowTestCase {
         let opened = try XCTUnwrap(try answer(.tabNew, ControlArgs(cwd: worktree.path)).get() as? TabResult)
         let child = try run(ControlArgs(cmd: "claude", pane: .token(lead), name: "review"), from: opened.pane).pane
         try surface(child).isBusy = true
+        try surface(child).title = "Reviewing x.swift"
 
         let closes = c.closedByRemoval(atPath: worktree)
         let card = WorktreeRemovalMessage.items(
