@@ -7,7 +7,7 @@ struct WaitCommand: ParsableCommand {
         commandName: "wait",
         abstract:
             "Wait until a pane's agent stops, its program exits, text appears, or this pane is sent something, "
-            + "and print why as JSON.")
+            + "and print why as JSON. --children waits on the helpers this pane started instead.")
 
     // The app answers `timeout` at the deadline and gives up past its own margin; the client outwaits both.
     static func replyTimeout(for args: ControlArgs) -> time_t {
@@ -17,7 +17,13 @@ struct WaitCommand: ParsableCommand {
     @OptionGroup var connection: ConnectionOptions
 
     @Argument(help: "A pane or drawer token, or a pane's name.")
-    var pane: ControlAddress.Pane
+    var pane: ControlAddress.Pane?
+
+    @Option(
+        help: ArgumentHelp(
+            "Wait on the panes this pane started with zen pane run, in place of a pane: any answers on the first "
+                + "one's news, all once none is working."))
+    var children: WaitChildren?
 
     @Option(help: "Answer once this text appears in output printed after the wait began.")
     var output: String?
@@ -29,6 +35,12 @@ struct WaitCommand: ParsableCommand {
     var timeout: Int = ControlWire.defaultPaneWait
 
     func validate() throws {
+        switch (pane, children) {
+        case (nil, nil): throw ValidationError("Name a pane, or pass --children any|all.")
+        case (.some, .some): throw ValidationError("Name a pane or pass --children, not both.")
+        default: break
+        }
+        if children == .all, output != nil { throw ValidationError("--output takes a pane or --children any.") }
         guard (1...ControlWire.longestPaneWait).contains(timeout) else {
             throw ValidationError("--timeout must be 1 to \(ControlWire.longestPaneWait).")
         }
@@ -39,7 +51,7 @@ struct WaitCommand: ParsableCommand {
     }
 
     func run() throws {
-        let args = ControlArgs(pane: pane, output: output, timeout: timeout)
+        let args = ControlArgs(pane: pane, output: output, timeout: timeout, children: children)
         var client = try connection.client()
         client.replyTimeout = Self.replyTimeout(for: args)
         print(try JSONOutput.text(client.send(.paneWait, args, expecting: WaitResult.self)))

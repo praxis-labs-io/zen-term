@@ -382,7 +382,7 @@ Returns one pane or drawer in the shape `list` uses, without the tree around it.
 
 ### `pane.wait`
 
-`args`: `pane` (required), `output`, `timeout` (seconds, 1 to 600, 90 by default, under the 2-minute default of agents' shell tools).
+`args`: `pane` or `children` (`any` or `all`), `output`, `timeout` (seconds, 1 to 600, 90 by default, under the 2-minute default of agents' shell tools).
 
 Holds until something happens to the pane, then answers once with why:
 
@@ -403,10 +403,40 @@ Holds until something happens to the pane, then answers once with why:
 - The program is the pane's foreground job, an agent included. A pane at a shell prompt waits
   for the next command to finish. An agent that sends no `status` waits as a plain program does.
 - `exitCode` is the shell's report through its integration, and is absent when the shell
-  integration is off or the pane closed. `text` is the last 40 lines while the pane is open.
+  integration is off. `text` is the last 40 lines. Both are absent for a pane that closed,
+  unless `pane.run` opened it.
 - `output` is matched within one line of the screen's rows, without escapes, so a newline in it
   is a `bad_request`. Text that scrolls more than a
   screen past between checks, a quarter second apart, can be missed.
+- A pane `pane.run` opened closes when its program exits, and a wait on it still answers
+  `exited` with the `exitCode` and `text` read as it closed, also when the wait begins after.
+  The app keeps that for the 64 most recent such exits; an older one is `not_found`.
+
+`children` waits on the panes `caller.pane` started with `pane.run`, as they are when the wait
+begins, and takes no `pane`. Each child is watched as a wait on its pane would be.
+
+| `children` | Answers |
+| ---------- | ------- |
+| `any`      | On the first child's news, with that child's `reason`: `stopped`, `exited`, or `output`. |
+| `all`      | `stopped` once none is working, at once when none is. |
+
+A child is working while its agent's `status` is `working`, or, with no `status`, while the app
+reads its agent as working; a child that runs no agent while its program runs. A child whose
+first task was sent counts as working until its `status` moves past `idle` or `done`, so `all`
+does not answer before it starts on the task. `message` and `timeout` answer as they do for a
+pane, and `output` is a `bad_request` with `all`.
+
+```json
+{"reason":"exited","children":[
+  {"reason":"exited","exitCode":0,"text":"$ make test\nall passed","pane":{"token":34,...}},
+  {"pane":{"token":35,"agent":{"name":"claude","state":"working","status":"working"},...}}]}
+```
+
+`children` lists every child the wait watched, each with its `pane` as `pane.get` reports it, or
+as it was last read once it closed. A child's `reason`, `exitCode` and `text` are its own news
+during the wait, absent when it had none. The answer has no `pane`. A caller with no children
+gets `{"reason":"no_children","children":[]}` at once. A request without `caller.pane` is a
+`bad_request`.
 
 ### `worktree.list`
 

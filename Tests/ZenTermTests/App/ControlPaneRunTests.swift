@@ -534,7 +534,7 @@ final class ControlPaneRunTests: WindowTestCase {
         waitUntil(reply != nil, "the wait to answer", timeout: 3)
         let waited = try XCTUnwrap(try XCTUnwrap(reply).get() as? WaitResult)
         XCTAssertEqual(waited.reason, .timeout)
-        XCTAssertEqual(waited.pane.token, helper)
-        XCTAssertEqual(waited.pane.name, "review")
+        XCTAssertEqual(waited.pane?.token, helper)
+        XCTAssertEqual(waited.pane?.name, "review")
     }
 }
