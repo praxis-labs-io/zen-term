@@ -253,6 +253,20 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   Pane verbs take a token: `PaneCanvasController.split(token:axis:command:)` and
   `close(token:)` leave focus on the pane that had it, and put back the keyboard focus the
   rebuild drops.
+- **A pane `pane.run` opened carries a `PaneRecord`** (name, parent token, first-task result)
+  per leaf in `PaneCanvasController`, beside its surface and not in `AgentRoster`, so it
+  outlives the agent leaving the roster. It opens through the same `openTab` and `split` as
+  `tab.new` and `pane.split`, with a `PaneProgram` whose `exitClosesPane` drops the shell that
+  `ShellLaunch.program` would `exec` after the command, so the child exit closes the pane.
+  Before it closes, the canvas hands the window a `LaunchedPaneExit`: the exit code from the
+  program's `D` mark, which lands before the child exit, and its last 40 lines. The window
+  keeps the newest 64 in `launchedPaneExits`. `FirstTaskDelivery`, one per window, holds a
+  run's task until the surface's first OSC 7501 report, its release, or 60 seconds.
+  Every pane and drawer token a tab releases reaches the window (`onPaneTokensReleased`),
+  which closes that token's children on the next main-queue turn, since the release lands
+  mid-rebuild of a canvas that may hold a child. A child's own release cascades the same way.
+  Close stakes and confirmations count the children first (`childStakes`), including whether
+  closing them empties the window. `list` drops a `parent` that `NavRegistry` no longer holds.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
   workspace costs nothing beyond an inactive tab.
 - **Tab ids are minted by the window**, not by the workspace, so they stay unique across a
@@ -860,8 +874,9 @@ Tools opens a system prompt.
   The wrapping `-c` shell runs no prompt hook, so without them the agent's exit reports
   nothing and an agent that exits before the first busy poll sits in the Agents list
   forever. Both marks are needed: libghostty drops a `D` that no `C` preceded. The `D`
-  mark carries `$?`, or `$status` under fish. Non-agent programs stay unmarked, or every
-  workspace program would reach `commandFinished` and toast on exit.
+  mark carries `$?`, or `$status` under fish. A program whose exit closes its pane is marked
+  too, for its exit code. Other programs stay unmarked, or every workspace program would
+  reach `commandFinished` and toast on exit.
 - **`ApplePressAndHoldEnabled` is registered false at launch**, or the accent popup leaks
   keys into the shell.
 - **`GitRepo.repoRoot` stops when the path stops shrinking**, not on `parent == dir`, and

@@ -81,7 +81,8 @@ public struct ListResult: ControlPayload, Equatable {
     }
 
     /// One pane or drawer, as `list` and `pane.get` report it. `drawer` is set for a drawer and absent for a pane in
-    /// the tab's split tree; `process` is absent on a host's pane and when the program cannot be read.
+    /// the tab's split tree; `process` is absent on a host's pane and when the program cannot be read. `name`,
+    /// `parent` and `firstTask` are set for a pane `pane.run` opened: `parent` is the live pane that ran it.
     public struct Pane: ControlPayload, Equatable {
         public let token: Int
         public let drawer: Drawer?
@@ -90,10 +91,13 @@ public struct ListResult: ControlPayload, Equatable {
         public let busy: Bool
         public let process: Process?
         public let agent: Agent?
+        public let name: String?
+        public let parent: Int?
+        public let firstTask: FirstTask?
 
         public init(
             token: Int, drawer: Drawer?, title: String, cwd: String?, busy: Bool, process: Process? = nil,
-            agent: Agent?
+            agent: Agent?, name: String? = nil, parent: Int? = nil, firstTask: FirstTask? = nil
         ) {
             self.token = token
             self.drawer = drawer
@@ -102,6 +106,14 @@ public struct ListResult: ControlPayload, Equatable {
             self.busy = busy
             self.process = process
             self.agent = agent
+            self.name = name
+            self.parent = parent
+            self.firstTask = firstTask
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case token, drawer, title, cwd, busy, process, agent, name, parent
+            case firstTask = "first_task"
         }
     }
 

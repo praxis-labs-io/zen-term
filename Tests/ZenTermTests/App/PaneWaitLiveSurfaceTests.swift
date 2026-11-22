@@ -74,7 +74,8 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
             windows: { [unowned self] in controller.map { [$0] } ?? [] }, keyWindow: { [unowned self] in controller },
             paneWaits: waits)
         responder.respond(
-            to: ControlRequest(id: 1, cmd: .paneWait, args: ControlArgs(pane: pane, output: output, timeout: 30))
+            to: ControlRequest(
+                id: 1, cmd: .paneWait, args: ControlArgs(pane: .token(pane), output: output, timeout: 30))
         ) { answer.reply = $0 }
         return answer
     }

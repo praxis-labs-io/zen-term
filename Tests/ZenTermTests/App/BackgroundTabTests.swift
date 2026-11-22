@@ -62,7 +62,8 @@ final class BackgroundTabTests: WindowTestCase {
     }
 
     private func openBackgroundTab(in c: WindowController, command: String? = nil) throws -> TabID {
-        try XCTUnwrap(c.openTab(in: XCTUnwrap(c.activeWorkspaceID), cwd: nil, command: command))
+        try XCTUnwrap(
+            c.openTab(in: XCTUnwrap(c.activeWorkspaceID), cwd: nil, command: command.map { PaneProgram(command: $0) }))
     }
 
     func test_aBackgroundTabJoinsTheTabBarWithoutBecomingActive() throws {

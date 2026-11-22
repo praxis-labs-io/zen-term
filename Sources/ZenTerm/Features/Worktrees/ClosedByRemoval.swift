@@ -5,9 +5,11 @@ struct ClosedByRemoval: Equatable {
     var otherWindows = 0
     var workspaces: [String] = []
     var tabs = 0
+    var stopping: [String] = []
 
     func adding(_ window: ClosedByRemoval, isThisWindow: Bool) -> ClosedByRemoval {
         var sum = self
+        sum.stopping += window.stopping
         if window.thisWindow {
             if isThisWindow { sum.thisWindow = true } else { sum.otherWindows += 1 }
         } else {

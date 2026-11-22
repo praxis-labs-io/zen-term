@@ -71,7 +71,8 @@ final class ControlPaneWaitTests: WindowTestCase {
         let answer = Answer()
         responder.respond(
             to: ControlRequest(
-                id: 1, cmd: .paneWait, args: ControlArgs(pane: pane, output: output, timeout: timeout),
+                id: 1, cmd: .paneWait,
+                args: ControlArgs(pane: pane.map(ControlAddress.Pane.token), output: output, timeout: timeout),
                 caller: caller.map(ControlCaller.init(pane:))),
             hangup: hangup
         ) { answer.reply = $0 }
@@ -165,11 +166,11 @@ final class ControlPaneWaitTests: WindowTestCase {
     func test_aPaneThatClosesAnswersExited() throws {
         makeWindow()
         let first = try XCTUnwrap(spawned.first)
-        send(.paneSplit, ControlArgs(pane: try token(of: first), dir: .right))
+        send(.paneSplit, ControlArgs(pane: .token(try token(of: first)), dir: .right))
         let second = try XCTUnwrap(spawned.last)
         let answer = wait(on: try token(of: second))
 
-        send(.paneClose, ControlArgs(force: true, pane: try token(of: second)))
+        send(.paneClose, ControlArgs(force: true, pane: .token(try token(of: second))))
 
         let got = try result(answer)
         XCTAssertEqual(got.reason, .exited)
@@ -180,15 +181,15 @@ final class ControlPaneWaitTests: WindowTestCase {
     func test_textSentToTheWaitingCallersOwnPaneAnswersMessage() throws {
         makeWindow()
         let caller = try XCTUnwrap(spawned.first)
-        send(.paneSplit, ControlArgs(pane: try token(of: caller), dir: .right))
+        send(.paneSplit, ControlArgs(pane: .token(try token(of: caller)), dir: .right))
         let helper = try XCTUnwrap(spawned.last)
         let answer = wait(on: try token(of: helper), from: try token(of: caller))
 
-        send(.paneSend, ControlArgs(pane: try token(of: helper), text: "to the helper"))
+        send(.paneSend, ControlArgs(pane: .token(try token(of: helper)), text: "to the helper"))
         settle(0.3)
         XCTAssertNil(answer.reply, "a send to the pane waited on is not a message for the caller")
 
-        send(.paneSend, ControlArgs(pane: try token(of: caller), text: "done: 2 bugs"))
+        send(.paneSend, ControlArgs(pane: .token(try token(of: caller)), text: "done: 2 bugs"))
 
         let got = try result(answer)
         XCTAssertEqual(got.reason, .message)
