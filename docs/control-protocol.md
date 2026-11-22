@@ -323,7 +323,7 @@ starting in that pane's folder. With `split` it splits `pane` the way `pane.spli
 refused or fails the same way. `focus` shows the new pane.
 
 A pane closes the children it started when it closes, and they close theirs, wherever they are
-in its window, however it closes: `pane.close`, `tab.close`, `workspace.close`, its program
+in any window, however it closes: `pane.close`, `tab.close`, `workspace.close`, its program
 exiting, or the window closing. A close that would end a running child is refused without
 `force`, and its `details` list that child; the app's close confirmation names it too. A
 parent's own `pane.close` on its child is not refused over the child's work (`pane.close`).
