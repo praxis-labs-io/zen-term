@@ -568,7 +568,8 @@ rest print nothing. `zen pane get` takes the pane as its argument, this pane by 
 a usage error.
 `zen pane run [--name] [--task] [--split right|down] [--pane] [--focus] [--keep] [--outlive-parent] [--wait] <command>` takes
 everything after its options, and after a `--`, as the command. One argument is a shell line as
-written; several are each quoted, so `-- sh -c 'sleep 1'` arrives as typed. A pane argument,
+written; several are each quoted, so `-- sh -c 'sleep 1'` arrives as typed. A leading `--help` or
+`-h` prints the help, and `-- --help` runs `--help`. A pane argument,
 `zen wait`'s included, is a token when it is all digits and a name otherwise.
 `zen workspace new` takes `--title`, and `zen workspace rename <title>` takes the workspace
 as `--workspace`. `zen worktree create <branch>` takes `--base default|current` or `--existing`, not both, and
