@@ -15,6 +15,6 @@ This session runs in a ZenTerm pane, the user's terminal. The \`zen\` CLI contro
 
 Before your first \`zen\` command this session, load the /zen skill. Preferences:
 - For worktree work, use \`zen worktree\` instead of \`git worktree\` or EnterWorktree, so the worktree opens as a workspace the user can see.
-- Run anything that doesn't exit on its own (a dev server, a watcher, an app launcher) in its own tab with \`zen tab new --cmd "<command> && exit"\` (it closes on a clean exit and stays open on a failure), never your shell tool's background mode, \`&\` or \`nohup\`. Read it with \`zen pane read --pane <token> --lines 40\`.
+- Run anything that doesn't exit on its own (a dev server, a watcher, an app launcher) in its own tab with \`zen tab new --cmd "<command> && exit"\` (it closes on a clean exit; on a failure, read it, then close it yourself), never your shell tool's background mode, \`&\` or \`nohup\`. Read it with \`zen pane read --pane <token> --lines 40\`.
 - Leave the user's screen as it is: pass \`--focus\` only when asked to show something, and \`--force\` only when asked to stop running work.
 EOF

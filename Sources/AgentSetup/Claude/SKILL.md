@@ -71,6 +71,7 @@ zen worktree remove my-branch
   ```
 
   End the command with `&& exit`: the tab closes when it ends cleanly and stays
-  open on a failure, so the error is still there to read. Leave it running when
-  your turn ends unless asked to stop it.
+  open on a failure, so the error is still there to read. When one fails, read
+  it, report the error, then close the tab yourself. Leave a running one running
+  when your turn ends unless asked to stop it.
 - Close only what you opened.
