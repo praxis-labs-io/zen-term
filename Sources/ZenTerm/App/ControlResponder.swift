@@ -185,7 +185,7 @@ struct ControlResponder {
             let cwd =
                 request.args.cwd.map { URL(fileURLWithPath: $0, isDirectory: true) }
                 ?? callerCWD(in: place, for: request)
-                ?? ShellLaunch.newSessionCWD(focused: place.window.sessionCWD(of: place.id))
+                ?? place.window.newTabCWD(in: place.id)
             guard let tab = place.window.openTab(in: place.id, cwd: cwd, command: command),
                 let pane = place.window.firstPaneToken(of: tab)
             else { return .failure(ControlError(.failed, "The tab could not be opened.")) }

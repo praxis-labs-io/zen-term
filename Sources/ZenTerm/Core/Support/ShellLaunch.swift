@@ -9,8 +9,8 @@ enum ShellLaunch {
     /// An app bundle's cwd is `/`, and a login shell doesn't `cd` home on its own.
     static var defaultCWD: URL { FileManager.default.homeDirectoryForCurrentUser }
 
-    static func newSessionCWD(focused: URL?) -> URL? {
-        GeneralConfig.current.tabInheritCWD ? focused : nil
+    static func newSessionCWD(focused: URL?, workspace: URL? = nil) -> URL? {
+        GeneralConfig.current.tabInheritCWD ? focused : workspace
     }
 
     static func shell(cwd: URL?, env: [String: String] = [:]) -> TerminalSurfaceConfig {

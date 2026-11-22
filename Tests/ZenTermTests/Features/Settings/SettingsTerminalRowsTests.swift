@@ -61,9 +61,9 @@ final class SettingsTerminalRowsTests: WindowTestCase {
         XCTAssertTrue(configText().contains("font-thicken = false"), "got: \(configText())")
     }
 
-    func test_tabInheritCWD_defaultsToHome() throws {
+    func test_tabInheritCWD_defaultsToWorkspace() throws {
         let directory = try segment("tab-inherit-cwd")
-        XCTAssertEqual(directory.selectedIndex, 0, "home is the shipped default, and Home is index 0")
+        XCTAssertEqual(directory.selectedIndex, 0, "the workspace folder is the shipped default, at index 0")
     }
 
     func test_tabInheritCWD_selectingCurrent_thenHome_writesTrueThenFalse() throws {

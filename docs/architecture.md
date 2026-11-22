@@ -827,7 +827,8 @@ The workspace `carry` key names ignored files to copy into a new worktree.
   on its picker row does the same, and the mark clears if `.git` comes back. It never auto-closes, because
   an agent in its panes may still be running. A session that would inherit a folder inside it
   (a split, drawer or float, and a tab or window under `tab-inherit-cwd`) starts at the parent
-  workspace's folder instead (`WorktreeOrigin.relocating`).
+  workspace's folder instead (`WorktreeOrigin.relocating`). So does a new tab without
+  `tab-inherit-cwd`, which starts at its workspace's folder (`WorkspaceController.newTabFolder`).
 
 ### Subprocess and GitCommand
 
