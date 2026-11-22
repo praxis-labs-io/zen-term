@@ -474,4 +474,44 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertTrue(stakes.isRunning)
         XCTAssertEqual(stakes.panes.map(\.token), [child])
     }
+
+    func test_theWorktreeRemovalCardNamesARunningChildItStartedElsewhere() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        let worktree = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-run-\(UUID().uuidString)", isDirectory: true)
+        let opened = try XCTUnwrap(try answer(.tabNew, ControlArgs(cwd: worktree.path)).get() as? TabResult)
+        let child = try run(ControlArgs(cmd: "claude", pane: .token(lead), name: "review"), from: opened.pane).pane
+        try surface(child).isBusy = true
+
+        let closes = c.closedByRemoval(atPath: worktree)
+        let card = WorktreeRemovalMessage.items(
+            for: Worktree(path: worktree, branch: "feat", head: "0123456789abcdef", isLocked: false),
+            state: WorktreeState(files: [], lostCommits: 0), carried: [], closes: closes)
+
+        XCTAssertEqual(closes.stopping, ["review"])
+        XCTAssertTrue(
+            card.contains { $0.mark == .warning && $0.text.map(\.text).joined() == "Stops review in other tabs" },
+            "\(card.map { $0.text.map(\.text).joined() })")
+    }
+
+    func test_aChildThatIsItsTabsLastPaneCountsThatTabsRunningFloat() throws {
+        let c = makeWindow()
+        c.floatsForTesting.resolveRepoRoot = { $1($0) }
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        let parent = try run(ControlArgs(cmd: "claude", split: .right), from: lead).pane
+        let child = try run(ControlArgs(cmd: "claude"), from: parent).pane
+        let leadTab = try XCTUnwrap(c.pane(token: lead)?.tab)
+        c.selectTab(try XCTUnwrap(c.pane(token: child)?.tab))
+        let before = spawned.count
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        try XCTUnwrap(spawned.dropFirst(before).first, "opening Scratch spawns a shell").isBusy = true
+        c.handle(.toggleToolFloat(ToolFloat.scratch.id))
+        c.selectTab(leadTab)
+
+        let refusal = try XCTUnwrap(error(try answer(.paneClose, ControlArgs(pane: .token(parent)))))
+
+        XCTAssertEqual(refusal.code, .refused)
+        XCTAssertEqual(refusal.details?.floats, [ToolFloat.scratch.title])
+    }
 }

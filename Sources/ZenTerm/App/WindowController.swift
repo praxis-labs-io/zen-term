@@ -265,7 +265,9 @@ final class WindowController: NSObject {
     }
 
     func closedByRemoval(atPath path: URL) -> ClosedByRemoval {
-        var closed = ClosedByRemoval()
+        let children = childStakes(closing: Set(allTabIDs.filter { isClosedByRemoval($0, atPath: path) }))
+        if children.closesWindow { return ClosedByRemoval(thisWindow: true) }
+        var closed = ClosedByRemoval(stopping: children.names)
         var emptied = 0
         for workspace in workspaces {
             let inside = workspace.tabIDs.filter { isClosedByRemoval($0, atPath: path) }.count
@@ -277,7 +279,7 @@ final class WindowController: NSObject {
                 closed.tabs += inside
             }
         }
-        return emptied == workspaces.count ? ClosedByRemoval(thisWindow: true) : closed
+        return emptied == workspaces.count ? ClosedByRemoval(thisWindow: true, stopping: children.names) : closed
     }
 
     private func isClosedByRemoval(_ id: TabID, atPath path: URL) -> Bool {
