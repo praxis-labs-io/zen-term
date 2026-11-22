@@ -25,6 +25,8 @@ final class FirstTaskDelivery {
         DispatchQueue.main.asyncAfter(deadline: .now() + readinessWindow, execute: deadline)
     }
 
+    func isAwaiting(_ surface: SurfaceID) -> Bool { pending[surface] != nil }
+
     func report(_ status: TerminalProgramStatus, from surface: SurfaceID) {
         guard let waiting = pending[surface] else { return }
         let outcome = Self.outcome(of: status)

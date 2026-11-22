@@ -305,7 +305,7 @@ Into a pane that runs an agent:
 - From another pane, the text arrives wrapped, so the agent can tell it from its user:
   `<zen from="31 lead" reply="zen pane send --pane 31">text</zen>`. `from` is the caller's
   token, and its name after it when it has one. A send into a shell, or into the caller's own
-  pane, is never wrapped.
+  pane, is never wrapped. A child's note to its parent (`pane.run`) arrives the same way.
 
 `wait` then holds as `pane.wait` on the pane, with `timeout`, and answers as it does.
 
@@ -353,6 +353,26 @@ prompt with `zen wait --output`, then send the task with `pane.send`.
 
 `wait` takes `timeout` and, once it would answer, holds as `pane.wait` on the new pane instead
 and answers as it does. The answer's `pane` carries `first_task`.
+
+A parent that runs an agent hears from the children it ran, so a child that finishes after the
+parent's turn ended still wakes it. Each change sends one line, in the child's envelope
+(`<zen from="34 review" reply="zen pane send --pane 34">`), pasted with Return as `pane.send`
+with `enter` sends it:
+
+| Change    | When                                                       | Note                                                                    |
+| --------- | ---------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `stopped` | The child's `status` left `working`, but not to `blocked`. | `review stopped (done): read it with zen pane read --pane 34`           |
+| `blocked` | The child's `status` became `blocked`.                     | `review is blocked on a permission prompt; that decision is the user's` |
+| `exited`  | Its program exited, closing its pane.                      | `review exited with code 1`                                             |
+
+- A child without a name is `pane 34`. `blocked` names `a permission prompt`, `a question` or
+  `a login` when the program says which.
+- There is no note when the parent runs no agent, when a `pane.wait` the parent holds on the
+  child answers the same change, or for the report that settles `first_task`, which `pane.run`
+  answers with. A pane run with `keep` stays open when its program exits, and sends no `exited`.
+- A note holds for the parent's draft as `pane.send` does. While the parent is `blocked` it holds
+  until it is not, since a paste would answer the parent's prompt, and after 10 minutes it is
+  dropped.
 
 ### `pane.keys`
 
@@ -409,7 +429,7 @@ Holds until something happens to the pane, then answers once with why:
 | `stopped` | The agent's `status` left `working`. Without `output` only. |
 | `exited`  | Its program exited, or the pane closed. |
 | `output`  | `output` appeared in text printed after the wait began. |
-| `message` | A `pane.send` reached the caller's own pane. |
+| `message` | A `pane.send`, or a child's note, reached the caller's own pane. |
 | `timeout` | Nothing happened within `timeout`. A check-in, not a failure: wait again. |
 
 ```json

@@ -61,6 +61,8 @@ final class PaneWait {
 
     func closed() { answer(.exited) }
 
+    func answers(_ reason: WaitReason) -> Bool { reason != .stopped || output == nil }
+
     func messageArrived() { answer(.message) }
 
     func cancel() { finish() }

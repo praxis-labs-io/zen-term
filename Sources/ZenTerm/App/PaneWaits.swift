@@ -25,5 +25,9 @@ final class PaneWaits {
 
     func sent(to surface: SurfaceID) { pending.filter { $0.caller == surface }.forEach { $0.messageArrived() } }
 
+    func callers(answeredBy reason: WaitReason, on surface: SurfaceID) -> Set<SurfaceID> {
+        Set(waits(on: surface).filter { $0.answers(reason) }.compactMap(\.caller))
+    }
+
     private func waits(on surface: SurfaceID) -> [PaneWait] { pending.filter { $0.watched.surfaceID == surface } }
 }

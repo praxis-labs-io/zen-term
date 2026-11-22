@@ -264,6 +264,8 @@ final class WindowController: NSObject {
 
     var paneDrafts = PaneDrafts()
 
+    var onHelperNote: ((HelperNote) -> Void)?
+
     func tabCount(atPath path: URL) -> Int {
         allTabIDs.filter { isClosedByRemoval($0, atPath: path) }.count
     }
@@ -2349,19 +2351,21 @@ final class WindowController: NSObject {
         -> ListResult.Agent
     {
         guard let report else { return ListResult.Agent(name: name, state: state) }
-        let status: ListResult.AgentStatus
         var kind: ListResult.AgentNeed?
-        switch report.state {
-        case .idle: status = .idle
-        case .working: status = .working
-        case .done: status = .done
-        case .blocked(let need):
-            status = .blocked
-            kind = need.map(Self.agentNeed)
-        case .failed: status = .error
-        }
+        if case .blocked(let need) = report.state { kind = need.map(Self.agentNeed) }
         return ListResult.Agent(
-            name: name, state: state, status: status, kind: kind, msg: report.message, title: report.title)
+            name: name, state: state, status: agentStatus(report.state), kind: kind, msg: report.message,
+            title: report.title)
+    }
+
+    private static func agentStatus(_ state: TerminalProgramStatus.State) -> ListResult.AgentStatus {
+        switch state {
+        case .idle: return .idle
+        case .working: return .working
+        case .done: return .done
+        case .blocked: return .blocked
+        case .failed: return .error
+        }
     }
 
     private static func agentNeed(_ need: TerminalProgramStatus.Need) -> ListResult.AgentNeed {
@@ -2387,12 +2391,14 @@ final class WindowController: NSObject {
         }
     }
 
-    func pane(token: Int) -> (tab: TabID, pane: PaneHandle)? {
+    func pane(token: Int) -> (tab: TabID, pane: PaneHandle)? { pane { $0.token == token } }
+
+    private func pane(surface: SurfaceID) -> PaneHandle? { pane { $0.surfaceID == surface }?.pane }
+
+    private func pane(where matches: (PaneHandle) -> Bool) -> (tab: TabID, pane: PaneHandle)? {
         for workspace in workspaces {
             for id in workspace.tabIDs {
-                if let pane = workspace.controller(id)?.paneHandles.first(where: { $0.token == token }) {
-                    return (id, pane)
-                }
+                if let pane = workspace.controller(id)?.paneHandles.first(where: matches) { return (id, pane) }
             }
         }
         return nil
@@ -3190,7 +3196,10 @@ final class WindowController: NSObject {
             self.renderAttention()
         }
         c.onLastPaneClosed = { [weak self] in self?.closeTab(id) }
-        c.onLaunchedPaneExited = { [weak self] exit in self?.launchedPaneExits.record(exit) }
+        c.onLaunchedPaneExited = { [weak self] exit in
+            self?.launchedPaneExits.record(exit)
+            self?.helperExited(exit)
+        }
         c.onPaneTokensReleased = { [weak self] tokens in self?.closeChildren(of: tokens) }
         c.removedWorktree = { [weak self] in self?.workspace(of: id)?.removedWorktree }
         c.onOverlayStateChanged = { [weak self] in self?.renderDock() }
@@ -3243,6 +3252,11 @@ final class WindowController: NSObject {
         c.onCommandFinished = { [weak self] surface, result in
             self?.commandFinished(surface: surface, id: id, result: result)
         }
+    }
+
+    private func helperExited(_ exit: LaunchedPaneExit) {
+        guard let (_, pane) = pane(token: exit.token) else { return }
+        noteHelper(pane.surfaceID, .exited(code: exit.exitCode), answering: .exited)
     }
 
     // The banner lands on `owner`: a hidden Scratch asking for input is usually not in the active tab.
@@ -3500,8 +3514,10 @@ final class WindowController: NSObject {
 
     private func programStatusChanged(surface: SurfaceID, status: TerminalProgramStatus?) {
         DispatchQueue.main.async { [weak self] in
-            if let status { self?.firstTasks.report(status, from: surface) }
-            guard let self, self.agents.agents[surface]?.hasExited != true else { return }
+            guard let self else { return }
+            let settlesFirstTask = self.firstTasks.isAwaiting(surface)
+            if let status { self.firstTasks.report(status, from: surface) }
+            guard self.agents.agents[surface]?.hasExited != true else { return }
             if let status {
                 let name = status.app.map { AgentRules.key(for: $0) ?? $0 }
                 self.agents.identify(surface, name: name, source: .signal)
@@ -3515,8 +3531,33 @@ final class WindowController: NSObject {
                 self.raiseAsk(surface)
             }
             self.renderAgents()
-            if previous?.state == .working, status?.state != .working { self.paneWaits.agentStopped(surface) }
+            let stopped = previous?.state == .working && status?.state != .working
+            if !settlesFirstTask, let change = Self.helperChange(from: previous, to: status) {
+                self.noteHelper(surface, change, answering: stopped ? .stopped : nil)
+            }
+            if stopped { self.paneWaits.agentStopped(surface) }
         }
+    }
+
+    // Entering `blocked` is its own note, so a helper that stops to ask sends one note, not two.
+    private static func helperChange(from previous: TerminalProgramStatus?, to status: TerminalProgramStatus?)
+        -> HelperNote.Change?
+    {
+        if case .blocked(let need) = status?.state {
+            if case .blocked = previous?.state { return nil }
+            return .blocked(need.map(agentNeed))
+        }
+        guard previous?.state == .working, status?.state != .working else { return nil }
+        return .stopped(status.map { agentStatus($0.state) })
+    }
+
+    // Read before the change reaches `paneWaits`, which drops the waits it answers.
+    private func noteHelper(_ surface: SurfaceID, _ change: HelperNote.Change, answering reason: WaitReason?) {
+        guard let pane = pane(surface: surface), let parent = pane.record.parent else { return }
+        onHelperNote?(
+            HelperNote(
+                helper: pane.token, name: pane.record.name, parent: parent, change: change,
+                answeredWaits: reason.map { paneWaits.callers(answeredBy: $0, on: surface) } ?? []))
     }
 
     private static func asks(_ status: TerminalProgramStatus) -> Bool {
