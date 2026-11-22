@@ -187,6 +187,12 @@ final class AgentNestingTests: WindowTestCase {
         c.pollTitlesForTesting()
 
         XCTAssertEqual(try row(of: process, in: c).processBadgeForTesting?.process?.name, "htop")
+
+        process.surface.foregroundProcessGroupID = 1
+        c.pollTitlesForTesting()
+        XCTAssertEqual(
+            try row(of: process, in: c).processBadgeForTesting?.process, .unknown,
+            "a program whose arguments cannot be read is not the resting shell")
     }
 
     func test_theDetailLine_namesTheWorkspace_andOnlyAnUnmarkedAgentAddsItsName() throws {

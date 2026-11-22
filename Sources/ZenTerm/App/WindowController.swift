@@ -4012,10 +4012,11 @@ final class WindowController: NSObject {
             let paneTitle =
                 agent.hasExited ? nil : AgentRules.taskTitle(fromPane: agentStates.title(of: id), agentName: agent.name)
             let title = agentStates.status(of: id)?.title ?? paneTitle ?? agent.name ?? AgentRoster.unnamed
-            let process = agent.name.map(ProcessIcon.forAgent) ?? .unknownAgent
+            let name = agent.name.flatMap { $0.isEmpty ? nil : $0 }
+            let process = name.map(ProcessIcon.forAgent) ?? .unknownAgent
             var item = SidebarAgentItem(
                 id: id, state: state, summary: title,
-                detail: Self.agentDetail(name: agent.name, process: process, place: place.name), message: message)
+                detail: Self.agentDetail(name: name, process: process, place: place.name), message: message)
             item.process = process
             let pane = panes[id]
             return AgentFamilies.Member(
@@ -4424,8 +4425,10 @@ final class WindowController: NSObject {
         return programIcon(of: surface)
     }
 
+    // Unreadable arguments are a program that runs, never the resting shell.
     private func programIcon(of surface: TerminalSurface) -> ProcessIcon {
-        ProcessIcon.forProgram(surface.foregroundProcessGroupID.flatMap(ProcessArguments.programName))
+        guard let group = surface.foregroundProcessGroupID else { return .shell }
+        return ProcessArguments.arguments(of: group).map(ProcessIcon.forCommand) ?? .unknown
     }
 
     private static func indicator(for tones: Set<AttentionTone>) -> TabChip.Indicator? {

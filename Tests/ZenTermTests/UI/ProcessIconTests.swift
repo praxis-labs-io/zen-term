@@ -41,6 +41,20 @@ final class ProcessIconTests: XCTestCase {
         XCTAssertEqual(ProcessIcon.unknown.mark, "binary")
     }
 
+    func test_aScript_isNamedForItself_notItsInterpreter() {
+        XCTAssertEqual(ProcessIcon.forCommand(["python3", "/opt/venv/bin/pytest", "-x"]).name, "Tests")
+        XCTAssertEqual(
+            ProcessIcon.forCommand(["/bin/bash", "-pu", "/opt/homebrew/bin/brew", "upgrade"]).name, "Homebrew")
+        XCTAssertEqual(ProcessIcon.forCommand(["python3", "-m", "pytest"]).name, "Tests")
+    }
+
+    func test_anInterpreterRunningSomethingUnmapped_staysItself() {
+        XCTAssertEqual(ProcessIcon.forCommand(["python3", "script.py"]).name, "Python")
+        XCTAssertEqual(ProcessIcon.forCommand(["python3", "-c", "print(1)"]).name, "Python")
+        XCTAssertEqual(ProcessIcon.forCommand(["-zsh"]), .shell)
+        XCTAssertEqual(ProcessIcon.forCommand([]), .unknown)
+    }
+
     func test_aVersionedProgram_findsItsUnversionedName() {
         XCTAssertEqual(ProcessIcon.forProgram("python3.12").name, "Python")
         XCTAssertEqual(ProcessIcon.forProgram("Python3").name, "Python", "program names match in any case")

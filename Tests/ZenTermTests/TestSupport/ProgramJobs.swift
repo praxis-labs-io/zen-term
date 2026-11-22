@@ -23,6 +23,8 @@ final class ProgramJobs {
         return pid
     }
 
+    func track(_ job: Process) { jobs.append(job) }
+
     func stopAll() {
         jobs.forEach { $0.terminate() }
         jobs = []

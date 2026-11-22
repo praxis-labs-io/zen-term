@@ -30,6 +30,21 @@ struct ProcessIcon: Equatable {
         return byProgram[program] ?? byProgram[withoutVersion(program)] ?? unknown
     }
 
+    // A script runs as its interpreter, so its own name is the first argument that is not a flag.
+    static func forCommand(_ arguments: [String]) -> ProcessIcon {
+        guard let program = arguments.first.flatMap(ProcessArguments.programName(from:)) else { return unknown }
+        if interpreters.contains(withoutVersion(program.lowercased())),
+            let script = arguments.dropFirst().first(where: { !$0.hasPrefix("-") }),
+            let name = ProcessArguments.programName(from: script),
+            let icon = byProgram[name.lowercased()]
+        {
+            return icon
+        }
+        return forProgram(program)
+    }
+
+    private static let interpreters: Set<String> = ["python", "bash", "sh", "zsh", "dash", "node", "ruby", "perl"]
+
     // An agent names itself in words (`Claude Code`), so any one of them can be its program.
     static func forAgent(_ name: String) -> ProcessIcon {
         let words = Set(name.lowercased().split { !$0.isLetter }.map(String.init))
