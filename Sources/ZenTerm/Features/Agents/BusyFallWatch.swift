@@ -11,4 +11,6 @@ struct BusyFallWatch {
     }
 
     mutating func forget(_ id: SurfaceID) { busy.remove(id) }
+
+    mutating func keep(only ids: Set<SurfaceID>) { busy.formIntersection(ids) }
 }

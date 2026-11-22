@@ -1,11 +1,19 @@
 import AppKit
 
 struct SidebarAgentItem: Equatable {
+    enum Role: Equatable {
+        case agent
+        case helper
+        case process(nested: Bool)
+    }
+
     let id: SurfaceID
     let state: AttentionTone
     let summary: String
     let detail: String
     let message: String?
+    var role = Role.agent
+    var startedBy: String?
 }
 
 // The Agents list's own ordering, and the state a row speaks since its title never names it.
@@ -29,14 +37,25 @@ extension AttentionTone {
     }
 }
 
+extension SidebarAgentItem {
+    var showsState: Bool {
+        if case .process = role { return false }
+        return true
+    }
+}
+
 final class SidebarAgentRow: SidebarJumpRow {
     private let glyphSlot = NSView()
     private let dot = StateDot()
     private let spinner = Spinner()
     private var item: SidebarAgentItem?
+    private lazy var heightPin = heightAnchor.constraint(equalToConstant: Self.height)
 
     static let height: CGFloat = ChromeMetrics.Height.xl
     private static let jumpHint = "Jump to agent"
+    private static let processJumpHint = "Jump to process"
+    private static let helperSymbol = "sparkles"
+    private static let processSymbol = "terminal"
     private static let glyphSize = NSSize(width: 14, height: 16)
 
     init(onActivate: @escaping () -> Void) {
@@ -49,7 +68,7 @@ final class SidebarAgentRow: SidebarJumpRow {
             glyph.trailingAnchor.constraint(equalTo: glyphSlot.trailingAnchor).isActive = true
         }
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: Self.height),
+            heightPin,
             glyphSlot.widthAnchor.constraint(equalToConstant: Self.glyphSize.width),
             glyphSlot.heightAnchor.constraint(equalToConstant: Self.glyphSize.height),
         ])
@@ -63,15 +82,36 @@ final class SidebarAgentRow: SidebarJumpRow {
         guard item != self.item else { return }
         self.item = item
         rendersForTesting += 1
-        render(Content(title: item.summary, subtitle: item.detail))
-        tooltip?.label = item.message ?? Self.jumpHint
+        heightPin.constant = item.role == .agent ? Self.height : ChromeMetrics.Height.control
+        renderContent(item)
+        let startedBy = item.startedBy.map { "Started by \($0)" }
+        let notes = [startedBy, item.message].compactMap { $0 }
+        tooltip?.label = notes.isEmpty ? Self.hint(for: item.role) : notes.joined(separator: "\n")
         tooltip?.style = item.message == nil ? .line : .paragraph
         tooltip?.relabel(from: self)
         announce(item)
-        setAccessibilityValue("\(item.state.accessibilityName), \(item.detail)")
+        let speaks = [item.showsState ? item.state.accessibilityName : nil, item.detail, startedBy]
+        setAccessibilityValue(speaks.compactMap { $0 }.joined(separator: ", "))
         dot.state = item.state.dot
         spinner.isHidden = item.state != .working
         spinner.isSpinning = item.state == .working
+    }
+
+    private func renderContent(_ item: SidebarAgentItem) {
+        glyphSlot.isHidden = !item.showsState
+        switch item.role {
+        case .agent:
+            render(Content(title: item.summary, subtitle: item.detail))
+        case .helper:
+            render(Content(title: item.summary, leading: .symbol(Self.helperSymbol), ink: .subtle, nests: true))
+        case .process(let nested):
+            render(Content(title: item.summary, leading: .symbol(Self.processSymbol), ink: .subtle, nests: nested))
+        }
+    }
+
+    private static func hint(for role: SidebarAgentItem.Role) -> String {
+        if case .process = role { return processJumpHint }
+        return jumpHint
     }
 
     var itemForTesting: SidebarAgentItem? { item }
@@ -84,9 +124,20 @@ final class SidebarAgentRow: SidebarJumpRow {
 
     var summaryTextForTesting: String { content.title }
 
+    var isNestedForTesting: Bool { content.nests }
+
+    var leadingSymbolForTesting: String? {
+        guard case .symbol(let name) = content.leading else { return nil }
+        return name
+    }
+
+    var showsStateForTesting: Bool { !glyphSlot.isHidden }
+
+    var tooltipForTesting: String? { tooltip?.label }
+
     override func reapplyTheme() {
         if let item {
-            render(Content(title: item.summary, subtitle: item.detail))
+            renderContent(item)
             announce(item)
         }
         super.reapplyTheme()
