@@ -57,6 +57,7 @@ final class ControlHelperNoteTests: WindowTestCase {
 
     override func tearDownWithError() throws {
         waits.pending.forEach { $0.cancel() }
+        waits.childrenWaits.forEach { $0.cancel() }
         for c in controllers {
             c.windowWillClose(Notification(name: NSWindow.willCloseNotification))
             AttentionCenter.shared.forget(windowID: c.windowID)
@@ -117,6 +118,16 @@ final class ControlHelperNoteTests: WindowTestCase {
         responder.respond(
             to: ControlRequest(
                 id: 2, cmd: .paneWait, args: ControlArgs(pane: .token(try token(of: pane)), output: output),
+                caller: ControlCaller(pane: try token(of: caller)))
+        ) { answer.reply = $0 }
+        return answer
+    }
+
+    private func waitOnChildren(of caller: RecordingSurface, _ mode: WaitChildren) throws -> Answer {
+        let answer = Answer()
+        responder.respond(
+            to: ControlRequest(
+                id: 3, cmd: .paneWait, args: ControlArgs(children: mode),
                 caller: ControlCaller(pane: try token(of: caller)))
         ) { answer.reply = $0 }
         return answer
@@ -332,5 +343,42 @@ final class ControlHelperNoteTests: WindowTestCase {
 
         XCTAssertEqual((try answer.reply?.get() as? PaneRunResult)?.firstTask, .held(.blocked))
         XCTAssertEqual(parent.inputs, [])
+    }
+
+    func test_aChildrenWaitTheChangeAnswersTakesThePlaceOfTheNote() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        report(.working, from: helper)
+        let any = try waitOnChildren(of: parent, .any)
+
+        report(.done, from: helper)
+        XCTAssertEqual((try any.reply?.get() as? WaitResult)?.reason, .stopped)
+
+        report(.working, from: helper)
+        let all = try waitOnChildren(of: parent, .all)
+        helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
+        helper.delegate?.surfaceDidExit(helper, code: 0)
+        waitUntil(all.reply != nil, "the wait to answer")
+
+        XCTAssertEqual(parent.inputs, [])
+    }
+
+    func test_aChildrenWaitForAllThatAnotherChildHoldsLetsTheNoteThrough() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(from: parent)
+        let other = try runHelper(named: "tests", from: parent)
+        report(.working, from: helper)
+        report(.working, from: other)
+        let all = try waitOnChildren(of: parent, .all)
+
+        report(.done, from: helper)
+
+        let read = "review stopped (done): read it with zen pane read --pane \(try token(of: helper))"
+        XCTAssertEqual(parent.inputs, try note(read, from: helper))
+        XCTAssertEqual((try all.reply?.get() as? WaitResult)?.reason, .message)
     }
 }
