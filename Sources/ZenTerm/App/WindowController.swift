@@ -202,6 +202,8 @@ final class WindowController: NSObject {
         )?
 
     private let tabBar: TabBarView
+    // What each tab last showed, so the title poll re-renders when a program changes, not on every tick.
+    private var tabProcesses: [TabID: ProcessIcon?] = [:]
     private let dock: ToggleDock
     private var dockTrailing: NSLayoutConstraint?
     private let sidebar: SidebarController
@@ -764,6 +766,7 @@ final class WindowController: NSObject {
                 if workspace.title(id) != t { workspace.setTitle(t, for: id); changed = true }
             }
         }
+        if activeTabIDs.contains(where: { processIcon(of: $0) != tabProcesses[$0] ?? nil }) { changed = true }
         if changed { renderTabBar() }
 
         if busyDots() != lastBusyDots { renderDock() }
@@ -3956,7 +3959,7 @@ final class WindowController: NSObject {
             let title = agentStates.status(of: id)?.title ?? paneTitle ?? agent.name ?? AgentRoster.unnamed
             var item = SidebarAgentItem(
                 id: id, state: state, summary: title, detail: place.name, message: message)
-            item.mark = AgentRules.brandMark(for: agent.name)
+            item.mark = agent.name.map { ProcessIcon.forAgent($0).mark }
             let pane = panes[id]
             return AgentFamilies.Member(
                 item: item, since: attention.agentSince(of: id), position: place.position, token: pane?.token,
@@ -4096,6 +4099,8 @@ final class WindowController: NSObject {
     }
 
     func checkForRemovedWorktreesForTesting() { checkForRemovedWorktrees() }
+
+    func pollTitlesForTesting() { refreshTitlesFromCWD() }
 
     func presentModalForTesting(_ overlay: ModalOverlay) { presentModal(overlay, kind: .workspaceForm) }
 
@@ -4332,14 +4337,27 @@ final class WindowController: NSObject {
     // A tab shows what its agents' rows show, so it reads the same items, after their rows.
     private func renderTabChips(agents: [SidebarAgentItem]) {
         let tones = Dictionary(grouping: agents) { attention.tab(of: $0.id) }.mapValues { Set($0.map(\.state)) }
+        tabProcesses = Dictionary(uniqueKeysWithValues: activeTabIDs.map { ($0, processIcon(of: $0)) })
         let items = activeTabIDs.enumerated().map { i, id in
             TabBarItem(
                 id: id, index: i + 1,
                 title: title(of: id),
                 isActive: id == activeWorkspace?.activeID,
-                indicator: Self.indicator(for: tones[id] ?? []))
+                indicator: Self.indicator(for: tones[id] ?? []),
+                process: tabProcesses[id] ?? nil)
         }
         tabBar.render(items)
+    }
+
+    // An agent by its own name, since some run under a runtime (`gemini` is `node`); anything else by its program.
+    private func processIcon(of id: TabID) -> ProcessIcon? {
+        guard let controller = workspace(of: id)?.controller(id), let surfaceID = controller.focusedPaneSurfaceID,
+            let surface = controller.surface(surfaceID)
+        else { return nil }
+        if let agent = agents.agents[surfaceID], !agent.hasExited, let name = agent.name {
+            return ProcessIcon.forAgent(name)
+        }
+        return ProcessIcon.forProgram(surface.foregroundProcessGroupID.flatMap(ProcessArguments.programName))
     }
 
     private static func indicator(for tones: Set<AttentionTone>) -> TabChip.Indicator? {

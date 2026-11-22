@@ -11,6 +11,13 @@ enum BrandMark {
         return image?.copy() as? NSImage
     }
 
+    // For a mark whose colors are part of it: a gradient, or several fills a tint would flatten.
+    static func artwork(_ name: String) -> NSImage? {
+        guard let image = image(name) else { return nil }
+        image.isTemplate = false
+        return image
+    }
+
     private static func load(_ name: String) -> NSImage? {
         guard
             let url = ZenTermResources.bundle.url(

@@ -51,6 +51,9 @@ enum ChromeMetrics {
         static let tile: CGFloat = 12
 
         static func capsule(_ height: CGFloat) -> CGFloat { height / 2 }
+
+        // The app-icon corner: a fixed radius rounds a 16pt chip nearly into a circle.
+        static func icon(_ side: CGFloat) -> CGFloat { side * 0.225 }
     }
 
     enum Border {

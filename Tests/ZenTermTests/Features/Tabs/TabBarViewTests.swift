@@ -22,6 +22,40 @@ final class TabBarViewTests: WindowTestCase {
         TabBarItem(id: TabID(id), index: index, title: title, isActive: active, indicator: nil)
     }
 
+    func test_aTabRunningAProgram_leadsWithItsChip_andItsLabelStartsAfterIt() throws {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
+        mount(tabBar)
+        var nvim = item(1, "zen-term", index: 1, active: true)
+        nvim.process = ProcessIcon.forProgram("nvim")
+        let plain = item(2, "notes", index: 2)
+
+        tabBar.render([nvim, plain])
+        tabBar.layoutSubtreeIfNeeded()
+
+        let chips = tabBar.chipsForTesting
+        let badge = try XCTUnwrap(chips[0].processBadgeForTesting, "a tab running nvim shows a chip")
+        XCTAssertEqual(badge.process?.name, "Neovim")
+        XCTAssertEqual(badge.frame.minX, ChromeMetrics.Spacing.s4)
+        XCTAssertEqual(badge.frame.midY, chips[0].bounds.midY, accuracy: 0.5)
+        XCTAssertEqual(
+            chips[0].labelFrameForTesting.minX, ChromeMetrics.Spacing.s4 + badge.frame.width + ChromeMetrics.Spacing.s6)
+        XCTAssertNil(chips[1].processBadgeForTesting, "a tab with no process shows no chip")
+        XCTAssertEqual(chips[1].labelFrameForTesting.minX, TabChip.labelInset)
+    }
+
+    func test_aKeptChip_swapsToTheNewProgramsMark() throws {
+        let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
+        mount(tabBar)
+        var tab = item(1, "zen-term", index: 1, active: true)
+        tab.process = .shell
+        tabBar.render([tab])
+
+        tab.process = ProcessIcon.forProgram("lazygit")
+        tabBar.render([tab])
+
+        XCTAssertEqual(try XCTUnwrap(tabBar.chipsForTesting.first?.processBadgeForTesting).process?.name, "Git")
+    }
+
     func test_hoveringAChip_layingOutItsCloseButton_conflictsWithNoConstraint() {
         let tabBar = TabBarView(onSelect: { _ in }, onClose: { _ in }, onRename: { _ in })
         mount(tabBar)

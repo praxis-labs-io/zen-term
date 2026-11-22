@@ -277,6 +277,11 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   active one.** A tab's callbacks keep firing while its workspace is in the background, so
   `workspace(of:)` and `controller(_:)` span them all. Reading the active workspace where
   a lookup belongs fails silently.
+- **A tab leads with its focused pane's process chip.** `ProcessIcon` maps an agent by its
+  own name, since some run under a runtime (`gemini` is `node`), and anything else by its
+  argv[0] (`ProcessArguments.programName` of the foreground group). A focused drawer does not
+  change it, as it does not change the title. The title poll re-renders the tab bar when a
+  tab's chip changes.
 - **Inactive tabs and workspaces are detached but retained**, so shells keep running.
 - **Closing the last tab closes its workspace, and the last workspace closes the window.** A
   close that takes the window with it confirms first, so the window never goes unannounced.
@@ -372,13 +377,14 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   Claude's without its status glyph, Codex's between its prompt and its folder; any other pane
   title is the shell's), else its name. Never its message, which stays in the tooltip and follows
   the title in the accessibility label, and never a state word. Its second line is its place. It leads
-  with its agent's brand mark (`AgentRules.brandMark`), else the process symbol, so rows align.
+  with its agent's mark (`ProcessIcon.forAgent`: the robot for an agent with no mark), or the
+  process symbol for one with no name, so rows align.
   Its state reaches VoiceOver through the accessibility value.
 - **The Agents rows nest a pane under the agent that started it.** `AgentFamilies` reads each
   row's `PaneRecord` parent and climbs through listed agents to the topmost, so there is one
   level: a helper's helper lists under the top agent and its tooltip names the helper that
   started it. A child is a one-line row (`ListRow` nesting): a helper agent leads with its
-  agent's brand mark (`AgentRules.brandMark`, else the process symbol) and shows its own
+  agent's mark (`ProcessIcon.forAgent`) and shows its own
   state, a process shows none. A process row is a parented pane with no agent,
   listed until its pane closes or its program finishes: every `pane.run` program reports an
   OSC 133 `D` mark (`PaneProgram.marksExit`), so a kept one that ends between polls still

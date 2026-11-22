@@ -230,7 +230,7 @@ final class ReapplyThemeTests: WindowTestCase {
         let chip = TerminalTabChip(
             id: TabID(1), index: 1, onClick: {}, onClose: {}, onDoubleClick: {}, directory: { nil })
         makeWindow().contentView?.addSubview(chip)
-        chip.update(index: 1, title: "zen-term", isCurrent: false, indicator: .dot(.blocked))
+        chip.update(index: 1, title: "zen-term", isCurrent: false, indicator: .dot(.blocked), process: nil)
         let before = try XCTUnwrap(chip.dotColorForTesting)
 
         Theme.setCurrentForTesting(try makeAlternateTheme())

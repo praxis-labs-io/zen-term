@@ -7,6 +7,7 @@ struct TabBarItem {
     let title: String
     let isActive: Bool
     let indicator: TabChip.Indicator?
+    var process: ProcessIcon?
 }
 
 // Chips are framed by hand: inside a scroll view an `NSStackView`'s intrinsic width is not authoritative.
@@ -106,7 +107,7 @@ final class TabBarView: NSView, ThemeReapplying {
                 }()
             chip.update(
                 index: item.index, title: item.title, isCurrent: item.isActive,
-                indicator: item.indicator)
+                indicator: item.indicator, process: item.process)
             next.append(chip)
             if item.isActive { activeChip = chip }
         }
