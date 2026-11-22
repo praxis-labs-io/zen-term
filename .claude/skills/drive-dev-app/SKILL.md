@@ -137,7 +137,7 @@ Run everything from the worktree root.
 S=.claude/skills/drive-dev-app/zt-drive.sh
 
 $S preflight                      # permissions + what is already running
-$S launch                         # bin/run in a ZenTerm tab (else the background), waits for it
+$S launch                         # bin/run in a `dev-build` pane (else a tab, else the background), waits for it
 $S verify-symbol drainAllSessions # PROVE the build has your change
 ```
 
@@ -183,8 +183,13 @@ Never guess a chord and send it. An unknown chord in a terminal is arbitrary inp
   never `2>/dev/null` a cleanup command: that hides the one failure that matters.
 - **`sweep` at the end, every time.** Report what it finds. A leaked process is
   Drew's machine, not a tidiness issue.
-- **Quitting the app ends the run.** `bin/run` exits with it, so relaunch to
-  continue.
+- **Quitting the app ends the run.** `bin/run` exits with it, and its pane closes,
+  so relaunch to continue. A build that fails closes the pane too: `zen wait <token>`
+  (the token `launch` printed) still reads its exit code and last lines.
+- **A `zen` typed into the dev build's own panes is the installed app's.** Those
+  panes put the installed bundle's `zen` first on `PATH`, and their ghostty
+  resources resolve to the installed bundle. To drive a verb this branch adds, run
+  the worktree's `.build/debug/zen` by path.
 - **No GNU coreutils.** `timeout(1)` is not on a stock macOS. Shelling out to it made
   every `osascript` call fail with "command not found" while the run read as
   proceeding normally. Check a tool exists before depending on it, or hand-roll it.
