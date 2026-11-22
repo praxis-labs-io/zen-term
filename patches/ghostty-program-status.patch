@@ -180,10 +180,10 @@ index 08d5d7c30..a6db7ad93 100644
                  log.warn("unimplemented action={}", .{action});
                  return false;
 diff --git i/src/apprt/surface.zig w/src/apprt/surface.zig
-index 3b1a04d8a..75c6c466d 100644
+index 3b1a04d8a..602e28c73 100644
 --- i/src/apprt/surface.zig
 +++ w/src/apprt/surface.zig
-@@ -140,6 +140,15 @@ pub const Message = union(enum) {
+@@ -140,6 +140,16 @@ pub const Message = union(enum) {
      /// Report the progress of an action using a GUI element
      progress_report: terminal.osc.Command.ProgressReport,
  
@@ -191,7 +191,8 @@ index 3b1a04d8a..75c6c466d 100644
 +    program_status: struct {
 +        state: terminal.osc.Command.ProgramStatus.State,
 +        kind: ?terminal.osc.Command.ProgramStatus.Kind,
-+        app: [31:0]u8,
++        app: [terminal.osc.program_status.max_app_bytes:0]u8,
++        /// Cut below the parser's limits so this variant doesn't grow every surface message.
 +        msg: [255:0]u8,
 +        title: [127:0]u8,
 +    },

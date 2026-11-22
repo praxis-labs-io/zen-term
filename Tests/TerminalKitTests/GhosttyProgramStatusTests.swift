@@ -71,6 +71,15 @@ final class GhosttyProgramStatusTests: XCTestCase {
                 title: "Fix the login bug"))
     }
 
+    func test_theLongestAppNameCrossesTheSeamWhole() throws {
+        let spy = StatusSpy()
+        let app = String(repeating: "a", count: 32)
+        _ = try runInSurface(
+            ["printf '\\033]7501;state=working:app=\(app)\\007'", "sleep 5"],
+            delegate: spy, until: { _ in !spy.statuses.isEmpty })
+        XCTAssertEqual(spy.statuses.first??.app, app)
+    }
+
     func test_aSubRecordsReportNeverReachesTheDelegate() throws {
         let spy = StatusSpy()
         _ = try runInSurface(
