@@ -573,7 +573,10 @@ feeds it the 7501 status leaving `working`, the OSC 133 finish and the surface's
 `pane.send` a message for the caller. libghostty reports no output, so output and a job's exit
 without OSC 133 are checked on a timer while a wait holds: the screen's own rows, lined up with the
 last read (`OutputWatch`), and the foreground group returning to the shell (`ForegroundGroup`). The
-connection's thread checks for a hangup while it waits and drops the hold. A token resolves to its window, tab and surface by walking the windows
+connection's thread checks for a hangup while it waits and drops the hold. A wait on the caller's children
+(`ChildrenWait`) holds a `PaneWait` per child with no deadline of its own, so a child's news routes
+as a single pane's does. A pane `pane.run` opened leaves its exit in its window's
+`LaunchedPaneExits` as it closes, which a wait reads when the pane is gone. A token resolves to its window, tab and surface by walking the windows
 (`ControlResponder.locate`), not through a second registry. An `ssh:<alias>` address resolves
 through each window's host workspaces, not `runningWorkspaces()`, which feeds the ⌘P picker
 and leaves hosts out. `action` hands its keymap action
