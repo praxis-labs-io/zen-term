@@ -5,7 +5,7 @@ import TerminalKit
 /// Reads nothing from `Theme`, so the dependency on it stays one-way.
 struct GeneralConfig: Equatable {
     enum ReduceMotion: Equatable { case system, on, off }
-    enum ToastDismissal: Equatable { case sticky, auto }
+    enum ToastDismissal: Equatable { case off, sticky, auto }
 
     var cursorStyle: TerminalBehavior.CursorStyle
     var cursorBlink: Bool
@@ -85,8 +85,8 @@ struct GeneralConfig: Equatable {
         maxDrawerFraction: 0.7,
         reduceMotion: .system,
         agentNotifications: true,
-        attentionToast: .sticky,
-        completionToast: .sticky,
+        attentionToast: .off,
+        completionToast: .off,
         toastDuration: Motion.Linger.toast,
         automaticUpdateChecks: true,
         debug: false,

@@ -20,8 +20,12 @@ final class WindowControllerToastSeamTests: WindowTestCase {
             .appendingPathComponent("zenterm-toast-seam-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         ConfigLoader.defaultRootOverrideForTesting = tempRoot
+        try? Self.stickyCards.write(
+            to: tempRoot.appendingPathComponent("config"), atomically: true, encoding: .utf8)
         AppConfig.reload()
     }
+
+    private static let stickyCards = "attention-toast = sticky\ncompletion-toast = sticky\n"
 
     override func tearDown() {
         controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
@@ -217,6 +221,41 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         XCTAssertEqual(toastViews(in: controller).count, 1, "no timer was armed")
     }
 
+    func test_waitingToast_byDefault_presentsNoNotice() throws {
+        try seed("")
+        assertWaitingPresentsNoNotice()
+    }
+
+    func test_waitingToast_underOff_presentsNoNotice() throws {
+        try seed("attention-toast = off\ncompletion-toast = sticky\n")
+        assertWaitingPresentsNoNotice()
+    }
+
+    private func assertWaitingPresentsNoNotice(file: StaticString = #filePath, line: UInt = #line) {
+        Motion.isReduceMotionEnabled = { false }
+        let controller = makeController()
+        controller.newTabForTesting()
+        controller.notifyAgentForTesting(tabIndex: 0, message: "needs your input")
+        drainMainQueue()
+
+        XCTAssertTrue(
+            toastViews(in: controller).isEmpty, "no card mounts, not even one on its way out",
+            file: file, line: line)
+        XCTAssertNil(controller.waitingToastForTesting(tabIndex: 0), file: file, line: line)
+        XCTAssertEqual(
+            controller.attentionStateForTesting(tabIndex: 0), .waiting, "the tab still asks",
+            file: file, line: line)
+    }
+
+    func test_nothingWaitingToast_stillAnswersTheJumpChord_byDefault() throws {
+        try seed("")
+        let controller = makeController()
+
+        controller.handle(.nextWaitingAgent)
+
+        XCTAssertEqual(toastViews(in: controller).count, 1, "the chord's answer is not an attention notice")
+    }
+
     func test_waitingToast_reappliesTheme_whenTheConfigChanges() throws {
         let controller = makeController()
         controller.newTabForTesting()
@@ -266,6 +305,64 @@ final class WindowControllerToastSeamTests: WindowTestCase {
         let copy = descendants(of: toast).compactMap { ($0 as? NSTextField)?.stringValue }
         XCTAssertTrue(copy.contains("Finished in 2m 6s."))
         XCTAssertEqual(keycaps(in: toast), ["⌘1"])
+    }
+
+    func test_longCommandInBackgroundTab_byDefault_presentsNoNotice() throws {
+        try seed("")
+        assertCompletionPresentsNoNotice()
+    }
+
+    func test_longCommandInBackgroundTab_underOff_presentsNoNotice() throws {
+        try seed("attention-toast = sticky\ncompletion-toast = off\n")
+        assertCompletionPresentsNoNotice()
+    }
+
+    private func assertCompletionPresentsNoNotice(file: StaticString = #filePath, line: UInt = #line) {
+        Motion.isReduceMotionEnabled = { false }
+        let controller = makeController()
+        controller.newTabForTesting()
+
+        controller.notifyCommandFinishedForTesting(
+            tabIndex: 0, result: TerminalCommandResult(exitCode: 0, duration: 126))
+        drainMainQueue()
+
+        XCTAssertTrue(
+            toastViews(in: controller).isEmpty, "no card mounts, not even one on its way out",
+            file: file, line: line)
+        XCTAssertEqual(
+            controller.attentionStateForTesting(tabIndex: 0), .completed, "the tab still says so",
+            file: file, line: line)
+    }
+
+    func test_anAskUnderOff_leavesTheTabsCompletionCardUp() throws {
+        Motion.isReduceMotionEnabled = { true }
+        try seed("attention-toast = off\ncompletion-toast = sticky\n")
+        let controller = makeController()
+        controller.newTabForTesting()
+        controller.notifyCommandFinishedForTesting(
+            tabIndex: 0, result: TerminalCommandResult(exitCode: 0, duration: 126))
+        drainMainQueue()
+        let completionCard = try XCTUnwrap(controller.waitingToastForTesting(tabIndex: 0))
+
+        controller.notifyAgentForTesting(tabIndex: 0, message: "needs your input")
+        drainMainQueue()
+
+        XCTAssertTrue(
+            controller.waitingToastForTesting(tabIndex: 0) === completionCard,
+            "an off notice takes nothing down")
+        XCTAssertEqual(toastViews(in: controller).count, 1)
+    }
+
+    func test_longCommandInBackgroundTab_underAuto_presentsANotice() throws {
+        try seed("completion-toast = auto\n")
+        let controller = makeController()
+        controller.newTabForTesting()
+
+        controller.notifyCommandFinishedForTesting(
+            tabIndex: 0, result: TerminalCommandResult(exitCode: 0, duration: 126))
+        drainMainQueue()
+
+        XCTAssertNotNil(controller.waitingToastForTesting(tabIndex: 0))
     }
 
     func test_shortCommandStaysQuiet() {

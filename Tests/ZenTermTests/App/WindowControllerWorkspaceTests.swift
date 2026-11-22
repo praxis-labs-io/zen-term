@@ -18,7 +18,7 @@ final class WindowControllerWorkspaceTests: WindowTestCase {
         originalConfig = GeneralConfig.current
         Motion.isReduceMotionEnabled = { true }
         TerminalSurfaceFactory.makeOverride = { RecordingSurface() }
-        GeneralConfig.setCurrentForTesting(.builtIn)
+        GeneralConfig.setCurrentForTesting(.builtInWithStickyCards)
         root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

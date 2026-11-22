@@ -389,10 +389,21 @@ final class GeneralConfigParserTests: XCTestCase {
         XCTAssertEqual(config.toastDuration, 8)
     }
 
-    func test_toastKeys_defaultToSticky() {
-        let config = parse("")
+    func test_toastKeys_parseOffAndSticky() {
+        let config = parse(
+            """
+            attention-toast = sticky
+            completion-toast = off
+            """)
         XCTAssertEqual(config.attentionToast, .sticky)
-        XCTAssertEqual(config.completionToast, .sticky)
+        XCTAssertEqual(config.completionToast, .off)
+        XCTAssertEqual(parse("attention-toast = off\n").attentionToast, .off)
+    }
+
+    func test_toastKeys_defaultToOff() {
+        let config = parse("")
+        XCTAssertEqual(config.attentionToast, .off)
+        XCTAssertEqual(config.completionToast, .off)
         XCTAssertEqual(config.toastDuration, 4)
     }
 
@@ -408,10 +419,10 @@ final class GeneralConfigParserTests: XCTestCase {
             [
                 ConfigDiagnostic(
                     scope: .setting(key: "attention-toast"),
-                    problem: .invalidValue(got: "forever", expected: "sticky or auto")),
+                    problem: .invalidValue(got: "forever", expected: "off, sticky, or auto")),
                 ConfigDiagnostic(
                     scope: .setting(key: "completion-toast"),
-                    problem: .invalidValue(got: "whenever", expected: "sticky or auto")),
+                    problem: .invalidValue(got: "whenever", expected: "off, sticky, or auto")),
             ])
     }
 

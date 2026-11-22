@@ -316,13 +316,14 @@ enum GeneralConfigParser {
         _ value: String, _ key: String, _ diagnostics: inout [ConfigDiagnostic]
     ) -> GeneralConfig.ToastDismissal? {
         switch value.lowercased() {
+        case "off": return .off
         case "sticky": return .sticky
         case "auto": return .auto
         default:
             Log.warning(
-                "GeneralConfig: `\(key)` expected sticky/auto, got `\(value)` — using default",
+                "GeneralConfig: `\(key)` expected off/sticky/auto, got `\(value)` — using default",
                 category: .config)
-            diagnostics.append(invalid(key, got: value, expected: "sticky or auto"))
+            diagnostics.append(invalid(key, got: value, expected: "off, sticky, or auto"))
             return nil
         }
     }

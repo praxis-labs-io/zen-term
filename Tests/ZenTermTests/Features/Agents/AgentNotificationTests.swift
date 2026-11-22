@@ -22,10 +22,7 @@ final class AgentNotificationTests: WindowTestCase {
             self?.spawned.append(surface)
             return surface
         }
-        var config = GeneralConfig.builtIn
-        config.attentionToast = .sticky
-        config.completionToast = .sticky
-        GeneralConfig.setCurrentForTesting(config)
+        GeneralConfig.setCurrentForTesting(.builtInWithStickyCards)
         WindowController.isPresent = { _ in true }
     }
 

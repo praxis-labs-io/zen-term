@@ -14,8 +14,8 @@ final class WindowController: NSObject {
     private var selection: WindowSelection
     private var nextWorkspaceID = 2
     private var attentionCards: [TabID: ToastView] = [:]
-    // A card is keyed by the tab it sits on but answers one surface, which may be a drawer or a float.
-    private var cardSurfaces: [TabID: SurfaceID] = [:]
+    // A tab's notice answers one surface, which may be a drawer or a float, and stands whether or not its card shows.
+    private var noticeSurfaces: [TabID: SurfaceID?] = [:]
     private var cardTitles: [TabID: () -> String] = [:]
     private let attention = AttentionStore()
     private let agents = AgentRoster()
@@ -3206,15 +3206,16 @@ final class WindowController: NSObject {
     private func finishTurn(_ surface: SurfaceID) {
         guard let tab = tab(of: surface) else { return }
         attention.endTurn(surface, seen: isSeen(surface, in: tab))
-        guard attention.agentWait(of: surface) == .turnEnd, !hasAskCard(tab) else { return }
+        guard attention.agentWait(of: surface) == .turnEnd, !askOutranksTurnEnd(in: tab) else { return }
         presentAttentionCard(
             .waiting, for: tab, address: cardAddress(of: surface, in: tab), message: Self.turnEndMessage,
             surface: surface)
     }
 
-    // A tab shows one card, and a finished turn is never worth more than a question.
-    private func hasAskCard(_ tab: TabID) -> Bool {
-        cardSurfaces[tab].map { attention.agentWait(of: $0) == .ask } ?? false
+    // A tab shows one card, and a finished turn is never worth more than a question whose card is up or off.
+    private func askOutranksTurnEnd(in tab: TabID) -> Bool {
+        guard let surface = noticeSurfaces[tab] ?? nil, attention.agentWait(of: surface) == .ask else { return false }
+        return attentionCards[tab] != nil || GeneralConfig.current.attentionToast == .off
     }
 
     private static let blockedMessage = "Waiting for your approval."
@@ -3321,7 +3322,7 @@ final class WindowController: NSObject {
     private func applyDerived(_ state: AgentSignalState, to surface: SurfaceID) {
         switch state {
         case .working:
-            if attention.agentWait(of: surface) != .ask { takeDownCard(of: surface) }
+            if attention.agentWait(of: surface) != .ask { takeDownNotice(of: surface) }
             attention.setWorking(surface, true)
             noteTitleMessage(surface)
         case .idle:
@@ -3387,7 +3388,6 @@ final class WindowController: NSObject {
     ) {
         let title = address.title
         let titleTail = address.titleTail
-        if let old = attentionCards[id] { toasts.dismiss(old) }
         let content: ToastContent
         let dismissal: GeneralConfig.ToastDismissal
         switch card {
@@ -3399,6 +3399,9 @@ final class WindowController: NSObject {
             content = ToastContent(variant: variant, title: title(), titleTail: titleTail, message: message)
             dismissal = GeneralConfig.current.completionToast
         }
+        noticeSurfaces.updateValue(surface, forKey: id)
+        guard dismissal != .off else { return }
+        if let old = attentionCards[id] { toasts.dismiss(old) }
         let destination =
             address.destination
             ?? CardDestination(
@@ -3523,7 +3526,7 @@ final class WindowController: NSObject {
         let crashed = agent.name != nil && Self.isCrash(result)
         if crashed {
             let seen = isSeen(surface, in: id)
-            takeDownTurnEndCard(of: surface)
+            takeDownTurnEndNotice(of: surface)
             attention.endCrashedAgent(surface, seen: seen)
             agentStates.drop(surface)
             if !seen { raiseAskCard(surface, in: id, message: message) }
@@ -3539,7 +3542,7 @@ final class WindowController: NSObject {
     }
 
     private func endAgent(_ surface: SurfaceID) {
-        takeDownTurnEndCard(of: surface)
+        takeDownTurnEndNotice(of: surface)
         attention.endAgent(surface)
         agentStates.drop(surface)
     }
@@ -3551,8 +3554,8 @@ final class WindowController: NSObject {
         renderAgents()
     }
 
-    private func takeDownTurnEndCard(of surface: SurfaceID) {
-        if attention.agentWait(of: surface) == .turnEnd { takeDownCard(of: surface) }
+    private func takeDownTurnEndNotice(of surface: SurfaceID) {
+        if attention.agentWait(of: surface) == .turnEnd { takeDownNotice(of: surface) }
     }
 
     private func trackAgentExits() {
@@ -3675,7 +3678,7 @@ final class WindowController: NSObject {
     private func surfaceShown(_ surface: SurfaceID) {
         attention.markSeen(surface)
         answerFocusedAgent()
-        takeDownCard(of: surface)
+        takeDownNotice(of: surface)
     }
 
     /// Clears the tab and the surface that asked. A window float belongs to no tab, so the tab alone would miss it.
@@ -3689,13 +3692,11 @@ final class WindowController: NSObject {
         actions: [ToastAction], autoDismiss: Bool
     ) -> ToastView {
         let toast = toasts.showSticky(content, actions: actions, autoDismiss: autoDismiss)
-        cardSurfaces[id] = surface
         cardTitles[id] = title
         toast.onClose = { [weak self] in self?.answer(id, surface: surface) }
         toast.onDismissed = { [weak self, weak toast] in
             guard let self, let toast, self.attentionCards[id] === toast else { return }
             self.attentionCards[id] = nil
-            self.cardSurfaces[id] = nil
             self.cardTitles[id] = nil
         }
         return toast
@@ -3910,23 +3911,23 @@ final class WindowController: NSObject {
 
     private func clearAttention(_ id: TabID) {
         attention.markSeen(tab: id)
-        takeDownCard(id)
+        takeDownNotice(id)
     }
 
     /// Answers what the tab shows on arrival; a closed drawer or Scratch keeps its ask and card.
     private func visit(_ id: TabID) {
         attention.visit(id) { isOnScreen($0, in: id) }
         answerFocusedAgent()
-        if isOnScreen(cardSurfaces[id], in: id) { takeDownCard(id) }
+        if isOnScreen(noticeSurfaces[id] ?? nil, in: id) { takeDownNotice(id) }
     }
 
-    private func takeDownCard(of surface: SurfaceID) {
-        guard let id = cardSurfaces.first(where: { $0.value == surface })?.key else { return }
-        takeDownCard(id)
+    private func takeDownNotice(of surface: SurfaceID) {
+        guard let id = noticeSurfaces.first(where: { $0.value == surface })?.key else { return }
+        takeDownNotice(id)
     }
 
-    private func takeDownCard(_ id: TabID) {
-        cardSurfaces[id] = nil
+    private func takeDownNotice(_ id: TabID) {
+        noticeSurfaces[id] = nil
         cardTitles[id] = nil
         if let toast = attentionCards.removeValue(forKey: id) { toasts.dismiss(toast) }
         AgentNotifier.shared.clear(windowID: windowID, tabID: id)
@@ -4080,9 +4081,9 @@ extension WindowController: NSWindowDelegate {
             guard let tab = tab(of: surface), isSeen(surface, in: tab) else { continue }
             attention.markSeen(surface)
         }
-        for id in attentionCards.keys where isSeen(cardSurfaces[id], in: id) {
-            cardSurfaces[id].map { attention.markSeen($0) }
-            takeDownCard(id)
+        for (id, surface) in noticeSurfaces where isSeen(surface, in: id) {
+            surface.map { attention.markSeen($0) }
+            takeDownNotice(id)
         }
     }
 

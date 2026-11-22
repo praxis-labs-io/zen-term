@@ -21,9 +21,7 @@ final class AttentionCenterWindowTests: WindowTestCase {
             self?.spawned.append(surface)
             return surface
         }
-        var config = GeneralConfig.builtIn
-        config.attentionToast = .sticky
-        GeneralConfig.setCurrentForTesting(config)
+        GeneralConfig.setCurrentForTesting(.builtInWithStickyCards)
     }
 
     override func tearDownWithError() throws {

@@ -18,14 +18,14 @@ final class SettingsGeneralSection: SettingsFormSection {
         addGroup("Notifications") {
             self.addSegmentedRow(
                 key: "attention-toast", caption: "Notice for a tab that needs you",
-                blurb: "Sticky waits to be answered; auto clears itself",
+                blurb: "Off shows none; sticky waits to be answered; auto clears itself",
                 options: Self.dismissalTitles,
                 read: { Self.dismissalIndex($0.attentionToast) },
                 token: { LayoutFormat.toastDismissalToken(Self.dismissals[$0]) },
                 notifiesOnReselect: false)
             self.addSegmentedRow(
                 key: "completion-toast", caption: "Notice for something that finished",
-                blurb: "Sticky waits to be answered; auto clears itself",
+                blurb: "Off shows none; sticky waits to be answered; auto clears itself",
                 options: Self.dismissalTitles,
                 read: { Self.dismissalIndex($0.completionToast) },
                 token: { LayoutFormat.toastDismissalToken(Self.dismissals[$0]) },
@@ -45,8 +45,8 @@ final class SettingsGeneralSection: SettingsFormSection {
         }
     }
 
-    private static let dismissals: [GeneralConfig.ToastDismissal] = [.sticky, .auto]
-    private static let dismissalTitles = ["Sticky", "Auto"]
+    private static let dismissals: [GeneralConfig.ToastDismissal] = [.off, .sticky, .auto]
+    private static let dismissalTitles = ["Off", "Sticky", "Auto"]
     private static func dismissalIndex(_ dismissal: GeneralConfig.ToastDismissal) -> Int {
         dismissals.firstIndex(of: dismissal) ?? 0
     }

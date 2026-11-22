@@ -13,6 +13,15 @@ final class AgentNotifier: NSObject {
 
     private var isAuthorized = false
 
+    #if DEBUG
+        enum Request: Equatable {
+            case notify(windowID: Int, tabID: TabID)
+            case clear(windowID: Int, tabID: TabID)
+        }
+
+        var recordForTesting: ((Request) -> Void)?
+    #endif
+
     private override init() { super.init() }
 
     static func shouldPushNotification(appActive: Bool, enabled: Bool) -> Bool {
@@ -25,6 +34,9 @@ final class AgentNotifier: NSObject {
     }
 
     func notify(windowID: Int, tabID: TabID, title: String, body: String) {
+        #if DEBUG
+            recordForTesting?(.notify(windowID: windowID, tabID: tabID))
+        #endif
         guard isBundled else { return }
         let content = UNMutableNotificationContent()
         content.title = title
@@ -40,6 +52,9 @@ final class AgentNotifier: NSObject {
     }
 
     func clear(windowID: Int, tabID: TabID) {
+        #if DEBUG
+            recordForTesting?(.clear(windowID: windowID, tabID: tabID))
+        #endif
         guard isBundled else { return }
         let id = [identifier(windowID: windowID, tabID: tabID)]
         let center = UNUserNotificationCenter.current()

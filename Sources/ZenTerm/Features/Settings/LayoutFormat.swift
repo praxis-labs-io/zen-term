@@ -23,6 +23,7 @@ enum LayoutFormat {
 
     static func toastDismissalToken(_ dismissal: GeneralConfig.ToastDismissal) -> String {
         switch dismissal {
+        case .off: return "off"
         case .sticky: return "sticky"
         case .auto: return "auto"
         }

@@ -59,8 +59,8 @@ final class SettingsGeneralSectionTests: WindowTestCase {
         let segments = mountSegments()
         XCTAssertEqual(segments.count, 4, "notifications, the two toast rows, and updates")
         XCTAssertEqual(segments[Segment.notifications.rawValue].selectedIndex, 0, "notifications On")
-        XCTAssertEqual(segments[Segment.attentionToast.rawValue].selectedIndex, 0, "attention Sticky")
-        XCTAssertEqual(segments[Segment.completionToast.rawValue].selectedIndex, 0, "completion Sticky")
+        XCTAssertEqual(segments[Segment.attentionToast.rawValue].selectedIndex, 0, "attention Off")
+        XCTAssertEqual(segments[Segment.completionToast.rawValue].selectedIndex, 0, "completion Off")
         XCTAssertEqual(segments[Segment.updates.rawValue].selectedIndex, 0, "automatic updates On")
     }
 
@@ -83,18 +83,30 @@ final class SettingsGeneralSectionTests: WindowTestCase {
             configText().contains("agent-notifications = false"), "got: \(configText())")
     }
 
-    func test_attentionToast_selectingAuto_writesItsOwnKey() {
-        segment(.attentionToast).select(1)
-
-        XCTAssertTrue(configText().contains("attention-toast = auto"), "got: \(configText())")
-        XCTAssertFalse(configText().contains("completion-toast"), "got: \(configText())")
+    func test_toastRows_offerOffStickyAndAuto() {
+        let segments = mountSegments()
+        for row in [Segment.attentionToast, .completionToast] {
+            XCTAssertEqual(segments[row.rawValue].optionTitles, ["Off", "Sticky", "Auto"], "\(row)")
+        }
     }
 
-    func test_completionToast_selectingAuto_writesItsOwnKey() {
-        segment(.completionToast).select(1)
+    func test_attentionToast_writesEachValue_toItsOwnKey() {
+        assertWritesEachDismissal(.attentionToast, key: "attention-toast", other: "completion-toast")
+    }
 
-        XCTAssertTrue(configText().contains("completion-toast = auto"), "got: \(configText())")
-        XCTAssertFalse(configText().contains("attention-toast"), "got: \(configText())")
+    func test_completionToast_writesEachValue_toItsOwnKey() {
+        assertWritesEachDismissal(.completionToast, key: "completion-toast", other: "attention-toast")
+    }
+
+    private func assertWritesEachDismissal(
+        _ row: Segment, key: String, other: String, file: StaticString = #filePath, line: UInt = #line
+    ) {
+        let control = segment(row)
+        for (index, value) in [(1, "sticky"), (2, "auto"), (0, "off")] {
+            control.select(index)
+            XCTAssertTrue(configText().contains("\(key) = \(value)"), "got: \(configText())", file: file, line: line)
+            XCTAssertFalse(configText().contains(other), "got: \(configText())", file: file, line: line)
+        }
     }
 
     func test_updates_selectingOff_thenOn_writesFalseThenTrue() {

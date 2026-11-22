@@ -23,7 +23,7 @@ final class BackgroundTabTests: WindowTestCase {
             self?.spawned.append(surface)
             return surface
         }
-        GeneralConfig.setCurrentForTesting(.builtIn)
+        GeneralConfig.setCurrentForTesting(.builtInWithStickyCards)
     }
 
     override func tearDownWithError() throws {

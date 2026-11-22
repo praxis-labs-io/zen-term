@@ -343,7 +343,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   command: `completed`, no banner, no row, and never over a tab that is already waiting.
   An agent's notification goes through `AgentRules.notificationKind`. Codex's carries no
   state, because it arrives before its title says what Codex wants; the move into its
-  Action Required title raises the waiting card and banner instead, once per ask.
+  Action Required title raises the banner and, unless `attention-toast` is off, the
+  waiting card instead, once per ask.
   Claude's idle prompt is a turn end arriving a minute late: it only banners over a turn
   end still unseen, and changes nothing once the turn was seen. It asks only from a Claude
   that reports no progress, since Claude clears its progress at launch and none means
@@ -359,8 +360,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   for its card and draws no dot. A toolbar button's dot says only that its drawer or float
   is running or live in the background.
 - **Background command completion:** OSC 133 `COMMAND_FINISHED` over a threshold in a
-  background tab raises one sticky toast; the rank keeps it under a waiting agent. A
-  notification no agent sent raises the same card, with its own words.
+  background tab records `completed` and, unless `completion-toast` is off, raises one
+  card; the rank keeps it under a waiting agent. A notification no agent sent does the
+  same, with its own words.
 - Notification identity is `(windowID, tabID)`; `TabID` is per window. `AttentionCenter`
   records how many unseen asks each window holds, and answers nothing else. Only the
   next-waiting-agent chord's toast reads it, to say an agent waits in another window when
