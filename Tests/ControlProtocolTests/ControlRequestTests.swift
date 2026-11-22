@@ -106,7 +106,7 @@ final class ControlRequestTests: XCTestCase {
                 "workspace.close", "tab.new",
                 "tab.select", "tab.rename", "tab.close",
                 "pane.split", "pane.focus", "pane.close", "pane.send", "pane.keys", "pane.interrupt", "pane.read",
-                "pane.get",
+                "pane.get", "pane.wait",
                 "worktree.list", "worktree.create", "worktree.remove", "action",
             ])
     }

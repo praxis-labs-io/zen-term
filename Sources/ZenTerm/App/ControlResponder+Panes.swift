@@ -103,6 +103,7 @@ extension ControlResponder {
             guard surface.isStarted else { return .failure(Self.notStarted(place.pane.token)) }
             if !text.isEmpty { surface.paste(text) }
             if request.args.enter == true { surface.submit() }
+            paneWaits.sent(to: place.pane.surfaceID)
             return .success(NoPayload())
         }
     }
@@ -182,6 +183,36 @@ extension ControlResponder {
 
     func getPane(_ request: ControlRequest) -> ControlReply {
         pane(request.args.pane, for: request).map { place in place.window.listing(of: place.pane, in: place.tab) }
+    }
+
+    func waitOnPane(_ request: ControlRequest, hangup: ControlHangup, reply: @escaping (ControlReply) -> Void) {
+        let timeout = request.args.timeout ?? ControlWire.defaultPaneWait
+        guard (1...ControlWire.longestPaneWait).contains(timeout) else {
+            return reply(
+                .failure(ControlError(.badRequest, "timeout must be 1 to \(ControlWire.longestPaneWait) seconds.")))
+        }
+        if request.args.output?.isEmpty == true {
+            return reply(.failure(ControlError(.badRequest, "output must not be empty.")))
+        }
+        if request.args.output?.contains(where: \.isNewline) == true {
+            return reply(.failure(ControlError(.badRequest, "output matches within one line, so it takes no newline.")))
+        }
+        guard let token = request.args.pane else {
+            return reply(.failure(ControlError(.badRequest, "pane.wait needs a pane.")))
+        }
+        switch pane(token, for: request) {
+        case .failure(let error): reply(.failure(error))
+        case .success(let place):
+            let onHost = place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) != nil
+            let watched = PaneWait.Watched(
+                surfaceID: place.pane.surfaceID, surface: place.pane.surface, readsForeground: !onHost,
+                pane: { [self] in locate(pane: token).map { $0.window.listing(of: $0.pane, in: $0.tab) } })
+            let caller = request.caller?.pane.flatMap { locate(pane: $0)?.pane.surfaceID }
+            guard let wait = PaneWait(watched, caller: caller, output: request.args.output, reply: reply) else {
+                return reply(.failure(ControlError(.notFound, "There is no pane \(token).")))
+            }
+            paneWaits.hold(wait, timeout: TimeInterval(timeout), hangup: hangup)
+        }
     }
 
     private static func notStarted(_ token: Int) -> ControlError {
