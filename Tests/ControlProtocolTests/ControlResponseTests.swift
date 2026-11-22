@@ -96,6 +96,28 @@ final class ControlResponseTests: XCTestCase {
         XCTAssertEqual(ControlAddress.Workspace("zen-term: feat/x"), .title("zen-term: feat/x"))
     }
 
+    func test_aPaneCarriesItsProgramAndTheAgentsOwnReport_andOmitsWhatIsUnknown() throws {
+        let pane = ListResult.Pane(
+            token: 34, drawer: nil, title: "claude", cwd: "/repo", busy: true,
+            process: ListResult.Process(pid: 81234, program: "claude"),
+            agent: ListResult.Agent(
+                name: "claude", state: .waiting, status: .blocked, kind: .permission, msg: "Run make?",
+                title: "Reviewing x.swift"))
+        XCTAssertEqual(
+            text(try pane.responseLine(id: 1)),
+            #"{"id":1,"ok":true,"result":{"agent":{"kind":"permission","msg":"Run make?","name":"claude","#
+                + #""state":"waiting","status":"blocked","title":"Reviewing x.swift"},"busy":true,"cwd":"/repo","#
+                + #""process":{"pid":81234,"program":"claude"},"title":"claude","token":34},"v":1}"# + "\n")
+
+        let bare = ListResult.Pane(
+            token: 35, drawer: nil, title: "", cwd: nil, busy: false,
+            agent: ListResult.Agent(name: nil, state: .idle))
+        XCTAssertEqual(
+            text(try bare.responseLine(id: 2)),
+            #"{"id":2,"ok":true,"result":{"agent":{"state":"idle"},"busy":false,"title":"","token":35},"v":1}"#
+                + "\n")
+    }
+
     func test_aRefusalCarriesWhatForceWouldEnd() throws {
         let pane = ListResult.Pane(token: 31, drawer: nil, title: "npm run dev", cwd: "/app", busy: true, agent: nil)
         let refusal = ControlError(
