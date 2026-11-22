@@ -243,7 +243,7 @@ final class GhosttyApp {
         }
     }
 
-    // Auto-confirms, since reads are allowed outright; leaving it unanswered hangs the program.
+    // Auto-confirms every request, OSC 52 and Kitty reads and writes alike; an unanswered one hangs the program.
     private static func confirmReadClipboard(
         _ userdata: UnsafeMutableRawPointer?,
         _ confirm: UnsafePointer<ghostty_clipboard_confirm_s>?,

@@ -6,12 +6,18 @@ import XCTest
 final class GhosttyClipboardTests: XCTestCase {
     private var window: NSWindow!
     private var surfaces: [GhosttySurface] = []
-    private var savedClipboard: String?
+    private var savedClipboard: [NSPasteboardItem] = []
 
     override func setUp() {
         super.setUp()
         _ = NSApplication.shared
-        savedClipboard = NSPasteboard.general.string(forType: .string)
+        savedClipboard = (NSPasteboard.general.pasteboardItems ?? []).map { item in
+            let copy = NSPasteboardItem()
+            for type in item.types {
+                if let data = item.data(forType: type) { copy.setData(data, forType: type) }
+            }
+            return copy
+        }
         window = NSWindow(
             contentRect: NSRect(x: 100, y: 100, width: 800, height: 600),
             styleMask: [.titled], backing: .buffered, defer: false)
@@ -28,7 +34,7 @@ final class GhosttyClipboardTests: XCTestCase {
         window.close()
         window = nil
         NSPasteboard.general.clearContents()
-        if let savedClipboard { NSPasteboard.general.setString(savedClipboard, forType: .string) }
+        NSPasteboard.general.writeObjects(savedClipboard)
         super.tearDown()
     }
 
