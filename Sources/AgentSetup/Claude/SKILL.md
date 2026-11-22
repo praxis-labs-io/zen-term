@@ -60,4 +60,16 @@ zen worktree remove my-branch
 
 - For worktree work, use `zen worktree` instead of `git worktree` or
   EnterWorktree, so the worktree opens as a workspace the user can see.
+- Run anything that doesn't exit on its own (a dev server, a watcher, an app
+  launcher) in a tab of its own, never in your shell tool's background mode or
+  with `&` or `nohup`. The user can watch a tab, and a background job keeps
+  your session reading as working after your turn ends.
+
+  ```sh
+  zen tab new --cmd "npm run dev"        # prints {"pane":34,"tab":"w1.t7"}
+  zen pane read --pane 34 --lines 40     # its output, instead of restarting it
+  ```
+
+  Leave it running when your turn ends unless asked to stop it. When the
+  command exits, its tab stays open at a shell prompt.
 - Close only what you opened.
