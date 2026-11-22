@@ -380,7 +380,7 @@ final class ControlHelperNoteTests: WindowTestCase {
         XCTAssertEqual(parent.inputs, [])
     }
 
-    func test_aChildrenWaitForAllThatAnotherChildHoldsLetsTheNoteThrough() throws {
+    func test_aChildrenWaitForAllTakesThePlaceOfTheNote_whileAnotherChildStillWorks() throws {
         makeWindow()
         let parent = try XCTUnwrap(spawned.first)
         report(.idle, from: parent)
@@ -391,9 +391,14 @@ final class ControlHelperNoteTests: WindowTestCase {
         let all = try waitOnChildren(of: parent, .all)
 
         report(.done, from: helper)
+        XCTAssertEqual(parent.inputs, [])
+        XCTAssertNil(all.reply, "the wait holds for the child still working")
 
-        let read = "review stopped (done): read it with zen pane read --pane \(try token(of: helper))"
-        XCTAssertEqual(parent.inputs, try note(read, from: helper))
-        XCTAssertEqual((try all.reply?.get() as? WaitResult)?.reason, .message)
+        report(.done, from: other)
+        let got = try XCTUnwrap(try all.reply?.get() as? WaitResult)
+        XCTAssertEqual(got.reason, .stopped)
+        let heard = got.children?.first { $0.pane.token == (try? token(of: helper)) }
+        XCTAssertEqual(heard?.reason, .stopped)
+        XCTAssertEqual(parent.inputs, [])
     }
 }

@@ -52,14 +52,9 @@ final class ChildrenWait {
 
     func messageArrived() { answer(.message) }
 
-    // The child the change is about is left out of `all`, since the change ends its work.
+    // `all` counts a change it does not answer on yet, and reports it among its children when it does.
     func answers(_ reason: WaitReason, from surface: SurfaceID) -> Bool {
-        guard watches.contains(where: { $0.probe.watched.surfaceID == surface && $0.probe.answers(reason) })
-        else { return false }
-        guard mode == .all else { return true }
-        return !watches.contains {
-            $0.probe.watched.surfaceID != surface && news[$0.token]?.reason != .exited && $0.isWorking()
-        }
+        watches.contains { $0.probe.watched.surfaceID == surface && $0.probe.answers(reason) }
     }
 
     func cancel() { finish() }

@@ -374,7 +374,8 @@ with `enter` sends it:
 - A child without a name is `pane 34`. `blocked` names `a permission prompt`, `a question` or
   `a login` when the program says which.
 - There is no note when the parent runs no agent, when a `pane.wait` the parent holds on the
-  child, or on its `children`, answers the same change, or for the report that settles `first_task`, which `pane.run`
+  child answers the same change, when one it holds on its `children` watches the child, since
+  that wait reports the change, or for the report that settles `first_task`, which `pane.run`
   answers with. A pane run with `keep` stays open when its program exits, and sends no `exited`.
 - A note holds for the parent's draft as `pane.send` does. While the parent is `blocked` it holds
   until it is not, since a paste would answer the parent's prompt, and after 10 minutes it is
