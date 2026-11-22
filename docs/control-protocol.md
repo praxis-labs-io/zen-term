@@ -84,7 +84,8 @@ A `refused` error says what `force` would end:
  "details":{"closesWindow":false,"floats":[],"panes":[{"token":31,"title":"npm run dev","cwd":"/Users/me/app","busy":true}]}}
 ```
 
-`panes` are the running panes and drawers, in the shape `list` uses. `floats` are the
+`panes` are the running panes and drawers, in the shape `list` uses, the running children
+that `pane.run` started from them included. `floats` are the
 titles of running tool floats. `closesWindow` is true when the close would take the
 window with it.
 A worktree removal's refusal adds `files`, its uncommitted and untracked files, and
@@ -162,8 +163,9 @@ is listed from its first opening until it closes, shown or hidden.
 - `agent`: present when the pane runs an agent. `state` is `working`, `waiting` or
   `idle`; `name` is absent for an agent that has not been named.
 - `name`, `parent`, `first_task`: present for a pane `pane.run` opened, when it was given a
-  name, run from a pane, or given a task. `parent` is the token of the pane that ran it, kept
-  after that pane closes. `first_task` is the run's answer about its task, once it has one.
+  name, run from a pane, or given a task. `parent` is the token of the pane that ran it, and is
+  absent once that pane has closed. `first_task` is the run's answer about its task, once it
+  has one.
 
 ### `workspace.open`
 
@@ -280,13 +282,20 @@ waiting for its connection. Nothing is sent.
 
 ### `pane.run`
 
-`args`: `cmd` (required), `name`, `task`, `split` (`right` or `down`), `pane`, `focus`, `keep`.
+`args`: `cmd` (required), `name`, `task`, `split` (`right` or `down`), `pane`, `focus`, `keep`,
+`outlive_parent`.
 
 Runs `cmd` in a shell in a new pane and records `caller.pane` as its parent. Without `split`
 it opens a tab behind the active one in the workspace of `pane` (the caller's by default),
 starting in that pane's folder. With `split` it splits `pane` the way `pane.split` does, and is
-refused or fails the same way. `focus` shows the new pane. A pane does not close when its
-parent does.
+refused or fails the same way. `focus` shows the new pane.
+
+A pane closes the children it started when it closes, and they close theirs, wherever they are
+in its window, however it closes: `pane.close`, `tab.close`, `workspace.close`, its program
+exiting, or the window closing. A close that would end a running child is refused without
+`force`, and its `details` list that child; the app's close confirmation names it too.
+`outlive_parent` keeps the pane open when its parent closes; it then has no `parent`. An agent
+that quits while its pane stays open closes nothing.
 
 The pane closes when its program exits, with any exit code. `keep` drops it to a shell instead,
 the way `tab.new` and `pane.split` run a `cmd`.
@@ -403,7 +412,7 @@ Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close
 `zen action <name>` runs a keymap action. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
 rest print nothing. `zen pane split` splits to the right unless `--dir down` says otherwise.
-`zen pane run [--name] [--task] [--split right|down] [--pane] [--focus] [--keep] <command>` takes
+`zen pane run [--name] [--task] [--split right|down] [--pane] [--focus] [--keep] [--outlive-parent] <command>` takes
 everything after its options as the command, joined with spaces. A pane argument is a token when it is all digits and a name otherwise.
 `zen workspace new` takes `--title`, and `zen workspace rename <title>` takes the workspace
 as `--workspace`. `zen worktree create <branch>` takes `--base default|current` or `--existing`, not both.

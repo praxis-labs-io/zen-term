@@ -33,6 +33,9 @@ struct PaneCommands: ParsableCommand {
         @Flag(help: "Keep the pane open after the program exits.")
         var keep = false
 
+        @Flag(help: "Keep the pane open after this pane closes. Otherwise it closes with it.")
+        var outliveParent = false
+
         @Argument(parsing: .captureForPassthrough, help: "The command to run, in a shell.")
         var command: [String] = []
 
@@ -46,7 +49,7 @@ struct PaneCommands: ParsableCommand {
         func run() throws {
             let args = ControlArgs(
                 cmd: command.joined(separator: " "), focus: focus, pane: pane, name: name, task: task, split: split,
-                keep: keep)
+                keep: keep, outliveParent: outliveParent)
             var client = try connection.client()
             client.replyTimeout = time_t(ControlWire.longestReplyWait)
             print(try JSONOutput.text(client.send(.paneRun, args, expecting: PaneRunResult.self)))

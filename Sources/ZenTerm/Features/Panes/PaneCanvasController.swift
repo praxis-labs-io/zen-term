@@ -47,6 +47,8 @@ final class PaneCanvasController: NSObject {
 
     var onLaunchedPaneExited: ((LaunchedPaneExit) -> Void)?
 
+    var onPaneTokensReleased: (([Int]) -> Void)?
+
     var onTitleChanged: (() -> Void)?
 
     var onFocusChanged: (() -> Void)?
@@ -201,6 +203,7 @@ final class PaneCanvasController: NSObject {
             Log.info("surface started (pane \(id))", category: .surface)
         }
         var released: [SurfaceID] = []
+        var releasedTokens: [Int] = []
         for id in diff.removed {
             Log.info("surface stopped (pane \(id))", category: .surface)
             cwdByLeaf[id] = nil
@@ -210,11 +213,15 @@ final class PaneCanvasController: NSObject {
             exitClosingLeaves.remove(id)
             reportedExitByLeaf[id] = nil
             if let surfaceID = surfaceIDByLeaf.removeValue(forKey: id) { released.append(surfaceID) }
-            if let token = tokenByLeaf.removeValue(forKey: id) { NavRegistry.shared.unregister(token: token) }
+            if let token = tokenByLeaf.removeValue(forKey: id) {
+                NavRegistry.shared.unregister(token: token)
+                releasedTokens.append(token)
+            }
         }
         if !registered.isEmpty { onSurfacesRegistered?(registered.map(\.0)) }
         if !released.isEmpty { onSurfacesReleased?(released) }
         if !diff.removed.isEmpty { onPanesRemoved?(diff.removed) }
+        if !releasedTokens.isEmpty { onPaneTokensReleased?(releasedTokens) }
         rebuildViews()
     }
 
@@ -523,8 +530,10 @@ final class PaneCanvasController: NSObject {
         registry.terminateAll()
         if !surfaceIDByLeaf.isEmpty { onSurfacesReleased?(Array(surfaceIDByLeaf.values)) }
         surfaceIDByLeaf.removeAll()
-        for token in tokenByLeaf.values { NavRegistry.shared.unregister(token: token) }
+        let releasedTokens = Array(tokenByLeaf.values)
+        for token in releasedTokens { NavRegistry.shared.unregister(token: token) }
         tokenByLeaf.removeAll()
+        if !releasedTokens.isEmpty { onPaneTokensReleased?(releasedTokens) }
         canvasView.subviews.forEach { $0.removeFromSuperview() }
         hostByLeaf.removeAll()
     }

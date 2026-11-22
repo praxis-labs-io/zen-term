@@ -118,6 +118,10 @@ final class TabController: NSObject {
         set { paneCanvas.onLaunchedPaneExited = newValue }
     }
 
+    var onPaneTokensReleased: (([Int]) -> Void)? {
+        didSet { paneCanvas.onPaneTokensReleased = onPaneTokensReleased }
+    }
+
     var pinnedTitle: String?
     var title: String { pinnedTitle ?? liveTitle }
     var liveTitle: String { paneCanvas.title }
@@ -481,11 +485,13 @@ final class TabController: NSObject {
     private func unregisterDrawerToken(_ panel: PanelRef) {
         switch panel {
         case .bottomDrawer:
+            bottomDrawerToken.map { onPaneTokensReleased?([$0]) }
             bottomDrawerToken.map(NavRegistry.shared.unregister)
             bottomDrawerToken = nil
             bottomDrawerSurfaceID.map { onSurfacesReleased?([$0]) }
             bottomDrawerSurfaceID = nil
         case .rightDrawer:
+            rightDrawerToken.map { onPaneTokensReleased?([$0]) }
             rightDrawerToken.map(NavRegistry.shared.unregister)
             rightDrawerToken = nil
             rightDrawerSurfaceID.map { onSurfacesReleased?([$0]) }

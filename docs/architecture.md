@@ -261,6 +261,11 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   program's `D` mark, which lands before the child exit, and its last 40 lines. The window
   keeps the newest 64 in `launchedPaneExits`. `FirstTaskDelivery`, one per window, holds a
   run's task until the surface's first OSC 7501 report, its release, or 60 seconds.
+  Every pane and drawer token a tab releases reaches the window (`onPaneTokensReleased`),
+  which closes that token's children on the next main-queue turn, since the release lands
+  mid-rebuild of a canvas that may hold a child. A child's own release cascades the same way.
+  Close stakes and confirmations count the children first (`childStakes`), including whether
+  closing them empties the window. `list` drops a `parent` that `NavRegistry` no longer holds.
 - **A workspace has no view.** The window mounts a tab's own canvas, so an inactive
   workspace costs nothing beyond an inactive tab.
 - **Tab ids are minted by the window**, not by the workspace, so they stay unique across a

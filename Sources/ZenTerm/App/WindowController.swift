@@ -2318,7 +2318,8 @@ final class WindowController: NSObject {
         return ListResult.Pane(
             token: pane.token, drawer: pane.drawer.map(Self.drawer), title: pane.surface.title,
             cwd: pane.cwd?.path, busy: pane.surface.isBusy, agent: agent, name: pane.record.name,
-            parent: pane.record.parent, firstTask: pane.record.firstTask)
+            parent: pane.record.parent.flatMap { NavRegistry.shared.isLive(token: $0) ? $0 : nil },
+            firstTask: pane.record.firstTask)
     }
 
     private static func agentState(_ tone: AttentionTone) -> ListResult.AgentState {
@@ -2419,21 +2420,24 @@ final class WindowController: NSObject {
     func closeStakes(tab id: TabID) -> CloseStakes? {
         guard let workspace = workspace(of: id), let tab = controller(id) else { return nil }
         if holdsAwaitingLogin(tab: id) { return loginStakes(of: workspace) }
-        let closesWindow = workspace.tabIDs.count == 1 && closesWindow(closing: workspace)
+        let children = childStakes(closing: [id])
+        let closesWindow = workspace.tabIDs.count == 1 && closesWindow(closing: workspace) || children.closesWindow
         return CloseStakes(
-            closesWindow: closesWindow, isRunning: isRunning(tab: id),
-            panes: tab.paneHandles.filter(\.surface.isBusy).map(listing(of:)),
+            closesWindow: closesWindow, isRunning: isRunning(tab: id) || children.isRunning,
+            panes: tab.paneHandles.filter(\.surface.isBusy).map(listing(of:)) + children.running.map(listing(of:)),
             floats: floats.runningTitles(scope: id) + (closesWindow ? floats.runningTitles(scope: nil) : []))
     }
 
     func closeStakes(workspace id: WorkspaceID) -> CloseStakes? {
         guard let workspace = workspaces.first(where: { $0.id == id }) else { return nil }
         if workspace.host != nil { return CloseStakes(closesWindow: false, isRunning: false, panes: [], floats: []) }
-        let closesWindow = closesWindow(closing: workspace)
+        let children = childStakes(closing: Set(workspace.tabIDs))
+        let closesWindow = closesWindow(closing: workspace) || children.closesWindow
         let tabs = workspace.tabIDs.compactMap(workspace.controller)
         return CloseStakes(
-            closesWindow: closesWindow, isRunning: isRunning(workspace: workspace),
-            panes: tabs.flatMap(\.paneHandles).filter(\.surface.isBusy).map(listing(of:)),
+            closesWindow: closesWindow, isRunning: isRunning(workspace: workspace) || children.isRunning,
+            panes: tabs.flatMap(\.paneHandles).filter(\.surface.isBusy).map(listing(of:))
+                + children.running.map(listing(of:)),
             floats: workspace.tabIDs.flatMap { floats.runningTitles(scope: $0) }
                 + (closesWindow ? floats.runningTitles(scope: nil) : []))
     }
@@ -2452,7 +2456,68 @@ final class WindowController: NSObject {
         if workspace.connection?.isAwaitingLogin(on: pane.surfaceID) == true { return loginStakes(of: workspace) }
         if c.isSinglePane { return closeStakes(tab: tab) }
         let busy = pane.surface.isBusy
-        return CloseStakes(closesWindow: false, isRunning: busy, panes: busy ? [listing(of: pane)] : [], floats: [])
+        let children = childStakes(closing: [], panes: [pane.token])
+        return CloseStakes(
+            closesWindow: children.closesWindow, isRunning: busy || children.isRunning,
+            panes: (busy ? [listing(of: pane)] : []) + children.running.map(listing(of:)), floats: [])
+    }
+
+    private struct ChildStakes {
+        let running: [PaneHandle]
+        let closesWindow: Bool
+
+        var isRunning: Bool { !running.isEmpty }
+        var names: [String] {
+            running.map { $0.record.name ?? ($0.surface.title.isEmpty ? "pane \($0.token)" : $0.surface.title) }
+        }
+    }
+
+    // Children close after their parent, wherever they are in the window, so the warning has to count them first.
+    private func childStakes(closing tabs: Set<TabID>, panes: Set<Int> = []) -> ChildStakes {
+        let every = workspaces.flatMap { workspace in
+            workspace.tabIDs.flatMap { id in (workspace.controller(id)?.paneHandles ?? []).map { (tab: id, pane: $0) } }
+        }
+        var closing = panes.union(every.filter { tabs.contains($0.tab) }.map(\.pane.token))
+        var children: [PaneHandle] = []
+        var grew = true
+        while grew {
+            grew = false
+            for entry in every where !closing.contains(entry.pane.token) && Self.closesWith(entry.pane, closing) {
+                closing.insert(entry.pane.token)
+                children.append(entry.pane)
+                grew = true
+            }
+        }
+        guard !children.isEmpty else { return ChildStakes(running: [], closesWindow: false) }
+        let tabCloses = { (id: TabID) in
+            tabs.contains(id)
+                || every.filter { $0.tab == id && $0.pane.drawer == nil }.allSatisfy { closing.contains($0.pane.token) }
+        }
+        let emptiesWindow = workspaces.allSatisfy { $0.host == nil && $0.tabIDs.allSatisfy(tabCloses) }
+        return ChildStakes(running: children.filter(\.surface.isBusy), closesWindow: emptiesWindow)
+    }
+
+    private static func closesWith(_ pane: PaneHandle, _ closing: Set<Int>) -> Bool {
+        guard let parent = pane.record.parent, !pane.record.outlivesParent else { return false }
+        return closing.contains(parent)
+    }
+
+    // Async: a release lands mid-rebuild of the canvas it came from, which may hold a child too.
+    private func closeChildren(of parents: [Int]) {
+        guard !didTearDown else { return }
+        let parents = Set(parents)
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.didTearDown else { return }
+            let children = self.workspaces.flatMap { workspace in
+                workspace.tabIDs.flatMap { id in
+                    (workspace.controller(id)?.paneHandles ?? []).filter { Self.closesWith($0, parents) }.map(\.token)
+                }
+            }
+            for token in children {
+                guard let (tab, _) = self.pane(token: token) else { continue }
+                self.removePane(token, in: tab)
+            }
+        }
     }
 
     private func loginStakes(of workspace: WorkspaceController) -> CloseStakes {
@@ -2836,10 +2901,17 @@ final class WindowController: NSObject {
         if lastPane, let workspace = activeWorkspace, let tab = workspace.activeID, holdsAwaitingLogin(tab: tab) {
             return confirmAbandoningLogin(of: workspace, closing: .tab)
         }
-        let closesWindow = lastPane && activeTabIDs.count == 1 && closesWindow(closing: activeWorkspace)
+        let tab = activeWorkspace?.activeID
+        let children =
+            lastPane
+            ? childStakes(closing: Set([tab].compactMap { $0 }))
+            : childStakes(closing: [], panes: Set([tab.flatMap(focusedPane(of:))?.token].compactMap { $0 }))
+        let closesWindow =
+            lastPane && activeTabIDs.count == 1 && closesWindow(closing: activeWorkspace) || children.closesWindow
         let needsConfirm =
             closesWindow
             || active.focusedPaneIsBusy
+            || children.isRunning
             || (lastPane && activeWorkspace?.activeID.map(isRunning(tab:)) ?? false)
         guard needsConfirm else {
             if active.closeFocused() == false { activeWorkspace?.activeID.map { closeTab($0) } }
@@ -2851,7 +2923,7 @@ final class WindowController: NSObject {
         let names =
             closesWindow
             ? runningNamesInWindow()
-            : (lastPane ? activeWorkspace?.activeID.map(hiddenRunningNames(inTab:)) ?? [] : [])
+            : (lastPane ? activeWorkspace?.activeID.map(hiddenRunningNames(inTab:)) ?? [] : []) + children.names
         presentConfirm(
             variant: .warning, title: subject.title,
             message: CloseWarning.message(closing: subject, naming: names), confirmLabel: "Close"
@@ -2910,11 +2982,12 @@ final class WindowController: NSObject {
     private func requestCloseTab(_ id: TabID) {
         guard let workspace = workspace(of: id) else { return }
         if holdsAwaitingLogin(tab: id) { return confirmAbandoningLogin(of: workspace, closing: .tab) }
-        let closesWindow = workspace.tabIDs.count == 1 && closesWindow(closing: workspace)
-        guard closesWindow || isRunning(tab: id) else { closeTab(id); return }
+        let children = childStakes(closing: [id])
+        let closesWindow = workspace.tabIDs.count == 1 && closesWindow(closing: workspace) || children.closesWindow
+        guard closesWindow || isRunning(tab: id) || children.isRunning else { closeTab(id); return }
         let subject: CloseWarning.Subject =
             closesWindow ? .lastTab(running: windowIsRunning) : .tab
-        let names = closesWindow ? runningNamesInWindow() : hiddenRunningNames(inTab: id)
+        let names = closesWindow ? runningNamesInWindow() : hiddenRunningNames(inTab: id) + children.names
         presentConfirm(
             variant: .warning, title: subject.title,
             message: CloseWarning.message(closing: subject, naming: names),
@@ -2932,14 +3005,15 @@ final class WindowController: NSObject {
             Log.info("ssh host disconnected", category: .workspace)
             return disconnect(workspace)
         }
-        let closesWindow = closesWindow(closing: workspace)
-        guard closesWindow || isRunning(workspace: workspace) else {
+        let children = childStakes(closing: Set(workspace.tabIDs))
+        let closesWindow = closesWindow(closing: workspace) || children.closesWindow
+        guard closesWindow || isRunning(workspace: workspace) || children.isRunning else {
             closeTabs(of: workspace) { closeTab($0) }
             return
         }
         let subject: CloseWarning.Subject =
             closesWindow ? .lastWorkspace(running: windowIsRunning) : .workspace(workspace.name)
-        let names = closesWindow ? runningNamesInWindow() : runningTabNames(in: workspace)
+        let names = closesWindow ? runningNamesInWindow() : runningTabNames(in: workspace) + children.names
         presentConfirm(
             variant: .warning, title: subject.title,
             message: CloseWarning.message(closing: subject, naming: names),
@@ -3044,6 +3118,7 @@ final class WindowController: NSObject {
         }
         c.onLastPaneClosed = { [weak self] in self?.closeTab(id) }
         c.onLaunchedPaneExited = { [weak self] exit in self?.launchedPaneExits.record(exit) }
+        c.onPaneTokensReleased = { [weak self] tokens in self?.closeChildren(of: tokens) }
         c.removedWorktree = { [weak self] in self?.workspace(of: id)?.removedWorktree }
         c.onOverlayStateChanged = { [weak self] in self?.renderDock() }
         c.onRequestToast = { [weak self] content in self?.toasts.show(content) }

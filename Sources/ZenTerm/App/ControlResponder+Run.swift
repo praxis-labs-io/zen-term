@@ -40,6 +40,7 @@ extension ControlResponder {
             window.updateRecord(pane: token) {
                 $0.name = name
                 $0.parent = request.caller?.pane
+                $0.outlivesParent = request.args.outliveParent == true
             }
             guard let task = request.args.task, !task.isEmpty else {
                 return reply(.success(PaneRunResult(pane: token, firstTask: nil)))

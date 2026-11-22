@@ -195,18 +195,6 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertEqual(error(try answer(.paneRead, ControlArgs(pane: .name("nobody"))))?.code, .notFound)
     }
 
-    func test_aChildStaysOpenWhenItsParentCloses() throws {
-        let c = makeWindow()
-        let lead = try token(of: XCTUnwrap(spawned.first))
-        let parent = try run(ControlArgs(cmd: "htop", split: .right), from: lead)
-        let child = try run(ControlArgs(cmd: "htop", name: "child"), from: parent.pane)
-
-        _ = try answer(.paneClose, ControlArgs(force: true, pane: .token(parent.pane)))
-
-        XCTAssertNil(everyPane(c).first { $0.token == parent.pane })
-        XCTAssertEqual(try listed(child.pane, in: c).parent, parent.pane)
-    }
-
     func test_theTaskIsSentOnTheFirstReadyReport_andThePaneKeepsTheResult() throws {
         let c = makeWindow()
         let caller = try token(of: XCTUnwrap(spawned.first))
@@ -313,5 +301,140 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertTrue(script(of: helper).contains("exec "), script(of: helper))
         helper.delegate?.surfaceDidExit(helper, code: 0)
         XCTAssertNil(c.launchedPaneExits.exit(of: opened.pane))
+    }
+
+    private func isOpen(_ token: Int, in c: WindowController) -> Bool { everyPane(c).contains { $0.token == token } }
+
+    private func family(in c: WindowController, outliving: Bool = false) throws
+        -> (lead: Int, parent: Int, child: Int, grandchild: Int)
+    {
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        let parent = try run(ControlArgs(cmd: "claude", focus: true, split: .right), from: lead).pane
+        let child = try run(
+            ControlArgs(cmd: "claude", name: "review", outliveParent: outliving ? true : nil), from: parent
+        ).pane
+        let grandchild = try run(ControlArgs(cmd: "claude", name: "tests"), from: child).pane
+        return (lead, parent, child, grandchild)
+    }
+
+    private func pressClose(_ c: WindowController) throws {
+        let content = try XCTUnwrap(c.window.contentView)
+        let button = try XCTUnwrap(
+            Self.descendants(of: content).compactMap { $0 as? AppButton }.first { $0.title == "Close" })
+        button.performClick(nil)
+    }
+
+    private static func descendants(of view: NSView) -> [NSView] {
+        view.subviews + view.subviews.flatMap { descendants(of: $0) }
+    }
+
+    func test_closingAPaneClosesItsChildrenAndTheirsWhereverTheyAre() throws {
+        let c = makeWindow()
+        let family = try family(in: c)
+        XCTAssertEqual(c.listing().workspaces.flatMap(\.tabs).count, 3)
+
+        _ = try answer(.paneClose, ControlArgs(pane: .token(family.parent)))
+
+        waitUntil(!isOpen(family.grandchild, in: c), "the grandchild closing")
+        XCTAssertFalse(isOpen(family.child, in: c))
+        XCTAssertTrue(isOpen(family.lead, in: c))
+        XCTAssertEqual(c.listing().workspaces.flatMap(\.tabs).count, 1)
+    }
+
+    func test_aPaneWithARunningChildIsRefusedNamingIt_andForceClosesBoth() throws {
+        let c = makeWindow()
+        let family = try family(in: c)
+        try surface(family.grandchild).isBusy = true
+
+        let refusal = try XCTUnwrap(error(try answer(.paneClose, ControlArgs(pane: .token(family.parent)))))
+
+        XCTAssertEqual(refusal.code, .refused)
+        XCTAssertEqual(refusal.details?.panes.map(\.token), [family.grandchild])
+        XCTAssertTrue(isOpen(family.parent, in: c))
+
+        _ = try answer(.paneClose, ControlArgs(force: true, pane: .token(family.parent)))
+        waitUntil(!isOpen(family.grandchild, in: c), "the grandchild closing")
+    }
+
+    func test_theCloseWarningNamesARunningChild_andConfirmingClosesIt() throws {
+        let c = makeWindow()
+        let family = try family(in: c)
+        try surface(family.child).isBusy = true
+        XCTAssertTrue(c.focusedSurfaceForTesting === (try surface(family.parent)))
+
+        c.handle(.closePane)
+
+        XCTAssertTrue(c.isConfirmOpen, "a running child closes without asking")
+        XCTAssertTrue(
+            toastTexts(in: c).contains("Closing this pane will stop the process running in it, including review."),
+            "\(toastTexts(in: c))")
+        XCTAssertTrue(isOpen(family.child, in: c))
+
+        try pressClose(c)
+        waitUntil(!isOpen(family.grandchild, in: c), "the grandchild closing")
+        XCTAssertFalse(isOpen(family.parent, in: c))
+        XCTAssertFalse(isOpen(family.child, in: c))
+    }
+
+    func test_closingATabOrAWorkspaceClosesTheChildrenStartedInIt() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        let helper = try run(ControlArgs(cmd: "claude"), from: lead).pane
+        let child = try run(ControlArgs(cmd: "claude"), from: helper).pane
+        let helperTab = try XCTUnwrap(c.pane(token: helper)?.tab)
+
+        _ = try answer(.tabClose, ControlArgs(tab: ControlAddress.tab(window: c.windowID, tab: helperTab.raw)))
+        waitUntil(!isOpen(child, in: c), "the child closing with its parent's tab")
+
+        let other = c.openUnconfiguredWorkspace(at: FileManager.default.temporaryDirectory, named: "other")
+        let otherPane = try XCTUnwrap(c.listing(of: other)?.tabs.first?.panes.first?.token)
+        let placedHere = try run(ControlArgs(cmd: "claude", pane: .token(lead)), from: otherPane).pane
+        XCTAssertEqual(
+            c.pane(token: placedHere).flatMap { c.workspaceID(of: $0.tab) },
+            c.pane(token: lead).flatMap { c.workspaceID(of: $0.tab) })
+
+        _ = try answer(.workspaceClose, ControlArgs(workspace: "other"))
+        waitUntil(!isOpen(placedHere, in: c), "a child in another workspace closing with its parent's")
+        XCTAssertTrue(isOpen(lead, in: c))
+    }
+
+    func test_aLaunchedPaneExitingClosesItsChildren() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        let helper = try run(ControlArgs(cmd: "npm test", split: .right), from: lead).pane
+        let child = try run(ControlArgs(cmd: "claude"), from: helper).pane
+        let exiting = try surface(helper)
+
+        exiting.delegate?.surfaceDidExit(exiting, code: 0)
+
+        waitUntil(!isOpen(child, in: c), "the child closing with its parent's exit")
+    }
+
+    func test_anOutlivingChildStaysOpenWithNoParent_andKeepsItsOwnChildren() throws {
+        let c = makeWindow()
+        let family = try family(in: c, outliving: true)
+
+        _ = try answer(.paneClose, ControlArgs(pane: .token(family.parent)))
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+
+        XCTAssertTrue(isOpen(family.child, in: c))
+        XCTAssertTrue(isOpen(family.grandchild, in: c))
+        XCTAssertNil(try listed(family.child, in: c).parent, "it claims a parent that closed")
+        XCTAssertEqual(try listed(family.grandchild, in: c).parent, family.child)
+    }
+
+    func test_anAgentQuittingInAPaneThatStaysOpenClosesNothing() throws {
+        let c = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        let helper = try run(ControlArgs(cmd: "claude", split: .right, keep: true), from: lead).pane
+        let child = try run(ControlArgs(cmd: "claude"), from: helper).pane
+        let quitting = try surface(helper)
+
+        quitting.delegate?.surface(quitting, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+
+        XCTAssertTrue(isOpen(helper, in: c))
+        XCTAssertTrue(isOpen(child, in: c))
+        XCTAssertEqual(try listed(child, in: c).parent, helper)
     }
 }

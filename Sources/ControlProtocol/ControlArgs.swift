@@ -27,13 +27,15 @@ public struct ControlArgs: Codable, Equatable, Sendable {
     public var split: PaneDirection?
     /// Whether `pane.run` keeps its pane open after its program exits.
     public var keep: Bool?
+    /// Whether `pane.run`'s pane stays open when the pane that ran it closes. Sent as `outlive_parent`.
+    public var outliveParent: Bool?
 
     public init(
         workspace: String? = nil, path: String? = nil, tab: String? = nil, cwd: String? = nil, cmd: String? = nil,
         title: String? = nil, focus: Bool? = nil, force: Bool? = nil, pane: ControlAddress.Pane? = nil,
         dir: PaneDirection? = nil, text: String? = nil, enter: Bool? = nil, lines: Int? = nil, branch: String? = nil,
         base: String? = nil, existing: Bool? = nil, name: String? = nil, task: String? = nil,
-        split: PaneDirection? = nil, keep: Bool? = nil
+        split: PaneDirection? = nil, keep: Bool? = nil, outliveParent: Bool? = nil
     ) {
         self.workspace = workspace
         self.path = path
@@ -55,5 +57,12 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         self.task = task
         self.split = split
         self.keep = keep
+        self.outliveParent = outliveParent
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case workspace, path, tab, cwd, cmd, title, focus, force, pane, dir, text, enter, lines, branch, base, existing
+        case name, task, split, keep
+        case outliveParent = "outlive_parent"
     }
 }

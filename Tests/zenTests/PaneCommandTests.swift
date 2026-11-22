@@ -43,7 +43,7 @@ final class PaneCommandTests: XCTestCase {
         let run = try XCTUnwrap(
             try Zen.parseAsRoot([
                 "pane", "run", "--name", "review", "--task", "Review x.swift", "--split", "down", "--pane", "31",
-                "--focus", "--keep", "claude", "--model", "opus",
+                "--focus", "--keep", "--outlive-parent", "claude", "--model", "opus",
             ]) as? PaneCommands.Run)
         XCTAssertEqual(run.name, "review")
         XCTAssertEqual(run.task, "Review x.swift")
@@ -51,12 +51,14 @@ final class PaneCommandTests: XCTestCase {
         XCTAssertEqual(run.pane, 31)
         XCTAssertTrue(run.focus)
         XCTAssertTrue(run.keep)
+        XCTAssertTrue(run.outliveParent)
         XCTAssertEqual(run.command, ["claude", "--model", "opus"])
 
         let plain = try XCTUnwrap(try Zen.parseAsRoot(["pane", "run", "npm run dev"]) as? PaneCommands.Run)
         XCTAssertEqual(plain.command, ["npm run dev"])
         XCTAssertNil(plain.split)
         XCTAssertFalse(plain.keep)
+        XCTAssertFalse(plain.outliveParent)
     }
 
     func test_runWithoutACommandOrWithADigitNameIsAUsageError() {
