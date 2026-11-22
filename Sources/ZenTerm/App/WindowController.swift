@@ -58,7 +58,7 @@ final class WindowController: NSObject {
     private var exitsAwaitingResult: Set<SurfaceID> = []
     private var processBusy = BusyFallWatch()
     private var exitedProcesses: Set<SurfaceID> = []
-    private var listedProcesses: Set<SurfaceID> = []
+    private var listedProcesses: [SurfaceID: ProcessIcon] = [:]
 
     func showFontSize(_ text: String) {
         if let card = fontSizeCard {
@@ -771,6 +771,9 @@ final class WindowController: NSObject {
         }
         if activeTabIDs.contains(where: { processIcon(of: $0) != tabProcesses[$0] ?? nil }) { changed = true }
         if changed { renderTabBar() }
+        if listedProcesses.contains(where: { id, shown in terminalSurface(id).map(programIcon) != shown }) {
+            renderAgents()
+        }
 
         if busyDots() != lastBusyDots { renderDock() }
         trackAgentExits()
@@ -3479,7 +3482,7 @@ final class WindowController: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.workspace(of: id) != nil else { return }
             if let surface { self.paneWaits.commandFinished(surface, exitCode: result.exitCode) }
-            if let surface, self.listedProcesses.contains(surface) { self.processFinished(surface) }
+            if let surface, self.listedProcesses[surface] != nil { self.processFinished(surface) }
             let crashedAgent = surface.map { self.agentExited($0, in: id, result: result) } ?? false
             guard !crashedAgent, !self.isSeen(surface, in: id),
                 result.duration >= Self.commandCompletionThreshold,
@@ -3522,7 +3525,7 @@ final class WindowController: NSObject {
                 joined = true
             }
             guard self.agents.contains(surface) else {
-                if self.listedProcesses.contains(surface) { self.renderAgents() }
+                if self.listedProcesses[surface] != nil { self.renderAgents() }
                 return
             }
             let previous = self.agentStates.title(of: surface)
@@ -3994,7 +3997,7 @@ final class WindowController: NSObject {
             exitedProcesses.insert(id)
         }
         let items = agentItems()
-        listedProcesses = Set(items.filter { !$0.showsState }.map(\.id))
+        listedProcesses = Dictionary(uniqueKeysWithValues: items.filter { !$0.showsState }.map { ($0.id, $0.process) })
         sidebar.renderAgents(items)
         renderTabChips(agents: items)
     }
@@ -4009,9 +4012,11 @@ final class WindowController: NSObject {
             let paneTitle =
                 agent.hasExited ? nil : AgentRules.taskTitle(fromPane: agentStates.title(of: id), agentName: agent.name)
             let title = agentStates.status(of: id)?.title ?? paneTitle ?? agent.name ?? AgentRoster.unnamed
+            let process = agent.name.map(ProcessIcon.forAgent) ?? .unknownAgent
             var item = SidebarAgentItem(
-                id: id, state: state, summary: title, detail: place.name, message: message)
-            item.mark = agent.name.map { ProcessIcon.forAgent($0).mark }
+                id: id, state: state, summary: title,
+                detail: Self.agentDetail(name: agent.name, process: process, place: place.name), message: message)
+            item.process = process
             let pane = panes[id]
             return AgentFamilies.Member(
                 item: item, since: attention.agentSince(of: id), position: place.position, token: pane?.token,
@@ -4023,8 +4028,9 @@ final class WindowController: NSObject {
                 let place = agentPlace(pane.surfaceID)
             else { return nil }
             let title = pane.record.name ?? (pane.surface.title.isEmpty ? Self.unnamedProcess : pane.surface.title)
-            let item = SidebarAgentItem(
+            var item = SidebarAgentItem(
                 id: pane.surfaceID, state: .idle, summary: title, detail: place.name, message: nil)
+            item.process = programIcon(of: pane.surface)
             return AgentFamilies.Member(
                 item: item, since: nil, position: place.position, token: pane.token, parent: pane.record.parent,
                 isAgent: false)
@@ -4033,6 +4039,12 @@ final class WindowController: NSObject {
     }
 
     private static let unnamedProcess = "process"
+
+    // The generic chip cannot say which agent it is, so its name stays in words.
+    private static func agentDetail(name: String?, process: ProcessIcon, place: String) -> String {
+        guard let name, process == .unknownAgent else { return place }
+        return "\(name) · \(place)"
+    }
 
     private func panesBySurface() -> [SurfaceID: PaneHandle] {
         var panes: [SurfaceID: PaneHandle] = [:]
@@ -4409,7 +4421,11 @@ final class WindowController: NSObject {
         if let agent = agents.agents[surfaceID], !agent.hasExited, let name = agent.name {
             return ProcessIcon.forAgent(name)
         }
-        return ProcessIcon.forProgram(surface.foregroundProcessGroupID.flatMap(ProcessArguments.programName))
+        return programIcon(of: surface)
+    }
+
+    private func programIcon(of surface: TerminalSurface) -> ProcessIcon {
+        ProcessIcon.forProgram(surface.foregroundProcessGroupID.flatMap(ProcessArguments.programName))
     }
 
     private static func indicator(for tones: Set<AttentionTone>) -> TabChip.Indicator? {

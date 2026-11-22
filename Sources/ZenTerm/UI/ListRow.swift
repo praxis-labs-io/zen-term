@@ -5,6 +5,7 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         case symbol(String)
         case swatch(NSColor)
         case spinner
+        case process(ProcessIcon)
     }
 
     enum Trailing: Equatable {
@@ -90,6 +91,8 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
         spinner.isSpinning = true
         return spinner
     }()
+    // Kept too, so a program change crossfades the mark rather than swapping in a new chip.
+    private var processBadge: IconBadge?
     private lazy var stackLeading = stack.leadingAnchor.constraint(equalTo: leadingAnchor)
     private lazy var stackTop = stack.topAnchor.constraint(equalTo: topAnchor)
     private lazy var stackBottom = stack.bottomAnchor.constraint(equalTo: bottomAnchor)
@@ -99,6 +102,11 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
     private var titleLinePins: [NSLayoutConstraint] = []
 
     var title: String { content.title }
+
+    var processBadgeForTesting: IconBadge? {
+        guard case .process = content.leading else { return nil }
+        return processBadge
+    }
 
     var shortcutForTesting: String {
         guard case .keycap(let shortcut) = content.trailing else { return "" }
@@ -278,6 +286,15 @@ class ListRow: ControlView, HoverSuppressing, ThemeReapplying {
             return dot
         case .spinner:
             return spinner
+        case .process(let process):
+            if let processBadge {
+                processBadge.show(process)
+                processBadge.reapplyTheme()
+                return processBadge
+            }
+            let badge = IconBadge(process: process, size: .small)
+            processBadge = badge
+            return badge
         }
     }
 

@@ -475,8 +475,6 @@ final class SidebarController {
         leadWidth?.constant = lead.contentWidth
     }
 
-    private static let worktreeSymbol = "arrow.triangle.branch"
-
     private static func rowItem(_ entry: Entry) -> SidebarRowItem {
         let branch = entry.folder.flatMap(GitRepoStatus.branch)
         switch entry.kind {
@@ -487,7 +485,7 @@ final class SidebarController {
                 isActive: entry.isActive, makesWorktrees: entry.isConfigured && isRepo)
         case .worktree(let origin):
             return SidebarRowItem(
-                id: entry.row, variant: .nested(symbol: worktreeSymbol),
+                id: entry.row, variant: .nested(.worktree),
                 name: entry.pinnedName ?? branch ?? origin.name,
                 detail: entry.isWorktreeRemoved ? WorktreeOrigin.removedDetail : nil, number: entry.number,
                 isActive: entry.isActive, makesWorktrees: false)
