@@ -54,7 +54,7 @@ jobs:
           path: |
             Frameworks/GhosttyKit.xcframework
             Sources/TerminalKit/Resources/ghostty-resources
-          key: ghosttykit-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('bin/build-ghosttykit') }}
+          key: ghosttykit-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('bin/build-ghosttykit', 'patches/ghostty-*.patch') }}
 
       - name: Build GhosttyKit (cache miss only)
         if: steps.ghosttykit.outputs.cache-hit != 'true'
