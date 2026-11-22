@@ -33,8 +33,10 @@ final class ChildrenWait {
         self.caller = caller
         self.reply = reply
         watches = children.compactMap { child in
-            PaneWait(child.watched, caller: nil, output: needle) { [weak self] in self?.heard($0, from: child.token) }
-                .map { Watch(token: child.token, probe: $0, isWorking: child.isWorking) }
+            PaneWait(child.watched, caller: nil, output: needle, keepsWatching: mode == .all) { [weak self] in
+                self?.heard($0, from: child.token)
+            }
+            .map { Watch(token: child.token, probe: $0, isWorking: child.isWorking) }
         }
     }
 
@@ -52,9 +54,11 @@ final class ChildrenWait {
 
     func messageArrived() { answer(.message) }
 
-    // `all` counts a change it does not answer on yet, and reports it among its children when it does.
+    // `all` keeps each child's probe until it exits, records the latest change, and reports it when it answers.
     func answers(_ reason: WaitReason, from surface: SurfaceID) -> Bool {
-        watches.contains { $0.probe.watched.surfaceID == surface && $0.probe.answers(reason) }
+        watches.contains {
+            $0.probe.watched.surfaceID == surface && $0.probe.isWatching && $0.probe.answers(reason)
+        }
     }
 
     func cancel() { finish() }

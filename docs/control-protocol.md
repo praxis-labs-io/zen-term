@@ -470,8 +470,10 @@ begins, and takes no `pane`. Each child is watched as a wait on its pane would b
 A child is working while its agent's `status` is `working`, or, with no `status`, while the app
 reads its agent as working. A child that runs no agent is working while its program runs. A child whose
 first task was sent counts as working until its `status` moves past `idle` or `done`, so `all`
-does not answer before it starts on the task. `message` and `timeout` answer as they do for a
-pane, and `output` is a `bad_request` with `all`.
+does not answer before it starts on the task. With `all`, each child's `reason` is its latest
+news while the wait held, so a child that stopped and then exited answers `exited` with its
+`exitCode` and `text`. `message` and `timeout` answer as they do for a pane, and `output` is a
+`bad_request` with `all`.
 
 ```json
 {"reason":"exited","children":[
