@@ -27,15 +27,17 @@ public struct ControlArgs: Codable, Equatable, Sendable {
     public var name: String?
     /// Text `pane.wait` answers on once it appears in the pane's output.
     public var output: String?
-    /// Seconds `pane.wait` holds before it answers `timeout`.
+    /// Seconds `pane.wait`, or a `pane.send` that waits, holds before it answers `timeout`.
     public var timeout: Int?
+    /// `pane.send` answers as `pane.wait` on its target once the text is in.
+    public var wait: Bool?
 
     public init(
         workspace: String? = nil, path: String? = nil, tab: String? = nil, cwd: String? = nil, cmd: String? = nil,
         title: String? = nil, focus: Bool? = nil, force: Bool? = nil, pane: Int? = nil, dir: PaneDirection? = nil,
         text: String? = nil, enter: Bool? = nil, keys: [String]? = nil, lines: Int? = nil, branch: String? = nil,
         base: String? = nil, existing: Bool? = nil, open: Bool? = nil, name: String? = nil, output: String? = nil,
-        timeout: Int? = nil
+        timeout: Int? = nil, wait: Bool? = nil
     ) {
         self.workspace = workspace
         self.path = path
@@ -58,5 +60,6 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         self.name = name
         self.output = output
         self.timeout = timeout
+        self.wait = wait
     }
 }

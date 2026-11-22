@@ -87,7 +87,8 @@ final class ControlServer {
     }
 
     private func deadline(for request: ControlRequest) -> TimeInterval {
-        request.cmd == .paneWait ? TimeInterval(ControlWire.answerWait(for: request.cmd, request.args)) : answerTimeout
+        ControlWire.setsOwnDeadline(request.cmd)
+            ? TimeInterval(ControlWire.answerWait(for: request.cmd, request.args)) : answerTimeout
     }
 
     // Nil when the client hung up first, which leaves nobody to answer.

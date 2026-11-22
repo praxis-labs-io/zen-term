@@ -9,11 +9,6 @@ struct WaitCommand: ParsableCommand {
             "Wait until a pane's agent stops, its program exits, text appears, or this pane is sent something, "
             + "and print why as JSON.")
 
-    // The app answers `timeout` at the deadline and gives up past its own margin; the client outwaits both.
-    static func replyTimeout(for args: ControlArgs) -> time_t {
-        time_t(ControlWire.answerWait(for: .paneWait, args) + ControlWire.answerMargin)
-    }
-
     @OptionGroup var connection: ConnectionOptions
 
     @Argument(help: "A pane or drawer token.")
@@ -41,7 +36,7 @@ struct WaitCommand: ParsableCommand {
     func run() throws {
         let args = ControlArgs(pane: pane, output: output, timeout: timeout)
         var client = try connection.client()
-        client.replyTimeout = Self.replyTimeout(for: args)
+        client.replyTimeout = ControlClient.replyTimeout(for: .paneWait, args)
         print(try JSONOutput.text(client.send(.paneWait, args, expecting: WaitResult.self)))
     }
 }

@@ -260,6 +260,8 @@ final class WindowController: NSObject {
 
     var paneWaits = PaneWaits()
 
+    var paneDrafts = PaneDrafts()
+
     func tabCount(atPath path: URL) -> Int {
         allTabIDs.filter { isClosedByRemoval($0, atPath: path) }.count
     }
@@ -3092,6 +3094,7 @@ final class WindowController: NSObject {
         }
         c.onSurfacesReleased = { [weak self] ids in
             self?.paneWaits.panesClosed(ids)
+            self?.paneDrafts.panesClosed(ids)
             self?.workspace(of: id)?.connection?.release(ids)
             ids.forEach {
                 self?.attention.release($0)
@@ -3597,6 +3600,12 @@ final class WindowController: NSObject {
     }
 
     // Runs on every keystroke the chrome passed on, which includes ones the find field takes before the pane.
+    func keyReachedFocus() {
+        guard !search.isEditing, let surface = presentFocusedSurface else { return }
+        paneDrafts.typed(into: surface)
+        answerTypedAgent()
+    }
+
     func answerTypedAgent() {
         guard !search.isEditing, let surface = presentFocusedSurface,
             attention.agentWait(of: surface) != nil, !awaitsSignalAnswer(surface)

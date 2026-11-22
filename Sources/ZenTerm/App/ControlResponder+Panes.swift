@@ -94,18 +94,65 @@ extension ControlResponder {
         }
     }
 
-    func sendToPane(_ request: ControlRequest) -> ControlReply {
-        guard let text = request.args.text else {
-            return .failure(ControlError(.badRequest, "pane.send needs text."))
+    func sendToPane(_ request: ControlRequest, hangup: ControlHangup, reply: @escaping (ControlReply) -> Void) {
+        guard request.args.text != nil else {
+            return reply(.failure(ControlError(.badRequest, "pane.send needs text.")))
         }
-        return pane(request.args.pane, for: request).flatMap { place in
-            let surface = place.pane.surface
-            guard surface.isStarted else { return .failure(Self.notStarted(place.pane.token)) }
-            if !text.isEmpty { surface.paste(text) }
-            if request.args.enter == true { surface.submit() }
-            paneWaits.sent(to: place.pane.surfaceID)
-            return .success(NoPayload())
+        if request.args.wait == true, case .failure(let error) = Self.waitTimeout(request) {
+            return reply(.failure(error))
         }
+        switch pane(request.args.pane, for: request) {
+        case .failure(let error): reply(.failure(error))
+        case .success(let place):
+            if let refusal = Self.refusal(sending: place, force: request.args.force) { return reply(.failure(refusal)) }
+            let token = place.pane.token
+            guard place.window.runsAgent(place.pane) else {
+                return deliver(to: token, for: request, hangup: hangup, reply: reply)
+            }
+            paneDrafts.hold(place.pane.surfaceID, hangup: hangup) { [self] in
+                deliver(to: token, for: request, hangup: hangup, reply: reply)
+            }
+        }
+    }
+
+    // The pane is found again because a draft hold can outlast it, and its agent can block meanwhile.
+    private func deliver(
+        to token: Int, for request: ControlRequest, hangup: ControlHangup, reply: @escaping (ControlReply) -> Void
+    ) {
+        let found = pane(token, for: request).flatMap { place -> Result<PanePlace, ControlError> in
+            guard place.pane.surface.isStarted else { return .failure(Self.notStarted(token)) }
+            if let refusal = Self.refusal(sending: place, force: request.args.force) { return .failure(refusal) }
+            return .success(place)
+        }
+        guard case .success(let place) = found else { return reply(found.map { _ in NoPayload() }) }
+        let text = request.args.text ?? ""
+        let surface = place.pane.surface
+        if !text.isEmpty { surface.paste(envelope(text, into: place, for: request)) }
+        if request.args.enter == true { surface.submit() }
+        paneWaits.sent(to: place.pane.surfaceID)
+        guard request.args.wait == true, case .success(let timeout) = Self.waitTimeout(request) else {
+            return reply(.success(NoPayload()))
+        }
+        hold(waitOn: place, output: nil, timeout: timeout, for: request, hangup: hangup, reply: reply)
+    }
+
+    // A permission prompt or a question is the user's to answer, and a paste would answer it for them.
+    private static func refusal(sending place: PanePlace, force: Bool?) -> ControlError? {
+        guard force != true, let agent = place.window.listing(of: place.pane, in: place.tab).agent,
+            agent.status == .blocked
+        else { return nil }
+        let waitsOn = agent.kind.map { " for \($0.rawValue)" } ?? ""
+        return ControlError(
+            .refused,
+            "Pane \(place.pane.token)'s agent is waiting on the user\(waitsOn), and that decision is the user's. "
+                + "Nothing was sent. Pass --force to send anyway.")
+    }
+
+    // An agent reads a bare paste as its user typing, so another agent's message says who sent it and how to answer.
+    private func envelope(_ text: String, into place: PanePlace, for request: ControlRequest) -> String {
+        guard let caller = request.caller?.pane, caller != place.pane.token, place.window.runsAgent(place.pane)
+        else { return text }
+        return "<zen from=\"\(caller)\" reply=\"zen pane send --pane \(caller)\">\(text)</zen>"
     }
 
     func pressKeys(_ request: ControlRequest) -> ControlReply {
@@ -186,10 +233,10 @@ extension ControlResponder {
     }
 
     func waitOnPane(_ request: ControlRequest, hangup: ControlHangup, reply: @escaping (ControlReply) -> Void) {
-        let timeout = request.args.timeout ?? ControlWire.defaultPaneWait
-        guard (1...ControlWire.longestPaneWait).contains(timeout) else {
-            return reply(
-                .failure(ControlError(.badRequest, "timeout must be 1 to \(ControlWire.longestPaneWait) seconds.")))
+        let timeout: Int
+        switch Self.waitTimeout(request) {
+        case .failure(let error): return reply(.failure(error))
+        case .success(let seconds): timeout = seconds
         }
         if request.args.output?.isEmpty == true {
             return reply(.failure(ControlError(.badRequest, "output must not be empty.")))
@@ -203,16 +250,34 @@ extension ControlResponder {
         switch pane(token, for: request) {
         case .failure(let error): reply(.failure(error))
         case .success(let place):
-            let onHost = place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) != nil
-            let watched = PaneWait.Watched(
-                surfaceID: place.pane.surfaceID, surface: place.pane.surface, readsForeground: !onHost,
-                pane: { [self] in locate(pane: token).map { $0.window.listing(of: $0.pane, in: $0.tab) } })
-            let caller = request.caller?.pane.flatMap { locate(pane: $0)?.pane.surfaceID }
-            guard let wait = PaneWait(watched, caller: caller, output: request.args.output, reply: reply) else {
-                return reply(.failure(ControlError(.notFound, "There is no pane \(token).")))
-            }
-            paneWaits.hold(wait, timeout: TimeInterval(timeout), hangup: hangup)
+            hold(
+                waitOn: place, output: request.args.output, timeout: timeout, for: request, hangup: hangup,
+                reply: reply)
         }
+    }
+
+    private static func waitTimeout(_ request: ControlRequest) -> Result<Int, ControlError> {
+        let timeout = request.args.timeout ?? ControlWire.defaultPaneWait
+        guard (1...ControlWire.longestPaneWait).contains(timeout) else {
+            return .failure(ControlError(.badRequest, "timeout must be 1 to \(ControlWire.longestPaneWait) seconds."))
+        }
+        return .success(timeout)
+    }
+
+    private func hold(
+        waitOn place: PanePlace, output: String?, timeout: Int, for request: ControlRequest, hangup: ControlHangup,
+        reply: @escaping (ControlReply) -> Void
+    ) {
+        let token = place.pane.token
+        let onHost = place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) != nil
+        let watched = PaneWait.Watched(
+            surfaceID: place.pane.surfaceID, surface: place.pane.surface, readsForeground: !onHost,
+            pane: { [self] in locate(pane: token).map { $0.window.listing(of: $0.pane, in: $0.tab) } })
+        let caller = request.caller?.pane.flatMap { locate(pane: $0)?.pane.surfaceID }
+        guard let wait = PaneWait(watched, caller: caller, output: output, reply: reply) else {
+            return reply(.failure(ControlError(.notFound, "There is no pane \(token).")))
+        }
+        paneWaits.hold(wait, timeout: TimeInterval(timeout), hangup: hangup)
     }
 
     private static func notStarted(_ token: Int) -> ControlError {

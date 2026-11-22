@@ -20,10 +20,21 @@ public enum ControlWire {
     /// Seconds past a held command's own timeout before the app gives up on its answer.
     public static let answerMargin = 5
 
-    /// The seconds the app takes at most to answer `cmd`: a `pane.wait` its timeout plus `answerMargin`.
+    /// The most seconds a `pane.send` to an agent holds while the person is typing into its pane.
+    public static let longestDraftHold = 60
+
+    /// Whether `cmd` holds its answer and so sets its own deadline with `answerWait`.
+    public static func setsOwnDeadline(_ cmd: ControlCommand) -> Bool { cmd == .paneWait || cmd == .paneSend }
+
+    /// The seconds the app takes at most to answer `cmd`: a `pane.wait` its timeout plus `answerMargin`, and a
+    /// `pane.send` the longest draft hold, plus its wait's timeout when it waits, plus `answerMargin`.
     public static func answerWait(for cmd: ControlCommand, _ args: ControlArgs) -> Int {
-        guard cmd == .paneWait else { return longestReplyWait }
-        return min(max(args.timeout ?? defaultPaneWait, 1), longestPaneWait) + answerMargin
+        let wait = min(max(args.timeout ?? defaultPaneWait, 1), longestPaneWait)
+        switch cmd {
+        case .paneWait: return wait + answerMargin
+        case .paneSend: return longestDraftHold + (args.wait == true ? wait : 0) + answerMargin
+        default: return longestReplyWait
+        }
     }
 
     /// One encoded line with its trailing newline.

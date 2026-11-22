@@ -64,7 +64,10 @@ struct PaneCommands: ParsableCommand {
 
     struct Send: ParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Paste text into a pane. Control characters arrive as spaces.")
+            abstract: "Paste text into a pane. Control characters arrive as spaces.",
+            discussion:
+                "Into an agent, it waits until the person has not typed into the pane for 2 seconds, "
+                + "at most \(ControlWire.longestDraftHold), and refuses while the agent waits on the user.")
 
         @OptionGroup var connection: ConnectionOptions
 
@@ -77,9 +80,31 @@ struct PaneCommands: ParsableCommand {
         @Flag(help: "Press Return after it, which runs the block once.")
         var enter = false
 
+        @Flag(help: "Send it to an agent that is waiting on the user.")
+        var force = false
+
+        @Flag(help: "Then wait on the pane as zen wait does, and print why as JSON.")
+        var wait = false
+
+        @Option(help: "With --wait, seconds to wait before answering timeout, at most \(ControlWire.longestPaneWait).")
+        var timeout: Int = ControlWire.defaultPaneWait
+
+        func validate() throws {
+            guard (1...ControlWire.longestPaneWait).contains(timeout) else {
+                throw ValidationError("--timeout must be 1 to \(ControlWire.longestPaneWait).")
+            }
+        }
+
         func run() throws {
-            let args = ControlArgs(pane: pane, text: text, enter: enter)
-            _ = try connection.client().send(.paneSend, args, expecting: NoPayload.self)
+            let args = ControlArgs(
+                force: force, pane: pane, text: text, enter: enter, timeout: wait ? timeout : nil, wait: wait)
+            var client = try connection.client()
+            client.replyTimeout = ControlClient.replyTimeout(for: .paneSend, args)
+            if wait {
+                print(try JSONOutput.text(client.send(.paneSend, args, expecting: WaitResult.self)))
+            } else {
+                _ = try client.send(.paneSend, args, expecting: NoPayload.self)
+            }
         }
     }
 
