@@ -17,6 +17,16 @@ final class WaitCommandTests: XCTestCase {
         XCTAssertEqual(plain.timeout, 90)
     }
 
+    func test_childrenTakesThePlaceOfAPane() throws {
+        let wait = try XCTUnwrap(try Zen.parseAsRoot(["wait", "--children", "all"]) as? WaitCommand)
+        XCTAssertNil(wait.pane)
+        XCTAssertEqual(wait.children, .all)
+        XCTAssertEqual(Zen.exitCode(running: ["wait", "34", "--children", "any"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["wait", "--children", "some"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["wait", "--children", "all", "--output", "ready"]), 2)
+        XCTAssertNoThrow(try Zen.parseAsRoot(["wait", "--children", "any", "--output", "ready"]))
+    }
+
     func test_theReplyDeadlineOutlastsTheTimeoutAndTheAppsOwnMargin() {
         let args = ControlArgs(pane: 34, timeout: 400)
         XCTAssertEqual(ControlWire.answerWait(for: .paneWait, args), 405)

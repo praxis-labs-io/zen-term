@@ -12,6 +12,7 @@ final class FirstTaskDelivery {
     }
 
     private var pending: [SurfaceID: Pending] = [:]
+    private var awaitingPickup: Set<SurfaceID> = []
     private let readinessWindow: TimeInterval
 
     init(readinessWindow: TimeInterval = FirstTaskDelivery.readinessWindow) {
@@ -27,14 +28,24 @@ final class FirstTaskDelivery {
 
     func isAwaiting(_ surface: SurfaceID) -> Bool { pending[surface] != nil }
 
+    // A sent task waits for pickup until a report other than the readiness it was sent on.
     func report(_ status: TerminalProgramStatus, from surface: SurfaceID) {
-        guard let waiting = pending[surface] else { return }
         let outcome = Self.outcome(of: status)
-        if outcome.sent { waiting.send() }
+        if !outcome.sent { awaitingPickup.remove(surface) }
+        guard let waiting = pending[surface] else { return }
+        if outcome.sent {
+            waiting.send()
+            awaitingPickup.insert(surface)
+        }
         finish(surface, outcome)
     }
 
-    func release(_ surface: SurfaceID) { finish(surface, .held(.notReady)) }
+    func awaitsPickup(_ surface: SurfaceID) -> Bool { awaitingPickup.contains(surface) }
+
+    func release(_ surface: SurfaceID) {
+        awaitingPickup.remove(surface)
+        finish(surface, .held(.notReady))
+    }
 
     private func finish(_ surface: SurfaceID, _ outcome: FirstTask) {
         guard let waiting = pending.removeValue(forKey: surface) else { return }

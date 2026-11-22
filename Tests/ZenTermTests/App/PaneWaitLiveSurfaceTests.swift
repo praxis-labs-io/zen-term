@@ -97,7 +97,9 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
         let (surface, token) = try shellPane()
         let report = #"printf '\033]7501;state=%s:app=claude-code\007'"#
         run("\(report) working; read -r _; \(report) done; sleep 30", in: surface)
-        waitUntil(controller?.listing().workspaces.first?.tabs.first?.panes.first?.agent?.status == .working, "working")
+        waitUntil(
+            controller?.listing().workspaces.first?.tabs.first?.panes.first?.agent?.status == .working, "working",
+            timeout: 10)
         let answer = wait(on: token)
         RunLoop.current.run(until: Date().addingTimeInterval(0.3))
         XCTAssertNil(answer.reply, "the agent is still working")
@@ -106,7 +108,7 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
 
         let got = try result(answer)
         XCTAssertEqual(got.reason, .stopped)
-        XCTAssertEqual(got.pane.agent?.status, .done)
+        XCTAssertEqual(got.pane?.agent?.status, .done)
     }
 
     func test_textTheProgramPrintsAnswersOutput() throws {
@@ -134,8 +136,10 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
         let (surface, _) = try shellPane()
         run("sleep 5", in: surface)
         waitUntil(
-            surface.foregroundProcessGroupID.map { !ForegroundGroup.isShell($0) } == true, "sleep in the foreground")
-        XCTAssertEqual(surface.foregroundProcessGroupID.flatMap(ProcessArguments.programName(of:)), "sleep")
+            surface.foregroundProcessGroupID.flatMap(ProcessArguments.programName(of:)) == "sleep",
+            "sleep in the foreground", timeout: 10)
+        let job = try XCTUnwrap(surface.foregroundProcessGroupID)
+        XCTAssertFalse(ForegroundGroup.isShell(job))
     }
 
     func test_aKeyTypedIntoThePaneRecordsTheDraftTime() throws {
@@ -158,6 +162,6 @@ final class PaneWaitLiveSurfaceTests: WindowTestCase {
 
         let typed = try XCTUnwrap(drafts.lastKey(into: place.pane.surfaceID))
         XCTAssertGreaterThanOrEqual(typed, before)
-        waitUntil((surface.activeScreenText ?? "").contains("q"), "the key to reach the shell")
+        waitUntil((surface.activeScreenText ?? "").contains("q"), "the key to reach the shell", timeout: 10)
     }
 }

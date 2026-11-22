@@ -259,7 +259,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   `tab.new` and `pane.split`, with a `PaneProgram` whose `exitClosesPane` drops the shell that
   `ShellLaunch.program` would `exec` after the command, so the child exit closes the pane.
   Before it closes, the canvas hands the window a `LaunchedPaneExit`: the exit code from the
-  program's `D` mark, which lands before the child exit, and its last 40 lines. The window
+  program's `D` mark and its last 40 lines. The mark can trail the child exit, so a child exit
+  with no code yet holds the close until the mark or `exitMarkGrace` (async). The window
   keeps the newest 64 in `launchedPaneExits`. `FirstTaskDelivery`, one per window, holds a
   run's task until the surface's first OSC 7501 report, its release, or 60 seconds.
   Every pane and drawer token a tab releases reaches the window (`onPaneTokensReleased`),
@@ -573,7 +574,10 @@ feeds it the 7501 status leaving `working`, the OSC 133 finish and the surface's
 `pane.send` a message for the caller. libghostty reports no output, so output and a job's exit
 without OSC 133 are checked on a timer while a wait holds: the screen's own rows, lined up with the
 last read (`OutputWatch`), and the foreground group returning to the shell (`ForegroundGroup`). The
-connection's thread checks for a hangup while it waits and drops the hold. A `pane.send` to an
+connection's thread checks for a hangup while it waits and drops the hold. A wait on the caller's children
+(`ChildrenWait`) holds a `PaneWait` per child with no deadline of its own, so a child's news routes
+as a single pane's does. A pane `pane.run` opened leaves its exit in its window's
+`LaunchedPaneExits` as it closes, which a wait reads when the pane is gone. A `pane.send` to an
 agent holds in `PaneDrafts`, also app-wide, which `WindowController.keyReachedFocus` feeds the
 person's last key into each surface from `KeyInterceptor`'s keys the chrome did not claim, the
 path that also answers an agent by typing. A `pane.run` child's note to its parent (`HelperNote`)

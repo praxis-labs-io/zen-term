@@ -4,11 +4,19 @@ import Foundation
 // App-wide, since a wait's caller and the pane it waits on can sit in different windows. Main-thread only.
 final class PaneWaits {
     private(set) var pending: [PaneWait] = []
+    private(set) var childrenWaits: [ChildrenWait] = []
 
     func hold(_ wait: PaneWait, timeout: TimeInterval, hangup: ControlHangup) {
-        pending.append(wait)
-        wait.onAnswered = { [weak self, weak wait] in self?.pending.removeAll { $0 === wait } }
+        track(wait)
         hangup.onHangup { [weak wait] in wait?.cancel() }
+        wait.start(timeout: timeout)
+    }
+
+    func hold(_ wait: ChildrenWait, timeout: TimeInterval, hangup: ControlHangup) {
+        childrenWaits.append(wait)
+        wait.onAnswered = { [weak self, weak wait] in self?.childrenWaits.removeAll { $0 === wait } }
+        hangup.onHangup { [weak wait] in wait?.cancel() }
+        wait.probes.forEach(track)
         wait.start(timeout: timeout)
     }
 
@@ -23,7 +31,15 @@ final class PaneWaits {
         pending.filter { closed.contains($0.watched.surfaceID) }.forEach { $0.closed() }
     }
 
-    func sent(to surface: SurfaceID) { pending.filter { $0.caller == surface }.forEach { $0.messageArrived() } }
+    func sent(to surface: SurfaceID) {
+        pending.filter { $0.caller == surface }.forEach { $0.messageArrived() }
+        childrenWaits.filter { $0.caller == surface }.forEach { $0.messageArrived() }
+    }
+
+    private func track(_ wait: PaneWait) {
+        pending.append(wait)
+        wait.onAnswered = { [weak self, weak wait] in self?.pending.removeAll { $0 === wait } }
+    }
 
     func callers(answeredBy reason: WaitReason, on surface: SurfaceID) -> Set<SurfaceID> {
         Set(waits(on: surface).filter { $0.answers(reason) }.compactMap(\.caller))

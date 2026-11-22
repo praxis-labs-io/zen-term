@@ -30,6 +30,7 @@ final class ControlPaneWaitTests: WindowTestCase {
 
     override func tearDownWithError() throws {
         waits.pending.forEach { $0.cancel() }
+        waits.childrenWaits.forEach { $0.cancel() }
         for c in controllers {
             c.windowWillClose(Notification(name: NSWindow.willCloseNotification))
             AttentionCenter.shared.forget(windowID: c.windowID)
@@ -117,8 +118,8 @@ final class ControlPaneWaitTests: WindowTestCase {
 
         let got = try result(answer)
         XCTAssertEqual(got.reason, .stopped)
-        XCTAssertEqual(got.pane.token, try token(of: agent))
-        XCTAssertEqual(got.pane.agent?.status, .done)
+        XCTAssertEqual(got.pane?.token, try token(of: agent))
+        XCTAssertEqual(got.pane?.agent?.status, .done)
         XCTAssertTrue(waits.pending.isEmpty)
     }
 
@@ -174,7 +175,7 @@ final class ControlPaneWaitTests: WindowTestCase {
 
         let got = try result(answer)
         XCTAssertEqual(got.reason, .exited)
-        XCTAssertEqual(got.pane.token, try token(of: second))
+        XCTAssertEqual(got.pane?.token, try token(of: second))
         XCTAssertNil(got.exitCode)
     }
 
@@ -193,7 +194,7 @@ final class ControlPaneWaitTests: WindowTestCase {
 
         let got = try result(answer)
         XCTAssertEqual(got.reason, .message)
-        XCTAssertEqual(got.pane.token, try token(of: helper))
+        XCTAssertEqual(got.pane?.token, try token(of: helper))
     }
 
     func test_outputPrintedAfterTheWaitBeganAnswersOutput_andTextAlreadyThereDoesNot() throws {

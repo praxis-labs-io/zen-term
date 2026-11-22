@@ -13,11 +13,19 @@ final class PaneWait {
         weak var surface: TerminalSurface?
         let readsForeground: Bool
         let pane: () -> ListResult.Pane?
+        let exit: () -> LaunchedPaneExit?
+    }
+
+    struct Answer {
+        let reason: WaitReason
+        let exitCode: Int?
+        let text: String?
+        let pane: ListResult.Pane
     }
 
     let watched: Watched
     let caller: SurfaceID?
-    private var reply: ((ControlReply) -> Void)?
+    private var reply: ((Answer) -> Void)?
     private var lastPane: ListResult.Pane
     private var output: OutputWatch?
     private var ranJob = false
@@ -26,7 +34,7 @@ final class PaneWait {
     var onAnswered: (() -> Void)?
 
     init?(
-        _ watched: Watched, caller: SurfaceID?, output needle: String?, reply: @escaping (ControlReply) -> Void
+        _ watched: Watched, caller: SurfaceID?, output needle: String?, reply: @escaping (Answer) -> Void
     ) {
         guard let pane = watched.pane() else { return nil }
         self.watched = watched
@@ -39,12 +47,16 @@ final class PaneWait {
         ranJob = Self.foregroundIsJob(watched)
     }
 
-    func start(timeout: TimeInterval) {
+    var pane: ListResult.Pane { watched.pane() ?? lastPane }
+
+    // A wait without a timeout answers only on the pane's news, for a wait that holds the deadline itself.
+    func start(timeout: TimeInterval?) {
         let ticker = Timer(timeInterval: Self.checkInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.check() }
         }
         RunLoop.main.add(ticker, forMode: .common)
         self.ticker = ticker
+        guard let timeout else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in self?.answer(.timeout) }
     }
 
@@ -59,7 +71,10 @@ final class PaneWait {
         answer(.exited, exitCode: exitCode, text: Self.lastLines(of: watched.surface))
     }
 
-    func closed() { answer(.exited) }
+    func closed() {
+        let exit = watched.exit()
+        answer(.exited, exitCode: exit?.exitCode, text: exit?.lastLines)
+    }
 
     func answers(_ reason: WaitReason) -> Bool { reason != .stopped || output == nil }
 
@@ -86,9 +101,9 @@ final class PaneWait {
 
     private func answer(_ reason: WaitReason, exitCode: Int? = nil, text: String? = nil) {
         guard let reply else { return }
-        let pane = watched.pane() ?? lastPane
+        let pane = pane
         finish()
-        reply(.success(WaitResult(reason: reason, exitCode: exitCode, text: text, pane: pane)))
+        reply(Answer(reason: reason, exitCode: exitCode, text: text, pane: pane))
     }
 
     private func finish() {

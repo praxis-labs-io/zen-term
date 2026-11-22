@@ -264,11 +264,28 @@ extension ControlResponder {
         if request.args.output?.contains(where: \.isNewline) == true {
             return reply(.failure(ControlError(.badRequest, "output matches within one line, so it takes no newline.")))
         }
+        if let children = request.args.children {
+            guard request.args.pane == nil else {
+                return reply(.failure(ControlError(.badRequest, "pane.wait takes a pane or children, not both.")))
+            }
+            if children == .all, request.args.output != nil {
+                return reply(.failure(ControlError(.badRequest, "output takes a pane or children any.")))
+            }
+            return waitOnChildren(children, request, timeout: timeout, hangup: hangup, reply: reply)
+        }
         guard let address = request.args.pane else {
-            return reply(.failure(ControlError(.badRequest, "pane.wait needs a pane.")))
+            return reply(.failure(ControlError(.badRequest, "pane.wait needs a pane or children.")))
         }
         switch pane(address, for: request) {
-        case .failure(let error): reply(.failure(error))
+        case .failure(let error):
+            if error.code == .notFound, case .token(let token) = address, let exit = launchedExit(of: token) {
+                return reply(
+                    .success(
+                        WaitResult(
+                            reason: .exited, exitCode: exit.exitCode, text: exit.lastLines,
+                            pane: exit.pane ?? Self.closedPane(exit))))
+            }
+            reply(.failure(error))
         case .success(let place):
             hold(
                 waitOn: place, output: request.args.output, timeout: timeout, for: request, hangup: hangup,
@@ -288,16 +305,59 @@ extension ControlResponder {
         waitOn place: PanePlace, output: String?, timeout: Int, for request: ControlRequest, hangup: ControlHangup,
         reply: @escaping (ControlReply) -> Void
     ) {
-        let token = place.pane.token
-        let onHost = place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) != nil
-        let watched = PaneWait.Watched(
-            surfaceID: place.pane.surfaceID, surface: place.pane.surface, readsForeground: !onHost,
-            pane: { [self] in locate(pane: token).map { $0.window.listing(of: $0.pane, in: $0.tab) } })
         let caller = request.caller?.pane.flatMap { locate(pane: $0)?.pane.surfaceID }
-        guard let wait = PaneWait(watched, caller: caller, output: output, reply: reply) else {
-            return reply(.failure(ControlError(.notFound, "There is no pane \(token).")))
+        let answered: (PaneWait.Answer) -> Void = {
+            reply(.success(WaitResult(reason: $0.reason, exitCode: $0.exitCode, text: $0.text, pane: $0.pane)))
+        }
+        guard let wait = PaneWait(watched(place), caller: caller, output: output, reply: answered) else {
+            return reply(.failure(ControlError(.notFound, "There is no pane \(place.pane.token).")))
         }
         paneWaits.hold(wait, timeout: TimeInterval(timeout), hangup: hangup)
+    }
+
+    private func waitOnChildren(
+        _ mode: WaitChildren, _ request: ControlRequest, timeout: Int, hangup: ControlHangup,
+        reply: @escaping (ControlReply) -> Void
+    ) {
+        guard let parent = request.caller?.pane else {
+            return reply(.failure(ControlError(.badRequest, "pane.wait waits on children from a pane.")))
+        }
+        guard let caller = locate(pane: parent) else {
+            return reply(.failure(ControlError(.notFound, "There is no pane \(parent).")))
+        }
+        let children = windows().flatMap { window in
+            window.panes(childOf: parent).map { found in
+                let token = found.pane.token
+                return ChildrenWait.Child(
+                    token: token, watched: watched(PanePlace(window: window, tab: found.tab, pane: found.pane)),
+                    isWorking: { [self] in
+                        locate(pane: token).map { $0.window.isWorking(helper: $0.pane, in: $0.tab) } ?? false
+                    })
+            }
+        }
+        guard !children.isEmpty else { return reply(.success(WaitResult(reason: .noChildren, children: []))) }
+        let wait = ChildrenWait(
+            children, mode: mode, caller: caller.pane.surfaceID, output: request.args.output, reply: reply)
+        paneWaits.hold(wait, timeout: TimeInterval(timeout), hangup: hangup)
+    }
+
+    private func watched(_ place: PanePlace) -> PaneWait.Watched {
+        let token = place.pane.token
+        let onHost = place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) != nil
+        return PaneWait.Watched(
+            surfaceID: place.pane.surfaceID, surface: place.pane.surface, readsForeground: !onHost,
+            pane: { [self] in locate(pane: token).map { $0.window.listing(of: $0.pane, in: $0.tab) } },
+            exit: { [self] in launchedExit(of: token) })
+    }
+
+    private func launchedExit(of token: Int) -> LaunchedPaneExit? {
+        windows().lazy.compactMap { $0.launchedPaneExits.exit(of: token) }.first
+    }
+
+    private static func closedPane(_ exit: LaunchedPaneExit) -> ListResult.Pane {
+        ListResult.Pane(
+            token: exit.token, drawer: nil, title: "", cwd: nil, busy: false, agent: nil, name: exit.record.name,
+            parent: exit.record.parent, firstTask: exit.record.firstTask)
     }
 
     private static func notStarted(_ token: Int) -> ControlError {
