@@ -38,8 +38,9 @@ final class IconBadgeTests: XCTestCase {
         XCTAssertEqual(chip.edgeForTesting, Theme.current.chrome.fill(alpha: ChromeTheme.border).cgColor)
         XCTAssertTrue(chip.hasSheenForTesting)
         XCTAssertTrue(chip.sheenLitFromTopForTesting, "a layer's y runs up, so the light starts at y = 1")
-        XCTAssertEqual(
-            chip.iconFrameForTesting.size, NSSize(width: ChromeMetrics.Icon.sm, height: ChromeMetrics.Icon.sm))
+        XCTAssertEqual(chip.iconFrameForTesting.width, ChromeMetrics.Icon.sm * claude().scale, accuracy: 0.5)
+        XCTAssertLessThan(
+            claude().scale, ProcessIcon.shell.scale, "a brand mark sits inside the box a Lucide glyph fills")
     }
 
     func test_aBrandChip_keepsItsBrandsColorsOnEveryTheme_whileItsEdgeFollowsTheTheme() throws {

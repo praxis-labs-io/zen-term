@@ -42,7 +42,9 @@ struct ProcessIcon: Equatable {
     }
 
     // Lucide draws inside a margin the brand marks lack, so its glyphs take a slightly larger box.
-    private static let lucideScale: CGFloat = 1.1
+    private static let lucideScale: CGFloat = 1.05
+    // A brand mark fills its box edge to edge, so it sits a touch inside it to keep air around it in the chip.
+    private static let brandScale: CGFloat = 0.9
 
     private static func neutral(_ name: String, _ mark: String) -> ProcessIcon {
         ProcessIcon(name: name, mark: mark, look: .neutral, scale: lucideScale)
@@ -51,11 +53,11 @@ struct ProcessIcon: Equatable {
     private static func brand(_ name: String, _ mark: String, _ fill: UInt32, _ glyph: UInt32, scale: CGFloat = 1)
         -> ProcessIcon
     {
-        ProcessIcon(name: name, mark: mark, look: .brand(fill: rgb(fill), glyph: rgb(glyph)), scale: scale)
+        ProcessIcon(name: name, mark: mark, look: .brand(fill: rgb(fill), glyph: rgb(glyph)), scale: scale * brandScale)
     }
 
     private static func artwork(_ name: String, _ mark: String, _ fill: UInt32) -> ProcessIcon {
-        ProcessIcon(name: name, mark: mark, look: .artwork(fill: rgb(fill)), scale: 1)
+        ProcessIcon(name: name, mark: mark, look: .artwork(fill: rgb(fill)), scale: brandScale)
     }
 
     private static func rgb(_ hex: UInt32) -> TerminalColor {
