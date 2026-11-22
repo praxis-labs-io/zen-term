@@ -22,6 +22,7 @@ public struct ControlArgs: Codable, Equatable, Sendable {
     /// The commit a new branch starts from: `default` or `current`.
     public var base: String?
     public var existing: Bool?
+    public var open: Bool?
     /// A keymap action's config name, like `toggle_sidebar`.
     public var name: String?
 
@@ -29,7 +30,7 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         workspace: String? = nil, path: String? = nil, tab: String? = nil, cwd: String? = nil, cmd: String? = nil,
         title: String? = nil, focus: Bool? = nil, force: Bool? = nil, pane: Int? = nil, dir: PaneDirection? = nil,
         text: String? = nil, enter: Bool? = nil, keys: [String]? = nil, lines: Int? = nil, branch: String? = nil,
-        base: String? = nil, existing: Bool? = nil, name: String? = nil
+        base: String? = nil, existing: Bool? = nil, open: Bool? = nil, name: String? = nil
     ) {
         self.workspace = workspace
         self.path = path
@@ -48,6 +49,7 @@ public struct ControlArgs: Codable, Equatable, Sendable {
         self.branch = branch
         self.base = base
         self.existing = existing
+        self.open = open
         self.name = name
     }
 }

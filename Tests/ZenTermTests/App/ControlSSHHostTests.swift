@@ -241,6 +241,17 @@ final class ControlSSHHostTests: WindowTestCase {
         XCTAssertEqual(refusal.message, "Pane \(waiting.token) has not started.")
     }
 
+    func test_getOfAHostPane_leavesOutTheLocalSSHProcess() throws {
+        let c = makeWindow()
+        let pane = try connected(c)
+        pane.foregroundProcessGroupID = getpid()
+
+        let got = try result(send(.paneGet, ControlArgs(pane: try token(of: pane))), as: ListResult.Pane.self)
+
+        XCTAssertNil(got.process)
+        XCTAssertEqual(c.listing().workspaces.flatMap(\.tabs).flatMap(\.panes).first { $0.token == got.token }, got)
+    }
+
     private let address = "ssh:devbox"
 
     func test_anSSHAddressFindsTheHostsWorkspaceInAnotherWindow_andSwitchRaisesIt() throws {

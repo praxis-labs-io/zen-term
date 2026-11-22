@@ -180,6 +180,10 @@ extension ControlResponder {
         }
     }
 
+    func getPane(_ request: ControlRequest) -> ControlReply {
+        pane(request.args.pane, for: request).map { place in place.window.listing(of: place.pane, in: place.tab) }
+    }
+
     private static func notStarted(_ token: Int) -> ControlError {
         ControlError(.failed, "Pane \(token) has not started.")
     }

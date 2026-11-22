@@ -37,6 +37,9 @@ final class PaneCommandTests: XCTestCase {
 
         let interrupt = try XCTUnwrap(try Zen.parseAsRoot(["pane", "interrupt", "34"]) as? PaneCommands.Interrupt)
         XCTAssertEqual(interrupt.pane, 34)
+
+        XCTAssertEqual(try XCTUnwrap(try Zen.parseAsRoot(["pane", "get", "34"]) as? PaneCommands.Get).pane, 34)
+        XCTAssertNil(try XCTUnwrap(try Zen.parseAsRoot(["pane", "get"]) as? PaneCommands.Get).pane)
     }
 
     func test_aBadDirectionLineCountOrKeyIsAUsageError() {

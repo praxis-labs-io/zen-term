@@ -140,8 +140,10 @@ is listed from its first opening until it closes, shown or hidden.
   "configured":true,"active":true,
   "worktree":{"name":"feat-x","parent":"/Users/me/src/zen-term"},
   "tabs":[{"id":"w1.t3","title":"zen-term","active":true,"panes":[
-    {"token":31,"title":"nvim","cwd":"/Users/me/.zenterm/worktrees/zen-term/feat-x","busy":true,
-     "agent":{"name":"claude","state":"waiting"}},
+    {"token":31,"title":"claude","cwd":"/Users/me/.zenterm/worktrees/zen-term/feat-x","busy":true,
+     "process":{"pid":81234,"program":"claude"},
+     "agent":{"name":"claude","state":"waiting","status":"blocked","kind":"permission",
+              "msg":"Claude needs your permission to use Bash","title":"Fix the build"}},
     {"token":32,"drawer":"bottom","title":"","busy":false}]}]}]}]}
 ```
 
@@ -158,8 +160,16 @@ is listed from its first opening until it closes, shown or hidden.
   that command until its program sets one. Empty when nothing set one.
 - `cwd`: absent when it is not known.
 - `busy`: always false in a host's workspace, since a remote shell reports no prompts.
+- `process`: the pane's foreground program: the shell at a prompt, else the job it runs.
+  `pid` is its process group, which is also its leader's pid, and `program` is the name
+  that process was run as (`claude`, `zsh`). Absent in a host's workspace, where it would
+  be the local ssh, and when it cannot be read.
 - `agent`: present when the pane runs an agent. `state` is `working`, `waiting` or
   `idle`; `name` is absent for an agent that has not been named.
+- `agent.status`: the agent's own OSC 7501 state word, as it sent it: `idle`, `working`,
+  `done`, `blocked` or `error`. Absent for an agent that sends none. `kind` joins
+  `blocked` when the agent says what it waits on: `permission`, `question` or `auth`.
+  `msg` and `title` are the report's text, each absent when it sent none.
 
 ### `workspace.open`
 
@@ -306,6 +316,18 @@ not started or its screen cannot be read.
 {"text":"$ seq 3\n1\n2\n3"}
 ```
 
+### `pane.get`
+
+`args`: `pane`.
+
+Returns one pane or drawer in the shape `list` uses, without the tree around it.
+
+```json
+{"token":31,"title":"claude","cwd":"/Users/me/src/app","busy":true,
+ "process":{"pid":81234,"program":"claude"},
+ "agent":{"name":"claude","state":"working","status":"working","msg":"Reading x.swift"}}
+```
+
 ### `worktree.list`
 
 `args`: `workspace`.
@@ -324,15 +346,15 @@ is a remote host's workspace, by its `ssh:<host>` address or as the caller's.
 
 ### `worktree.create`
 
-`args`: `branch` (required), `workspace`, `base`, `existing`, `focus`.
+`args`: `branch` (required), `workspace`, `base`, `existing`, `open`, `focus`.
 
 Makes a worktree on a new branch cut from `base`: `default`, the default branch, unless
 `current` cuts it from what the workspace's checkout is on. `existing` checks out a branch
 that already exists instead and ignores `base`. It copies the entry's `carry` into the
-worktree and opens a workspace there, nested under the workspace it was made from, in the
-window that has that workspace open, else the caller's window. It answers once the copy
-finishes. Anything git refuses is `failed`, with the message the app's New Worktree card
-shows.
+worktree and opens nothing. `open` also opens a workspace there, nested under the
+workspace it was made from, in the window that has that workspace open, else the caller's
+window. `focus` implies `open` and switches to it. It answers once the copy finishes.
+Anything git refuses is `failed`, with the message the app's New Worktree card shows.
 
 ```json
 {"path":"/Users/me/.zenterm/worktrees/zen-term-1a2b3c4d/feat-x",
@@ -341,7 +363,8 @@ shows.
 ```
 
 `skipped` holds what was there to copy and did not arrive. An entry with nothing to copy
-is in neither list. `workspace` is in the shape `list` uses.
+is in neither list. `window` and `workspace` are present only when it opened one, and
+`workspace` is in the shape `list` uses.
 
 ### `worktree.remove`
 
@@ -379,15 +402,18 @@ speaks is refused with exit 1, before its result is read, and the message names 
 versions.
 
 Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close`,
-`zen tab new|select|rename|close`, `zen pane split|focus|close|send|keys|interrupt|read` and
+`zen tab new|select|rename|close`, `zen pane split|focus|close|send|keys|interrupt|read|get` and
 `zen worktree list|create|remove`, with `--focus` and `--force` for those fields.
-`zen action <name>` runs a keymap action. A command
+`zen action <name>` runs a keymap action. `zen setup claude` and `zen setup claude --remove`
+edit Claude Code's config, not the app, and never open the socket. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
-rest print nothing. `zen pane split` splits to the right unless `--dir down` says otherwise.
+rest print nothing. `zen pane get` takes the pane as its argument, this pane by default.
+`zen pane split` splits to the right unless `--dir down` says otherwise.
 `zen pane keys <pane> <key>...` takes the keys as arguments, and a name that is not a key is
 a usage error.
 `zen workspace new` takes `--title`, and `zen workspace rename <title>` takes the workspace
-as `--workspace`. `zen worktree create <branch>` takes `--base default|current` or `--existing`, not both.
+as `--workspace`. `zen worktree create <branch>` takes `--base default|current` or `--existing`, not both, and
+opens a workspace on it only with `--open` or `--focus`.
 `zen worktree remove` takes a folder when it starts with `/`, `~` or `.`, and a branch
 otherwise. `zen` sends
 folders as absolute paths, read against its own folder, and refuses a `--cwd` or

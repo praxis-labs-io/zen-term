@@ -409,6 +409,71 @@ final class ControlPaneTests: WindowTestCase {
 
         XCTAssertEqual(focused.inputs, [.paste("pwd")])
     }
+
+    private func drainMainQueue() {
+        let drained = expectation(description: "main queue")
+        DispatchQueue.main.async { drained.fulfill() }
+        wait(for: [drained], timeout: 2)
+    }
+
+    func test_getPassesTheAgentsOwnStatusWordThrough_inTheShapeListUses() throws {
+        let c = makeWindow()
+        let agent = try XCTUnwrap(spawned.first)
+        let cases: [(TerminalProgramStatus.State, ListResult.AgentStatus, ListResult.AgentNeed?)] = [
+            (.working, .working, nil), (.blocked(.permission), .blocked, .permission),
+            (.blocked(.auth), .blocked, .auth),
+            (.blocked(nil), .blocked, nil), (.done, .done, nil), (.failed, .error, nil), (.idle, .idle, nil),
+        ]
+        for (state, status, kind) in cases {
+            agent.delegate?.surface(
+                agent,
+                programStatusDidChange: TerminalProgramStatus(
+                    state: state, app: "claude-code", message: "Reading x.swift", title: "Reviewing x.swift"))
+            drainMainQueue()
+
+            let got = try result(send(.paneGet, ControlArgs(pane: try token(of: agent))), as: ListResult.Pane.self)
+
+            XCTAssertEqual(got.agent?.status, status, "\(state)")
+            XCTAssertEqual(got.agent?.kind, kind, "\(state)")
+            XCTAssertEqual(got.agent?.msg, "Reading x.swift")
+            XCTAssertEqual(got.agent?.title, "Reviewing x.swift")
+            XCTAssertEqual([got], panes(c), "pane.get and list must report a pane the same way")
+        }
+    }
+
+    func test_getWithoutAPane_reportsTheCaller_andAnAgentWithNoReportHasNoStatus() throws {
+        _ = makeWindow()
+        let caller = try XCTUnwrap(spawned.first)
+        caller.delegate?.surface(caller, didPostNotification: TerminalNotification(title: "Claude Code", body: "Done"))
+        drainMainQueue()
+
+        let got = try result(send(.paneGet, from: try token(of: caller)), as: ListResult.Pane.self)
+
+        XCTAssertEqual(got.token, try token(of: caller))
+        XCTAssertNotNil(got.agent)
+        XCTAssertNil(got.agent?.status)
+        XCTAssertEqual(try error(send(.paneGet, ControlArgs(pane: 9999))).code, .notFound)
+    }
+
+    func test_getNamesTheForegroundProgramByWhatItWasRunAs() throws {
+        _ = makeWindow()
+        let pane = try XCTUnwrap(spawned.first)
+        let program = Process()
+        program.executableURL = URL(fileURLWithPath: "/bin/bash")
+        program.arguments = ["-c", "exec -a -zen-probe /bin/sleep 30"]
+        try program.run()
+        defer { program.terminate() }
+        let exec = Date().addingTimeInterval(5)
+        while Date() < exec, ProcessArguments.programName(of: program.processIdentifier) == "bash" {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        }
+        XCTAssertNil(try result(send(.paneGet, from: try token(of: pane)), as: ListResult.Pane.self).process)
+
+        pane.foregroundProcessGroupID = program.processIdentifier
+        let got = try result(send(.paneGet, from: try token(of: pane)), as: ListResult.Pane.self)
+
+        XCTAssertEqual(got.process, ListResult.Process(pid: program.processIdentifier, program: "zen-probe"))
+    }
 }
 
 private extension Result {

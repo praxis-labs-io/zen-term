@@ -249,12 +249,7 @@ extension SSHConnection.Watchers {
 
     // ssh retitles a master as `ssh: <ControlPath> [mux]` over its arguments, so the path survives either way.
     private nonisolated static func commandLine(of pid: pid_t) -> String? {
-        var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
-        var size = 0
-        guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > 0 else { return nil }
-        var buffer = [UInt8](repeating: 0, count: size)
-        guard sysctl(&mib, 3, &buffer, &size, nil, 0) == 0 else { return nil }
-        return String(decoding: buffer.prefix(size).map { $0 == 0 ? 0x20 : $0 }, as: UTF8.self)
+        ProcessArguments.raw(of: pid).map { String(decoding: $0.map { $0 == 0 ? 0x20 : $0 }, as: UTF8.self) }
     }
 
     static let live = SSHConnection.Watchers(

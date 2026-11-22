@@ -64,7 +64,8 @@ TerminalKit          the ONLY target that may import GhosttyKit
   TabKit             pure leaf used by ZenTerm: imports nothing
   AppLog             Foundation + os leaf used by TerminalKit and ZenTerm
   ControlProtocol    Foundation leaf: the control socket's wire types, used by ZenTerm and zen
-  zen                the control CLI: ControlProtocol + swift-argument-parser, nothing else
+  AgentSetup         Foundation leaf: the zen skill and session hook and their installer, used by ZenTerm and zen
+  zen                the control CLI: ControlProtocol + AgentSetup + swift-argument-parser, nothing else
 ```
 
 The package graph enforces the seam: `ZenTerm` has no `GhosttyKit` dependency, so an
@@ -784,7 +785,8 @@ The create card replaces the picker and reopens it on cancel. `BranchField` is a
 plus `ListPopover`, Esc handled in its `doCommandBy`. `CreateTarget` carries the repo to
 branch in and the workspace to carry from. `WorktreeCreation` is the one create pipeline
 (create, mirror the entry, carry), run off-main: the card passes its phase line and opens the
-result through the chrome, and the control socket passes nothing and opens it headless.
+result through the chrome, and the control socket passes nothing and opens it headless
+only when asked to.
 
 ### Carry
 
