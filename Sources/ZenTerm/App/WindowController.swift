@@ -2502,14 +2502,16 @@ final class WindowController: NSObject {
         appendUnconfiguredWorkspace(at: folder, named: name).id
     }
 
-    func closeStakes(tab id: TabID) -> CloseStakes? {
+    func closeStakes(tab id: TabID, sparingWorkOf spared: Int? = nil) -> CloseStakes? {
         guard let workspace = workspace(of: id), let tab = controller(id) else { return nil }
         if holdsAwaitingLogin(tab: id) { return loginStakes(of: workspace) }
-        let children = childStakes(closing: [id])
+        let children = childStakes(closing: [id], sparingWorkOf: spared)
         let closesWindow = workspace.tabIDs.count == 1 && closesWindow(closing: workspace) || children.closesWindow
+        let busy = tab.paneHandles.filter { $0.surface.isBusy && $0.token != spared }
+        let running = spared == nil ? isRunning(tab: id) : !busy.isEmpty || floats.hasBusyInScope(id)
         return CloseStakes(
-            closesWindow: closesWindow, isRunning: isRunning(tab: id) || children.isRunning,
-            panes: tab.paneHandles.filter(\.surface.isBusy).map { listing(of: $0, onHost: workspace.host != nil) }
+            closesWindow: closesWindow, isRunning: running || children.isRunning,
+            panes: busy.map { listing(of: $0, onHost: workspace.host != nil) }
                 + children.running.map { listing(of: $0.pane, in: $0.tab) },
             floats: floats.runningTitles(scope: id) + children.floats
                 + (closesWindow ? floats.runningTitles(scope: nil) : []))
@@ -2538,12 +2540,13 @@ final class WindowController: NSObject {
         controller(tab)?.split(pane: token, axis: axis, command: command)
     }
 
-    func closeStakes(pane: PaneHandle, in tab: TabID) -> CloseStakes? {
+    func closeStakes(pane: PaneHandle, in tab: TabID, closedByItsParent: Bool = false) -> CloseStakes? {
         guard let c = controller(tab), let workspace = workspace(of: tab) else { return nil }
         if workspace.connection?.isAwaitingLogin(on: pane.surfaceID) == true { return loginStakes(of: workspace) }
-        if c.isSinglePane { return closeStakes(tab: tab) }
-        let busy = pane.surface.isBusy
-        let children = childStakes(closing: [], panes: [pane.token])
+        let spared = closedByItsParent ? pane.token : nil
+        if c.isSinglePane { return closeStakes(tab: tab, sparingWorkOf: spared) }
+        let busy = !closedByItsParent && pane.surface.isBusy
+        let children = childStakes(closing: [], panes: [pane.token], sparingWorkOf: spared)
         return CloseStakes(
             closesWindow: children.closesWindow, isRunning: busy || children.isRunning,
             panes: (busy ? [listing(of: pane, in: tab)] : [])
@@ -2567,12 +2570,15 @@ final class WindowController: NSObject {
 
     // Children close after their parent, wherever they are in the window, so the warning has to count them first.
     // A child that is its tab's last pane takes the tab, with its drawers and floats, so those count too.
-    private func childStakes(closing tabs: Set<TabID>, panes: Set<Int> = []) -> ChildStakes {
+    private func childStakes(closing tabs: Set<TabID>, panes: Set<Int> = [], sparingWorkOf spared: Int? = nil)
+        -> ChildStakes
+    {
         let every = workspaces.flatMap { workspace in
             workspace.tabIDs.flatMap { id in (workspace.controller(id)?.paneHandles ?? []).map { (tab: id, pane: $0) } }
         }
         var closing = panes.union(every.filter { tabs.contains($0.tab) }.map(\.pane.token))
         var children: [(tab: TabID, pane: PaneHandle)] = []
+        var lineage: Set<Int> = spared.map { [$0] } ?? []
         var cascadedTabs: [TabID] = []
         let tabCloses = { (id: TabID) in
             tabs.contains(id)
@@ -2584,6 +2590,7 @@ final class WindowController: NSObject {
             for entry in every where !closing.contains(entry.pane.token) && Self.closesWith(entry.pane, closing) {
                 closing.insert(entry.pane.token)
                 children.append(entry)
+                if Self.closesWith(entry.pane, lineage) { lineage.insert(entry.pane.token) }
                 grew = true
             }
             for id in Set(every.map(\.tab)) where !tabs.contains(id) && !cascadedTabs.contains(id) && tabCloses(id) {
@@ -2598,7 +2605,7 @@ final class WindowController: NSObject {
         guard !children.isEmpty else { return ChildStakes(running: [], floats: [], closesWindow: false) }
         let emptiesWindow = workspaces.allSatisfy { $0.host == nil && $0.tabIDs.allSatisfy(tabCloses) }
         return ChildStakes(
-            running: children.filter(\.pane.surface.isBusy),
+            running: children.filter { $0.pane.surface.isBusy && (spared == nil || !lineage.contains($0.pane.token)) },
             floats: cascadedTabs.flatMap { floats.runningTitles(scope: $0) }, closesWindow: emptiesWindow)
     }
 

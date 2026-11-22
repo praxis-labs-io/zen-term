@@ -112,6 +112,20 @@ final class PaneCommandTests: XCTestCase {
         XCTAssertEqual(line.commandLine, "npm run dev && exit")
     }
 
+    func test_runAsksForHelpBeforeACommandAndRunsItAfterTheSeparator() throws {
+        for flag in ["--help", "-h"] {
+            XCTAssertThrowsError(try Zen.parseAsRoot(["pane", "run", flag])) {
+                XCTAssertEqual(Zen.exitCode(for: $0), .success)
+                XCTAssertTrue(Zen.fullMessage(for: $0).contains("--outlive-parent"), "\(flag) prints pane run's help")
+            }
+            XCTAssertEqual(Zen.exitCode(running: ["pane", "run", flag]), 0)
+        }
+        let literal = try XCTUnwrap(try Zen.parseAsRoot(["pane", "run", "--", "--help"]) as? PaneCommands.Run)
+        XCTAssertEqual(literal.commandLine, "--help")
+        let passed = try XCTUnwrap(try Zen.parseAsRoot(["pane", "run", "claude", "--help"]) as? PaneCommands.Run)
+        XCTAssertEqual(passed.commandLine, "claude --help")
+    }
+
     func test_runWithoutACommandOrWithADigitNameIsAUsageError() {
         XCTAssertEqual(Zen.exitCode(running: ["pane", "run"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--"]), 2)

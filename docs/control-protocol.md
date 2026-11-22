@@ -282,10 +282,11 @@ to split.
 
 ### `pane.close`
 
-`args`: `pane`, `force`. `refused` without `force` when the pane is running something. The
-last pane of a tab closes the tab, refused as `tab.close` would be. The login pane of a host
-that is connecting is refused, and closed with `force`, as `tab.close` on its tab is. A drawer
-is not closed.
+`args`: `pane`, `force`. `refused` without `force` when the pane is running something. From
+the pane's `parent`, the pane's own program and the children that close with it are not
+refused over; anything else the close would end still is. The last pane of a tab closes the
+tab, refused as `tab.close` would be. The login pane of a host that is connecting is refused,
+and closed with `force`, as `tab.close` on its tab is. A drawer is not closed.
 
 ### `pane.send`
 
@@ -303,9 +304,10 @@ Into a pane that runs an agent:
 - It holds while the person is typing into the pane: until 2 seconds after their last key
   into it, at most 60 seconds. A client that hangs up during the hold sends nothing.
 - From another pane, the text arrives wrapped, so the agent can tell it from its user:
-  `<zen from="31 lead" reply="zen pane send --pane 31">text</zen>`. `from` is the caller's
-  token, and its name after it when it has one. A send into a shell, or into the caller's own
-  pane, is never wrapped. A child's note to its parent (`pane.run`) arrives the same way.
+  `<zen from="31 lead" reply="zen pane send --pane 31 --enter">text</zen>`. `from` is the caller's
+  token, and its name after it when it has one. A send into a shell, into the caller's own
+  pane, or of a single line starting with `/` (a slash command) is never wrapped. A child's
+  note to its parent (`pane.run`) arrives the same way.
 
 `wait` then holds as `pane.wait` on the pane, with `timeout`, and answers as it does.
 
@@ -322,7 +324,8 @@ refused or fails the same way. `focus` shows the new pane.
 A pane closes the children it started when it closes, and they close theirs, wherever they are
 in its window, however it closes: `pane.close`, `tab.close`, `workspace.close`, its program
 exiting, or the window closing. A close that would end a running child is refused without
-`force`, and its `details` list that child; the app's close confirmation names it too.
+`force`, and its `details` list that child; the app's close confirmation names it too. A
+parent's own `pane.close` on its child is not refused over the child's work (`pane.close`).
 `outlive_parent` keeps the pane open when its parent closes; it then has no `parent`. An agent
 that quits while its pane stays open closes nothing.
 
@@ -358,7 +361,7 @@ a server's ready line cannot print before the wait begins. It is a `bad_request`
 
 A parent that runs an agent hears from the children it ran, so a child that finishes after the
 parent's turn ended still wakes it. Each change sends one line, in the child's envelope
-(`<zen from="34 review" reply="zen pane send --pane 34">`), pasted with Return as `pane.send`
+(`<zen from="34 review" reply="zen pane send --pane 34 --enter">`), pasted with Return as `pane.send`
 with `enter` sends it:
 
 | Change    | When                                                       | Note                                                                    |
@@ -570,7 +573,8 @@ rest print nothing. `zen pane get` takes the pane as its argument, this pane by 
 a usage error.
 `zen pane run [--name] [--task] [--split right|down] [--pane] [--focus] [--keep] [--outlive-parent] [--wait [--output]] <command>` takes
 everything after its options, and after a `--`, as the command. One argument is a shell line as
-written; several are each quoted, so `-- sh -c 'sleep 1'` arrives as typed. A pane argument,
+written; several are each quoted, so `-- sh -c 'sleep 1'` arrives as typed. A leading `--help` or
+`-h` prints the help, and `-- --help` runs `--help`. A pane argument,
 `zen wait`'s included, is a token when it is all digits and a name otherwise.
 `zen workspace new` takes `--title`, and `zen workspace rename <title>` takes the workspace
 as `--workspace`. `zen worktree create <branch>` takes `--base default|current` or `--existing`, not both, and

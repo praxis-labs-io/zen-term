@@ -99,7 +99,9 @@ extension ControlResponder {
             if place.pane.drawer != nil {
                 return .failure(ControlError(.badRequest, "Pane \(token) is a drawer, which pane.close leaves open."))
             }
-            guard let stakes = place.window.closeStakes(pane: place.pane, in: place.tab) else {
+            let byParent = request.caller?.pane.map { $0 == place.pane.record.parent } ?? false
+            guard let stakes = place.window.closeStakes(pane: place.pane, in: place.tab, closedByItsParent: byParent)
+            else {
                 return .failure(ControlError(.notFound, "There is no pane \(token)."))
             }
             if stakes.needsForce, request.args.force != true {
@@ -170,9 +172,15 @@ extension ControlResponder {
 
     // An agent reads a bare paste as its user typing, so another agent's message says who sent it and how to answer.
     private func envelope(_ text: String, from sender: Int?, into place: PanePlace) -> String {
-        guard let sender, sender != place.pane.token, place.window.runsAgent(place.pane) else { return text }
+        guard let sender, sender != place.pane.token, place.window.runsAgent(place.pane), !Self.isSlashCommand(text)
+        else { return text }
         let from = locate(pane: sender)?.pane.record.name.map { "\(sender) \($0)" } ?? "\(sender)"
-        return "<zen from=\"\(from)\" reply=\"zen pane send --pane \(sender)\">\(text)</zen>"
+        return "<zen from=\"\(from)\" reply=\"zen pane send --pane \(sender) --enter\">\(text)</zen>"
+    }
+
+    // A wrapped slash command reaches the agent as a message and never runs.
+    private static func isSlashCommand(_ text: String) -> Bool {
+        text.hasPrefix("/") && !text.contains(where: \.isNewline)
     }
 
     func pressKeys(_ request: ControlRequest) -> ControlReply {

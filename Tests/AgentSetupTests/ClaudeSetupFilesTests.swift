@@ -99,6 +99,8 @@ final class ClaudeSetupFilesTests: XCTestCase {
         XCTAssertTrue(output.hasPrefix("This session runs in ZenTerm pane 31"))
         XCTAssertFalse(output.contains("You are helper"))
         XCTAssertTrue(output.contains("zen pane run --name"))
+        XCTAssertTrue(output.contains("with no ready line, with `zen pane run --name <what it runs> -- <command>`"))
+        XCTAssertTrue(output.contains("a helper you started closes without `--force`"))
     }
 
     func test_shippedHookStillSpeaksWhenThePaneCannotBeRead() throws {

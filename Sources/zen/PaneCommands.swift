@@ -68,7 +68,9 @@ struct PaneCommands: ParsableCommand {
             return "'" + word.replacingOccurrences(of: "'", with: "'\\''") + "'"
         }
 
+        // Passthrough capture takes a leading `--help` as the command, so it is asked for here.
         func validate() throws {
+            if let first = command.first, ["--help", "-h"].contains(first) { throw CleanExit.helpRequest(self) }
             if commandLine.isEmpty { throw ValidationError("pane run needs a command to run.") }
             if let name, !ControlAddress.Pane.isValidName(name) {
                 throw ValidationError("--name needs at least one character that is not a digit or a space.")

@@ -117,4 +117,34 @@ final class SidebarAgentRowTests: WindowTestCase {
             midY(try summaryLabel(of: row, saying: "Idle")), midY(row), accuracy: 0.5,
             "the title sits above the row's middle, or this test proves nothing")
     }
+
+    func test_anAgentsMarkSitsOnTheTitleLine_withTheWorkspaceLineStillUnderIt() throws {
+        let row = SidebarAgentRow {}
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 80), styleMask: [.borderless],
+            backing: .buffered, defer: false)
+        let content = try XCTUnwrap(window.contentView)
+        content.addSubview(row)
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            row.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            row.topAnchor.constraint(equalTo: content.topAnchor),
+        ])
+        row.render(
+            SidebarAgentItem(
+                id: SurfaceID(raw: 1), state: .idle, summary: "Review x.swift", detail: "zen-term", message: nil,
+                mark: "terminal"))
+        content.layoutSubtreeIfNeeded()
+        func frame(_ view: NSView) -> NSRect { view.convert(view.bounds, to: nil) }
+
+        let mark = try XCTUnwrap(descendants(row).compactMap { $0 as? NSImageView }.first { $0.image != nil })
+        let title = try summaryLabel(of: row, saying: "Review x.swift")
+        let workspace = try summaryLabel(of: row, saying: "zen-term")
+        XCTAssertFalse(mark.isHiddenOrHasHiddenAncestor)
+        XCTAssertFalse(workspace.isHiddenOrHasHiddenAncestor)
+        XCTAssertGreaterThan(frame(mark).width, 0)
+        XCTAssertGreaterThan(frame(workspace).width, 0)
+        XCTAssertEqual(frame(mark).midY, frame(title).midY, accuracy: 0.5, "the mark centers on the title's line")
+        XCTAssertLessThan(frame(workspace).maxY, frame(title).minY, "the workspace line sits under the title")
+    }
 }

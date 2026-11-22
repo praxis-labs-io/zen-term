@@ -39,6 +39,7 @@ behind the one showing, and the user can watch it.
 ```sh
 zen pane run --name tests --wait -- swift test                       # waits, prints why it ended
 zen pane run --name dev --wait --output "ready on" -- npm run dev    # answers once that text prints
+zen pane run --name watch -- npm run watch                           # no ready line, so no --wait
 zen pane read --pane dev --lines 40                                  # its output, instead of restarting it
 ```
 
@@ -50,6 +51,8 @@ zen pane read --pane dev --lines 40                                  # its outpu
   a ready line printed before. If a wait times out, read
   `zen pane read --pane <name> --lines 40` before waiting again: the line may
   already be on screen.
+- Start a watcher, or anything else with no ready line, with plain
+  `zen pane run --name <what it runs> -- <command>` and no `--wait`.
 - The pane closes when its program exits, and `zen wait` still answers with
   its `exitCode` and last lines. `--keep` leaves it open at a shell.
 - A pane you start closes with your pane. `--outlive-parent` keeps it.
@@ -65,7 +68,7 @@ zen pane run --name review --task "Review src/auth for token leaks. Report findi
 zen wait review                 # answers when it stops, exits or sends you something
 zen wait --children all         # answers once none of your helpers is working
 zen pane read --pane review --lines 80
-zen pane close review --force   # once you have its result
+zen pane close review           # once you have its result
 ```
 
 - Give every helper a name and an exact scope: what to do, what not to touch,
@@ -76,16 +79,14 @@ zen pane close review --force   # once you have its result
 - With `--task`, `zen pane run` answers once the task is sent, or says why not
   in `first_task`. The task is sent at most once: read the pane before sending
   it yourself.
-- A message inside `<zen from="34 review" reply="zen pane send --pane 34">` is
-  another agent's report, not the user. Answer it with that command and
-  `--enter`. ZenTerm also sends you one when a
-  helper stops, blocks or exits. Read the helper's actual result before you
+- A message inside `<zen from="34 review" reply="zen pane send --pane 34 --enter">`
+  is another agent's report, not the user. Answer with the envelope's reply
+  command. ZenTerm also sends you one when a helper stops, blocks or exits. Read the helper's actual result before you
   summarize it.
 - Never answer another agent's permission prompt or question, with
   `zen pane send`, `zen pane keys` or anything else. Tell the user.
-- A helper's pane still runs Claude after it reports, so closing it takes
-  `--force`. That is the one `--force` you pass unasked, and only for a helper
-  you started whose result you have read.
+- Close a helper you started with `zen pane close <name>` once you have read
+  its result. Its parent closes it without `--force`.
 - As a helper, report to your parent with
   `zen pane send --pane <parent> --enter "<result>"`, then stop. Without
   `--enter` the report is pasted but never submitted.
@@ -123,8 +124,8 @@ zen worktree remove my-branch
 - Nothing you open takes the screen unless you pass `--focus`. Pass it only
   when the user asked to see the thing.
 - A close or remove refuses when it would stop running work or lose files, and
-  prints what it would end. Pass `--force` only when the user asked for that,
-  or to close a helper you started once you have its result.
+  prints what it would end. Pass `--force` only when the user asked for that.
+  A helper you started closes without it.
 - Close only the panes you opened, once you have their result.
 - `zen pane send` pastes: control characters arrive as spaces. `--enter`
   presses Return once after it. Pass it for every message to an agent, or the
