@@ -280,12 +280,40 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertTrue(exit.lastLines?.hasPrefix("FAIL x.test.ts") == true, "\(String(describing: exit.lastLines))")
     }
 
+    func test_aLaunchedPaneWhoseExitMarkTrailsItsExitStaysOpenForTheMark_andKeepsItsCode() throws {
+        let c = makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let opened = try run(ControlArgs(cmd: "npm test", split: .right), from: caller)
+        let helper = try surface(opened.pane)
+
+        helper.delegate?.surfaceDidExit(helper, code: 0)
+        XCTAssertEqual(everyPane(c).map(\.token), [caller, opened.pane], "closed before its exit mark could land")
+        helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 3, duration: 1))
+
+        XCTAssertEqual(everyPane(c).map(\.token), [caller])
+        XCTAssertEqual(c.launchedPaneExits.exit(of: opened.pane)?.exitCode, 3)
+    }
+
+    func test_aLaunchedPaneWhoseExitMarkNeverLandsClosesAfterTheGrace_withNoCode() throws {
+        let c = makeWindow()
+        let caller = try token(of: XCTUnwrap(spawned.first))
+        let opened = try run(ControlArgs(cmd: "npm test", split: .right), from: caller)
+        let helper = try surface(opened.pane)
+
+        helper.delegate?.surfaceDidExit(helper, code: 0)
+
+        waitUntil(everyPane(c).count == 1, "the pane to close", timeout: 2)
+        let exit = try XCTUnwrap(c.launchedPaneExits.exit(of: opened.pane))
+        XCTAssertNil(exit.exitCode)
+    }
+
     func test_aLaunchedTabClosesWithItsProgram() throws {
         let c = makeWindow()
         let caller = try token(of: XCTUnwrap(spawned.first))
         let opened = try run(ControlArgs(cmd: "npm test"), from: caller)
         let helper = try surface(opened.pane)
 
+        helper.delegate?.surface(helper, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
         helper.delegate?.surfaceDidExit(helper, code: 0)
 
         XCTAssertEqual(c.listing().workspaces.flatMap(\.tabs).count, 1)
@@ -534,7 +562,7 @@ final class ControlPaneRunTests: WindowTestCase {
         waitUntil(reply != nil, "the wait to answer", timeout: 3)
         let waited = try XCTUnwrap(try XCTUnwrap(reply).get() as? WaitResult)
         XCTAssertEqual(waited.reason, .timeout)
-        XCTAssertEqual(waited.pane.token, helper)
-        XCTAssertEqual(waited.pane.name, "review")
+        XCTAssertEqual(waited.pane?.token, helper)
+        XCTAssertEqual(waited.pane?.name, "review")
     }
 }

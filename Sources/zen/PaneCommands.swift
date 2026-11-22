@@ -265,6 +265,8 @@ struct PaneCommands: ParsableCommand {
 
 extension PaneDirection: ExpressibleByArgument {}
 
+extension WaitChildren: ExpressibleByArgument {}
+
 extension ControlAddress.Pane: ExpressibleByArgument {
     public init?(argument: String) { self.init(argument) }
 }

@@ -284,7 +284,7 @@ final class ControlPaneSendTests: WindowTestCase {
         waitUntil(answer.reply != nil, "the wait to answer")
         let got = try XCTUnwrap(try answer.reply?.get() as? WaitResult)
         XCTAssertEqual(got.reason, .stopped)
-        XCTAssertEqual(got.pane.token, try token(of: agent))
+        XCTAssertEqual(got.pane?.token, try token(of: agent))
     }
 
     func test_runWithWaitSendsTheTaskThenAnswersAsPaneWaitOnTheHelper() throws {
@@ -309,9 +309,9 @@ final class ControlPaneSendTests: WindowTestCase {
         waitUntil(answer.reply != nil, "the wait to answer")
         let got = try XCTUnwrap(try answer.reply?.get() as? WaitResult, "\(answer.reply as Any)")
         XCTAssertEqual(got.reason, .stopped)
-        XCTAssertEqual(got.pane.token, try token(of: helper))
-        XCTAssertEqual(got.pane.name, "review")
-        XCTAssertEqual(got.pane.firstTask, .delivered)
+        XCTAssertEqual(got.pane?.token, try token(of: helper))
+        XCTAssertEqual(got.pane?.name, "review")
+        XCTAssertEqual(got.pane?.firstTask, .delivered)
     }
 
     func test_waitTakesATimeoutInRange() throws {

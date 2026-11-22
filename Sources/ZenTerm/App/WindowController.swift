@@ -2398,6 +2398,28 @@ final class WindowController: NSObject {
         return nil
     }
 
+    func panes(childOf parent: Int) -> [(tab: TabID, pane: PaneHandle)] {
+        workspaces.flatMap { workspace in
+            workspace.tabIDs.flatMap { id in
+                (workspace.controller(id)?.paneHandles ?? []).filter { $0.record.parent == parent }.map { (id, $0) }
+            }
+        }
+    }
+
+    // A task pasted into an idle agent shows no change until the agent reports again.
+    func isWorking(helper pane: PaneHandle, in tab: TabID) -> Bool {
+        if firstTasks.awaitsPickup(pane.surfaceID) { return true }
+        let listed = listing(of: pane, in: tab)
+        guard let agent = listed.agent else { return listed.busy }
+        return agent.status.map { $0 == .working } ?? (agent.state == .working)
+    }
+
+    private func recordExit(_ exit: LaunchedPaneExit, in tab: TabID) {
+        var exit = exit
+        exit.pane = controller(tab)?.paneHandles.first { $0.token == exit.token }.map { listing(of: $0, in: tab) }
+        launchedPaneExits.record(exit)
+    }
+
     func panes(named name: String) -> [(tab: TabID, pane: PaneHandle)] {
         workspaces.flatMap { workspace in
             workspace.tabIDs.flatMap { id in
@@ -3190,7 +3212,7 @@ final class WindowController: NSObject {
             self.renderAttention()
         }
         c.onLastPaneClosed = { [weak self] in self?.closeTab(id) }
-        c.onLaunchedPaneExited = { [weak self] exit in self?.launchedPaneExits.record(exit) }
+        c.onLaunchedPaneExited = { [weak self] exit in self?.recordExit(exit, in: id) }
         c.onPaneTokensReleased = { [weak self] tokens in self?.closeChildren(of: tokens) }
         c.removedWorktree = { [weak self] in self?.workspace(of: id)?.removedWorktree }
         c.onOverlayStateChanged = { [weak self] in self?.renderDock() }

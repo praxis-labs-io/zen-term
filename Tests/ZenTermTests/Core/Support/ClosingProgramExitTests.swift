@@ -4,7 +4,7 @@ import XCTest
 @testable import TerminalKit
 @testable import ZenTerm
 
-// A launched pane reads its exit code from the D mark when the child exits, so the mark has to land first.
+// A launched pane reads its exit code from the D mark, which can land before or after the child exits.
 final class ClosingProgramExitTests: XCTestCase {
     private final class Recorder: NSObject, TerminalSurfaceDelegate {
         var events: [String] = []
@@ -54,14 +54,16 @@ final class ClosingProgramExitTests: XCTestCase {
         try XCTSkipIf(surface.surfacePtr == nil, "ghostty_surface_new failed")
 
         let deadline = Date().addingTimeInterval(30)
-        while Date() < deadline, !recorder.events.contains("exited") {
+        while Date() < deadline, !recorder.events.contains("exited") || !recorder.events.contains(where: finished) {
             RunLoop.current.run(until: Date().addingTimeInterval(0.05))
         }
         return recorder.events
     }
 
-    func test_theExitMarkLandsBeforeTheChildExits() throws {
-        XCTAssertEqual(try events(running: "(exit 7)", in: "/bin/zsh"), ["finished 7", "exited"])
-        XCTAssertEqual(try events(running: "true", in: "/bin/bash"), ["finished 0", "exited"])
+    private func finished(_ event: String) -> Bool { event.hasPrefix("finished") }
+
+    func test_theShellReportsTheLaunchedProgramsExitCodeAroundItsExit() throws {
+        XCTAssertEqual(try events(running: "(exit 7)", in: "/bin/zsh").sorted(), ["exited", "finished 7"])
+        XCTAssertEqual(try events(running: "true", in: "/bin/bash").sorted(), ["exited", "finished 0"])
     }
 }
