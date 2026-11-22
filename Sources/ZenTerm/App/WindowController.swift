@@ -3427,6 +3427,7 @@ final class WindowController: NSObject {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.workspace(of: id) != nil else { return }
             if let surface { self.paneWaits.commandFinished(surface, exitCode: result.exitCode) }
+            if let surface, self.listedProcesses.contains(surface) { self.processFinished(surface) }
             let crashedAgent = surface.map { self.agentExited($0, in: id, result: result) } ?? false
             guard !crashedAgent, !self.isSeen(surface, in: id),
                 result.duration >= Self.commandCompletionThreshold,
@@ -3828,6 +3829,11 @@ final class WindowController: NSObject {
         }
         let processesExited = trackProcessExits()
         if !settling.isEmpty || agents.agents != before || processesExited { renderAgents() }
+    }
+
+    private func processFinished(_ surface: SurfaceID) {
+        exitedProcesses.insert(surface)
+        renderAgents()
     }
 
     private func trackProcessExits() -> Bool {

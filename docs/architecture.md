@@ -379,7 +379,9 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   started it. A child is a one-line row (`ListRow` nesting): a helper agent leads with its
   agent's brand mark (`AgentRules.brandMark`, else the process symbol) and shows its own
   state, a process shows none. A process row is a parented pane with no agent,
-  listed until its pane closes or its busy reading falls (`BusyFallWatch`, the roster's rule);
+  listed until its pane closes or its program finishes: every `pane.run` program reports an
+  OSC 133 `D` mark (`PaneProgram.marksExit`), so a kept one that ends between polls still
+  leaves, and a busy reading falling (`BusyFallWatch`, the roster's rule) is the backstop;
   a parented pane whose agent left is never one. A family sorts by its most urgent member.
   When the parent's agent leaves, or its pane closes under children that outlive it, the chain
   breaks there and those children list top-level.

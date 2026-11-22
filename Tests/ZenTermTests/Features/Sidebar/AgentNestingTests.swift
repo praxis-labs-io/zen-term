@@ -271,6 +271,24 @@ final class AgentNestingTests: WindowTestCase {
         XCTAssertNotNil(c.pane(token: process.token), "precondition: the kept pane is still open")
     }
 
+    func test_aKeptProcessThatFinishesBetweenPolls_leavesOnItsFinishMark() throws {
+        let c = makeWindow()
+        let root = try rootAgent(c)
+        let process = try run("make", from: root, keep: true, in: c)
+        XCTAssertNotNil(rows(c).first { $0.itemForTesting?.id == process.id }, "precondition")
+        let script = process.surface.lastConfig?.args.last ?? ""
+        XCTAssertTrue(script.contains("133;D"), "a kept run reports no finish mark: \(script)")
+        XCTAssertTrue(script.contains("exec "), "precondition: a kept run keeps its shell")
+
+        process.surface.delegate?.surface(
+            process.surface, commandDidFinish: TerminalCommandResult(exitCode: 0, duration: 1))
+        drainMainQueue()
+        c.trackAgentExitsForTesting()
+
+        XCTAssertEqual(items(c).map(\.id), [root.id], "a process never seen busy stayed listed")
+        XCTAssertNotNil(c.pane(token: process.token), "precondition: the kept pane is still open")
+    }
+
     func test_aKeptHelperWhoseAgentLeftIsNotListedAsAProcess() throws {
         let c = makeWindow()
         let root = try rootAgent(c)

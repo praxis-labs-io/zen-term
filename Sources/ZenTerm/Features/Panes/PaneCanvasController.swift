@@ -191,7 +191,7 @@ final class PaneCanvasController: NSObject {
             if let program = launchedCommand {
                 launch = ShellLaunch.program(
                     program.command, cwd: cwdByLeaf[id], env: navEnv(token: token),
-                    exitClosesPane: program.exitClosesPane)
+                    exitClosesPane: program.exitClosesPane, marksExit: program.marksExit)
                 if program.exitClosesPane { exitClosingLeaves.insert(id) }
             } else {
                 launch = ShellLaunch.shell(cwd: cwdByLeaf[id], env: navEnv(token: token))

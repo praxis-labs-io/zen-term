@@ -18,7 +18,7 @@ extension ControlResponder {
                     .failure(ControlError(.refused, "Pane \(open.pane.token) is already named \(name).")))
             }
         }
-        let program = PaneProgram(command: command, exitClosesPane: request.args.keep != true)
+        let program = PaneProgram(command: command, exitClosesPane: request.args.keep != true, marksExit: true)
         let focus = request.args.focus == true
         let opened = pane(request.args.pane, for: request).flatMap {
             place -> Result<(WindowController, Int), ControlError> in
