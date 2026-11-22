@@ -19,6 +19,7 @@ final class RecordingSurface: NSObject, TerminalSurface {
     var lastConfig: TerminalSurfaceConfig?
     var currentDirectory: URL?
     var isBusy = false
+    var foregroundProcessGroupID: pid_t?
     var backgroundOverride: TerminalColor?
     var terminated = false
     var failOnStart = false

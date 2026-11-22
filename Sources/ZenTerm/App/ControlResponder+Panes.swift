@@ -1,4 +1,5 @@
 import ControlProtocol
+import Foundation
 import PaneKit
 import TabKit
 import TerminalKit
@@ -132,6 +133,32 @@ extension ControlResponder {
             return .success(NoPayload())
         }
     }
+
+    // A remote host's foreground is the local ssh, which a signal would end; its remote terminal turns Ctrl-C into one.
+    func interruptPane(_ request: ControlRequest) -> ControlReply {
+        pane(request.args.pane, for: request).flatMap { place in
+            let surface = place.pane.surface
+            let token = place.pane.token
+            guard surface.isStarted else { return .failure(Self.notStarted(token)) }
+            if place.window.runsAgent(place.pane) {
+                surface.press(.escape)
+                return .success(NoPayload())
+            }
+            if place.window.workspaceID(of: place.tab).flatMap(place.window.host(of:)) != nil {
+                guard let controlC = TerminalKey(paneKey: .control("c")) else {
+                    return .failure(ControlError(.failed, "The keyboard layout has no key for ctrl-c."))
+                }
+                surface.press(controlC)
+                return .success(NoPayload())
+            }
+            guard let group = surface.foregroundProcessGroupID, interruptGroup(group) else {
+                return .failure(ControlError(.failed, "Pane \(token)'s foreground process could not be interrupted."))
+            }
+            return .success(NoPayload())
+        }
+    }
+
+    static func interrupt(group: pid_t) -> Bool { killpg(group, SIGINT) == 0 }
 
     func readPane(_ request: ControlRequest) -> ControlReply {
         if let lines = request.args.lines, lines < 1 {

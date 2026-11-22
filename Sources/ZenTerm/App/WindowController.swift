@@ -2304,6 +2304,8 @@ final class WindowController: NSObject {
             active: workspace === activeWorkspace, tabs: tabs)
     }
 
+    func runsAgent(_ pane: PaneHandle) -> Bool { liveAgent(pane.surfaceID) != nil }
+
     private func listing(of pane: PaneHandle) -> ListResult.Pane {
         let agent = agents.agents[pane.surfaceID].map { agent in
             let tone = AttentionTone(

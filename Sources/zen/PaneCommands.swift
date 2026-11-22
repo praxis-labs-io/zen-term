@@ -3,8 +3,8 @@ import ControlProtocol
 
 struct PaneCommands: ParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "pane", abstract: "Split, focus, close, type into and read panes.",
-        subcommands: [Split.self, Focus.self, Close.self, Send.self, Keys.self, Read.self])
+        commandName: "pane", abstract: "Split, focus, close, type into, interrupt and read panes.",
+        subcommands: [Split.self, Focus.self, Close.self, Send.self, Keys.self, Interrupt.self, Read.self])
 
     struct Split: ParsableCommand {
         static let configuration = CommandConfiguration(
@@ -100,6 +100,20 @@ struct PaneCommands: ParsableCommand {
         func run() throws {
             let args = ControlArgs(pane: pane, keys: keys.map(\.name))
             _ = try connection.client().send(.paneKeys, args, expecting: NoPayload.self)
+        }
+    }
+
+    struct Interrupt: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Stop an agent's turn with Escape, or send SIGINT to what a pane runs.")
+
+        @OptionGroup var connection: ConnectionOptions
+
+        @Argument(help: "A pane or drawer token.")
+        var pane: Int
+
+        func run() throws {
+            _ = try connection.client().send(.paneInterrupt, ControlArgs(pane: pane), expecting: NoPayload.self)
         }
     }
 

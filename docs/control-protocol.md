@@ -284,6 +284,16 @@ the key: `enter`, `escape`, `tab`, `shift-tab`, `backspace`, `space`, `up`, `dow
 not a key is `bad_request` naming it, and nothing is pressed. `failed` when the pane has not
 started.
 
+### `pane.interrupt`
+
+`args`: `pane`.
+
+Stops what the pane is doing without ending it. A pane running an agent gets Escape, which
+ends Claude's or Codex's turn and leaves the agent running. Otherwise the terminal's
+foreground process group gets SIGINT, as Ctrl-C would: the program, or the shell at a
+prompt. A remote host's pane gets Ctrl-C as a key, so the host's terminal sends the signal.
+`failed` when the pane has not started or its foreground process is not known.
+
 ### `pane.read`
 
 `args`: `pane`, `lines`.
@@ -369,7 +379,7 @@ speaks is refused with exit 1, before its result is read, and the message names 
 versions.
 
 Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close`,
-`zen tab new|select|rename|close`, `zen pane split|focus|close|send|keys|read` and
+`zen tab new|select|rename|close`, `zen pane split|focus|close|send|keys|interrupt|read` and
 `zen worktree list|create|remove`, with `--focus` and `--force` for those fields.
 `zen action <name>` runs a keymap action. A command
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
