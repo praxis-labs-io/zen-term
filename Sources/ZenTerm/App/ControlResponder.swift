@@ -37,7 +37,7 @@ struct ControlResponder {
         case .paneKeys: reply(pressKeys(request))
         case .paneInterrupt: reply(interruptPane(request))
         case .paneRead: reply(readPane(request))
-        case .paneRun: runInPane(request, reply: reply)
+        case .paneRun: runInPane(request, hangup: hangup, reply: reply)
         case .paneGet: reply(getPane(request))
         case .paneWait: waitOnPane(request, hangup: hangup, reply: reply)
         case .worktreeList: listWorktrees(request, reply: reply)

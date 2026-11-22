@@ -39,6 +39,12 @@ struct PaneCommands: ParsableCommand {
         @Flag(help: "Keep the pane open after this pane closes. Otherwise it closes with it.")
         var outliveParent = false
 
+        @Flag(help: "Then wait on the pane as zen wait does, and print why as JSON.")
+        var wait = false
+
+        @Option(help: "With --wait, seconds to wait before answering timeout, at most \(ControlWire.longestPaneWait).")
+        var timeout: Int = ControlWire.defaultPaneWait
+
         @Argument(parsing: .captureForPassthrough, help: "The command to run, in a shell.")
         var command: [String] = []
 
@@ -64,15 +70,22 @@ struct PaneCommands: ParsableCommand {
             if let name, !ControlAddress.Pane.isValidName(name) {
                 throw ValidationError("--name needs at least one character that is not a digit or a space.")
             }
+            guard (1...ControlWire.longestPaneWait).contains(timeout) else {
+                throw ValidationError("--timeout must be 1 to \(ControlWire.longestPaneWait).")
+            }
         }
 
         func run() throws {
             let args = ControlArgs(
-                cmd: commandLine, focus: focus, pane: pane, name: name, task: task, split: split,
-                keep: keep, outliveParent: outliveParent)
+                cmd: commandLine, focus: focus, pane: pane, name: name, timeout: wait ? timeout : nil, task: task,
+                split: split, keep: keep, outliveParent: outliveParent, wait: wait)
             var client = try connection.client()
-            client.replyTimeout = time_t(ControlWire.longestReplyWait)
-            print(try JSONOutput.text(client.send(.paneRun, args, expecting: PaneRunResult.self)))
+            client.replyTimeout = ControlClient.replyTimeout(for: .paneRun, args)
+            if wait {
+                print(try JSONOutput.text(client.send(.paneRun, args, expecting: WaitResult.self)))
+            } else {
+                print(try JSONOutput.text(client.send(.paneRun, args, expecting: PaneRunResult.self)))
+            }
         }
     }
 

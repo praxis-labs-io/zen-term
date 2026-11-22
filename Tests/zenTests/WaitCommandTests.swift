@@ -25,6 +25,8 @@ final class WaitCommandTests: XCTestCase {
         XCTAssertEqual(ControlWire.answerWait(for: .paneSend, ControlArgs(pane: 34)), 65)
         XCTAssertEqual(ControlWire.answerWait(for: .paneSend, ControlArgs(pane: 34, timeout: 400, wait: true)), 465)
         XCTAssertEqual(ControlClient.replyTimeout(for: .paneSend, ControlArgs(pane: 34)), 70)
+        XCTAssertEqual(ControlWire.answerWait(for: .paneRun, ControlArgs(cmd: "claude")), ControlWire.longestReplyWait)
+        XCTAssertEqual(ControlWire.answerWait(for: .paneRun, ControlArgs(cmd: "claude", timeout: 400, wait: true)), 465)
     }
 
     func test_aMissingPaneOrAnOutOfRangeTimeoutIsAUsageError() {

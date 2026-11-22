@@ -112,9 +112,8 @@ final class ControlPaneSendTests: WindowTestCase {
     }
 
     private func split(_ c: WindowController, from surface: RecordingSurface) throws -> RecordingSurface {
-        responder.respond(
-            to: ControlRequest(id: 2, cmd: .paneSplit, args: ControlArgs(pane: .token(try token(of: surface)), dir: .right))
-        ) { _ in }
+        let args = ControlArgs(pane: .token(try token(of: surface)), dir: .right)
+        responder.respond(to: ControlRequest(id: 2, cmd: .paneSplit, args: args)) { _ in }
         return try XCTUnwrap(spawned.last)
     }
 
@@ -254,6 +253,21 @@ final class ControlPaneSendTests: WindowTestCase {
         XCTAssertEqual(shell.inputs, [.paste("ls")])
     }
 
+    func test_theEnvelopeNamesACallerThatHasAName() throws {
+        let c = makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        let helper = try split(c, from: parent)
+        report(.idle, from: parent)
+        let to = try token(of: parent)
+        let from = try token(of: helper)
+        c.updateRecord(pane: from) { $0.name = "review" }
+
+        XCTAssertEqual(send("done: 2 bugs", to: to, from: from).reply?.isSuccess, true)
+
+        let envelope = "<zen from=\"\(from) review\" reply=\"zen pane send --pane \(from)\">done: 2 bugs</zen>"
+        XCTAssertEqual(parent.inputs, [.paste(envelope)])
+    }
+
     func test_waitSendsThenAnswersAsPaneWaitOnTheTarget() throws {
         makeWindow()
         let agent = try XCTUnwrap(spawned.first)
@@ -271,6 +285,33 @@ final class ControlPaneSendTests: WindowTestCase {
         let got = try XCTUnwrap(try answer.reply?.get() as? WaitResult)
         XCTAssertEqual(got.reason, .stopped)
         XCTAssertEqual(got.pane.token, try token(of: agent))
+    }
+
+    func test_runWithWaitSendsTheTaskThenAnswersAsPaneWaitOnTheHelper() throws {
+        makeWindow()
+        let caller = try token(of: try XCTUnwrap(spawned.first))
+        let answer = Answer()
+        responder.respond(
+            to: ControlRequest(
+                id: 1, cmd: .paneRun,
+                args: ControlArgs(cmd: "claude", name: "review", task: "Review x.swift", wait: true),
+                caller: ControlCaller(pane: caller))
+        ) { answer.reply = $0 }
+        let helper = try XCTUnwrap(spawned.last)
+
+        report(.idle, from: helper)
+        XCTAssertEqual(helper.inputs, [.paste("Review x.swift"), .submit])
+        XCTAssertNil(answer.reply, "the wait holds until the helper's turn ends")
+
+        report(.working, from: helper)
+        report(.done, from: helper)
+
+        waitUntil(answer.reply != nil, "the wait to answer")
+        let got = try XCTUnwrap(try answer.reply?.get() as? WaitResult, "\(answer.reply as Any)")
+        XCTAssertEqual(got.reason, .stopped)
+        XCTAssertEqual(got.pane.token, try token(of: helper))
+        XCTAssertEqual(got.pane.name, "review")
+        XCTAssertEqual(got.pane.firstTask, .delivered)
     }
 
     func test_waitTakesATimeoutInRange() throws {

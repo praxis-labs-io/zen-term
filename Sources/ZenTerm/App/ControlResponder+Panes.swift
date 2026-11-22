@@ -169,7 +169,8 @@ extension ControlResponder {
     private func envelope(_ text: String, into place: PanePlace, for request: ControlRequest) -> String {
         guard let caller = request.caller?.pane, caller != place.pane.token, place.window.runsAgent(place.pane)
         else { return text }
-        return "<zen from=\"\(caller)\" reply=\"zen pane send --pane \(caller)\">\(text)</zen>"
+        let from = locate(pane: caller)?.pane.record.name.map { "\(caller) \($0)" } ?? "\(caller)"
+        return "<zen from=\"\(from)\" reply=\"zen pane send --pane \(caller)\">\(text)</zen>"
     }
 
     func pressKeys(_ request: ControlRequest) -> ControlReply {
@@ -273,7 +274,7 @@ extension ControlResponder {
         }
     }
 
-    private static func waitTimeout(_ request: ControlRequest) -> Result<Int, ControlError> {
+    static func waitTimeout(_ request: ControlRequest) -> Result<Int, ControlError> {
         let timeout = request.args.timeout ?? ControlWire.defaultPaneWait
         guard (1...ControlWire.longestPaneWait).contains(timeout) else {
             return .failure(ControlError(.badRequest, "timeout must be 1 to \(ControlWire.longestPaneWait) seconds."))
@@ -281,7 +282,7 @@ extension ControlResponder {
         return .success(timeout)
     }
 
-    private func hold(
+    func hold(
         waitOn place: PanePlace, output: String?, timeout: Int, for request: ControlRequest, hangup: ControlHangup,
         reply: @escaping (ControlReply) -> Void
     ) {
