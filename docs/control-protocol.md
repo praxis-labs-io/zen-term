@@ -92,7 +92,9 @@ A worktree removal's refusal adds `files`, its uncommitted and untracked files, 
 
 Requests are decoded off the main thread, applied on it, and written back off it. The app
 answers within 5 minutes, except `pane.wait`, which answers within its `timeout` plus 5 seconds.
-A client that closes its connection before the answer ends a `pane.wait`.
+A client that closes its connection before the answer ends a `pane.wait`. A client keeps its
+write side open until it has the answer: closing it is read as hanging up, which drops a held
+`pane.wait`.
 
 ## Addressing
 
@@ -354,7 +356,8 @@ Holds until something happens to the pane, then answers once with why:
   for the next command to finish. An agent that sends no `status` waits as a plain program does.
 - `exitCode` is the shell's report through its integration, and is absent when the shell
   integration is off or the pane closed. `text` is the last 40 lines while the pane is open.
-- `output` is matched on the screen's rows, without escapes. Text that scrolls more than a
+- `output` is matched within one line of the screen's rows, without escapes, so a newline in it
+  is a `bad_request`. Text that scrolls more than a
   screen past between checks, a quarter second apart, can be missed.
 
 ### `worktree.list`

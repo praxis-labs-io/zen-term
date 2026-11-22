@@ -194,6 +194,9 @@ extension ControlResponder {
         if request.args.output?.isEmpty == true {
             return reply(.failure(ControlError(.badRequest, "output must not be empty.")))
         }
+        if request.args.output?.contains(where: \.isNewline) == true {
+            return reply(.failure(ControlError(.badRequest, "output matches within one line, so it takes no newline.")))
+        }
         guard let token = request.args.pane else {
             return reply(.failure(ControlError(.badRequest, "pane.wait needs a pane.")))
         }

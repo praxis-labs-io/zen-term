@@ -29,5 +29,6 @@ final class WaitCommandTests: XCTestCase {
         XCTAssertEqual(Zen.exitCode(running: ["wait", "34", "--timeout", "0"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["wait", "34", "--timeout", "601"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["wait", "34", "--output", ""]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["wait", "34", "--output", "built\nready"]), 2)
     }
 }

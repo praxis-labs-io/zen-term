@@ -289,7 +289,8 @@ final class ControlPaneWaitTests: WindowTestCase {
         let cases: [(Answer, ControlErrorCode)] = [
             (wait(on: nil), .badRequest), (wait(on: pane, timeout: 0), .badRequest),
             (wait(on: pane, timeout: ControlWire.longestPaneWait + 1), .badRequest),
-            (wait(on: pane, output: ""), .badRequest), (wait(on: 9999), .notFound),
+            (wait(on: pane, output: ""), .badRequest), (wait(on: pane, output: "built\nready"), .badRequest),
+            (wait(on: 9999), .notFound),
         ]
         for (answer, code) in cases {
             guard case .failure(let error) = answer.reply else {

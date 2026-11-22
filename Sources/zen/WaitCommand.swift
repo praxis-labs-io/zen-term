@@ -33,6 +33,9 @@ struct WaitCommand: ParsableCommand {
             throw ValidationError("--timeout must be 1 to \(ControlWire.longestPaneWait).")
         }
         if output?.isEmpty == true { throw ValidationError("--output must not be empty.") }
+        if output?.contains(where: \.isNewline) == true {
+            throw ValidationError("--output matches within one line, so it takes no newline.")
+        }
     }
 
     func run() throws {
