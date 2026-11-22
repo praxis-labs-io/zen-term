@@ -19,6 +19,17 @@ final class WorktreeCommandTests: XCTestCase {
         XCTAssertNil(existing.base)
     }
 
+    func test_createOpensNothingByDefault_andOpenOrFocusAsksToOpen() throws {
+        func open(_ flags: [String]) throws -> Bool? {
+            let create = try XCTUnwrap(
+                try Zen.parseAsRoot(["worktree", "create", "feat/x"] + flags) as? WorktreeCommands.Create)
+            return create.args(in: "/src").open
+        }
+        XCTAssertEqual(try open([]), false)
+        XCTAssertEqual(try open(["--open"]), true)
+        XCTAssertEqual(try open(["--focus"]), true)
+    }
+
     func test_aBaseThatIsNeitherDefaultNorCurrentIsAUsageError() {
         XCTAssertEqual(Zen.exitCode(running: ["worktree", "create", "feat/x", "--base", "main"]), 2)
     }

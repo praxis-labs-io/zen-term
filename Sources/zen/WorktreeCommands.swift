@@ -33,7 +33,7 @@ struct WorktreeCommands: ParsableCommand {
     struct Create: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract:
-                "Make a worktree, copy what the workspace carries into it, open it behind the view, and print it as JSON."
+                "Make a worktree, copy what the workspace carries into it, and print it as JSON. It opens nothing unless --open."
         )
 
         @OptionGroup var connection: ConnectionOptions
@@ -50,7 +50,10 @@ struct WorktreeCommands: ParsableCommand {
         @Flag(help: "Check out a branch that already exists.")
         var existing = false
 
-        @Flag(help: "Switch to it.")
+        @Flag(help: "Open it as a workspace behind the view.")
+        var open = false
+
+        @Flag(help: "Open it and switch to it.")
         var focus = false
 
         func validate() throws {
@@ -58,12 +61,16 @@ struct WorktreeCommands: ParsableCommand {
         }
 
         func run() throws {
-            let args = ControlArgs(
-                workspace: workspace.map(CommandPath.workspace), focus: focus, branch: branch,
-                base: (base ?? .defaultBranch).rawValue, existing: existing)
             var client = try connection.client()
             client.replyTimeout = WorktreeCommands.gitReplyTimeout
+            let args = args(in: FileManager.default.currentDirectoryPath)
             print(try JSONOutput.text(client.send(.worktreeCreate, args, expecting: WorktreeResult.self)))
+        }
+
+        func args(in cwd: String) -> ControlArgs {
+            ControlArgs(
+                workspace: workspace.map { CommandPath.workspace($0, in: cwd) }, focus: focus, branch: branch,
+                base: (base ?? .defaultBranch).rawValue, existing: existing, open: open || focus)
         }
     }
 
