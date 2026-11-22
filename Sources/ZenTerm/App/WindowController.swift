@@ -3307,18 +3307,27 @@ final class WindowController: NSObject {
 
     private func programStatusChanged(surface: SurfaceID, status: TerminalProgramStatus?) {
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            if let status, !self.agents.contains(surface) {
+            guard let self, self.agents.agents[surface]?.hasExited != true else { return }
+            if let status {
                 let name = status.app.map { AgentRules.key(for: $0) ?? $0 }
                 self.agents.identify(surface, name: name, source: .signal)
             }
             guard self.agents.contains(surface) else { return }
+            let previous = self.agentStates.status(of: surface)
             self.agentStates.noteStatus(status, of: surface)
-            self.deriveAgentState(surface)
-            if let message = status?.message, self.liveAgent(surface) != nil {
-                self.agents.setMessage(surface, message)
+            let moved = self.deriveAgentState(surface)
+            if let status { self.agents.setMessage(surface, status.message) }
+            if !moved, let status, let previous, Self.asks(previous), Self.asks(status), previous != status {
+                self.raiseAsk(surface)
             }
             self.renderAgents()
+        }
+    }
+
+    private static func asks(_ status: TerminalProgramStatus) -> Bool {
+        switch status.state {
+        case .blocked, .failed: return true
+        case .idle, .working, .done: return false
         }
     }
 
@@ -3363,19 +3372,33 @@ final class WindowController: NSObject {
             if attention.agentWait(of: surface) == nil { agents.setMessage(surface, nil) }
             if endedTurn, agents.agents[surface]?.name != nil { finishTurn(surface) }
         case .blocked:
-            guard let tab = tab(of: surface) else { return }
-            let seen = isSeen(surface, in: tab)
             attention.setWorking(surface, false)
-            attention.ask(surface, seen: seen)
-            let message =
-                agentStates.status(of: surface)?.message
-                ?? AgentRules.codexAsk(fromTitle: agentStates.title(of: surface)) ?? Self.blockedMessage
-            let address = cardAddress(of: surface, in: tab)
-            pushBanner(for: tab, address: address, message: message)
-            guard !seen else { break }
-            presentAttentionCard(.waiting, for: tab, address: address, message: message, surface: surface)
+            raiseAsk(surface)
         }
         renderAgents()
+    }
+
+    private func raiseAsk(_ surface: SurfaceID) {
+        guard let tab = tab(of: surface) else { return }
+        let seen = isSeen(surface, in: tab)
+        attention.ask(surface, seen: seen)
+        let status = agentStates.status(of: surface)
+        let message =
+            status?.message ?? status.flatMap(Self.askMessage)
+            ?? AgentRules.codexAsk(fromTitle: agentStates.title(of: surface)) ?? Self.blockedMessage
+        let address = cardAddress(of: surface, in: tab)
+        pushBanner(for: tab, address: address, message: message)
+        guard !seen else { return }
+        presentAttentionCard(.waiting, for: tab, address: address, message: message, surface: surface)
+    }
+
+    private static func askMessage(_ status: TerminalProgramStatus) -> String? {
+        switch status.state {
+        case .failed: return "Stopped with an error."
+        case .blocked(.question): return "Waiting for your answer."
+        case .blocked(.auth): return "Waiting for you to sign in."
+        case .blocked, .idle, .working, .done: return nil
+        }
     }
 
     // A window float belongs to no tab, so it asks from whichever tab is showing it.
@@ -3526,7 +3549,8 @@ final class WindowController: NSObject {
     // An arrow key at a prompt sends nothing, so an agent that signals its own answer is never answered by a key.
     private func awaitsSignalAnswer(_ surface: SurfaceID) -> Bool {
         guard let agent = liveAgent(surface) else { return false }
-        return AgentRules.key(for: agent.name) != nil && attention.agentWait(of: surface) == .ask
+        let signalsItsAnswer = AgentRules.key(for: agent.name) != nil || agentStates.status(of: surface) != nil
+        return signalsItsAnswer && attention.agentWait(of: surface) == .ask
     }
 
     private func resumesAfterAsking(_ next: AgentSignalState, agent: AgentRoster.Agent) -> Bool {
@@ -3932,6 +3956,8 @@ final class WindowController: NSObject {
     }
 
     func agentMessageForTesting(_ surface: SurfaceID) -> String? { agents.agents[surface]?.message }
+
+    func agentNameForTesting(_ surface: SurfaceID) -> String? { agents.agents[surface]?.name }
 
     func waitingToastForTesting(tab id: TabID) -> ToastView? { attentionCards[id] }
 

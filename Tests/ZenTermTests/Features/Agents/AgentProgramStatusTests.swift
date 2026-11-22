@@ -18,6 +18,7 @@ final class AgentProgramStatusTests: WindowTestCase {
         try super.setUpWithError()
         WindowController.isPresent = { _ in true }
         originalConfig = GeneralConfig.current
+        GeneralConfig.setCurrentForTesting(.builtInWithStickyCards)
         originalOverride = TerminalSurfaceFactory.makeOverride
         Motion.isReduceMotionEnabled = { true }
         TerminalSurfaceFactory.makeOverride = { [weak self] in
@@ -66,6 +67,14 @@ final class AgentProgramStatusTests: WindowTestCase {
     private func tabChips(_ c: WindowController) -> [TerminalTabChip] {
         func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
         return descendants(c.containerForTesting).compactMap { $0 as? TabBarView }.first?.chipsForTesting ?? []
+    }
+
+    private func cardCopy(_ c: WindowController) -> [String] {
+        func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
+        guard let content = c.window.contentView else { return [] }
+        return descendants(content).compactMap { $0 as? ToastView }
+            .flatMap { descendants($0) }
+            .compactMap { ($0 as? NSTextField)?.stringValue }
     }
 
     private func firstPane(_ c: WindowController) throws -> (surface: RecordingSurface, id: SurfaceID) {
@@ -166,8 +175,91 @@ final class AgentProgramStatusTests: WindowTestCase {
 
         report(.idle, from: surface)
 
-        let row = try XCTUnwrap(renderedAgentRows(c).first { $0.id == id })
-        XCTAssertTrue(row.detail.contains("claude"), "got \(row.detail)")
+        XCTAssertEqual(c.agentNameForTesting(id), "claude", "its app names the agent Claude, not claude-code")
+    }
+
+    func test_anAgentListedUnnamed_takesItsReportsName_soAKeyLeavesItsAskStanding() throws {
+        let c = makeWindow()
+        let (surface, id) = try firstPane(c)
+        progress(true, from: surface)
+        XCTAssertNil(c.agentNameForTesting(id), "precondition: it joined unnamed on its progress")
+
+        report(.blocked(.permission), from: surface)
+        c.answerTypedAgent()
+
+        XCTAssertEqual(c.agentNameForTesting(id), "claude")
+        XCTAssertEqual(c.agentStateForTesting(id), .blocked, "an arrow key at its prompt answers nothing")
+    }
+
+    func test_aKeyLeavesTheAskOfAnyReportingAgentStanding() throws {
+        let c = makeWindow()
+        let (surface, id) = try firstPane(c)
+        surface.delegate?.surface(
+            surface, programStatusDidChange: TerminalProgramStatus(state: .blocked(.permission), app: "mytool"))
+        drainMainQueue()
+
+        c.answerTypedAgent()
+
+        XCTAssertEqual(c.agentStateForTesting(id), .blocked, "its report, not a key, says when it is answered")
+    }
+
+    func test_anAskWithNoWords_saysWhatItWaitsFor() throws {
+        let cases: [(TerminalProgramStatus.State, String)] = [
+            (.failed, "Stopped with an error."),
+            (.blocked(.question), "Waiting for your answer."),
+            (.blocked(.auth), "Waiting for you to sign in."),
+            (.blocked(.permission), "Waiting for your approval."),
+        ]
+        for (state, expected) in cases {
+            let c = makeWindow()
+            let (surface, _) = try firstPane(c)
+            c.newTabForTesting()
+            drainMainQueue()
+
+            report(state, from: surface)
+
+            XCTAssertTrue(cardCopy(c).contains(expected), "\(state): got \(cardCopy(c))")
+            controller?.windowWillClose(Notification(name: NSWindow.willCloseNotification))
+            controller.map { AttentionCenter.shared.forget(windowID: $0.windowID) }
+            controller = nil
+            spawned = []
+        }
+    }
+
+    func test_aReportWithNoWords_clearsTheRowsWords() throws {
+        let c = makeWindow()
+        let (surface, id) = try firstPane(c)
+        report(.working, message: "Reading AgentRules.swift", from: surface)
+
+        report(.working, from: surface)
+
+        XCTAssertNil(c.agentMessageForTesting(id), "the report replaces its record, words included")
+    }
+
+    func test_aNewAskWhileAsking_raisesItsOwnCard() throws {
+        let c = makeWindow()
+        let (surface, _) = try firstPane(c)
+        c.newTabForTesting()
+        drainMainQueue()
+        report(.blocked(.permission), message: "approve Write: test.txt", from: surface)
+
+        report(.blocked(.question), message: "Which branch should I use?", from: surface)
+
+        XCTAssertTrue(cardCopy(c).contains("Which branch should I use?"), "got \(cardCopy(c))")
+    }
+
+    func test_anExitedAgentsReport_changesNothing() throws {
+        let c = makeWindow()
+        let (surface, id) = try firstPane(c)
+        c.identifyAgentForTesting(id, name: "claude")
+        surface.isBusy = true
+        c.trackAgentExitsForTesting()
+        surface.isBusy = false
+        c.trackAgentExitsForTesting()
+
+        report(.blocked(.permission), from: surface)
+
+        XCTAssertNotEqual(c.agentStateForTesting(id), .blocked, "the agent is gone, so its pane asks nothing")
     }
 
     func test_anAnsweredAsk_readsWorking_withItsNewWords() throws {
