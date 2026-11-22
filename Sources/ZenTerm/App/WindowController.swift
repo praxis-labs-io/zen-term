@@ -3288,10 +3288,13 @@ final class WindowController: NSObject {
             {
                 self.answerAgent(surface)
             }
-            if !self.deriveAgentState(surface), self.agentStates.state(of: surface) == .working {
-                self.noteTitleMessage(surface)
-            }
-            if joined || SidebarAgentItem.title(fromPane: title) != SidebarAgentItem.title(fromPane: previous) {
+            guard !self.deriveAgentState(surface) else { return }
+            if self.agentStates.state(of: surface) == .working { self.noteTitleMessage(surface) }
+            let name = self.agents.agents[surface]?.name
+            if joined
+                || AgentRules.taskTitle(fromPane: title, agentName: name)
+                    != AgentRules.taskTitle(fromPane: previous, agentName: name)
+            {
                 self.renderAgents()
             }
         }
@@ -3662,9 +3665,9 @@ final class WindowController: NSObject {
             let wait = attention.agentWait(of: id)
             let state = AttentionTone(wait: wait, working: attention.isWorking(id))
             let message = wait == .turnEnd ? Self.turnEndMessage : agent.message
-            let paneTitle = SidebarAgentItem.title(fromPane: agentStates.title(of: id))
-            let title =
-                agentStates.status(of: id)?.title ?? (paneTitle.isEmpty ? agent.name ?? AgentRoster.unnamed : paneTitle)
+            let paneTitle =
+                agent.hasExited ? nil : AgentRules.taskTitle(fromPane: agentStates.title(of: id), agentName: agent.name)
+            let title = agentStates.status(of: id)?.title ?? paneTitle ?? agent.name ?? AgentRoster.unnamed
             let item = SidebarAgentItem(
                 id: id, state: state, summary: title, detail: place.name, message: message)
             return (item, attention.agentSince(of: id), place.position)

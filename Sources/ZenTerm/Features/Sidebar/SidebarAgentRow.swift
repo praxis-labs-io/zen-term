@@ -6,11 +6,6 @@ struct SidebarAgentItem: Equatable {
     let summary: String
     let detail: String
     let message: String?
-
-    // An agent heads its pane title with an animated status glyph, which the row's indicator already shows.
-    static func title(fromPane title: String) -> String {
-        String(title.drop { !$0.isLetter && !$0.isNumber }).trimmingCharacters(in: .whitespacesAndNewlines)
-    }
 }
 
 // The Agents list's own ordering, and the state a row speaks since its title never names it.
