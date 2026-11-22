@@ -35,7 +35,9 @@ extension ControlResponder {
             let target = RepoPickerOverlay.CreateTarget(workspace: entry, repo: entry.path)
             WorktreeCreation.start(made, from: target) { result in
                 switch result {
-                case .success(let created): reply(open(created, for: request))
+                case .success(let created):
+                    let opens = request.args.open == true || request.args.focus == true
+                    reply(opens ? open(created, for: request) : .success(Self.made(created)))
                 case .failure(let error): reply(.failure(ControlError(.failed, error.localizedDescription)))
                 }
             }
@@ -79,12 +81,16 @@ extension ControlResponder {
         guard let listing = window.listing(of: id) else {
             return .failure(ControlError(.failed, "The worktree is at \(path), but its workspace closed."))
         }
+        return .success(Self.made(created, window: ControlAddress.window(window.windowID), workspace: listing))
+    }
+
+    private static func made(
+        _ created: WorktreeCreation.Created, window: String? = nil, workspace: ListResult.Workspace? = nil
+    ) -> WorktreeResult {
         let carry = WorktreeResult.Carry(
             carried: created.carry.carried,
             skipped: created.carry.lost.map { WorktreeResult.Skipped(name: $0.name, reason: $0.reason.explanation) })
-        return .success(
-            WorktreeResult(
-                path: path, carry: carry, window: ControlAddress.window(window.windowID), workspace: listing))
+        return WorktreeResult(path: created.origin.path.path, carry: carry, window: window, workspace: workspace)
     }
 
     private func remove(

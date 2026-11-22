@@ -304,15 +304,15 @@ is a remote host's workspace, by its `ssh:<host>` address or as the caller's.
 
 ### `worktree.create`
 
-`args`: `branch` (required), `workspace`, `base`, `existing`, `focus`.
+`args`: `branch` (required), `workspace`, `base`, `existing`, `open`, `focus`.
 
 Makes a worktree on a new branch cut from `base`: `default`, the default branch, unless
 `current` cuts it from what the workspace's checkout is on. `existing` checks out a branch
 that already exists instead and ignores `base`. It copies the entry's `carry` into the
-worktree and opens a workspace there, nested under the workspace it was made from, in the
-window that has that workspace open, else the caller's window. It answers once the copy
-finishes. Anything git refuses is `failed`, with the message the app's New Worktree card
-shows.
+worktree and opens nothing. `open` also opens a workspace there, nested under the
+workspace it was made from, in the window that has that workspace open, else the caller's
+window. `focus` implies `open` and switches to it. It answers once the copy finishes.
+Anything git refuses is `failed`, with the message the app's New Worktree card shows.
 
 ```json
 {"path":"/Users/me/.zenterm/worktrees/zen-term-1a2b3c4d/feat-x",
@@ -321,7 +321,8 @@ shows.
 ```
 
 `skipped` holds what was there to copy and did not arrive. An entry with nothing to copy
-is in neither list. `workspace` is in the shape `list` uses.
+is in neither list. `window` and `workspace` are present only when it opened one, and
+`workspace` is in the shape `list` uses.
 
 ### `worktree.remove`
 
@@ -365,7 +366,8 @@ Each command is `zen <noun> <verb>`: `zen workspace open|new|switch|rename|close
 that returns something prints it as JSON, except `zen pane read`, which prints the text; the
 rest print nothing. `zen pane split` splits to the right unless `--dir down` says otherwise.
 `zen workspace new` takes `--title`, and `zen workspace rename <title>` takes the workspace
-as `--workspace`. `zen worktree create <branch>` takes `--base default|current` or `--existing`, not both.
+as `--workspace`. `zen worktree create <branch>` takes `--base default|current` or `--existing`, not both, and
+opens a workspace on it only with `--open` or `--focus`.
 `zen worktree remove` takes a folder when it starts with `/`, `~` or `.`, and a branch
 otherwise. `zen` sends
 folders as absolute paths, read against its own folder, and refuses a `--cwd` or

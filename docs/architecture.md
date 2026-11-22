@@ -784,7 +784,8 @@ The create card replaces the picker and reopens it on cancel. `BranchField` is a
 plus `ListPopover`, Esc handled in its `doCommandBy`. `CreateTarget` carries the repo to
 branch in and the workspace to carry from. `WorktreeCreation` is the one create pipeline
 (create, mirror the entry, carry), run off-main: the card passes its phase line and opens the
-result through the chrome, and the control socket passes nothing and opens it headless.
+result through the chrome, and the control socket passes nothing and opens it headless
+only when asked to.
 
 ### Carry
 
