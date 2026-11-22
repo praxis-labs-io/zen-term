@@ -67,7 +67,8 @@ palette = 15=#f1f5fb
 #   positive     ← palette 2  (#6ee6b8, mint)
 #   warning      ← palette 3  (#ebc17a, amber)
 #   destructive  ← palette 1  (#f2707a, coral)
-#   attention    ← palette 6  (#5cc8e0, sky)
+#   blocked      ← palette 1  (#f2707a, coral; an agent waiting for approval)
+#   done         ← palette 4  (#6e9bff, cobalt; an agent that finished its turn)
 #
 # `accent` is the one you can repoint without editing this file: `accent-color`
 # in `config` sends it to any palette entry by ANSI hue name.

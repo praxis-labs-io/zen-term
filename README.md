@@ -71,7 +71,7 @@ ZenTerm's.
   theme in ZenTerm switches your editor's colorscheme to match, live.
 - **A notification when an agent needs you.** With ZenTerm in the background and
   an agent stopped for input, macOS posts a banner and the tab gets a dot in the
-  theme's attention color until you visit it.
+  theme's red until you visit it.
 - **Drive it from the command line.** `zen` opens workspaces, tabs and panes
   behind the one you're looking at, sends text to a pane and reads what it
   printed, and makes and removes worktrees. A script or an agent in one pane can
