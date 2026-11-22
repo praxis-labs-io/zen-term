@@ -76,7 +76,12 @@ final class SettingsRowDescriptionTests: WindowTestCase {
     }
 
     func test_generalSection_everyDescriptionFitsItsRow() {
+        let testRoot = ClaudeCodeSetup.configRootOverrideForTesting
+        ClaudeCodeSetup.configRootOverrideForTesting = URL(fileURLWithPath: PathDisplay.homePath)
+            .appendingPathComponent(".claude")
+        defer { ClaudeCodeSetup.configRootOverrideForTesting = testRoot }
         let detail = mount(SettingsGeneralSection())
+        ClaudeCodeSetup.configRootOverrideForTesting = testRoot
         let labels = notes(in: detail)
         XCTAssertFalse(labels.isEmpty, "expected the section to render descriptions")
 
