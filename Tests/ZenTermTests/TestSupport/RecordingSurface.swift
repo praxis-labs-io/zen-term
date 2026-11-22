@@ -19,6 +19,7 @@ final class RecordingSurface: NSObject, TerminalSurface {
     var lastConfig: TerminalSurfaceConfig?
     var currentDirectory: URL?
     var isBusy = false
+    var foregroundProcessGroupID: pid_t?
     var backgroundOverride: TerminalColor?
     var terminated = false
     var failOnStart = false
@@ -68,6 +69,7 @@ final class RecordingSurface: NSObject, TerminalSurface {
     enum Input: Equatable {
         case paste(String)
         case submit
+        case press(TerminalKey)
     }
     private(set) var inputs: [Input] = []
     private(set) var pastes: [String] = []
@@ -76,6 +78,7 @@ final class RecordingSurface: NSObject, TerminalSurface {
         inputs.append(.paste(text))
     }
     func submit() { inputs.append(.submit) }
+    func press(_ key: TerminalKey) { inputs.append(.press(key)) }
     var selectionText: String?
     func copySelection() -> String? { selectionText }
     private(set) var scrolls: [TerminalScroll] = []
@@ -136,6 +139,8 @@ final class RecordingSurface: NSObject, TerminalSurface {
 
     var scrollback: [String] = []
     var screenIsUnreadable = false
+
+    var activeScreenText: String? { screenIsUnreadable ? nil : rows.joined(separator: "\n") }
 
     func text(lastLines count: Int) -> String? {
         guard !screenIsUnreadable else { return nil }

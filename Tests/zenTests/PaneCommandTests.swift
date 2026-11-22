@@ -30,6 +30,16 @@ final class PaneCommandTests: XCTestCase {
         XCTAssertTrue(close.force)
 
         XCTAssertEqual(try XCTUnwrap(try Zen.parseAsRoot(["pane", "focus", "32"]) as? PaneCommands.Focus).pane, 32)
+
+        let keys = try XCTUnwrap(try Zen.parseAsRoot(["pane", "keys", "34", "down", "enter"]) as? PaneCommands.Keys)
+        XCTAssertEqual(keys.pane, 34)
+        XCTAssertEqual(keys.keys, [.down, .enter])
+
+        let interrupt = try XCTUnwrap(try Zen.parseAsRoot(["pane", "interrupt", "34"]) as? PaneCommands.Interrupt)
+        XCTAssertEqual(interrupt.pane, 34)
+
+        XCTAssertEqual(try XCTUnwrap(try Zen.parseAsRoot(["pane", "get", "34"]) as? PaneCommands.Get).pane, 34)
+        XCTAssertNil(try XCTUnwrap(try Zen.parseAsRoot(["pane", "get"]) as? PaneCommands.Get).pane)
     }
 
     func test_aPaneArgumentTakesAName() throws {
@@ -37,6 +47,13 @@ final class PaneCommandTests: XCTestCase {
         XCTAssertEqual(focus.pane, .name("review"))
         let send = try XCTUnwrap(try Zen.parseAsRoot(["pane", "send", "hi", "--pane", "review"]) as? PaneCommands.Send)
         XCTAssertEqual(send.pane, .name("review"))
+        XCTAssertEqual(
+            try XCTUnwrap(try Zen.parseAsRoot(["pane", "get", "review"]) as? PaneCommands.Get).pane, .name("review"))
+        let keys = try XCTUnwrap(try Zen.parseAsRoot(["pane", "keys", "review", "enter"]) as? PaneCommands.Keys)
+        XCTAssertEqual(keys.pane, .name("review"))
+        let interrupt = try XCTUnwrap(try Zen.parseAsRoot(["pane", "interrupt", "review"]) as? PaneCommands.Interrupt)
+        XCTAssertEqual(interrupt.pane, .name("review"))
+        XCTAssertEqual(try XCTUnwrap(try Zen.parseAsRoot(["wait", "review"]) as? WaitCommand).pane, .name("review"))
     }
 
     func test_runTakesItsOptionsThenTheWholeCommand() throws {
@@ -80,9 +97,12 @@ final class PaneCommandTests: XCTestCase {
         XCTAssertEqual(Zen.exitCode(running: ["pane", "run", "--split", "left", "claude"]), 2)
     }
 
-    func test_aBadDirectionOrLineCountIsAUsageError() {
+    func test_aBadDirectionLineCountOrKeyIsAUsageError() {
         XCTAssertEqual(Zen.exitCode(running: ["pane", "split", "--dir", "left"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["pane", "read", "--lines", "0"]), 2)
         XCTAssertEqual(Zen.exitCode(running: ["pane", "send"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "keys", "34", "down", "ctrl-1"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "keys", "34"]), 2)
+        XCTAssertEqual(Zen.exitCode(running: ["pane", "interrupt"]), 2)
     }
 }

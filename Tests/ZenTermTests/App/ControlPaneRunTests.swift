@@ -514,4 +514,27 @@ final class ControlPaneRunTests: WindowTestCase {
         XCTAssertEqual(refusal.code, .refused)
         XCTAssertEqual(refusal.details?.floats, [ToolFloat.scratch.title])
     }
+
+    func test_getAndWaitReachAPaneByItsName_andGetCarriesWhatRunRecorded() throws {
+        _ = makeWindow()
+        let lead = try token(of: XCTUnwrap(spawned.first))
+        let helper = try run(ControlArgs(cmd: "claude", name: "review"), from: lead).pane
+
+        let got = try XCTUnwrap(try answer(.paneGet, ControlArgs(pane: .name("review"))).get() as? ListResult.Pane)
+        XCTAssertEqual(got.token, helper)
+        XCTAssertEqual(got.name, "review")
+        XCTAssertEqual(got.parent, lead)
+
+        let waiter = responder
+        var reply: ControlReply?
+        waiter.respond(
+            to: ControlRequest(id: 2, cmd: .paneWait, args: ControlArgs(pane: .name("review"), timeout: 1)),
+            hangup: ControlHangup()
+        ) { reply = $0 }
+        waitUntil(reply != nil, "the wait to answer", timeout: 3)
+        let waited = try XCTUnwrap(try XCTUnwrap(reply).get() as? WaitResult)
+        XCTAssertEqual(waited.reason, .timeout)
+        XCTAssertEqual(waited.pane.token, helper)
+        XCTAssertEqual(waited.pane.name, "review")
+    }
 }

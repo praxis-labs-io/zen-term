@@ -221,6 +221,16 @@ final class ControlSSHHostTests: WindowTestCase {
         XCTAssertEqual(waiting.surface.inputs, [.paste("ls")])
     }
 
+    func test_interruptingAHostsPanePressesCtrlCRatherThanSignallingTheLocalSSH() throws {
+        let c = makeWindow()
+        let login = try connected(c)
+        login.foregroundProcessGroupID = 4242
+
+        _ = try result(send(.paneInterrupt, ControlArgs(pane: .token(token(of: login)))), as: NoPayload.self)
+
+        XCTAssertEqual(login.inputs, [.press(try XCTUnwrap(TerminalKey(paneKey: .control("c"))))])
+    }
+
     func test_paneReadOfAPaneWaitingForItsHost_failsSayingItHasNotStarted() throws {
         let c = makeWindow()
         let waiting = try paneWaitingForTheHost(c)
@@ -229,6 +239,17 @@ final class ControlSSHHostTests: WindowTestCase {
 
         XCTAssertEqual(refusal.code, .failed)
         XCTAssertEqual(refusal.message, "Pane \(waiting.token) has not started.")
+    }
+
+    func test_getOfAHostPane_leavesOutTheLocalSSHProcess() throws {
+        let c = makeWindow()
+        let pane = try connected(c)
+        pane.foregroundProcessGroupID = getpid()
+
+        let got = try result(send(.paneGet, ControlArgs(pane: .token(try token(of: pane)))), as: ListResult.Pane.self)
+
+        XCTAssertNil(got.process)
+        XCTAssertEqual(c.listing().workspaces.flatMap(\.tabs).flatMap(\.panes).first { $0.token == got.token }, got)
     }
 
     private let address = "ssh:devbox"

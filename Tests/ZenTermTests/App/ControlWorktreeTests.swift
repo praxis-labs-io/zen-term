@@ -115,31 +115,54 @@ final class ControlWorktreeTests: WindowTestCase {
         return worktree
     }
 
-    func test_createFromAConfiguredPane_opensTheWorktreeUnderItsParentWithItsCarry_andLeavesTheView() throws {
+    func test_createMakesTheWorktreeWithItsCarry_opensNothing_andAnswersWithoutAWorkspace() throws {
+        let c = makeWindow()
+        let caller = try repoPane(in: c)
+        let before = names(in: c)
+        let showing = c.activeWorkspaceIDForTesting
+
+        let made = try result(
+            send(.worktreeCreate, ControlArgs(branch: "feat/x"), from: caller), as: WorktreeResult.self)
+
+        XCTAssertEqual(names(in: c), before)
+        XCTAssertEqual(c.activeWorkspaceIDForTesting, showing)
+        XCTAssertNil(made.window)
+        XCTAssertNil(made.workspace)
+        XCTAssertEqual(made.carry, WorktreeResult.Carry(carried: [".env"], skipped: []))
+        XCTAssertTrue(GitFixture.exists(URL(fileURLWithPath: made.path).appendingPathComponent(".env")))
+        XCTAssertEqual(try WorktreeStore.list(in: repo).map(\.path.path), [made.path])
+        let wire = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(made)) as? [String: Any])
+        XCTAssertEqual(Set(wire.keys), ["path", "carry"])
+    }
+
+    func test_createWithOpen_opensTheWorktreeUnderItsParentWithItsCarry_andLeavesTheView() throws {
         let c = makeWindow()
         let caller = try repoPane(in: c)
         c.openWorkspaceForTesting(Workspace(title: "Other", path: root, tabs: [], env: [:]))
         let showing = c.activeWorkspaceIDForTesting
 
         let made = try result(
-            send(.worktreeCreate, ControlArgs(branch: "feat/x"), from: caller), as: WorktreeResult.self)
+            send(.worktreeCreate, ControlArgs(branch: "feat/x", open: true), from: caller), as: WorktreeResult.self)
 
         XCTAssertEqual(names(in: c), ["Workspace 1", "Repo", "Repo: feat/x", "Other"])
         XCTAssertEqual(c.activeWorkspaceIDForTesting, showing)
-        XCTAssertEqual(made.workspace.title, "Repo: feat/x")
-        XCTAssertEqual(made.workspace.worktree, ListResult.Worktree(name: "feat/x", parent: repo.path))
+        XCTAssertEqual(made.workspace?.title, "Repo: feat/x")
+        XCTAssertEqual(made.workspace?.worktree, ListResult.Worktree(name: "feat/x", parent: repo.path))
         XCTAssertEqual(made.window, ControlAddress.window(c.windowID))
         XCTAssertEqual(made.carry, WorktreeResult.Carry(carried: [".env"], skipped: []))
         XCTAssertTrue(GitFixture.exists(URL(fileURLWithPath: made.path).appendingPathComponent(".env")))
         XCTAssertEqual(try WorktreeStore.list(in: repo).map(\.path.path), [made.path])
     }
 
-    func test_createWithFocusSwitchesToTheWorktree() throws {
+    func test_createWithFocusOpensTheWorktreeAndSwitchesToIt() throws {
         let c = makeWindow()
         let caller = try repoPane(in: c)
 
-        _ = try result(
+        let made = try result(
             send(.worktreeCreate, ControlArgs(focus: true, branch: "feat/x"), from: caller), as: WorktreeResult.self)
+
+        XCTAssertEqual(made.workspace?.title, "Repo: feat/x")
 
         XCTAssertEqual(c.activeWorkspaceIDForTesting, c.workspaceIDsForTesting.last)
         XCTAssertEqual(c.workspaceNamesForTesting.last, "Repo: feat/x")
@@ -151,9 +174,9 @@ final class ControlWorktreeTests: WindowTestCase {
         let caller = try XCTUnwrap(spawned.last?.lastConfig?.environment["ZEN_PANE"].flatMap(Int.init))
 
         let made = try result(
-            send(.worktreeCreate, ControlArgs(branch: "feat/b"), from: caller), as: WorktreeResult.self)
+            send(.worktreeCreate, ControlArgs(branch: "feat/b", open: true), from: caller), as: WorktreeResult.self)
 
-        XCTAssertEqual(made.workspace.worktree?.parent, repo.path)
+        XCTAssertEqual(made.workspace?.worktree?.parent, repo.path)
     }
 
     func test_anInvalidBranchFailsWithTheStoresMessage_andCreatesNothing() throws {

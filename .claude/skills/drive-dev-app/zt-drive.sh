@@ -209,14 +209,23 @@ ASK
 cmd_launch() {
     target_pid >/dev/null 2>&1 && die "a .build ZenTerm is already running (pid $(target_pid))"
     [ -x bin/run ] || die "run this from the worktree root (no bin/run here)"
-    note "launching bin/run in the background"
-    nohup bin/run >/tmp/zt-drive-run.log 2>&1 &
+    local where pane
+    if [ -n "${ZEN_CONTROL_SOCK:-}" ] && command -v zen >/dev/null 2>&1 \
+        && pane=$(zen tab new --cwd "$PWD" --cmd "bin/run && exit" | sed -n 's/.*"pane" *: *\([0-9]*\).*/\1/p') \
+        && [ -n "$pane" ]; then
+        note "launching bin/run in a ZenTerm tab (pane $pane)"
+        where="zen pane read --pane $pane --lines 40"
+    else
+        note "launching bin/run in the background"
+        nohup bin/run >/tmp/zt-drive-run.log 2>&1 &
+        where="/tmp/zt-drive-run.log"
+    fi
     local i t
     for i in $(seq 1 60); do
         if t=$(target_pid 2>/dev/null); then note "up: pid $t"; sleep 2; return 0; fi
         sleep 2
     done
-    die "did not come up in 120s — see /tmp/zt-drive-run.log"
+    die "did not come up in 120s — see $where"
 }
 
 # Prove the RUNNING binary contains a symbol your change introduced. Without this
@@ -342,7 +351,7 @@ case "${1:-}" in
 usage: zt-drive.sh <command>
 
   preflight              check TCC permissions and list instances
-  launch                 start bin/run in the background, wait for it
+  launch                 start bin/run in a ZenTerm tab (else the background), wait for it
   verify-symbol <sym>    prove the RUNNING binary contains your change
   target                 print the target pid (refuses bundle apps)
 

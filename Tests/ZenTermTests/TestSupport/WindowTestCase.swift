@@ -7,10 +7,12 @@ class WindowTestCase: XCTestCase {
     /// Captured at init, before any setup hook can pin it.
     private let originalReduceMotion = Motion.isReduceMotionEnabled
 
-    // Fixtures open worktrees at folders that were never created, which the removal check would read as deleted.
+    // Fixtures open worktrees at never-created folders the removal check reads as deleted, and Settings writes ~/.claude.
     override func setUpWithError() throws {
         try super.setUpWithError()
         WorktreeStore.isRemovedOverrideForTesting = { _ in false }
+        ClaudeCodeSetup.configRootOverrideForTesting = FileManager.default.temporaryDirectory
+            .appendingPathComponent("zenterm-claude-\(UUID().uuidString)")
     }
 
     /// Not `tearDown`, which runs first and would close windows before a subclass's own teardown.
@@ -19,6 +21,8 @@ class WindowTestCase: XCTestCase {
         Self.closeAllWindows()
         Motion.isReduceMotionEnabled = originalReduceMotion
         WorktreeStore.isRemovedOverrideForTesting = nil
+        ClaudeCodeSetup.configRootOverrideForTesting.map { try? FileManager.default.removeItem(at: $0) }
+        ClaudeCodeSetup.configRootOverrideForTesting = nil
     }
 
     @MainActor

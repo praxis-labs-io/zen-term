@@ -7,6 +7,7 @@ import TerminalKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windows: [WindowController] = []
     private let worktreeRemovals = WorktreeRemovalTracker()
+    private let paneWaits = PaneWaits()
     private let keys = KeyInterceptor()
     private var navSocket: NavSocketServer?
     private var controlSocket: ControlServer?
@@ -96,8 +97,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             windows: { [weak self] in self?.windows ?? [] }, keyWindow: { [weak self] in self?.controlTarget() },
             bringForward: { Self.bringForward($0) },
             isInFront: { NSApp.isActive && $0.window.isKeyWindow }, worktreeRemovals: worktreeRemovals,
-            runAction: { [weak self] in self?.route($0, in: self?.controlTarget()) })
-        let control = ControlServer { responder.respond(to: $0, reply: $1) }
+            runAction: { [weak self] in self?.route($0, in: self?.controlTarget()) }, paneWaits: paneWaits)
+        let control = ControlServer { responder.respond(to: $0, hangup: $1, reply: $2) }
         control.start()
         controlSocket = control
 
@@ -231,6 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wc.keyModeHost = keys
         wc.onAppGlobalCommand = { [weak self] chord in self?.route(chord, in: self?.keyController()) }
         wc.worktreeRemovals = worktreeRemovals
+        wc.paneWaits = paneWaits
         wc.onClosedByRemovalAtPath = { [weak self, weak wc] path in
             self?.windows.reduce(ClosedByRemoval()) {
                 $0.adding($1.closedByRemoval(atPath: path), isThisWindow: $1 === wc)
