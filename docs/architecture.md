@@ -259,7 +259,8 @@ its `TabController`s and their titles. `TabController` owns one tab: a
   `tab.new` and `pane.split`, with a `PaneProgram` whose `exitClosesPane` drops the shell that
   `ShellLaunch.program` would `exec` after the command, so the child exit closes the pane.
   Before it closes, the canvas hands the window a `LaunchedPaneExit`: the exit code from the
-  program's `D` mark, which lands before the child exit, and its last 40 lines. The window
+  program's `D` mark and its last 40 lines. The mark can trail the child exit, so a child exit
+  with no code yet holds the close until the mark or `exitMarkGrace` (async). The window
   keeps the newest 64 in `launchedPaneExits`. `FirstTaskDelivery`, one per window, holds a
   run's task until the surface's first OSC 7501 report, its release, or 60 seconds.
   Every pane and drawer token a tab releases reaches the window (`onPaneTokensReleased`),

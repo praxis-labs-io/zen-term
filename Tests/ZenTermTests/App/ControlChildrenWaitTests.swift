@@ -245,6 +245,20 @@ final class ControlChildrenWaitTests: WindowTestCase {
         XCTAssertEqual(got.pane?.token, try token(of: child))
     }
 
+    func test_aLaunchedPaneWhoseExitMarkTrailsItsExitStillAnswersWithItsExitCode() throws {
+        makeWindow()
+        let caller = try token(of: try XCTUnwrap(spawned.first))
+        let child = try run("npm test", from: caller)
+        let answer = request(.paneWait, ControlArgs(pane: .token(try token(of: child))), from: caller)
+
+        child.delegate?.surfaceDidExit(child, code: 0)
+        child.delegate?.surface(child, commandDidFinish: TerminalCommandResult(exitCode: 3, duration: 1))
+
+        let got = try result(answer)
+        XCTAssertEqual(got.reason, .exited)
+        XCTAssertEqual(got.exitCode, 3)
+    }
+
     func test_aWaitThatBeginsAfterALaunchedPaneClosedAnswersWithItsExit() throws {
         makeWindow()
         let caller = try token(of: try XCTUnwrap(spawned.first))
