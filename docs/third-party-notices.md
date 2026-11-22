@@ -9,8 +9,8 @@ also the check that every patch still carries.
 
 Three rules learned the hard way:
 
-- **Probe the linked executable, not `libghostty-fat.a`.** The archive is a bag of object
-  files the linker draws from selectively: it is ~141 MB against a ~18 MB binary. The
+- **Probe the linked executable, not `libghostty-internal.a`.** The archive is a bag of object
+  files the linker draws from selectively: it is ~150 MB against a ~21 MB binary. The
   original audit probed the archive and still under-counted the shipped set by eight
   libraries, because it went looking for names it already expected.
 - **Symbols cannot see data.** Fonts are embedded bytes with no symbols, so a symbol probe
@@ -31,9 +31,9 @@ swift build -c release
 
 ```sh
 nm -U .build/release/ZenTerm | awk '$2=="T"||$2=="t"{ $1=""; $2=""; print }' | c++filt > /tmp/defined.txt
-wc -l < /tmp/defined.txt   # ~17.5k at the v1.3.1 pin
+wc -l < /tmp/defined.txt   # ~21.7k at the v1.4.0 pin
 
-for p in google_breakpad simdutf glslang spirv_cross ImGui "utf8::" "hwy::" \
+for p in google_breakpad simdutf glslang spirv_cross ImGui "hwy::" \
          FT_ onig_ png_ sentry_ wuffs inflate libintl mpack; do
     printf '%-18s %s\n' "$p" "$(grep -ci "$p" /tmp/defined.txt)"
 done
@@ -107,7 +107,7 @@ for magic in (b"\x00\x01\x00\x00", b"OTTO", b"true", b"ttcf"):
 EOF
 ```
 
-At the `v1.3.1` pin this reports exactly three fonts: JetBrains Mono (variable regular and
+At the `v1.4.0` pin this reports exactly three fonts: JetBrains Mono (variable regular and
 variable italic) and Symbols Nerd Font. More than three means ghostty started embedding
 something new and it needs an OFL/MIT notice.
 
@@ -148,12 +148,13 @@ Two things learned attributing those, worth carrying into the next resource that
 
 ## 5. Regenerate and diff
 
-License texts come from the Zig dependency cache (`~/.cache/zig/p/<hash>/`), keyed by the
-hashes in `vendor/ghostty/pkg/*/build.zig.zon`. Copy them verbatim: do not retype or
+License texts come from the Zig packages fetched into `vendor/ghostty/zig-pkg/<hash>/`, keyed
+by the hashes in `vendor/ghostty/build.zig.zon` and `vendor/ghostty/pkg/*/build.zig.zon`. Copy them verbatim: do not retype or
 summarize a license. Check the copyright years moved too, not just the terms.
 
-Section 4's resources are not in that cache. The themes tarball ghostty pins carries no
-license file at all, so take those texts from the upstream repository instead.
+Section 4's resources are not there. The themes tarball ghostty pins carries no license file
+at all, so take those texts from the upstream repository instead. The same goes for simdutf:
+ghostty vendors its fork's amalgamation in `pkg/simdutf/vendor` without the license.
 
 One exception to "verbatim": decode any stray HTML entities. Breakpad's vendored copy of the
 APSL block carries `&apos;` where the published license has an apostrophe; a `grep -n '&[a-z]*;'`

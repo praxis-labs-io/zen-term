@@ -23,7 +23,7 @@ enum GhosttyConfigWriter {
             "theme = light:\(lightSchemeThemePath),dark:\(darkSchemeThemePath)",
             "cursor-style = \(behavior.ghosttyCursorStyle)",
             "cursor-style-blink = \(behavior.cursorBlink)",
-            "shell-integration-features = no-cursor,ssh-env",
+            "shell-integration-features = no-cursor",
             "mouse-hide-while-typing = true",
             "window-padding-x = \(Int(gridInset))",
             "window-padding-y = \(Int(gridInset))",

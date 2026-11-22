@@ -16,7 +16,7 @@ if [[ ! -d Frameworks/GhosttyKit.xcframework ]] \
     exit 1
 fi
 
-# Filter the harmless linker noise so real app logs stand out: libghostty-fat.a has a couple of
+# Filter the harmless linker noise so real app logs stand out: libghostty-internal.a has a couple of
 # "could not find symbol … in object file" lines. Not a real problem, and `-Xlinker -w` doesn't
 # suppress them on the current linker. The `> >(…) 2>&1` process substitution filters both streams
 # while `exec` keeps the app's exit code, signals, and debug symbols intact.
