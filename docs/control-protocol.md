@@ -291,7 +291,8 @@ and closed with `force`, as `tab.close` on its tab is. A drawer is not closed.
 
 `args`: `pane`, `text` (required), `enter`, `force`, `wait`, `timeout`.
 
-Pastes `text`, so several lines arrive as one block. `enter` then sends Return outside the
+Pastes `text`, so several lines arrive as one block. Text containing `<zen` or `</zen`, in any
+case, is a `bad_request`, since it could pass for the envelope below. `enter` then sends Return outside the
 paste, which runs the block once at a shell prompt. It delivers text, not keys: control
 characters become spaces, and `pane.keys` presses keys. `failed` when the pane has not started, such as a host's pane
 waiting for its connection. Nothing is sent.
@@ -304,9 +305,10 @@ Into a pane that runs an agent:
   into it, at most 60 seconds. A client that hangs up during the hold sends nothing.
 - From another pane, the text arrives wrapped, so the agent can tell it from its user:
   `<zen from="31 lead" reply="zen pane send --pane 31 --enter">text</zen>`. `from` is the caller's
-  token, and its name after it when it has one. A send into a shell, into the caller's own
+  token, and its name after it when it has one, with `&`, `"`, `<` and `>` escaped as `&amp;`,
+  `&quot;`, `&lt;` and `&gt;`. A send into a shell, into the caller's own
   pane, or of a single line starting with `/` (a slash command) is never wrapped. A child's
-  note to its parent (`pane.run`) arrives the same way.
+  note to its parent (`pane.run`) arrives the same way, its name escaped the same way.
 
 `wait` then holds as `pane.wait` on the pane, with `timeout`, and answers as it does.
 

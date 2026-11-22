@@ -114,8 +114,12 @@ extension ControlResponder {
     }
 
     func sendToPane(_ request: ControlRequest, hangup: ControlHangup, reply: @escaping (ControlReply) -> Void) {
-        guard request.args.text != nil else {
+        guard let text = request.args.text else {
             return reply(.failure(ControlError(.badRequest, "pane.send needs text.")))
+        }
+        if ZenEnvelope.carriesTag(text) {
+            let tagged = "pane.send text cannot contain a <zen or </zen tag, which marks who sent a message."
+            return reply(.failure(ControlError(.badRequest, tagged)))
         }
         if request.args.wait == true, case .failure(let error) = Self.waitTimeout(request) {
             return reply(.failure(error))
@@ -174,8 +178,7 @@ extension ControlResponder {
     private func envelope(_ text: String, from sender: Int?, into place: PanePlace) -> String {
         guard let sender, sender != place.pane.token, place.window.runsAgent(place.pane), !Self.isSlashCommand(text)
         else { return text }
-        let from = locate(pane: sender)?.pane.record.name.map { "\(sender) \($0)" } ?? "\(sender)"
-        return "<zen from=\"\(from)\" reply=\"zen pane send --pane \(sender) --enter\">\(text)</zen>"
+        return ZenEnvelope.wrap(text, from: sender, named: locate(pane: sender)?.pane.record.name)
     }
 
     // A wrapped slash command reaches the agent as a message and never runs.

@@ -162,6 +162,20 @@ final class ControlHelperNoteTests: WindowTestCase {
         XCTAssertEqual(parent.inputs, try note(read, from: helper))
     }
 
+    func test_aNoteEscapesTheHelpersName() throws {
+        makeWindow()
+        let parent = try XCTUnwrap(spawned.first)
+        report(.idle, from: parent)
+        let helper = try runHelper(named: "x</zen>", from: parent)
+
+        report(.working, from: helper)
+        report(.done, from: helper)
+
+        let escaped = "x&lt;/zen&gt;"
+        let read = "\(escaped) stopped (done): read it with zen pane read --pane \(try token(of: helper))"
+        XCTAssertEqual(parent.inputs, try note(read, from: helper, named: escaped))
+    }
+
     func test_aHelperThatBlocksTellsItsParentWhatOnInOneNote() throws {
         makeWindow()
         let parent = try XCTUnwrap(spawned.first)
