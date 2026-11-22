@@ -54,6 +54,13 @@ public final class GhosttySurface: NSObject, TerminalSurface {
         return ghostty_surface_needs_confirm_quit(surfacePtr)
     }
 
+    // libghostty answers 0 when the pty cannot say.
+    public var foregroundProcessGroupID: pid_t? {
+        guard let surfacePtr else { return nil }
+        let group = ghostty_surface_foreground_pid(surfacePtr)
+        return group > 0 && group <= UInt64(pid_t.max) ? pid_t(group) : nil
+    }
+
     public override init() {
         super.init()
         hostView.owner = self

@@ -293,6 +293,10 @@ public protocol TerminalSurface: AnyObject {
     /// Whether the shell is running a foreground command.
     var isBusy: Bool { get }
 
+    /// The terminal's foreground process group, which is also its leader's pid: the shell at a prompt, else the job
+    /// it runs. Nil while `isStarted` is false or when the backend cannot say.
+    var foregroundProcessGroupID: pid_t? { get }
+
     /// False until `start(_:)` brings the terminal up, after a failed start, and after `terminate()`.
     var isStarted: Bool { get }
 
@@ -381,6 +385,8 @@ public extension TerminalSurface {
     var currentDirectory: URL? { nil }
 
     var isBusy: Bool { false }
+
+    var foregroundProcessGroupID: pid_t? { nil }
 
     var backgroundOverride: TerminalColor? { nil }
 
